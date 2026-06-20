@@ -31,6 +31,7 @@
     'í•­ê³µê¶Œ ê´€ë¦¬': 'Flight Management',
     'í˜„ìž¥ì‚¬ë¬´ì‹¤ ë¹„í’ˆ': 'Office Supplies',
     'AI ìŠ¤ìº” í†µí•© ë“±ë¡': 'AI Scan Registration',
+    'ì¸ì›, ìž¥ë¹„, ê±°ëž˜ID ê²€ìƒ‰...': 'Search people, equipment, transaction ID...',
     'ì „ì²´': 'All',
     'ê¸´ê¸‰': 'Critical',
     'ì£¼ì˜': 'Warning',
@@ -208,6 +209,242 @@
     ['미처리', 'Open'],
     ['완료', 'Done']
   ];
+
+  const exactEs = new Map(Object.entries({
+    'Site': 'Obra',
+    'Global View': 'Vista global',
+    'Loading data...': 'Cargando datos...',
+    'Dashboard (Overview)': 'Panel (Resumen)',
+    'Dashboard': 'Panel',
+    'Overview': 'Resumen',
+    'Executive Panel': 'Panel ejecutivo',
+    'CORE': 'NÚCLEO',
+    'MODULES': 'MÓDULOS',
+    'NEW': 'NUEVO',
+    'AI Command Center': 'Centro de comando IA',
+    'Analytics': 'Analítica',
+    'Alert Center': 'Centro de alertas',
+    'AI Safety Management': 'Gestión de seguridad IA',
+    'HR Management': 'Gestión de personal',
+    'Payroll / Settlement': 'Nómina / Liquidación',
+    'WBS Management': 'Gestión WBS',
+    'Finance': 'Finanzas',
+    'Inventory': 'Inventario',
+    'NASON Operations': 'Operaciones NASON',
+    'Vehicle Management': 'Gestión de vehículos',
+    'Equipment Rental': 'Renta de equipos',
+    'Housing Management': 'Gestión de alojamiento',
+    'Vendor / Rental Management': 'Proveedores / Rentas',
+    'Flight Management': 'Gestión de vuelos',
+    'Office Supplies': 'Suministros de oficina',
+    'AI Scan Registration': 'Registro con escaneo IA',
+    'All': 'Todo',
+    'people': 'personas',
+    'unit': 'unidad',
+    'units': 'unidades',
+    'issues': 'incidencias',
+    'days': 'días',
+    'rooms': 'habitaciones',
+    'Critical': 'Crítico',
+    'Warning': 'Advertencia',
+    'Normal': 'Normal',
+    'Open': 'Abierto',
+    'In Progress': 'En progreso',
+    'Resolved': 'Resuelto',
+    'Done': 'Completado',
+    'Pending Approval': 'Pendiente de aprobación',
+    'Operable': 'Operable',
+    'Inoperable': 'No operable',
+    'Stored': 'En almacén',
+    'Checked Out': 'Prestado',
+    'Repair Needed': 'Requiere reparación',
+    'Damaged': 'Dañado',
+    'Expiring Soon': 'Por vencer',
+    'Working': 'Trabajando',
+    'All workers checked in': 'Todo el personal registró entrada',
+    'Checked In': 'Entrada registrada',
+    'Not Checked In': 'Sin entrada',
+    'Master Sheet': 'Hoja maestra',
+    'New Record': 'Nuevo registro',
+    'Notifications': 'Notificaciones',
+    'Settings': 'Configuración',
+    'Close': 'Cerrar',
+    'Saving...': 'Guardando...',
+    'Loading...': 'Cargando...',
+    'Refresh': 'Actualizar',
+    'Language': 'Idioma',
+    'Search...': 'Buscar...',
+    'Search people, equipment, transaction ID...': 'Buscar personal, equipo, ID de transacción...',
+    'Search everything...': 'Buscar todo...',
+    'My Account': 'Mi cuenta',
+    'Current Company': 'Empresa actual',
+    'Your Company': 'Su empresa',
+    'My Profile': 'Mi perfil',
+    'View Profile': 'Ver perfil',
+    'Update Profile': 'Actualizar perfil',
+    'UI Settings': 'Configuración de interfaz',
+    'Change Password': 'Cambiar contraseña',
+    'Logout': 'Cerrar sesión',
+    'Admin User': 'Usuario administrador',
+    'System Administrator': 'Administrador del sistema',
+    'Operations': 'Operaciones',
+    'Personal Information': 'Información personal',
+    'Employment Information': 'Información laboral',
+    'Contact Information': 'Información de contacto',
+    'Password Information': 'Información de contraseña',
+    'Employee Code': 'Código de empleado',
+    'First Name': 'Nombre',
+    'Last Name': 'Apellido',
+    'Preferred Name': 'Nombre preferido',
+    'Job Title': 'Puesto',
+    'Department': 'Departamento',
+    'Location': 'Ubicación',
+    'Company': 'Empresa',
+    'Manager': 'Supervisor',
+    'Login Email': 'Correo de acceso',
+    'Personal Email': 'Correo personal',
+    'Mobile Number': 'Teléfono móvil',
+    'Direct Number': 'Teléfono directo',
+    'Read-only': 'Solo lectura',
+    'Not set': 'Sin definir',
+    'Back to Profile': 'Volver al perfil',
+    'Home': 'Inicio',
+    'Save Changes': 'Guardar cambios',
+    'Cancel': 'Cancelar',
+    'Display Settings': 'Configuración de pantalla',
+    'Interface Style': 'Estilo de interfaz',
+    'New Interface (Left Sidebar)': 'Nueva interfaz (barra lateral izquierda)',
+    'Classic (Top Navbar)': 'Clásica (barra superior)',
+    'Theme': 'Tema',
+    'Auto (System)': 'Automático (sistema)',
+    'Dark': 'Oscuro',
+    'Light': 'Claro',
+    'Timezone': 'Zona horaria',
+    'Expand Quick Menu': 'Expandir menú rápido',
+    'Document/Folder Settings': 'Configuración de documentos/carpetas',
+    'Default View Mode': 'Vista predeterminada',
+    'Grid': 'Cuadrícula',
+    'List': 'Lista',
+    'Default Sort By': 'Ordenar por defecto',
+    'Upload Date': 'Fecha de carga',
+    'Project': 'Proyecto',
+    'Default Sort Order': 'Orden predeterminado',
+    'Descending': 'Descendente',
+    'Ascending': 'Ascendente',
+    'Security Notice': 'Aviso de seguridad',
+    'Password Requirements': 'Requisitos de contraseña',
+    'Current Password': 'Contraseña actual',
+    'New Password': 'Nueva contraseña',
+    'Confirm New Password': 'Confirmar nueva contraseña',
+    'At least 8 characters': 'Al menos 8 caracteres',
+    'At least one uppercase letter': 'Al menos una letra mayúscula',
+    'At least one lowercase letter': 'Al menos una letra minúscula',
+    'At least one number': 'Al menos un número',
+    'Attendance Record': 'Registro de asistencia',
+    'Work Log': 'Registro de trabajo',
+    'To Do': 'Pendientes',
+    'Calendar': 'Calendario',
+    'Meetings': 'Reuniones',
+    'Notes': 'Notas',
+    'Files': 'Archivos',
+    'Chats': 'Chats',
+    'Direct Messages': 'Mensajes directos',
+    'Directory': 'Directorio',
+    'Work Project': 'Proyecto de trabajo',
+    'QUICK MENU': 'MENÚ RÁPIDO',
+    'Quick Action Center': 'Centro de acciones rápidas',
+    'Field Staff': 'Personal de campo',
+    'Total Present': 'Presentes',
+    'Total Workers': 'Personal total',
+    'Connected Sites': 'Obras conectadas',
+    'Integrated Attendance List': 'Lista integrada de asistencia',
+    'Personnel Master': 'Maestro de personal',
+    'Name': 'Nombre',
+    'Team': 'Equipo',
+    'Check In': 'Entrada',
+    'Check Out': 'Salida',
+    'Role': 'Rol',
+    'Visa Expiry': 'Vencimiento de visa',
+    'Safety Training': 'Capacitación de seguridad',
+    'Personnel ID': 'ID de personal',
+    'All Sites': 'Todas las obras',
+    'Global Overview': 'Resumen global',
+    'Equipment Operable': 'Equipo operable',
+    'MTD Spend': 'Gasto MTD',
+    'Open Safety Issues': 'Incidencias de seguridad abiertas',
+    'Housing Occupancy': 'Ocupación de alojamiento',
+    'Revenue at Risk': 'Ingresos en riesgo',
+    'Safety Blockers': 'Bloqueos de seguridad',
+    'Schedule Risk Jobs': 'Trabajos con riesgo de agenda',
+    'Decision Queue': 'Cola de decisiones',
+    'Finance / Costs': 'Finanzas / Costos',
+    'Inventory / Equipment': 'Inventario / Equipo',
+    'Daily equipment inspection status': 'Estado diario de inspección de equipos',
+    'Tool checkout / return tracking': 'Control de salida/devolución de herramientas',
+    'Total Equipment': 'Equipo total',
+    'Tools Checked Out': 'Herramientas prestadas',
+    'Tool Issues': 'Incidencias de herramientas',
+    'Equipment ID': 'ID de equipo',
+    'Equipment': 'Equipo',
+    'Inspector': 'Inspector',
+    'Last Check': 'Última revisión',
+    'Current Status': 'Estado actual',
+    'Vendor Email Communication': 'Comunicación por correo con proveedores',
+    'AI Writing Assistant': 'Asistente de redacción IA',
+    'Translate to English': 'Traducir al inglés',
+    'AI Draft': 'Borrador IA',
+    'Send': 'Enviar'
+  }));
+
+  const replacementsEs = [
+    ['NAHSHON MEP Â· Live field operations', 'NAHSHON MEP Â· Operaciones de campo en vivo'],
+    ['NAHSHON MEP · Live field operations', 'NAHSHON MEP · Operaciones de campo en vivo'],
+    ['Urgent Action Items', 'Acciones urgentes'],
+    ['Project Status', 'Estado del proyecto'],
+    ["Today's Decision Queue", 'Cola de decisiones de hoy'],
+    ['Unbilled Work Check', 'Revisión de trabajo no facturado'],
+    ['AI Operations Brief', 'Resumen operativo IA'],
+    ['1-Minute Field Input', 'Entrada de campo en 1 minuto'],
+    ['Document Scan', 'Escaneo de documentos'],
+    ['Create Draft', 'Crear borrador'],
+    ['Clear', 'Limpiar'],
+    ['Repair waiting', 'En reparación'],
+    ['Pending approval', 'Pendiente de aprobación'],
+    ['Accident-free', 'Sin accidentes'],
+    ['Available', 'Disponible'],
+    ['Target', 'Objetivo'],
+    ['Summary', 'Resumen'],
+    ['Owner', 'Responsable'],
+    ['Status', 'Estado'],
+    ['Date', 'Fecha'],
+    ['Type', 'Tipo'],
+    ['Attendance by Site', 'Asistencia por obra'],
+    ['Aggregated attendance across all connected sites', 'Asistencia agregada de todas las obras conectadas'],
+    ['What you can update:', 'Lo que puede actualizar:'],
+    ['You can update your preferred name, personal email, mobile number, and direct number.', 'Puede actualizar su nombre preferido, correo personal, teléfono móvil y teléfono directo.'],
+    ['Update your personal contact information', 'Actualice su información personal de contacto'],
+    ['Configure your user interface defaults', 'Configure sus preferencias de interfaz'],
+    ['Choose between Classic and the new left sidebar interface.', 'Elija entre la interfaz clásica y la nueva barra lateral izquierda.'],
+    ['Choose light, dark, or automatic based on system settings.', 'Elija claro, oscuro o automático según el sistema.'],
+    ['Select the language displayed in the interface.', 'Seleccione el idioma mostrado en la interfaz.'],
+    ['Select the timezone used for displaying dates and times.', 'Seleccione la zona horaria para mostrar fechas y horas.'],
+    ['When enabled, the right sidebar quick menu stays visible on account pages.', 'Cuando está activado, el menú rápido derecho permanece visible en las páginas de cuenta.'],
+    ['Select the default view for document and folder lists.', 'Seleccione la vista predeterminada para documentos y carpetas.'],
+    ['Select the default sorting criteria for document lists.', 'Seleccione el criterio de orden predeterminado.'],
+    ['Choose ascending or descending order.', 'Elija orden ascendente o descendente.'],
+    ['Secure your account with a strong password', 'Proteja su cuenta con una contraseña segura'],
+    ['Choose a strong password that you do not use elsewhere.', 'Elija una contraseña fuerte que no use en otro lugar.'],
+    ['We recommend using a combination of letters, numbers, and special characters.', 'Recomendamos combinar letras, números y caracteres especiales.'],
+    ['Enter your current password', 'Ingrese su contraseña actual'],
+    ['Enter your new password', 'Ingrese su nueva contraseña'],
+    ['Re-enter your new password', 'Vuelva a ingresar su nueva contraseña'],
+    ['Profile updated.', 'Perfil actualizado.'],
+    ['Please fill in all password fields.', 'Complete todos los campos de contraseña.'],
+    ['New password and confirmation do not match.', 'La nueva contraseña y la confirmación no coinciden.'],
+    ['Password does not meet the requirements.', 'La contraseña no cumple los requisitos.'],
+    ['Password change request is ready for backend connection.', 'La solicitud de cambio de contraseña está lista para conectarse al backend.']
+  ];
+
   let normalizedExactEn = null;
   let normalizedReplacementsEn = null;
 
@@ -248,14 +485,46 @@
     return output;
   }
 
+  function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function translateToSpanish(text) {
+    const english = translateToEnglish(text);
+    const trimmed = english.trim();
+    if (!trimmed) return english;
+    if (exactEs.has(trimmed)) return english.replace(trimmed, exactEs.get(trimmed));
+    let output = english;
+    for (const [from, to] of replacementsEs) output = output.split(from).join(to);
+    Array.from(exactEs.entries())
+      .sort((a, b) => b[0].length - a[0].length)
+      .forEach(([en, es]) => {
+        const start = /^[A-Za-z0-9]/.test(en) ? '\\b' : '';
+        const end = /[A-Za-z0-9]$/.test(en) ? '\\b' : '';
+        output = output.replace(new RegExp(start + escapeRegExp(en) + end, 'g'), es);
+      });
+    output = output
+      .replace(/(\d+)\s*people/g, '$1 personas')
+      .replace(/(\d+\/\d+)\s*units/g, '$1 unidades')
+      .replace(/(\d+)\s*units/g, '$1 unidades')
+      .replace(/(\d+)\s*issues/g, '$1 incidencias')
+      .replace(/(\d+)\s*days/g, '$1 días')
+      .replace(/(\d+)\s*rooms/g, '$1 habitaciones');
+    return output;
+  }
+
   function currentLanguage() {
-    return localStorage.getItem(STORAGE_KEY) || 'ko';
+    const lang = localStorage.getItem(STORAGE_KEY) || 'ko';
+    return ['ko', 'en', 'es'].includes(lang) ? lang : 'ko';
   }
 
   function localizeString(value) {
     if (typeof value !== 'string' || value.length === 0) return value;
     const repaired = repairText(value);
-    return currentLanguage() === 'en' ? translateToEnglish(repaired) : repaired;
+    const lang = currentLanguage();
+    if (lang === 'en') return translateToEnglish(repaired);
+    if (lang === 'es') return translateToSpanish(repaired);
+    return repaired;
   }
 
   function localizeAttributes(root) {
@@ -316,7 +585,7 @@
   }
 
     window.smartCompanySetLanguage = function (lang) {
-    localStorage.setItem(STORAGE_KEY, lang === 'en' ? 'en' : 'ko');
+    localStorage.setItem(STORAGE_KEY, ['ko', 'en', 'es'].includes(lang) ? lang : 'ko');
     window.location.reload();
   };
 

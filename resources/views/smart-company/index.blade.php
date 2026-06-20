@@ -188,13 +188,15 @@
           </div>
         </div>
         <div class="topbar-right">
-          <div class="language-switcher-wrap" data-no-i18n>
+          <div class="language-switcher-wrap">
             <span class="language-switcher-label">Language</span>
-            <select id="language-switcher" class="language-switcher" aria-label="Language selector">
+            <select id="language-switcher" class="language-switcher" aria-label="Language selector" data-no-i18n>
               <option value="ko">한국어</option>
               <option value="en">English</option>
+              <option value="es">Español</option>
             </select>
-          </div>          <div class="search-container">
+          </div>
+          <div class="search-container">
             <i class="ph ph-magnifying-glass"></i>
             <input type="text" placeholder="ì¸ì›, ìž¥ë¹„, ê±°ëž˜ID ê²€ìƒ‰..." class="global-search" id="global-search-input">
             <span class="shortcut">âŒ˜K</span>
@@ -207,6 +209,45 @@
             <button class="icon-btn" id="btn-settings" title="ì„¤ì •">
               <i class="ph ph-gear"></i>
             </button>
+          </div>
+          <div class="account-menu-wrap">
+            <button class="account-button" id="account-menu-button" type="button" aria-expanded="false">
+              <span class="account-avatar">AD</span>
+              <span>My Account (NAHSHON MEP)</span>
+              <i class="ph ph-caret-down"></i>
+            </button>
+            <div class="account-dropdown" id="account-dropdown" hidden>
+              <div class="account-dropdown-section">
+                <div class="account-dropdown-label">Current Company</div>
+                <div class="account-company">
+                  <span class="account-company-icon"><i class="ph ph-buildings"></i></span>
+                  <div>
+                    <div class="account-company-name">NAHSHON MEP</div>
+                    <div class="account-company-sub">Your Company</div>
+                  </div>
+                </div>
+              </div>
+              <div class="account-menu-group">
+                <div class="account-menu-heading">My Profile</div>
+                <button class="account-menu-item" type="button" data-account-view="profile">
+                  <i class="ph ph-user-circle"></i><span>View Profile</span>
+                </button>
+                <button class="account-menu-item" type="button" data-account-view="profile-update">
+                  <i class="ph ph-identification-card"></i><span>Update Profile</span>
+                </button>
+                <button class="account-menu-item" type="button" data-account-view="ui-settings">
+                  <i class="ph ph-sliders-horizontal"></i><span>UI Settings</span>
+                </button>
+                <button class="account-menu-item" type="button" data-account-view="password">
+                  <i class="ph ph-lock-key"></i><span>Change Password</span>
+                </button>
+              </div>
+              <div class="account-menu-group">
+                <button class="account-menu-item" type="button" data-account-logout>
+                  <i class="ph ph-sign-out"></i><span>Logout (Admin User)</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -903,9 +944,39 @@
       const pageContainer = document.getElementById('page-container');
       const breadcrumbCurrent = document.getElementById('breadcrumb-current');
       const alertBadge = document.getElementById('alert-badge');
+      const accountStorageKey = 'nahshonAccountProfile';
+      const accountDefaults = {
+        company: 'NAHSHON MEP',
+        name: 'David Cho',
+        firstName: 'David',
+        lastName: 'Cho',
+        preferredName: '',
+        employeeCode: 'ADMIN-001',
+        jobTitle: 'System Administrator',
+        department: 'Operations',
+        location: 'HFF-02',
+        manager: 'NAHSHON MEP',
+        email: 'davidcho1973@gmail.com',
+        personalEmail: 'davidcho1973@gmail.com',
+        mobile: '+1 (602) 435-6787',
+        direct: '+1 (555) 987-6543',
+        timezone: 'America/Phoenix'
+      };
+      function loadAccountProfileData() {
+        try {
+          return Object.assign({}, accountDefaults, JSON.parse(localStorage.getItem(accountStorageKey) || '{}'));
+        } catch (e) {
+          return Object.assign({}, accountDefaults);
+        }
+      }
+      let accountProfile = loadAccountProfileData();
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
+        'profile': { title: 'My Profile', render: renderAccountProfile },
+        'profile-update': { title: 'Update Profile', render: renderAccountUpdateProfile },
+        'ui-settings': { title: 'UI Settings', render: renderAccountUiSettings },
+        'password': { title: 'Change Password', render: renderAccountPassword },
         'command': { title: 'AI í˜„ìž¥ ì§€íœ˜ì‹¤', render: renderCommandCenter },
         'analytics': { title: 'ë¶„ì„ ë°ì´í„°', render: renderAnalytics },
         'alerts': { title: 'í†µí•© ì•Œë¦¼ ì„¼í„°', render: renderAlerts },
@@ -940,6 +1011,44 @@
           loadView(view);
         });
       });
+
+      var accountButton = document.getElementById('account-menu-button');
+      var accountDropdown = document.getElementById('account-dropdown');
+      var sidebarUserBlock = document.querySelector('.user-block');
+      function closeAccountDropdown() {
+        if (!accountButton || !accountDropdown) return;
+        accountButton.setAttribute('aria-expanded', 'false');
+        accountDropdown.hidden = true;
+      }
+      function openAccountView(viewKey) {
+        navItems.forEach(function (n) { n.classList.remove('active'); });
+        closeAccountDropdown();
+        window.loadView(viewKey);
+      }
+      if (accountButton && accountDropdown) {
+        accountButton.addEventListener('click', function (event) {
+          event.stopPropagation();
+          var isOpen = accountButton.getAttribute('aria-expanded') === 'true';
+          accountButton.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+          accountDropdown.hidden = isOpen;
+        });
+        accountDropdown.addEventListener('click', function (event) {
+          if (event.target.closest('[data-account-logout]')) {
+            closeAccountDropdown();
+            window.location.href = '/admin/login';
+            return;
+          }
+          var item = event.target.closest('[data-account-view]');
+          if (!item) return;
+          openAccountView(item.getAttribute('data-account-view'));
+        });
+        document.addEventListener('click', function (event) {
+          if (!event.target.closest('.account-menu-wrap')) closeAccountDropdown();
+        });
+      }
+      if (sidebarUserBlock) sidebarUserBlock.addEventListener('click', function () { openAccountView('profile'); });
+      var settingsButton = document.getElementById('btn-settings');
+      if (settingsButton) settingsButton.addEventListener('click', function () { openAccountView('ui-settings'); });
 
       window.loadView = function loadView(viewKey) {
         var route = routes[viewKey];
@@ -1011,6 +1120,202 @@
         var sel = document.getElementById('project-context-switcher');
         if (sel && sel.selectedIndex >= 0) return sel.options[sel.selectedIndex].text;
         return window.currentSiteId || 'ì „ì²´ í˜„ìž¥';
+      }
+
+      function accountValue(value, fallback) {
+        var text = value == null || value === '' ? (fallback || 'Not set') : value;
+        return safeHtml(text);
+      }
+
+      function accountInfoRows(rows) {
+        return '<div class="account-info-grid">' + rows.map(function (row) {
+          var badge = row.readonly ? '<span class="readonly-badge">Read-only</span>' : '';
+          return '<div class="account-info-row">' +
+            '<div class="account-info-label">' + safeHtml(row.label) + badge + '</div>' +
+            '<div class="account-info-value">' + accountValue(row.value, row.fallback) + '</div>' +
+            '</div>';
+        }).join('') + '</div>';
+      }
+
+      function quickMenuHtml() {
+        var items = [
+          ['ph-clock-counter-clockwise', 'Attendance Record', 'hr'],
+          ['ph-notebook', 'Work Log', 'wbs'],
+          ['ph-check-square-offset', 'To Do', 'alerts'],
+          ['ph-calendar', 'Calendar', 'dashboard'],
+          ['ph-calendar-plus', 'Meetings', 'dashboard'],
+          ['ph-note', 'Notes', 'dashboard'],
+          ['ph-folder', 'Files', 'office'],
+          ['ph-chat-circle-dots', 'Chats', 'dashboard'],
+          ['ph-users-three', 'Directory', 'hr'],
+          ['ph-briefcase', 'Work Project', 'wbs']
+        ];
+        return '<aside class="account-side">' +
+          '<div class="account-side-title">QUICK MENU</div>' +
+          '<div class="quick-menu-list">' + items.map(function (item) {
+            return '<button type="button" class="quick-menu-item" data-quick-view="' + item[2] + '">' +
+              '<i class="ph ' + item[0] + '"></i><span>' + safeHtml(item[1]) + '</span></button>';
+          }).join('') + '</div>' +
+          '</aside>';
+      }
+
+      function accountShell(viewKey, title, subtitle, body, options) {
+        options = options || {};
+        pageContainer.innerHTML =
+          '<div class="account-layout" data-account-view="' + safeHtml(viewKey) + '">' +
+            '<div class="account-main">' +
+              '<div class="account-crumbs"><button class="btn-secondary" type="button" data-account-back="profile"><i class="ph ph-arrow-left"></i> Back to Profile</button><span>Home</span><span>/</span><span class="active">' + safeHtml(title) + '</span></div>' +
+              '<section class="account-hero">' +
+                '<h1>' + safeHtml(title) + '</h1>' +
+                '<p>' + safeHtml(subtitle) + '</p>' +
+              '</section>' +
+              body +
+            '</div>' +
+            (options.hideQuickMenu ? '' : quickMenuHtml()) +
+          '</div>';
+
+        pageContainer.querySelectorAll('[data-quick-view]').forEach(function (btn) {
+          btn.addEventListener('click', function () { window.goToView(btn.getAttribute('data-quick-view')); });
+        });
+        pageContainer.querySelectorAll('[data-account-back]').forEach(function (btn) {
+          btn.addEventListener('click', function () { window.loadView(btn.getAttribute('data-account-back')); });
+        });
+      }
+
+      function renderAccountProfile() {
+        var body =
+          '<section class="account-card">' +
+            '<div class="account-card-title"><i class="ph ph-user-circle"></i> Personal Information</div>' +
+            accountInfoRows([
+              { label: 'Employee Code', value: accountProfile.employeeCode },
+              { label: 'First Name', value: accountProfile.firstName },
+              { label: 'Last Name', value: accountProfile.lastName },
+              { label: 'Preferred Name', value: accountProfile.preferredName, fallback: 'Not set' }
+            ]) +
+          '</section>' +
+          '<section class="account-card">' +
+            '<div class="account-card-title"><i class="ph ph-briefcase"></i> Employment Information</div>' +
+            accountInfoRows([
+              { label: 'Job Title', value: accountProfile.jobTitle, readonly: true },
+              { label: 'Department', value: accountProfile.department, readonly: true },
+              { label: 'Location', value: accountProfile.location, readonly: true },
+              { label: 'Company', value: accountProfile.company, readonly: true },
+              { label: 'Manager', value: accountProfile.manager, readonly: true }
+            ]) +
+          '</section>' +
+          '<section class="account-card">' +
+            '<div class="account-card-title"><i class="ph ph-address-book"></i> Contact Information</div>' +
+            accountInfoRows([
+              { label: 'Login Email', value: accountProfile.email, readonly: true },
+              { label: 'Personal Email', value: accountProfile.personalEmail },
+              { label: 'Mobile Number', value: accountProfile.mobile },
+              { label: 'Direct Number', value: accountProfile.direct }
+            ]) +
+            '<div class="account-actions-row" style="margin-top:16px">' +
+              '<button class="btn-primary" type="button" data-account-action="edit"><i class="ph ph-pencil-simple"></i> Update Profile</button>' +
+              '<button class="btn-secondary" type="button" data-account-action="settings"><i class="ph ph-sliders-horizontal"></i> UI Settings</button>' +
+            '</div>' +
+          '</section>';
+        accountShell('profile', accountProfile.name, accountProfile.jobTitle + ' • ' + accountProfile.department, body);
+        pageContainer.querySelector('[data-account-action="edit"]').addEventListener('click', function () { window.loadView('profile-update'); });
+        pageContainer.querySelector('[data-account-action="settings"]').addEventListener('click', function () { window.loadView('ui-settings'); });
+      }
+
+      function renderAccountUpdateProfile() {
+        var body =
+          '<section class="account-card light">' +
+            '<div class="account-note"><strong>What you can update:</strong> You can update your preferred name, personal email, mobile number, and direct number.</div>' +
+            '<form class="account-form" id="account-profile-form" style="margin-top:24px">' +
+              '<div class="account-card-title">Personal Information</div>' +
+              '<div class="account-field"><label for="account-preferred-name">Preferred Name</label><input class="account-input" id="account-preferred-name" name="preferredName" value="' + accountValue(accountProfile.preferredName, '') + '" placeholder="Preferred Name"></div>' +
+              '<div class="account-card-title" style="margin-top:8px">Contact Information</div>' +
+              '<div class="account-field"><label for="account-personal-email">Personal Email</label><input class="account-input" id="account-personal-email" name="personalEmail" value="' + accountValue(accountProfile.personalEmail, '') + '" placeholder="your.email@example.com"></div>' +
+              '<div class="account-field"><label for="account-mobile">Mobile Number</label><input class="account-input" id="account-mobile" name="mobile" value="' + accountValue(accountProfile.mobile, '') + '" placeholder="+1 (555) 000-0000"></div>' +
+              '<div class="account-field"><label for="account-direct">Direct Number</label><input class="account-input" id="account-direct" name="direct" value="' + accountValue(accountProfile.direct, '') + '" placeholder="+1 (555) 000-0000"></div>' +
+              '<div class="account-actions-row"><button class="btn-primary" type="submit"><i class="ph ph-floppy-disk"></i> Save Changes</button><button class="btn-secondary" type="button" data-account-cancel>Cancel</button></div>' +
+            '</form>' +
+          '</section>';
+        accountShell('profile-update', 'Update Profile', 'Update your personal contact information', body);
+        var form = document.getElementById('account-profile-form');
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var data = new FormData(form);
+          accountProfile = Object.assign({}, accountProfile, {
+            preferredName: String(data.get('preferredName') || '').trim(),
+            personalEmail: String(data.get('personalEmail') || '').trim(),
+            mobile: String(data.get('mobile') || '').trim(),
+            direct: String(data.get('direct') || '').trim()
+          });
+          localStorage.setItem(accountStorageKey, JSON.stringify(accountProfile));
+          window.showToast ? window.showToast('Profile updated.', false) : alert('Profile updated.');
+          window.loadView('profile');
+        });
+        pageContainer.querySelector('[data-account-cancel]').addEventListener('click', function () { window.loadView('profile'); });
+      }
+
+      function renderAccountUiSettings() {
+        var lang = localStorage.getItem('smartCompanyLanguage') || 'ko';
+        var body =
+          '<section class="account-card">' +
+            '<div class="account-card-title"><i class="ph ph-monitor"></i> Display Settings</div>' +
+            '<div class="settings-row"><div><div class="settings-title">Interface Style <span class="readonly-badge">Beta</span></div><div class="settings-desc">Choose between Classic and the new left sidebar interface.</div></div><select class="account-select"><option>New Interface (Left Sidebar)</option><option>Classic (Top Navbar)</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Theme</div><div class="settings-desc">Choose light, dark, or automatic based on system settings.</div></div><select class="account-select"><option>Auto (System)</option><option>Dark</option><option>Light</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Language</div><div class="settings-desc">Select the language displayed in the interface.</div></div><select class="account-select" id="account-language-select" data-no-i18n><option value="ko">한국어</option><option value="en">English</option><option value="es">Español</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Timezone</div><div class="settings-desc">Select the timezone used for displaying dates and times.</div></div><select class="account-select"><option value="America/Phoenix">(UTC-07:00) Arizona Time</option><option value="America/Los_Angeles">(UTC-08:00) Pacific Time</option><option value="America/New_York">(UTC-05:00) Eastern Time</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Expand Quick Menu</div><div class="settings-desc">When enabled, the right sidebar quick menu stays visible on account pages.</div></div><button class="switch-control" type="button" aria-pressed="true"><span class="switch-dot"></span></button></div>' +
+          '</section>' +
+          '<section class="account-card">' +
+            '<div class="account-card-title"><i class="ph ph-folder"></i> Document/Folder Settings</div>' +
+            '<div class="settings-row"><div><div class="settings-title">Default View Mode</div><div class="settings-desc">Select the default view for document and folder lists.</div></div><select class="account-select"><option>Grid</option><option>List</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Default Sort By</div><div class="settings-desc">Select the default sorting criteria for document lists.</div></div><select class="account-select"><option>Upload Date</option><option>Name</option><option>Project</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Default Sort Order</div><div class="settings-desc">Choose ascending or descending order.</div></div><select class="account-select"><option>Descending</option><option>Ascending</option></select></div>' +
+          '</section>';
+        accountShell('ui-settings', 'UI Settings', 'Configure your user interface defaults', body);
+        var langSelect = document.getElementById('account-language-select');
+        if (langSelect) {
+          langSelect.value = lang;
+          langSelect.addEventListener('change', function () {
+            if (window.smartCompanySetLanguage) window.smartCompanySetLanguage(langSelect.value);
+          });
+        }
+      }
+
+      function renderAccountPassword() {
+        var body =
+          '<section class="account-card light">' +
+            '<div class="account-warning"><strong>Security Notice:</strong> Choose a strong password that you do not use elsewhere. We recommend using a combination of letters, numbers, and special characters.</div>' +
+            '<div class="account-note" style="margin-top:18px"><strong>Password Requirements:</strong><ul style="margin:8px 0 0 18px"><li>At least 8 characters</li><li>At least one uppercase letter</li><li>At least one lowercase letter</li><li>At least one number</li></ul></div>' +
+            '<form class="account-form" id="account-password-form" style="margin-top:24px">' +
+              '<div class="account-card-title">Password Information</div>' +
+              '<div class="account-field"><label for="account-current-password">Current Password</label><input class="account-input" id="account-current-password" type="password" placeholder="Enter your current password"></div>' +
+              '<div class="account-field"><label for="account-new-password">New Password</label><input class="account-input" id="account-new-password" type="password" placeholder="Enter your new password"></div>' +
+              '<div class="account-field"><label for="account-confirm-password">Confirm New Password</label><input class="account-input" id="account-confirm-password" type="password" placeholder="Re-enter your new password"></div>' +
+              '<div class="account-actions-row"><button class="btn-primary" type="submit"><i class="ph ph-lock-key"></i> Change Password</button><button class="btn-secondary" type="button" data-account-cancel>Cancel</button></div>' +
+            '</form>' +
+          '</section>';
+        accountShell('password', 'Change Password', 'Secure your account with a strong password', body);
+        var form = document.getElementById('account-password-form');
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var current = document.getElementById('account-current-password').value;
+          var next = document.getElementById('account-new-password').value;
+          var confirm = document.getElementById('account-confirm-password').value;
+          if (!current || !next || !confirm) {
+            window.showToast('Please fill in all password fields.', true);
+            return;
+          }
+          if (next !== confirm) {
+            window.showToast('New password and confirmation do not match.', true);
+            return;
+          }
+          if (next.length < 8 || !/[A-Z]/.test(next) || !/[a-z]/.test(next) || !/[0-9]/.test(next)) {
+            window.showToast('Password does not meet the requirements.', true);
+            return;
+          }
+          form.reset();
+          window.showToast('Password change request is ready for backend connection.', false);
+        });
+        pageContainer.querySelector('[data-account-cancel]').addEventListener('click', function () { window.loadView('profile'); });
       }
 
       function levelClass(level) {
