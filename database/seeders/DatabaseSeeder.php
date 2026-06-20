@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\MemberDocument;
+use App\Models\MemberRegistration;
 use App\Models\SmartRecord;
 use App\Models\Site;
 use App\Models\Team;
@@ -32,6 +34,7 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->seedOperationalData();
+        $this->seedMemberRegistrationData();
     }
 
     private function seedOperationalData(): void
@@ -90,5 +93,52 @@ class DatabaseSeeder extends Seeder
                 ]
             );
         }
+    }
+
+    private function seedMemberRegistrationData(): void
+    {
+        $company = Company::query()->where('code', 'NAHSHON-MEP')->first();
+        $site = Site::query()->where('code', 'HFF-02')->first();
+        $team = $site ? Team::query()->where('site_id', $site->id)->first() : null;
+
+        $registration = MemberRegistration::query()->updateOrCreate(
+            ['registration_number' => 'MR-DEMO-001'],
+            [
+                'company_id' => $company?->id,
+                'site_id' => $site?->id,
+                'team_id' => $team?->id,
+                'employee_number' => 'MR-DEMO-001',
+                'member_type' => 'worker',
+                'full_name' => 'Sample Smart Worker',
+                'email' => 'sample.worker@example.com',
+                'phone' => '480-555-0199',
+                'nationality' => 'Korea',
+                'role' => 'Electrician',
+                'trade' => 'Electrical',
+                'start_date' => now()->toDateString(),
+                'visa_type' => 'E-2',
+                'visa_expires_on' => now()->addMonths(8)->toDateString(),
+                'safety_training_expires_on' => now()->addMonths(5)->toDateString(),
+                'identity_status' => 'pending',
+                'document_status' => 'pending',
+                'onboarding_status' => 'invited',
+                'invite_token' => '11111111-1111-4111-8111-111111111111',
+                'invited_at' => now(),
+                'notes' => 'Demo smart member registration. Use the intake link to test self-service onboarding.',
+            ]
+        );
+
+        MemberDocument::query()->updateOrCreate(
+            [
+                'member_registration_id' => $registration->id,
+                'document_type' => 'safety',
+            ],
+            [
+                'title' => 'Safety orientation certificate',
+                'status' => 'pending',
+                'expires_on' => now()->addMonths(5)->toDateString(),
+                'extracted_data' => ['source' => 'demo', 'automation' => 'ready_for_ocr'],
+            ]
+        );
     }
 }
