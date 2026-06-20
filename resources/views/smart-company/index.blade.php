@@ -1153,30 +1153,7 @@
         }).join('') + '</div>';
       }
 
-      function quickMenuHtml() {
-        var items = [
-          ['ph-clock-counter-clockwise', 'Attendance Record', 'hr'],
-          ['ph-notebook', 'Work Log', 'wbs'],
-          ['ph-check-square-offset', 'To Do', 'alerts'],
-          ['ph-calendar', 'Calendar', 'dashboard'],
-          ['ph-calendar-plus', 'Meetings', 'dashboard'],
-          ['ph-note', 'Notes', 'dashboard'],
-          ['ph-folder', 'Files', 'office'],
-          ['ph-chat-circle-dots', 'Chats', 'dashboard'],
-          ['ph-users-three', 'Directory', 'hr'],
-          ['ph-briefcase', 'Work Project', 'wbs']
-        ];
-        return '<aside class="account-side">' +
-          '<div class="account-side-title">QUICK MENU</div>' +
-          '<div class="quick-menu-list">' + items.map(function (item) {
-            return '<button type="button" class="quick-menu-item" data-quick-view="' + item[2] + '">' +
-              '<i class="ph ' + item[0] + '"></i><span>' + safeHtml(item[1]) + '</span></button>';
-          }).join('') + '</div>' +
-          '</aside>';
-      }
-
-      function accountShell(viewKey, title, subtitle, body, options) {
-        options = options || {};
+      function accountShell(viewKey, title, subtitle, body) {
         pageContainer.innerHTML =
           '<div class="account-layout" data-account-view="' + safeHtml(viewKey) + '">' +
             '<div class="account-main">' +
@@ -1187,12 +1164,8 @@
               '</section>' +
               body +
             '</div>' +
-            (options.hideQuickMenu ? '' : quickMenuHtml()) +
           '</div>';
 
-        pageContainer.querySelectorAll('[data-quick-view]').forEach(function (btn) {
-          btn.addEventListener('click', function () { window.goToView(btn.getAttribute('data-quick-view')); });
-        });
         pageContainer.querySelectorAll('[data-account-back]').forEach(function (btn) {
           btn.addEventListener('click', function () { window.loadView(btn.getAttribute('data-account-back')); });
         });
@@ -1278,7 +1251,6 @@
             '<div class="settings-row"><div><div class="settings-title">Theme</div><div class="settings-desc">Choose light, dark, or automatic based on system settings.</div></div><select class="account-select"><option>Auto (System)</option><option>Dark</option><option>Light</option></select></div>' +
             '<div class="settings-row"><div><div class="settings-title">Language</div><div class="settings-desc">Select the language displayed in the interface.</div></div><select class="account-select" id="account-language-select" data-no-i18n><option value="ko">한국어</option><option value="en">English</option><option value="es">Español</option></select></div>' +
             '<div class="settings-row"><div><div class="settings-title">Timezone</div><div class="settings-desc">Select the timezone used for displaying dates and times.</div></div><select class="account-select"><option value="America/Phoenix">(UTC-07:00) Arizona Time</option><option value="America/Los_Angeles">(UTC-08:00) Pacific Time</option><option value="America/New_York">(UTC-05:00) Eastern Time</option></select></div>' +
-            '<div class="settings-row"><div><div class="settings-title">Expand Quick Menu</div><div class="settings-desc">When enabled, the right sidebar quick menu stays visible on account pages.</div></div><button class="switch-control" type="button" aria-pressed="true"><span class="switch-dot"></span></button></div>' +
           '</section>' +
           '<section class="account-card">' +
             '<div class="account-card-title"><i class="ph ph-folder"></i> Document/Folder Settings</div>' +
