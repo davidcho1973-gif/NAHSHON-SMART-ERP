@@ -23,17 +23,29 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-Create the local SQLite database file:
+This project is now configured for PostgreSQL local development.
 
-```bash
-mkdir -p database
-touch database/database.sqlite
+Default local database settings:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=nahshon_smart_erp
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
 ```
 
-On Windows PowerShell:
+On this workstation the portable PostgreSQL binaries are expected at:
+
+```text
+C:\tmp\postgresql-17.5
+```
+
+Start local PostgreSQL and create the development database:
 
 ```powershell
-New-Item -ItemType File -Force database/database.sqlite
+.\scripts\start-local-postgres.ps1
 ```
 
 Then migrate and seed:

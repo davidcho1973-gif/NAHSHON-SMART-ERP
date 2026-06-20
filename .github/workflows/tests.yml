@@ -13,6 +13,21 @@ jobs:
   tests:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: nahshon_smart_erp
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d nahshon_smart_erp"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     strategy:
       fail-fast: true
       matrix:
@@ -28,7 +43,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pgsql, pdo_pgsql
           coverage: none
 
       - name: Install Composer dependencies
@@ -37,7 +52,6 @@ jobs:
       - name: Prepare environment
         run: |
           cp .env.example .env
-          touch database/database.sqlite
           php artisan key:generate
 
       - name: Run migrations
