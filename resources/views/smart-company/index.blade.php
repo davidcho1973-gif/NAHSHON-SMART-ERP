@@ -206,7 +206,7 @@
               <i class="ph ph-bell"></i>
               <span class="status-dot"></span>
             </button>
-            <button class="icon-btn" id="btn-settings" title="ì„¤ì •">
+            <button class="icon-btn" id="btn-settings" title="Admin Login">
               <i class="ph ph-gear"></i>
             </button>
           </div>
@@ -1064,7 +1064,7 @@
       }
       if (sidebarUserBlock) sidebarUserBlock.addEventListener('click', function () { openAccountView('profile'); });
       var settingsButton = document.getElementById('btn-settings');
-      if (settingsButton) settingsButton.addEventListener('click', function () { openAccountView('ui-settings'); });
+      if (settingsButton) settingsButton.addEventListener('click', function () { window.location.href = '/admin/login'; });
 
       window.loadView = function loadView(viewKey) {
         var route = routes[viewKey];
