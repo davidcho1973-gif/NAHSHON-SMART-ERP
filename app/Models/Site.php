@@ -37,4 +37,9 @@ class Site extends Model
     {
         return $this->hasMany(Team::class);
     }
+
+    public function employees(): HasMany
+    {
+        return $this->hasMany(Employee::class);
+    }
 }

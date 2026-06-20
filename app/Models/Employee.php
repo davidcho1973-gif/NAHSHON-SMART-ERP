@@ -13,10 +13,12 @@ class Employee extends Model
 
     protected $fillable = [
         'company_id',
+        'site_id',
         'team_id',
         'employee_number',
         'badge_number',
         'name',
+        'email',
         'nationality',
         'role',
         'employment_status',
@@ -37,6 +39,11 @@ class Employee extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function site(): BelongsTo
+    {
+        return $this->belongsTo(Site::class);
     }
 
     public function team(): BelongsTo

@@ -2,7 +2,10 @@
 
 namespace App\Support;
 
+use App\Models\AttendanceLog;
+use App\Models\Employee;
 use App\Models\SmartRecord;
+use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -11,14 +14,14 @@ class SmartCompanyData
     public static function handle(string $method, array $args = [], string $siteId = 'ALL'): mixed
     {
         return match ($method) {
-            'api_getHRData' => self::hrData($siteId),
-            'api_getPersonnelList' => self::personnel($siteId),
-            'api_getPersonnelStats' => self::personnelStats($siteId),
-            'api_getGlobalAttendance' => self::globalAttendance(),
-            'api_getAttendanceLive' => self::attendanceLive($siteId),
-            'api_getDailyTeamMatrix' => self::dailyTeamMatrix($siteId),
-            'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::dailyAttendanceDetail($siteId, $args[1] ?? $args[0] ?? null),
-            'api_getEmployeeDetail' => self::employeeDetail((string) ($args[0] ?? ''), $siteId),
+            'api_getHRData' => self::realHrData($siteId),
+            'api_getPersonnelList' => self::realPersonnel($siteId),
+            'api_getPersonnelStats' => self::realPersonnelStats($siteId),
+            'api_getGlobalAttendance' => self::realGlobalAttendance(),
+            'api_getAttendanceLive' => self::realAttendanceLive($siteId),
+            'api_getDailyTeamMatrix' => self::realDailyTeamMatrix($siteId),
+            'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, $args[1] ?? $args[0] ?? null),
+            'api_getEmployeeDetail' => self::realEmployeeDetail((string) ($args[0] ?? ''), $siteId),
             'api_uploadEmployeePhoto' => ['success' => true, 'message' => 'Photo upload endpoint is ready. Configure filesystem disk for production.'],
 
             'api_getFinanceStats' => self::financeStats(),
@@ -75,7 +78,7 @@ class SmartCompanyData
             'api_getAllFolderFiles' => json_encode(['success' => true, 'data' => ['NAHSHON RECEIPT' => ['pending' => 3, 'done' => 28, 'total' => 31], 'UTILITY RECEIPT' => ['pending' => 1, 'done' => 12, 'total' => 13]]]),
             'api_bulkProcessDriveFolder' => json_encode(['success' => true, 'log' => ['Scanned pending receipts', 'Updated finance records']]),
             'api_getFinanceExcelBase64' => '',
-            'api_getPersonnelCard' => self::personnelCard((string) ($args[0] ?? '')),
+            'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
             'api_syncWorkerStatus' => ['success' => true, 'messages' => ['Worker status updated', 'Related vehicle/housing assignments checked']],
             'api_universalAIScan' => ['success' => true, 'category' => ($args[0] ?? 'UNKNOWN')],
             'api_nfcAssignVehicle', 'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
@@ -87,9 +90,6 @@ class SmartCompanyData
     public static function seedRecords(): array
     {
         $records = [];
-        foreach (self::personnel('ALL') as $person) {
-            $records[] = self::record('hr', $person['id'], $person['nameEn'], $person['company'], $person['site'], $person['workerStatus'] ?? 'Active', null, $person);
-        }
         foreach (self::projects() as $project) {
             $records[] = self::record('wbs', $project['code'], $project['name'], 'Project', $project['code'], $project['status'] ?? 'Active', null, $project);
         }
@@ -376,6 +376,373 @@ class SmartCompanyData
     public static function wbsTree(string $projectId): array { return ['success' => true, 'projectId' => $projectId, 'stages' => [['name' => 'Rough-in', 'progress' => 72, 'items' => [['id' => 'WBS-001', 'name' => 'Conduit install Area A', 'status' => '완료', 'progress' => 100], ['id' => 'WBS-002', 'name' => 'Cable tray Area B', 'status' => '처리중', 'progress' => 55]]], ['name' => 'Trim-out', 'progress' => 18, 'items' => [['id' => 'WBS-003', 'name' => 'Panel labeling', 'status' => '미처리', 'progress' => 0]]]]]; }
     public static function projectProgressSummary(string $projectId): array { return ['success' => true, 'projectId' => $projectId, 'progress' => collect(self::projects())->firstWhere('code', $projectId)['progress'] ?? 0, 'risk' => 'medium']; }
 
+    public static function realSites(): array
+    {
+        try {
+            if (! Schema::hasTable('sites')) {
+                return [];
+            }
+
+            return Site::query()
+                ->whereHas('employees', fn ($query) => $query->where('employment_status', 'active'))
+                ->orderBy('code')
+                ->get()
+                ->mapWithKeys(fn (Site $site): array => [$site->code => trim($site->code . ' - ' . $site->name)])
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    public static function realPersonnel(string $siteId = 'ALL'): array
+    {
+        return self::employeeRows($siteId)
+            ->map(fn (Employee $employee): array => self::formatEmployee($employee))
+            ->values()
+            ->all();
+    }
+
+    public static function realPersonnelStats(string $siteId = 'ALL'): array
+    {
+        $people = self::realPersonnel($siteId);
+        $byCompany = [];
+
+        foreach ($people as $person) {
+            $company = $person['company'] ?: 'Unassigned';
+            $byCompany[$company] = ($byCompany[$company] ?? 0) + 1;
+        }
+
+        return [
+            'total' => count($people),
+            'active' => count(array_filter($people, fn ($p) => ($p['workerStatus'] ?? '') === 'active')),
+            'onLeave' => count(array_filter($people, fn ($p) => ($p['workerStatus'] ?? '') === 'on_leave')),
+            'visaExpiringSoon' => count(array_filter($people, fn ($p) => self::dateWithinDays($p['visaExpiry'] ?? null, 60))),
+            'safetyExpiring' => count(array_filter($people, fn ($p) => self::dateWithinDays($p['safetyTrainingExpiresOn'] ?? null, 60))),
+            'byCompany' => array_map(fn ($name, $count) => ['name' => $name, 'count' => $count], array_keys($byCompany), $byCompany),
+        ];
+    }
+
+    public static function realHrData(string $siteId = 'ALL'): array
+    {
+        return [
+            'success' => true,
+            'stats' => self::realPersonnelStats($siteId),
+            'list' => self::realPersonnel($siteId),
+            'attendance' => self::realAttendanceLive($siteId),
+        ];
+    }
+
+    public static function realGlobalAttendance(): array
+    {
+        $people = self::activeRealPersonnel('ALL');
+        [$checkedIn, $notCheckedIn] = self::realAttendanceRows($people);
+        $siteStats = [];
+
+        foreach (self::realSites() as $id => $name) {
+            $sitePeople = self::activeRealPersonnel($id);
+            if (count($sitePeople) === 0) {
+                continue;
+            }
+
+            $present = count(array_filter($checkedIn, fn ($p) => $p['site'] === $id));
+            $siteStats[$id] = ['siteName' => $name, 'totalActive' => count($sitePeople), 'presentCount' => $present];
+        }
+
+        return [
+            'success' => true,
+            'mode' => 'global',
+            'date' => Carbon::now()->toDateString(),
+            'checkedIn' => $checkedIn,
+            'notCheckedIn' => $notCheckedIn,
+            'siteStats' => $siteStats,
+            'totalPresent' => count($checkedIn),
+            'totalWorkers' => count($people),
+            'absentCount' => count($notCheckedIn),
+            'activeSiteCount' => count($siteStats),
+        ];
+    }
+
+    public static function realAttendanceLive(string $siteId): array
+    {
+        $people = self::activeRealPersonnel($siteId);
+        [$checkedIn, $notCheckedIn] = self::realAttendanceRows($people);
+        $summary = [];
+
+        foreach ($checkedIn as $row) {
+            $team = $row['team'] ?: 'Unassigned';
+            $summary[$team] = ($summary[$team] ?? 0) + 1;
+        }
+
+        return [
+            'success' => true,
+            'checkedIn' => $checkedIn,
+            'notCheckedIn' => $notCheckedIn,
+            'teamSummary' => array_map(fn ($team, $count) => ['team' => $team, 'count' => $count], array_keys($summary), $summary),
+            'totalActive' => count($people),
+            'presentCount' => count($checkedIn),
+            'absentCount' => count($notCheckedIn),
+            'date' => Carbon::now()->toDateString(),
+        ];
+    }
+
+    public static function realDailyTeamMatrix(string $siteId): array
+    {
+        $people = self::activeRealPersonnel($siteId);
+        $teams = array_values(array_unique(array_map(fn ($p) => $p['team'] ?: 'Unassigned', $people)));
+
+        return [
+            'success' => true,
+            'date' => Carbon::now()->toDateString(),
+            'teams' => $teams,
+            'matrix' => [],
+            'foremen' => [],
+            'subtotals' => [],
+            'totals' => ['total' => count($people)],
+        ];
+    }
+
+    public static function realDailyAttendanceDetail(string $siteId, mixed $date): array
+    {
+        $people = self::activeRealPersonnel($siteId);
+        $targetDate = $date ? Carbon::parse($date)->toDateString() : Carbon::now()->toDateString();
+        $attendance = self::realAttendanceMap($people, $targetDate);
+        $companies = [];
+
+        foreach ($people as $person) {
+            $company = $person['company'] ?: 'Unassigned';
+            $team = $person['team'] ?: 'Unassigned';
+            $state = $attendance[$person['employeeDbId']] ?? ['isPresent' => false, 'checkIn' => null, 'checkOut' => null];
+
+            $companies[$company]['name'] = $company;
+            $companies[$company]['teams'][$team][] = array_merge($person, [
+                'isOpen' => $state['isPresent'],
+                'todayIn' => $state['checkIn'],
+                'todayOut' => $state['checkOut'],
+            ]);
+        }
+
+        $companyRows = [];
+        foreach ($companies as $company) {
+            $teamRows = [];
+            $total = 0;
+            foreach ($company['teams'] as $team => $members) {
+                $count = count($members);
+                $total += $count;
+                $teamRows[] = ['team' => $team, 'members' => array_values($members), 'count' => $count];
+            }
+
+            $companyRows[] = [
+                'name' => $company['name'],
+                'total' => $total,
+                'divide' => ['manager' => 0, 'korean' => 0, 'local' => $total],
+                'teams' => $teamRows,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'date' => $targetDate,
+            'availableDates' => [$targetDate],
+            'companies' => $companyRows,
+            'teamStats' => collect($companyRows)->flatMap(fn ($company) => $company['teams'])->map(fn ($team) => ['team' => $team['team'], 'count' => $team['count']])->values()->all(),
+            'totalAttended' => count($people),
+        ];
+    }
+
+    public static function realEmployeeDetail(string $badgeId, string $siteId): array
+    {
+        $person = collect(self::realPersonnel('ALL'))->first(fn ($p) => ($p['badgeId'] ?? $p['id']) === $badgeId || ($p['id'] ?? '') === $badgeId);
+        if (! $person) {
+            return ['success' => false, 'employee' => null];
+        }
+
+        $state = self::realAttendanceMap([$person])[$person['employeeDbId']] ?? ['isPresent' => false, 'checkIn' => null, 'checkOut' => null];
+
+        return [
+            'success' => true,
+            'employee' => array_merge($person, [
+                'todayIn' => $state['checkIn'],
+                'todayOut' => $state['checkOut'],
+                'isOpen' => $state['isPresent'],
+            ]),
+        ];
+    }
+
+    public static function realPersonnelCard(string $uid): array
+    {
+        $person = collect(self::realPersonnel('ALL'))->first(fn ($p) => ($p['id'] ?? '') === $uid || ($p['badgeId'] ?? '') === $uid);
+        if (! $person) {
+            return ['success' => false, 'person' => null];
+        }
+
+        return [
+            'success' => true,
+            'person' => array_merge($person, [
+                'passport' => null,
+                'birthday' => null,
+                'nationality' => $person['nationality'] ?? null,
+            ]),
+            'vehicle' => null,
+            'housing' => null,
+            'flights' => [],
+        ];
+    }
+
+    private static function employeeRows(string $siteId = 'ALL')
+    {
+        try {
+            if (! Schema::hasTable('employees')) {
+                return collect();
+            }
+
+            return Employee::query()
+                ->with(['company', 'site', 'team'])
+                ->when($siteId !== 'ALL', fn ($query) => $query->whereHas('site', fn ($siteQuery) => $siteQuery->where('code', $siteId)))
+                ->orderBy('name')
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
+    }
+
+    private static function formatEmployee(Employee $employee): array
+    {
+        $payload = is_array($employee->payload) ? $employee->payload : [];
+        $siteCode = $employee->site?->code ?? ($payload['site'] ?? '');
+        $companyName = $employee->company?->name ?? ($payload['company'] ?? '');
+        $teamName = $employee->team?->name ?? ($payload['team'] ?? '');
+
+        return [
+            'employeeDbId' => $employee->id,
+            'id' => $employee->employee_number,
+            'badgeId' => $employee->badge_number ?: $employee->employee_number,
+            'nameEn' => $employee->name,
+            'nameKr' => $payload['nameKr'] ?? '',
+            'company' => $companyName,
+            'team' => $teamName,
+            'role' => $employee->role,
+            'site' => $siteCode,
+            'visa' => $payload['visa'] ?? null,
+            'visaExpiry' => $employee->visa_expires_on?->toDateString(),
+            'safety' => self::expiryLabel($employee->safety_training_expires_on),
+            'safetyTrainingExpiresOn' => $employee->safety_training_expires_on?->toDateString(),
+            'workerStatus' => $employee->employment_status,
+            'phone' => $payload['phone'] ?? null,
+            'email' => $employee->email,
+            'nationality' => $employee->nationality,
+        ];
+    }
+
+    private static function activeRealPersonnel(string $siteId = 'ALL'): array
+    {
+        return array_values(array_filter(self::realPersonnel($siteId), fn ($person) => ($person['workerStatus'] ?? null) === 'active'));
+    }
+
+    private static function realAttendanceRows(array $people, ?string $date = null): array
+    {
+        $attendance = self::realAttendanceMap($people, $date);
+        $checkedIn = [];
+        $notCheckedIn = [];
+
+        foreach ($people as $person) {
+            $state = $attendance[$person['employeeDbId']] ?? ['isPresent' => false, 'checkIn' => null, 'checkOut' => null];
+            $row = [
+                'name' => $person['nameEn'],
+                'company' => $person['company'],
+                'team' => $person['team'],
+                'site' => $person['site'],
+                'checkIn' => $state['checkIn'],
+                'checkOut' => $state['checkOut'],
+                'nfcUid' => $person['badgeId'],
+            ];
+
+            if ($state['isPresent']) {
+                $checkedIn[] = $row;
+            } else {
+                $notCheckedIn[] = $row;
+            }
+        }
+
+        return [$checkedIn, $notCheckedIn];
+    }
+
+    private static function realAttendanceMap(array $people, ?string $date = null): array
+    {
+        $ids = array_values(array_filter(array_map(fn ($person) => $person['employeeDbId'] ?? null, $people)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $targetDate = $date ?: Carbon::now()->toDateString();
+
+        try {
+            if (! Schema::hasTable('attendance_logs')) {
+                return [];
+            }
+
+            $logs = AttendanceLog::query()
+                ->whereIn('employee_id', $ids)
+                ->whereDate('attendance_date', $targetDate)
+                ->where('status', '!=', 'rejected')
+                ->orderBy('event_at')
+                ->get()
+                ->groupBy('employee_id');
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $states = [];
+        foreach ($logs as $employeeId => $employeeLogs) {
+            $checkIn = null;
+            $checkOut = null;
+
+            foreach ($employeeLogs as $log) {
+                $type = strtolower((string) $log->event_type);
+                if (str_contains($type, 'out')) {
+                    $checkOut = $log->event_at;
+                    continue;
+                }
+
+                if (str_contains($type, 'in') || str_contains($type, 'check')) {
+                    $checkIn = $log->event_at;
+                }
+            }
+
+            $states[$employeeId] = [
+                'isPresent' => $checkIn !== null && ($checkOut === null || $checkOut->lessThan($checkIn)),
+                'checkIn' => $checkIn?->format('H:i'),
+                'checkOut' => $checkOut?->format('H:i'),
+            ];
+        }
+
+        return $states;
+    }
+
+    private static function dateWithinDays(?string $date, int $days): bool
+    {
+        if (! $date) {
+            return false;
+        }
+
+        $target = Carbon::parse($date);
+
+        return $target->isFuture() && $target->lte(now()->addDays($days));
+    }
+
+    private static function expiryLabel(mixed $date): string
+    {
+        if (! $date) {
+            return 'missing';
+        }
+
+        $target = Carbon::parse($date);
+        if ($target->isPast()) {
+            return 'expired';
+        }
+
+        return $target->lte(now()->addDays(60)) ? 'expiring_soon' : 'valid';
+    }
+
     private static function defaultResponse(string $method): mixed
     {
         if (str_starts_with($method, 'api_get')) {
@@ -384,4 +751,3 @@ class SmartCompanyData
         return ['success' => true, 'method' => $method, 'message' => 'Endpoint stub is ready for implementation.'];
     }
 }
-

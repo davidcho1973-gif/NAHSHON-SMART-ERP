@@ -119,7 +119,10 @@ class MemberRegistration extends Model
             'approved_by_id' => $user?->id,
         ])->save();
 
-        return $this->syncEmployee();
+        $employee = $this->syncEmployee();
+        $this->syncAccessUser($employee);
+
+        return $employee;
     }
 
     public function syncEmployee(): Employee
@@ -128,9 +131,11 @@ class MemberRegistration extends Model
             ['employee_number' => $this->employee_number ?: $this->registration_number],
             [
                 'company_id' => $this->company_id,
+                'site_id' => $this->site_id,
                 'team_id' => $this->team_id,
                 'badge_number' => $this->badge_number,
                 'name' => $this->full_name,
+                'email' => $this->email ? Str::lower($this->email) : null,
                 'nationality' => $this->nationality,
                 'role' => $this->role ?: $this->trade,
                 'employment_status' => 'active',
@@ -149,6 +154,35 @@ class MemberRegistration extends Model
         $this->forceFill(['employee_id' => $employee->id])->saveQuietly();
 
         return $employee;
+    }
+
+    private function syncAccessUser(Employee $employee): ?User
+    {
+        if (! $this->email) {
+            return null;
+        }
+
+        $accessUser = User::query()->firstOrNew(['email' => Str::lower($this->email)]);
+
+        $accessUser->fill([
+            'employee_id' => $employee->id,
+            'name' => $this->full_name,
+            'access_role' => $accessUser->access_role ?: 'worker',
+            'access_scope' => $accessUser->access_scope ?: 'self',
+            'account_status' => $accessUser->account_status ?: 'active',
+            'allowed_company_id' => $accessUser->allowed_company_id ?: $this->company_id,
+            'allowed_site_id' => $accessUser->allowed_site_id ?: $this->site_id,
+            'allowed_team_id' => $accessUser->allowed_team_id ?: $this->team_id,
+            'email_verified_at' => $accessUser->email_verified_at ?: now(),
+        ]);
+
+        if (! $accessUser->exists || ! $accessUser->password) {
+            $accessUser->password = Str::password(32);
+        }
+
+        $accessUser->save();
+
+        return $accessUser;
     }
 
     private static function makeRegistrationNumber(): string

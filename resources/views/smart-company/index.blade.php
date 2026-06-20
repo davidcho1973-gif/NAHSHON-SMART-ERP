@@ -175,10 +175,10 @@
             <select id="project-context-switcher"
               onchange="window.setProjectContext(this.value)"
               style="background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:700;cursor:pointer;outline:none;font-family:inherit;padding:0 4px;max-width:200px;">
-               <option value="ALL" selected style="background:#1e2030;">ðŸŒ í†µí•© ë·° (Global)</option>
-               <option value="HFF-02" style="background:#1e2030;">ðŸ— HFF-02 â€” Hoffman</option>
-               <option value="LGES-AZ" style="background:#1e2030;">ðŸ— LGES-AZ â€” Battery Plant</option>
-               <option value="NV-05" style="background:#1e2030;">ðŸ— NV-05 â€” Nevada EV Plant</option>
+               <option value="ALL" selected style="background:#1e2030;">Global</option>
+               @foreach (($siteOptions ?? []) as $site)
+                 <option value="{{ $site['code'] }}" style="background:#1e2030;">{{ $site['label'] }}</option>
+               @endforeach
             </select>
           </div>
           <div class="breadcrumbs" style="margin-left: 14px; border-left: 1px solid var(--border-color); padding-left: 14px;">
@@ -221,12 +221,7 @@
     // ============================================================
     window.currentSiteId = 'ALL';
 
-    window.SITE_NAMES = {
-      'ALL':     'í†µí•© ë·° (Global)',
-      'HFF-02':  'HFF-02 â€” Hoffman',
-      'LGES-AZ': 'LGES-AZ â€” Battery Plant',
-      'NV-05':   'NV-05 â€” Nevada EV Plant',
-    };
+    window.SITE_NAMES = @json($siteNames ?? ['ALL' => 'Global']);
 
     function _siteId() {
       return (window.currentSiteId && window.currentSiteId !== '') ? window.currentSiteId : 'ALL';
@@ -684,6 +679,25 @@
       }
       return makeRunner(null, null);
     })();
+    MockAPI.getPersonnelList = async () => [];
+    MockAPI.getPersonnelStats = async () => ({
+      total: 0,
+      active: 0,
+      onLeave: 0,
+      visaExpiringSoon: 0,
+      safetyExpiring: 0,
+      byCompany: [],
+    });
+    MockAPI.getAttendanceLive = async () => ({
+      success: true,
+      checkedIn: [],
+      notCheckedIn: [],
+      teamSummary: [],
+      totalActive: 0,
+      presentCount: 0,
+      absentCount: 0,
+    });
+
     window.MockAPI = MockAPI;
 
     window.API = {
@@ -5926,5 +5940,3 @@ async function renderVendors() {
 
 </body>
 </html>
-
-
