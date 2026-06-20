@@ -426,7 +426,6 @@
     ['Choose light, dark, or automatic based on system settings.', 'Elija claro, oscuro o automático según el sistema.'],
     ['Select the language displayed in the interface.', 'Seleccione el idioma mostrado en la interfaz.'],
     ['Select the timezone used for displaying dates and times.', 'Seleccione la zona horaria para mostrar fechas y horas.'],
-    ['When enabled, the right sidebar quick menu stays visible on account pages.', 'Cuando está activado, el menú rápido derecho permanece visible en las páginas de cuenta.'],
     ['Select the default view for document and folder lists.', 'Seleccione la vista predeterminada para documentos y carpetas.'],
     ['Select the default sorting criteria for document lists.', 'Seleccione el criterio de orden predeterminado.'],
     ['Choose ascending or descending order.', 'Elija orden ascendente o descendente.'],
