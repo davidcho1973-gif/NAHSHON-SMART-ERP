@@ -53,7 +53,7 @@ class CompanyResource extends Resource
                 ->required(),
             Select::make('sites')
                 ->label('담당 현장 (Sites)')
-                ->relationship('sites', 'code')
+                ->relationship('sites', 'code', fn ($query) => $query->select('sites.id', 'sites.code'))
                 ->multiple()
                 ->preload()
                 ->searchable(),

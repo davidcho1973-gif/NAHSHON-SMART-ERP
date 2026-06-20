@@ -58,7 +58,7 @@ class SiteResource extends Resource
                 ->required(),
             Select::make('companies')
                 ->label('원청사 (Companies)')
-                ->relationship('companies', 'name')
+                ->relationship('companies', 'name', fn ($query) => $query->select('companies.id', 'companies.name'))
                 ->multiple()
                 ->preload()
                 ->searchable(),
