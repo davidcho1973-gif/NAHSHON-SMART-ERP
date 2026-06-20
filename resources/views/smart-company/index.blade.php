@@ -1042,6 +1042,22 @@
           if (!item) return;
           openAccountView(item.getAttribute('data-account-view'));
         });
+        accountDropdown.querySelectorAll('[data-account-view]').forEach(function (item) {
+          item.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            openAccountView(item.getAttribute('data-account-view'));
+          });
+        });
+        var logoutButton = accountDropdown.querySelector('[data-account-logout]');
+        if (logoutButton) {
+          logoutButton.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeAccountDropdown();
+            window.location.href = '/admin/login';
+          });
+        }
         document.addEventListener('click', function (event) {
           if (!event.target.closest('.account-menu-wrap')) closeAccountDropdown();
         });
