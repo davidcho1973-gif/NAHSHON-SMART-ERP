@@ -11,6 +11,7 @@ use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -148,6 +149,7 @@ class UserAccessResource extends Resource
                     ->visible(fn (User $record): bool => $record->account_status === 'active')
                     ->action(fn (User $record): bool => $record->forceFill(['account_status' => 'suspended'])->save()),
                 EditAction::make(),
+                DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -6,6 +6,7 @@ use App\Filament\Resources\MemberDocuments\Pages\ManageMemberDocuments;
 use App\Filament\Resources\MemberDocuments\Pages\ManageMemberUploadedDocuments;
 use App\Models\MemberRegistration;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -132,6 +133,7 @@ class MemberDocumentResource extends Resource
                     ->label('Documents')
                     ->icon('heroicon-o-document-check')
                     ->url(fn (MemberRegistration $record): string => static::getUrl('documents', ['record' => $record])),
+                DeleteAction::make(),
             ])
             ->recordUrl(fn (MemberRegistration $record): string => static::getUrl('documents', ['record' => $record]));
     }
