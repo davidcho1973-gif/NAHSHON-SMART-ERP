@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-21 | Antigravity | Core resources | Added individual delete action (DeleteAction) to all core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control). | `15f6981` | `php artisan test` passed locally. |
 | 2026-06-21 | Antigravity | Member registration | Added individual delete action to Member Registration resource. | `0b3d27a` | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Member documents / employee sync | Changed Member Documents to one row per member with a per-member document detail page; repaired mismatched Member Registration to Employee links. | Deploy pending | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Auth / access | Required Google OAuth for ERP entry and linked successful Google login to active ERP users. | Deploy pending | `php artisan test` passed locally. |
@@ -108,6 +109,7 @@ Use this section for manual owner checks, business decisions, and final approval
 
 - 2026-06-20: Added many-to-many site and company management resources and resolved PostgreSQL distinct JSON query error.
 - 2026-06-21: Added individual delete action (DeleteAction) to Member Registration resource.
+- 2026-06-21: Added individual delete action (DeleteAction) to all other core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control).
 
 ### Planned / Next
 
