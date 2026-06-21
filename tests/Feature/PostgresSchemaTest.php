@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PostgresSchemaTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_erp_postgresql_schema_foundation_exists(): void
     {
         $this->assertSame('pgsql', config('database.default'));
@@ -25,6 +28,19 @@ class PostgresSchemaTest extends TestCase
             'ai_outputs',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Missing table: {$table}");
+        }
+
+        foreach ([
+            'first_name',
+            'last_name',
+            'badge_company_name',
+            'badge_issued_on',
+            'badge_photo_path',
+            'badge_analysis_model',
+            'badge_analyzed_at',
+            'badge_analysis_payload',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('employees', $column), "Missing employees column: {$column}");
         }
     }
 }

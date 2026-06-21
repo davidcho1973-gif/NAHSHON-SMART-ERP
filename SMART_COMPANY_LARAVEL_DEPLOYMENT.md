@@ -52,9 +52,13 @@ GOOGLE_CLIENT_ID="your-google-oauth-client-id"
 GOOGLE_CLIENT_SECRET="your-google-oauth-client-secret"
 GOOGLE_REDIRECT_URI="https://your-domain.com/auth/google/callback"
 GOOGLE_AUTH_PROMPT=
+GEMINI_API_KEY="your-gemini-api-key"
+GEMINI_MODEL="gemini-3.5-flash"
 ```
 
 Google OAuth callback URLs must be registered in Google Cloud Console for each environment. Store the client secret only in `.env` or Laravel Cloud environment variables.
+
+Gemini API credentials are used by the Employees resource to analyze uploaded badge photos. Store the key only in `.env` or Laravel Cloud environment variables.
 
 ## Production deployment checklist
 

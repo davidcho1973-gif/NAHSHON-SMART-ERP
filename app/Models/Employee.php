@@ -17,8 +17,16 @@ class Employee extends Model
         'team_id',
         'employee_number',
         'badge_number',
+        'first_name',
+        'last_name',
         'name',
         'email',
+        'badge_company_name',
+        'badge_issued_on',
+        'badge_photo_path',
+        'badge_analysis_model',
+        'badge_analyzed_at',
+        'badge_analysis_payload',
         'nationality',
         'role',
         'employment_status',
@@ -30,6 +38,9 @@ class Employee extends Model
     protected function casts(): array
     {
         return [
+            'badge_issued_on' => 'date',
+            'badge_analyzed_at' => 'datetime',
+            'badge_analysis_payload' => 'array',
             'visa_expires_on' => 'date',
             'safety_training_expires_on' => 'date',
             'payload' => 'array',

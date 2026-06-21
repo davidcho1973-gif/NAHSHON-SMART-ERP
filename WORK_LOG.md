@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-21 | CODEX | Employee badge AI | Added employee badge photo capture/upload, Gemini 3.5 Flash extraction, badge image storage, and employee form autofill fields. | Deploy pending | `php artisan test` passed locally. |
 | 2026-06-21 | Antigravity | Core resources | Added individual delete action (DeleteAction) to all core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control). | `15f6981` | `php artisan test` passed locally. |
 | 2026-06-21 | Antigravity | Member registration | Added individual delete action to Member Registration resource. | `0b3d27a` | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Member documents / employee sync | Changed Member Documents to one row per member with a per-member document detail page; repaired mismatched Member Registration to Employee links. | Deploy pending | `php artisan test` passed locally. |
@@ -72,6 +73,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-20: Fixed Member Registration downstream sync to Employees, Access Control, and Member Documents, including existing active/approved registration backfill.
 - 2026-06-20: Changed Member Documents into a member-level list with per-member uploaded document management.
 - 2026-06-20: Repaired Member Registration to Employee sync when existing data points a registration at another worker's employee record.
+- 2026-06-21: Added Gemini 3.5 Flash badge photo analysis to the Employees create/edit form with camera/file upload and stored badge images.
 
 ### Current Boundaries
 

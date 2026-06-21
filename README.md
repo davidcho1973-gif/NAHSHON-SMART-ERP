@@ -88,6 +88,15 @@ GOOGLE_AUTH_PROMPT=
 
 In Google Cloud Console, add the production callback URL as `https://your-domain.com/auth/google/callback`.
 
+Employee badge photo analysis uses Gemini. Configure the API key in `.env` or Laravel Cloud environment variables:
+
+```env
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_API_ENDPOINT=https://generativelanguage.googleapis.com
+GEMINI_TIMEOUT=30
+```
+
 ## Development Notes
 
 Do not commit these files or folders:
