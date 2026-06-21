@@ -105,10 +105,7 @@ class User extends Authenticatable implements FilamentUser
             'site_manager' => '/admin',
             'safety_manager' => '/admin/member-documents',
             'payroll' => '/admin',
-            'foreman' => '/portal/team',
-            'vendor_admin' => '/portal/company',
-            'viewer' => '/portal/view',
-            default => '/portal/me',
+            default => '/',
         };
     }
 

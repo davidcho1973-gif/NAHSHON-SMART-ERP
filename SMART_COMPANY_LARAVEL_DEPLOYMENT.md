@@ -48,7 +48,13 @@ Change these in `.env` before production:
 SMART_COMPANY_ADMIN_NAME="Admin User"
 SMART_COMPANY_ADMIN_EMAIL=admin@nahshonmep.com
 SMART_COMPANY_ADMIN_PASSWORD="a-long-random-password"
+GOOGLE_CLIENT_ID="your-google-oauth-client-id"
+GOOGLE_CLIENT_SECRET="your-google-oauth-client-secret"
+GOOGLE_REDIRECT_URI="https://your-domain.com/auth/google/callback"
+GOOGLE_AUTH_PROMPT=
 ```
+
+Google OAuth callback URLs must be registered in Google Cloud Console for each environment. Store the client secret only in `.env` or Laravel Cloud environment variables.
 
 ## Production deployment checklist
 

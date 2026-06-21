@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class MemberRegistration extends Model
@@ -74,6 +75,15 @@ class MemberRegistration extends Model
         static::saving(function (MemberRegistration $registration): void {
             $registration->refreshAutomationSignals();
         });
+
+        // 단일 연동 트리거: 회원등록이 approved/active 로 저장되면 Create/Edit/Approve
+        // 어떤 경로든 직원·계정·문서로 자동 반영한다. syncEmployee 의 자기 저장은
+        // saveQuietly 라 이 saved 훅을 재귀 호출하지 않는다.
+        static::saved(function (MemberRegistration $registration): void {
+            if (in_array($registration->onboarding_status, ['approved', 'active'], true)) {
+                $registration->syncDownstream();
+            }
+        });
     }
 
     public function employee(): BelongsTo
@@ -113,43 +123,115 @@ class MemberRegistration extends Model
 
     public function approve(?User $user = null): Employee
     {
+        // save() 가 saved 훅을 통해 syncDownstream 을 실행한다.
         $this->forceFill([
             'onboarding_status' => 'active',
             'approved_at' => now(),
             'approved_by_id' => $user?->id,
         ])->save();
 
-        $employee = $this->syncEmployee();
-        $this->syncAccessUser($employee);
+        return $this->employee()->firstOrFail();
+    }
 
-        return $employee;
+    /**
+     * 회원등록을 직원(Employees) · 접근계정(Access Control) · 문서(Member Documents)로
+     * 일괄 반영한다. updateOrCreate/firstOrCreate 기반이라 여러 번 호출해도 안전(idempotent).
+     */
+    public function syncDownstream(): Employee
+    {
+        return DB::transaction(function (): Employee {
+            $employee = $this->syncEmployee();
+            $this->syncAccessUser($employee);
+            $this->syncDocuments();
+
+            return $employee;
+        });
+    }
+
+    /**
+     * 접근계정이 생성/연결됐는지 여부(이메일이 없으면 계정은 생성되지 않는다).
+     */
+    public function hasAccessAccount(): bool
+    {
+        return User::query()
+            ->when(
+                $this->employee_id,
+                fn ($query) => $query->where('employee_id', $this->employee_id),
+                fn ($query) => $query->whereRaw('1 = 0'),
+            )
+            ->when($this->email, fn ($query) => $query->orWhere('email', Str::lower($this->email)))
+            ->exists();
+    }
+
+    /**
+     * 기본 서류 체크리스트를 생성한다. 이미 존재하는 문서는 건드리지 않는다(firstOrCreate).
+     */
+    private function syncDocuments(): void
+    {
+        $status = match ($this->document_status) {
+            'verified' => 'verified',
+            'expired' => 'expired',
+            default => 'pending',
+        };
+
+        $checklist = [
+            ['document_type' => 'id', 'title' => '신분증 (ID)', 'expires_on' => null],
+            ['document_type' => 'safety_training', 'title' => '안전교육 수료증 (Safety Training)', 'expires_on' => $this->safety_training_expires_on],
+        ];
+
+        if ($this->visa_type || $this->visa_expires_on) {
+            $checklist[] = ['document_type' => 'visa', 'title' => '비자 (Visa)', 'expires_on' => $this->visa_expires_on];
+        }
+
+        foreach ($checklist as $doc) {
+            MemberDocument::query()->firstOrCreate(
+                [
+                    'member_registration_id' => $this->id,
+                    'document_type' => $doc['document_type'],
+                ],
+                [
+                    'title' => $doc['title'],
+                    'status' => $status,
+                    'expires_on' => $doc['expires_on'],
+                    'verified_at' => $status === 'verified' ? now() : null,
+                ],
+            );
+        }
     }
 
     public function syncEmployee(): Employee
     {
-        $employee = Employee::query()->updateOrCreate(
-            ['employee_number' => $this->employee_number ?: $this->registration_number],
-            [
-                'company_id' => $this->company_id,
+        $employeeNumber = $this->employee_number ?: $this->registration_number;
+        $email = $this->email ? Str::lower($this->email) : null;
+
+        $employee = $this->employee()->first()
+            ?? Employee::query()->where('employee_number', $employeeNumber)->first()
+            ?? ($email ? Employee::query()->where('email', $email)->first() : null)
+            ?? new Employee(['employee_number' => $employeeNumber]);
+
+        $employee->fill([
+            'employee_number' => $employeeNumber,
+            'company_id' => $this->company_id,
+            'site_id' => $this->site_id,
+            'team_id' => $this->team_id,
+            'badge_number' => $this->badge_number,
+            'name' => $this->full_name,
+            'email' => $email,
+            'nationality' => $this->nationality,
+            'role' => $this->role ?: $this->trade,
+            'employment_status' => 'active',
+            'visa_expires_on' => $this->visa_expires_on,
+            'safety_training_expires_on' => $this->safety_training_expires_on,
+            'payload' => array_merge($employee->payload ?? [], [
+                'member_registration_id' => $this->id,
+                'member_type' => $this->member_type,
                 'site_id' => $this->site_id,
-                'team_id' => $this->team_id,
-                'badge_number' => $this->badge_number,
-                'name' => $this->full_name,
-                'email' => $this->email ? Str::lower($this->email) : null,
-                'nationality' => $this->nationality,
-                'role' => $this->role ?: $this->trade,
-                'employment_status' => 'active',
-                'visa_expires_on' => $this->visa_expires_on,
-                'safety_training_expires_on' => $this->safety_training_expires_on,
-                'payload' => [
-                    'member_registration_id' => $this->id,
-                    'member_type' => $this->member_type,
-                    'site_id' => $this->site_id,
-                    'trade' => $this->trade,
-                    'source' => 'smart-member-registration',
-                ],
-            ],
-        );
+                'trade' => $this->trade,
+                'source' => 'smart-member-registration',
+            ]),
+        ]);
+
+        $employee->save();
 
         $this->forceFill(['employee_id' => $employee->id])->saveQuietly();
 
@@ -162,11 +244,16 @@ class MemberRegistration extends Model
             return null;
         }
 
-        $accessUser = User::query()->firstOrNew(['email' => Str::lower($this->email)]);
+        $email = Str::lower($this->email);
+
+        $accessUser = User::query()->where('employee_id', $employee->id)->first()
+            ?? User::query()->where('email', $email)->first()
+            ?? new User();
 
         $accessUser->fill([
             'employee_id' => $employee->id,
             'name' => $this->full_name,
+            'email' => $email,
             'access_role' => $accessUser->access_role ?: 'worker',
             'access_scope' => $accessUser->access_scope ?: 'self',
             'account_status' => $accessUser->account_status ?: 'active',

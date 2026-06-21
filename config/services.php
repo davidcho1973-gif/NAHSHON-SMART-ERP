@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+        'prompt' => env('GOOGLE_AUTH_PROMPT'),
+        'auth_url' => 'https://accounts.google.com/o/oauth2/v2/auth',
+        'token_url' => 'https://oauth2.googleapis.com/token',
+        'userinfo_url' => 'https://openidconnect.googleapis.com/v1/userinfo',
+    ],
+
 ];

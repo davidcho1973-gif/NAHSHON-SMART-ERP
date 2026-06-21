@@ -69,6 +69,14 @@
 </head>
 
 <body>
+  @php
+    $authUser = $authUser ?? [
+      'name' => 'ERP User',
+      'email' => '',
+      'role' => 'ERP User',
+      'initials' => 'ER',
+    ];
+  @endphp
   <div class="erp-layout">
     <aside class="sidebar">
       <div class="sidebar-brand">
@@ -157,10 +165,10 @@
       </div>
       <div class="sidebar-footer">
         <div class="user-block">
-          <div class="user-avatar">AD</div>
+          <div class="user-avatar">{{ $authUser['initials'] }}</div>
           <div class="user-details">
-            <div class="user-name">Admin User</div>
-            <div class="user-role">System Administrator</div>
+            <div class="user-name">{{ $authUser['name'] }}</div>
+            <div class="user-role">{{ $authUser['role'] }}</div>
           </div>
           <i class="ph ph-caret-right" style="color:var(--text-tertiary)"></i>
         </div>
@@ -206,14 +214,14 @@
               <i class="ph ph-bell"></i>
               <span class="status-dot"></span>
             </button>
-            <button class="icon-btn" id="btn-settings" title="Admin Login">
+            <button class="icon-btn" id="btn-settings" title="ì„¤ì •">
               <i class="ph ph-gear"></i>
             </button>
           </div>
           <div class="account-menu-wrap">
             <button class="account-button" id="account-menu-button" type="button" aria-expanded="false">
-              <span class="account-avatar">AD</span>
-              <span>My Account (NAHSHON MEP)</span>
+              <span class="account-avatar">{{ $authUser['initials'] }}</span>
+              <span>{{ $authUser['name'] }}</span>
               <i class="ph ph-caret-down"></i>
             </button>
             <div class="account-dropdown" id="account-dropdown" hidden>
@@ -244,7 +252,7 @@
               </div>
               <div class="account-menu-group">
                 <button class="account-menu-item" type="button" data-account-logout>
-                  <i class="ph ph-sign-out"></i><span>Logout (Admin User)</span>
+                  <i class="ph ph-sign-out"></i><span>Logout ({{ $authUser['name'] }})</span>
                 </button>
               </div>
             </div>
@@ -945,19 +953,20 @@
       const breadcrumbCurrent = document.getElementById('breadcrumb-current');
       const alertBadge = document.getElementById('alert-badge');
       const accountStorageKey = 'nahshonAccountProfile';
+      const authenticatedAccount = @json($authUser);
       const accountDefaults = {
         company: 'NAHSHON MEP',
-        name: 'David Cho',
-        firstName: 'David',
-        lastName: 'Cho',
+        name: authenticatedAccount.name || 'ERP User',
+        firstName: (authenticatedAccount.name || 'ERP').split(' ')[0] || 'ERP',
+        lastName: (authenticatedAccount.name || 'User').split(' ').slice(1).join(' ') || 'User',
         preferredName: '',
-        employeeCode: 'ADMIN-001',
-        jobTitle: 'System Administrator',
+        employeeCode: authenticatedAccount.email || 'ERP',
+        jobTitle: authenticatedAccount.role || 'ERP User',
         department: 'Operations',
         location: 'HFF-02',
         manager: 'NAHSHON MEP',
-        email: 'davidcho1973@gmail.com',
-        personalEmail: 'davidcho1973@gmail.com',
+        email: authenticatedAccount.email || '',
+        personalEmail: authenticatedAccount.email || '',
         mobile: '+1 (602) 435-6787',
         direct: '+1 (555) 987-6543',
         timezone: 'America/Phoenix'
@@ -1025,6 +1034,19 @@
         closeAccountDropdown();
         window.loadView(viewKey);
       }
+      function submitErpLogout() {
+        var form = document.createElement('form');
+        var token = document.querySelector('meta[name="csrf-token"]');
+        var field = document.createElement('input');
+        form.method = 'POST';
+        form.action = @json(route('logout'));
+        field.type = 'hidden';
+        field.name = '_token';
+        field.value = token ? token.getAttribute('content') : '';
+        form.appendChild(field);
+        document.body.appendChild(form);
+        form.submit();
+      }
       if (accountButton && accountDropdown) {
         accountButton.addEventListener('click', function (event) {
           event.stopPropagation();
@@ -1034,8 +1056,10 @@
         });
         accountDropdown.addEventListener('click', function (event) {
           if (event.target.closest('[data-account-logout]')) {
+            event.preventDefault();
+            event.stopPropagation();
             closeAccountDropdown();
-            window.location.href = '/admin/login';
+            submitErpLogout();
             return;
           }
           var item = event.target.closest('[data-account-view]');
@@ -1055,7 +1079,7 @@
             event.preventDefault();
             event.stopPropagation();
             closeAccountDropdown();
-            window.location.href = '/admin/login';
+            submitErpLogout();
           });
         }
         document.addEventListener('click', function (event) {
@@ -1064,7 +1088,7 @@
       }
       if (sidebarUserBlock) sidebarUserBlock.addEventListener('click', function () { openAccountView('profile'); });
       var settingsButton = document.getElementById('btn-settings');
-      if (settingsButton) settingsButton.addEventListener('click', function () { window.location.href = '/admin/login'; });
+      if (settingsButton) settingsButton.addEventListener('click', function () { openAccountView('ui-settings'); });
 
       window.loadView = function loadView(viewKey) {
         var route = routes[viewKey];

@@ -77,6 +77,17 @@ Password: value of SMART_COMPANY_ADMIN_PASSWORD in your local .env
 
 Change this password before using the app outside local development.
 
+Google sign-in is required for the ERP screen. Configure OAuth credentials in `.env` or Laravel Cloud environment variables:
+
+```env
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
+GOOGLE_AUTH_PROMPT=
+```
+
+In Google Cloud Console, add the production callback URL as `https://your-domain.com/auth/google/callback`.
+
 ## Development Notes
 
 Do not commit these files or folders:

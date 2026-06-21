@@ -16,6 +16,7 @@ use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -118,6 +119,11 @@ class MemberRegistrationResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('registration_number')->label('Registration')->searchable()->sortable(),
+                TextColumn::make('employee.employee_number')
+                    ->label('Employee')
+                    ->badge()
+                    ->placeholder('Not synced')
+                    ->toggleable(),
                 TextColumn::make('full_name')->searchable()->sortable(),
                 TextColumn::make('company.name')->label('Company')->toggleable(),
                 TextColumn::make('site.code')->label('Site')->badge(),
@@ -167,6 +173,17 @@ class MemberRegistrationResource extends Resource
                     ->visible(fn (MemberRegistration $record): bool => $record->onboarding_status !== 'active')
                     ->action(function (MemberRegistration $record): void {
                         $record->approve(auth()->user());
+                        self::notifySyncResult($record);
+                    }),
+                Action::make('resync')
+                    ->label('Re-sync')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->visible(fn (MemberRegistration $record): bool => $record->onboarding_status === 'active')
+                    ->action(function (MemberRegistration $record): void {
+                        $record->syncDownstream();
+                        self::notifySyncResult($record);
                     }),
                 EditAction::make(),
             ])
@@ -175,6 +192,26 @@ class MemberRegistrationResource extends Resource
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    protected static function notifySyncResult(MemberRegistration $record): void
+    {
+        if ($record->hasAccessAccount()) {
+            Notification::make()
+                ->success()
+                ->title('연동 완료')
+                ->body('직원(Employees) · 계정(Access Control) · 서류(Member Documents)에 반영되었습니다.')
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->warning()
+            ->title('계정(Access Control) 미생성 — 이메일 없음')
+            ->body('직원·서류는 반영됐지만, 이메일이 없어 로그인 계정은 만들어지지 않았습니다. 이메일을 입력 후 Re-sync 하세요.')
+            ->persistent()
+            ->send();
     }
 
     public static function getPages(): array
