@@ -57,6 +57,8 @@ class SmartCompanyController extends Controller
             'email' => $user->email,
             'role' => User::ROLE_OPTIONS[$user->access_role] ?? Str::headline($user->access_role ?: 'user'),
             'initials' => $this->initials($name),
+            'employee_id' => $user->employee_id,
+            'raw_role' => $user->access_role,
         ];
     }
 

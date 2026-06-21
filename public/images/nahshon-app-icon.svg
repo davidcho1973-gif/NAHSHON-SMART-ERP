@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="NAHSHON SMART COMPANY">
+  <defs>
+    <linearGradient id="bg" x1="96" y1="80" x2="424" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <rect x="72" y="72" width="368" height="368" rx="92" fill="url(#bg)"/>
+  <text x="256" y="302" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="132" font-weight="900" fill="#fff" letter-spacing="0">NS</text>
+  <path d="M148 352h216" stroke="#dbeafe" stroke-width="18" stroke-linecap="round" opacity=".9"/>
+</svg>

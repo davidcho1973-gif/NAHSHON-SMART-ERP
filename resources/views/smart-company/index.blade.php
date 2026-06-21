@@ -5485,38 +5485,58 @@
       <div
         style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid var(--border-strong); padding-bottom:12px;">
         <h3 style="margin:0; font-size:18px; display:flex; align-items:center; gap:8px;"><i class="ph ph-scan"
-            style="color:var(--brand-primary); font-size:24px;"></i> ìŠ¤ë§ˆíŠ¸ ë¬¸ì„œ AI ìŠ¤ìºë„ˆ</h3>
+            style="color:var(--brand-primary); font-size:24px;"></i> 스마트 문서 AI 스캐너</h3>
         <button class="icon-btn" onclick="closeUniversalScanner()"><i class="ph ph-x"></i></button>
       </div>
       <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height:1.5;">
-        ìŠ¤ë§ˆíŠ¸í°ìœ¼ë¡œ ì´¬ì˜í•œ ë¬¸ì„œë¥¼ ì—…ë¡œë“œ í•˜ì„¸ìš”.<br>Gemini 2.5 AI ì—”ì§„ì´ ì‚¬ì§„ì„ ìžë™ìœ¼ë¡œ íŒë…í•˜ì—¬ ìž¥ë¶€ì— ì¦‰ì‹œ ë“±ë¡í•©ë‹ˆë‹¤.
+        스마트폰으로 촬영한 문서를 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 사진을 자동으로 판독하여 장부에 즉시 등록합니다.
       </div>
 
       <div style="margin-bottom: 20px;">
         <label
-          style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; font-weight:600;">ìŠ¤ìº” ë¬¸ì„œ
-          ì¢…ë¥˜ ì„ íƒ</label>
+          style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; font-weight:600;">스캔 문서 종류 선택</label>
         <select id="ai-scan-target-category"
           style="width:100%; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--bg-body); color: var(--text-primary); font-size:14px; outline:none;">
-          <option value="EXPENSE">ë¹„ìš© ì˜ìˆ˜ì¦ (ìž¬ë¬´/ê²°ì˜)</option>
-          <option value="VEHICLE">ì°¨ëŸ‰ ë ŒíŠ¸ ë° ë³´í—˜ ì„œë¥˜</option>
-          <option value="HOUSING">ë¶€ë™ì‚° ìž„ëŒ€/ë ŒíŠ¸ ê³„ì•½ì„œ</option>
-          <option value="FLIGHTS">í•­ê³µ E-Ticket / ë³´ë”©íŒ¨ìŠ¤</option>
-          <option value="OFFICE">í˜„ìž¥ ë¹„í’ˆ/êµ¬ë§¤ ì¸ë³´ì´ìŠ¤</option>
-          <option value="VENDORS">ê±°ëž˜ì²˜ ëª…í•¨/ì‚¬ì—…ìžë“±ë¡ì¦ ìŠ¤ìº”</option>
+          <option value="EXPENSE">비용 영수증 (재무/결의)</option>
+          <option value="VEHICLE">차량 렌트 및 보험 서류</option>
+          <option value="HOUSING">부동산 임대/렌트 계약서</option>
+          <option value="FLIGHTS">항공 E-Ticket / 보딩패스</option>
+          <option value="OFFICE">현장 비품/구매 인보이스</option>
+          <option value="VENDORS">거래처 명함/사업자등록증 스캔</option>
         </select>
       </div>
 
+      <!-- Toggle Scanner Mode -->
+      <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+        <button id="btn-toggle-upload" class="btn-primary" onclick="switchScannerMode('upload')" style="flex: 1; justify-content: center; height: 38px; border-radius: 6px;">
+          <i class="ph ph-upload-simple"></i> 파일 업로드 (Upload)
+        </button>
+        <button id="btn-toggle-camera" class="btn-secondary" onclick="switchScannerMode('camera')" style="flex: 1; justify-content: center; height: 38px; border-radius: 6px;">
+          <i class="ph ph-camera"></i> 실시간 카메라 (Webcam)
+        </button>
+      </div>
+
+      <!-- Upload Mode Area -->
       <div id="ai-upload-area"
         style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 40px 20px; text-align: center; cursor: pointer; transition: 0.2s;"
         onmouseover="this.style.borderColor='var(--brand-primary)'"
         onmouseout="this.style.borderColor='var(--border-strong)'"
         onclick="document.getElementById('ai-file-input').click()">
         <i class="ph ph-upload-simple" style="font-size: 36px; color: var(--text-tertiary); margin-bottom: 12px;"></i>
-        <div style="font-weight: 500; font-size:15px; color:var(--text-primary);">í´ë¦­í•˜ì—¬ ì´¬ì˜ ë˜ëŠ” ì‚¬ì§„ ì„ íƒ</div>
-        <div style="font-size: 13px; color: var(--text-tertiary); margin-top: 6px;">ì§€ì›: JPG, PNG, HEIC ë“± ì´ë¯¸ì§€</div>
+        <div style="font-weight: 500; font-size:15px; color:var(--text-primary);">클릭하여 촬영 또는 사진 선택</div>
+        <div style="font-size: 13px; color: var(--text-tertiary); margin-top: 6px;">지원: JPG, PNG, HEIC 등 이미지</div>
         <input type="file" id="ai-file-input" style="display: none;" accept="image/*"
           onchange="handleAiFileSelect(event)">
+      </div>
+
+      <!-- Camera Mode Area -->
+      <div id="ai-camera-area" style="display: none; text-align: center; background: var(--bg-body); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border-strong); margin-bottom: 20px;">
+        <div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">
+          <video id="ai-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+        </div>
+        <button type="button" class="btn-primary" onclick="captureCameraFrame()" style="margin: 12px auto 0; justify-content: center; width: 100%; height: 38px; font-weight: 600; border-radius: 6px;">
+          <i class="ph ph-camera" style="font-size: 16px;"></i> 사진 촬영 (Capture)
+        </button>
       </div>
 
       <div id="ai-preview-container"
@@ -5531,14 +5551,14 @@
       <div id="ai-scan-loading"
         style="display: none; margin-top: 24px; text-align: center; padding: 20px; background: var(--bg-body); border-radius: var(--radius-md);">
         <i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--brand-primary); margin-bottom: 12px;"></i>
-        <div style="font-size: 14px; font-weight: 600; color:var(--text-primary);">AIê°€ ë¬¸ì„œë¥¼ í•´ë… ì¤‘ìž…ë‹ˆë‹¤...</div>
-        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 6px;">ì„œë¥˜ ì¢…ë¥˜ì— ë”°ë¼ ìµœëŒ€ 10~15ì´ˆê°€ ì†Œìš”ë©ë‹ˆë‹¤.</div>
+        <div style="font-size: 14px; font-weight: 600; color:var(--text-primary);">AI가 문서를 해독 중입니다...</div>
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 6px;">서류 종류에 따라 최대 10~15초가 소요됩니다.</div>
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:12px; margin-top: 24px;">
-        <button class="btn-secondary" onclick="closeUniversalScanner()">ì·¨ì†Œ</button>
+        <button class="btn-secondary" onclick="closeUniversalScanner()">취소</button>
         <button class="btn-primary" id="btn-ai-scan-submit" onclick="submitUniversalAiScan()"><i
-            class="ph ph-magic-wand"></i> AI ë¶„ì„ ë° ìžë™ ê¸°ìž…</button>
+            class="ph ph-magic-wand"></i> AI 분석 및 자동 기입</button>
       </div>
     </div>
   </div>
@@ -5677,11 +5697,82 @@
     };
 
 
+    let currentScannerMode = 'upload'; // Track active scanner mode
+
+    window.switchScannerMode = function (mode) {
+      currentScannerMode = mode;
+      if (mode === 'camera') {
+        document.getElementById('btn-toggle-upload').className = 'btn-secondary';
+        document.getElementById('btn-toggle-camera').className = 'btn-primary';
+        document.getElementById('ai-upload-area').style.display = 'none';
+        document.getElementById('ai-camera-area').style.display = 'block';
+        startCameraStream();
+      } else {
+        document.getElementById('btn-toggle-upload').className = 'btn-primary';
+        document.getElementById('btn-toggle-camera').className = 'btn-secondary';
+        document.getElementById('ai-upload-area').style.display = 'block';
+        document.getElementById('ai-camera-area').style.display = 'none';
+        stopCameraStream();
+      }
+    };
+
+    window.startCameraStream = function () {
+      stopCameraStream();
+      const video = document.getElementById('ai-video-stream');
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(function (stream) {
+            video.srcObject = stream;
+          })
+          .catch(function (err) {
+            console.error('Camera stream error:', err);
+            alert('카메라를 활성화할 수 없습니다: ' + err.message);
+            switchScannerMode('upload');
+          });
+      } else {
+        alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+        switchScannerMode('upload');
+      }
+    };
+
+    window.stopCameraStream = function () {
+      const video = document.getElementById('ai-video-stream');
+      if (video && video.srcObject) {
+        const stream = video.srcObject;
+        const tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+      }
+    };
+
+    window.captureCameraFrame = function () {
+      const video = document.getElementById('ai-video-stream');
+      if (!video || !video.srcObject) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      currentAiBase64 = canvas.toDataURL('image/jpeg');
+      currentAiMime = 'image/jpeg';
+
+      document.getElementById('ai-image-preview').src = currentAiBase64;
+      document.getElementById('ai-camera-area').style.display = 'none';
+      document.getElementById('ai-preview-container').style.display = 'block';
+      document.getElementById('btn-ai-scan-submit').style.opacity = '1';
+      document.getElementById('btn-ai-scan-submit').style.pointerEvents = 'auto';
+
+      stopCameraStream();
+    };
+
     window.openUniversalScanner = function (category, title) {
       if (category) {
         document.getElementById('ai-scan-target-category').value = category;
       }
       document.getElementById('ai-scanner-modal').classList.add('active');
+      switchScannerMode('upload'); // Default to upload mode when opening
       clearAiPreview();
     };
 
@@ -5850,6 +5941,7 @@ window.submitVendorCreate = function() {
 
 
     window.closeUniversalScanner = function () {
+      stopCameraStream();
       document.getElementById('ai-scanner-modal').classList.remove('active');
     }
 
@@ -5884,13 +5976,23 @@ window.submitVendorCreate = function() {
       currentAiBase64 = null;
       currentAiMime = null;
       document.getElementById('ai-file-input').value = '';
-      document.getElementById('ai-upload-area').style.display = 'block';
       document.getElementById('ai-preview-container').style.display = 'none';
       document.getElementById('btn-ai-scan-submit').style.opacity = '1';
       document.getElementById('btn-ai-scan-submit').style.pointerEvents = 'auto';
       document.getElementById('ai-scan-loading').style.display = 'none';
       if (document.getElementById('ai-preview-container')) {
         document.getElementById('ai-preview-container').style.opacity = '1';
+      }
+
+      // Return to current active mode
+      if (currentScannerMode === 'camera') {
+        document.getElementById('ai-upload-area').style.display = 'none';
+        document.getElementById('ai-camera-area').style.display = 'block';
+        startCameraStream();
+      } else {
+        document.getElementById('ai-upload-area').style.display = 'block';
+        document.getElementById('ai-camera-area').style.display = 'none';
+        stopCameraStream();
       }
     };
 

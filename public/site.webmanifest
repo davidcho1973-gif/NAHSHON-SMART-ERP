@@ -1,0 +1,18 @@
+{
+  "name": "NAHSHON SMART COMPANY ERP",
+  "short_name": "SMART ERP",
+  "description": "NAHSHON MEP field ERP for mobile access.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070b14",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/images/nahshon-app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

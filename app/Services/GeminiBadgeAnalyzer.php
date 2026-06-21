@@ -28,57 +28,85 @@ class GeminiBadgeAnalyzer
             throw new RuntimeException('Badge image file is not readable.');
         }
 
-        $model = (string) config('services.gemini.model', 'gemini-3.5-flash');
-        $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
-            . "/v1beta/models/{$model}:generateContent";
+        $models = [
+            'gemini-3.5-pro',
+            'gemini-2.5-pro',
+            'gemini-2.0-pro',
+            'gemini-1.5-pro',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash'
+        ];
 
-        $response = $this->http
-            ->timeout((int) config('services.gemini.timeout', 30))
-            ->withHeaders([
-                'x-goog-api-key' => $apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->post($endpoint, [
-                'contents' => [[
-                    'parts' => [
-                        [
-                            'inline_data' => [
-                                'mime_type' => $mimeType ?: mime_content_type($imagePath) ?: 'image/jpeg',
-                                'data' => base64_encode((string) file_get_contents($imagePath)),
+        $configuredModel = (string) config('services.gemini.model');
+        if ($configuredModel !== '') {
+            $models = array_filter($models, fn($m) => $m !== $configuredModel);
+            array_unshift($models, $configuredModel);
+        }
+
+        $lastException = null;
+
+        foreach ($models as $model) {
+            try {
+                $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
+                    . "/v1beta/models/{$model}:generateContent";
+
+                $response = $this->http
+                    ->timeout((int) config('services.gemini.timeout', 30))
+                    ->withHeaders([
+                        'x-goog-api-key' => $apiKey,
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post($endpoint, [
+                        'contents' => [[
+                            'parts' => [
+                                [
+                                    'inline_data' => [
+                                        'mime_type' => $mimeType ?: mime_content_type($imagePath) ?: 'image/jpeg',
+                                        'data' => base64_encode((string) file_get_contents($imagePath)),
+                                    ],
+                                ],
+                                [
+                                    'text' => $this->prompt(),
+                                ],
+                            ],
+                        ]],
+                        'generationConfig' => [
+                            'responseFormat' => [
+                                'text' => [
+                                    'mimeType' => 'application/json',
+                                    'schema' => $this->schema(),
+                                ],
                             ],
                         ],
-                        [
-                            'text' => $this->prompt(),
-                        ],
-                    ],
-                ]],
-                'generationConfig' => [
-                    'responseFormat' => [
-                        'text' => [
-                            'mimeType' => 'application/json',
-                            'schema' => $this->schema(),
-                        ],
-                    ],
-                ],
-            ]);
+                    ]);
 
-        if ($response->failed()) {
-            throw new RuntimeException('Gemini badge analysis failed: ' . $response->body());
+                if ($response->failed()) {
+                    throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
+                }
+
+                $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
+
+                if (! is_string($text) || trim($text) === '') {
+                    throw new RuntimeException('Gemini returned no badge analysis text.');
+                }
+
+                $decoded = json_decode($this->stripJsonFence($text), true);
+
+                if (! is_array($decoded)) {
+                    throw new RuntimeException('Gemini badge analysis was not valid JSON.');
+                }
+
+                return $this->normalize($decoded, $model);
+
+            } catch (\Throwable $e) {
+                $lastException = $e;
+                \Illuminate\Support\Facades\Log::warning("Gemini model {$model} failed, falling back. Error: " . $e->getMessage());
+            }
         }
 
-        $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
-
-        if (! is_string($text) || trim($text) === '') {
-            throw new RuntimeException('Gemini returned no badge analysis text.');
-        }
-
-        $decoded = json_decode($this->stripJsonFence($text), true);
-
-        if (! is_array($decoded)) {
-            throw new RuntimeException('Gemini badge analysis was not valid JSON.');
-        }
-
-        return $this->normalize($decoded, $model);
+        throw new RuntimeException('All Gemini models failed. Last error: ' . $lastException->getMessage());
     }
 
     private function prompt(): string

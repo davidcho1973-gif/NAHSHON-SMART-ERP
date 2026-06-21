@@ -24,12 +24,14 @@ class SiteCreationTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test(ManageSites::class)
-            ->callAction('create', data: [
+            ->mountAction('create')
+            ->set('mountedActions.0.data', [
                 'code' => 'NEW-SITE',
                 'name' => 'New Site Name',
                 'timezone' => 'America/Phoenix',
                 'status' => 'active',
             ])
-            ->assertHasNoErrors();
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
     }
 }

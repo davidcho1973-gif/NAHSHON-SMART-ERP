@@ -24,12 +24,16 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
-| 2026-06-21 | CODEX | Employee badge AI | Added employee badge photo capture/upload, Gemini 3.5 Flash extraction, badge image storage, and employee form autofill fields. | Deploy pending | `php artisan test` passed locally. |
+| 2026-06-21 | CODEX | Mobile login / app shell | Kept the desktop login unchanged while turning the phone login/home entry into an app-like mobile screen with PWA manifest/icon metadata. | Main deploy | `npm run build`, `php artisan test`, Playwright desktop/mobile login screenshots, manifest/icon 200 responses. |
+| 2026-06-21 | Antigravity | Universal AI Scanner | Implemented WebRTC webcam stream capture and file upload hybrid UI for the Universal AI Scanner Modal in index.blade.php. | Local verified | `npm run build` completed, and all 23 phpunit tests passed. |
+| 2026-06-21 | Antigravity | HR Attendance | Implemented Solis-style HR submenus (Directory, Attendance Record, Attendance Summary) in index.blade.php. Added backend pending review approval/rejection APIs and verified them with a full test suite. | Local verified | `php artisan test` passed locally (23 tests passed). |
+| 2026-06-21 | CODEX | Mobile ERP UI | Made the ERP shell and Google login page phone-friendly with sticky mobile header, bottom tab navigation, horizontal-safe tables, compact panels, and mobile HR tab behavior. | Main deploy | `npm run build`, `php artisan test`, Playwright mobile smoke test at 390px passed locally. |
+| 2026-06-21 | CODEX | Employee badge AI | Added employee badge photo capture/upload, Gemini 3.5 Flash extraction, badge image storage, and employee form autofill fields. | Main deploy | `php artisan test` passed locally. |
 | 2026-06-21 | Antigravity | Core resources | Added individual delete action (DeleteAction) to all core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control). | `15f6981` | `php artisan test` passed locally. |
 | 2026-06-21 | Antigravity | Member registration | Added individual delete action to Member Registration resource. | `0b3d27a` | `php artisan test` passed locally. |
-| 2026-06-20 | CODEX | Member documents / employee sync | Changed Member Documents to one row per member with a per-member document detail page; repaired mismatched Member Registration to Employee links. | Deploy pending | `php artisan test` passed locally. |
-| 2026-06-20 | CODEX | Auth / access | Required Google OAuth for ERP entry and linked successful Google login to active ERP users. | Deploy pending | `php artisan test` passed locally. |
-| 2026-06-20 | CODEX | Member registration | Audited and fixed Member Registration to Employee/Access/Documents sync; added active/approved backfill migration and resync UI. | Deploy pending | `php artisan test` passed locally. |
+| 2026-06-20 | CODEX | Member documents / employee sync | Changed Member Documents to one row per member with a per-member document detail page; repaired mismatched Member Registration to Employee links. | Main deploy | `php artisan test` passed locally. |
+| 2026-06-20 | CODEX | Auth / access | Required Google OAuth for ERP entry and linked successful Google login to active ERP users. | Main deploy | `php artisan test` passed locally. |
+| 2026-06-20 | CODEX | Member registration | Audited and fixed Member Registration to Employee/Access/Documents sync; added active/approved backfill migration and resync UI. | Main deploy | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Admin navigation | Linked topbar settings gear to `/admin/login`. | `8e82f5f` | Local click verified; staging click verified to `/admin/login`. |
 | 2026-06-20 | External agent | PostgreSQL / Filament | Fixed pgsql JSON distinct issue in many-to-many select fields. | `75662e6` | Integrated through rebase before CODEX push. |
 | 2026-06-20 | CODEX | Account UI | Removed remaining quick menu toggle CSS and translation remnants. | `439338a` | `npm run build`, `artisan optimize:clear`, staging verified. |
@@ -74,6 +78,8 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-20: Changed Member Documents into a member-level list with per-member uploaded document management.
 - 2026-06-20: Repaired Member Registration to Employee sync when existing data points a registration at another worker's employee record.
 - 2026-06-21: Added Gemini 3.5 Flash badge photo analysis to the Employees create/edit form with camera/file upload and stored badge images.
+- 2026-06-21: Added mobile-friendly ERP shell/login layout with bottom tab navigation, sticky mobile topbar, safer table scrolling, and mobile HR parent-tab routing.
+- 2026-06-21: Refined `/login` so desktop remains the existing card layout while mobile renders as an app-like entry screen with install metadata and app icon.
 
 ### Current Boundaries
 
@@ -112,6 +118,8 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-20: Added many-to-many site and company management resources and resolved PostgreSQL distinct JSON query error.
 - 2026-06-21: Added individual delete action (DeleteAction) to Member Registration resource.
 - 2026-06-21: Added individual delete action (DeleteAction) to all other core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control).
+- 2026-06-21: Implemented Solis-style HR submenus (Directory, Attendance Record, Attendance Summary) in index.blade.php. Added backend pending review approval/rejection APIs and verified them with a full test suite.
+- 2026-06-21: Implemented WebRTC webcam stream capture and file upload hybrid UI for the Universal AI Scanner Modal in index.blade.php with clear preview reset and stream release checks.
 
 ### Planned / Next
 

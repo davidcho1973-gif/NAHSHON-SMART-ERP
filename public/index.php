@@ -1,5 +1,10 @@
 <?php
 
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+
+// Fix PHP built-in server CWD resolution bug on Windows
+chdir(dirname(__DIR__));
+
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 

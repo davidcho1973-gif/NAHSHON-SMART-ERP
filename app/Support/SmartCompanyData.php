@@ -23,6 +23,17 @@ class SmartCompanyData
             'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, $args[1] ?? $args[0] ?? null),
             'api_getEmployeeDetail' => self::realEmployeeDetail((string) ($args[0] ?? ''), $siteId),
             'api_uploadEmployeePhoto' => ['success' => true, 'message' => 'Photo upload endpoint is ready. Configure filesystem disk for production.'],
+            'api_getHrDirectory' => self::hrDirectory($siteId),
+            'api_getHrAttendanceRecords' => self::hrAttendanceRecords($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_getHrAttendanceSummary' => self::hrAttendanceSummary($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_clockIn' => self::clockIn($args[0] ?? null),
+            'api_clockOut' => self::clockOut($args[0] ?? null),
+            'api_requestCorrection' => self::requestCorrection($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_submitNfcTag' => self::submitNfcTag($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_submitBatchPhotoScan' => self::submitBatchPhotoScan($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null, $args[4] ?? null),
+            'api_getPendingAttendanceLogs' => self::getPendingAttendanceLogs($siteId),
+            'api_approveAttendanceLog' => self::approveAttendanceLog($args[0] ?? null),
+            'api_rejectAttendanceLog' => self::rejectAttendanceLog($args[0] ?? null),
 
             'api_getFinanceStats' => self::financeStats(),
             'api_getExpenses' => self::expenses(),
@@ -741,6 +752,585 @@ class SmartCompanyData
         }
 
         return $target->lte(now()->addDays(60)) ? 'expiring_soon' : 'valid';
+    }
+
+    public static function hrDirectory(string $siteId = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('employees')) {
+                return ['success' => false, 'message' => 'Employees table not found.'];
+            }
+
+            $employees = Employee::query()
+                ->with(['company', 'site', 'team'])
+                ->where('employment_status', 'active')
+                ->when($siteId !== 'ALL', fn ($query) => $query->whereHas('site', fn ($q) => $q->where('code', $siteId)))
+                ->get();
+
+            $grouped = [];
+            foreach ($employees as $emp) {
+                $siteCode = $emp->site?->code ?: 'Office';
+                $siteName = $emp->site?->name ?: 'Office Location';
+                $siteLabel = "{$siteCode} — {$siteName}";
+
+                $payload = is_array($emp->payload) ? $emp->payload : [];
+                $grouped[$siteLabel][] = [
+                    'id' => $emp->id,
+                    'employee_number' => $emp->employee_number,
+                    'name' => $emp->name,
+                    'preferred_name' => $payload['preferred_name'] ?? $emp->name,
+                    'role' => $emp->role ?: 'Staff',
+                    'department' => $emp->team?->name ?: 'Operation',
+                    'email' => $emp->email ?: '-',
+                    'direct_number' => $payload['direct_number'] ?? '-',
+                    'phone' => $payload['phone'] ?? '-',
+                    'manager' => $payload['manager'] ?? ($emp->team?->payload['manager'] ?? 'Unassigned'),
+                    'type' => 'Regular Employee',
+                ];
+            }
+
+            return [
+                'success' => true,
+                'sites' => $grouped,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function clockIn(mixed $employeeId = null): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '현재 계정에 연결된 직원(Employee) 정보가 없습니다. 관리자 패널에서 연동을 확인하세요.'];
+            }
+
+            $employee = Employee::find($employeeId);
+            if (! $employee) {
+                return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
+            }
+
+            $today = Carbon::today()->toDateString();
+            $lastLog = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('attendance_date', $today)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if ($lastLog && $lastLog->event_type === 'clock_in') {
+                return ['success' => false, 'message' => '이미 출근(Clock In) 처리가 완료되었습니다.'];
+            }
+
+            AttendanceLog::create([
+                'employee_id' => $employeeId,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => 'clock_in',
+                'event_at' => Carbon::now(),
+                'source' => 'web_portal',
+                'status' => 'approved',
+            ]);
+
+            return ['success' => true, 'message' => '출근(Clock In)이 성공적으로 기록되었습니다.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function clockOut(mixed $employeeId = null): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '현재 계정에 연결된 직원(Employee) 정보가 없습니다.'];
+            }
+
+            $employee = Employee::find($employeeId);
+            if (! $employee) {
+                return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
+            }
+
+            $today = Carbon::today()->toDateString();
+            $lastLog = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('attendance_date', $today)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if (! $lastLog || $lastLog->event_type !== 'clock_in') {
+                return ['success' => false, 'message' => '출근(Clock In) 기록이 없습니다. 먼저 출근해 주세요.'];
+            }
+
+            AttendanceLog::create([
+                'employee_id' => $employeeId,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => 'clock_out',
+                'event_at' => Carbon::now(),
+                'source' => 'web_portal',
+                'status' => 'approved',
+            ]);
+
+            return ['success' => true, 'message' => '퇴근(Clock Out)이 성공적으로 기록되었습니다.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function hrAttendanceRecords(mixed $employeeId = null, ?string $startDate = null, ?string $endDate = null): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '직원 정보가 없습니다.', 'records' => []];
+            }
+
+            $start = $startDate ?: Carbon::now()->startOfMonth()->toDateString();
+            $end = $endDate ?: Carbon::now()->toDateString();
+
+            if (! Schema::hasTable('attendance_logs')) {
+                return ['success' => true, 'records' => []];
+            }
+
+            $logs = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->whereBetween('attendance_date', [$start, $end])
+                ->orderBy('attendance_date', 'desc')
+                ->orderBy('event_at', 'asc')
+                ->get()
+                ->groupBy('attendance_date');
+
+            $records = [];
+            foreach ($logs as $dateStr => $dailyLogs) {
+                $checkIn = null;
+                $checkOut = null;
+
+                foreach ($dailyLogs as $log) {
+                    $type = strtolower((string) $log->event_type);
+                    if (str_contains($type, 'out')) {
+                        $checkOut = Carbon::parse($log->event_at);
+                    } elseif (str_contains($type, 'in') || str_contains($type, 'check')) {
+                        if (! $checkIn) {
+                            $checkIn = Carbon::parse($log->event_at);
+                        }
+                    }
+                }
+
+                $workHours = 0.0;
+                if ($checkIn && $checkOut) {
+                    $minutes = $checkIn->diffInMinutes($checkOut);
+                    $workHours = round($minutes / 60, 2);
+                    // 점심시간 1시간 공제 (4시간 이상 근무 시)
+                    if ($workHours > 4.0) {
+                        $workHours -= 1.0;
+                    }
+                }
+
+                $carbonDate = Carbon::parse($dateStr);
+                $dayOfWeek = $carbonDate->format('N');
+                $isWeekend = $dayOfWeek >= 6;
+                $status = $isWeekend ? 'Weekend Work' : 'Regular Work';
+
+                $records[] = [
+                    'date' => $carbonDate->format('M d, Y'),
+                    'raw_date' => $dateStr,
+                    'clock_in' => $checkIn ? $checkIn->format('H:i:s') : '-',
+                    'clock_out' => $checkOut ? $checkOut->format('H:i:s') : '-',
+                    'work_hours' => $workHours > 0 ? "{$workHours} hrs" : '-',
+                    'status' => $status,
+                    'notes' => $dailyLogs->first()?->notes ?: '',
+                ];
+            }
+
+            return [
+                'success' => true,
+                'records' => $records,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'records' => []];
+        }
+    }
+
+    public static function hrAttendanceSummary(mixed $employeeId = null, ?string $startDate = null, ?string $endDate = null): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return [
+                    'success' => false,
+                    'message' => '직원 정보가 없습니다.',
+                    'kpis' => ['work_hours' => 0, 'lates' => 0, 'early_outs' => 0, 'absences' => 0],
+                    'records' => [],
+                ];
+            }
+
+            $start = $startDate ?: Carbon::now()->startOfMonth()->toDateString();
+            $end = $endDate ?: Carbon::now()->toDateString();
+
+            $recordsResult = self::hrAttendanceRecords($employeeId, $start, $end);
+            $records = $recordsResult['records'] ?? [];
+
+            // Calculate KPIs
+            $totalHours = 0.0;
+            $lates = 0;
+            $earlyOuts = 0;
+            $presentDates = [];
+
+            foreach ($records as $rec) {
+                $hoursStr = str_replace(' hrs', '', $rec['work_hours']);
+                if ($hoursStr !== '-') {
+                    $totalHours += (float) $hoursStr;
+                }
+
+                if ($rec['clock_in'] !== '-') {
+                    $checkInTime = Carbon::parse($rec['clock_in']);
+                    // 지각 기준: 07:05 이후 출근 시 지각 처리
+                    if ($checkInTime->format('H:i:s') > '07:05:00') {
+                        $lates++;
+                    }
+                    $presentDates[$rec['raw_date']] = true;
+                }
+
+                if ($rec['clock_out'] !== '-') {
+                    $checkOutTime = Carbon::parse($rec['clock_out']);
+                    // 조기 퇴근 기준: 16:00 이전 퇴근 시 조기 퇴근 처리
+                    if ($checkOutTime->format('H:i:s') < '16:00:00') {
+                        $earlyOuts++;
+                    }
+                }
+            }
+
+            // Calculate absences for weekdays in range
+            $absences = 0;
+            $period = new \DatePeriod(
+                new \DateTime($start),
+                new \DateInterval('P1D'),
+                (new \DateTime($end))->modify('+1 day')
+            );
+            foreach ($period as $date) {
+                $dayOfWeek = (int) $date->format('N');
+                if ($dayOfWeek <= 5) { // Mon - Fri
+                    $dateStr = $date->format('Y-m-d');
+                    if (! isset($presentDates[$dateStr])) {
+                        $absences++;
+                    }
+                }
+            }
+
+            return [
+                'success' => true,
+                'kpis' => [
+                    'work_hours' => round($totalHours, 1),
+                    'lates' => $lates,
+                    'early_outs' => $earlyOuts,
+                    'absences' => $absences,
+                ],
+                'records' => $records,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'kpis' => ['work_hours' => 0, 'lates' => 0, 'early_outs' => 0, 'absences' => 0],
+                'records' => [],
+            ];
+        }
+    }
+
+    public static function requestCorrection(mixed $employeeId, ?string $date, ?string $notes): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (!$employeeId) {
+                return ['success' => false, 'message' => '직원 정보가 없습니다.'];
+            }
+            if (!$date || !$notes) {
+                return ['success' => false, 'message' => '날짜와 사유를 모두 입력하세요.'];
+            }
+
+            // Find or create a log for this employee on this date to attach the correction notes to
+            $log = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('attendance_date', $date)
+                ->first();
+
+            if (!$log) {
+                // Create a stub log with type 'correction_requested' so they have a placeholder
+                $employee = Employee::find($employeeId);
+                $log = AttendanceLog::create([
+                    'employee_id' => $employeeId,
+                    'company_id' => $employee?->company_id,
+                    'site_id' => $employee?->site_id,
+                    'team_id' => $employee?->team_id,
+                    'attendance_date' => $date,
+                    'event_type' => 'correction_requested',
+                    'event_at' => Carbon::parse($date)->startOfDay(),
+                    'source' => 'web_portal',
+                    'status' => 'pending',
+                    'notes' => "[수정요청] " . $notes,
+                ]);
+            } else {
+                $log->update([
+                    'notes' => "[수정요청] " . $notes,
+                    'status' => 'pending', // Mark as pending review
+                ]);
+            }
+
+            return ['success' => true, 'message' => '근태 수정 요청이 성공적으로 접수되었습니다.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function submitNfcTag(?string $badgeNumber, ?string $siteCode, ?string $timestamp = null): array
+    {
+        try {
+            if (!$badgeNumber) {
+                return ['success' => false, 'message' => 'Badge/NFC number is required.'];
+            }
+
+            // Find employee by badge_number or employee_number
+            $employee = Employee::query()
+                ->where('badge_number', $badgeNumber)
+                ->orWhere('employee_number', $badgeNumber)
+                ->first();
+
+            if (!$employee) {
+                return ['success' => false, 'message' => "Employee with badge/NFC number {$badgeNumber} not found."];
+            }
+
+            $site = null;
+            if ($siteCode) {
+                $site = Site::where('code', $siteCode)->first();
+            }
+            // Use employee's site if siteCode is not provided or not found
+            $siteId = $site ? $site->id : $employee->site_id;
+
+            $eventTime = $timestamp ? Carbon::parse($timestamp) : Carbon::now();
+            $today = $eventTime->toDateString();
+
+            // Double tag prevention: check if there's a tag from the same employee within the last 5 minutes
+            $fiveMinutesAgo = (clone $eventTime)->subMinutes(5);
+            $recentLog = AttendanceLog::query()
+                ->where('employee_id', $employee->id)
+                ->where('event_at', '>=', $fiveMinutesAgo)
+                ->where('event_at', '<=', $eventTime)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if ($recentLog) {
+                return [
+                    'success' => true,
+                    'ignored' => true,
+                    'message' => "태깅이 너무 빠릅니다. 중복 태깅 방지를 위해 무시되었습니다. (최근 태깅: {$recentLog->event_at->toTimeString()})",
+                    'employee_name' => $employee->name,
+                ];
+            }
+
+            // Determine event_type (Clock In vs Clock Out)
+            $lastLog = AttendanceLog::query()
+                ->where('employee_id', $employee->id)
+                ->where('attendance_date', $today)
+                ->where('status', '!=', 'rejected')
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            $eventType = 'clock_in';
+            if ($lastLog && $lastLog->event_type === 'clock_in') {
+                $eventType = 'clock_out';
+            }
+
+            $log = AttendanceLog::create([
+                'employee_id' => $employee->id,
+                'company_id' => $employee->company_id,
+                'site_id' => $siteId,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => $eventType,
+                'event_at' => $eventTime,
+                'source' => 'nfc_reader',
+                'status' => 'approved', // Auto-approved
+                'notes' => 'NFC 태그 리더기를 통해 자동 기록됨.',
+            ]);
+
+            $eventTypeName = $eventType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
+
+            return [
+                'success' => true,
+                'ignored' => false,
+                'event_type' => $eventType,
+                'employee_name' => $employee->name,
+                'message' => "{$employee->name}님의 {$eventTypeName}이 성공적으로 기록되었습니다.",
+                'timestamp' => $eventTime->toIso8601String(),
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function submitBatchPhotoScan(?array $scannedBadges, ?string $siteCode, ?string $eventType = 'clock_in', ?string $photoUrl = null, ?string $timestamp = null): array
+    {
+        try {
+            if (empty($scannedBadges)) {
+                return ['success' => false, 'message' => 'Scanned badges list is empty.'];
+            }
+
+            $site = null;
+            if ($siteCode) {
+                $site = Site::where('code', $siteCode)->first();
+            }
+
+            $eventTime = $timestamp ? Carbon::parse($timestamp) : Carbon::now();
+            $today = $eventTime->toDateString();
+            $eventType = strtolower($eventType ?: 'clock_in');
+
+            $successCount = 0;
+            $failedBadges = [];
+
+            foreach ($scannedBadges as $badgeNumber) {
+                $employee = Employee::query()
+                    ->where('badge_number', $badgeNumber)
+                    ->orWhere('employee_number', $badgeNumber)
+                    ->first();
+
+                if (!$employee) {
+                    $failedBadges[] = $badgeNumber;
+                    continue;
+                }
+
+                $siteId = $site ? $site->id : $employee->site_id;
+
+                // Check for duplicate in the last 15 minutes to prevent registering same scan multiple times
+                $fifteenMinutesAgo = (clone $eventTime)->subMinutes(15);
+                $duplicate = AttendanceLog::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('event_type', $eventType)
+                    ->where('attendance_date', $today)
+                    ->where('event_at', '>=', $fifteenMinutesAgo)
+                    ->first();
+
+                if ($duplicate) {
+                    continue; // Skip duplicates
+                }
+
+                AttendanceLog::create([
+                    'employee_id' => $employee->id,
+                    'company_id' => $employee->company_id,
+                    'site_id' => $siteId,
+                    'team_id' => $employee->team_id,
+                    'attendance_date' => $today,
+                    'event_type' => $eventType,
+                    'event_at' => $eventTime,
+                    'source' => 'batch_photo_scan',
+                    'status' => 'pending', // Pending approval by manager
+                    'notes' => '팀장 사진 인식을 통한 자동 등록 (승인 대기 중).',
+                    'payload' => [
+                        'photo_url' => $photoUrl,
+                        'original_badge_scanned' => $badgeNumber,
+                    ],
+                ]);
+
+                $successCount++;
+            }
+
+            $msg = "총 {$successCount}명의 출퇴근 기록이 승인 대기 상태로 접수되었습니다.";
+            if (!empty($failedBadges)) {
+                $failedStr = implode(', ', $failedBadges);
+                $msg .= " 단, 등록되지 않은 배지 번호({$failedStr})는 스킵되었습니다.";
+            }
+
+            return [
+                'success' => true,
+                'processed_count' => $successCount,
+                'failed_badges' => $failedBadges,
+                'message' => $msg,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function getPendingAttendanceLogs(string $siteId = 'ALL'): array
+    {
+        try {
+            $logs = AttendanceLog::query()
+                ->with(['employee.company', 'employee.site', 'employee.team'])
+                ->where('status', 'pending')
+                ->when($siteId !== 'ALL', function ($query) use ($siteId) {
+                    $query->whereHas('employee.site', function ($q) use ($siteId) {
+                        $q->where('code', $siteId);
+                    });
+                })
+                ->orderBy('event_at', 'desc')
+                ->get()
+                ->map(function ($log) {
+                    return [
+                        'id' => $log->id,
+                        'employee_id' => $log->employee_id,
+                        'name' => $log->employee?->name ?: 'Unknown',
+                        'company' => $log->employee?->company?->name ?: 'None',
+                        'site' => $log->employee?->site?->name ?: 'None',
+                        'team' => $log->employee?->team?->name ?: 'None',
+                        'attendance_date' => $log->attendance_date?->toDateString(),
+                        'event_type' => $log->event_type,
+                        'event_at' => $log->event_at?->toIso8601String(),
+                        'source' => $log->source,
+                        'notes' => $log->notes,
+                        'payload' => $log->payload,
+                    ];
+                });
+
+            return [
+                'success' => true,
+                'logs' => $logs,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function approveAttendanceLog(mixed $logId): array
+    {
+        try {
+            $log = AttendanceLog::find($logId);
+            if (!$log) {
+                return ['success' => false, 'message' => 'Attendance log not found.'];
+            }
+
+            $user = auth()->user();
+            $log->update([
+                'status' => 'approved',
+                'approved_by_id' => $user?->id ?: null,
+                'approved_at' => Carbon::now(),
+            ]);
+
+            return ['success' => true, 'message' => 'Attendance log approved successfully.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function rejectAttendanceLog(mixed $logId): array
+    {
+        try {
+            $log = AttendanceLog::find($logId);
+            if (!$log) {
+                return ['success' => false, 'message' => 'Attendance log not found.'];
+            }
+
+            $log->update([
+                'status' => 'rejected',
+            ]);
+
+            return ['success' => true, 'message' => 'Attendance log rejected successfully.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     private static function defaultResponse(string $method): mixed
