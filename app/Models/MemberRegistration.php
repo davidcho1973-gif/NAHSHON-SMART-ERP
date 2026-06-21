@@ -201,12 +201,19 @@ class MemberRegistration extends Model
 
     public function syncEmployee(): Employee
     {
-        $employeeNumber = $this->employee_number ?: $this->registration_number;
         $email = $this->email ? Str::lower($this->email) : null;
+        $linkedEmployee = $this->employee()->first();
 
-        $employee = $this->employee()->first()
-            ?? Employee::query()->where('employee_number', $employeeNumber)->first()
+        if ($linkedEmployee && ! $this->employeeMatchesRegistration($linkedEmployee)) {
+            $linkedEmployee = null;
+            $this->forceFill(['employee_id' => null])->saveQuietly();
+        }
+
+        $employeeNumber = $this->resolveEmployeeNumber($linkedEmployee);
+
+        $employee = $linkedEmployee
             ?? ($email ? Employee::query()->where('email', $email)->first() : null)
+            ?? $this->matchingEmployeeByNumber($employeeNumber)
             ?? new Employee(['employee_number' => $employeeNumber]);
 
         $employee->fill([
@@ -236,6 +243,84 @@ class MemberRegistration extends Model
         $this->forceFill(['employee_id' => $employee->id])->saveQuietly();
 
         return $employee;
+    }
+
+    private function resolveEmployeeNumber(?Employee $currentEmployee = null): string
+    {
+        $preferred = $this->employee_number ?: $this->registration_number;
+        $employeeNumber = $this->availableEmployeeNumber($preferred, $currentEmployee);
+
+        if ($employeeNumber !== $preferred) {
+            $this->forceFill(['employee_number' => $employeeNumber])->saveQuietly();
+        }
+
+        return $employeeNumber;
+    }
+
+    private function availableEmployeeNumber(string $candidate, ?Employee $currentEmployee = null): string
+    {
+        $conflict = Employee::query()
+            ->where('employee_number', $candidate)
+            ->when($currentEmployee?->exists, fn ($query) => $query->whereKeyNot($currentEmployee->getKey()))
+            ->first();
+
+        if (! $conflict || $this->employeeMatchesRegistration($conflict)) {
+            return $candidate;
+        }
+
+        $fallback = $this->registration_number;
+        $fallbackConflict = Employee::query()
+            ->where('employee_number', $fallback)
+            ->when($currentEmployee?->exists, fn ($query) => $query->whereKeyNot($currentEmployee->getKey()))
+            ->first();
+
+        if (! $fallbackConflict || $this->employeeMatchesRegistration($fallbackConflict)) {
+            return $fallback;
+        }
+
+        return Str::limit($fallback, 70, '') . '-' . $this->id;
+    }
+
+    private function matchingEmployeeByNumber(string $employeeNumber): ?Employee
+    {
+        $employee = Employee::query()->where('employee_number', $employeeNumber)->first();
+
+        if (! $employee || ! $this->employeeMatchesRegistration($employee)) {
+            return null;
+        }
+
+        return $employee;
+    }
+
+    private function employeeMatchesRegistration(Employee $employee): bool
+    {
+        $payloadRegistrationId = (int) data_get($employee->payload, 'member_registration_id');
+
+        if ($payloadRegistrationId === $this->id) {
+            return true;
+        }
+
+        if (
+            $this->email &&
+            $employee->email &&
+            Str::lower($employee->email) === Str::lower($this->email)
+        ) {
+            return true;
+        }
+
+        $registrationNumbers = array_filter([
+            $this->employee_number,
+            $this->registration_number,
+        ]);
+
+        if (
+            in_array($employee->employee_number, $registrationNumbers, true) &&
+            Str::lower($employee->name) === Str::lower($this->full_name)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     private function syncAccessUser(Employee $employee): ?User

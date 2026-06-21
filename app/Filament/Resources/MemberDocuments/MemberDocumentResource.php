@@ -3,11 +3,9 @@
 namespace App\Filament\Resources\MemberDocuments;
 
 use App\Filament\Resources\MemberDocuments\Pages\ManageMemberDocuments;
-use App\Models\MemberDocument;
+use App\Filament\Resources\MemberDocuments\Pages\ManageMemberUploadedDocuments;
 use App\Models\MemberRegistration;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -18,16 +16,17 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class MemberDocumentResource extends Resource
 {
-    protected static ?string $model = MemberDocument::class;
+    protected static ?string $model = MemberRegistration::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-check';
 
     protected static ?string $navigationLabel = 'Member Documents';
 
-    protected static ?string $modelLabel = 'Member Document';
+    protected static ?string $modelLabel = 'Member Document Summary';
 
     protected static ?string $pluralModelLabel = 'Member Documents';
 
@@ -35,23 +34,18 @@ class MemberDocumentResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        return $schema->components([]);
+    }
+
+    public static function documentForm(Schema $schema): Schema
+    {
         return $schema->components([
-            Select::make('member_registration_id')
-                ->label('Member')
-                ->options(fn (): array => MemberRegistration::query()
-                    ->orderBy('full_name')
-                    ->get()
-                    ->mapWithKeys(fn (MemberRegistration $registration): array => [
-                        $registration->id => "{$registration->full_name} ({$registration->registration_number})",
-                    ])
-                    ->all())
-                ->searchable()
-                ->required(),
             Select::make('document_type')
                 ->options([
                     'id' => 'Government ID',
                     'visa' => 'Visa / Work Authorization',
-                    'safety' => 'Safety Training',
+                    'safety' => 'Safety Orientation',
+                    'safety_training' => 'Safety Training',
                     'nfc' => 'Badge / NFC',
                     'contract' => 'Contract',
                     'insurance' => 'Insurance',
@@ -81,38 +75,76 @@ class MemberDocumentResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('memberRegistration.full_name')->label('Member')->searchable(),
-                TextColumn::make('document_type')->badge()->sortable(),
-                TextColumn::make('title')->searchable()->sortable(),
-                TextColumn::make('status')->badge()->sortable(),
-                TextColumn::make('expires_on')->date()->sortable(),
-                TextColumn::make('verified_at')->since()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('full_name')
+                    ->label('Member')
+                    ->searchable()
+                    ->sortable()
+                    ->url(fn (MemberRegistration $record): string => static::getUrl('documents', ['record' => $record])),
+                TextColumn::make('employee.employee_number')
+                    ->label('Employee')
+                    ->badge()
+                    ->placeholder('Not synced')
+                    ->toggleable(),
+                TextColumn::make('company.name')->label('Company')->toggleable(),
+                TextColumn::make('site.code')->label('Site')->badge(),
+                TextColumn::make('documents_count')
+                    ->label('Docs')
+                    ->badge()
+                    ->sortable(),
+                TextColumn::make('verified_documents_count')
+                    ->label('Verified')
+                    ->badge()
+                    ->color('success')
+                    ->sortable(),
+                TextColumn::make('pending_documents_count')
+                    ->label('Pending')
+                    ->badge()
+                    ->color('warning')
+                    ->sortable(),
+                TextColumn::make('expired_documents_count')
+                    ->label('Expired')
+                    ->badge()
+                    ->color('danger')
+                    ->sortable(),
+                TextColumn::make('document_status')->label('Document status')->badge()->sortable(),
+                TextColumn::make('onboarding_status')->label('Member status')->badge()->sortable()->toggleable(),
             ])
             ->filters([
-                SelectFilter::make('document_type')->options([
-                    'id' => 'Government ID',
-                    'visa' => 'Visa / Work Authorization',
-                    'safety' => 'Safety Training',
-                    'nfc' => 'Badge / NFC',
-                    'contract' => 'Contract',
-                    'insurance' => 'Insurance',
-                    'other' => 'Other',
-                ]),
-                SelectFilter::make('status')->options([
+                SelectFilter::make('document_status')->options([
+                    'missing' => 'Missing',
                     'pending' => 'Pending',
                     'verified' => 'Verified',
-                    'needs_review' => 'Needs review',
                     'expired' => 'Expired',
+                ]),
+                SelectFilter::make('onboarding_status')->options([
+                    'draft' => 'Draft',
+                    'invited' => 'Invited',
+                    'submitted' => 'Submitted',
+                    'screening' => 'Screening',
+                    'approved' => 'Approved',
+                    'active' => 'Active',
                     'rejected' => 'Rejected',
+                    'archived' => 'Archived',
                 ]),
             ])
             ->recordActions([
-                EditAction::make(),
+                Action::make('documents')
+                    ->label('Documents')
+                    ->icon('heroicon-o-document-check')
+                    ->url(fn (MemberRegistration $record): string => static::getUrl('documents', ['record' => $record])),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+            ->recordUrl(fn (MemberRegistration $record): string => static::getUrl('documents', ['record' => $record]));
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['employee', 'company', 'site'])
+            ->withCount([
+                'documents',
+                'documents as verified_documents_count' => fn (Builder $query): Builder => $query->where('status', 'verified'),
+                'documents as pending_documents_count' => fn (Builder $query): Builder => $query->whereIn('status', ['pending', 'needs_review']),
+                'documents as expired_documents_count' => fn (Builder $query): Builder => $query->where('status', 'expired'),
             ]);
     }
 
@@ -120,6 +152,7 @@ class MemberDocumentResource extends Resource
     {
         return [
             'index' => ManageMemberDocuments::route('/'),
+            'documents' => ManageMemberUploadedDocuments::route('/{record}/documents'),
         ];
     }
 }

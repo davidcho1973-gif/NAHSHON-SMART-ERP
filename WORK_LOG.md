@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-20 | CODEX | Member documents / employee sync | Changed Member Documents to one row per member with a per-member document detail page; repaired mismatched Member Registration to Employee links. | Deploy pending | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Auth / access | Required Google OAuth for ERP entry and linked successful Google login to active ERP users. | Deploy pending | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Member registration | Audited and fixed Member Registration to Employee/Access/Documents sync; added active/approved backfill migration and resync UI. | Deploy pending | `php artisan test` passed locally. |
 | 2026-06-20 | CODEX | Admin navigation | Linked topbar settings gear to `/admin/login`. | `8e82f5f` | Local click verified; staging click verified to `/admin/login`. |
@@ -67,6 +68,8 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-20: Answered Cowork coordination questions on module ownership, Filament resource conventions, access scope, migrations, i18n, deployment, and test DB.
 - 2026-06-20: Added Google OAuth ERP entry flow for registered active users, with remember-session login and role-aware landing.
 - 2026-06-20: Fixed Member Registration downstream sync to Employees, Access Control, and Member Documents, including existing active/approved registration backfill.
+- 2026-06-20: Changed Member Documents into a member-level list with per-member uploaded document management.
+- 2026-06-20: Repaired Member Registration to Employee sync when existing data points a registration at another worker's employee record.
 
 ### Current Boundaries
 

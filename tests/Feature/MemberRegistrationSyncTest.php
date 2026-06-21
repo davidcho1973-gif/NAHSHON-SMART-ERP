@@ -152,6 +152,44 @@ class MemberRegistrationSyncTest extends TestCase
         ]);
     }
 
+    public function test_sync_downstream_repairs_registration_linked_to_another_employee(): void
+    {
+        $firstRegistration = MemberRegistration::create([
+            'employee_number' => 'EMP-DAVID-001',
+            'full_name' => 'David Cho',
+            'email' => 'davidcho@example.com',
+            'member_type' => 'worker',
+            'onboarding_status' => 'active',
+        ])->fresh();
+
+        $secondRegistration = MemberRegistration::withoutEvents(fn () => MemberRegistration::create([
+            'registration_number' => 'MR-HYUNSUK-001',
+            'employee_number' => 'EMP-HYUNSUK-001',
+            'full_name' => 'HYUNSUK',
+            'member_type' => 'worker',
+            'onboarding_status' => 'active',
+            'invite_token' => '00000000-0000-0000-0000-000000000002',
+        ]));
+
+        $secondRegistration->forceFill(['employee_id' => $firstRegistration->employee_id])->saveQuietly();
+
+        $employee = $secondRegistration->syncDownstream();
+
+        $this->assertNotSame($firstRegistration->employee_id, $employee->id);
+        $this->assertSame($employee->id, $secondRegistration->fresh()->employee_id);
+        $this->assertDatabaseHas('employees', [
+            'id' => $firstRegistration->employee_id,
+            'employee_number' => 'EMP-DAVID-001',
+            'name' => 'David Cho',
+        ]);
+        $this->assertDatabaseHas('employees', [
+            'id' => $employee->id,
+            'employee_number' => 'EMP-HYUNSUK-001',
+            'name' => 'HYUNSUK',
+        ]);
+        $this->assertSame(2, Employee::query()->count());
+    }
+
     public function test_purge_demo_command_removes_demo_records(): void
     {
         $registration = MemberRegistration::create([
