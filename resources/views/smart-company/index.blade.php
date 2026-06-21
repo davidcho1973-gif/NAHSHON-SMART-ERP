@@ -175,6 +175,59 @@
       </div>
     </aside>
 
+    <nav class="mobile-tabbar" aria-label="Mobile primary navigation">
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="attendance" aria-label="출석관리">
+        <i class="ph ph-clock"></i>
+        <span>출석관리</span>
+      </button>
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="messages" aria-label="메세지">
+        <i class="ph ph-chat-circle-text"></i>
+        <span>메세지</span>
+      </button>
+      <button class="mobile-tabbar-item mobile-tabbar-more" id="mobile-more-button" type="button" aria-label="More" aria-expanded="false">
+        <span class="mobile-more-icon">
+          <span class="mobile-more-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+        </span>
+        <span>More</span>
+      </button>
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="schedule" aria-label="일정관리">
+        <i class="ph ph-calendar"></i>
+        <span>일정관리</span>
+      </button>
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="receipts" aria-label="영수증처리">
+        <i class="ph ph-receipt"></i>
+        <span>영수증처리</span>
+      </button>
+    </nav>
+
+    <div class="mobile-more-backdrop" id="mobile-more-backdrop" hidden>
+      <section class="mobile-more-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-more-title">
+        <div class="mobile-more-handle" aria-hidden="true"></div>
+        <div class="mobile-more-header">
+          <h2 id="mobile-more-title">More</h2>
+          <button class="mobile-more-close" type="button" data-mobile-more-close aria-label="Close More">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="mobile-more-grid">
+          <button class="mobile-more-tile" type="button" data-mobile-view="dashboard"><i class="ph ph-squares-four"></i><span>대시보드</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="command"><i class="ph ph-command"></i><span>AI 지휘실</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>AI 작업안전</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="vehicle"><i class="ph ph-car"></i><span>차량관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="personnel"><i class="ph ph-users"></i><span>인원관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="analytics"><i class="ph ph-chart-line-up"></i><span>통합분석</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여정산</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재장비</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="rental"><i class="ph ph-bulldozer"></i><span>장비렌탈</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="flights"><i class="ph ph-airplane"></i><span>항공권</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="office"><i class="ph ph-archive"></i><span>사무실비품</span></button>
+          <button class="mobile-more-tile mobile-more-tile-accent" type="button" data-mobile-action="scanner"><i class="ph ph-magic-wand"></i><span>AI 스캔등록</span></button>
+        </div>
+      </section>
+    </div>
+
     <main class="main-content">
       <header class="topbar">
         <div class="topbar-left" style="display:flex;align-items:center;gap:0;">
@@ -982,6 +1035,11 @@
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
+        'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
+        'receipts': { title: '영수증처리', render: renderFinance },
+        'messages': { title: '메세지', render: renderAlerts },
+        'schedule': { title: '일정관리', render: renderWbs },
+        'personnel': { title: '인원관리', render: function () { window._pendingHrTab = 'personnel'; return renderHR(); } },
         'profile': { title: 'My Profile', render: renderAccountProfile },
         'profile-update': { title: 'Update Profile', render: renderAccountUpdateProfile },
         'ui-settings': { title: 'UI Settings', render: renderAccountUiSettings },
@@ -1004,19 +1062,100 @@
         'office': { title: 'í˜„ìž¥ì‚¬ë¬´ì‹¤ ë¹„í’ˆ', render: renderOffice },
       };
 
+      const mobileMoreButton = document.getElementById('mobile-more-button');
+      const mobileMoreBackdrop = document.getElementById('mobile-more-backdrop');
+      const mobilePrimaryButtons = document.querySelectorAll('.mobile-tabbar-item[data-mobile-view]');
+      const mobileMoreTiles = document.querySelectorAll('.mobile-more-tile[data-mobile-view]');
+      const mobileRouteAliases = {
+        hr: 'attendance',
+        finance: 'receipts',
+        alerts: 'messages',
+        wbs: 'schedule',
+      };
+
+      function normalizeMobileView(viewKey) {
+        return mobileRouteAliases[viewKey] || viewKey;
+      }
+
+      function closeMobileMore() {
+        if (!mobileMoreButton || !mobileMoreBackdrop) return;
+        mobileMoreButton.setAttribute('aria-expanded', 'false');
+        mobileMoreBackdrop.hidden = true;
+        mobileMoreBackdrop.classList.remove('is-open');
+        document.body.classList.remove('mobile-more-open');
+      }
+
+      function openMobileMore() {
+        if (!mobileMoreButton || !mobileMoreBackdrop) return;
+        mobileMoreButton.setAttribute('aria-expanded', 'true');
+        mobileMoreBackdrop.hidden = false;
+        mobileMoreBackdrop.classList.add('is-open');
+        document.body.classList.add('mobile-more-open');
+      }
+
+      function syncMobileNavigation(viewKey) {
+        var normalizedView = normalizeMobileView(viewKey);
+        var primaryActive = false;
+        mobilePrimaryButtons.forEach(function (button) {
+          var isActive = button.getAttribute('data-mobile-view') === normalizedView;
+          button.classList.toggle('active', isActive);
+          if (isActive) primaryActive = true;
+        });
+        mobileMoreTiles.forEach(function (tile) {
+          tile.classList.toggle('active', tile.getAttribute('data-mobile-view') === viewKey);
+        });
+        if (mobileMoreButton) {
+          mobileMoreButton.classList.toggle('active', !primaryActive);
+        }
+      }
+
+      function prepareViewNavigation(view) {
+        if ((view === 'hr' || view === 'attendance' || view === 'personnel') && window.currentSiteId !== 'ALL') {
+          var sel = document.getElementById('project-context-switcher');
+          if (sel) sel.value = 'ALL';
+          window.currentSiteId = 'ALL';
+          if (window.apiCache) Object.keys(window.apiCache).forEach(function(k) { delete window.apiCache[k]; });
+        }
+      }
+
+      if (mobileMoreButton) {
+        mobileMoreButton.addEventListener('click', function () {
+          if (mobileMoreButton.getAttribute('aria-expanded') === 'true') closeMobileMore();
+          else openMobileMore();
+        });
+      }
+      if (mobileMoreBackdrop) {
+        mobileMoreBackdrop.addEventListener('click', function (event) {
+          if (event.target === mobileMoreBackdrop || event.target.closest('[data-mobile-more-close]')) {
+            closeMobileMore();
+          }
+        });
+      }
+      document.querySelectorAll('[data-mobile-view]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var view = button.getAttribute('data-mobile-view');
+          if (!view) return;
+          closeMobileMore();
+          window.goToView(view);
+        });
+      });
+      document.querySelectorAll('[data-mobile-action="scanner"]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          closeMobileMore();
+          if (typeof window.openUniversalScanner === 'function') window.openUniversalScanner();
+        });
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeMobileMore();
+      });
+
       navItems.forEach(function (item) {
         item.addEventListener('click', function () {
           navItems.forEach(function (n) { n.classList.remove('active'); });
           item.classList.add('active');
           var view = item.getAttribute('data-view');
-          // í†µí•©ë·°(HR) í´ë¦­ ì‹œ ìžë™ìœ¼ë¡œ ì‚¬ì´íŠ¸ ì…€ë ‰í„°ë¥¼ ALLë¡œ ì „í™˜
-          if (view === 'hr' && window.currentSiteId !== 'ALL') {
-            var sel = document.getElementById('project-context-switcher');
-            if (sel) sel.value = 'ALL';
-            window.currentSiteId = 'ALL';
-            // apiCache flush â€” ë‹¤ë¥¸ ì‚¬ì´íŠ¸ ë°ì´í„°ê°€ ìºì‹œì— ìžˆìœ¼ë©´ ì¶©ëŒ ë°©ì§€
-            if (window.apiCache) Object.keys(window.apiCache).forEach(function(k) { delete window.apiCache[k]; });
-          }
+          prepareViewNavigation(view);
+          closeMobileMore();
           loadView(view);
         });
       });
@@ -1094,6 +1233,7 @@
         var route = routes[viewKey];
         if (!route) return;
         window._currentView = viewKey;
+        syncMobileNavigation(viewKey);
         breadcrumbCurrent.textContent = route.title;
         pageContainer.style.opacity = '0.3';
         setTimeout(function () {
@@ -1105,6 +1245,7 @@
 
       window.goToView = function(viewKey) {
         var target = document.querySelector('.nav-item[data-view="' + viewKey + '"]');
+        prepareViewNavigation(viewKey);
         if (target) {
           navItems.forEach(function(n) { n.classList.remove('active'); });
           target.classList.add('active');
@@ -3279,6 +3420,12 @@
               document.getElementById('tab-personnel').style.display = tab === 'personnel' ? '' : 'none';
             });
           });
+          if (window._pendingHrTab) {
+            var pendingHrTab = window._pendingHrTab;
+            window._pendingHrTab = null;
+            var pendingHrTabButton = document.querySelector('#hr-tabs .tab-btn[data-tab="' + pendingHrTab + '"]');
+            if (pendingHrTabButton) pendingHrTabButton.click();
+          }
           var srch = document.getElementById('hr-search');
           if (srch) {
             srch.addEventListener('input', function () {

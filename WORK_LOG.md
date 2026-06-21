@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-21 | CODEX | Mobile bottom navigation | Reworked phone bottom navigation into Attendance, Message, More, Schedule, and Receipt actions, with a Solis-style More bottom sheet for the remaining modules. | Main deploy | `npm run build`, `php artisan test`, Playwright mobile 390px More sheet check. |
 | 2026-06-21 | CODEX | Mobile login / app shell | Kept the desktop login unchanged while turning the phone login/home entry into an app-like mobile screen with PWA manifest/icon metadata. | Main deploy | `npm run build`, `php artisan test`, Playwright desktop/mobile login screenshots, manifest/icon 200 responses. |
 | 2026-06-21 | Antigravity | Universal AI Scanner | Implemented WebRTC webcam stream capture and file upload hybrid UI for the Universal AI Scanner Modal in index.blade.php. | Local verified | `npm run build` completed, and all 23 phpunit tests passed. |
 | 2026-06-21 | Antigravity | HR Attendance | Implemented Solis-style HR submenus (Directory, Attendance Record, Attendance Summary) in index.blade.php. Added backend pending review approval/rejection APIs and verified them with a full test suite. | Local verified | `php artisan test` passed locally (23 tests passed). |
@@ -80,6 +81,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-21: Added Gemini 3.5 Flash badge photo analysis to the Employees create/edit form with camera/file upload and stored badge images.
 - 2026-06-21: Added mobile-friendly ERP shell/login layout with bottom tab navigation, sticky mobile topbar, safer table scrolling, and mobile HR parent-tab routing.
 - 2026-06-21: Refined `/login` so desktop remains the existing card layout while mobile renders as an app-like entry screen with install metadata and app icon.
+- 2026-06-21: Reworked the phone bottom navigation into four primary actions plus a centered More sheet containing the remaining modules.
 
 ### Current Boundaries
 
