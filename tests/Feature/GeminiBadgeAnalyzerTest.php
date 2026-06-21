@@ -59,7 +59,7 @@ class GeminiBadgeAnalyzerTest extends TestCase
                 && $request->hasHeader('x-goog-api-key', 'test-gemini-key')
                 && data_get($data, 'contents.0.parts.0.inline_data.mime_type') === 'image/jpeg'
                 && filled(data_get($data, 'contents.0.parts.0.inline_data.data'))
-                && data_get($data, 'generationConfig.responseFormat.text.mimeType') === 'application/json';
+                && data_get($data, 'generationConfig.responseMimeType') === 'application/json';
         });
     }
 

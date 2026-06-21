@@ -73,12 +73,8 @@ class GeminiBadgeAnalyzer
                             ],
                         ]],
                         'generationConfig' => [
-                            'responseFormat' => [
-                                'text' => [
-                                    'mimeType' => 'application/json',
-                                    'schema' => $this->schema(),
-                                ],
-                            ],
+                            'responseMimeType' => 'application/json',
+                            'responseSchema' => $this->schema(),
                         ],
                     ]);
 
