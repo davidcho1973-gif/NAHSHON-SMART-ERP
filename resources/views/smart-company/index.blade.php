@@ -728,7 +728,7 @@
 
         try {
           const tokenEl = document.querySelector('meta[name="csrf-token"]');
-          const response = await fetch('/api/smart-company/' + encodeURIComponent(fnName), {
+          const response = await fetch('/smart-company-api/' + encodeURIComponent(fnName), {
             method: 'POST',
             headers: {
               'Accept': 'application/json',

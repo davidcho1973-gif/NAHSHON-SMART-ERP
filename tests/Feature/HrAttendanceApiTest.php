@@ -63,7 +63,7 @@ class HrAttendanceApiTest extends TestCase
     {
         // 1. Clock in John Doe
         $response = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_submitNfcTag', [
+            ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-1001', 'AZ-01'],
             ]);
 
@@ -81,7 +81,7 @@ class HrAttendanceApiTest extends TestCase
 
         // 2. Immediate tag should be ignored (Debounce)
         $response2 = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_submitNfcTag', [
+            ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-1001', 'AZ-01'],
             ]);
 
@@ -92,7 +92,7 @@ class HrAttendanceApiTest extends TestCase
         Carbon::setTestNow(Carbon::now()->addMinutes(6));
 
         $response3 = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_submitNfcTag', [
+            ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-1001', 'AZ-01'],
             ]);
 
@@ -122,7 +122,7 @@ class HrAttendanceApiTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_submitNfcTag', [
+            ->postJson('/smart-company-api/api_submitNfcTag', [
                 'args' => ['NFC-PENDING', 'AZ-01'],
             ]);
 
@@ -137,7 +137,7 @@ class HrAttendanceApiTest extends TestCase
     {
         // 1. Send batch scan for both employees
         $response = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_submitBatchPhotoScan', [
+            ->postJson('/smart-company-api/api_submitBatchPhotoScan', [
                 'args' => [
                     ['NFC-1001', 'NFC-1002'], // badges
                     'AZ-01',                  // site
@@ -166,7 +166,7 @@ class HrAttendanceApiTest extends TestCase
 
         // 2. Fetch pending reviews list
         $logsResponse = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_getPendingAttendanceLogs', [
+            ->postJson('/smart-company-api/api_getPendingAttendanceLogs', [
                 'siteId' => 'ALL',
             ]);
 
@@ -180,7 +180,7 @@ class HrAttendanceApiTest extends TestCase
 
         // 3. Approve first log
         $approveResponse = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_approveAttendanceLog', [
+            ->postJson('/smart-company-api/api_approveAttendanceLog', [
                 'args' => [$log1Id],
             ]);
 
@@ -194,7 +194,7 @@ class HrAttendanceApiTest extends TestCase
 
         // 4. Reject second log
         $rejectResponse = $this->actingAs($this->adminUser)
-            ->postJson('/api/smart-company/api_rejectAttendanceLog', [
+            ->postJson('/smart-company-api/api_rejectAttendanceLog', [
                 'args' => [$log2Id],
             ]);
 

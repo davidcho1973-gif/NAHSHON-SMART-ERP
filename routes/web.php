@@ -27,6 +27,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/expense-pre-approval/index', [ExpensePreApprovalController::class, 'index'])->name('expense-pre-approval.index');
     Route::get('/expense-pre-approval/create', [ExpensePreApprovalController::class, 'create'])->name('expense-pre-approval.create');
     Route::post('/expense-pre-approval/store', [ExpensePreApprovalController::class, 'store'])->name('expense-pre-approval.store');
+
+    // Universal Scanner and Compatibility Adapter Route
+    Route::post('/smart-company-api/{method}', \App\Http\Controllers\SmartCompanyApiController::class)
+        ->where('method', '[A-Za-z0-9_]+')
+        ->name('api.smart-company');
 });
 
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
