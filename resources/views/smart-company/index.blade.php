@@ -3930,7 +3930,12 @@
 
           pageContainer.innerHTML =
             '<div class="header-section"><div><h1 class="page-title">ìž¬ë¬´ / ë¹„ìš© ê´€ë¦¬</h1><p class="page-subtitle">ë¹„ìš© ì œì¶œ ë‚´ì—­ Â· ìŠ¹ì¸ ëŒ€ê¸° Â· ì²­êµ¬ í˜„í™©</p></div>' +
-            '<div class="action-row"><button class="btn-secondary" onclick="window.print()"><i class="ph ph-printer"></i> ì§€ì¶œë‚´ì—­ ì¶œë ¥</button><button class="btn-primary" onclick="openUniversalScanner(\'EXPENSE\', \'ë¹„ìš© ì˜ìˆ˜ì¦/ì§€ì¶œê²°ì˜ì„œ\')"><i class="ph ph-scan"></i> AI ì˜ìˆ˜ì¦ ìŠ¤ìº” / ë¹„ìš©ì œì¶œ</button></div></div>' +
+            '<div class="action-row" style="flex-wrap: wrap; gap: 8px;">' +
+            '  <a href="/mobile-expense/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-receipt" style="font-size:16px"></i> 내 경비 목록</a>' +
+            '  <a href="/expense-pre-approval/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-hand-coins" style="font-size:16px"></i> 사전 예산 승인</a>' +
+            '  <a href="/mobile-expense/wizard-ai" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;"><i class="ph ph-magic-wand" style="font-size:16px"></i> AI 경비 등록 위저드</a>' +
+            '  <button class="btn-secondary" style="height:38px;padding:0 14px;border-radius:6px;" onclick="window.print()"><i class="ph ph-printer"></i> 지출내역 출력</button>' +
+            '</div></div>' +
             '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
             '<div class="kpi-card"><div class="kpi-label">ì´ ìˆ˜ì£¼ ê¸ˆì•¡ (ì˜ˆì‚°)<i class="ph ph-buildings" style="font-size:14px;color:var(--brand-primary)"></i></div><div class="kpi-value">' + fmtUSD(stats.mtdBudget) + '</div>' +
             '<div class="kpi-meta"><div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:' + budgetPct + '%;background:var(--brand-primary)"></div></div><span style="color:var(--text-secondary);margin-left:6px">ì†Œì§„ìœ¨ ' + budgetPct + '%</span></div></div>' +
