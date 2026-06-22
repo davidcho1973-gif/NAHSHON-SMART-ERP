@@ -264,20 +264,37 @@ class MemberRegistrationResource extends Resource
                     ])
                     ->modalHeading('지원서 링크 이메일 발송')
                     ->modalSubmitActionLabel('이메일 보내기')
-                    ->action(function (MemberRegistration $record, array $data): void {
+                    ->action(function (MemberRegistration $record, array $data, Action $action): void {
                         $record->forceFill(['email' => $data['email']])->save();
+                        $service = app(ApplicantInvitationService::class);
+                        $email = (string) $data['email'];
+
+                        if (! $service->hasRealMailerConfigured()) {
+                            Notification::make()
+                                ->success()
+                                ->title('지원서 링크 준비 완료')
+                                ->body('서버 메일 설정이 없어 메일 작성창을 열었습니다. 작성창에서 보내기를 누르면 전달됩니다.')
+                                ->persistent()
+                                ->send();
+
+                            $action->redirect($service->mailtoUrl($record, $email));
+
+                            return;
+                        }
 
                         try {
-                            app(ApplicantInvitationService::class)->sendEmail($record, (string) $data['email']);
+                            $service->sendEmail($record, $email);
                         } catch (Throwable $exception) {
                             Notification::make()
-                                ->danger()
-                                ->title('이메일 발송 실패')
-                                ->body($exception->getMessage() . ' 지원서 링크는 유지됩니다: ' . $record->intakeUrl())
+                                ->warning()
+                                ->title('메일 작성창으로 전환')
+                                ->body('서버 메일 발송이 완료되지 않아 메일 작성창을 열었습니다. 작성창에서 보내기를 누르면 전달됩니다.')
                                 ->persistent()
                                 ->send();
 
                             report($exception);
+
+                            $action->redirect($service->mailtoUrl($record, $email));
 
                             return;
                         }

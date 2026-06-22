@@ -50,13 +50,7 @@ class ApplicantInvitationService
     {
         $this->ensureRealMailerConfigured();
 
-        $recipientEmail = $recipientEmail
-            ? Str::lower(trim($recipientEmail))
-            : Str::lower((string) $registration->email);
-
-        if (blank($recipientEmail)) {
-            throw new \InvalidArgumentException('Recipient email is required.');
-        }
+        $recipientEmail = $this->normalizeRecipientEmail($registration, $recipientEmail);
 
         Mail::raw($this->emailBody($registration), function ($message) use ($registration, $recipientEmail): void {
             $message
@@ -65,7 +59,31 @@ class ApplicantInvitationService
         });
     }
 
-    private function ensureRealMailerConfigured(): void
+    public function hasRealMailerConfigured(): bool
+    {
+        try {
+            $this->ensureRealMailerConfigured();
+        } catch (RuntimeException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function mailtoUrl(MemberRegistration $registration, ?string $recipientEmail = null): string
+    {
+        $recipientEmail = $this->normalizeRecipientEmail($registration, $recipientEmail);
+
+        return 'mailto:' . rawurlencode($recipientEmail) . '?' . http_build_query([
+            'subject' => 'NAHSHON MEP application link',
+            'body' => $this->emailBody($registration),
+        ], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
+     * @throws RuntimeException
+     */
+    public function ensureRealMailerConfigured(): void
     {
         $mailer = (string) config('mail.default', 'log');
 
@@ -92,6 +110,19 @@ class ApplicantInvitationService
                 '발신 이메일 주소가 설정되지 않았습니다. MAIL_FROM_ADDRESS를 실제 발신 주소로 설정해 주세요.',
             );
         }
+    }
+
+    private function normalizeRecipientEmail(MemberRegistration $registration, ?string $recipientEmail = null): string
+    {
+        $recipientEmail = $recipientEmail
+            ? Str::lower(trim($recipientEmail))
+            : Str::lower((string) $registration->email);
+
+        if (blank($recipientEmail)) {
+            throw new \InvalidArgumentException('Recipient email is required.');
+        }
+
+        return $recipientEmail;
     }
 
     private function emailBody(MemberRegistration $registration): string

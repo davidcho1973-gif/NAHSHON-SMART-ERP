@@ -30,4 +30,8 @@ For Gmail, `MAIL_PASSWORD` must be a Google app password, not the normal Gmail l
 5. Open Admin > Applicants.
 6. Use `지원서 링크로 보내기` with a test email.
 
-If `MAIL_MAILER` is still `log` or the SMTP host is still `127.0.0.1`, the ERP will now show a clear failure message instead of pretending the email was sent.
+If `MAIL_MAILER` is still `log` or the SMTP host is still `127.0.0.1`, the ERP will create the application link and open an email draft instead of stopping on a failure.
+
+## Fallback Behavior
+
+If real SMTP is not configured, the applicant email action still creates the application link and opens a `mailto:` email draft. The draft includes the applicant email, subject, and application link. The admin only needs to press Send in their email app.

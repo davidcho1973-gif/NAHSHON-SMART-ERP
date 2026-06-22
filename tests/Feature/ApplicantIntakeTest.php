@@ -8,7 +8,6 @@ use App\Services\ApplicantInvitationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use RuntimeException;
 use Tests\TestCase;
 
 class ApplicantIntakeTest extends TestCase
@@ -37,7 +36,7 @@ class ApplicantIntakeTest extends TestCase
             ->assertSee($registration->intakeUrl());
     }
 
-    public function test_applicant_email_requires_real_mailer_configuration(): void
+    public function test_applicant_email_can_fall_back_to_mailto_when_real_mailer_is_missing(): void
     {
         config(['mail.default' => 'log']);
 
@@ -49,9 +48,12 @@ class ApplicantIntakeTest extends TestCase
             'onboarding_status' => 'invited',
         ]);
 
-        $this->expectException(RuntimeException::class);
+        $service = app(ApplicantInvitationService::class);
+        $mailtoUrl = $service->mailtoUrl($registration);
 
-        app(ApplicantInvitationService::class)->sendEmail($registration);
+        $this->assertFalse($service->hasRealMailerConfigured());
+        $this->assertStringStartsWith('mailto:applicant%40example.com?', $mailtoUrl);
+        $this->assertStringContainsString(rawurlencode($registration->intakeUrl()), $mailtoUrl);
     }
 
     public function test_applicant_can_submit_multilingual_intake_with_id_and_certifications(): void
