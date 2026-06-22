@@ -44,7 +44,7 @@ class ManageMemberRegistrations extends ManageRecords
                         Notification::make()
                             ->danger()
                             ->title('이메일 발송 실패')
-                            ->body('지원서 링크는 생성됐지만 메일 발송 중 오류가 발생했습니다. 링크: ' . $registration->intakeUrl())
+                            ->body($exception->getMessage() . ' 지원서 링크는 생성됐습니다: ' . $registration->intakeUrl())
                             ->persistent()
                             ->send();
 

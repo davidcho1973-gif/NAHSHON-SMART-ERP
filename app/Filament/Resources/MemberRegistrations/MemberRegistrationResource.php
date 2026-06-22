@@ -273,7 +273,7 @@ class MemberRegistrationResource extends Resource
                             Notification::make()
                                 ->danger()
                                 ->title('이메일 발송 실패')
-                                ->body('링크는 유지됐지만 메일 발송 중 오류가 발생했습니다. 링크: ' . $record->intakeUrl())
+                                ->body($exception->getMessage() . ' 지원서 링크는 유지됩니다: ' . $record->intakeUrl())
                                 ->persistent()
                                 ->send();
 

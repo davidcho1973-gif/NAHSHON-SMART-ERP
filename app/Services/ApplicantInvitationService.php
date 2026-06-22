@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MemberRegistration;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class ApplicantInvitationService
 {
@@ -47,6 +48,8 @@ class ApplicantInvitationService
 
     public function sendEmail(MemberRegistration $registration, ?string $recipientEmail = null): void
     {
+        $this->ensureRealMailerConfigured();
+
         $recipientEmail = $recipientEmail
             ? Str::lower(trim($recipientEmail))
             : Str::lower((string) $registration->email);
@@ -60,6 +63,35 @@ class ApplicantInvitationService
                 ->to($recipientEmail, $registration->full_name)
                 ->subject('NAHSHON MEP application link');
         });
+    }
+
+    private function ensureRealMailerConfigured(): void
+    {
+        $mailer = (string) config('mail.default', 'log');
+
+        if (in_array($mailer, ['log', 'array'], true)) {
+            throw new RuntimeException(
+                '실제 메일 발송 설정이 없습니다. Laravel Cloud 환경변수에 MAIL_MAILER=smtp 와 SMTP 계정 정보를 먼저 설정해야 합니다.',
+            );
+        }
+
+        if ($mailer === 'smtp') {
+            $host = (string) config('mail.mailers.smtp.host', '');
+
+            if ($host === '' || in_array(Str::lower($host), ['127.0.0.1', 'localhost'], true)) {
+                throw new RuntimeException(
+                    'SMTP 서버가 설정되지 않았습니다. MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD를 Laravel Cloud 환경변수에 넣어 주세요.',
+                );
+            }
+        }
+
+        $fromAddress = (string) config('mail.from.address', '');
+
+        if ($fromAddress === '' || Str::endsWith(Str::lower($fromAddress), '@example.com')) {
+            throw new RuntimeException(
+                '발신 이메일 주소가 설정되지 않았습니다. MAIL_FROM_ADDRESS를 실제 발신 주소로 설정해 주세요.',
+            );
+        }
     }
 
     private function emailBody(MemberRegistration $registration): string

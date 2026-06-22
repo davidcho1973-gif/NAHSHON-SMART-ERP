@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\MemberRegistration;
+use App\Services\ApplicantInvitationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Tests\TestCase;
 
 class ApplicantIntakeTest extends TestCase
@@ -33,6 +35,23 @@ class ApplicantIntakeTest extends TestCase
             ->assertOk()
             ->assertSee('입사지원서 QR 코드')
             ->assertSee($registration->intakeUrl());
+    }
+
+    public function test_applicant_email_requires_real_mailer_configuration(): void
+    {
+        config(['mail.default' => 'log']);
+
+        $registration = MemberRegistration::create([
+            'full_name' => 'Email Applicant',
+            'email' => 'applicant@example.com',
+            'member_type' => 'worker',
+            'preferred_language' => 'es',
+            'onboarding_status' => 'invited',
+        ]);
+
+        $this->expectException(RuntimeException::class);
+
+        app(ApplicantInvitationService::class)->sendEmail($registration);
     }
 
     public function test_applicant_can_submit_multilingual_intake_with_id_and_certifications(): void
