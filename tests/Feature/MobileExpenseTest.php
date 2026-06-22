@@ -186,4 +186,53 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
     }
+
+    public function test_desktop_universal_ai_scan_saves_expense(): void
+    {
+        Storage::fake('public');
+
+        $this->mock(GeminiReceiptAnalyzer::class, function ($mock): void {
+            $mock->shouldReceive('analyze')
+                ->once()
+                ->andReturn([
+                    'vendor_name' => 'Staples',
+                    'amount' => 89.99,
+                    'date' => '2026-06-22',
+                    'category' => 'Office Supplies',
+                    'description' => 'Paper and pens',
+                    'model' => 'gemini-mock',
+                ]);
+        });
+
+        $fakeBase64 = 'data:image/jpeg;base64,' . base64_encode('fake-image-bytes');
+
+        $response = $this->actingAs($this->user)->postJson('/api/smart-company/api_universalAIScan', [
+            'args' => [
+                'EXPENSE',
+                $fakeBase64,
+                'image/jpeg',
+            ],
+            'siteId' => $this->site->id,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'category' => 'EXPENSE',
+            'data' => [
+                'vendor_name' => 'Staples',
+                'amount' => 89.99,
+            ],
+        ]);
+
+        $this->assertDatabaseHas('mobile_expenses', [
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'amount' => 89.99,
+            'status' => 'pending',
+        ]);
+    }
 }
