@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | Antigravity | Mobile Expense Wizard | Fixed a frontend JavaScript error where querySelector for csrf-token returned null during receipt upload by adding the missing meta tag to the wizard head. | Main deploy | Manual staging verification and all 45 phpunit tests passing. |
 | 2026-06-22 | Antigravity | Mobile Expense / Pre-Approval | Implemented My Expenses dashboard, AI OCR Wizard with custom virtual keypad, and Expense Pre-Approval modules. Verified with full feature test coverage (45 tests total passing). | Main deploy | All tests passed (`php artisan test`); PR merged. |
 | 2026-06-22 | CODEX | HR employees | Fixed Employee registration saves by auto-generating Employee IDs, normalizing blank optional unique fields, and cleaning existing blank employee values. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 33 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Changed applicant email invitations to fall back to a prefilled mail draft instead of stopping on missing SMTP configuration. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 31 tests; `npm run build` passed. |
@@ -133,6 +134,8 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-21: Implemented Solis-style HR submenus (Directory, Attendance Record, Attendance Summary) in index.blade.php. Added backend pending review approval/rejection APIs and verified them with a full test suite.
 - 2026-06-21: Implemented WebRTC webcam stream capture and file upload hybrid UI for the Universal AI Scanner Modal in index.blade.php with clear preview reset and stream release checks.
 - 2026-06-22: Implemented Mobile Expense dashboard (/mobile-expense/index), AI Expense Registration Wizard (/mobile-expense/wizard-ai) with Gemini OCR and a custom virtual keypad, and Expense Pre-Approval module (/expense-pre-approval/index). Created a full suite of automated feature tests (MobileExpenseTest, ExpensePreApprovalTest, GeminiReceiptAnalyzerTest) and successfully merged the implementation to main.
+- 2026-06-22: Fixed a frontend JavaScript error where `document.querySelector('meta[name="csrf-token"]')` returned null on the AI Expense Wizard page (throwing "Cannot read properties of null (reading 'getAttribute')" when uploading a receipt) by adding the missing csrf-token meta tag to the document head.
+
 
 
 ### Planned / Next
