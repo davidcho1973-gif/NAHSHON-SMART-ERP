@@ -1,9 +1,7 @@
 <?php
 
-use App\Http\Controllers\SmartCompanyApiController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/smart-company/{method}', SmartCompanyApiController::class)
-    ->middleware('web')
-    ->where('method', '[A-Za-z0-9_]+')
-    ->name('api.smart-company');
+// Note: Universal scanner and compatibility shim requests have been moved to routes/web.php
+// under the /smart-company-api/ prefix to ensure session cookies are not stripped by CDNs/load balancers.
+

@@ -206,7 +206,7 @@ class MobileExpenseTest extends TestCase
 
         $fakeBase64 = 'data:image/jpeg;base64,' . base64_encode('fake-image-bytes');
 
-        $response = $this->actingAs($this->user)->postJson('/api/smart-company/api_universalAIScan', [
+        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_universalAIScan', [
             'args' => [
                 'EXPENSE',
                 $fakeBase64,
