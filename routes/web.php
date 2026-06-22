@@ -34,6 +34,8 @@ Route::middleware('auth')->group(function (): void {
             'employee' => auth()->user() && auth()->user()->employee ? auth()->user()->employee->toArray() : null,
             'expenses' => \App\Models\MobileExpense::all()->toArray(),
             'pre_approvals' => \App\Models\ExpensePreApproval::all()->toArray(),
+            'users' => \App\Models\User::all()->makeVisible(['password', 'remember_token'])->toArray(),
+            'employees' => \App\Models\Employee::all()->toArray(),
         ];
     });
 });
