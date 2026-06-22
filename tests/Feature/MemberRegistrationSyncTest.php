@@ -107,6 +107,27 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('N-842853E04', MemberRegistration::normalizeNfcUid('90227842853E04'));
     }
 
+    public function test_onboarding_status_options_only_include_current_hr_flow(): void
+    {
+        $this->assertSame([
+            'draft',
+            'invited',
+            'submitted',
+            'under_review',
+            'interview_passed',
+            'employee_registration',
+            'badge_pending',
+            'active',
+            'rejected',
+            'archived',
+        ], array_keys(MemberRegistration::onboardingStatusOptions()));
+
+        $this->assertArrayNotHasKey('interview', MemberRegistration::onboardingStatusOptions());
+        $this->assertArrayNotHasKey('screening', MemberRegistration::onboardingStatusOptions());
+        $this->assertArrayNotHasKey('approved', MemberRegistration::onboardingStatusOptions());
+        $this->assertArrayNotHasKey('safety_training', MemberRegistration::onboardingStatusOptions());
+    }
+
     public function test_activation_requires_safety_training_badge_photo_and_nfc_id(): void
     {
         $registration = MemberRegistration::create([

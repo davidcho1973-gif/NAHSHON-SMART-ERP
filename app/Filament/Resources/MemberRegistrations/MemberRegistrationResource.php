@@ -241,22 +241,7 @@ class MemberRegistrationResource extends Resource
             DatePicker::make('badge_issued_on')
                 ->label('Badge issued on / hire date'),
             Select::make('onboarding_status')
-                ->options([
-                    'draft' => 'Draft',
-                    'invited' => 'Invited',
-                    'submitted' => 'Submitted',
-                    'under_review' => 'Under review',
-                    'employee_registration' => 'Employee registration',
-                    'interview' => 'Interview (legacy)',
-                    'interview_passed' => 'Interview passed',
-                    'safety_training' => 'Hoffman safety training',
-                    'badge_pending' => 'Badge / NFC pending',
-                    'screening' => 'Screening (legacy)',
-                    'approved' => 'Approved (legacy)',
-                    'active' => 'Active',
-                    'rejected' => 'Rejected',
-                    'archived' => 'Archived',
-                ])
+                ->options(MemberRegistration::onboardingStatusOptions())
                 ->default('draft')
                 ->required(),
             Textarea::make('notes')->columnSpanFull(),
@@ -315,22 +300,7 @@ class MemberRegistrationResource extends Resource
                 TextColumn::make('approved_at')->since()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('onboarding_status')->options([
-                    'draft' => 'Draft',
-                    'invited' => 'Invited',
-                    'submitted' => 'Submitted',
-                    'under_review' => 'Under review',
-                    'employee_registration' => 'Employee registration',
-                    'interview' => 'Interview (legacy)',
-                    'interview_passed' => 'Interview passed',
-                    'safety_training' => 'Hoffman safety training',
-                    'badge_pending' => 'Badge / NFC pending',
-                    'screening' => 'Screening (legacy)',
-                    'approved' => 'Approved (legacy)',
-                    'active' => 'Active',
-                    'rejected' => 'Rejected',
-                    'archived' => 'Archived',
-                ]),
+                SelectFilter::make('onboarding_status')->options(MemberRegistration::onboardingStatusOptions()),
                 SelectFilter::make('interview_status')->options([
                     'pending' => 'Pending',
                     'scheduled' => 'Scheduled',

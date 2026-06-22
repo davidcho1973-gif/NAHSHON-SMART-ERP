@@ -119,22 +119,7 @@ class MemberDocumentResource extends Resource
                     'verified' => 'Verified',
                     'expired' => 'Expired',
                 ]),
-                SelectFilter::make('onboarding_status')->options([
-                    'draft' => 'Draft',
-                    'invited' => 'Invited',
-                    'submitted' => 'Submitted',
-                    'under_review' => 'Under review',
-                    'employee_registration' => 'Employee registration',
-                    'screening' => 'Screening (legacy)',
-                    'approved' => 'Approved (legacy)',
-                    'interview' => 'Interview (legacy)',
-                    'interview_passed' => 'Interview passed (legacy)',
-                    'safety_training' => 'Hoffman safety training (legacy)',
-                    'badge_pending' => 'Badge / NFC pending (legacy)',
-                    'active' => 'Active',
-                    'rejected' => 'Rejected',
-                    'archived' => 'Archived',
-                ]),
+                SelectFilter::make('onboarding_status')->options(MemberRegistration::onboardingStatusOptions()),
             ])
             ->recordActions([
                 Action::make('documents')

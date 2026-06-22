@@ -13,7 +13,7 @@ return new class extends Migration
         }
 
         MemberRegistration::query()
-            ->whereIn('onboarding_status', ['approved', 'active'])
+            ->where('onboarding_status', 'active')
             ->orderBy('id')
             ->chunkById(100, function ($registrations): void {
                 foreach ($registrations as $registration) {

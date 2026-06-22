@@ -209,6 +209,25 @@ class MemberRegistration extends Model
         ];
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public static function onboardingStatusOptions(): array
+    {
+        return [
+            'draft' => 'Draft',
+            'invited' => 'Invited',
+            'submitted' => 'Submitted',
+            'under_review' => 'Under review',
+            'interview_passed' => 'Interview passed',
+            'employee_registration' => 'Employee registration',
+            'badge_pending' => 'Badge / NFC pending',
+            'active' => 'Active',
+            'rejected' => 'Rejected',
+            'archived' => 'Archived',
+        ];
+    }
+
     public static function normalizeNfcUid(?string $uid): ?string
     {
         if (! is_string($uid)) {
@@ -294,7 +313,6 @@ class MemberRegistration extends Model
             'onboarding_status' => in_array($this->onboarding_status, [
                 'active',
                 'employee_registration',
-                'safety_training',
                 'badge_pending',
             ], true) ? $this->onboarding_status : 'interview_passed',
         ])->save();
