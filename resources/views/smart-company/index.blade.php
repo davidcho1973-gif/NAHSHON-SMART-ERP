@@ -716,7 +716,7 @@
     const CACHE_TTL = 60000; // 60 seconds
 
     function gsRun(fnName, args, defaultVal) {
-      return new Promise(async function (resolve) {
+      return new Promise(async function (resolve, reject) {
         const cacheKey = fnName + JSON.stringify(args || []);
         const now = Date.now();
 
@@ -747,7 +747,7 @@
           resolve(res != null ? res : defaultVal);
         } catch (e) {
           console.warn('[API] ' + fnName + ':', e);
-          resolve(defaultVal);
+          reject(e);
         }
       });
     }
