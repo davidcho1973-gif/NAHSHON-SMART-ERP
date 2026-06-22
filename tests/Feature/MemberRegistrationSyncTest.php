@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class MemberRegistrationSyncTest extends TestCase
@@ -78,6 +79,9 @@ class MemberRegistrationSyncTest extends TestCase
             'email' => 'approve@example.com',
             'member_type' => 'worker',
             'onboarding_status' => 'draft',
+            'safety_training_status' => 'completed',
+            'nfc_raw_uid' => '90227842853E04',
+            'badge_photo_path' => 'member-badges/approve.jpg',
         ]);
 
         $this->assertSame(0, Employee::query()->count());
@@ -85,8 +89,64 @@ class MemberRegistrationSyncTest extends TestCase
         $employee = $registration->approve();
 
         $this->assertSame('Approve Me', $employee->name);
+        $this->assertSame('N-842853E04', $employee->badge_number);
         $this->assertDatabaseHas('users', ['email' => 'approve@example.com']);
         $this->assertSame('active', $registration->fresh()->onboarding_status);
+    }
+
+    public function test_nfc_uid_is_normalized_to_n_prefix_and_last_nine_characters(): void
+    {
+        $registration = MemberRegistration::create([
+            'full_name' => 'Badge Worker',
+            'member_type' => 'worker',
+            'nfc_raw_uid' => '90227842853E04',
+        ]);
+
+        $this->assertSame('N-842853E04', $registration->fresh()->badge_number);
+        $this->assertSame('N-842853E04', MemberRegistration::normalizeNfcUid('90227842853E04'));
+    }
+
+    public function test_activation_requires_safety_training_badge_photo_and_nfc_id(): void
+    {
+        $registration = MemberRegistration::create([
+            'full_name' => 'Not Ready',
+            'member_type' => 'worker',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        $registration->activateAsEmployee();
+    }
+
+    public function test_activation_copies_hoffman_badge_fields_to_employee(): void
+    {
+        $registration = MemberRegistration::create([
+            'first_name' => 'Sekon',
+            'last_name' => 'Kim',
+            'full_name' => 'Sekon Kim',
+            'email' => 'sekon@example.com',
+            'member_type' => 'worker',
+            'safety_training_status' => 'completed',
+            'nfc_raw_uid' => '90227842853E04',
+            'badge_photo_path' => 'member-badges/sekon.jpg',
+            'badge_company_name' => 'AUTORICA LLC',
+            'badge_first_name' => 'SEKON',
+            'badge_last_name' => 'KIM',
+            'badge_role' => 'ENGINEER',
+            'badge_issued_on' => '2026-03-29',
+            'badge_analysis_model' => 'gemini-3.5-flash',
+            'badge_analysis_payload' => ['confidence' => 93],
+        ]);
+
+        $employee = $registration->activateAsEmployee();
+
+        $this->assertSame('N-842853E04', $employee->badge_number);
+        $this->assertSame('SEKON', $employee->first_name);
+        $this->assertSame('KIM', $employee->last_name);
+        $this->assertSame('AUTORICA LLC', $employee->badge_company_name);
+        $this->assertSame('ENGINEER', $employee->role);
+        $this->assertSame('2026-03-29', $employee->start_date?->toDateString());
+        $this->assertSame('member-badges/sekon.jpg', $employee->badge_photo_path);
     }
 
     public function test_active_registration_updates_linked_employee_without_duplicates(): void

@@ -36,7 +36,7 @@ class UserAccessResource extends Resource
 
     protected static ?string $slug = 'access-control';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'SMART COMPANY';
+    protected static string | \UnitEnum | null $navigationGroup = 'HUMAN RESOURCE';
 
     protected static ?int $navigationSort = 5;
 

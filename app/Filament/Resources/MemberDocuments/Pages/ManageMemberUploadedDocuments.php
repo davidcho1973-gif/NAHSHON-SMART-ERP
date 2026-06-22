@@ -55,6 +55,7 @@ class ManageMemberUploadedDocuments extends ManageRelatedRecords
             ->filters([
                 SelectFilter::make('document_type')->options([
                     'id' => 'Government ID',
+                    'certification' => 'Certification',
                     'visa' => 'Visa / Work Authorization',
                     'safety' => 'Safety Orientation',
                     'safety_training' => 'Safety Training',

@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR onboarding | Rebuilt the employee intake flow around multilingual applicant forms, interview, Hoffman safety training, badge photo/Gemini extraction, NFC normalization, and final employee activation. | Local branch `codex/hr-onboarding-flow` | PHP lint passed for changed files; `php artisan test` passed, 27 tests. |
 | 2026-06-21 | CODEX | Mobile bottom navigation | Reworked phone bottom navigation into Attendance, Message, More, Schedule, and Receipt actions, with a Solis-style More bottom sheet for the remaining modules. | Main deploy | `npm run build`, `php artisan test`, Playwright mobile 390px More sheet check. |
 | 2026-06-21 | CODEX | Mobile login / app shell | Kept the desktop login unchanged while turning the phone login/home entry into an app-like mobile screen with PWA manifest/icon metadata. | Main deploy | `npm run build`, `php artisan test`, Playwright desktop/mobile login screenshots, manifest/icon 200 responses. |
 | 2026-06-21 | Antigravity | Universal AI Scanner | Implemented WebRTC webcam stream capture and file upload hybrid UI for the Universal AI Scanner Modal in index.blade.php. | Local verified | `npm run build` completed, and all 23 phpunit tests passed. |
@@ -82,6 +83,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-21: Added mobile-friendly ERP shell/login layout with bottom tab navigation, sticky mobile topbar, safer table scrolling, and mobile HR parent-tab routing.
 - 2026-06-21: Refined `/login` so desktop remains the existing card layout while mobile renders as an app-like entry screen with install metadata and app icon.
 - 2026-06-21: Reworked the phone bottom navigation into four primary actions plus a centered More sheet containing the remaining modules.
+- 2026-06-22: Rebuilt HR onboarding around Spanish/English/Korean applicant intake, uploaded ID/certification documents, interview/safety/badge stages, Hoffman badge Gemini extraction, and NFC ID normalization (`N-` + last 9 characters).
 
 ### Current Boundaries
 

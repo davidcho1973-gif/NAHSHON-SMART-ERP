@@ -47,7 +47,7 @@ class EmployeeResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Employees';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'SMART COMPANY';
+    protected static string | \UnitEnum | null $navigationGroup = 'HUMAN RESOURCE';
 
     protected static ?int $navigationSort = 2;
 
@@ -130,6 +130,8 @@ class EmployeeResource extends Resource
                 ->maxLength(120),
             TextInput::make('nationality')
                 ->maxLength(80),
+            DatePicker::make('start_date')
+                ->label('Hire date / 입사일'),
             Select::make('employment_status')
                 ->label('Status')
                 ->options([
@@ -180,6 +182,7 @@ class EmployeeResource extends Resource
                 TextColumn::make('site.code')->label('Site')->badge()->sortable(),
                 TextColumn::make('team.name')->label('Team')->searchable()->toggleable(),
                 TextColumn::make('role')->label('Role')->searchable()->toggleable(),
+                TextColumn::make('start_date')->label('Hire date')->date()->sortable()->toggleable(),
                 TextColumn::make('employment_status')->label('Status')->badge()->sortable(),
                 TextColumn::make('badge_number')->label('Badge')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_company_name')->label('Badge company')->searchable()->toggleable(isToggledHiddenByDefault: true),

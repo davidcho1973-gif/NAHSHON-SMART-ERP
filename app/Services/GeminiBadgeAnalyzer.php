@@ -108,11 +108,20 @@ class GeminiBadgeAnalyzer
     private function prompt(): string
     {
         return <<<'PROMPT'
-Analyze this employee/site badge photo and extract only visible information.
+Analyze this HOFFMAN site access badge photo and extract only visible information.
 Return JSON only. Do not guess missing values.
 
+Badge-specific rules:
+- Do not use the HOFFMAN logo as the company name.
+- company_name is the red contractor/company text directly under the HOFFMAN logo.
+- last_name is printed below the red company text.
+- first_name is printed below the last name.
+- role is printed below the first name.
+- issued_on is the date printed next to "ISSUED ON" under the portrait photo.
+- If the badge shows another visible badge code, return it as badge_number, but do not invent the NFC ID.
+
 Fields:
-- company_name: company or contractor name printed on the badge.
+- company_name: red contractor/company name under HOFFMAN.
 - first_name: given name.
 - last_name: family/surname.
 - full_name: complete person name as printed.

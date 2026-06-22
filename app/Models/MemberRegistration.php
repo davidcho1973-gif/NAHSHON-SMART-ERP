@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class MemberRegistration extends Model
 {
@@ -24,10 +26,17 @@ class MemberRegistration extends Model
         'badge_number',
         'member_type',
         'full_name',
+        'first_name',
+        'last_name',
         'preferred_name',
         'email',
         'phone',
         'nationality',
+        'preferred_language',
+        'date_of_birth',
+        'address',
+        'emergency_contact_name',
+        'emergency_contact_phone',
         'role',
         'trade',
         'start_date',
@@ -40,6 +49,25 @@ class MemberRegistration extends Model
         'onboarding_status',
         'automation_score',
         'risk_level',
+        'interview_status',
+        'interviewed_at',
+        'interviewed_by_id',
+        'interview_notes',
+        'safety_training_status',
+        'safety_training_completed_on',
+        'badge_registration_status',
+        'nfc_raw_uid',
+        'badge_photo_path',
+        'badge_company_name',
+        'badge_first_name',
+        'badge_last_name',
+        'badge_role',
+        'badge_issued_on',
+        'badge_analysis_model',
+        'badge_analyzed_at',
+        'badge_analysis_payload',
+        'privacy_consent_at',
+        'privacy_consent_language',
         'invite_token',
         'invited_at',
         'submitted_at',
@@ -54,8 +82,15 @@ class MemberRegistration extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
+            'date_of_birth' => 'date',
             'visa_expires_on' => 'date',
             'safety_training_expires_on' => 'date',
+            'interviewed_at' => 'datetime',
+            'safety_training_completed_on' => 'date',
+            'badge_issued_on' => 'date',
+            'badge_analyzed_at' => 'datetime',
+            'badge_analysis_payload' => 'array',
+            'privacy_consent_at' => 'datetime',
             'invited_at' => 'datetime',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
@@ -73,14 +108,17 @@ class MemberRegistration extends Model
         });
 
         static::saving(function (MemberRegistration $registration): void {
+            if (filled($registration->nfc_raw_uid) && (blank($registration->badge_number) || $registration->isDirty('nfc_raw_uid'))) {
+                $registration->badge_number = self::normalizeNfcUid($registration->nfc_raw_uid);
+            }
+
             $registration->refreshAutomationSignals();
         });
 
-        // 단일 연동 트리거: 회원등록이 approved/active 로 저장되면 Create/Edit/Approve
-        // 어떤 경로든 직원·계정·문서로 자동 반영한다. syncEmployee 의 자기 저장은
-        // saveQuietly 라 이 saved 훅을 재귀 호출하지 않는다.
+        // 단일 연동 트리거: 최종 Active 상태가 될 때만 직원·계정·문서로 반영한다.
+        // 지원서/인터뷰/안전교육 단계에서는 Employee 레코드를 만들지 않는다.
         static::saved(function (MemberRegistration $registration): void {
-            if (in_array($registration->onboarding_status, ['approved', 'active'], true)) {
+            if ($registration->onboarding_status === 'active') {
                 $registration->syncDownstream();
             }
         });
@@ -121,16 +159,123 @@ class MemberRegistration extends Model
         return route('member-registration.show', $this->invite_token);
     }
 
-    public function approve(?User $user = null): Employee
+    /**
+     * @return array<string, string>
+     */
+    public static function languageOptions(): array
     {
-        // save() 가 saved 훅을 통해 syncDownstream 을 실행한다.
+        return [
+            'es' => 'Español',
+            'en' => 'English',
+            'ko' => '한국어',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function roleOptions(): array
+    {
+        return [
+            'Electrician' => 'Electrician',
+            'Plumber' => 'Plumber',
+            'Welder' => 'Welder',
+            'HVAC' => 'HVAC',
+            'General Labor' => 'General Labor',
+            'Foreman' => 'Foreman',
+            'Engineer' => 'Engineer',
+            'Safety' => 'Safety',
+            'Spotter' => 'Spotter',
+            'Other' => 'Other',
+        ];
+    }
+
+    public static function normalizeNfcUid(?string $uid): ?string
+    {
+        if (! is_string($uid)) {
+            return null;
+        }
+
+        $clean = Str::upper(preg_replace('/[^A-Za-z0-9]/', '', $uid) ?? '');
+
+        if ($clean === '') {
+            return null;
+        }
+
+        return 'N-' . Str::substr($clean, -9);
+    }
+
+    public function markInterviewPassed(?User $user = null): void
+    {
         $this->forceFill([
+            'interview_status' => 'passed',
+            'interviewed_at' => $this->interviewed_at ?: now(),
+            'interviewed_by_id' => $this->interviewed_by_id ?: $user?->id,
+            'onboarding_status' => $this->onboarding_status === 'active' ? 'active' : 'safety_training',
+        ])->save();
+    }
+
+    public function markSafetyTrainingCompleted(): void
+    {
+        $this->forceFill([
+            'safety_training_status' => 'completed',
+            'safety_training_completed_on' => $this->safety_training_completed_on ?: now()->toDateString(),
+            'document_status' => $this->document_status === 'missing' ? 'pending' : $this->document_status,
+            'onboarding_status' => $this->onboarding_status === 'active' ? 'active' : 'badge_pending',
+        ])->save();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function activationBlockers(): array
+    {
+        $blockers = [];
+
+        if ($this->safety_training_status !== 'completed') {
+            $blockers[] = 'Hoffman safety training must be completed first.';
+        }
+
+        if (blank($this->badge_number)) {
+            $blockers[] = 'NFC ID is required. Scan the badge UID first.';
+        }
+
+        if (blank($this->badge_photo_path)) {
+            $blockers[] = 'Badge photo is required for later verification.';
+        }
+
+        return $blockers;
+    }
+
+    public function canActivateEmployee(): bool
+    {
+        return $this->activationBlockers() === [];
+    }
+
+    public function activateAsEmployee(?User $user = null): Employee
+    {
+        $blockers = $this->activationBlockers();
+
+        if ($blockers !== []) {
+            throw ValidationException::withMessages([
+                'onboarding_status' => implode(' ', $blockers),
+            ]);
+        }
+
+        $this->forceFill([
+            'badge_registration_status' => 'registered',
+            'start_date' => $this->start_date ?: $this->badge_issued_on,
             'onboarding_status' => 'active',
             'approved_at' => now(),
             'approved_by_id' => $user?->id,
         ])->save();
 
         return $this->employee()->firstOrFail();
+    }
+
+    public function approve(?User $user = null): Employee
+    {
+        return $this->activateAsEmployee($user);
     }
 
     /**
@@ -175,27 +320,61 @@ class MemberRegistration extends Model
         };
 
         $checklist = [
-            ['document_type' => 'id', 'title' => '신분증 (ID)', 'expires_on' => null],
-            ['document_type' => 'safety_training', 'title' => '안전교육 수료증 (Safety Training)', 'expires_on' => $this->safety_training_expires_on],
+            ['document_type' => 'id', 'title' => '신분증 (ID)', 'expires_on' => null, 'status' => $status],
+            ['document_type' => 'safety_training', 'title' => '안전교육 수료증 (Safety Training)', 'expires_on' => $this->safety_training_expires_on, 'status' => $status],
         ];
 
         if ($this->visa_type || $this->visa_expires_on) {
-            $checklist[] = ['document_type' => 'visa', 'title' => '비자 (Visa)', 'expires_on' => $this->visa_expires_on];
+            $checklist[] = ['document_type' => 'visa', 'title' => '비자 (Visa)', 'expires_on' => $this->visa_expires_on, 'status' => $status];
+        }
+
+        if ($this->badge_photo_path || $this->badge_number) {
+            $checklist[] = [
+                'document_type' => 'nfc',
+                'title' => 'Hoffman Badge / NFC',
+                'status' => $this->badge_registration_status === 'registered' ? 'verified' : 'pending',
+                'issued_on' => $this->badge_issued_on,
+                'file_path' => $this->publicStorageUrl($this->badge_photo_path),
+                'extracted_data' => array_filter([
+                    'nfc_raw_uid' => $this->nfc_raw_uid,
+                    'nfc_id' => $this->badge_number,
+                    'company_name' => $this->badge_company_name,
+                    'last_name' => $this->badge_last_name,
+                    'first_name' => $this->badge_first_name,
+                    'role' => $this->badge_role,
+                    'issued_on' => optional($this->badge_issued_on)->toDateString(),
+                    'analysis_model' => $this->badge_analysis_model,
+                ]),
+            ];
         }
 
         foreach ($checklist as $doc) {
-            MemberDocument::query()->firstOrCreate(
+            $document = MemberDocument::query()->firstOrCreate(
                 [
                     'member_registration_id' => $this->id,
                     'document_type' => $doc['document_type'],
                 ],
                 [
                     'title' => $doc['title'],
-                    'status' => $status,
-                    'expires_on' => $doc['expires_on'],
-                    'verified_at' => $status === 'verified' ? now() : null,
+                    'status' => $doc['status'],
+                    'issued_on' => $doc['issued_on'] ?? null,
+                    'expires_on' => $doc['expires_on'] ?? null,
+                    'file_path' => $doc['file_path'] ?? null,
+                    'extracted_data' => $doc['extracted_data'] ?? null,
+                    'verified_at' => $doc['status'] === 'verified' ? now() : null,
                 ],
             );
+
+            $updates = array_filter([
+                'issued_on' => $doc['issued_on'] ?? null,
+                'expires_on' => $doc['expires_on'] ?? null,
+                'file_path' => $doc['file_path'] ?? null,
+                'extracted_data' => $doc['extracted_data'] ?? null,
+            ], fn (mixed $value): bool => filled($value));
+
+            if ($updates !== []) {
+                $document->fill($updates)->save();
+            }
         }
     }
 
@@ -210,6 +389,11 @@ class MemberRegistration extends Model
         }
 
         $employeeNumber = $this->resolveEmployeeNumber($linkedEmployee);
+        $firstName = $this->badge_first_name ?: $this->first_name;
+        $lastName = $this->badge_last_name ?: $this->last_name;
+        $fullName = $this->full_name ?: trim(implode(' ', array_filter([$firstName, $lastName])));
+        $role = $this->badge_role ?: $this->role ?: $this->trade;
+        $startDate = $this->start_date ?: $this->badge_issued_on;
 
         $employee = $linkedEmployee
             ?? ($email ? Employee::query()->where('email', $email)->first() : null)
@@ -222,10 +406,19 @@ class MemberRegistration extends Model
             'site_id' => $this->site_id,
             'team_id' => $this->team_id,
             'badge_number' => $this->badge_number,
-            'name' => $this->full_name,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'name' => $fullName,
             'email' => $email,
+            'badge_company_name' => $this->badge_company_name,
+            'badge_issued_on' => $this->badge_issued_on,
+            'badge_photo_path' => $this->badge_photo_path,
+            'badge_analysis_model' => $this->badge_analysis_model,
+            'badge_analyzed_at' => $this->badge_analyzed_at,
+            'badge_analysis_payload' => $this->badge_analysis_payload,
             'nationality' => $this->nationality,
-            'role' => $this->role ?: $this->trade,
+            'role' => $role,
+            'start_date' => $startDate,
             'employment_status' => 'active',
             'visa_expires_on' => $this->visa_expires_on,
             'safety_training_expires_on' => $this->safety_training_expires_on,
@@ -234,6 +427,8 @@ class MemberRegistration extends Model
                 'member_type' => $this->member_type,
                 'site_id' => $this->site_id,
                 'trade' => $this->trade,
+                'application_language' => $this->preferred_language,
+                'nfc_raw_uid' => $this->nfc_raw_uid,
                 'source' => 'smart-member-registration',
             ]),
         ]);
@@ -370,9 +565,12 @@ class MemberRegistration extends Model
         $score += $this->company_id ? 10 : 0;
         $score += $this->site_id ? 10 : 0;
         $score += $this->role || $this->trade ? 10 : 0;
+        $score += ($this->first_name && $this->last_name) || $this->full_name ? 10 : 0;
         $score += $this->identity_status === 'verified' ? 15 : 0;
         $score += $this->document_status === 'verified' ? 15 : 0;
         $score += $this->safety_training_expires_on ? 5 : 0;
+        $score += $this->safety_training_status === 'completed' ? 10 : 0;
+        $score += $this->badge_number ? 10 : 0;
 
         $this->automation_score = min(100, $score);
         $this->risk_level = $this->calculateRiskLevel();
@@ -402,5 +600,18 @@ class MemberRegistration extends Model
         }
 
         return 'low';
+    }
+
+    private function publicStorageUrl(?string $path): ?string
+    {
+        if (blank($path)) {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '/storage/'])) {
+            return $path;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 }

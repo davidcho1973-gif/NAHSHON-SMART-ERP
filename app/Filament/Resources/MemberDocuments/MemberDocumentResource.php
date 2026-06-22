@@ -25,13 +25,13 @@ class MemberDocumentResource extends Resource
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-check';
 
-    protected static ?string $navigationLabel = 'Member Documents';
+    protected static ?string $navigationLabel = 'HR Documents';
 
-    protected static ?string $modelLabel = 'Member Document Summary';
+    protected static ?string $modelLabel = 'HR Document Summary';
 
-    protected static ?string $pluralModelLabel = 'Member Documents';
+    protected static ?string $pluralModelLabel = 'HR Documents';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'SMART COMPANY';
+    protected static string | \UnitEnum | null $navigationGroup = 'HUMAN RESOURCE';
 
     public static function form(Schema $schema): Schema
     {
@@ -44,6 +44,7 @@ class MemberDocumentResource extends Resource
             Select::make('document_type')
                 ->options([
                     'id' => 'Government ID',
+                    'certification' => 'Certification',
                     'visa' => 'Visa / Work Authorization',
                     'safety' => 'Safety Orientation',
                     'safety_training' => 'Safety Training',

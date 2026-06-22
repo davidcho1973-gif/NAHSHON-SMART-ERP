@@ -39,8 +39,28 @@ class PostgresSchemaTest extends TestCase
             'badge_analysis_model',
             'badge_analyzed_at',
             'badge_analysis_payload',
+            'start_date',
         ] as $column) {
             $this->assertTrue(Schema::hasColumn('employees', $column), "Missing employees column: {$column}");
+        }
+
+        foreach ([
+            'preferred_language',
+            'first_name',
+            'last_name',
+            'interview_status',
+            'safety_training_status',
+            'badge_registration_status',
+            'nfc_raw_uid',
+            'badge_photo_path',
+            'badge_company_name',
+            'badge_first_name',
+            'badge_last_name',
+            'badge_role',
+            'badge_issued_on',
+            'privacy_consent_at',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('member_registrations', $column), "Missing member_registrations column: {$column}");
         }
     }
 }
