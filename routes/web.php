@@ -27,6 +27,15 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/expense-pre-approval/index', [ExpensePreApprovalController::class, 'index'])->name('expense-pre-approval.index');
     Route::get('/expense-pre-approval/create', [ExpensePreApprovalController::class, 'create'])->name('expense-pre-approval.create');
     Route::post('/expense-pre-approval/store', [ExpensePreApprovalController::class, 'store'])->name('expense-pre-approval.store');
+
+    Route::get('/debug-expenses', function () {
+        return [
+            'user' => auth()->user() ? auth()->user()->toArray() : null,
+            'employee' => auth()->user() && auth()->user()->employee ? auth()->user()->employee->toArray() : null,
+            'expenses' => \App\Models\MobileExpense::all()->toArray(),
+            'pre_approvals' => \App\Models\ExpensePreApproval::all()->toArray(),
+        ];
+    });
 });
 
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
