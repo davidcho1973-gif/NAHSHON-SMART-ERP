@@ -253,6 +253,7 @@
                 <div><span>{{ $t['site'] }}</span>{{ $registration->site?->code ?? 'Pending' }}</div>
             </section>
 
+            @unless ($submitted)
             <section class="form-card">
                 <form class="application" method="POST" action="{{ route('member-registration.store', $registration->invite_token) }}" enctype="multipart/form-data">
                     @csrf
@@ -415,6 +416,7 @@
                     <button type="submit">{{ $t['submit'] }}</button>
                 </form>
             </section>
+            @endunless
         </div>
     </main>
 </body>

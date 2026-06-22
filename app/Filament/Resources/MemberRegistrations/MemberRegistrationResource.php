@@ -60,12 +60,14 @@ class MemberRegistrationResource extends Resource
             TextInput::make('applicant_code')
                 ->label('Applicant code / 지원자 코드')
                 ->disabled()
-                ->dehydrated(),
+                ->dehydrated(false)
+                ->helperText('Created only after the applicant submits the public application.'),
             Select::make('preferred_language')
                 ->label('Application language')
                 ->options(MemberRegistration::languageOptions())
                 ->default('es')
-                ->required(),
+                ->disabled()
+                ->dehydrated(false),
             Select::make('member_type')
                 ->label('Member type')
                 ->options([
@@ -76,42 +78,57 @@ class MemberRegistrationResource extends Resource
                     'driver' => 'Driver',
                 ])
                 ->default('worker')
-                ->required(),
+                ->disabled()
+                ->dehydrated(false),
             TextInput::make('last_name')
                 ->label('Last name / 성')
                 ->maxLength(120)
+                ->disabled()
+                ->dehydrated(false)
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
             TextInput::make('first_name')
                 ->label('First name / 이름')
                 ->maxLength(120)
+                ->disabled()
+                ->dehydrated(false)
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
             TextInput::make('full_name')
                 ->label('Full name')
-                ->required()
+                ->disabled()
+                ->dehydrated(false)
                 ->maxLength(255),
-            TextInput::make('preferred_name')->maxLength(255),
-            TextInput::make('email')->email()->maxLength(255),
-            TextInput::make('phone')->tel()->maxLength(80),
+            TextInput::make('preferred_name')->disabled()->dehydrated(false)->maxLength(255),
+            TextInput::make('email')->email()->disabled()->dehydrated(false)->maxLength(255),
+            TextInput::make('phone')->tel()->disabled()->dehydrated(false)->maxLength(80),
             DatePicker::make('date_of_birth')
-                ->label('Date of birth'),
+                ->label('Date of birth')
+                ->disabled()
+                ->dehydrated(false),
             TextInput::make('address')
                 ->label('Address')
+                ->disabled()
+                ->dehydrated(false)
                 ->maxLength(255)
                 ->columnSpanFull(),
             TextInput::make('emergency_contact_name')
                 ->label('Emergency contact')
+                ->disabled()
+                ->dehydrated(false)
                 ->maxLength(255),
             TextInput::make('emergency_contact_phone')
                 ->label('Emergency phone')
                 ->tel()
+                ->disabled()
+                ->dehydrated(false)
                 ->maxLength(80),
-            TextInput::make('employee_number')->label('Employee ID')->maxLength(80),
+            TextInput::make('employee_number')->label('Employee ID')->disabled()->dehydrated(false)->maxLength(80),
             Select::make('company_id')
                 ->label('Company')
                 ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
-                ->searchable(),
+                ->searchable()
+                ->helperText('Admin assignment for the Employee draft.'),
             Select::make('site_id')
                 ->label('Site')
                 ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
@@ -120,16 +137,18 @@ class MemberRegistrationResource extends Resource
                 ->label('Team')
                 ->options(fn (): array => Team::query()->orderBy('name')->pluck('name', 'id')->all())
                 ->searchable(),
-            TextInput::make('nationality')->maxLength(80),
+            TextInput::make('nationality')->disabled()->dehydrated(false)->maxLength(80),
             Select::make('role')
                 ->label('Position')
                 ->options(MemberRegistration::roleOptions())
-                ->searchable(),
-            TextInput::make('trade')->maxLength(120),
-            DatePicker::make('start_date'),
-            DatePicker::make('end_date'),
-            TextInput::make('visa_type')->maxLength(60),
-            DatePicker::make('visa_expires_on'),
+                ->searchable()
+                ->disabled()
+                ->dehydrated(false),
+            TextInput::make('trade')->disabled()->dehydrated(false)->maxLength(120),
+            DatePicker::make('start_date')->disabled()->dehydrated(false),
+            DatePicker::make('end_date')->disabled()->dehydrated(false),
+            TextInput::make('visa_type')->disabled()->dehydrated(false)->maxLength(60),
+            DatePicker::make('visa_expires_on')->disabled()->dehydrated(false),
             DatePicker::make('safety_training_expires_on')
                 ->label('Safety training expires'),
             Select::make('identity_status')
@@ -243,11 +262,17 @@ class MemberRegistrationResource extends Resource
             Select::make('onboarding_status')
                 ->options(MemberRegistration::onboardingStatusOptions())
                 ->default('draft')
-                ->required(),
-            Textarea::make('notes')->columnSpanFull(),
+                ->disabled()
+                ->dehydrated(false)
+                ->helperText('Changed by workflow actions: submit, interview pass, employee draft, safety, badge/NFC, activate, reject.'),
+            Textarea::make('notes')
+                ->label('Admin review notes')
+                ->columnSpanFull(),
             KeyValue::make('payload')
                 ->keyLabel('Signal')
                 ->valueLabel('Value')
+                ->disabled()
+                ->dehydrated(false)
                 ->columnSpanFull(),
             Hidden::make('badge_analysis_model'),
             Hidden::make('badge_analyzed_at'),
@@ -334,11 +359,13 @@ class MemberRegistrationResource extends Resource
                     ->label('지원서 작성 링크 열기')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (MemberRegistration $record): string => $record->intakeUrl())
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->visible(fn (MemberRegistration $record): bool => blank($record->submitted_at)),
                 Action::make('sendIntakeLink')
                     ->label('지원서 링크 보내기')
                     ->icon('heroicon-o-envelope')
                     ->color('success')
+                    ->visible(fn (MemberRegistration $record): bool => blank($record->submitted_at))
                     ->form([
                         TextInput::make('email')
                             ->label('지원자 이메일')
@@ -395,7 +422,8 @@ class MemberRegistrationResource extends Resource
                     ->icon('heroicon-o-qr-code')
                     ->color('gray')
                     ->url(fn (MemberRegistration $record): string => $record->qrUrl())
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->visible(fn (MemberRegistration $record): bool => blank($record->submitted_at)),
                 Action::make('markInterviewPassed')
                     ->label('인터뷰 합격')
                     ->icon('heroicon-o-user-circle')
@@ -643,7 +671,9 @@ class MemberRegistrationResource extends Resource
                         $record->syncDownstream();
                         self::notifySyncResult($record);
                     }),
-                EditAction::make(),
+                EditAction::make()
+                    ->label('지원서 검토')
+                    ->icon('heroicon-o-eye'),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

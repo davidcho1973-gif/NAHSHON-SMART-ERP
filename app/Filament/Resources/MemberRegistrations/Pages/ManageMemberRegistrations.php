@@ -8,7 +8,6 @@ use App\Models\MemberRegistration;
 use App\Models\Site;
 use App\Services\ApplicantInvitationService;
 use Filament\Actions\Action;
-use Filament\Actions\CreateAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -22,11 +21,25 @@ class ManageMemberRegistrations extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()
-                ->label('지원서 작성')
-                ->icon('heroicon-o-document-plus')
-                ->modalHeading('지원서 초대 생성')
-                ->modalSubmitActionLabel('지원서 링크 만들기'),
+            Action::make('createApplicationInvitation')
+                ->label('지원서 링크 만들기')
+                ->icon('heroicon-o-link')
+                ->color('primary')
+                ->form(self::inviteForm())
+                ->modalHeading('지원자가 작성할 링크 생성')
+                ->modalDescription('관리자는 지원서를 대신 작성하지 않습니다. 링크 또는 QR을 만든 뒤 지원자가 직접 작성해서 제출합니다.')
+                ->modalSubmitActionLabel('링크 만들기')
+                ->action(function (array $data): void {
+                    $registration = app(ApplicantInvitationService::class)
+                        ->createInvitation($data, 'admin-link', auth()->id());
+
+                    Notification::make()
+                        ->success()
+                        ->title('지원서 링크 생성 완료')
+                        ->body($registration->intakeUrl())
+                        ->persistent()
+                        ->send();
+                }),
             Action::make('sendApplicationLink')
                 ->label('지원서 링크로 보내기')
                 ->icon('heroicon-o-envelope')

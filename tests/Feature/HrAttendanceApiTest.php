@@ -61,6 +61,8 @@ class HrAttendanceApiTest extends TestCase
 
     public function test_nfc_tagging_flow(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 08:00:00'));
+
         // 1. Clock in John Doe
         $response = $this->actingAs($this->adminUser)
             ->postJson('/smart-company-api/api_submitNfcTag', [
@@ -89,7 +91,7 @@ class HrAttendanceApiTest extends TestCase
         $response2->assertJsonPath('ignored', true);
 
         // 3. 6 minutes later tag should register as Clock Out
-        Carbon::setTestNow(Carbon::now()->addMinutes(6));
+        Carbon::setTestNow(Carbon::parse('2026-06-22 08:06:00'));
 
         $response3 = $this->actingAs($this->adminUser)
             ->postJson('/smart-company-api/api_submitNfcTag', [

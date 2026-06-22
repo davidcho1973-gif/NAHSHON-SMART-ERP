@@ -103,6 +103,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Removed legacy applicant onboarding states from live forms/filters and centralized the current status list as `draft`, `invited`, `submitted`, `under_review`, `interview_passed`, `employee_registration`, `badge_pending`, `active`, `rejected`, `archived`.
 - 2026-06-22: Added a one-time production admin password reset migration for the configured SMART COMPANY admin account and hardened deploy startup to avoid leaving the app in maintenance mode.
 - 2026-06-22: Reset the owner admin login defaults and production DB credential migration to `davidcho1973@gmail.com` with the requested temporary password.
+- 2026-06-22: Separated applicant-owned intake from admin HR review: admins now create/send links or QR codes, applicant fields are read-only in review, submitted public forms are locked, and workflow status changes stay on HR actions.
 
 ### Current Boundaries
 

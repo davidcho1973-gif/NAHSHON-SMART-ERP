@@ -16,8 +16,9 @@ class MemberRegistrationController extends Controller
     public function show(Request $request, string $token): View
     {
         $registration = $this->registrationForToken($token);
+        $submitted = filled($registration->submitted_at);
 
-        return $this->intakeView($registration, false, $this->resolveLanguage(
+        return $this->intakeView($registration, $submitted, $this->resolveLanguage(
             $request->query('lang', $registration->preferred_language),
         ));
     }
@@ -36,6 +37,12 @@ class MemberRegistrationController extends Controller
     public function store(Request $request, string $token): View
     {
         $registration = $this->registrationForToken($token);
+
+        if ($registration->submitted_at) {
+            return $this->intakeView($registration, true, $this->resolveLanguage(
+                $request->input('preferred_language', $registration->preferred_language),
+            ));
+        }
 
         $hasIdentityDocument = $registration->documents()
             ->where('document_type', 'id')

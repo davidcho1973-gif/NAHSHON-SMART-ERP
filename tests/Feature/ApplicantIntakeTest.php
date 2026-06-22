@@ -56,6 +56,26 @@ class ApplicantIntakeTest extends TestCase
         $this->assertStringContainsString(rawurlencode($registration->intakeUrl()), $mailtoUrl);
     }
 
+    public function test_admin_invitation_creates_only_an_applicant_link(): void
+    {
+        $service = app(ApplicantInvitationService::class);
+
+        $registration = $service->createInvitation([
+            'full_name' => 'Invited Worker',
+            'email' => 'worker@example.com',
+            'preferred_language' => 'es',
+        ], 'admin-link', 123);
+
+        $this->assertSame('invited', $registration->onboarding_status);
+        $this->assertSame('Invited Worker', $registration->full_name);
+        $this->assertSame('worker@example.com', $registration->email);
+        $this->assertNull($registration->applicant_code);
+        $this->assertNull($registration->submitted_at);
+        $this->assertNull($registration->employee_id);
+        $this->assertSame('admin-link', data_get($registration->payload, 'invite.source'));
+        $this->assertSame(0, Employee::query()->count());
+    }
+
     public function test_applicant_can_submit_multilingual_intake_with_id_and_certifications(): void
     {
         Storage::fake('public');
@@ -136,5 +156,51 @@ class ApplicantIntakeTest extends TestCase
             'document_type' => 'certification',
             'status' => 'pending',
         ]);
+    }
+
+    public function test_submitted_application_is_locked_from_public_resubmission(): void
+    {
+        Storage::fake('public');
+
+        $registration = MemberRegistration::create([
+            'full_name' => 'Original Applicant',
+            'member_type' => 'worker',
+            'preferred_language' => 'en',
+            'onboarding_status' => 'submitted',
+            'submitted_at' => now(),
+            'first_name' => 'Original',
+            'last_name' => 'Applicant',
+            'email' => 'original@example.com',
+        ]);
+
+        $this->get(route('member-registration.show', $registration->invite_token))
+            ->assertOk()
+            ->assertSee('Application submitted')
+            ->assertDontSee('Submit application');
+
+        $this->post(route('member-registration.store', $registration->invite_token), [
+            'preferred_language' => 'en',
+            'first_name' => 'Changed',
+            'last_name' => 'Name',
+            'email' => 'changed@example.com',
+            'phone' => '555-0101',
+            'emergency_contact_name' => 'Emergency Contact',
+            'emergency_contact_phone' => '555-0202',
+            'available_languages' => ['Spanish'],
+            'role' => 'Safety',
+            'hoffman_experience' => 'no',
+            'identity_document_type' => 'driver_license',
+            'identity_front' => UploadedFile::fake()->create('license-front.jpg', 64, 'image/jpeg'),
+            'privacy_consent' => '1',
+            'applicant_signature' => 'Changed Name',
+            'signed_on' => '2026-06-22',
+        ])->assertOk();
+
+        $registration->refresh();
+
+        $this->assertSame('Original', $registration->first_name);
+        $this->assertSame('Applicant', $registration->last_name);
+        $this->assertSame('original@example.com', $registration->email);
+        $this->assertSame(0, $registration->documents()->count());
     }
 }
