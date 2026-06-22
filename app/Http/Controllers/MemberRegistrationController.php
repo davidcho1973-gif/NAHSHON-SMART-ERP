@@ -39,38 +39,74 @@ class MemberRegistrationController extends Controller
             'preferred_language' => ['required', Rule::in(array_keys(MemberRegistration::languageOptions()))],
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['required', 'string', 'max:120'],
-            'preferred_name' => ['nullable', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:80'],
             'date_of_birth' => ['nullable', 'date'],
-            'nationality' => ['required', 'string', 'max:80'],
             'address' => ['nullable', 'string', 'max:255'],
+            'emergency_contact_name' => ['required', 'string', 'max:255'],
+            'emergency_contact_phone' => ['required', 'string', 'max:80'],
+            'available_languages' => ['required', 'array', 'min:1'],
+            'available_languages.*' => [Rule::in(array_keys(MemberRegistration::availableLanguageOptions()))],
+            'available_language_other' => ['nullable', 'string', 'max:120'],
             'role' => ['required', Rule::in(array_keys(MemberRegistration::roleOptions()))],
-            'trade' => ['nullable', 'string', 'max:120'],
+            'role_other' => ['nullable', 'string', 'max:120'],
             'start_date' => ['nullable', 'date'],
-            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
-            'emergency_contact_phone' => ['nullable', 'string', 'max:80'],
-            'identity_document' => [
+            'desired_site' => ['nullable', 'string', 'max:255'],
+            'previous_site_experience' => ['nullable', 'string', 'max:2000'],
+            'hoffman_experience' => ['required', Rule::in(['yes', 'no'])],
+            'identity_document_type' => ['required', Rule::in(['driver_license', 'passport', 'government_id'])],
+            'identity_front' => [
                 Rule::requiredIf(! $hasIdentityDocument),
                 'file',
                 'mimes:jpg,jpeg,png,webp,pdf',
                 'max:10240',
             ],
+            'identity_back' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
             'certifications' => ['nullable', 'array', 'max:10'],
             'certifications.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
-            'consent' => ['accepted'],
+            'work_history' => ['nullable', 'array', 'max:2'],
+            'work_history.*.company' => ['nullable', 'string', 'max:255'],
+            'work_history.*.role' => ['nullable', 'string', 'max:120'],
+            'work_history.*.period' => ['nullable', 'string', 'max:120'],
+            'work_history.*.duties' => ['nullable', 'string', 'max:1000'],
+            'work_history.*.reason' => ['nullable', 'string', 'max:500'],
+            'privacy_consent' => ['accepted'],
+            'applicant_signature' => ['required', 'string', 'max:255'],
+            'signed_on' => ['required', 'date'],
         ]);
 
         $language = $this->resolveLanguage($data['preferred_language']);
         $fullName = trim($data['first_name'] . ' ' . $data['last_name']);
         $certificationFiles = $request->file('certifications', []);
+        $role = $data['role'] === 'Other' && filled($data['role_other'] ?? null)
+            ? 'Other: ' . $data['role_other']
+            : $data['role'];
+        $availableLanguages = $data['available_languages'];
+        if (in_array('Other', $availableLanguages, true) && filled($data['available_language_other'] ?? null)) {
+            $availableLanguages[] = 'Other: ' . $data['available_language_other'];
+        }
 
         $payload = array_merge($registration->payload ?? [], [
-            'self_registration' => [
+            'application' => [
                 'submitted_ip' => $request->ip(),
                 'submitted_user_agent' => $request->userAgent(),
                 'language' => $language,
+                'available_languages' => array_values(array_unique($availableLanguages)),
+                'desired_site' => $data['desired_site'] ?? null,
+                'previous_site_experience' => $data['previous_site_experience'] ?? null,
+                'hoffman_experience' => $data['hoffman_experience'],
+                'identity_document_type' => $data['identity_document_type'],
                 'certification_upload_count' => is_array($certificationFiles) ? count($certificationFiles) : 0,
+                'work_history' => array_values(array_filter(
+                    $data['work_history'] ?? [],
+                    fn (array $history): bool => filled($history['company'] ?? null)
+                        || filled($history['role'] ?? null)
+                        || filled($history['period'] ?? null)
+                        || filled($history['duties'] ?? null)
+                        || filled($history['reason'] ?? null),
+                )),
+                'applicant_signature' => $data['applicant_signature'],
+                'signed_on' => $data['signed_on'],
                 'consent_accepted_at' => now()->toISOString(),
             ],
         ]);
@@ -80,17 +116,15 @@ class MemberRegistrationController extends Controller
             'first_name' => $data['first_name'],
             'last_name' => $data['last_name'],
             'full_name' => $fullName,
-            'preferred_name' => $data['preferred_name'] ?? null,
-            'email' => $data['email'] ?? null,
+            'email' => $data['email'],
             'phone' => $data['phone'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
-            'nationality' => $data['nationality'],
             'address' => $data['address'] ?? null,
-            'role' => $data['role'],
-            'trade' => $data['trade'] ?? null,
+            'role' => $role,
+            'trade' => null,
             'start_date' => $data['start_date'] ?? null,
-            'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
-            'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
+            'emergency_contact_name' => $data['emergency_contact_name'],
+            'emergency_contact_phone' => $data['emergency_contact_phone'],
             'identity_status' => 'pending',
             'document_status' => 'pending',
             'onboarding_status' => 'submitted',
@@ -100,13 +134,25 @@ class MemberRegistrationController extends Controller
             'payload' => $payload,
         ]);
         $registration->save();
+        $registration->ensureApplicantCode();
 
-        if ($request->file('identity_document') instanceof UploadedFile) {
+        if ($request->file('identity_front') instanceof UploadedFile) {
             $this->storeUploadedDocument(
                 $registration,
-                $request->file('identity_document'),
+                $request->file('identity_front'),
                 'id',
-                'Government ID / Driver License / Passport',
+                'Government ID - front',
+                ['side' => 'front', 'identity_document_type' => $data['identity_document_type']],
+            );
+        }
+
+        if ($request->file('identity_back') instanceof UploadedFile) {
+            $this->storeUploadedDocument(
+                $registration,
+                $request->file('identity_back'),
+                'id_back',
+                'Government ID - back',
+                ['side' => 'back', 'identity_document_type' => $data['identity_document_type']],
             );
         }
 
@@ -127,6 +173,7 @@ class MemberRegistrationController extends Controller
             'language' => $language,
             'languages' => MemberRegistration::languageOptions(),
             'roleOptions' => MemberRegistration::roleOptions(),
+            'availableLanguageOptions' => MemberRegistration::availableLanguageOptions(),
         ]);
     }
 
@@ -142,6 +189,7 @@ class MemberRegistrationController extends Controller
         UploadedFile $file,
         string $type,
         string $title,
+        array $extraData = [],
     ): MemberDocument {
         $path = $file->store("member-documents/{$registration->id}", 'public');
         $url = Storage::disk('public')->url($path);
@@ -154,7 +202,7 @@ class MemberRegistrationController extends Controller
                 'original_name' => $file->getClientOriginalName(),
                 'mime_type' => $file->getClientMimeType(),
                 'size' => $file->getSize(),
-            ],
+            ] + $extraData,
         ];
 
         if ($type === 'id') {

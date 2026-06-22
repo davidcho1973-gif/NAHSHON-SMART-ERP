@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR onboarding | Corrected HR flow so the public application contains only applicant-facing fields, creates an applicant code on submit, and moves passed applicants into pending Employees registration. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 28 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Rebuilt the employee intake flow around multilingual applicant forms, interview, Hoffman safety training, badge photo/Gemini extraction, NFC normalization, and final employee activation. | Local branch `codex/hr-onboarding-flow` | PHP lint passed for changed files; `php artisan test` passed, 27 tests. |
 | 2026-06-21 | CODEX | Mobile bottom navigation | Reworked phone bottom navigation into Attendance, Message, More, Schedule, and Receipt actions, with a Solis-style More bottom sheet for the remaining modules. | Main deploy | `npm run build`, `php artisan test`, Playwright mobile 390px More sheet check. |
 | 2026-06-21 | CODEX | Mobile login / app shell | Kept the desktop login unchanged while turning the phone login/home entry into an app-like mobile screen with PWA manifest/icon metadata. | Main deploy | `npm run build`, `php artisan test`, Playwright desktop/mobile login screenshots, manifest/icon 200 responses. |
@@ -84,6 +85,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-21: Refined `/login` so desktop remains the existing card layout while mobile renders as an app-like entry screen with install metadata and app icon.
 - 2026-06-21: Reworked the phone bottom navigation into four primary actions plus a centered More sheet containing the remaining modules.
 - 2026-06-22: Rebuilt HR onboarding around Spanish/English/Korean applicant intake, uploaded ID/certification documents, interview/safety/badge stages, Hoffman badge Gemini extraction, and NFC ID normalization (`N-` + last 9 characters).
+- 2026-06-22: Corrected the HR application flow so applicant intake is applicant-only, creates an `applicant_code` on submit, and pass processing creates a pending Employee registration draft without creating Access Control.
 
 ### Current Boundaries
 

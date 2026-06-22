@@ -22,6 +22,7 @@ class MemberRegistration extends Model
         'site_id',
         'team_id',
         'registration_number',
+        'applicant_code',
         'employee_number',
         'badge_number',
         'member_type',
@@ -190,6 +191,19 @@ class MemberRegistration extends Model
         ];
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public static function availableLanguageOptions(): array
+    {
+        return [
+            'Korean' => 'Korean',
+            'English' => 'English',
+            'Spanish' => 'Spanish',
+            'Other' => 'Other',
+        ];
+    }
+
     public static function normalizeNfcUid(?string $uid): ?string
     {
         if (! is_string($uid)) {
@@ -203,6 +217,63 @@ class MemberRegistration extends Model
         }
 
         return 'N-' . Str::substr($clean, -9);
+    }
+
+    public function ensureApplicantCode(): string
+    {
+        if (filled($this->applicant_code)) {
+            return $this->applicant_code;
+        }
+
+        $this->forceFill(['applicant_code' => self::makeApplicantCode()])->saveQuietly();
+
+        return $this->applicant_code;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function applicationPassBlockers(): array
+    {
+        $blockers = [];
+
+        if (! $this->submitted_at) {
+            $blockers[] = 'Application must be submitted first.';
+        }
+
+        if (! $this->privacy_consent_at) {
+            $blockers[] = 'Privacy consent is required.';
+        }
+
+        if (! $this->documents()->where('document_type', 'id')->exists()) {
+            $blockers[] = 'Government ID document is required.';
+        }
+
+        return $blockers;
+    }
+
+    public function passApplication(?User $user = null): Employee
+    {
+        $blockers = $this->applicationPassBlockers();
+
+        if ($blockers !== []) {
+            throw ValidationException::withMessages([
+                'onboarding_status' => implode(' ', $blockers),
+            ]);
+        }
+
+        return DB::transaction(function () use ($user): Employee {
+            $this->ensureApplicantCode();
+            $employee = $this->createEmployeeRegistrationDraft();
+
+            $this->forceFill([
+                'onboarding_status' => 'employee_registration',
+                'approved_at' => now(),
+                'approved_by_id' => $user?->id,
+            ])->saveQuietly();
+
+            return $employee;
+        });
     }
 
     public function markInterviewPassed(?User $user = null): void
@@ -236,12 +307,20 @@ class MemberRegistration extends Model
             $blockers[] = 'Hoffman safety training must be completed first.';
         }
 
-        if (blank($this->badge_number)) {
+        if (blank($this->nfc_raw_uid)) {
+            $blockers[] = 'Raw NFC UID is required. Scan the badge first.';
+        }
+
+        if (blank($this->badge_number) || $this->badge_number !== self::normalizeNfcUid($this->nfc_raw_uid)) {
             $blockers[] = 'NFC ID is required. Scan the badge UID first.';
         }
 
         if (blank($this->badge_photo_path)) {
             $blockers[] = 'Badge photo is required for later verification.';
+        }
+
+        if (blank($this->badge_issued_on)) {
+            $blockers[] = 'Badge issued date is required because it becomes the hire date.';
         }
 
         return $blockers;
@@ -264,7 +343,7 @@ class MemberRegistration extends Model
 
         $this->forceFill([
             'badge_registration_status' => 'registered',
-            'start_date' => $this->start_date ?: $this->badge_issued_on,
+            'start_date' => $this->badge_issued_on,
             'onboarding_status' => 'active',
             'approved_at' => now(),
             'approved_by_id' => $user?->id,
@@ -380,6 +459,16 @@ class MemberRegistration extends Model
 
     public function syncEmployee(): Employee
     {
+        return $this->syncEmployeeRecord('active', 'smart-member-registration');
+    }
+
+    public function createEmployeeRegistrationDraft(): Employee
+    {
+        return $this->syncEmployeeRecord('pending', 'hr-application-approved');
+    }
+
+    private function syncEmployeeRecord(string $employmentStatus, string $source): Employee
+    {
         $email = $this->email ? Str::lower($this->email) : null;
         $linkedEmployee = $this->employee()->first();
 
@@ -419,7 +508,9 @@ class MemberRegistration extends Model
             'nationality' => $this->nationality,
             'role' => $role,
             'start_date' => $startDate,
-            'employment_status' => 'active',
+            'employment_status' => $employee->exists && $employee->employment_status === 'active'
+                ? 'active'
+                : $employmentStatus,
             'visa_expires_on' => $this->visa_expires_on,
             'safety_training_expires_on' => $this->safety_training_expires_on,
             'payload' => array_merge($employee->payload ?? [], [
@@ -429,7 +520,8 @@ class MemberRegistration extends Model
                 'trade' => $this->trade,
                 'application_language' => $this->preferred_language,
                 'nfc_raw_uid' => $this->nfc_raw_uid,
-                'source' => 'smart-member-registration',
+                'applicant_code' => $this->applicant_code,
+                'source' => $source,
             ]),
         ]);
 
@@ -555,6 +647,15 @@ class MemberRegistration extends Model
     private static function makeRegistrationNumber(): string
     {
         return 'MR-' . now()->format('ymd') . '-' . Str::upper(Str::random(6));
+    }
+
+    private static function makeApplicantCode(): string
+    {
+        do {
+            $code = 'AP-' . now()->format('ymd') . '-' . Str::upper(Str::random(5));
+        } while (self::query()->where('applicant_code', $code)->exists());
+
+        return $code;
     }
 
     private function refreshAutomationSignals(): void

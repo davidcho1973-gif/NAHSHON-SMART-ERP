@@ -46,6 +46,7 @@ class PostgresSchemaTest extends TestCase
 
         foreach ([
             'preferred_language',
+            'applicant_code',
             'first_name',
             'last_name',
             'interview_status',

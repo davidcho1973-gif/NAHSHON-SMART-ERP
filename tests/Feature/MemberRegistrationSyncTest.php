@@ -82,6 +82,7 @@ class MemberRegistrationSyncTest extends TestCase
             'safety_training_status' => 'completed',
             'nfc_raw_uid' => '90227842853E04',
             'badge_photo_path' => 'member-badges/approve.jpg',
+            'badge_issued_on' => now()->toDateString(),
         ]);
 
         $this->assertSame(0, Employee::query()->count());
@@ -116,6 +117,35 @@ class MemberRegistrationSyncTest extends TestCase
         $this->expectException(ValidationException::class);
 
         $registration->activateAsEmployee();
+    }
+
+    public function test_pass_application_creates_pending_employee_registration_draft(): void
+    {
+        $registration = MemberRegistration::create([
+            'first_name' => 'Applicant',
+            'last_name' => 'Worker',
+            'full_name' => 'Applicant Worker',
+            'email' => 'applicant@example.com',
+            'phone' => '555-0101',
+            'member_type' => 'worker',
+            'onboarding_status' => 'submitted',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
+        ]);
+
+        $registration->documents()->create([
+            'document_type' => 'id',
+            'title' => 'Government ID - front',
+            'status' => 'pending',
+        ]);
+
+        $employee = $registration->passApplication();
+
+        $this->assertSame('employee_registration', $registration->fresh()->onboarding_status);
+        $this->assertNotNull($registration->fresh()->applicant_code);
+        $this->assertSame('pending', $employee->employment_status);
+        $this->assertSame($employee->id, $registration->fresh()->employee_id);
+        $this->assertDatabaseMissing('users', ['email' => 'applicant@example.com']);
     }
 
     public function test_activation_copies_hoffman_badge_fields_to_employee(): void

@@ -2,27 +2,24 @@
 
 namespace App\Filament\Resources\MemberRegistrations;
 
+use App\Filament\Resources\Employees\EmployeeResource;
 use App\Filament\Resources\MemberRegistrations\Pages\ManageMemberRegistrations;
 use App\Models\Company;
 use App\Models\MemberRegistration;
 use App\Models\Site;
 use App\Models\Team;
-use App\Services\GeminiBadgeAnalyzer;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -30,10 +27,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class MemberRegistrationResource extends Resource
 {
@@ -52,6 +46,10 @@ class MemberRegistrationResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            TextInput::make('applicant_code')
+                ->label('Applicant code / 지원자 코드')
+                ->disabled()
+                ->dehydrated(),
             Select::make('preferred_language')
                 ->label('Application language')
                 ->options(MemberRegistration::languageOptions())
@@ -121,7 +119,6 @@ class MemberRegistrationResource extends Resource
             DatePicker::make('end_date'),
             TextInput::make('visa_type')->maxLength(60),
             DatePicker::make('visa_expires_on'),
-            DatePicker::make('safety_training_expires_on'),
             Select::make('identity_status')
                 ->options([
                     'pending' => 'Pending',
@@ -154,79 +151,17 @@ class MemberRegistrationResource extends Resource
             Textarea::make('interview_notes')
                 ->label('Interview notes')
                 ->columnSpanFull(),
-            Select::make('safety_training_status')
-                ->label('Hoffman safety training')
-                ->options([
-                    'pending' => 'Pending',
-                    'scheduled' => 'Scheduled',
-                    'completed' => 'Completed',
-                    'failed' => 'Failed',
-                ])
-                ->default('pending')
-                ->required(),
-            DatePicker::make('safety_training_completed_on')
-                ->label('Safety completed on'),
-            TextInput::make('nfc_raw_uid')
-                ->label('NFC raw UID')
-                ->helperText('Example: 90227842853E04 becomes N-842853E04.')
-                ->maxLength(120)
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Set $set, ?string $state): null => self::syncNfcId($set, $state)),
-            TextInput::make('badge_number')
-                ->label('ERP NFC ID')
-                ->helperText('N- + last 9 characters from the raw UID.')
-                ->maxLength(80),
-            Select::make('badge_registration_status')
-                ->label('Badge / NFC')
-                ->options([
-                    'pending' => 'Pending',
-                    'photo_analyzed' => 'Photo analyzed',
-                    'nfc_scanned' => 'NFC scanned',
-                    'registered' => 'Registered',
-                ])
-                ->default('pending')
-                ->required(),
-            FileUpload::make('badge_photo_path')
-                ->label('Hoffman badge photo / camera')
-                ->disk('public')
-                ->directory('member-badges')
-                ->visibility('public')
-                ->image()
-                ->imagePreviewHeight('180')
-                ->maxSize(10240)
-                ->openable()
-                ->downloadable()
-                ->helperText('Take a badge photo on mobile or upload it. Gemini 3.5 Flash reads company, last name, first name, role, and issued date.')
-                ->extraInputAttributes(['accept' => 'image/*', 'capture' => 'environment'], merge: true)
-                ->afterStateUpdated(function (Set $set, Get $get, ?TemporaryUploadedFile $state): void {
-                    if ($state instanceof TemporaryUploadedFile) {
-                        self::analyzeBadgePhoto($state, $set, $get);
-                    }
-                })
-                ->columnSpanFull(),
-            Actions::make([
-                Action::make('analyzeBadgePhoto')
-                    ->label('Analyze Hoffman badge')
-                    ->icon('heroicon-o-sparkles')
-                    ->color('info')
-                    ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
-            ])->columnSpanFull(),
-            TextInput::make('badge_company_name')->label('Badge company')->maxLength(255),
-            TextInput::make('badge_last_name')->label('Badge last name')->maxLength(120),
-            TextInput::make('badge_first_name')->label('Badge first name')->maxLength(120),
-            TextInput::make('badge_role')->label('Badge role')->maxLength(120),
-            DatePicker::make('badge_issued_on')->label('Badge issued on'),
-            Hidden::make('badge_analysis_model'),
-            Hidden::make('badge_analyzed_at'),
             Select::make('onboarding_status')
                 ->options([
                     'draft' => 'Draft',
                     'invited' => 'Invited',
                     'submitted' => 'Submitted',
-                    'interview' => 'Interview',
-                    'interview_passed' => 'Interview passed',
-                    'safety_training' => 'Hoffman safety training',
-                    'badge_pending' => 'Badge / NFC pending',
+                    'under_review' => 'Under review',
+                    'employee_registration' => 'Employee registration',
+                    'interview' => 'Interview (legacy)',
+                    'interview_passed' => 'Interview passed (legacy)',
+                    'safety_training' => 'Hoffman safety training (legacy)',
+                    'badge_pending' => 'Badge / NFC pending (legacy)',
                     'screening' => 'Screening (legacy)',
                     'approved' => 'Approved (legacy)',
                     'active' => 'Active',
@@ -236,14 +171,6 @@ class MemberRegistrationResource extends Resource
                 ->default('draft')
                 ->required(),
             Textarea::make('notes')->columnSpanFull(),
-            KeyValue::make('badge_analysis_payload')
-                ->label('Gemini badge analysis')
-                ->keyLabel('Field')
-                ->valueLabel('Value')
-                ->disabled()
-                ->dehydrated()
-                ->visible(fn (Get $get): bool => filled($get('badge_analysis_payload')))
-                ->columnSpanFull(),
             KeyValue::make('payload')
                 ->keyLabel('Signal')
                 ->valueLabel('Value')
@@ -255,6 +182,12 @@ class MemberRegistrationResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('applicant_code')
+                    ->label('Applicant code')
+                    ->badge()
+                    ->placeholder('Not submitted')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('registration_number')->label('Registration')->searchable()->sortable(),
                 TextColumn::make('employee.employee_number')
                     ->label('Employee')
@@ -267,8 +200,6 @@ class MemberRegistrationResource extends Resource
                 TextColumn::make('member_type')->badge()->sortable(),
                 TextColumn::make('onboarding_status')->label('Status')->badge()->sortable(),
                 TextColumn::make('interview_status')->label('Interview')->badge()->sortable()->toggleable(),
-                TextColumn::make('safety_training_status')->label('Safety')->badge()->sortable()->toggleable(),
-                TextColumn::make('badge_number')->label('NFC ID')->badge()->searchable()->toggleable(),
                 TextColumn::make('risk_level')->badge()->sortable(),
                 TextColumn::make('automation_score')->label('Auto %')->sortable(),
                 TextColumn::make('document_status')->badge()->toggleable(),
@@ -280,10 +211,12 @@ class MemberRegistrationResource extends Resource
                     'draft' => 'Draft',
                     'invited' => 'Invited',
                     'submitted' => 'Submitted',
-                    'interview' => 'Interview',
-                    'interview_passed' => 'Interview passed',
-                    'safety_training' => 'Hoffman safety training',
-                    'badge_pending' => 'Badge / NFC pending',
+                    'under_review' => 'Under review',
+                    'employee_registration' => 'Employee registration',
+                    'interview' => 'Interview (legacy)',
+                    'interview_passed' => 'Interview passed (legacy)',
+                    'safety_training' => 'Hoffman safety training (legacy)',
+                    'badge_pending' => 'Badge / NFC pending (legacy)',
                     'screening' => 'Screening (legacy)',
                     'approved' => 'Approved (legacy)',
                     'active' => 'Active',
@@ -294,12 +227,6 @@ class MemberRegistrationResource extends Resource
                     'pending' => 'Pending',
                     'scheduled' => 'Scheduled',
                     'passed' => 'Passed',
-                    'failed' => 'Failed',
-                ]),
-                SelectFilter::make('safety_training_status')->options([
-                    'pending' => 'Pending',
-                    'scheduled' => 'Scheduled',
-                    'completed' => 'Completed',
                     'failed' => 'Failed',
                 ]),
                 SelectFilter::make('risk_level')->options([
@@ -321,47 +248,19 @@ class MemberRegistrationResource extends Resource
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (MemberRegistration $record): string => $record->intakeUrl())
                     ->openUrlInNewTab(),
-                Action::make('interviewPassed')
-                    ->label('Interview pass')
+                Action::make('passApplication')
+                    ->label('합격 처리')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (MemberRegistration $record): bool => ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
-                    ->action(function (MemberRegistration $record): void {
-                        $record->markInterviewPassed(auth()->user());
-                        Notification::make()
-                            ->success()
-                            ->title('Interview recorded')
-                            ->body('Applicant moved to Hoffman safety training.')
-                            ->send();
-                    }),
-                Action::make('safetyComplete')
-                    ->label('Safety complete')
-                    ->icon('heroicon-o-shield-check')
-                    ->color('info')
-                    ->requiresConfirmation()
-                    ->visible(fn (MemberRegistration $record): bool => ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
-                    ->action(function (MemberRegistration $record): void {
-                        $record->markSafetyTrainingCompleted();
-                        Notification::make()
-                            ->success()
-                            ->title('Safety training completed')
-                            ->body('Applicant is ready for badge photo and NFC registration.')
-                            ->send();
-                    }),
-                Action::make('activateEmployee')
-                    ->label('Activate employee')
-                    ->icon('heroicon-o-identification')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->visible(fn (MemberRegistration $record): bool => $record->onboarding_status !== 'active')
+                    ->visible(fn (MemberRegistration $record): bool => ! in_array($record->onboarding_status, ['employee_registration', 'active', 'rejected', 'archived'], true))
                     ->action(function (MemberRegistration $record): void {
                         try {
-                            $record->activateAsEmployee(auth()->user());
+                            $employee = $record->passApplication(auth()->user());
                         } catch (ValidationException $exception) {
                             Notification::make()
                                 ->warning()
-                                ->title('Employee activation blocked')
+                                ->title('합격 처리 불가')
                                 ->body(implode(' ', Arr::flatten($exception->errors())))
                                 ->persistent()
                                 ->send();
@@ -369,7 +268,27 @@ class MemberRegistrationResource extends Resource
                             return;
                         }
 
-                        self::notifySyncResult($record->fresh());
+                        Notification::make()
+                            ->success()
+                            ->title('합격 처리 완료')
+                            ->body("Employees 등록 초안이 생성되었습니다: {$employee->employee_number}")
+                            ->send();
+                    }),
+                Action::make('openEmployee')
+                    ->label('Employees 열기')
+                    ->icon('heroicon-o-identification')
+                    ->color('gray')
+                    ->visible(fn (MemberRegistration $record): bool => filled($record->employee_id))
+                    ->url(fn (): string => EmployeeResource::getUrl('index')),
+                Action::make('rejectApplication')
+                    ->label('불합격')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (MemberRegistration $record): bool => ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
+                    ->action(function (MemberRegistration $record): void {
+                        $record->forceFill(['onboarding_status' => 'rejected'])->save();
+                        Notification::make()->success()->title('불합격 처리 완료')->send();
                     }),
                 Action::make('resync')
                     ->label('Re-sync')
@@ -411,121 +330,6 @@ class MemberRegistrationResource extends Resource
             ->send();
     }
 
-    private static function analyzeBadgePhoto(mixed $state, Set $set, Get $get): null
-    {
-        $file = self::resolveBadgePhoto($state);
-
-        if ($file === null) {
-            Notification::make()
-                ->warning()
-                ->title('Badge photo required')
-                ->body('Take a Hoffman badge photo or upload an image first.')
-                ->send();
-
-            return null;
-        }
-
-        try {
-            $analysis = app(GeminiBadgeAnalyzer::class)->analyze($file['path'], $file['mime_type']);
-            self::applyBadgeAnalysis($analysis, $set, $get);
-
-            Notification::make()
-                ->success()
-                ->title('Badge analysis complete')
-                ->body('Gemini filled the company, name, role, and issued date from the Hoffman badge.')
-                ->send();
-        } catch (\Throwable $exception) {
-            Notification::make()
-                ->warning()
-                ->title('Badge analysis skipped')
-                ->body($exception->getMessage())
-                ->send();
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array{path: string, mime_type: string}|null
-     */
-    private static function resolveBadgePhoto(mixed $state): ?array
-    {
-        if (is_array($state)) {
-            $state = Arr::first($state);
-        }
-
-        if ($state instanceof TemporaryUploadedFile) {
-            return [
-                'path' => $state->getRealPath(),
-                'mime_type' => $state->getMimeType() ?: 'image/jpeg',
-            ];
-        }
-
-        if (is_string($state) && $state !== '' && Storage::disk('public')->exists($state)) {
-            $path = Storage::disk('public')->path($state);
-
-            return [
-                'path' => $path,
-                'mime_type' => mime_content_type($path) ?: 'image/jpeg',
-            ];
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $analysis
-     */
-    private static function applyBadgeAnalysis(array $analysis, Set $set, Get $get): void
-    {
-        self::setIfFilled($set, 'badge_company_name', $analysis['company_name'] ?? null);
-        self::setIfFilled($set, 'badge_first_name', $analysis['first_name'] ?? null);
-        self::setIfFilled($set, 'badge_last_name', $analysis['last_name'] ?? null);
-        self::setIfFilled($set, 'badge_role', $analysis['role'] ?? null);
-        self::setIfFilled($set, 'badge_issued_on', $analysis['issued_on'] ?? null);
-
-        if (blank($get('first_name'))) {
-            self::setIfFilled($set, 'first_name', $analysis['first_name'] ?? null);
-        }
-
-        if (blank($get('last_name'))) {
-            self::setIfFilled($set, 'last_name', $analysis['last_name'] ?? null);
-        }
-
-        if (blank($get('role'))) {
-            self::setIfFilled($set, 'role', $analysis['role'] ?? null);
-        }
-
-        if (blank($get('start_date'))) {
-            self::setIfFilled($set, 'start_date', $analysis['issued_on'] ?? null);
-        }
-
-        if (blank($get('badge_number'))) {
-            self::setIfFilled($set, 'badge_number', $analysis['badge_number'] ?? null);
-        }
-
-        $set('badge_registration_status', blank($get('badge_number')) ? 'photo_analyzed' : 'nfc_scanned');
-        $set('badge_analysis_model', $analysis['model'] ?? config('services.gemini.model', 'gemini-3.5-flash'));
-        $set('badge_analyzed_at', Carbon::now()->toDateTimeString());
-        $set('badge_analysis_payload', Arr::except($analysis, ['raw']) + [
-            'raw_json' => json_encode($analysis['raw'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
-
-        self::syncFullName($set, $get);
-    }
-
-    private static function syncNfcId(Set $set, ?string $state): null
-    {
-        $nfcId = MemberRegistration::normalizeNfcUid($state);
-
-        if ($nfcId !== null) {
-            $set('badge_number', $nfcId);
-            $set('badge_registration_status', 'nfc_scanned');
-        }
-
-        return null;
-    }
-
     private static function syncFullName(Set $set, Get $get): null
     {
         $firstName = trim((string) $get('first_name'));
@@ -537,19 +341,6 @@ class MemberRegistrationResource extends Resource
         }
 
         return null;
-    }
-
-    private static function setIfFilled(Set $set, string $field, mixed $value): void
-    {
-        if (is_string($value)) {
-            $value = trim($value);
-        }
-
-        if (blank($value)) {
-            return;
-        }
-
-        $set($field, $value);
     }
 
     public static function getPages(): array
