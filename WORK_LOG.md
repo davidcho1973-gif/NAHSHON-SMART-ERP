@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR employees | Fixed Employee registration saves by auto-generating Employee IDs, normalizing blank optional unique fields, and cleaning existing blank employee values. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 33 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Changed applicant email invitations to fall back to a prefilled mail draft instead of stopping on missing SMTP configuration. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 31 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Added real-mail configuration guard for applicant invitation emails and documented Laravel Cloud SMTP setup. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 31 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Renamed the Applicants create action for application intake and added email-link invitation plus QR-code application entry actions. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 30 tests; `npm run build` passed; application/QR routes verified. |

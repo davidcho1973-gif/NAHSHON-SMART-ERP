@@ -56,12 +56,15 @@ class EmployeeResource extends Resource
         return $schema->components([
             TextInput::make('employee_number')
                 ->label('Employee ID')
-                ->required()
                 ->unique(ignoreRecord: true)
+                ->placeholder('Auto-generated if blank')
+                ->helperText('Leave blank to let the ERP create an Employee ID automatically.')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
             TextInput::make('badge_number')
                 ->label('Badge / NFC ID')
                 ->unique(ignoreRecord: true)
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
             FileUpload::make('badge_photo_path')
                 ->label('Badge photo / camera')
@@ -93,23 +96,28 @@ class EmployeeResource extends Resource
             TextInput::make('first_name')
                 ->label('First name')
                 ->maxLength(120)
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
             TextInput::make('last_name')
                 ->label('Last name')
                 ->maxLength(120)
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
             TextInput::make('name')
                 ->label('Full name')
-                ->required()
+                ->helperText('Leave blank if first and last name are filled; the ERP will combine them.')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(255),
             TextInput::make('email')
                 ->email()
                 ->unique(ignoreRecord: true)
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state, lower: true))
                 ->maxLength(255),
             TextInput::make('badge_company_name')
                 ->label('Badge company name')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(255),
             DatePicker::make('badge_issued_on')
                 ->label('Badge issued on'),
@@ -127,8 +135,10 @@ class EmployeeResource extends Resource
                 ->searchable(),
             TextInput::make('role')
                 ->label('Role / Trade')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(120),
             TextInput::make('nationality')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
             DatePicker::make('start_date')
                 ->label('Hire date / 입사일'),
@@ -327,6 +337,21 @@ class EmployeeResource extends Resource
         }
 
         $set($field, $value);
+    }
+
+    private static function nullableText(mixed $state, bool $lower = false): ?string
+    {
+        if (! is_string($state)) {
+            return null;
+        }
+
+        $state = trim($state);
+
+        if ($state === '') {
+            return null;
+        }
+
+        return $lower ? Str::lower($state) : $state;
     }
 
     private static function syncFullName(Set $set, Get $get): null

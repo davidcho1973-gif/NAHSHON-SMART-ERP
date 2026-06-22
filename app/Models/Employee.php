@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Employee extends Model
 {
@@ -47,6 +48,67 @@ class Employee extends Model
             'safety_training_expires_on' => 'date',
             'payload' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Employee $employee): void {
+            $employee->normalizeOptionalTextFields();
+
+            if (blank($employee->employee_number)) {
+                $employee->employee_number = self::makeEmployeeNumber();
+            } else {
+                $employee->employee_number = trim((string) $employee->employee_number);
+            }
+
+            if (blank($employee->name)) {
+                $fullName = trim(implode(' ', array_filter([
+                    $employee->first_name,
+                    $employee->last_name,
+                ])));
+
+                $employee->name = $fullName !== ''
+                    ? $fullName
+                    : 'Employee ' . $employee->employee_number;
+            }
+
+            if (blank($employee->start_date) && filled($employee->badge_issued_on)) {
+                $employee->start_date = $employee->badge_issued_on;
+            }
+        });
+    }
+
+    private function normalizeOptionalTextFields(): void
+    {
+        foreach ([
+            'badge_number',
+            'first_name',
+            'last_name',
+            'email',
+            'badge_company_name',
+            'nationality',
+            'role',
+        ] as $field) {
+            if (! is_string($this->{$field})) {
+                continue;
+            }
+
+            $value = trim($this->{$field});
+            $this->{$field} = $value === '' ? null : $value;
+        }
+
+        if (filled($this->email)) {
+            $this->email = Str::lower((string) $this->email);
+        }
+    }
+
+    private static function makeEmployeeNumber(): string
+    {
+        do {
+            $employeeNumber = 'EMP-' . now()->format('ymd') . '-' . Str::upper(Str::random(5));
+        } while (self::query()->where('employee_number', $employeeNumber)->exists());
+
+        return $employeeNumber;
     }
 
     public function company(): BelongsTo
