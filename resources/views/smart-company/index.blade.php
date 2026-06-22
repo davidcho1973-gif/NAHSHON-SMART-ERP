@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 
 <head>
@@ -727,11 +727,13 @@
         }
 
         try {
+          const tokenEl = document.querySelector('meta[name="csrf-token"]');
           const response = await fetch('/api/smart-company/' + encodeURIComponent(fnName), {
             method: 'POST',
             headers: {
               'Accept': 'application/json',
               'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
             },
             body: JSON.stringify({ args: args || [], siteId: _siteId() })
           });
