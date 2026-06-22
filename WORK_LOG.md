@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR onboarding | Guarded malformed public application invite links so placeholder or broken tokens return 404 instead of PostgreSQL UUID server errors. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 29 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Corrected HR flow so the public application contains only applicant-facing fields, creates an applicant code on submit, and moves passed applicants into pending Employees registration. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 28 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding | Rebuilt the employee intake flow around multilingual applicant forms, interview, Hoffman safety training, badge photo/Gemini extraction, NFC normalization, and final employee activation. | Local branch `codex/hr-onboarding-flow` | PHP lint passed for changed files; `php artisan test` passed, 27 tests. |
 | 2026-06-21 | CODEX | Mobile bottom navigation | Reworked phone bottom navigation into Attendance, Message, More, Schedule, and Receipt actions, with a Solis-style More bottom sheet for the remaining modules. | Main deploy | `npm run build`, `php artisan test`, Playwright mobile 390px More sheet check. |

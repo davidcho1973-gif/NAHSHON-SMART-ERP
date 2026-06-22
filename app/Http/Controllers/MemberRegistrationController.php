@@ -7,6 +7,7 @@ use App\Models\MemberRegistration;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -14,10 +15,7 @@ class MemberRegistrationController extends Controller
 {
     public function show(Request $request, string $token): View
     {
-        $registration = MemberRegistration::query()
-            ->with(['company', 'site', 'team', 'documents'])
-            ->where('invite_token', $token)
-            ->firstOrFail();
+        $registration = $this->registrationForToken($token);
 
         return $this->intakeView($registration, false, $this->resolveLanguage(
             $request->query('lang', $registration->preferred_language),
@@ -26,10 +24,7 @@ class MemberRegistrationController extends Controller
 
     public function store(Request $request, string $token): View
     {
-        $registration = MemberRegistration::query()
-            ->with(['company', 'site', 'team', 'documents'])
-            ->where('invite_token', $token)
-            ->firstOrFail();
+        $registration = $this->registrationForToken($token);
 
         $hasIdentityDocument = $registration->documents()
             ->where('document_type', 'id')
@@ -182,6 +177,16 @@ class MemberRegistrationController extends Controller
         $language = is_string($language) ? $language : 'es';
 
         return array_key_exists($language, MemberRegistration::languageOptions()) ? $language : 'es';
+    }
+
+    private function registrationForToken(string $token): MemberRegistration
+    {
+        abort_unless(Str::isUuid($token), 404);
+
+        return MemberRegistration::query()
+            ->with(['company', 'site', 'team', 'documents'])
+            ->where('invite_token', $token)
+            ->firstOrFail();
     }
 
     private function storeUploadedDocument(

@@ -13,6 +13,12 @@ class ApplicantIntakeTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_placeholder_invite_token_returns_not_found(): void
+    {
+        $this->get('/member/register/%7Binvite_token%7D')->assertNotFound();
+        $this->post('/member/register/%7Binvite_token%7D')->assertNotFound();
+    }
+
     public function test_applicant_can_submit_multilingual_intake_with_id_and_certifications(): void
     {
         Storage::fake('public');
