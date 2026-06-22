@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | Antigravity | Desktop Universal Scanner | Fixed unauthenticated API scanner error by applying the web middleware group to routes/api.php and passing the X-CSRF-TOKEN header in fetch requests. | Main deploy | Staging verified and all 49 phpunit tests passing. |
 | 2026-06-22 | Antigravity | Desktop Universal Scanner | Connected the legacy Apps Script universal scanner (EXPENSE/OFFICE categories) on the desktop view to the Laravel backend. Decodes base64 uploads, parses via Gemini OCR, and saves to the mobile_expenses table. | Main deploy | All 49 tests passed (`php artisan test`); PR merged and deployed. |
 | 2026-06-22 | CODEX | HR architecture / onboarding | Audited and tightened the HR flow: Applicants now require interview pass before Employee draft, support safety/badge/NFC activation actions, collect nationality, and only active Employees can use NFC attendance. | Local branch `codex/hr-flow-audit` | PHP lint passed for changed files; targeted HR tests passed, 21 tests; full `php artisan test` passed, 48 tests; `npm run build` passed. |
 | 2026-06-22 | Antigravity | Mobile Expense Wizard | Fixed a frontend JavaScript error where querySelector for csrf-token returned null during receipt upload by adding the missing meta tag to the wizard head. | Main deploy | Manual staging verification and all 45 phpunit tests passing. |
@@ -139,6 +140,8 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Implemented Mobile Expense dashboard (/mobile-expense/index), AI Expense Registration Wizard (/mobile-expense/wizard-ai) with Gemini OCR and a custom virtual keypad, and Expense Pre-Approval module (/expense-pre-approval/index). Created a full suite of automated feature tests (MobileExpenseTest, ExpensePreApprovalTest, GeminiReceiptAnalyzerTest) and successfully merged the implementation to main.
 - 2026-06-22: Fixed a frontend JavaScript error where `document.querySelector('meta[name="csrf-token"]')` returned null on the AI Expense Wizard page (throwing "Cannot read properties of null (reading 'getAttribute')" when uploading a receipt) by adding the missing csrf-token meta tag to the document head.
 - 2026-06-22: Connected the desktop web app's legacy Apps Script universal scanner (specifically the EXPENSE and OFFICE categories) to the Laravel backend database. The scanner now decodes base64 uploads, parses them via the Gemini OCR service, uploads the receipt image, and saves the record in the mobile_expenses table. Added comprehensive integration tests and successfully merged to main.
+- 2026-06-22: Enabled session cookie authentication on smart-company API endpoints by applying the web middleware group in routes/api.php, and updated gsRun in index.blade.php to append the X-CSRF-TOKEN header to all fetch requests.
+
 
 
 
