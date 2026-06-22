@@ -71,11 +71,11 @@ http://127.0.0.1:8000/admin
 Local seeded admin account:
 
 ```text
-Email: admin@nahshonmep.com
-Password: value of SMART_COMPANY_ADMIN_PASSWORD in your local .env
+Email: davidcho1973@gmail.com
+Password: value of SMART_COMPANY_ADMIN_PASSWORD in your local .env, default 1234
 ```
 
-Change this password before using the app outside local development.
+Change this password after the owner confirms access.
 
 Google sign-in is required for the ERP screen. Configure OAuth credentials in `.env` or Laravel Cloud environment variables:
 

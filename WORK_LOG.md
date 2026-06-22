@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | Admin access | Reset the owner admin login to `davidcho1973@gmail.com` with the requested temporary password and updated login defaults. | Local branch `codex/set-owner-admin-login` | PHP lint passed for changed files; `php artisan test` passed, 50 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | Admin access | Added a one-time production admin password reset migration for `admin@nahshonmep.com` without committing the plaintext password, and made deploy start with `artisan up` to avoid stuck maintenance mode. | Local branch `codex/reset-production-admin-password` | PHP lint passed for migration; `php artisan test` passed, 50 tests; `npm run build` passed. |
 | 2026-06-22 | Antigravity | Desktop Universal Scanner | Shifted universal scanner API routes from routes/api.php to routes/web.php under /smart-company-api/ prefix to prevent CDNs and load balancers from stripping session cookies on stateless /api/* paths. | Branch pushed | All 49 phpunit tests passing locally. |
 | 2026-06-22 | Antigravity | Desktop Universal Scanner | Connected the legacy Apps Script universal scanner (EXPENSE/OFFICE categories) on the desktop view to the Laravel backend. Decodes base64 uploads, parses via Gemini OCR, and saves to the mobile_expenses table. | Main deploy | All 49 tests passed (`php artisan test`); PR merged and deployed. |
@@ -101,6 +102,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Audited HR architecture and tightened the workflow links: interview pass is required before Employee draft, Applicants can complete safety/badge/NFC/activation, nationality is collected on intake, and NFC attendance accepts active Employees only.
 - 2026-06-22: Removed legacy applicant onboarding states from live forms/filters and centralized the current status list as `draft`, `invited`, `submitted`, `under_review`, `interview_passed`, `employee_registration`, `badge_pending`, `active`, `rejected`, `archived`.
 - 2026-06-22: Added a one-time production admin password reset migration for the configured SMART COMPANY admin account and hardened deploy startup to avoid leaving the app in maintenance mode.
+- 2026-06-22: Reset the owner admin login defaults and production DB credential migration to `davidcho1973@gmail.com` with the requested temporary password.
 
 ### Current Boundaries
 

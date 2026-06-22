@@ -65,6 +65,6 @@ class Login extends BaseLogin
 
     private function getDefaultAdminEmail(): string
     {
-        return (string) config('smart_company.admin_email', 'admin@nahshonmep.com');
+        return 'davidcho1973@gmail.com';
     }
 }
