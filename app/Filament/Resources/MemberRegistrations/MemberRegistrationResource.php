@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\MemberRegistration;
 use App\Models\Site;
 use App\Models\Team;
+use App\Services\ApplicantInvitationService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -28,6 +29,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class MemberRegistrationResource extends Resource
 {
@@ -244,9 +246,53 @@ class MemberRegistrationResource extends Resource
             ])
             ->recordActions([
                 Action::make('intake')
-                    ->label('Open intake')
+                    ->label('지원서 작성 링크 열기')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (MemberRegistration $record): string => $record->intakeUrl())
+                    ->openUrlInNewTab(),
+                Action::make('sendIntakeLink')
+                    ->label('지원서 링크 보내기')
+                    ->icon('heroicon-o-envelope')
+                    ->color('success')
+                    ->form([
+                        TextInput::make('email')
+                            ->label('지원자 이메일')
+                            ->email()
+                            ->required()
+                            ->maxLength(255)
+                            ->default(fn (MemberRegistration $record): ?string => $record->email),
+                    ])
+                    ->modalHeading('지원서 링크 이메일 발송')
+                    ->modalSubmitActionLabel('이메일 보내기')
+                    ->action(function (MemberRegistration $record, array $data): void {
+                        $record->forceFill(['email' => $data['email']])->save();
+
+                        try {
+                            app(ApplicantInvitationService::class)->sendEmail($record, (string) $data['email']);
+                        } catch (Throwable $exception) {
+                            Notification::make()
+                                ->danger()
+                                ->title('이메일 발송 실패')
+                                ->body('링크는 유지됐지만 메일 발송 중 오류가 발생했습니다. 링크: ' . $record->intakeUrl())
+                                ->persistent()
+                                ->send();
+
+                            report($exception);
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->success()
+                            ->title('지원서 링크 발송 완료')
+                            ->body((string) $data['email'] . ' 로 입사지원서 링크를 보냈습니다.')
+                            ->send();
+                    }),
+                Action::make('qr')
+                    ->label('QR 코드')
+                    ->icon('heroicon-o-qr-code')
+                    ->color('gray')
+                    ->url(fn (MemberRegistration $record): string => $record->qrUrl())
                     ->openUrlInNewTab(),
                 Action::make('passApplication')
                     ->label('합격 처리')

@@ -16,5 +16,6 @@ Route::middleware('auth')->group(function (): void {
     Route::redirect('/dashboard', '/');
 });
 
+Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
 Route::post('/member/register/{token}', [MemberRegistrationController::class, 'store'])->name('member-registration.store');

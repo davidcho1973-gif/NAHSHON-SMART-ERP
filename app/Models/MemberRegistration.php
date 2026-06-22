@@ -160,6 +160,11 @@ class MemberRegistration extends Model
         return route('member-registration.show', $this->invite_token);
     }
 
+    public function qrUrl(): string
+    {
+        return route('member-registration.qr', $this->invite_token);
+    }
+
     /**
      * @return array<string, string>
      */

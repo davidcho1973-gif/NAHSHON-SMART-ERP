@@ -22,6 +22,17 @@ class MemberRegistrationController extends Controller
         ));
     }
 
+    public function qr(Request $request, string $token): View
+    {
+        $registration = $this->registrationForToken($token);
+
+        return view('member-registration.qr', [
+            'registration' => $registration,
+            'intakeUrl' => $registration->intakeUrl(),
+            'language' => $this->resolveLanguage($request->query('lang', $registration->preferred_language)),
+        ]);
+    }
+
     public function store(Request $request, string $token): View
     {
         $registration = $this->registrationForToken($token);

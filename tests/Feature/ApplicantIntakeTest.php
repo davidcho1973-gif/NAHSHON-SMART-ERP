@@ -16,7 +16,23 @@ class ApplicantIntakeTest extends TestCase
     public function test_placeholder_invite_token_returns_not_found(): void
     {
         $this->get('/member/register/%7Binvite_token%7D')->assertNotFound();
+        $this->get('/member/register/%7Binvite_token%7D/qr')->assertNotFound();
         $this->post('/member/register/%7Binvite_token%7D')->assertNotFound();
+    }
+
+    public function test_qr_page_shows_scannable_application_link(): void
+    {
+        $registration = MemberRegistration::create([
+            'full_name' => 'QR Applicant',
+            'member_type' => 'worker',
+            'preferred_language' => 'es',
+            'onboarding_status' => 'invited',
+        ]);
+
+        $this->get(route('member-registration.qr', $registration->invite_token))
+            ->assertOk()
+            ->assertSee('입사지원서 QR 코드')
+            ->assertSee($registration->intakeUrl());
     }
 
     public function test_applicant_can_submit_multilingual_intake_with_id_and_certifications(): void
