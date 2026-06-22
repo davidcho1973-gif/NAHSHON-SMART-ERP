@@ -71,6 +71,7 @@ class ApplicantIntakeTest extends TestCase
             'preferred_language' => 'es',
             'first_name' => 'Sekon',
             'last_name' => 'Kim',
+            'nationality' => 'Korea',
             'phone' => '555-0101',
             'email' => 'sekon@example.com',
             'emergency_contact_name' => 'Emergency Contact',
@@ -109,10 +110,12 @@ class ApplicantIntakeTest extends TestCase
         $this->assertSame('Sekon', $registration->first_name);
         $this->assertSame('Kim', $registration->last_name);
         $this->assertSame('Sekon Kim', $registration->full_name);
+        $this->assertSame('Korea', $registration->nationality);
         $this->assertSame('Safety', $registration->role);
         $this->assertNotNull($registration->applicant_code);
         $this->assertNotNull($registration->privacy_consent_at);
         $this->assertSame(['Spanish', 'English'], data_get($registration->payload, 'application.available_languages'));
+        $this->assertSame('Korea', data_get($registration->payload, 'application.nationality'));
         $this->assertSame('no', data_get($registration->payload, 'application.hoffman_experience'));
         $this->assertSame(0, Employee::query()->count());
 

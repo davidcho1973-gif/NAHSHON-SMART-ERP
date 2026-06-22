@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR architecture / onboarding | Audited and tightened the HR flow: Applicants now require interview pass before Employee draft, support safety/badge/NFC activation actions, collect nationality, and only active Employees can use NFC attendance. | Local branch `codex/hr-flow-audit` | PHP lint passed for changed files; targeted HR tests passed, 21 tests; full `php artisan test` passed, 48 tests; `npm run build` passed. |
 | 2026-06-22 | Antigravity | Mobile Expense Wizard | Fixed a frontend JavaScript error where querySelector for csrf-token returned null during receipt upload by adding the missing meta tag to the wizard head. | Main deploy | Manual staging verification and all 45 phpunit tests passing. |
 | 2026-06-22 | Antigravity | Mobile Expense / Pre-Approval | Implemented My Expenses dashboard, AI OCR Wizard with custom virtual keypad, and Expense Pre-Approval modules. Verified with full feature test coverage (45 tests total passing). | Main deploy | All tests passed (`php artisan test`); PR merged. |
 | 2026-06-22 | CODEX | HR employees | Fixed Employee registration saves by auto-generating Employee IDs, normalizing blank optional unique fields, and cleaning existing blank employee values. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 33 tests; `npm run build` passed. |
@@ -93,6 +94,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-21: Reworked the phone bottom navigation into four primary actions plus a centered More sheet containing the remaining modules.
 - 2026-06-22: Rebuilt HR onboarding around Spanish/English/Korean applicant intake, uploaded ID/certification documents, interview/safety/badge stages, Hoffman badge Gemini extraction, and NFC ID normalization (`N-` + last 9 characters).
 - 2026-06-22: Corrected the HR application flow so applicant intake is applicant-only, creates an `applicant_code` on submit, and pass processing creates a pending Employee registration draft without creating Access Control.
+- 2026-06-22: Audited HR architecture and tightened the workflow links: interview pass is required before Employee draft, Applicants can complete safety/badge/NFC/activation, nationality is collected on intake, and NFC attendance accepts active Employees only.
 
 ### Current Boundaries
 

@@ -116,8 +116,8 @@ class MemberRegistration extends Model
             $registration->refreshAutomationSignals();
         });
 
-        // 단일 연동 트리거: 최종 Active 상태가 될 때만 직원·계정·문서로 반영한다.
-        // 지원서/인터뷰/안전교육 단계에서는 Employee 레코드를 만들지 않는다.
+        // Final active status is the single downstream trigger for employee/account/document sync.
+        // The application-pass step may create a pending Employee draft, then activation promotes it to active.
         static::saved(function (MemberRegistration $registration): void {
             if ($registration->onboarding_status === 'active') {
                 $registration->syncDownstream();
@@ -254,6 +254,10 @@ class MemberRegistration extends Model
             $blockers[] = 'Government ID document is required.';
         }
 
+        if ($this->interview_status !== 'passed') {
+            $blockers[] = 'Interview must be passed before creating the Employee draft.';
+        }
+
         return $blockers;
     }
 
@@ -287,7 +291,12 @@ class MemberRegistration extends Model
             'interview_status' => 'passed',
             'interviewed_at' => $this->interviewed_at ?: now(),
             'interviewed_by_id' => $this->interviewed_by_id ?: $user?->id,
-            'onboarding_status' => $this->onboarding_status === 'active' ? 'active' : 'safety_training',
+            'onboarding_status' => in_array($this->onboarding_status, [
+                'active',
+                'employee_registration',
+                'safety_training',
+                'badge_pending',
+            ], true) ? $this->onboarding_status : 'interview_passed',
         ])->save();
     }
 
@@ -296,7 +305,9 @@ class MemberRegistration extends Model
         $this->forceFill([
             'safety_training_status' => 'completed',
             'safety_training_completed_on' => $this->safety_training_completed_on ?: now()->toDateString(),
-            'document_status' => $this->document_status === 'missing' ? 'pending' : $this->document_status,
+            'document_status' => blank($this->document_status) || $this->document_status === 'missing'
+                ? 'pending'
+                : $this->document_status,
             'onboarding_status' => $this->onboarding_status === 'active' ? 'active' : 'badge_pending',
         ])->save();
     }

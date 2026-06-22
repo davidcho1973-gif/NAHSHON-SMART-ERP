@@ -129,6 +129,7 @@ class MemberRegistrationSyncTest extends TestCase
             'phone' => '555-0101',
             'member_type' => 'worker',
             'onboarding_status' => 'submitted',
+            'interview_status' => 'passed',
             'submitted_at' => now(),
             'privacy_consent_at' => now(),
         ]);
@@ -146,6 +147,83 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('pending', $employee->employment_status);
         $this->assertSame($employee->id, $registration->fresh()->employee_id);
         $this->assertDatabaseMissing('users', ['email' => 'applicant@example.com']);
+    }
+
+    public function test_pass_application_requires_interview_passed_first(): void
+    {
+        $registration = MemberRegistration::create([
+            'first_name' => 'Applicant',
+            'last_name' => 'Worker',
+            'full_name' => 'Applicant Worker',
+            'email' => 'waiting@example.com',
+            'member_type' => 'worker',
+            'onboarding_status' => 'submitted',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
+        ]);
+
+        $registration->documents()->create([
+            'document_type' => 'id',
+            'title' => 'Government ID - front',
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        $registration->passApplication();
+    }
+
+    public function test_full_hr_flow_promotes_applicant_to_active_employee_and_documents(): void
+    {
+        $registration = MemberRegistration::create([
+            'first_name' => 'Sekon',
+            'last_name' => 'Kim',
+            'full_name' => 'Sekon Kim',
+            'email' => 'flow@example.com',
+            'phone' => '555-0101',
+            'nationality' => 'Korea',
+            'member_type' => 'worker',
+            'onboarding_status' => 'submitted',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
+        ]);
+
+        $registration->documents()->create([
+            'document_type' => 'id',
+            'title' => 'Government ID - front',
+            'status' => 'pending',
+        ]);
+
+        $registration->markInterviewPassed();
+        $this->assertSame('interview_passed', $registration->fresh()->onboarding_status);
+
+        $draft = $registration->passApplication();
+        $this->assertSame('pending', $draft->employment_status);
+        $this->assertSame('employee_registration', $registration->fresh()->onboarding_status);
+
+        $registration->markSafetyTrainingCompleted();
+        $registration->refresh()->fill([
+            'nfc_raw_uid' => '90227842853E04',
+            'badge_photo_path' => 'member-badges/sekon.jpg',
+            'badge_company_name' => 'AUTORICA LLC',
+            'badge_first_name' => 'SEKON',
+            'badge_last_name' => 'KIM',
+            'badge_role' => 'ENGINEER',
+            'badge_issued_on' => '2026-03-29',
+        ])->save();
+
+        $employee = $registration->activateAsEmployee();
+
+        $this->assertSame('active', $employee->employment_status);
+        $this->assertSame('N-842853E04', $employee->badge_number);
+        $this->assertSame('Korea', $employee->nationality);
+        $this->assertSame('active', $registration->fresh()->onboarding_status);
+        $this->assertDatabaseHas('users', ['email' => 'flow@example.com', 'employee_id' => $employee->id]);
+        $this->assertDatabaseHas('member_documents', [
+            'member_registration_id' => $registration->id,
+            'document_type' => 'nfc',
+            'status' => 'verified',
+        ]);
     }
 
     public function test_activation_copies_hoffman_badge_fields_to_employee(): void

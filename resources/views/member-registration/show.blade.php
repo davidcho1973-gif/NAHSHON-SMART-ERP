@@ -19,6 +19,7 @@
             'last_name' => '성',
             'first_name' => '이름',
             'dob' => '생년월일',
+            'nationality' => '국적',
             'phone' => '전화번호',
             'email' => '이메일',
             'address' => '현재 주소',
@@ -48,7 +49,7 @@
             'duties' => '담당 업무',
             'reason' => '퇴사 사유',
             'consent_text' => '본인은 입사지원, 서류 검토, 인터뷰, 채용 여부 판단, HOFFMAN 안전교육 진행, 현장 출입 베지 발급, 출퇴근/NFC 관리, 비상 연락 및 인사 기록 관리를 위해 본인이 제출한 개인정보가 NAHSHON MEP ERP 시스템에 저장 및 사용되는 것에 동의합니다.',
-            'collected' => '수집 및 이용 항목: 이름, 생년월일, 연락처, 이메일, 주소, 비상 연락처, 지원 직책, 경력 사항, 근무 가능일, 신분증 사진, 자격증 및 라이선스 사진, HOFFMAN 안전교육 및 현장 출입 베지 정보, NFC ID 및 출퇴근 기록',
+            'collected' => '수집 및 이용 항목: 이름, 생년월일, 국적, 연락처, 이메일, 주소, 비상 연락처, 지원 직책, 경력 사항, 근무 가능일, 신분증 사진, 자격증 및 라이선스 사진, HOFFMAN 안전교육 및 현장 출입 베지 정보, NFC ID 및 출퇴근 기록',
             'purpose' => '보관 및 이용 목적: 입사지원 및 채용 검토, 인터뷰 진행 및 결과 관리, 안전교육 및 현장 출입 자격 확인, 직원 등록 및 현장 배정, 출퇴근, 급여, 비상 연락, 현장 운영 관리',
             'agree' => '위 개인정보 수집 및 이용에 동의합니다.',
             'signature' => '지원자 서명',
@@ -75,6 +76,7 @@
             'last_name' => 'Last name',
             'first_name' => 'First name',
             'dob' => 'Date of birth',
+            'nationality' => 'Nationality',
             'phone' => 'Phone',
             'email' => 'Email',
             'address' => 'Current address',
@@ -104,7 +106,7 @@
             'duties' => 'Duties',
             'reason' => 'Reason for leaving',
             'consent_text' => 'I agree that the personal information I submit may be stored and used in the NAHSHON MEP ERP system for job application, document review, interview, hiring decision, HOFFMAN safety training, site badge issuance, attendance/NFC management, emergency contact, and HR records.',
-            'collected' => 'Collected items: name, date of birth, contact, email, address, emergency contact, position, work history, available start date, ID photos, certification/license photos, HOFFMAN safety and site badge information, NFC ID and attendance records.',
+            'collected' => 'Collected items: name, date of birth, nationality, contact, email, address, emergency contact, position, work history, available start date, ID photos, certification/license photos, HOFFMAN safety and site badge information, NFC ID and attendance records.',
             'purpose' => 'Purpose: job application and hiring review, interview/result management, safety and site access qualification, employee registration and site assignment, attendance, payroll, emergency contact, and site operations.',
             'agree' => 'I agree to the personal information collection and use above.',
             'signature' => 'Applicant signature',
@@ -131,6 +133,7 @@
             'last_name' => 'Apellido',
             'first_name' => 'Nombre',
             'dob' => 'Fecha de nacimiento',
+            'nationality' => 'Nacionalidad',
             'phone' => 'Teléfono',
             'email' => 'Correo electrónico',
             'address' => 'Dirección actual',
@@ -160,7 +163,7 @@
             'duties' => 'Responsabilidades',
             'reason' => 'Razón de salida',
             'consent_text' => 'Acepto que la información personal enviada se guarde y use en el sistema NAHSHON MEP ERP para solicitud de empleo, revisión de documentos, entrevista, decisión de contratación, entrenamiento de seguridad HOFFMAN, badge de acceso, asistencia/NFC, contacto de emergencia y registros de HR.',
-            'collected' => 'Datos recopilados: nombre, fecha de nacimiento, contacto, email, dirección, contacto de emergencia, puesto, experiencia, fecha disponible, fotos de ID, certificaciones/licencias, seguridad HOFFMAN y badge, NFC ID y registros de asistencia.',
+            'collected' => 'Datos recopilados: nombre, fecha de nacimiento, nacionalidad, contacto, email, dirección, contacto de emergencia, puesto, experiencia, fecha disponible, fotos de ID, certificaciones/licencias, seguridad HOFFMAN y badge, NFC ID y registros de asistencia.',
             'purpose' => 'Propósito: revisión de empleo, entrevistas, seguridad y acceso a sitio, registro de empleado y asignación, asistencia, nómina, emergencia y operación del sitio.',
             'agree' => 'Acepto la recopilación y uso de información personal descritos arriba.',
             'signature' => 'Firma del solicitante',
@@ -267,6 +270,9 @@
                         </label>
                         <label class="field">{{ $t['dob'] }}
                             <input name="date_of_birth" type="date" value="{{ old('date_of_birth', optional($registration->date_of_birth)->format('Y-m-d')) }}">
+                        </label>
+                        <label class="field">{{ $t['nationality'] }}
+                            <input name="nationality" value="{{ old('nationality', $registration->nationality) }}" maxlength="80" autocomplete="country-name">
                         </label>
                         <label class="field">{{ $t['phone'] }} <small>{{ $t['required'] }}</small>
                             <input name="phone" value="{{ old('phone', $registration->phone) }}" required maxlength="80" autocomplete="tel">

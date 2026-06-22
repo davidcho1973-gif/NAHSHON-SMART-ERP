@@ -1094,14 +1094,16 @@ class SmartCompanyData
                 return ['success' => false, 'message' => 'Badge/NFC number is required.'];
             }
 
-            // Find employee by badge_number or employee_number
+            // Attendance is only valid after HR activates the employee.
             $employee = Employee::query()
-                ->where('badge_number', $badgeNumber)
-                ->orWhere('employee_number', $badgeNumber)
+                ->where('employment_status', 'active')
+                ->where(fn ($query) => $query
+                    ->where('badge_number', $badgeNumber)
+                    ->orWhere('employee_number', $badgeNumber))
                 ->first();
 
             if (!$employee) {
-                return ['success' => false, 'message' => "Employee with badge/NFC number {$badgeNumber} not found."];
+                return ['success' => false, 'message' => "Active employee with badge/NFC number {$badgeNumber} not found."];
             }
 
             $site = null;
@@ -1194,8 +1196,10 @@ class SmartCompanyData
 
             foreach ($scannedBadges as $badgeNumber) {
                 $employee = Employee::query()
-                    ->where('badge_number', $badgeNumber)
-                    ->orWhere('employee_number', $badgeNumber)
+                    ->where('employment_status', 'active')
+                    ->where(fn ($query) => $query
+                        ->where('badge_number', $badgeNumber)
+                        ->orWhere('employee_number', $badgeNumber))
                     ->first();
 
                 if (!$employee) {

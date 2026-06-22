@@ -110,6 +110,29 @@ class HrAttendanceApiTest extends TestCase
         Carbon::setTestNow(); // Reset test time mock
     }
 
+    public function test_nfc_tagging_requires_active_employee(): void
+    {
+        $pendingEmployee = Employee::create([
+            'name' => 'Pending Worker',
+            'employee_number' => 'EMP-PENDING',
+            'badge_number' => 'NFC-PENDING',
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employment_status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->postJson('/api/smart-company/api_submitNfcTag', [
+                'args' => ['NFC-PENDING', 'AZ-01'],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', false);
+        $this->assertDatabaseMissing('attendance_logs', [
+            'employee_id' => $pendingEmployee->id,
+        ]);
+    }
+
     public function test_batch_photo_scan_flow_and_approval(): void
     {
         // 1. Send batch scan for both employees
