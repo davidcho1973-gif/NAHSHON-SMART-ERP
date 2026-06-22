@@ -1,0 +1,189 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Company;
+use App\Models\Employee;
+use App\Models\MobileExpense;
+use App\Models\Site;
+use App\Models\User;
+use App\Services\GeminiReceiptAnalyzer;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class MobileExpenseTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $user;
+    private Employee $employee;
+    private Company $company;
+    private Site $site;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->company = Company::create([
+            'code' => 'TEST-COMP',
+            'name' => 'Test Company',
+            'status' => 'active',
+        ]);
+
+        $this->site = Site::create([
+            'company_id' => $this->company->id,
+            'code' => 'TEST-SITE',
+            'name' => 'Test Site',
+            'status' => 'active',
+        ]);
+
+        $this->employee = Employee::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'john.doe@example.com',
+            'employment_status' => 'active',
+        ]);
+
+        $this->user = User::factory()->create([
+            'employee_id' => $this->employee->id,
+            'email' => 'john.doe@example.com',
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+        ]);
+    }
+
+    public function test_mobile_expense_routes_require_auth(): void
+    {
+        $this->get(route('mobile-expense.index'))->assertRedirect(route('login'));
+        $this->get(route('mobile-expense.wizard'))->assertRedirect(route('login'));
+        $this->post(route('mobile-expense.upload-receipt'))->assertRedirect(route('login'));
+        $this->post(route('mobile-expense.store'))->assertRedirect(route('login'));
+    }
+
+    public function test_mobile_expense_index_displays_expenses_and_stats(): void
+    {
+        MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Meals & Entertainment',
+            'description' => 'Business lunch',
+            'amount' => 50.00,
+            'expense_date' => now()->format('Y-m-d'),
+            'status' => 'approved',
+        ]);
+
+        MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'corporate',
+            'category' => 'Office Supplies',
+            'description' => 'Notebooks',
+            'amount' => 25.00,
+            'expense_date' => now()->format('Y-m-d'),
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('mobile-expense.index'));
+
+        $response->assertStatus(200);
+        $response->assertViewHas('expenses');
+        $response->assertViewHas('approvedMtd', 50.00);
+        $response->assertViewHas('pendingCount', 1);
+        $response->assertViewHas('totalReimbursement', 50.00);
+        $response->assertSee('Business lunch');
+        $response->assertSee('Notebooks');
+    }
+
+    public function test_mobile_expense_wizard_displays_sites_and_details(): void
+    {
+        $response = $this->actingAs($this->user)->get(route('mobile-expense.wizard'));
+
+        $response->assertStatus(200);
+        $response->assertViewHas('sites');
+        $response->assertSee('Test Site');
+    }
+
+    public function test_mobile_expense_upload_receipt_runs_ocr_analyzer(): void
+    {
+        Storage::fake('public');
+
+        $this->mock(GeminiReceiptAnalyzer::class, function ($mock): void {
+            $mock->shouldReceive('analyze')
+                ->once()
+                ->andReturn([
+                    'vendor_name' => 'McDonalds',
+                    'amount' => 12.34,
+                    'date' => '2026-06-20',
+                    'category' => 'Meals & Entertainment',
+                    'description' => 'Happy Meal',
+                    'model' => 'gemini-mock',
+                ]);
+        });
+
+        $file = UploadedFile::fake()->create('receipt.jpg', 500, 'image/jpeg');
+
+        $response = $this->actingAs($this->user)->postJson(route('mobile-expense.upload-receipt'), [
+            'receipt' => $file,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'data' => [
+                'vendor_name' => 'McDonalds',
+                'amount' => 12.34,
+                'date' => '2026-06-20',
+                'category' => 'Meals & Entertainment',
+                'description' => 'Happy Meal',
+                'model' => 'gemini-mock',
+            ],
+        ]);
+
+        $path = $response->json('receipt_path');
+        $this->assertNotNull($path);
+        // Path matches public storage receipts directory
+        $storedFilename = basename($path);
+        Storage::disk('public')->assertExists('receipts/' . $storedFilename);
+    }
+
+    public function test_mobile_expense_store_saves_expense_record(): void
+    {
+        $expenseData = [
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'class' => 'Admin',
+            'description' => 'Printer paper',
+            'amount' => '45.99',
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/test.jpg',
+            'site_id' => $this->site->id,
+            'ocr_data' => [
+                'vendor_name' => 'OfficeMax',
+                'amount' => 45.99,
+            ],
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), $expenseData);
+
+        $response->assertRedirect(route('mobile-expense.index'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('mobile_expenses', [
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'amount' => 45.99,
+            'status' => 'pending',
+        ]);
+    }
+}
