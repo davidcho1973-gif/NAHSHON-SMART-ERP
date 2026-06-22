@@ -37,3 +37,11 @@ Route::middleware('auth')->group(function (): void {
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
 Route::post('/member/register/{token}', [MemberRegistrationController::class, 'store'])->name('member-registration.store');
+
+Route::get('/debug-logs-sec-53298bfd9a', function() {
+    $logPath = storage_path('logs/laravel.log');
+    if (file_exists($logPath)) {
+        return response()->file($logPath);
+    }
+    return 'Log file not found';
+});
