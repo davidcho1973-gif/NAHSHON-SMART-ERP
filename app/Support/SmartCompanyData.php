@@ -91,7 +91,7 @@ class SmartCompanyData
             'api_getFinanceExcelBase64' => '',
             'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
             'api_syncWorkerStatus' => ['success' => true, 'messages' => ['Worker status updated', 'Related vehicle/housing assignments checked']],
-            'api_universalAIScan' => ['success' => true, 'category' => ($args[0] ?? 'UNKNOWN')],
+            'api_universalAIScan' => self::universalAIScan($args),
             'api_nfcAssignVehicle', 'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
 
             default => self::defaultResponse($method),
@@ -1334,6 +1334,86 @@ class SmartCompanyData
             return ['success' => true, 'message' => 'Attendance log rejected successfully.'];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    private static function universalAIScan(array $args): array
+    {
+        $category = (string) ($args[0] ?? 'UNKNOWN');
+        $base64Data = (string) ($args[1] ?? '');
+        $mimeType = (string) ($args[2] ?? 'image/jpeg');
+
+        if ($category !== 'EXPENSE' && $category !== 'OFFICE') {
+            return ['success' => true, 'category' => $category, 'mock' => true];
+        }
+
+        try {
+            if ($base64Data === '') {
+                throw new \RuntimeException('No image data received.');
+            }
+
+            if (str_contains($base64Data, ',')) {
+                $base64Data = explode(',', $base64Data)[1];
+            }
+
+            $imageBytes = base64_decode($base64Data);
+            if ($imageBytes === false) {
+                throw new \RuntimeException('Invalid base64 data.');
+            }
+
+            // Save to temporary file for analysis
+            $tempPath = tempnam(sys_get_temp_dir(), 'universal-scan-');
+            file_put_contents($tempPath, $imageBytes);
+
+            // Run analysis
+            $analyzer = app(\App\Services\GeminiReceiptAnalyzer::class);
+            $result = $analyzer->analyze($tempPath, $mimeType);
+            @unlink($tempPath);
+
+            // Save to public storage/receipts
+            $filename = 'receipts/' . md5(uniqid('', true)) . '.' . ($mimeType === 'image/png' ? 'png' : 'jpg');
+            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageBytes);
+            $receiptPath = '/storage/' . $filename;
+
+            // Fetch authenticated user
+            $user = auth()->user();
+            if (!$user) {
+                throw new \RuntimeException('Unauthenticated.');
+            }
+
+            $employee = $user->employee;
+            $companyId = $employee?->company_id ?? $user->allowed_company_id;
+            $siteId = $employee?->site_id ?? $user->allowed_site_id;
+            $employeeId = $user->employee_id;
+
+            // Save to mobile_expenses table
+            \App\Models\MobileExpense::create([
+                'company_id' => $companyId,
+                'site_id' => $siteId,
+                'employee_id' => $employeeId,
+                'payment_type' => 'personal',
+                'category' => $result['category'] ?? 'Other',
+                'class' => $category === 'OFFICE' ? 'Office Supplies' : 'General',
+                'description' => '[Desktop AI Scan] ' . ($result['vendor_name'] ?? 'Receipt') . ($result['description'] ? ' - ' . $result['description'] : ''),
+                'amount' => $result['amount'] ?? 0.0,
+                'expense_date' => $result['date'] ?: now()->format('Y-m-d'),
+                'receipt_path' => $receiptPath,
+                'ocr_data' => $result,
+                'status' => 'pending',
+            ]);
+
+            return [
+                'success' => true,
+                'category' => $category,
+                'data' => $result,
+                'receipt_path' => $receiptPath,
+            ];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Universal AI Scan failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 
