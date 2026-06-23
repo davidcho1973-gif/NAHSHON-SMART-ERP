@@ -2060,9 +2060,60 @@
       async function renderSafety() {
         pageContainer.innerHTML = skeleton();
         try {
-          var safetyStorageKey = 'smart_ai_safety_work_items_v1';
+          var safetyStorageKey = 'smart_ai_safety_work_items_v2';
           var selectedWorkId = window._safetySelectedWorkId || 'WRK-2605-001';
           var currentFilter = window._safetyFilter || 'all';
+
+          var CP1252_MAP = {
+            '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87,
+            'ˆ': 0x88, '‰': 0x89, 'Š': 0x8A, '‹': 0x8B, 'Œ': 0x8C, 'Ž': 0x8E,
+            '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97,
+            '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F
+          };
+
+          function repairMojibake(text) {
+            if (!text || typeof text !== 'string') return text;
+            if (!/[ÃÂâ€ðŸìíëêÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞß]/.test(text)) return text;
+            try {
+              var bytes = [];
+              for (var i = 0; i < text.length; i++) {
+                var ch = text[i];
+                var code = ch.charCodeAt(0);
+                if (CP1252_MAP[ch] !== undefined) {
+                  bytes.push(CP1252_MAP[ch]);
+                } else if (code <= 255) {
+                  bytes.push(code);
+                } else {
+                  return text;
+                }
+              }
+              var decoded = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
+              if (!decoded || decoded.indexOf('\uFFFD') !== -1) return text;
+              return decoded;
+            } catch (e) {
+              return text;
+            }
+          }
+
+          function repairObject(obj) {
+            if (obj === null || obj === undefined) return obj;
+            if (typeof obj === 'string') {
+              return repairMojibake(obj);
+            }
+            if (Array.isArray(obj)) {
+              return obj.map(function(item) { return repairObject(item); });
+            }
+            if (typeof obj === 'object') {
+              var newObj = {};
+              for (var key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                  newObj[key] = repairObject(obj[key]);
+                }
+              }
+              return newObj;
+            }
+            return obj;
+          }
 
           function defaultSafetyItems() {
             return [
@@ -2100,7 +2151,19 @@
           function loadSafetyItems() {
             try {
               var raw = localStorage.getItem(safetyStorageKey);
-              return raw ? JSON.parse(raw) : defaultSafetyItems();
+              if (raw) {
+                return JSON.parse(raw);
+              }
+              var legacyRaw = localStorage.getItem('smart_ai_safety_work_items_v1');
+              if (legacyRaw) {
+                var legacyData = JSON.parse(legacyRaw);
+                if (Array.isArray(legacyData)) {
+                  var repairedData = repairObject(legacyData);
+                  localStorage.setItem(safetyStorageKey, JSON.stringify(repairedData));
+                  return repairedData;
+                }
+              }
+              return defaultSafetyItems();
             } catch (e) {
               return defaultSafetyItems();
             }
