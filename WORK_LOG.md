@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR badge analysis | Fixed Badge/NFC save failures after Gemini analysis by replacing the Filament KeyValue analysis display with a read-only JSON preview and normalizing the stored payload for Applicants and Employees. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 52 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding A-plan | Enforced activation-only Employee/account creation: removed the Employee draft step, added `safety_completed`, gated buttons by the real sequence, and added a cleanup migration for old `employee_registration` statuses. | Local changes | PHP lint passed for changed files; `php artisan test` passed, 52 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | Admin access | Reset the owner admin login to `davidcho1973@gmail.com` with the requested temporary password and updated login defaults. | Local branch `codex/set-owner-admin-login` | PHP lint passed for changed files; `php artisan test` passed, 50 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | Admin access | Added a one-time production admin password reset migration for `admin@nahshonmep.com` without committing the plaintext password, and made deploy start with `artisan up` to avoid stuck maintenance mode. | Local branch `codex/reset-production-admin-password` | PHP lint passed for migration; `php artisan test` passed, 50 tests; `npm run build` passed. |
@@ -106,6 +107,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Reset the owner admin login defaults and production DB credential migration to `davidcho1973@gmail.com` with the requested temporary password.
 - 2026-06-22: Separated applicant-owned intake from admin HR review: admins now create/send links or QR codes, applicant fields are read-only in review, submitted public forms are locked, and workflow status changes stay on HR actions.
 - 2026-06-22: Applied HR A-plan sequence: application submit -> interview passed -> safety completed -> Badge/NFC registered -> active; Employee, Access Control, and HR Documents sync only when the applicant becomes active.
+- 2026-06-22: Fixed Gemini Badge/NFC save failures by removing the KeyValue analysis field from the save path, using a read-only JSON preview, and normalizing analysis payload storage for Applicants and Employees.
 
 ### Current Boundaries
 

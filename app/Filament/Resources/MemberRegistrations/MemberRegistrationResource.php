@@ -243,13 +243,13 @@ class MemberRegistrationResource extends Resource
                 ->collapsible()
                 ->collapsed()
                 ->schema([
-                    KeyValue::make('badge_analysis_payload')
+                    Textarea::make('badge_analysis_preview')
                         ->label('Gemini badge analysis')
-                        ->keyLabel('Field')
-                        ->valueLabel('Value')
+                        ->formatStateUsing(fn (?MemberRegistration $record): ?string => self::formatBadgeAnalysisPayload($record?->badge_analysis_payload))
                         ->disabled()
                         ->dehydrated(false)
-                        ->visible(fn (Get $get): bool => filled($get('badge_analysis_payload')))
+                        ->rows(10)
+                        ->visible(fn (?MemberRegistration $record): bool => filled($record?->badge_analysis_payload))
                         ->columnSpanFull(),
                     KeyValue::make('payload')
                         ->keyLabel('Signal')
@@ -475,7 +475,8 @@ class MemberRegistrationResource extends Resource
                         'badge_issued_on' => $record->badge_issued_on?->toDateString(),
                         'badge_analysis_model' => $record->badge_analysis_model,
                         'badge_analyzed_at' => $record->badge_analyzed_at?->toDateTimeString(),
-                        'badge_analysis_payload' => $record->badge_analysis_payload,
+                        'badge_analysis_payload' => self::encodeBadgeAnalysisPayload($record->badge_analysis_payload),
+                        'badge_analysis_preview' => self::formatBadgeAnalysisPayload($record->badge_analysis_payload),
                     ])
                     ->form([
                         TextInput::make('nfc_raw_uid')
@@ -530,13 +531,14 @@ class MemberRegistrationResource extends Resource
                             ->required(),
                         Hidden::make('badge_analysis_model'),
                         Hidden::make('badge_analyzed_at'),
-                        KeyValue::make('badge_analysis_payload')
+                        Hidden::make('badge_analysis_payload')
+                            ->dehydrateStateUsing(fn (mixed $state): ?array => self::normalizeBadgeAnalysisPayload($state)),
+                        Textarea::make('badge_analysis_preview')
                             ->label('Gemini badge analysis')
-                            ->keyLabel('Field')
-                            ->valueLabel('Value')
                             ->disabled()
-                            ->dehydrated()
-                            ->visible(fn (Get $get): bool => filled($get('badge_analysis_payload')))
+                            ->dehydrated(false)
+                            ->rows(10)
+                            ->visible(fn (Get $get): bool => filled($get('badge_analysis_preview')))
                             ->columnSpanFull(),
                     ])
                     ->modalHeading('Hoffman Badge/NFC 등록')
@@ -559,7 +561,7 @@ class MemberRegistrationResource extends Resource
                             'badge_issued_on' => $data['badge_issued_on'] ?? null,
                             'badge_analysis_model' => $data['badge_analysis_model'] ?? null,
                             'badge_analyzed_at' => $data['badge_analyzed_at'] ?? null,
-                            'badge_analysis_payload' => $data['badge_analysis_payload'] ?? null,
+                            'badge_analysis_payload' => self::normalizeBadgeAnalysisPayload($data['badge_analysis_payload'] ?? null),
                             'badge_registration_status' => 'registered',
                             'onboarding_status' => 'badge_pending',
                         ])->save();
@@ -745,11 +747,69 @@ class MemberRegistrationResource extends Resource
 
         $set('badge_analysis_model', $analysis['model'] ?? config('services.gemini.model', 'gemini-3.5-flash'));
         $set('badge_analyzed_at', Carbon::now()->toDateTimeString());
-        $set('badge_analysis_payload', Arr::except($analysis, ['raw']) + [
-            'raw_json' => json_encode($analysis['raw'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
+        $payload = self::badgeAnalysisPayload($analysis);
+
+        $set('badge_analysis_payload', self::encodeBadgeAnalysisPayload($payload));
+        $set('badge_analysis_preview', self::formatBadgeAnalysisPayload($payload));
 
         self::syncFullName($set, $get);
+    }
+
+    /**
+     * @param  array<string, mixed>  $analysis
+     * @return array<string, mixed>
+     */
+    private static function badgeAnalysisPayload(array $analysis): array
+    {
+        return Arr::except($analysis, ['raw']) + [
+            'raw_json' => json_encode($analysis['raw'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    private static function encodeBadgeAnalysisPayload(mixed $payload): ?string
+    {
+        if (blank($payload)) {
+            return null;
+        }
+
+        if (is_string($payload)) {
+            return $payload;
+        }
+
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function normalizeBadgeAnalysisPayload(mixed $payload): ?array
+    {
+        if (blank($payload)) {
+            return null;
+        }
+
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (is_string($payload)) {
+            $decoded = json_decode($payload, true);
+
+            return is_array($decoded) ? $decoded : ['raw' => $payload];
+        }
+
+        return ['value' => $payload];
+    }
+
+    private static function formatBadgeAnalysisPayload(mixed $payload): ?string
+    {
+        $payload = self::normalizeBadgeAnalysisPayload($payload);
+
+        if ($payload === null) {
+            return null;
+        }
+
+        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
     }
 
     private static function setIfFilled(Set $set, string $field, mixed $value): void

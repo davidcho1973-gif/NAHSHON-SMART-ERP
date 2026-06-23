@@ -18,6 +18,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -164,13 +165,16 @@ class EmployeeResource extends Resource
                 ->columnSpanFull(),
             Hidden::make('badge_analysis_model'),
             Hidden::make('badge_analyzed_at'),
-            KeyValue::make('badge_analysis_payload')
+            Hidden::make('badge_analysis_payload')
+                ->formatStateUsing(fn (?Employee $record): ?string => self::encodeBadgeAnalysisPayload($record?->badge_analysis_payload))
+                ->dehydrateStateUsing(fn (mixed $state): ?array => self::normalizeBadgeAnalysisPayload($state)),
+            Textarea::make('badge_analysis_preview')
                 ->label('Gemini badge analysis')
-                ->keyLabel('Field')
-                ->valueLabel('Value')
+                ->formatStateUsing(fn (Get $get, ?Employee $record): ?string => self::formatBadgeAnalysisPayload($get('badge_analysis_payload') ?? $record?->badge_analysis_payload))
                 ->disabled()
-                ->dehydrated()
-                ->visible(fn (Get $get): bool => filled($get('badge_analysis_payload')))
+                ->dehydrated(false)
+                ->rows(10)
+                ->visible(fn (Get $get, ?Employee $record): bool => filled($get('badge_analysis_preview')) || filled($record?->badge_analysis_payload))
                 ->columnSpanFull(),
         ]);
     }
@@ -319,11 +323,69 @@ class EmployeeResource extends Resource
 
         $set('badge_analysis_model', $analysis['model'] ?? config('services.gemini.model', 'gemini-3.5-flash'));
         $set('badge_analyzed_at', Carbon::now()->toDateTimeString());
-        $set('badge_analysis_payload', Arr::except($analysis, ['raw']) + [
-            'raw_json' => json_encode($analysis['raw'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
+        $payload = self::badgeAnalysisPayload($analysis);
+
+        $set('badge_analysis_payload', self::encodeBadgeAnalysisPayload($payload));
+        $set('badge_analysis_preview', self::formatBadgeAnalysisPayload($payload));
 
         self::syncFullName($set, $get);
+    }
+
+    /**
+     * @param  array<string, mixed>  $analysis
+     * @return array<string, mixed>
+     */
+    private static function badgeAnalysisPayload(array $analysis): array
+    {
+        return Arr::except($analysis, ['raw']) + [
+            'raw_json' => json_encode($analysis['raw'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    private static function encodeBadgeAnalysisPayload(mixed $payload): ?string
+    {
+        if (blank($payload)) {
+            return null;
+        }
+
+        if (is_string($payload)) {
+            return $payload;
+        }
+
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function normalizeBadgeAnalysisPayload(mixed $payload): ?array
+    {
+        if (blank($payload)) {
+            return null;
+        }
+
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (is_string($payload)) {
+            $decoded = json_decode($payload, true);
+
+            return is_array($decoded) ? $decoded : ['raw' => $payload];
+        }
+
+        return ['value' => $payload];
+    }
+
+    private static function formatBadgeAnalysisPayload(mixed $payload): ?string
+    {
+        $payload = self::normalizeBadgeAnalysisPayload($payload);
+
+        if ($payload === null) {
+            return null;
+        }
+
+        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
     }
 
     private static function setIfFilled(Set $set, string $field, mixed $value): void
