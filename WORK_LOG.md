@@ -116,6 +116,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Documented the Laravel Cloud cleanup plan: keep `nahshon-smart-erp` as production, keep `nahshon-smart-erp-staging` as official testing, and retire the old `nahshon-erp` app after backup review.
 - 2026-06-22: Added the Laravel Cloud dashboard action sequence for deleting the old app, switching staging to the `staging` branch, reading failed deployment logs, and verifying the debug build route.
 - 2026-06-22: Fixed staging deploy seeding failure caused by DB-backed mobile expenses missing the legacy `vendor` key in `SmartCompanyData::seedRecords`.
+- 2026-06-23: Confirmed deployment policy with David: test changes on Staging first, then promote the same tested code to Production after approval; Staging and Production use separate databases.
 
 ### Current Boundaries
 

@@ -31,9 +31,11 @@ Before deleting this app, confirm there is no needed database, storage file, or 
 
 - Do not use multiple Laravel Cloud apps for the same active workflow unless their purpose is production versus staging.
 - Production deploys from `main`.
-- Staging should deploy from `staging`.
+- Staging deploys from `staging`.
+- New work is verified in Staging first. After David approves the test result, the same tested code can be promoted to Production.
 - If staging must temporarily deploy from `main`, document the reason in `WORK_LOG.md`.
 - Do not migrate data between environments casually. Decide which environment is official before copying data.
+- Production and Staging can run the same code, but their databases are intentionally separate.
 
 ## Laravel Cloud Dashboard Actions
 
@@ -43,9 +45,9 @@ These actions must be done in the Laravel Cloud dashboard by an owner/admin acco
 2. Confirm there is no needed database, storage file, environment variable, or custom domain.
 3. Delete `nahshon-erp`.
 4. Open `nahshon-smart-erp-staging`.
-5. Change the connected branch from `main` to `staging`.
-6. Open the latest failed deployment log for `nahshon-smart-erp-staging`.
-7. Fix the reported error, then redeploy `staging`.
+5. Confirm the connected branch is `staging`.
+6. Deploy `staging` after each test-ready change.
+7. If deployment fails, open the failed deployment log and fix the reported error.
 8. Verify `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/debug-build-sec-53298bfd9a` returns `member_registration_has_badge_keyvalue: false`.
 
-Current known staging symptom: the staging app responds, but the debug route returns `404`, which means the latest code has not successfully deployed there yet.
+Current rule confirmed by David: test in Staging first; after the test passes, deploy/promote to Production.
