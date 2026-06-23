@@ -278,6 +278,34 @@ class MobileExpenseTest extends TestCase
             ->assertOk();
     }
 
+    public function test_receipt_file_can_be_served_from_database_when_storage_file_is_missing(): void
+    {
+        Storage::fake('public');
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/missing-after-deploy.png',
+            'receipt_mime_type' => 'image/png',
+            'receipt_original_name' => 'missing-after-deploy.png',
+            'receipt_file' => 'receipt-image-from-database',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('mobile-expense.receipt', $expense));
+
+        $response->assertOk();
+        $this->assertSame('image/png', $response->headers->get('content-type'));
+        $this->assertSame('receipt-image-from-database', $response->getContent());
+    }
+
     public function test_desktop_universal_ai_scan_saves_expense(): void
     {
         Storage::fake('public');

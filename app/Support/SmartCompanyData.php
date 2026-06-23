@@ -1471,6 +1471,9 @@ class SmartCompanyData
                 'amount' => $result['amount'] ?? 0.0,
                 'expense_date' => $result['date'] ?: now()->format('Y-m-d'),
                 'receipt_path' => $receiptPath,
+                'receipt_mime_type' => $mimeType,
+                'receipt_original_name' => basename($filename),
+                'receipt_file' => $imageBytes,
                 'ocr_data' => $result,
                 'status' => 'pending',
             ]);

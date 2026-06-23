@@ -21,8 +21,15 @@ class MobileExpense extends Model
         'amount',
         'expense_date',
         'receipt_path',
+        'receipt_mime_type',
+        'receipt_original_name',
+        'receipt_file',
         'ocr_data',
         'status',
+    ];
+
+    protected $hidden = [
+        'receipt_file',
     ];
 
     protected function casts(): array

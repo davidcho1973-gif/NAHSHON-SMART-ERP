@@ -118,6 +118,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Fixed staging deploy seeding failure caused by DB-backed mobile expenses missing the legacy `vendor` key in `SmartCompanyData::seedRecords`.
 - 2026-06-23: Confirmed deployment policy with David: test changes on Staging first, then promote the same tested code to Production after approval; Staging and Production use separate databases.
 - 2026-06-23: Fixed receipt image 403 viewing by serving uploaded mobile expense receipts through an authenticated route: workers can view their own receipts and admins/HR/payroll can view all receipts.
+- 2026-06-23: Added database-backed receipt file storage for new mobile expenses so receipt images remain viewable even if Laravel Cloud local storage is cleared by deployment.
 
 ### Current Boundaries
 

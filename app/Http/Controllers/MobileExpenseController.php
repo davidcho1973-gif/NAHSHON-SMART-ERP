@@ -106,6 +106,13 @@ class MobileExpenseController extends Controller
 
         abort_unless($canViewAll || (int) $expense->employee_id === (int) $user?->employee_id, 403);
 
+        $databaseFile = $this->databaseReceiptFile($expense->receipt_file);
+        if ($databaseFile !== null) {
+            return response($databaseFile)
+                ->header('Content-Type', $expense->receipt_mime_type ?: 'application/octet-stream')
+                ->header('Content-Disposition', 'inline; filename="' . ($expense->receipt_original_name ?: 'receipt') . '"');
+        }
+
         $path = $this->publicReceiptPath($expense->receipt_path);
 
         abort_unless($path !== null && Storage::disk('public')->exists($path), 404);
@@ -135,6 +142,10 @@ class MobileExpenseController extends Controller
         $siteId = $request->input('site_id') ?: ($employee?->site_id ?? $user->allowed_site_id);
         $employeeId = $user->employee_id;
 
+        $receiptPath = $request->input('receipt_path');
+        $receiptStoragePath = $this->publicReceiptPath($receiptPath);
+        $receiptFile = $this->storedReceiptFile($receiptStoragePath);
+
         MobileExpense::create([
             'company_id' => $companyId,
             'site_id' => $siteId,
@@ -145,7 +156,10 @@ class MobileExpenseController extends Controller
             'description' => $request->input('description'),
             'amount' => $request->input('amount'),
             'expense_date' => $request->input('expense_date'),
-            'receipt_path' => $request->input('receipt_path'),
+            'receipt_path' => $receiptPath,
+            'receipt_mime_type' => $receiptFile['mime_type'] ?? null,
+            'receipt_original_name' => $receiptFile['name'] ?? null,
+            'receipt_file' => $receiptFile['contents'] ?? null,
             'ocr_data' => $request->input('ocr_data'),
             'status' => 'pending', // Starts in pending approval status
         ]);
@@ -165,5 +179,31 @@ class MobileExpenseController extends Controller
         }
 
         return ltrim($path, '/');
+    }
+
+    private function storedReceiptFile(?string $path): ?array
+    {
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        return [
+            'contents' => Storage::disk('public')->get($path),
+            'mime_type' => Storage::disk('public')->mimeType($path) ?: 'application/octet-stream',
+            'name' => basename($path),
+        ];
+    }
+
+    private function databaseReceiptFile(mixed $contents): ?string
+    {
+        if ($contents === null || $contents === '') {
+            return null;
+        }
+
+        if (is_resource($contents)) {
+            $contents = stream_get_contents($contents);
+        }
+
+        return is_string($contents) && $contents !== '' ? $contents : null;
     }
 }
