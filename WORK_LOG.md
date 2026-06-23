@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-23 | CODEX | AI expense accounting | Replaced the limited manual expense category step with chart-of-accounts based accounting account selection, separated accounting account from department/class, clarified approved pre-approval budget linking, and added a migration to clean legacy account values out of `class`. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/GeminiReceiptAnalyzerTest.php tests/Feature/MobileExpenseTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 26 tests; full `php artisan test` passed, 74 tests; `npm run build` passed. |
 | 2026-06-23 | CODEX | AI expense registration | Enhanced receipt OCR so upload results show immediately below the photo picker, Gemini extracts an accounting account and handwritten notes, and saved expense descriptions/accounts flow into Finance. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/GeminiReceiptAnalyzerTest.php tests/Feature/MobileExpenseTest.php` passed, 25 tests; `npm run build` passed. |
 | 2026-06-23 | CODEX | Finance expense sync | Fixed finance dashboard receipt sync by including Global/Office expenses in selected-site finance views and passing the current site context into the AI expense wizard. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/MobileExpenseTest.php` passed, 22 tests; `npm run build` passed. |
 | 2026-06-23 | CODEX | Mobile expenses | Fixed the receipt edit page so it can scroll on desktop/mobile and the save button remains reachable despite the global ERP overflow rule. | Staging deploy | `npm run build` passed; `php artisan test tests/Feature/MobileExpenseTest.php` passed, 20 tests. |
@@ -133,6 +134,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-23: Fixed the mobile expense edit page scroll behavior by overriding the global hidden body overflow on that page and adding safe bottom spacing so the save button can be reached.
 - 2026-06-23: Fixed finance dashboard receipt visibility by showing Global/Office expenses alongside the selected site and preselecting the current site when launching the AI expense wizard from Finance.
 - 2026-06-23: Enhanced AI expense registration to display OCR results immediately after upload, recommend accounting accounts, capture handwritten receipt notes, and save those values into Finance expense records.
+- 2026-06-23: Replaced the limited AI expense category buttons with chart-of-accounts based `accounting_account` selection, kept department/class separate, clarified approved pre-approval budget linking, and added legacy data cleanup for account values stored in `class`.
 
 ### Current Boundaries
 

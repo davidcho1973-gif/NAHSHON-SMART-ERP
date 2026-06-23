@@ -14,8 +14,8 @@ return new class extends Migration
             $table->foreignId('site_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('employee_id')->nullable()->constrained()->nullOnDelete();
             $table->string('payment_type', 40)->index(); // 'personal', 'corporate'
-            $table->string('category', 80)->index(); // 'Computer & Software', 'Travel', etc.
-            $table->string('class', 80)->nullable();
+            $table->string('category', 80)->index(); // Backward-compatible accounting account label.
+            $table->string('class', 80)->nullable(); // Department/class only, not an accounting account.
             $table->text('description');
             $table->decimal('amount', 14, 2)->index();
             $table->date('expense_date')->index();

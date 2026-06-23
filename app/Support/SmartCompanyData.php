@@ -362,7 +362,7 @@ class SmartCompanyData
 
                 $palette = ['#2563eb', '#10b981', '#f59e0b', '#7c3aed', '#ef4444', '#06b6d4', '#eab308'];
                 $grouped = $mtdRows
-                    ->groupBy(fn (MobileExpense $e): string => $e->category ?: 'Other')
+                    ->groupBy(fn (MobileExpense $e): string => $e->accounting_account ?: ($e->category ?: FinanceChartOfAccounts::FALLBACK_ACCOUNT))
                     ->map(fn ($group): float => (float) $group->sum(fn (MobileExpense $e): float => (float) $e->amount))
                     ->sortDesc();
 
@@ -413,8 +413,9 @@ class SmartCompanyData
                             'expenseId' => $e->id,
                             'date' => optional($e->expense_date)->toDateString() ?? '',
                             'site' => $e->site?->code ?: 'Global / Office',
-                            'account' => $e->class ?: ($e->category ?: '-'),
-                            'category' => $e->category ?: 'Other',
+                            'account' => $e->accounting_account ?: ($e->category ?: '-'),
+                            'category' => $e->accounting_account ?: ($e->category ?: FinanceChartOfAccounts::FALLBACK_ACCOUNT),
+                            'departmentClass' => $e->class ?: '',
                             'detail' => $e->description ?: '-',
                             'amount' => (float) $e->amount,
                             'method' => $e->payment_type,
@@ -1629,6 +1630,10 @@ class SmartCompanyData
             if ($handwrittenNotes !== '') {
                 $description .= "\nHandwritten note: " . $handwrittenNotes;
             }
+            $accountingAccount = FinanceChartOfAccounts::normalize(
+                $result['accounting_account'] ?? $result['category'] ?? '',
+                $description
+            );
 
             // Save to mobile_expenses table
             \App\Models\MobileExpense::create([
@@ -1636,8 +1641,9 @@ class SmartCompanyData
                 'site_id' => $siteId,
                 'employee_id' => $employeeId,
                 'payment_type' => 'personal',
-                'category' => $result['category'] ?? 'Other',
-                'class' => $result['accounting_account'] ?? ($category === 'OFFICE' ? '6170 Office Supplies' : '6999 Other Expense'),
+                'category' => $accountingAccount,
+                'accounting_account' => $accountingAccount,
+                'class' => null,
                 'description' => $description,
                 'amount' => $result['amount'] ?? 0.0,
                 'expense_date' => $result['date'] ?: now()->format('Y-m-d'),

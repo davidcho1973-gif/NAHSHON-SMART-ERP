@@ -319,26 +319,6 @@
       justify-content: center;
       gap: 8px;
     }
-    .category-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .cat-btn {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
-      padding: 14px 8px;
-      border-radius: var(--radius-md);
-      font-size: 12px;
-      font-weight: 600;
-      text-align: center;
-    }
-    .cat-btn.selected {
-      border-color: var(--brand-primary);
-      background: var(--brand-primary-dim);
-      color: var(--text-primary);
-    }
     .quick-adjust-row {
       display: flex;
       gap: 6px;
@@ -414,7 +394,6 @@
       <div class="step-dot" id="dot-4"></div>
       <div class="step-dot" id="dot-5"></div>
       <div class="step-dot" id="dot-6"></div>
-      <div class="step-dot" id="dot-7"></div>
     </div>
 
     <form id="wizardForm" action="{{ route('mobile-expense.store') }}" method="POST" style="display:flex; flex-direction:column; flex:1; gap:16px;">
@@ -424,6 +403,8 @@
       <input type="hidden" name="receipt_path" id="receiptPath">
       <input type="hidden" name="ocr_data" id="ocrData">
       <input type="hidden" name="payment_type" id="paymentType" value="personal">
+      <input type="hidden" name="category" id="categoryInput" value="9999 Needs Review">
+      <input type="hidden" name="accounting_account" id="accountingAccountInput" value="9999 Needs Review">
 
       <!-- STEP 1: Payment Type -->
       <div class="wizard-step active" id="step-1">
@@ -480,10 +461,6 @@
               <span class="analysis-label">Date</span>
               <span class="analysis-value" id="analysisDate">-</span>
             </div>
-            <div class="analysis-field">
-              <span class="analysis-label">Category</span>
-              <span class="analysis-value" id="analysisCategory">-</span>
-            </div>
             <div class="analysis-field wide">
               <span class="analysis-label">Accounting account</span>
               <span class="analysis-value" id="analysisAccount">-</span>
@@ -501,26 +478,8 @@
         <div class="btn-manual-skip" onclick="goNextStep()">영수증 없이 직접 입력하기</div>
       </div>
 
-      <!-- STEP 3: Category -->
+      <!-- STEP 3: Site, budget, and department -->
       <div class="wizard-step" id="step-3">
-        <div class="step-header">
-          <span class="step-title">지출 카테고리</span>
-          <span class="step-subtitle">경비 항목에 맞는 분류를 선택해 주세요.</span>
-        </div>
-        <input type="hidden" name="category" id="categoryInput" value="Other">
-        <div class="category-grid">
-          <button type="button" class="cat-btn" onclick="selectCategory('Computer & Software', this)">Computer & Software</button>
-          <button type="button" class="cat-btn" onclick="selectCategory('Automobile Expense', this)">Automobile Expense</button>
-          <button type="button" class="cat-btn" onclick="selectCategory('Utilities', this)">Utilities</button>
-          <button type="button" class="cat-btn" onclick="selectCategory('Travel & Lodging', this)">Travel & Lodging</button>
-          <button type="button" class="cat-btn" onclick="selectCategory('Office Supplies', this)">Office Supplies</button>
-          <button type="button" class="cat-btn" onclick="selectCategory('Meals & Entertainment', this)">Meals & Entertainment</button>
-          <button type="button" class="cat-btn selected" onclick="selectCategory('Other', this)">Other</button>
-        </div>
-      </div>
-
-      <!-- STEP 4: Class & Site -->
-      <div class="wizard-step" id="step-4">
         <div class="step-header">
           <span class="step-title">현장 및 부서 지정</span>
           <span class="step-subtitle">경비가 발생한 현장 또는 부서를 지정해 주세요.</span>
@@ -535,24 +494,25 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label" for="preApprovalSelect">승인된 사전 예산과 연결</label>
+          <label class="form-label" for="preApprovalSelect">승인된 사전 예산 / 구매승인과 연결</label>
           <select name="expense_pre_approval_id" id="preApprovalSelect" class="input-text" style="background-color: var(--bg-surface);">
-            <option value="">연결 안함</option>
+            <option value="">연결하지 않음 - 예산 차감 없이 일반 경비로 제출</option>
             @foreach($preApprovals as $preApproval)
               <option value="{{ $preApproval->id }}">
-                {{ $preApproval->title }} - ${{ number_format($preApproval->estimated_amount, 2) }}
+                {{ $preApproval->title }} / 승인예산 ${{ number_format($preApproval->estimated_amount, 2) }} / 사용 예정일 {{ optional($preApproval->planned_date)->format('Y-m-d') }}
               </option>
             @endforeach
           </select>
+          <span class="upload-sub">연결하면 이 영수증 금액이 승인된 사전 예산의 사용 내역으로 추적됩니다.</span>
         </div>
         <div class="form-group">
           <label class="form-label" for="classInput">부서 / 클래스 (Class)</label>
-          <input type="text" name="class" id="classInput" class="input-text" placeholder="예: HR, SALES, WBS-01">
+          <input type="text" name="class" id="classInput" class="input-text" placeholder="추후 부서 선택으로 전환 예정 - 필요 시 직접 입력">
         </div>
       </div>
 
-      <!-- STEP 5: Description -->
-      <div class="wizard-step" id="step-5">
+      <!-- STEP 4: Description -->
+      <div class="wizard-step" id="step-4">
         <div class="step-header">
           <span class="step-title">경비 세부 내용</span>
           <span class="step-subtitle">지출 명목과 세부 내역을 적어주세요.</span>
@@ -563,8 +523,8 @@
         </div>
       </div>
 
-      <!-- STEP 6: Amount with Keypad -->
-      <div class="wizard-step" id="step-6">
+      <!-- STEP 5: Amount with Keypad -->
+      <div class="wizard-step" id="step-5">
         <div class="step-header">
           <span class="step-title">지출 금액 입력</span>
           <span class="step-subtitle">실제 영수증의 최종 청구 금액을 입력해 주세요.</span>
@@ -597,8 +557,8 @@
         </div>
       </div>
 
-      <!-- STEP 7: Expense Date & Submit -->
-      <div class="wizard-step" id="step-7">
+      <!-- STEP 6: Expense Date & Submit -->
+      <div class="wizard-step" id="step-6">
         <div class="step-header">
           <span class="step-title">지출 날짜 선택</span>
           <span class="step-subtitle">경비를 지출한 날짜를 확인하고 제출해 주세요.</span>
@@ -628,19 +588,15 @@
 
   <script>
     let currentStep = 1;
-    const totalSteps = 7;
+    const totalSteps = 6;
     let rawAmountString = "0";
+    const accountOptions = @json($accountOptions ?? []);
+    const fallbackAccount = '9999 Needs Review';
 
     function selectPaymentType(type, element) {
       document.querySelectorAll('#step-1 .option-card').forEach(c => c.classList.remove('selected'));
       element.classList.add('selected');
       document.getElementById('paymentType').value = type;
-    }
-
-    function selectCategory(category, element) {
-      document.querySelectorAll('#step-3 .cat-btn').forEach(b => b.classList.remove('selected'));
-      element.classList.add('selected');
-      document.getElementById('categoryInput').value = category;
     }
 
     function keypadPress(val) {
@@ -721,12 +677,20 @@
           document.getElementById('ocrData').value = JSON.stringify(data);
 
           // Populate fields
-          const cleanCat = normalizeCategory(data.category || 'Other');
-          const accountingAccount = normalizeAccountingAccount(data.accounting_account, cleanCat);
           const description = buildReceiptDescription(data);
+          const accountingAccount = normalizeAccountingAccount(
+            data.accounting_account || data.category,
+            [
+              data.vendor_name || '',
+              data.description || '',
+              data.handwritten_notes || '',
+              description
+            ].join(' ')
+          );
 
           document.getElementById('descInput').value = description;
-          document.getElementById('classInput').value = accountingAccount;
+          document.getElementById('categoryInput').value = accountingAccount;
+          document.getElementById('accountingAccountInput').value = accountingAccount;
 
           if (data.amount) {
             rawAmountString = Number(data.amount).toFixed(2);
@@ -736,16 +700,7 @@
             document.getElementById('dateInput').value = data.date;
           }
 
-          document.getElementById('categoryInput').value = cleanCat;
-          document.querySelectorAll('#step-3 .cat-btn').forEach(btn => {
-            if (btn.textContent.trim().toLowerCase() === cleanCat.toLowerCase()) {
-              btn.classList.add('selected');
-            } else {
-              btn.classList.remove('selected');
-            }
-          });
-
-          renderReceiptAnalysis(data, cleanCat, accountingAccount, description);
+          renderReceiptAnalysis(data, accountingAccount, description);
           label.textContent = 'AI analysis complete';
           sub.textContent = 'Review the extracted result below, then tap Next.';
         } else {
@@ -765,31 +720,47 @@
       }
     }
 
-    function normalizeCategory(cat) {
-      const allowed = ['Computer & Software', 'Automobile Expense', 'Utilities', 'Travel & Lodging', 'Office Supplies', 'Meals & Entertainment', 'Other'];
-      for (let item of allowed) {
-        if (item.toLowerCase() === String(cat || '').trim().toLowerCase()) return item;
-      }
-      return 'Other';
-    }
-
-    function normalizeAccountingAccount(account, category) {
-      const byCategory = {
-        'Computer & Software': '6120 Computer & Software',
-        'Automobile Expense': '6140 Automobile Expense',
-        'Utilities': '6150 Utilities',
-        'Travel & Lodging': '6160 Travel & Lodging',
-        'Office Supplies': '6170 Office Supplies',
-        'Meals & Entertainment': '6180 Meals & Entertainment',
-        'Other': '6999 Other Expense'
-      };
-
-      const allowed = Object.values(byCategory);
+    function normalizeAccountingAccount(account, context = '') {
       const text = String(account || '').trim();
-      const exact = allowed.find(item => item.toLowerCase() === text.toLowerCase());
+      const exact = accountOptions.find(item => item.toLowerCase() === text.toLowerCase());
       if (exact) return exact;
 
-      return byCategory[category] || byCategory.Other;
+      const codeMatch = text.match(/^(\d{4})\b/);
+      if (codeMatch) {
+        const byCode = accountOptions.find(item => item.startsWith(codeMatch[1] + ' '));
+        if (byCode) return byCode;
+      }
+
+      const inferred = inferAccountingAccount([text, context].join(' '));
+      return inferred || fallbackAccount;
+    }
+
+    function inferAccountingAccount(text) {
+      const value = String(text || '').toLowerCase();
+      const rules = [
+        ['7404 Vehicle Lease / Rental', ['hertz', 'enterprise', 'avis', 'budget', 'rental car', 'car rental', 'vehicle rental']],
+        ['6403 Site Vehicle Fuel', ['marathon', 'shell', 'chevron', 'exxon', 'circle k', 'fuel', 'gasoline', 'regular gas', 'diesel', 'gas receipt']],
+        ['7405 Toll & Parking', ['toll', 'parking']],
+        ['6404 Site Vehicle Maintenance', ['auto repair', 'vehicle maintenance', 'oil change', 'tire']],
+        ['7303 Accommodation - Business Travel', ['hotel', 'motel', 'lodging', 'accommodation']],
+        ['7301 Domestic Travel - Airfare', ['airfare', 'airline', 'flight']],
+        ['7304 Ground Transportation', ['uber', 'lyft', 'taxi', 'shuttle']],
+        ['7308 Business Meal', ['restaurant', 'mcdonald', 'burger', 'meal', 'lunch', 'dinner', 'breakfast', 'catering']],
+        ['7206 Office Supplies', ['office supplies', 'staples', 'officemax', 'paper', 'pen', 'printer']],
+        ['7601 Software Subscription', ['software', 'subscription', 'license', 'saas']],
+        ['7205 Office Utilities - Internet', ['internet']],
+        ['6502 Site Communication - Phone', ['phone bill', 'mobile bill', 'communication']],
+        ['6301 Electricity - Site', ['electricity', 'electric bill']],
+        ['6302 Water - Site', ['water bill']],
+        ['6303 Gas - Site', ['utility gas']],
+        ['6304 Waste Disposal', ['waste', 'dumpster', 'trash']]
+      ];
+
+      for (const [account, needles] of rules) {
+        if (needles.some(needle => value.includes(needle))) return account;
+      }
+
+      return '';
     }
 
     function buildReceiptDescription(data) {
@@ -805,12 +776,11 @@
       return description;
     }
 
-    function renderReceiptAnalysis(data, category, accountingAccount, description) {
+    function renderReceiptAnalysis(data, accountingAccount, description) {
       const amount = Number(data.amount || 0);
       document.getElementById('analysisVendor').textContent = data.vendor_name || '-';
       document.getElementById('analysisAmount').textContent = amount > 0 ? '$' + amount.toFixed(2) : '-';
       document.getElementById('analysisDate').textContent = data.date || '-';
-      document.getElementById('analysisCategory').textContent = category || '-';
       document.getElementById('analysisAccount').textContent = accountingAccount || '-';
       document.getElementById('analysisHandwriting').textContent = data.handwritten_notes || '-';
       document.getElementById('analysisDescription').textContent = description || '-';
@@ -865,7 +835,7 @@
         const amountVal = parseFloat(document.getElementById('amountInput').value) || 0;
         if (amountVal <= 0) {
           alert('지출 금액을 0보다 크게 입력해 주세요.');
-          currentStep = 6;
+          currentStep = 5;
           updateStepUI();
           return;
         }
@@ -873,7 +843,7 @@
         const descVal = document.getElementById('descInput').value.trim();
         if (descVal === '') {
           alert('지출 내역/설명을 입력해 주세요.');
-          currentStep = 5;
+          currentStep = 4;
           updateStepUI();
           return;
         }

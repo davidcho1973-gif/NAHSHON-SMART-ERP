@@ -73,7 +73,7 @@ class MobileExpenseTest extends TestCase
             'site_id' => $this->site->id,
             'employee_id' => $this->employee->id,
             'payment_type' => 'personal',
-            'category' => 'Meals & Entertainment',
+            'category' => '7308 Business Meal',
             'description' => 'Business lunch',
             'amount' => 50.00,
             'expense_date' => now()->format('Y-m-d'),
@@ -134,8 +134,8 @@ class MobileExpenseTest extends TestCase
                     'vendor_name' => 'McDonalds',
                     'amount' => 12.34,
                     'date' => '2026-06-20',
-                    'category' => 'Meals & Entertainment',
-                    'accounting_account' => '6180 Meals & Entertainment',
+                    'category' => '7308 Business Meal',
+                    'accounting_account' => '7308 Business Meal',
                     'description' => 'Happy Meal',
                     'handwritten_notes' => 'Crew lunch',
                     'model' => 'gemini-mock',
@@ -155,8 +155,8 @@ class MobileExpenseTest extends TestCase
                 'vendor_name' => 'McDonalds',
                 'amount' => 12.34,
                 'date' => '2026-06-20',
-                'category' => 'Meals & Entertainment',
-                'accounting_account' => '6180 Meals & Entertainment',
+                'category' => '7308 Business Meal',
+                'accounting_account' => '7308 Business Meal',
                 'description' => 'Happy Meal',
                 'handwritten_notes' => 'Crew lunch',
                 'model' => 'gemini-mock',
@@ -197,7 +197,8 @@ class MobileExpenseTest extends TestCase
             'site_id' => $this->site->id,
             'employee_id' => $this->employee->id,
             'payment_type' => 'personal',
-            'category' => 'Office Supplies',
+            'category' => '7206 Office Supplies',
+            'accounting_account' => '7206 Office Supplies',
             'amount' => 45.99,
             'status' => 'pending',
         ]);
@@ -207,7 +208,8 @@ class MobileExpenseTest extends TestCase
     {
         $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
             'payment_type' => 'personal',
-            'category' => 'Automobile Expense',
+            'category' => '6403 Site Vehicle Fuel',
+            'accounting_account' => '6403 Site Vehicle Fuel',
             'class' => '',
             'description' => 'Shell - Fuel',
             'amount' => '82.15',
@@ -217,8 +219,8 @@ class MobileExpenseTest extends TestCase
                 'vendor_name' => 'Shell',
                 'amount' => 82.15,
                 'date' => '2026-06-23',
-                'category' => 'Automobile Expense',
-                'accounting_account' => '6140 Automobile Expense',
+                'category' => '6403 Site Vehicle Fuel',
+                'accounting_account' => '6403 Site Vehicle Fuel',
                 'handwritten_notes' => 'Truck 12 / LG-ESAZ',
                 'description' => 'Fuel',
             ]),
@@ -229,7 +231,9 @@ class MobileExpenseTest extends TestCase
         $expense = MobileExpense::query()->latest('id')->first();
 
         $this->assertNotNull($expense);
-        $this->assertSame('6140 Automobile Expense', $expense->class);
+        $this->assertSame('6403 Site Vehicle Fuel', $expense->category);
+        $this->assertSame('6403 Site Vehicle Fuel', $expense->accounting_account);
+        $this->assertNull($expense->class);
         $this->assertStringContainsString('Shell - Fuel', $expense->description);
         $this->assertStringContainsString('Handwritten note: Truck 12 / LG-ESAZ', $expense->description);
         $this->assertSame('Truck 12 / LG-ESAZ', $expense->ocr_data['handwritten_notes']);
@@ -443,7 +447,8 @@ class MobileExpenseTest extends TestCase
         $response = $this->actingAs($this->user)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'corporate',
-                'category' => 'Tools',
+                'category' => '5215 Consumables',
+                'accounting_account' => '5215 Consumables',
                 'class' => 'Field',
                 'description' => 'Replacement blades',
                 'amount' => 67.89,
@@ -456,7 +461,8 @@ class MobileExpenseTest extends TestCase
 
         $expense->refresh();
         $this->assertSame('corporate', $expense->payment_type);
-        $this->assertSame('Tools', $expense->category);
+        $this->assertSame('5215 Consumables', $expense->category);
+        $this->assertSame('5215 Consumables', $expense->accounting_account);
         $this->assertSame('Replacement blades', $expense->description);
         $this->assertSame('pending', $expense->status);
         $this->assertNotNull($expense->receipt_file);
@@ -576,7 +582,8 @@ class MobileExpenseTest extends TestCase
         $this->actingAs($admin)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'personal',
-                'category' => 'Admin Updated',
+                'category' => '7206 Office Supplies',
+                'accounting_account' => '7206 Office Supplies',
                 'description' => 'Reviewed expense',
                 'amount' => 99.99,
                 'expense_date' => '2026-06-23',
@@ -585,7 +592,8 @@ class MobileExpenseTest extends TestCase
             ->assertRedirect(route('mobile-expense.index'));
 
         $expense->refresh();
-        $this->assertSame('Admin Updated', $expense->category);
+        $this->assertSame('7206 Office Supplies', $expense->category);
+        $this->assertSame('7206 Office Supplies', $expense->accounting_account);
         $this->assertSame('rejected', $expense->status);
 
         $this->actingAs($admin)
@@ -818,8 +826,8 @@ class MobileExpenseTest extends TestCase
                     'vendor_name' => 'Staples',
                     'amount' => 89.99,
                     'date' => '2026-06-22',
-                    'category' => 'Office Supplies',
-                    'accounting_account' => '6170 Office Supplies',
+                    'category' => '7206 Office Supplies',
+                    'accounting_account' => '7206 Office Supplies',
                     'description' => 'Paper and pens',
                     'handwritten_notes' => 'Field office',
                     'model' => 'gemini-mock',
@@ -852,8 +860,9 @@ class MobileExpenseTest extends TestCase
             'site_id' => $this->site->id,
             'employee_id' => $this->employee->id,
             'payment_type' => 'personal',
-            'category' => 'Office Supplies',
-            'class' => '6170 Office Supplies',
+            'category' => '7206 Office Supplies',
+            'accounting_account' => '7206 Office Supplies',
+            'class' => null,
             'amount' => 89.99,
             'status' => 'pending',
         ]);

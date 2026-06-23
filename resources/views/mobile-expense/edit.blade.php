@@ -63,13 +63,19 @@
       </div>
 
       <div class="field">
-        <label for="category">카테고리</label>
-        <input id="category" name="category" value="{{ old('category', $expense->category) }}" required maxlength="80">
+        <label for="category">회계계정</label>
+        @php($selectedAccount = old('accounting_account', $expense->accounting_account ?: $expense->category))
+        <select id="category" name="category" required onchange="document.getElementById('accounting_account').value = this.value">
+          @foreach ($accountOptions as $account)
+            <option value="{{ $account }}" @selected($selectedAccount === $account)>{{ $account }}</option>
+          @endforeach
+        </select>
+        <input type="hidden" id="accounting_account" name="accounting_account" value="{{ $selectedAccount }}">
       </div>
 
       <div class="field">
         <label for="class">부서 / 클래스</label>
-        <input id="class" name="class" value="{{ old('class', $expense->class) }}" maxlength="80">
+        <input id="class" name="class" value="{{ old('class', $expense->class) }}" maxlength="80" placeholder="추후 부서 선택 기능으로 전환 예정">
       </div>
 
       <div class="field">
@@ -93,15 +99,16 @@
       </div>
 
       <div class="field">
-        <label for="expense_pre_approval_id">승인된 사전 예산과 연결</label>
+        <label for="expense_pre_approval_id">승인된 사전 예산 / 구매승인과 연결</label>
         <select id="expense_pre_approval_id" name="expense_pre_approval_id">
-          <option value="">연결 안함</option>
+          <option value="">연결하지 않음 - 예산 차감 없이 일반 경비로 제출</option>
           @foreach ($preApprovals as $preApproval)
             <option value="{{ $preApproval->id }}" @selected((string) old('expense_pre_approval_id', $expense->expense_pre_approval_id) === (string) $preApproval->id)>
-              {{ $preApproval->title }} - ${{ number_format($preApproval->estimated_amount, 2) }}
+              {{ $preApproval->title }} / 승인예산 ${{ number_format($preApproval->estimated_amount, 2) }} / 사용 예정일 {{ optional($preApproval->planned_date)->format('Y-m-d') }}
             </option>
           @endforeach
         </select>
+        <span class="hint">연결하면 이 지출이 승인된 사전 예산의 실제 사용 내역으로 추적됩니다.</span>
       </div>
 
       @if ($canManageAllExpenses)

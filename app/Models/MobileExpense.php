@@ -17,6 +17,7 @@ class MobileExpense extends Model
         'expense_pre_approval_id',
         'payment_type',
         'category',
+        'accounting_account',
         'class',
         'description',
         'amount',

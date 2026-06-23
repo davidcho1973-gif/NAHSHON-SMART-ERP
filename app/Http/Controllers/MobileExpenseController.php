@@ -6,6 +6,7 @@ use App\Models\MobileExpense;
 use App\Models\ExpensePreApproval;
 use App\Models\Site;
 use App\Services\GeminiReceiptAnalyzer;
+use App\Support\FinanceChartOfAccounts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -71,6 +72,7 @@ class MobileExpenseController extends Controller
             'sites' => $sites,
             'preApprovals' => $this->availablePreApprovals(),
             'selectedSiteId' => $selectedSiteId,
+            'accountOptions' => FinanceChartOfAccounts::accounts(),
         ]);
     }
 
@@ -138,6 +140,7 @@ class MobileExpenseController extends Controller
             'sites' => $sites,
             'preApprovals' => $this->availablePreApprovals($expense->employee_id),
             'canManageAllExpenses' => $this->canManageAllExpenses(),
+            'accountOptions' => FinanceChartOfAccounts::accounts(),
         ]);
     }
 
@@ -147,6 +150,7 @@ class MobileExpenseController extends Controller
         $request->validate([
             'payment_type' => 'required|in:personal,corporate',
             'category' => 'required|string|max:80',
+            'accounting_account' => 'nullable|string|max:160',
             'class' => 'nullable|string|max:80',
             'description' => 'required|string',
             'amount' => 'required|numeric|min:0.01',
@@ -165,7 +169,16 @@ class MobileExpenseController extends Controller
         $employeeId = $user->employee_id;
         $preApprovalId = $this->validatedPreApprovalId($request->input('expense_pre_approval_id'), $employeeId);
         $ocrData = $this->normalizedOcrData($request->input('ocr_data'));
-        $accountingAccount = trim((string) ($request->input('class') ?: data_get($ocrData, 'accounting_account', '')));
+        $accountingAccount = FinanceChartOfAccounts::normalize(
+            $request->input('accounting_account') ?: data_get($ocrData, 'accounting_account') ?: $request->input('category'),
+            trim(implode(' ', [
+                (string) data_get($ocrData, 'vendor_name', ''),
+                (string) data_get($ocrData, 'description', ''),
+                (string) data_get($ocrData, 'handwritten_notes', ''),
+                (string) $request->input('description', ''),
+            ]))
+        );
+        $departmentClass = trim((string) $request->input('class'));
         $description = $this->descriptionWithHandwrittenNotes(
             (string) $request->input('description'),
             data_get($ocrData, 'handwritten_notes')
@@ -181,8 +194,9 @@ class MobileExpenseController extends Controller
             'employee_id' => $employeeId,
             'expense_pre_approval_id' => $preApprovalId,
             'payment_type' => $request->input('payment_type'),
-            'category' => $request->input('category'),
-            'class' => $accountingAccount !== '' ? $accountingAccount : null,
+            'category' => $accountingAccount,
+            'accounting_account' => $accountingAccount,
+            'class' => $departmentClass !== '' ? $departmentClass : null,
             'description' => $description,
             'amount' => $request->input('amount'),
             'expense_date' => $request->input('expense_date'),
@@ -205,6 +219,7 @@ class MobileExpenseController extends Controller
         $validated = $request->validate([
             'payment_type' => 'required|in:personal,corporate',
             'category' => 'required|string|max:80',
+            'accounting_account' => 'nullable|string|max:160',
             'class' => 'nullable|string|max:80',
             'description' => 'required|string',
             'amount' => 'required|numeric|min:0.01',
@@ -216,12 +231,17 @@ class MobileExpenseController extends Controller
         ]);
 
         $preApprovalId = $this->validatedPreApprovalId($validated['expense_pre_approval_id'] ?? null, $expense->employee_id);
+        $accountingAccount = FinanceChartOfAccounts::normalize(
+            $validated['accounting_account'] ?? $validated['category'],
+            $validated['description']
+        );
 
         $updates = [
             'site_id' => ($validated['site_id'] ?? null) ?: $expense->site_id,
             'expense_pre_approval_id' => $preApprovalId,
             'payment_type' => $validated['payment_type'],
-            'category' => $validated['category'],
+            'category' => $accountingAccount,
+            'accounting_account' => $accountingAccount,
             'class' => $validated['class'] ?? null,
             'description' => $validated['description'],
             'amount' => $validated['amount'],

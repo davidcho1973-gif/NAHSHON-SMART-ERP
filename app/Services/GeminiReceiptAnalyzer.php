@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\FinanceChartOfAccounts;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use RuntimeException;
 
@@ -109,11 +110,13 @@ Fields to extract:
 - vendor_name: Name of the store, merchant, or supplier.
 - amount: The total price/amount paid (decimal/float).
 - date: Transaction date in YYYY-MM-DD format (if visible, otherwise empty string).
-- category: Predict the category from: 'Computer & Software', 'Automobile Expense', 'Utilities', 'Travel & Lodging', 'Office Supplies', 'Meals & Entertainment', 'Other'.
-- accounting_account: Choose the best accounting account from: '6120 Computer & Software', '6140 Automobile Expense', '6150 Utilities', '6160 Travel & Lodging', '6170 Office Supplies', '6180 Meals & Entertainment', '6999 Other Expense'.
+- accounting_account: Choose the best accounting account from the chart below. Return the exact code and name.
+- category: Return the same exact value as accounting_account for ERP compatibility.
 - description: Brief details of items bought.
 - handwritten_notes: Any handwritten memo visible on the receipt, including job/site notes, purpose, initials, added totals, or short comments. Return an empty string if none is visible.
-PROMPT;
+PROMPT
+            . "\n\nChart of accounts:\n"
+            . FinanceChartOfAccounts::promptList();
     }
 
     /**
@@ -142,14 +145,20 @@ PROMPT;
      */
     private function normalize(array $data, string $model): array
     {
-        $category = $this->normalizeCategory($data['category'] ?? '');
+        $context = implode(' ', [
+            (string) ($data['vendor_name'] ?? ''),
+            (string) ($data['category'] ?? ''),
+            (string) ($data['description'] ?? ''),
+            (string) ($data['handwritten_notes'] ?? ''),
+        ]);
+        $accountingAccount = FinanceChartOfAccounts::normalize($data['accounting_account'] ?? $data['category'] ?? '', $context);
 
         return [
             'vendor_name' => trim((string) ($data['vendor_name'] ?? '')),
             'amount' => is_numeric($data['amount'] ?? null) ? (float) $data['amount'] : 0.0,
             'date' => $this->normalizeDate($data['date'] ?? null),
-            'category' => $category,
-            'accounting_account' => $this->normalizeAccountingAccount($data['accounting_account'] ?? '', $category),
+            'category' => $accountingAccount,
+            'accounting_account' => $accountingAccount,
             'description' => trim((string) ($data['description'] ?? '')),
             'handwritten_notes' => trim((string) ($data['handwritten_notes'] ?? '')),
             'model' => $model,
@@ -171,58 +180,6 @@ PROMPT;
         }
 
         return '';
-    }
-
-    private function normalizeCategory(string $category): string
-    {
-        $allowed = [
-            'Computer & Software',
-            'Automobile Expense',
-            'Utilities',
-            'Travel & Lodging',
-            'Office Supplies',
-            'Meals & Entertainment',
-            'Other',
-        ];
-
-        $category = trim($category);
-
-        foreach ($allowed as $item) {
-            if (strcasecmp($category, $item) === 0) {
-                return $item;
-            }
-        }
-
-        return 'Other';
-    }
-
-    private function normalizeAccountingAccount(mixed $account, string $category): string
-    {
-        $allowed = [
-            'Computer & Software' => '6120 Computer & Software',
-            'Automobile Expense' => '6140 Automobile Expense',
-            'Utilities' => '6150 Utilities',
-            'Travel & Lodging' => '6160 Travel & Lodging',
-            'Office Supplies' => '6170 Office Supplies',
-            'Meals & Entertainment' => '6180 Meals & Entertainment',
-            'Other' => '6999 Other Expense',
-        ];
-
-        $account = trim((string) $account);
-
-        foreach ($allowed as $label) {
-            if (strcasecmp($account, $label) === 0) {
-                return $label;
-            }
-        }
-
-        foreach ($allowed as $categoryName => $label) {
-            if (strcasecmp($account, $categoryName) === 0 || str_contains(strtolower($account), strtolower($categoryName))) {
-                return $label;
-            }
-        }
-
-        return $allowed[$category] ?? $allowed['Other'];
     }
 
     private function stripJsonFence(string $text): string

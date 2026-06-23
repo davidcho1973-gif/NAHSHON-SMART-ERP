@@ -354,6 +354,7 @@
       @forelse($expenses as $expense)
         @php
           $expensePayload = $expense->toArray();
+          $expensePayload['category'] = $expense->accounting_account ?: $expense->category;
           $expensePayload['receipt_view_url'] = $expense->receipt_path ? route('mobile-expense.receipt', $expense) : null;
           $canModifyExpense = $canManageAllExpenses || ((int) $expense->employee_id === (int) auth()->user()?->employee_id && in_array($expense->status, ['draft', 'pending', 'rejected'], true));
           $expensePayload['edit_url'] = $canModifyExpense ? route('mobile-expense.edit', $expense) : null;
@@ -361,7 +362,7 @@
         @endphp
         <div class="expense-card" data-status="{{ $expense->status }}" onclick="openDetailModal({{ Illuminate\Support\Js::from($expensePayload) }})">
           <div class="card-top">
-            <span class="card-category">{{ $expense->category }}</span>
+            <span class="card-category">{{ $expense->accounting_account ?: $expense->category }}</span>
             <span class="card-amount">${{ number_format($expense->amount, 2) }}</span>
           </div>
           <div class="card-mid">
@@ -409,7 +410,7 @@
           <span class="detail-value" id="modalAmount" style="font-family:var(--font-mono);font-weight:700">-</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">지출 카테고리</span>
+          <span class="detail-label">회계계정</span>
           <span class="detail-value" id="modalCategory">-</span>
         </div>
         <div class="detail-item">
