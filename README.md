@@ -123,3 +123,4 @@ php artisan serve
 ## Deployment
 
 See `SMART_COMPANY_LARAVEL_DEPLOYMENT.md` for deployment notes.
+See `DEPLOYMENT_ENVIRONMENTS.md` for the production, staging, and retired Laravel Cloud app map.
