@@ -9,8 +9,10 @@ use App\Models\MobileExpense;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\GeminiReceiptAnalyzer;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -237,6 +239,34 @@ class MobileExpenseTest extends TestCase
         $this->assertStringContainsString('Shell - Fuel', $expense->description);
         $this->assertStringContainsString('Handwritten note: Truck 12 / LG-ESAZ', $expense->description);
         $this->assertSame('Truck 12 / LG-ESAZ', $expense->ocr_data['handwritten_notes']);
+    }
+
+    public function test_mobile_expense_store_survives_when_optional_accounting_column_is_not_migrated_yet(): void
+    {
+        Schema::table('mobile_expenses', function (Blueprint $table): void {
+            $table->dropColumn('accounting_account');
+        });
+
+        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+            'payment_type' => 'personal',
+            'category' => '6403 Site Vehicle Fuel',
+            'accounting_account' => '6403 Site Vehicle Fuel',
+            'class' => '6140 Automobile Expense',
+            'description' => 'Marathon gas receipt',
+            'amount' => '42.53',
+            'expense_date' => '2026-06-23',
+            'site_id' => $this->site->id,
+        ]);
+
+        $response->assertRedirect(route('mobile-expense.index'));
+
+        $this->assertDatabaseHas('mobile_expenses', [
+            'employee_id' => $this->employee->id,
+            'category' => '6403 Site Vehicle Fuel',
+            'class' => null,
+            'amount' => 42.53,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_mobile_expense_can_link_approved_pre_approval(): void

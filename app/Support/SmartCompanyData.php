@@ -1636,7 +1636,7 @@ class SmartCompanyData
             );
 
             // Save to mobile_expenses table
-            \App\Models\MobileExpense::create([
+            \App\Models\MobileExpense::create(self::mobileExpensePayload([
                 'company_id' => $companyId,
                 'site_id' => $siteId,
                 'employee_id' => $employeeId,
@@ -1653,7 +1653,7 @@ class SmartCompanyData
                 'receipt_file' => $imageBytes,
                 'ocr_data' => $result,
                 'status' => 'pending',
-            ]);
+            ]));
 
             return [
                 'success' => true,
@@ -1676,5 +1676,20 @@ class SmartCompanyData
             return [];
         }
         return ['success' => true, 'method' => $method, 'message' => 'Endpoint stub is ready for implementation.'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private static function mobileExpensePayload(array $attributes): array
+    {
+        if (! class_exists(Schema::class) || ! Schema::hasTable('mobile_expenses')) {
+            return $attributes;
+        }
+
+        $columns = array_flip(Schema::getColumnListing('mobile_expenses'));
+
+        return array_intersect_key($attributes, $columns);
     }
 }

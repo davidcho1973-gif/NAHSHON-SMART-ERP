@@ -10,6 +10,7 @@ use App\Support\FinanceChartOfAccounts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -178,7 +179,7 @@ class MobileExpenseController extends Controller
                 (string) $request->input('description', ''),
             ]))
         );
-        $departmentClass = trim((string) $request->input('class'));
+        $departmentClass = $this->cleanDepartmentClass($request->input('class'));
         $description = $this->descriptionWithHandwrittenNotes(
             (string) $request->input('description'),
             data_get($ocrData, 'handwritten_notes')
@@ -188,7 +189,7 @@ class MobileExpenseController extends Controller
         $receiptStoragePath = $this->publicReceiptPath($receiptPath);
         $receiptFile = $this->storedReceiptFile($receiptStoragePath);
 
-        MobileExpense::create([
+        MobileExpense::create($this->mobileExpensePayload([
             'company_id' => $companyId,
             'site_id' => $siteId,
             'employee_id' => $employeeId,
@@ -196,7 +197,7 @@ class MobileExpenseController extends Controller
             'payment_type' => $request->input('payment_type'),
             'category' => $accountingAccount,
             'accounting_account' => $accountingAccount,
-            'class' => $departmentClass !== '' ? $departmentClass : null,
+            'class' => $departmentClass,
             'description' => $description,
             'amount' => $request->input('amount'),
             'expense_date' => $request->input('expense_date'),
@@ -206,7 +207,7 @@ class MobileExpenseController extends Controller
             'receipt_file' => $receiptFile['contents'] ?? null,
             'ocr_data' => $ocrData,
             'status' => 'pending', // Starts in pending approval status
-        ]);
+        ]));
 
         return redirect()->route('mobile-expense.index')
             ->with('success', 'Expense report submitted successfully.');
@@ -242,7 +243,7 @@ class MobileExpenseController extends Controller
             'payment_type' => $validated['payment_type'],
             'category' => $accountingAccount,
             'accounting_account' => $accountingAccount,
-            'class' => $validated['class'] ?? null,
+            'class' => $this->cleanDepartmentClass($validated['class'] ?? null),
             'description' => $validated['description'],
             'amount' => $validated['amount'],
             'expense_date' => $validated['expense_date'],
@@ -277,7 +278,7 @@ class MobileExpenseController extends Controller
             $updates['receipt_file'] = $receiptFile['contents'] ?? null;
         }
 
-        $expense->update($updates);
+        $expense->update($this->mobileExpensePayload($updates));
 
         return redirect()->route('mobile-expense.index')
             ->with('success', 'Expense report updated successfully.');
@@ -452,5 +453,33 @@ class MobileExpenseController extends Controller
         }
 
         return is_string($contents) && $contents !== '' ? $contents : null;
+    }
+
+    /**
+     * Keep expense saves resilient while Laravel Cloud runs migrations during a deploy.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function mobileExpensePayload(array $attributes): array
+    {
+        if (! Schema::hasTable('mobile_expenses')) {
+            return $attributes;
+        }
+
+        $columns = array_flip(Schema::getColumnListing('mobile_expenses'));
+
+        return array_intersect_key($attributes, $columns);
+    }
+
+    private function cleanDepartmentClass(mixed $class): ?string
+    {
+        $class = trim((string) $class);
+
+        if ($class === '' || preg_match('/^\d{4}\s+/', $class) === 1) {
+            return null;
+        }
+
+        return $class;
     }
 }
