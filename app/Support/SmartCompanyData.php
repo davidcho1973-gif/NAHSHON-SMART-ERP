@@ -108,7 +108,16 @@ class SmartCompanyData
             $records[] = self::record('equipment', $item['id'], $item['name'], $item['type'], $item['site'], $item['status'], null, $item);
         }
         foreach (self::expenses() as $expense) {
-            $records[] = self::record('finance', $expense['id'], $expense['vendor'], $expense['category'], $expense['site'] ?? 'HFF-02', $expense['status'], $expense['amount'], $expense);
+            $records[] = self::record(
+                'finance',
+                (string) ($expense['id'] ?? ('EXP-' . md5(json_encode($expense)))),
+                (string) ($expense['vendor'] ?? $expense['vendor_name'] ?? $expense['detail'] ?? $expense['description'] ?? $expense['category'] ?? 'Expense'),
+                $expense['category'] ?? $expense['account'] ?? 'Other',
+                $expense['site'] ?? 'HFF-02',
+                $expense['status'] ?? 'pending',
+                $expense['amount'] ?? null,
+                $expense
+            );
         }
         foreach (self::alerts('all') as $alert) {
             $records[] = self::record('safety', $alert['id'], $alert['title'], $alert['type'], $alert['site'] ?? 'HFF-02', $alert['status'], null, $alert);
