@@ -114,6 +114,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Removed the last Applicants KeyValue field, added deploy-time Laravel/Filament cache clearing, and confirmed Badge/NFC save does not require applicant and badge names to match.
 - 2026-06-22: Reverted deploy-time cache clearing from the production script after Laravel Cloud staging failed deployments while the main app deployed the same commits successfully.
 - 2026-06-22: Documented the Laravel Cloud cleanup plan: keep `nahshon-smart-erp` as production, keep `nahshon-smart-erp-staging` as official testing, and retire the old `nahshon-erp` app after backup review.
+- 2026-06-22: Added the Laravel Cloud dashboard action sequence for deleting the old app, switching staging to the `staging` branch, reading failed deployment logs, and verifying the debug build route.
 
 ### Current Boundaries
 

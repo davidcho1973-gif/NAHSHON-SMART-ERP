@@ -34,3 +34,18 @@ Before deleting this app, confirm there is no needed database, storage file, or 
 - Staging should deploy from `staging`.
 - If staging must temporarily deploy from `main`, document the reason in `WORK_LOG.md`.
 - Do not migrate data between environments casually. Decide which environment is official before copying data.
+
+## Laravel Cloud Dashboard Actions
+
+These actions must be done in the Laravel Cloud dashboard by an owner/admin account.
+
+1. Open `nahshon-erp`.
+2. Confirm there is no needed database, storage file, environment variable, or custom domain.
+3. Delete `nahshon-erp`.
+4. Open `nahshon-smart-erp-staging`.
+5. Change the connected branch from `main` to `staging`.
+6. Open the latest failed deployment log for `nahshon-smart-erp-staging`.
+7. Fix the reported error, then redeploy `staging`.
+8. Verify `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/debug-build-sec-53298bfd9a` returns `member_registration_has_badge_keyvalue: false`.
+
+Current known staging symptom: the staging app responds, but the debug route returns `404`, which means the latest code has not successfully deployed there yet.
