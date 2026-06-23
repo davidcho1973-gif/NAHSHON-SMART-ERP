@@ -187,6 +187,97 @@ class MobileExpenseTest extends TestCase
         ]);
     }
 
+    public function test_employee_can_view_own_receipt_file(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('receipts/test-receipt.png', 'receipt-image');
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/test-receipt.png',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->user)
+            ->get(route('mobile-expense.receipt', $expense))
+            ->assertOk();
+    }
+
+    public function test_employee_cannot_view_another_employee_receipt_file(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('receipts/private-receipt.png', 'receipt-image');
+
+        $otherEmployee = Employee::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'first_name' => 'Jane',
+            'last_name' => 'Smith',
+            'email' => 'jane.smith@example.com',
+            'employment_status' => 'active',
+        ]);
+
+        $otherUser = User::factory()->create([
+            'employee_id' => $otherEmployee->id,
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/private-receipt.png',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($otherUser)
+            ->get(route('mobile-expense.receipt', $expense))
+            ->assertForbidden();
+    }
+
+    public function test_admin_can_view_any_receipt_file(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('receipts/admin-visible-receipt.png', 'receipt-image');
+
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/admin-visible-receipt.png',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('mobile-expense.receipt', $expense))
+            ->assertOk();
+    }
+
     public function test_desktop_universal_ai_scan_saves_expense(): void
     {
         Storage::fake('public');

@@ -13,7 +13,7 @@ class SmartCompanySeedRecordsTest extends TestCase
 
     public function test_seed_records_handle_mobile_expenses_without_vendor_key(): void
     {
-        MobileExpense::create([
+        $expense = MobileExpense::create([
             'payment_type' => 'personal',
             'category' => 'Office Supplies',
             'class' => 'Office',
@@ -25,7 +25,7 @@ class SmartCompanySeedRecordsTest extends TestCase
 
         $records = SmartCompanyData::seedRecords();
 
-        $financeRecord = collect($records)->firstWhere('record_key', 'EXP-1');
+        $financeRecord = collect($records)->firstWhere('record_key', 'EXP-' . $expense->id);
 
         $this->assertNotNull($financeRecord);
         $this->assertSame('finance', $financeRecord['module']);

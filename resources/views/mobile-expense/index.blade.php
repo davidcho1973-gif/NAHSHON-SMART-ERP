@@ -317,7 +317,11 @@
     <!-- Expenses List -->
     <div class="expense-list" id="expenseList">
       @forelse($expenses as $expense)
-        <div class="expense-card" data-status="{{ $expense->status }}" onclick="openDetailModal({{ json_encode($expense) }})">
+        @php
+          $expensePayload = $expense->toArray();
+          $expensePayload['receipt_view_url'] = $expense->receipt_path ? route('mobile-expense.receipt', $expense) : null;
+        @endphp
+        <div class="expense-card" data-status="{{ $expense->status }}" onclick="openDetailModal({{ Illuminate\Support\Js::from($expensePayload) }})">
           <div class="card-top">
             <span class="card-category">{{ $expense->category }}</span>
             <span class="card-amount">${{ number_format($expense->amount, 2) }}</span>
@@ -440,8 +444,8 @@
 
       const img = document.getElementById('modalReceiptImg');
       const wrap = document.getElementById('receiptPreviewWrap');
-      if (expense.receipt_path) {
-        img.src = expense.receipt_path;
+      if (expense.receipt_view_url) {
+        img.src = expense.receipt_view_url;
         wrap.style.display = 'flex';
       } else {
         img.src = '';

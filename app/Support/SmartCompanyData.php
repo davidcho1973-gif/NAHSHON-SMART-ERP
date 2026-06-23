@@ -384,7 +384,7 @@ class SmartCompanyData
                         'detail' => $e->description ?: '-',
                         'amount' => (float) $e->amount,
                         'status' => $e->status,
-                        'receiptUrl' => $e->receipt_path ?: '',
+                        'receiptUrl' => self::mobileExpenseReceiptUrl($e),
                     ])
                     ->all();
             }
@@ -393,6 +393,19 @@ class SmartCompanyData
         }
 
         return [];
+    }
+
+    private static function mobileExpenseReceiptUrl(\App\Models\MobileExpense $expense): string
+    {
+        if (! $expense->receipt_path) {
+            return '';
+        }
+
+        try {
+            return route('mobile-expense.receipt', $expense, false);
+        } catch (\Throwable) {
+            return $expense->receipt_path;
+        }
     }
 
     public static function equipmentStats(): array { return ['total' => count(self::equipmentList()), 'operable' => 4, 'inoperable' => 1, 'todayInspections' => 4]; }

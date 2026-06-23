@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -98,6 +99,21 @@ class MobileExpenseController extends Controller
         }
     }
 
+    public function receipt(MobileExpense $expense)
+    {
+        $user = auth()->user();
+        $canViewAll = in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
+
+        abort_unless($canViewAll || (int) $expense->employee_id === (int) $user?->employee_id, 403);
+
+        $path = $this->publicReceiptPath($expense->receipt_path);
+
+        abort_unless($path !== null && Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path);
+    }
+
+
     public function store(Request $request)
     {
         $request->validate([
@@ -136,5 +152,18 @@ class MobileExpenseController extends Controller
 
         return redirect()->route('mobile-expense.index')
             ->with('success', 'Expense report submitted successfully.');
+    }
+
+    private function publicReceiptPath(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        if (Str::contains($path, '/storage/')) {
+            return Str::after($path, '/storage/');
+        }
+
+        return ltrim($path, '/');
     }
 }
