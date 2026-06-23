@@ -322,17 +322,68 @@ class SmartCompanyData
 
     public static function financeStats(): array
     {
-        return ['mtdTotal' => 83420, 'mtdBudget' => 125000, 'pendingApproval' => 4, 'pendingAmount' => 12600, 'claimable' => 18400, 'byCategory' => [['name' => 'Rental', 'amount' => 31200, 'color' => '#2563eb'], ['name' => 'Materials', 'amount' => 42800, 'color' => '#10b981'], ['name' => 'Travel', 'amount' => 9420, 'color' => '#f59e0b']]];
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
+                $rows = \App\Models\MobileExpense::query()->get();
+                $mtdTotal = (float) $rows->sum(fn (\App\Models\MobileExpense $e): float => (float) $e->amount);
+                $pending = $rows->where('status', 'pending');
+
+                $palette = ['#2563eb', '#10b981', '#f59e0b', '#7c3aed', '#ef4444', '#06b6d4', '#eab308'];
+                $grouped = $rows
+                    ->groupBy(fn (\App\Models\MobileExpense $e): string => $e->category ?: 'Other')
+                    ->map(fn ($group): float => (float) $group->sum(fn (\App\Models\MobileExpense $e): float => (float) $e->amount))
+                    ->sortDesc();
+
+                $byCategory = [];
+                $i = 0;
+                foreach ($grouped as $name => $amount) {
+                    $byCategory[] = ['name' => $name, 'amount' => $amount, 'color' => $palette[$i % count($palette)]];
+                    $i++;
+                }
+
+                return [
+                    'mtdTotal' => $mtdTotal,
+                    'mtdBudget' => 0,
+                    'pendingApproval' => $pending->count(),
+                    'pendingAmount' => (float) $pending->sum(fn (\App\Models\MobileExpense $e): float => (float) $e->amount),
+                    'claimable' => 0,
+                    'byCategory' => $byCategory,
+                ];
+            }
+        } catch (\Throwable) {
+            // Fall back to empty totals when the table is not ready.
+        }
+
+        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'byCategory' => []];
     }
 
     public static function expenses(): array
     {
-        $fromDb = self::smartRecords('finance');
-        return $fromDb ?: [
-            ['id' => 'EXP-2401', 'vendor' => 'United Rentals', 'category' => 'Rental', 'site' => 'HFF-02', 'amount' => 4200, 'status' => '승인대기', 'date' => '2026-06-18'],
-            ['id' => 'EXP-2402', 'vendor' => 'Graybar', 'category' => 'Materials', 'site' => 'LGES-AZ', 'amount' => 8750, 'status' => '청구완료', 'date' => '2026-06-17'],
-            ['id' => 'EXP-2403', 'vendor' => 'Delta', 'category' => 'Travel', 'site' => 'NV-05', 'amount' => 1350, 'status' => '처리중', 'date' => '2026-06-16'],
-        ];
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
+                return \App\Models\MobileExpense::query()
+                    ->with('site')
+                    ->orderByDesc('expense_date')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (\App\Models\MobileExpense $e): array => [
+                        'id' => 'EXP-' . $e->id,
+                        'date' => optional($e->expense_date)->toDateString() ?? '',
+                        'site' => $e->site?->code ?: '-',
+                        'account' => $e->class ?: ($e->category ?: '-'),
+                        'category' => $e->category ?: 'Other',
+                        'detail' => $e->description ?: '-',
+                        'amount' => (float) $e->amount,
+                        'status' => $e->status,
+                        'receiptUrl' => $e->receipt_path ?: '',
+                    ])
+                    ->all();
+            }
+        } catch (\Throwable) {
+            // Fall back to an empty list when the table is not ready.
+        }
+
+        return [];
     }
 
     public static function equipmentStats(): array { return ['total' => count(self::equipmentList()), 'operable' => 4, 'inoperable' => 1, 'todayInspections' => 4]; }

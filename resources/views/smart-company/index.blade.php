@@ -3914,7 +3914,7 @@
             window.API.getExpenses()
           ]);
 
-          var budgetPct = Math.round(stats.mtdTotal / stats.mtdBudget * 100);
+          var budgetPct = stats.mtdBudget > 0 ? Math.round(stats.mtdTotal / stats.mtdBudget * 100) : 0;
 
           var expensesHtml = expenses.map(function (ex) {
             var amtStyle = ex.amount >= 500 ? 'color:var(--status-warning);font-weight:600' : '';
@@ -3925,7 +3925,7 @@
           }).join('');
 
           var categoryHtml = stats.byCategory.map(function (c) {
-            var pct = Math.round(c.amount / stats.mtdTotal * 100);
+            var pct = stats.mtdTotal > 0 ? Math.round(c.amount / stats.mtdTotal * 100) : 0;
             return '<div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:12px;color:var(--text-primary)">' + c.name + '</span><span class="cell-mono" style="font-size:12px">' + fmtUSD(c.amount) + '</span></div>' +
               '<div class="progress-wrapper"><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:' + c.color + '"></div></div><span class="progress-text" style="color:var(--text-tertiary)">' + pct + '%</span></div></div>';
           }).join('');
