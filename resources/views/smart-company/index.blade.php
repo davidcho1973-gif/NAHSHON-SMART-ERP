@@ -2067,32 +2067,32 @@
           function defaultSafetyItems() {
             return [
               {
-                id:'WRK-2605-001', project:'LGES-AZ ì˜¤í”¼ìŠ¤ ì „ê¸°', site:'2ì¸µ ì‚¬ë¬´ì‹¤',
-                title:'ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤', crew:3, qty:30, unit:'m',
-                due:'ì˜¤ëŠ˜ 17:00', planStatus:'ìŠ¹ì¸ì™„ë£Œ', tbmStatus:'ì™„ë£Œ', closeStatus:'ë§ˆê°ëŒ€ê¸°',
-                progressStatus:'ë¯¸ë¶„ì„', progress:60, doneQty:18, totalQty:30,
-                workText:'ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤. ìž‘ì—…ìžëŠ” 3ëª…ì´ê³  ì‚¬ë‹¤ë¦¬ë¥¼ ì‚¬ìš©í•©ë‹ˆë‹¤. ì˜ˆì • ìž‘ì—…ëŸ‰ì€ 30mìž…ë‹ˆë‹¤.',
-                closeText:'ì²œìž¥ ë°°ì„  18m í¬ì„¤ ì™„ë£Œ. ìžìž¬ ë¶€ì¡±ìœ¼ë¡œ ë‚˜ë¨¸ì§€ 12mëŠ” ë‚´ì¼ ì§„í–‰ ì˜ˆì •. ì²œìž¥ ë‚´ë¶€ ìž¥ì• ë¬¼ë¡œ ìž‘ì—… ì†ë„ ì§€ì—°.',
-                signatures:[{name:'ê¹€ì² ìˆ˜', role:'ì „ê¸°ê³µ', signed:true, time:'07:42'}, {name:'ì´ë¯¼ì¤€', role:'ë³´ì¡°', signed:true, time:'07:43'}, {name:'ìž„ì„±í›ˆ', role:'ê°ì‹œìž', signed:false, time:'-'}],
-                issues:[{type:'ë¯¸ì¡°ì¹˜', text:'ìžìž¬ ë¶€ì¡±ìœ¼ë¡œ ìž”ì—¬ 12m ëŒ€ê¸°', owner:'êµ¬ë§¤íŒ€', status:'ì¡°ì¹˜ì¤‘'}]
+                id:'WRK-2605-001', project:'LGES-AZ 오피스 전기', site:'2층 사무실',
+                title:'천장 전기 배선 정리 및 신규 케이블 포설', crew:3, qty:30, unit:'m',
+                due:'오늘 17:00', planStatus:'승인완료', tbmStatus:'완료', closeStatus:'마감대기',
+                progressStatus:'미분석', progress:60, doneQty:18, totalQty:30,
+                workText:'천장 전기 배선 정리 및 신규 케이블 포설. 작업자는 3명이고 사다리를 사용합니다. 예정 작업량은 30m입니다.',
+                closeText:'천장 배선 18m 포설 완료. 자재 부족으로 나머지 12m는 내일 진행 예정. 천장 내부 장애물로 작업 속도 지연.',
+                signatures:[{name:'김철수', role:'전기공', signed:true, time:'07:42'}, {name:'이민준', role:'보조', signed:true, time:'07:43'}, {name:'임성훈', role:'감시자', signed:false, time:'-'}],
+                issues:[{type:'미조치', text:'자재 부족으로 잔여 12m 대기', owner:'구매팀', status:'조치중'}]
               },
               {
-                id:'WRK-2605-002', project:'HFF-02 ìž¥ë¹„ ì„¤ì¹˜', site:'Production Bay B',
-                title:'ì»¨íŠ¸ë¡¤ íŒ¨ë„ ì•µì»¤ ì„¤ì¹˜ ë° ì¼€ì´ë¸” íŠ¸ë ˆì´ ë³´ê°•', crew:4, qty:10, unit:'ea',
-                due:'ì˜¤ëŠ˜ 13:00', planStatus:'ê²€í† ì¤‘', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „',
-                progressStatus:'ë¯¸ë¶„ì„', progress:35, doneQty:0, totalQty:10,
-                workText:'ì»¨íŠ¸ë¡¤ íŒ¨ë„ ì•µì»¤ ì„¤ì¹˜ ë° ì¼€ì´ë¸” íŠ¸ë ˆì´ ë³´ê°•. í•´ë¨¸ë“œë¦´, ì•µì»¤ë³¼íŠ¸, ì‚¬ë‹¤ë¦¬ ì‚¬ìš©. ì˜ˆì • ìž‘ì—…ëŸ‰ì€ 10ê°œì†Œìž…ë‹ˆë‹¤.',
-                closeText:'', signatures:[{name:'ë°•ì§€í˜¸', role:'íŒ€ë¦¬ë”', signed:false, time:'-'}, {name:'ìµœë™í˜', role:'ì„¤ì¹˜', signed:false, time:'-'}, {name:'ê°•ìŠ¹ìš°', role:'ìž¥ë¹„', signed:false, time:'-'}, {name:'ìž„ì„±í›ˆ', role:'ë³´ì¡°', signed:false, time:'-'}],
-                issues:[{type:'ìœ„í—˜ìƒí™©', text:'ì¼€ì´ë¸” íŠ¸ë ˆì´ ëª¨ì„œë¦¬ ë‚ ì¹´ë¡œì›€', owner:'ë°•ì†Œìž¥', status:'ì¡°ì¹˜ì¤‘'}]
+                id:'WRK-2605-002', project:'HFF-02 장비 설치', site:'Production Bay B',
+                title:'컨트롤 패널 앵커 설치 및 케이블 트레이 보강', crew:4, qty:10, unit:'ea',
+                due:'오늘 13:00', planStatus:'검토중', tbmStatus:'대기', closeStatus:'시작전',
+                progressStatus:'미분석', progress:35, doneQty:0, totalQty:10,
+                workText:'컨트롤 패널 앵커 설치 및 케이블 트레이 보강. 해머드릴, 앵커볼트, 사다리 사용. 예정 작업량은 10개소입니다.',
+                closeText:'', signatures:[{name:'박지호', role:'팀리더', signed:false, time:'-'}, {name:'최동혁', role:'설치', signed:false, time:'-'}, {name:'강승우', role:'장비', signed:false, time:'-'}, {name:'임성훈', role:'보조', signed:false, time:'-'}],
+                issues:[{type:'위험상황', text:'케이블 트레이 모서리 날카로움', owner:'박소장', status:'조치중'}]
               },
               {
-                id:'WRK-2605-003', project:'SST-03 ë°°ê´€ ìˆ˜ì •', site:'Utility Room',
-                title:'ê¸°ì¡´ ë°°ê´€ ì² ê±° í›„ ì‹ ê·œ ë¼ì¸ 12m ì„¤ì¹˜', crew:5, qty:12, unit:'m',
-                due:'ë‚´ì¼', planStatus:'ì´ˆì•ˆ', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „',
-                progressStatus:'ë¯¸ë¶„ì„', progress:15, doneQty:0, totalQty:12,
-                workText:'ê¸°ì¡´ ë°°ê´€ ì² ê±° í›„ ì‹ ê·œ ë¼ì¸ 12m ì„¤ì¹˜. ì ˆë‹¨ ê³µêµ¬ì™€ ë¦¬í”„íŠ¸ë¥¼ ì‚¬ìš©í•©ë‹ˆë‹¤.',
-                closeText:'', signatures:[{name:'ê¹€ì² ìˆ˜', role:'ë°°ê´€ê³µ', signed:false, time:'-'}, {name:'ì´ë¯¼ì¤€', role:'ë³´ì¡°', signed:false, time:'-'}],
-                issues:[{type:'ì•„ì°¨ì‚¬ê³ ', text:'ë°°ê´€ ìžìž¬ ì´ë™ ì¤‘ í†µë¡œ í˜‘ì†Œ', owner:'í˜„ìž¥íŒ€', status:'ì™„ë£Œ'}]
+                id:'WRK-2605-003', project:'SST-03 배관 수정', site:'Utility Room',
+                title:'기존 배관 철거 후 신규 라인 12m 설치', crew:5, qty:12, unit:'m',
+                due:'내일', planStatus:'초안', tbmStatus:'대기', closeStatus:'시작전',
+                progressStatus:'미분석', progress:15, doneQty:0, totalQty:12,
+                workText:'기존 배관 철거 후 신규 라인 12m 설치. 절단 공구와 리프트를 사용합니다.',
+                closeText:'', signatures:[{name:'김철수', role:'배관공', signed:false, time:'-'}, {name:'이민준', role:'보조', signed:false, time:'-'}],
+                issues:[{type:'아차사고', text:'배관 자재 이동 중 통로 협소', owner:'현장팀', status:'완료'}]
               }
             ];
           }
@@ -2123,8 +2123,8 @@
           }
 
           function badge(text) {
-            var ok = ['ìŠ¹ì¸ì™„ë£Œ','ì™„ë£Œ','í™•ì •ì™„ë£Œ','ì¡°ì¹˜ì™„ë£Œ'].indexOf(text) !== -1;
-            var warn = ['ê²€í† ì¤‘','ë§ˆê°ëŒ€ê¸°','ì¶”ì²œì™„ë£Œ','ì¡°ì¹˜ì¤‘','ì„œëª…ì¤‘','ì§„í–‰ì¤‘'].indexOf(text) !== -1;
+            var ok = ['승인완료','완료','확정완료','조치완료'].indexOf(text) !== -1;
+            var warn = ['검토중','마감대기','추천완료','조치중','서명중','진행중'].indexOf(text) !== -1;
             var color = ok ? 'var(--status-success)' : warn ? 'var(--status-warning)' : 'var(--text-tertiary)';
             var bg = ok ? 'rgba(16,185,129,.12)' : warn ? 'rgba(245,158,11,.12)' : 'var(--bg-surface-elevated)';
             return '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;background:'+bg+';color:'+color+';font-size:10px;font-weight:700">'+esc(text)+'</span>';
@@ -2136,34 +2136,34 @@
           }
 
           function nextAction(w) {
-            if (w.planStatus === 'ë¯¸ìƒì„±' || w.planStatus === 'ì´ˆì•ˆ' || w.planStatus === 'ìˆ˜ì •í•„ìš”') return 'AI ê³„íšì„œ ìƒì„±';
-            if (w.planStatus === 'ê²€í† ì¤‘') return 'ìŠ¹ì¸';
-            if (w.tbmStatus === 'ëŒ€ê¸°') return 'TBM ì‹œìž‘';
-            if (w.tbmStatus === 'ì§„í–‰ì¤‘' || w.tbmStatus === 'ì„œëª…ì¤‘') return 'ì„œëª…/ì™„ë£Œ';
-            if (w.closeStatus !== 'ì €ìž¥ì™„ë£Œ' && w.closeStatus !== 'ì™„ë£Œ') return 'ìž‘ì—… ë§ˆê°';
-            if (w.progressStatus !== 'í™•ì •ì™„ë£Œ') return 'ê³µì • í™•ì •';
-            return 'ê¸°ë¡ ë³´ê¸°';
+            if (w.planStatus === '미생성' || w.planStatus === '초안' || w.planStatus === '수정필요') return 'AI 계획서 생성';
+            if (w.planStatus === '검토중') return '승인';
+            if (w.tbmStatus === '대기') return 'TBM 시작';
+            if (w.tbmStatus === '진행중' || w.tbmStatus === '서명중') return '서명/완료';
+            if (w.closeStatus !== '저장완료' && w.closeStatus !== '완료') return '작업 마감';
+            if (w.progressStatus !== '확정완료') return '공정 확정';
+            return '기록 보기';
           }
 
           function filterItems() {
             return safetyItems.filter(function(w) {
               if (currentFilter === 'all') return true;
-              if (currentFilter === 'plan') return w.planStatus !== 'ìŠ¹ì¸ì™„ë£Œ';
-              if (currentFilter === 'tbm') return w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ' && w.tbmStatus !== 'ì™„ë£Œ';
-              if (currentFilter === 'close') return w.tbmStatus === 'ì™„ë£Œ' && w.closeStatus !== 'ì™„ë£Œ' && w.closeStatus !== 'ì €ìž¥ì™„ë£Œ';
-              if (currentFilter === 'progress') return w.closeStatus === 'ì €ìž¥ì™„ë£Œ' && w.progressStatus !== 'í™•ì •ì™„ë£Œ';
-              if (currentFilter === 'issue') return (w.issues || []).some(function(i){ return i.status !== 'ì™„ë£Œ' && i.status !== 'ì¡°ì¹˜ì™„ë£Œ'; });
-              if (currentFilter === 'done') return w.progressStatus === 'í™•ì •ì™„ë£Œ';
+              if (currentFilter === 'plan') return w.planStatus !== '승인완료';
+              if (currentFilter === 'tbm') return w.planStatus === '승인완료' && w.tbmStatus !== '완료';
+              if (currentFilter === 'close') return w.tbmStatus === '완료' && w.closeStatus !== '완료' && w.closeStatus !== '저장완료';
+              if (currentFilter === 'progress') return w.closeStatus === '저장완료' && w.progressStatus !== '확정완료';
+              if (currentFilter === 'issue') return (w.issues || []).some(function(i){ return i.status !== '완료' && i.status !== '조치완료'; });
+              if (currentFilter === 'done') return w.progressStatus === '확정완료';
               return true;
             });
           }
 
           function counts() {
             var total = safetyItems.length;
-            var plans = safetyItems.filter(function(w){ return w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ'; }).length;
-            var tbm = safetyItems.filter(function(w){ return w.tbmStatus === 'ì™„ë£Œ'; }).length;
-            var progressWait = safetyItems.filter(function(w){ return w.progressStatus === 'ì¶”ì²œì™„ë£Œ'; }).length;
-            var issues = safetyItems.reduce(function(sum,w){ return sum + (w.issues || []).filter(function(i){ return i.status !== 'ì™„ë£Œ' && i.status !== 'ì¡°ì¹˜ì™„ë£Œ'; }).length; }, 0);
+            var plans = safetyItems.filter(function(w){ return w.planStatus === '승인완료'; }).length;
+            var tbm = safetyItems.filter(function(w){ return w.tbmStatus === '완료'; }).length;
+            var progressWait = safetyItems.filter(function(w){ return w.progressStatus === '추천완료'; }).length;
+            var issues = safetyItems.reduce(function(sum,w){ return sum + (w.issues || []).filter(function(i){ return i.status !== '완료' && i.status !== '조치완료'; }).length; }, 0);
             return {total:total, plans:plans, tbm:tbm, progressWait:progressWait, issues:issues};
           }
 
@@ -2172,20 +2172,20 @@
             if (alertBadge) alertBadge.textContent = c.issues;
             pageContainer.innerHTML =
               '<div class="header-section"><div>'
-              +'<h1 class="page-title">AI ìž‘ì—…ì•ˆì „ê´€ë¦¬</h1>'
-              +'<p class="page-subtitle">ìž‘ì—…ë‚´ìš© ìž…ë ¥ â†’ ì•ˆì „ ìž‘ì—… ê³„íšì„œ ìƒì„± â†’ TBM/ì„œëª… â†’ ìž‘ì—… ë§ˆê° â†’ AI ê³µì •ìœ¨ ì¶”ì²œ</p>'
+              +'<h1 class="page-title">AI 작업안전관리</h1>'
+              +'<p class="page-subtitle">작업내용 입력 → 안전 작업 계획서 생성 → TBM/서명 → 작업 마감 → AI 공정율 추천</p>'
               +'</div><div class="action-row">'
-              +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button>'
-              +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> ì˜¤ëŠ˜ ìž‘ì—… ë“±ë¡</button>'
+              +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button>'
+              +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> 오늘 작업 등록</button>'
               +'</div></div>'
               +'<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)" id="safety-kpis"></div>'
               +'<div class="tab-nav" id="safety-tabs">'
-              +'<button class="tab-btn active" data-tab="s-today"><i class="ph ph-calendar-check"></i> ì˜¤ëŠ˜ì˜ ìž‘ì—…</button>'
-              +'<button class="tab-btn" data-tab="s-ai-plan"><i class="ph ph-sparkle"></i> AI ê³„íšì„œ</button>'
-              +'<button class="tab-btn" data-tab="s-tbm"><i class="ph ph-signature"></i> TBM / ì„œëª…</button>'
-              +'<button class="tab-btn" data-tab="s-close"><i class="ph ph-chart-pie-slice"></i> ìž‘ì—… ë§ˆê° / ê³µì •</button>'
-              +'<button class="tab-btn" data-tab="s-issues"><i class="ph ph-warning-circle"></i> ì´ìŠˆ</button>'
-              +'<button class="tab-btn" data-tab="s-records"><i class="ph ph-folder-open"></i> í”„ë¡œì íŠ¸ ê¸°ë¡</button>'
+              +'<button class="tab-btn active" data-tab="s-today"><i class="ph ph-calendar-check"></i> 오늘의 작업</button>'
+              +'<button class="tab-btn" data-tab="s-ai-plan"><i class="ph ph-sparkle"></i> AI 계획서</button>'
+              +'<button class="tab-btn" data-tab="s-tbm"><i class="ph ph-signature"></i> TBM / 서명</button>'
+              +'<button class="tab-btn" data-tab="s-close"><i class="ph ph-chart-pie-slice"></i> 작업 마감 / 공정</button>'
+              +'<button class="tab-btn" data-tab="s-issues"><i class="ph ph-warning-circle"></i> 이슈</button>'
+              +'<button class="tab-btn" data-tab="s-records"><i class="ph ph-folder-open"></i> 프로젝트 기록</button>'
               +'</div>'
               +'<div id="s-today" class="tab-content" style="display:block"></div>'
               +'<div id="s-ai-plan" class="tab-content" style="display:none"></div>'
@@ -2211,11 +2211,11 @@
           function renderKpis() {
             var c = counts();
             document.getElementById('safety-kpis').innerHTML =
-              '<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> ì˜¤ëŠ˜ ì§„í–‰ ìž‘ì—…</div><div class="kpi-value" style="color:var(--brand-primary)">'+c.total+'</div><div class="kpi-meta">ë‹¨ê¸° í”„ë¡œì íŠ¸ ìž‘ì—… ì¹´ë“œ</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> ì•ˆì „ê³„íš ìŠ¹ì¸</div><div class="kpi-value" style="color:var(--status-success)">'+c.plans+' / '+c.total+'</div><div class="kpi-meta">PHA Â· PTP Â· TBM ì´ˆì•ˆ í¬í•¨</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM ì™„ë£Œ</div><div class="kpi-value" style="color:#8b5cf6">'+c.tbm+' / '+c.total+'</div><div class="kpi-meta">ìž‘ì—…ìž ì„œëª… ê¸°ì¤€</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">'+c.progressWait+'</div><div class="kpi-meta">AI ì¶”ì²œ í›„ ê´€ë¦¬ìž í™•ì •</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> ë¯¸ì¡°ì¹˜ ì´ìŠˆ</div><div class="kpi-value" style="color:var(--status-danger)">'+c.issues+'</div><div class="kpi-meta">ë§ˆê° ì „ ì¡°ì¹˜ í•„ìš”</div></div>';
+              '<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> 오늘 진행 작업</div><div class="kpi-value" style="color:var(--brand-primary)">'+c.total+'</div><div class="kpi-meta">단기 프로젝트 작업 카드</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> 안전계획 승인</div><div class="kpi-value" style="color:var(--status-success)">'+c.plans+' / '+c.total+'</div><div class="kpi-meta">PHA · PTP · TBM 초안 포함</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM 완료</div><div class="kpi-value" style="color:#8b5cf6">'+c.tbm+' / '+c.total+'</div><div class="kpi-meta">작업자 서명 기준</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> 공정 반영 대기</div><div class="kpi-value" style="color:var(--status-warning)">'+c.progressWait+'</div><div class="kpi-meta">AI 추천 후 관리자 확정</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> 미조치 이슈</div><div class="kpi-value" style="color:var(--status-danger)">'+c.issues+'</div><div class="kpi-meta">마감 전 조치 필요</div></div>';
           }
 
           function renderTodayTab() {
@@ -2223,16 +2223,16 @@
               var selected = w.id === selectedWorkId ? 'background:rgba(37,99,235,.06)' : '';
               return '<tr style="cursor:pointer;'+selected+'" onclick="window._safetySelectWork(\''+w.id+'\')">'
                 +'<td class="cell-mono">'+esc(w.id)+'</td>'
-                +'<td><div class="cell-primary">'+esc(w.title)+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+esc(w.project)+' Â· '+esc(w.site)+'</div></td>'
-                +'<td style="text-align:center">'+esc(w.crew)+'ëª…</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td>'
+                +'<td><div class="cell-primary">'+esc(w.title)+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+esc(w.project)+' · '+esc(w.site)+'</div></td>'
+                +'<td style="text-align:center">'+esc(w.crew)+'명</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td>'
                 +'<td style="min-width:150px">'+bar(w.progress)+'</td><td class="cell-mono">'+esc(w.due)+'</td><td><button class="btn-secondary safety-next-btn" data-id="'+esc(w.id)+'" style="padding:4px 8px;font-size:11px">'+esc(nextAction(w))+'</button></td></tr>';
             }).join('');
             document.getElementById('s-today').innerHTML =
               '<div style="display:grid;grid-template-columns:1.45fr .9fr;gap:16px">'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> ì˜¤ëŠ˜ ìž‘ì—… íë¦„</div>'
-              +'<select id="safety-filter" class="search-inline" style="width:180px"><option value="all">ì „ì²´</option><option value="plan">ê³„íšì„œ ë¯¸ì™„ë£Œ</option><option value="tbm">TBM ëŒ€ê¸°</option><option value="close">ë§ˆê° ëŒ€ê¸°</option><option value="progress">ê³µì • ë°˜ì˜ ëŒ€ê¸°</option><option value="issue">ë¯¸ì¡°ì¹˜ ìžˆìŒ</option><option value="done">ì™„ë£Œ</option></select></div>'
-              +'<div class="panel-body"><table class="data-table"><thead><tr><th>ID</th><th>ìž‘ì—…ë‚´ìš©</th><th>ì¸ì›</th><th>ê³„íšì„œ</th><th>TBM</th><th>ë§ˆê°</th><th>ê³µì •ìœ¨</th><th>ê¸°í•œ</th><th>ë‹¤ìŒ</th></tr></thead><tbody>'+(rows || '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-tertiary)">í•´ë‹¹ ì¡°ê±´ì˜ ìž‘ì—…ì´ ì—†ìŠµë‹ˆë‹¤.</td></tr>')+'</tbody></table></div></div>'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> ì˜¤ëŠ˜ í•´ì•¼ í•  ì¼</div></div><div class="panel-body padded" id="safety-next-list"></div></div></div>';
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> 오늘 작업 흐름</div>'
+              +'<select id="safety-filter" class="search-inline" style="width:180px"><option value="all">전체</option><option value="plan">계획서 미완료</option><option value="tbm">TBM 대기</option><option value="close">마감 대기</option><option value="progress">공정 반영 대기</option><option value="issue">미조치 있음</option><option value="done">완료</option></select></div>'
+              +'<div class="panel-body"><table class="data-table"><thead><tr><th>ID</th><th>작업내용</th><th>인원</th><th>계획서</th><th>TBM</th><th>마감</th><th>공정율</th><th>기한</th><th>다음</th></tr></thead><tbody>'+(rows || '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-tertiary)">해당 조건의 작업이 없습니다.</td></tr>')+'</tbody></table></div></div>'
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> 오늘 해야 할 일</div></div><div class="panel-body padded" id="safety-next-list"></div></div></div>';
             document.getElementById('safety-filter').value = currentFilter;
             document.getElementById('safety-filter').addEventListener('change', function(){ currentFilter = this.value; window._safetyFilter = currentFilter; renderAllSafetyTabs(); });
             document.querySelectorAll('.safety-next-btn').forEach(function(btn){
@@ -2244,7 +2244,7 @@
           function renderNextList() {
             var items = safetyItems.map(function(w){
               return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);cursor:pointer" onclick="window._safetySelectWork(\''+w.id+'\'); window._safetyGoNext(\''+w.id+'\')">'
-                +'<div style="font-weight:700;font-size:12px;color:var(--brand-primary)">'+esc(w.project)+' Â· '+esc(nextAction(w))+'</div>'
+                +'<div style="font-weight:700;font-size:12px;color:var(--brand-primary)">'+esc(w.project)+' · '+esc(nextAction(w))+'</div>'
                 +'<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">'+esc(w.title)+'</div></div>';
             }).join('');
             var el = document.getElementById('safety-next-list');
@@ -2255,12 +2255,12 @@
             var w = selectedItem();
             document.getElementById('s-ai-plan').innerHTML =
               '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px">'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple-line"></i> ìž‘ì—…ë‚´ìš© ìž…ë ¥</div>'+badge(w.planStatus)+'</div><div class="panel-body padded">'
-              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">í”„ë¡œì íŠ¸ / ìž¥ì†Œ</label><input id="ai-project-input" class="search-inline" style="width:100%;margin-bottom:10px" value="'+esc(w.project+' / '+w.site)+'">'
-              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">ìž‘ì—…ë‚´ìš©</label><textarea id="ai-work-input" style="width:100%;height:138px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.workText)+'</textarea>'
-              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="ai-qty-input" class="search-inline" style="width:100%" value="'+esc(w.qty)+'"><select id="ai-unit-input" class="search-inline" style="width:100%"><option '+(w.unit==='m'?'selected':'')+'>m</option><option '+(w.unit==='ea'?'selected':'')+'>ea</option><option '+(w.unit==='%'?'selected':'')+'>%</option><option '+(w.unit==='ë‹¨ê³„'?'selected':'')+'>ë‹¨ê³„</option></select></div>'
-              +'<button class="btn-primary" id="ai-generate-plan" style="width:100%;margin-top:14px"><i class="ph ph-sparkle"></i> AI ì•ˆì „ê³„íš ìƒì„±</button></div></div>'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-text"></i> PHA Â· PTP Â· TBM ì´ˆì•ˆ</div><span style="font-size:10px;color:var(--status-warning);font-weight:700">í˜„ìž¥ ì±…ìž„ìž í™•ì¸ í•„ìš”</span></div><div class="panel-body padded" id="ai-plan-preview"></div></div></div>';
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple-line"></i> 작업내용 입력</div>'+badge(w.planStatus)+'</div><div class="panel-body padded">'
+              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">프로젝트 / 장소</label><input id="ai-project-input" class="search-inline" style="width:100%;margin-bottom:10px" value="'+esc(w.project+' / '+w.site)+'">'
+              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">작업내용</label><textarea id="ai-work-input" style="width:100%;height:138px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.workText)+'</textarea>'
+              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="ai-qty-input" class="search-inline" style="width:100%" value="'+esc(w.qty)+'"><select id="ai-unit-input" class="search-inline" style="width:100%"><option '+(w.unit==='m'?'selected':'')+'>m</option><option '+(w.unit==='ea'?'selected':'')+'>ea</option><option '+(w.unit==='%'?'selected':'')+'>%</option><option '+(w.unit==='단계'?'selected':'')+'>단계</option></select></div>'
+              +'<button class="btn-primary" id="ai-generate-plan" style="width:100%;margin-top:14px"><i class="ph ph-sparkle"></i> AI 안전계획 생성</button></div></div>'
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-text"></i> PHA · PTP · TBM 초안</div><span style="font-size:10px;color:var(--status-warning);font-weight:700">현장 책임자 확인 필요</span></div><div class="panel-body padded" id="ai-plan-preview"></div></div></div>';
             document.getElementById('ai-generate-plan').addEventListener('click', function(){ generatePlan(w.id); });
             renderPlanPreview(w);
           }
@@ -2269,35 +2269,35 @@
             var el = document.getElementById('ai-plan-preview');
             if (!el) return;
             el.innerHTML =
-              '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ìž‘ì—…ëª…</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ì˜ˆì • ìž‘ì—…ëŸ‰</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">ìŠ¹ì¸ ìƒíƒœ</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
-              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA ìœ„í—˜ì„± ë¶„ì„</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>ìž‘ì—…êµ¬ì—­ ë‚´ ë‚™í•˜, í˜‘ì°©, ì „ë„ ìœ„í—˜ í™•ì¸</li><li>ì‚¬ìš© ìž¥ë¹„ì™€ ê³µêµ¬ì˜ ì‚¬ì „ ì ê²€ í•„ìš”</li><li>ìž‘ì—…ìž ë™ì„ ê³¼ ì¶œìž… í†µì œ í•„ìš”</li><li>ë¹„ì •ìƒ ìƒí™© ë°œìƒ ì‹œ ìž‘ì—… ì¤‘ì§€</li></ul></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP ìž‘ì—… ì „ ê³„íš</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>ìž‘ì—… ë²”ìœ„ì™€ ë‹´ë‹¹ìž í™•ì¸</li><li>í•„ìˆ˜ ë³´í˜¸êµ¬ ì°©ìš© í™•ì¸</li><li>ìž¥ë¹„ì™€ ê³µêµ¬ ìƒíƒœ í™•ì¸</li><li>ìž‘ì—… ìˆ˜í–‰ ë° ì¤‘ê°„ ì ê²€</li><li>ì •ë¦¬ì •ëˆ ë° ì™„ë£Œ ì‚¬ì§„ ê¸°ë¡</li></ol></div></div>'
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">TBM ë©˜íŠ¸:</b> ì˜¤ëŠ˜ ìž‘ì—…ì€ '+esc(w.workText)+' ì£¼ìš” ìœ„í—˜ìš”ì†Œë¥¼ í™•ì¸í•˜ê³ , ì´ìƒ ìƒí™© ë°œìƒ ì‹œ ì¦‰ì‹œ ìž‘ì—…ì„ ì¤‘ì§€í•©ë‹ˆë‹¤.</div>'
-              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> ìŠ¹ì¸</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> ë°˜ë ¤</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> ì´ˆì•ˆ ì €ìž¥</button></div>';
-            document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'ìŠ¹ì¸ì™„ë£Œ', tbmStatus: w.tbmStatus === 'ëŒ€ê¸°' ? 'ëŒ€ê¸°' : w.tbmStatus}); switchTab('s-tbm'); });
-            document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'ìˆ˜ì •í•„ìš”'}); });
-            document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'ì´ˆì•ˆ'}); });
+              '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
+              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성 분석</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>작업구역 내 낙하, 협착, 전도 위험 확인</li><li>사용 장비와 공구의 사전 점검 필요</li><li>작업자 동선과 출입 통제 필요</li><li>비정상 상황 발생 시 작업 중지</li></ul></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>작업 범위와 담당자 확인</li><li>필수 보호구 착용 확인</li><li>장비와 공구 상태 확인</li><li>작업 수행 및 중간 점검</li><li>정리정돈 및 완료 사진 기록</li></ol></div></div>'
+              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">TBM 멘트:</b> 오늘 작업은 '+esc(w.workText)+' 주요 위험요소를 확인하고, 이상 상황 발생 시 즉시 작업을 중지합니다.</div>'
+              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+            document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'승인완료', tbmStatus: w.tbmStatus === '대기' ? '대기' : w.tbmStatus}); switchTab('s-tbm'); });
+            document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'수정필요'}); });
+            document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'초안'}); });
           }
 
           function renderTbmTab() {
             var w = selectedItem();
-            var canStart = w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ';
+            var canStart = w.planStatus === '승인완료';
             var signRows = (w.signatures || []).map(function(s, idx){
-              return '<tr><td class="cell-primary">'+esc(s.name)+'</td><td>'+esc(s.role)+'</td><td class="cell-mono">'+esc(s.time)+'</td><td>'+badge(s.signed ? 'ì™„ë£Œ' : 'ëŒ€ê¸°')+'</td><td><button class="btn-secondary sign-worker-btn" data-idx="'+idx+'" style="padding:4px 8px;font-size:11px" '+(!canStart || s.signed ? 'disabled' : '')+'>ì„œëª…</button></td></tr>';
+              return '<tr><td class="cell-primary">'+esc(s.name)+'</td><td>'+esc(s.role)+'</td><td class="cell-mono">'+esc(s.time)+'</td><td>'+badge(s.signed ? '완료' : '대기')+'</td><td><button class="btn-secondary sign-worker-btn" data-idx="'+idx+'" style="padding:4px 8px;font-size:11px" '+(!canStart || s.signed ? 'disabled' : '')+'>서명</button></td></tr>';
             }).join('');
             document.getElementById('s-tbm').innerHTML =
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-megaphone"></i> TBM ì§„í–‰ ë‚´ìš©</div>'+badge(w.tbmStatus)+'</div><div class="panel-body padded"><div style="font-size:13px;font-weight:700;margin-bottom:8px">'+esc(w.title)+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.7">ìŠ¹ì¸ëœ ì•ˆì „ê³„íšì„œë¥¼ ê¸°ì¤€ìœ¼ë¡œ ì£¼ìš” ìœ„í—˜, ìž‘ì—…ìˆœì„œ, ë³´í˜¸êµ¬, ìž‘ì—… ì¤‘ì§€ ê¸°ì¤€ì„ ê³µìœ í•©ë‹ˆë‹¤. ìž‘ì—…ìžëŠ” ë‚´ìš©ì„ í™•ì¸í•œ ë’¤ ì„œëª…í•©ë‹ˆë‹¤.</div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="tbm-start-btn" '+(!canStart || w.tbmStatus !== 'ëŒ€ê¸°' ? 'disabled' : '')+'>TBM ì‹œìž‘</button><button class="btn-secondary" id="tbm-sign-all-btn" '+(!canStart || w.tbmStatus === 'ì™„ë£Œ' ? 'disabled' : '')+'>ì „ì²´ ì„œëª… ì²˜ë¦¬</button><button class="btn-primary" id="tbm-complete-btn" '+(!canStart || w.signatures.some(function(s){return !s.signed;}) || w.tbmStatus === 'ì™„ë£Œ' ? 'disabled' : '')+'>TBM ì™„ë£Œ</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-signature"></i> ìž‘ì—…ìž ì„œëª…</div><button class="btn-secondary" id="add-worker-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> ìž‘ì—…ìž ì¶”ê°€</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>ìž‘ì—…ìž</th><th>ì—­í• </th><th>í™•ì¸ì‹œê°„</th><th>ì„œëª…</th><th></th></tr></thead><tbody>'+signRows+'</tbody></table></div></div></div>';
-            document.getElementById('tbm-start-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'ì„œëª…ì¤‘'}); });
-            document.getElementById('tbm-sign-all-btn').addEventListener('click', function(){ w.signatures.forEach(function(s){ s.signed = true; s.time = new Date().toTimeString().slice(0,5); }); updateWork(w.id, {tbmStatus:'ì„œëª…ì¤‘'}); });
-            document.getElementById('tbm-complete-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'ì™„ë£Œ', closeStatus:'ë§ˆê°ëŒ€ê¸°'}); switchTab('s-close'); });
-            document.getElementById('add-worker-btn').addEventListener('click', function(){ var name = prompt('ìž‘ì—…ìž ì´ë¦„'); if (!name) return; w.signatures.push({name:name, role:'ìž‘ì—…ìž', signed:false, time:'-'}); updateWork(w.id, {tbmStatus:w.tbmStatus}); });
-            document.querySelectorAll('.sign-worker-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var idx = Number(btn.getAttribute('data-idx')); w.signatures[idx].signed = true; w.signatures[idx].time = new Date().toTimeString().slice(0,5); updateWork(w.id, {tbmStatus:'ì„œëª…ì¤‘'}); }); });
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-megaphone"></i> TBM 진행 내용</div>'+badge(w.tbmStatus)+'</div><div class="panel-body padded"><div style="font-size:13px;font-weight:700;margin-bottom:8px">'+esc(w.title)+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.7">승인된 안전계획서를 기준으로 주요 위험, 작업순서, 보호구, 작업 중지 기준을 공유합니다. 작업자는 내용을 확인한 뒤 서명합니다.</div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="tbm-start-btn" '+(!canStart || w.tbmStatus !== '대기' ? 'disabled' : '')+'>TBM 시작</button><button class="btn-secondary" id="tbm-sign-all-btn" '+(!canStart || w.tbmStatus === '완료' ? 'disabled' : '')+'>전체 서명 처리</button><button class="btn-primary" id="tbm-complete-btn" '+(!canStart || w.signatures.some(function(s){return !s.signed;}) || w.tbmStatus === '완료' ? 'disabled' : '')+'>TBM 완료</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-signature"></i> 작업자 서명</div><button class="btn-secondary" id="add-worker-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> 작업자 추가</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>작업자</th><th>역할</th><th>확인시간</th><th>서명</th><th></th></tr></thead><tbody>'+signRows+'</tbody></table></div></div></div>';
+            document.getElementById('tbm-start-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'서명중'}); });
+            document.getElementById('tbm-sign-all-btn').addEventListener('click', function(){ w.signatures.forEach(function(s){ s.signed = true; s.time = new Date().toTimeString().slice(0,5); }); updateWork(w.id, {tbmStatus:'서명중'}); });
+            document.getElementById('tbm-complete-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'완료', closeStatus:'마감대기'}); switchTab('s-close'); });
+            document.getElementById('add-worker-btn').addEventListener('click', function(){ var name = prompt('작업자 이름'); if (!name) return; w.signatures.push({name:name, role:'작업자', signed:false, time:'-'}); updateWork(w.id, {tbmStatus:w.tbmStatus}); });
+            document.querySelectorAll('.sign-worker-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var idx = Number(btn.getAttribute('data-idx')); w.signatures[idx].signed = true; w.signatures[idx].time = new Date().toTimeString().slice(0,5); updateWork(w.id, {tbmStatus:'서명중'}); }); });
           }
 
           function renderCloseTab() {
             var w = selectedItem();
-            var canClose = w.tbmStatus === 'ì™„ë£Œ';
+            var canClose = w.tbmStatus === '완료';
             document.getElementById('s-close').innerHTML =
-              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> ìž‘ì—… ë§ˆê° ìž…ë ¥</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">ì‹¤ì œ ì™„ë£Œë‚´ìš©</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>ì¼ë¶€ ì™„ë£Œ</option><option>ì™„ë£Œ</option><option>ì§€ì—°</option><option>ì¤‘ë‹¨</option><option>ìž¬ìž‘ì—… í•„ìš”</option></select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>ë§ˆê° ì €ìž¥</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI ê³µì •ìœ¨ ë¶„ì„</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
+              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>마감 저장</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI 공정율 분석</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
             document.getElementById('save-close-btn').addEventListener('click', function(){ saveClose(w.id, false); });
             document.getElementById('ai-progress-btn').addEventListener('click', function(){ saveClose(w.id, true); });
             renderProgressResult(w);
@@ -2311,10 +2311,10 @@
             var rate = total > 0 ? Math.round(done / total * 100) : Number(w.progress || 0);
             var remain = Math.max(total - done, 0);
             el.innerHTML =
-              '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ì˜ˆì •</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">ì™„ë£Œ</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">ìž”ì—¬</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI ì¶”ì²œ</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">ë§ˆê° ë‚´ìš©ì„ ì €ìž¥í•˜ë©´ AI ì¶”ì²œ ê³µì •ìœ¨ì´ ìƒì„±ë©ë‹ˆë‹¤. ê´€ë¦¬ìžê°€ í™•ì •í•˜ë©´ í”„ë¡œì íŠ¸ ê¸°ë¡ì— ë°˜ì˜ë©ë‹ˆë‹¤.</div>'
-              +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== 'ì¶”ì²œì™„ë£Œ' ? 'disabled' : '')+'>ê³µì •ìœ¨ í™•ì • ë°˜ì˜</button><button class="btn-secondary" id="next-work-btn">ë‹¤ìŒ ìž‘ì—… ìƒì„±</button></div>';
-            document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'í™•ì •ì™„ë£Œ', closeStatus:'ì™„ë£Œ'}); switchTab('s-records'); });
+              '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">완료</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">잔여</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI 추천</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
+              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">마감 내용을 저장하면 AI 추천 공정율이 생성됩니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>'
+              +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== '추천완료' ? 'disabled' : '')+'>공정율 확정 반영</button><button class="btn-secondary" id="next-work-btn">다음 작업 생성</button></div>';
+            document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'확정완료', closeStatus:'완료'}); switchTab('s-records'); });
             document.getElementById('next-work-btn').addEventListener('click', function(){ createNextWork(w); });
           }
 
@@ -2322,15 +2322,15 @@
             var allIssues = [];
             safetyItems.forEach(function(w){ (w.issues || []).forEach(function(i, idx){ allIssues.push({work:w, issue:i, idx:idx}); }); });
             document.getElementById('s-issues').innerHTML =
-              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> ì‚¬ê³  Â· ì•„ì°¨ì‚¬ê³  Â· ë¯¸ì¡°ì¹˜ ì‚¬í•­</div><button class="btn-primary" id="add-issue-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> ë“±ë¡</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>ìœ í˜•</th><th>ìž‘ì—…</th><th>ë‚´ìš©</th><th>ë‹´ë‹¹</th><th>ìƒíƒœ</th><th></th></tr></thead><tbody>'+allIssues.map(function(x){ return '<tr><td>'+esc(x.issue.type)+'</td><td>'+esc(x.work.project)+'</td><td class="cell-primary">'+esc(x.issue.text)+'</td><td>'+esc(x.issue.owner || '-')+'</td><td>'+badge(x.issue.status)+'</td><td><button class="btn-secondary issue-done-btn" data-work="'+esc(x.work.id)+'" data-idx="'+x.idx+'" style="padding:4px 8px;font-size:11px">ì¡°ì¹˜ ì™„ë£Œ</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
-            document.getElementById('add-issue-btn').addEventListener('click', function(){ var w = selectedItem(); var text = prompt('ì´ìŠˆ ë‚´ìš©ì„ ìž…ë ¥í•˜ì„¸ìš”'); if (!text) return; w.issues = w.issues || []; w.issues.push({type:'ë¯¸ì¡°ì¹˜', text:text, owner:'ë‹´ë‹¹ìž ë¯¸ì •', status:'ëŒ€ê¸°'}); updateWork(w.id, {}); });
-            document.querySelectorAll('.issue-done-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var w = safetyItems.find(function(x){ return x.id === btn.getAttribute('data-work'); }); if (!w) return; w.issues[Number(btn.getAttribute('data-idx'))].status = 'ì¡°ì¹˜ì™„ë£Œ'; updateWork(w.id, {}); }); });
+              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> 사고 · 아차사고 · 미조치 사항</div><button class="btn-primary" id="add-issue-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> 등록</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>유형</th><th>작업</th><th>내용</th><th>담당</th><th>상태</th><th></th></tr></thead><tbody>'+allIssues.map(function(x){ return '<tr><td>'+esc(x.issue.type)+'</td><td>'+esc(x.work.project)+'</td><td class="cell-primary">'+esc(x.issue.text)+'</td><td>'+esc(x.issue.owner || '-')+'</td><td>'+badge(x.issue.status)+'</td><td><button class="btn-secondary issue-done-btn" data-work="'+esc(x.work.id)+'" data-idx="'+x.idx+'" style="padding:4px 8px;font-size:11px">조치 완료</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
+            document.getElementById('add-issue-btn').addEventListener('click', function(){ var w = selectedItem(); var text = prompt('이슈 내용을 입력하세요'); if (!text) return; w.issues = w.issues || []; w.issues.push({type:'미조치', text:text, owner:'담당자 미정', status:'대기'}); updateWork(w.id, {}); });
+            document.querySelectorAll('.issue-done-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var w = safetyItems.find(function(x){ return x.id === btn.getAttribute('data-work'); }); if (!w) return; w.issues[Number(btn.getAttribute('data-idx'))].status = '조치완료'; updateWork(w.id, {}); }); });
           }
 
           function renderRecordsTab() {
             document.getElementById('s-records').innerHTML =
-              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-archive"></i> í”„ë¡œì íŠ¸ ì•ˆì „Â·ìž‘ì—… ê¸°ë¡</div><button class="btn-secondary" id="pdf-report-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-file-pdf"></i> PDF ì¶œë ¥</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>í”„ë¡œì íŠ¸</th><th>ìž‘ì—…</th><th>ì•ˆì „ê³„íš</th><th>TBM</th><th>ë§ˆê°</th><th>ê³µì •</th><th>ì´ìŠˆ</th></tr></thead><tbody>'+safetyItems.map(function(w){ return '<tr><td class="cell-primary">'+esc(w.project)+'</td><td>'+esc(w.title)+'</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td><td>'+bar(w.progress)+'</td><td>'+((w.issues || []).length)+'ê±´</td></tr>'; }).join('')+'</tbody></table></div></div>';
-            document.getElementById('pdf-report-btn').addEventListener('click', function(){ alert('PDF ë¦¬í¬íŠ¸ ìƒì„± ì¤€ë¹„ ì™„ë£Œ: ì‹¤ì œ PDF ì¶œë ¥ API ì—°ê²° ë‹¨ê³„ìž…ë‹ˆë‹¤.'); });
+              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-archive"></i> 프로젝트 안전·작업 기록</div><button class="btn-secondary" id="pdf-report-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-file-pdf"></i> PDF 출력</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>프로젝트</th><th>작업</th><th>안전계획</th><th>TBM</th><th>마감</th><th>공정</th><th>이슈</th></tr></thead><tbody>'+safetyItems.map(function(w){ return '<tr><td class="cell-primary">'+esc(w.project)+'</td><td>'+esc(w.title)+'</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td><td>'+bar(w.progress)+'</td><td>'+((w.issues || []).length)+'건</td></tr>'; }).join('')+'</tbody></table></div></div>';
+            document.getElementById('pdf-report-btn').addEventListener('click', function(){ alert('PDF 리포트 생성 준비 완료: 실제 PDF 출력 API 연결 단계입니다.'); });
           }
 
           function renderAllSafetyTabs() {
@@ -2361,7 +2361,7 @@
             w.qty = Number(document.getElementById('ai-qty-input').value || w.qty || 0);
             w.totalQty = w.qty;
             w.unit = document.getElementById('ai-unit-input').value;
-            w.planStatus = 'ê²€í† ì¤‘';
+            w.planStatus = '검토중';
             saveSafetyItems();
             renderAllSafetyTabs();
           }
@@ -2372,10 +2372,10 @@
             w.closeText = document.getElementById('close-work-input').value;
             w.doneQty = Number(document.getElementById('done-qty-input').value || 0);
             w.totalQty = Number(document.getElementById('total-qty-input').value || w.qty || 0);
-            w.closeStatus = 'ì €ìž¥ì™„ë£Œ';
+            w.closeStatus = '저장완료';
             if (analyze) {
               w.progress = w.totalQty > 0 ? Math.round(w.doneQty / w.totalQty * 100) : w.progress;
-              w.progressStatus = 'ì¶”ì²œì™„ë£Œ';
+              w.progressStatus = '추천완료';
             }
             saveSafetyItems();
             renderAllSafetyTabs();
@@ -2383,12 +2383,12 @@
 
           function createNextWork(w) {
             var remain = Math.max(Number(w.totalQty || 0) - Number(w.doneQty || 0), 0);
-            if (!remain) { alert('ìž”ì—¬ ìˆ˜ëŸ‰ì´ ì—†ìŠµë‹ˆë‹¤.'); return; }
+            if (!remain) { alert('잔여 수량이 없습니다.'); return; }
             var id = 'WRK-' + new Date().getTime().toString().slice(-8);
             safetyItems.push({
-              id:id, project:w.project, site:w.site, title:'ìž”ì—¬ ìž‘ì—…: '+w.title, crew:w.crew, qty:remain, unit:w.unit, due:'ë‹¤ìŒ ìž‘ì—…ì¼',
-              planStatus:'ë¯¸ìƒì„±', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „', progressStatus:'ë¯¸ë¶„ì„', progress:0, doneQty:0, totalQty:remain,
-              workText:'ì´ì „ ìž‘ì—… ìž”ì—¬ '+remain+w.unit+' ì§„í–‰. '+w.title, closeText:'', signatures:[], issues:[]
+              id:id, project:w.project, site:w.site, title:'잔여 작업: '+w.title, crew:w.crew, qty:remain, unit:w.unit, due:'다음 작업일',
+              planStatus:'미생성', tbmStatus:'대기', closeStatus:'시작전', progressStatus:'미분석', progress:0, doneQty:0, totalQty:remain,
+              workText:'이전 작업 잔여 '+remain+w.unit+' 진행. '+w.title, closeText:'', signatures:[], issues:[]
             });
             selectedWorkId = id;
             window._safetySelectedWorkId = id;
@@ -2398,9 +2398,9 @@
 
           function goNextStep(w) {
             var action = nextAction(w);
-            if (action === 'AI ê³„íšì„œ ìƒì„±' || action === 'ìŠ¹ì¸') switchTab('s-ai-plan');
-            else if (action === 'TBM ì‹œìž‘' || action === 'ì„œëª…/ì™„ë£Œ') switchTab('s-tbm');
-            else if (action === 'ìž‘ì—… ë§ˆê°' || action === 'ê³µì • í™•ì •') switchTab('s-close');
+            if (action === 'AI 계획서 생성' || action === '승인') switchTab('s-ai-plan');
+            else if (action === 'TBM 시작' || action === '서명/완료') switchTab('s-tbm');
+            else if (action === '작업 마감' || action === '공정 확정') switchTab('s-close');
             else switchTab('s-records');
           }
 
@@ -2411,15 +2411,15 @@
 
           function openNewWorkModal() {
             document.getElementById('safety-modal-root').innerHTML =
-              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px"><div class="panel" style="width:560px;max-width:96vw;margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-plus-circle"></i> ì˜¤ëŠ˜ ìž‘ì—… ë“±ë¡</div><button id="close-new-work-modal" class="icon-btn"><i class="ph ph-x"></i></button></div><div class="panel-body padded"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><input id="new-project" class="search-inline" style="width:100%" placeholder="í”„ë¡œì íŠ¸ëª…"><input id="new-site" class="search-inline" style="width:100%" placeholder="ìž‘ì—…ìž¥ì†Œ"><input id="new-crew" class="search-inline" style="width:100%" placeholder="ìž‘ì—…ì¸ì›" value="3"><input id="new-due" class="search-inline" style="width:100%" placeholder="ê¸°í•œ" value="ì˜¤ëŠ˜"></div><textarea id="new-work-text" style="width:100%;height:120px;margin-top:10px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical" placeholder="ìž‘ì—…ë‚´ìš©ì„ ìž…ë ¥í•˜ì„¸ìš”"></textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px"><input id="new-qty" class="search-inline" style="width:100%" placeholder="ì˜ˆì • ìˆ˜ëŸ‰" value="1"><select id="new-unit" class="search-inline" style="width:100%"><option>ea</option><option>m</option><option>%</option><option>ë‹¨ê³„</option></select></div><button id="save-new-work" class="btn-primary" style="width:100%;margin-top:14px"><i class="ph ph-check-circle"></i> ìž‘ì—… ë“±ë¡ í›„ AI ê³„íšì„œ ìž‘ì„±</button></div></div></div>';
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px"><div class="panel" style="width:560px;max-width:96vw;margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-plus-circle"></i> 오늘 작업 등록</div><button id="close-new-work-modal" class="icon-btn"><i class="ph ph-x"></i></button></div><div class="panel-body padded"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><input id="new-project" class="search-inline" style="width:100%" placeholder="프로젝트명"><input id="new-site" class="search-inline" style="width:100%" placeholder="작업장소"><input id="new-crew" class="search-inline" style="width:100%" placeholder="작업인원" value="3"><input id="new-due" class="search-inline" style="width:100%" placeholder="기한" value="오늘"></div><textarea id="new-work-text" style="width:100%;height:120px;margin-top:10px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical" placeholder="작업내용을 입력하세요"></textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px"><input id="new-qty" class="search-inline" style="width:100%" placeholder="예정 수량" value="1"><select id="new-unit" class="search-inline" style="width:100%"><option>ea</option><option>m</option><option>%</option><option>단계</option></select></div><button id="save-new-work" class="btn-primary" style="width:100%;margin-top:14px"><i class="ph ph-check-circle"></i> 작업 등록 후 AI 계획서 작성</button></div></div></div>';
             document.getElementById('close-new-work-modal').addEventListener('click', function(){ document.getElementById('safety-modal-root').innerHTML=''; });
             document.getElementById('save-new-work').addEventListener('click', function(){
               var text = document.getElementById('new-work-text').value.trim();
-              if (!text) { alert('ìž‘ì—…ë‚´ìš©ì„ ìž…ë ¥í•˜ì„¸ìš”.'); return; }
+              if (!text) { alert('작업내용을 입력하세요.'); return; }
               var id = 'WRK-' + new Date().getTime().toString().slice(-8);
-              var project = document.getElementById('new-project').value || 'ì‹ ê·œ í”„ë¡œì íŠ¸';
-              var site = document.getElementById('new-site').value || 'ìž‘ì—…ìž¥ì†Œ ë¯¸ì •';
-              safetyItems.push({ id:id, project:project, site:site, title:text.slice(0,42), crew:Number(document.getElementById('new-crew').value || 1), qty:Number(document.getElementById('new-qty').value || 1), unit:document.getElementById('new-unit').value, due:document.getElementById('new-due').value || 'ì˜¤ëŠ˜', planStatus:'ë¯¸ìƒì„±', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „', progressStatus:'ë¯¸ë¶„ì„', progress:0, doneQty:0, totalQty:Number(document.getElementById('new-qty').value || 1), workText:text, closeText:'', signatures:[], issues:[] });
+              var project = document.getElementById('new-project').value || '신규 프로젝트';
+              var site = document.getElementById('new-site').value || '작업장소 미정';
+              safetyItems.push({ id:id, project:project, site:site, title:text.slice(0,42), crew:Number(document.getElementById('new-crew').value || 1), qty:Number(document.getElementById('new-qty').value || 1), unit:document.getElementById('new-unit').value, due:document.getElementById('new-due').value || '오늘', planStatus:'미생성', tbmStatus:'대기', closeStatus:'시작전', progressStatus:'미분석', progress:0, doneQty:0, totalQty:Number(document.getElementById('new-qty').value || 1), workText:text, closeText:'', signatures:[], issues:[] });
               selectedWorkId = id;
               window._safetySelectedWorkId = id;
               saveSafetyItems();
