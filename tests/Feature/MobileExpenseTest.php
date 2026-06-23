@@ -9,6 +9,7 @@ use App\Models\MobileExpense;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\GeminiReceiptAnalyzer;
+use App\Support\ReceiptFilePayload;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -446,7 +447,7 @@ class MobileExpenseTest extends TestCase
             'receipt_path' => '/storage/receipts/missing-after-deploy.png',
             'receipt_mime_type' => 'image/png',
             'receipt_original_name' => 'missing-after-deploy.png',
-            'receipt_file' => 'receipt-image-from-database',
+            'receipt_file' => ReceiptFilePayload::encode('receipt-image-from-database'),
             'status' => 'pending',
         ]);
 
@@ -456,6 +457,67 @@ class MobileExpenseTest extends TestCase
         $response->assertOk();
         $this->assertSame('image/png', $response->headers->get('content-type'));
         $this->assertSame('receipt-image-from-database', $response->getContent());
+    }
+
+    public function test_legacy_raw_receipt_file_can_still_be_served_from_database(): void
+    {
+        Storage::fake('public');
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => '7206 Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/legacy-missing.png',
+            'receipt_mime_type' => 'image/png',
+            'receipt_original_name' => 'legacy-missing.png',
+            'receipt_file' => 'legacy-raw-receipt-image',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('mobile-expense.receipt', $expense));
+
+        $response->assertOk();
+        $this->assertSame('legacy-raw-receipt-image', $response->getContent());
+    }
+
+    public function test_mobile_expense_store_persists_uploaded_receipt_file_as_database_safe_payload(): void
+    {
+        Storage::fake('public');
+
+        $imageBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', true);
+        $this->assertIsString($imageBytes);
+        Storage::disk('public')->put('receipts/database-safe.png', $imageBytes);
+
+        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+            'payment_type' => 'personal',
+            'category' => '6403 Site Vehicle Fuel',
+            'accounting_account' => '6403 Site Vehicle Fuel',
+            'class' => '',
+            'description' => 'Marathon gas receipt',
+            'amount' => '42.53',
+            'expense_date' => '2026-06-23',
+            'receipt_path' => '/storage/receipts/database-safe.png',
+            'site_id' => $this->site->id,
+        ]);
+
+        $response->assertRedirect(route('mobile-expense.index'));
+
+        $expense = MobileExpense::query()->latest('id')->first();
+
+        $this->assertNotNull($expense);
+        $this->assertSame($imageBytes, ReceiptFilePayload::decode($expense->receipt_file));
+
+        $receiptResponse = $this->actingAs($this->user)
+            ->get(route('mobile-expense.receipt', $expense));
+
+        $receiptResponse->assertOk();
+        $this->assertSame($imageBytes, $receiptResponse->getContent());
     }
 
     public function test_employee_can_update_own_pending_expense_and_replace_receipt(): void
@@ -474,6 +536,9 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
+        $replacementImage = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', true);
+        $this->assertIsString($replacementImage);
+
         $response = $this->actingAs($this->user)
             ->put(route('mobile-expense.update', $expense), [
                 'payment_type' => 'corporate',
@@ -484,7 +549,7 @@ class MobileExpenseTest extends TestCase
                 'amount' => 67.89,
                 'expense_date' => '2026-06-22',
                 'site_id' => $this->site->id,
-                'receipt' => UploadedFile::fake()->create('replacement.png', 500, 'image/png'),
+                'receipt' => UploadedFile::fake()->createWithContent('replacement.png', $replacementImage),
             ]);
 
         $response->assertRedirect(route('mobile-expense.index'));

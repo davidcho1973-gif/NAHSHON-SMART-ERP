@@ -1650,7 +1650,7 @@ class SmartCompanyData
                 'receipt_path' => $receiptPath,
                 'receipt_mime_type' => $mimeType,
                 'receipt_original_name' => basename($filename),
-                'receipt_file' => $imageBytes,
+                'receipt_file' => ReceiptFilePayload::encode($imageBytes),
                 'ocr_data' => $result,
                 'status' => 'pending',
             ]));

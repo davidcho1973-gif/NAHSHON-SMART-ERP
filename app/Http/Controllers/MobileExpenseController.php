@@ -7,6 +7,7 @@ use App\Models\ExpensePreApproval;
 use App\Models\Site;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Support\FinanceChartOfAccounts;
+use App\Support\ReceiptFilePayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -436,7 +437,7 @@ class MobileExpenseController extends Controller
         }
 
         return [
-            'contents' => Storage::disk('public')->get($path),
+            'contents' => ReceiptFilePayload::encode(Storage::disk('public')->get($path)),
             'mime_type' => Storage::disk('public')->mimeType($path) ?: 'application/octet-stream',
             'name' => basename($path),
         ];
@@ -444,15 +445,7 @@ class MobileExpenseController extends Controller
 
     private function databaseReceiptFile(mixed $contents): ?string
     {
-        if ($contents === null || $contents === '') {
-            return null;
-        }
-
-        if (is_resource($contents)) {
-            $contents = stream_get_contents($contents);
-        }
-
-        return is_string($contents) && $contents !== '' ? $contents : null;
+        return ReceiptFilePayload::decode($contents);
     }
 
     /**
