@@ -79,7 +79,7 @@ class EmployeeResource extends Resource
                 ->downloadable()
                 ->helperText('Take a photo on mobile or upload a badge image. Gemini 3.5 Flash analyzes it after upload.')
                 ->extraInputAttributes(['accept' => 'image/*', 'capture' => 'environment'], merge: true)
-                ->afterStateUpdated(function (Set $set, Get $get, ?TemporaryUploadedFile $state): void {
+                ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
                     if (! $state instanceof TemporaryUploadedFile) {
                         return;
                     }

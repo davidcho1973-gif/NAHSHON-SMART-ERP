@@ -507,7 +507,7 @@ class MemberRegistrationResource extends Resource
                             ->downloadable()
                             ->required()
                             ->extraInputAttributes(['accept' => 'image/*', 'capture' => 'environment'], merge: true)
-                            ->afterStateUpdated(function (Set $set, Get $get, ?TemporaryUploadedFile $state): void {
+                            ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
                                 if (! $state instanceof TemporaryUploadedFile) {
                                     return;
                                 }

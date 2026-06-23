@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\User;
+use App\Filament\Resources\MemberRegistrations\Pages\ManageMemberRegistrations;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class MemberRegistrationSyncTest extends TestCase
@@ -302,6 +304,64 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('ENGINEER', $employee->role);
         $this->assertSame('2026-03-29', $employee->start_date?->toDateString());
         $this->assertSame('member-badges/sekon.jpg', $employee->badge_photo_path);
+    }
+
+    public function test_badge_nfc_table_action_saves_gemini_payload(): void
+    {
+        $user = User::query()->create([
+            'name' => 'HR Manager',
+            'email' => 'hr@example.com',
+            'password' => bcrypt('password'),
+            'access_role' => 'hr_manager',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $registration = MemberRegistration::create([
+            'first_name' => 'Gianna',
+            'last_name' => 'Ferrer Jorge',
+            'full_name' => 'Gianna Ferrer Jorge',
+            'email' => 'gianna@example.com',
+            'member_type' => 'worker',
+            'onboarding_status' => 'interview_passed',
+            'interview_status' => 'passed',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
+            'safety_training_status' => 'completed',
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(ManageMemberRegistrations::class)
+            ->callTableAction('registerBadgeNfc', $registration, [
+                'nfc_raw_uid' => '90227842853E04',
+                'badge_number' => 'N-842853E04',
+                'badge_photo_path' => ['member-badges/gianna.jpg'],
+                'badge_company_name' => 'AUTORICA LLC',
+                'badge_last_name' => 'FERRER JORGE',
+                'badge_first_name' => 'GIANNA',
+                'badge_role' => 'SPOTTER',
+                'badge_issued_on' => '2026-02-03',
+                'badge_analysis_model' => 'gemini-3.5-flash',
+                'badge_analyzed_at' => now()->toDateTimeString(),
+                'badge_analysis_payload' => json_encode([
+                    'company_name' => 'AUTORICA LLC',
+                    'first_name' => 'GIANNA',
+                    'last_name' => 'FERRER JORGE',
+                    'role' => 'SPOTTER',
+                    'issued_on' => '2026-02-03',
+                    'confidence' => 95,
+                    'model' => 'gemini-3.5-flash',
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ])
+            ->assertHasNoActionErrors();
+
+        $registration->refresh();
+
+        $this->assertSame('badge_pending', $registration->onboarding_status);
+        $this->assertSame('registered', $registration->badge_registration_status);
+        $this->assertSame('N-842853E04', $registration->badge_number);
+        $this->assertSame('AUTORICA LLC', $registration->badge_analysis_payload['company_name'] ?? null);
     }
 
     public function test_active_registration_manual_resync_updates_linked_employee_without_duplicates(): void
