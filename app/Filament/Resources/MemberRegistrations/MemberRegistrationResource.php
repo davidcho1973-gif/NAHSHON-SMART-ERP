@@ -18,7 +18,6 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -251,11 +250,13 @@ class MemberRegistrationResource extends Resource
                         ->rows(10)
                         ->visible(fn (?MemberRegistration $record): bool => filled($record?->badge_analysis_payload))
                         ->columnSpanFull(),
-                    KeyValue::make('payload')
-                        ->keyLabel('Signal')
-                        ->valueLabel('Value')
+                    Textarea::make('payload_preview')
+                        ->label('Automation signals')
+                        ->formatStateUsing(fn (?MemberRegistration $record): ?string => self::formatBadgeAnalysisPayload($record?->payload))
                         ->disabled()
                         ->dehydrated(false)
+                        ->rows(8)
+                        ->visible(fn (?MemberRegistration $record): bool => filled($record?->payload))
                         ->columnSpanFull(),
                 ]),
         ]);

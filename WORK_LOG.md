@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR badge save | Removed the remaining KeyValue component from Applicants, added explicit Laravel/Filament cache clearing during deploy, and verified Badge/NFC save works even when applicant and badge names differ. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 53 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR badge save | Fixed the remaining Badge/NFC save 500 by allowing FileUpload update hooks to receive stored string/array state, and added a Livewire table-action regression test for saving Gemini badge payloads. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 53 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR badge analysis | Fixed Badge/NFC save failures after Gemini analysis by replacing the Filament KeyValue analysis display with a read-only JSON preview and normalizing the stored payload for Applicants and Employees. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 52 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR onboarding A-plan | Enforced activation-only Employee/account creation: removed the Employee draft step, added `safety_completed`, gated buttons by the real sequence, and added a cleanup migration for old `employee_registration` statuses. | Local changes | PHP lint passed for changed files; `php artisan test` passed, 52 tests; `npm run build` passed. |
@@ -110,6 +111,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Applied HR A-plan sequence: application submit -> interview passed -> safety completed -> Badge/NFC registered -> active; Employee, Access Control, and HR Documents sync only when the applicant becomes active.
 - 2026-06-22: Fixed Gemini Badge/NFC save failures by removing the KeyValue analysis field from the save path, using a read-only JSON preview, and normalizing analysis payload storage for Applicants and Employees.
 - 2026-06-22: Fixed the remaining Badge/NFC save 500 from the FileUpload state update hook by accepting non-temporary stored file state and added a Livewire regression test for the exact save action.
+- 2026-06-22: Removed the last Applicants KeyValue field, added deploy-time Laravel/Filament cache clearing, and confirmed Badge/NFC save does not require applicant and badge names to match.
 
 ### Current Boundaries
 

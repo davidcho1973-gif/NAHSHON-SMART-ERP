@@ -318,9 +318,9 @@ class MemberRegistrationSyncTest extends TestCase
         ]);
 
         $registration = MemberRegistration::create([
-            'first_name' => 'Gianna',
-            'last_name' => 'Ferrer Jorge',
-            'full_name' => 'Gianna Ferrer Jorge',
+            'first_name' => 'Test',
+            'last_name' => 'Applicant',
+            'full_name' => 'Test Applicant',
             'email' => 'gianna@example.com',
             'member_type' => 'worker',
             'onboarding_status' => 'interview_passed',
@@ -338,18 +338,18 @@ class MemberRegistrationSyncTest extends TestCase
                 'badge_number' => 'N-842853E04',
                 'badge_photo_path' => ['member-badges/gianna.jpg'],
                 'badge_company_name' => 'AUTORICA LLC',
-                'badge_last_name' => 'FERRER JORGE',
-                'badge_first_name' => 'GIANNA',
-                'badge_role' => 'SPOTTER',
-                'badge_issued_on' => '2026-02-03',
+                'badge_last_name' => 'VILLARREAL',
+                'badge_first_name' => 'GERARD',
+                'badge_role' => 'HELPER',
+                'badge_issued_on' => '2026-02-18',
                 'badge_analysis_model' => 'gemini-3.5-flash',
                 'badge_analyzed_at' => now()->toDateTimeString(),
                 'badge_analysis_payload' => json_encode([
                     'company_name' => 'AUTORICA LLC',
-                    'first_name' => 'GIANNA',
-                    'last_name' => 'FERRER JORGE',
-                    'role' => 'SPOTTER',
-                    'issued_on' => '2026-02-03',
+                    'first_name' => 'GERARD',
+                    'last_name' => 'VILLARREAL',
+                    'role' => 'HELPER',
+                    'issued_on' => '2026-02-18',
                     'confidence' => 95,
                     'model' => 'gemini-3.5-flash',
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -361,6 +361,9 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('badge_pending', $registration->onboarding_status);
         $this->assertSame('registered', $registration->badge_registration_status);
         $this->assertSame('N-842853E04', $registration->badge_number);
+        $this->assertSame('Test Applicant', $registration->full_name);
+        $this->assertSame('GERARD', $registration->badge_first_name);
+        $this->assertSame('VILLARREAL', $registration->badge_last_name);
         $this->assertSame('AUTORICA LLC', $registration->badge_analysis_payload['company_name'] ?? null);
     }
 
