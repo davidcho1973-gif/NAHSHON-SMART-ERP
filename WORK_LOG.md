@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-22 | CODEX | HR onboarding A-plan | Enforced activation-only Employee/account creation: removed the Employee draft step, added `safety_completed`, gated buttons by the real sequence, and added a cleanup migration for old `employee_registration` statuses. | Local changes | PHP lint passed for changed files; `php artisan test` passed, 52 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | Admin access | Reset the owner admin login to `davidcho1973@gmail.com` with the requested temporary password and updated login defaults. | Local branch `codex/set-owner-admin-login` | PHP lint passed for changed files; `php artisan test` passed, 50 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | Admin access | Added a one-time production admin password reset migration for `admin@nahshonmep.com` without committing the plaintext password, and made deploy start with `artisan up` to avoid stuck maintenance mode. | Local branch `codex/reset-production-admin-password` | PHP lint passed for migration; `php artisan test` passed, 50 tests; `npm run build` passed. |
 | 2026-06-22 | Antigravity | Desktop Universal Scanner | Shifted universal scanner API routes from routes/api.php to routes/web.php under /smart-company-api/ prefix to prevent CDNs and load balancers from stripping session cookies on stateless /api/* paths. | Branch pushed | All 49 phpunit tests passing locally. |
@@ -104,6 +105,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Added a one-time production admin password reset migration for the configured SMART COMPANY admin account and hardened deploy startup to avoid leaving the app in maintenance mode.
 - 2026-06-22: Reset the owner admin login defaults and production DB credential migration to `davidcho1973@gmail.com` with the requested temporary password.
 - 2026-06-22: Separated applicant-owned intake from admin HR review: admins now create/send links or QR codes, applicant fields are read-only in review, submitted public forms are locked, and workflow status changes stay on HR actions.
+- 2026-06-22: Applied HR A-plan sequence: application submit -> interview passed -> safety completed -> Badge/NFC registered -> active; Employee, Access Control, and HR Documents sync only when the applicant becomes active.
 
 ### Current Boundaries
 

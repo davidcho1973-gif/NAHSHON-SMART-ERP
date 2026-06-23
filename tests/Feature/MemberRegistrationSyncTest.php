@@ -78,11 +78,20 @@ class MemberRegistrationSyncTest extends TestCase
             'full_name' => 'Approve Me',
             'email' => 'approve@example.com',
             'member_type' => 'worker',
-            'onboarding_status' => 'draft',
+            'onboarding_status' => 'badge_pending',
+            'interview_status' => 'passed',
             'safety_training_status' => 'completed',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
             'nfc_raw_uid' => '90227842853E04',
             'badge_photo_path' => 'member-badges/approve.jpg',
             'badge_issued_on' => now()->toDateString(),
+        ]);
+
+        $registration->documents()->create([
+            'document_type' => 'id',
+            'title' => 'Government ID - front',
+            'status' => 'pending',
         ]);
 
         $this->assertSame(0, Employee::query()->count());
@@ -115,7 +124,7 @@ class MemberRegistrationSyncTest extends TestCase
             'submitted',
             'under_review',
             'interview_passed',
-            'employee_registration',
+            'safety_completed',
             'badge_pending',
             'active',
             'rejected',
@@ -140,7 +149,7 @@ class MemberRegistrationSyncTest extends TestCase
         $registration->activateAsEmployee();
     }
 
-    public function test_pass_application_creates_pending_employee_registration_draft(): void
+    public function test_interview_pass_does_not_create_employee(): void
     {
         $registration = MemberRegistration::create([
             'first_name' => 'Applicant',
@@ -161,16 +170,15 @@ class MemberRegistrationSyncTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $employee = $registration->passApplication();
+        $registration->markInterviewPassed();
 
-        $this->assertSame('employee_registration', $registration->fresh()->onboarding_status);
-        $this->assertNotNull($registration->fresh()->applicant_code);
-        $this->assertSame('pending', $employee->employment_status);
-        $this->assertSame($employee->id, $registration->fresh()->employee_id);
+        $this->assertSame('interview_passed', $registration->fresh()->onboarding_status);
+        $this->assertNull($registration->fresh()->employee_id);
+        $this->assertSame(0, Employee::query()->count());
         $this->assertDatabaseMissing('users', ['email' => 'applicant@example.com']);
     }
 
-    public function test_pass_application_requires_interview_passed_first(): void
+    public function test_activation_requires_interview_passed_first(): void
     {
         $registration = MemberRegistration::create([
             'first_name' => 'Applicant',
@@ -178,9 +186,13 @@ class MemberRegistrationSyncTest extends TestCase
             'full_name' => 'Applicant Worker',
             'email' => 'waiting@example.com',
             'member_type' => 'worker',
-            'onboarding_status' => 'submitted',
+            'onboarding_status' => 'badge_pending',
             'submitted_at' => now(),
             'privacy_consent_at' => now(),
+            'safety_training_status' => 'completed',
+            'nfc_raw_uid' => '90227842853E04',
+            'badge_photo_path' => 'member-badges/waiting.jpg',
+            'badge_issued_on' => now()->toDateString(),
         ]);
 
         $registration->documents()->create([
@@ -191,7 +203,7 @@ class MemberRegistrationSyncTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        $registration->passApplication();
+        $registration->activateAsEmployee();
     }
 
     public function test_full_hr_flow_promotes_applicant_to_active_employee_and_documents(): void
@@ -217,12 +229,13 @@ class MemberRegistrationSyncTest extends TestCase
 
         $registration->markInterviewPassed();
         $this->assertSame('interview_passed', $registration->fresh()->onboarding_status);
-
-        $draft = $registration->passApplication();
-        $this->assertSame('pending', $draft->employment_status);
-        $this->assertSame('employee_registration', $registration->fresh()->onboarding_status);
+        $this->assertSame(0, Employee::query()->count());
+        $this->assertDatabaseMissing('users', ['email' => 'flow@example.com']);
 
         $registration->markSafetyTrainingCompleted();
+        $this->assertSame('safety_completed', $registration->fresh()->onboarding_status);
+        $this->assertSame(0, Employee::query()->count());
+
         $registration->refresh()->fill([
             'nfc_raw_uid' => '90227842853E04',
             'badge_photo_path' => 'member-badges/sekon.jpg',
@@ -231,7 +244,10 @@ class MemberRegistrationSyncTest extends TestCase
             'badge_last_name' => 'KIM',
             'badge_role' => 'ENGINEER',
             'badge_issued_on' => '2026-03-29',
+            'badge_registration_status' => 'registered',
+            'onboarding_status' => 'badge_pending',
         ])->save();
+        $this->assertSame(0, Employee::query()->count());
 
         $employee = $registration->activateAsEmployee();
 
@@ -255,6 +271,10 @@ class MemberRegistrationSyncTest extends TestCase
             'full_name' => 'Sekon Kim',
             'email' => 'sekon@example.com',
             'member_type' => 'worker',
+            'onboarding_status' => 'badge_pending',
+            'interview_status' => 'passed',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
             'safety_training_status' => 'completed',
             'nfc_raw_uid' => '90227842853E04',
             'badge_photo_path' => 'member-badges/sekon.jpg',
@@ -265,6 +285,12 @@ class MemberRegistrationSyncTest extends TestCase
             'badge_issued_on' => '2026-03-29',
             'badge_analysis_model' => 'gemini-3.5-flash',
             'badge_analysis_payload' => ['confidence' => 93],
+        ]);
+
+        $registration->documents()->create([
+            'document_type' => 'id',
+            'title' => 'Government ID - front',
+            'status' => 'pending',
         ]);
 
         $employee = $registration->activateAsEmployee();
@@ -278,7 +304,7 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('member-badges/sekon.jpg', $employee->badge_photo_path);
     }
 
-    public function test_active_registration_updates_linked_employee_without_duplicates(): void
+    public function test_active_registration_manual_resync_updates_linked_employee_without_duplicates(): void
     {
         $registration = MemberRegistration::create([
             'employee_number' => 'EMP-100',
@@ -299,6 +325,16 @@ class MemberRegistrationSyncTest extends TestCase
             'email' => 'updated@example.com',
             'role' => 'Foreman',
         ]);
+
+        $this->assertSame(1, Employee::query()->count());
+        $this->assertDatabaseHas('employees', [
+            'id' => $employeeId,
+            'employee_number' => 'EMP-100',
+            'name' => 'Original Name',
+            'email' => 'original@example.com',
+        ]);
+
+        $registration->syncDownstream();
 
         $this->assertSame(1, Employee::query()->count());
         $this->assertDatabaseHas('employees', [

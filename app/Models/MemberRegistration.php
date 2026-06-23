@@ -116,10 +116,11 @@ class MemberRegistration extends Model
             $registration->refreshAutomationSignals();
         });
 
-        // Final active status is the single downstream trigger for employee/account/document sync.
-        // The application-pass step may create a pending Employee draft, then activation promotes it to active.
+        // Employee/account/document sync only happens when the applicant transitions to active.
+        // Manual re-sync remains available from the Filament table action.
         static::saved(function (MemberRegistration $registration): void {
-            if ($registration->onboarding_status === 'active') {
+            if ($registration->onboarding_status === 'active'
+                && ($registration->wasRecentlyCreated || $registration->wasChanged('onboarding_status'))) {
                 $registration->syncDownstream();
             }
         });
@@ -220,7 +221,7 @@ class MemberRegistration extends Model
             'submitted' => 'Submitted',
             'under_review' => 'Under review',
             'interview_passed' => 'Interview passed',
-            'employee_registration' => 'Employee registration',
+            'safety_completed' => 'Safety training completed',
             'badge_pending' => 'Badge / NFC pending',
             'active' => 'Active',
             'rejected' => 'Rejected',
@@ -254,10 +255,36 @@ class MemberRegistration extends Model
         return $this->applicant_code;
     }
 
+    public function markInterviewPassed(?User $user = null): void
+    {
+        $this->forceFill([
+            'interview_status' => 'passed',
+            'interviewed_at' => $this->interviewed_at ?: now(),
+            'interviewed_by_id' => $this->interviewed_by_id ?: $user?->id,
+            'onboarding_status' => in_array($this->onboarding_status, [
+                'active',
+                'safety_completed',
+                'badge_pending',
+            ], true) ? $this->onboarding_status : 'interview_passed',
+        ])->save();
+    }
+
+    public function markSafetyTrainingCompleted(): void
+    {
+        $this->forceFill([
+            'safety_training_status' => 'completed',
+            'safety_training_completed_on' => $this->safety_training_completed_on ?: now()->toDateString(),
+            'document_status' => blank($this->document_status) || $this->document_status === 'missing'
+                ? 'pending'
+                : $this->document_status,
+            'onboarding_status' => $this->onboarding_status === 'active' ? 'active' : 'safety_completed',
+        ])->save();
+    }
+
     /**
      * @return list<string>
      */
-    public function applicationPassBlockers(): array
+    public function activationBlockers(): array
     {
         $blockers = [];
 
@@ -274,68 +301,8 @@ class MemberRegistration extends Model
         }
 
         if ($this->interview_status !== 'passed') {
-            $blockers[] = 'Interview must be passed before creating the Employee draft.';
+            $blockers[] = 'Interview must be passed first.';
         }
-
-        return $blockers;
-    }
-
-    public function passApplication(?User $user = null): Employee
-    {
-        $blockers = $this->applicationPassBlockers();
-
-        if ($blockers !== []) {
-            throw ValidationException::withMessages([
-                'onboarding_status' => implode(' ', $blockers),
-            ]);
-        }
-
-        return DB::transaction(function () use ($user): Employee {
-            $this->ensureApplicantCode();
-            $employee = $this->createEmployeeRegistrationDraft();
-
-            $this->forceFill([
-                'onboarding_status' => 'employee_registration',
-                'approved_at' => now(),
-                'approved_by_id' => $user?->id,
-            ])->saveQuietly();
-
-            return $employee;
-        });
-    }
-
-    public function markInterviewPassed(?User $user = null): void
-    {
-        $this->forceFill([
-            'interview_status' => 'passed',
-            'interviewed_at' => $this->interviewed_at ?: now(),
-            'interviewed_by_id' => $this->interviewed_by_id ?: $user?->id,
-            'onboarding_status' => in_array($this->onboarding_status, [
-                'active',
-                'employee_registration',
-                'badge_pending',
-            ], true) ? $this->onboarding_status : 'interview_passed',
-        ])->save();
-    }
-
-    public function markSafetyTrainingCompleted(): void
-    {
-        $this->forceFill([
-            'safety_training_status' => 'completed',
-            'safety_training_completed_on' => $this->safety_training_completed_on ?: now()->toDateString(),
-            'document_status' => blank($this->document_status) || $this->document_status === 'missing'
-                ? 'pending'
-                : $this->document_status,
-            'onboarding_status' => $this->onboarding_status === 'active' ? 'active' : 'badge_pending',
-        ])->save();
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function activationBlockers(): array
-    {
-        $blockers = [];
 
         if ($this->safety_training_status !== 'completed') {
             $blockers[] = 'Hoffman safety training must be completed first.';
@@ -389,6 +356,14 @@ class MemberRegistration extends Model
     public function approve(?User $user = null): Employee
     {
         return $this->activateAsEmployee($user);
+    }
+
+    public function rejectApplication(?User $user = null): void
+    {
+        $this->forceFill([
+            'onboarding_status' => 'rejected',
+            'approved_by_id' => $this->approved_by_id ?: $user?->id,
+        ])->save();
     }
 
     /**
@@ -494,11 +469,6 @@ class MemberRegistration extends Model
     public function syncEmployee(): Employee
     {
         return $this->syncEmployeeRecord('active', 'smart-member-registration');
-    }
-
-    public function createEmployeeRegistrationDraft(): Employee
-    {
-        return $this->syncEmployeeRecord('pending', 'hr-application-approved');
     }
 
     private function syncEmployeeRecord(string $employmentStatus, string $source): Employee

@@ -72,7 +72,7 @@ class MemberRegistrationResource extends Resource
                         ->options(MemberRegistration::onboardingStatusOptions())
                         ->disabled()
                         ->dehydrated(false)
-                        ->helperText('우측 액션 버튼(제출·인터뷰·직원초안·안전교육·뱃지·활성화)으로만 변경됩니다.'),
+                        ->helperText('우측 액션 버튼(제출·인터뷰·안전교육·뱃지/NFC·활성화)으로만 변경됩니다.'),
                     TextInput::make('employee_number')
                         ->label('Employee ID')
                         ->placeholder('Not synced')
@@ -157,14 +157,14 @@ class MemberRegistrationResource extends Resource
                 ]),
 
             Section::make('③ 현장 배정')
-                ->description('직원 초안 생성 시 적용되는 회사·현장·팀 배정값입니다.')
+                ->description('직원 활성화 시 생성될 Employee에 적용되는 회사·현장·팀 배정값입니다.')
                 ->columns(3)
                 ->schema([
                     Select::make('company_id')
                         ->label('Company')
                         ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
-                        ->helperText('Admin assignment for the Employee draft.'),
+                        ->helperText('Admin assignment for the Employee that will be created at activation.'),
                     Select::make('site_id')
                         ->label('Site')
                         ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
@@ -402,7 +402,8 @@ class MemberRegistrationResource extends Resource
                     ->label('인터뷰 합격')
                     ->icon('heroicon-o-user-circle')
                     ->color('info')
-                    ->visible(fn (MemberRegistration $record): bool => $record->interview_status !== 'passed'
+                    ->visible(fn (MemberRegistration $record): bool => filled($record->submitted_at)
+                        && $record->interview_status !== 'passed'
                         && ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
                     ->form([
                         DatePicker::make('interviewed_at')
@@ -424,41 +425,14 @@ class MemberRegistrationResource extends Resource
                         Notification::make()
                             ->success()
                             ->title('인터뷰 합격 처리 완료')
-                            ->body('다음 단계로 합격 처리/직원 초안을 생성할 수 있습니다.')
-                            ->send();
-                    }),
-                Action::make('passApplication')
-                    ->label('합격/직원 초안 생성')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->visible(fn (MemberRegistration $record): bool => blank($record->employee_id)
-                        && ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
-                    ->action(function (MemberRegistration $record): void {
-                        try {
-                            $employee = $record->passApplication(auth()->user());
-                        } catch (ValidationException $exception) {
-                            Notification::make()
-                                ->warning()
-                                ->title('합격 처리 불가')
-                                ->body(implode(' ', Arr::flatten($exception->errors())))
-                                ->persistent()
-                                ->send();
-
-                            return;
-                        }
-
-                        Notification::make()
-                            ->success()
-                            ->title('합격 처리 완료')
-                            ->body("Employees 등록 초안이 생성되었습니다: {$employee->employee_number}")
+                            ->body('다음 단계로 Hoffman 안전교육 완료를 기록할 수 있습니다.')
                             ->send();
                     }),
                 Action::make('markSafetyTrainingCompleted')
                     ->label('안전교육 완료')
                     ->icon('heroicon-o-shield-check')
                     ->color('warning')
-                    ->visible(fn (MemberRegistration $record): bool => filled($record->employee_id)
+                    ->visible(fn (MemberRegistration $record): bool => $record->interview_status === 'passed'
                         && $record->safety_training_status !== 'completed'
                         && ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
                     ->form([
@@ -488,7 +462,7 @@ class MemberRegistrationResource extends Resource
                     ->label('Badge/NFC 등록')
                     ->icon('heroicon-o-identification')
                     ->color('info')
-                    ->visible(fn (MemberRegistration $record): bool => filled($record->employee_id)
+                    ->visible(fn (MemberRegistration $record): bool => $record->safety_training_status === 'completed'
                         && ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
                     ->fillForm(fn (MemberRegistration $record): array => [
                         'nfc_raw_uid' => $record->nfc_raw_uid,
@@ -586,7 +560,7 @@ class MemberRegistrationResource extends Resource
                             'badge_analysis_model' => $data['badge_analysis_model'] ?? null,
                             'badge_analyzed_at' => $data['badge_analyzed_at'] ?? null,
                             'badge_analysis_payload' => $data['badge_analysis_payload'] ?? null,
-                            'badge_registration_status' => 'pending',
+                            'badge_registration_status' => 'registered',
                             'onboarding_status' => 'badge_pending',
                         ])->save();
 
@@ -601,8 +575,7 @@ class MemberRegistrationResource extends Resource
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (MemberRegistration $record): bool => filled($record->employee_id)
-                        && ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
+                    ->visible(fn (MemberRegistration $record): bool => $record->onboarding_status === 'badge_pending')
                     ->action(function (MemberRegistration $record): void {
                         try {
                             $record->activateAsEmployee(auth()->user());
@@ -632,7 +605,7 @@ class MemberRegistrationResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn (MemberRegistration $record): bool => ! in_array($record->onboarding_status, ['active', 'rejected', 'archived'], true))
                     ->action(function (MemberRegistration $record): void {
-                        $record->forceFill(['onboarding_status' => 'rejected'])->save();
+                        $record->rejectApplication(auth()->user());
                         Notification::make()->success()->title('불합격 처리 완료')->send();
                     }),
                 Action::make('resync')
