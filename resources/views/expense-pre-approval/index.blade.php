@@ -172,6 +172,37 @@
       background: var(--status-danger-dim);
       color: var(--status-danger);
     }
+    .approval-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .approval-actions form {
+      margin: 0;
+    }
+    .btn-approval {
+      width: 100%;
+      border-radius: var(--radius-md);
+      padding: 9px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .btn-approval.approve {
+      border: 1px solid var(--status-success);
+      color: var(--status-success);
+      background: var(--status-success-dim);
+    }
+    .btn-approval.reject {
+      border: 1px solid var(--status-danger);
+      color: var(--status-danger);
+      background: var(--status-danger-dim);
+    }
     .btn-create {
       position: fixed;
       bottom: 24px;
@@ -317,6 +348,13 @@
           </div>
           <div class="card-mid">
             {{ Str::limit($req->description, 60) ?: '(설명 없음)' }}
+            @if ($canManageAllRequests)
+              <br>
+              <span style="color:var(--text-tertiary)">
+                신청자: {{ trim(($req->employee?->first_name ?? '') . ' ' . ($req->employee?->last_name ?? '')) ?: ($req->employee?->email ?? '-') }}
+                · 현장: {{ $req->site?->code ?? '-' }}
+              </span>
+            @endif
           </div>
           <div class="card-bottom">
             <span style="font-family:var(--font-mono)">예정일: {{ $req->planned_date->format('Y-m-d') }}</span>
@@ -324,6 +362,26 @@
               {{ $req->status === 'draft' ? '임시저장' : ($req->status === 'pending' ? '결재대기' : ($req->status === 'approved' ? '승인완료' : ($req->status === 'rejected' ? '반려됨' : $req->status))) }}
             </span>
           </div>
+          @if ($canManageAllRequests && $req->status === 'pending')
+            <div class="approval-actions" onclick="event.stopPropagation()">
+              <form method="POST" action="{{ route('expense-pre-approval.approve', $req) }}">
+                @csrf
+                @method('PATCH')
+                <button type="submit" class="btn-approval approve">
+                  <i class="ph ph-check-circle"></i>
+                  <span>승인</span>
+                </button>
+              </form>
+              <form method="POST" action="{{ route('expense-pre-approval.reject', $req) }}">
+                @csrf
+                @method('PATCH')
+                <button type="submit" class="btn-approval reject">
+                  <i class="ph ph-x-circle"></i>
+                  <span>반려</span>
+                </button>
+              </form>
+            </div>
+          @endif
         </div>
       @empty
         <div class="empty-state">

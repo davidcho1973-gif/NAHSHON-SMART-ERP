@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\AttendanceLog;
 use App\Models\Employee;
+use App\Models\ExpensePreApproval;
+use App\Models\MobileExpense;
 use App\Models\SmartRecord;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
@@ -35,8 +37,8 @@ class SmartCompanyData
             'api_approveAttendanceLog' => self::approveAttendanceLog($args[0] ?? null),
             'api_rejectAttendanceLog' => self::rejectAttendanceLog($args[0] ?? null),
 
-            'api_getFinanceStats' => self::financeStats(),
-            'api_getExpenses' => self::expenses(),
+            'api_getFinanceStats' => self::financeStats($siteId),
+            'api_getExpenses' => self::expenses($siteId),
             'api_getPayrollDashboard' => self::payrollDashboard($args[0] ?? null),
 
             'api_getEquipmentStats' => self::equipmentStats(),
@@ -107,7 +109,7 @@ class SmartCompanyData
         foreach (self::equipmentList() as $item) {
             $records[] = self::record('equipment', $item['id'], $item['name'], $item['type'], $item['site'], $item['status'], null, $item);
         }
-        foreach (self::expenses() as $expense) {
+        foreach (self::expenses('ALL', false) as $expense) {
             $records[] = self::record(
                 'finance',
                 (string) ($expense['id'] ?? ('EXP-' . md5(json_encode($expense)))),
@@ -329,18 +331,39 @@ class SmartCompanyData
         ];
     }
 
-    public static function financeStats(): array
+    public static function financeStats(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
-                $rows = \App\Models\MobileExpense::query()->get();
-                $mtdTotal = (float) $rows->sum(fn (\App\Models\MobileExpense $e): float => (float) $e->amount);
+                $startOfMonth = Carbon::now()->startOfMonth();
+                $rows = self::financeExpenseQuery($siteId)
+                    ->whereIn('status', ['pending', 'approved', 'paid'])
+                    ->get();
+                $mtdRows = $rows->filter(fn (MobileExpense $e): bool => $e->expense_date?->gte($startOfMonth) ?? false);
+                $mtdTotal = (float) $mtdRows->sum(fn (MobileExpense $e): float => (float) $e->amount);
                 $pending = $rows->where('status', 'pending');
+                $paid = $rows->where('status', 'paid');
+                $claimable = $rows
+                    ->where('status', 'approved')
+                    ->where('payment_type', 'personal');
+
+                $preApprovals = collect();
+                if (Schema::hasTable('expense_pre_approvals')) {
+                    $preApprovals = self::financePreApprovalQuery($siteId)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->get();
+                }
+
+                $approvedPreApprovals = $preApprovals->where('status', 'approved');
+                $pendingPreApprovals = $preApprovals->where('status', 'pending');
+                $mtdBudget = (float) $approvedPreApprovals
+                    ->filter(fn (ExpensePreApproval $approval): bool => $approval->planned_date?->gte($startOfMonth) ?? false)
+                    ->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount);
 
                 $palette = ['#2563eb', '#10b981', '#f59e0b', '#7c3aed', '#ef4444', '#06b6d4', '#eab308'];
-                $grouped = $rows
-                    ->groupBy(fn (\App\Models\MobileExpense $e): string => $e->category ?: 'Other')
-                    ->map(fn ($group): float => (float) $group->sum(fn (\App\Models\MobileExpense $e): float => (float) $e->amount))
+                $grouped = $mtdRows
+                    ->groupBy(fn (MobileExpense $e): string => $e->category ?: 'Other')
+                    ->map(fn ($group): float => (float) $group->sum(fn (MobileExpense $e): float => (float) $e->amount))
                     ->sortDesc();
 
                 $byCategory = [];
@@ -352,10 +375,16 @@ class SmartCompanyData
 
                 return [
                     'mtdTotal' => $mtdTotal,
-                    'mtdBudget' => 0,
-                    'pendingApproval' => $pending->count(),
-                    'pendingAmount' => (float) $pending->sum(fn (\App\Models\MobileExpense $e): float => (float) $e->amount),
-                    'claimable' => 0,
+                    'mtdBudget' => $mtdBudget,
+                    'pendingApproval' => $pending->count() + $pendingPreApprovals->count(),
+                    'pendingAmount' => (float) $pending->sum(fn (MobileExpense $e): float => (float) $e->amount)
+                        + (float) $pendingPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
+                    'claimable' => (float) $claimable->sum(fn (MobileExpense $e): float => (float) $e->amount),
+                    'paidAmount' => (float) $paid->sum(fn (MobileExpense $e): float => (float) $e->amount),
+                    'approvedPreApprovalAmount' => (float) $approvedPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
+                    'pendingPreApprovalAmount' => (float) $pendingPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
+                    'approvedExpenseAmount' => (float) $rows->where('status', 'approved')->sum(fn (MobileExpense $e): float => (float) $e->amount),
+                    'budgetBalance' => $mtdBudget - $mtdTotal,
                     'byCategory' => $byCategory,
                 ];
             }
@@ -366,17 +395,18 @@ class SmartCompanyData
         return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'byCategory' => []];
     }
 
-    public static function expenses(): array
+    public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
-                return \App\Models\MobileExpense::query()
-                    ->with('site')
+                return self::financeExpenseQuery($siteId, $applyUserScope)
+                    ->with(['site', 'employee', 'preApproval'])
                     ->orderByDesc('expense_date')
                     ->orderByDesc('id')
                     ->get()
-                    ->map(function (\App\Models\MobileExpense $e): array {
+                    ->map(function (MobileExpense $e): array {
                         $canModify = self::canModifyMobileExpense($e);
+                        $employeeName = trim(($e->employee?->first_name ?? '') . ' ' . ($e->employee?->last_name ?? ''));
 
                         return [
                             'id' => 'EXP-' . $e->id,
@@ -387,7 +417,15 @@ class SmartCompanyData
                             'category' => $e->category ?: 'Other',
                             'detail' => $e->description ?: '-',
                             'amount' => (float) $e->amount,
+                            'method' => $e->payment_type,
+                            'claimable' => $e->payment_type === 'personal' && $e->status === 'approved',
                             'status' => $e->status,
+                            'employeeName' => $employeeName ?: ($e->employee?->email ?: ''),
+                            'preApprovalId' => $e->expense_pre_approval_id,
+                            'preApprovalTitle' => $e->preApproval?->title ?: '',
+                            'preApprovalAmount' => $e->preApproval ? (float) $e->preApproval->estimated_amount : null,
+                            'reviewedAt' => optional($e->reviewed_at)->toIso8601String(),
+                            'paidAt' => optional($e->paid_at)->toIso8601String(),
                             'receiptUrl' => self::mobileExpenseReceiptUrl($e),
                             'canModify' => $canModify,
                             'editUrl' => $canModify ? route('mobile-expense.edit', $e, false) : '',
@@ -427,6 +465,109 @@ class SmartCompanyData
 
         return (int) $expense->employee_id === (int) $user?->employee_id
             && in_array($expense->status, ['draft', 'pending', 'rejected'], true);
+    }
+
+    private static function financeExpenseQuery(string $siteId = 'ALL', bool $applyUserScope = true)
+    {
+        $query = MobileExpense::query();
+
+        self::applyFinanceSiteScope($query, $siteId);
+        if ($applyUserScope) {
+            self::applyFinanceUserScope($query);
+        }
+
+        return $query;
+    }
+
+    private static function financePreApprovalQuery(string $siteId = 'ALL', bool $applyUserScope = true)
+    {
+        $query = ExpensePreApproval::query();
+
+        self::applyFinanceSiteScope($query, $siteId);
+        if ($applyUserScope) {
+            self::applyFinanceUserScope($query);
+        }
+
+        return $query;
+    }
+
+    private static function applyFinanceSiteScope($query, string $siteId): void
+    {
+        $resolvedSiteId = self::resolveSiteId($siteId);
+
+        if ($resolvedSiteId !== null) {
+            $query->where('site_id', $resolvedSiteId);
+        }
+    }
+
+    private static function applyFinanceUserScope($query): void
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if (
+            in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)
+            || $user->access_scope === 'all_sites'
+        ) {
+            return;
+        }
+
+        $employee = $user->employee;
+
+        if ($user->access_scope === 'company' && ($user->allowed_company_id || $employee?->company_id)) {
+            $query->where('company_id', $user->allowed_company_id ?: $employee?->company_id);
+            return;
+        }
+
+        if ($user->access_scope === 'site' && ($user->allowed_site_id || $employee?->site_id)) {
+            $query->where('site_id', $user->allowed_site_id ?: $employee?->site_id);
+            return;
+        }
+
+        if ($user->access_scope === 'team' && $user->allowed_team_id) {
+            $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where('team_id', $user->allowed_team_id));
+            return;
+        }
+
+        if ($user->employee_id) {
+            $query->where('employee_id', $user->employee_id);
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
+    }
+
+    private static function resolveSiteId(string $siteId): ?int
+    {
+        $siteId = trim($siteId);
+
+        if ($siteId === '' || in_array(strtoupper($siteId), ['ALL', 'GLOBAL'], true)) {
+            return null;
+        }
+
+        if (is_numeric($siteId)) {
+            return (int) $siteId;
+        }
+
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('sites')) {
+                $siteCode = str_contains($siteId, ' - ') ? trim(strstr($siteId, ' - ', true)) : $siteId;
+
+                return Site::query()
+                    ->where('code', $siteId)
+                    ->orWhere('code', $siteCode)
+                    ->orWhere('name', $siteId)
+                    ->value('id');
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
     }
 
     public static function equipmentStats(): array { return ['total' => count(self::equipmentList()), 'operable' => 4, 'inoperable' => 1, 'todayInspections' => 4]; }

@@ -161,4 +161,132 @@ class ExpensePreApprovalTest extends TestCase
             'status' => 'pending',
         ]);
     }
+
+    public function test_admin_can_view_all_pre_approval_requests(): void
+    {
+        $otherEmployee = Employee::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'first_name' => 'Alex',
+            'last_name' => 'Worker',
+            'email' => 'alex.worker@example.com',
+            'employment_status' => 'active',
+        ]);
+
+        ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Jane request',
+            'description' => 'First request',
+            'justification' => 'Needed for field work',
+            'estimated_amount' => 100.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'pending',
+        ]);
+
+        ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $otherEmployee->id,
+            'title' => 'Alex request',
+            'description' => 'Second request',
+            'justification' => 'Needed for field work',
+            'estimated_amount' => 200.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'corporate',
+            'status' => 'pending',
+        ]);
+
+        $admin = User::factory()->create([
+            'access_role' => 'payroll',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('expense-pre-approval.index'));
+
+        $response->assertOk();
+        $response->assertSee('Jane request');
+        $response->assertSee('Alex request');
+        $response->assertViewHas('pendingCount', 2);
+    }
+
+    public function test_admin_can_approve_and_reject_pre_approval_requests(): void
+    {
+        $approveRequest = ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Approve me',
+            'description' => 'Ready',
+            'justification' => 'Needed for field work',
+            'estimated_amount' => 100.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'pending',
+        ]);
+
+        $rejectRequest = ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Reject me',
+            'description' => 'Not ready',
+            'justification' => 'Insufficient detail',
+            'estimated_amount' => 200.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'pending',
+        ]);
+
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->patch(route('expense-pre-approval.approve', $approveRequest))
+            ->assertRedirect(route('expense-pre-approval.index'));
+
+        $this->actingAs($admin)
+            ->patch(route('expense-pre-approval.reject', $rejectRequest))
+            ->assertRedirect(route('expense-pre-approval.index'));
+
+        $this->assertDatabaseHas('expense_pre_approvals', [
+            'id' => $approveRequest->id,
+            'status' => 'approved',
+        ]);
+        $this->assertDatabaseHas('expense_pre_approvals', [
+            'id' => $rejectRequest->id,
+            'status' => 'rejected',
+        ]);
+    }
+
+    public function test_worker_cannot_approve_pre_approval_requests(): void
+    {
+        $request = ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Worker cannot approve',
+            'description' => 'Pending request',
+            'justification' => 'Needs approval',
+            'estimated_amount' => 100.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->user)
+            ->patch(route('expense-pre-approval.approve', $request))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('expense_pre_approvals', [
+            'id' => $request->id,
+            'status' => 'pending',
+        ]);
+    }
 }

@@ -14,6 +14,7 @@ class MobileExpense extends Model
         'company_id',
         'site_id',
         'employee_id',
+        'expense_pre_approval_id',
         'payment_type',
         'category',
         'class',
@@ -26,6 +27,12 @@ class MobileExpense extends Model
         'receipt_file',
         'ocr_data',
         'status',
+        'reviewed_at',
+        'reviewed_by_user_id',
+        'rejection_reason',
+        'paid_at',
+        'paid_by_user_id',
+        'payment_reference',
     ];
 
     protected $hidden = [
@@ -38,6 +45,8 @@ class MobileExpense extends Model
             'amount' => 'decimal:2',
             'expense_date' => 'date',
             'ocr_data' => 'array',
+            'reviewed_at' => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -54,5 +63,20 @@ class MobileExpense extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function preApproval(): BelongsTo
+    {
+        return $this->belongsTo(ExpensePreApproval::class, 'expense_pre_approval_id');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by_user_id');
+    }
+
+    public function paidBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by_user_id');
     }
 }

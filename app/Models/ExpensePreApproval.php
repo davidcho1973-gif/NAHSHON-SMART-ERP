@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ExpensePreApproval extends Model
 {
@@ -44,5 +45,10 @@ class ExpensePreApproval extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(MobileExpense::class);
     }
 }

@@ -172,6 +172,10 @@
       background: var(--status-success-dim);
       color: var(--status-success);
     }
+    .status-badge.paid {
+      background: rgba(37, 99, 235, 0.14);
+      color: var(--brand-primary);
+    }
     .status-badge.rejected {
       background: var(--status-danger-dim);
       color: var(--status-danger);
@@ -341,6 +345,7 @@
       <button class="tab-btn active" onclick="filterStatus('all', this)">전체</button>
       <button class="tab-btn" onclick="filterStatus('pending', this)">대기</button>
       <button class="tab-btn" onclick="filterStatus('approved', this)">승인</button>
+      <button class="tab-btn" onclick="filterStatus('paid', this)">지급</button>
       <button class="tab-btn" onclick="filterStatus('rejected', this)">반려</button>
     </div>
 
@@ -365,7 +370,7 @@
           <div class="card-bottom">
             <span class="card-date">{{ $expense->expense_date->format('Y-m-d') }}</span>
             <span class="status-badge {{ $expense->status }}">
-              {{ $expense->status === 'pending' ? '승인대기' : ($expense->status === 'approved' ? '승인완료' : ($expense->status === 'rejected' ? '반려됨' : $expense->status)) }}
+              {{ $expense->status === 'pending' ? '승인대기' : ($expense->status === 'approved' ? '승인완료' : ($expense->status === 'paid' ? '지급완료' : ($expense->status === 'rejected' ? '반려됨' : $expense->status))) }}
             </span>
           </div>
         </div>
@@ -422,6 +427,10 @@
         <div class="detail-item">
           <span class="detail-label">승인 상태</span>
           <span class="detail-value" id="modalStatus">-</span>
+        </div>
+        <div class="detail-item" style="grid-column: span 2" id="modalPreApprovalItem">
+          <span class="detail-label">연결된 사전 예산</span>
+          <span class="detail-value" id="modalPreApproval">-</span>
         </div>
       </div>
       <div class="detail-item" id="receiptPreviewWrap" style="display:none">
@@ -485,9 +494,20 @@
         'draft': '임시저장',
         'pending': '승인대기중',
         'approved': '승인완료',
+        'paid': '지급완료',
         'rejected': '반려됨'
       };
       document.getElementById('modalStatus').textContent = statusLabels[expense.status] || expense.status;
+
+      const preApprovalItem = document.getElementById('modalPreApprovalItem');
+      const preApproval = expense.pre_approval || null;
+      if (preApproval && preApproval.title) {
+        preApprovalItem.style.display = 'flex';
+        document.getElementById('modalPreApproval').textContent = preApproval.title + ' · $' + Number(preApproval.estimated_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+      } else {
+        preApprovalItem.style.display = 'none';
+        document.getElementById('modalPreApproval').textContent = '-';
+      }
 
       const img = document.getElementById('modalReceiptImg');
       const wrap = document.getElementById('receiptPreviewWrap');

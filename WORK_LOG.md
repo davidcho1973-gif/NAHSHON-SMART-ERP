@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-23 | CODEX | Finance DB workflow | Linked approved expense pre-approvals to receipt expenses with a real FK, added review/payment audit fields, admin approve/reject actions, paid status handling, and DB-backed finance dashboard/API aggregation. | Staging deploy | PHP lint passed for changed files; targeted finance tests passed, 29 tests; full `php artisan test` passed, 71 tests. |
 | 2026-06-23 | CODEX | Finance dashboard | Removed the unused Google Drive receipt scan status panel and legacy drive scan JavaScript from the Finance dashboard so the page focuses on DB-backed expense, pre-approval, and AI receipt flows. | Staging deploy | `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/ExpensePreApprovalTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 22 tests. |
 | 2026-06-23 | CODEX | Desktop finance expenses | Exposed receipt view/edit/delete actions directly in the desktop Finance expense table and added API fields so admins can manage scanned receipt records from the visible list. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 17 tests. |
 | 2026-06-23 | CODEX | Mobile expenses | Added receipt expense edit/delete flow: workers can modify their own draft/pending/rejected records, admins/HR/payroll can manage all records, and replacement receipt images are persisted in the DB. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 16 tests. |
@@ -125,6 +126,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-23: Added the same receipt view/edit/delete actions to the desktop Finance expense table so scanned receipt records can be managed from the screen David is using.
 - 2026-06-23: Removed the inactive Google Drive receipt scan status widget and related legacy JavaScript from the Finance dashboard to keep the workflow aligned with the current AI receipt and DB-backed expense system.
 - 2026-06-23: Added database-backed receipt file storage for new mobile expenses so receipt images remain viewable even if Laravel Cloud local storage is cleared by deployment.
+- 2026-06-23: Tightened the finance DB workflow: approved pre-approvals can now be linked to receipt expenses, pending pre-approvals cannot be linked, admins can approve/reject pre-approvals, paid expense records keep reviewer/payment audit fields, and finance stats/expense APIs are calculated from scoped DB records.
 
 ### Current Boundaries
 

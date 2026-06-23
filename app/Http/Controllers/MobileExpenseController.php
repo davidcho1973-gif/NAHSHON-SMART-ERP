@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MobileExpense;
+use App\Models\ExpensePreApproval;
 use App\Models\Site;
 use App\Services\GeminiReceiptAnalyzer;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -27,7 +29,7 @@ class MobileExpenseController extends Controller
 
         $expenses = MobileExpense::query()
             ->when(! $canManageAllExpenses, fn ($query) => $query->where('employee_id', $employeeId))
-            ->with(['employee', 'site'])
+            ->with(['employee', 'site', 'preApproval'])
             ->orderByDesc('expense_date')
             ->orderByDesc('id')
             ->get();
@@ -66,6 +68,7 @@ class MobileExpenseController extends Controller
 
         return view('mobile-expense.wizard', [
             'sites' => $sites,
+            'preApprovals' => $this->availablePreApprovals(),
         ]);
     }
 
@@ -131,6 +134,7 @@ class MobileExpenseController extends Controller
         return view('mobile-expense.edit', [
             'expense' => $expense,
             'sites' => $sites,
+            'preApprovals' => $this->availablePreApprovals($expense->employee_id),
             'canManageAllExpenses' => $this->canManageAllExpenses(),
         ]);
     }
@@ -148,6 +152,7 @@ class MobileExpenseController extends Controller
             'receipt_path' => 'nullable|string',
             'ocr_data' => 'nullable|array',
             'site_id' => 'nullable|exists:sites,id',
+            'expense_pre_approval_id' => 'nullable|exists:expense_pre_approvals,id',
         ]);
 
         $user = auth()->user();
@@ -156,6 +161,7 @@ class MobileExpenseController extends Controller
         $companyId = $employee?->company_id ?? $user->allowed_company_id;
         $siteId = $request->input('site_id') ?: ($employee?->site_id ?? $user->allowed_site_id);
         $employeeId = $user->employee_id;
+        $preApprovalId = $this->validatedPreApprovalId($request->input('expense_pre_approval_id'), $employeeId);
 
         $receiptPath = $request->input('receipt_path');
         $receiptStoragePath = $this->publicReceiptPath($receiptPath);
@@ -165,6 +171,7 @@ class MobileExpenseController extends Controller
             'company_id' => $companyId,
             'site_id' => $siteId,
             'employee_id' => $employeeId,
+            'expense_pre_approval_id' => $preApprovalId,
             'payment_type' => $request->input('payment_type'),
             'category' => $request->input('category'),
             'class' => $request->input('class'),
@@ -195,12 +202,16 @@ class MobileExpenseController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'expense_date' => 'required|date',
             'site_id' => 'nullable|exists:sites,id',
-            'status' => 'nullable|in:draft,pending,approved,rejected',
+            'expense_pre_approval_id' => 'nullable|exists:expense_pre_approvals,id',
+            'status' => 'nullable|in:draft,pending,approved,rejected,paid',
             'receipt' => 'nullable|image|max:10240',
         ]);
 
+        $preApprovalId = $this->validatedPreApprovalId($validated['expense_pre_approval_id'] ?? null, $expense->employee_id);
+
         $updates = [
             'site_id' => ($validated['site_id'] ?? null) ?: $expense->site_id,
+            'expense_pre_approval_id' => $preApprovalId,
             'payment_type' => $validated['payment_type'],
             'category' => $validated['category'],
             'class' => $validated['class'] ?? null,
@@ -211,6 +222,18 @@ class MobileExpenseController extends Controller
 
         if ($this->canManageAllExpenses() && isset($validated['status'])) {
             $updates['status'] = $validated['status'];
+            if (in_array($validated['status'], ['approved', 'rejected', 'paid'], true)) {
+                $updates['reviewed_at'] = now();
+                $updates['reviewed_by_user_id'] = auth()->id();
+            }
+            if ($validated['status'] === 'paid') {
+                $updates['paid_at'] = now();
+                $updates['paid_by_user_id'] = auth()->id();
+            } else {
+                $updates['paid_at'] = null;
+                $updates['paid_by_user_id'] = null;
+                $updates['payment_reference'] = null;
+            }
         } elseif (! $this->canManageAllExpenses()) {
             $updates['status'] = 'pending';
         }
@@ -279,6 +302,42 @@ class MobileExpenseController extends Controller
     private function canManageAllExpenses(): bool
     {
         return in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
+    }
+
+    private function availablePreApprovals(?int $employeeId = null)
+    {
+        $user = auth()->user();
+
+        return ExpensePreApproval::query()
+            ->where('status', 'approved')
+            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
+            ->when(! $this->canManageAllExpenses(), fn ($query) => $query->where('employee_id', $user?->employee_id))
+            ->orderByDesc('planned_date')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    private function validatedPreApprovalId(mixed $value, ?int $employeeId): ?int
+    {
+        $preApprovalId = $value ? (int) $value : null;
+
+        if (! $preApprovalId) {
+            return null;
+        }
+
+        $exists = ExpensePreApproval::query()
+            ->whereKey($preApprovalId)
+            ->where('status', 'approved')
+            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
+            ->exists();
+
+        if (! $exists) {
+            throw ValidationException::withMessages([
+                'expense_pre_approval_id' => 'Only approved pre-approval requests available to this user can be linked.',
+            ]);
+        }
+
+        return $preApprovalId;
     }
 
     private function storedReceiptFile(?string $path): ?array

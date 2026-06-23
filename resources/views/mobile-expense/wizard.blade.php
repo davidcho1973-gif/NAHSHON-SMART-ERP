@@ -435,6 +435,17 @@
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label" for="preApprovalSelect">승인된 사전 예산과 연결</label>
+          <select name="expense_pre_approval_id" id="preApprovalSelect" class="input-text" style="background-color: var(--bg-surface);">
+            <option value="">연결 안함</option>
+            @foreach($preApprovals as $preApproval)
+              <option value="{{ $preApproval->id }}">
+                {{ $preApproval->title }} - ${{ number_format($preApproval->estimated_amount, 2) }}
+              </option>
+            @endforeach
+          </select>
+        </div>
+        <div class="form-group">
           <label class="form-label" for="classInput">부서 / 클래스 (Class)</label>
           <input type="text" name="class" id="classInput" class="input-text" placeholder="예: HR, SALES, WBS-01">
         </div>

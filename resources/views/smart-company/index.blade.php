@@ -3937,7 +3937,26 @@
             window.API.getExpenses()
           ]);
 
-          var budgetPct = stats.mtdBudget > 0 ? Math.round(stats.mtdTotal / stats.mtdBudget * 100) : 0;
+          stats = stats || {};
+          expenses = Array.isArray(expenses) ? expenses : [];
+
+          var mtdBudget = Number(stats.mtdBudget || 0);
+          var mtdTotal = Number(stats.mtdTotal || 0);
+          var budgetBalance = Number((stats.budgetBalance !== undefined ? stats.budgetBalance : (mtdBudget - mtdTotal)) || 0);
+          var budgetPct = mtdBudget > 0 ? Math.min(100, Math.round(mtdTotal / mtdBudget * 100)) : 0;
+          var pendingApproval = Number(stats.pendingApproval || 0);
+          var pendingAmount = Number(stats.pendingAmount || 0);
+
+          function financeStatusLabel(status) {
+            var labels = {
+              draft: '임시저장',
+              pending: '승인대기',
+              approved: '승인완료',
+              paid: '지급완료',
+              rejected: '반려됨'
+            };
+            return labels[status] || status || '-';
+          }
 
           var expensesHtml = expenses.map(function (ex) {
             var amtStyle = ex.amount >= 500 ? 'color:var(--status-warning);font-weight:600' : '';
@@ -3948,22 +3967,34 @@
               ? '<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">' + receiptLink + editLink + deleteButton + '</div>'
               : '<span style="color:var(--text-tertiary)">-</span>';
             var siteName = (ex.site && ex.site !== '-') ? '<span class="tag">' + ex.site + '</span>' : '<span style="color:var(--text-tertiary)">-</span>';
-            var actName = (ex.account && ex.account !== '-') ? ex.account : '<span style="color:var(--text-tertiary)">-</span>';
-            return '<tr><td class="cell-mono">' + ex.date + '</td><td>' + siteName + '</td><td>' + actName + '</td><td class="cell-primary">' + ex.detail + '</td><td class="cell-mono" style="text-align:right;' + amtStyle + '">' + fmtUSD(ex.amount) + '</td><td>' + actions + '</td></tr>';
+            var accountName = (ex.account && ex.account !== '-') ? safeHtml(ex.account) : '<span style="color:var(--text-tertiary)">-</span>';
+            var linkedBudget = ex.preApprovalTitle
+              ? '<div style="font-size:11px;color:var(--status-success);margin-top:4px">연결 예산: ' + safeHtml(ex.preApprovalTitle) + (ex.preApprovalAmount ? ' · ' + fmtUSD(ex.preApprovalAmount) : '') + '</div>'
+              : '';
+            var employee = ex.employeeName ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">제출자: ' + safeHtml(ex.employeeName) + '</div>' : '';
+            return '<tr><td class="cell-mono">' + safeHtml(ex.date || '-') + '</td><td>' + siteName + '</td><td>' + accountName + '</td><td class="cell-primary">' + safeHtml(ex.detail || '-') + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">상태: ' + financeStatusLabel(ex.status) + '</div>' + linkedBudget + employee + '</td><td class="cell-mono" style="text-align:right;' + amtStyle + '">' + fmtUSD(ex.amount) + '</td><td>' + actions + '</td></tr>';
           }).join('');
 
-          var categoryHtml = stats.byCategory.map(function (c) {
-            var pct = stats.mtdTotal > 0 ? Math.round(c.amount / stats.mtdTotal * 100) : 0;
-            return '<div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:12px;color:var(--text-primary)">' + c.name + '</span><span class="cell-mono" style="font-size:12px">' + fmtUSD(c.amount) + '</span></div>' +
+          if (!expensesHtml) {
+            expensesHtml = '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 비용 내역이 없습니다.</td></tr>';
+          }
+
+          var categoryHtml = (stats.byCategory || []).map(function (c) {
+            var pct = mtdTotal > 0 ? Math.round(Number(c.amount || 0) / mtdTotal * 100) : 0;
+            return '<div><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:12px;color:var(--text-primary)">' + safeHtml(c.name || 'Other') + '</span><span class="cell-mono" style="font-size:12px">' + fmtUSD(c.amount) + '</span></div>' +
               '<div class="progress-wrapper"><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:' + c.color + '"></div></div><span class="progress-text" style="color:var(--text-tertiary)">' + pct + '%</span></div></div>';
           }).join('');
+
+          if (!categoryHtml) {
+            categoryHtml = '<div style="text-align:center;color:var(--text-tertiary);padding:24px">이번 달 지출 분류가 없습니다.</div>';
+          }
 
           pageContainer.innerHTML =
             '<div class="header-section"><div><h1 class="page-title">ìž¬ë¬´ / ë¹„ìš© ê´€ë¦¬</h1><p class="page-subtitle">ë¹„ìš© ì œì¶œ ë‚´ì—­ Â· ìŠ¹ì¸ ëŒ€ê¸° Â· ì²­êµ¬ í˜„í™©</p></div>' +
             '<div class="action-row" style="flex-wrap: wrap; gap: 8px;">' +
-            '  <a href="/mobile-expense/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-receipt" style="font-size:16px"></i> 내 경비 목록</a>' +
+            '  <a href="/mobile-expense/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-receipt" style="font-size:16px"></i> 비용/영수증 목록</a>' +
             '  <a href="/expense-pre-approval/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-hand-coins" style="font-size:16px"></i> 사전 예산 승인</a>' +
-            '  <a href="/mobile-expense/wizard-ai" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;"><i class="ph ph-magic-wand" style="font-size:16px"></i> AI 경비 등록 위저드</a>' +
+            '  <a href="/mobile-expense/wizard-ai" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;"><i class="ph ph-magic-wand" style="font-size:16px"></i> AI 경비 등록</a>' +
             '  <button class="btn-secondary" style="height:38px;padding:0 14px;border-radius:6px;" onclick="window.print()"><i class="ph ph-printer"></i> 지출내역 출력</button>' +
             '</div></div>' +
             '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +

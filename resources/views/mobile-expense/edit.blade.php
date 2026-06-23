@@ -80,11 +80,23 @@
         </select>
       </div>
 
+      <div class="field">
+        <label for="expense_pre_approval_id">승인된 사전 예산과 연결</label>
+        <select id="expense_pre_approval_id" name="expense_pre_approval_id">
+          <option value="">연결 안함</option>
+          @foreach ($preApprovals as $preApproval)
+            <option value="{{ $preApproval->id }}" @selected((string) old('expense_pre_approval_id', $expense->expense_pre_approval_id) === (string) $preApproval->id)>
+              {{ $preApproval->title }} - ${{ number_format($preApproval->estimated_amount, 2) }}
+            </option>
+          @endforeach
+        </select>
+      </div>
+
       @if ($canManageAllExpenses)
         <div class="field">
           <label for="status">상태</label>
           <select id="status" name="status">
-            @foreach (['draft' => 'Draft', 'pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'] as $value => $label)
+            @foreach (['draft' => 'Draft', 'pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'paid' => 'Paid'] as $value => $label)
               <option value="{{ $value }}" @selected(old('status', $expense->status) === $value)>{{ $label }}</option>
             @endforeach
           </select>

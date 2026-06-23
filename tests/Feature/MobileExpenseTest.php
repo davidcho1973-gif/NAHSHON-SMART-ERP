@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
 use App\Models\Site;
 use App\Models\User;
@@ -184,6 +185,76 @@ class MobileExpenseTest extends TestCase
             'category' => 'Office Supplies',
             'amount' => 45.99,
             'status' => 'pending',
+        ]);
+    }
+
+    public function test_mobile_expense_can_link_approved_pre_approval(): void
+    {
+        $preApproval = ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Approved travel budget',
+            'description' => 'Hotel and rental car',
+            'justification' => 'Project travel',
+            'estimated_amount' => 800.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'approved',
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+            'payment_type' => 'personal',
+            'category' => 'Travel & Lodging',
+            'class' => 'Field',
+            'description' => 'Hotel receipt',
+            'amount' => '450.00',
+            'expense_date' => now()->format('Y-m-d'),
+            'site_id' => $this->site->id,
+            'expense_pre_approval_id' => $preApproval->id,
+        ]);
+
+        $response->assertRedirect(route('mobile-expense.index'));
+
+        $this->assertDatabaseHas('mobile_expenses', [
+            'employee_id' => $this->employee->id,
+            'expense_pre_approval_id' => $preApproval->id,
+            'description' => 'Hotel receipt',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_mobile_expense_cannot_link_pending_pre_approval(): void
+    {
+        $preApproval = ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Pending travel budget',
+            'description' => 'Hotel and rental car',
+            'justification' => 'Project travel',
+            'estimated_amount' => 800.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+            'payment_type' => 'personal',
+            'category' => 'Travel & Lodging',
+            'class' => 'Field',
+            'description' => 'Hotel receipt',
+            'amount' => '450.00',
+            'expense_date' => now()->format('Y-m-d'),
+            'site_id' => $this->site->id,
+            'expense_pre_approval_id' => $preApproval->id,
+        ]);
+
+        $response->assertSessionHasErrors('expense_pre_approval_id');
+
+        $this->assertDatabaseMissing('mobile_expenses', [
+            'expense_pre_approval_id' => $preApproval->id,
+            'description' => 'Hotel receipt',
         ]);
     }
 
@@ -477,10 +548,10 @@ class MobileExpenseTest extends TestCase
         $this->assertDatabaseMissing('mobile_expenses', ['id' => $expense->id]);
     }
 
-    public function test_desktop_expense_api_exposes_edit_and_delete_actions_for_admin(): void
+    public function test_admin_paid_status_records_review_and_payment_audit_fields(): void
     {
         $admin = User::factory()->create([
-            'access_role' => 'admin',
+            'access_role' => 'payroll',
             'access_scope' => 'all_sites',
             'account_status' => 'active',
         ]);
@@ -489,6 +560,61 @@ class MobileExpenseTest extends TestCase
             'company_id' => $this->company->id,
             'site_id' => $this->site->id,
             'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Travel & Lodging',
+            'description' => 'Hotel reimbursement',
+            'amount' => 125.50,
+            'expense_date' => now()->format('Y-m-d'),
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('mobile-expense.update', $expense), [
+                'payment_type' => 'personal',
+                'category' => 'Travel & Lodging',
+                'description' => 'Hotel reimbursement',
+                'amount' => 125.50,
+                'expense_date' => now()->format('Y-m-d'),
+                'site_id' => $this->site->id,
+                'status' => 'paid',
+            ])
+            ->assertRedirect(route('mobile-expense.index'));
+
+        $expense->refresh();
+
+        $this->assertSame('paid', $expense->status);
+        $this->assertNotNull($expense->reviewed_at);
+        $this->assertSame($admin->id, $expense->reviewed_by_user_id);
+        $this->assertNotNull($expense->paid_at);
+        $this->assertSame($admin->id, $expense->paid_by_user_id);
+    }
+
+    public function test_desktop_expense_api_exposes_edit_and_delete_actions_for_admin(): void
+    {
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $preApproval = ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Approved lodging budget',
+            'description' => 'Hotel budget',
+            'justification' => 'Project travel',
+            'estimated_amount' => 300.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'approved',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'expense_pre_approval_id' => $preApproval->id,
             'payment_type' => 'personal',
             'category' => 'Travel & Lodging',
             'description' => 'Hotel receipt',
@@ -506,8 +632,78 @@ class MobileExpenseTest extends TestCase
         $response->assertOk();
         $this->assertSame('EXP-' . $expense->id, $response->json('0.id'));
         $this->assertTrue($response->json('0.canModify'));
+        $this->assertSame($preApproval->id, $response->json('0.preApprovalId'));
+        $this->assertSame('Approved lodging budget', $response->json('0.preApprovalTitle'));
+        $this->assertSame(300, $response->json('0.preApprovalAmount'));
         $this->assertSame(route('mobile-expense.edit', $expense, false), $response->json('0.editUrl'));
         $this->assertSame(route('mobile-expense.destroy', $expense, false), $response->json('0.deleteUrl'));
+    }
+
+    public function test_desktop_finance_stats_are_built_from_linked_database_records(): void
+    {
+        $admin = User::factory()->create([
+            'access_role' => 'payroll',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Approved monthly budget',
+            'description' => 'Approved travel',
+            'justification' => 'Project travel',
+            'estimated_amount' => 300.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'approved',
+        ]);
+
+        ExpensePreApproval::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'title' => 'Pending monthly budget',
+            'description' => 'Pending travel',
+            'justification' => 'Project travel',
+            'estimated_amount' => 50.00,
+            'planned_date' => now()->format('Y-m-d'),
+            'payment_method' => 'personal',
+            'status' => 'pending',
+        ]);
+
+        foreach ([
+            ['amount' => 125.00, 'status' => 'approved', 'payment_type' => 'personal', 'description' => 'Approved reimbursement'],
+            ['amount' => 10.00, 'status' => 'pending', 'payment_type' => 'corporate', 'description' => 'Pending receipt'],
+            ['amount' => 5.00, 'status' => 'paid', 'payment_type' => 'personal', 'description' => 'Paid reimbursement'],
+            ['amount' => 1000.00, 'status' => 'rejected', 'payment_type' => 'personal', 'description' => 'Rejected receipt'],
+        ] as $row) {
+            MobileExpense::create([
+                'company_id' => $this->company->id,
+                'site_id' => $this->site->id,
+                'employee_id' => $this->employee->id,
+                'payment_type' => $row['payment_type'],
+                'category' => 'Travel & Lodging',
+                'description' => $row['description'],
+                'amount' => $row['amount'],
+                'expense_date' => now()->format('Y-m-d'),
+                'status' => $row['status'],
+            ]);
+        }
+
+        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_getFinanceStats', [
+            'args' => [],
+            'siteId' => 'ALL',
+        ]);
+
+        $response->assertOk();
+        $this->assertEquals(300.00, $response->json('mtdBudget'));
+        $this->assertEquals(140.00, $response->json('mtdTotal'));
+        $this->assertEquals(2, $response->json('pendingApproval'));
+        $this->assertEquals(60.00, $response->json('pendingAmount'));
+        $this->assertEquals(125.00, $response->json('claimable'));
+        $this->assertEquals(160.00, $response->json('budgetBalance'));
     }
 
     public function test_desktop_universal_ai_scan_saves_expense(): void

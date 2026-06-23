@@ -31,6 +31,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/expense-pre-approval/index', [ExpensePreApprovalController::class, 'index'])->name('expense-pre-approval.index');
     Route::get('/expense-pre-approval/create', [ExpensePreApprovalController::class, 'create'])->name('expense-pre-approval.create');
     Route::post('/expense-pre-approval/store', [ExpensePreApprovalController::class, 'store'])->name('expense-pre-approval.store');
+    Route::patch('/expense-pre-approval/{expensePreApproval}/approve', [ExpensePreApprovalController::class, 'approve'])->name('expense-pre-approval.approve');
+    Route::patch('/expense-pre-approval/{expensePreApproval}/reject', [ExpensePreApprovalController::class, 'reject'])->name('expense-pre-approval.reject');
 
     // Universal Scanner and Compatibility Adapter Route
     Route::post('/smart-company-api/{method}', \App\Http\Controllers\SmartCompanyApiController::class)

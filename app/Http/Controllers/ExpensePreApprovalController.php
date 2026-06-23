@@ -13,10 +13,11 @@ class ExpensePreApprovalController extends Controller
     {
         $user = auth()->user();
         $employeeId = $user->employee_id;
+        $canManageAllRequests = $this->canManageAllRequests();
 
-        // Fetch user's own pre-approval requests
         $requests = ExpensePreApproval::query()
-            ->where('employee_id', $employeeId)
+            ->when(! $canManageAllRequests, fn ($query) => $query->where('employee_id', $employeeId))
+            ->with(['employee', 'site'])
             ->orderByDesc('planned_date')
             ->orderByDesc('id')
             ->get();
@@ -33,6 +34,7 @@ class ExpensePreApprovalController extends Controller
             'pendingCount' => $pendingCount,
             'approvedCount' => $approvedCount,
             'rejectedCount' => $rejectedCount,
+            'canManageAllRequests' => $canManageAllRequests,
         ]);
     }
 
@@ -94,5 +96,30 @@ class ExpensePreApprovalController extends Controller
 
         return redirect()->route('expense-pre-approval.index')
             ->with('success', $status === 'draft' ? 'Pre-approval draft saved.' : 'Pre-approval request submitted.');
+    }
+
+    public function approve(ExpensePreApproval $expensePreApproval)
+    {
+        abort_unless($this->canManageAllRequests(), 403);
+
+        $expensePreApproval->update(['status' => 'approved']);
+
+        return redirect()->route('expense-pre-approval.index')
+            ->with('success', 'Pre-approval request approved.');
+    }
+
+    public function reject(ExpensePreApproval $expensePreApproval)
+    {
+        abort_unless($this->canManageAllRequests(), 403);
+
+        $expensePreApproval->update(['status' => 'rejected']);
+
+        return redirect()->route('expense-pre-approval.index')
+            ->with('success', 'Pre-approval request rejected.');
+    }
+
+    private function canManageAllRequests(): bool
+    {
+        return in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
     }
 }
