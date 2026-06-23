@@ -77,8 +77,6 @@
                     "deploy:prod":  [
                                         "@php artisan up",
                                         "composer install --no-dev --prefer-dist --optimize-autoloader",
-                                        "@php artisan optimize:clear",
-                                        "@php artisan filament:optimize-clear",
                                         "@php artisan migrate --force",
                                         "npm ci",
                                         "npm run build",
