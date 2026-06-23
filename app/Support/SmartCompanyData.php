@@ -438,8 +438,65 @@ class SmartCompanyData
     public static function vehicleList(): array { return [['id' => 'VH-001', 'name' => 'Ford F-250', 'driver' => 'James Kim', 'site' => 'HFF-02', 'status' => '운행중'], ['id' => 'VH-002', 'name' => 'Toyota Sienna', 'driver' => 'Admin', 'site' => 'LGES-AZ', 'status' => '정비중']]; }
     public static function rentalStats(): array { return ['total' => 8, 'active' => 5, 'overdue' => 1, 'returned' => 2, 'returningSoon' => 2, 'mtdCost' => 28600]; }
     public static function rentalList(): array { return [['id' => 'RN-001', 'vendor' => 'United Rentals', 'item' => 'Scissor Lift', 'site' => 'HFF-02', 'startDate' => '2026-06-10', 'endDate' => '2026-06-24', 'cost' => 4200, 'status' => '반납예정'], ['id' => 'RN-002', 'vendor' => 'Sunbelt', 'item' => 'Telehandler', 'site' => 'LGES-AZ', 'startDate' => '2026-06-01', 'endDate' => '2026-06-18', 'cost' => 7600, 'status' => '만료임박']]; }
-    public static function housingStats(): array { return ['total' => 12, 'occupied' => 9, 'available' => 3, 'maintenance' => 1, 'occupancyRate' => 75]; }
-    public static function housingList(): array { return [['id' => 'HS-101', 'name' => 'Mesa House A', 'beds' => 4, 'occupied' => 3, 'status' => '정상'], ['id' => 'HS-102', 'name' => 'Tempe Apt B', 'beds' => 3, 'occupied' => 3, 'status' => '수리필요']]; }
+    public static function housingStats(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('housings')) {
+                $rows = \App\Models\Housing::query()->get();
+                $total = $rows->count();
+                $occupied = $rows->filter(fn (\App\Models\Housing $h): bool => (int) $h->beds > 0 && (int) $h->occupied >= (int) $h->beds)->count();
+                $maintenance = $rows->where('status', 'maintenance')->count();
+
+                return [
+                    'total' => $total,
+                    'occupied' => $occupied,
+                    'available' => max(0, $total - $occupied),
+                    'maintenance' => $maintenance,
+                    'occupancyRate' => $total > 0 ? (int) round($occupied / $total * 100) : 0,
+                ];
+            }
+        } catch (\Throwable) {
+            // Fall back to empty stats when the table is not ready.
+        }
+
+        return ['total' => 0, 'occupied' => 0, 'available' => 0, 'maintenance' => 0, 'occupancyRate' => 0];
+    }
+
+    public static function housingList(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('housings')) {
+                return \App\Models\Housing::query()
+                    ->with('site')
+                    ->orderBy('code')
+                    ->get()
+                    ->map(fn (\App\Models\Housing $h): array => [
+                        'id' => $h->code,
+                        'name' => $h->name,
+                        'site' => $h->site?->code ?: '-',
+                        'beds' => (int) $h->beds,
+                        'occupied' => (int) $h->occupied,
+                        'status' => self::housingStatusLabel($h->status),
+                    ])
+                    ->all();
+            }
+        } catch (\Throwable) {
+            // Fall back to an empty list when the table is not ready.
+        }
+
+        return [];
+    }
+
+    private static function housingStatusLabel(?string $status): string
+    {
+        return match ($status) {
+            'available' => '정상',
+            'full' => '만실',
+            'maintenance' => '수리필요',
+            'inactive' => '미사용',
+            default => (string) $status,
+        };
+    }
     public static function flightList(): array { return [['id' => 'FL-001', 'name' => 'Han Gildong', 'direction' => '입국', 'from' => 'ICN', 'to' => 'PHX', 'depDateTime' => '2026-06-28 10:30', 'airline' => 'Korean Air', 'pnr' => 'KXNV7T', 'price' => 1240, 'status' => '발권', 'needPickup' => true, 'pickupBy' => 'Lee', 'housingReady' => true]]; }
     public static function officeSupplies(): array { return [['id' => 'OF-001', 'category' => '소모품', 'name' => 'Copy Paper A4', 'qty' => 3, 'minQty' => 5, 'location' => 'Office cabinet', 'lastRestock' => '2026-06-01', 'unitPrice' => 45, 'reorder' => true], ['id' => 'OF-002', 'category' => 'Safety', 'name' => 'Safety Vest', 'qty' => 8, 'minQty' => 10, 'location' => 'Safety shelf', 'lastRestock' => '2026-05-24', 'unitPrice' => 35, 'reorder' => true]]; }
     public static function vendors(): array { $fromDb = self::smartRecords('vendors'); return $fromDb ?: [['id' => 'VEN-001', 'name' => 'Graybar', 'category' => 'Electrical Supply', 'manager' => 'Amy', 'phone' => '602-555-0111', 'email' => 'quotes@graybar.example', 'contractStatus' => '진행중', 'site' => 'ALL'], ['id' => 'VEN-002', 'name' => 'United Rentals', 'category' => 'Equipment Rental', 'manager' => 'Mark', 'phone' => '602-555-0122', 'email' => 'az@united.example', 'contractStatus' => '진행중', 'site' => 'ALL']]; }
