@@ -25,6 +25,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -57,233 +58,206 @@ class MemberRegistrationResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('applicant_code')
-                ->label('Applicant code / 지원자 코드')
-                ->disabled()
-                ->dehydrated(false)
-                ->helperText('Created only after the applicant submits the public application.'),
-            Select::make('preferred_language')
-                ->label('Application language')
-                ->options(MemberRegistration::languageOptions())
-                ->default('es')
-                ->disabled()
-                ->dehydrated(false),
-            Select::make('member_type')
-                ->label('Member type')
-                ->options([
-                    'worker' => 'Worker',
-                    'staff' => 'Staff',
-                    'vendor' => 'Vendor',
-                    'visitor' => 'Visitor',
-                    'driver' => 'Driver',
-                ])
-                ->default('worker')
-                ->disabled()
-                ->dehydrated(false),
-            TextInput::make('last_name')
-                ->label('Last name / 성')
-                ->maxLength(120)
-                ->disabled()
-                ->dehydrated(false)
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
-            TextInput::make('first_name')
-                ->label('First name / 이름')
-                ->maxLength(120)
-                ->disabled()
-                ->dehydrated(false)
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
-            TextInput::make('full_name')
-                ->label('Full name')
-                ->disabled()
-                ->dehydrated(false)
-                ->maxLength(255),
-            TextInput::make('preferred_name')->disabled()->dehydrated(false)->maxLength(255),
-            TextInput::make('email')->email()->disabled()->dehydrated(false)->maxLength(255),
-            TextInput::make('phone')->tel()->disabled()->dehydrated(false)->maxLength(80),
-            DatePicker::make('date_of_birth')
-                ->label('Date of birth')
-                ->disabled()
-                ->dehydrated(false),
-            TextInput::make('address')
-                ->label('Address')
-                ->disabled()
-                ->dehydrated(false)
-                ->maxLength(255)
-                ->columnSpanFull(),
-            TextInput::make('emergency_contact_name')
-                ->label('Emergency contact')
-                ->disabled()
-                ->dehydrated(false)
-                ->maxLength(255),
-            TextInput::make('emergency_contact_phone')
-                ->label('Emergency phone')
-                ->tel()
-                ->disabled()
-                ->dehydrated(false)
-                ->maxLength(80),
-            TextInput::make('employee_number')->label('Employee ID')->disabled()->dehydrated(false)->maxLength(80),
-            Select::make('company_id')
-                ->label('Company')
-                ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
-                ->searchable()
-                ->helperText('Admin assignment for the Employee draft.'),
-            Select::make('site_id')
-                ->label('Site')
-                ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
-                ->searchable(),
-            Select::make('team_id')
-                ->label('Team')
-                ->options(fn (): array => Team::query()->orderBy('name')->pluck('name', 'id')->all())
-                ->searchable(),
-            TextInput::make('nationality')->disabled()->dehydrated(false)->maxLength(80),
-            Select::make('role')
-                ->label('Position')
-                ->options(MemberRegistration::roleOptions())
-                ->searchable()
-                ->disabled()
-                ->dehydrated(false),
-            TextInput::make('trade')->disabled()->dehydrated(false)->maxLength(120),
-            DatePicker::make('start_date')->disabled()->dehydrated(false),
-            DatePicker::make('end_date')->disabled()->dehydrated(false),
-            TextInput::make('visa_type')->disabled()->dehydrated(false)->maxLength(60),
-            DatePicker::make('visa_expires_on')->disabled()->dehydrated(false),
-            DatePicker::make('safety_training_expires_on')
-                ->label('Safety training expires'),
-            Select::make('identity_status')
-                ->options([
-                    'pending' => 'Pending',
-                    'verified' => 'Verified',
-                    'needs_review' => 'Needs review',
-                ])
-                ->default('pending')
-                ->required(),
-            Select::make('document_status')
-                ->options([
-                    'missing' => 'Missing',
-                    'pending' => 'Pending',
-                    'verified' => 'Verified',
-                    'expired' => 'Expired',
-                ])
-                ->default('missing')
-                ->required(),
-            Select::make('interview_status')
-                ->label('Interview')
-                ->options([
-                    'pending' => 'Pending',
-                    'scheduled' => 'Scheduled',
-                    'passed' => 'Passed',
-                    'failed' => 'Failed',
-                ])
-                ->default('pending')
-                ->required(),
-            DatePicker::make('interviewed_at')
-                ->label('Interview date'),
-            Textarea::make('interview_notes')
-                ->label('Interview notes')
-                ->columnSpanFull(),
-            Select::make('safety_training_status')
-                ->label('Hoffman safety training')
-                ->options([
-                    'pending' => 'Pending',
-                    'completed' => 'Completed',
-                    'expired' => 'Expired',
-                ])
-                ->default('pending')
-                ->required(),
-            DatePicker::make('safety_training_completed_on')
-                ->label('Safety training completed'),
-            Select::make('badge_registration_status')
-                ->label('Badge / NFC registration')
-                ->options([
-                    'pending' => 'Pending',
-                    'registered' => 'Registered',
-                ])
-                ->default('pending')
-                ->required(),
-            TextInput::make('nfc_raw_uid')
-                ->label('Raw NFC UID')
-                ->helperText('Example: 90227842853E04. ERP stores it as N- plus the last 9 characters.')
-                ->maxLength(120)
-                ->live(onBlur: true)
-                ->afterStateUpdated(function (Set $set, mixed $state): void {
-                    if (filled($state)) {
-                        $set('badge_number', MemberRegistration::normalizeNfcUid((string) $state));
-                    }
-                }),
-            TextInput::make('badge_number')
-                ->label('NFC ID')
-                ->helperText('Auto-created from the raw NFC UID.')
-                ->disabled()
-                ->dehydrated()
-                ->maxLength(80),
-            FileUpload::make('badge_photo_path')
-                ->label('Hoffman badge photo / camera')
-                ->disk('public')
-                ->directory('member-badges')
-                ->visibility('public')
-                ->image()
-                ->imagePreviewHeight('180')
-                ->maxSize(10240)
-                ->openable()
-                ->downloadable()
-                ->helperText('Take a badge photo on mobile or upload an image. Gemini analyzes it after upload.')
-                ->extraInputAttributes(['accept' => 'image/*', 'capture' => 'environment'], merge: true)
-                ->afterStateUpdated(function (Set $set, Get $get, ?TemporaryUploadedFile $state): void {
-                    if (! $state instanceof TemporaryUploadedFile) {
-                        return;
-                    }
+            Section::make('지원 현황')
+                ->description('지원자 코드와 현재 온보딩 단계를 한눈에 확인합니다.')
+                ->columns(3)
+                ->schema([
+                    TextInput::make('applicant_code')
+                        ->label('Applicant code / 지원자 코드')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->helperText('Created only after the applicant submits the public application.'),
+                    Select::make('onboarding_status')
+                        ->label('Onboarding status / 진행 상태')
+                        ->options(MemberRegistration::onboardingStatusOptions())
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->helperText('우측 액션 버튼(제출·인터뷰·직원초안·안전교육·뱃지·활성화)으로만 변경됩니다.'),
+                    TextInput::make('employee_number')
+                        ->label('Employee ID')
+                        ->placeholder('Not synced')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->maxLength(80),
+                ]),
 
-                    self::analyzeBadgePhoto($state, $set, $get);
-                })
-                ->columnSpanFull(),
-            Actions::make([
-                Action::make('analyzeBadgePhoto')
-                    ->label('Analyze badge photo')
-                    ->icon('heroicon-o-sparkles')
-                    ->color('info')
-                    ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
-            ])->columnSpanFull(),
-            TextInput::make('badge_company_name')
-                ->label('Badge company')
-                ->maxLength(255),
-            TextInput::make('badge_last_name')
-                ->label('Badge last name')
-                ->maxLength(120),
-            TextInput::make('badge_first_name')
-                ->label('Badge first name')
-                ->maxLength(120),
-            TextInput::make('badge_role')
-                ->label('Badge role')
-                ->maxLength(120),
-            DatePicker::make('badge_issued_on')
-                ->label('Badge issued on / hire date'),
-            Select::make('onboarding_status')
-                ->options(MemberRegistration::onboardingStatusOptions())
-                ->default('draft')
-                ->disabled()
-                ->dehydrated(false)
-                ->helperText('Changed by workflow actions: submit, interview pass, employee draft, safety, badge/NFC, activate, reject.'),
-            Textarea::make('notes')
-                ->label('Admin review notes')
-                ->columnSpanFull(),
-            KeyValue::make('payload')
-                ->keyLabel('Signal')
-                ->valueLabel('Value')
-                ->disabled()
-                ->dehydrated(false)
-                ->columnSpanFull(),
-            Hidden::make('badge_analysis_model'),
-            Hidden::make('badge_analyzed_at'),
-            KeyValue::make('badge_analysis_payload')
-                ->label('Gemini badge analysis')
-                ->keyLabel('Field')
-                ->valueLabel('Value')
-                ->disabled()
-                ->dehydrated()
-                ->visible(fn (Get $get): bool => filled($get('badge_analysis_payload')))
-                ->columnSpanFull(),
+            Section::make('① 지원자 제출 정보')
+                ->description('지원자가 공개 지원서에서 직접 제출한 값입니다. 여기서는 수정할 수 없습니다.')
+                ->collapsible()
+                ->collapsed()
+                ->columns(2)
+                ->schema([
+                    Select::make('preferred_language')
+                        ->label('Application language')
+                        ->options(MemberRegistration::languageOptions())
+                        ->disabled()
+                        ->dehydrated(false),
+                    Select::make('member_type')
+                        ->label('Member type')
+                        ->options([
+                            'worker' => 'Worker',
+                            'staff' => 'Staff',
+                            'vendor' => 'Vendor',
+                            'visitor' => 'Visitor',
+                            'driver' => 'Driver',
+                        ])
+                        ->disabled()
+                        ->dehydrated(false),
+                    TextInput::make('last_name')->label('Last name / 성')->disabled()->dehydrated(false)->maxLength(120),
+                    TextInput::make('first_name')->label('First name / 이름')->disabled()->dehydrated(false)->maxLength(120),
+                    TextInput::make('full_name')->label('Full name')->disabled()->dehydrated(false)->maxLength(255),
+                    TextInput::make('preferred_name')->label('Preferred name')->disabled()->dehydrated(false)->maxLength(255),
+                    TextInput::make('email')->label('Email')->email()->disabled()->dehydrated(false)->maxLength(255),
+                    TextInput::make('phone')->label('Phone')->tel()->disabled()->dehydrated(false)->maxLength(80),
+                    DatePicker::make('date_of_birth')->label('Date of birth')->disabled()->dehydrated(false),
+                    TextInput::make('nationality')->label('Nationality')->disabled()->dehydrated(false)->maxLength(80),
+                    TextInput::make('address')
+                        ->label('Address')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->maxLength(255)
+                        ->columnSpanFull(),
+                    TextInput::make('emergency_contact_name')->label('Emergency contact')->disabled()->dehydrated(false)->maxLength(255),
+                    TextInput::make('emergency_contact_phone')->label('Emergency phone')->tel()->disabled()->dehydrated(false)->maxLength(80),
+                    Select::make('role')
+                        ->label('Position')
+                        ->options(MemberRegistration::roleOptions())
+                        ->disabled()
+                        ->dehydrated(false),
+                    TextInput::make('trade')->label('Trade')->disabled()->dehydrated(false)->maxLength(120),
+                    DatePicker::make('start_date')->label('Desired start date')->disabled()->dehydrated(false),
+                    DatePicker::make('end_date')->label('End date')->disabled()->dehydrated(false),
+                    TextInput::make('visa_type')->label('Visa type')->disabled()->dehydrated(false)->maxLength(60),
+                    DatePicker::make('visa_expires_on')->label('Visa expires')->disabled()->dehydrated(false),
+                ]),
+
+            Section::make('② HR 서류 검증')
+                ->description('제출 서류의 신원·문서 상태를 HR이 직접 판단합니다. 업로드 원본은 Member Documents에서 확인하세요.')
+                ->columns(2)
+                ->schema([
+                    Select::make('identity_status')
+                        ->label('Identity status')
+                        ->options([
+                            'pending' => 'Pending',
+                            'verified' => 'Verified',
+                            'needs_review' => 'Needs review',
+                        ])
+                        ->default('pending')
+                        ->required(),
+                    Select::make('document_status')
+                        ->label('Document status')
+                        ->options([
+                            'missing' => 'Missing',
+                            'pending' => 'Pending',
+                            'verified' => 'Verified',
+                            'expired' => 'Expired',
+                        ])
+                        ->default('missing')
+                        ->required(),
+                ]),
+
+            Section::make('③ 현장 배정')
+                ->description('직원 초안 생성 시 적용되는 회사·현장·팀 배정값입니다.')
+                ->columns(3)
+                ->schema([
+                    Select::make('company_id')
+                        ->label('Company')
+                        ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable()
+                        ->helperText('Admin assignment for the Employee draft.'),
+                    Select::make('site_id')
+                        ->label('Site')
+                        ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
+                        ->searchable(),
+                    Select::make('team_id')
+                        ->label('Team')
+                        ->options(fn (): array => Team::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable(),
+                ]),
+
+            Section::make('④ 온보딩 진행 상태')
+                ->description('아래 값은 우측 액션 버튼으로만 변경됩니다(가드 검증 통과). 여기서는 표시 전용입니다.')
+                ->columns(2)
+                ->schema([
+                    Select::make('interview_status')
+                        ->label('Interview')
+                        ->options([
+                            'pending' => 'Pending',
+                            'scheduled' => 'Scheduled',
+                            'passed' => 'Passed',
+                            'failed' => 'Failed',
+                        ])
+                        ->disabled()
+                        ->dehydrated(false),
+                    DatePicker::make('interviewed_at')->label('Interview date')->disabled()->dehydrated(false),
+                    Textarea::make('interview_notes')->label('Interview notes')->disabled()->dehydrated(false)->columnSpanFull(),
+                    Select::make('safety_training_status')
+                        ->label('Hoffman safety training')
+                        ->options([
+                            'pending' => 'Pending',
+                            'completed' => 'Completed',
+                            'expired' => 'Expired',
+                        ])
+                        ->disabled()
+                        ->dehydrated(false),
+                    DatePicker::make('safety_training_completed_on')->label('Safety training completed')->disabled()->dehydrated(false),
+                    DatePicker::make('safety_training_expires_on')->label('Safety training expires')->disabled()->dehydrated(false),
+                    Select::make('badge_registration_status')
+                        ->label('Badge / NFC registration')
+                        ->options([
+                            'pending' => 'Pending',
+                            'registered' => 'Registered',
+                        ])
+                        ->disabled()
+                        ->dehydrated(false),
+                    TextInput::make('nfc_raw_uid')->label('Raw NFC UID')->disabled()->dehydrated(false)->maxLength(120),
+                    TextInput::make('badge_number')->label('NFC ID')->disabled()->dehydrated(false)->maxLength(80),
+                    FileUpload::make('badge_photo_path')
+                        ->label('Hoffman badge photo')
+                        ->disk('public')
+                        ->directory('member-badges')
+                        ->visibility('public')
+                        ->image()
+                        ->imagePreviewHeight('180')
+                        ->openable()
+                        ->downloadable()
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->columnSpanFull(),
+                    TextInput::make('badge_company_name')->label('Badge company')->disabled()->dehydrated(false)->maxLength(255),
+                    TextInput::make('badge_last_name')->label('Badge last name')->disabled()->dehydrated(false)->maxLength(120),
+                    TextInput::make('badge_first_name')->label('Badge first name')->disabled()->dehydrated(false)->maxLength(120),
+                    TextInput::make('badge_role')->label('Badge role')->disabled()->dehydrated(false)->maxLength(120),
+                    DatePicker::make('badge_issued_on')->label('Badge issued on / hire date')->disabled()->dehydrated(false),
+                ]),
+
+            Section::make('⑤ 관리자 메모')
+                ->schema([
+                    Textarea::make('notes')
+                        ->label('Admin review notes')
+                        ->columnSpanFull(),
+                ]),
+
+            Section::make('⑥ 시스템 · AI 분석')
+                ->description('Gemini 뱃지 분석 결과와 자동화 신호입니다.')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                    KeyValue::make('badge_analysis_payload')
+                        ->label('Gemini badge analysis')
+                        ->keyLabel('Field')
+                        ->valueLabel('Value')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->visible(fn (Get $get): bool => filled($get('badge_analysis_payload')))
+                        ->columnSpanFull(),
+                    KeyValue::make('payload')
+                        ->keyLabel('Signal')
+                        ->valueLabel('Value')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->columnSpanFull(),
+                ]),
         ]);
     }
 
