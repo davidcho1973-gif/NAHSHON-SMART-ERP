@@ -6176,7 +6176,7 @@ window.submitVendorCreate = function() {
       if (typeof google === 'undefined') {
         // ë¯¹ìŠ¤ ëª¨ë“œ(ë¡œì»¬ í…ŒìŠ¤íŠ¸) ë™ìž‘
         setTimeout(() => {
-          alert('Mock Mode: AI ë¶„ë¥˜ ì™„ë£Œ -> ' + category);
+          alert('Mock Mode: AI 분류 완료 -> ' + category);
           window.closeUniversalScanner();
         }, 2000);
         return;
@@ -6191,7 +6191,7 @@ window.submitVendorCreate = function() {
             res = { success: false, error: 'Empty or invalid server response. Please retry.' };
           }
           if (res.success) {
-            alert('ðŸš€ [AI ìžë™ ê¸°ìž… ì™„ë£Œ]\n' + category + ' ìž¥ë¶€ì— ì„±ê³µì ìœ¼ë¡œ ë“±ë¡ë˜ì—ˆìŠµë‹ˆë‹¤.');
+            alert('🚀 [AI 자동 기입 완료]\n' + category + ' 장부에 성공적으로 등록되었습니다.');
             window.closeUniversalScanner();
             // View Refresh
             if (category === 'VEHICLE') loadView('vehicle');
@@ -6199,7 +6199,7 @@ window.submitVendorCreate = function() {
             if (category === 'FLIGHTS') loadView('flights');
             if (category === 'OFFICE') loadView('office');
           } else {
-            alert('âš ï¸ AI ì¸ì‹ ì‹¤íŒ¨: ' + res.error);
+            alert('⚠️ AI 인식 실패: ' + res.error);
             document.getElementById('btn-ai-scan-submit').style.opacity = '1';
             document.getElementById('btn-ai-scan-submit').style.pointerEvents = 'auto';
             document.getElementById('ai-preview-container').style.opacity = '1';
@@ -6207,7 +6207,7 @@ window.submitVendorCreate = function() {
         })
         .withFailureHandler(function (err) {
           document.getElementById('ai-scan-loading').style.display = 'none';
-          alert('í†µì‹  ì˜¤ë¥˜: ' + err.message);
+          alert('통신 오류: ' + err.message);
           document.getElementById('btn-ai-scan-submit').style.opacity = '1';
           document.getElementById('btn-ai-scan-submit').style.pointerEvents = 'auto';
           document.getElementById('ai-preview-container').style.opacity = '1';
