@@ -3906,6 +3906,29 @@
       };
 
       // â”€â”€ FINANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      window.deleteFinanceExpense = async function(deleteUrl) {
+        if (!deleteUrl) return;
+        if (!confirm('이 영수증 처리를 삭제할까요?')) return;
+
+        try {
+          const tokenEl = document.querySelector('meta[name="csrf-token"]');
+          const response = await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: {
+              'Accept': 'application/json, text/html',
+              'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+            }
+          });
+
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          window.apiCache = {};
+          await renderFinance();
+        } catch (err) {
+          console.error(err);
+          alert('삭제에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
+        }
+      };
+
       async function renderFinance() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -3918,10 +3941,15 @@
 
           var expensesHtml = expenses.map(function (ex) {
             var amtStyle = ex.amount >= 500 ? 'color:var(--status-warning);font-weight:600' : '';
-            var urlLink = ex.receiptUrl ? '<a href="' + ex.receiptUrl + '" target="_blank" class="btn-primary" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;text-decoration:none;padding:0" title="ì‚¬ì§„ ë³´ê¸°"><i class="ph ph-image" style="font-size:18px"></i></a>' : '<span style="color:var(--text-tertiary)">-</span>';
+            var receiptLink = ex.receiptUrl ? '<a href="' + safeHtml(ex.receiptUrl) + '" target="_blank" class="btn-primary" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;text-decoration:none;padding:0" title="영수증 보기"><i class="ph ph-image" style="font-size:18px"></i></a>' : '';
+            var editLink = ex.editUrl ? '<a href="' + safeHtml(ex.editUrl) + '" class="btn-secondary" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;text-decoration:none;padding:0" title="수정"><i class="ph ph-pencil-simple" style="font-size:17px"></i></a>' : '';
+            var deleteButton = ex.deleteUrl ? '<button type="button" class="btn-secondary finance-delete-expense" data-delete-url="' + safeHtml(ex.deleteUrl) + '" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;padding:0;color:var(--status-danger);border-color:var(--status-danger)" title="삭제"><i class="ph ph-trash" style="font-size:17px"></i></button>' : '';
+            var actions = (receiptLink || editLink || deleteButton)
+              ? '<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">' + receiptLink + editLink + deleteButton + '</div>'
+              : '<span style="color:var(--text-tertiary)">-</span>';
             var siteName = (ex.site && ex.site !== '-') ? '<span class="tag">' + ex.site + '</span>' : '<span style="color:var(--text-tertiary)">-</span>';
             var actName = (ex.account && ex.account !== '-') ? ex.account : '<span style="color:var(--text-tertiary)">-</span>';
-            return '<tr><td class="cell-mono">' + ex.date + '</td><td>' + siteName + '</td><td>' + actName + '</td><td class="cell-primary">' + ex.detail + '</td><td class="cell-mono" style="text-align:right;' + amtStyle + '">' + fmtUSD(ex.amount) + '</td><td>' + urlLink + '</td></tr>';
+            return '<tr><td class="cell-mono">' + ex.date + '</td><td>' + siteName + '</td><td>' + actName + '</td><td class="cell-primary">' + ex.detail + '</td><td class="cell-mono" style="text-align:right;' + amtStyle + '">' + fmtUSD(ex.amount) + '</td><td>' + actions + '</td></tr>';
           }).join('');
 
           var categoryHtml = stats.byCategory.map(function (c) {
@@ -3962,7 +3990,7 @@
             '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> ë§ˆìŠ¤í„° ì—‘ì…€ ë‹¤ìš´ë¡œë“œ</button>' +
             '<input type="text" class="search-inline" id="fin-search" placeholder="ë‚´ì—­ ê²€ìƒ‰..."></div></div>' +
             '<div class="panel-body"><table class="data-table" id="fin-table"><thead><tr>' +
-            '<th>ë‚ ì§œ</th><th>í˜„ìž¥</th><th>ê³„ì •</th><th>ì„¸ë¶€ë‚´ì—­</th><th style="text-align:right">ê¸ˆì•¡</th><th>ì˜ìˆ˜ì¦URL</th>' +
+            '<th>ë‚ ì§œ</th><th>í˜„ìž¥</th><th>ê³„ì •</th><th>ì„¸ë¶€ë‚´ì—­</th><th style="text-align:right">ê¸ˆì•¡</th><th style="text-align:right">관리</th>' +
             '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div></div>' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-pie-slice"></i> ê³„ì •ë³„ ì§€ì¶œí˜„í™©</div></div>' +
             '<div class="panel-body padded" style="display:flex;flex-direction:column;gap:14px">' + categoryHtml + '</div></div>' +
@@ -3972,6 +4000,11 @@
             var q = this.value.toLowerCase();
             document.querySelectorAll('#fin-table tbody tr').forEach(function (row) {
               row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+          });
+          document.querySelectorAll('.finance-delete-expense').forEach(function (button) {
+            button.addEventListener('click', function () {
+              window.deleteFinanceExpense(this.dataset.deleteUrl);
             });
           });
           setTimeout(window.loadDriveStats, 100);

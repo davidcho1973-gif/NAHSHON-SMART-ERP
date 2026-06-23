@@ -477,6 +477,39 @@ class MobileExpenseTest extends TestCase
         $this->assertDatabaseMissing('mobile_expenses', ['id' => $expense->id]);
     }
 
+    public function test_desktop_expense_api_exposes_edit_and_delete_actions_for_admin(): void
+    {
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Travel & Lodging',
+            'description' => 'Hotel receipt',
+            'amount' => 125.50,
+            'expense_date' => '2026-06-23',
+            'receipt_path' => '/storage/receipts/hotel.png',
+            'status' => 'approved',
+        ]);
+
+        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_getExpenses', [
+            'args' => [],
+            'siteId' => 'ALL',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('EXP-' . $expense->id, $response->json('0.id'));
+        $this->assertTrue($response->json('0.canModify'));
+        $this->assertSame(route('mobile-expense.edit', $expense, false), $response->json('0.editUrl'));
+        $this->assertSame(route('mobile-expense.destroy', $expense, false), $response->json('0.deleteUrl'));
+    }
+
     public function test_desktop_universal_ai_scan_saves_expense(): void
     {
         Storage::fake('public');

@@ -375,17 +375,25 @@ class SmartCompanyData
                     ->orderByDesc('expense_date')
                     ->orderByDesc('id')
                     ->get()
-                    ->map(fn (\App\Models\MobileExpense $e): array => [
-                        'id' => 'EXP-' . $e->id,
-                        'date' => optional($e->expense_date)->toDateString() ?? '',
-                        'site' => $e->site?->code ?: '-',
-                        'account' => $e->class ?: ($e->category ?: '-'),
-                        'category' => $e->category ?: 'Other',
-                        'detail' => $e->description ?: '-',
-                        'amount' => (float) $e->amount,
-                        'status' => $e->status,
-                        'receiptUrl' => self::mobileExpenseReceiptUrl($e),
-                    ])
+                    ->map(function (\App\Models\MobileExpense $e): array {
+                        $canModify = self::canModifyMobileExpense($e);
+
+                        return [
+                            'id' => 'EXP-' . $e->id,
+                            'expenseId' => $e->id,
+                            'date' => optional($e->expense_date)->toDateString() ?? '',
+                            'site' => $e->site?->code ?: '-',
+                            'account' => $e->class ?: ($e->category ?: '-'),
+                            'category' => $e->category ?: 'Other',
+                            'detail' => $e->description ?: '-',
+                            'amount' => (float) $e->amount,
+                            'status' => $e->status,
+                            'receiptUrl' => self::mobileExpenseReceiptUrl($e),
+                            'canModify' => $canModify,
+                            'editUrl' => $canModify ? route('mobile-expense.edit', $e, false) : '',
+                            'deleteUrl' => $canModify ? route('mobile-expense.destroy', $e, false) : '',
+                        ];
+                    })
                     ->all();
             }
         } catch (\Throwable) {
@@ -397,7 +405,7 @@ class SmartCompanyData
 
     private static function mobileExpenseReceiptUrl(\App\Models\MobileExpense $expense): string
     {
-        if (! $expense->receipt_path) {
+        if (! $expense->receipt_path && ! $expense->receipt_file) {
             return '';
         }
 
@@ -406,6 +414,19 @@ class SmartCompanyData
         } catch (\Throwable) {
             return $expense->receipt_path;
         }
+    }
+
+    private static function canModifyMobileExpense(\App\Models\MobileExpense $expense): bool
+    {
+        $user = auth()->user();
+        $canManageAll = in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
+
+        if ($canManageAll) {
+            return true;
+        }
+
+        return (int) $expense->employee_id === (int) $user?->employee_id
+            && in_array($expense->status, ['draft', 'pending', 'rejected'], true);
     }
 
     public static function equipmentStats(): array { return ['total' => count(self::equipmentList()), 'operable' => 4, 'inoperable' => 1, 'todayInspections' => 4]; }
