@@ -45,3 +45,20 @@ Route::get('/debug-logs-sec-53298bfd9a', function() {
     }
     return 'Log file not found';
 });
+
+Route::get('/debug-build-sec-53298bfd9a', function () {
+    $resourcePath = app_path('Filament/Resources/MemberRegistrations/MemberRegistrationResource.php');
+    $resource = is_readable($resourcePath) ? (string) file_get_contents($resourcePath) : '';
+
+    return response()->json([
+        'marker' => 'hr-badge-save-diagnostic-v1',
+        'checked_at' => now()->toIso8601String(),
+        'app_env' => app()->environment(),
+        'resource_sha1' => $resource !== '' ? sha1($resource) : null,
+        'resource_mtime' => is_readable($resourcePath) ? date('c', (int) filemtime($resourcePath)) : null,
+        'member_registration_has_any_keyvalue' => str_contains($resource, 'KeyValue::make'),
+        'member_registration_has_badge_keyvalue' => str_contains($resource, "KeyValue::make('badge_analysis_payload')"),
+        'member_registration_has_payload_preview' => str_contains($resource, "Textarea::make('payload_preview')"),
+        'git_commit' => trim((string) @shell_exec('git rev-parse --short HEAD')),
+    ]);
+});

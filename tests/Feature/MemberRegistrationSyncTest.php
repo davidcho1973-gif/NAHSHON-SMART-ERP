@@ -341,7 +341,7 @@ class MemberRegistrationSyncTest extends TestCase
                 'badge_last_name' => 'VILLARREAL',
                 'badge_first_name' => 'GERARD',
                 'badge_role' => 'HELPER',
-                'badge_issued_on' => '2026-02-18',
+                'badge_issued_on' => '02/18/2026',
                 'badge_analysis_model' => 'gemini-3.5-flash',
                 'badge_analyzed_at' => now()->toDateTimeString(),
                 'badge_analysis_payload' => json_encode([
