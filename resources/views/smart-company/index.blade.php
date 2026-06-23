@@ -6185,6 +6185,11 @@ window.submitVendorCreate = function() {
       google.script.run
         .withSuccessHandler(function (res) {
           document.getElementById('ai-scan-loading').style.display = 'none';
+          // Guard against an empty/null server response so the handler never throws
+          // "Cannot read properties of null (reading 'success')".
+          if (res == null || typeof res !== 'object') {
+            res = { success: false, error: 'Empty or invalid server response. Please retry.' };
+          }
           if (res.success) {
             alert('ðŸš€ [AI ìžë™ ê¸°ìž… ì™„ë£Œ]\n' + category + ' ìž¥ë¶€ì— ì„±ê³µì ìœ¼ë¡œ ë“±ë¡ë˜ì—ˆìŠµë‹ˆë‹¤.');
             window.closeUniversalScanner();
