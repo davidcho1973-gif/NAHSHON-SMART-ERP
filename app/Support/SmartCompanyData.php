@@ -1624,6 +1624,11 @@ class SmartCompanyData
             $companyId = $employee?->company_id ?? $user->allowed_company_id;
             $siteId = $employee?->site_id ?? $user->allowed_site_id;
             $employeeId = $user->employee_id;
+            $handwrittenNotes = trim((string) ($result['handwritten_notes'] ?? ''));
+            $description = '[Desktop AI Scan] ' . ($result['vendor_name'] ?? 'Receipt') . (! empty($result['description']) ? ' - ' . $result['description'] : '');
+            if ($handwrittenNotes !== '') {
+                $description .= "\nHandwritten note: " . $handwrittenNotes;
+            }
 
             // Save to mobile_expenses table
             \App\Models\MobileExpense::create([
@@ -1632,8 +1637,8 @@ class SmartCompanyData
                 'employee_id' => $employeeId,
                 'payment_type' => 'personal',
                 'category' => $result['category'] ?? 'Other',
-                'class' => $category === 'OFFICE' ? 'Office Supplies' : 'General',
-                'description' => '[Desktop AI Scan] ' . ($result['vendor_name'] ?? 'Receipt') . ($result['description'] ? ' - ' . $result['description'] : ''),
+                'class' => $result['accounting_account'] ?? ($category === 'OFFICE' ? '6170 Office Supplies' : '6999 Other Expense'),
+                'description' => $description,
                 'amount' => $result['amount'] ?? 0.0,
                 'expense_date' => $result['date'] ?: now()->format('Y-m-d'),
                 'receipt_path' => $receiptPath,

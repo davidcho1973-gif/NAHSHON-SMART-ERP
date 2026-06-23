@@ -152,7 +152,7 @@ class MobileExpenseController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'expense_date' => 'required|date',
             'receipt_path' => 'nullable|string',
-            'ocr_data' => 'nullable|array',
+            'ocr_data' => 'nullable',
             'site_id' => 'nullable|exists:sites,id',
             'expense_pre_approval_id' => 'nullable|exists:expense_pre_approvals,id',
         ]);
@@ -164,6 +164,12 @@ class MobileExpenseController extends Controller
         $siteId = $request->input('site_id') ?: ($employee?->site_id ?? $user->allowed_site_id);
         $employeeId = $user->employee_id;
         $preApprovalId = $this->validatedPreApprovalId($request->input('expense_pre_approval_id'), $employeeId);
+        $ocrData = $this->normalizedOcrData($request->input('ocr_data'));
+        $accountingAccount = trim((string) ($request->input('class') ?: data_get($ocrData, 'accounting_account', '')));
+        $description = $this->descriptionWithHandwrittenNotes(
+            (string) $request->input('description'),
+            data_get($ocrData, 'handwritten_notes')
+        );
 
         $receiptPath = $request->input('receipt_path');
         $receiptStoragePath = $this->publicReceiptPath($receiptPath);
@@ -176,15 +182,15 @@ class MobileExpenseController extends Controller
             'expense_pre_approval_id' => $preApprovalId,
             'payment_type' => $request->input('payment_type'),
             'category' => $request->input('category'),
-            'class' => $request->input('class'),
-            'description' => $request->input('description'),
+            'class' => $accountingAccount !== '' ? $accountingAccount : null,
+            'description' => $description,
             'amount' => $request->input('amount'),
             'expense_date' => $request->input('expense_date'),
             'receipt_path' => $receiptPath,
             'receipt_mime_type' => $receiptFile['mime_type'] ?? null,
             'receipt_original_name' => $receiptFile['name'] ?? null,
             'receipt_file' => $receiptFile['contents'] ?? null,
-            'ocr_data' => $request->input('ocr_data'),
+            'ocr_data' => $ocrData,
             'status' => 'pending', // Starts in pending approval status
         ]);
 
@@ -289,6 +295,37 @@ class MobileExpenseController extends Controller
     {
         return $this->canManageAllExpenses()
             || (int) $expense->employee_id === (int) auth()->user()?->employee_id;
+    }
+
+    private function normalizedOcrData(mixed $ocrData): ?array
+    {
+        if (is_array($ocrData)) {
+            return $ocrData;
+        }
+
+        if (is_string($ocrData) && trim($ocrData) !== '') {
+            $decoded = json_decode($ocrData, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return null;
+    }
+
+    private function descriptionWithHandwrittenNotes(string $description, mixed $handwrittenNotes): string
+    {
+        $description = trim($description);
+        $handwrittenNotes = trim((string) $handwrittenNotes);
+
+        if ($handwrittenNotes === '') {
+            return $description;
+        }
+
+        if (stripos($description, $handwrittenNotes) !== false) {
+            return $description;
+        }
+
+        return trim($description . "\nHandwritten note: " . $handwrittenNotes);
     }
 
     private function requestedSiteId(Request $request): ?int

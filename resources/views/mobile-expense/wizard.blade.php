@@ -159,6 +159,70 @@
       font-size: 11px;
       color: var(--text-tertiary);
     }
+    .analysis-card {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+    }
+    .analysis-card.visible {
+      display: flex;
+    }
+    .analysis-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .analysis-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .analysis-badge {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--status-success);
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      border-radius: 999px;
+      padding: 4px 8px;
+      white-space: nowrap;
+    }
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .analysis-field {
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 9px;
+      min-width: 0;
+    }
+    .analysis-field.wide {
+      grid-column: 1 / -1;
+    }
+    .analysis-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .analysis-value {
+      display: block;
+      font-size: 12px;
+      font-weight: 650;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
     .btn-manual-skip {
       background: var(--bg-surface-elevated);
       border: 1px solid var(--border-subtle);
@@ -398,6 +462,42 @@
           <span class="upload-sub" id="uploadAreaSub">JPG, PNG, PDF 최대 10MB</span>
           <input type="file" id="receiptFileInput" accept="image/*,application/pdf" style="display:none" onchange="handleReceiptUpload(event)">
         </div>
+        <div class="analysis-card" id="receiptAnalysisCard" aria-live="polite">
+          <div class="analysis-head">
+            <span class="analysis-title">AI analysis result</span>
+            <span class="analysis-badge">Ready to save</span>
+          </div>
+          <div class="analysis-grid">
+            <div class="analysis-field">
+              <span class="analysis-label">Vendor</span>
+              <span class="analysis-value" id="analysisVendor">-</span>
+            </div>
+            <div class="analysis-field">
+              <span class="analysis-label">Amount</span>
+              <span class="analysis-value" id="analysisAmount">-</span>
+            </div>
+            <div class="analysis-field">
+              <span class="analysis-label">Date</span>
+              <span class="analysis-value" id="analysisDate">-</span>
+            </div>
+            <div class="analysis-field">
+              <span class="analysis-label">Category</span>
+              <span class="analysis-value" id="analysisCategory">-</span>
+            </div>
+            <div class="analysis-field wide">
+              <span class="analysis-label">Accounting account</span>
+              <span class="analysis-value" id="analysisAccount">-</span>
+            </div>
+            <div class="analysis-field wide">
+              <span class="analysis-label">Handwritten note</span>
+              <span class="analysis-value" id="analysisHandwriting">-</span>
+            </div>
+            <div class="analysis-field wide">
+              <span class="analysis-label">Detail</span>
+              <span class="analysis-value" id="analysisDescription">-</span>
+            </div>
+          </div>
+        </div>
         <div class="btn-manual-skip" onclick="goNextStep()">영수증 없이 직접 입력하기</div>
       </div>
 
@@ -621,9 +721,13 @@
           document.getElementById('ocrData').value = JSON.stringify(data);
 
           // Populate fields
-          if (data.vendor_name) {
-            document.getElementById('descInput').value = data.vendor_name + (data.description ? ' - ' + data.description : '');
-          }
+          const cleanCat = normalizeCategory(data.category || 'Other');
+          const accountingAccount = normalizeAccountingAccount(data.accounting_account, cleanCat);
+          const description = buildReceiptDescription(data);
+
+          document.getElementById('descInput').value = description;
+          document.getElementById('classInput').value = accountingAccount;
+
           if (data.amount) {
             rawAmountString = Number(data.amount).toFixed(2);
             updateAmountDisplay();
@@ -631,20 +735,19 @@
           if (data.date) {
             document.getElementById('dateInput').value = data.date;
           }
-          if (data.category) {
-            const cleanCat = normalizeCategory(data.category);
-            document.getElementById('categoryInput').value = cleanCat;
-            document.querySelectorAll('#step-3 .cat-btn').forEach(btn => {
-              if (btn.textContent.trim().toLowerCase() === cleanCat.toLowerCase()) {
-                btn.classList.add('selected');
-              } else {
-                btn.classList.remove('selected');
-              }
-            });
-          }
 
-          // Move to next step automatically
-          goNextStep();
+          document.getElementById('categoryInput').value = cleanCat;
+          document.querySelectorAll('#step-3 .cat-btn').forEach(btn => {
+            if (btn.textContent.trim().toLowerCase() === cleanCat.toLowerCase()) {
+              btn.classList.add('selected');
+            } else {
+              btn.classList.remove('selected');
+            }
+          });
+
+          renderReceiptAnalysis(data, cleanCat, accountingAccount, description);
+          label.textContent = 'AI analysis complete';
+          sub.textContent = 'Review the extracted result below, then tap Next.';
         } else {
           alert('영수증 분석 실패: ' + result.error);
         }
@@ -655,17 +758,63 @@
         scanner.style.display = 'none';
         icon.className = 'ph ph-receipt-bold upload-icon';
         icon.style.animation = 'none';
-        label.textContent = '사진 촬영 또는 파일 올리기';
-        sub.textContent = 'JPG, PNG, PDF 최대 10MB';
+        if (!document.getElementById('receiptAnalysisCard').classList.contains('visible')) {
+          label.textContent = 'Photo capture or file upload';
+          sub.textContent = 'JPG, PNG, PDF up to 10MB';
+        }
       }
     }
 
     function normalizeCategory(cat) {
       const allowed = ['Computer & Software', 'Automobile Expense', 'Utilities', 'Travel & Lodging', 'Office Supplies', 'Meals & Entertainment', 'Other'];
       for (let item of allowed) {
-        if (item.toLowerCase() === cat.trim().toLowerCase()) return item;
+        if (item.toLowerCase() === String(cat || '').trim().toLowerCase()) return item;
       }
       return 'Other';
+    }
+
+    function normalizeAccountingAccount(account, category) {
+      const byCategory = {
+        'Computer & Software': '6120 Computer & Software',
+        'Automobile Expense': '6140 Automobile Expense',
+        'Utilities': '6150 Utilities',
+        'Travel & Lodging': '6160 Travel & Lodging',
+        'Office Supplies': '6170 Office Supplies',
+        'Meals & Entertainment': '6180 Meals & Entertainment',
+        'Other': '6999 Other Expense'
+      };
+
+      const allowed = Object.values(byCategory);
+      const text = String(account || '').trim();
+      const exact = allowed.find(item => item.toLowerCase() === text.toLowerCase());
+      if (exact) return exact;
+
+      return byCategory[category] || byCategory.Other;
+    }
+
+    function buildReceiptDescription(data) {
+      const vendor = String(data.vendor_name || '').trim();
+      const detail = String(data.description || '').trim();
+      const handwriting = String(data.handwritten_notes || '').trim();
+      let description = [vendor, detail].filter(Boolean).join(' - ');
+
+      if (handwriting) {
+        description = (description ? description + '\n' : '') + 'Handwritten note: ' + handwriting;
+      }
+
+      return description;
+    }
+
+    function renderReceiptAnalysis(data, category, accountingAccount, description) {
+      const amount = Number(data.amount || 0);
+      document.getElementById('analysisVendor').textContent = data.vendor_name || '-';
+      document.getElementById('analysisAmount').textContent = amount > 0 ? '$' + amount.toFixed(2) : '-';
+      document.getElementById('analysisDate').textContent = data.date || '-';
+      document.getElementById('analysisCategory').textContent = category || '-';
+      document.getElementById('analysisAccount').textContent = accountingAccount || '-';
+      document.getElementById('analysisHandwriting').textContent = data.handwritten_notes || '-';
+      document.getElementById('analysisDescription').textContent = description || '-';
+      document.getElementById('receiptAnalysisCard').classList.add('visible');
     }
 
     function updateStepUI() {

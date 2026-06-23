@@ -27,7 +27,9 @@ class GeminiReceiptAnalyzerTest extends TestCase
                                 'amount' => 15.50,
                                 'date' => '2026-06-20',
                                 'category' => 'Meals & Entertainment',
+                                'accounting_account' => '6180 Meals & Entertainment',
                                 'description' => 'Burger and fries',
+                                'handwritten_notes' => 'Job lunch / LG-ESAZ',
                             ]),
                         ]],
                     ],
@@ -43,7 +45,9 @@ class GeminiReceiptAnalyzerTest extends TestCase
         $this->assertSame(15.50, $result['amount']);
         $this->assertSame('2026-06-20', $result['date']);
         $this->assertSame('Meals & Entertainment', $result['category']);
+        $this->assertSame('6180 Meals & Entertainment', $result['accounting_account']);
         $this->assertSame('Burger and fries', $result['description']);
+        $this->assertSame('Job lunch / LG-ESAZ', $result['handwritten_notes']);
         $this->assertSame('gemini-2.5-flash', $result['model']);
 
         Http::assertSent(function (Request $request): bool {

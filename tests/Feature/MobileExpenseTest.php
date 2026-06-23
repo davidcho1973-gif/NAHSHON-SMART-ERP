@@ -135,7 +135,9 @@ class MobileExpenseTest extends TestCase
                     'amount' => 12.34,
                     'date' => '2026-06-20',
                     'category' => 'Meals & Entertainment',
+                    'accounting_account' => '6180 Meals & Entertainment',
                     'description' => 'Happy Meal',
+                    'handwritten_notes' => 'Crew lunch',
                     'model' => 'gemini-mock',
                 ]);
         });
@@ -154,7 +156,9 @@ class MobileExpenseTest extends TestCase
                 'amount' => 12.34,
                 'date' => '2026-06-20',
                 'category' => 'Meals & Entertainment',
+                'accounting_account' => '6180 Meals & Entertainment',
                 'description' => 'Happy Meal',
+                'handwritten_notes' => 'Crew lunch',
                 'model' => 'gemini-mock',
             ],
         ]);
@@ -197,6 +201,38 @@ class MobileExpenseTest extends TestCase
             'amount' => 45.99,
             'status' => 'pending',
         ]);
+    }
+
+    public function test_mobile_expense_store_uses_ai_account_and_handwritten_notes(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('mobile-expense.store'), [
+            'payment_type' => 'personal',
+            'category' => 'Automobile Expense',
+            'class' => '',
+            'description' => 'Shell - Fuel',
+            'amount' => '82.15',
+            'expense_date' => '2026-06-23',
+            'site_id' => $this->site->id,
+            'ocr_data' => json_encode([
+                'vendor_name' => 'Shell',
+                'amount' => 82.15,
+                'date' => '2026-06-23',
+                'category' => 'Automobile Expense',
+                'accounting_account' => '6140 Automobile Expense',
+                'handwritten_notes' => 'Truck 12 / LG-ESAZ',
+                'description' => 'Fuel',
+            ]),
+        ]);
+
+        $response->assertRedirect(route('mobile-expense.index'));
+
+        $expense = MobileExpense::query()->latest('id')->first();
+
+        $this->assertNotNull($expense);
+        $this->assertSame('6140 Automobile Expense', $expense->class);
+        $this->assertStringContainsString('Shell - Fuel', $expense->description);
+        $this->assertStringContainsString('Handwritten note: Truck 12 / LG-ESAZ', $expense->description);
+        $this->assertSame('Truck 12 / LG-ESAZ', $expense->ocr_data['handwritten_notes']);
     }
 
     public function test_mobile_expense_can_link_approved_pre_approval(): void
@@ -783,7 +819,9 @@ class MobileExpenseTest extends TestCase
                     'amount' => 89.99,
                     'date' => '2026-06-22',
                     'category' => 'Office Supplies',
+                    'accounting_account' => '6170 Office Supplies',
                     'description' => 'Paper and pens',
+                    'handwritten_notes' => 'Field office',
                     'model' => 'gemini-mock',
                 ]);
         });
@@ -815,8 +853,14 @@ class MobileExpenseTest extends TestCase
             'employee_id' => $this->employee->id,
             'payment_type' => 'personal',
             'category' => 'Office Supplies',
+            'class' => '6170 Office Supplies',
             'amount' => 89.99,
             'status' => 'pending',
         ]);
+
+        $expense = MobileExpense::query()->latest('id')->first();
+
+        $this->assertNotNull($expense);
+        $this->assertStringContainsString('Handwritten note: Field office', $expense->description);
     }
 }

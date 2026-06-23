@@ -110,7 +110,9 @@ Fields to extract:
 - amount: The total price/amount paid (decimal/float).
 - date: Transaction date in YYYY-MM-DD format (if visible, otherwise empty string).
 - category: Predict the category from: 'Computer & Software', 'Automobile Expense', 'Utilities', 'Travel & Lodging', 'Office Supplies', 'Meals & Entertainment', 'Other'.
+- accounting_account: Choose the best accounting account from: '6120 Computer & Software', '6140 Automobile Expense', '6150 Utilities', '6160 Travel & Lodging', '6170 Office Supplies', '6180 Meals & Entertainment', '6999 Other Expense'.
 - description: Brief details of items bought.
+- handwritten_notes: Any handwritten memo visible on the receipt, including job/site notes, purpose, initials, added totals, or short comments. Return an empty string if none is visible.
 PROMPT;
     }
 
@@ -126,9 +128,11 @@ PROMPT;
                 'amount' => ['type' => 'number'],
                 'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD format or empty string'],
                 'category' => ['type' => 'string'],
+                'accounting_account' => ['type' => 'string'],
                 'description' => ['type' => 'string'],
+                'handwritten_notes' => ['type' => 'string'],
             ],
-            'required' => ['vendor_name', 'amount', 'date', 'category', 'description'],
+            'required' => ['vendor_name', 'amount', 'date', 'category', 'accounting_account', 'description', 'handwritten_notes'],
         ];
     }
 
@@ -138,12 +142,16 @@ PROMPT;
      */
     private function normalize(array $data, string $model): array
     {
+        $category = $this->normalizeCategory($data['category'] ?? '');
+
         return [
             'vendor_name' => trim((string) ($data['vendor_name'] ?? '')),
             'amount' => is_numeric($data['amount'] ?? null) ? (float) $data['amount'] : 0.0,
             'date' => $this->normalizeDate($data['date'] ?? null),
-            'category' => $this->normalizeCategory($data['category'] ?? ''),
+            'category' => $category,
+            'accounting_account' => $this->normalizeAccountingAccount($data['accounting_account'] ?? '', $category),
             'description' => trim((string) ($data['description'] ?? '')),
+            'handwritten_notes' => trim((string) ($data['handwritten_notes'] ?? '')),
             'model' => $model,
         ];
     }
@@ -186,6 +194,35 @@ PROMPT;
         }
 
         return 'Other';
+    }
+
+    private function normalizeAccountingAccount(mixed $account, string $category): string
+    {
+        $allowed = [
+            'Computer & Software' => '6120 Computer & Software',
+            'Automobile Expense' => '6140 Automobile Expense',
+            'Utilities' => '6150 Utilities',
+            'Travel & Lodging' => '6160 Travel & Lodging',
+            'Office Supplies' => '6170 Office Supplies',
+            'Meals & Entertainment' => '6180 Meals & Entertainment',
+            'Other' => '6999 Other Expense',
+        ];
+
+        $account = trim((string) $account);
+
+        foreach ($allowed as $label) {
+            if (strcasecmp($account, $label) === 0) {
+                return $label;
+            }
+        }
+
+        foreach ($allowed as $categoryName => $label) {
+            if (strcasecmp($account, $categoryName) === 0 || str_contains(strtolower($account), strtolower($categoryName))) {
+                return $label;
+            }
+        }
+
+        return $allowed[$category] ?? $allowed['Other'];
     }
 
     private function stripJsonFence(string $text): string
