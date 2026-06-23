@@ -10,8 +10,20 @@
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   <style>
-    body { background: var(--bg-base); color: var(--text-primary); font-family: var(--font-base); }
-    .mobile-container { max-width: 480px; margin: 0 auto; padding: 16px 16px 92px; min-height: 100vh; display: flex; flex-direction: column; gap: 16px; }
+    html,
+    body {
+      min-height: 100%;
+      height: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-base);
+      -webkit-overflow-scrolling: touch;
+    }
+    .mobile-container { max-width: 480px; margin: 0 auto; padding: 16px 16px calc(120px + env(safe-area-inset-bottom)); min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box; }
     .mobile-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
     .mobile-title { font-size: 20px; font-weight: 700; }
     .btn-back { background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); color: var(--text-secondary); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-decoration: none; }
