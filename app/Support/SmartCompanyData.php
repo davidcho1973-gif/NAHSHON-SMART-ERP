@@ -412,7 +412,7 @@ class SmartCompanyData
                             'id' => 'EXP-' . $e->id,
                             'expenseId' => $e->id,
                             'date' => optional($e->expense_date)->toDateString() ?? '',
-                            'site' => $e->site?->code ?: '-',
+                            'site' => $e->site?->code ?: 'Global / Office',
                             'account' => $e->class ?: ($e->category ?: '-'),
                             'category' => $e->category ?: 'Other',
                             'detail' => $e->description ?: '-',
@@ -496,7 +496,11 @@ class SmartCompanyData
         $resolvedSiteId = self::resolveSiteId($siteId);
 
         if ($resolvedSiteId !== null) {
-            $query->where('site_id', $resolvedSiteId);
+            $query->where(function ($siteQuery) use ($resolvedSiteId): void {
+                $siteQuery
+                    ->where('site_id', $resolvedSiteId)
+                    ->orWhereNull('site_id');
+            });
         }
     }
 

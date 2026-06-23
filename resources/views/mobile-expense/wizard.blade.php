@@ -430,7 +430,7 @@
           <select name="site_id" id="siteSelect" class="input-text" style="background-color: var(--bg-surface);">
             <option value="">지정 안함 (Global / Office)</option>
             @foreach($sites as $site)
-              <option value="{{ $site->id }}">{{ $site->code }} - {{ $site->name }}</option>
+              <option value="{{ $site->id }}" @selected((int) ($selectedSiteId ?? 0) === (int) $site->id)>{{ $site->code }} - {{ $site->name }}</option>
             @endforeach
           </select>
         </div>

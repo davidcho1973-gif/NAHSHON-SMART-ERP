@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-23 | CODEX | Finance expense sync | Fixed finance dashboard receipt sync by including Global/Office expenses in selected-site finance views and passing the current site context into the AI expense wizard. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/MobileExpenseTest.php` passed, 22 tests; `npm run build` passed. |
 | 2026-06-23 | CODEX | Mobile expenses | Fixed the receipt edit page so it can scroll on desktop/mobile and the save button remains reachable despite the global ERP overflow rule. | Staging deploy | `npm run build` passed; `php artisan test tests/Feature/MobileExpenseTest.php` passed, 20 tests. |
 | 2026-06-23 | CODEX | Finance DB workflow | Linked approved expense pre-approvals to receipt expenses with a real FK, added review/payment audit fields, admin approve/reject actions, paid status handling, and DB-backed finance dashboard/API aggregation. | Staging deploy | PHP lint passed for changed files; targeted finance tests passed, 29 tests; full `php artisan test` passed, 71 tests. |
 | 2026-06-23 | CODEX | Finance dashboard | Removed the unused Google Drive receipt scan status panel and legacy drive scan JavaScript from the Finance dashboard so the page focuses on DB-backed expense, pre-approval, and AI receipt flows. | Staging deploy | `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/ExpensePreApprovalTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 22 tests. |
@@ -129,6 +130,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-23: Added database-backed receipt file storage for new mobile expenses so receipt images remain viewable even if Laravel Cloud local storage is cleared by deployment.
 - 2026-06-23: Tightened the finance DB workflow: approved pre-approvals can now be linked to receipt expenses, pending pre-approvals cannot be linked, admins can approve/reject pre-approvals, paid expense records keep reviewer/payment audit fields, and finance stats/expense APIs are calculated from scoped DB records.
 - 2026-06-23: Fixed the mobile expense edit page scroll behavior by overriding the global hidden body overflow on that page and adding safe bottom spacing so the save button can be reached.
+- 2026-06-23: Fixed finance dashboard receipt visibility by showing Global/Office expenses alongside the selected site and preselecting the current site when launching the AI expense wizard from Finance.
 
 ### Current Boundaries
 

@@ -112,6 +112,17 @@ class MobileExpenseTest extends TestCase
         $response->assertSee('Test Site');
     }
 
+    public function test_mobile_expense_wizard_preselects_site_from_finance_context(): void
+    {
+        $response = $this->actingAs($this->user)->get(route('mobile-expense.wizard', [
+            'site' => $this->site->code,
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertViewHas('selectedSiteId', $this->site->id);
+        $response->assertSee('value="' . $this->site->id . '" selected', false);
+    }
+
     public function test_mobile_expense_upload_receipt_runs_ocr_analyzer(): void
     {
         Storage::fake('public');
@@ -637,6 +648,60 @@ class MobileExpenseTest extends TestCase
         $this->assertSame(300, $response->json('0.preApprovalAmount'));
         $this->assertSame(route('mobile-expense.edit', $expense, false), $response->json('0.editUrl'));
         $this->assertSame(route('mobile-expense.destroy', $expense, false), $response->json('0.deleteUrl'));
+    }
+
+    public function test_desktop_finance_includes_global_office_expenses_when_site_is_selected(): void
+    {
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $siteExpense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Travel & Lodging',
+            'description' => 'Selected site hotel',
+            'amount' => 100.00,
+            'expense_date' => now()->format('Y-m-d'),
+            'status' => 'pending',
+        ]);
+
+        $globalExpense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => null,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Global office receipt',
+            'amount' => 25.00,
+            'expense_date' => now()->format('Y-m-d'),
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_getExpenses', [
+            'args' => [],
+            'siteId' => $this->site->code,
+        ]);
+
+        $response->assertOk();
+
+        $rows = collect($response->json());
+
+        $this->assertContains('EXP-' . $siteExpense->id, $rows->pluck('id')->all());
+        $this->assertContains('EXP-' . $globalExpense->id, $rows->pluck('id')->all());
+        $this->assertSame('Global / Office', $rows->firstWhere('id', 'EXP-' . $globalExpense->id)['site']);
+
+        $statsResponse = $this->actingAs($admin)->postJson('/smart-company-api/api_getFinanceStats', [
+            'args' => [],
+            'siteId' => $this->site->code,
+        ]);
+
+        $statsResponse->assertOk();
+        $this->assertEquals(125.00, $statsResponse->json('mtdTotal'));
     }
 
     public function test_desktop_finance_stats_are_built_from_linked_database_records(): void

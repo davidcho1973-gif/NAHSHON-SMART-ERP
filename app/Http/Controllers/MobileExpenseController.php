@@ -50,10 +50,11 @@ class MobileExpenseController extends Controller
         ]);
     }
 
-    public function wizard(): View
+    public function wizard(Request $request): View
     {
         $user = auth()->user();
         $employee = $user->employee;
+        $selectedSiteId = $this->requestedSiteId($request) ?: ($employee?->site_id ?? $user->allowed_site_id);
 
         // Fetch sites available for user's company
         $sites = [];
@@ -69,6 +70,7 @@ class MobileExpenseController extends Controller
         return view('mobile-expense.wizard', [
             'sites' => $sites,
             'preApprovals' => $this->availablePreApprovals(),
+            'selectedSiteId' => $selectedSiteId,
         ]);
     }
 
@@ -287,6 +289,35 @@ class MobileExpenseController extends Controller
     {
         return $this->canManageAllExpenses()
             || (int) $expense->employee_id === (int) auth()->user()?->employee_id;
+    }
+
+    private function requestedSiteId(Request $request): ?int
+    {
+        $siteValue = $request->query('site_id', $request->query('site'));
+
+        if ($siteValue === null) {
+            return null;
+        }
+
+        $siteValue = trim((string) $siteValue);
+
+        if ($siteValue === '' || in_array(strtoupper($siteValue), ['ALL', 'GLOBAL'], true)) {
+            return null;
+        }
+
+        if (is_numeric($siteValue)) {
+            $siteId = (int) $siteValue;
+
+            return Site::query()->whereKey($siteId)->exists() ? $siteId : null;
+        }
+
+        $siteCode = str_contains($siteValue, ' - ') ? trim(strstr($siteValue, ' - ', true)) : $siteValue;
+
+        return Site::query()
+            ->where('code', $siteValue)
+            ->orWhere('code', $siteCode)
+            ->orWhere('name', $siteValue)
+            ->value('id');
     }
 
     private function canModifyExpense(MobileExpense $expense): bool

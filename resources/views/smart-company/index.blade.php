@@ -3989,12 +3989,17 @@
             categoryHtml = '<div style="text-align:center;color:var(--text-tertiary);padding:24px">이번 달 지출 분류가 없습니다.</div>';
           }
 
+          var expenseWizardUrl = '/mobile-expense/wizard-ai';
+          if (_siteId() && _siteId() !== 'ALL') {
+            expenseWizardUrl += '?site=' + encodeURIComponent(_siteId());
+          }
+
           pageContainer.innerHTML =
             '<div class="header-section"><div><h1 class="page-title">ìž¬ë¬´ / ë¹„ìš© ê´€ë¦¬</h1><p class="page-subtitle">ë¹„ìš© ì œì¶œ ë‚´ì—­ Â· ìŠ¹ì¸ ëŒ€ê¸° Â· ì²­êµ¬ í˜„í™©</p></div>' +
             '<div class="action-row" style="flex-wrap: wrap; gap: 8px;">' +
             '  <a href="/mobile-expense/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-receipt" style="font-size:16px"></i> 비용/영수증 목록</a>' +
             '  <a href="/expense-pre-approval/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-hand-coins" style="font-size:16px"></i> 사전 예산 승인</a>' +
-            '  <a href="/mobile-expense/wizard-ai" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;"><i class="ph ph-magic-wand" style="font-size:16px"></i> AI 경비 등록</a>' +
+            '  <a href="' + expenseWizardUrl + '" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;"><i class="ph ph-magic-wand" style="font-size:16px"></i> AI 경비 등록</a>' +
             '  <button class="btn-secondary" style="height:38px;padding:0 14px;border-radius:6px;" onclick="window.print()"><i class="ph ph-printer"></i> 지출내역 출력</button>' +
             '</div></div>' +
             '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
