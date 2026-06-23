@@ -3974,17 +3974,6 @@
             '<div class="kpi-card"><div class="kpi-label">ì‹¤í–‰ ì˜ˆì‚° ìž”ì•¡<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(stats.mtdBudget - stats.mtdTotal) + '</div><div class="kpi-meta"><span class="trend-' + ((stats.mtdBudget - stats.mtdTotal) >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">ê°€ìš© ê°€ëŠ¥ ìž”ì—¬ ì˜ˆì‚° (ì´ìµê¸ˆ)</span></div></div>' +
             '</div>' +
 
-            // ðŸ“‚ ì˜ìˆ˜ì¦ ë“œë¼ì´ë¸Œ ìŠ¤ìºë„ˆ
-            '<div class="scanner-container" id="driveScannerUI" style="background:var(--bg-base);padding:0;border:none">' +
-            '  <div class="panel-header" style="background:var(--bg-surface);padding:16px;border:1px solid var(--border-subtle);border-radius:var(--radius-md) var(--radius-md) 0 0">' +
-            '    <div class="panel-title"><i class="ph ph-folder-open" style="color:var(--brand-primary)"></i> êµ¬ê¸€ ë“œë¼ì´ë¸Œ ìŠ¤ìº” í˜„í™©</div>' +
-            '    <button class="btn-primary small" id="btnSyncDrive" style="font-size:12px"><i class="ph ph-arrows-clockwise"></i> ì „ì²´ ì˜ìˆ˜ì¦ ì¼ê´„ ìŠ¤ìº”</button>' +
-            '  </div>' +
-            '  <div style="border:1px solid var(--border-subtle);border-top:none;padding:16px;border-radius:0 0 var(--radius-md) var(--radius-md);background:var(--bg-surface-elevated)">' +
-            '    <div id="driveStatsContainer" style="display:flex;gap:16px;overflow-x:auto;padding-bottom:8px">ë¡œë”©ì¤‘...</div>' +
-            '  </div>' +
-            '</div>' +
-
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-bullets"></i> ë¹„ìš© ì œì¶œ ë‚´ì—­</div>' +
             '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> ë§ˆìŠ¤í„° ì—‘ì…€ ë‹¤ìš´ë¡œë“œ</button>' +
@@ -4007,7 +3996,6 @@
               window.deleteFinanceExpense(this.dataset.deleteUrl);
             });
           });
-          setTimeout(window.loadDriveStats, 100);
         } catch (err) { renderError('ìž¬ë¬´ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
       }
 
@@ -5352,63 +5340,6 @@
       document.getElementById('doc-modal').classList.remove('active');
     }
 
-    // â”€â”€ êµ¬ê¸€ ë“œë¼ì´ë¸Œ ìŠ¤ìº” ì—°ë™ (ReceiptAI) í”„ë¡ íŠ¸ì—”ë“œ ë¡œì§ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    window.loadDriveStats = function () {
-      var container = document.getElementById('driveStatsContainer');
-      if (!container) return;
-      container.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> ë¡œë”©ì¤‘...</div>';
-
-      google.script.run
-        .withSuccessHandler(function (res) {
-          try {
-            var r = JSON.parse(res);
-            if (!r.success) throw new Error(r.error);
-
-            var html = '';
-            var folders = r.data || {};
-            var keys = Object.keys(folders);
-            if (keys.length === 0) {
-              container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary)">ì—°ë™ëœ í´ë”ê°€ ì—†ìŠµë‹ˆë‹¤.</div>';
-              return;
-            }
-
-            keys.forEach(function (fName) {
-              var fd = folders[fName];
-              var pct = fd.total > 0 ? Math.round((fd.done / fd.total) * 100) : 100;
-              var statusColor = fd.pending > 0 ? 'var(--status-warning)' : 'var(--status-success)';
-              var icon = fd.pending > 0 ? 'ph-clock' : 'ph-check-circle';
-
-              html += '<div style="min-width:200px;background:var(--bg-base);border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:12px;display:flex;flex-direction:column;gap:8px">';
-              html += '  <div style="display:flex;justify-content:space-between;align-items:center">';
-              html += '    <div style="font-size:12px;font-weight:600;color:var(--text-primary)"><i class="ph ph-folder" style="color:var(--brand-primary);margin-right:4px"></i>' + fName + '</div>';
-              html += '    <i class="ph ' + icon + '" style="color:' + statusColor + ';font-size:14px"></i>';
-              html += '  </div>';
-              html += '  <div style="display:flex;gap:12px;margin-top:4px">';
-              html += '    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;color:var(--text-tertiary)">ëŒ€ê¸°ì¤‘</span><span style="font-size:16px;font-weight:700;color:var(--status-warning)">' + fd.pending + '</span></div>';
-              html += '    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;color:var(--text-tertiary)">ì²˜ë¦¬ì™„ë£Œ</span><span style="font-size:16px;font-weight:700;color:var(--status-success)">' + fd.done + '</span></div>';
-              html += '  </div>';
-              html += '  <div class="progress-wrapper" style="margin-top:4px"><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:var(--brand-primary)"></div></div><span class="progress-text" style="color:var(--text-tertiary)">' + pct + '%</span></div>';
-              html += '</div>';
-            });
-
-            container.innerHTML = html;
-          } catch (e) {
-            container.innerHTML = '<div style="font-size:12px;color:var(--status-danger)"><i class="ph ph-warning"></i> ë°ì´í„° íŒŒì‹± ì˜¤ë¥˜</div>';
-          }
-        })
-        .withFailureHandler(function (err) {
-          container.innerHTML = '<div style="font-size:12px;color:var(--status-danger)"><i class="ph ph-warning"></i> í†µì‹  ì˜¤ë¥˜</div>';
-        })
-        .api_getAllFolderFiles();
-    };
-
-    document.body.addEventListener('click', function (e) {
-      if (e.target && (e.target.id === 'btnSyncDrive' || e.target.closest('#btnSyncDrive'))) {
-        window.triggerDriveSync();
-      }
-    });
-
     window.showToast = function (msg, isError) {
       var toast = document.createElement('div');
       toast.innerText = msg;
@@ -5430,51 +5361,6 @@
       }, 4000);
     };
 
-    window.triggerDriveSync = function () {
-      // ë¸Œë¼ìš°ì € ì •ì±…(í¬ë¡œìŠ¤ ì˜¤ë¦¬ì§„ iframe ë‚´ confirm/alert ì°¨ë‹¨)ìœ¼ë¡œ ì¸í•´ confirm/alert ì „ë©´ ì œê±°
-      var btn = document.getElementById('btnSyncDrive');
-      var origText = btn.innerHTML;
-      btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> AI ìŠ¤ìº” ì§„í–‰ì¤‘...';
-      btn.disabled = true;
-      btn.classList.replace('btn-primary', 'btn-secondary');
-
-      // Show overall loading status in the card
-      var container = document.getElementById('driveStatsContainer');
-      if (container) container.innerHTML = '<div style="font-size:13px;color:var(--brand-primary);padding:20px;text-align:center;width:100%"><i class="ph ph-spinner ph-spin" style="font-size:24px;margin-bottom:8px"></i><br>ë°±ê·¸ë¼ìš´ë“œì—ì„œ AIê°€ ì˜ìˆ˜ì¦ë“¤ì„ ìˆœì°¨ ë¶„ì„í•˜ê³  ìžˆìŠµë‹ˆë‹¤...</div>';
-
-      google.script.run
-        .withSuccessHandler(function (res) {
-          btn.innerHTML = origText;
-          btn.disabled = false;
-          btn.classList.replace('btn-secondary', 'btn-primary');
-
-          try {
-            var r = JSON.parse(res);
-            if (r.success) {
-              window.showToast("ì¼ê´„ ìŠ¤ìº” ì²˜ë¦¬ê°€ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤. (ë¡œê·¸: " + r.log.length + "ê±´ ìƒì„±)", false);
-              window.loadDriveStats();
-              // Refetch stats and table
-              if (typeof window.API !== 'undefined') {
-                document.querySelector('[data-view="finance"]').click();
-              }
-            } else {
-              window.showToast("ì˜¤ë¥˜ ë°œìƒ: " + r.error, true);
-              window.loadDriveStats();
-            }
-          } catch (e) {
-            window.showToast("ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜: " + e.message, true);
-            window.loadDriveStats();
-          }
-        })
-        .withFailureHandler(function (err) {
-          window.showToast("ë°±ì—”ë“œ í†µì‹  ì˜¤ë¥˜: " + err, true);
-          btn.innerHTML = origText;
-          btn.disabled = false;
-          btn.classList.replace('btn-secondary', 'btn-primary');
-          window.loadDriveStats();
-        })
-        .api_bulkProcessDriveFolder();
-    }
 
 
   </script>

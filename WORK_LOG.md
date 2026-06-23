@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-23 | CODEX | Finance dashboard | Removed the unused Google Drive receipt scan status panel and legacy drive scan JavaScript from the Finance dashboard so the page focuses on DB-backed expense, pre-approval, and AI receipt flows. | Staging deploy | `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/ExpensePreApprovalTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 22 tests. |
 | 2026-06-23 | CODEX | Desktop finance expenses | Exposed receipt view/edit/delete actions directly in the desktop Finance expense table and added API fields so admins can manage scanned receipt records from the visible list. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 17 tests. |
 | 2026-06-23 | CODEX | Mobile expenses | Added receipt expense edit/delete flow: workers can modify their own draft/pending/rejected records, admins/HR/payroll can manage all records, and replacement receipt images are persisted in the DB. | Staging deploy | PHP lint passed for changed files; `php artisan test tests/Feature/MobileExpenseTest.php tests/Feature/SmartCompanySeedRecordsTest.php` passed, 16 tests. |
 | 2026-06-22 | CODEX | HR badge save | Removed the remaining KeyValue component from Applicants, added explicit Laravel/Filament cache clearing during deploy, and verified Badge/NFC save works even when applicant and badge names differ. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 53 tests; `npm run build` passed. |
@@ -122,6 +123,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-23: Fixed receipt image 403 viewing by serving uploaded mobile expense receipts through an authenticated route: workers can view their own receipts and admins/HR/payroll can view all receipts.
 - 2026-06-23: Added mobile expense edit/delete support with ownership/admin permissions, replacement receipt upload, DB-backed receipt persistence, and regression tests for worker/admin access.
 - 2026-06-23: Added the same receipt view/edit/delete actions to the desktop Finance expense table so scanned receipt records can be managed from the screen David is using.
+- 2026-06-23: Removed the inactive Google Drive receipt scan status widget and related legacy JavaScript from the Finance dashboard to keep the workflow aligned with the current AI receipt and DB-backed expense system.
 - 2026-06-23: Added database-backed receipt file storage for new mobile expenses so receipt images remain viewable even if Laravel Cloud local storage is cleared by deployment.
 
 ### Current Boundaries
