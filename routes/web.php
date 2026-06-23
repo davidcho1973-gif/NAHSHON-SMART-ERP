@@ -21,8 +21,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/mobile-expense/index', [MobileExpenseController::class, 'index'])->name('mobile-expense.index');
     Route::get('/mobile-expense/wizard-ai', [MobileExpenseController::class, 'wizard'])->name('mobile-expense.wizard');
     Route::get('/mobile-expense/receipt/{expense}', [MobileExpenseController::class, 'receipt'])->name('mobile-expense.receipt');
+    Route::get('/mobile-expense/{expense}/edit', [MobileExpenseController::class, 'edit'])->name('mobile-expense.edit');
     Route::post('/mobile-expense/upload-receipt', [MobileExpenseController::class, 'uploadReceipt'])->name('mobile-expense.upload-receipt');
     Route::post('/mobile-expense/store', [MobileExpenseController::class, 'store'])->name('mobile-expense.store');
+    Route::put('/mobile-expense/{expense}', [MobileExpenseController::class, 'update'])->name('mobile-expense.update');
+    Route::delete('/mobile-expense/{expense}', [MobileExpenseController::class, 'destroy'])->name('mobile-expense.destroy');
 
     // Expense Pre-Approval Routes
     Route::get('/expense-pre-approval/index', [ExpensePreApprovalController::class, 'index'])->name('expense-pre-approval.index');

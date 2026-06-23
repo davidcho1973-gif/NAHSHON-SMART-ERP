@@ -306,6 +306,177 @@ class MobileExpenseTest extends TestCase
         $this->assertSame('receipt-image-from-database', $response->getContent());
     }
 
+    public function test_employee_can_update_own_pending_expense_and_replace_receipt(): void
+    {
+        Storage::fake('public');
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->put(route('mobile-expense.update', $expense), [
+                'payment_type' => 'corporate',
+                'category' => 'Tools',
+                'class' => 'Field',
+                'description' => 'Replacement blades',
+                'amount' => 67.89,
+                'expense_date' => '2026-06-22',
+                'site_id' => $this->site->id,
+                'receipt' => UploadedFile::fake()->create('replacement.png', 500, 'image/png'),
+            ]);
+
+        $response->assertRedirect(route('mobile-expense.index'));
+
+        $expense->refresh();
+        $this->assertSame('corporate', $expense->payment_type);
+        $this->assertSame('Tools', $expense->category);
+        $this->assertSame('Replacement blades', $expense->description);
+        $this->assertSame('pending', $expense->status);
+        $this->assertNotNull($expense->receipt_file);
+        $this->assertSame('replacement.png', $expense->receipt_original_name);
+    }
+
+    public function test_employee_cannot_update_another_employee_expense(): void
+    {
+        $otherEmployee = Employee::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'first_name' => 'Jane',
+            'last_name' => 'Smith',
+            'email' => 'jane.update@example.com',
+            'employment_status' => 'active',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $otherEmployee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->user)
+            ->put(route('mobile-expense.update', $expense), [
+                'payment_type' => 'personal',
+                'category' => 'Tools',
+                'description' => 'Attempted edit',
+                'amount' => 10,
+                'expense_date' => '2026-06-22',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_employee_can_delete_own_pending_expense(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('receipts/delete-me.png', 'receipt-image');
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'receipt_path' => '/storage/receipts/delete-me.png',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->user)
+            ->delete(route('mobile-expense.destroy', $expense))
+            ->assertRedirect(route('mobile-expense.index'));
+
+        $this->assertDatabaseMissing('mobile_expenses', ['id' => $expense->id]);
+        Storage::disk('public')->assertMissing('receipts/delete-me.png');
+    }
+
+    public function test_employee_cannot_delete_another_employee_expense(): void
+    {
+        $otherEmployee = Employee::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'first_name' => 'Jane',
+            'last_name' => 'Smith',
+            'email' => 'jane.delete@example.com',
+            'employment_status' => 'active',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $otherEmployee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->user)
+            ->delete(route('mobile-expense.destroy', $expense))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('mobile_expenses', ['id' => $expense->id]);
+    }
+
+    public function test_admin_can_update_and_delete_any_expense(): void
+    {
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'personal',
+            'category' => 'Office Supplies',
+            'description' => 'Printer paper',
+            'amount' => 45.99,
+            'expense_date' => '2026-06-21',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('mobile-expense.update', $expense), [
+                'payment_type' => 'personal',
+                'category' => 'Admin Updated',
+                'description' => 'Reviewed expense',
+                'amount' => 99.99,
+                'expense_date' => '2026-06-23',
+                'status' => 'rejected',
+            ])
+            ->assertRedirect(route('mobile-expense.index'));
+
+        $expense->refresh();
+        $this->assertSame('Admin Updated', $expense->category);
+        $this->assertSame('rejected', $expense->status);
+
+        $this->actingAs($admin)
+            ->delete(route('mobile-expense.destroy', $expense))
+            ->assertRedirect(route('mobile-expense.index'));
+
+        $this->assertDatabaseMissing('mobile_expenses', ['id' => $expense->id]);
+    }
+
     public function test_desktop_universal_ai_scan_saves_expense(): void
     {
         Storage::fake('public');

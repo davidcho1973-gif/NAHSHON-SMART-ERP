@@ -277,6 +277,36 @@
       object-fit: contain;
       background: var(--bg-base);
     }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 12px;
+    }
+    .btn-edit,
+    .btn-delete {
+      flex: 1;
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn-edit {
+      border: 1px solid var(--brand-primary);
+      color: var(--brand-primary);
+      background: rgba(37, 99, 235, 0.1);
+    }
+    .btn-delete {
+      border: 1px solid var(--status-danger);
+      color: var(--status-danger);
+      background: var(--status-danger-dim);
+    }
   </style>
 </head>
 <body>
@@ -320,6 +350,9 @@
         @php
           $expensePayload = $expense->toArray();
           $expensePayload['receipt_view_url'] = $expense->receipt_path ? route('mobile-expense.receipt', $expense) : null;
+          $canModifyExpense = $canManageAllExpenses || ((int) $expense->employee_id === (int) auth()->user()?->employee_id && in_array($expense->status, ['draft', 'pending', 'rejected'], true));
+          $expensePayload['edit_url'] = $canModifyExpense ? route('mobile-expense.edit', $expense) : null;
+          $expensePayload['delete_url'] = $canModifyExpense ? route('mobile-expense.destroy', $expense) : null;
         @endphp
         <div class="expense-card" data-status="{{ $expense->status }}" onclick="openDetailModal({{ Illuminate\Support\Js::from($expensePayload) }})">
           <div class="card-top">
@@ -395,6 +428,20 @@
         <span class="detail-label">영수증 첨부</span>
         <img class="receipt-preview" id="modalReceiptImg" src="" alt="영수증 미리보기">
       </div>
+      <div class="modal-actions" id="modalActions" style="display:none">
+        <a href="#" class="btn-edit" id="editExpenseLink">
+          <i class="ph ph-pencil-simple"></i>
+          <span>수정</span>
+        </a>
+        <form id="deleteExpenseForm" method="POST" style="flex:1" onsubmit="return confirm('이 영수증 처리를 삭제할까요?')">
+          @csrf
+          @method('DELETE')
+          <button type="submit" class="btn-delete" style="width:100%">
+            <i class="ph ph-trash"></i>
+            <span>삭제</span>
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -450,6 +497,21 @@
       } else {
         img.src = '';
         wrap.style.display = 'none';
+      }
+
+      const actions = document.getElementById('modalActions');
+      const editLink = document.getElementById('editExpenseLink');
+      const deleteForm = document.getElementById('deleteExpenseForm');
+      if (expense.edit_url || expense.delete_url) {
+        actions.style.display = 'flex';
+        editLink.href = expense.edit_url || '#';
+        editLink.style.display = expense.edit_url ? 'flex' : 'none';
+        deleteForm.action = expense.delete_url || '';
+        deleteForm.style.display = expense.delete_url ? 'block' : 'none';
+      } else {
+        actions.style.display = 'none';
+        editLink.href = '#';
+        deleteForm.action = '';
       }
 
       document.getElementById('detailModal').style.display = 'flex';

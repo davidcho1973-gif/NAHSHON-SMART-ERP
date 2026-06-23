@@ -23,10 +23,11 @@ class MobileExpenseController extends Controller
     {
         $user = auth()->user();
         $employeeId = $user->employee_id;
+        $canManageAllExpenses = $this->canManageAllExpenses();
 
-        // Fetch user's own expenses
         $expenses = MobileExpense::query()
-            ->where('employee_id', $employeeId)
+            ->when(! $canManageAllExpenses, fn ($query) => $query->where('employee_id', $employeeId))
+            ->with(['employee', 'site'])
             ->orderByDesc('expense_date')
             ->orderByDesc('id')
             ->get();
@@ -43,6 +44,7 @@ class MobileExpenseController extends Controller
             'approvedMtd' => $approvedMtd,
             'pendingCount' => $pendingCount,
             'totalReimbursement' => $totalReimbursement,
+            'canManageAllExpenses' => $canManageAllExpenses,
         ]);
     }
 
@@ -101,10 +103,7 @@ class MobileExpenseController extends Controller
 
     public function receipt(MobileExpense $expense)
     {
-        $user = auth()->user();
-        $canViewAll = in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
-
-        abort_unless($canViewAll || (int) $expense->employee_id === (int) $user?->employee_id, 403);
+        abort_unless($this->canAccessExpense($expense), 403);
 
         $databaseFile = $this->databaseReceiptFile($expense->receipt_file);
         if ($databaseFile !== null) {
@@ -118,6 +117,22 @@ class MobileExpenseController extends Controller
         abort_unless($path !== null && Storage::disk('public')->exists($path), 404);
 
         return Storage::disk('public')->response($path);
+    }
+
+    public function edit(MobileExpense $expense): View
+    {
+        abort_unless($this->canModifyExpense($expense), 403);
+
+        $employee = auth()->user()?->employee;
+        $sites = $employee?->company_id
+            ? Site::query()->where('company_id', $employee->company_id)->where('status', 'active')->get()
+            : Site::query()->where('status', 'active')->get();
+
+        return view('mobile-expense.edit', [
+            'expense' => $expense,
+            'sites' => $sites,
+            'canManageAllExpenses' => $this->canManageAllExpenses(),
+        ]);
     }
 
 
@@ -168,6 +183,70 @@ class MobileExpenseController extends Controller
             ->with('success', 'Expense report submitted successfully.');
     }
 
+    public function update(Request $request, MobileExpense $expense)
+    {
+        abort_unless($this->canModifyExpense($expense), 403);
+
+        $validated = $request->validate([
+            'payment_type' => 'required|in:personal,corporate',
+            'category' => 'required|string|max:80',
+            'class' => 'nullable|string|max:80',
+            'description' => 'required|string',
+            'amount' => 'required|numeric|min:0.01',
+            'expense_date' => 'required|date',
+            'site_id' => 'nullable|exists:sites,id',
+            'status' => 'nullable|in:draft,pending,approved,rejected',
+            'receipt' => 'nullable|image|max:10240',
+        ]);
+
+        $updates = [
+            'site_id' => ($validated['site_id'] ?? null) ?: $expense->site_id,
+            'payment_type' => $validated['payment_type'],
+            'category' => $validated['category'],
+            'class' => $validated['class'] ?? null,
+            'description' => $validated['description'],
+            'amount' => $validated['amount'],
+            'expense_date' => $validated['expense_date'],
+        ];
+
+        if ($this->canManageAllExpenses() && isset($validated['status'])) {
+            $updates['status'] = $validated['status'];
+        } elseif (! $this->canManageAllExpenses()) {
+            $updates['status'] = 'pending';
+        }
+
+        if ($request->hasFile('receipt')) {
+            $file = $request->file('receipt');
+            $path = $file->store('receipts', 'public');
+            $receiptFile = $this->storedReceiptFile($path);
+
+            $updates['receipt_path'] = '/storage/' . $path;
+            $updates['receipt_mime_type'] = $receiptFile['mime_type'] ?? null;
+            $updates['receipt_original_name'] = $file->getClientOriginalName() ?: ($receiptFile['name'] ?? null);
+            $updates['receipt_file'] = $receiptFile['contents'] ?? null;
+        }
+
+        $expense->update($updates);
+
+        return redirect()->route('mobile-expense.index')
+            ->with('success', 'Expense report updated successfully.');
+    }
+
+    public function destroy(MobileExpense $expense)
+    {
+        abort_unless($this->canModifyExpense($expense), 403);
+
+        $path = $this->publicReceiptPath($expense->receipt_path);
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        $expense->delete();
+
+        return redirect()->route('mobile-expense.index')
+            ->with('success', 'Expense report deleted successfully.');
+    }
+
     private function publicReceiptPath(?string $path): ?string
     {
         if (! $path) {
@@ -179,6 +258,27 @@ class MobileExpenseController extends Controller
         }
 
         return ltrim($path, '/');
+    }
+
+    private function canAccessExpense(MobileExpense $expense): bool
+    {
+        return $this->canManageAllExpenses()
+            || (int) $expense->employee_id === (int) auth()->user()?->employee_id;
+    }
+
+    private function canModifyExpense(MobileExpense $expense): bool
+    {
+        if ($this->canManageAllExpenses()) {
+            return true;
+        }
+
+        return (int) $expense->employee_id === (int) auth()->user()?->employee_id
+            && in_array($expense->status, ['draft', 'pending', 'rejected'], true);
+    }
+
+    private function canManageAllExpenses(): bool
+    {
+        return in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
     }
 
     private function storedReceiptFile(?string $path): ?array
