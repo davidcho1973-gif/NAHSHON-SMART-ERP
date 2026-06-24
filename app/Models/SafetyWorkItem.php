@@ -81,6 +81,8 @@ class SafetyWorkItem extends Model
                 'owner' => $i->owner ?? '',
                 'status' => $i->status,
             ])->all(),
+            'aiPlan' => is_array($this->plan_payload) ? ($this->plan_payload['plan'] ?? null) : null,
+            'aiProgress' => is_array($this->plan_payload) ? ($this->plan_payload['progress'] ?? null) : null,
         ];
     }
 

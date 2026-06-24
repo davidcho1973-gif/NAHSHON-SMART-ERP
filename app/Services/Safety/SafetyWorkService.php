@@ -5,6 +5,7 @@ namespace App\Services\Safety;
 use App\Models\SafetyWorkItem;
 use App\Models\SafetyWorkSignature;
 use App\Models\Site;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -68,6 +69,73 @@ class SafetyWorkService
         });
 
         return $saved;
+    }
+
+    /**
+     * Persist the (edited) work card, generate an AI safety plan for it, store it, and
+     * return the refreshed client item plus the raw plan.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{item: array<string, mixed>, plan: array<string, mixed>}
+     */
+    public function generatePlan(array $data, string $siteId = 'ALL', ?int $userId = null): array
+    {
+        $this->save([$data], $siteId, $userId);
+        $item = SafetyWorkItem::query()->where('work_code', $data['id'])->firstOrFail();
+
+        $plan = app(GeminiSafetyAnalyzer::class)->generatePlan([
+            'title' => $item->title,
+            'workText' => $item->work_text,
+            'project' => $item->project,
+            'location' => $item->location,
+            'crew' => $item->crew,
+            'qty' => $item->planned_qty,
+            'unit' => $item->unit,
+        ]);
+
+        $payload = is_array($item->plan_payload) ? $item->plan_payload : [];
+        $payload['plan'] = $plan;
+        $payload['plan_generated_at'] = Carbon::now()->toIso8601String();
+
+        $item->plan_payload = $payload;
+        if (in_array($item->plan_status, ['미생성', '초안', '수정필요'], true)) {
+            $item->plan_status = '검토중';
+        }
+        $item->save();
+
+        return ['item' => $item->fresh(['signatures', 'issues'])->toClientArray(), 'plan' => $plan];
+    }
+
+    /**
+     * Persist the (edited) close report, get an AI progress recommendation, store it,
+     * and return the refreshed client item plus the recommendation.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{item: array<string, mixed>, recommendation: array<string, mixed>}
+     */
+    public function recommendProgress(array $data, string $siteId = 'ALL', ?int $userId = null): array
+    {
+        $this->save([$data], $siteId, $userId);
+        $item = SafetyWorkItem::query()->where('work_code', $data['id'])->firstOrFail();
+
+        $recommendation = app(GeminiSafetyAnalyzer::class)->recommendProgress([
+            'title' => $item->title,
+            'closeText' => $item->close_text,
+            'doneQty' => $item->done_qty,
+            'totalQty' => $item->total_qty,
+            'unit' => $item->unit,
+        ]);
+
+        $payload = is_array($item->plan_payload) ? $item->plan_payload : [];
+        $payload['progress'] = $recommendation;
+        $payload['progress_generated_at'] = Carbon::now()->toIso8601String();
+
+        $item->plan_payload = $payload;
+        $item->progress = (int) ($recommendation['recommended_progress'] ?? $item->progress);
+        $item->progress_status = '추천완료';
+        $item->save();
+
+        return ['item' => $item->fresh(['signatures', 'issues'])->toClientArray(), 'recommendation' => $recommendation];
     }
 
     /**

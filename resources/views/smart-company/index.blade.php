@@ -2350,13 +2350,31 @@
             renderPlanPreview(w);
           }
 
+          function safetyPlanBody(w) {
+            var p = w.aiPlan;
+            if (!p) {
+              return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성평가</div><div style="font-size:12px;color:var(--text-tertiary);line-height:1.8">「AI 안전계획 생성」을 누르면 작업내용 기반으로 위험성평가·PTP·보호구·TBM 주제가 생성됩니다.</div></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><div style="font-size:12px;color:var(--text-tertiary)">생성 대기 중</div></div></div>';
+            }
+            function chips(arr, color){ return (arr||[]).map(function(x){ return '<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:'+color+'22;color:'+color+';font-size:11px">'+esc(x)+'</span>'; }).join(''); }
+            function riskColor(lv){ return lv==='상'?'var(--status-danger)':lv==='중'?'var(--status-warning)':'var(--status-success)'; }
+            var hazardRows = (p.hazards||[]).map(function(h){ return '<tr><td style="font-size:12px">'+esc(h.hazard)+'</td><td><span style="color:'+riskColor(h.risk_level)+';font-weight:700;font-size:11px">'+esc(h.risk_level)+'</span></td><td style="font-size:12px;color:var(--text-secondary)">'+esc(h.control)+'</td></tr>'; }).join('');
+            var ptp = (p.ptp_steps||[]).map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('');
+            var tbm = (p.tbm_topics||[]).map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('');
+            return ''
+              + (p.summary ? '<div style="padding:10px 12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b style="color:var(--text-primary)">요약:</b> '+esc(p.summary)+'</div>' : '')
+              + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성평가</div><table class="data-table" style="margin-bottom:14px"><thead><tr><th>위험요인</th><th>위험도</th><th>대책</th></tr></thead><tbody>'+(hazardRows||'<tr><td colspan="3" style="color:var(--text-tertiary)">-</td></tr>')+'</tbody></table>'
+              + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 단계</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+ptp+'</ol></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#a78bfa">TBM 토의 주제</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+tbm+'</ul></div></div>'
+              + '<div style="margin-top:12px;font-size:12px;font-weight:700;color:var(--text-secondary)">필수 보호구</div><div style="margin:4px 0">'+chips(p.required_ppe, '#3b82f6')+'</div>'
+              + ((p.permits&&p.permits.length) ? '<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--text-secondary)">필요 허가(PTW)</div><div style="margin:4px 0">'+chips(p.permits, '#f59e0b')+'</div>' : '')
+              + (p.key_risk ? '<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,.08);border-left:3px solid var(--status-danger);border-radius:6px;font-size:12px;color:var(--text-primary)"><b>핵심 위험:</b> '+esc(p.key_risk)+'</div>' : '');
+          }
+
           function renderPlanPreview(w) {
             var el = document.getElementById('ai-plan-preview');
             if (!el) return;
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
-              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성 분석</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>작업구역 내 낙하, 협착, 전도 위험 확인</li><li>사용 장비와 공구의 사전 점검 필요</li><li>작업자 동선과 출입 통제 필요</li><li>비정상 상황 발생 시 작업 중지</li></ul></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>작업 범위와 담당자 확인</li><li>필수 보호구 착용 확인</li><li>장비와 공구 상태 확인</li><li>작업 수행 및 중간 점검</li><li>정리정돈 및 완료 사진 기록</li></ol></div></div>'
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">TBM 멘트:</b> 오늘 작업은 '+esc(w.workText)+' 주요 위험요소를 확인하고, 이상 상황 발생 시 즉시 작업을 중지합니다.</div>'
+              + safetyPlanBody(w)
               +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
             document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'승인완료', tbmStatus: w.tbmStatus === '대기' ? '대기' : w.tbmStatus}); switchTab('s-tbm'); });
             document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'수정필요'}); });
@@ -2393,11 +2411,14 @@
             if (!el) return;
             var total = Number(w.totalQty || w.qty || 0);
             var done = Number(w.doneQty || 0);
-            var rate = total > 0 ? Math.round(done / total * 100) : Number(w.progress || 0);
+            var ai = w.aiProgress;
+            var rate = ai ? Math.max(0, Math.min(100, Number(ai.recommended_progress || 0))) : (total > 0 ? Math.round(done / total * 100) : Number(w.progress || 0));
             var remain = Math.max(total - done, 0);
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">완료</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">잔여</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI 추천</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">마감 내용을 저장하면 AI 추천 공정율이 생성됩니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>'
+              + (ai
+                  ? '<div style="margin-top:14px;padding:12px;background:rgba(37,99,235,.06);border-left:3px solid var(--brand-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--brand-primary)">AI 추천 ('+esc(ai.status || '')+')</b><br>'+esc(ai.rationale || '')+(ai.follow_up ? '<br><span style="color:var(--text-tertiary)">후속: '+esc(ai.follow_up)+'</span>' : '')+'</div>'
+                  : '<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">「AI 공정율 분석」을 누르면 마감 보고를 바탕으로 AI가 공정율을 추천합니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>')
               +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== '추천완료' ? 'disabled' : '')+'>공정율 확정 반영</button><button class="btn-secondary" id="next-work-btn">다음 작업 생성</button></div>';
             document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'확정완료', closeStatus:'완료'}); switchTab('s-records'); });
             document.getElementById('next-work-btn').addEventListener('click', function(){ createNextWork(w); });
@@ -2436,7 +2457,14 @@
             renderAllSafetyTabs();
           }
 
-          function generatePlan(id) {
+          function applyServerItem(id, item) {
+            var i = safetyItems.findIndex(function(x){ return x.id === id; });
+            if (i >= 0 && item) { safetyItems[i] = item; }
+            localStorage.setItem(safetyStorageKey, JSON.stringify(safetyItems));
+            renderAllSafetyTabs();
+          }
+
+          async function generatePlan(id) {
             var w = safetyItems.find(function(x){ return x.id === id; });
             if (!w) return;
             var project = document.getElementById('ai-project-input').value.split('/');
@@ -2446,24 +2474,33 @@
             w.qty = Number(document.getElementById('ai-qty-input').value || w.qty || 0);
             w.totalQty = w.qty;
             w.unit = document.getElementById('ai-unit-input').value;
-            w.planStatus = '검토중';
-            saveSafetyItems();
-            renderAllSafetyTabs();
+            var btn = document.getElementById('ai-generate-plan');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 안전계획 분석 중...'; }
+            try {
+              var res = await gsRun('api_generateSafetyPlan', [w], null);
+              if (res && res.success && res.item) { applyServerItem(id, res.item); return; }
+              alert((res && res.error) || 'AI 계획 생성에 실패했습니다. (GEMINI_API_KEY 설정 확인)');
+            } catch (e) { alert('AI 계획 생성 오류: ' + e.message); }
+            w.planStatus = '검토중'; saveSafetyItems(); renderAllSafetyTabs();
           }
 
-          function saveClose(id, analyze) {
+          async function saveClose(id, analyze) {
             var w = safetyItems.find(function(x){ return x.id === id; });
             if (!w) return;
             w.closeText = document.getElementById('close-work-input').value;
             w.doneQty = Number(document.getElementById('done-qty-input').value || 0);
             w.totalQty = Number(document.getElementById('total-qty-input').value || w.qty || 0);
             w.closeStatus = '저장완료';
-            if (analyze) {
-              w.progress = w.totalQty > 0 ? Math.round(w.doneQty / w.totalQty * 100) : w.progress;
-              w.progressStatus = '추천완료';
-            }
-            saveSafetyItems();
-            renderAllSafetyTabs();
+            if (!analyze) { saveSafetyItems(); renderAllSafetyTabs(); return; }
+            var btn = document.getElementById('ai-progress-btn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 공정율 분석 중...'; }
+            try {
+              var res = await gsRun('api_recommendSafetyProgress', [w], null);
+              if (res && res.success && res.item) { applyServerItem(id, res.item); return; }
+              alert((res && res.error) || 'AI 공정율 분석에 실패했습니다. (GEMINI_API_KEY 설정 확인)');
+            } catch (e) { alert('AI 공정율 분석 오류: ' + e.message); }
+            w.progress = w.totalQty > 0 ? Math.round(w.doneQty / w.totalQty * 100) : w.progress;
+            w.progressStatus = '추천완료'; saveSafetyItems(); renderAllSafetyTabs();
           }
 
           function createNextWork(w) {

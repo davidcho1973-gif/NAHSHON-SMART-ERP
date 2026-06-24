@@ -56,6 +56,8 @@ class SmartCompanyData
             'api_getSafetyStats' => self::safetyStats(),
             'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
+            'api_generateSafetyPlan' => self::generateSafetyPlan($args[0] ?? null, $siteId),
+            'api_recommendSafetyProgress' => self::recommendSafetyProgress($args[0] ?? null, $siteId),
             'api_getPtwList' => self::ptwList(),
             'api_getPtwStats' => ['todayActive' => 4, 'pending' => 2, 'completed' => 18, 'rejected' => 1],
             'api_getInspections' => self::inspections(),
@@ -687,6 +689,40 @@ class SmartCompanyData
             $saved = app(\App\Services\Safety\SafetyWorkService::class)->save($items, $siteId, auth()->id());
 
             return ['success' => true, 'saved' => $saved];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function generateSafetyPlan(mixed $item, string $siteId = 'ALL'): array
+    {
+        if (! is_array($item) || blank($item['id'] ?? null)) {
+            return ['success' => false, 'error' => '작업 정보가 올바르지 않습니다.'];
+        }
+
+        try {
+            $result = app(\App\Services\Safety\SafetyWorkService::class)->generatePlan($item, $siteId, auth()->id());
+
+            return ['success' => true, 'item' => $result['item'], 'plan' => $result['plan']];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function recommendSafetyProgress(mixed $item, string $siteId = 'ALL'): array
+    {
+        if (! is_array($item) || blank($item['id'] ?? null)) {
+            return ['success' => false, 'error' => '작업 정보가 올바르지 않습니다.'];
+        }
+
+        try {
+            $result = app(\App\Services\Safety\SafetyWorkService::class)->recommendProgress($item, $siteId, auth()->id());
+
+            return ['success' => true, 'item' => $result['item'], 'recommendation' => $result['recommendation']];
         } catch (\Throwable $e) {
             report($e);
 
