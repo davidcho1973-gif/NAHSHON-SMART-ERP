@@ -43,6 +43,8 @@ class ProjectResource extends Resource
 
     protected static string | \UnitEnum | null $navigationGroup = 'SMART COMPANY';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?int $navigationSort = 1;
 
     private const MANAGE_ROLES = [

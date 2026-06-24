@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Models\Project;
 use App\Models\Site;
 use App\Models\SiteContractor;
 use App\Models\Team;
@@ -13,7 +14,7 @@ class SiteManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_site_can_track_contract_companies_and_field_teams(): void
+    public function test_site_can_track_projects_contract_companies_and_field_teams(): void
     {
         $company = Company::query()->create([
             'code' => 'A-COMPANY',
@@ -28,6 +29,19 @@ class SiteManagementTest extends TestCase
             'address' => 'Phoenix, AZ',
             'timezone' => 'America/Phoenix',
             'status' => 'active',
+        ]);
+
+        $project = $site->projects()->create([
+            'company_id' => $company->id,
+            'end_client_company_id' => $company->id,
+            'project_code' => 'A-PHX-2026-001',
+            'name' => 'Arizona Equipment Setting',
+            'construction_type' => 'equipment_setting',
+            'project_stage' => 'in_progress',
+            'vendor_tier' => 'tier_2',
+            'upper_contractor_company_id' => $company->id,
+            'po_number' => 'PO-AZ-1001',
+            'scope_of_work' => 'Equipment setting and mechanical installation',
         ]);
 
         $contractor = $site->contractors()->create([
@@ -55,8 +69,10 @@ class SiteManagementTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->assertInstanceOf(Project::class, $project);
         $this->assertInstanceOf(SiteContractor::class, $contractor);
         $this->assertInstanceOf(Team::class, $team);
+        $this->assertSame('Arizona Equipment Setting', $site->projects()->first()?->name);
         $this->assertSame('A Company', $site->contractors()->first()?->company_name);
         $this->assertSame('배관팀 A', $site->teams()->first()?->name);
         $this->assertSame('piping', $site->teams()->first()?->trade_type);
