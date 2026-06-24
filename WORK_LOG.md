@@ -24,6 +24,11 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-24 | CODEX | Applicant site QR intake | Added reusable site-based public application QR links so walk-in applicants can scan a field QR and submit without pre-created name/email/phone invitation records. | Local branch `codex/project-management` | PHP lint passed; `ApplicantIntakeTest` passed (7 tests, 56 assertions); route list shows `member/site/{site}/apply` and `/apply/qr`; in-app browser confirmed the `현장 공용 QR` admin action is visible. |
+| 2026-06-24 | Antigravity | AI Vehicle Management | Overhauled vehicle management: implemented multimodal AI scan (PDF contract + 4 photos), database save, manual/NFC assignment/return, detail modal, and vertical chronology timeline. Fixed pre-existing database sequence leak in tests. | Local branch `antigravity/vehicle-ui` | All 69 tests passed successfully (`php artisan test`). |
+| 2026-06-24 | CODEX | Admin navigation cleanup | Removed the Filament admin resources/routes for 거래처 마스터, ERP Records, and 숙소 관리 so PROJECT 관리 is the remaining SMART COMPANY management entry with Sites. | Local branch `codex/project-management` | `artisan optimize:clear` passed; targeted `ProjectManagementTest` + `PostgresSchemaTest` passed; `route:list --path=admin` shows only `admin/projects` among the removed route patterns. |
+| 2026-06-24 | CODEX | Project management UX | Reworked the PROJECT create form from a dense multi-card layout into a cleaner 5-step wizard with compact step labels and wider modal spacing. | Local branch `codex/project-management` | PHP lint passed; `ProjectManagementTest` passed; in-app browser visual check completed at `/admin/projects`. |
+| 2026-06-24 | CODEX | Project management | Added dedicated PROJECT management with construction project metadata, vendor tier/contract structure, US compliance, finance/WBS, workforce/resource planning, and moved the old company menu wording to 거래처 마스터. | Local branch `codex/project-management` | PHP lint passed for new project files; targeted `ProjectManagementTest` + `PostgresSchemaTest` passed (2 tests, 66 assertions); full `php artisan test` passed 63/64 with order-dependent `SmartCompanySeedRecordsTest` failure, and that test passes alone. |
 | 2026-06-22 | CODEX | HR badge save | Removed the remaining KeyValue component from Applicants, added explicit Laravel/Filament cache clearing during deploy, and verified Badge/NFC save works even when applicant and badge names differ. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 53 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR badge save | Fixed the remaining Badge/NFC save 500 by allowing FileUpload update hooks to receive stored string/array state, and added a Livewire table-action regression test for saving Gemini badge payloads. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 53 tests; `npm run build` passed. |
 | 2026-06-22 | CODEX | HR badge analysis | Fixed Badge/NFC save failures after Gemini analysis by replacing the Filament KeyValue analysis display with a read-only JSON preview and normalizing the stored payload for Applicants and Employees. | Main deploy | PHP lint passed for changed files; `php artisan test` passed, 52 tests; `npm run build` passed. |
@@ -117,6 +122,10 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-22: Added the Laravel Cloud dashboard action sequence for deleting the old app, switching staging to the `staging` branch, reading failed deployment logs, and verifying the debug build route.
 - 2026-06-22: Fixed staging deploy seeding failure caused by DB-backed mobile expenses missing the legacy `vendor` key in `SmartCompanyData::seedRecords`.
 - 2026-06-23: Confirmed deployment policy with David: test changes on Staging first, then promote the same tested code to Production after approval; Staging and Production use separate databases.
+- 2026-06-24: Added PROJECT management as a dedicated Filament resource backed by a `projects` table for construction project metadata, vendor tier/contract structure, US site/compliance tracking, finance/WBS fields, and workforce/resource planning; relabeled the old company screen as 거래처 마스터.
+- 2026-06-24: Reworked the PROJECT create form into a cleaner wizard flow (`기본`, `계약`, `현장 일정`, `재무 WBS`, `규정/리소스`) after visual review showed the first dense card layout was too cramped.
+- 2026-06-24: Removed Filament admin resources/routes for 거래처 마스터, ERP Records, and 숙소 관리 while leaving their underlying tables/models available where core relationships still depend on them.
+- 2026-06-24: Added field-office public application QR flow: admins can open a `현장 공용 QR` from Applicants, applicants scan `/member/site/{site}/apply/qr`, and a Member Registration record is created only after the applicant submits the form.
 
 ### Current Boundaries
 
@@ -152,6 +161,7 @@ Use this section for manual owner checks, business decisions, and final approval
 
 ### Completed
 
+- 2026-06-24: Overhauled the vehicle management module. Replaced legacy Apps Script and mock views with a Laravel + PostgreSQL database-backed system. Supports multimodal AI upload (4-direction photos + rental contract), Gemini-based metadata extraction & verification, driver assignment/returns, detailed modal with photo slider, and chronological timeline of assignments. Fixed the database sequence leak in `SmartCompanySeedRecordsTest` to ensure robust test runs.
 - 2026-06-20: Added many-to-many site and company management resources and resolved PostgreSQL distinct JSON query error.
 - 2026-06-21: Added individual delete action (DeleteAction) to Member Registration resource.
 - 2026-06-21: Added individual delete action (DeleteAction) to all other core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control).

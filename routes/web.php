@@ -28,6 +28,13 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/expense-pre-approval/create', [ExpensePreApprovalController::class, 'create'])->name('expense-pre-approval.create');
     Route::post('/expense-pre-approval/store', [ExpensePreApprovalController::class, 'store'])->name('expense-pre-approval.store');
 
+    // Vehicle API Routes
+    Route::post('/vehicle-api/scan-rental', [App\Http\Controllers\VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
+    Route::post('/vehicle-api/save', [App\Http\Controllers\VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');
+    Route::post('/vehicle-api/assign', [App\Http\Controllers\VehicleApiController::class, 'assignVehicle'])->name('vehicle.assign');
+    Route::post('/vehicle-api/return', [App\Http\Controllers\VehicleApiController::class, 'returnVehicle'])->name('vehicle.return');
+    Route::get('/vehicle-api/{vehicle}/history', [App\Http\Controllers\VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
+
     // Universal Scanner and Compatibility Adapter Route
     Route::post('/smart-company-api/{method}', \App\Http\Controllers\SmartCompanyApiController::class)
         ->where('method', '[A-Za-z0-9_]+')
@@ -37,6 +44,9 @@ Route::middleware('auth')->group(function (): void {
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
 Route::post('/member/register/{token}', [MemberRegistrationController::class, 'store'])->name('member-registration.store');
+Route::get('/member/site/{site}/apply/qr', [MemberRegistrationController::class, 'siteQr'])->name('member-registration.site.qr');
+Route::get('/member/site/{site}/apply', [MemberRegistrationController::class, 'siteShow'])->name('member-registration.site.show');
+Route::post('/member/site/{site}/apply', [MemberRegistrationController::class, 'siteStore'])->name('member-registration.site.store');
 
 Route::get('/debug-logs-sec-53298bfd9a', function() {
     $logPath = storage_path('logs/laravel.log');

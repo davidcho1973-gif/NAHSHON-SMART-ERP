@@ -92,7 +92,8 @@ class SmartCompanyData
             'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
             'api_syncWorkerStatus' => ['success' => true, 'messages' => ['Worker status updated', 'Related vehicle/housing assignments checked']],
             'api_universalAIScan' => self::universalAIScan($args),
-            'api_nfcAssignVehicle', 'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
+            'api_nfcAssignVehicle' => self::nfcAssignVehicle($args),
+            'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
 
             default => self::defaultResponse($method),
         };
@@ -138,9 +139,74 @@ class SmartCompanyData
             'site' => $site,
             'status' => $status,
             'amount' => $amount,
-            'occurred_on' => Carbon::now()->toDateString(),
+            'occurred_on' => \Illuminate\Support\Carbon::now()->toDateString(),
             'payload' => $payload,
         ];
+    }
+
+    public static function nfcAssignVehicle(array $args): array
+    {
+        $uid = $args[0] ?? null;
+        $vehicleCode = $args[1] ?? null;
+
+        if (blank($uid) || blank($vehicleCode)) {
+            return ['success' => false, 'error' => 'NFC 카드 UID 또는 차량 ID가 비어있습니다.'];
+        }
+
+        try {
+            $normalizedNfc = \App\Models\MemberRegistration::normalizeNfcUid($uid);
+            
+            $employee = \App\Models\Employee::where('badge_number', $normalizedNfc)->first();
+            if (! $employee) {
+                return ['success' => false, 'error' => '해당 NFC 카드를 소지한 직원을 찾을 수 없습니다. (NFC ID: ' . $normalizedNfc . ')'];
+            }
+
+            $vehicle = \App\Models\Vehicle::where('vehicle_code', $vehicleCode)->first();
+            if (! $vehicle) {
+                return ['success' => false, 'error' => '차량을 찾을 수 없습니다.'];
+            }
+
+            \Illuminate\Support\Facades\DB::transaction(function () use ($vehicle, $employee): void {
+                // Terminate active rentals for this vehicle
+                \App\Models\VehicleRental::where('vehicle_id', $vehicle->id)
+                    ->whereNull('returned_at')
+                    ->update([
+                        'returned_at' => now(),
+                        'end_mileage' => $vehicle->current_mileage,
+                        'status' => 'returned',
+                    ]);
+
+                // Terminate active rentals for this employee
+                \App\Models\VehicleRental::where('employee_id', $employee->id)
+                    ->whereNull('returned_at')
+                    ->update([
+                        'returned_at' => now(),
+                        'status' => 'returned',
+                    ]);
+
+                // Create active rental
+                \App\Models\VehicleRental::create([
+                    'vehicle_id' => $vehicle->id,
+                    'employee_id' => $employee->id,
+                    'company_id' => $employee->company_id,
+                    'site_id' => $employee->site_id,
+                    'rented_at' => now(),
+                    'start_mileage' => $vehicle->current_mileage,
+                    'status' => 'active',
+                    'notes' => 'NFC 태그 배정',
+                ]);
+
+                // Update vehicle
+                $vehicle->update(['status' => '운행중']);
+            });
+
+            return [
+                'success' => true, 
+                'message' => "NFC 카드 매핑 성공: {$employee->name}님에게 차량({$vehicle->model})이 배정되었습니다."
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     private static function smartRecords(string $module): array
@@ -434,8 +500,74 @@ class SmartCompanyData
     public static function inventoryDashboard(): array { return ['success' => true, 'totals' => ['assets' => 42, 'available' => 31, 'checkedOut' => 8, 'repair' => 3], 'matrix' => ['categories' => ['Lift', 'Tooling', 'Vehicle'], 'sites' => array_keys(self::sites()), 'cells' => []], 'recent' => self::equipmentList(), 'upcomingInspections' => []]; }
     public static function inventoryAssetDetail(string $assetId): array { return ['success' => true, 'asset' => collect(self::equipmentList())->firstWhere('id', $assetId) ?? self::equipmentList()[0], 'photos' => [], 'transactions' => self::toolTransactions()]; }
 
-    public static function vehicleStats(): array { return ['total' => 6, 'active' => 4, 'available' => 1, 'maintenance' => 1]; }
-    public static function vehicleList(): array { return [['id' => 'VH-001', 'name' => 'Ford F-250', 'driver' => 'James Kim', 'site' => 'HFF-02', 'status' => '운행중'], ['id' => 'VH-002', 'name' => 'Toyota Sienna', 'driver' => 'Admin', 'site' => 'LGES-AZ', 'status' => '정비중']]; }
+    public static function vehicleStats(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('vehicles')) {
+                $query = \App\Models\Vehicle::query()->visibleTo(auth()->user());
+                $all = $query->get();
+
+                $total = $all->count();
+                $active = $all->where('status', '운행중')->count();
+                $maintenance = $all->where('status', '정비중')->count();
+                $available = $all->where('status', '대기중')->count();
+
+                // Rent expiring within 60 days
+                $limit60 = now()->addDays(60)->toDateString();
+                $today = now()->toDateString();
+                $rentExpiringSoon = $all->filter(fn($v) => $v->rent_end && $v->rent_end->toDateString() >= $today && $v->rent_end->toDateString() <= $limit60)->count();
+
+                return [
+                    'total' => $total,
+                    'active' => $active,
+                    'maintenance' => $maintenance,
+                    'available' => $available,
+                    'rentExpiringSoon' => $rentExpiringSoon,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in vehicleStats shim: ' . $e->getMessage());
+        }
+
+        return ['total' => 0, 'active' => 0, 'available' => 0, 'maintenance' => 0, 'rentExpiringSoon' => 0];
+    }
+
+    public static function vehicleList(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('vehicles')) {
+                return \App\Models\Vehicle::query()
+                    ->with(['activeRental.employee'])
+                    ->visibleTo(auth()->user())
+                    ->get()
+                    ->map(fn (\App\Models\Vehicle $v): array => [
+                        'id' => $v->vehicle_code,
+                        'realId' => $v->id,
+                        'plate' => $v->plate_number ?: '-',
+                        'type' => $v->vehicle_type ?: '차량',
+                        'model' => $v->model,
+                        'company' => $v->vendor ?: '-',
+                        'rentEnd' => $v->rent_end ? $v->rent_end->toDateString() : '-',
+                        'insuranceExp' => $v->insurance_expiry ? $v->insurance_expiry->toDateString() : '-',
+                        'assignee' => $v->activeRental?->employee?->name ?: '',
+                        'mileage' => (int) $v->current_mileage,
+                        'nextOil' => (int) $v->next_oil_change_mileage ?: ((int) $v->current_mileage + 5000),
+                        'status' => $v->status ?: '대기중',
+                        'registrationMethod' => $v->registration_method === 'AI자동분석' ? 'AI자동분석' : 'manual',
+                        'photo_front' => $v->photo_front,
+                        'photo_rear' => $v->photo_rear,
+                        'photo_left' => $v->photo_left,
+                        'photo_right' => $v->photo_right,
+                        'contract_path' => $v->contract_path,
+                    ])
+                    ->all();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in vehicleList shim: ' . $e->getMessage());
+        }
+
+        return [];
+    }
     public static function rentalStats(): array { return ['total' => 8, 'active' => 5, 'overdue' => 1, 'returned' => 2, 'returningSoon' => 2, 'mtdCost' => 28600]; }
     public static function rentalList(): array { return [['id' => 'RN-001', 'vendor' => 'United Rentals', 'item' => 'Scissor Lift', 'site' => 'HFF-02', 'startDate' => '2026-06-10', 'endDate' => '2026-06-24', 'cost' => 4200, 'status' => '반납예정'], ['id' => 'RN-002', 'vendor' => 'Sunbelt', 'item' => 'Telehandler', 'site' => 'LGES-AZ', 'startDate' => '2026-06-01', 'endDate' => '2026-06-18', 'cost' => 7600, 'status' => '만료임박']]; }
     public static function housingStats(): array
