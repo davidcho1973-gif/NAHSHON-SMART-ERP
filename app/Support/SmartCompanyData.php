@@ -54,6 +54,8 @@ class SmartCompanyData
             'api_getAlerts' => self::alerts($args[0] ?? 'all'),
             'api_updateAlertStatus' => ['success' => true],
             'api_getSafetyStats' => self::safetyStats(),
+            'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
+            'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
             'api_getPtwList' => self::ptwList(),
             'api_getPtwStats' => ['todayActive' => 4, 'pending' => 2, 'completed' => 18, 'rejected' => 1],
             'api_getInspections' => self::inspections(),
@@ -663,6 +665,34 @@ class SmartCompanyData
     public static function toolTransactions(): array { return [['time' => '08:12', 'action' => '불출', 'toolName' => 'Cordless Hammer Drill', 'toolId' => 'TL-101', 'userId' => 'EMP-1002', 'condition' => '정상'], ['time' => '11:40', 'action' => '반납', 'toolName' => 'Laser Level', 'toolId' => 'TL-103', 'userId' => 'EMP-1005', 'condition' => '손상']]; }
 
     public static function safetyStats(): array { return ['daysNoIncident' => 47, 'unresolved' => 3, 'resolved' => 18, 'urgent' => 1, 'warning' => 2, 'normal' => 8]; }
+
+    public static function safetyWorkItems(string $siteId = 'ALL'): array
+    {
+        try {
+            return ['success' => true, 'items' => app(\App\Services\Safety\SafetyWorkService::class)->items($siteId)];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage(), 'items' => []];
+        }
+    }
+
+    public static function saveSafetyWorkItems(mixed $items, string $siteId = 'ALL'): array
+    {
+        if (! is_array($items)) {
+            return ['success' => false, 'error' => 'Invalid work items payload.'];
+        }
+
+        try {
+            $saved = app(\App\Services\Safety\SafetyWorkService::class)->save($items, $siteId, auth()->id());
+
+            return ['success' => true, 'saved' => $saved];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
     public static function alerts(mixed $filter = 'all'): array
     {
         $fromDb = self::smartRecords('safety');

@@ -2148,7 +2148,7 @@
             ];
           }
 
-          function loadSafetyItems() {
+          function loadSafetyItemsOffline() {
             try {
               var raw = localStorage.getItem(safetyStorageKey);
               if (raw) {
@@ -2163,16 +2163,38 @@
                   return repairedData;
                 }
               }
-              return defaultSafetyItems();
-            } catch (e) {
-              return defaultSafetyItems();
-            }
+            } catch (e) {}
+            return defaultSafetyItems();
           }
 
-          var safetyItems = loadSafetyItems();
+          // Server is the source of truth (TBM signatures / close reports are legal records).
+          // localStorage is kept only as an offline cache + fallback.
+          async function loadSafetyItems() {
+            if (window.apiCache) { delete window.apiCache['api_getSafetyWorkItems[]']; }
+            try {
+              var res = await gsRun('api_getSafetyWorkItems', [], null);
+              if (res && res.success && Array.isArray(res.items)) {
+                if (res.items.length === 0) {
+                  // First run with an empty server: migrate any local-only items up.
+                  var local = loadSafetyItemsOffline();
+                  if (Array.isArray(local) && local.length) {
+                    gsRun('api_saveSafetyWorkItems', [local]).catch(function(){});
+                    return local;
+                  }
+                }
+                localStorage.setItem(safetyStorageKey, JSON.stringify(res.items));
+                return res.items;
+              }
+            } catch (e) {}
+            return loadSafetyItemsOffline();
+          }
+
+          var safetyItems = await loadSafetyItems();
 
           function saveSafetyItems() {
             localStorage.setItem(safetyStorageKey, JSON.stringify(safetyItems));
+            if (window.apiCache) { delete window.apiCache['api_getSafetyWorkItems[]']; }
+            try { gsRun('api_saveSafetyWorkItems', [safetyItems]).catch(function(){}); } catch (e) {}
           }
 
           function esc(v) {
