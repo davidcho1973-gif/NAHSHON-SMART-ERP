@@ -4491,21 +4491,85 @@
         
         modal.innerHTML =
           '<style>' +
+            '#ai-vehicle-reg-modal * { box-sizing: border-box; }' +
             '#ai-vehicle-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
             '#ai-vehicle-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
             '#ai-vehicle-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+            '#ai-vehicle-reg-modal input[type="text"],' +
+            '#ai-vehicle-reg-modal input[type="number"],' +
+            '#ai-vehicle-reg-modal input[type="date"] {' +
+            '  width: 100%;' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  border-radius: 8px;' +
+            '  padding: 10px 12px;' +
+            '  color: var(--text-primary);' +
+            '  font-size: 13px;' +
+            '  outline: none;' +
+            '  transition: border-color 0.2s, box-shadow 0.2s;' +
+            '}' +
+            '#ai-vehicle-reg-modal input[type="text"]:focus,' +
+            '#ai-vehicle-reg-modal input[type="number"]:focus,' +
+            '#ai-vehicle-reg-modal input[type="date"]:focus {' +
+            '  border-color: #7c3aed;' +
+            '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
+            '}' +
+            '#ai-vehicle-reg-modal label {' +
+            '  display: block;' +
+            '  font-size: 12px;' +
+            '  font-weight: 600;' +
+            '  color: var(--text-secondary);' +
+            '  margin-bottom: 6px;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-primary {' +
+            '  background: linear-gradient(135deg, #7c3aed, #2563eb);' +
+            '  border: none;' +
+            '  color: #fff;' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: opacity 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-primary:hover {' +
+            '  opacity: 0.9;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-primary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-secondary {' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  color: var(--text-primary);' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: background 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-secondary:hover {' +
+            '  background: var(--bg-body);' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-secondary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#vehicle-modal-close-btn {' +
+            '  transition: color 0.2s, transform 0.2s;' +
+            '}' +
+            '#vehicle-modal-close-btn:hover {' +
+            '  color: var(--text-primary);' +
+            '  transform: rotate(90deg);' +
+            '}' +
             '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
             '@media (max-width: 640px) { #vehicle-camera-area { grid-template-columns: 1fr !important; } }' +
           '</style>' +
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:720px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;">' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:20px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;box-sizing:border-box;">' +
             // Header
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
-              '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:24px;"></i> AI 렌트카 자동 등록</h2>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:22px;"></i> AI 렌트카 자동 등록</h2>' +
               '<button type="button" id="vehicle-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
             '</div>' +
             
             // Description
-            '<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height:1.5;">' +
+            '<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height:1.5;">' +
               '렌트 계약서와 차량 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 사진을 자동으로 판독하여 장부에 즉시 등록합니다.' +
             '</div>' +
 
@@ -4517,192 +4581,188 @@
             '<input type="file" id="vehicle-file-photo_right" style="display:none" accept="image/*">' +
 
             // Upload / Camera Toggle
-            '<div style="display: flex; gap: 8px; margin-bottom: 20px;">' +
-              '<button type="button" id="vehicle-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 6px; cursor:pointer;">' +
-                '<i class="ph ph-upload-simple"></i> 파일 업로드 (Upload)' +
+            '<div style="display: flex; gap: 8px; margin-bottom: 16px;">' +
+              '<button type="button" id="vehicle-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-upload-simple"></i> 파일 업로드' +
               '</button>' +
-              '<button type="button" id="vehicle-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 6px; cursor:pointer;">' +
-                '<i class="ph ph-camera"></i> 실시간 카메라 (Webcam)' +
+              '<button type="button" id="vehicle-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-camera"></i> 실시간 카메라' +
               '</button>' +
             '</div>' +
 
             // Upload Mode Area (Grid of Cards)
-            '<div id="vehicle-upload-area" style="display:flex; flex-direction:column; gap:16px; margin-bottom: 20px;">' +
+            '<div id="vehicle-upload-area" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 16px;">' +
               // Contract (Full width card)
-              '<div id="vehicle-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 28px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 100px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
-                '<div class="empty-state">' +
-                  '<i class="ph ph-file-text" style="font-size: 32px; color: var(--text-tertiary); margin-bottom: 8px;"></i>' +
-                  '<div style="font-weight: 500; font-size:14px; color:var(--text-primary);">렌트 계약서 파일 (PDF 또는 이미지) <span style="color:var(--status-danger)">*</span></div>' +
-                  '<div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">클릭하여 파일 선택</div>' +
+              '<div id="vehicle-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 75px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:6px;">' +
+                  '<i class="ph ph-file-text" style="font-size: 24px; color: var(--text-tertiary);"></i>' +
+                  '<div style="font-weight: 600; font-size:13px; color:var(--text-primary);">렌트 계약서 파일 (PDF/이미지) <span style="color:var(--status-danger)">*</span></div>' +
+                  '<div style="font-size: 11px; color: var(--text-tertiary);">클릭하여 파일 업로드</div>' +
                 '</div>' +
-                '<div class="preview-state" style="display: none; width:100%; text-align:center;">' +
-                  '<div class="preview-icon-wrapper" style="font-size: 32px; color: var(--brand-primary); margin-bottom: 6px;"><i class="ph ph-file-pdf"></i></div>' +
-                  '<img class="preview-img" style="max-height: 80px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 6px;">' +
-                  '<div class="file-name" style="font-size: 13px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 40px;"></div>' +
-                  '<button type="button" class="trash-btn" style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;"><i class="ph ph-trash"></i></button>' +
+                '<div class="preview-state" style="display: none; width:100%; text-align:center; position:relative;">' +
+                  '<div class="preview-icon-wrapper" style="font-size: 24px; color: var(--brand-primary); margin-bottom: 4px;"><i class="ph ph-file-pdf"></i></div>' +
+                  '<img class="preview-img" style="max-height: 50px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 4px;">' +
+                  '<div class="file-name" style="font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>' +
+                  '<button type="button" class="trash-btn" style="position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,0.6); color: #fff; width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-trash"></i></button>' +
                 '</div>' +
               '</div>' +
               
-              // Directional photos (4 columns)
-              '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">' +
+              // Directional photos (2x2 grid)
+              '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
                 // Front
-                '<div id="vehicle-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
-                  '<div class="empty-state">' +
-                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
-                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
-                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                '<div id="vehicle-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
                   '</div>' +
                   '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
-                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
-                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
                 // Rear
-                '<div id="vehicle-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
-                  '<div class="empty-state">' +
-                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
-                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
-                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                '<div id="vehicle-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
                   '</div>' +
                   '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
-                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
-                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
                 // Left
-                '<div id="vehicle-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
-                  '<div class="empty-state">' +
-                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
-                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
-                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                '<div id="vehicle-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
                   '</div>' +
                   '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
-                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
-                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
                 // Right
-                '<div id="vehicle-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
-                  '<div class="empty-state">' +
-                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
-                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
-                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                '<div id="vehicle-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
                   '</div>' +
                   '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
-                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
-                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
             '</div>' +
 
             // Camera Mode Area (Side-by-side)
-            '<div id="vehicle-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; margin-bottom: 20px;">' +
+            '<div id="vehicle-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin-bottom: 16px;">' +
               // Left: Video feed
-              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border-strong);">' +
+              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
                 '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
                   '<video id="vehicle-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
-                  '<div id="vehicle-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 12px; padding: 6px 8px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+                  '<div id="vehicle-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 11px; padding: 4px 6px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
                     '촬영 대상: 계약서' +
                   '</div>' +
                 '</div>' +
-                '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
-                  '<button type="button" id="vehicle-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; font-weight: 600; border-radius: 6px; cursor:pointer;">' +
-                    '<i class="ph ph-camera"></i> 사진 촬영 (Capture)' +
+                '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+                  '<button type="button" id="vehicle-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 34px; font-size: 12px; font-weight: 600; cursor:pointer;">' +
+                    '<i class="ph ph-camera"></i> 사진 촬영' +
                   '</button>' +
                 '</div>' +
-                '<div id="vehicle-camera-select-container" style="margin-top: 10px; display: none; align-items:center; gap:6px;">' +
-                  '<span style="font-size:11px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라 선택:</span>' +
-                  '<select id="vehicle-camera-device-select" style="flex:1; padding: 6px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 11px; outline: none;"></select>' +
+                '<div id="vehicle-camera-select-container" style="margin-top: 8px; display: none; align-items:center; gap:6px;">' +
+                  '<span style="font-size:10px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라:</span>' +
+                  '<select id="vehicle-camera-device-select" style="flex:1; padding: 4px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 10px; outline: none;"></select>' +
                 '</div>' +
               '</div>' +
               
               // Right: Slots selector
-              '<div style="display: flex; flex-direction: column; gap: 10px; background: var(--bg-body); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border-strong);">' +
-                '<div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:4px; padding-bottom:6px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+              '<div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:2px; padding-bottom:4px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
                 
                 // Contract slot
-                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
                   '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
-                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
-                      '<i class="ph ph-file-text" style="color: var(--text-tertiary);"></i>' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-file-text" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
                     '</div>' +
                     '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">계약서 <span style="color:var(--status-danger)">*</span></div>' +
-                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">계약서 <span style="color:var(--status-danger)">*</span></div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="display: flex; align-items: center; gap: 6px;">' +
-                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
-                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
 
                 // Front slot
-                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
                   '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
-                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
-                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
                     '</div>' +
                     '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
-                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="display: flex; align-items: center; gap: 6px;">' +
-                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
-                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
 
                 // Rear slot
-                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
                   '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
-                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
-                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
                     '</div>' +
                     '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
-                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="display: flex; align-items: center; gap: 6px;">' +
-                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
-                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
 
                 // Left slot
-                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
                   '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
-                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
-                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
                     '</div>' +
                     '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
-                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="display: flex; align-items: center; gap: 6px;">' +
-                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
-                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
 
                 // Right slot
-                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
                   '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
-                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
-                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
                     '</div>' +
                     '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
-                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="display: flex; align-items: center; gap: 6px;">' +
-                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
-                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
@@ -4710,65 +4770,65 @@
 
             // Submit Buttons / Controls for Initial Upload Mode
             '<div id="vehicle-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
-              '<button type="button" id="vehicle-upload-cancel-btn" class="btn-secondary" style="padding:10px 20px; cursor:pointer;">취소</button>' +
-              '<button type="button" id="vehicle-upload-submit-btn" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb); border:none; padding:10px 24px; font-weight:700; cursor:pointer;">AI 분석 실행</button>' +
+              '<button type="button" id="vehicle-upload-cancel-btn" class="btn-secondary" style="padding:0 20px; cursor:pointer;">취소</button>' +
+              '<button type="button" id="vehicle-upload-submit-btn" class="btn-primary" style="padding:0 24px; cursor:pointer;">AI 분석 실행</button>' +
             '</div>' +
 
             // Loading / Analysis Spinner
-            '<div id="ai-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:40px 0; gap:16px;">' +
-              '<div style="width:50px; height:50px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
-              '<div style="color:var(--text-primary); font-size:16px; font-weight:700;">Gemini AI가 계약서 및 사진을 분석하는 중...</div>' +
-              '<div style="color:var(--text-secondary); font-size:13px; text-align:center; max-width:420px;">텍스트를 추출하고 차량 정보를 자동 매핑하고 있습니다. 잠시만 기다려주세요 (최대 30초).</div>' +
+            '<div id="ai-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px 0; gap:12px;">' +
+              '<div style="width:40px; height:40px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary); font-size:14px; font-weight:700;">Gemini AI가 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary); font-size:12px; text-align:center; max-width:320px; line-height:1.4;">계약서 및 차량 사진 정보를 추출하여 자동 매핑하고 있습니다. 잠시만 기다려주세요.</div>' +
             '</div>' +
 
             // Verification and save form
-            '<div id="ai-analysis-result-container" style="display:none; flex-direction:column; gap:16px; margin-top:12px;">' +
-              '<h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
-              '<div style="font-size:12px; color:var(--text-secondary); background:rgba(124,58,237,0.1); border:1px solid rgba(124,58,237,0.2); border-radius:6px; padding:10px;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
-              '<form id="ai-vehicle-save-form" style="display:flex; flex-direction:column; gap:14px;">' +
+            '<div id="ai-analysis-result-container" style="display:none; flex-direction:column; gap:12px; margin-top:12px;">' +
+              '<h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+              '<div style="font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.4;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-vehicle-save-form" style="display:flex; flex-direction:column; gap:12px;">' +
                 '<input type="hidden" name="contract_path">' +
                 '<input type="hidden" name="photo_front">' +
                 '<input type="hidden" name="photo_rear">' +
                 '<input type="hidden" name="photo_left">' +
                 '<input type="hidden" name="photo_right">' +
-                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
                   '<div>' +
-                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">차량 번호판</label>' +
-                    '<input type="text" name="plate_number" required style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
+                    '<label>차량 번호판</label>' +
+                    '<input type="text" name="plate_number" required>' +
                   '</div>' +
                   '<div>' +
-                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">차량 모델명</label>' +
-                    '<input type="text" name="model" required style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
-                  '</div>' +
-                '</div>' +
-                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
-                  '<div>' +
-                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">렌트사 (Vendor)</label>' +
-                    '<input type="text" name="vendor" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
-                  '</div>' +
-                  '<div>' +
-                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">현재 마일리지 (Odometer)</label>' +
-                    '<input type="number" name="current_mileage" min="0" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
+                    '<label>차량 모델명</label>' +
+                    '<input type="text" name="model" required>' +
                   '</div>' +
                 '</div>' +
-                '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
                   '<div>' +
-                    '<label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">렌트 시작일</label>' +
-                    '<input type="date" name="rent_start" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); font-size:11px; outline:none;">' +
+                    '<label>렌트사 (Vendor)</label>' +
+                    '<input type="text" name="vendor">' +
                   '</div>' +
                   '<div>' +
-                    '<label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">렌트 종료일</label>' +
-                    '<input type="date" name="rent_end" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); font-size:11px; outline:none;">' +
-                  '</div>' +
-                  '<div>' +
-                    '<label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">보험 만료일</label>' +
-                    '<input type="date" name="insurance_expiry" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); font-size:11px; outline:none;">' +
+                    '<label>현재 마일리지 (Odometer)</label>' +
+                    '<input type="number" name="current_mileage" min="0">' +
                   '</div>' +
                 '</div>' +
-                '<div id="ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:8px;"></div>' +
-                '<div style="margin-top:12px; display:flex; justify-content:flex-end; gap:12px;">' +
-                  '<button type="button" id="vehicle-save-cancel-btn" class="btn-secondary" style="padding:10px 20px; cursor:pointer;">취소</button>' +
-                  '<button type="submit" class="btn-primary" style="background:var(--status-success); border:none; padding:10px 24px; font-weight:700; cursor:pointer;">차량 등록 및 저장</button>' +
+                '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">' +
+                  '<div>' +
+                    '<label>렌트 시작일</label>' +
+                    '<input type="date" name="rent_start">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>렌트 종료일</label>' +
+                    '<input type="date" name="rent_end">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>보험 만료일</label>' +
+                    '<input type="date" name="insurance_expiry">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px;"></div>' +
+                '<div style="margin-top:8px; display:flex; justify-content:flex-end; gap:12px;">' +
+                  '<button type="button" id="vehicle-save-cancel-btn" class="btn-secondary" style="padding:0 20px;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success) !important; padding:0 24px; border:none;">차량 등록 및 저장</button>' +
                 '</div>' +
               '</form>' +
             '</div>' +
@@ -5163,11 +5223,18 @@
               { key: 'photo_right', label: '우측' }
             ];
             directions.forEach(function(d) {
-              if (files[d.key]) {
+              var src = '';
+              if (vehicleFiles[d.key]) {
+                src = URL.createObjectURL(vehicleFiles[d.key]);
+              } else if (files[d.key]) {
+                src = files[d.key];
+              }
+
+              if (src) {
                 var previewCard = document.createElement('div');
                 previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
                 previewCard.innerHTML = 
-                  '<img src="' + files[d.key] + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+                  '<img src="' + src + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
                   '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
                 previewsDiv.appendChild(previewCard);
               }
