@@ -5005,17 +5005,10 @@
           // â”€â”€ 2. KPI 5ì¢… (60% ì••ì¶•) â”€â”€
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
-<<<<<<< HEAD
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ  ì ¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + totals.gross.toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì  </span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì ¸ì› <i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
-=======
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ ì¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
                 '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + (totals.gross||0).toLocaleString() + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì </span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì¸ì›<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
->>>>>>> origin/staging
                 '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + 'ê°œ íšŒì‚¬</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular ê³µìˆ˜<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
