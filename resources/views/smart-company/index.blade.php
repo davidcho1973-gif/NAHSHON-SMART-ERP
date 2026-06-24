@@ -4466,7 +4466,7 @@
               '</div>' +
               '<div style="display:flex;gap:8px">' +
                 '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> í˜„ìž¬ ì£¼ê¸°</button>' +
-                '<button class="btn-primary" disabled style="opacity:0.5"><i class="ph ph-file-pdf"></i> ëª…ì„¸ì„œ (Phase B)</button>' +
+                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>ëª…ì„¸ì„œ (Phase B)</button>' +
               '</div>' +
             '</div></div>';
 
@@ -4606,6 +4606,23 @@
         var ds = current.toISOString().slice(0, 10);
         window._payrollPeriodStart = ds;
         renderPayroll(ds);
+      };
+
+      // Run payroll for the current pay period, then open the WH-347 certified payroll doc.
+      window.openPayrollDocs = function(btn) {
+        var label = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner"></i> 정산 중...'; }
+        gsRun('api_runPayroll', [window._payrollPeriodStart || null], null).then(function(res) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          if (res && res.success && res.certifiedUrl) {
+            window.open(res.certifiedUrl, '_blank');
+          } else {
+            alert((res && res.error) || '급여 정산 문서를 생성할 수 없습니다.');
+          }
+        }).catch(function(e) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          alert('급여 정산 실행 실패: ' + e.message);
+        });
       };
 
       // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

@@ -157,4 +157,33 @@ class PayrollDashboardTest extends TestCase
         $this->assertGreaterThan(0, $payslip->net_pay);
         $this->assertLessThan($payslip->gross_pay, $payslip->net_pay);
     }
+
+    public function test_run_payroll_api_then_render_certified_payroll(): void
+    {
+        $runRes = $this->actingAs($this->admin)
+            ->postJson('/smart-company-api/api_runPayroll', ['args' => ['2026-06-15'], 'siteId' => 'ALL']);
+
+        $runRes->assertStatus(200);
+        $runRes->assertJsonPath('success', true);
+        $runRes->assertJsonPath('headcount', 2);
+        $runId = $runRes->json('runId');
+        $this->assertNotNull($runId);
+
+        $page = $this->actingAs($this->admin)->get("/payroll/run/{$runId}/certified");
+        $page->assertStatus(200);
+        $page->assertSee('Certified Payroll (WH-347)');
+        $page->assertSee('Carlos Rivera');   // worker present
+        $page->assertSee('Min Lee');
+    }
+
+    public function test_certified_payroll_blocks_unauthorized_role(): void
+    {
+        $run = app(PayrollCalculator::class)->runPayroll('2026-06-15', 'ALL', $this->admin->id);
+
+        $viewer = User::factory()->create(['access_role' => 'site_manager']);
+
+        $this->actingAs($viewer)
+            ->get("/payroll/run/{$run->id}/certified")
+            ->assertStatus(403);
+    }
 }
