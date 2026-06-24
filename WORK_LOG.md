@@ -24,6 +24,11 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-24 | CODEX | Applicant site QR intake | Added reusable site-based public application QR links so walk-in applicants can scan a field QR and submit without pre-created name/email/phone invitation records. | Local branch `codex/project-management` | PHP lint passed; `ApplicantIntakeTest` passed (7 tests, 56 assertions); route list shows `member/site/{site}/apply` and `/apply/qr`; in-app browser confirmed the `현장 공용 QR` admin action is visible. |
+| 2026-06-24 | Antigravity | AI Vehicle Management | Overhauled vehicle management: implemented multimodal AI scan (PDF contract + 4 photos), database save, manual/NFC assignment/return, detail modal, and vertical chronology timeline. Fixed pre-existing database sequence leak in tests. | Local branch `antigravity/vehicle-ui` | All 69 tests passed successfully (`php artisan test`). |
+| 2026-06-24 | CODEX | Admin navigation cleanup | Removed the Filament admin resources/routes for 거래처 마스터, ERP Records, and 숙소 관리 so PROJECT 관리 is the remaining SMART COMPANY management entry with Sites. | Local branch `codex/project-management` | `artisan optimize:clear` passed; targeted `ProjectManagementTest` + `PostgresSchemaTest` passed; `route:list --path=admin` shows only `admin/projects` among the removed route patterns. |
+| 2026-06-24 | CODEX | Project management UX | Reworked the PROJECT create form from a dense multi-card layout into a cleaner 5-step wizard with compact step labels and wider modal spacing. | Local branch `codex/project-management` | PHP lint passed; `ProjectManagementTest` passed; in-app browser visual check completed at `/admin/projects`. |
+| 2026-06-24 | CODEX | Project management | Added dedicated PROJECT management with construction project metadata, vendor tier/contract structure, US compliance, finance/WBS, workforce/resource planning, and moved the old company menu wording to 거래처 마스터. | Local branch `codex/project-management` | PHP lint passed for new project files; targeted `ProjectManagementTest` + `PostgresSchemaTest` passed (2 tests, 66 assertions); full `php artisan test` passed 63/64 with order-dependent `SmartCompanySeedRecordsTest` failure, and that test passes alone. |
 | 2026-06-23 | Antigravity | AI Safety Management | Overhauled the AI safety management module into a 5-step foreman-led TBM & close report flow, repairing Mojibake strings. | Local change | `php artisan test` passed (77 tests) |
 | 2026-06-23 | CODEX | Mobile expense wizard | Added an uploaded receipt image preview directly inside the AI receipt upload area so users can see the selected receipt while OCR results appear below. | Local change | `npm run build` passed; local `/mobile-expense/wizard` returned 200 OK. |
 | 2026-06-23 | David / CODEX | Deployment policy | Reverted the workflow back to Staging-based testing: agents should run local checks when possible, deploy test changes to the `staging` environment for David validation, and reserve Production deploys for explicit approval. | Documentation update | Recorded in `AGENTS.md` and this work log. |
@@ -146,6 +151,10 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-23: Replaced the limited AI expense category buttons with chart-of-accounts based `accounting_account` selection, kept department/class separate, clarified approved pre-approval budget linking, and added legacy data cleanup for account values stored in `class`.
 - 2026-06-23: Hardened mobile and desktop AI expense saves against Laravel Cloud migration timing drift by filtering write payloads to columns that exist in the live `mobile_expenses` table and stripping account-code values from department/class.
 - 2026-06-23: Fixed the remaining mobile expense final-save 500 by encoding receipt image DB backups as base64-safe payloads, decoding them through the authenticated receipt route, and preserving support for older raw receipt rows.
+- 2026-06-24: Added PROJECT management as a dedicated Filament resource backed by a `projects` table for construction project metadata, vendor tier/contract structure, US site/compliance tracking, finance/WBS fields, and workforce/resource planning; relabeled the old company screen as 거래처 마스터.
+- 2026-06-24: Reworked the PROJECT create form into a cleaner wizard flow (`기본`, `계약`, `현장 일정`, `재무 WBS`, `규정/리소스`) after visual review showed the first dense card layout was too cramped.
+- 2026-06-24: Removed Filament admin resources/routes for 거래처 마스터, ERP Records, and 숙소 관리 while leaving their underlying tables/models available where core relationships still depend on them.
+- 2026-06-24: Added field-office public application QR flow: admins can open a `현장 공용 QR` from Applicants, applicants scan `/member/site/{site}/apply/qr`, and a Member Registration record is created only after the applicant submits the form.
 
 ### Current Boundaries
 
@@ -181,6 +190,7 @@ Use this section for manual owner checks, business decisions, and final approval
 
 ### Completed
 
+- 2026-06-24: Overhauled the vehicle management module. Replaced legacy Apps Script and mock views with a Laravel + PostgreSQL database-backed system. Supports multimodal AI upload (4-direction photos + rental contract), Gemini-based metadata extraction & verification, driver assignment/returns, detailed modal with photo slider, and chronological timeline of assignments. Fixed the database sequence leak in `SmartCompanySeedRecordsTest` to ensure robust test runs.
 - 2026-06-20: Added many-to-many site and company management resources and resolved PostgreSQL distinct JSON query error.
 - 2026-06-21: Added individual delete action (DeleteAction) to Member Registration resource.
 - 2026-06-21: Added individual delete action (DeleteAction) to all other core resource lists (Companies, Employees, Member Documents, Sites, ERP Records, Access Control).

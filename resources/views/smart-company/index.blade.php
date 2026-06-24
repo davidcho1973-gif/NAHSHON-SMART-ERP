@@ -4427,9 +4427,541 @@
       };
 
       // ë§¤íŠ¸ë¦­ìŠ¤ ì…€ í´ë¦­ â†’ í•„í„° (Phase 2 ì˜ˆì•½)
+      // ë§¤íŠ¸ë¦­ìŠ¤ ì…€ í ´ë¦­ â†’ í•„í„° (Phase 2 ì˜ˆì•½)
       window.filterInventory = function(cat, site) {
         console.log('Filter:', cat, '/', site);
-        // Phase 2: í•„í„° + ëª©ë¡ í‘œì‹œ
+        // Phase 2: í•„í„° + ëª©ë¡  í‘œì‹œ
+      };
+
+      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      async function renderVehicle() {
+        pageContainer.innerHTML = skeleton();
+        try {
+          const [stats, vehicles] = await Promise.all([
+            window.API.getVehicleStats(),
+            window.API.getVehicleList()
+          ]);
+          var vehiclesListHtml = vehicles.map(function (v) {
+            var rentClass = v.rentEnd < '2026-05-30' ? ' text-warning' : '';
+            var insClass = v.insuranceExp < '2026-06-30' ? ' text-warning' : '';
+            var oilClass = (v.nextOil - v.mileage) < 1000 ? ' text-warning' : '';
+            var assignee = v.assignee || '<span style="color:var(--text-tertiary)">미배정</span>';
+            var aiTag = v.registrationMethod === 'AI자동분석' ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;color:white;background:#7c3aed;margin-left:4px">AI</span>' : '';
+            
+            // Render table row
+            return '<tr style="cursor:pointer" onclick=\'openVehicleDetailModal(' + JSON.stringify(v).replace(/'/g, "&#39;").replace(/"/g, "&quot;") + ')\'>' +
+              '<td class="cell-mono">' + v.id + aiTag + '</td>' +
+              '<td class="cell-primary cell-mono">' + v.plate + '</td>' +
+              '<td>' + v.type + ' ' + v.model + '</td>' +
+              '<td>' + assignee + '</td>' +
+              '<td class="cell-mono' + rentClass + '">' + v.rentEnd + '</td>' +
+              '<td class="cell-mono' + insClass + '">' + v.insuranceExp + '</td>' +
+              '<td class="cell-mono">' + (v.mileage||0).toLocaleString() + '</td>' +
+              '<td class="cell-mono' + oilClass + '">' + (v.nextOil||0).toLocaleString() + '</td>' +
+              '<td>' + statusPill(v.status) + '</td>' +
+              '</tr>';
+          }).join('');
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">차량 관리</h1><p class="page-subtitle">렌트 차량 현황 · 보험/등록 만료 추적 · AI 계약서 자동 등록</p></div>' +
+            '<div class="action-row">' +
+            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> 목록 출력</button>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;" onclick="openAiVehicleRegModal()">' +
+            '<i class="ph ph-robot"></i> 🤖 AI 렌트카 등록</button>' +
+            '<button class="btn-primary" style="background:var(--status-warning);color:#000;" onclick="openNfcAssignModal(\'VEHICLE\')"><i class="ph ph-identification-card"></i> NFC 배정</button>' +
+            '</div></div>' +
+            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
+            '<div class="kpi-card"><div class="kpi-label">전체 차량</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 차량</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">운행중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">정상 배정</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">정비중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.maintenance + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">서비스 센터</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">렌트만료임박</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.rentExpiringSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">60일 이내</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">AI 등록 차량</div><div class="kpi-value" style="color:#7c3aed">' + vehicles.filter(function(v){return v.registrationMethod==='AI자동분석';}).length + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Gemini 분석</span></div></div>' +
+            '</div>' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-car"></i> 차량 목록</div></div>' +
+            '<div class="panel-body"><table class="data-table"><thead><tr><th>차량ID</th><th>번호판</th><th>모델</th><th>배정자</th><th>렌트만료</th><th>보험만료</th><th>현재마일</th><th>다음오일</th><th>상태</th></tr></thead><tbody>' + (vehiclesListHtml || '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 차량 없음</td></tr>') + '</tbody></table></div></div>';
+
+        } catch (err) { renderError('차량 데이터 로딩 실패'); console.error(err); }
+      }
+
+      // AI Rent Car Auto Registration Modal
+      window.openAiVehicleRegModal = function() {
+        var modal = document.createElement('div');
+        modal.id = 'ai-vehicle-reg-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:600px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;"></i> AI 렌트카 자동 등록</h2>' +
+              '<button onclick="this.closest(\'#ai-vehicle-reg-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<form id="ai-vehicle-upload-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">렌트 계약서 파일 (PDF 또는 이미지) <span style="color:var(--status-danger)">*</span></label>' +
+                '<input type="file" name="contract" accept="application/pdf,image/*" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+              '</div>' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                '<div>' +
+                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 전면 사진</label>' +
+                  '<input type="file" name="photo_front" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                '</div>' +
+                '<div>' +
+                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 후면 사진</label>' +
+                  '<input type="file" name="photo_rear" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                '</div>' +
+              '</div>' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                '<div>' +
+                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 좌측 사진</label>' +
+                  '<input type="file" name="photo_left" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                '</div>' +
+                '<div>' +
+                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 우측 사진</label>' +
+                  '<input type="file" name="photo_right" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                '</div>' +
+              '</div>' +
+              '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:12px;">' +
+                '<button type="button" onclick="this.closest(\'#ai-vehicle-reg-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;padding:10px 24px;font-weight:700;">AI 분석 실행</button>' +
+              '</div>' +
+            '</form>' +
+            '<div id="ai-analysis-loading" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:16px;">' +
+              '<div style="width:50px;height:50px;border:4px solid rgba(124,58,237,0.2);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary);font-size:16px;font-weight:700;">Gemini AI가 계약서 및 사진을 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary);font-size:13px;text-align:center;max-width:400px;">텍스트를 추출하고 차량 정보를 자동 매핑하고 있습니다. 잠시만 기다려주세요 (최대 30초).</div>' +
+            '</div>' +
+            '<div id="ai-analysis-result-container" style="display:none;flex-direction:column;gap:16px;margin-top:12px;">' +
+              '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0;padding-top:12px;border-top:1px solid var(--border-subtle);">AI 분석 결과 검증</h3>' +
+              '<div style="font-size:12px;color:var(--text-secondary);background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.2);border-radius:6px;padding:10px;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-vehicle-save-form" style="display:flex;flex-direction:column;gap:14px;">' +
+                '<input type="hidden" name="contract_path">' +
+                '<input type="hidden" name="photo_front">' +
+                '<input type="hidden" name="photo_rear">' +
+                '<input type="hidden" name="photo_left">' +
+                '<input type="hidden" name="photo_right">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 번호판</label>' +
+                    '<input type="text" name="plate_number" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 모델명</label>' +
+                    '<input type="text" name="model" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">렌트사 (Vendor)</label>' +
+                    '<input type="text" name="vendor" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">현재 마일리지 (Odometer)</label>' +
+                    '<input type="number" name="current_mileage" min="0" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">렌트 시작일</label>' +
+                    '<input type="date" name="rent_start" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);font-size:11px;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">렌트 종료일</label>' +
+                    '<input type="date" name="rent_end" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);font-size:11px;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">보험 만료일</label>' +
+                    '<input type="date" name="insurance_expiry" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);font-size:11px;">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-uploaded-previews" style="display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;margin-top:8px;"></div>' +
+                '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:12px;">' +
+                  '<button type="button" onclick="document.getElementById(\'ai-vehicle-reg-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success);border:none;padding:10px 24px;font-weight:700;">차량 등록 및 저장</button>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var uploadForm = modal.querySelector('#ai-vehicle-upload-form');
+        var loadingDiv = modal.querySelector('#ai-analysis-loading');
+        var resultDiv = modal.querySelector('#ai-analysis-result-container');
+        var saveForm = modal.querySelector('#ai-vehicle-save-form');
+
+        uploadForm.onsubmit = async function(e) {
+          e.preventDefault();
+          uploadForm.style.display = 'none';
+          loadingDiv.style.display = 'flex';
+
+          var formData = new FormData(uploadForm);
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/scan-rental', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || 'AI 분석 중 오류가 발생했습니다.');
+            }
+
+            var res = await response.json();
+            loadingDiv.style.display = 'none';
+            resultDiv.style.display = 'flex';
+
+            var data = res.data || {};
+            var files = res.files || {};
+
+            saveForm.querySelector('[name="plate_number"]').value = data.plate_number || '';
+            saveForm.querySelector('[name="model"]').value = data.model || '';
+            saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+            saveForm.querySelector('[name="current_mileage"]').value = data.current_mileage || 0;
+            saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
+            saveForm.querySelector('[name="rent_end"]').value = data.rent_end || '';
+            saveForm.querySelector('[name="insurance_expiry"]').value = data.insurance_expiry || '';
+
+            saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
+            saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
+            saveForm.querySelector('[name="photo_rear"]').value = files.photo_rear || '';
+            saveForm.querySelector('[name="photo_left"]').value = files.photo_left || '';
+            saveForm.querySelector('[name="photo_right"]').value = files.photo_right || '';
+
+            var previewsDiv = saveForm.querySelector('#ai-uploaded-previews');
+            previewsDiv.innerHTML = '';
+            var directions = [
+              { key: 'photo_front', label: '전면' },
+              { key: 'photo_rear', label: '후면' },
+              { key: 'photo_left', label: '좌측' },
+              { key: 'photo_right', label: '우측' }
+            ];
+            directions.forEach(function(d) {
+              if (files[d.key]) {
+                var previewCard = document.createElement('div');
+                previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
+                previewCard.innerHTML = 
+                  '<img src="' + files[d.key] + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+                  '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
+                previewsDiv.appendChild(previewCard);
+              }
+            });
+
+          } catch (err) {
+            loadingDiv.style.display = 'none';
+            uploadForm.style.display = 'flex';
+            alert('오류: ' + err.message);
+          }
+        };
+
+        saveForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            plate_number: saveForm.querySelector('[name="plate_number"]').value,
+            model: saveForm.querySelector('[name="model"]').value,
+            vendor: saveForm.querySelector('[name="vendor"]').value,
+            current_mileage: parseInt(saveForm.querySelector('[name="current_mileage"]').value, 10) || 0,
+            rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
+            rent_end: saveForm.querySelector('[name="rent_end"]').value || null,
+            insurance_expiry: saveForm.querySelector('[name="insurance_expiry"]').value || null,
+            contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
+            photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
+            photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
+            photo_left: saveForm.querySelector('[name="photo_left"]').value || null,
+            photo_right: saveForm.querySelector('[name="photo_right"]').value || null
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/save', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '차량 정보를 저장하는 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('차량이 성공적으로 등록되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Detailed Vehicle Info & Chronological Rental History modal
+      window.openVehicleDetailModal = async function(v) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-detail-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        var photosHtml = '';
+        var directions = [
+          { path: v.photo_front, label: '전면 사진' },
+          { path: v.photo_rear, label: '후면 사진' },
+          { path: v.photo_left, label: '좌측 사진' },
+          { path: v.photo_right, label: '우측 사진' }
+        ];
+        directions.forEach(function(d) {
+          if (d.path) {
+            photosHtml += '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:6px;text-align:center;">' +
+              '<a href="' + d.path + '" target="_blank">' +
+                '<img src="' + d.path + '" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px;border:1px solid var(--border-subtle);">' +
+              '</a>' +
+              '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + d.label + '</span>' +
+            '</div>';
+          }
+        });
+
+        if (photosHtml) {
+          photosHtml = '<div style="margin-top:16px;">' +
+            '<h4 style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">차량 사진 (4방향)</h4>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' + photosHtml + '</div>' +
+          '</div>';
+        }
+
+        var contractHtml = v.contract_path 
+          ? '<div style="margin-top:12px;"><a href="' + v.contract_path + '" target="_blank" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;"><i class="ph ph-file-pdf"></i> 렌트 계약서 파일 보기</a></div>'
+          : '';
+
+        var actionButton = '';
+        if (v.status === '운행중') {
+          actionButton = '<button onclick="openReturnVehicleModal(' + v.realId + ', \'' + v.model + '\', ' + v.mileage + ')" class="btn-primary" style="background:var(--status-danger);border:none;padding:10px 20px;font-weight:700;">차량 반납 처리</button>';
+        } else {
+          actionButton = '<button onclick="openAssignVehicleModal(' + v.realId + ', \'' + v.model + '\')" class="btn-primary" style="background:var(--status-success);border:none;padding:10px 20px;font-weight:700;">차량 운전자 배정</button>';
+        }
+
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:700px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-car" style="color:var(--brand-primary);"></i> 차량 상세 정보</h2>' +
+              '<button onclick="this.closest(\'#vehicle-detail-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--bg-base);border-radius:10px;padding:16px;border:1px solid var(--border-subtle);">' +
+              '<div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">차량 ID / 모델</span><strong style="font-size:15px;color:var(--text-primary);">' + v.id + ' / ' + v.model + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">번호판 / 제조사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + v.plate + ' / ' + v.company + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 마일리지 / 다음 오일 교환</span><strong style="font-size:15px;color:var(--text-primary);">' + v.mileage.toLocaleString() + ' mi / ' + v.nextOil.toLocaleString() + ' mi</strong></div>' +
+              '</div>' +
+              '<div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정자</span><strong style="font-size:15px;color:var(--text-primary);">' + (v.assignee || '미배정') + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">렌트 만료일 / 보험 만료일</span><strong style="font-size:15px;color:var(--text-primary);">' + v.rentEnd + ' / ' + v.insuranceExp + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">차량 상태</span><div>' + statusPill(v.status) + '</div></div>' +
+              '</div>' +
+            '</div>' +
+            photosHtml +
+            contractHtml +
+            '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+              '<div>' + actionButton + '</div>' +
+              '<button type="button" onclick="this.closest(\'#vehicle-detail-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">닫기</button>' +
+            '</div>' +
+            '<div style="margin-top:28px;">' +
+              '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;"><i class="ph ph-clock-counter-clockwise"></i> 대여 및 배정 이력 (Rental History)</h3>' +
+              '<div id="vehicle-history-timeline" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-base);padding:14px;">' +
+                '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">이력을 불러오는 중...</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        try {
+          var response = await fetch('/vehicle-api/' + v.realId + '/history');
+          if (!response.ok) throw new Error('이력 로딩 실패');
+          var res = await response.json();
+          var history = res.history || [];
+          var timelineHtml = '';
+
+          if (history.length === 0) {
+            timelineHtml = '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">배정 이력이 없습니다.</div>';
+          } else {
+            timelineHtml = history.map(function(h) {
+              var period = h.returned_at ? h.rented_at + ' ~ ' + h.returned_at : h.rented_at + ' ~ <span style="color:var(--status-success);font-weight:700;">사용 중</span>';
+              var mileageInfo = h.end_mileage ? h.start_mileage.toLocaleString() + ' mi → ' + h.end_mileage.toLocaleString() + ' mi' : h.start_mileage.toLocaleString() + ' mi ~';
+              var notesText = h.notes ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:4px;">' + h.notes.replace(/\n/g, '<br>') + '</div>' : '';
+              return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px;display:flex;flex-direction:column;gap:4px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                  '<span style="font-weight:700;color:var(--text-primary);">' + h.driver + '</span>' +
+                  '<span style="font-size:11px;color:var(--text-secondary);">' + period + '</span>' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);">' +
+                  '<span>마일리지: ' + mileageInfo + '</span>' +
+                  '<span style="font-weight:600;color:' + (h.status === '대여중' ? 'var(--status-success)' : 'var(--text-tertiary)') + ';">' + h.status + '</span>' +
+                '</div>' +
+                notesText +
+              '</div>';
+            }).join('');
+          }
+          modal.querySelector('#vehicle-history-timeline').innerHTML = timelineHtml;
+        } catch (err) {
+          modal.querySelector('#vehicle-history-timeline').innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:12px;">이력을 불러오지 못했습니다.</div>';
+        }
+      };
+
+      // Manual Assignment Modal
+      window.openAssignVehicleModal = async function(vehicleId, modelName) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-assign-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:450px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">운전자 배정: ' + modelName + '</h3>' +
+            '<form id="vehicle-assign-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">운전자 선택 <span style="color:var(--status-danger)">*</span></label>' +
+                '<select name="employee_id" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">불러오는 중...</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">메모</label>' +
+                '<textarea name="notes" placeholder="배정 사유 또는 메모를 입력하세요" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'vehicle-assign-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-success);border:none;padding:8px 20px;font-weight:700;">배정 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var selectEl = modal.querySelector('[name="employee_id"]');
+
+        try {
+          var employees = await window.API.getPersonnelList();
+          var activeEmp = employees.filter(function(e) { return e.workerStatus === 'active'; });
+          if (activeEmp.length === 0) {
+            selectEl.innerHTML = '<option value="">선택 가능한 활성 직원이 없습니다.</option>';
+          } else {
+            selectEl.innerHTML = '<option value="">-- 운전자 선택 --</option>' + activeEmp.map(function(e) {
+              var name = e.nameKr ? e.nameKr + ' (' + e.nameEn + ')' : e.nameEn;
+              var comp = e.company ? ' [' + e.company + ']' : '';
+              return '<option value="' + e.employeeDbId + '">' + name + comp + '</option>';
+            }).join('');
+          }
+        } catch (err) {
+          selectEl.innerHTML = '<option value="">직원 목록을 불러오지 못했습니다.</option>';
+        }
+
+        modal.querySelector('#vehicle-assign-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            vehicle_id: vehicleId,
+            employee_id: selectEl.value,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/assign', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '배정 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('vehicle-detail-modal');
+            if (detailModal) detailModal.remove();
+            
+            showToast('운전자가 배정되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Manual Return Modal
+      window.openReturnVehicleModal = function(vehicleId, modelName, currentMileage) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-return-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:400px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">차량 반납: ' + modelName + '</h3>' +
+            '<form id="vehicle-return-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">현재 마일리지 (최소 ' + currentMileage.toLocaleString() + ' mi) <span style="color:var(--status-danger)">*</span></label>' +
+                '<input type="number" name="current_mileage" required min="' + currentMileage + '" value="' + currentMileage + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">반납 메모</label>' +
+                '<textarea name="notes" placeholder="차량 상태(청결도, 파손 여부 등) 또는 특이사항 입력" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'vehicle-return-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-danger);border:none;padding:8px 20px;font-weight:700;">반납 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#vehicle-return-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var inputMileage = parseInt(modal.querySelector('[name="current_mileage"]').value, 10);
+          if (inputMileage < currentMileage) {
+            alert('반납 마일리지는 이전 마일리지보다 작을 수 없습니다.');
+            return;
+          }
+
+          var payload = {
+            vehicle_id: vehicleId,
+            current_mileage: inputMileage,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/return', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '반납 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('vehicle-detail-modal');
+            if (detailModal) detailModal.remove();
+
+            showToast('차량이 반납 완료 처리되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
       };
 
       // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4439,7 +4971,7 @@
           var res = await window.API.getPayrollDashboard(periodStart);
           if (!res || !res.success) {
             pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded">' +
-              '<div style="color:var(--status-danger);text-align:center;padding:32px">ê¸‰ì—¬ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨<br>' + (res && res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div></div></div>';
+              '<div style="color:var(--status-danger);text-align:center;padding:32px">ê¸‰ì—¬ ë °ì ´í„° ë¡œë”© ì‹¤íŒ¨<br>' + (res && res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div></div></div>';
             return;
           }
 
@@ -4451,7 +4983,7 @@
 
           var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
 
-          // â”€â”€ 1. Pay Period í—¤ë” â”€â”€
+          // â”€â”€ 1. Pay Period í—¤ë ” â”€â”€
           var periodHtml =
             '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
               '<div style="display:flex;align-items:center;gap:12px">' +
@@ -4473,10 +5005,10 @@
           // â”€â”€ 2. KPI 5ì¢… (60% ì••ì¶•) â”€â”€
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ ì¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ  ì ¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
                 '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + totals.gross.toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì </span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì¸ì›<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì  </span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì ¸ì› <i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + 'ê°œ íšŒì‚¬</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular ê³µìˆ˜<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
@@ -4485,19 +5017,19 @@
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT ê³µìˆ˜<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
                 '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + totals.otHours.toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì´ˆê³¼ (1.5Ã—)</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ìƒ íƒì§€<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì ´ìƒ  íƒ ì§€<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:' + (anomalies.length > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + anomalies.length + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? 'ê²€í†  í•„ìš”' : 'ì •ìƒ') + '</span></div></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? 'ê²€í†  í•„ìš”' : 'ì •ìƒ ') + '</span></div></div>' +
             '</div>';
 
           // â”€â”€ 3. íšŒì‚¬ë³„ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
           var companyHtml = companies.length === 0
-            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">ì´ë²ˆ Pay Periodì— ë°ì´í„° ì—†ìŒ</div></div>'
+            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">ì ´ë²ˆ Pay Periodì—  ë °ì ´í„° ì—†ì Œ</div></div>'
             : '<div class="panel" style="margin-bottom:14px;overflow:hidden">' +
                 '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
                   '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
                     '<i class="ph ph-chart-bar" style="font-size:18px;color:' + COLOR_TOTAL + '"></i>' +
-                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">íšŒì‚¬Â·ì§ì±…ë³„ ì¸ê±´ë¹„</span>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">íšŒì‚¬Â·ì§ ì±…ë³„ ì ¸ê±´ë¹„</span>' +
                     '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:' + COLOR_TOTAL + ';border-radius:4px;font-weight:600">' + period.start + ' ~ ' + period.end + '</span>' +
                   '</div>' +
                 '</div>' +
@@ -4513,9 +5045,9 @@
                           '<div style="font-size:10px;color:var(--text-tertiary)">' + c.totals.count + 'ëª… Â· ' + (c.totals.regHours + c.totals.otHours).toFixed(1) + 'h</div></div>' +
                         '</div>' +
                         '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
-                          (div['ê´€ë¦¬ìž'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ê´€ë¦¬ìž ' + div['ê´€ë¦¬ìž'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ê´€ë¦¬ìž'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['ê´€ë¦¬ìž'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['í•œêµ­ì¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">í•œêµ­ì¸ ' + div['í•œêµ­ì¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['í•œêµ­ì¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['í•œêµ­ì¸'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['ì™¸êµ­ì¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ì™¸êµ­ì¸ ' + div['ì™¸êµ­ì¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ì™¸êµ­ì¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['ì™¸êµ­ì¸'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['ê´€ë¦¬ìž '].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ê´€ë¦¬ìž  ' + div['ê´€ë¦¬ìž '].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ê´€ë¦¬ìž '].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['ê´€ë¦¬ìž '].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['í•œêµ­ì ¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">í•œêµ­ì ¸ ' + div['í•œêµ­ì ¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['í•œêµ­ì ¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['í•œêµ­ì ¸'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['ì™¸êµ­ì ¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ì™¸êµ­ì ¸ ' + div['ì™¸êµ­ì ¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ì™¸êµ­ì ¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['ì™¸êµ­ì ¸'].gross.toLocaleString() + '</span></div>' : '') +
                         '</div>' +
                       '</div>';
                   }).join('') +
