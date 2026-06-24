@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/vehicle-api/assign', [App\Http\Controllers\VehicleApiController::class, 'assignVehicle'])->name('vehicle.assign');
     Route::post('/vehicle-api/return', [App\Http\Controllers\VehicleApiController::class, 'returnVehicle'])->name('vehicle.return');
     Route::get('/vehicle-api/{vehicle}/history', [App\Http\Controllers\VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
+    Route::get('/vehicle-api/file', [App\Http\Controllers\VehicleApiController::class, 'serveFile'])->name('vehicle.file');
 
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');

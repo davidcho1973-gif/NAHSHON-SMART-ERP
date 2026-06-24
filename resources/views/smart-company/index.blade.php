@@ -4446,7 +4446,7 @@
             var insClass = v.insuranceExp < '2026-06-30' ? ' text-warning' : '';
             var oilClass = (v.nextOil - v.mileage) < 1000 ? ' text-warning' : '';
             var assignee = v.assignee || '<span style="color:var(--text-tertiary)">미배정</span>';
-            var aiTag = v.registrationMethod === 'AI자동분석' ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;color:white;background:#7c3aed;margin-left:4px">AI</span>' : '';
+            var aiTag = '';
             
             // Render table row
             return '<tr style="cursor:pointer" onclick=\'openVehicleDetailModal(' + JSON.stringify(v).replace(/'/g, "&#39;").replace(/"/g, "&quot;") + ')\'>' +
@@ -4470,12 +4470,11 @@
             '<i class="ph ph-robot"></i> 🤖 AI 렌트카 등록</button>' +
             '<button class="btn-primary" style="background:var(--status-warning);color:#000;" onclick="openNfcAssignModal(\'VEHICLE\')"><i class="ph ph-identification-card"></i> NFC 배정</button>' +
             '</div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
+            '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
             '<div class="kpi-card"><div class="kpi-label">전체 차량</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 차량</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">운행중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">정상 배정</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">정비중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.maintenance + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">서비스 센터</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">렌트만료임박</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.rentExpiringSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">60일 이내</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">AI 등록 차량</div><div class="kpi-value" style="color:#7c3aed">' + vehicles.filter(function(v){return v.registrationMethod==='AI자동분석';}).length + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Gemini 분석</span></div></div>' +
             '</div>' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-car"></i> 차량 목록</div></div>' +
             '<div class="panel-body"><table class="data-table"><thead><tr><th>차량ID</th><th>번호판</th><th>모델</th><th>배정자</th><th>렌트만료</th><th>보험만료</th><th>현재마일</th><th>다음오일</th><th>상태</th></tr></thead><tbody>' + (vehiclesListHtml || '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 차량 없음</td></tr>') + '</tbody></table></div></div>';
@@ -5299,6 +5298,14 @@
 
       // Detailed Vehicle Info & Chronological Rental History modal
       window.openVehicleDetailModal = async function(v) {
+        function getSecureFileUrl(path) {
+          if (!path) return '';
+          if (path.indexOf('/storage/') === 0) {
+            return '/vehicle-api/file?path=' + encodeURIComponent(path.replace('/storage/', ''));
+          }
+          return path;
+        }
+
         var modal = document.createElement('div');
         modal.id = 'vehicle-detail-modal';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -5312,9 +5319,10 @@
         ];
         directions.forEach(function(d) {
           if (d.path) {
+            var secureUrl = getSecureFileUrl(d.path);
             photosHtml += '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:6px;text-align:center;">' +
-              '<a href="' + d.path + '" target="_blank">' +
-                '<img src="' + d.path + '" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px;border:1px solid var(--border-subtle);">' +
+              '<a href="' + secureUrl + '" target="_blank">' +
+                '<img src="' + secureUrl + '" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px;border:1px solid var(--border-subtle);">' +
               '</a>' +
               '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + d.label + '</span>' +
             '</div>';
@@ -5329,7 +5337,7 @@
         }
 
         var contractHtml = v.contract_path 
-          ? '<div style="margin-top:12px;"><a href="' + v.contract_path + '" target="_blank" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;"><i class="ph ph-file-pdf"></i> 렌트 계약서 파일 보기</a></div>'
+          ? '<div style="margin-top:12px;"><a href="' + getSecureFileUrl(v.contract_path) + '" target="_blank" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;"><i class="ph ph-file-pdf"></i> 렌트 계약서 파일 보기</a></div>'
           : '';
 
         var actionButton = '';

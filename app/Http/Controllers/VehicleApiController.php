@@ -237,4 +237,23 @@ class VehicleApiController extends Controller
             'history' => $history,
         ]);
     }
+
+    public function serveFile(Request $request)
+    {
+        $path = $request->query('path');
+        abort_unless($path && is_string($path), 400);
+
+        if (str_contains($path, '..') || str_contains($path, '\\')) {
+            abort(403, 'Path traversal detected.');
+        }
+
+        $path = ltrim($path, '/');
+
+        // Only allow serving from the 'vehicles' directory
+        abort_unless(str_starts_with($path, 'vehicles/'), 403);
+
+        abort_unless(Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path);
+    }
 }

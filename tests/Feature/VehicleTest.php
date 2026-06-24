@@ -258,4 +258,26 @@ class VehicleTest extends TestCase
         $this->assertSame('Second trip', $history[0]['notes']);
         $this->assertSame('First trip', $history[1]['notes']);
     }
+
+    public function test_serve_file_serves_valid_file_and_denies_unauthorized_paths(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->user);
+
+        // Put a fake file in vehicles/ directory
+        Storage::disk('public')->put('vehicles/test_photo.jpg', 'fake-image-contents');
+
+        // Verify successful retrieval
+        $response = $this->get(route('vehicle.file', ['path' => 'vehicles/test_photo.jpg']));
+        $response->assertOk();
+        $this->assertSame('fake-image-contents', $response->streamedContent());
+
+        // Verify rejection of path outside vehicles/
+        $badResponse = $this->get(route('vehicle.file', ['path' => 'outside/test_photo.jpg']));
+        $badResponse->assertStatus(403);
+
+        // Verify rejection of directory traversal
+        $traversalResponse = $this->get(route('vehicle.file', ['path' => 'vehicles/../../test_photo.jpg']));
+        $traversalResponse->assertStatus(403);
+    }
 }
