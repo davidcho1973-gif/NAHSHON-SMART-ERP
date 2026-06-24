@@ -1051,7 +1051,7 @@
         'alerts': { title: 'í†µí•© ì•Œë¦¼ ì„¼í„°', render: renderAlerts },
         'safety': { title: 'AI ìž‘ì—…ì•ˆì „ê´€ë¦¬', render: renderSafety },
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
-        'payroll': { title: 'ê¸‰ì—¬ / ì •ì‚°', render: renderPayroll },
+        'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
@@ -4971,7 +4971,7 @@
           var res = await window.API.getPayrollDashboard(periodStart);
           if (!res || !res.success) {
             pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded">' +
-              '<div style="color:var(--status-danger);text-align:center;padding:32px">ê¸‰ì—¬ ë °ì ´í„° ë¡œë”© ì‹¤íŒ¨<br>' + (res && res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div></div></div>';
+              '<div style="color:var(--status-danger);text-align:center;padding:32px">급여 ë °ì ´í„° 로딩 실패<br>' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
             return;
           }
 
@@ -4983,7 +4983,7 @@
 
           var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
 
-          // â”€â”€ 1. Pay Period í—¤ë ” â”€â”€
+          // ── 1. Pay Period í—¤ë ” ──
           var periodHtml =
             '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
               '<div style="display:flex;align-items:center;gap:12px">' +
@@ -5044,25 +5044,25 @@
                           '<div style="display:flex;align-items:center;gap:8px"><i class="ph ph-buildings" style="font-size:16px;color:' + compColor + '"></i>' +
                           '<span style="font-size:14px;font-weight:800;color:var(--text-primary)">' + c.name + '</span></div>' +
                           '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + ct.gross.toLocaleString() + '</div>' +
-                          '<div style="font-size:10px;color:var(--text-tertiary)">' + ct.count + 'ëª… Â· ' + (ct.regHours + ct.otHours).toFixed(1) + 'h</div></div>' +
+                          '<div style="font-size:10px;color:var(--text-tertiary)">' + ct.count + '명 · ' + (ct.regHours + ct.otHours).toFixed(1) + 'h</div></div>' +
                         '</div>' +
                         '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
-                          (div['관리자'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">관리자 ' + div['관리자'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['관리자'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['관리자'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['한국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">한국인 ' + div['한국인'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['한국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['한국인'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['외국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">외국인 ' + div['외국인'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['외국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['외국인'].gross.toLocaleString() + '</span></div>' : '')
+                          (div['관리자'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">관리자 ' + div['관리자'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['관리자'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['관리자'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['한국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">한국인 ' + div['한국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['한국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['한국인'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['외국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">외국인 ' + div['외국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['외국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['외국인'].gross.toLocaleString() + '</span></div>' : '')
                         '</div>' +
                       '</div>';
                   }).join('') +
                 '</div>' +
               '</div>';
 
-          // â”€â”€ 4. ì´ìƒ íƒì§€ â”€â”€
+          // ── 4. 이상 탐지 ──
           var anomalyHtml = anomalies.length === 0
             ? ''
             : '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-danger)">' +
-                '<div class="panel-header"><div class="panel-title" style="color:var(--status-danger);display:flex;align-items:center;gap:8px"><i class="ph ph-warning"></i> ì´ìƒ íƒì§€ (' + anomalies.length + 'ê±´)</div></div>' +
+                '<div class="panel-header"><div class="panel-title" style="color:var(--status-danger);display:flex;align-items:center;gap:8px"><i class="ph ph-warning"></i> 이상 탐지 (' + anomalies.length + '건)</div></div>' +
                 '<div class="panel-body" style="padding:0">' +
-                  '<table class="data-table"><thead><tr><th>Badge</th><th>ì´ë¦„</th><th>íšŒì‚¬</th><th>ìœ í˜•</th><th>ì‚¬ìœ </th></tr></thead><tbody>' +
+                  '<table class="data-table"><thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>유형</th><th>사유</th></tr></thead><tbody>' +
                   anomalies.map(function(a) {
                     var sevColor = a.severity === 'high' ? 'var(--status-danger)' : 'var(--status-warning)';
                     return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + a.badgeId + '\')">' +
@@ -5077,19 +5077,19 @@
                 '</div>' +
               '</div>';
 
-          // â”€â”€ 5. ì§ì›ë³„ ì •ì‚° í…Œì´ë¸” â”€â”€
+          // ── 5. 직원별 정산 테이블 ──
           var empHtml =
             '<div class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
-              '<div class="panel-title"><i class="ph ph-list"></i> ì§ì›ë³„ ì •ì‚° (' + employees.length + 'ëª…)</div>' +
-              '<input type="text" class="search-inline" id="payroll-search" placeholder="ì´ë¦„, Badge ID ê²€ìƒ‰...">' +
+              '<div class="panel-title"><i class="ph ph-list"></i> 직원별 정산 (' + employees.length + '명)</div>' +
+              '<input type="text" class="search-inline" id="payroll-search" placeholder="이름, Badge ID 검색...">' +
             '</div>' +
             '<div class="panel-body" style="padding:0">' +
               '<table class="data-table" id="payroll-table">' +
-                '<thead><tr><th>Badge</th><th>ì´ë¦„</th><th>íšŒì‚¬</th><th>ì§ì±…</th><th>Reg</th><th>OT</th><th>ë‹¨ê°€</th><th>Gross</th><th>ë¯¸ë§ˆê°</th></tr></thead>' +
+                '<thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>직책</th><th>Reg</th><th>OT</th><th>단가</th><th>Gross</th><th>미마감</th></tr></thead>' +
                 '<tbody>' +
                   employees.map(function(e) {
                     var dColor = e.divide === '관리자' ? COLOR_MGR : e.divide === '한국인' ? COLOR_KOR : e.divide === '외국인' ? COLOR_LOC : 'var(--text-tertiary)';
-                    var basisLabel = e.basis === 'salary' ? 'ì›”ê¸‰' : 'ì‹œê¸‰';
+                    var basisLabel = e.basis === 'salary' ? '월급' : '시급';
                     return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + e.badgeId + '\')">' +
                       '<td class="cell-mono">' + e.badgeId + '</td>' +
                       '<td class="cell-primary">' + e.name + '</td>' +
@@ -5099,20 +5099,20 @@
                       '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + (e.otHours||0).toFixed(1) + 'h</td>' +
                       '<td class="cell-mono">$' + (e.rate||0).toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
                       '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + (e.gross||0).toLocaleString() + '</td>' +
-                      '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + 'ì¼</span>' : '-') + '</td>' +
+                      '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + '일</span>' : '-') + '</td>' +
                     '</tr>';
                   }).join('') +
                 '</tbody></table>' +
             '</div></div>';
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ê¸‰ì—¬ / ì •ì‚°</h1>' +
-              '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' Â· Bi-weekly Pay Period ê¸°ì¤€</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button></div>' +
+            '<div class="header-section"><div><h1 class="page-title">급여 / 정산</h1>' +
+              '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' · Bi-weekly Pay Period 기준</p></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 시트 마스터</button></div>' +
             '</div>' +
             periodHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
 
-          // ê²€ìƒ‰ í•¸ë“¤ëŸ¬
+          // 검색 핸들러
           var srch = document.getElementById('payroll-search');
           if (srch) srch.addEventListener('input', function() {
             var q = this.value.toLowerCase();
@@ -5121,11 +5121,11 @@
             });
           });
         } catch (e) {
-          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">ê¸‰ì—¬ í˜„í™© ë¡œë”© ì¤‘ ì˜¤ë¥˜<br>' + e.message + '</div></div></div>';
+          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">급여 현황 로딩 중 오류<br>' + e.message + '</div></div></div>';
         }
       }
 
-      // Pay Period ì¢Œìš° ì´ë™
+      // Pay Period 좌우 이동
       window._payrollPeriodStart = null;
       window.shiftPayPeriod = function(delta) {
         if (delta === 0) {
@@ -5157,9 +5157,9 @@
         });
       };
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-      // WBS â€” ì‹¤ì‹œê°„ ê³µì • ê´€ë¦¬ (AI ë©”ë‰´ì–¼ ë¶„ì„ ê¸°ë°˜)
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ══════════════════════════════════════════════════════
+      // WBS — 실시간 공정 관리 (AI 메뉴얼 분석 기반)
+      // ══════════════════════════════════════════════════════
       window.WBS_PROJECTS = [
         { id: 'HFF-02',  name: 'Hoffman Logistics Hub' },
         { id: 'LGES-AZ', name: 'LGES Battery Plant AZ' },
