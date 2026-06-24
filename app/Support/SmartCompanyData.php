@@ -38,6 +38,7 @@ class SmartCompanyData
             'api_getFinanceStats' => self::financeStats(),
             'api_getExpenses' => self::expenses(),
             'api_getPayrollDashboard' => self::payrollDashboard($args[0] ?? null, $siteId),
+            'api_runPayroll' => self::runPayroll($args[0] ?? null, $siteId),
 
             'api_getEquipmentStats' => self::equipmentStats(),
             'api_getEquipmentList' => self::equipmentList(),
@@ -435,6 +436,34 @@ class SmartCompanyData
         try {
             return app(\App\Services\Payroll\PayrollCalculator::class)
                 ->dashboard(is_string($periodStart) && $periodStart !== '' ? $periodStart : null, $siteId);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function runPayroll(mixed $periodStart, string $siteId = 'ALL'): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+            return ['success' => false, 'error' => '급여 정산 실행 권한이 없습니다.'];
+        }
+
+        try {
+            $run = app(\App\Services\Payroll\PayrollCalculator::class)
+                ->runPayroll(is_string($periodStart) && $periodStart !== '' ? $periodStart : null, $siteId, $user?->id);
+
+            return [
+                'success' => true,
+                'runId' => $run->id,
+                'code' => $run->code,
+                'headcount' => $run->headcount,
+                'totalGross' => (float) $run->total_gross,
+                'totalNet' => (float) $run->total_net,
+                'certifiedUrl' => route('payroll.certified', $run),
+            ];
         } catch (\Throwable $e) {
             report($e);
 

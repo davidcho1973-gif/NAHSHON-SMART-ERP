@@ -322,6 +322,67 @@ class PayrollCalculator
         });
     }
 
+    /**
+     * Assemble a US DOL WH-347 certified-payroll dataset from a persisted run:
+     * per-worker daily hours across the period + classification, rate, gross and deductions.
+     *
+     * @return array{run: PayrollRun, dates: array<int,string>, rows: array<int,array<string,mixed>>}
+     */
+    public function certifiedPayrollData(PayrollRun $run): array
+    {
+        $run->loadMissing('payslips');
+        $employeeIds = $run->payslips->pluck('employee_id')->all();
+
+        $employees = Employee::query()->whereIn('id', $employeeIds)->with('company')->get()->keyBy('id');
+
+        $sheets = Schema::hasTable('payroll_timesheets')
+            ? PayrollTimesheet::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->whereBetween('work_date', [$run->period_start->toDateString(), $run->period_end->toDateString()])
+                ->where('status', '!=', 'rejected')
+                ->get()
+                ->groupBy('employee_id')
+            : collect();
+
+        $dates = [];
+        for ($d = $run->period_start->copy(); $d->lte($run->period_end); $d->addDay()) {
+            $dates[] = $d->toDateString();
+        }
+
+        $rows = $run->payslips->map(function (Payslip $ps) use ($employees, $sheets, $dates): array {
+            $employee = $employees->get($ps->employee_id);
+            $byDate = ($sheets->get($ps->employee_id) ?? collect())
+                ->keyBy(fn (PayrollTimesheet $s) => $s->work_date->toDateString());
+
+            $daily = [];
+            foreach ($dates as $dt) {
+                $sheet = $byDate->get($dt);
+                $daily[$dt] = $sheet ? round(((int) $sheet->regular_minutes + (int) $sheet->overtime_minutes) / 60, 2) : 0.0;
+            }
+
+            return [
+                'badgeId' => $employee?->badge_number ?: $employee?->employee_number ?: '-',
+                'name' => $employee?->name ?: '-',
+                'classification' => $ps->snap_trade ?: ($employee?->role ?: '-'),
+                'division' => $ps->snap_division ?: '-',
+                'daily' => $daily,
+                'regHours' => (float) $ps->regular_hours,
+                'otHours' => (float) $ps->overtime_hours,
+                'totalHours' => round((float) $ps->regular_hours + (float) $ps->overtime_hours, 2),
+                'rate' => (float) $ps->applied_rate,
+                'gross' => (float) $ps->gross_pay,
+                'fica' => (float) $ps->fica,
+                'medicare' => (float) $ps->medicare,
+                'fedTax' => (float) $ps->fed_tax,
+                'stateTax' => (float) $ps->state_tax,
+                'retirement' => (float) $ps->retirement_401k,
+                'net' => (float) $ps->net_pay,
+            ];
+        })->all();
+
+        return ['run' => $run, 'dates' => $dates, 'rows' => $rows];
+    }
+
     // ───────────────────────── internals ─────────────────────────
 
     /** @return Collection<int, array{regHours: float, otHours: float, openDays: int}> */
