@@ -176,6 +176,8 @@
     $application = $registration->payload['application'] ?? [];
     $selectedLanguages = old('available_languages', $application['available_languages'] ?? []);
     $workHistory = old('work_history', $application['work_history'] ?? [[], []]);
+    $languageActionUrl = $languageActionUrl ?? route('member-registration.show', $registration->invite_token);
+    $formActionUrl = $formActionUrl ?? route('member-registration.store', $registration->invite_token);
 @endphp
 <!DOCTYPE html>
 <html lang="{{ $t['html'] }}">
@@ -232,7 +234,7 @@
         <header>
             <h1>{{ $t['title'] }}</h1>
             <p class="muted">{{ $t['access'] }}</p>
-            <form class="language-form" method="GET" action="{{ route('member-registration.show', $registration->invite_token) }}">
+            <form class="language-form" method="GET" action="{{ $languageActionUrl }}">
                 <label for="lang">{{ $t['language'] }}</label>
                 <select id="lang" name="lang" onchange="this.form.submit()">
                     @foreach ($languages as $code => $label)
@@ -255,7 +257,7 @@
 
             @unless ($submitted)
             <section class="form-card">
-                <form class="application" method="POST" action="{{ route('member-registration.store', $registration->invite_token) }}" enctype="multipart/form-data">
+                <form class="application" method="POST" action="{{ $formActionUrl }}" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" name="preferred_language" value="{{ $language }}">
 

@@ -101,6 +101,41 @@ class ManageMemberRegistrations extends ManageRecords
 
                     $action->redirect($registration->qrUrl());
                 }),
+            Action::make('openSiteApplicationQr')
+                ->label('현장 공용 QR')
+                ->icon('heroicon-o-qr-code')
+                ->color('warning')
+                ->form([
+                    Select::make('site_id')
+                        ->label('현장명 선택')
+                        ->options(fn (): array => Site::query()
+                            ->orderBy('code')
+                            ->get()
+                            ->mapWithKeys(fn (Site $site): array => [
+                                $site->id => $site->address
+                                    ? "{$site->code} - {$site->name} ({$site->address})"
+                                    : "{$site->code} - {$site->name}",
+                            ])
+                            ->all())
+                        ->placeholder('현장 관리에 등록된 현장을 선택하세요')
+                        ->helperText('현장 주소는 선택한 현장 정보에서 자동으로 안내문에 표시됩니다.')
+                        ->required()
+                        ->searchable(),
+                    Select::make('preferred_language')
+                        ->label('기본 지원서 언어')
+                        ->options(MemberRegistration::languageOptions())
+                        ->default('es')
+                        ->required(),
+                ])
+                ->modalHeading('현장에서 바로 쓰는 공용 QR')
+                ->modalDescription('현장 관리에 등록된 현장을 선택해 프린트용 공용 QR 안내문을 엽니다. 지원자 정보는 QR을 스캔한 사람이 제출할 때 생성됩니다.')
+                ->modalSubmitActionLabel('현장 QR 열기')
+                ->action(function (array $data, Action $action): void {
+                    $action->redirect(route('member-registration.site.qr', [
+                        'site' => $data['site_id'],
+                        'lang' => $data['preferred_language'],
+                    ]));
+                }),
         ];
     }
 

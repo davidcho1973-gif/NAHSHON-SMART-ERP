@@ -35,4 +35,24 @@ class Company extends Model
     {
         return $this->hasMany(Employee::class);
     }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    public function endClientProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'end_client_company_id');
+    }
+
+    public function upperContractorProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'upper_contractor_company_id');
+    }
+
+    public function epcProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'epc_company_id');
+    }
 }

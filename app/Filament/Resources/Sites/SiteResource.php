@@ -58,7 +58,7 @@ class SiteResource extends Resource
                 ->default('active')
                 ->required(),
             Select::make('companies')
-                ->label('원청사 (Companies)')
+                ->label('관련 거래처 (Companies)')
                 ->relationship('companies', 'name', fn ($query) => $query->select('companies.id', 'companies.name'))
                 ->multiple()
                 ->preload()
@@ -79,7 +79,7 @@ class SiteResource extends Resource
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('companies.name')
-                    ->label('원청사')
+                    ->label('관련 거래처')
                     ->badge()
                     ->wrap(),
                 TextColumn::make('status')
