@@ -6140,11 +6140,678 @@
           pageContainer.innerHTML =
             '<div class="header-section"><div><h1 class="page-title">장비 렌탈 관리</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
             '<div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> 목록 출력</button>' +
-            '<button class="btn-secondary" onclick="window.setupRentalSheetHeaders()"><i class="ph ph-table"></i> 시트 헤더 생성</button>' +
-            '<button class="btn-secondary" onclick="window.generateSampleContracts()"><i class="ph ph-file-pdf"></i> 샘플 계약서 생성</button>' +
+            '<button class="btn-secondary" onclick="window.downloadRentalExcel()"><i class="ph ph-file-xls"></i> 엑셀 다운로드</button>' +
             '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.openAiEquipmentRegModal()"><i class="ph ph-robot"></i> 🤖 AI 계약서 등록</button>' +
-            '<button class="btn-primary" onclick="window.openRentalCreateModal()"><i class="ph ph-plus"></i> 신규 렌탈</button>' +
+            '</div></div>' +
+            
+            '<div style="display:grid; grid-template-columns: 7.2fr 2.8fr; gap:20px; align-items:start;">' +
+            '  <div style="display:flex; flex-direction:column; gap:20px;">' +
+            '    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr); gap:12px;">' +
+            '      <div class="kpi-card"><div class="kpi-label">전체 장비</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 장비</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">사용중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">현장 가동</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">대기중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.available + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">배정 대기</span></div></div>' +
+            '    </div>' +
+            '    <div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bulldozer"></i> 렌탈 목록</div></div>' +
+            '    <div class="panel-body" style="overflow-x:auto;"><table class="data-table"><thead><tr>' +
+            '    <th>렌탈ID</th><th>장비종류</th><th>모델</th><th>벤더</th><th>기간</th>' +
+            '    <th>배정회사</th><th>배정팀</th><th>운영자</th><th>상태</th><th>액션</th>' +
+            '    </tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 렌탈 없음</td></tr>') + '</tbody></table></div></div>' +
+            '  </div>' +
+            '  <div class="panel" style="position:sticky; top:20px;">' +
+            '    <div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 계약회사별 사용중인 장비 현황</div></div>' +
+            '    <div class="panel-body padded" style="display:flex; flex-direction:column; gap:16px;">' +
+                   byCompanyHtml +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+
+        } catch (err) { renderError('렌탈 데이터 로딩 실패'); console.error(err); }
+      }
+
+      // Manual Return Modal
+      window.openReturnVehicleModal = function(vehicleId, modelName, currentMileage) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-return-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:400px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">차량 반납: ' + modelName + '</h3>' +
+            '<form id="vehicle-return-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">현재 마일리지 (최소 ' + currentMileage.toLocaleString() + ' mi) <span style="color:var(--status-danger)">*</span></label>' +
+                '<input type="number" name="current_mileage" required min="' + currentMileage + '" value="' + currentMileage + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">반납 메모</label>' +
+                '<textarea name="notes" placeholder="차량 상태(청결도, 파손 여부 등) 또는 특이사항 입력" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'vehicle-return-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-danger);border:none;padding:8px 20px;font-weight:700;">반납 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#vehicle-return-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var inputMileage = parseInt(modal.querySelector('[name="current_mileage"]').value, 10);
+          if (inputMileage < currentMileage) {
+            alert('반납 마일리지는 이전 마일리지보다 작을 수 없습니다.');
+            return;
+          }
+
+          var payload = {
+            vehicle_id: vehicleId,
+            current_mileage: inputMileage,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/return', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '반납 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('vehicle-detail-modal');
+            if (detailModal) detailModal.remove();
+
+            showToast('차량이 반납 완료 처리되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      async function renderPayroll(periodStart) {
+        pageContainer.innerHTML = skeleton();
+        try {
+          var res = await window.API.getPayrollDashboard(periodStart);
+          if (!res || !res.success) {
+            pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded">' +
+              '<div style="color:var(--status-danger);text-align:center;padding:32px">급여 ë °ì ´í„° 로딩 실패<br>' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
+            return;
+          }
+
+          var period = res.period || {};
+          var totals = res.totals || { headcount: 0, regHours: 0, otHours: 0, gross: 0 };
+          var companies = res.companies || [];
+          var anomalies = res.anomalies || [];
+          var employees = res.employees || [];
+
+          var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
+
+          // ── 1. Pay Period í—¤ë ” ──
+          var periodHtml =
+            '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
+              '<div style="display:flex;align-items:center;gap:12px">' +
+                '<button onclick="window.shiftPayPeriod(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">‹</button>' +
+                '<div style="text-align:center;min-width:280px">' +
+                  '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:2px">PAY PERIOD (Bi-weekly)</div>' +
+                  '<div class="cell-mono" style="font-size:16px;font-weight:800;color:var(--text-primary)">' + period.start + ' ~ ' + period.end + '</div>' +
+                  '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Day ' + (period.currentDay || 0) + ' / ' + (period.totalDays || 14) +
+                    (period.isComplete ? ' · <span style="color:var(--status-success)">완료</span>' : ' · <span style="color:var(--status-warning)">진행중</span>') + '</div>' +
+                '</div>' +
+                '<button onclick="window.shiftPayPeriod(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">›</button>' +
+              '</div>' +
+              '<div style="display:flex;gap:8px">' +
+                '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> 현재 주기</button>' +
+                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>명세서 (Phase B)</button>' +
+              '</div>' +
+            '</div></div>';
+
+          // ——— 2. KPI 5종 (60% 압축) ———
+          var kpiHtml =
+            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">예상 인건비<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + (totals.gross||0).toLocaleString() + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period 누적</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">활성 인원<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
+                '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + '개 회사</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular 공수<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.regHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">정규 근무</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT 공수<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.otHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">초과 (1.5×)</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">이상 타지<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
+                '<div class="kpi-value" style="font-size:22px;color:' + (anomalies.length > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + anomalies.length + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? '검토 필요' : '정상') + '</span></div></div>' +
+            '</div>';
+
+          // ——— 3. 회사별 매트릭스 ———
+          var companyHtml = companies.length === 0
+            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">이번 Pay Period에 데이터 없음</div></div>'
+            : '<div class="panel" style="margin-bottom:14px;overflow:hidden">' +
+                '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
+                  '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
+                    '<i class="ph ph-chart-bar" style="font-size:18px;color:' + COLOR_TOTAL + '"></i>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">회사·직책별 인건비</span>' +
+                    '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:' + COLOR_TOTAL + ';border-radius:4px;font-weight:600">' + period.start + ' ~ ' + period.end + '</span>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="panel-body" style="padding:14px;display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px">' +
+                  companies.map(function(c) {
+                    var compColor = window.getCompanyColor ? window.getCompanyColor(c.name) : COLOR_TOTAL;
+                    var ct = c.totals || { gross:0, count:0, regHours:0, otHours:0 };
+                    var div = c.divides || {};
+                    ['관리자','한국인','외국인'].forEach(function(k){ if(!div[k]) div[k] = { count:0, hours:0, gross:0 }; });
+                    return '<div style="background:var(--bg-panel);border:1px solid ' + compColor + '33;border-radius:10px;overflow:hidden">' +
+                        '<div style="padding:12px 16px;background:linear-gradient(90deg,' + compColor + '22,transparent);border-bottom:1px solid ' + compColor + '44;display:flex;align-items:center;justify-content:space-between">' +
+                          '<div style="display:flex;align-items:center;gap:8px"><i class="ph ph-buildings" style="font-size:16px;color:' + compColor + '"></i>' +
+                          '<span style="font-size:14px;font-weight:800;color:var(--text-primary)">' + c.name + '</span></div>' +
+                          '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + ct.gross.toLocaleString() + '</div>' +
+                          '<div style="font-size:10px;color:var(--text-tertiary)">' + ct.count + '명 · ' + (ct.regHours + ct.otHours).toFixed(1) + 'h</div></div>' +
+                        '</div>' +
+                        '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
+                          (div['관리자'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">관리자 ' + div['관리자'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['관리자'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['관리자'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['한국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">한국인 ' + div['한국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['한국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['한국인'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['외국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">외국인 ' + div['외국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['외국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['외국인'].gross.toLocaleString() + '</span></div>' : '')
+                        '</div>' +
+                      '</div>';
+                  }).join('') +
+                '</div>' +
+              '</div>';
+
+          // ── 4. 이상 탐지 ──
+          var anomalyHtml = anomalies.length === 0
+            ? ''
+            : '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-danger)">' +
+                '<div class="panel-header"><div class="panel-title" style="color:var(--status-danger);display:flex;align-items:center;gap:8px"><i class="ph ph-warning"></i> 이상 탐지 (' + anomalies.length + '건)</div></div>' +
+                '<div class="panel-body" style="padding:0">' +
+                  '<table class="data-table"><thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>유형</th><th>사유</th></tr></thead><tbody>' +
+                  anomalies.map(function(a) {
+                    var sevColor = a.severity === 'high' ? 'var(--status-danger)' : 'var(--status-warning)';
+                    return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + a.badgeId + '\')">' +
+                      '<td class="cell-mono">' + a.badgeId + '</td>' +
+                      '<td class="cell-primary">' + a.name + '</td>' +
+                      '<td><span class="tag">' + a.company + '</span></td>' +
+                      '<td><span style="color:' + sevColor + ';font-weight:600;font-size:11px">' + a.type + '</span></td>' +
+                      '<td style="font-size:12px">' + a.reason + (a.detail ? ' <span style="color:var(--text-tertiary);font-size:10px">(' + a.detail + ')</span>' : '') + '</td>' +
+                    '</tr>';
+                  }).join('') +
+                  '</tbody></table>' +
+                '</div>' +
+              '</div>';
+
+          // ── 5. 직원별 정산 테이블 ──
+          var empHtml =
+            '<div class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
+              '<div class="panel-title"><i class="ph ph-list"></i> 직원별 정산 (' + employees.length + '명)</div>' +
+              '<input type="text" class="search-inline" id="payroll-search" placeholder="이름, Badge ID 검색...">' +
+            '</div>' +
+            '<div class="panel-body" style="padding:0">' +
+              '<table class="data-table" id="payroll-table">' +
+                '<thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>직책</th><th>Reg</th><th>OT</th><th>단가</th><th>Gross</th><th>미마감</th></tr></thead>' +
+                '<tbody>' +
+                  employees.map(function(e) {
+                    var dColor = e.divide === '관리자' ? COLOR_MGR : e.divide === '한국인' ? COLOR_KOR : e.divide === '외국인' ? COLOR_LOC : 'var(--text-tertiary)';
+                    var basisLabel = e.basis === 'salary' ? '월급' : '시급';
+                    return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + e.badgeId + '\')">' +
+                      '<td class="cell-mono">' + e.badgeId + '</td>' +
+                      '<td class="cell-primary">' + e.name + '</td>' +
+                      '<td><span class="tag">' + e.company + '</span></td>' +
+                      '<td><span style="color:' + dColor + ';font-size:11px;font-weight:600">' + (e.divide || '-') + '</span></td>' +
+                      '<td class="cell-mono">' + (e.regHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + (e.otHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono">$' + (e.rate||0).toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
+                      '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + (e.gross||0).toLocaleString() + '</td>' +
+                      '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + '일</span>' : '-') + '</td>' +
+                    '</tr>';
+                  }).join('') +
+                '</tbody></table>' +
+            '</div></div>';
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">급여 / 정산</h1>' +
+              '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' · Bi-weekly Pay Period 기준</p></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 시트 마스터</button></div>' +
+            '</div>' +
+            periodHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
+
+          // 검색 핸들러
+          var srch = document.getElementById('payroll-search');
+          if (srch) srch.addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            document.querySelectorAll('#payroll-table tbody tr').forEach(function(row) {
+              row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+          });
+        } catch (e) {
+          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">급여 현황 로딩 중 오류<br>' + e.message + '</div></div></div>';
+        }
+      }
+
+      // Pay Period 좌우 이동
+      window._payrollPeriodStart = null;
+      window.shiftPayPeriod = function(delta) {
+        if (delta === 0) {
+          window._payrollPeriodStart = null;
+          renderPayroll();
+          return;
+        }
+        var current = window._payrollPeriodStart ? new Date(window._payrollPeriodStart) : new Date();
+        current.setDate(current.getDate() + (delta * 14));
+        var ds = current.toISOString().slice(0, 10);
+        window._payrollPeriodStart = ds;
+        renderPayroll(ds);
+      };
+
+      // Run payroll for the current pay period, then open the WH-347 certified payroll doc.
+      window.openPayrollDocs = function(btn) {
+        var label = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner"></i> 정산 중...'; }
+        gsRun('api_runPayroll', [_siteId(), window._payrollPeriodStart || null], null).then(function(res) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          if (res && res.success && res.certifiedUrl) {
+            window.open(res.certifiedUrl, '_blank');
+          } else {
+            alert((res && res.error) || '급여 정산 문서를 생성할 수 없습니다.');
+          }
+        }).catch(function(e) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          alert('급여 정산 실행 실패: ' + e.message);
+        });
+      };
+
+      // ══════════════════════════════════════════════════════
+      // WBS — 실시간 공정 관리 (AI 메뉴얼 분석 기반)
+      // ══════════════════════════════════════════════════════
+      window.WBS_PROJECTS = [
+        { id: 'HFF-02',  name: 'Hoffman Logistics Hub' },
+        { id: 'LGES-AZ', name: 'LGES Battery Plant AZ' },
+        { id: 'NV-05',   name: 'Nevada EV Plant' },
+        { id: 'SST-03',  name: 'Samsung Taylor Fab' },
+        { id: 'HWH-04',  name: 'Hanwha Solar Site' }
+      ];
+      window.WBS_CURRENT_PROJECT = 'HFF-02';
+
+      async function renderWbs() {
+        pageContainer.innerHTML = skeleton();
+        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
+        try {
+          var [treeRes, sumRes] = await Promise.all([
+            window.API.getProjectWbsTree(projectId),
+            window.API.getProjectProgressSummary(projectId)
+          ]);
+
+          var tree = treeRes && treeRes.success ? (treeRes.stages || []) : [];
+          var sum  = sumRes  && sumRes.success  ? sumRes : { totalWbsCount: 0, progress: 0 };
+
+          // Stageë³„ ì§„ì²™ë¥  ë§µ (ì„œë²„ì—ì„œ ë°›ì€ ë°ì´í„°)
+          var stageProgressMap = {};
+          (sum.stages || []).forEach(function(s){ stageProgressMap[String(s.stage_no)] = s.progress; });
+
+          // í†µê³„ ê³„ì‚°
+          var totalSubTasks = 0;
+          var totalManhours = 0;
+          var byCompany = { NAHSHON: 0, AUTORICA: 0, 'AI-KOREA': 0, 'M-SOL': 0 };
+          var ehsHigh = 0;
+          tree.forEach(function(stage){
+            (stage.tasks||[]).forEach(function(task){
+              (task.sub_tasks||[]).forEach(function(sub){
+                totalSubTasks++;
+                totalManhours += parseFloat(sub.manhours)||0;
+                if (byCompany[sub.company] !== undefined) byCompany[sub.company] += parseFloat(sub.manhours)||0;
+                if (sub.ehs === 'high') ehsHigh++;
+              });
+            });
+          });
+
+          var projOptions = window.WBS_PROJECTS.map(function(p){
+            return '<option value="' + p.id + '"' + (p.id === projectId ? ' selected' : '') + '>' + p.id + ' â€” ' + p.name + '</option>';
+          }).join('');
+
+          // í˜‘ë ¥ì‚¬ ë§‰ëŒ€
+          var companyBars = Object.keys(byCompany).map(function(c){
+            var mh = byCompany[c];
+            var pct = totalManhours > 0 ? (mh / totalManhours * 100) : 0;
+            var color = c === 'NAHSHON' ? '#2563eb' : c === 'AUTORICA' ? '#f59e0b' : c === 'AI-KOREA' ? '#10b981' : '#8b5cf6';
+            return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:3px"><span>' + c + '</span><span class="cell-mono">' + mh.toLocaleString() + ' MH (' + pct.toFixed(0) + '%)</span></div>' +
+              '<div style="height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + '"></div></div></div>';
+          }).join('');
+
+          // WBS íŠ¸ë¦¬
+          var treeHtml;
+          if (tree.length === 0) {
+            treeHtml = '<div style="text-align:center;padding:48px;color:var(--text-tertiary)">' +
+              '<i class="ph ph-tree-structure" style="font-size:48px;color:#7c3aed;margin-bottom:12px"></i>' +
+              '<div style="font-size:16px;color:white;margin-bottom:8px">ì•„ì§ WBSê°€ ìƒì„±ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤</div>' +
+              '<div style="font-size:13px">ë§¤ë‰´ì–¼ PDFë¥¼ <strong style="color:#7c3aed">WBS_MANUAL/01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„<br>ì•„ëž˜ <strong>AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”.</div>' +
+              '</div>';
+          } else {
+            treeHtml = tree.map(function(stage, sIdx){
+              var stageMh = 0, subCount = 0, stageCompleted = 0;
+              (stage.tasks||[]).forEach(function(t){ (t.sub_tasks||[]).forEach(function(s){
+                stageMh += parseFloat(s.manhours)||0;
+                subCount++;
+                if (s.status === 'ì™„ë£Œ') stageCompleted++;
+              }); });
+              var stagePct = stageProgressMap[String(stage.stage_no)] || 0;
+              var stageColor = stagePct >= 100 ? '#10b981' : stagePct >= 50 ? '#f59e0b' : '#7c3aed';
+
+              var tasksHtml = (stage.tasks||[]).map(function(task, tIdx){
+                // Taskë³„ ì§„ì²™ë¥  (sub_tasks í‰ê· )
+                var taskCompleted = 0, taskTotal = (task.sub_tasks||[]).length;
+                (task.sub_tasks||[]).forEach(function(s){ if (s.status === 'ì™„ë£Œ') taskCompleted++; });
+                var taskPct = taskTotal > 0 ? (taskCompleted / taskTotal * 100) : 0;
+
+                var subHtml = (task.sub_tasks||[]).map(function(sub){
+                  var status = sub.status || 'AIìƒì„±';
+                  var isDone = status === 'ì™„ë£Œ';
+                  var isProg = status === 'ì§„í–‰ì¤‘';
+                  var ehsBadge = sub.ehs === 'high' ? '<span style="background:#ef4444;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">ðŸ”´ ìœ„í—˜</span>' : sub.ehs === 'medium' ? '<span style="background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">âš ï¸ ì£¼ì˜</span>' : '';
+                  var companyColor = sub.company === 'NAHSHON' ? '#2563eb' : sub.company === 'AUTORICA' ? '#f59e0b' : sub.company === 'AI-KOREA' ? '#10b981' : sub.company === 'M-SOL' ? '#8b5cf6' : '#64748b';
+                  var rowBg = isDone ? 'rgba(16,185,129,0.08)' : isProg ? 'rgba(245,158,11,0.08)' : 'var(--bg-base)';
+                  var rowBorder = isDone ? '#10b981' : isProg ? '#f59e0b' : 'transparent';
+                  var nameStyle = isDone ? 'text-decoration:line-through;color:#10b981;opacity:0.85' : 'color:white';
+                  var statusIcon = isDone ? '<i class="ph ph-check-circle" style="color:#10b981;font-size:18px"></i>'
+                    : isProg ? '<i class="ph ph-spinner" style="color:#f59e0b;font-size:18px"></i>'
+                    : '<i class="ph ph-circle" style="color:var(--text-tertiary);font-size:18px"></i>';
+                  // ë¹ ë¥¸ í† ê¸€ ë²„íŠ¼ (ì™„ë£Œ â†” AIìƒì„±)
+                  var toggleAction = isDone ? 'AIìƒì„±' : 'ì™„ë£Œ';
+                  var toggleLabel = isDone ? 'â†» ë¯¸ì™„ë£Œë¡œ' : 'âœ“ ì™„ë£Œ';
+                  var toggleBg = isDone ? '#64748b' : '#10b981';
+
+                  return '<div class="wbs-subtask" data-wbsid="' + sub.wbs_id + '" data-status="' + status + '" style="display:grid;grid-template-columns:auto auto 1fr auto auto auto auto;gap:10px;align-items:center;padding:8px 12px;border-radius:6px;background:' + rowBg + ';margin-bottom:4px;border:1px solid ' + rowBorder + ';transition:all 0.15s">' +
+                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center" title="' + toggleLabel + '">' + statusIcon + '</button>' +
+                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:60px">' + (sub.sub_no || '') + '</span>' +
+                    '<span style="font-size:13px;' + nameStyle + ';cursor:pointer" onclick="openWbsEditModal(\'' + sub.wbs_id + '\')">' + (sub.sub_name || '') + ehsBadge + '</span>' +
+                    '<span style="font-size:11px;color:' + companyColor + ';font-weight:700;min-width:80px;text-align:right">' + (sub.company || '-') + '</span>' +
+                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:60px;text-align:right">' + (sub.manhours || 0) + 'MH</span>' +
+                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:50px;text-align:right">' + (sub.days || 0) + 'ì¼</span>' +
+                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:' + toggleBg + ';color:white;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">' + toggleLabel + '</button>' +
+                    '</div>';
+                }).join('');
+
+                return '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:6px 10px;background:rgba(124,58,237,0.08);border-left:3px solid #7c3aed;border-radius:4px">' +
+                  '<span class="cell-mono" style="font-size:11px;color:#7c3aed;font-weight:700">Task ' + (task.task_no||'') + '</span>' +
+                  '<span style="font-size:14px;color:white;font-weight:600">' + (task.task_name||'') + '</span>' +
+                  '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
+                  '<span>' + taskCompleted + '/' + taskTotal + ' ì™„ë£Œ</span>' +
+                  '<div style="width:80px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
+                  '<span class="cell-mono" style="color:white;font-weight:700;min-width:32px;text-align:right">' + taskPct.toFixed(0) + '%</span>' +
+                  '</span></div>' + subHtml + '</div>';
+              }).join('');
+
+              return '<details ' + (sIdx === 0 ? 'open' : '') + ' style="margin-bottom:18px;border:1px solid var(--border-default);border-radius:10px;overflow:hidden">' +
+                '<summary style="padding:14px 18px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
+                '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
+                '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700">STAGE ' + (stage.stage_no || sIdx + 1) + '</span>' +
+                '<span style="font-size:16px;font-weight:700;color:white">' + (stage.stage_name || '') + '</span>' +
+                '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
+                '<span><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
+                '<span><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
+                '<div style="display:flex;align-items:center;gap:8px"><div style="width:120px;height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + stagePct + '%;background:' + stageColor + '"></div></div>' +
+                '<span class="cell-mono" style="color:' + stageColor + ';font-weight:700;min-width:44px;text-align:right">' + stagePct.toFixed(1) + '%</span></div>' +
+                '</div></summary>' +
+                '<div style="padding:14px 18px">' + tasksHtml + '</div></details>';
+            }).join('');
+          }
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div>' +
+            '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> ê³µì • ê´€ë¦¬ (WBS)</h1>' +
+            '<p class="page-subtitle">AI ë©”ë‰´ì–¼ ë¶„ì„ ê¸°ë°˜ ì‹¤ì‹œê°„ ê³µì • ì¶”ì  Â· Stage â†’ Task â†’ SubTask ê³„ì¸µ êµ¬ì¡°</p>' +
+            '</div>' +
+            '<div class="action-row" style="gap:8px">' +
+            '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">' + projOptions + '</select>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
+            '<i class="ph ph-robot"></i> ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„</button>' +
+            '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> ë©”ë‰´ì–¼ í´ë”</button>' +
+            '</div></div>' +
+            // KPI Row (6ê°œ)
+            '<div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">' +
+            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ SubTask</div><div class="kpi-value">' + totalSubTasks + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">ì „ì²´ ì§„ì²™ë¥ </div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
+            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:4px"><div style="height:100%;width:' + (sum.progress||0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">âœ… ì™„ë£Œ</div><div class="kpi-value" style="color:#10b981">' + (sum.completedCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (totalSubTasks > 0 ? ((sum.completedCount||0)/totalSubTasks*100).toFixed(0) : 0) + '% of all</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">â³ ì§„í–‰ì¤‘</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">ì˜ˆìƒ ì´ê³µìˆ˜</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">EHS ê³ ìœ„í—˜</div><div class="kpi-value" style="color:#ef4444">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ìœ„í—˜ìž‘ì—…</span></div></div>' +
+            '</div>' +
+            // í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜ + AI ì•ˆë‚´
+            '<div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:18px">' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜</div></div>' +
+            '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px">WBS ë°ì´í„° ì—†ìŒ</div>') + '</div></div>' +
+            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:18px;display:flex;align-items:center;gap:18px">' +
+            '<i class="ph ph-robot" style="font-size:42px;color:#7c3aed;flex-shrink:0"></i>' +
+            '<div style="flex:1">' +
+            '<div style="font-size:14px;font-weight:700;color:#c4b5fd;margin-bottom:6px">ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ ì‹œìŠ¤í…œ</div>' +
+            '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">ì„¤ì¹˜ ë§¤ë‰´ì–¼/ì‹œë°©ì„œ PDFë¥¼ <strong style="color:white">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„ <strong style="color:#c4b5fd">AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ë©´, Gemini 2.5 Proê°€ ìžë™ìœ¼ë¡œ ìž‘ì—…ì„ ìž˜ê²Œ ìª¼ê°œ WBSë¥¼ ìƒì„±í•©ë‹ˆë‹¤. Stage / Task / SubTask 3ë‹¨ê³„ ê³„ì¸µ êµ¬ì¡°ë¡œ í˜‘ë ¥ì‚¬/EHS/ê³µìˆ˜ê¹Œì§€ ìžë™ ë¶„ë¥˜.</div>' +
+            '</div></div></div>' +
+            // WBS íŠ¸ë¦¬
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> WBS êµ¬ì¡° â€” ' + projectId + '</div>' +
+            '<div style="font-size:11px;color:var(--text-tertiary)">í´ë¦­í•˜ì—¬ ìƒì„¸ íŽ¸ì§‘</div></div>' +
+            '<div class="panel-body">' + treeHtml + '</div></div>';
+
+        } catch (err) {
+          renderError('WBS ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message);
+          console.error(err);
+        }
+      }
+
+      window.changeWbsProject = function(projectId) {
+        window.WBS_CURRENT_PROJECT = projectId;
+        renderWbs();
+      };
+
+      window.openWbsManualFolder = function() {
+        window.open('https://drive.google.com/drive/folders/1rC8RSb966nL3H_vaqKD-LkDLWsNdfnl3', '_blank');
+      };
+
+      // ë¹ ë¥¸ ì™„ë£Œ í† ê¸€ â€” KPI/Stage/Task ì§„ì²™ë¥  ì¦‰ì‹œ ê°±ì‹ 
+      window.toggleWbsComplete = async function(wbsId, newStatus) {
+        // ìºì‹œ ë¬´íš¨í™” (ì§„ì²™ë¥  ì¦‰ì‹œ ë°˜ì˜)
+        if (window.apiCache) {
+          Object.keys(window.apiCache).forEach(function(k){
+            if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) {
+              delete window.apiCache[k];
+            }
+          });
+        }
+        // ë‚™ê´€ì  UI: í´ë¦­ ì¦‰ì‹œ í–‰ ìƒ‰ìƒ ë³€ê²½
+        var row = document.querySelector('.wbs-subtask[data-wbsid="' + wbsId + '"]');
+        if (row) {
+          row.style.opacity = '0.5';
+          row.style.pointerEvents = 'none';
+        }
+        try {
+          var res = await window.API.markWbsStatus(wbsId, newStatus);
+          if (res && res.success) {
+            // ì „ì²´ ë¦¬ë Œë” (KPI + Stage ì§„ì²™ë¥  ëª¨ë‘ ê°±ì‹ )
+            renderWbs();
+          } else {
+            alert('ìƒíƒœ ë³€ê²½ ì‹¤íŒ¨: ' + (res && res.error ? res.error : 'unknown'));
+            if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+          }
+        } catch(e) {
+          alert('ì˜¤ë¥˜: ' + e.message);
+          if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+        }
+      };
+
+      window.runWbsAiAnalysis = async function() {
+        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
+        var ok = confirm('ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ì„ ì‹¤í–‰í•˜ì‹œê² ìŠµë‹ˆê¹Œ?\n\ní˜„ìž¥: ' + projectId + '\ní´ë”: WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°\n\nGemini 2.5 Proê°€ í´ë” ë‚´ ëª¨ë“  ë§¤ë‰´ì–¼ì„ ë¶„ì„í•˜ì—¬\nWBSë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤. (ìˆ˜ ë¶„ ì†Œìš” ê°€ëŠ¥)');
+        if (!ok) return;
+
+        var overlay = document.createElement('div');
+        overlay.id = 'wbs-ai-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px';
+        overlay.innerHTML =
+          '<div style="width:80px;height:80px;border:5px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
+          '<div style="color:white;font-size:18px;font-weight:700">ðŸ¤– Gemini 2.5 Pro ë¶„ì„ ì¤‘...</div>' +
+          '<div style="color:rgba(255,255,255,0.7);font-size:13px">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” â†’ AI ë¶„ì„ â†’ WBS ìƒì„±</div>' +
+          '<div style="color:rgba(255,255,255,0.5);font-size:11px">ëŒ€ìš©ëŸ‰ PDFì˜ ê²½ìš° 2~5ë¶„ ì†Œìš”ë©ë‹ˆë‹¤. íŽ˜ì´ì§€ ë‹«ì§€ ë§ˆì„¸ìš”.</div>';
+        document.body.appendChild(overlay);
+
+        try {
+          var result = await window.API.processWbsManual(projectId);
+          overlay.remove();
+
+          var modal = document.createElement('div');
+          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
+          var icon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
+          var detailRows = (result.results || []).map(function(r) {
+            var sIcon = r.status === 'success' ? 'âœ…' : 'âŒ';
+            var detail = r.status === 'success'
+              ? '<span style="color:var(--status-success)">' + r.stages + ' Stages Â· ' + r.tasks + ' Tasks Â· ' + r.subTasks + ' SubTasks</span>'
+              : '<span style="color:var(--status-danger)">' + (r.error || '') + '</span>';
+            return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
+              sIcon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
+          }).join('');
+
+          modal.innerHTML =
+            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:560px;max-height:80vh;overflow-y:auto">' +
+            '<div style="font-size:42px;text-align:center;margin-bottom:12px">' + icon + '</div>' +
+            '<h2 style="text-align:center;font-size:18px;margin-bottom:12px">AI ë©”ë‰´ì–¼ ë¶„ì„ ê²°ê³¼</h2>' +
+            (result.processed === 0 && result.success
+              ? '<div style="text-align:center;color:var(--text-secondary);padding:20px">ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.<br><span style="font-size:11px;color:var(--text-tertiary)">01_ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ë§¤ë‰´ì–¼ì„ ì—…ë¡œë“œí•˜ì„¸ìš”.</span></div>'
+              : !result.success
+                ? '<div style="text-align:center;color:var(--status-danger);padding:20px">' + (result.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div>'
+                : '<div style="max-height:320px;overflow-y:auto;margin-bottom:18px">' + detailRows + '</div>') +
+            '<button id="wbs-result-close" style="width:100%;background:#7c3aed;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ìƒˆë¡œê³ ì¹¨</button>' +
+            '</div>';
+          document.body.appendChild(modal);
+          modal.querySelector('#wbs-result-close').addEventListener('click', function() {
+            modal.remove();
+            renderWbs();
+          });
+        } catch(err) {
+          if (document.getElementById('wbs-ai-overlay')) document.getElementById('wbs-ai-overlay').remove();
+          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜:\n' + err.message);
+        }
+      };
+
+      window.openWbsEditModal = function(wbsId) {
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:480px">' +
+          '<h3 style="margin:0 0 14px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS íŽ¸ì§‘</h3>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsId + '</div>' +
+          '<div style="display:grid;gap:12px">' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ìƒíƒœ</label>' +
+          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
+          '<option value="AIìƒì„±">ðŸ“ AIìƒì„± (ëŒ€ê¸°)</option><option value="ê²€ìˆ˜ì™„ë£Œ">âœ… ê²€ìˆ˜ì™„ë£Œ</option><option value="ì§„í–‰ì¤‘">â³ ì§„í–‰ì¤‘</option><option value="ì™„ë£Œ">ðŸŽ¯ ì™„ë£Œ</option><option value="ë³´ë¥˜">â¸ï¸ ë³´ë¥˜</option></select></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ë‹´ë‹¹ì‚¬</label>' +
+          '<select id="wbs-edit-company" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
+          '<option value="NAHSHON">NAHSHON</option><option value="AUTORICA">AUTORICA</option><option value="AI-KOREA">AI-KOREA</option><option value="M-SOL">M-SOL</option></select></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì‹œìž‘ì˜ˆì •</label>' +
+          '<input type="date" id="wbs-edit-start" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì¢…ë£Œì˜ˆì •</label>' +
+          '<input type="date" id="wbs-edit-end" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '</div></div>' +
+          '<div style="display:flex;gap:10px;margin-top:18px">' +
+          '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">ì·¨ì†Œ</button>' +
+          '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">ì €ìž¥</button>' +
+          '</div></div>';
+        document.body.appendChild(modal);
+
+        modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
+        modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
+          var updates = {
+            'ìƒíƒœ': document.getElementById('wbs-edit-status').value,
+            'ë‹´ë‹¹ì‚¬': document.getElementById('wbs-edit-company').value,
+            'ì‹œìž‘ì˜ˆì •': document.getElementById('wbs-edit-start').value,
+            'ì¢…ë£Œì˜ˆì •': document.getElementById('wbs-edit-end').value
+          };
+          try {
+            var res = await window.API.updateWbsRow(wbsId, updates);
+            if (res.success) {
+              modal.remove();
+              renderWbs();
+            } else {
+              alert('ì €ìž¥ ì‹¤íŒ¨: ' + (res.error || 'unknown'));
+            }
+          } catch(e) {
+            alert('ì €ìž¥ ì˜¤ë¥˜: ' + e.message);
+          }
+        });
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+      };
+
+      // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      
+
+      async function renderRental() {
+        pageContainer.innerHTML = skeleton();
+        try {
+          const [stats, rentals] = await Promise.all([
+            window.API.getRentalStats(),
+            window.API.getRentalList()
+          ]);
+
+          window.currentRentals = rentals; // Cache globally for detail modal lookup
+
+          var rowsHtml = rentals.map(function(r) {
+            var actionBtn = '';
+            if (r.status === '대기중') {
+              actionBtn = '<button class="btn-primary" style="background:var(--status-success);border:none;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openAssignEquipmentModal(' + r.realId + ', \'' + r.model + '\')">배정</button>';
+            } else if (r.status === '사용중') {
+              actionBtn = '<button class="btn-secondary" style="background:var(--status-danger);border:none;color:#fff;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openReturnEquipmentModal(' + r.realId + ', \'' + r.model + '\')">반납</button>';
+            } else {
+              actionBtn = '<span style="color:var(--text-tertiary)">-</span>';
+            }
+
+            var operator = r.operator || '<span style="color:var(--text-tertiary)">미배정</span>';
+
+            return '<tr style="cursor:pointer;" onclick="window.openEquipmentDetailModal(' + r.realId + ')">'
+              + '<td class="cell-mono">' + r.id + '</td>'
+              + '<td class="cell-primary">' + r.equipType + '</td>'
+              + '<td>' + r.model + '</td>'
+              + '<td>' + r.vendor + '</td>'
+              + '<td class="cell-mono">' + r.startDate + ' ~ ' + r.endDate + '</td>'
+              + '<td>' + (r.company || '-') + '</td>'
+              + '<td>' + (r.team || '-') + '</td>'
+              + '<td>' + operator + '</td>'
+              + '<td>' + statusPill(r.status) + '</td>'
+              + '<td>' + actionBtn + '</td>'
+              + '</tr>';
+          }).join('');
+
+          var byCompanyHtml = '';
+          if (!stats.byCompany || stats.byCompany.length === 0) {
+            byCompanyHtml = '<div style="color:var(--text-tertiary); text-align:center; padding:12px; font-size:12px;">사용중인 계약회사가 없습니다.</div>';
+          } else {
+            byCompanyHtml = stats.byCompany.map(function(c) {
+              var pct = stats.active > 0 ? (c.count / stats.active * 100) : 0;
+              return '<div style="margin-bottom:12px;">' +
+                     '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+                     '    <span style="font-size:12px; font-weight:600; color:var(--text-primary);">' + c.name + '</span>' +
+                     '    <span style="font-size:12px; font-weight:700; color:#7c3aed;">' + c.count + '대 사용중</span>' +
+                     '  </div>' +
+                     '  <div style="height:6px; background:var(--bg-base); border-radius:3px; overflow:hidden;">' +
+                     '    <div style="width:' + pct + '%; height:100%; background:linear-gradient(90deg, #7c3aed, #2563eb); border-radius:3px;"></div>' +
+                     '  </div>' +
+                     '</div>';
+            }).join('');
+          }
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">장비 렌탈 관리</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
+            '<div class="action-row">' +
+            '<button class="btn-secondary" onclick="window.downloadRentalExcel()"><i class="ph ph-file-xls"></i> 엑셀 다운로드</button>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.openAiEquipmentRegModal()"><i class="ph ph-robot"></i> 🤖 AI 계약서 등록</button>' +
             '</div></div>' +
             
             '<div style="display:grid; grid-template-columns: 7.2fr 2.8fr; gap:20px; align-items:start;">' +
@@ -7312,29 +7979,51 @@
         };
       };
 
-      // 📄 샘플 계약서 생성 및 헤더 생성 stubs
-      window.generateSampleContracts = async function() {
-        if (!confirm('샘플 계약서 3종을 생성하시겠습니까?')) return;
-        var res = await window.API.generateSampleRentalContracts();
-        if (res.success) {
-          alert('샘플 계약서 생성 완료');
-          window.renderRental();
-        } else {
-          alert('실패: ' + (res.error || '알 수 없는 오류'));
+            // 엑셀 다운로드
+      window.downloadRentalExcel = function() {
+        var rentals = window.currentRentals || [];
+        if (rentals.length === 0) {
+          alert('다운로드할 데이터가 없습니다.');
+          return;
         }
-      };
 
-      window.setupRentalSheetHeaders = async function() {
-        if (!confirm('렌탈 시트 헤더를 설정하시겠습니까?')) return;
-        var res = await window.API.setupRentalSheet();
-        if (res.success) {
-          alert('헤더 설정 완료');
-          window.renderRental();
-        } else {
-          alert('실패: ' + (res.error || '알 수 없는 오류'));
-        }
-      };
+        var headers = ['렌탈ID', '장비종류', '모델', '벤더', '시작일', '종료일', '일단가', '배송비', '배정회사', '배정팀', '운영자', '상태'];
+        var rows = rentals.map(function(r) {
+          return [
+            r.id,
+            r.equipType,
+            r.model,
+            r.vendor,
+            r.startDate,
+            r.endDate,
+            r.dailyRate || 0,
+            r.deliveryFee || 0,
+            r.company || '-',
+            r.team || '-',
+            r.operator || '미배정',
+            r.status
+          ];
+        });
 
+        var csvContent = '\uFEFF'; // UTF-8 BOM
+        csvContent += headers.map(function(h) { return '"' + h.replace(/"/g, '""') + '"'; }).join(',') + '\r\n';
+        rows.forEach(function(row) {
+          csvContent += row.map(function(v) { 
+            var strVal = (v === null || v === undefined) ? '' : String(v);
+            return '"' + strVal.replace(/"/g, '""') + '"'; 
+          }).join(',') + '\r\n';
+        });
+
+        var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', '장비_렌탈_현황_' + new Date().toISOString().slice(0, 10) + '.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
 
       // â”€â”€ HOUSING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       async function renderHousing() {
