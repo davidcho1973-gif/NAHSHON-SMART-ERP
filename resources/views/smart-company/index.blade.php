@@ -2550,7 +2550,7 @@
             +'<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> ì˜¤ëŠ˜ ì§„í–‰ ìž‘ì—…</div><div class="kpi-value" style="color:var(--brand-primary)">3</div><div class="kpi-meta">ë‹¨ê¸° í”„ë¡œì íŠ¸ ìž‘ì—… ì¹´ë“œ</div></div>'
             +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> ì•ˆì „ê³„íš ìŠ¹ì¸</div><div class="kpi-value" style="color:var(--status-success)">1 / 3</div><div class="kpi-meta">PHA Â· PTP Â· TBM ì´ˆì•ˆ í¬í•¨</div></div>'
             +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM ì™„ë£Œ</div><div class="kpi-value" style="color:#8b5cf6">1 / 3</div><div class="kpi-meta">ìž‘ì—…ìž ì„œëª… ê¸°ì¤€</div></div>'
-            +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">1</div><div class="kpi-meta">AI ì¶”ì²œ í›„ ê´€ë¦¬ìž í™•ì •</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">1</div><div class="kpi-meta">AI ì¶”ì²œ í›„ 관리자 í™•ì •</div></div>'
             +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> ë¯¸ì¡°ì¹˜ ì´ìŠˆ</div><div class="kpi-value" style="color:var(--status-danger)">2</div><div class="kpi-meta">ë§ˆê° ì „ ì¡°ì¹˜ í•„ìš”</div></div>'
             +'</div>'
 
@@ -2605,7 +2605,7 @@
             +'<select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>ì¼ë¶€ ì™„ë£Œ</option><option>ì™„ë£Œ</option><option>ì§€ì—°</option><option>ì¤‘ë‹¨</option><option>ìž¬ìž‘ì—… í•„ìš”</option></select>'
             +'<button class="btn-primary" id="ai-progress-btn" style="width:100%;margin-top:14px"><i class="ph ph-chart-line-up"></i> AI ê³µì •ìœ¨ ë¶„ì„</button>'
             +'</div></div>'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div><span style="font-size:10px;color:var(--text-tertiary)">AI ì¶”ì²œ + ê´€ë¦¬ìž í™•ì •</span></div><div class="panel-body padded" id="progress-result"></div></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div><span style="font-size:10px;color:var(--text-tertiary)">AI ì¶”ì²œ + 관리자 í™•ì •</span></div><div class="panel-body padded" id="progress-result"></div></div>'
             +'</div></div>'
 
             +'<div id="s-issues" class="tab-content" style="display:none">'
@@ -3195,9 +3195,9 @@
               var yy = dateParts[0] || '----', mm = dateParts[1] || '--', dd = dateParts[2] || '--';
 
               // ìƒ‰ìƒ í† í° â€” ì˜ë¯¸ì  ë§¤í•‘
-              var COLOR_MGR = '#f59e0b';   // ê´€ë¦¬ìž = ì£¼í™© (ì±…ìž„ìž)
-              var COLOR_KOR = '#3b82f6';   // í•œêµ­ì¸ = íŒŒëž‘
-              var COLOR_LOC = '#10b981';   // ì™¸êµ­ì¸ = ë…¹ìƒ‰
+              var COLOR_MGR = '#f59e0b';   // 관리자 = ì£¼í™© (ì±…ìž„ìž)
+              var COLOR_KOR = '#3b82f6';   // 한국인 = íŒŒëž‘
+              var COLOR_LOC = '#10b981';   // 외국인 = ë…¹ìƒ‰
               var COLOR_TOTAL = '#a78bfa'; // í•©ê³„ = ë³´ë¼ (brand)
 
               // â”€â”€ ìš°ì¸¡: ì¸í„°ëž™í‹°ë¸Œ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
@@ -3240,7 +3240,7 @@
               // 1) íšŒì‚¬ê°€ ì‚¬ìš©í•œ íŒ€ ì¶”ì¶œ (matrixì— ì¹´ìš´íŠ¸ê°€ ìžˆëŠ” íŒ€)
               function extractCompanyTeams(companyData) {
                 var s = new Set();
-                ['ê´€ë¦¬ìž','í•œêµ­ì¸','ì™¸êµ­ì¸'].forEach(function(div) {
+                ['관리자','한국인','외국인'].forEach(function(div) {
                   Object.keys((companyData.matrix && companyData.matrix[div]) || {}).forEach(function(t) {
                     if ((companyData.matrix[div][t] || 0) > 0) s.add(t);
                   });
@@ -3275,9 +3275,9 @@
                     '</div>' +
                     '<span class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + ';line-height:1">' + (t.total || 0) + '</span>' +
                   '</div>' +
-                  row('ê´€ë¦¬ìž', t.manager || 0, pctMgr, COLOR_MGR, 'ph-crown') +
-                  row('í•œêµ­ì¸', t.korean  || 0, pctKor, COLOR_KOR, 'ph-flag') +
-                  row('ì™¸êµ­ì¸', t.local   || 0, pctLoc, COLOR_LOC, 'ph-globe') +
+                  row('관리자', t.manager || 0, pctMgr, COLOR_MGR, 'ph-crown') +
+                  row('한국인', t.korean  || 0, pctKor, COLOR_KOR, 'ph-flag') +
+                  row('외국인', t.local   || 0, pctLoc, COLOR_LOC, 'ph-globe') +
                   '<div style="margin-top:4px;padding:6px 10px;background:' + compColor + '22;border-radius:6px;display:flex;justify-content:space-between;align-items:center">' +
                     '<span style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;text-transform:uppercase">í•©ê³„</span>' +
                     '<span class="cell-mono" style="font-size:13px;font-weight:800;color:' + compColor + '">' + (t.total || 0) + ' ëª…</span>' +
@@ -3338,9 +3338,9 @@
                         '<tr><th style="padding:5px 12px;background:var(--bg-base);border-bottom:1px solid var(--border-subtle);color:var(--text-tertiary);font-size:9px;font-weight:600;letter-spacing:0.5px;text-align:left;text-transform:uppercase">FOREMAN</th>' + thForemen + '</tr>' +
                       '</thead>' +
                       '<tbody>' +
-                        buildRow('ê´€ë¦¬ìž', 'ê´€ë¦¬ìž', COLOR_MGR, 'ph-crown') +
-                        buildRow('í•œêµ­ì¸', 'í•œêµ­ì¸', COLOR_KOR, 'ph-flag') +
-                        buildRow('ì™¸êµ­ì¸', 'ì™¸êµ­ì¸', COLOR_LOC, 'ph-globe') +
+                        buildRow('관리자', '관리자', COLOR_MGR, 'ph-crown') +
+                        buildRow('한국인', '한국인', COLOR_KOR, 'ph-flag') +
+                        buildRow('외국인', '외국인', COLOR_LOC, 'ph-globe') +
                         '<tr style="border-top:2px solid ' + compColor + '44">' +
                           '<td style="padding:10px 12px;background:linear-gradient(90deg,' + compColor + '22,' + compColor + '08);text-align:left;font-weight:800;font-size:12px;color:var(--text-primary);letter-spacing:0.3px">' +
                           '<i class="ph ph-equals" style="color:' + compColor + ';margin-right:6px;font-size:13px"></i>ì†Œ ê³„</td>' +
@@ -3358,7 +3358,7 @@
                 if (!existingNames.has(cn)) {
                   companies.push({
                     name: cn,
-                    matrix: { 'ê´€ë¦¬ìž': {}, 'í•œêµ­ì¸': {}, 'ì™¸êµ­ì¸': {} },
+                    matrix: { '관리자': {}, '한국인': {}, '외국인': {} },
                     totals: { manager: 0, korean: 0, local: 0, total: 0 },
                     subtotals: {}
                   });
@@ -3385,15 +3385,15 @@
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary);background:var(--bg-base);padding:3px 8px;border-radius:4px">' + companies.length + 'ê°œì‚¬</span>' +
                 '</div>' +
                 '<div style="display:flex;align-items:center;gap:18px;font-size:12px">' +
-                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="color:var(--text-tertiary)">ê´€ë¦¬ìž</span><span class="cell-mono" style="color:' + COLOR_MGR + ';font-weight:800">' + (tm.totals.manager||0) + '</span></span>' +
-                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="color:var(--text-tertiary)">í•œêµ­ì¸</span><span class="cell-mono" style="color:' + COLOR_KOR + ';font-weight:800">' + (tm.totals.korean||0) + '</span></span>' +
-                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="color:var(--text-tertiary)">ì™¸êµ­ì¸</span><span class="cell-mono" style="color:' + COLOR_LOC + ';font-weight:800">' + (tm.totals.local||0) + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="color:var(--text-tertiary)">관리자</span><span class="cell-mono" style="color:' + COLOR_MGR + ';font-weight:800">' + (tm.totals.manager||0) + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="color:var(--text-tertiary)">한국인</span><span class="cell-mono" style="color:' + COLOR_KOR + ';font-weight:800">' + (tm.totals.korean||0) + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="color:var(--text-tertiary)">외국인</span><span class="cell-mono" style="color:' + COLOR_LOC + ';font-weight:800">' + (tm.totals.local||0) + '</span></span>' +
                   '<span style="display:flex;align-items:center;gap:5px;padding-left:14px;border-left:1px solid var(--border-default)"><span style="color:var(--text-tertiary)">ì´</span><span class="cell-mono" style="font-size:18px;color:' + COLOR_TOTAL + ';font-weight:800">' + grandTotal + '</span><span style="color:var(--text-tertiary)">ëª…</span></span>' +
                 '</div></div>';
 
               var unclassifiedHtml = (tm.unclassified && tm.unclassified.length > 0)
                 ? '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(239,68,68,0.10);border-radius:8px;border:1px solid rgba(239,68,68,0.25);font-size:11px;color:var(--status-danger)">' +
-                  '<i class="ph ph-warning"></i>Pì—´ ë¯¸ë¶„ë¥˜ <strong>' + tm.unclassified.length + 'ëª…</strong> (ê´€ë¦¬ìž ìˆ˜ë™ ì§€ì • í•„ìš”)</div>'
+                  '<i class="ph ph-warning"></i>Pì—´ ë¯¸ë¶„ë¥˜ <strong>' + tm.unclassified.length + 'ëª…</strong> (관리자 ìˆ˜ë™ ì§€ì • í•„ìš”)</div>'
                 : '';
 
               // â”€â”€ ì „ì²´ íŒ¨ë„ ì»¨í…Œì´ë„ˆ â”€â”€
@@ -3423,7 +3423,7 @@
             var totals = (teamMatrix && teamMatrix.totals) || { manager: 0, korean: 0, local: 0, grandTotal: 0 };
             var totalAttended = totals.grandTotal || 0;
             var totalAbsent = (regInfo.total || 0) - totalAttended;
-            // íšŒì‚¬ë³„ ê´€ë¦¬ìž ë¶„í¬ ë¯¸ë‹ˆ í‘œì‹œ
+            // íšŒì‚¬ë³„ 관리자 ë¶„í¬ ë¯¸ë‹ˆ í‘œì‹œ
             var mgrCompanyHint = Object.keys(regInfo.managerByCompany || {}).map(function(cn) {
               return cn + ' ' + regInfo.managerByCompany[cn];
             }).join(' Â· ');
@@ -3434,13 +3434,13 @@
               '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button><button class="btn-primary" onclick="openGoogleForm(\'hr\')"><i class="ph ph-user-plus"></i> êµ¬ê¸€í¼: ì‹ ê·œ ë“±ë¡</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ê´€ë¦¬ìž ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (regInfo.managerTotal || 0) + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (mgrCompanyHint || 'íšŒì‚¬ë³„ ë“±ë¡ í•©ê³„') + '</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í•œêµ­ì¸<i class="ph ph-flag" style="font-size:12px;color:#3b82f6"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">한국인<i class="ph ph-flag" style="font-size:12px;color:#3b82f6"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.korean || 0) + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì˜¤ëŠ˜ ì¶œê·¼</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì™¸êµ­ì¸<i class="ph ph-globe" style="font-size:12px;color:#10b981"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">외국인<i class="ph ph-globe" style="font-size:12px;color:#10b981"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#10b981;line-height:1.1">' + (totals.local || 0) + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì˜¤ëŠ˜ ì¶œê·¼</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ ë“±ë¡ì¸ì›<i class="ph ph-identification-card" style="font-size:12px;color:var(--brand-primary)"></i></div>' +
@@ -3623,14 +3623,14 @@
                 '<span class="cell-mono" style="font-size:13px;font-weight:700;color:' + compColor + '">' + c.total + 'ëª…</span>' +
               '</div>' +
               '<div style="height:24px;background:var(--bg-base);border-radius:6px;overflow:hidden;display:flex;width:' + w + '%;min-width:60px;border:1px solid var(--border-subtle)">' +
-                (c.manager > 0 ? '<div title="ê´€ë¦¬ìž ' + c.manager + 'ëª…" style="width:' + mgrW + '%;background:' + COLOR_MGR + ';display:flex;align-items:center;justify-content:center;color:#000;font-size:10px;font-weight:700">' + (mgrW > 12 ? c.manager : '') + '</div>' : '') +
-                (c.korean  > 0 ? '<div title="í•œêµ­ì¸ ' + c.korean  + 'ëª…" style="width:' + korW + '%;background:' + COLOR_KOR + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (korW > 12 ? c.korean : '') + '</div>' : '') +
-                (c.local   > 0 ? '<div title="ì™¸êµ­ì¸ ' + c.local   + 'ëª…" style="width:' + locW + '%;background:' + COLOR_LOC + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (locW > 12 ? c.local : '') + '</div>' : '') +
+                (c.manager > 0 ? '<div title="관리자 ' + c.manager + 'ëª…" style="width:' + mgrW + '%;background:' + COLOR_MGR + ';display:flex;align-items:center;justify-content:center;color:#000;font-size:10px;font-weight:700">' + (mgrW > 12 ? c.manager : '') + '</div>' : '') +
+                (c.korean  > 0 ? '<div title="한국인 ' + c.korean  + 'ëª…" style="width:' + korW + '%;background:' + COLOR_KOR + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (korW > 12 ? c.korean : '') + '</div>' : '') +
+                (c.local   > 0 ? '<div title="외국인 ' + c.local   + 'ëª…" style="width:' + locW + '%;background:' + COLOR_LOC + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (locW > 12 ? c.local : '') + '</div>' : '') +
               '</div>' +
               '<div style="display:flex;gap:10px;font-size:10px;color:var(--text-tertiary);margin-top:4px">' +
-                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_MGR + ';border-radius:2px;margin-right:4px"></span>ê´€ë¦¬ìž ' + c.manager + '</span>' +
-                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_KOR + ';border-radius:2px;margin-right:4px"></span>í•œêµ­ì¸ ' + c.korean + '</span>' +
-                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_LOC + ';border-radius:2px;margin-right:4px"></span>ì™¸êµ­ì¸ ' + c.local + '</span>' +
+                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_MGR + ';border-radius:2px;margin-right:4px"></span>관리자 ' + c.manager + '</span>' +
+                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_KOR + ';border-radius:2px;margin-right:4px"></span>한국인 ' + c.korean + '</span>' +
+                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_LOC + ';border-radius:2px;margin-right:4px"></span>외국인 ' + c.local + '</span>' +
               '</div>' +
             '</div>';
           }).join('');
@@ -3649,7 +3649,7 @@
 
           body.innerHTML =
             '<div style="margin-bottom:18px">' +
-              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-buildings" style="margin-right:4px"></i>íšŒì‚¬ë³„ ë¶„í¬ (ê´€ë¦¬ìž/í•œêµ­ì¸/ì™¸êµ­ì¸)</div>' +
+              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-buildings" style="margin-right:4px"></i>íšŒì‚¬ë³„ ë¶„í¬ (관리자/한국인/외국인)</div>' +
               companyHtml +
             '</div>' +
             '<div style="border-top:1px solid var(--border-subtle);padding-top:14px">' +
@@ -3791,12 +3791,12 @@
         startCam(facingMode);
       };
 
-      // â”€â”€ íŒŒì¼ ì—…ë¡œë“œ (ê´€ë¦¬ìž â€” ë¹„ë°€ë²ˆí˜¸ 1234) â”€â”€
+      // â”€â”€ íŒŒì¼ ì—…ë¡œë“œ (관리자 â€” ë¹„ë°€ë²ˆí˜¸ 1234) â”€â”€
       window.empPhotoUpload = async function(badgeId) {
         var SITE_ID_PATTERNS = /^(HFF|NV|LGES|SST|HWH)[-_][A-Z0-9]+$/i;
         if (!badgeId || SITE_ID_PATTERNS.test(badgeId)) return;
 
-        var pw = prompt('ðŸ”’ ê´€ë¦¬ìž ë¹„ë°€ë²ˆí˜¸ë¥¼ ìž…ë ¥í•˜ì„¸ìš” (' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ)');
+        var pw = prompt('ðŸ”’ 관리자 ë¹„ë°€ë²ˆí˜¸ë¥¼ ìž…ë ¥í•˜ì„¸ìš” (' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ)');
         if (pw === null) return;
         if (pw !== window.ADMIN_PASSWORD) {
           alert('âŒ ë¹„ë°€ë²ˆí˜¸ê°€ í‹€ë¦½ë‹ˆë‹¤.');
@@ -3883,9 +3883,9 @@
             : '<div style="width:160px;height:160px;border-radius:12px;background:linear-gradient(135deg,' + compColor + ',' + compColor + 'AA);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:48px;border:3px solid ' + compColor + '">' + window.getInitials(e.firstName, e.lastName) + '</div>';
 
           var natFlag = '';
-          if (e.divide === 'í•œêµ­ì¸' || /korea/i.test(e.nationality)) natFlag = 'ðŸ‡°ðŸ‡· í•œêµ­ì¸';
-          else if (e.divide === 'ê´€ë¦¬ìž') natFlag = 'ðŸ‘‘ ê´€ë¦¬ìž';
-          else natFlag = 'ðŸŒ ì™¸êµ­ì¸';
+          if (e.divide === '한국인' || /korea/i.test(e.nationality)) natFlag = 'ðŸ‡°ðŸ‡· 한국인';
+          else if (e.divide === '관리자') natFlag = 'ðŸ‘‘ 관리자';
+          else natFlag = 'ðŸŒ 외국인';
 
           var fullName = (e.firstName + ' ' + e.lastName).trim() || badgeId;
           var workingBadge = e.todayWorking
@@ -3919,7 +3919,7 @@
                   '<div style="display:flex;gap:6px;width:100%">' +
                     '<button onclick="window.empPhotoCapture(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="ì¹´ë©”ë¼ë¡œ ì´¬ì˜">' +
                       '<i class="ph ph-camera" style="font-size:13px"></i>ì´¬ì˜</button>' +
-                    '<button onclick="window.empPhotoUpload(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-secondary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="ê´€ë¦¬ìž: íŒŒì¼ ì—…ë¡œë“œ (ë¹„ë°€ë²ˆí˜¸)">' +
+                    '<button onclick="window.empPhotoUpload(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-secondary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="관리자: íŒŒì¼ ì—…ë¡œë“œ (ë¹„ë°€ë²ˆí˜¸)">' +
                       '<i class="ph ph-upload-simple" style="font-size:13px"></i>ì—…ë¡œë“œ<i class="ph ph-lock-key" style="font-size:10px;opacity:0.6"></i></button>' +
                   '</div>' +
                   '<div style="text-align:center">' +
@@ -4474,16 +4474,16 @@
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ ì¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + totals.gross.toLocaleString() + '</div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + (totals.gross||0).toLocaleString() + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì </span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì¸ì›<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + 'ê°œ íšŒì‚¬</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular ê³µìˆ˜<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + totals.regHours.toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.regHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì •ê·œ ê·¼ë¬´</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT ê³µìˆ˜<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + totals.otHours.toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.otHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì´ˆê³¼ (1.5Ã—)</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ìƒ íƒì§€<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:' + (anomalies.length > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + anomalies.length + '</div>' +
@@ -4504,18 +4504,20 @@
                 '<div class="panel-body" style="padding:14px;display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px">' +
                   companies.map(function(c) {
                     var compColor = window.getCompanyColor ? window.getCompanyColor(c.name) : COLOR_TOTAL;
-                    var div = c.divides;
+                    var ct = c.totals || { gross:0, count:0, regHours:0, otHours:0 };
+                    var div = c.divides || {};
+                    ['관리자','한국인','외국인'].forEach(function(k){ if(!div[k]) div[k] = { count:0, hours:0, gross:0 }; });
                     return '<div style="background:var(--bg-panel);border:1px solid ' + compColor + '33;border-radius:10px;overflow:hidden">' +
                         '<div style="padding:12px 16px;background:linear-gradient(90deg,' + compColor + '22,transparent);border-bottom:1px solid ' + compColor + '44;display:flex;align-items:center;justify-content:space-between">' +
                           '<div style="display:flex;align-items:center;gap:8px"><i class="ph ph-buildings" style="font-size:16px;color:' + compColor + '"></i>' +
                           '<span style="font-size:14px;font-weight:800;color:var(--text-primary)">' + c.name + '</span></div>' +
-                          '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + c.totals.gross.toLocaleString() + '</div>' +
-                          '<div style="font-size:10px;color:var(--text-tertiary)">' + c.totals.count + 'ëª… Â· ' + (c.totals.regHours + c.totals.otHours).toFixed(1) + 'h</div></div>' +
+                          '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + ct.gross.toLocaleString() + '</div>' +
+                          '<div style="font-size:10px;color:var(--text-tertiary)">' + ct.count + 'ëª… Â· ' + (ct.regHours + ct.otHours).toFixed(1) + 'h</div></div>' +
                         '</div>' +
                         '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
-                          (div['ê´€ë¦¬ìž'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ê´€ë¦¬ìž ' + div['ê´€ë¦¬ìž'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ê´€ë¦¬ìž'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['ê´€ë¦¬ìž'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['í•œêµ­ì¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">í•œêµ­ì¸ ' + div['í•œêµ­ì¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['í•œêµ­ì¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['í•œêµ­ì¸'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['ì™¸êµ­ì¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ì™¸êµ­ì¸ ' + div['ì™¸êµ­ì¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ì™¸êµ­ì¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['ì™¸êµ­ì¸'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['관리자'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">관리자 ' + div['관리자'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['관리자'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['관리자'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['한국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">한국인 ' + div['한국인'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['한국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['한국인'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['외국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">외국인 ' + div['외국인'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['외국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['외국인'].gross.toLocaleString() + '</span></div>' : '') +
                         '</div>' +
                       '</div>';
                   }).join('') +
@@ -4554,17 +4556,17 @@
                 '<thead><tr><th>Badge</th><th>ì´ë¦„</th><th>íšŒì‚¬</th><th>ì§ì±…</th><th>Reg</th><th>OT</th><th>ë‹¨ê°€</th><th>Gross</th><th>ë¯¸ë§ˆê°</th></tr></thead>' +
                 '<tbody>' +
                   employees.map(function(e) {
-                    var dColor = e.divide === 'ê´€ë¦¬ìž' ? COLOR_MGR : e.divide === 'í•œêµ­ì¸' ? COLOR_KOR : e.divide === 'ì™¸êµ­ì¸' ? COLOR_LOC : 'var(--text-tertiary)';
+                    var dColor = e.divide === '관리자' ? COLOR_MGR : e.divide === '한국인' ? COLOR_KOR : e.divide === '외국인' ? COLOR_LOC : 'var(--text-tertiary)';
                     var basisLabel = e.basis === 'salary' ? 'ì›”ê¸‰' : 'ì‹œê¸‰';
                     return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + e.badgeId + '\')">' +
                       '<td class="cell-mono">' + e.badgeId + '</td>' +
                       '<td class="cell-primary">' + e.name + '</td>' +
                       '<td><span class="tag">' + e.company + '</span></td>' +
                       '<td><span style="color:' + dColor + ';font-size:11px;font-weight:600">' + (e.divide || '-') + '</span></td>' +
-                      '<td class="cell-mono">' + e.regHours.toFixed(1) + 'h</td>' +
-                      '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + e.otHours.toFixed(1) + 'h</td>' +
-                      '<td class="cell-mono">$' + e.rate.toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
-                      '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + e.gross.toLocaleString() + '</td>' +
+                      '<td class="cell-mono">' + (e.regHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + (e.otHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono">$' + (e.rate||0).toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
+                      '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + (e.gross||0).toLocaleString() + '</td>' +
                       '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + 'ì¼</span>' : '-') + '</td>' +
                     '</tr>';
                   }).join('') +

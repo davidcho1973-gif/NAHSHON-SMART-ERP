@@ -39,7 +39,7 @@ class SmartCompanyData
 
             'api_getFinanceStats' => self::financeStats($siteId),
             'api_getExpenses' => self::expenses($siteId),
-            'api_getPayrollDashboard' => self::payrollDashboard($args[0] ?? null),
+            'api_getPayrollDashboard' => self::payrollDashboard($args[0] ?? null, $siteId),
 
             'api_getEquipmentStats' => self::equipmentStats(),
             'api_getEquipmentList' => self::equipmentList(),
@@ -610,7 +610,17 @@ class SmartCompanyData
     public static function violations(): array { return [['id' => 'VIO-01', 'title' => 'PPE missing', 'status' => 'Corrected']]; }
     public static function tbmRecords(): array { return [['id' => 'TBM-01', 'topic' => 'Heat stress', 'attendees' => 18, 'date' => '2026-06-19']]; }
 
-    public static function payrollDashboard(mixed $periodStart): array { return ['success' => true, 'period' => ['start' => $periodStart ?: '2026-06-16', 'end' => '2026-06-22'], 'totals' => ['hours' => 212, 'regular' => 184, 'ot' => 28, 'gross' => 12480], 'companies' => [['name' => 'NAHSHON MEP', 'gross' => 7400], ['name' => 'Local Union', 'gross' => 5080]], 'anomalies' => [['employee' => 'Min Lee', 'issue' => 'Missing checkout']], 'employees' => self::personnel('ALL')]; }
+    public static function payrollDashboard(mixed $periodStart, string $siteId = 'ALL'): array
+    {
+        try {
+            return app(\App\Services\Payroll\PayrollCalculator::class)
+                ->dashboard(is_string($periodStart) && $periodStart !== '' ? $periodStart : null, $siteId);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
     public static function inventoryDashboard(): array { return ['success' => true, 'totals' => ['assets' => 42, 'available' => 31, 'checkedOut' => 8, 'repair' => 3], 'matrix' => ['categories' => ['Lift', 'Tooling', 'Vehicle'], 'sites' => array_keys(self::sites()), 'cells' => []], 'recent' => self::equipmentList(), 'upcomingInspections' => []]; }
     public static function inventoryAssetDetail(string $assetId): array { return ['success' => true, 'asset' => collect(self::equipmentList())->firstWhere('id', $assetId) ?? self::equipmentList()[0], 'photos' => [], 'transactions' => self::toolTransactions()]; }
 
