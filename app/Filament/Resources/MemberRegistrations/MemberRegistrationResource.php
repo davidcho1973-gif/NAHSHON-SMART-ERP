@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MemberRegistrations;
 
+use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\Employees\EmployeeResource;
 use App\Filament\Resources\MemberRegistrations\Pages\ManageMemberRegistrations;
 use App\Models\Company;
@@ -42,6 +43,18 @@ use Throwable;
 
 class MemberRegistrationResource extends Resource
 {
+    use AuthorizesResourceAccess;
+
+    protected static function accessViewRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+    }
+
+    protected static function accessManageRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager'];
+    }
+
     protected static ?string $model = MemberRegistration::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user-plus';

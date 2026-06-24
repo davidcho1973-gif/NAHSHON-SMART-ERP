@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Sites;
 
+use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\Sites\Pages\ManageSites;
 use App\Models\Company;
 use App\Models\Site;
@@ -23,6 +24,19 @@ use Filament\Tables\Table;
 
 class SiteResource extends Resource
 {
+    use AuthorizesResourceAccess;
+
+    // Site directory is reference data: broadly viewable, only admins manage it.
+    protected static function accessViewRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'payroll'];
+    }
+
+    protected static function accessRowScoped(): bool
+    {
+        return false;
+    }
+
     protected static ?string $model = Site::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-building-office-2';

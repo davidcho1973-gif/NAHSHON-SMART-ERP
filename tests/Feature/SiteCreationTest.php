@@ -19,6 +19,8 @@ class SiteCreationTest extends TestCase
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => bcrypt('password'),
+            'access_role' => 'admin',
+            'account_status' => 'active',
         ]);
 
         $this->actingAs($user);

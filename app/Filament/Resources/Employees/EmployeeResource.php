@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Employees;
 
+use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\Employees\Pages\ManageEmployees;
 use App\Models\Company;
 use App\Models\Employee;
@@ -38,6 +39,23 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class EmployeeResource extends Resource
 {
+    use AuthorizesResourceAccess;
+
+    protected static function accessViewRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager', 'site_manager', 'payroll'];
+    }
+
+    protected static function accessManageRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager'];
+    }
+
+    protected static function accessScopeColumns(): array
+    {
+        return ['company' => 'company_id', 'site' => 'site_id', 'team' => 'team_id', 'self' => 'id'];
+    }
+
     protected static ?string $model = Employee::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-identification';

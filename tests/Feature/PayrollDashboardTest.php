@@ -50,22 +50,16 @@ class PayrollDashboardTest extends TestCase
             'employment_status' => 'active',
         ]);
 
-        EmployeePayrollProfile::create([
-            'employee_id' => $this->hourly->id,
-            'company_id' => $this->company->id,
-            'site_id' => $this->site->id,
-            'pay_type' => 'hourly',
-            'base_rate' => 50,
-        ]);
+        // Employees auto-provision a profile on create (observer); set the wage on it.
+        EmployeePayrollProfile::updateOrCreate(
+            ['employee_id' => $this->hourly->id],
+            ['company_id' => $this->company->id, 'site_id' => $this->site->id, 'pay_type' => 'hourly', 'base_rate' => 50],
+        );
 
-        EmployeePayrollProfile::create([
-            'employee_id' => $this->dispatched->id,
-            'company_id' => $this->company->id,
-            'site_id' => $this->site->id,
-            'pay_type' => 'hourly',
-            'base_rate' => 40,
-            'is_dispatched' => true,
-        ]);
+        EmployeePayrollProfile::updateOrCreate(
+            ['employee_id' => $this->dispatched->id],
+            ['company_id' => $this->company->id, 'site_id' => $this->site->id, 'pay_type' => 'hourly', 'base_rate' => 40, 'is_dispatched' => true],
+        );
 
         // Hourly worker: 8h reg + 2h OT, fully clocked in/out.
         PayrollTimesheet::create([
