@@ -6090,87 +6090,109 @@
             window.API.getRentalStats(),
             window.API.getRentalList()
           ]);
+
+          window.currentRentals = rentals; // Cache globally for detail modal lookup
+
           var rowsHtml = rentals.map(function(r) {
-            var statusClass = r.status === 'ì—°ì²´' ? 'text-danger'
-                            : r.status === 'ë°˜ë‚©ì™„ë£Œ' ? 'text-tertiary'
-                            : (r.daysRemaining >= 0 && r.daysRemaining <= 3) ? 'text-warning'
-                            : 'text-success';
-            var dRem = r.status === 'ë°˜ë‚©ì™„ë£Œ' ? 'â€”'
-                     : r.daysRemaining < 0 ? ('D+' + Math.abs(r.daysRemaining))
-                     : ('D-' + r.daysRemaining);
-            var operator = r.operator || '<span style="color:var(--text-tertiary)">ë¯¸ë°°ì •</span>';
-            var actionBtn = r.status === 'ë°˜ë‚©ì™„ë£Œ'
-              ? '<span style="color:var(--text-tertiary)">ì™„ë£Œ</span>'
-              : '<button class="btn-secondary" style="padding:4px 10px;font-size:11px" onclick="window.returnRentalPrompt(\'' + r.id + '\')">ë°˜ë‚©</button>';
-            return '<tr>'
+            var actionBtn = '';
+            if (r.status === '대기중') {
+              actionBtn = '<button class="btn-primary" style="background:var(--status-success);border:none;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openAssignEquipmentModal(' + r.realId + ', \'' + r.model + '\')">배정</button>';
+            } else if (r.status === '사용중') {
+              actionBtn = '<button class="btn-secondary" style="background:var(--status-danger);border:none;color:#fff;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openReturnEquipmentModal(' + r.realId + ', \'' + r.model + '\')">반납</button>';
+            } else {
+              actionBtn = '<span style="color:var(--text-tertiary)">-</span>';
+            }
+
+            var operator = r.operator || '<span style="color:var(--text-tertiary)">미배정</span>';
+
+            return '<tr style="cursor:pointer;" onclick="window.openEquipmentDetailModal(' + r.realId + ')">'
               + '<td class="cell-mono">' + r.id + '</td>'
               + '<td class="cell-primary">' + r.equipType + '</td>'
               + '<td>' + r.model + '</td>'
               + '<td>' + r.vendor + '</td>'
               + '<td class="cell-mono">' + r.startDate + ' ~ ' + r.endDate + '</td>'
-              + '<td class="cell-mono ' + statusClass + '">' + dRem + '</td>'
-              + '<td class="cell-mono">$' + (r.dailyRate||0).toLocaleString() + '/ì¼</td>'
-              + '<td class="cell-mono">$' + (r.totalCost||0).toLocaleString() + '</td>'
+              + '<td>' + (r.company || '-') + '</td>'
+              + '<td>' + (r.team || '-') + '</td>'
               + '<td>' + operator + '</td>'
-              + '<td>' + r.task + '</td>'
               + '<td>' + statusPill(r.status) + '</td>'
               + '<td>' + actionBtn + '</td>'
               + '</tr>';
           }).join('');
 
-          pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬</h1><p class="page-subtitle">ì¤‘ìž¥ë¹„ ë‹¨ê¸° ë Œíƒˆ í˜„í™© Â· ë°˜ë‚©ì¼/ë¹„ìš© ì¶”ì  Â· AI ê³„ì•½ì„œ ìžë™ ë“±ë¡</p></div>' +
-            '<div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> ëª©ë¡ ì¶œë ¥</button>' +
-            '<button class="btn-secondary" onclick="window.setupRentalSheetHeaders()"><i class="ph ph-table"></i> ì‹œíŠ¸ í—¤ë” ìƒì„±</button>' +
-            '<button class="btn-secondary" onclick="window.generateSampleContracts()"><i class="ph ph-file-pdf"></i> ìƒ˜í”Œ ê³„ì•½ì„œ ìƒì„±</button>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAiRentalEquipScan()"><i class="ph ph-robot"></i> ðŸ¤– AI ê³„ì•½ì„œ ë“±ë¡</button>' +
-            '<button class="btn-primary" onclick="window.openRentalCreateModal()"><i class="ph ph-plus"></i> ì‹ ê·œ ë Œíƒˆ</button>' +
-            '</div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ë Œíƒˆ</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ë“±ë¡ ìž¥ë¹„</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì‚¬ìš©ì¤‘</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">í˜„ìž¥ ê°€ë™</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ë°˜ë‚© ìž„ë°•</div><div class="kpi-value" style="color:var(--status-warning)">' + (stats.returningSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">D-3 ì´ë‚´</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì—°ì²´</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.overdue||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ê¸°í•œ ì´ˆê³¼</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">MTD ë¹„ìš©</div><div class="kpi-value cell-mono">$' + (stats.mtdCost||0).toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì›” ëˆ„ì </span></div></div>' +
-            '</div>' +
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px">' +
-            '<i class="ph ph-robot" style="font-size:28px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div><div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:3px">ðŸ¤– AI ìž¥ë¹„ ë Œíƒˆ ê³„ì•½ì„œ ìžë™ ë“±ë¡</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary)">êµ¬ê¸€ ë“œë¼ì´ë¸Œ â†’ <strong style="color:white">EQUIPMENT RENTAL / ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ê³„ì•½ì„œ PDF/ì‚¬ì§„ì„ ë„£ê³  <strong style="color:#c4b5fd">AI ê³„ì•½ì„œ ë“±ë¡</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”. Geminiê°€ ìž¥ë¹„ì¢…ë¥˜Â·ëª¨ë¸Â·ë²¤ë”Â·ì¼ë‹¨ê°€Â·ê¸°ê°„ì„ ìžë™ ì¶”ì¶œí•©ë‹ˆë‹¤.</div></div>' +
-            '<button onclick="window.runAiRentalEquipScan()" style="flex-shrink:0;background:linear-gradient(135deg,#7c3aed,#2563eb);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">ì‹¤í–‰</button>' +
-            '</div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bulldozer"></i> ë Œíƒˆ ëª©ë¡</div></div>' +
-            '<div class="panel-body"><table class="data-table"><thead><tr>' +
-            '<th>ë ŒíƒˆID</th><th>ìž¥ë¹„ì¢…ë¥˜</th><th>ëª¨ë¸</th><th>ë²¤ë”</th><th>ê¸°ê°„</th><th>D-day</th>' +
-            '<th>ì¼ë‹¨ê°€</th><th>ëˆ„ì ë¹„ìš©</th><th>ìš´ì˜ìž</th><th>ìž‘ì—…</th><th>ìƒíƒœ</th><th>ì•¡ì…˜</th>' +
-            '</tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:32px">ë“±ë¡ëœ ë Œíƒˆ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>';
+          var byCompanyHtml = '';
+          if (!stats.byCompany || stats.byCompany.length === 0) {
+            byCompanyHtml = '<div style="color:var(--text-tertiary); text-align:center; padding:12px; font-size:12px;">사용중인 계약회사가 없습니다.</div>';
+          } else {
+            byCompanyHtml = stats.byCompany.map(function(c) {
+              var pct = stats.active > 0 ? (c.count / stats.active * 100) : 0;
+              return '<div style="margin-bottom:12px;">' +
+                     '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+                     '    <span style="font-size:12px; font-weight:600; color:var(--text-primary);">' + c.name + '</span>' +
+                     '    <span style="font-size:12px; font-weight:700; color:#7c3aed;">' + c.count + '대 사용중</span>' +
+                     '  </div>' +
+                     '  <div style="height:6px; background:var(--bg-base); border-radius:3px; overflow:hidden;">' +
+                     '    <div style="width:' + pct + '%; height:100%; background:linear-gradient(90deg, #7c3aed, #2563eb); border-radius:3px;"></div>' +
+                     '  </div>' +
+                     '</div>';
+            }).join('');
+          }
 
-        } catch (err) { renderError('ë Œíƒˆ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">장비 렌탈 관리</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
+            '<div class="action-row">' +
+            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> 목록 출력</button>' +
+            '<button class="btn-secondary" onclick="window.setupRentalSheetHeaders()"><i class="ph ph-table"></i> 시트 헤더 생성</button>' +
+            '<button class="btn-secondary" onclick="window.generateSampleContracts()"><i class="ph ph-file-pdf"></i> 샘플 계약서 생성</button>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.openAiEquipmentRegModal()"><i class="ph ph-robot"></i> 🤖 AI 계약서 등록</button>' +
+            '<button class="btn-primary" onclick="window.openRentalCreateModal()"><i class="ph ph-plus"></i> 신규 렌탈</button>' +
+            '</div></div>' +
+            
+            '<div style="display:grid; grid-template-columns: 7.2fr 2.8fr; gap:20px; align-items:start;">' +
+            '  <div style="display:flex; flex-direction:column; gap:20px;">' +
+            '    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr); gap:12px;">' +
+            '      <div class="kpi-card"><div class="kpi-label">전체 장비</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 장비</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">사용중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">현장 가동</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">대기중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.available + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">배정 대기</span></div></div>' +
+            '    </div>' +
+            '    <div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bulldozer"></i> 렌탈 목록</div></div>' +
+            '    <div class="panel-body" style="overflow-x:auto;"><table class="data-table"><thead><tr>' +
+            '    <th>렌탈ID</th><th>장비종류</th><th>모델</th><th>벤더</th><th>기간</th>' +
+            '    <th>배정회사</th><th>배정팀</th><th>운영자</th><th>상태</th><th>액션</th>' +
+            '    </tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 렌탈 없음</td></tr>') + '</tbody></table></div></div>' +
+            '  </div>' +
+            '  <div class="panel" style="position:sticky; top:20px;">' +
+            '    <div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 계약회사별 사용중인 장비 현황</div></div>' +
+            '    <div class="panel-body padded" style="display:flex; flex-direction:column; gap:16px;">' +
+                   byCompanyHtml +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+
+        } catch (err) { renderError('렌탈 데이터 로딩 실패'); console.error(err); }
       }
 
-      // ì‹ ê·œ ë Œíƒˆ ë“±ë¡ ëª¨ë‹¬
+      // 신규 렌탈 등록 모달
       window.openRentalCreateModal = function() {
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
         modal.innerHTML =
           '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:480px;max-height:90vh;overflow-y:auto">' +
-          '<h2 style="margin-bottom:16px;font-size:18px">ðŸ—ï¸ ì‹ ê·œ ìž¥ë¹„ ë Œíƒˆ ë“±ë¡</h2>' +
+          '<h2 style="margin-bottom:16px;font-size:18px">🚧 신규 장비 렌탈 등록</h2>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<label style="grid-column:span 2;font-size:12px">ìž¥ë¹„ì¢…ë¥˜<select id="r-type" class="form-input" style="width:100%;margin-top:4px"><option>Excavator</option><option>Forklift</option><option>Boom Lift</option><option>Skid Steer</option><option>Generator</option><option>Compressor</option><option>Crane</option><option>Other</option></select></label>' +
-          '<label style="font-size:12px">ëª¨ë¸<input id="r-model" class="form-input" placeholder="CAT 320GC" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ë²¤ë”<input id="r-vendor" class="form-input" placeholder="United Rentals" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ì‹œìž‘ì¼<input id="r-start" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ë°˜ë‚©ì˜ˆì •ì¼<input id="r-end" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ì¼ë‹¨ê°€ ($)<input id="r-rate" type="number" class="form-input" placeholder="850" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ë°°ì†¡ë¹„ ($)<input id="r-delivery" type="number" class="form-input" placeholder="450" style="width:100%;margin-top:4px"></label>' +
-          '<label style="grid-column:span 2;font-size:12px">ìš´ì˜ìž<input id="r-operator" class="form-input" style="width:100%;margin-top:4px"></label>' +
-          '<label style="grid-column:span 2;font-size:12px">ìž‘ì—…ë‚´ìš©<input id="r-task" class="form-input" placeholder="ê¸°ì´ˆê³µì‚¬ êµ´ì°©" style="width:100%;margin-top:4px"></label>' +
-          '<label style="grid-column:span 2;font-size:12px">ë¹„ê³ <input id="r-notes" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">장비종류<select id="r-type" class="form-input" style="width:100%;margin-top:4px"><option>Excavator</option><option>Forklift</option><option>Boom Lift</option><option>Skid Steer</option><option>Generator</option><option>Compressor</option><option>Crane</option><option>Other</option></select></label>' +
+          '<label style="font-size:12px">모델<input id="r-model" class="form-input" placeholder="CAT 320GC" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">벤더<input id="r-vendor" class="form-input" placeholder="United Rentals" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">시작일<input id="r-start" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">반납예정일<input id="r-end" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">일단가 ($)<input id="r-rate" type="number" class="form-input" placeholder="850" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">배송비 ($)<input id="r-delivery" type="number" class="form-input" placeholder="450" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">운영자<input id="r-operator" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">작업내용<input id="r-task" class="form-input" placeholder="기초공사 굴착" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">비고<input id="r-notes" class="form-input" style="width:100%;margin-top:4px"></label>' +
           '</div>' +
           '<div style="display:flex;gap:8px;margin-top:20px">' +
-          '<button onclick="this.closest(\'div[style]\').parentElement.remove()" class="btn-secondary" style="flex:1">ì·¨ì†Œ</button>' +
-          '<button onclick="window.submitRental()" class="btn-primary" style="flex:1">ë“±ë¡</button>' +
+          '<button onclick="this.closest(\'div[style]\').parentElement.remove()" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button onclick="window.submitRental()" class="btn-primary" style="flex:1">등록</button>' +
           '</div></div>';
         document.body.appendChild(modal);
       };
@@ -6190,164 +6212,1126 @@
           notes: document.getElementById('r-notes').value
         };
         if (!payload.model || !payload.vendor || !payload.startDate || !payload.endDate) {
-          alert('ëª¨ë¸Â·ë²¤ë”Â·ì‹œìž‘ì¼Â·ë°˜ë‚©ì˜ˆì •ì¼ì€ í•„ìˆ˜ìž…ë‹ˆë‹¤.');
+          alert('모델·벤더·시작일·반납예정일은 필수입니다.');
           return;
         }
         var res = await window.API.createRental(payload);
         if (res.success) {
-          alert('ë“±ë¡ ì™„ë£Œ: ' + res.id);
+          alert('등록 완료: ' + res.id);
           document.querySelectorAll('div[style*="z-index:9999"]').forEach(function(el){ el.remove(); });
           window.loadView('rental');
         } else {
-          alert('ë“±ë¡ ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
+          alert('등록 실패: ' + (res.error || '알 수 없는 오류'));
         }
       };
 
-      window.returnRentalPrompt = async function(rentalId) {
-        var date = prompt('ë°˜ë‚©ì¼ ìž…ë ¥ (YYYY-MM-DD)\në¹ˆê°’ = ì˜¤ëŠ˜', new Date().toISOString().slice(0,10));
-        if (date === null) return;
-        var res = await window.API.returnRental(rentalId, date);
-        if (res.success) {
-          alert('ë°˜ë‚© ì²˜ë¦¬ ì™„ë£Œ');
-          window.loadView('rental');
-        } else {
-          alert('ë°˜ë‚© ì²˜ë¦¬ ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
-        }
-      };
+      // Manual Return Modal
+      window.openReturnEquipmentModal = function(equipmentId, modelName) {
+        var modal = document.createElement('div');
+        modal.id = 'equipment-return-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:400px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">장비 반납: ' + modelName + '</h3>' +
+            '<form id="equipment-return-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">반납 메모</label>' +
+                '<textarea name="notes" placeholder="장비 반납 상태 또는 특이사항 입력" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'equipment-return-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-danger);border:none;padding:8px 20px;font-weight:700;cursor:pointer;">반납 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
 
-      // ðŸ“„ ìƒ˜í”Œ ê³„ì•½ì„œ 3ì¢… PDF ìžë™ ìƒì„± + ì²˜ë¦¬ëŒ€ê¸° í´ë” ì—…ë¡œë“œ
-      window.generateSampleContracts = async function() {
-        if (!confirm('ìƒ˜í”Œ ë Œíƒˆ ê³„ì•½ì„œ 3ì¢…ì„ PDFë¡œ ìƒì„±í•˜ì—¬\nDriveì˜ EQUIPMENT RENTAL / ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ì—…ë¡œë“œí•©ë‹ˆë‹¤.\n\nì²« ì‹¤í–‰ ì‹œ ê¶Œí•œ ìŠ¹ì¸ íŒì—…ì´ ëœ° ìˆ˜ ìžˆìŠµë‹ˆë‹¤.\nê³„ì†í•˜ì‹œê² ìŠµë‹ˆê¹Œ?')) return;
+        document.body.appendChild(modal);
 
-        var overlay = document.createElement('div');
-        overlay.id = 'sample-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer';
-        overlay.title = 'í´ë¦­í•˜ë©´ ë‹«íž˜';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ“„ ìƒ˜í”Œ PDF 3ì¢… ìƒì„± ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:13px">United Rentals Â· Sunbelt Â· Herc</div>' +
-          '<div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:12px">í™”ë©´ì„ í´ë¦­í•˜ê±°ë‚˜ ESCë¥¼ ëˆ„ë¥´ë©´ ì˜¤ë²„ë ˆì´ê°€ ë‹«íž™ë‹ˆë‹¤ (ìž‘ì—…ì€ ë°±ê·¸ë¼ìš´ë“œ ê³„ì†)</div>';
-        document.body.appendChild(overlay);
+        modal.querySelector('#equipment-return-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            equipment_id: equipmentId,
+            notes: modal.querySelector('[name="notes"]').value
+          };
 
-        // í´ë¦­/ESCë¡œ ë‹«ê¸° + 30ì´ˆ ìžë™ íƒ€ìž„ì•„ì›ƒ
-        var dismiss = function() {
-          var ov = document.getElementById('sample-overlay');
-          if (ov) ov.remove();
-        };
-        overlay.addEventListener('click', dismiss);
-        var keyHandler = function(e) { if (e.key === 'Escape') dismiss(); };
-        document.addEventListener('keydown', keyHandler);
-        var timeoutId = setTimeout(function() {
-          dismiss();
-          console.warn('[ìƒ˜í”Œìƒì„±] 30ì´ˆ íƒ€ìž„ì•„ì›ƒ â€” ë°±ê·¸ë¼ìš´ë“œì—ì„œ ê³„ì† ì§„í–‰ ì¤‘ì¼ ìˆ˜ ìžˆìŠµë‹ˆë‹¤.');
-        }, 30000);
-
-        try {
-          var res = await window.API.generateSampleRentalContracts();
-          clearTimeout(timeoutId);
-          document.removeEventListener('keydown', keyHandler);
-          dismiss();
-          if (res.success) {
-            var msg = 'âœ… ' + res.count + 'ê°œ PDFê°€ ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ì—…ë¡œë“œë˜ì—ˆìŠµë‹ˆë‹¤.\n\n';
-            (res.results || []).forEach(function(r, i) {
-              msg += (i + 1) + '. ' + r.title + '\n';
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/return', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
             });
-            msg += '\nì´ì œ [ðŸ¤– AI ê³„ì•½ì„œ ë“±ë¡] ë²„íŠ¼ì„ í´ë¦­í•˜ì—¬ ë¶„ì„ì„ í…ŒìŠ¤íŠ¸í•˜ì„¸ìš”.';
-            alert(msg);
-          } else {
-            alert('âŒ ìƒì„± ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '반납 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('equipment-detail-modal');
+            if (detailModal) detailModal.remove();
+            
+            showToast('장비가 반납되었습니다.');
+            window.renderRental();
+          } catch (err) {
+            alert('오류: ' + err.message);
           }
-        } catch(err) {
-          clearTimeout(timeoutId);
-          document.removeEventListener('keydown', keyHandler);
-          dismiss();
-          alert('ìƒì„± ì¤‘ ì˜¤ë¥˜: ' + (err && err.message ? err.message : err));
-        }
+        };
       };
 
-      // ðŸ› ï¸ ì‹œíŠ¸ í—¤ë” ë¯¸ë¦¬ ìƒì„±
-      window.setupRentalSheetHeaders = async function() {
-        if (!confirm('ìž¥ë¹„ë Œíƒˆ_ë§ˆìŠ¤í„° ì‹œíŠ¸ì˜ í—¤ë”ë¥¼ ìƒì„±/ê²€ì¦í•©ë‹ˆë‹¤.\nê³„ì†í•˜ì‹œê² ìŠµë‹ˆê¹Œ?')) return;
-        var res = await window.API.setupRentalSheet();
-        if (res.success) {
-          alert('âœ… ' + (res.message || 'ì™„ë£Œ') + (res.created ? '\nì‹ ê·œ ì‹œíŠ¸ê°€ ìƒì„±ë˜ì—ˆìŠµë‹ˆë‹¤.' : '\nê¸°ì¡´ ì‹œíŠ¸ì˜ í—¤ë”ë¥¼ ê²€ì¦í–ˆìŠµë‹ˆë‹¤.'));
-        } else {
-          alert('âŒ ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
-        }
-      };
+      // Manual Assignment Modal
+      window.openAssignEquipmentModal = async function(equipmentId, modelName) {
+        var modal = document.createElement('div');
+        modal.id = 'equipment-assign-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:450px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">장비 배정: ' + modelName + '</h3>' +
+            '<form id="equipment-assign-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">배정 회사 <span style="color:var(--status-danger)">*</span></label>' +
+                '<select name="company_id" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">불러오는 중...</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">배정 팀 (선택)</label>' +
+                '<select name="team_id" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">회사 먼저 선택하세요</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">운영자 / 담당 직원 (선택)</label>' +
+                '<select name="employee_id" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">회사 먼저 선택하세요</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">메모</label>' +
+                '<textarea name="notes" placeholder="배정 메모를 입력하세요" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'equipment-assign-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-success);border:none;padding:8px 20px;font-weight:700;cursor:pointer;">배정 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
 
-      // ðŸ¤– AI ìž¥ë¹„ë Œíƒˆ ê³„ì•½ì„œ ìŠ¤ìº”
-      window.runAiRentalEquipScan = async function() {
-        var overlay = document.createElement('div');
-        overlay.id = 'ai-rental-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ¤– Gemini AI ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:13px">EQUIPMENT RENTAL / ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” ì¤‘</div>' +
-          '<div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:12px">í´ë¦­/ESCë¡œ ì˜¤ë²„ë ˆì´ ë‹«ê¸° (ìž‘ì—…ì€ ë°±ê·¸ë¼ìš´ë“œ ê³„ì†)</div>';
-        document.body.appendChild(overlay);
-        var dismissAi = function() { var ov = document.getElementById('ai-rental-overlay'); if (ov) ov.remove(); };
-        overlay.addEventListener('click', dismissAi);
-        var aiKey = function(e) { if (e.key === 'Escape') dismissAi(); };
-        document.addEventListener('keydown', aiKey);
-        var aiTimeout = setTimeout(dismissAi, 60000);
+        document.body.appendChild(modal);
+
+        var companySelect = modal.querySelector('[name="company_id"]');
+        var teamSelect = modal.querySelector('[name="team_id"]');
+        var employeeSelect = modal.querySelector('[name="employee_id"]');
+
+        var companyList = [];
+        var teamList = [];
+        var employeeList = [];
 
         try {
-          var result = await window.API.processEquipmentRentalContracts();
-          clearTimeout(aiTimeout);
-          document.removeEventListener('keydown', aiKey);
-          dismissAi();
+          const [companies, teams, employees] = await Promise.all([
+            window.API.getCompanyList(),
+            window.API.getTeamList(),
+            window.API.getEmployeeList()
+          ]);
+          companyList = companies;
+          teamList = teams;
+          employeeList = employees;
 
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
-          var statusIcon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var statusMsg = !result.success
-            ? '<div style="color:var(--status-danger);font-size:13px;margin-top:8px">' + result.error + '</div>'
-            : result.processed === 0
-              ? '<div style="color:var(--text-secondary);font-size:13px;margin-top:8px">' + (result.message || 'ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.') + '</div>'
-              : '';
-          var detailRows = (result.results || []).map(function(r) {
-            var icon = r.status === 'success' ? 'âœ…' : r.status === 'error' ? 'âŒ' : 'â­ï¸';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + (r.equipType||'') + ' Â· ' + (r.model||'') + ' Â· ' + (r.vendor||'') + ' [' + r.rentalId + ']</span>'
-              : '<span style="color:var(--status-danger)">' + (r.reason||'') + '</span>';
-            return '<div style="padding:8px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-                   icon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
+          companySelect.innerHTML = '<option value="">-- 회사 선택 --</option>' + companyList.map(function(c) {
+            return '<option value="' + c.id + '">' + c.name + '</option>';
+          }).join('');
+        } catch (err) {
+          companySelect.innerHTML = '<option value="">회사 목록 불러오기 실패</option>';
+        }
+
+        companySelect.onchange = function() {
+          var cid = companySelect.value;
+          if (!cid) {
+            teamSelect.innerHTML = '<option value="">회사 먼저 선택하세요</option>';
+            employeeSelect.innerHTML = '<option value="">회사 먼저 선택하세요</option>';
+            return;
+          }
+
+          teamSelect.innerHTML = '<option value="">-- 배정 팀 선택 --</option>' + teamList.map(function(t) {
+            return '<option value="' + t.id + '">' + t.name + '</option>';
           }).join('');
 
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:520px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:32px;text-align:center;margin-bottom:12px">' + statusIcon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:8px">AI ìž¥ë¹„ë Œíƒˆ ë“±ë¡ ê²°ê³¼</h2>' +
-            statusMsg +
-            (result.processed > 0 ?
-              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0;text-align:center">' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:white">' + (result.processed||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì´ ì²˜ë¦¬</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-success)">' + (result.saved||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì €ìž¥ ì™„ë£Œ</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-danger)">' + (result.errors||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì˜¤ë¥˜</div></div>' +
-              '</div>' +
-              '<div style="max-height:260px;overflow-y:auto;margin-bottom:16px">' + detailRows + '</div>'
-            : '') +
-            '<button id="rental-modal-close" style="width:100%;background:var(--brand-primary);color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ëª©ë¡ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-          // ë°”ê¹¥ ì˜¤ë²„ë ˆì´ ìžì²´ë¥¼ ì œê±° (ëª¨ë‹¬ ë³€ìˆ˜ ì§ì ‘ ì°¸ì¡°)
-          var closeBtn = modal.querySelector('#rental-modal-close');
-          if (closeBtn) closeBtn.addEventListener('click', function() {
+          var filteredEmployees = employeeList.filter(function(e) {
+            return e.company_id == cid;
+          });
+
+          if (filteredEmployees.length === 0) {
+            employeeSelect.innerHTML = '<option value="">해당 회사의 직원이 없습니다.</option>';
+          } else {
+            employeeSelect.innerHTML = '<option value="">-- 운영자 선택 --</option>' + filteredEmployees.map(function(e) {
+              return '<option value="' + e.id + '">' + e.name + '</option>';
+            }).join('');
+          }
+        };
+
+        modal.querySelector('#equipment-assign-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            equipment_id: equipmentId,
+            company_id: companySelect.value,
+            team_id: teamSelect.value || null,
+            employee_id: employeeSelect.value || null,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/assign', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '배정 처리 중 오류가 발생했습니다.');
+            }
+
             modal.remove();
-            window.loadView('rental');
+            var detailModal = document.getElementById('equipment-detail-modal');
+            if (detailModal) detailModal.remove();
+            
+            showToast('장비가 배정되었습니다.');
+            window.renderRental();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Detailed Equipment Info & Chronological Rental History modal
+      window.openEquipmentDetailModal = async function(equipmentId) {
+        var r = (window.currentRentals || []).find(x => x.realId === equipmentId);
+        if (!r) return;
+
+        function getSecureFileUrl(path) {
+          if (!path) return '';
+          if (path.indexOf('/storage/') === 0) {
+            return '/equipment-api/file?path=' + encodeURIComponent(path.replace('/storage/', ''));
+          }
+          return path;
+        }
+
+        var modal = document.createElement('div');
+        modal.id = 'equipment-detail-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        var photosHtml = '';
+        var directions = [
+          { path: r.photo_front, label: '전면 사진' },
+          { path: r.photo_rear, label: '후면 사진' },
+          { path: r.photo_left, label: '좌측 사진' },
+          { path: r.photo_right, label: '우측 사진' }
+        ];
+        directions.forEach(function(d) {
+          if (d.path) {
+            var secureUrl = getSecureFileUrl(d.path);
+            photosHtml += '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:6px;text-align:center;">' +
+              '<a href="' + secureUrl + '" target="_blank">' +
+                '<img src="' + secureUrl + '" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px;border:1px solid var(--border-subtle);">' +
+              '</a>' +
+              '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + d.label + '</span>' +
+            '</div>';
+          }
+        });
+
+        if (photosHtml) {
+          photosHtml = '<div style="margin-top:16px;">' +
+            '<h4 style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">장비 사진 (4방향)</h4>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' + photosHtml + '</div>' +
+          '</div>';
+        }
+
+        var contractHtml = r.contract_path 
+          ? '<div style="margin-top:12px;"><a href="' + getSecureFileUrl(r.contract_path) + '" target="_blank" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;"><i class="ph ph-file-pdf"></i> 렌트 계약서 파일 보기</a></div>'
+          : '';
+
+        var actionButton = '';
+        if (r.status === '사용중') {
+          actionButton = '<button onclick="window.openReturnEquipmentModal(' + r.realId + ', \'' + r.model + '\')" class="btn-primary" style="background:var(--status-danger);border:none;padding:10px 20px;font-weight:700;cursor:pointer;">장비 반납 처리</button>';
+        } else {
+          actionButton = '<button onclick="window.openAssignEquipmentModal(' + r.realId + ', \'' + r.model + '\')" class="btn-primary" style="background:var(--status-success);border:none;padding:10px 20px;font-weight:700;cursor:pointer;">장비 배정</button>';
+        }
+
+        // Calculate lease duration cost
+        var leaseDays = 0;
+        var totalLeaseCost = 0;
+        if (r.startDate && r.endDate && r.startDate !== '-' && r.endDate !== '-') {
+          var startD = new Date(r.startDate);
+          var endD = new Date(r.endDate);
+          var diffTime = Math.max(0, endD - startD);
+          leaseDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          totalLeaseCost = (r.dailyRate || 0) * leaseDays + (r.deliveryFee || 0);
+        }
+
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:700px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-bulldozer" style="color:var(--brand-primary);"></i> 장비 상세 정보</h2>' +
+              '<button onclick="this.closest(\'#equipment-detail-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--bg-base);border-radius:10px;padding:16px;border:1px solid var(--border-subtle);">' +
+              '<div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 코드 / 종류</span><strong style="font-size:15px;color:var(--text-primary);">' + r.id + ' / ' + r.equipType + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">모델명 / 렌트사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + r.model + ' / ' + r.vendor + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">일단가 / 배송비</span><strong style="font-size:15px;color:var(--text-primary);">$' + (r.dailyRate || 0).toLocaleString() + ' / $' + (r.deliveryFee || 0).toLocaleString() + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">계약 총 비용</span><strong style="font-size:15px;color:#7c3aed;">$' + totalLeaseCost.toLocaleString() + ' (' + leaseDays + '일 기준)</strong></div>' +
+              '</div>' +
+              '<div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정회사 / 팀</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.company || '-') + ' / ' + (r.team || '-') + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 운영자 / 담당자</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.operator || '미배정') + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">대여 기간</span><strong style="font-size:15px;color:var(--text-primary);">' + r.startDate + ' ~ ' + r.endDate + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 상태</span><div>' + statusPill(r.status) + '</div></div>' +
+              '</div>' +
+            '</div>' +
+            photosHtml +
+            contractHtml +
+            '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+              '<div>' + actionButton + '</div>' +
+              '<button type="button" onclick="this.closest(\'#equipment-detail-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">닫기</button>' +
+            '</div>' +
+            '<div style="margin-top:28px;">' +
+              '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;"><i class="ph ph-clock-counter-clockwise"></i> 대여 및 배정 이력 (Rental History)</h3>' +
+              '<div id="equipment-history-timeline" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-base);padding:14px;">' +
+                '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">이력을 불러오는 중...</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        try {
+          var response = await fetch('/equipment-api/' + r.realId + '/history');
+          if (!response.ok) throw new Error('이력 로딩 실패');
+          var res = await response.json();
+          var history = res.history || [];
+          var timelineHtml = '';
+
+          if (history.length === 0) {
+            timelineHtml = '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">배정 이력이 없습니다.</div>';
+          } else {
+            timelineHtml = history.map(function(h) {
+              var period = h.returned_at ? h.rented_at + ' ~ ' + h.returned_at : h.rented_at + ' ~ <span style="color:var(--status-success);font-weight:700;">사용 중</span>';
+              var notesText = h.notes ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:4px;">' + h.notes.replace(/\\n/g, '<br>') + '</div>' : '';
+              return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px;display:flex;flex-direction:column;gap:4px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                  '<span style="font-weight:700;color:var(--text-primary);">' + h.company + ' - ' + h.team + ' (' + h.operator + ')</span>' +
+                  '<span style="font-size:11px;color:var(--text-secondary);">' + period + '</span>' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);">' +
+                  '<span style="font-weight:600;color:\\' + (h.status === '대여중' ? 'var(--status-success)' : 'var(--text-tertiary)') + '\\";">' + h.status + '</span>' +
+                '</div>' +
+                notesText +
+              '</div>';
+            }).join('');
+          }
+          modal.querySelector('#equipment-history-timeline').innerHTML = timelineHtml;
+        } catch (err) {
+          modal.querySelector('#equipment-history-timeline').innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:12px;">이력을 불러오지 못했습니다.</div>';
+        }
+      };
+
+      // 🤖 AI Equipment Scanner Modal
+      window.openAiEquipmentRegModal = function() {
+        var modal = document.createElement('div');
+        modal.id = 'ai-equipment-reg-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<style>' +
+            '#ai-equipment-reg-modal * { box-sizing: border-box; }' +
+            '#ai-equipment-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
+            '#ai-equipment-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
+            '#ai-equipment-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+            '#ai-equipment-reg-modal input[type="text"],' +
+            '#ai-equipment-reg-modal input[type="number"],' +
+            '#ai-equipment-reg-modal input[type="date"] {' +
+            '  width: 100%;' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  border-radius: 8px;' +
+            '  padding: 10px 12px;' +
+            '  color: var(--text-primary);' +
+            '  font-size: 13px;' +
+            '  outline: none;' +
+            '  transition: border-color 0.2s, box-shadow 0.2s;' +
+            '}' +
+            '#ai-equipment-reg-modal input[type="text"]:focus,' +
+            '#ai-equipment-reg-modal input[type="number"]:focus,' +
+            '#ai-equipment-reg-modal input[type="date"]:focus {' +
+            '  border-color: #7c3aed;' +
+            '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
+            '}' +
+            '#ai-equipment-reg-modal label {' +
+            '  display: block;' +
+            '  font-size: 12px;' +
+            '  font-weight: 600;' +
+            '  color: var(--text-secondary);' +
+            '  margin-bottom: 6px;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-primary {' +
+            '  background: linear-gradient(135deg, #7c3aed, #2563eb);' +
+            '  border: none;' +
+            '  color: #fff;' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: opacity 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-primary:hover {' +
+            '  opacity: 0.9;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-primary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-secondary {' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  color: var(--text-primary);' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: background 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-secondary:hover {' +
+            '  background: var(--bg-body);' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-secondary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#equipment-modal-close-btn {' +
+            '  transition: color 0.2s, transform 0.2s;' +
+            '}' +
+            '#equipment-modal-close-btn:hover {' +
+            '  color: var(--text-primary);' +
+            '  transform: rotate(90deg);' +
+            '}' +
+            '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
+            '@media (max-width: 640px) { #equipment-camera-area { grid-template-columns: 1fr !important; } }' +
+          '</style>' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:20px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;box-sizing:border-box;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:22px;"></i> AI 장비렌탈 자동 등록</h2>' +
+              '<button type="button" id="equipment-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height:1.5;">' +
+              '렌트 계약서와 장비 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 문서와 사진 정보를 자동으로 판독하여 장부에 등록합니다.' +
+            '</div>' +
+            '<input type="file" id="equipment-file-contract" style="display:none" accept="application/pdf,image/*">' +
+            '<input type="file" id="equipment-file-photo_front" style="display:none" accept="image/*">' +
+            '<input type="file" id="equipment-file-photo_rear" style="display:none" accept="image/*">' +
+            '<input type="file" id="equipment-file-photo_left" style="display:none" accept="image/*">' +
+            '<input type="file" id="equipment-file-photo_right" style="display:none" accept="image/*">' +
+            '<div style="display: flex; gap: 8px; margin-bottom: 16px;">' +
+              '<button type="button" id="equipment-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-upload-simple"></i> 파일 업로드' +
+              '</button>' +
+              '<button type="button" id="equipment-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-camera"></i> 실시간 카메라' +
+              '</button>' +
+            '</div>' +
+            '<div id="equipment-upload-area" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 16px;">' +
+              '<div id="equipment-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 75px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:6px;">' +
+                  '<i class="ph ph-file-text" style="font-size: 24px; color: var(--text-tertiary);"></i>' +
+                  '<div style="font-weight: 600; font-size:13px; color:var(--text-primary);">렌트 계약서 파일 (PDF/이미지) <span style="color:var(--status-danger)">*</span></div>' +
+                  '<div style="font-size: 11px; color: var(--text-tertiary);">클릭하여 파일 업로드</div>' +
+                '</div>' +
+                '<div class="preview-state" style="display: none; width:100%; text-align:center; position:relative;">' +
+                  '<div class="preview-icon-wrapper" style="font-size: 24px; color: var(--brand-primary); margin-bottom: 4px;"><i class="ph ph-file-pdf"></i></div>' +
+                  '<img class="preview-img" style="max-height: 50px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 4px;">' +
+                  '<div class="file-name" style="font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>' +
+                  '<button type="button" class="trash-btn" style="position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,0.6); color: #fff; width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-trash"></i></button>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
+                '<div id="equipment-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="equipment-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="equipment-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="equipment-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div id="equipment-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin-bottom: 16px;">' +
+              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
+                  '<video id="equipment-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
+                  '<div id="equipment-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 11px; padding: 4px 6px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+                    '촬영 대상: 계약서' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+                  '<button type="button" id="equipment-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 34px; font-size: 12px; font-weight: 600; cursor:pointer;">' +
+                    '<i class="ph ph-camera"></i> 사진 촬영' +
+                  '</button>' +
+                '</div>' +
+                '<div id="equipment-camera-select-container" style="margin-top: 8px; display: none; align-items:center; gap:6px;">' +
+                  '<span style="font-size:10px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라:</span>' +
+                  '<select id="equipment-camera-device-select" style="flex:1; padding: 4px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 10px; outline: none;"></select>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:2px; padding-bottom:4px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-file-text" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">계약서 <span style="color:var(--status-danger)">*</span></div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div id="equipment-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
+              '<button type="button" id="equipment-upload-cancel-btn" class="btn-secondary" style="padding:0 20px; cursor:pointer;">취소</button>' +
+              '<button type="button" id="equipment-upload-submit-btn" class="btn-primary" style="padding:0 24px; cursor:pointer;">AI 분석 실행</button>' +
+            '</div>' +
+            '<div id="equipment-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px 0; gap:12px;">' +
+              '<div style="width:40px; height:40px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary); font-size:14px; font-weight:700;">Gemini AI가 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary); font-size:12px; text-align:center; max-width:320px; line-height:1.4;">계약서 및 장비 사진 정보를 추출하여 자동 매핑하고 있습니다. 잠시만 기다려주세요.</div>' +
+            '</div>' +
+            '<div id="equipment-analysis-result-container" style="display:none; flex-direction:column; gap:12px; margin-top:12px;">' +
+              '<h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+              '<div style="font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.4;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-equipment-save-form" style="display:flex; flex-direction:column; gap:12px;">' +
+                '<input type="hidden" name="contract_path">' +
+                '<input type="hidden" name="photo_front">' +
+                '<input type="hidden" name="photo_rear">' +
+                '<input type="hidden" name="photo_left">' +
+                '<input type="hidden" name="photo_right">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>장비 종류 (Type)</label>' +
+                    '<input type="text" name="equipment_type" required>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>장비 모델명</label>' +
+                    '<input type="text" name="model" required>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>렌트사 (Vendor)</label>' +
+                    '<input type="text" name="vendor">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">' +
+                  '<div style="grid-column:span 2;">' +
+                    '<label>렌트 시작일</label>' +
+                    '<input type="date" name="rent_start">' +
+                  '</div>' +
+                  '<div style="grid-column:span 2;">' +
+                    '<label>렌트 종료일</label>' +
+                    '<input type="date" name="rent_end">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>일단가 ($)</label>' +
+                    '<input type="number" name="daily_rate" min="0">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>배송비 ($)</label>' +
+                    '<input type="number" name="delivery_fee" min="0">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px;"></div>' +
+                '<div style="margin-top:8px; display:flex; justify-content:flex-end; gap:12px;">' +
+                  '<button type="button" id="equipment-save-cancel-btn" class="btn-secondary" style="padding:0 20px;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success) !important; padding:0 24px; border:none; cursor:pointer;">장비 등록 및 저장</button>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var equipmentFiles = {
+          contract: null,
+          photo_front: null,
+          photo_rear: null,
+          photo_left: null,
+          photo_right: null
+        };
+
+        var currentActiveSlot = 'contract';
+        var currentCameraMode = 'upload';
+        var localVideoStream = null;
+        var availableCameraDevices = [];
+
+        var btnToggleUpload = modal.querySelector('#equipment-btn-toggle-upload');
+        var btnToggleCamera = modal.querySelector('#equipment-btn-toggle-camera');
+        var uploadArea = modal.querySelector('#equipment-upload-area');
+        var cameraArea = modal.querySelector('#equipment-camera-area');
+        var initialControls = modal.querySelector('#equipment-initial-controls');
+        var loadingDiv = modal.querySelector('#equipment-analysis-loading');
+        var resultDiv = modal.querySelector('#equipment-analysis-result-container');
+        var saveForm = modal.querySelector('#ai-equipment-save-form');
+        var deviceSelect = modal.querySelector('#equipment-camera-device-select');
+        var deviceSelectContainer = modal.querySelector('#equipment-camera-select-container');
+
+        function showUploadMode() {
+          currentCameraMode = 'upload';
+          btnToggleUpload.className = 'btn-primary';
+          btnToggleCamera.className = 'btn-secondary';
+          uploadArea.style.display = 'flex';
+          cameraArea.style.display = 'none';
+          stopCamera();
+        }
+
+        async function showCameraMode() {
+          currentCameraMode = 'camera';
+          btnToggleUpload.className = 'btn-secondary';
+          btnToggleCamera.className = 'btn-primary';
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'grid';
+          await startCamera();
+        }
+
+        btnToggleUpload.onclick = showUploadMode;
+        btnToggleCamera.onclick = showCameraMode;
+
+        var cards = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            card.onclick = function(e) {
+              if (e.target.closest('.trash-btn')) return;
+              modal.querySelector('#equipment-file-' + slot).click();
+            };
+          }
+
+          var fileInput = modal.querySelector('#equipment-file-' + slot);
+          if (fileInput) {
+            fileInput.onchange = function(e) {
+              var file = e.target.files[0];
+              if (file) {
+                setFileSlot(slot, file);
+              }
+            };
+          }
+        });
+
+        function setFileSlot(slot, file) {
+          equipmentFiles[slot] = file;
+          var url = URL.createObjectURL(file);
+
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            card.dataset.hasFile = 'true';
+            card.style.borderColor = 'var(--border-default)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'none';
+            previewState.style.display = 'block';
+
+            if (slot === 'contract') {
+              var isImg = file.type.startsWith('image/');
+              var previewImg = previewState.querySelector('.preview-img');
+              var iconWrapper = previewState.querySelector('.preview-icon-wrapper');
+              if (isImg) {
+                previewImg.src = url;
+                previewImg.style.display = 'block';
+                iconWrapper.style.display = 'none';
+              } else {
+                previewImg.style.display = 'none';
+                iconWrapper.style.display = 'block';
+              }
+              previewState.querySelector('.file-name').innerText = file.name;
+            } else {
+              var img = previewState.querySelector('.preview-img');
+              img.src = url;
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            slotRow.querySelector('.slot-status').innerText = '완료';
+            slotRow.querySelector('.slot-status').style.color = 'var(--status-success)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'inline-block';
+            
+            var thumb = slotRow.querySelector('.slot-thumbnail');
+            var isImg = file.type.startsWith('image/');
+            if (isImg || slot !== 'contract') {
+              thumb.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+            } else {
+              thumb.innerHTML = '<i class="ph ph-file-pdf" style="color:var(--brand-primary); font-size:18px;"></i>';
+            }
+          }
+        }
+
+        function clearFileSlot(slot) {
+          equipmentFiles[slot] = null;
+          var fileInput = modal.querySelector('#equipment-file-' + slot);
+          if (fileInput) fileInput.value = '';
+
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            delete card.dataset.hasFile;
+            card.style.borderColor = 'var(--border-strong)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'flex';
+            previewState.style.display = 'none';
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var iconName = (slot === 'contract') ? 'ph-file-text' : 'ph-camera';
+            slotRow.querySelector('.slot-thumbnail').innerHTML = '<i class="ph ' + iconName + '" style="color:var(--text-tertiary);"></i>';
+            slotRow.querySelector('.slot-status').innerText = (slot === 'contract') ? '선택된 파일 없음' : '선택된 사진 없음';
+            slotRow.querySelector('.slot-status').style.color = 'var(--text-tertiary)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'none';
+          }
+        }
+
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            var trashBtn = card.querySelector('.trash-btn');
+            if (trashBtn) {
+              trashBtn.onclick = function(e) {
+                e.stopPropagation();
+                clearFileSlot(slot);
+              };
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var delBtn = slotRow.querySelector('.slot-delete-btn');
+            delBtn.onclick = function(e) {
+              e.stopPropagation();
+              clearFileSlot(slot);
+            };
+          }
+        });
+
+        var slotRows = modal.querySelectorAll('.webcam-slot-card');
+        slotRows.forEach(function(row) {
+          row.onclick = function() {
+            var slot = row.dataset.slot;
+            setActiveTargetSlot(slot);
+          };
+        });
+
+        function setActiveTargetSlot(slot) {
+          currentActiveSlot = slot;
+          
+          slotRows.forEach(function(row) {
+            if (row.dataset.slot === slot) {
+              row.classList.add('active-target');
+              row.style.background = 'rgba(124,58,237,0.1)';
+              row.style.borderColor = 'var(--brand-primary)';
+              row.querySelector('.target-badge').style.display = 'inline-block';
+            } else {
+              row.classList.remove('active-target');
+              row.style.background = 'var(--bg-base)';
+              row.style.borderColor = 'var(--border-strong)';
+              row.querySelector('.target-badge').style.display = 'none';
+            }
           });
-          // ëª¨ë‹¬ ë°”ê¹¥ ì–´ë‘ìš´ ì˜ì—­ í´ë¦­ìœ¼ë¡œë„ ë‹«ê¸°
-          modal.addEventListener('click', function(e) {
-            if (e.target === modal) { modal.remove(); window.loadView('rental'); }
-          });
-        } catch(err) {
-          clearTimeout(aiTimeout);
-          document.removeEventListener('keydown', aiKey);
-          dismissAi();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤:\n' + (err && err.message ? err.message : err));
+
+          var labelMap = {
+            contract: '렌트 계약서',
+            photo_front: '장비 전면 사진',
+            photo_rear: '장비 후면 사진',
+            photo_left: '장비 좌측 사진',
+            photo_right: '장비 우측 사진'
+          };
+          modal.querySelector('#equipment-camera-overlay-label').innerText = '촬영 대상: ' + (labelMap[slot] || slot);
+        }
+
+        async function startCamera(preferredDeviceId) {
+          stopCamera();
+          var video = modal.querySelector('#equipment-video-stream');
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            var constraints = {
+              video: { facingMode: 'environment' }
+            };
+            if (preferredDeviceId) {
+              constraints.video = { deviceId: { exact: preferredDeviceId } };
+            }
+            try {
+              var stream = await navigator.mediaDevices.getUserMedia(constraints);
+              localVideoStream = stream;
+              video.srcObject = stream;
+              
+              if (availableCameraDevices.length === 0) {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameraDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                if (availableCameraDevices.length > 1) {
+                  deviceSelectContainer.style.display = 'flex';
+                  deviceSelect.innerHTML = '';
+                  availableCameraDevices.forEach(function(d, idx) {
+                    var opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || ('Camera ' + (idx + 1));
+                    if (preferredDeviceId && d.deviceId === preferredDeviceId) {
+                      opt.selected = true;
+                    }
+                    deviceSelect.appendChild(opt);
+                  });
+                  deviceSelect.onchange = function() {
+                    startCamera(deviceSelect.value);
+                  };
+                }
+              }
+            } catch (err) {
+              console.error('Camera stream error:', err);
+              alert('카메라를 활성화할 수 없습니다: ' + err.message);
+              showUploadMode();
+            }
+          } else {
+            alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+            showUploadMode();
+          }
+        }
+
+        function stopCamera() {
+          var video = modal.querySelector('#equipment-video-stream');
+          if (video && video.srcObject) {
+            var stream = video.srcObject;
+            var tracks = stream.getTracks();
+            tracks.forEach(function(track) { track.stop(); });
+            video.srcObject = null;
+          }
+          localVideoStream = null;
+        }
+
+        modal.querySelector('#equipment-btn-capture').onclick = function() {
+          var video = modal.querySelector('#equipment-video-stream');
+          if (!video || !video.srcObject) return;
+
+          var canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          var dataUrl = canvas.toDataURL('image/jpeg');
+          var fileName = 'webcam_' + currentActiveSlot + '.jpg';
+          var file = dataURLtoFile(dataUrl, fileName);
+
+          setFileSlot(currentActiveSlot, file);
+
+          var sequence = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+          var nextSlotIdx = sequence.indexOf(currentActiveSlot) + 1;
+          
+          var foundNext = false;
+          for (var i = 0; i < sequence.length; i++) {
+            var s = sequence[(nextSlotIdx + i) % sequence.length];
+            if (!equipmentFiles[s]) {
+              setActiveTargetSlot(s);
+              foundNext = true;
+              break;
+            }
+          }
+          if (!foundNext) {
+            showToast('모든 슬롯이 촬영되었습니다.');
+          }
+        };
+
+        function dataURLtoFile(dataurl, filename) {
+          var arr = dataurl.split(','),
+              mime = arr[0].match(/:(.*?);/)[1],
+              bstr = atob(arr[1]),
+              n = bstr.length,
+              u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new File([u8arr], filename, { type: mime });
+        }
+
+        function cleanUpAndClose() {
+          stopCamera();
+          modal.remove();
+        }
+
+        modal.querySelector('#equipment-modal-close-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#equipment-upload-cancel-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#equipment-save-cancel-btn').onclick = cleanUpAndClose;
+
+        modal.querySelector('#equipment-upload-submit-btn').onclick = async function(e) {
+          e.preventDefault();
+
+          if (!equipmentFiles.contract) {
+            alert('렌트 계약서는 필수 등록 항목입니다.');
+            return;
+          }
+
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'none';
+          btnToggleUpload.parentElement.style.display = 'none';
+          initialControls.style.display = 'none';
+          loadingDiv.style.display = 'flex';
+          stopCamera();
+
+          var formData = new FormData();
+          formData.append('contract', equipmentFiles.contract);
+          if (equipmentFiles.photo_front) formData.append('photo_front', equipmentFiles.photo_front);
+          if (equipmentFiles.photo_rear) formData.append('photo_rear', equipmentFiles.photo_rear);
+          if (equipmentFiles.photo_left) formData.append('photo_left', equipmentFiles.photo_left);
+          if (equipmentFiles.photo_right) formData.append('photo_right', equipmentFiles.photo_right);
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/scan-rental', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || 'AI 분석 중 오류가 발생했습니다.');
+            }
+
+            var res = await response.json();
+            loadingDiv.style.display = 'none';
+            resultDiv.style.display = 'flex';
+
+            var data = res.data || {};
+            var files = res.files || {};
+
+            saveForm.querySelector('[name="equipment_type"]').value = data.equipment_type || '';
+            saveForm.querySelector('[name="model"]').value = data.model || '';
+            saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+            saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
+            saveForm.querySelector('[name="rent_end"]').value = data.rent_end || '';
+            saveForm.querySelector('[name="daily_rate"]').value = data.daily_rate || 0;
+            saveForm.querySelector('[name="delivery_fee"]').value = data.delivery_fee || 0;
+
+            saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
+            saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
+            saveForm.querySelector('[name="photo_rear"]').value = files.photo_rear || '';
+            saveForm.querySelector('[name="photo_left"]').value = files.photo_left || '';
+            saveForm.querySelector('[name="photo_right"]').value = files.photo_right || '';
+
+            var previewsDiv = saveForm.querySelector('#ai-uploaded-previews');
+            previewsDiv.innerHTML = '';
+            var directions = [
+              { key: 'photo_front', label: '전면' },
+              { key: 'photo_rear', label: '후면' },
+              { key: 'photo_left', label: '좌측' },
+              { key: 'photo_right', label: '우측' }
+            ];
+            directions.forEach(function(d) {
+              var src = '';
+              if (equipmentFiles[d.key]) {
+                src = URL.createObjectURL(equipmentFiles[d.key]);
+              } else if (files[d.key]) {
+                src = files[d.key];
+              }
+
+              if (src) {
+                var previewCard = document.createElement('div');
+                previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
+                previewCard.innerHTML = 
+                  '<img src="' + src + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+                  '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
+                previewsDiv.appendChild(previewCard);
+              }
+            });
+
+          } catch (err) {
+            loadingDiv.style.display = 'none';
+            btnToggleUpload.parentElement.style.display = 'flex';
+            initialControls.style.display = 'flex';
+            if (currentCameraMode === 'camera') {
+              cameraArea.style.display = 'grid';
+              startCamera();
+            } else {
+              uploadArea.style.display = 'flex';
+            }
+            alert('오류: ' + err.message);
+          }
+        };
+
+        saveForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            equipment_type: saveForm.querySelector('[name="equipment_type"]').value,
+            model: saveForm.querySelector('[name="model"]').value,
+            vendor: saveForm.querySelector('[name="vendor"]').value,
+            rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
+            rent_end: saveForm.querySelector('[name="rent_end"]').value || null,
+            daily_rate: parseInt(saveForm.querySelector('[name="daily_rate"]').value, 10) || 0,
+            delivery_fee: parseInt(saveForm.querySelector('[name="delivery_fee"]').value, 10) || 0,
+            contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
+            photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
+            photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
+            photo_left: saveForm.querySelector('[name="photo_left"]').value || null,
+            photo_right: saveForm.querySelector('[name="photo_right"]').value || null
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/save', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '장비 정보를 저장하는 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('장비가 성공적으로 등록되었습니다.');
+            window.renderRental();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // 📄 샘플 계약서 생성 및 헤더 생성 stubs
+      window.generateSampleContracts = async function() {
+        if (!confirm('샘플 계약서 3종을 생성하시겠습니까?')) return;
+        var res = await window.API.generateSampleRentalContracts();
+        if (res.success) {
+          alert('샘플 계약서 생성 완료');
+          window.renderRental();
+        } else {
+          alert('실패: ' + (res.error || '알 수 없는 오류'));
+        }
+      };
+
+      window.setupRentalSheetHeaders = async function() {
+        if (!confirm('렌탈 시트 헤더를 설정하시겠습니까?')) return;
+        var res = await window.API.setupRentalSheet();
+        if (res.success) {
+          alert('헤더 설정 완료');
+          window.renderRental();
+        } else {
+          alert('실패: ' + (res.error || '알 수 없는 오류'));
         }
       };
 

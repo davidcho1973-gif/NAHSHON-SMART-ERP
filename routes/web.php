@@ -43,6 +43,14 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/vehicle-api/{vehicle}/history', [App\Http\Controllers\VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
     Route::get('/vehicle-api/file', [App\Http\Controllers\VehicleApiController::class, 'serveFile'])->name('vehicle.file');
 
+    // Equipment API Routes
+    Route::post('/equipment-api/scan-rental', [App\Http\Controllers\EquipmentApiController::class, 'scanRental'])->name('equipment.scan-rental');
+    Route::post('/equipment-api/save', [App\Http\Controllers\EquipmentApiController::class, 'saveEquipment'])->name('equipment.save');
+    Route::post('/equipment-api/assign', [App\Http\Controllers\EquipmentApiController::class, 'assignEquipment'])->name('equipment.assign');
+    Route::post('/equipment-api/return', [App\Http\Controllers\EquipmentApiController::class, 'returnEquipment'])->name('equipment.return');
+    Route::get('/equipment-api/{equipment}/history', [App\Http\Controllers\EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
+    Route::get('/equipment-api/file', [App\Http\Controllers\EquipmentApiController::class, 'serveFile'])->name('equipment.file');
+
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');

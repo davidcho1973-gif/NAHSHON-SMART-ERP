@@ -77,12 +77,16 @@ class SmartCompanyData
             'api_getVehicleStats' => self::vehicleStats(),
             'api_getRentalList' => self::rentalList(),
             'api_getRentalStats' => self::rentalStats(),
-            'api_createRental', 'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
+            'api_createRental' => self::createRental($args[0] ?? []),
+            'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
             'api_getHousingList' => self::housingList(),
             'api_getHousingStats' => self::housingStats(),
             'api_getFlightList' => self::flightList(),
             'api_getOfficeSupplies' => self::officeSupplies(),
             'api_getVendorList' => self::vendors(),
+            'api_getCompanyList' => \App\Models\Company::query()->where('status', 'active')->orderBy('name')->get()->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->all(),
+            'api_getTeamList' => \App\Models\Team::query()->where('status', 'active')->orderBy('name')->get()->map(fn($t) => ['id' => $t->id, 'name' => $t->name, 'site_id' => $t->site_id])->all(),
+            'api_getEmployeeList' => \App\Models\Employee::query()->where('employment_status', 'active')->orderBy('name')->get()->map(fn($e) => ['id' => $e->id, 'name' => $e->name, 'company_id' => $e->company_id, 'team_id' => $e->team_id])->all(),
             'api_createVendor' => ['success' => true, 'id' => 'V-' . random_int(100, 999)],
             'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\nNAHSHON MEP"],
             'api_translateToEnglish' => ['success' => true, 'text' => (string) ($args[0] ?? '')],
@@ -787,8 +791,85 @@ class SmartCompanyData
 
         return [];
     }
-    public static function rentalStats(): array { return ['total' => 8, 'active' => 5, 'overdue' => 1, 'returned' => 2, 'returningSoon' => 2, 'mtdCost' => 28600]; }
-    public static function rentalList(): array { return [['id' => 'RN-001', 'vendor' => 'United Rentals', 'item' => 'Scissor Lift', 'site' => 'HFF-02', 'startDate' => '2026-06-10', 'endDate' => '2026-06-24', 'cost' => 4200, 'status' => '반납예정'], ['id' => 'RN-002', 'vendor' => 'Sunbelt', 'item' => 'Telehandler', 'site' => 'LGES-AZ', 'startDate' => '2026-06-01', 'endDate' => '2026-06-18', 'cost' => 7600, 'status' => '만료임박']]; }
+    public static function rentalStats(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
+                $query = \App\Models\Equipment::query()->visibleTo(auth()->user());
+                $all = $query->get();
+
+                $total = $all->count();
+                $active = $all->where('status', '사용중')->count();
+                $available = $all->where('status', '대기중')->count();
+
+                // Group by company dynamically
+                $companies = \App\Models\Company::query()
+                    ->where('status', 'active')
+                    ->orderBy('name')
+                    ->get();
+
+                $byCompany = [];
+                foreach ($companies as $comp) {
+                    $inUse = $all->where('company_id', $comp->id)->where('status', '사용중')->count();
+                    $byCompany[] = [
+                        'name' => $comp->name,
+                        'count' => $inUse,
+                    ];
+                }
+
+                return [
+                    'total' => $total,
+                    'active' => $active,
+                    'available' => $available,
+                    'byCompany' => $byCompany,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in rentalStats shim: ' . $e->getMessage());
+        }
+
+        return ['total' => 0, 'active' => 0, 'available' => 0, 'byCompany' => []];
+    }
+
+    public static function rentalList(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
+                return \App\Models\Equipment::query()
+                    ->with(['company', 'team', 'employee'])
+                    ->visibleTo(auth()->user())
+                    ->get()
+                    ->map(fn (\App\Models\Equipment $e): array => [
+                        'id' => $e->equipment_code,
+                        'realId' => $e->id,
+                        'equipType' => $e->equipment_type,
+                        'model' => $e->model,
+                        'vendor' => $e->vendor ?: '-',
+                        'startDate' => $e->rent_start ? $e->rent_start->toDateString() : '-',
+                        'endDate' => $e->rent_end ? $e->rent_end->toDateString() : '-',
+                        'dailyRate' => (int) $e->daily_rate,
+                        'deliveryFee' => (int) $e->delivery_fee,
+                        'status' => $e->status ?: '대기중',
+                        'company' => $e->company?->name ?: '-',
+                        'companyId' => $e->company_id,
+                        'team' => $e->team?->name ?: '-',
+                        'teamId' => $e->team_id,
+                        'operator' => $e->employee?->name ?: '',
+                        'operatorId' => $e->employee_id,
+                        'contract_path' => $e->contract_path,
+                        'photo_front' => $e->photo_front,
+                        'photo_rear' => $e->photo_rear,
+                        'photo_left' => $e->photo_left,
+                        'photo_right' => $e->photo_right,
+                    ])
+                    ->all();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in rentalList shim: ' . $e->getMessage());
+        }
+
+        return [];
+    }
     public static function housingStats(): array
     {
         try {
@@ -847,6 +928,31 @@ class SmartCompanyData
             'inactive' => '미사용',
             default => (string) $status,
         };
+    }
+
+    public static function createRental(array $payload): array
+    {
+        try {
+            $siteCode = $payload['siteId'] ?? 'HFF-02';
+            $siteId = \App\Models\Site::where('code', $siteCode)->value('id');
+
+            $equipment = \App\Models\Equipment::create([
+                'site_id' => $siteId,
+                'equipment_type' => $payload['equipType'] ?? 'Other',
+                'model' => $payload['model'] ?? '',
+                'vendor' => $payload['vendor'] ?? null,
+                'rent_start' => $payload['startDate'] ?? null,
+                'rent_end' => $payload['endDate'] ?? null,
+                'daily_rate' => (int) ($payload['dailyRate'] ?? 0),
+                'delivery_fee' => (int) ($payload['deliveryFee'] ?? 0),
+                'status' => '대기중',
+                'registration_method' => 'manual',
+            ]);
+
+            return ['success' => true, 'id' => $equipment->equipment_code];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
     public static function flightList(): array { return [['id' => 'FL-001', 'name' => 'Han Gildong', 'direction' => '입국', 'from' => 'ICN', 'to' => 'PHX', 'depDateTime' => '2026-06-28 10:30', 'airline' => 'Korean Air', 'pnr' => 'KXNV7T', 'price' => 1240, 'status' => '발권', 'needPickup' => true, 'pickupBy' => 'Lee', 'housingReady' => true]]; }
     public static function officeSupplies(): array { return [['id' => 'OF-001', 'category' => '소모품', 'name' => 'Copy Paper A4', 'qty' => 3, 'minQty' => 5, 'location' => 'Office cabinet', 'lastRestock' => '2026-06-01', 'unitPrice' => 45, 'reorder' => true], ['id' => 'OF-002', 'category' => 'Safety', 'name' => 'Safety Vest', 'qty' => 8, 'minQty' => 10, 'location' => 'Safety shelf', 'lastRestock' => '2026-05-24', 'unitPrice' => 35, 'reorder' => true]]; }
