@@ -4987,56 +4987,49 @@
           var periodHtml =
             '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
               '<div style="display:flex;align-items:center;gap:12px">' +
-                '<button onclick="window.shiftPayPeriod(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">â€¹</button>' +
+                '<button onclick="window.shiftPayPeriod(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">‹</button>' +
                 '<div style="text-align:center;min-width:280px">' +
                   '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:2px">PAY PERIOD (Bi-weekly)</div>' +
                   '<div class="cell-mono" style="font-size:16px;font-weight:800;color:var(--text-primary)">' + period.start + ' ~ ' + period.end + '</div>' +
                   '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Day ' + (period.currentDay || 0) + ' / ' + (period.totalDays || 14) +
-                    (period.isComplete ? ' Â· <span style="color:var(--status-success)">ì™„ë£Œ</span>' : ' Â· <span style="color:var(--status-warning)">ì§„í–‰ì¤‘</span>') + '</div>' +
+                    (period.isComplete ? ' · <span style="color:var(--status-success)">완료</span>' : ' · <span style="color:var(--status-warning)">진행중</span>') + '</div>' +
                 '</div>' +
-                '<button onclick="window.shiftPayPeriod(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">â€º</button>' +
+                '<button onclick="window.shiftPayPeriod(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">›</button>' +
               '</div>' +
               '<div style="display:flex;gap:8px">' +
-                '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> í˜„ìž¬ ì£¼ê¸°</button>' +
-                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>ëª…ì„¸ì„œ (Phase B)</button>' +
+                '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> 현재 주기</button>' +
+                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>명세서 (Phase B)</button>' +
               '</div>' +
             '</div></div>';
 
-          // â”€â”€ 2. KPI 5ì¢… (60% ì••ì¶•) â”€â”€
+          // ——— 2. KPI 5종 (60% 압축) ———
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
-<<<<<<< HEAD
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ  ì ¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + totals.gross.toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì  </span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì ¸ì› <i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
-=======
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ ì¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">예상 인건비<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
                 '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + (totals.gross||0).toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì </span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì¸ì›<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
->>>>>>> origin/staging
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period 누적</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">활성 인원<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + 'ê°œ íšŒì‚¬</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular ê³µìˆ˜<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + '개 회사</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular 공수<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
                 '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.regHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì •ê·œ ê·¼ë¬´</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT ê³µìˆ˜<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">정규 근무</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT 공수<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
                 '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.otHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì´ˆê³¼ (1.5Ã—)</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì ´ìƒ  íƒ ì§€<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">초과 (1.5×)</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">이상 타지<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:' + (anomalies.length > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + anomalies.length + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? 'ê²€í†  í•„ìš”' : 'ì •ìƒ ') + '</span></div></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? '검토 필요' : '정상') + '</span></div></div>' +
             '</div>';
 
-          // â”€â”€ 3. íšŒì‚¬ë³„ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
+          // ——— 3. 회사별 매트릭스 ———
           var companyHtml = companies.length === 0
-            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">ì ´ë²ˆ Pay Periodì—  ë °ì ´í„° ì—†ì Œ</div></div>'
+            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">이번 Pay Period에 데이터 없음</div></div>'
             : '<div class="panel" style="margin-bottom:14px;overflow:hidden">' +
                 '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
                   '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
                     '<i class="ph ph-chart-bar" style="font-size:18px;color:' + COLOR_TOTAL + '"></i>' +
-                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">íšŒì‚¬Â·ì§ ì±…ë³„ ì ¸ê±´ë¹„</span>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">회사·직책별 인건비</span>' +
                     '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:' + COLOR_TOTAL + ';border-radius:4px;font-weight:600">' + period.start + ' ~ ' + period.end + '</span>' +
                   '</div>' +
                 '</div>' +
@@ -5484,122 +5477,8 @@
       };
 
       // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      async function renderVehicle() {
-        pageContainer.innerHTML = skeleton();
-        try {
-          const [stats, vehicles] = await Promise.all([
-            window.API.getVehicleStats(),
-            window.API.getVehicleList()
-          ]);
-          var vehiclesListHtml = vehicles.map(function (v) {
-            var rentClass = v.rentEnd < '2026-05-30' ? ' text-warning' : '';
-            var insClass = v.insuranceExp < '2026-06-30' ? ' text-warning' : '';
-            var oilClass = (v.nextOil - v.mileage) < 1000 ? ' text-warning' : '';
-            var assignee = v.assignee || '<span style="color:var(--text-tertiary)">ë¯¸ë°°ì •</span>';
-            var aiTag = v.registrationMethod === 'AIìžë™ë¶„ì„' ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;color:white;background:#7c3aed;margin-left:4px">AI</span>' : '';
-            return '<tr><td class="cell-mono">' + v.id + aiTag + '</td><td class="cell-primary cell-mono">' + v.plate + '</td><td>' + v.type + ' ' + v.model + '</td><td>' + assignee + '</td><td class="cell-mono' + rentClass + '">' + v.rentEnd + '</td><td class="cell-mono' + insClass + '">' + v.insuranceExp + '</td><td class="cell-mono">' + (v.mileage||0).toLocaleString() + '</td><td class="cell-mono' + oilClass + '">' + (v.nextOil||0).toLocaleString() + '</td><td>' + statusPill(v.status) + '</td></tr>';
-          }).join('');
+      
 
-          pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ì°¨ëŸ‰ ê´€ë¦¬</h1><p class="page-subtitle">ë ŒíŠ¸ ì°¨ëŸ‰ í˜„í™© Â· ë³´í—˜/ë“±ë¡ ë§Œë£Œ ì¶”ì  Â· AI ê³„ì•½ì„œ ìžë™ ë“±ë¡</p></div>' +
-            '<div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> ëª©ë¡ ì¶œë ¥</button>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;" onclick="window.runAiRentalScan()">' +
-            '<i class="ph ph-robot"></i> ðŸ¤– AI ë Œíƒˆì¹´ ë“±ë¡</button>' +
-            '<button class="btn-primary" style="background:var(--status-warning);color:#000;" onclick="openNfcAssignModal(\'VEHICLE\')"><i class="ph ph-identification-card"></i> NFC ë°°ì •</button>' +
-            '</div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì°¨ëŸ‰</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ë“±ë¡ ì°¨ëŸ‰</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ìš´í–‰ì¤‘</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì •ìƒ ë°°ì •</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì •ë¹„ì¤‘</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.maintenance + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì„œë¹„ìŠ¤ ì„¼í„°</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ë ŒíŠ¸ë§Œë£Œìž„ë°•</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.rentExpiringSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">60ì¼ ì´ë‚´</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">AI ë“±ë¡ ì°¨ëŸ‰</div><div class="kpi-value" style="color:#7c3aed">' + vehicles.filter(function(v){return v.registrationMethod==='AIìžë™ë¶„ì„';}).length + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Gemini ë¶„ì„</span></div></div>' +
-            '</div>' +
-            // AI ì•ˆë‚´ ë°°ë„ˆ
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px">' +
-            '<i class="ph ph-robot" style="font-size:28px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:3px">ðŸ¤– AI ë Œíƒˆì¹´ ìžë™ ë“±ë¡ ì‹œìŠ¤í…œ</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary)">êµ¬ê¸€ ë“œë¼ì´ë¸Œ â†’ <strong style="color:white">NAHSHON / RENT CAR / ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ê³„ì•½ì„œ PDF/ì‚¬ì§„ì„ ë„£ê³  <strong style="color:#c4b5fd">AI ë Œíƒˆì¹´ ë“±ë¡</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”. Gemini AIê°€ ìžë™ìœ¼ë¡œ ë¶„ì„í•˜ì—¬ ì°¨ëŸ‰ ëª©ë¡ì— ë“±ë¡í•©ë‹ˆë‹¤.</div>' +
-            '</div>' +
-            '<button onclick="window.runAiRentalScan()" style="flex-shrink:0;background:linear-gradient(135deg,#7c3aed,#2563eb);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">ì‹¤í–‰</button>' +
-            '</div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-car"></i> ì°¨ëŸ‰ ëª©ë¡</div></div>' +
-            '<div class="panel-body"><table class="data-table"><thead><tr><th>ì°¨ëŸ‰ID</th><th>ë²ˆí˜¸íŒ</th><th>ëª¨ë¸</th><th>ë°°ì •ìž</th><th>ë ŒíŠ¸ë§Œë£Œ</th><th>ë³´í—˜ë§Œë£Œ</th><th>í˜„ìž¬ë§ˆì¼</th><th>ë‹¤ìŒì˜¤ì¼</th><th>ìƒíƒœ</th></tr></thead><tbody>' + (vehiclesListHtml || '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:32px">ë“±ë¡ëœ ì°¨ëŸ‰ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>';
-
-        } catch (err) { renderError('ì°¨ëŸ‰ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
-      }
-
-      // ðŸ¤– AI ë Œíƒˆì¹´ ìŠ¤ìº” ì‹¤í–‰
-      window.runAiRentalScan = async function() {
-        // ì§„í–‰ ì¤‘ ì˜¤ë²„ë ˆì´ í‘œì‹œ
-        var overlay = document.createElement('div');
-        overlay.id = 'ai-scan-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ¤– Gemini AI ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:13px">RENT CAR / ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” ì¤‘</div>';
-        document.body.appendChild(overlay);
-
-        try {
-          var result = await window.API.processRentalContracts();
-          overlay.remove();
-
-          // ê²°ê³¼ ëª¨ë‹¬ í‘œì‹œ
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
-
-          var statusIcon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var statusMsg  = !result.success
-            ? '<div style="color:var(--status-danger);font-size:13px;margin-top:8px">' + result.error + '</div>'
-            : result.processed === 0
-              ? '<div style="color:var(--text-secondary);font-size:13px;margin-top:8px">' + (result.message || 'ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.') + '</div>'
-              : '';
-
-          var detailRows = (result.results || []).map(function(r) {
-            var icon   = r.status === 'success' ? 'âœ…' : r.status === 'error' ? 'âŒ' : 'â­ï¸';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.plate + ' Â· ' + (r.type||'') + ' [' + r.vehicleId + ']</span>'
-              : '<span style="color:var(--status-danger)">' + (r.reason||'') + '</span>';
-            return '<div style="padding:8px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-              icon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
-          }).join('');
-
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:520px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:32px;text-align:center;margin-bottom:12px">' + statusIcon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:8px">AI ë Œíƒˆì¹´ ë“±ë¡ ê²°ê³¼</h2>' +
-            statusMsg +
-            (result.processed > 0 ?
-              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0;text-align:center">' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:white">' + (result.processed||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì´ ì²˜ë¦¬</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-success)">' + (result.saved||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì €ìž¥ ì™„ë£Œ</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-danger)">' + (result.errors||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì˜¤ë¥˜</div></div>' +
-              '</div>' +
-              '<div style="max-height:260px;overflow-y:auto;margin-bottom:16px">' + detailRows + '</div>'
-            : '') +
-            '<button id="vehicle-modal-close" style="width:100%;background:var(--brand-primary);color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ëª©ë¡ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-
-          document.body.appendChild(modal);
-          var vCloseBtn = modal.querySelector('#vehicle-modal-close');
-          if (vCloseBtn) vCloseBtn.addEventListener('click', function() {
-            modal.remove();
-            window.loadView('vehicle');
-          });
-          modal.addEventListener('click', function(e) {
-            if (e.target === modal) { modal.remove(); window.loadView('vehicle'); }
-          });
-
-        } catch(err) {
-          overlay.remove();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤:\n' + err.message);
-        }
-      };
-
-
-      // â”€â”€ EQUIPMENT RENTAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       async function renderRental() {
         pageContainer.innerHTML = skeleton();
         try {
