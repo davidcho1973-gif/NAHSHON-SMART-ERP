@@ -5,6 +5,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileExpenseController;
 use App\Http\Controllers\ExpensePreApprovalController;
+use App\Http\Controllers\PayrollController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
@@ -40,6 +41,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/vehicle-api/assign', [App\Http\Controllers\VehicleApiController::class, 'assignVehicle'])->name('vehicle.assign');
     Route::post('/vehicle-api/return', [App\Http\Controllers\VehicleApiController::class, 'returnVehicle'])->name('vehicle.return');
     Route::get('/vehicle-api/{vehicle}/history', [App\Http\Controllers\VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
+
+    // Payroll documents (printable payslip + WH-347 certified payroll)
+    Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
+    Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
     // Universal Scanner and Compatibility Adapter Route
     Route::post('/smart-company-api/{method}', \App\Http\Controllers\SmartCompanyApiController::class)
