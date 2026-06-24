@@ -4492,7 +4492,7 @@
       window.openPayrollDocs = function(btn) {
         var label = btn ? btn.innerHTML : '';
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner"></i> 정산 중...'; }
-        gsRun('api_runPayroll', [window._payrollPeriodStart || null], null).then(function(res) {
+        gsRun('api_runPayroll', [_siteId(), window._payrollPeriodStart || null], null).then(function(res) {
           if (btn) { btn.disabled = false; btn.innerHTML = label; }
           if (res && res.success && res.certifiedUrl) {
             window.open(res.certifiedUrl, '_blank');

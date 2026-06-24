@@ -98,9 +98,10 @@ class PayrollDashboardTest extends TestCase
 
     public function test_dashboard_returns_real_aggregated_payroll(): void
     {
+        // Frontend calls with args = [siteId, periodStart].
         $res = $this->actingAs($this->admin)
             ->postJson('/smart-company-api/api_getPayrollDashboard', [
-                'args' => ['2026-06-15'],
+                'args' => ['ALL', '2026-06-15'],
                 'siteId' => 'ALL',
             ]);
 
@@ -158,10 +159,24 @@ class PayrollDashboardTest extends TestCase
         $this->assertLessThan($payslip->gross_pay, $payslip->net_pay);
     }
 
+    public function test_dashboard_tolerates_site_id_in_period_slot(): void
+    {
+        // Regression: the SPA passes the site id ('ALL') as args[0]; it must never be
+        // parsed as a date. Even a garbage period value must fall back gracefully.
+        foreach ([['ALL'], ['ALL', 'ALL'], []] as $args) {
+            $res = $this->actingAs($this->admin)
+                ->postJson('/smart-company-api/api_getPayrollDashboard', ['args' => $args, 'siteId' => 'ALL']);
+
+            $res->assertStatus(200);
+            $res->assertJsonPath('success', true);
+            $res->assertJsonPath('period.totalDays', 14);
+        }
+    }
+
     public function test_run_payroll_api_then_render_certified_payroll(): void
     {
         $runRes = $this->actingAs($this->admin)
-            ->postJson('/smart-company-api/api_runPayroll', ['args' => ['2026-06-15'], 'siteId' => 'ALL']);
+            ->postJson('/smart-company-api/api_runPayroll', ['args' => ['ALL', '2026-06-15'], 'siteId' => 'ALL']);
 
         $runRes->assertStatus(200);
         $runRes->assertJsonPath('success', true);

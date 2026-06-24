@@ -37,8 +37,8 @@ class SmartCompanyData
 
             'api_getFinanceStats' => self::financeStats(),
             'api_getExpenses' => self::expenses(),
-            'api_getPayrollDashboard' => self::payrollDashboard($args[0] ?? null, $siteId),
-            'api_runPayroll' => self::runPayroll($args[0] ?? null, $siteId),
+            'api_getPayrollDashboard' => self::payrollDashboard($args[1] ?? null, $siteId),
+            'api_runPayroll' => self::runPayroll($args[1] ?? $args[0] ?? null, $siteId),
 
             'api_getEquipmentStats' => self::equipmentStats(),
             'api_getEquipmentList' => self::equipmentList(),
