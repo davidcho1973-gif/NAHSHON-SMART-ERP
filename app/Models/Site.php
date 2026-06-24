@@ -44,6 +44,11 @@ class Site extends Model
         return $this->hasMany(Team::class);
     }
 
+    public function contractors(): HasMany
+    {
+        return $this->hasMany(SiteContractor::class);
+    }
+
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);

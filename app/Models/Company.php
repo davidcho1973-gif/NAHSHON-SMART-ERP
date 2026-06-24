@@ -36,6 +36,11 @@ class Company extends Model
         return $this->hasMany(Employee::class);
     }
 
+    public function siteContractors(): HasMany
+    {
+        return $this->hasMany(SiteContractor::class);
+    }
+
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);

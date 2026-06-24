@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-24 | CODEX | Site organization management | Expanded `현장 관리 (Sites)` so a site can manage contract companies and field teams directly from the create/edit screen, including company role, contract details, trade type, foreman, responsible manager, supervisor, and planned headcount. | Staging deploy (`staging` branch) | PHP syntax checks passed for changed PHP files; `npm run build` passed; `git diff --check` passed. PHPUnit could not run in the available local PHP runtimes because WinGet PHP 8.5 lacks `mbstring` and Laragon PHP is 8.3.30 below the project requirement. |
 | 2026-06-24 | CODEX | Admin navigation cleanup | Removed the remaining Filament Housing admin resource so `숙소 관리 (Housing)` no longer appears in the SMART COMPANY admin menu. | Local change on `staging` | `rg` confirmed no remaining `HousingResource`/`ManageHousing` Filament resource references. |
 | 2026-06-24 | CODEX | Project + site QR staging deploy | Deployed the PROJECT management build, admin navigation cleanup, and field-office shared QR intake/print flyer changes to the `staging` branch for David validation. | Staging deploy (`staging` branch) | `npm run build` passed; `git diff --check` passed; PHP syntax checks passed for changed PHP/Blade files. PHPUnit could not run in the available local PHP runtimes because WinGet PHP 8.5 lacks `mbstring` and Laragon PHP is 8.3.30 below the project requirement. |
 | 2026-06-24 | CODEX | Applicant site QR print content | Refined the field-office shared QR print page to show only site name/address, simple usage steps, and a privacy collection notice, with print styling and a print button. | Local branch `codex/project-management` | PHP syntax checks passed for the QR view, Applicants page, and `ApplicantIntakeTest`; PHPUnit could not run in the available local PHP runtimes because WinGet PHP 8.5 lacks `mbstring` and Laragon PHP is 8.3.30 below the project requirement. |
@@ -162,6 +163,7 @@ Use this section for manual owner checks, business decisions, and final approval
 - 2026-06-24: Refined the shared site QR flyer content to site name/address, usage steps, and privacy collection notice only; removed the need for project/client, materials, or caution-style content.
 - 2026-06-24: Deployed the PROJECT management, admin navigation cleanup, and site QR intake/flyer changes to the `staging` branch for David validation.
 - 2026-06-24: Removed the remaining Filament Housing admin resource so `숙소 관리 (Housing)` no longer appears in the SMART COMPANY admin menu.
+- 2026-06-24: Expanded `현장 관리 (Sites)` with inline contract-company and field-team management for company role, contract details, trade type, foreman, responsible manager, supervisor, and planned headcount.
 
 ### Current Boundaries
 

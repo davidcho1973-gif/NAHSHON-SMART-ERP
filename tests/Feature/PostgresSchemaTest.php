@@ -17,6 +17,7 @@ class PostgresSchemaTest extends TestCase
         foreach ([
             'companies',
             'sites',
+            'site_contractors',
             'teams',
             'employees',
             'projects',
@@ -63,6 +64,35 @@ class PostgresSchemaTest extends TestCase
             'privacy_consent_at',
         ] as $column) {
             $this->assertTrue(Schema::hasColumn('member_registrations', $column), "Missing member_registrations column: {$column}");
+        }
+
+        foreach ([
+            'site_id',
+            'company_id',
+            'company_name',
+            'contract_role',
+            'contract_number',
+            'scope_of_work',
+            'primary_contact_name',
+            'primary_contact_phone',
+            'starts_on',
+            'ends_on',
+            'status',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('site_contractors', $column), "Missing site_contractors column: {$column}");
+        }
+
+        foreach ([
+            'company_id',
+            'contract_company_name',
+            'trade_type',
+            'responsible_manager_name',
+            'supervisor_name',
+            'supervisor_phone',
+            'planned_headcount',
+            'notes',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('teams', $column), "Missing teams column: {$column}");
         }
 
         foreach ([
