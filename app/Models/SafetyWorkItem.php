@@ -45,6 +45,21 @@ class SafetyWorkItem extends Model
     }
 
     /**
+     * TBM(툴박스미팅) 게이트 판정 — 공정 진행을 허용해도 되는지.
+     * 작업반장이 TBM 을 '완료'로 표기했거나, 서명자 전원이 서명했으면 통과.
+     */
+    public function isTbmCleared(): bool
+    {
+        if ($this->tbm_status === '완료') {
+            return true;
+        }
+
+        $signatures = $this->relationLoaded('signatures') ? $this->signatures : $this->signatures()->get();
+
+        return $signatures->isNotEmpty() && $signatures->every(fn (SafetyWorkSignature $s): bool => (bool) $s->signed);
+    }
+
+    /**
      * Shape consumed by the renderSafety() SPA (mirrors the old localStorage item).
      *
      * @return array<string, mixed>

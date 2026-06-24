@@ -73,9 +73,11 @@ class SmartCompanyData
             'api_getProjectStatus' => self::projects(),
             'api_getActionItems' => self::actionItems(),
             'api_getConstructionCommandCenter' => self::commandCenter($siteId),
-            'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02')),
-            'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02')),
-            'api_updateWbsRow', 'api_markWbsStatus', 'api_processWbsManual' => ['success' => true],
+            'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02'), $siteId),
+            'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02'), $siteId),
+            'api_markWbsStatus' => app(\App\Services\Wbs\WbsService::class)->markStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
+            'api_updateWbsRow' => app(\App\Services\Wbs\WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
             'api_getVehicleList' => self::vehicleList(),
             'api_getVehicleStats' => self::vehicleStats(),
@@ -1024,8 +1026,40 @@ class SmartCompanyData
     public static function officeSupplies(): array { return [['id' => 'OF-001', 'category' => '소모품', 'name' => 'Copy Paper A4', 'qty' => 3, 'minQty' => 5, 'location' => 'Office cabinet', 'lastRestock' => '2026-06-01', 'unitPrice' => 45, 'reorder' => true], ['id' => 'OF-002', 'category' => 'Safety', 'name' => 'Safety Vest', 'qty' => 8, 'minQty' => 10, 'location' => 'Safety shelf', 'lastRestock' => '2026-05-24', 'unitPrice' => 35, 'reorder' => true]]; }
     public static function vendors(): array { $fromDb = self::smartRecords('vendors'); return $fromDb ?: [['id' => 'VEN-001', 'name' => 'Graybar', 'category' => 'Electrical Supply', 'manager' => 'Amy', 'phone' => '602-555-0111', 'email' => 'quotes@graybar.example', 'contractStatus' => '진행중', 'site' => 'ALL'], ['id' => 'VEN-002', 'name' => 'United Rentals', 'category' => 'Equipment Rental', 'manager' => 'Mark', 'phone' => '602-555-0122', 'email' => 'az@united.example', 'contractStatus' => '진행중', 'site' => 'ALL']]; }
 
-    public static function wbsTree(string $projectId): array { return ['success' => true, 'projectId' => $projectId, 'stages' => [['name' => 'Rough-in', 'progress' => 72, 'items' => [['id' => 'WBS-001', 'name' => 'Conduit install Area A', 'status' => '완료', 'progress' => 100], ['id' => 'WBS-002', 'name' => 'Cable tray Area B', 'status' => '처리중', 'progress' => 55]]], ['name' => 'Trim-out', 'progress' => 18, 'items' => [['id' => 'WBS-003', 'name' => 'Panel labeling', 'status' => '미처리', 'progress' => 0]]]]]; }
-    public static function projectProgressSummary(string $projectId): array { return ['success' => true, 'projectId' => $projectId, 'progress' => collect(self::projects())->firstWhere('code', $projectId)['progress'] ?? 0, 'risk' => 'medium']; }
+    public static function wbsTree(string $projectId, string $siteId = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('wbs_items')) {
+                return ['success' => true, 'projectId' => $projectId, 'stages' => []];
+            }
+
+            return app(\App\Services\Wbs\WbsService::class)->tree($projectId, $siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'projectId' => $projectId, 'stages' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function projectProgressSummary(string $projectId, string $siteId = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('wbs_items')) {
+                return ['success' => true, 'projectId' => $projectId, 'progress' => 0, 'totalWbsCount' => 0, 'completedCount' => 0, 'inProgressCount' => 0, 'stages' => []];
+            }
+
+            return app(\App\Services\Wbs\WbsService::class)->progressSummary($projectId, $siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'projectId' => $projectId, 'progress' => 0, 'stages' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function processWbsManual(string $projectId, string $siteId = 'ALL'): array
+    {
+        try {
+            return app(\App\Services\Wbs\GeminiWbsAnalyzer::class)->processManual($projectId, $siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
+        }
+    }
 
     public static function realSites(): array
     {
