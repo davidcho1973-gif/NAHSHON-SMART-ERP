@@ -165,6 +165,53 @@ class WbsTest extends TestCase
         $this->assertSame(100, (int) WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->value('progress'));
     }
 
+    public function test_tbm_gate_blocks_progress_when_tbm_not_cleared(): void
+    {
+        // Linked safety card with TBM not done → cannot advance the WBS subtask.
+        $card = SafetyWorkItem::create([
+            'work_code' => 'WRK-GATE-1', 'title' => '앵커 작업', 'progress' => 0,
+            'plan_status' => '검토중', 'tbm_status' => '대기', 'close_status' => '시작전', 'progress_status' => '미분석',
+        ]);
+        $card->signatures()->create(['name' => '김반장', 'role' => '반장', 'signed' => false, 'sort_order' => 0]);
+
+        $this->seedTree([
+            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '검수완료', 'progress' => 0, 'safety' => 'WRK-GATE-1'],
+        ]);
+
+        $res = app(WbsService::class)->markStatus('TST-01-W-1.1.3', '완료');
+
+        $this->assertFalse($res['success']);
+        $this->assertTrue($res['gated']);
+        $this->assertSame('검수완료', WbsItem::where('wbs_code', 'TST-01-W-1.1.3')->value('status'));
+    }
+
+    public function test_tbm_gate_allows_progress_when_tbm_cleared(): void
+    {
+        SafetyWorkItem::create([
+            'work_code' => 'WRK-GATE-2', 'title' => '앵커 작업', 'progress' => 0,
+            'plan_status' => '승인완료', 'tbm_status' => '완료', 'close_status' => '시작전', 'progress_status' => '미분석',
+        ]);
+
+        $this->seedTree([
+            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '검수완료', 'progress' => 0, 'safety' => 'WRK-GATE-2'],
+        ]);
+
+        $res = app(WbsService::class)->markStatus('TST-01-W-1.1.3', '완료');
+
+        $this->assertTrue($res['success']);
+        $this->assertSame('완료', WbsItem::where('wbs_code', 'TST-01-W-1.1.3')->value('status'));
+    }
+
+    public function test_tbm_gate_ignores_unlinked_subtask(): void
+    {
+        // No safety link → no gate, advancing is always allowed.
+        $this->seedTree();
+
+        $res = app(WbsService::class)->markStatus('TST-01-W-1.1.2', '완료');
+
+        $this->assertTrue($res['success']);
+    }
+
     public function test_api_get_wbs_tree_endpoint(): void
     {
         $this->seedTree();

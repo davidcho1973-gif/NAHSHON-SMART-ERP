@@ -95,6 +95,9 @@ class WbsItem extends Model
      */
     public function toSubtaskArray(): array
     {
+        $linked = $this->relationLoaded('safetyWorkItem') ? $this->safetyWorkItem : null;
+        $tbmGated = $linked !== null && ! $linked->isTbmCleared();
+
         return [
             'wbs_id' => $this->wbs_code,
             'sub_no' => $this->node_no ?? '',
@@ -106,6 +109,8 @@ class WbsItem extends Model
             'ehs' => $this->ehs ?? '',
             'progress' => $this->effectiveProgress(),
             'safetyWorkCode' => $this->safety_work_code,
+            'tbmGated' => $tbmGated,
+            'safetyTbmStatus' => $linked?->tbm_status,
         ];
     }
 }

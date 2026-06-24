@@ -84,9 +84,13 @@ class WbsService
      */
     public function markStatus(string $wbsCode, string $status): array
     {
-        $item = WbsItem::query()->where('wbs_code', $wbsCode)->first();
+        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItem')->first();
         if (! $item) {
             return ['success' => false, 'error' => "WBS 항목을 찾을 수 없습니다: {$wbsCode}"];
+        }
+
+        if ($gate = $this->tbmGate($item, $status)) {
+            return ['success' => false, 'error' => $gate, 'gated' => true];
         }
 
         $item->status = $status;
@@ -104,9 +108,14 @@ class WbsService
      */
     public function updateRow(string $wbsCode, array $updates): array
     {
-        $item = WbsItem::query()->where('wbs_code', $wbsCode)->first();
+        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItem')->first();
         if (! $item) {
             return ['success' => false, 'error' => "WBS 항목을 찾을 수 없습니다: {$wbsCode}"];
+        }
+
+        $targetStatus = (string) ($updates['상태'] ?? $updates['status'] ?? '');
+        if ($targetStatus !== '' && ($gate = $this->tbmGate($item, $targetStatus))) {
+            return ['success' => false, 'error' => $gate, 'gated' => true];
         }
 
         $map = [
@@ -233,6 +242,29 @@ class WbsService
         });
 
         return $counts;
+    }
+
+    /**
+     * TBM 게이트 — "안전 없이 공정 없다". 안전카드에 연결된 SubTask 를 진행중/완료로 바꾸려면
+     * 연결된 작업의 TBM/서명이 완료되어야 한다. 막혀야 하면 사유 문자열, 통과면 null.
+     */
+    private function tbmGate(WbsItem $item, string $targetStatus): ?string
+    {
+        if ($item->level !== WbsItem::LEVEL_SUBTASK || blank($item->safety_work_code)) {
+            return null;
+        }
+
+        if (! in_array($targetStatus, [WbsItem::STATUS_IN_PROGRESS, WbsItem::STATUS_DONE], true)) {
+            return null;
+        }
+
+        $card = $item->relationLoaded('safetyWorkItem') ? $item->safetyWorkItem : $item->safetyWorkItem()->first();
+
+        if (! $card || $card->isTbmCleared()) {
+            return null;
+        }
+
+        return "TBM 미완료 — 연결된 안전 작업({$item->safety_work_code})의 TBM/서명이 완료되어야 공정을 진행할 수 있습니다.";
     }
 
     /**
