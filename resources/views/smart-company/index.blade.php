@@ -4490,93 +4490,285 @@
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
         
         modal.innerHTML =
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:600px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+          '<style>' +
+            '#ai-vehicle-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
+            '#ai-vehicle-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
+            '#ai-vehicle-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+            '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
+            '@media (max-width: 640px) { #vehicle-camera-area { grid-template-columns: 1fr !important; } }' +
+          '</style>' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:720px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;">' +
+            // Header
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
-              '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;"></i> AI 렌트카 자동 등록</h2>' +
-              '<button onclick="this.closest(\'#ai-vehicle-reg-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+              '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:24px;"></i> AI 렌트카 자동 등록</h2>' +
+              '<button type="button" id="vehicle-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
             '</div>' +
-            '<form id="ai-vehicle-upload-form" style="display:flex;flex-direction:column;gap:16px;">' +
-              '<div>' +
-                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">렌트 계약서 파일 (PDF 또는 이미지) <span style="color:var(--status-danger)">*</span></label>' +
-                '<input type="file" name="contract" accept="application/pdf,image/*" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-              '</div>' +
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-                '<div>' +
-                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 전면 사진</label>' +
-                  '<input type="file" name="photo_front" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-                '</div>' +
-                '<div>' +
-                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 후면 사진</label>' +
-                  '<input type="file" name="photo_rear" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-                '</div>' +
-              '</div>' +
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-                '<div>' +
-                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 좌측 사진</label>' +
-                  '<input type="file" name="photo_left" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-                '</div>' +
-                '<div>' +
-                  '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 우측 사진</label>' +
-                  '<input type="file" name="photo_right" accept="image/*" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-                '</div>' +
-              '</div>' +
-              '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:12px;">' +
-                '<button type="button" onclick="this.closest(\'#ai-vehicle-reg-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">취소</button>' +
-                '<button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;padding:10px 24px;font-weight:700;">AI 분석 실행</button>' +
-              '</div>' +
-            '</form>' +
-            '<div id="ai-analysis-loading" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:16px;">' +
-              '<div style="width:50px;height:50px;border:4px solid rgba(124,58,237,0.2);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-              '<div style="color:var(--text-primary);font-size:16px;font-weight:700;">Gemini AI가 계약서 및 사진을 분석하는 중...</div>' +
-              '<div style="color:var(--text-secondary);font-size:13px;text-align:center;max-width:400px;">텍스트를 추출하고 차량 정보를 자동 매핑하고 있습니다. 잠시만 기다려주세요 (최대 30초).</div>' +
+            
+            // Description
+            '<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height:1.5;">' +
+              '렌트 계약서와 차량 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 사진을 자동으로 판독하여 장부에 즉시 등록합니다.' +
             '</div>' +
-            '<div id="ai-analysis-result-container" style="display:none;flex-direction:column;gap:16px;margin-top:12px;">' +
-              '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0;padding-top:12px;border-top:1px solid var(--border-subtle);">AI 분석 결과 검증</h3>' +
-              '<div style="font-size:12px;color:var(--text-secondary);background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.2);border-radius:6px;padding:10px;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
-              '<form id="ai-vehicle-save-form" style="display:flex;flex-direction:column;gap:14px;">' +
+
+            // Hidden file inputs
+            '<input type="file" id="vehicle-file-contract" style="display:none" accept="application/pdf,image/*">' +
+            '<input type="file" id="vehicle-file-photo_front" style="display:none" accept="image/*">' +
+            '<input type="file" id="vehicle-file-photo_rear" style="display:none" accept="image/*">' +
+            '<input type="file" id="vehicle-file-photo_left" style="display:none" accept="image/*">' +
+            '<input type="file" id="vehicle-file-photo_right" style="display:none" accept="image/*">' +
+
+            // Upload / Camera Toggle
+            '<div style="display: flex; gap: 8px; margin-bottom: 20px;">' +
+              '<button type="button" id="vehicle-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 6px; cursor:pointer;">' +
+                '<i class="ph ph-upload-simple"></i> 파일 업로드 (Upload)' +
+              '</button>' +
+              '<button type="button" id="vehicle-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 6px; cursor:pointer;">' +
+                '<i class="ph ph-camera"></i> 실시간 카메라 (Webcam)' +
+              '</button>' +
+            '</div>' +
+
+            // Upload Mode Area (Grid of Cards)
+            '<div id="vehicle-upload-area" style="display:flex; flex-direction:column; gap:16px; margin-bottom: 20px;">' +
+              // Contract (Full width card)
+              '<div id="vehicle-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 28px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 100px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                '<div class="empty-state">' +
+                  '<i class="ph ph-file-text" style="font-size: 32px; color: var(--text-tertiary); margin-bottom: 8px;"></i>' +
+                  '<div style="font-weight: 500; font-size:14px; color:var(--text-primary);">렌트 계약서 파일 (PDF 또는 이미지) <span style="color:var(--status-danger)">*</span></div>' +
+                  '<div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">클릭하여 파일 선택</div>' +
+                '</div>' +
+                '<div class="preview-state" style="display: none; width:100%; text-align:center;">' +
+                  '<div class="preview-icon-wrapper" style="font-size: 32px; color: var(--brand-primary); margin-bottom: 6px;"><i class="ph ph-file-pdf"></i></div>' +
+                  '<img class="preview-img" style="max-height: 80px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 6px;">' +
+                  '<div class="file-name" style="font-size: 13px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 40px;"></div>' +
+                  '<button type="button" class="trash-btn" style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;"><i class="ph ph-trash"></i></button>' +
+                '</div>' +
+              '</div>' +
+              
+              // Directional photos (4 columns)
+              '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">' +
+                // Front
+                '<div id="vehicle-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state">' +
+                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
+                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
+                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                // Rear
+                '<div id="vehicle-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state">' +
+                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
+                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
+                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                // Left
+                '<div id="vehicle-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state">' +
+                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
+                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
+                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                // Right
+                '<div id="vehicle-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px 8px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); aspect-ratio: 1.1; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state">' +
+                    '<i class="ph ph-camera" style="font-size: 24px; color: var(--text-tertiary); margin-bottom: 6px;"></i>' +
+                    '<div style="font-weight: 500; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
+                    '<div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;">클릭하여 선택</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; width:22px; height:22px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 12px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+
+            // Camera Mode Area (Side-by-side)
+            '<div id="vehicle-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; margin-bottom: 20px;">' +
+              // Left: Video feed
+              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border-strong);">' +
+                '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
+                  '<video id="vehicle-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
+                  '<div id="vehicle-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 12px; padding: 6px 8px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+                    '촬영 대상: 계약서' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
+                  '<button type="button" id="vehicle-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; font-weight: 600; border-radius: 6px; cursor:pointer;">' +
+                    '<i class="ph ph-camera"></i> 사진 촬영 (Capture)' +
+                  '</button>' +
+                '</div>' +
+                '<div id="vehicle-camera-select-container" style="margin-top: 10px; display: none; align-items:center; gap:6px;">' +
+                  '<span style="font-size:11px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라 선택:</span>' +
+                  '<select id="vehicle-camera-device-select" style="flex:1; padding: 6px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 11px; outline: none;"></select>' +
+                '</div>' +
+              '</div>' +
+              
+              // Right: Slots selector
+              '<div style="display: flex; flex-direction: column; gap: 10px; background: var(--bg-body); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border-strong);">' +
+                '<div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:4px; padding-bottom:6px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+                
+                // Contract slot
+                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-file-text" style="color: var(--text-tertiary);"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">계약서 <span style="color:var(--status-danger)">*</span></div>' +
+                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Front slot
+                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Rear slot
+                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Left slot
+                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Right slot
+                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 12px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 32px; height: 32px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary);"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 10px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 10px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+
+            // Submit Buttons / Controls for Initial Upload Mode
+            '<div id="vehicle-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
+              '<button type="button" id="vehicle-upload-cancel-btn" class="btn-secondary" style="padding:10px 20px; cursor:pointer;">취소</button>' +
+              '<button type="button" id="vehicle-upload-submit-btn" class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb); border:none; padding:10px 24px; font-weight:700; cursor:pointer;">AI 분석 실행</button>' +
+            '</div>' +
+
+            // Loading / Analysis Spinner
+            '<div id="ai-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:40px 0; gap:16px;">' +
+              '<div style="width:50px; height:50px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary); font-size:16px; font-weight:700;">Gemini AI가 계약서 및 사진을 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary); font-size:13px; text-align:center; max-width:420px;">텍스트를 추출하고 차량 정보를 자동 매핑하고 있습니다. 잠시만 기다려주세요 (최대 30초).</div>' +
+            '</div>' +
+
+            // Verification and save form
+            '<div id="ai-analysis-result-container" style="display:none; flex-direction:column; gap:16px; margin-top:12px;">' +
+              '<h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+              '<div style="font-size:12px; color:var(--text-secondary); background:rgba(124,58,237,0.1); border:1px solid rgba(124,58,237,0.2); border-radius:6px; padding:10px;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-vehicle-save-form" style="display:flex; flex-direction:column; gap:14px;">' +
                 '<input type="hidden" name="contract_path">' +
                 '<input type="hidden" name="photo_front">' +
                 '<input type="hidden" name="photo_rear">' +
                 '<input type="hidden" name="photo_left">' +
                 '<input type="hidden" name="photo_right">' +
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
                   '<div>' +
-                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 번호판</label>' +
-                    '<input type="text" name="plate_number" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">차량 번호판</label>' +
+                    '<input type="text" name="plate_number" required style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
                   '</div>' +
                   '<div>' +
-                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">차량 모델명</label>' +
-                    '<input type="text" name="model" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-                  '</div>' +
-                '</div>' +
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-                  '<div>' +
-                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">렌트사 (Vendor)</label>' +
-                    '<input type="text" name="vendor" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
-                  '</div>' +
-                  '<div>' +
-                    '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">현재 마일리지 (Odometer)</label>' +
-                    '<input type="number" name="current_mileage" min="0" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);">' +
+                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">차량 모델명</label>' +
+                    '<input type="text" name="model" required style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
                   '</div>' +
                 '</div>' +
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
                   '<div>' +
-                    '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">렌트 시작일</label>' +
-                    '<input type="date" name="rent_start" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);font-size:11px;">' +
+                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">렌트사 (Vendor)</label>' +
+                    '<input type="text" name="vendor" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
                   '</div>' +
                   '<div>' +
-                    '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">렌트 종료일</label>' +
-                    '<input type="date" name="rent_end" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);font-size:11px;">' +
-                  '</div>' +
-                  '<div>' +
-                    '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">보험 만료일</label>' +
-                    '<input type="date" name="insurance_expiry" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:8px;color:var(--text-primary);font-size:11px;">' +
+                    '<label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">현재 마일리지 (Odometer)</label>' +
+                    '<input type="number" name="current_mileage" min="0" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); outline:none;">' +
                   '</div>' +
                 '</div>' +
-                '<div id="ai-uploaded-previews" style="display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;margin-top:8px;"></div>' +
-                '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:12px;">' +
-                  '<button type="button" onclick="document.getElementById(\'ai-vehicle-reg-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">취소</button>' +
-                  '<button type="submit" class="btn-primary" style="background:var(--status-success);border:none;padding:10px 24px;font-weight:700;">차량 등록 및 저장</button>' +
+                '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">' +
+                  '<div>' +
+                    '<label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">렌트 시작일</label>' +
+                    '<input type="date" name="rent_start" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); font-size:11px; outline:none;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">렌트 종료일</label>' +
+                    '<input type="date" name="rent_end" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); font-size:11px; outline:none;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">보험 만료일</label>' +
+                    '<input type="date" name="insurance_expiry" style="width:100%; background:var(--bg-base); border:1px solid var(--border-default); border-radius:8px; padding:8px; color:var(--text-primary); font-size:11px; outline:none;">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:8px;"></div>' +
+                '<div style="margin-top:12px; display:flex; justify-content:flex-end; gap:12px;">' +
+                  '<button type="button" id="vehicle-save-cancel-btn" class="btn-secondary" style="padding:10px 20px; cursor:pointer;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success); border:none; padding:10px 24px; font-weight:700; cursor:pointer;">차량 등록 및 저장</button>' +
                 '</div>' +
               '</form>' +
             '</div>' +
@@ -4584,17 +4776,347 @@
 
         document.body.appendChild(modal);
 
-        var uploadForm = modal.querySelector('#ai-vehicle-upload-form');
+        var vehicleFiles = {
+          contract: null,
+          photo_front: null,
+          photo_rear: null,
+          photo_left: null,
+          photo_right: null
+        };
+
+        var currentActiveSlot = 'contract';
+        var currentCameraMode = 'upload';
+        var localVideoStream = null;
+        var availableCameraDevices = [];
+
+        // Elements
+        var btnToggleUpload = modal.querySelector('#vehicle-btn-toggle-upload');
+        var btnToggleCamera = modal.querySelector('#vehicle-btn-toggle-camera');
+        var uploadArea = modal.querySelector('#vehicle-upload-area');
+        var cameraArea = modal.querySelector('#vehicle-camera-area');
+        var initialControls = modal.querySelector('#vehicle-initial-controls');
         var loadingDiv = modal.querySelector('#ai-analysis-loading');
         var resultDiv = modal.querySelector('#ai-analysis-result-container');
         var saveForm = modal.querySelector('#ai-vehicle-save-form');
+        var deviceSelect = modal.querySelector('#vehicle-camera-device-select');
+        var deviceSelectContainer = modal.querySelector('#vehicle-camera-select-container');
 
-        uploadForm.onsubmit = async function(e) {
+        // Helpers
+        function showUploadMode() {
+          currentCameraMode = 'upload';
+          btnToggleUpload.className = 'btn-primary';
+          btnToggleCamera.className = 'btn-secondary';
+          uploadArea.style.display = 'flex';
+          cameraArea.style.display = 'none';
+          stopCamera();
+        }
+
+        async function showCameraMode() {
+          currentCameraMode = 'camera';
+          btnToggleUpload.className = 'btn-secondary';
+          btnToggleCamera.className = 'btn-primary';
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'grid';
+          await startCamera();
+        }
+
+        btnToggleUpload.onclick = showUploadMode;
+        btnToggleCamera.onclick = showCameraMode;
+
+        var cards = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            card.onclick = function(e) {
+              if (e.target.closest('.trash-btn')) return;
+              modal.querySelector('#vehicle-file-' + slot).click();
+            };
+          }
+
+          var fileInput = modal.querySelector('#vehicle-file-' + slot);
+          if (fileInput) {
+            fileInput.onchange = function(e) {
+              var file = e.target.files[0];
+              if (file) {
+                setFileSlot(slot, file);
+              }
+            };
+          }
+        });
+
+        // Set file into slot and update UI
+        function setFileSlot(slot, file) {
+          vehicleFiles[slot] = file;
+          var url = URL.createObjectURL(file);
+
+          // Update upload cards
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            card.dataset.hasFile = 'true';
+            card.style.borderColor = 'var(--border-default)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'none';
+            previewState.style.display = 'block';
+
+            if (slot === 'contract') {
+              var isImg = file.type.startsWith('image/');
+              var previewImg = previewState.querySelector('.preview-img');
+              var iconWrapper = previewState.querySelector('.preview-icon-wrapper');
+              if (isImg) {
+                previewImg.src = url;
+                previewImg.style.display = 'block';
+                iconWrapper.style.display = 'none';
+              } else {
+                previewImg.style.display = 'none';
+                iconWrapper.style.display = 'block';
+              }
+              previewState.querySelector('.file-name').innerText = file.name;
+            } else {
+              var img = previewState.querySelector('.preview-img');
+              img.src = url;
+            }
+          }
+
+          // Update webcam list rows
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            slotRow.querySelector('.slot-status').innerText = '완료';
+            slotRow.querySelector('.slot-status').style.color = 'var(--status-success)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'inline-block';
+            
+            var thumb = slotRow.querySelector('.slot-thumbnail');
+            var isImg = file.type.startsWith('image/');
+            if (isImg || slot !== 'contract') {
+              thumb.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+            } else {
+              thumb.innerHTML = '<i class="ph ph-file-pdf" style="color:var(--brand-primary); font-size:18px;"></i>';
+            }
+          }
+        }
+
+        // Remove file from slot and update UI
+        function clearFileSlot(slot) {
+          vehicleFiles[slot] = null;
+          var fileInput = modal.querySelector('#vehicle-file-' + slot);
+          if (fileInput) fileInput.value = '';
+
+          // Update upload cards
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            delete card.dataset.hasFile;
+            card.style.borderColor = 'var(--border-strong)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'flex';
+            previewState.style.display = 'none';
+          }
+
+          // Update webcam list rows
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var iconName = (slot === 'contract') ? 'ph-file-text' : 'ph-camera';
+            slotRow.querySelector('.slot-thumbnail').innerHTML = '<i class="ph ' + iconName + '" style="color:var(--text-tertiary);"></i>';
+            slotRow.querySelector('.slot-status').innerText = (slot === 'contract') ? '선택된 파일 없음' : '선택된 사진 없음';
+            slotRow.querySelector('.slot-status').style.color = 'var(--text-tertiary)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'none';
+          }
+        }
+
+        // Trash button click listeners
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            var trashBtn = card.querySelector('.trash-btn');
+            if (trashBtn) {
+              trashBtn.onclick = function(e) {
+                e.stopPropagation();
+                clearFileSlot(slot);
+              };
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var delBtn = slotRow.querySelector('.slot-delete-btn');
+            delBtn.onclick = function(e) {
+              e.stopPropagation();
+              clearFileSlot(slot);
+            };
+          }
+        });
+
+        // Webcam slot row clicks (setting active target)
+        var slotRows = modal.querySelectorAll('.webcam-slot-card');
+        slotRows.forEach(function(row) {
+          row.onclick = function() {
+            var slot = row.dataset.slot;
+            setActiveTargetSlot(slot);
+          };
+        });
+
+        function setActiveTargetSlot(slot) {
+          currentActiveSlot = slot;
+          
+          slotRows.forEach(function(row) {
+            if (row.dataset.slot === slot) {
+              row.classList.add('active-target');
+              row.style.background = 'rgba(124,58,237,0.1)';
+              row.style.borderColor = 'var(--brand-primary)';
+              row.querySelector('.target-badge').style.display = 'inline-block';
+            } else {
+              row.classList.remove('active-target');
+              row.style.background = 'var(--bg-base)';
+              row.style.borderColor = 'var(--border-strong)';
+              row.querySelector('.target-badge').style.display = 'none';
+            }
+          });
+
+          var labelMap = {
+            contract: '렌트 계약서',
+            photo_front: '차량 전면 사진',
+            photo_rear: '차량 후면 사진',
+            photo_left: '차량 좌측 사진',
+            photo_right: '차량 우측 사진'
+          };
+          modal.querySelector('#vehicle-camera-overlay-label').innerText = '촬영 대상: ' + (labelMap[slot] || slot);
+        }
+
+        // Camera functions
+        async function startCamera(preferredDeviceId) {
+          stopCamera();
+          var video = modal.querySelector('#vehicle-video-stream');
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            var constraints = {
+              video: { facingMode: 'environment' }
+            };
+            if (preferredDeviceId) {
+              constraints.video = { deviceId: { exact: preferredDeviceId } };
+            }
+            try {
+              var stream = await navigator.mediaDevices.getUserMedia(constraints);
+              localVideoStream = stream;
+              video.srcObject = stream;
+              
+              if (availableCameraDevices.length === 0) {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameraDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                if (availableCameraDevices.length > 1) {
+                  deviceSelectContainer.style.display = 'flex';
+                  deviceSelect.innerHTML = '';
+                  availableCameraDevices.forEach(function(d, idx) {
+                    var opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || ('Camera ' + (idx + 1));
+                    if (preferredDeviceId && d.deviceId === preferredDeviceId) {
+                      opt.selected = true;
+                    }
+                    deviceSelect.appendChild(opt);
+                  });
+                  deviceSelect.onchange = function() {
+                    startCamera(deviceSelect.value);
+                  };
+                }
+              }
+            } catch (err) {
+              console.error('Camera stream error:', err);
+              alert('카메라를 활성화할 수 없습니다: ' + err.message);
+              showUploadMode();
+            }
+          } else {
+            alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+            showUploadMode();
+          }
+        }
+
+        function stopCamera() {
+          var video = modal.querySelector('#vehicle-video-stream');
+          if (video && video.srcObject) {
+            var stream = video.srcObject;
+            var tracks = stream.getTracks();
+            tracks.forEach(function(track) { track.stop(); });
+            video.srcObject = null;
+          }
+          localVideoStream = null;
+        }
+
+        // Snap and capture
+        modal.querySelector('#vehicle-btn-capture').onclick = function() {
+          var video = modal.querySelector('#vehicle-video-stream');
+          if (!video || !video.srcObject) return;
+
+          var canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          var dataUrl = canvas.toDataURL('image/jpeg');
+          var fileName = 'webcam_' + currentActiveSlot + '.jpg';
+          var file = dataURLtoFile(dataUrl, fileName);
+
+          setFileSlot(currentActiveSlot, file);
+
+          var sequence = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+          var nextSlotIdx = sequence.indexOf(currentActiveSlot) + 1;
+          
+          var foundNext = false;
+          for (var i = 0; i < sequence.length; i++) {
+            var s = sequence[(nextSlotIdx + i) % sequence.length];
+            if (!vehicleFiles[s]) {
+              setActiveTargetSlot(s);
+              foundNext = true;
+              break;
+            }
+          }
+          if (!foundNext) {
+            showToast('모든 슬롯이 촬영되었습니다.');
+          }
+        };
+
+        function dataURLtoFile(dataurl, filename) {
+          var arr = dataurl.split(','),
+              mime = arr[0].match(/:(.*?);/)[1],
+              bstr = atob(arr[1]),
+              n = bstr.length,
+              u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new File([u8arr], filename, { type: mime });
+        }
+
+        function cleanUpAndClose() {
+          stopCamera();
+          modal.remove();
+        }
+
+        modal.querySelector('#vehicle-modal-close-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#vehicle-upload-cancel-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#vehicle-save-cancel-btn').onclick = cleanUpAndClose;
+
+        // Submit form (Trigger AI Analysis)
+        modal.querySelector('#vehicle-upload-submit-btn').onclick = async function(e) {
           e.preventDefault();
-          uploadForm.style.display = 'none';
-          loadingDiv.style.display = 'flex';
 
-          var formData = new FormData(uploadForm);
+          if (!vehicleFiles.contract) {
+            alert('렌트 계약서는 필수 등록 항목입니다.');
+            return;
+          }
+
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'none';
+          btnToggleUpload.parentElement.style.display = 'none';
+          initialControls.style.display = 'none';
+          loadingDiv.style.display = 'flex';
+          stopCamera();
+
+          var formData = new FormData();
+          formData.append('contract', vehicleFiles.contract);
+          if (vehicleFiles.photo_front) formData.append('photo_front', vehicleFiles.photo_front);
+          if (vehicleFiles.photo_rear) formData.append('photo_rear', vehicleFiles.photo_rear);
+          if (vehicleFiles.photo_left) formData.append('photo_left', vehicleFiles.photo_left);
+          if (vehicleFiles.photo_right) formData.append('photo_right', vehicleFiles.photo_right);
 
           try {
             var tokenEl = document.querySelector('meta[name="csrf-token"]');
@@ -4653,7 +5175,14 @@
 
           } catch (err) {
             loadingDiv.style.display = 'none';
-            uploadForm.style.display = 'flex';
+            btnToggleUpload.parentElement.style.display = 'flex';
+            initialControls.style.display = 'flex';
+            if (currentCameraMode === 'camera') {
+              cameraArea.style.display = 'grid';
+              startCamera();
+            } else {
+              uploadArea.style.display = 'flex';
+            }
             alert('오류: ' + err.message);
           }
         };
