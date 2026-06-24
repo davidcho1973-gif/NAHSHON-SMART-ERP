@@ -103,9 +103,17 @@ class PayrollCalculator
     {
         $today = Carbon::today();
 
+        $start = null;
         if ($periodStart) {
-            $start = Carbon::parse($periodStart)->startOfDay();
-        } else {
+            // Tolerate non-date values (e.g. a stray 'ALL' site id) by falling back to the anchor.
+            try {
+                $start = Carbon::parse($periodStart)->startOfDay();
+            } catch (\Throwable) {
+                $start = null;
+            }
+        }
+
+        if (! $start instanceof Carbon) {
             $anchor = Carbon::parse(self::PERIOD_ANCHOR);
             $elapsed = $anchor->diffInDays($today);
             $offset = intdiv($elapsed, self::PERIOD_DAYS) * self::PERIOD_DAYS;
