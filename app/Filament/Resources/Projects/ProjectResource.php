@@ -27,6 +27,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class ProjectResource extends Resource
 {
@@ -89,22 +90,15 @@ class ProjectResource extends Resource
                             ->options(Project::CONSTRUCTION_TYPE_OPTIONS)
                             ->required()
                             ->searchable(),
-                        Select::make('end_client_company_id')
-                            ->label('End Client')
-                            ->options(fn (): array => self::companyOptions())
-                            ->required()
-                            ->searchable(),
+                        self::companySelect('end_client_company_id', 'End Client (최종 발주처)', required: true)
+                            ->helperText('공장/플랜트의 최종 고객사입니다. 예: LGES, SK hynix, Hyundai Motor'),
                         Select::make('project_stage')
                             ->label('프로젝트 단계')
                             ->options(Project::STAGE_OPTIONS)
                             ->default('estimate')
                             ->required(),
-                        Select::make('company_id')
-                            ->label('수행 회사 / 계약 법인')
-                            ->options(fn (): array => self::companyOptions())
-                            ->required()
-                            ->searchable()
-                            ->helperText('접근제어 company scope 기준 컬럼입니다.'),
+                        self::companySelect('company_id', '수행 회사 / 계약 법인', required: true)
+                            ->helperText('우리 회사 또는 이 프로젝트를 수행하는 계약 법인입니다. 접근제어 company scope 기준 컬럼입니다.'),
                         Select::make('site_id')
                             ->label('현장 (Site)')
                             ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
@@ -126,14 +120,8 @@ class ProjectResource extends Resource
                             ->label('벤더 차수 (Tier)')
                             ->options(Project::VENDOR_TIER_OPTIONS)
                             ->searchable(),
-                        Select::make('upper_contractor_company_id')
-                            ->label('상위 원청사')
-                            ->options(fn (): array => self::companyOptions())
-                            ->searchable(),
-                        Select::make('epc_company_id')
-                            ->label('EPC / 종합건설사')
-                            ->options(fn (): array => self::companyOptions())
-                            ->searchable(),
+                        self::companySelect('upper_contractor_company_id', '상위 원청사'),
+                        self::companySelect('epc_company_id', 'EPC / 종합건설사'),
                         TextInput::make('po_number')
                             ->label('계약/PO 번호')
                             ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state, upper: true))
@@ -492,6 +480,86 @@ class ProjectResource extends Resource
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    private static function companySelect(string $field, string $label, bool $required = false): Select
+    {
+        $select = Select::make($field)
+            ->label($label)
+            ->options(fn (): array => self::companyOptions())
+            ->searchable()
+            ->preload()
+            ->createOptionForm(self::companyCreateForm())
+            ->createOptionUsing(fn (array $data): int => self::createCompany($data))
+            ->createOptionAction(fn ($action) => $action
+                ->label('새 회사 추가')
+                ->modalHeading('새 회사 등록')
+                ->modalSubmitActionLabel('등록'));
+
+        if ($required) {
+            $select->required();
+        }
+
+        return $select;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private static function companyCreateForm(): array
+    {
+        return [
+            TextInput::make('name')
+                ->label('회사명')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('code')
+                ->label('회사 코드')
+                ->helperText('비워두면 회사명 기준으로 자동 생성됩니다.')
+                ->maxLength(40),
+            TextInput::make('legal_name')
+                ->label('법인명')
+                ->maxLength(255),
+            Select::make('status')
+                ->label('상태')
+                ->options([
+                    'active' => 'Active',
+                    'inactive' => 'Inactive',
+                ])
+                ->default('active')
+                ->required(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private static function createCompany(array $data): int
+    {
+        return Company::query()->create([
+            'code' => self::uniqueCompanyCode((string) ($data['code'] ?? ''), (string) $data['name']),
+            'name' => trim((string) $data['name']),
+            'legal_name' => self::nullableText($data['legal_name'] ?? null),
+            'status' => (string) ($data['status'] ?? 'active'),
+        ])->getKey();
+    }
+
+    private static function uniqueCompanyCode(string $code, string $name): string
+    {
+        $base = filled($code) ? $code : $name;
+        $base = Str::ascii(Str::upper($base));
+        $base = preg_replace('/[^A-Z0-9]+/', '-', $base) ?: 'COMPANY';
+        $base = trim($base, '-') ?: 'COMPANY';
+        $base = substr($base, 0, 32);
+        $candidate = $base;
+        $sequence = 2;
+
+        while (Company::query()->where('code', $candidate)->exists()) {
+            $candidate = substr($base, 0, 35) . '-' . $sequence;
+            $sequence++;
+        }
+
+        return $candidate;
     }
 
     private static function employeeOptions(): array

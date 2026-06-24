@@ -21,6 +21,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class SiteResource extends Resource
 {
@@ -71,10 +72,7 @@ class SiteResource extends Resource
                         ->label('현장 주소')
                         ->maxLength(255)
                         ->columnSpanFull(),
-                    Select::make('company_id')
-                        ->label('대표 관리 회사')
-                        ->options(fn (): array => self::companyOptions())
-                        ->searchable()
+                    self::companySelect('company_id', '대표 관리 회사')
                         ->helperText('접근제어와 현장 QR 기본 회사로 사용할 대표 회사를 선택합니다.'),
                     TextInput::make('timezone')
                         ->label('타임존')
@@ -102,10 +100,7 @@ class SiteResource extends Resource
                                 ->label('계약 회사명')
                                 ->required()
                                 ->maxLength(255),
-                            Select::make('company_id')
-                                ->label('기존 회사 연결')
-                                ->options(fn (): array => self::companyOptions())
-                                ->searchable(),
+                            self::companySelect('company_id', '기존 회사 연결'),
                             Select::make('contract_role')
                                 ->label('회사 역할')
                                 ->options(SiteContractor::ROLE_OPTIONS)
@@ -168,10 +163,7 @@ class SiteResource extends Resource
                                 ->label('소속 계약 회사명')
                                 ->placeholder('예: A Company')
                                 ->maxLength(255),
-                            Select::make('company_id')
-                                ->label('기존 회사 연결')
-                                ->options(fn (): array => self::companyOptions())
-                                ->searchable(),
+                            self::companySelect('company_id', '기존 회사 연결'),
                             Select::make('trade_type')
                                 ->label('공종')
                                 ->options([
@@ -287,5 +279,90 @@ class SiteResource extends Resource
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    private static function companySelect(string $field, string $label): Select
+    {
+        return Select::make($field)
+            ->label($label)
+            ->options(fn (): array => self::companyOptions())
+            ->searchable()
+            ->preload()
+            ->createOptionForm(self::companyCreateForm())
+            ->createOptionUsing(fn (array $data): int => self::createCompany($data))
+            ->createOptionAction(fn ($action) => $action
+                ->label('새 회사 추가')
+                ->modalHeading('새 회사 등록')
+                ->modalSubmitActionLabel('등록'));
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private static function companyCreateForm(): array
+    {
+        return [
+            TextInput::make('name')
+                ->label('회사명')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('code')
+                ->label('회사 코드')
+                ->helperText('비워두면 회사명 기준으로 자동 생성됩니다.')
+                ->maxLength(40),
+            TextInput::make('legal_name')
+                ->label('법인명')
+                ->maxLength(255),
+            Select::make('status')
+                ->label('상태')
+                ->options([
+                    'active' => 'Active',
+                    'inactive' => 'Inactive',
+                ])
+                ->default('active')
+                ->required(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private static function createCompany(array $data): int
+    {
+        return Company::query()->create([
+            'code' => self::uniqueCompanyCode((string) ($data['code'] ?? ''), (string) $data['name']),
+            'name' => trim((string) $data['name']),
+            'legal_name' => self::nullableText($data['legal_name'] ?? null),
+            'status' => (string) ($data['status'] ?? 'active'),
+        ])->getKey();
+    }
+
+    private static function uniqueCompanyCode(string $code, string $name): string
+    {
+        $base = filled($code) ? $code : $name;
+        $base = Str::ascii(Str::upper($base));
+        $base = preg_replace('/[^A-Z0-9]+/', '-', $base) ?: 'COMPANY';
+        $base = trim($base, '-') ?: 'COMPANY';
+        $base = substr($base, 0, 32);
+        $candidate = $base;
+        $sequence = 2;
+
+        while (Company::query()->where('code', $candidate)->exists()) {
+            $candidate = substr($base, 0, 35) . '-' . $sequence;
+            $sequence++;
+        }
+
+        return $candidate;
+    }
+
+    private static function nullableText(mixed $state): ?string
+    {
+        if (! filled($state)) {
+            return null;
+        }
+
+        $value = trim((string) $state);
+
+        return $value === '' ? null : $value;
     }
 }
