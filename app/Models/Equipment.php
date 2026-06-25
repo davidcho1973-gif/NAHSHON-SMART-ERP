@@ -24,6 +24,9 @@ class Equipment extends Model
         'equipment_type',
         'model',
         'vendor',
+        'acquisition_type',
+        'asset_value',
+        'inspection_due_on',
         'rent_start',
         'rent_end',
         'daily_rate',
@@ -45,6 +48,8 @@ class Equipment extends Model
         return [
             'rent_start' => 'date',
             'rent_end' => 'date',
+            'inspection_due_on' => 'date',
+            'asset_value' => 'decimal:2',
             'daily_rate' => 'integer',
             'delivery_fee' => 'integer',
             'payload' => 'array',

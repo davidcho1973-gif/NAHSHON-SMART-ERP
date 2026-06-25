@@ -50,7 +50,7 @@ class SmartCompanyData
             'api_getToolStats' => self::toolStats(),
             'api_getToolList' => self::toolList(),
             'api_getToolTransactions' => self::toolTransactions(),
-            'api_getInventoryDashboard' => self::inventoryDashboard(),
+            'api_getInventoryDashboard' => self::inventoryDashboard($siteId),
             'api_getInventoryAssetDetail' => self::inventoryAssetDetail((string) ($args[0] ?? '')),
             'api_processInventoryPhotos', 'setupInventorySheets', 'setupInventoryFolders' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
 
@@ -834,95 +834,30 @@ class SmartCompanyData
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
-    public static function inventoryDashboard(): array
+    public static function inventoryDashboard(string $siteId = 'ALL'): array
     {
         try {
-            if (class_exists(\App\Models\Equipment::class) && Schema::hasTable('equipments')) {
-                $user = auth()->user();
-                $equipments = \App\Models\Equipment::query()
-                    ->visibleTo($user)
-                    ->with('site')
-                    ->get();
-
-                $totals = [
-                    'assets' => $equipments->count(),
-                    'available' => $equipments->where('status', '대기중')->count(),
-                    'checkedOut' => $equipments->where('status', '사용중')->count(),
-                    'repair' => $equipments->where('status', '정비중')->count(),
-                    'count' => $equipments->count(),
-                    'inUse' => $equipments->where('status', '사용중')->count(),
-                    'inStorage' => $equipments->where('status', '대기중')->count(),
-                    'inspectionDue' => 0,
-                    'value' => 0,
-                ];
-
-                // Extract all distinct sites and categories
-                $sites = $equipments->map(fn($e) => $e->site ? $e->site->code : 'Global')->unique()->values()->all();
-                if (empty($sites)) {
-                    $sites = ['Global'];
-                }
-
-                $categories = [
-                    'Power Tool (전동공구)',
-                    'Hand Tool (수공구)',
-                    'Pipes & Fittings (배관 자재)',
-                    'Conduit & Electrical (전선관/전기 자재)',
-                    'Wires & Cables (전선/케이블)',
-                    'Valves & Controls (밸브/계측기)',
-                    'Fasteners & Anchors (체결류/피스)',
-                    'Generator & Power (발전기/동력원)',
-                    'Welding Machine (용접기)',
-                    'Heavy Equipment (중장비)',
-                    'Safety & PPE (안전 용품)',
-                    'Other Materials (기타 자재/공구)'
-                ];
-
-                // Compute cells matrix
-                $cells = [];
-                foreach ($categories as $cat) {
-                    $cells[$cat] = [];
-                    foreach ($sites as $site) {
-                        $cells[$cat][$site] = 0;
-                    }
-                }
-
-                foreach ($equipments as $eq) {
-                    $cat = $eq->equipment_type ?: 'Other Materials (기타 자재/공구)';
-                    if (!in_array($cat, $categories, true)) {
-                        $categories[] = $cat;
-                        $cells[$cat] = [];
-                        foreach ($sites as $site) {
-                            $cells[$cat][$site] = 0;
-                        }
-                    }
-                    $site = $eq->site ? $eq->site->code : 'Global';
-                    if (!isset($cells[$cat][$site])) {
-                        $cells[$cat][$site] = 0;
-                    }
-                    $cells[$cat][$site] += $eq->quantity ?: 1;
-                }
-
-                $recent = self::equipmentList();
-
-                return [
-                    'success' => true,
-                    'totals' => $totals,
-                    'matrix' => [
-                        'categories' => $categories,
-                        'sites' => $sites,
-                        'cells' => $cells,
-                    ],
-                    'recent' => array_slice($recent, 0, 12),
-                    'upcomingInspections' => [],
-                ];
+            if (! Schema::hasTable('equipments')) {
+                return ['success' => true, 'totals' => ['count' => 0, 'value' => 0, 'inUse' => 0, 'inStorage' => 0, 'repair' => 0, 'inspectionDue' => 0], 'matrix' => ['categories' => [], 'sites' => [], 'cells' => []], 'recent' => [], 'upcomingInspections' => []];
             }
+
+            return app(\App\Services\Inventory\InventoryService::class)->dashboard($siteId);
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
-
-        return ['success' => false];
     }
-    public static function inventoryAssetDetail(string $assetId): array { return ['success' => true, 'asset' => collect(self::equipmentList())->firstWhere('id', $assetId) ?? self::equipmentList()[0], 'photos' => [], 'transactions' => self::toolTransactions()]; }
+    public static function inventoryAssetDetail(string $assetId): array
+    {
+        try {
+            if (! Schema::hasTable('equipments')) {
+                return ['success' => false, 'error' => '자산 테이블이 없습니다.'];
+            }
+
+            return app(\App\Services\Inventory\InventoryService::class)->assetDetail($assetId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
 
     public static function vehicleStats(): array
     {
