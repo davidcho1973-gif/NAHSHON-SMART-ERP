@@ -7520,7 +7520,8 @@
                   '<span style="font-size:11px;color:var(--text-secondary);">' + period + '</span>' +
                 '</div>' +
                 '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);">' +
-                  '<span style="font-weight:600;color:\' + (h.status === \'대여중\' ? \'var(--status-success)\' : \'var(--text-tertiary)\') + \'\";">' + h.status + '</span>' +
+                  '<span style="font-weight:600;color:' + (h.status === '대여중' ? 'var(--status-success)' : 'var(--text-tertiary)') + ';">' + h.status + '</span>' +
+
                 '</div>' +
                 notesText +
               '</div>';
