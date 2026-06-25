@@ -7480,8 +7480,8 @@
 
           try {
             var tokenEl = document.querySelector('meta[name="csrf-token"]');
-            var response = await fetch('/equipment-api/' + r.realId, {
-              method: 'DELETE',
+            var response = await fetch('/equipment-api/' + r.realId + '/delete', {
+              method: 'POST',
               headers: {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''

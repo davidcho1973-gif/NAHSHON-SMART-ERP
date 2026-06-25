@@ -468,7 +468,7 @@ class EquipmentTest extends TestCase
             'quantity' => 1,
         ]);
 
-        $response = $this->delete(route('equipment.delete', $equipment));
+        $response = $this->post(route('equipment.delete', $equipment));
         $response->assertOk();
         $response->assertJsonPath('success', true);
 

@@ -54,7 +54,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/equipment-api/{equipment}/history', [App\Http\Controllers\EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
     Route::get('/equipment-api/file', [App\Http\Controllers\EquipmentApiController::class, 'serveFile'])->name('equipment.file');
     Route::post('/equipment-api/{equipment}/update', [App\Http\Controllers\EquipmentApiController::class, 'updateEquipment'])->name('equipment.update');
-    Route::delete('/equipment-api/{equipment}', [App\Http\Controllers\EquipmentApiController::class, 'deleteEquipment'])->name('equipment.delete');
+    Route::post('/equipment-api/{equipment}/delete', [App\Http\Controllers\EquipmentApiController::class, 'deleteEquipment'])->name('equipment.delete');
 
 
     // Mobile Equipment Routes
