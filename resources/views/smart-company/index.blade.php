@@ -219,6 +219,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여정산</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재장비</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="rental"><i class="ph ph-bulldozer"></i><span>장비렌탈</span></button>
+          <a class="mobile-more-tile" href="/mobile-equipment/index"><i class="ph ph-wrench"></i><span>장비스캔(AI)</span></a>
           <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="flights"><i class="ph ph-airplane"></i><span>항공권</span></button>

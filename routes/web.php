@@ -52,6 +52,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/equipment-api/{equipment}/history', [App\Http\Controllers\EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
     Route::get('/equipment-api/file', [App\Http\Controllers\EquipmentApiController::class, 'serveFile'])->name('equipment.file');
 
+    // Mobile Equipment Routes
+    Route::get('/mobile-equipment/index', [\App\Http\Controllers\MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');
+    Route::get('/mobile-equipment/wizard', [\App\Http\Controllers\MobileEquipmentController::class, 'wizard'])->name('mobile-equipment.wizard');
+    Route::post('/mobile-equipment/scan-photo', [\App\Http\Controllers\MobileEquipmentController::class, 'scanPhoto'])->name('mobile-equipment.scan-photo');
+    Route::post('/mobile-equipment/store', [\App\Http\Controllers\MobileEquipmentController::class, 'store'])->name('mobile-equipment.store');
+
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
