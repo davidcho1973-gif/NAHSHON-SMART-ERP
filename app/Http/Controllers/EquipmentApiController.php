@@ -77,10 +77,14 @@ class EquipmentApiController extends Controller
             'equipment_type' => 'required|string|max:100',
             'model' => 'required|string|max:100',
             'vendor' => 'nullable|string|max:100',
+            'quantity' => 'nullable|integer|min:1|max:100',
             'rent_start' => 'nullable|date',
             'rent_end' => 'nullable|date',
             'daily_rate' => 'nullable|integer|min:0',
             'delivery_fee' => 'nullable|integer|min:0',
+            'return_fee' => 'nullable|integer|min:0',
+            'rate_period' => 'nullable|string|max:40',
+            'details' => 'nullable|array',
             'photo_front' => 'nullable|string',
             'photo_rear' => 'nullable|string',
             'photo_left' => 'nullable|string',
@@ -94,30 +98,52 @@ class EquipmentApiController extends Controller
         $siteId = $employee?->site_id ?? $user->allowed_site_id;
         $teamId = $employee?->team_id ?? $user->allowed_team_id;
 
-        $equipment = Equipment::create([
-            'company_id' => null, // Stays available/unassigned initially
-            'site_id' => $siteId,
-            'team_id' => null,
-            'employee_id' => null,
-            'equipment_type' => $request->input('equipment_type'),
-            'model' => $request->input('model'),
-            'vendor' => $request->input('vendor'),
-            'rent_start' => $request->input('rent_start'),
-            'rent_end' => $request->input('rent_end'),
-            'daily_rate' => $request->input('daily_rate') ?? 0,
-            'delivery_fee' => $request->input('delivery_fee') ?? 0,
-            'status' => '대기중',
-            'photo_front' => $request->input('photo_front'),
-            'photo_rear' => $request->input('photo_rear'),
-            'photo_left' => $request->input('photo_left'),
-            'photo_right' => $request->input('photo_right'),
-            'contract_path' => $request->input('contract_path'),
-            'registration_method' => 'AI자동분석',
-        ]);
+        $quantity = (int) ($request->input('quantity') ?: 1);
+
+        // The full extracted contract metadata is kept on each unit's payload so nothing
+        // the AI read is lost, even though the quick-edit form only surfaces a few fields.
+        $payload = array_filter([
+            'rate_period' => $request->input('rate_period'),
+            'return_fee' => $request->input('return_fee'),
+            'details' => $request->input('details'),
+            'order_quantity' => $quantity,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        $created = DB::transaction(function () use ($request, $siteId, $quantity, $payload): array {
+            $rows = [];
+
+            // One Equipment row per unit on the order (a "2 containers" order = 2 assets).
+            for ($i = 0; $i < $quantity; $i++) {
+                $rows[] = Equipment::create([
+                    'company_id' => null, // Stays available/unassigned initially
+                    'site_id' => $siteId,
+                    'team_id' => null,
+                    'employee_id' => null,
+                    'equipment_type' => $request->input('equipment_type'),
+                    'model' => $request->input('model'),
+                    'vendor' => $request->input('vendor'),
+                    'rent_start' => $request->input('rent_start'),
+                    'rent_end' => $request->input('rent_end'),
+                    'daily_rate' => $request->input('daily_rate') ?? 0,
+                    'delivery_fee' => $request->input('delivery_fee') ?? 0,
+                    'status' => '대기중',
+                    'photo_front' => $request->input('photo_front'),
+                    'photo_rear' => $request->input('photo_rear'),
+                    'photo_left' => $request->input('photo_left'),
+                    'photo_right' => $request->input('photo_right'),
+                    'contract_path' => $request->input('contract_path'),
+                    'registration_method' => 'AI자동분석',
+                    'payload' => $payload ?: null,
+                ]);
+            }
+
+            return $rows;
+        });
 
         return response()->json([
             'success' => true,
-            'equipment' => $equipment,
+            'count' => count($created),
+            'equipment' => $created[0] ?? null,
         ]);
     }
 
