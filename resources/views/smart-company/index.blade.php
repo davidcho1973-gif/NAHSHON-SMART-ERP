@@ -6848,7 +6848,14 @@
       // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       
 
-      async function renderRental() {
+      async function renderRental(force) {
+        if (force && window.apiCache) {
+          Object.keys(window.apiCache).forEach(function(k) {
+            if (k.indexOf('api_getRentalList') >= 0 || k.indexOf('api_getRentalStats') >= 0) {
+              delete window.apiCache[k];
+            }
+          });
+        }
         pageContainer.innerHTML = skeleton();
         try {
           const [stats, rentals] = await Promise.all([
@@ -6980,6 +6987,13 @@
         var res = await window.API.createRental(payload);
         if (res.success) {
           alert('등록 완료: ' + res.id);
+          if (window.apiCache) {
+            Object.keys(window.apiCache).forEach(function(k) {
+              if (k.indexOf('api_getRentalList') >= 0 || k.indexOf('api_getRentalStats') >= 0) {
+                delete window.apiCache[k];
+              }
+            });
+          }
           document.querySelectorAll('div[style*="z-index:9999"]').forEach(function(el){ el.remove(); });
           window.loadView('rental');
         } else {
@@ -7039,7 +7053,7 @@
             if (detailModal) detailModal.remove();
             
             showToast('장비가 반납되었습니다.');
-            window.renderRental();
+            window.renderRental(true);
           } catch (err) {
             alert('오류: ' + err.message);
           }
@@ -7169,7 +7183,7 @@
             if (detailModal) detailModal.remove();
             
             showToast('장비가 배정되었습니다.');
-            window.renderRental();
+            window.renderRental(true);
           } catch (err) {
             alert('오류: ' + err.message);
           }
@@ -7464,7 +7478,7 @@
 
             modal.remove();
             showToast('장비 정보가 수정되었습니다.');
-            window.renderRental();
+            window.renderRental(true);
           } catch(err) {
             alert('오류: ' + err.message);
             saveBtn.disabled = false;
@@ -7495,7 +7509,7 @@
 
             modal.remove();
             showToast('장비가 삭제되었습니다.');
-            window.renderRental();
+            window.renderRental(true);
           } catch(err) {
             alert('오류: ' + err.message);
           }
@@ -8331,7 +8345,7 @@
 
             modal.remove();
             showToast('장비가 성공적으로 등록되었습니다.');
-            window.renderRental();
+            window.renderRental(true);
           } catch (err) {
             alert('오류: ' + err.message);
           }
