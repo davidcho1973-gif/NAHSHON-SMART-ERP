@@ -120,18 +120,44 @@ class GeminiEquipmentAnalyzer
     private function prompt(): string
     {
         return <<<'PROMPT'
-Analyze the attached files: a rental contract document (PDF or image) and equipment condition photos.
-Extract the following information from the rental contract and/or photos.
-Provide JSON only. Do not guess missing values.
+You are analyzing a US construction equipment/material rental or lease document
+(e.g. a heavy-equipment rental from United Rentals/Sunbelt/Herc, or a storage
+container / modular office lease from WillScot/Williams Scotsman), plus optional
+equipment condition photos. Extract EVERY field you can read. Return JSON only.
+Do NOT invent values — use an empty string / 0 / empty array when a field is absent.
 
-Fields to extract:
-- equipment_type: Equipment category/type (e.g. "Excavator", "Forklift", "Boom Lift", "Generator", "Skid Steer", "Crane", "Compressor", "Other").
-- model: Model of the equipment (e.g. "CAT 320", "Genie S-60").
-- vendor: Rental vendor/company (e.g. "United Rentals", "Sunbelt", "Herc").
-- rent_start: Date the rental starts (YYYY-MM-DD format). If not found, return empty string.
-- rent_end: Date the rental ends (YYYY-MM-DD format). If not found, return empty string.
-- daily_rate: Daily rental rate (integer).
-- delivery_fee: Delivery/transportation fee (integer).
+Read carefully: these documents contain far more than type/model/vendor. Capture
+the agreement identifiers, both parties, the ship-to/delivery site, the full
+pricing breakdown (recurring rate AND its billing period, delivery, return/pickup,
+totals with and without tax), quantity of units, specs, and the lease terms.
+
+Top-level fields:
+- equipment_type: category (e.g. "Storage Container", "Boom Lift", "Excavator", "Generator", "Modular Office", "Other").
+- model: model/description (e.g. "40' CONTAINER", "Genie S-60", "CAT 320").
+- vendor: rental/lessor company short name (e.g. "WillScot", "United Rentals").
+- quantity: number of identical units on this order (integer, default 1).
+- rent_start: start/estimated delivery date (YYYY-MM-DD) or "".
+- rent_end: end date (YYYY-MM-DD) or "" if open/month-to-month.
+- rate_amount: the recurring rental rate amount per billing period (number).
+- rate_period: the billing period for rate_amount, e.g. "day", "week", "month", "28-day cycle". "" if unknown.
+- daily_rate: best daily-equivalent rate if available, else the recurring rate_amount (integer).
+- delivery_fee: delivery/transport charge (integer).
+- return_fee: estimated return/pickup charge (integer).
+
+details: a nested object with the full contract metadata:
+- quote_no, document_type, revision, quote_date (YYYY-MM-DD), expiration_date (YYYY-MM-DD).
+- account_no: customer/lessee account number.
+- ship_to_address: full delivery/job-site address.
+- delivery_date (YYYY-MM-DD).
+- sales_rep: { name, phone, email }.
+- lessor: { name, address, phone } (the rental company).
+- lessee: { name, address, contact_name, contact_phone, contact_email } (the customer).
+- specs: free-text dimensions/volume/capacity.
+- scope_of_work: what is included (e.g. "(3) Lights and Lock").
+- addons: array of { name, quantity, price } (shelving, waivers, insurance, etc.).
+- pricing: { recurring_per_cycle, recurring_with_tax, delivery, return, total, total_with_tax } (numbers).
+- terms: { billing_cycle, payment_terms, min_lease_term, late_interest, lease_type, taxes_responsibility } (strings).
+- po_number.
 PROMPT;
     }
 
@@ -140,18 +166,78 @@ PROMPT;
      */
     private function schema(): array
     {
+        $str = ['type' => 'string'];
+        $num = ['type' => 'number'];
+
         return [
             'type' => 'object',
             'properties' => [
-                'equipment_type' => ['type' => 'string'],
-                'model' => ['type' => 'string'],
-                'vendor' => ['type' => 'string'],
-                'rent_start' => ['type' => 'string', 'description' => 'YYYY-MM-DD format or empty string'],
-                'rent_end' => ['type' => 'string', 'description' => 'YYYY-MM-DD format or empty string'],
+                'equipment_type' => $str,
+                'model' => $str,
+                'vendor' => $str,
+                'quantity' => ['type' => 'integer'],
+                'rent_start' => ['type' => 'string', 'description' => 'YYYY-MM-DD or empty string'],
+                'rent_end' => ['type' => 'string', 'description' => 'YYYY-MM-DD or empty string'],
+                'rate_amount' => $num,
+                'rate_period' => $str,
                 'daily_rate' => ['type' => 'integer'],
                 'delivery_fee' => ['type' => 'integer'],
+                'return_fee' => ['type' => 'integer'],
+                'details' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'quote_no' => $str,
+                        'document_type' => $str,
+                        'revision' => $str,
+                        'quote_date' => $str,
+                        'expiration_date' => $str,
+                        'account_no' => $str,
+                        'ship_to_address' => $str,
+                        'delivery_date' => $str,
+                        'sales_rep' => [
+                            'type' => 'object',
+                            'properties' => ['name' => $str, 'phone' => $str, 'email' => $str],
+                        ],
+                        'lessor' => [
+                            'type' => 'object',
+                            'properties' => ['name' => $str, 'address' => $str, 'phone' => $str],
+                        ],
+                        'lessee' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'name' => $str, 'address' => $str,
+                                'contact_name' => $str, 'contact_phone' => $str, 'contact_email' => $str,
+                            ],
+                        ],
+                        'specs' => $str,
+                        'scope_of_work' => $str,
+                        'addons' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => ['name' => $str, 'quantity' => ['type' => 'integer'], 'price' => $num],
+                            ],
+                        ],
+                        'pricing' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'recurring_per_cycle' => $num, 'recurring_with_tax' => $num,
+                                'delivery' => $num, 'return' => $num,
+                                'total' => $num, 'total_with_tax' => $num,
+                            ],
+                        ],
+                        'terms' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'billing_cycle' => $str, 'payment_terms' => $str, 'min_lease_term' => $str,
+                                'late_interest' => $str, 'lease_type' => $str, 'taxes_responsibility' => $str,
+                            ],
+                        ],
+                        'po_number' => $str,
+                    ],
+                ],
             ],
-            'required' => ['equipment_type', 'model', 'vendor', 'rent_start', 'rent_end', 'daily_rate', 'daily_rate', 'delivery_fee'],
+            'required' => ['equipment_type', 'model', 'vendor', 'quantity', 'rent_start', 'rent_end', 'daily_rate', 'delivery_fee'],
         ];
     }
 
@@ -161,14 +247,30 @@ PROMPT;
      */
     private function normalize(array $data, string $model): array
     {
+        $rateAmount = is_numeric($data['rate_amount'] ?? null) ? (float) $data['rate_amount'] : 0.0;
+        $dailyRate = is_numeric($data['daily_rate'] ?? null) ? (int) $data['daily_rate'] : 0;
+
+        // If the AI gave a recurring rate but no daily figure, surface the recurring amount
+        // so the form no longer shows 0 (a container is priced per 28-day cycle, not per day).
+        if ($dailyRate === 0 && $rateAmount > 0) {
+            $dailyRate = (int) round($rateAmount);
+        }
+
+        $quantity = is_numeric($data['quantity'] ?? null) ? max(1, (int) $data['quantity']) : 1;
+
         return [
             'equipment_type' => trim((string) ($data['equipment_type'] ?? 'Other')),
             'model' => trim((string) ($data['model'] ?? '')),
             'vendor' => trim((string) ($data['vendor'] ?? '')),
+            'quantity' => $quantity,
             'rent_start' => $this->normalizeDate($data['rent_start'] ?? null),
             'rent_end' => $this->normalizeDate($data['rent_end'] ?? null),
-            'daily_rate' => is_numeric($data['daily_rate'] ?? null) ? (int) $data['daily_rate'] : 0,
+            'rate_amount' => $rateAmount,
+            'rate_period' => trim((string) ($data['rate_period'] ?? '')),
+            'daily_rate' => $dailyRate,
             'delivery_fee' => is_numeric($data['delivery_fee'] ?? null) ? (int) $data['delivery_fee'] : 0,
+            'return_fee' => is_numeric($data['return_fee'] ?? null) ? (int) $data['return_fee'] : 0,
+            'details' => is_array($data['details'] ?? null) ? $data['details'] : [],
             'model_name' => $model,
         ];
     }

@@ -7561,6 +7561,9 @@
                 '<input type="hidden" name="photo_rear">' +
                 '<input type="hidden" name="photo_left">' +
                 '<input type="hidden" name="photo_right">' +
+                '<input type="hidden" name="details">' +
+                '<input type="hidden" name="rate_period">' +
+                '<input type="hidden" name="return_fee">' +
                 '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
                   '<div>' +
                     '<label>장비 종류 (Type)</label>' +
@@ -7571,12 +7574,17 @@
                     '<input type="text" name="model" required>' +
                   '</div>' +
                 '</div>' +
-                '<div style="display:grid; grid-template-columns:1fr; gap:10px;">' +
+                '<div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">' +
                   '<div>' +
                     '<label>렌트사 (Vendor)</label>' +
                     '<input type="text" name="vendor">' +
                   '</div>' +
+                  '<div>' +
+                    '<label>수량 (Qty)</label>' +
+                    '<input type="number" name="quantity" min="1" value="1">' +
+                  '</div>' +
                 '</div>' +
+                '<div id="ai-extracted-summary" style="display:none; font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.6;"></div>' +
                 '<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">' +
                   '<div style="grid-column:span 2;">' +
                     '<label>렌트 시작일</label>' +
@@ -7962,10 +7970,32 @@
             saveForm.querySelector('[name="equipment_type"]').value = data.equipment_type || '';
             saveForm.querySelector('[name="model"]').value = data.model || '';
             saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+            saveForm.querySelector('[name="quantity"]').value = data.quantity || 1;
             saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
             saveForm.querySelector('[name="rent_end"]').value = data.rent_end || '';
             saveForm.querySelector('[name="daily_rate"]').value = data.daily_rate || 0;
             saveForm.querySelector('[name="delivery_fee"]').value = data.delivery_fee || 0;
+            saveForm.querySelector('[name="rate_period"]').value = data.rate_period || '';
+            saveForm.querySelector('[name="return_fee"]').value = data.return_fee || 0;
+            saveForm.querySelector('[name="details"]').value = data.details ? JSON.stringify(data.details) : '';
+
+            // Surface the rich extracted contract metadata (kept on save even if not editable here).
+            var d = data.details || {};
+            var sumRows = [];
+            if (data.rate_amount) sumRows.push('<b>요금</b> $' + data.rate_amount + (data.rate_period ? ' / ' + data.rate_period : ''));
+            if (d.quote_no) sumRows.push('<b>견적번호</b> ' + d.quote_no);
+            if (d.ship_to_address) sumRows.push('<b>배송지</b> ' + d.ship_to_address);
+            if (d.lessee && d.lessee.name) sumRows.push('<b>임차인</b> ' + d.lessee.name + (d.account_no ? ' (계정 ' + d.account_no + ')' : ''));
+            if (d.sales_rep && d.sales_rep.name) sumRows.push('<b>영업담당</b> ' + d.sales_rep.name + (d.sales_rep.phone ? ' / ' + d.sales_rep.phone : ''));
+            if (d.pricing && d.pricing.total_with_tax) sumRows.push('<b>총액(세포함)</b> $' + d.pricing.total_with_tax);
+            if (d.terms && d.terms.payment_terms) sumRows.push('<b>지급조건</b> ' + d.terms.payment_terms);
+            if (d.terms && d.terms.min_lease_term) sumRows.push('<b>최소임대</b> ' + d.terms.min_lease_term);
+            if (d.scope_of_work) sumRows.push('<b>포함</b> ' + d.scope_of_work);
+            var sumDiv = saveForm.querySelector('#ai-extracted-summary');
+            if (sumRows.length && sumDiv) {
+              sumDiv.innerHTML = '<div style="font-weight:700;color:var(--text-primary);margin-bottom:4px">📋 AI 추출 추가 정보 (저장됨)</div>' + sumRows.join(' &nbsp;·&nbsp; ');
+              sumDiv.style.display = 'block';
+            }
 
             saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
             saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
@@ -8015,14 +8045,22 @@
 
         saveForm.onsubmit = async function(e) {
           e.preventDefault();
+          var detailsRaw = saveForm.querySelector('[name="details"]').value;
+          var detailsObj = null;
+          if (detailsRaw) { try { detailsObj = JSON.parse(detailsRaw); } catch (e) { detailsObj = null; } }
+
           var payload = {
             equipment_type: saveForm.querySelector('[name="equipment_type"]').value,
             model: saveForm.querySelector('[name="model"]').value,
             vendor: saveForm.querySelector('[name="vendor"]').value,
+            quantity: parseInt(saveForm.querySelector('[name="quantity"]').value, 10) || 1,
             rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
             rent_end: saveForm.querySelector('[name="rent_end"]').value || null,
             daily_rate: parseInt(saveForm.querySelector('[name="daily_rate"]').value, 10) || 0,
             delivery_fee: parseInt(saveForm.querySelector('[name="delivery_fee"]').value, 10) || 0,
+            return_fee: parseInt(saveForm.querySelector('[name="return_fee"]').value, 10) || 0,
+            rate_period: saveForm.querySelector('[name="rate_period"]').value || null,
+            details: detailsObj,
             contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
             photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
             photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
@@ -8055,6 +8093,10 @@
           }
         };
       };
+
+      // Expose renderRental on window so post-save/return/assign handlers can refresh the list
+      // (these call window.renderRental(); the function declaration alone isn't attached to window).
+      window.renderRental = renderRental;
 
             // 엑셀 다운로드
       window.downloadRentalExcel = function() {

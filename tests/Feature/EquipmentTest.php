@@ -146,6 +146,85 @@ class EquipmentTest extends TestCase
         ]);
     }
 
+    public function test_save_equipment_creates_one_record_per_quantity_and_stores_details(): void
+    {
+        $this->actingAs($this->user);
+
+        $details = [
+            'quote_no' => 'Q-2391330',
+            'ship_to_address' => '335 E Pecos Rd Queen Creek, AZ 85140',
+            'lessee' => ['name' => 'NAHSHON MEP LLC', 'contact_email' => 'lili@outlook.com'],
+            'pricing' => ['total_with_tax' => 3683.62],
+        ];
+
+        $response = $this->postJson(route('equipment.save'), [
+            'equipment_type' => 'Storage Container',
+            'model' => "40' CONTAINER",
+            'vendor' => 'WillScot',
+            'quantity' => 2,
+            'rent_start' => '2026-06-30',
+            'daily_rate' => 160,
+            'delivery_fee' => 273,
+            'return_fee' => 273,
+            'rate_period' => '28-day cycle',
+            'details' => $details,
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true)->assertJsonPath('count', 2);
+
+        // A "2 containers" order becomes 2 individual assets (previously registered as 1).
+        $this->assertSame(2, Equipment::where('model', "40' CONTAINER")->count());
+
+        $unit = Equipment::where('model', "40' CONTAINER")->first();
+        $this->assertSame('Q-2391330', $unit->payload['details']['quote_no']);
+        $this->assertSame('28-day cycle', $unit->payload['rate_period']);
+        $this->assertSame(273, $unit->payload['return_fee']);
+    }
+
+    public function test_analyzer_extracts_rich_contract_metadata(): void
+    {
+        config(['services.gemini.api_key' => 'test-key', 'services.gemini.model' => 'gemini-2.5-flash']);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'generativelanguage.googleapis.com/*' => \Illuminate\Support\Facades\Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => json_encode([
+                    'equipment_type' => 'Storage Container',
+                    'model' => "40' CONTAINER",
+                    'vendor' => 'WillScot',
+                    'quantity' => 2,
+                    'rent_start' => '2026-06-30',
+                    'rent_end' => '',
+                    'rate_amount' => 160,
+                    'rate_period' => '28-day cycle',
+                    'daily_rate' => 0,
+                    'delivery_fee' => 273,
+                    'return_fee' => 273,
+                    'details' => [
+                        'quote_no' => 'Q-2391330',
+                        'ship_to_address' => '335 E Pecos Rd Queen Creek, AZ 85140',
+                        'sales_rep' => ['name' => 'Daniel Carrillo Gonzalez', 'phone' => '6023259147'],
+                        'lessee' => ['name' => 'NAHSHON MEP LLC', 'contact_email' => 'lili@outlook.com'],
+                        'terms' => ['payment_terms' => 'Net 10 Days', 'min_lease_term' => '4 cycles'],
+                    ],
+                ])]]]]],
+            ]),
+        ]);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'pdf');
+        file_put_contents($tmp, '%PDF-1.4 fake');
+
+        $result = app(GeminiEquipmentAnalyzer::class)->analyze([['path' => $tmp, 'mime_type' => 'application/pdf']]);
+        @unlink($tmp);
+
+        $this->assertSame(2, $result['quantity']);
+        $this->assertSame('28-day cycle', $result['rate_period']);
+        // daily_rate was 0 but recurring rate is 160 → falls back so the form never shows 0.
+        $this->assertSame(160, $result['daily_rate']);
+        $this->assertSame('Q-2391330', $result['details']['quote_no']);
+        $this->assertSame('Daniel Carrillo Gonzalez', $result['details']['sales_rep']['name']);
+        $this->assertStringContainsString('Queen Creek', $result['details']['ship_to_address']);
+    }
+
     public function test_assign_equipment_creates_active_rental_and_updates_status(): void
     {
         $this->actingAs($this->user);
