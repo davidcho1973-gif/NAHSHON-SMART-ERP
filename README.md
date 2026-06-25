@@ -86,7 +86,31 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
 GOOGLE_AUTH_PROMPT=
 ```
 
-In Google Cloud Console, add the production callback URL as `https://your-domain.com/auth/google/callback`.
+Google OAuth setup:
+
+1. In Google Cloud Console, open APIs & Services, then configure the OAuth consent screen.
+2. Create an OAuth client ID with application type `Web application`.
+3. Add the exact callback URLs under Authorized redirect URIs:
+
+```text
+http://127.0.0.1:8000/auth/google/callback
+https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/auth/google/callback
+https://your-production-domain.com/auth/google/callback
+```
+
+4. In Laravel Cloud, set the staging environment variables:
+
+```env
+GOOGLE_CLIENT_ID=<Google OAuth web client ID>
+GOOGLE_CLIENT_SECRET=<Google OAuth web client secret>
+GOOGLE_REDIRECT_URI=https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/auth/google/callback
+GOOGLE_AUTH_PROMPT=select_account
+```
+
+5. Redeploy or restart the Laravel Cloud environment after saving variables.
+6. The Google account email must already exist as an active ERP user. On the first successful login, the app links Google's `sub` ID into `users.google_id`.
+
+If Google shows `redirect_uri_mismatch`, the `GOOGLE_REDIRECT_URI` value and the Google Cloud Authorized redirect URI are not identical.
 
 Employee badge photo analysis uses Gemini. Configure the API key in `.env` or Laravel Cloud environment variables:
 
