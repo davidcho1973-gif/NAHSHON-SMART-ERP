@@ -119,6 +119,8 @@ class MobileEquipmentController extends Controller
             'photo_front' => 'nullable|string',
             'ocr_data' => 'nullable|string',
             'status' => 'required|string|in:대기중,사용중,정비중',
+            'quantity' => 'required|integer|min:1',
+            'is_bulk' => 'nullable|string',
         ]);
 
         $user = auth()->user();
@@ -132,21 +134,46 @@ class MobileEquipmentController extends Controller
             $ocrPayload = json_decode($request->input('ocr_data'), true);
         }
 
-        Equipment::create([
-            'company_id' => $companyId,
-            'site_id' => $siteId,
-            'team_id' => $request->input('team_id'),
-            'employee_id' => $request->input('employee_id'),
-            'equipment_type' => $request->input('equipment_type'),
-            'model' => $request->input('model'),
-            'vendor' => $request->input('vendor'),
-            'status' => $request->input('status'),
-            'photo_front' => $request->input('photo_front'),
-            'registration_method' => 'AI자동분석',
-            'payload' => $ocrPayload,
-        ]);
+        $quantity = (int) $request->input('quantity', 1);
+        $isBulk = $request->input('is_bulk') === 'on' || $request->input('is_bulk') == 1 || $request->input('is_bulk') === 'true';
+
+        if ($isBulk) {
+            Equipment::create([
+                'company_id' => $companyId,
+                'site_id' => $siteId,
+                'team_id' => $request->input('team_id'),
+                'employee_id' => $request->input('employee_id'),
+                'equipment_type' => $request->input('equipment_type'),
+                'model' => $request->input('model'),
+                'vendor' => $request->input('vendor'),
+                'status' => $request->input('status'),
+                'photo_front' => $request->input('photo_front'),
+                'registration_method' => 'AI자동분석',
+                'payload' => $ocrPayload,
+                'quantity' => $quantity,
+                'is_bulk' => true,
+            ]);
+        } else {
+            for ($i = 0; $i < $quantity; $i++) {
+                Equipment::create([
+                    'company_id' => $companyId,
+                    'site_id' => $siteId,
+                    'team_id' => $request->input('team_id'),
+                    'employee_id' => $request->input('employee_id'),
+                    'equipment_type' => $request->input('equipment_type'),
+                    'model' => $request->input('model'),
+                    'vendor' => $request->input('vendor'),
+                    'status' => $request->input('status'),
+                    'photo_front' => $request->input('photo_front'),
+                    'registration_method' => 'AI자동분석',
+                    'payload' => $ocrPayload,
+                    'quantity' => 1,
+                    'is_bulk' => false,
+                ]);
+            }
+        }
 
         return redirect()->route('mobile-equipment.index')
-            ->with('success', '새 장비가 AI 분석을 통해 정상 등록되었습니다.');
+            ->with('success', '새 장비/자재가 정상 등록되었습니다.');
     }
 }

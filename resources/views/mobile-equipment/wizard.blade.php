@@ -301,6 +301,18 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label" for="quantityInput">등록 수량 (Quantity) <span style="color:var(--status-danger)">*</span></label>
+          <input type="number" name="quantity" id="quantityInput" class="input-text" value="1" min="1" required>
+        </div>
+
+        <div class="form-group" style="flex-direction:row; align-items:center; gap:8px; margin: 4px 0;">
+          <input type="checkbox" name="is_bulk" id="isBulkInput" style="width:20px; height:20px; accent-color:var(--brand-primary); cursor:pointer;">
+          <label class="form-label" for="isBulkInput" style="text-transform:none; font-size:12px; color:var(--text-primary); cursor:pointer; font-weight:600; user-select:none;">
+            대량 자재/소모품 등록 (체크 시 단일 항목에 수량 합산 저장)
+          </label>
+        </div>
+
+        <div class="form-group">
           <label class="form-label" for="statusSelect">장비 상태 (Status) <span style="color:var(--status-danger)">*</span></label>
           <select name="status" id="statusSelect" class="input-text" style="background-color: var(--bg-surface);">
             <option value="대기중" selected>대기중 (배정가능)</option>

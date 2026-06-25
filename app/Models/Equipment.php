@@ -36,6 +36,8 @@ class Equipment extends Model
         'contract_path',
         'registration_method',
         'payload',
+        'quantity',
+        'is_bulk',
     ];
 
     protected function casts(): array
@@ -46,6 +48,8 @@ class Equipment extends Model
             'daily_rate' => 'integer',
             'delivery_fee' => 'integer',
             'payload' => 'array',
+            'quantity' => 'integer',
+            'is_bulk' => 'boolean',
         ];
     }
 

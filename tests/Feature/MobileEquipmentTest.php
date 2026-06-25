@@ -237,6 +237,7 @@ class MobileEquipmentTest extends TestCase
             'photo_front' => '/storage/equipments/test_generator.jpg',
             'ocr_data' => json_encode($ocrPayload),
             'status' => '대기중',
+            'quantity' => 1,
         ];
 
         $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
@@ -261,5 +262,82 @@ class MobileEquipmentTest extends TestCase
         $eq = Equipment::latest('id')->first();
         $this->assertNotNull($eq);
         $this->assertStringStartsWith('EQ-', $eq->equipment_code);
+    }
+
+    public function test_mobile_equipment_store_saves_manually_corrected_fields(): void
+    {
+        $postData = [
+            'equipment_type' => 'Other (기타)',
+            'model' => 'Custom Drill X',
+            'vendor' => 'My Brand',
+            'site_id' => $this->site->id,
+            'status' => '대기중',
+            'quantity' => 1,
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+
+        $this->assertDatabaseHas('equipments', [
+            'equipment_type' => 'Other (기타)',
+            'model' => 'Custom Drill X',
+            'vendor' => 'My Brand',
+            'quantity' => 1,
+            'is_bulk' => false,
+        ]);
+    }
+
+    public function test_mobile_equipment_store_creates_multiple_records_for_serialized_quantity(): void
+    {
+        $postData = [
+            'equipment_type' => 'Power Tool (전동공구)',
+            'model' => 'DCD771',
+            'vendor' => 'DeWalt',
+            'site_id' => $this->site->id,
+            'status' => '대기중',
+            'quantity' => 3,
+            'is_bulk' => '0',
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+
+        // Check that 3 separate rows were created
+        $records = Equipment::where('model', 'DCD771')->get();
+        $this->assertCount(3, $records);
+
+        foreach ($records as $index => $record) {
+            $this->assertStringStartsWith('EQ-', $record->equipment_code);
+            $this->assertSame(1, $record->quantity);
+            $this->assertFalse($record->is_bulk);
+        }
+    }
+
+    public function test_mobile_equipment_store_saves_single_record_with_quantity_for_bulk_materials(): void
+    {
+        $postData = [
+            'equipment_type' => 'Other (기타)',
+            'model' => 'Drywall Screws 2in',
+            'vendor' => 'Grip-Rite',
+            'site_id' => $this->site->id,
+            'status' => '대기중',
+            'quantity' => 50,
+            'is_bulk' => 'on',
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store'), $postData);
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+
+        // Check that only 1 row was created with quantity 50
+        $records = Equipment::where('model', 'Drywall Screws 2in')->get();
+        $this->assertCount(1, $records);
+
+        $record = $records->first();
+        $this->assertSame(50, $record->quantity);
+        $this->assertTrue($record->is_bulk);
+        $this->assertStringStartsWith('EQ-', $record->equipment_code);
     }
 }
