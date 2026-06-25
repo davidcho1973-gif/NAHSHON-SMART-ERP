@@ -397,4 +397,64 @@ class MobileEquipmentTest extends TestCase
         $this->assertTrue($bulkRecord->is_bulk);
         $this->assertSame($this->site->id, $bulkRecord->site_id);
     }
+
+    public function test_mobile_equipment_scan_photos_batch_requires_auth(): void
+    {
+        $response = $this->postJson(route('mobile-equipment.scan-photos-batch'));
+        $response->assertStatus(401);
+    }
+
+    public function test_mobile_equipment_scan_photos_batch_analyzes_multiple_images_successfully(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $mockAnalyzer = $this->createMock(GeminiEquipmentPhotoAnalyzer::class);
+        $mockAnalyzer->expects($this->once())
+            ->method('analyzeCollection')
+            ->willReturn([
+                'items' => [
+                    [
+                        'equipment_type' => 'Power Tool (전동공구)',
+                        'model' => 'DCD771',
+                        'vendor' => 'DeWalt',
+                        'quantity' => 1,
+                        'is_bulk' => false,
+                        'photo_index' => 0
+                    ],
+                    [
+                        'equipment_type' => 'Other (기타)',
+                        'model' => 'Box of Nails',
+                        'vendor' => 'Grip-Rite',
+                        'quantity' => 5,
+                        'is_bulk' => true,
+                        'photo_index' => 1
+                    ]
+                ],
+                'model_name' => 'gemini-2.5-flash'
+            ]);
+
+        $this->app->instance(GeminiEquipmentPhotoAnalyzer::class, $mockAnalyzer);
+
+        $file1 = \Illuminate\Http\UploadedFile::fake()->create('drill.jpg', 800, 'image/jpeg');
+        $file2 = \Illuminate\Http\UploadedFile::fake()->create('nails.jpg', 800, 'image/jpeg');
+
+        $response = $this->actingAs($this->user)->post(route('mobile-equipment.scan-photos-batch'), [
+            'photos' => [$file1, $file2]
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        
+        $data = $response->json();
+        $this->assertCount(2, $data['items']);
+        $this->assertCount(2, $data['photos']);
+
+        $this->assertSame($data['photos'][0], $data['items'][0]['photo_path']);
+        $this->assertSame($data['photos'][1], $data['items'][1]['photo_path']);
+
+        $this->assertSame('DCD771', $data['items'][0]['model']);
+        $this->assertSame('Box of Nails', $data['items'][1]['model']);
+        $this->assertTrue($data['items'][1]['is_bulk']);
+    }
 }
+

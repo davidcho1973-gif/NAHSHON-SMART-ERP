@@ -56,6 +56,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/mobile-equipment/index', [\App\Http\Controllers\MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');
     Route::get('/mobile-equipment/wizard', [\App\Http\Controllers\MobileEquipmentController::class, 'wizard'])->name('mobile-equipment.wizard');
     Route::post('/mobile-equipment/scan-photo', [\App\Http\Controllers\MobileEquipmentController::class, 'scanPhoto'])->name('mobile-equipment.scan-photo');
+    Route::post('/mobile-equipment/scan-photos-batch', [\App\Http\Controllers\MobileEquipmentController::class, 'scanPhotosBatch'])->name('mobile-equipment.scan-photos-batch');
     Route::post('/mobile-equipment/store', [\App\Http\Controllers\MobileEquipmentController::class, 'store'])->name('mobile-equipment.store');
     Route::post('/mobile-equipment/store-batch', [\App\Http\Controllers\MobileEquipmentController::class, 'storeBatch'])->name('mobile-equipment.store-batch');
 

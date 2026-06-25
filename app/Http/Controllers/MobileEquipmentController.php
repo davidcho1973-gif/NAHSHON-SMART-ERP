@@ -107,6 +107,53 @@ class MobileEquipmentController extends Controller
         }
     }
 
+    public function scanPhotosBatch(Request $request): JsonResponse
+    {
+        $request->validate([
+            'photos' => 'required|array|min:1',
+            'photos.*' => 'image|max:10240', // 10MB limit per photo
+        ]);
+
+        try {
+            $files = $request->file('photos');
+            if (empty($files)) {
+                throw new RuntimeException('사진 파일이 존재하지 않습니다.');
+            }
+
+            $absolutePaths = [];
+            $publicPaths = [];
+            $mimeTypes = [];
+
+            foreach ($files as $file) {
+                $path = $file->store('equipments', 'public');
+                $absolutePaths[] = Storage::disk('public')->path($path);
+                $publicPaths[] = '/storage/' . $path;
+                $mimeTypes[] = $file->getClientMimeType();
+            }
+
+            $analysis = $this->analyzer->analyzeCollection($absolutePaths, $mimeTypes);
+            $items = $analysis['items'] ?? [];
+
+            foreach ($items as &$item) {
+                $idx = $item['photo_index'] ?? 0;
+                $item['photo_path'] = $publicPaths[$idx] ?? ($publicPaths[0] ?? null);
+            }
+            unset($item);
+
+            return response()->json([
+                'success' => true,
+                'items' => $items,
+                'photos' => $publicPaths,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+
     public function store(Request $request)
     {
         $request->validate([
