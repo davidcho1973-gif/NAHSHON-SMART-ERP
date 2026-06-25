@@ -176,4 +176,75 @@ class MobileEquipmentController extends Controller
         return redirect()->route('mobile-equipment.index')
             ->with('success', '새 장비/자재가 정상 등록되었습니다.');
     }
+
+    public function storeBatch(Request $request)
+    {
+        $request->validate([
+            'site_id' => 'nullable|exists:sites,id',
+            'team_id' => 'nullable|exists:teams,id',
+            'employee_id' => 'nullable|exists:employees,id',
+            'items' => 'required|array|min:1',
+            'items.*.equipment_type' => 'required|string|max:100',
+            'items.*.model' => 'required|string|max:100',
+            'items.*.vendor' => 'nullable|string|max:100',
+            'items.*.photo_front' => 'nullable|string',
+            'items.*.status' => 'required|string|in:대기중,사용중,정비중',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.is_bulk' => 'nullable|string',
+        ]);
+
+        $user = auth()->user();
+        $employee = $user->employee;
+        $companyId = $employee?->company_id ?? $user->allowed_company_id;
+
+        $batchSiteId = $request->input('site_id') ?: ($employee?->site_id ?? $user->allowed_site_id);
+        $batchTeamId = $request->input('team_id');
+        $batchEmployeeId = $request->input('employee_id');
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $companyId, $batchSiteId, $batchTeamId, $batchEmployeeId): void {
+            foreach ($request->input('items') as $item) {
+                $quantity = (int) ($item['quantity'] ?? 1);
+                $isBulk = isset($item['is_bulk']) && ($item['is_bulk'] === 'on' || $item['is_bulk'] == 1 || $item['is_bulk'] === 'true');
+
+                if ($isBulk) {
+                    Equipment::create([
+                        'company_id' => $companyId,
+                        'site_id' => $batchSiteId,
+                        'team_id' => $batchTeamId,
+                        'employee_id' => $batchEmployeeId,
+                        'equipment_type' => $item['equipment_type'],
+                        'model' => $item['model'],
+                        'vendor' => $item['vendor'] ?? null,
+                        'status' => $item['status'] ?? '대기중',
+                        'photo_front' => $item['photo_front'] ?? null,
+                        'registration_method' => 'AI자동분석',
+                        'payload' => null,
+                        'quantity' => $quantity,
+                        'is_bulk' => true,
+                    ]);
+                } else {
+                    for ($i = 0; $i < $quantity; $i++) {
+                        Equipment::create([
+                            'company_id' => $companyId,
+                            'site_id' => $batchSiteId,
+                            'team_id' => $batchTeamId,
+                            'employee_id' => $batchEmployeeId,
+                            'equipment_type' => $item['equipment_type'],
+                            'model' => $item['model'],
+                            'vendor' => $item['vendor'] ?? null,
+                            'status' => $item['status'] ?? '대기중',
+                            'photo_front' => $item['photo_front'] ?? null,
+                            'registration_method' => 'AI자동분석',
+                            'payload' => null,
+                            'quantity' => 1,
+                            'is_bulk' => false,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        return redirect()->route('mobile-equipment.index')
+            ->with('success', '총 ' . count($request->input('items')) . '건의 장비/자재가 일괄 등록되었습니다.');
+    }
 }

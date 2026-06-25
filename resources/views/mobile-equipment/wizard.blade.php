@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>장비 등록 - SMART COMPANY</title>
+  <title>장비 신속 스캔등록 - SMART COMPANY</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -25,6 +25,7 @@
       display: flex;
       flex-direction: column;
       gap: 16px;
+      padding-bottom: 90px;
       position: relative;
     }
     .mobile-header {
@@ -51,119 +52,32 @@
       cursor: pointer;
       text-decoration: none;
     }
-    .step-bar {
-      display: flex;
-      gap: 4px;
+    .shared-info-card {
       background: var(--bg-surface);
-      padding: 6px;
-      border-radius: 20px;
       border: 1px solid var(--border-subtle);
-    }
-    .step-dot {
-      flex: 1;
-      height: 4px;
-      background: var(--border-subtle);
-      border-radius: 2px;
-      transition: background-color 0.3s ease;
-    }
-    .step-dot.active {
-      background: var(--brand-primary);
-    }
-    .wizard-step {
-      display: none;
-      flex-direction: column;
-      gap: 16px;
-      animation: fadeIn 0.3s ease-in-out;
-    }
-    .wizard-step.active {
-      display: flex;
-    }
-    .step-header {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-bottom: 8px;
-    }
-    .step-title {
-      font-size: 20px;
-      font-weight: 700;
-    }
-    .step-subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-    .upload-area {
-      border: 2px dashed var(--border-strong);
       border-radius: var(--radius-lg);
-      padding: 32px 16px;
+      padding: 14px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      cursor: pointer;
-      background: var(--bg-surface);
-      text-align: center;
-      transition: border-color 0.2s ease;
-      position: relative;
-      overflow: hidden;
+      gap: 10px;
     }
-    .upload-area:hover {
-      border-color: var(--brand-primary);
-    }
-    .upload-icon {
-      font-size: 40px;
+    .shared-info-title {
+      font-size: 13px;
+      font-weight: 700;
       color: var(--text-secondary);
-    }
-    .upload-label {
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .upload-sub {
-      font-size: 11px;
-      color: var(--text-tertiary);
-    }
-    .upload-preview {
-      display: none;
-      width: 100%;
-      max-height: 320px;
-      object-fit: contain;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      background: var(--bg-base);
-    }
-    .upload-preview.visible {
-      display: block;
-    }
-    .upload-area.has-preview {
-      padding: 14px;
-      border-style: solid;
-      align-items: stretch;
-    }
-    .upload-area.has-preview .upload-icon {
-      display: none;
-    }
-    .scanner-bar {
-      position: absolute;
-      left: 0; right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, transparent, var(--brand-primary), transparent);
-      box-shadow: 0 0 10px var(--brand-primary);
-      animation: scan 2s linear infinite;
-      display: none;
-    }
-    @keyframes scan {
-      0% { top: 0%; }
-      50% { top: 100%; }
-      100% { top: 0%; }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .form-group {
       display: flex;
       flex-direction: column;
       gap: 6px;
+    }
+    .form-group-sm {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
     .form-label {
       font-size: 11px;
@@ -171,11 +85,17 @@
       color: var(--text-tertiary);
       text-transform: uppercase;
     }
+    .form-label-sm {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+    }
     .input-text {
-      background: var(--bg-surface);
+      background: var(--bg-surface-elevated);
       border: 1px solid var(--border-subtle);
       color: var(--text-primary);
-      padding: 14px;
+      padding: 10px 12px;
       border-radius: var(--radius-md);
       font-size: 13px;
       outline: none;
@@ -184,44 +104,161 @@
     .input-text:focus {
       border-color: var(--brand-primary);
     }
-    .wizard-footer {
-      display: flex;
-      gap: 8px;
-      margin-top: auto;
-      padding: 16px 0;
-    }
-    .btn-wz-prev {
-      flex: 1;
+    .input-text-sm {
       background: var(--bg-surface-elevated);
       border: 1px solid var(--border-subtle);
       color: var(--text-primary);
-      padding: 14px;
-      border-radius: var(--radius-lg);
-      font-weight: 600;
+      padding: 6px 8px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      outline: none;
+      font-family: inherit;
     }
-    .btn-wz-next {
-      flex: 2;
-      background: var(--brand-primary);
-      color: white;
-      padding: 14px;
+    .input-text-sm:focus {
+      border-color: var(--brand-primary);
+    }
+    .batch-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .batch-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
+      padding: 12px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    .batch-card-body {
+      display: flex;
+      gap: 12px;
+    }
+    .batch-card-img-wrap {
+      width: 90px;
+      height: 120px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+      position: relative;
+      background: var(--bg-base);
+      flex-shrink: 0;
+    }
+    .batch-card-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .batch-card-spinner-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      gap: 4px;
+    }
+    .batch-card-fields {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .btn-remove-card {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: var(--status-danger);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .btn-remove-card:hover {
+      background: var(--status-danger);
+      color: white;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 48px 16px;
+      color: var(--text-tertiary);
+      border: 2px dashed var(--border-subtle);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-surface);
+    }
+    .empty-icon {
+      font-size: 40px;
+    }
+    .floating-footer {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle);
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      z-index: 100;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    }
+    .btn-batch-action {
+      padding: 12px;
+      border-radius: var(--radius-lg);
+      font-size: 13px;
       font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
     }
-    .btn-manual-skip {
+    .btn-batch-action.camera {
+      background: linear-gradient(135deg, var(--brand-primary), #1d4ed8);
+      color: white;
+    }
+    .btn-batch-action.save {
+      background: linear-gradient(135deg, var(--status-success), #15803d);
+      color: white;
+    }
+    .btn-batch-action:disabled {
       background: var(--bg-surface-elevated);
       border: 1px solid var(--border-subtle);
-      color: var(--text-primary);
-      padding: 14px;
-      border-radius: var(--radius-lg);
-      font-size: 13px;
-      font-weight: 600;
-      text-align: center;
-      cursor: pointer;
-      margin-top: 8px;
+      color: var(--text-tertiary);
+      cursor: not-allowed;
+      background-image: none;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .spin {
+      animation: spin 1s linear infinite;
     }
   </style>
 </head>
@@ -232,98 +269,23 @@
       <a href="{{ route('mobile-equipment.index') }}" class="btn-back">
         <i class="ph ph-caret-left"></i>
       </a>
-      <h1 class="mobile-title">AI 장비 스캔등록</h1>
+      <h1 class="mobile-title">AI 신속 스캔등록 (연속)</h1>
       <div style="width: 36px"></div>
     </div>
 
-    <!-- Multi-step Indicator Bar -->
-    <div class="step-bar">
-      <div class="step-dot active" id="dot-1"></div>
-      <div class="step-dot" id="dot-2"></div>
-    </div>
-
-    <form id="wizardForm" action="{{ route('mobile-equipment.store') }}" method="POST" style="display:flex; flex-direction:column; flex:1; gap:16px;">
+    <form id="batchForm" action="{{ route('mobile-equipment.store-batch') }}" method="POST" style="display:flex; flex-direction:column; flex:1; gap:16px;">
       @csrf
-      
-      <!-- Hidden AI outputs -->
-      <input type="hidden" name="photo_front" id="photoFront">
-      <input type="hidden" name="ocr_data" id="ocrData">
 
-      <!-- STEP 1: Capture & AI Scan -->
-      <div class="wizard-step active" id="step-1">
-        <div class="step-header">
-          <span class="step-title">장비 촬영 (Camera)</span>
-          <span class="step-subtitle">장비 사진을 찍으면 AI가 분류와 모델명을 분석합니다.</span>
+      <!-- Shared/Batch Assignment Card -->
+      <div class="shared-info-card">
+        <div class="shared-info-title">
+          <i class="ph ph-sliders"></i>
+          <span>배치 공통 정보 (기본 배정지 지정)</span>
         </div>
-        <div class="upload-area" onclick="document.getElementById('photoFileInput').click()" id="uploadContainer">
-          <div class="scanner-bar" id="scannerBar"></div>
-          <img class="upload-preview" id="photoUploadPreview" src="" alt="Equipment preview">
-          <i class="ph ph-camera-bold upload-icon" id="uploadAreaIcon"></i>
-          <span class="upload-label" id="uploadAreaLabel">여기를 눌러 카메라 촬영 / 업로드</span>
-          <span class="upload-sub" id="uploadAreaSub">핸드폰 카메라로 직접 찍어올리세요</span>
-          <!-- capture="environment" launches the back camera on mobile directly -->
-          <input type="file" id="photoFileInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoUpload(event)">
-        </div>
-        <div class="btn-manual-skip" onclick="goNextStep()">사진 없이 직접 기입하기</div>
-      </div>
-
-      <!-- STEP 2: Verify details & Assignment -->
-      <div class="wizard-step" id="step-2">
-        <div class="step-header">
-          <span class="step-title">장비 정보 확인</span>
-          <span class="step-subtitle">AI가 판독한 내용입니다. 필요 시 수정하세요.</span>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="typeSelect">장비 분류 (Type)</label>
-          <select name="equipment_type" id="typeSelect" class="input-text" style="background-color: var(--bg-surface);">
-            <option value="Generator (발전기)">Generator (발전기)</option>
-            <option value="Welding Machine (용접기)">Welding Machine (용접기)</option>
-            <option value="Power Tool (전동공구)">Power Tool (전동공구)</option>
-            <option value="Hand Tool (수공구)">Hand Tool (수공구)</option>
-            <option value="Forklift (지게차)">Forklift (지게차)</option>
-            <option value="Boom Lift (고소작업대)">Boom Lift (고소작업대)</option>
-            <option value="Excavator (굴착기)">Excavator (굴착기)</option>
-            <option value="Skid Steer (스키드로더)">Skid Steer (스키드로더)</option>
-            <option value="Compressor (콤프레샤)">Compressor (콤프레샤)</option>
-            <option value="Other (기타)">Other (기타)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="modelInput">모델명 (Model) <span style="color:var(--status-danger)">*</span></label>
-          <input type="text" name="model" id="modelInput" class="input-text" placeholder="예: Honda EU2200i" required>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="vendorInput">제조사 / 브랜드 (Brand)</label>
-          <input type="text" name="vendor" id="vendorInput" class="input-text" placeholder="예: Honda, Makita, Bosch">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="quantityInput">등록 수량 (Quantity) <span style="color:var(--status-danger)">*</span></label>
-          <input type="number" name="quantity" id="quantityInput" class="input-text" value="1" min="1" required>
-        </div>
-
-        <div class="form-group" style="flex-direction:row; align-items:center; gap:8px; margin: 4px 0;">
-          <input type="checkbox" name="is_bulk" id="isBulkInput" style="width:20px; height:20px; accent-color:var(--brand-primary); cursor:pointer;">
-          <label class="form-label" for="isBulkInput" style="text-transform:none; font-size:12px; color:var(--text-primary); cursor:pointer; font-weight:600; user-select:none;">
-            대량 자재/소모품 등록 (체크 시 단일 항목에 수량 합산 저장)
-          </label>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="statusSelect">장비 상태 (Status) <span style="color:var(--status-danger)">*</span></label>
-          <select name="status" id="statusSelect" class="input-text" style="background-color: var(--bg-surface);">
-            <option value="대기중" selected>대기중 (배정가능)</option>
-            <option value="사용중">사용중 (현장가동)</option>
-            <option value="정비중">정비중 (수리필요)</option>
-          </select>
-        </div>
-
+        
         <div class="form-group">
           <label class="form-label" for="siteSelect">배정 현장 (Site)</label>
-          <select name="site_id" id="siteSelect" class="input-text" style="background-color: var(--bg-surface);">
+          <select name="site_id" id="siteSelect" class="input-text" style="background-color: var(--bg-surface-elevated);">
             <option value="">지정 안함 (Global / Office)</option>
             @foreach($sites as $site)
               <option value="{{ $site->id }}" @selected((int) ($selectedSiteId ?? 0) === (int) $site->id)>{{ $site->code }} - {{ $site->name }}</option>
@@ -331,130 +293,168 @@
           </select>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="teamSelect">배정 팀 (Team)</label>
-          <select name="team_id" id="teamSelect" class="input-text" style="background-color: var(--bg-surface);">
-            <option value="">지정 안함</option>
-            @foreach($teams as $team)
-              <option value="{{ $team->id }}">{{ $team->name }} ({{ $team->site ? $team->site->code : 'Global' }})</option>
-            @endforeach
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="employeeSelect">담당자 / 운영자 (Operator)</label>
-          <select name="employee_id" id="employeeSelect" class="input-text" style="background-color: var(--bg-surface);">
-            <option value="">지정 안함</option>
-            @foreach($employees as $employee)
-              <option value="{{ $employee->id }}">{{ $employee->name }} ({{ $employee->company ? $employee->company->name : '-' }})</option>
-            @endforeach
-          </select>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div class="form-group-sm">
+            <label class="form-label" for="teamSelect">배정 팀 (Team)</label>
+            <select name="team_id" id="teamSelect" class="input-text" style="background-color: var(--bg-surface-elevated); padding: 10px;">
+              <option value="">지정 안함</option>
+              @foreach($teams as $team)
+                <option value="{{ $team->id }}">{{ $team->name }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="form-group-sm">
+            <label class="form-label" for="employeeSelect">담당 운영자 (Operator)</label>
+            <select name="employee_id" id="employeeSelect" class="input-text" style="background-color: var(--bg-surface-elevated); padding: 10px;">
+              <option value="">지정 안함</option>
+              @foreach($employees as $employee)
+                <option value="{{ $employee->id }}">{{ $employee->name }}</option>
+              @endforeach
+            </select>
+          </div>
         </div>
       </div>
 
-      <!-- Wizard Navigation Footer -->
-      <div class="wizard-footer">
-        <button type="button" class="btn-wz-prev" id="btnPrev" style="display:none" onclick="goPrevStep()">이전</button>
-        <button type="button" class="btn-wz-next" id="btnNext" onclick="handleNextClick()">다음</button>
+      <!-- Batch Items List Container -->
+      <div class="batch-items-list" id="batchItemsList">
+        <!-- Cards will be appended here dynamically -->
+      </div>
+
+      <!-- Empty State View -->
+      <div class="empty-state" id="emptyState">
+        <i class="ph ph-camera-rotate empty-icon"></i>
+        <span style="font-weight:600;">아직 촬영된 장비 사진이 없습니다.</span>
+        <span style="font-size:11px; color:var(--text-secondary);">하단의 카메라 버튼을 눌러 자재 및 툴을 연속으로 찍어보세요!</span>
+      </div>
+
+      <!-- Native File Picker (Supports multiple files and environment/back camera) -->
+      <input type="file" id="photoFileInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoUpload(event)" multiple>
+
+      <!-- Fixed Bottom Action Footer -->
+      <div class="floating-footer">
+        <button type="button" class="btn-batch-action camera" onclick="document.getElementById('photoFileInput').click()">
+          <i class="ph ph-camera"></i>
+          <span>추가 촬영/업로드</span>
+        </button>
+        <button type="button" class="btn-batch-action save" id="btnSaveBatch" onclick="submitBatchForm()" disabled>
+          <i class="ph ph-floppy-disk"></i>
+          <span id="saveBtnText">등록할 장비 없음</span>
+        </button>
       </div>
 
     </form>
   </div>
 
   <script>
-    let currentStep = 1;
-    const totalSteps = 2;
-    let photoPreviewObjectUrl = null;
+    let cardCounter = 0;
 
-    function goNextStep() {
-      if (currentStep < totalSteps) {
-        document.getElementById('step-' + currentStep).classList.remove('active');
-        document.getElementById('dot-' + currentStep).classList.remove('active');
-        currentStep++;
-        document.getElementById('step-' + currentStep).classList.add('active');
-        document.getElementById('dot-' + currentStep).classList.add('active');
-        
-        // Show/hide buttons
-        document.getElementById('btnPrev').style.display = 'block';
-        document.getElementById('btnNext').textContent = '최종 등록하기';
-      }
-    }
+    function createCardHTML(cardId, imageUrl) {
+      return `
+        <div class="batch-card" id="card-${cardId}">
+          <button type="button" class="btn-remove-card" onclick="removeCard('${cardId}')">
+            <i class="ph ph-trash"></i>
+          </button>
+          
+          <div class="batch-card-body">
+            <div class="batch-card-img-wrap">
+              <img src="${imageUrl}" class="batch-card-img">
+              <div class="batch-card-spinner-overlay" id="spinner-${cardId}">
+                <i class="ph ph-circle-notch spin" style="font-size: 24px;"></i>
+                <span style="font-size: 9px; font-weight:600; text-align:center;">AI 분석중...</span>
+              </div>
+            </div>
+            
+            <div class="batch-card-fields">
+              <input type="hidden" name="items[${cardId}][photo_front]" id="photo-${cardId}">
+              <input type="hidden" name="items[${cardId}][ocr_data]" id="ocr-${cardId}">
+              
+              <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+                <div class="form-group-sm">
+                  <label class="form-label-sm">분류</label>
+                  <select name="items[${cardId}][equipment_type]" id="type-${cardId}" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
+                    <option value="Generator (발전기)">Generator (발전기)</option>
+                    <option value="Welding Machine (용접기)">Welding Machine (용접기)</option>
+                    <option value="Power Tool (전동공구)">Power Tool (전동공구)</option>
+                    <option value="Hand Tool (수공구)">Hand Tool (수공구)</option>
+                    <option value="Forklift (지게차)">Forklift (지게차)</option>
+                    <option value="Boom Lift (고소작업대)">Boom Lift (고소작업대)</option>
+                    <option value="Excavator (굴착기)">Excavator (굴착기)</option>
+                    <option value="Skid Steer (스키드로더)">Skid Steer (스키드로더)</option>
+                    <option value="Compressor (콤프레샤)">Compressor (콤프레샤)</option>
+                    <option value="Other (기타)" selected>Other (기타)</option>
+                  </select>
+                </div>
+                <div class="form-group-sm">
+                  <label class="form-label-sm">제조사</label>
+                  <input type="text" name="items[${cardId}][vendor]" id="vendor-${cardId}" class="input-text-sm" placeholder="예: Honda">
+                </div>
+              </div>
+              
+              <div class="form-group-sm" style="margin-top: 2px;">
+                <label class="form-label-sm">모델명/설명 <span style="color:var(--status-danger)">*</span></label>
+                <input type="text" name="items[${cardId}][model]" id="model-${cardId}" class="input-text-sm" placeholder="모델명 또는 상세설명" required>
+              </div>
 
-    function goPrevStep() {
-      if (currentStep > 1) {
-        document.getElementById('step-' + currentStep).classList.remove('active');
-        document.getElementById('dot-' + currentStep).classList.remove('active');
-        currentStep--;
-        document.getElementById('step-' + currentStep).classList.add('active');
-        document.getElementById('dot-' + currentStep).classList.add('active');
-        
-        // Show/hide buttons
-        document.getElementById('btnPrev').style.display = 'none';
-        document.getElementById('btnNext').textContent = '다음';
-      }
-    }
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; margin-top: 2px;">
+                <div class="form-group-sm">
+                  <label class="form-label-sm">수량</label>
+                  <input type="number" name="items[${cardId}][quantity]" id="quantity-${cardId}" class="input-text-sm" value="1" min="1" required>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px; margin-top: 14px; cursor: pointer;">
+                  <input type="checkbox" name="items[${cardId}][is_bulk]" id="bulk-${cardId}" value="on" style="width: 15px; height: 15px; accent-color: var(--brand-primary); cursor: pointer;">
+                  <label for="bulk-${cardId}" style="font-size: 10px; font-weight:600; color:var(--text-secondary); cursor: pointer; user-select:none;">대량 자재</label>
+                </div>
+              </div>
 
-    function handleNextClick() {
-      if (currentStep === 1) {
-        // Must upload a photo first if not skipped manually via skip button
-        const photoPath = document.getElementById('photoFront').value;
-        if (!photoPath) {
-          alert('장비 사진 촬영이 완료되지 않았습니다.\n사진을 찍으시거나 "사진 없이 직접 기입하기"를 누르세요.');
-          return;
-        }
-        goNextStep();
-      } else {
-        // Validate required fields
-        const model = document.getElementById('modelInput').value.trim();
-        if (!model) {
-          alert('모델명을 입력해 주세요.');
-          return;
-        }
-        // Submit form
-        document.getElementById('wizardForm').submit();
-      }
-    }
+              <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 2px;">
+                <div class="form-group-sm">
+                  <label class="form-label-sm">상태</label>
+                  <select name="items[${cardId}][status]" id="status-${cardId}" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
+                    <option value="대기중" selected>대기중</option>
+                    <option value="사용중">사용중</option>
+                    <option value="정비중">정비중</option>
+                  </select>
+                </div>
+              </div>
 
-    function showPhotoUploadPreview(file) {
-      const preview = document.getElementById('photoUploadPreview');
-      const container = document.getElementById('uploadContainer');
-
-      if (!file || !file.type.startsWith('image/')) {
-        preview.removeAttribute('src');
-        preview.classList.remove('visible');
-        container.classList.remove('has-preview');
-        return;
-      }
-
-      if (photoPreviewObjectUrl) {
-        URL.revokeObjectURL(photoPreviewObjectUrl);
-      }
-
-      photoPreviewObjectUrl = URL.createObjectURL(file);
-      preview.src = photoPreviewObjectUrl;
-      preview.classList.add('visible');
-      container.classList.add('has-preview');
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     async function handlePhotoUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
 
-      const container = document.getElementById('uploadContainer');
-      const scanner = document.getElementById('scannerBar');
-      const icon = document.getElementById('uploadAreaIcon');
-      const label = document.getElementById('uploadAreaLabel');
-      const sub = document.getElementById('uploadAreaSub');
+      const container = document.getElementById('batchItemsList');
+      const empty = document.getElementById('emptyState');
+      if (empty) empty.style.display = 'none';
 
-      showPhotoUploadPreview(file);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        cardCounter++;
+        const cardId = cardCounter;
+        
+        // Show local preview immediately using object URL
+        const imageUrl = URL.createObjectURL(file);
+        
+        // Create card HTML and append to list
+        const cardHtml = createCardHTML(cardId, imageUrl);
+        container.insertAdjacentHTML('beforeend', cardHtml);
+        
+        // Start uploading file to scan API asynchronously
+        uploadAndAnalyzeCard(cardId, file);
+      }
+      
+      // Update counts
+      updateBatchCounts();
+      
+      // Reset file input
+      event.target.value = '';
+    }
 
-      // Start scanner animation
-      scanner.style.display = 'block';
-      icon.className = 'ph ph-circle-notch upload-icon';
-      icon.style.animation = 'spin 1s linear infinite';
-      label.textContent = 'AI 장비 분석중...';
-      sub.textContent = 'Gemini가 장비 실물 모델명과 종류를 추출하고 있습니다.';
-
+    async function uploadAndAnalyzeCard(cardId, file) {
       const formData = new FormData();
       formData.append('photo', file);
 
@@ -471,53 +471,100 @@
 
         if (result.success) {
           const data = result.data;
-          document.getElementById('photoFront').value = result.photo_path;
-          document.getElementById('ocrData').value = JSON.stringify(data);
+          document.getElementById('photo-' + cardId).value = result.photo_path;
+          document.getElementById('ocr-' + cardId).value = JSON.stringify(data);
 
-          // Populate fields
+          // Populate inputs
           if (data.model) {
-            document.getElementById('modelInput').value = data.model;
+            document.getElementById('model-' + cardId).value = data.model;
           }
           if (data.vendor) {
-            document.getElementById('vendorInput').value = data.vendor;
+            document.getElementById('vendor-' + cardId).value = data.vendor;
           }
           if (data.equipment_type) {
-            // Find closest option in select
-            const typeSelect = document.getElementById('typeSelect');
+            const select = document.getElementById('type-' + cardId);
             let found = false;
-            for (let i = 0; i < typeSelect.options.length; i++) {
-              if (typeSelect.options[i].value.toLowerCase().includes(data.equipment_type.toLowerCase()) || 
-                  data.equipment_type.toLowerCase().includes(typeSelect.options[i].value.toLowerCase())) {
-                typeSelect.selectedIndex = i;
+            for (let i = 0; i < select.options.length; i++) {
+              if (select.options[i].value.toLowerCase().includes(data.equipment_type.toLowerCase()) || 
+                  data.equipment_type.toLowerCase().includes(select.options[i].value.toLowerCase())) {
+                select.selectedIndex = i;
                 found = true;
                 break;
               }
             }
             if (!found) {
-              typeSelect.value = "Other (기타)";
+              select.value = "Other (기타)";
             }
           }
 
-          label.textContent = 'AI 판독 완료';
-          sub.textContent = '아래 "다음" 버튼을 눌러 확인하세요.';
-          
-          // Auto advance step
-          setTimeout(goNextStep, 800);
+          // Hide loader overlay
+          document.getElementById('spinner-' + cardId).style.display = 'none';
         } else {
-          alert('AI 장비 분석 실패: ' + result.error);
+          // If fail, keep card but let user type manually
+          document.getElementById('spinner-' + cardId).style.display = 'none';
+          document.getElementById('model-' + cardId).placeholder = 'AI 판독 실패 - 수동 입력 필요';
+          // Save the photo path returned from upload if available, so it retains photo even on failed AI
+          if (result.photo_path) {
+            document.getElementById('photo-' + cardId).value = result.photo_path;
+          }
         }
       } catch (err) {
-        alert('서버 오류: ' + err.message);
+        document.getElementById('spinner-' + cardId).style.display = 'none';
+        document.getElementById('model-' + cardId).placeholder = '스캔 오류 - 수동 입력 필요';
       } finally {
-        // Reset upload UI
-        scanner.style.display = 'none';
-        icon.className = 'ph ph-camera-bold upload-icon';
-        icon.style.animation = 'none';
-        if (!document.getElementById('photoFront').value) {
-          label.textContent = '여기를 눌러 카메라 촬영 / 업로드';
-          sub.textContent = '핸드폰 카메라로 직접 찍어올리세요';
-        }
+        updateBatchCounts();
       }
+    }
+
+    function removeCard(cardId) {
+      const card = document.getElementById('card-' + cardId);
+      if (card) {
+        card.remove();
+      }
+      
+      const container = document.getElementById('batchItemsList');
+      if (container.children.length === 0) {
+        const empty = document.getElementById('emptyState');
+        if (empty) empty.style.display = 'flex';
+      }
+      
+      updateBatchCounts();
+    }
+
+    function updateBatchCounts() {
+      const container = document.getElementById('batchItemsList');
+      const count = container.children.length;
+      const btnSave = document.getElementById('btnSaveBatch');
+      const saveText = document.getElementById('saveBtnText');
+      
+      if (count > 0) {
+        btnSave.disabled = false;
+        saveText.textContent = `총 ${count}건 일괄 등록`;
+      } else {
+        btnSave.disabled = true;
+        saveText.textContent = '등록할 장비 없음';
+      }
+    }
+
+    function submitBatchForm() {
+      // Validate all models are filled
+      const models = document.querySelectorAll('input[id^="model-"]');
+      let valid = true;
+      models.forEach(m => {
+        if (!m.value.trim()) {
+          m.style.borderColor = 'var(--status-danger)';
+          valid = false;
+        } else {
+          m.style.borderColor = 'var(--border-subtle)';
+        }
+      });
+      
+      if (!valid) {
+        alert('모델명이 빈칸인 품목이 있습니다. 모델명 또는 간략한 설명을 기입해 주세요.');
+        return;
+      }
+      
+      document.getElementById('batchForm').submit();
     }
   </script>
 </body>

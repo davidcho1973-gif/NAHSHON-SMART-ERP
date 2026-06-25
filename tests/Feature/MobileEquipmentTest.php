@@ -340,4 +340,61 @@ class MobileEquipmentTest extends TestCase
         $this->assertTrue($record->is_bulk);
         $this->assertStringStartsWith('EQ-', $record->equipment_code);
     }
+
+    public function test_mobile_equipment_store_batch_saves_all_serialized_and_bulk_items_properly(): void
+    {
+        $postData = [
+            'site_id' => $this->site->id,
+            'team_id' => $this->team->id,
+            'employee_id' => $this->employee->id,
+            'items' => [
+                'card_1' => [
+                    'equipment_type' => 'Generator (발전기)',
+                    'model' => 'EU2000i',
+                    'vendor' => 'Honda',
+                    'photo_front' => '/storage/equipments/honda.jpg',
+                    'status' => '대기중',
+                    'quantity' => 2,
+                    'is_bulk' => '0',
+                ],
+                'card_2' => [
+                    'equipment_type' => 'Other (기타)',
+                    'model' => 'Box of Screws',
+                    'vendor' => 'Grip-Rite',
+                    'photo_front' => '/storage/equipments/screws.jpg',
+                    'status' => '대기중',
+                    'quantity' => 10,
+                    'is_bulk' => 'on',
+                ],
+            ]
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), $postData);
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+        $response->assertSessionHas('success');
+
+        // Check serialized item 'EU2000i' created 2 records
+        $serializedCount = Equipment::where('model', 'EU2000i')->count();
+        $this->assertSame(2, $serializedCount);
+
+        $serializedRecords = Equipment::where('model', 'EU2000i')->get();
+        foreach ($serializedRecords as $record) {
+            $this->assertSame(1, $record->quantity);
+            $this->assertFalse($record->is_bulk);
+            $this->assertSame($this->site->id, $record->site_id);
+            $this->assertSame($this->team->id, $record->team_id);
+            $this->assertSame($this->employee->id, $record->employee_id);
+        }
+
+        // Check bulk item 'Box of Screws' created 1 record with quantity 10
+        $bulkCount = Equipment::where('model', 'Box of Screws')->count();
+        $this->assertSame(1, $bulkCount);
+
+        $bulkRecord = Equipment::where('model', 'Box of Screws')->first();
+        $this->assertNotNull($bulkRecord);
+        $this->assertSame(10, $bulkRecord->quantity);
+        $this->assertTrue($bulkRecord->is_bulk);
+        $this->assertSame($this->site->id, $bulkRecord->site_id);
+    }
 }
