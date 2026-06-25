@@ -8,6 +8,7 @@ use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
 use App\Models\SmartRecord;
 use App\Models\Site;
+use App\Services\AttendanceQrService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -31,6 +32,8 @@ class SmartCompanyData
             'api_clockIn' => self::clockIn($args[0] ?? null),
             'api_clockOut' => self::clockOut($args[0] ?? null),
             'api_requestCorrection' => self::requestCorrection($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_clockInWithGps' => self::clockInWithGps($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
+            'api_clockInWithTeamQr' => self::clockInWithTeamQr($args[0] ?? null, $args[1] ?? null),
             'api_submitNfcTag' => self::submitNfcTag($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_submitBatchPhotoScan' => self::submitBatchPhotoScan($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null, $args[4] ?? null),
             'api_getPendingAttendanceLogs' => self::getPendingAttendanceLogs($siteId),
@@ -1556,6 +1559,333 @@ class SmartCompanyData
         }
     }
 
+    public static function clockInWithGps(mixed $eventType = null, mixed $lat = null, mixed $lng = null, mixed $accuracy = null): array
+    {
+        try {
+            $employeeId = auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '현재 계정에 연결된 직원(Employee) 정보가 없습니다.'];
+            }
+
+            $employee = Employee::find($employeeId);
+            if (! $employee) {
+                return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
+            }
+
+            if (! $employee->site_id) {
+                return ['success' => false, 'message' => '배정된 현장 정보가 없습니다.'];
+            }
+
+            $site = Site::find($employee->site_id);
+            if (! $site) {
+                return ['success' => false, 'message' => '배정된 현장 모델을 찾을 수 없습니다.'];
+            }
+
+            // GPS 정보 획득
+            $siteLat = null;
+            $siteLng = null;
+            $radius = 150; // 기본 반경 150미터
+
+            if ($site->payload && is_array($site->payload)) {
+                $siteLat = $site->payload['latitude'] ?? null;
+                $siteLng = $site->payload['longitude'] ?? null;
+                $radius = $site->payload['radius'] ?? 150;
+            }
+
+            // 현장별 대표 GPS Fallback (Hoffman, LGES-AZ, NV-05)
+            if (is_null($siteLat) || is_null($siteLng)) {
+                $code = strtoupper($site->code);
+                if ($code === 'HFF-02') {
+                    $siteLat = 33.4255;
+                    $siteLng = -111.9400;
+                } elseif ($code === 'LGES-AZ') {
+                    $siteLat = 32.8410;
+                    $siteLng = -111.7580;
+                } elseif ($code === 'NV-05') {
+                    $siteLat = 39.5296;
+                    $siteLng = -119.8138;
+                }
+            }
+
+            // 만약 지오펜싱 위치가 설정되어 있다면 거리 계산 수행
+            $distance = null;
+            if (!is_null($siteLat) && !is_null($siteLng) && !is_null($lat) && !is_null($lng)) {
+                $earthRadius = 6371000; // meters
+                $latFrom = deg2rad($lat);
+                $lonFrom = deg2rad($lng);
+                $latTo = deg2rad($siteLat);
+                $lonTo = deg2rad($siteLng);
+
+                $latDelta = $latTo - $latFrom;
+                $lonDelta = $lonTo - $lonFrom;
+
+                $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+                    cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+                $distance = $angle * $earthRadius;
+
+                if ($distance > $radius) {
+                    return [
+                        'success' => false,
+                        'message' => sprintf(
+                            '현장 반경을 벗어났습니다. (현재 거리: %.1fm, 허용 반경: %dm)',
+                            $distance,
+                            $radius
+                        )
+                    ];
+                }
+            } else {
+                // GPS 좌표가 넘어오지 않았거나 현장 GPS가 없는 경우
+                if (is_null($lat) || is_null($lng)) {
+                    return ['success' => false, 'message' => '기기의 GPS 정보가 전송되지 않았습니다.'];
+                }
+                // 현장 GPS 정보 자체가 셋팅 안되어 있다면 일단 허용
+            }
+
+            $today = Carbon::today()->toDateString();
+            $eventTime = Carbon::now();
+
+            // 5분 중복 태그 방지
+            $fiveMinutesAgo = (clone $eventTime)->subMinutes(5);
+            $recentLog = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('event_at', '>=', $fiveMinutesAgo)
+                ->where('event_at', '<=', $eventTime)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if ($recentLog) {
+                return [
+                    'success' => false,
+                    'message' => "태깅이 너무 빠릅니다. 잠시 후 다시 시도해 주세요. (최근 태깅: " . $recentLog->event_at->toTimeString() . ")"
+                ];
+            }
+
+            // 이벤트 타입 결정
+            $resolvedType = strtolower($eventType ?: '');
+            if ($resolvedType !== 'clock_in' && $resolvedType !== 'clock_out') {
+                // 수동 토글 처리
+                $lastLog = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('status', '!=', 'rejected')
+                    ->orderBy('event_at', 'desc')
+                    ->first();
+                $resolvedType = ($lastLog && $lastLog->event_type === 'clock_in') ? 'clock_out' : 'clock_in';
+            }
+
+            // 이전 상태 검증
+            if ($resolvedType === 'clock_in') {
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayIn) {
+                    return ['success' => false, 'message' => '이미 오늘 출근 처리가 되어 있습니다.'];
+                }
+            } else {
+                // clock_out
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if (! $lastTodayIn) {
+                    return ['success' => false, 'message' => '오늘 출근 기록이 존재하지 않습니다.'];
+                }
+                $lastTodayOut = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_out')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayOut) {
+                    return ['success' => false, 'message' => '이미 오늘 퇴근 처리가 되어 있습니다.'];
+                }
+            }
+
+            // AttendanceLog 생성
+            AttendanceLog::create([
+                'employee_id' => $employeeId,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => $resolvedType,
+                'event_at' => $eventTime,
+                'source' => 'mobile_gps',
+                'status' => 'approved',
+                'notes' => '모바일 GPS 기반 셀프 등록 완료.',
+                'payload' => [
+                    'latitude' => $lat,
+                    'longitude' => $lng,
+                    'accuracy' => $accuracy,
+                    'distance_meters' => $distance,
+                    'geofence_lat' => $siteLat,
+                    'geofence_lng' => $siteLng,
+                    'geofence_radius' => $radius
+                ]
+            ]);
+
+            $eventTypeName = $resolvedType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
+
+            return [
+                'success' => true,
+                'message' => "{$eventTypeName}이 성공적으로 등록되었습니다."
+            ];
+
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function clockInWithTeamQr(?string $teamCode, ?string $eventType = null): array
+    {
+        try {
+            if ($teamCode) {
+                $team = \App\Models\Team::query()
+                    ->with(['site', 'company'])
+                    ->whereRaw('lower(code) = ?', [strtolower(trim($teamCode))])
+                    ->first();
+
+                if (! $team) {
+                    return ['success' => false, 'message' => "Team QR code {$teamCode} was not found."];
+                }
+
+                $qrCode = \App\Models\AttendanceQrCode::forTeam($team, auth()->id());
+                $result = app(AttendanceQrService::class)->recordSelfScan(auth()->user(), $qrCode, $eventType ?: 'auto');
+
+                return [
+                    'success' => true,
+                    'ignored' => $result['ignored'] ?? false,
+                    'event_type' => $result['event_type'] ?? null,
+                    'status' => $result['status'] ?? null,
+                    'message' => $result['message'] ?? 'QR attendance recorded.',
+                ];
+            }
+
+            if (!$teamCode) {
+                return ['success' => false, 'message' => '스캔한 팀 코드 정보가 비어있습니다.'];
+            }
+
+            $employeeId = auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '현재 계정에 연결된 직원(Employee) 정보가 없습니다.'];
+            }
+
+            $employee = Employee::query()->with('team')->find($employeeId);
+            if (! $employee) {
+                return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
+            }
+
+            if (! $employee->team) {
+                return ['success' => false, 'message' => '소속 팀이 배정되어 있지 않습니다. 관리자에게 문의하세요.'];
+            }
+
+            $myTeamCode = $employee->team->code;
+            if (strcasecmp(trim($myTeamCode ?? ''), trim($teamCode)) !== 0) {
+                return [
+                    'success' => false,
+                    'message' => "소속 팀의 QR 코드가 아닙니다. (본인 팀: {$employee->team->name})"
+                ];
+            }
+
+            $today = Carbon::today()->toDateString();
+            $eventTime = Carbon::now();
+
+            // 5분 중복 태그 방지
+            $fiveMinutesAgo = (clone $eventTime)->subMinutes(5);
+            $recentLog = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('event_at', '>=', $fiveMinutesAgo)
+                ->where('event_at', '<=', $eventTime)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if ($recentLog) {
+                return [
+                    'success' => false,
+                    'message' => "태깅이 너무 빠릅니다. 잠시 후 다시 시도해 주세요. (최근 태깅: " . $recentLog->event_at->toTimeString() . ")"
+                ];
+            }
+
+            // 이벤트 타입 결정
+            $resolvedType = strtolower($eventType ?: '');
+            if ($resolvedType !== 'clock_in' && $resolvedType !== 'clock_out') {
+                $lastLog = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('status', '!=', 'rejected')
+                    ->orderBy('event_at', 'desc')
+                    ->first();
+                $resolvedType = ($lastLog && $lastLog->event_type === 'clock_in') ? 'clock_out' : 'clock_in';
+            }
+
+            // 이전 상태 검증
+            if ($resolvedType === 'clock_in') {
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayIn) {
+                    return ['success' => false, 'message' => '이미 오늘 출근 처리가 되어 있습니다.'];
+                }
+            } else {
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if (! $lastTodayIn) {
+                    return ['success' => false, 'message' => '오늘 출근 기록이 존재하지 않습니다.'];
+                }
+                $lastTodayOut = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_out')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayOut) {
+                    return ['success' => false, 'message' => '이미 오늘 퇴근 처리가 되어 있습니다.'];
+                }
+            }
+
+            // AttendanceLog 생성
+            AttendanceLog::create([
+                'employee_id' => $employeeId,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => $resolvedType,
+                'event_at' => $eventTime,
+                'source' => 'team_qr',
+                'status' => 'approved',
+                'notes' => '팀 QR 코드 스캔을 통해 자동 기록됨.',
+                'payload' => [
+                    'scanned_team_code' => $teamCode,
+                    'employee_team_code' => $myTeamCode,
+                    'team_name' => $employee->team->name
+                ]
+            ]);
+
+            $eventTypeName = $resolvedType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
+
+            return [
+                'success' => true,
+                'message' => "{$eventTypeName}이 성공적으로 등록되었습니다."
+            ];
+
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
     public static function hrAttendanceRecords(mixed $employeeId = null, ?string $startDate = null, ?string $endDate = null): array
     {
         try {
@@ -1834,6 +2164,8 @@ class SmartCompanyData
                 'notes' => 'NFC 태그 리더기를 통해 자동 기록됨.',
             ]);
 
+            app(AttendanceQrService::class)->syncTimesheetFor($employee, $today);
+
             $eventTypeName = $eventType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
 
             return [
@@ -1981,11 +2313,7 @@ class SmartCompanyData
             }
 
             $user = auth()->user();
-            $log->update([
-                'status' => 'approved',
-                'approved_by_id' => $user?->id ?: null,
-                'approved_at' => Carbon::now(),
-            ]);
+            app(AttendanceQrService::class)->approveLog($log, $user);
 
             return ['success' => true, 'message' => 'Attendance log approved successfully.'];
         } catch (\Throwable $e) {
@@ -2001,9 +2329,7 @@ class SmartCompanyData
                 return ['success' => false, 'message' => 'Attendance log not found.'];
             }
 
-            $log->update([
-                'status' => 'rejected',
-            ]);
+            app(AttendanceQrService::class)->rejectLog($log);
 
             return ['success' => true, 'message' => 'Attendance log rejected successfully.'];
         } catch (\Throwable $e) {

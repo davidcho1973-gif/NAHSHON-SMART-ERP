@@ -3,9 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\AttendanceLog;
+use App\Models\AttendanceQrCode;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\EmployeeBadgeQrToken;
 use App\Models\Site;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -207,5 +210,164 @@ class HrAttendanceApiTest extends TestCase
             'id' => $log2Id,
             'status' => 'rejected',
         ]);
+    }
+
+    public function test_clock_in_with_team_qr_flow(): void
+    {
+        // 1. Create a Team and assign it to the employee
+        $team = Team::create([
+            'site_id' => $this->site->id,
+            'company_id' => $this->company->id,
+            'code' => 'T-ELECT-A',
+            'name' => 'Electrical Crew A',
+            'status' => 'active',
+        ]);
+
+        $this->employee1->update([
+            'team_id' => $team->id,
+        ]);
+
+        // 2. Perform successful clock in with matching team QR code
+        $response = $this->actingAs($this->adminUser)
+            ->postJson('/smart-company-api/api_clockInWithTeamQr', [
+                'args' => ['T-ELECT-A', 'clock_in'],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('attendance_logs', [
+            'employee_id' => $this->employee1->id,
+            'event_type' => 'clock_in',
+            'source' => 'self_team_qr',
+            'status' => 'approved',
+            'team_id' => $team->id,
+        ]);
+
+        $this->assertDatabaseHas('daily_work_assignments', [
+            'employee_id' => $this->employee1->id,
+            'team_id' => $team->id,
+            'status' => 'approved',
+        ]);
+
+        $this->assertDatabaseHas('payroll_timesheets', [
+            'employee_id' => $this->employee1->id,
+            'team_id' => $team->id,
+            'status' => 'open',
+        ]);
+
+        // 3. Perform failed clock in with another team's QR code
+        $otherTeam = Team::create([
+            'site_id' => $this->site->id,
+            'company_id' => $this->company->id,
+            'code' => 'T-PIPE-B',
+            'name' => 'Pipe Crew B',
+            'status' => 'active',
+        ]);
+
+        $user2 = User::factory()->create([
+            'access_role' => 'worker',
+            'employee_id' => $this->employee2->id,
+        ]);
+
+        $this->employee2->update([
+            'team_id' => $otherTeam->id,
+        ]);
+
+        // Scan the wrong team's QR code (T-ELECT-A) for employee2
+        $response2 = $this->actingAs($user2)
+            ->postJson('/smart-company-api/api_clockInWithTeamQr', [
+                'args' => ['T-ELECT-A', 'clock_in'],
+            ]);
+
+        $response2->assertStatus(200);
+        $response2->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('attendance_logs', [
+            'employee_id' => $this->employee2->id,
+            'event_type' => 'clock_in',
+            'source' => 'self_team_qr',
+            'team_id' => $team->id,
+        ]);
+    }
+
+    public function test_foreman_can_record_worker_attendance_with_badge_qr(): void
+    {
+        $team = Team::create([
+            'site_id' => $this->site->id,
+            'company_id' => $this->company->id,
+            'code' => 'T-RIG-A',
+            'name' => 'Rigging Crew A',
+            'status' => 'active',
+        ]);
+
+        $qrCode = AttendanceQrCode::forTeam($team, $this->adminUser->id);
+        $badgeToken = EmployeeBadgeQrToken::activeForEmployee($this->employee2, $this->adminUser->id);
+
+        $foremanEmployee = Employee::create([
+            'name' => 'Foreman User',
+            'employee_number' => 'EMP-FOR',
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employment_status' => 'active',
+            'attendance_app_role' => 'foreman',
+            'attendance_app_scope' => 'site',
+        ]);
+
+        $foremanUser = User::factory()->create([
+            'access_role' => 'worker',
+            'employee_id' => $foremanEmployee->id,
+        ]);
+
+        $response = $this->actingAs($foremanUser)
+            ->post(route('attendance-app.crew.record', ['token' => $qrCode->token]), [
+                'badge_token' => route('attendance-app.badge', ['token' => $badgeToken->token]),
+                'mode' => 'clock_in',
+                'reason' => 'worker_no_phone',
+            ]);
+
+        $response->assertRedirect(route('attendance-app.crew', ['token' => $qrCode->token]));
+
+        $this->assertDatabaseHas('attendance_logs', [
+            'employee_id' => $this->employee2->id,
+            'recorded_by_id' => $foremanUser->id,
+            'event_type' => 'clock_in',
+            'source' => 'foreman_badge_qr',
+            'team_id' => $team->id,
+            'status' => 'approved',
+        ]);
+
+        $this->assertDatabaseHas('daily_work_assignments', [
+            'employee_id' => $this->employee2->id,
+            'team_id' => $team->id,
+            'status' => 'approved',
+        ]);
+    }
+
+    public function test_team_qr_printable_page(): void
+    {
+        // 1. Create a Team
+        $team = Team::create([
+            'site_id' => $this->site->id,
+            'company_id' => $this->company->id,
+            'code' => 'T-ELECT-A',
+            'name' => 'Electrical Crew A',
+            'status' => 'active',
+        ]);
+
+        // 2. Access without authentication -> should redirect to login
+        $unauthenticatedResponse = $this->get(route('team.qr', ['team' => $team]));
+        $unauthenticatedResponse->assertStatus(302);
+        $unauthenticatedResponse->assertRedirect(route('login'));
+
+        // 3. Access with authentication -> should render 200 with correct content
+        $authenticatedResponse = $this->actingAs($this->adminUser)
+            ->get(route('team.qr', ['team' => $team]));
+
+        $authenticatedResponse->assertStatus(200);
+        $authenticatedResponse->assertSee('T-ELECT-A');
+        $authenticatedResponse->assertSee('Electrical Crew A');
+        $authenticatedResponse->assertSee('/attendance-app/team/', false);
+        $authenticatedResponse->assertSee('https://api.qrserver.com/v1/create-qr-code/');
     }
 }

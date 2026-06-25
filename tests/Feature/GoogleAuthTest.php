@@ -37,7 +37,7 @@ class GoogleAuthTest extends TestCase
             ->withSession(['google_oauth_state' => 'known-state'])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
-        $response->assertRedirect('/');
+        $response->assertRedirect('/attendance-app');
         $this->assertAuthenticatedAs($user->fresh());
         $this->assertSame('google-123', $user->fresh()->google_id);
         $this->assertNotNull($user->fresh()->last_login_at);

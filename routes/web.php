@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\SmartCompanyController;
+use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileExpenseController;
@@ -54,6 +55,18 @@ Route::middleware('auth')->group(function (): void {
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
+
+    // QR Attendance mobile app
+    Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
+    Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');
+    Route::post('/attendance-app/team/{token}', [AttendanceAppController::class, 'recordTeam'])->name('attendance-app.team.record');
+    Route::get('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'crew'])->name('attendance-app.crew');
+    Route::post('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'recordCrew'])->name('attendance-app.crew.record');
+    Route::get('/attendance-app/badge/{token}', [AttendanceAppController::class, 'badge'])->name('attendance-app.badge');
+    Route::get('/attendance-app/employee/{employee}/badge-qr', [AttendanceAppController::class, 'employeeBadgeQr'])->name('attendance-app.employee.badge-qr');
+
+    // Team QR Code Printable Sheet
+    Route::get('/team/{team}/qr', [SmartCompanyController::class, 'teamQr'])->name('team.qr');
 
     // Universal Scanner and Compatibility Adapter Route
     Route::post('/smart-company-api/{method}', \App\Http\Controllers\SmartCompanyApiController::class)

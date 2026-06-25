@@ -17,6 +17,12 @@ class AttendanceLog extends Model
         'site_id',
         'team_id',
         'photo_upload_id',
+        'daily_work_assignment_id',
+        'attendance_qr_code_id',
+        'employee_badge_qr_token_id',
+        'site_contractor_id',
+        'employer_company_id',
+        'recorded_by_id',
         'attendance_date',
         'event_type',
         'event_at',
@@ -41,6 +47,36 @@ class AttendanceLog extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function dailyWorkAssignment(): BelongsTo
+    {
+        return $this->belongsTo(DailyWorkAssignment::class);
+    }
+
+    public function attendanceQrCode(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceQrCode::class);
+    }
+
+    public function employeeBadgeQrToken(): BelongsTo
+    {
+        return $this->belongsTo(EmployeeBadgeQrToken::class);
+    }
+
+    public function siteContractor(): BelongsTo
+    {
+        return $this->belongsTo(SiteContractor::class);
+    }
+
+    public function employerCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'employer_company_id');
+    }
+
+    public function recordedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by_id');
     }
 
     public function photoUpload(): BelongsTo

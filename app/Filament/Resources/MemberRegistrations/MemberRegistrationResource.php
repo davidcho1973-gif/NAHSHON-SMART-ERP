@@ -223,7 +223,12 @@ class MemberRegistrationResource extends Resource
                         ->disabled()
                         ->dehydrated(false),
                     TextInput::make('nfc_raw_uid')->label('Raw NFC UID')->disabled()->dehydrated(false)->maxLength(120),
-                    TextInput::make('badge_number')->label('NFC ID')->disabled()->dehydrated(false)->maxLength(80),
+                    TextInput::make('badge_number')
+                        ->label('NFC ID')
+                        ->helperText('Generated only from Raw NFC UID: N- plus the last 9 characters.')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->maxLength(80),
                     FileUpload::make('badge_photo_path')
                         ->label('Hoffman badge photo')
                         ->disk('public')
@@ -236,11 +241,40 @@ class MemberRegistrationResource extends Resource
                         ->disabled()
                         ->dehydrated(false)
                         ->columnSpanFull(),
+                    TextInput::make('badge_printed_number')
+                        ->label('Badge printed number')
+                        ->helperText('OCR reference only. This is not used as the NFC ID.')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->maxLength(120),
                     TextInput::make('badge_company_name')->label('Badge company')->disabled()->dehydrated(false)->maxLength(255),
                     TextInput::make('badge_last_name')->label('Badge last name')->disabled()->dehydrated(false)->maxLength(120),
                     TextInput::make('badge_first_name')->label('Badge first name')->disabled()->dehydrated(false)->maxLength(120),
                     TextInput::make('badge_role')->label('Badge role')->disabled()->dehydrated(false)->maxLength(120),
                     DatePicker::make('badge_issued_on')->label('Badge issued on / hire date')->disabled()->dehydrated(false),
+                    TextInput::make('badge_analyzed_at')
+                        ->label('AI OCR analyzed at')
+                        ->formatStateUsing(fn (?MemberRegistration $record): ?string => $record?->badge_analyzed_at?->format('m/d/Y H:i'))
+                        ->disabled()
+                        ->dehydrated(false),
+                    TextInput::make('badge_analysis_model')
+                        ->label('AI OCR model')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->maxLength(80),
+                    TextInput::make('badge_analysis_confidence')
+                        ->label('AI OCR confidence')
+                        ->formatStateUsing(fn (?MemberRegistration $record): ?string => self::badgeAnalysisConfidence($record?->badge_analysis_payload))
+                        ->disabled()
+                        ->dehydrated(false),
+                    Textarea::make('badge_analysis_preview')
+                        ->label('AI OCR JSON')
+                        ->formatStateUsing(fn (?MemberRegistration $record): ?string => self::formatBadgeAnalysisPayload($record?->badge_analysis_payload))
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->rows(8)
+                        ->visible(fn (?MemberRegistration $record): bool => filled($record?->badge_analysis_payload))
+                        ->columnSpanFull(),
                 ]),
 
             Section::make('⑤ 관리자 메모')
@@ -255,14 +289,6 @@ class MemberRegistrationResource extends Resource
                 ->collapsible()
                 ->collapsed()
                 ->schema([
-                    Textarea::make('badge_analysis_preview')
-                        ->label('Gemini badge analysis')
-                        ->formatStateUsing(fn (?MemberRegistration $record): ?string => self::formatBadgeAnalysisPayload($record?->badge_analysis_payload))
-                        ->disabled()
-                        ->dehydrated(false)
-                        ->rows(10)
-                        ->visible(fn (?MemberRegistration $record): bool => filled($record?->badge_analysis_payload))
-                        ->columnSpanFull(),
                     Textarea::make('payload_preview')
                         ->label('Automation signals')
                         ->formatStateUsing(fn (?MemberRegistration $record): ?string => self::formatBadgeAnalysisPayload($record?->payload))
@@ -306,6 +332,7 @@ class MemberRegistrationResource extends Resource
                 TextColumn::make('safety_training_status')->label('Safety')->badge()->sortable()->toggleable(),
                 TextColumn::make('badge_registration_status')->label('Badge status')->badge()->sortable()->toggleable(),
                 TextColumn::make('badge_number')->label('NFC ID')->badge()->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('badge_printed_number')->label('Badge printed')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('risk_level')->badge()->sortable(),
                 TextColumn::make('automation_score')->label('Auto %')->sortable(),
                 TextColumn::make('document_status')->badge()->toggleable(),
@@ -481,6 +508,7 @@ class MemberRegistrationResource extends Resource
                     ->fillForm(fn (MemberRegistration $record): array => [
                         'nfc_raw_uid' => $record->nfc_raw_uid,
                         'badge_number' => $record->badge_number,
+                        'badge_printed_number' => $record->badge_printed_number,
                         'badge_photo_path' => $record->badge_photo_path,
                         'badge_company_name' => $record->badge_company_name,
                         'badge_last_name' => $record->badge_last_name,
@@ -531,11 +559,15 @@ class MemberRegistrationResource extends Resource
                             ->columnSpanFull(),
                         Actions::make([
                             Action::make('analyzeBadgePhotoForApplicant')
-                                ->label('Analyze badge photo')
+                                ->label('AI OCR analyze badge')
                                 ->icon('heroicon-o-sparkles')
                                 ->color('info')
                                 ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
                         ])->columnSpanFull(),
+                        TextInput::make('badge_printed_number')
+                            ->label('Badge printed number')
+                            ->helperText('OCR reference only. NFC ID is generated from Raw NFC UID.')
+                            ->maxLength(120),
                         TextInput::make('badge_company_name')->label('Badge company')->maxLength(255),
                         TextInput::make('badge_last_name')->label('Badge last name')->maxLength(120),
                         TextInput::make('badge_first_name')->label('Badge first name')->maxLength(120),
@@ -564,10 +596,9 @@ class MemberRegistrationResource extends Resource
 
                         $record->fill([
                             'nfc_raw_uid' => $data['nfc_raw_uid'] ?? null,
-                            'badge_number' => filled($data['nfc_raw_uid'] ?? null)
-                                ? MemberRegistration::normalizeNfcUid((string) $data['nfc_raw_uid'])
-                                : ($data['badge_number'] ?? null),
+                            'badge_number' => MemberRegistration::normalizeNfcUid(is_string($data['nfc_raw_uid'] ?? null) ? $data['nfc_raw_uid'] : null),
                             'badge_photo_path' => $badgePhotoPath,
+                            'badge_printed_number' => self::nullableText($data['badge_printed_number'] ?? null),
                             'badge_company_name' => self::nullableText($data['badge_company_name'] ?? null),
                             'badge_last_name' => self::nullableText($data['badge_last_name'] ?? null),
                             'badge_first_name' => self::nullableText($data['badge_first_name'] ?? null),
@@ -738,6 +769,7 @@ class MemberRegistrationResource extends Resource
         self::setIfFilled($set, 'badge_role', $analysis['role'] ?? null);
         self::setIfFilled($set, 'badge_company_name', $analysis['company_name'] ?? null);
         self::setIfFilled($set, 'badge_issued_on', $analysis['issued_on'] ?? null);
+        self::setIfFilled($set, 'badge_printed_number', $analysis['printed_badge_number'] ?? null);
 
         if (blank($get('first_name'))) {
             self::setIfFilled($set, 'first_name', $analysis['first_name'] ?? null);
@@ -749,10 +781,6 @@ class MemberRegistrationResource extends Resource
 
         if (blank($get('role'))) {
             self::setIfFilled($set, 'role', $analysis['role'] ?? null);
-        }
-
-        if (blank($get('badge_number'))) {
-            self::setIfFilled($set, 'badge_number', $analysis['badge_number'] ?? null);
         }
 
         if ($companyId = self::findCompanyId($analysis['company_name'] ?? null)) {
@@ -824,6 +852,19 @@ class MemberRegistrationResource extends Resource
         }
 
         return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
+    }
+
+    private static function badgeAnalysisConfidence(mixed $payload): ?string
+    {
+        $payload = self::normalizeBadgeAnalysisPayload($payload);
+
+        if ($payload === null || ! isset($payload['confidence'])) {
+            return null;
+        }
+
+        return is_numeric($payload['confidence'])
+            ? ((string) (int) $payload['confidence']) . '%'
+            : (string) $payload['confidence'];
     }
 
     private static function setIfFilled(Set $set, string $field, mixed $value): void

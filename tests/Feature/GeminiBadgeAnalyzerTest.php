@@ -29,7 +29,7 @@ class GeminiBadgeAnalyzerTest extends TestCase
                                 'full_name' => 'David Cho',
                                 'role' => 'Foreman',
                                 'issued_on' => '06/20/2026',
-                                'badge_number' => 'BB-100',
+                                'printed_badge_number' => 'BB-100',
                                 'confidence' => 91,
                             ]),
                         ]],
@@ -48,7 +48,7 @@ class GeminiBadgeAnalyzerTest extends TestCase
         $this->assertSame('David Cho', $result['full_name']);
         $this->assertSame('Foreman', $result['role']);
         $this->assertSame('2026-06-20', $result['issued_on']);
-        $this->assertSame('BB-100', $result['badge_number']);
+        $this->assertSame('BB-100', $result['printed_badge_number']);
         $this->assertSame(91, $result['confidence']);
         $this->assertSame('gemini-3.5-flash', $result['model']);
 

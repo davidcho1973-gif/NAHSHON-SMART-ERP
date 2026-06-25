@@ -118,7 +118,8 @@ Badge-specific rules:
 - first_name is printed below the last name.
 - role is printed below the first name.
 - issued_on is the date printed next to "ISSUED ON" under the portrait photo.
-- If the badge shows another visible badge code, return it as badge_number, but do not invent the NFC ID.
+- If the badge shows another visible printed badge code, return it as printed_badge_number.
+- Never return or invent the NFC chip UID. NFC IDs are created only from the hardware reader UID.
 
 Fields:
 - company_name: red contractor/company name under HOFFMAN.
@@ -127,7 +128,7 @@ Fields:
 - full_name: complete person name as printed.
 - role: job title, trade, position, or worker role.
 - issued_on: badge issue date in YYYY-MM-DD if visible, otherwise null.
-- badge_number: badge ID, NFC ID, employee ID, or visible badge number if present.
+- printed_badge_number: visible printed badge number or printed employee/badge code if present.
 - confidence: 0-100 confidence score for the extraction.
 PROMPT;
     }
@@ -146,7 +147,7 @@ PROMPT;
                 'full_name' => ['type' => 'string'],
                 'role' => ['type' => 'string'],
                 'issued_on' => ['type' => 'string', 'description' => 'YYYY-MM-DD or empty string'],
-                'badge_number' => ['type' => 'string'],
+                'printed_badge_number' => ['type' => 'string'],
                 'confidence' => ['type' => 'integer'],
             ],
         ];
@@ -173,7 +174,7 @@ PROMPT;
             'full_name' => $fullName,
             'role' => $this->clean($data['role'] ?? null),
             'issued_on' => $this->normalizeDate($data['issued_on'] ?? null),
-            'badge_number' => $this->clean($data['badge_number'] ?? null),
+            'printed_badge_number' => $this->clean($data['printed_badge_number'] ?? $data['badge_number'] ?? null),
             'confidence' => is_numeric($data['confidence'] ?? null) ? max(0, min(100, (int) $data['confidence'])) : null,
             'model' => $model,
             'raw' => $data,

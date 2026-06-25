@@ -18,6 +18,7 @@ class Employee extends Model
         'team_id',
         'employee_number',
         'badge_number',
+        'badge_printed_number',
         'first_name',
         'last_name',
         'name',
@@ -34,6 +35,8 @@ class Employee extends Model
         'employment_status',
         'visa_expires_on',
         'safety_training_expires_on',
+        'attendance_app_role',
+        'attendance_app_scope',
         'payload',
     ];
 
@@ -82,12 +85,15 @@ class Employee extends Model
     {
         foreach ([
             'badge_number',
+            'badge_printed_number',
             'first_name',
             'last_name',
             'email',
             'badge_company_name',
             'nationality',
             'role',
+            'attendance_app_role',
+            'attendance_app_scope',
         ] as $field) {
             if (! is_string($this->{$field})) {
                 continue;
@@ -129,5 +135,15 @@ class Employee extends Model
     public function attendanceLogs(): HasMany
     {
         return $this->hasMany(AttendanceLog::class);
+    }
+
+    public function badgeQrTokens(): HasMany
+    {
+        return $this->hasMany(EmployeeBadgeQrToken::class);
+    }
+
+    public function dailyWorkAssignments(): HasMany
+    {
+        return $this->hasMany(DailyWorkAssignment::class);
     }
 }

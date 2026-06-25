@@ -21,6 +21,9 @@ class PostgresSchemaTest extends TestCase
             'teams',
             'employees',
             'projects',
+            'attendance_qr_codes',
+            'employee_badge_qr_tokens',
+            'daily_work_assignments',
             'photo_uploads',
             'ocr_results',
             'attendance_logs',
@@ -35,6 +38,7 @@ class PostgresSchemaTest extends TestCase
         foreach ([
             'first_name',
             'last_name',
+            'badge_printed_number',
             'badge_company_name',
             'badge_issued_on',
             'badge_photo_path',
@@ -42,8 +46,28 @@ class PostgresSchemaTest extends TestCase
             'badge_analyzed_at',
             'badge_analysis_payload',
             'start_date',
+            'attendance_app_role',
+            'attendance_app_scope',
         ] as $column) {
             $this->assertTrue(Schema::hasColumn('employees', $column), "Missing employees column: {$column}");
+        }
+
+        foreach ([
+            'daily_work_assignment_id',
+            'attendance_qr_code_id',
+            'employee_badge_qr_token_id',
+            'site_contractor_id',
+            'employer_company_id',
+            'recorded_by_id',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('attendance_logs', $column), "Missing attendance_logs column: {$column}");
+        }
+
+        foreach ([
+            'employer_company_id',
+            'site_contractor_id',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('payroll_timesheets', $column), "Missing payroll_timesheets column: {$column}");
         }
 
         foreach ([
@@ -56,6 +80,7 @@ class PostgresSchemaTest extends TestCase
             'badge_registration_status',
             'nfc_raw_uid',
             'badge_photo_path',
+            'badge_printed_number',
             'badge_company_name',
             'badge_first_name',
             'badge_last_name',

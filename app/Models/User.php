@@ -105,6 +105,7 @@ class User extends Authenticatable implements FilamentUser
             'site_manager' => '/admin',
             'safety_manager' => '/admin/member-documents',
             'payroll' => '/admin',
+            'foreman', 'worker' => '/attendance-app',
             default => '/',
         };
     }

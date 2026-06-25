@@ -81,7 +81,8 @@ class EmployeeResource extends Resource
                 ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
             TextInput::make('badge_number')
-                ->label('Badge / NFC ID')
+                ->label('NFC ID')
+                ->helperText('Use the ERP NFC ID format, such as N-842853E04. AI OCR does not fill this field.')
                 ->unique(ignoreRecord: true)
                 ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
@@ -112,6 +113,11 @@ class EmployeeResource extends Resource
                     ->color('info')
                     ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
             ])->columnSpanFull(),
+            TextInput::make('badge_printed_number')
+                ->label('Badge printed number')
+                ->helperText('OCR reference only. This is not used as the NFC ID.')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                ->maxLength(120),
             TextInput::make('first_name')
                 ->label('First name')
                 ->maxLength(120)
@@ -172,6 +178,26 @@ class EmployeeResource extends Resource
                 ])
                 ->default('active')
                 ->required(),
+            Select::make('attendance_app_role')
+                ->label('QR attendance role')
+                ->options([
+                    'worker' => 'Worker - self attendance only',
+                    'foreman' => 'Foreman / Team lead',
+                    'safety_manager' => 'Safety manager',
+                    'attendance_admin' => 'Attendance admin',
+                ])
+                ->default('worker')
+                ->required(),
+            Select::make('attendance_app_scope')
+                ->label('QR attendance scope')
+                ->options([
+                    'self' => 'Self only',
+                    'team' => 'Assigned team',
+                    'site' => 'Assigned site',
+                    'all_sites' => 'All sites',
+                ])
+                ->default('self')
+                ->required(),
             DatePicker::make('visa_expires_on')
                 ->label('Visa expires'),
             DatePicker::make('safety_training_expires_on')
@@ -214,9 +240,11 @@ class EmployeeResource extends Resource
                 TextColumn::make('site.code')->label('Site')->badge()->sortable(),
                 TextColumn::make('team.name')->label('Team')->searchable()->toggleable(),
                 TextColumn::make('role')->label('Role')->searchable()->toggleable(),
+                TextColumn::make('attendance_app_role')->label('QR role')->badge()->sortable()->toggleable(),
                 TextColumn::make('start_date')->label('Hire date')->date()->sortable()->toggleable(),
                 TextColumn::make('employment_status')->label('Status')->badge()->sortable(),
-                TextColumn::make('badge_number')->label('Badge')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('badge_number')->label('NFC ID')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('badge_printed_number')->label('Badge printed')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_company_name')->label('Badge company')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_issued_on')->label('Badge issued')->date()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('visa_expires_on')->date()->sortable()->toggleable(isToggledHiddenByDefault: true),
@@ -240,6 +268,11 @@ class EmployeeResource extends Resource
                     ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all()),
             ])
             ->recordActions([
+                Action::make('badgeQr')
+                    ->label('Badge QR')
+                    ->icon('heroicon-o-qr-code')
+                    ->url(fn (Employee $record): string => route('attendance-app.employee.badge-qr', ['employee' => $record]))
+                    ->openUrlInNewTab(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -330,10 +363,7 @@ class EmployeeResource extends Resource
         self::setIfFilled($set, 'role', $analysis['role'] ?? null);
         self::setIfFilled($set, 'badge_company_name', $analysis['company_name'] ?? null);
         self::setIfFilled($set, 'badge_issued_on', $analysis['issued_on'] ?? null);
-
-        if (blank($get('badge_number'))) {
-            self::setIfFilled($set, 'badge_number', $analysis['badge_number'] ?? null);
-        }
+        self::setIfFilled($set, 'badge_printed_number', $analysis['printed_badge_number'] ?? null);
 
         if ($companyId = self::findCompanyId($analysis['company_name'] ?? null)) {
             $set('company_id', $companyId);

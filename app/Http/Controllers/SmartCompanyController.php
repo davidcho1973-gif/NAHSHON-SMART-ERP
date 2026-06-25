@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Models\AttendanceQrCode;
+use App\Models\Team;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -59,6 +62,7 @@ class SmartCompanyController extends Controller
             'initials' => $this->initials($name),
             'employee_id' => $user->employee_id,
             'raw_role' => $user->access_role,
+            'site_code' => $user->employee?->site?->code,
         ];
     }
 
@@ -71,5 +75,18 @@ class SmartCompanyController extends Controller
             ->implode('');
 
         return $parts !== '' ? $parts : 'ER';
+    }
+
+    public function teamQr(Request $request, Team $team): View
+    {
+        $team->loadMissing(['site', 'company']);
+        $qrCode = AttendanceQrCode::forTeam($team, $request->user()?->id);
+        $intakeUrl = route('attendance-app.team', ['token' => $qrCode->token]);
+
+        return view('smart-company.team-qr', [
+            'team' => $team,
+            'qrCode' => $qrCode,
+            'intakeUrl' => $intakeUrl,
+        ]);
     }
 }

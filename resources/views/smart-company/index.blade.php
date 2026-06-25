@@ -263,6 +263,10 @@
             <span class="shortcut">âŒ˜K</span>
           </div>
           <div class="topbar-actions">
+            <button class="btn-primary" id="btn-global-commute" title="내 출퇴근 등록" onclick="window.openMyCommuteModal()" style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:var(--brand-primary); color:white; cursor:pointer; margin-right:8px;">
+              <i class="ph ph-clock" style="font-size:14px;"></i>
+              <span>내 출퇴근</span>
+            </button>
             <button class="icon-btn" id="btn-notifications" title="ì•Œë¦¼">
               <i class="ph ph-bell"></i>
               <span class="status-dot"></span>
@@ -875,6 +879,7 @@
           });
       },
       getAttendanceDetailed: (date) => gsRun('api_getAttendanceDetailed', [_siteId(), date || null], { success: false, companies: [], totalCount: 0 }),
+      clockInWithTeamQr: (teamCode, eventType) => gsRun('api_clockInWithTeamQr', [teamCode, eventType || null], { success: false }),
       getEmployeeDetail: (badgeId) => gsRun('api_getEmployeeDetail', [badgeId, _siteId()], { success: false }),
       getCompanyTeamStats: (date) => gsRun('api_getCompanyTeamStats', [_siteId(), date || null], { success: false, byCompany: [], byTeam: [] }),
       getAvailableDates: () => gsRun('api_getAvailableDates', [_siteId()], { success: false, dates: [] }),
@@ -3085,7 +3090,20 @@
       async function renderHR() {
         pageContainer.innerHTML = skeleton();
         try {
+          var userRole = (authenticatedAccount.raw_role || '').toLowerCase();
+          var isAdmin = ['super_admin', 'admin', 'hr_manager', 'site_manager'].includes(userRole);
           var isGlobal = (_siteId() === 'ALL');
+
+          if (!isAdmin) {
+            pageContainer.innerHTML =
+              '<div class="header-section"><div><h1 class="page-title">📍 내 출퇴근 등록 (GPS)</h1>' +
+              '<p class="page-subtitle">현장 반경 내에서 출근 및 퇴근을 기록합니다.</p></div></div>' +
+              '<div id="tab-my-commute" style="display:block;">' + (typeof window._myCommuteHtmlTemplate === 'function' ? window._myCommuteHtmlTemplate() : '') + '</div>';
+
+            if (typeof window.loadMyCommuteLogs === 'function') window.loadMyCommuteLogs();
+            if (typeof window.initMyCommuteGps === 'function') window.initMyCommuteGps();
+            return;
+          }
 
           // í†µí•©ë·°: getHRData(stats/personnel) + getAttendanceLive(global merged)
           // ë‹¨ì¼ë·°: getHRData + getDailyTeamMatrix + getDailyAttendanceDetail ë³‘ë ¬
@@ -6140,7 +6158,7 @@
       };
 
       // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      
+
 
       async function renderRental() {
         pageContainer.innerHTML = skeleton();
@@ -8201,6 +8219,19 @@
       // â”€â”€ ì´ˆê¸°í™” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       pageContainer.style.transition = 'opacity 0.15s';
       loadView('dashboard');
+
+      // URL team_code 파라미터 체크 및 QR 출퇴근 자동 진입
+      const urlParams = new URLSearchParams(window.location.search);
+      const teamCodeParam = urlParams.get('team_code');
+      if (teamCodeParam) {
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+        setTimeout(function() {
+          if (typeof window.openMyCommuteModal === 'function') {
+            window.openMyCommuteModal(teamCodeParam);
+          }
+        }, 500);
+      }
     });
 
     // â”€â”€ ë¬¸ì„œ ëª¨ë‹¬ ì œì–´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -9305,7 +9336,167 @@ async function renderVendors() {
     document.getElementById('page-container').innerHTML = '<div style="padding:40px;">ì˜¤ë¥˜: ' + e.message + '</div>';
   }
 }
+
+    // ============================================================
+    // TEAM QR COMMUTE / ATTENDANCE logic
+    // ============================================================
+    window._scannedTeamCode = null;
+
+    window._myCommuteHtmlTemplate = function(scannedCode) {
+      const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
+      let validationHtml = '';
+      if (scannedCode) {
+        validationHtml = '<div style="background:rgba(37,99,235,0.08); border:1px dashed var(--brand-primary); padding:10px 14px; border-radius:8px; font-size:12px; margin-bottom:12px; text-align:center;">' +
+          '<span style="color:var(--text-secondary);">스캔한 팀 코드:</span> ' +
+          '<strong style="color:var(--brand-primary); font-size:13px;">' + scannedCode + '</strong>' +
+          '</div>';
+      }
+
+      return '<div class="panel" style="margin-bottom:16px; border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
+        '<div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--border-subtle);">' +
+        '<div class="panel-title" style="font-size:13px; font-weight:700;"><i class="ph ph-qr-code" style="color:var(--brand-primary);"></i> QR 팀별 출퇴근</div>' +
+        '<span style="font-size:11px; font-weight:600; color:var(--brand-primary);">' + today + '</span>' +
+        '</div>' +
+        '<div class="panel-body padded" style="padding:20px; display:flex; flex-direction:column; gap:16px;">' +
+        validationHtml +
+        '<div style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:8px; padding:14px; font-size:12px; display:flex; flex-direction:column; gap:10px;">' +
+        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 성명</span><span style="font-weight:700; color:var(--text-primary);">' + authenticatedAccount.name + '</span></div>' +
+        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 권한</span><span style="font-weight:700; color:var(--text-primary);">' + authenticatedAccount.role + '</span></div>' +
+        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">스캔 검증 상태</span><span id="commute-validation-status" style="font-weight:700; color:var(--status-warning);">스캔 대기 중</span></div>' +
+        '</div>' +
+        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
+        '<button id="btn-clock-in" onclick="window.submitCommuteQr(\'clock_in\')" class="btn-primary" style="padding:14px; font-size:14px; font-weight:700; border-radius:8px; display:flex; flex-direction:column; align-items:center; gap:6px;" disabled>' +
+        '<i class="ph ph-sign-in" style="font-size:20px;"></i><span>출근 등록</span></button>' +
+        '<button id="btn-clock-out" onclick="window.submitCommuteQr(\'clock_out\')" class="btn-secondary" style="padding:14px; font-size:14px; font-weight:700; border-radius:8px; display:flex; flex-direction:column; align-items:center; gap:6px;" disabled>' +
+        '<i class="ph ph-sign-out" style="font-size:20px;"></i><span>퇴근 등록</span></button>' +
+        '</div>' +
+        '<div id="commute-message" style="font-size:11px; text-align:center; color:var(--text-tertiary);">현장의 팀 QR 코드를 카메라로 정확히 스캔해 주세요.</div>' +
+        '</div></div>' +
+        '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
+        '<div class="panel-header" style="padding:14px 20px; border-bottom:1px solid var(--border-subtle);"><div class="panel-title" style="font-size:13px;"><i class="ph ph-list-bullets"></i> 오늘 내 출퇴근 기록</div></div>' +
+        '<div class="panel-body" style="padding:0; overflow-x:auto;">' +
+        '<table class="data-table" id="my-attendance-table" style="width:100%; border-collapse:collapse;">' +
+        '<thead><tr><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">구분</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">기록 시간</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">방식</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">상태</th></tr></thead>' +
+        '<tbody id="my-attendance-logs-body"><tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">기록 조회 중...</td></tr></tbody>' +
+        '</table></div></div>';
+    };
+
+    window.openMyCommuteModal = function(teamCode) {
+      window._scannedTeamCode = teamCode || null;
+      const modal = document.getElementById('myCommuteModalOverlay');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('my-commute-modal-body').innerHTML = window._myCommuteHtmlTemplate(teamCode);
+        window.loadMyCommuteLogs();
+        window.validateScannedTeamCode(teamCode);
+      }
+    };
+
+    window.closeMyCommuteModal = function() {
+      const modal = document.getElementById('myCommuteModalOverlay');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    };
+
+    window.loadMyCommuteLogs = async function() {
+      const body = document.getElementById('my-attendance-logs-body');
+      if (!body) return;
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await gsRun('api_getHrAttendanceRecords', [authenticatedAccount.employee_id, today, today], { success: false, records: [] });
+        if (res && res.success && res.records && res.records.length > 0) {
+          body.innerHTML = res.records.map(r => {
+            const time = r.time || (r.event_at ? new Date(r.event_at).toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '-');
+            const type = r.event_type === 'clock_in' ? '<span style="color:var(--status-success); font-weight:700;">출근</span>' : '<span style="color:var(--status-warning); font-weight:700;">퇴근</span>';
+            const method = r.source === 'team_qr' ? 'QR 스캔' : r.source === 'nfc_reader' ? 'NFC 리더' : '웹 포탈';
+            const status = r.status === 'approved' ? '<span style="color:var(--status-success);">승인완료</span>' : r.status === 'pending' ? '<span style="color:var(--status-warning);">대기중</span>' : '<span style="color:var(--status-danger);">반려</span>';
+            return '<tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px 14px; font-weight:600;">' + type + '</td><td class="cell-mono" style="padding:10px 14px;">' + time + '</td><td style="padding:10px 14px;">' + method + '</td><td style="padding:10px 14px;">' + status + '</td></tr>';
+          }).join('');
+        } else {
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">오늘 출퇴근 기록이 존재하지 않습니다.</td></tr>';
+        }
+      } catch (err) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--status-danger);">이력 조회 실패: ' + err.message + '</td></tr>';
+      }
+    };
+
+    window.validateScannedTeamCode = function(teamCode) {
+      const statusEl = document.getElementById('commute-validation-status');
+      const msgEl = document.getElementById('commute-message');
+      const btnIn = document.getElementById('btn-clock-in');
+      const btnOut = document.getElementById('btn-clock-out');
+
+      if (!teamCode) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--status-danger);">스캔 실패 (코드 없음)</span>';
+        if (msgEl) msgEl.innerText = '올바른 QR 코드를 스캔해 주세요.';
+        return;
+      }
+
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--status-success);"><i class="ph ph-check-circle"></i> 스캔 확인 완료</span>';
+      }
+      if (msgEl) {
+        msgEl.innerHTML = '<span style="color:var(--brand-primary); font-weight:700;">본인 인증이 활성화되었습니다. 출퇴근을 선택해주세요.</span>';
+      }
+      if (btnIn) btnIn.disabled = false;
+      if (btnOut) btnOut.disabled = false;
+    };
+
+    window.submitCommuteQr = async function(eventType) {
+      if (!window._scannedTeamCode) {
+        alert('스캔된 팀 코드가 없습니다. 다시 QR 코드를 스캔해 주세요.');
+        return;
+      }
+      const btnIn = document.getElementById('btn-clock-in');
+      const btnOut = document.getElementById('btn-clock-out');
+      if (btnIn) btnIn.disabled = true;
+      if (btnOut) btnOut.disabled = true;
+
+      showToast('스캔 정보를 전송 및 소속 팀 검증 중...');
+      try {
+        const res = await window.API.clockInWithTeamQr(window._scannedTeamCode, eventType);
+        if (res && res.success) {
+          showToast(res.message);
+          window.loadMyCommuteLogs();
+          const msgEl = document.getElementById('commute-message');
+          if (msgEl) {
+            msgEl.innerHTML = '<span style="color:var(--status-success); font-weight:700;"><i class="ph ph-check-circle"></i> ' + res.message + '</span>';
+          }
+          setTimeout(function() {
+            window.closeMyCommuteModal();
+          }, 2000);
+        } else {
+          const msgEl = document.getElementById('commute-message');
+          if (msgEl) {
+            msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-x-circle"></i> ' + (res.message || '인증 오류') + '</span>';
+          }
+          alert('인증 반려: ' + (res.message || '소속 팀이 일치하지 않습니다.'));
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+      } catch (err) {
+        alert('서버 검증 실패: ' + err.message);
+        if (btnIn) btnIn.disabled = false;
+        if (btnOut) btnOut.disabled = false;
+      }
+    };
 </script>
+
+<div id="myCommuteModalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.65); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:var(--bg-surface-elevated); width:90%; max-width:550px; border-radius:16px; box-shadow:0 24px 48px rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); overflow:hidden; display:flex; flex-direction:column; max-height:90vh;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:20px 24px; background:linear-gradient(135deg, rgba(37,99,235,0.1), transparent); border-bottom:1px solid var(--border-color);">
+      <h2 style="margin:0; font-size:18px; color:var(--text-primary); font-weight:700; display:flex; align-items:center; gap:8px;">
+        <i class="ph ph-clock" style="color:var(--brand-primary); font-size:22px;"></i>
+        내 출퇴근 등록 (QR)
+      </h2>
+      <button onclick="window.closeMyCommuteModal()" style="background:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-secondary); font-size:18px; cursor:pointer; width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;">&times;</button>
+    </div>
+    <div style="padding:24px; overflow-y:auto; flex:1;" id="my-commute-modal-body">
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

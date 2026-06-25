@@ -59,6 +59,7 @@ class MemberRegistration extends Model
         'badge_registration_status',
         'nfc_raw_uid',
         'badge_photo_path',
+        'badge_printed_number',
         'badge_company_name',
         'badge_first_name',
         'badge_last_name',
@@ -426,6 +427,7 @@ class MemberRegistration extends Model
                 'extracted_data' => array_filter([
                     'nfc_raw_uid' => $this->nfc_raw_uid,
                     'nfc_id' => $this->badge_number,
+                    'printed_number' => $this->badge_printed_number,
                     'company_name' => $this->badge_company_name,
                     'last_name' => $this->badge_last_name,
                     'first_name' => $this->badge_first_name,
@@ -499,6 +501,7 @@ class MemberRegistration extends Model
             'site_id' => $this->site_id,
             'team_id' => $this->team_id,
             'badge_number' => $this->badge_number,
+            'badge_printed_number' => $this->badge_printed_number,
             'first_name' => $firstName,
             'last_name' => $lastName,
             'name' => $fullName,
