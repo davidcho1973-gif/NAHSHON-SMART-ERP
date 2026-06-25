@@ -7255,6 +7255,135 @@
           totalLeaseCost = (r.dailyRate || 0) * leaseDays + (r.deliveryFee || 0);
         }
 
+        var payload = r.payload || {};
+        if (typeof payload === 'string') {
+          try { payload = JSON.parse(payload); } catch(e) { payload = {}; }
+        }
+        var details = payload.details || {};
+        
+        var ratePeriodText = payload.rate_period ? ' (' + payload.rate_period + ')' : '';
+        var returnFeeText = payload.return_fee ? ' (반납비: $' + parseInt(payload.return_fee).toLocaleString() + ')' : '';
+        var rateAmountText = '$' + (r.dailyRate || 0).toLocaleString() + ratePeriodText;
+        var deliveryFeeText = '$' + (r.deliveryFee || 0).toLocaleString() + returnFeeText;
+
+        var aiDetailsHtml = '';
+        if (details && typeof details === 'object' && Object.keys(details).length > 0) {
+          aiDetailsHtml += '<div style="margin-top:16px;border:1px solid var(--border-subtle);border-radius:10px;overflow:hidden;background:var(--bg-base);">';
+          aiDetailsHtml += '  <div style="background:rgba(255,255,255,0.02);padding:10px 16px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:6px;font-weight:700;color:#7c3aed;font-size:13px;">';
+          aiDetailsHtml += '    <i class="ph ph-robot" style="font-size:16px;"></i> AI 계약 추출 추가 정보 (Contract Details)';
+          aiDetailsHtml += '  </div>';
+          aiDetailsHtml += '  <div style="padding:16px;display:flex;flex-direction:column;gap:12px;font-size:12px;color:var(--text-secondary);">';
+          
+          // Row 1: Document info
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">Quote / 계약번호</span><strong>' + (details.quote_no || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">PO 번호</span><strong>' + (details.po_number || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">고객 계정번호</span><strong>' + (details.account_no || '-') + '</strong></div>';
+          aiDetailsHtml += '    </div>';
+
+          // Row 2: Dates and doc type
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">계약일자</span><strong>' + (details.quote_date || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">만료일자</span><strong>' + (details.expiration_date || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">배송희망일</span><strong>' + (details.delivery_date || '-') + '</strong></div>';
+          aiDetailsHtml += '    </div>';
+
+          // Lessor and Lessee Details
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          
+          // Lessor
+          var lessor = details.lessor || {};
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">임대 회사 (Lessor)</span>';
+          aiDetailsHtml += '        <div style="display:flex;flex-direction:column;gap:2px;">';
+          aiDetailsHtml += '          <div><strong>' + (lessor.name || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>연락처: ' + (lessor.phone || '-') + '</div>';
+          aiDetailsHtml += '          <div>주소: ' + (lessor.address || '-') + '</div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          // Lessee
+          var lessee = details.lessee || {};
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">임차 회사 (Lessee)</span>';
+          aiDetailsHtml += '        <div style="display:flex;flex-direction:column;gap:2px;">';
+          aiDetailsHtml += '          <div><strong>' + (lessee.name || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>담당자: ' + (lessee.contact_name || '-') + ' (' + (lessee.contact_phone || '-') + ')</div>';
+          aiDetailsHtml += '          <div>이메일: ' + (lessee.contact_email || '-') + '</div>';
+          aiDetailsHtml += '          <div>주소: ' + (lessee.address || '-') + '</div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          aiDetailsHtml += '    </div>';
+
+          // Addresses and sales rep
+          var salesRep = details.sales_rep || {};
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:20px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">배송지 주소 (Ship-To)</span><strong>' + (details.ship_to_address || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">영업 담당자 (Sales Rep)</span>';
+          aiDetailsHtml += '        <strong>' + (salesRep.name || '-') + '</strong>';
+          if (salesRep.phone || salesRep.email) {
+            aiDetailsHtml += '      <div style="font-size:11px;margin-top:2px;">' + (salesRep.phone || '') + ' ' + (salesRep.email || '') + '</div>';
+          }
+          aiDetailsHtml += '      </div>';
+          aiDetailsHtml += '    </div>';
+
+          // Specs and Scope of Work
+          if (details.specs || details.scope_of_work) {
+            aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+            aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">상세 규격 (Specs)</span><strong>' + (details.specs || '-') + '</strong></div>';
+            aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">작업 범위 (Scope of Work)</span><strong>' + (details.scope_of_work || '-') + '</strong></div>';
+            aiDetailsHtml += '    </div>';
+          }
+
+          // Terms and Pricing
+          var pricing = details.pricing || {};
+          var terms = details.terms || {};
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:20px;">';
+          
+          // Pricing Breakdown
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">세부 금액표 (Pricing Breakdown)</span>';
+          aiDetailsHtml += '        <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:6px 12px;background:rgba(255,255,255,0.02);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);">';
+          aiDetailsHtml += '          <div>주기별 렌트비:</div><div style="text-align:right;"><strong>$' + (pricing.recurring_per_cycle || 0).toLocaleString() + '</strong> <span style="font-size:10px;color:var(--text-tertiary);">(세후 $' + (pricing.recurring_with_tax || 0).toLocaleString() + ')</span></div>';
+          aiDetailsHtml += '          <div>배송 요금:</div><div style="text-align:right;"><strong>$' + (pricing.delivery || 0).toLocaleString() + '</strong></div>';
+          aiDetailsHtml += '          <div>반납 요금:</div><div style="text-align:right;"><strong>$' + (pricing.return || 0).toLocaleString() + '</strong></div>';
+          aiDetailsHtml += '          <div style="border-top:1px solid var(--border-subtle);padding-top:4px;font-weight:700;color:var(--text-primary);">총 합계액:</div><div style="border-top:1px solid var(--border-subtle);padding-top:4px;text-align:right;font-weight:700;color:#7c3aed;">$' + (pricing.total || 0).toLocaleString() + ' <span style="font-size:10px;font-weight:normal;color:var(--text-tertiary);">(세후 $' + (pricing.total_with_tax || 0).toLocaleString() + ')</span></div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          // Contract Terms
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">계약 조건 (Lease Terms)</span>';
+          aiDetailsHtml += '        <div style="display:flex;flex-direction:column;gap:4px;">';
+          aiDetailsHtml += '          <div>청구 주기: <strong>' + (terms.billing_cycle || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>지불 조건: <strong>' + (terms.payment_terms || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>최소 임대기간: <strong>' + (terms.min_lease_term || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>지연 이자율: <strong>' + (terms.late_interest || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>계약 유형: <strong>' + (terms.lease_type || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>세금 부담 주체: <strong>' + (terms.taxes_responsibility || '-') + '</strong></div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          aiDetailsHtml += '    </div>';
+
+          // Addons
+          if (details.addons && details.addons.length > 0) {
+            aiDetailsHtml += '    <div style="margin-top:8px;border-top:1px dashed var(--border-subtle);padding-top:10px;">';
+            aiDetailsHtml += '      <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:6px;font-weight:700;">추가 옵션/액세서리 (Add-ons)</span>';
+            aiDetailsHtml += '      <div style="display:flex;flex-wrap:wrap;gap:8px;">';
+            details.addons.forEach(function(addon) {
+              aiDetailsHtml += '        <span style="background:var(--bg-body);border:1px solid var(--border-subtle);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text-primary);font-weight:600;">' + addon.name + ' (x' + addon.quantity + ') - $' + (addon.price || 0).toLocaleString() + '</span>';
+            });
+            aiDetailsHtml += '      </div>';
+            aiDetailsHtml += '    </div>';
+          }
+          
+          aiDetailsHtml += '  </div>';
+          aiDetailsHtml += '</div>';
+        }
+
         modal.innerHTML =
           '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:700px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
@@ -7268,7 +7397,7 @@
                 '<div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 코드 / 종류</span><strong style="font-size:15px;color:var(--text-primary);">' + r.id + ' / ' + r.equipType + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">모델명 / 렌트사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + r.model + ' / ' + r.vendor + '</strong></div>' +
-                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">일단가 / 배송비</span><strong style="font-size:15px;color:var(--text-primary);">$' + (r.dailyRate || 0).toLocaleString() + ' / $' + (r.deliveryFee || 0).toLocaleString() + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">단가 / 배송 비용 (Rate & Delivery)</span><strong style="font-size:15px;color:var(--text-primary);">' + rateAmountText + ' / ' + deliveryFeeText + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">계약 총 비용</span><strong style="font-size:15px;color:#7c3aed;">$' + totalLeaseCost.toLocaleString() + ' (' + leaseDays + '일 기준)</strong></div>' +
                 '</div>' +
                 '<div>' +
@@ -7280,6 +7409,7 @@
               '</div>' +
               photosHtml +
               contractHtml +
+              aiDetailsHtml +
               '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
                 '<div style="display:flex;gap:10px;">' + 
                   actionButton + 

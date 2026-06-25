@@ -1062,6 +1062,7 @@ class SmartCompanyData
                         'photo_rear' => $e->photo_rear,
                         'photo_left' => $e->photo_left,
                         'photo_right' => $e->photo_right,
+                        'payload' => $e->payload,
                     ])
                     ->all();
             }
