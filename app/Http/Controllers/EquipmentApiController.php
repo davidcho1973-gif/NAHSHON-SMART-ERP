@@ -280,4 +280,79 @@ class EquipmentApiController extends Controller
 
         return Storage::disk('public')->response($path);
     }
+
+    public function updateEquipment(Request $request, Equipment $equipment): JsonResponse
+    {
+        $request->validate([
+            'equipment_type' => 'required|string|max:100',
+            'model' => 'required|string|max:100',
+            'vendor' => 'nullable|string|max:100',
+            'rent_start' => 'nullable|date',
+            'rent_end' => 'nullable|date',
+            'daily_rate' => 'nullable|integer|min:0',
+            'delivery_fee' => 'nullable|integer|min:0',
+            'status' => 'required|string|max:40',
+            'photo_front_file' => 'nullable|image|max:10240',
+            'photo_rear_file' => 'nullable|image|max:10240',
+            'photo_left_file' => 'nullable|image|max:10240',
+            'photo_right_file' => 'nullable|image|max:10240',
+            'contract_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        ]);
+
+        $data = [
+            'equipment_type' => $request->input('equipment_type'),
+            'model' => $request->input('model'),
+            'vendor' => $request->input('vendor'),
+            'rent_start' => $request->input('rent_start'),
+            'rent_end' => $request->input('rent_end'),
+            'daily_rate' => $request->input('daily_rate') ?? 0,
+            'delivery_fee' => $request->input('delivery_fee') ?? 0,
+            'status' => $request->input('status'),
+        ];
+
+        // Store photo files if present
+        $storePhoto = function ($key) use ($request, &$data): void {
+            if ($request->hasFile("{$key}_file")) {
+                $file = $request->file("{$key}_file");
+                $path = $file->store('equipments', 'public');
+                $data[$key] = '/storage/' . $path;
+            }
+        };
+
+        $storePhoto('photo_front');
+        $storePhoto('photo_rear');
+        $storePhoto('photo_left');
+        $storePhoto('photo_right');
+
+        if ($request->hasFile('contract_file')) {
+            $file = $request->file('contract_file');
+            $path = $file->store('equipments', 'public');
+            $data['contract_path'] = '/storage/' . $path;
+        }
+
+        $equipment->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => '장비 정보가 수정되었습니다.',
+            'equipment' => $equipment,
+        ]);
+    }
+
+    public function deleteEquipment(Equipment $equipment): JsonResponse
+    {
+        try {
+            $equipment->delete();
+            return response()->json([
+                'success' => true,
+                'message' => '장비가 성공적으로 삭제되었습니다.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }
+

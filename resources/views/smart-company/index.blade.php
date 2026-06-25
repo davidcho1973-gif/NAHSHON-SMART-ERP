@@ -7247,35 +7247,259 @@
               '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-bulldozer" style="color:var(--brand-primary);"></i> 장비 상세 정보</h2>' +
               '<button onclick="this.closest(\'#equipment-detail-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
             '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--bg-base);border-radius:10px;padding:16px;border:1px solid var(--border-subtle);">' +
-              '<div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 코드 / 종류</span><strong style="font-size:15px;color:var(--text-primary);">' + r.id + ' / ' + r.equipType + '</strong></div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">모델명 / 렌트사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + r.model + ' / ' + r.vendor + '</strong></div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">일단가 / 배송비</span><strong style="font-size:15px;color:var(--text-primary);">$' + (r.dailyRate || 0).toLocaleString() + ' / $' + (r.deliveryFee || 0).toLocaleString() + '</strong></div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">계약 총 비용</span><strong style="font-size:15px;color:#7c3aed;">$' + totalLeaseCost.toLocaleString() + ' (' + leaseDays + '일 기준)</strong></div>' +
+            
+            // Detail View Container
+            '<div id="eq-detail-view" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--bg-base);border-radius:10px;padding:16px;border:1px solid var(--border-subtle);">' +
+                '<div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 코드 / 종류</span><strong style="font-size:15px;color:var(--text-primary);">' + r.id + ' / ' + r.equipType + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">모델명 / 렌트사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + r.model + ' / ' + r.vendor + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">일단가 / 배송비</span><strong style="font-size:15px;color:var(--text-primary);">$' + (r.dailyRate || 0).toLocaleString() + ' / $' + (r.deliveryFee || 0).toLocaleString() + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">계약 총 비용</span><strong style="font-size:15px;color:#7c3aed;">$' + totalLeaseCost.toLocaleString() + ' (' + leaseDays + '일 기준)</strong></div>' +
+                '</div>' +
+                '<div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정회사 / 팀</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.company || '-') + ' / ' + (r.team || '-') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 운영자 / 담당자</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.operator || '미배정') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">대여 기간</span><strong style="font-size:15px;color:var(--text-primary);">' + r.startDate + ' ~ ' + r.endDate + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 상태</span><div>' + statusPill(r.status) + '</div></div>' +
+                '</div>' +
               '</div>' +
-              '<div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정회사 / 팀</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.company || '-') + ' / ' + (r.team || '-') + '</strong></div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 운영자 / 담당자</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.operator || '미배정') + '</strong></div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">대여 기간</span><strong style="font-size:15px;color:var(--text-primary);">' + r.startDate + ' ~ ' + r.endDate + '</strong></div>' +
-                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 상태</span><div>' + statusPill(r.status) + '</div></div>' +
+              photosHtml +
+              contractHtml +
+              '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+                '<div style="display:flex;gap:10px;">' + 
+                  actionButton + 
+                  '<button type="button" class="btn-secondary btn-eq-edit-trigger" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;font-weight:700;cursor:pointer;"><i class="ph ph-pencil"></i> 수정</button>' +
+                  '<button type="button" class="btn-secondary btn-eq-delete-trigger" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;font-weight:700;color:var(--status-danger);border-color:rgba(239,68,68,0.2);cursor:pointer;"><i class="ph ph-trash"></i> 삭제</button>' +
+                '</div>' +
+                '<button type="button" onclick="this.closest(\'#equipment-detail-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">닫기</button>' +
+              '</div>' +
+              '<div style="margin-top:28px;">' +
+                '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;"><i class="ph ph-clock-counter-clockwise"></i> 대여 및 배정 이력 (Rental History)</h3>' +
+                '<div id="equipment-history-timeline" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-base);padding:14px;">' +
+                  '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">이력을 불러오는 중...</div>' +
+                '</div>' +
               '</div>' +
             '</div>' +
-            photosHtml +
-            contractHtml +
-            '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
-              '<div>' + actionButton + '</div>' +
-              '<button type="button" onclick="this.closest(\'#equipment-detail-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">닫기</button>' +
-            '</div>' +
-            '<div style="margin-top:28px;">' +
-              '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;"><i class="ph ph-clock-counter-clockwise"></i> 대여 및 배정 이력 (Rental History)</h3>' +
-              '<div id="equipment-history-timeline" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-base);padding:14px;">' +
-                '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">이력을 불러오는 중...</div>' +
-              '</div>' +
+            
+            // Edit View Container
+            '<div id="eq-edit-view" style="display:none;">' +
+              '<form id="eq-edit-form" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:16px;">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">장비 종류 (Type) *</label>' +
+                    '<select name="equipment_type" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" required>' +
+                      '<option value="Power Tool (전동공구)">Power Tool (전동공구)</option>' +
+                      '<option value="Hand Tool (수공구)">Hand Tool (수공구)</option>' +
+                      '<option value="Pipes & Fittings (배관 자재)">Pipes & Fittings (배관 자재)</option>' +
+                      '<option value="Conduit & Electrical (전선관/전기 자재)">Conduit & Electrical (전선관/전기 자재)</option>' +
+                      '<option value="Wires & Cables (전선/케이블)">Wires & Cables (전선/케이블)</option>' +
+                      '<option value="Valves & Controls (밸브/계측기)">Valves & Controls (밸브/계측기)</option>' +
+                      '<option value="Fasteners & Anchors (체결류/피스)">Fasteners & Anchors (체결류/피스)</option>' +
+                      '<option value="Generator & Power (발전기/동력원)">Generator & Power (발전기/동력원)</option>' +
+                      '<option value="Welding Machine (용접기)">Welding Machine (용접기)</option>' +
+                      '<option value="Heavy Equipment (중장비)">Heavy Equipment (중장비)</option>' +
+                      '<option value="Safety & PPE (안전 용품)">Safety & PPE (안전 용품)</option>' +
+                      '<option value="Other Materials (기타 자재/공구)">Other Materials (기타 자재/공구)</option>' +
+                    '</select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">모델명 (Model) *</label>' +
+                    '<input type="text" name="model" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" required>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">렌트사 / 제조사 (Vendor)</label>' +
+                    '<input type="text" name="vendor" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">장비 상태 (Status) *</label>' +
+                    '<select name="status" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" required>' +
+                      '<option value="대기중">대기중</option>' +
+                      '<option value="사용중">사용중</option>' +
+                      '<option value="정비중">정비중</option>' +
+                    '</select>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">일단가 (Daily Rate)</label>' +
+                    '<input type="number" name="daily_rate" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" min="0">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">배송비 (Delivery Fee)</label>' +
+                    '<input type="number" name="delivery_fee" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" min="0">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">대여 시작일 (Start Date)</label>' +
+                    '<input type="date" name="rent_start" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">대여 종료일 (End Date)</label>' +
+                    '<input type="date" name="rent_end" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                  '</div>' +
+                '</div>' +
+                
+                '<div>' +
+                  '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">장비 사진 변경 (4방향)</label>' +
+                  '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-front\').click()">' +
+                      '<img id="eq-edit-preview-front" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>전면</span>' +
+                      '<input type="file" id="eq-edit-photo-front" name="photo_front_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-front\')">' +
+                    '</div>' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-rear\').click()">' +
+                      '<img id="eq-edit-preview-rear" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>후면</span>' +
+                      '<input type="file" id="eq-edit-photo-rear" name="photo_rear_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-rear\')">' +
+                    '</div>' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-left\').click()">' +
+                      '<img id="eq-edit-preview-left" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>좌측</span>' +
+                      '<input type="file" id="eq-edit-photo-left" name="photo_left_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-left\')">' +
+                    '</div>' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-right\').click()">' +
+                      '<img id="eq-edit-preview-right" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>우측</span>' +
+                      '<input type="file" id="eq-edit-photo-right" name="photo_right_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-right\')">' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                
+                '<div>' +
+                  '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">렌트 계약서 파일 변경 (PDF/Image)</label>' +
+                  '<input type="file" name="contract_file" accept=".pdf,image/*" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                '</div>' +
+
+                '<div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+                  '<button type="button" class="btn-secondary btn-eq-edit-cancel" style="padding:10px 20px;cursor:pointer;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="padding:10px 20px;cursor:pointer;">저장하기</button>' +
+                '</div>' +
+              '</form>' +
             '</div>' +
           '</div>';
 
         document.body.appendChild(modal);
+
+        var detailView = modal.querySelector('#eq-detail-view');
+        var editView = modal.querySelector('#eq-edit-view');
+        var editForm = modal.querySelector('#eq-edit-form');
+
+        // Preview helper
+        window.previewFile = function(input, imgId) {
+          var file = input.files[0];
+          var preview = modal.querySelector('#' + imgId);
+          if (file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+              preview.src = e.target.result;
+              preview.style.display = 'block';
+            }
+            reader.readAsDataURL(file);
+          }
+        };
+
+        // Switch to Edit
+        modal.querySelector('.btn-eq-edit-trigger').onclick = function() {
+          editForm.querySelector('[name="equipment_type"]').value = r.equipType || '';
+          editForm.querySelector('[name="model"]').value = r.model || '';
+          editForm.querySelector('[name="vendor"]').value = r.vendor === '-' ? '' : r.vendor;
+          editForm.querySelector('[name="status"]').value = r.status || '대기중';
+          editForm.querySelector('[name="daily_rate"]').value = r.dailyRate || 0;
+          editForm.querySelector('[name="delivery_fee"]').value = r.deliveryFee || 0;
+          editForm.querySelector('[name="rent_start"]').value = r.startDate === '-' ? '' : r.startDate;
+          editForm.querySelector('[name="rent_end"]').value = r.endDate === '-' ? '' : r.endDate;
+
+          var setPreview = function(path, imgId) {
+            var img = editForm.querySelector('#' + imgId);
+            if (path) {
+              img.src = getSecureFileUrl(path);
+              img.style.display = 'block';
+            } else {
+              img.style.display = 'none';
+            }
+          };
+          setPreview(r.photo_front, 'eq-edit-preview-front');
+          setPreview(r.photo_rear, 'eq-edit-preview-rear');
+          setPreview(r.photo_left, 'eq-edit-preview-left');
+          setPreview(r.photo_right, 'eq-edit-preview-right');
+
+          detailView.style.display = 'none';
+          editView.style.display = 'block';
+        };
+
+        // Switch back to Detail
+        modal.querySelector('.btn-eq-edit-cancel').onclick = function() {
+          editView.style.display = 'none';
+          detailView.style.display = 'flex';
+        };
+
+        // Submit Form
+        editForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var formData = new FormData(editForm);
+          var saveBtn = editForm.querySelector('button[type="submit"]');
+          var originalBtnText = saveBtn.textContent;
+          saveBtn.disabled = true;
+          saveBtn.textContent = '저장 중...';
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/' + r.realId + '/update', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '저장 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('장비 정보가 수정되었습니다.');
+            window.renderRental();
+          } catch(err) {
+            alert('오류: ' + err.message);
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
+          }
+        };
+
+        // Delete Equipment
+        modal.querySelector('.btn-eq-delete-trigger').onclick = async function() {
+          if (!confirm('정말로 이 장비/자재를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+            return;
+          }
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/' + r.realId, {
+              method: 'DELETE',
+              headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              }
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '삭제 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('장비가 삭제되었습니다.');
+            window.renderRental();
+          } catch(err) {
+            alert('오류: ' + err.message);
+          }
+        };
 
         try {
           var response = await fetch('/equipment-api/' + r.realId + '/history');
@@ -7296,7 +7520,7 @@
                   '<span style="font-size:11px;color:var(--text-secondary);">' + period + '</span>' +
                 '</div>' +
                 '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);">' +
-                  '<span style="font-weight:600;color:\\' + (h.status === '대여중' ? 'var(--status-success)' : 'var(--text-tertiary)') + '\\";">' + h.status + '</span>' +
+                  '<span style="font-weight:600;color:\' + (h.status === \'대여중\' ? \'var(--status-success)\' : \'var(--text-tertiary)\') + \'\";">' + h.status + '</span>' +
                 '</div>' +
                 notesText +
               '</div>';
@@ -7307,6 +7531,7 @@
           modal.querySelector('#equipment-history-timeline').innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:12px;">이력을 불러오지 못했습니다.</div>';
         }
       };
+
 
       // 🤖 AI Equipment Scanner Modal
       window.openAiEquipmentRegModal = function() {

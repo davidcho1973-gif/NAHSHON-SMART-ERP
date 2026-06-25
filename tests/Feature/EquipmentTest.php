@@ -416,4 +416,63 @@ class EquipmentTest extends TestCase
         $this->assertContains('Generator (발전기)', $dashboard['matrix']['categories']);
         $this->assertSame(1, $dashboard['matrix']['cells']['Generator (발전기)']['LGES-AZ']);
     }
+
+    public function test_desktop_equipment_update(): void
+    {
+        $this->actingAs($this->user);
+
+        $equipment = Equipment::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'equipment_type' => 'Generator (발전기)',
+            'model' => 'Old Model',
+            'vendor' => 'Old Vendor',
+            'status' => '대기중',
+            'quantity' => 1,
+        ]);
+
+        $payload = [
+            'equipment_type' => 'Power Tool (전동공구)',
+            'model' => 'New Model',
+            'vendor' => 'New Vendor',
+            'rent_start' => '2026-06-20',
+            'rent_end' => '2026-06-25',
+            'daily_rate' => 150,
+            'delivery_fee' => 50,
+            'status' => '사용중',
+        ];
+
+        $response = $this->post(route('equipment.update', $equipment), $payload);
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+
+        $equipment->refresh();
+        $this->assertSame('Power Tool (전동공구)', $equipment->equipment_type);
+        $this->assertSame('New Model', $equipment->model);
+        $this->assertSame('New Vendor', $equipment->vendor);
+        $this->assertSame(150, $equipment->daily_rate);
+        $this->assertSame(50, $equipment->delivery_fee);
+        $this->assertSame('사용중', $equipment->status);
+    }
+
+    public function test_desktop_equipment_delete(): void
+    {
+        $this->actingAs($this->user);
+
+        $equipment = Equipment::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'equipment_type' => 'Generator (발전기)',
+            'model' => 'To Delete',
+            'status' => '대기중',
+            'quantity' => 1,
+        ]);
+
+        $response = $this->delete(route('equipment.delete', $equipment));
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+
+        $this->assertNull(Equipment::find($equipment->id));
+    }
 }
+

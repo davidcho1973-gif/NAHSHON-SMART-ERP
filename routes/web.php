@@ -14,6 +14,8 @@ Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('aut
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
 
+
+
 Route::middleware('auth')->group(function (): void {
     Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
     Route::redirect('/erp', '/');
@@ -51,6 +53,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/equipment-api/return', [App\Http\Controllers\EquipmentApiController::class, 'returnEquipment'])->name('equipment.return');
     Route::get('/equipment-api/{equipment}/history', [App\Http\Controllers\EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
     Route::get('/equipment-api/file', [App\Http\Controllers\EquipmentApiController::class, 'serveFile'])->name('equipment.file');
+    Route::post('/equipment-api/{equipment}/update', [App\Http\Controllers\EquipmentApiController::class, 'updateEquipment'])->name('equipment.update');
+    Route::delete('/equipment-api/{equipment}', [App\Http\Controllers\EquipmentApiController::class, 'deleteEquipment'])->name('equipment.delete');
+
 
     // Mobile Equipment Routes
     Route::get('/mobile-equipment/index', [\App\Http\Controllers\MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');
