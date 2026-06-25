@@ -49,6 +49,8 @@ Route::middleware('auth')->group(function (): void {
     // Equipment API Routes
     Route::post('/equipment-api/scan-rental', [App\Http\Controllers\EquipmentApiController::class, 'scanRental'])->name('equipment.scan-rental');
     Route::post('/equipment-api/save', [App\Http\Controllers\EquipmentApiController::class, 'saveEquipment'])->name('equipment.save');
+    Route::post('/equipment-api/scan-inventory', [App\Http\Controllers\EquipmentApiController::class, 'scanInventory'])->name('equipment.scan-inventory');
+    Route::post('/equipment-api/save-inventory', [App\Http\Controllers\EquipmentApiController::class, 'saveInventory'])->name('equipment.save-inventory');
     Route::post('/equipment-api/assign', [App\Http\Controllers\EquipmentApiController::class, 'assignEquipment'])->name('equipment.assign');
     Route::post('/equipment-api/return', [App\Http\Controllers\EquipmentApiController::class, 'returnEquipment'])->name('equipment.return');
     Route::get('/equipment-api/{equipment}/history', [App\Http\Controllers\EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');

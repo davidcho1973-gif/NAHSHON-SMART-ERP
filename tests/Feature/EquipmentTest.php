@@ -181,6 +181,94 @@ class EquipmentTest extends TestCase
         $this->assertSame(273, $unit->payload['return_fee']);
     }
 
+    public function test_scan_inventory_calls_gemini_analyzer_and_saves_files(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->user);
+
+        $mockAnalysis = [
+            'equipment_type' => 'Power Tool (전동공구)',
+            'model' => 'Hilti TE 70',
+            'vendor' => 'Home Depot',
+            'rent_start' => '2026-06-25',
+            'rent_end' => '',
+            'daily_rate' => 1200,
+            'delivery_fee' => 0,
+            'model_name' => 'gemini-2.5-flash',
+            'quantity' => 1,
+            'details' => [
+                'quote_no' => 'REC-9928112',
+                'lessor' => ['name' => 'Home Depot'],
+            ],
+        ];
+
+        $this->mock(GeminiEquipmentAnalyzer::class, function ($mock) use ($mockAnalysis) {
+            $mock->shouldReceive('analyze')
+                ->once()
+                ->andReturn($mockAnalysis);
+        });
+
+        $contract = UploadedFile::fake()->create('receipt.pdf', 500, 'application/pdf');
+        $front = UploadedFile::fake()->create('front.jpg', 500, 'image/jpeg');
+
+        $response = $this->postJson(route('equipment.scan-inventory'), [
+            'contract' => $contract,
+            'photo_front' => $front,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'data' => $mockAnalysis,
+        ]);
+
+        $responseData = $response->json();
+        $this->assertNotNull($responseData['files']['contract']);
+        $this->assertNotNull($responseData['files']['photo_front']);
+
+        Storage::disk('public')->assertExists(str_replace('/storage/', '', $responseData['files']['contract']));
+        Storage::disk('public')->assertExists(str_replace('/storage/', '', $responseData['files']['photo_front']));
+    }
+
+    public function test_save_inventory_stores_data_in_database(): void
+    {
+        $this->actingAs($this->user);
+
+        $details = [
+            'quote_no' => 'REC-9928112',
+            'lessor' => ['name' => 'Home Depot'],
+        ];
+
+        $response = $this->postJson(route('equipment.save-inventory'), [
+            'equipment_type' => 'Power Tool (전동공구)',
+            'model' => 'Hilti TE 70',
+            'vendor' => 'Home Depot',
+            'quantity' => 3,
+            'rent_start' => '2026-06-25',
+            'daily_rate' => 1200,
+            'delivery_fee' => 50,
+            'details' => $details,
+            'contract_path' => '/storage/equipments/receipt.pdf',
+            'photo_front' => '/storage/equipments/front.jpg',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('count', 3);
+
+        $this->assertSame(3, Equipment::where('model', 'Hilti TE 70')->count());
+
+        $first = Equipment::where('model', 'Hilti TE 70')->first();
+        $this->assertSame('Power Tool (전동공구)', $first->equipment_type);
+        $this->assertSame('Home Depot', $first->vendor);
+        $this->assertSame(1200, $first->daily_rate);
+        $this->assertSame(50, $first->delivery_fee);
+        $this->assertSame('REC-9928112', $first->payload['details']['quote_no']);
+        $this->assertSame('AI자동분석', $first->registration_method);
+        $this->assertSame('대기중', $first->status);
+    }
+
     public function test_analyzer_extracts_rich_contract_metadata(): void
     {
         config(['services.gemini.api_key' => 'test-key', 'services.gemini.model' => 'gemini-2.5-flash']);

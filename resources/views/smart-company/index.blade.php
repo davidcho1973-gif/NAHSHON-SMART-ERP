@@ -4236,7 +4236,7 @@
             '<p class="page-subtitle">íšŒì‚¬ ë³´ìœ  ìžì‚° Â· ì‚¬ì§„ AI ë“±ë¡ Â· 5ê°œ ì¹´í…Œê³ ë¦¬</p></div>' +
             '<div class="action-row">' +
               '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> ìƒˆë¡œê³ ì¹¨</button>' +
-              '<button class="btn-secondary" onclick="window.openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button>' +
+              '<button class="btn-secondary" onclick="window.downloadInventoryExcel()"><i class="ph ph-file-csv"></i> 엑셀 다운로드</button>' +
               '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> ðŸ¤– AI ì‚¬ì§„ ë“±ë¡</button>' +
             '</div></div>';
 
@@ -4396,57 +4396,781 @@
       };
 
       // AI ì‚¬ì§„ ë“±ë¡ ì‹¤í–‰
-      window.runAIInventoryRegister = async function() {
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ¤– Gemini AI ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:12px">INVENTORY_PHOTOS/PENDING í´ë” ìŠ¤ìº” + ìžë™ ë“±ë¡</div>' +
-          '<div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:8px">í´ë¦­/ESCë¡œ ë‹«ê¸° (ë°±ê·¸ë¼ìš´ë“œ ê³„ì†)</div>';
-        document.body.appendChild(overlay);
-        var dismiss = function() { try { overlay.remove(); } catch(e) {} };
-        overlay.addEventListener('click', dismiss);
-        var esc = function(e) { if (e.key === 'Escape') dismiss(); };
-        document.addEventListener('keydown', esc);
-        var to = setTimeout(dismiss, 90000);
-
-        try {
-          var res = await window.API.processInventoryPhotos();
-          clearTimeout(to);
-          document.removeEventListener('keydown', esc);
-          dismiss();
-
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
-          var icon = res.success ? (res.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var detail = (res.results || []).map(function(r) {
-            var ic = r.status === 'success' ? 'âœ…' : r.status === 'error' ? 'âŒ' : 'â­ï¸';
-            var txt = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.category + ' Â· ' + (r.brand || '') + ' ' + (r.model || '') + ' [' + r.assetId + ']</span>'
-              : '<span style="color:var(--status-danger)">' + (r.reason || '') + '</span>';
-            return '<div style="padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:11px">' + ic + ' <strong>' + r.file + '</strong><br>' + txt + '</div>';
-          }).join('');
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:560px;max-height:80vh;overflow-y:auto">' +
-              '<div style="font-size:32px;text-align:center;margin-bottom:8px">' + icon + '</div>' +
-              '<h2 style="text-align:center;font-size:18px;margin-bottom:8px">AI ìžì‚° ë“±ë¡ ê²°ê³¼</h2>' +
-              (res.success ? (res.processed === 0 ? '<div style="text-align:center;color:var(--text-secondary);font-size:13px;margin-top:8px">' + (res.message || 'ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.') + '</div>' :
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;text-align:center">' +
-                  '<div style="background:var(--bg-base);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700">' + (res.processed||0) + '</div><div style="font-size:10px;color:var(--text-secondary)">ì´ ì²˜ë¦¬</div></div>' +
-                  '<div style="background:var(--bg-base);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:var(--status-success)">' + (res.saved||0) + '</div><div style="font-size:10px;color:var(--text-secondary)">ì €ìž¥ ì™„ë£Œ</div></div>' +
-                  '<div style="background:var(--bg-base);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:var(--status-danger)">' + (res.errors||0) + '</div><div style="font-size:10px;color:var(--text-secondary)">ì˜¤ë¥˜</div></div>' +
+      window.runAIInventoryRegister = function() {
+        var modal = document.createElement('div');
+        modal.id = 'ai-inventory-reg-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<style>' +
+            '#ai-inventory-reg-modal * { box-sizing: border-box; }' +
+            '#ai-inventory-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
+            '#ai-inventory-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
+            '#ai-inventory-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+            '#ai-inventory-reg-modal input[type="text"],' +
+            '#ai-inventory-reg-modal input[type="number"],' +
+            '#ai-inventory-reg-modal input[type="date"] {' +
+            '  width: 100%;' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  border-radius: 8px;' +
+            '  padding: 10px 12px;' +
+            '  color: var(--text-primary);' +
+            '  font-size: 13px;' +
+            '  outline: none;' +
+            '  transition: border-color 0.2s, box-shadow 0.2s;' +
+            '}' +
+            '#ai-inventory-reg-modal input[type="text"]:focus,' +
+            '#ai-inventory-reg-modal input[type="number"]:focus,' +
+            '#ai-inventory-reg-modal input[type="date"]:focus {' +
+            '  border-color: #7c3aed;' +
+            '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
+            '}' +
+            '#ai-inventory-reg-modal label {' +
+            '  display: block;' +
+            '  font-size: 12px;' +
+            '  font-weight: 600;' +
+            '  color: var(--text-secondary);' +
+            '  margin-bottom: 6px;' +
+            '}' +
+            '#ai-inventory-reg-modal .btn-primary {' +
+            '  background: linear-gradient(135deg, #7c3aed, #2563eb);' +
+            '  border: none;' +
+            '  color: #fff;' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: opacity 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-inventory-reg-modal .btn-primary:hover {' +
+            '  opacity: 0.9;' +
+            '}' +
+            '#ai-inventory-reg-modal .btn-primary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#ai-inventory-reg-modal .btn-secondary {' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  color: var(--text-primary);' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: background 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-inventory-reg-modal .btn-secondary:hover {' +
+            '  background: var(--bg-body);' +
+            '}' +
+            '#ai-inventory-reg-modal .btn-secondary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#inventory-modal-close-btn {' +
+            '  transition: color 0.2s, transform 0.2s;' +
+            '}' +
+            '#inventory-modal-close-btn:hover {' +
+            '  color: var(--text-primary);' +
+            '  transform: rotate(90deg);' +
+            '}' +
+            '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
+            '@media (max-width: 640px) { #inventory-camera-area { grid-template-columns: 1fr !important; } }' +
+          '</style>' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:20px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;box-sizing:border-box;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:22px;"></i> AI 자재/장비 자동 등록</h2>' +
+              '<button type="button" id="inventory-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height:1.5;">' +
+              '구매 계약서나 구매 영수증 및 장비 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 문서와 사진 정보를 자동으로 판독하여 자재 대장에 등록합니다.' +
+            '</div>' +
+            '<input type="file" id="inventory-file-contract" style="display:none" accept="application/pdf,image/*">' +
+            '<input type="file" id="inventory-file-photo_front" style="display:none" accept="image/*">' +
+            '<input type="file" id="inventory-file-photo_rear" style="display:none" accept="image/*">' +
+            '<input type="file" id="inventory-file-photo_left" style="display:none" accept="image/*">' +
+            '<input type="file" id="inventory-file-photo_right" style="display:none" accept="image/*">' +
+            '<div style="display: flex; gap: 8px; margin-bottom: 16px;">' +
+              '<button type="button" id="inventory-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-upload-simple"></i> 파일 업로드' +
+              '</button>' +
+              '<button type="button" id="inventory-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-camera"></i> 실시간 카메라' +
+              '</button>' +
+            '</div>' +
+            '<div id="inventory-upload-area" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 16px;">' +
+              '<div id="inventory-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 75px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:6px;">' +
+                  '<i class="ph ph-file-text" style="font-size: 24px; color: var(--text-tertiary);"></i>' +
+                  '<div style="font-weight: 600; font-size:13px; color:var(--text-primary);">구매 영수증 / 계약서 파일 (PDF/이미지) <span style="color:var(--status-danger)">*</span></div>' +
+                  '<div style="font-size: 11px; color: var(--text-tertiary);">클릭하여 파일 업로드</div>' +
                 '</div>' +
-                '<div style="max-height:300px;overflow-y:auto;margin-bottom:14px">' + detail + '</div>'
-              ) : '<div style="color:var(--status-danger);text-align:center;margin-top:8px">' + (res.error || 'ì‹¤íŒ¨') + '</div>') +
-              '<button onclick="this.closest(\'div[style*=z-index]\').parentElement.remove();window.refreshInventory()" style="width:100%;background:var(--brand-primary);color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-        } catch(err) {
-          clearTimeout(to);
-          dismiss();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜: ' + err.message);
+                '<div class="preview-state" style="display: none; width:100%; text-align:center; position:relative;">' +
+                  '<div class="preview-icon-wrapper" style="font-size: 24px; color: var(--brand-primary); margin-bottom: 4px;"><i class="ph ph-file-pdf"></i></div>' +
+                  '<img class="preview-img" style="max-height: 50px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 4px;">' +
+                  '<div class="file-name" style="font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>' +
+                  '<button type="button" class="trash-btn" style="position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,0.6); color: #fff; width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-trash"></i></button>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
+                '<div id="inventory-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="inventory-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="inventory-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--brand-primary)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="inventory-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div id="inventory-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin-bottom: 16px;">' +
+              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
+                  '<video id="inventory-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
+                  '<div id="inventory-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 11px; padding: 4px 6px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+                    '촬영 대상: 구매 영수증 / 계약서' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+                  '<button type="button" id="inventory-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 34px; font-size: 12px; font-weight: 600; cursor:pointer;">' +
+                    '<i class="ph ph-camera"></i> 사진 촬영' +
+                  '</button>' +
+                '</div>' +
+                '<div id="inventory-camera-select-container" style="margin-top: 8px; display: none; align-items:center; gap:6px;">' +
+                  '<span style="font-size:10px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라:</span>' +
+                  '<select id="inventory-camera-device-select" style="flex:1; padding: 4px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 10px; outline: none;"></select>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:2px; padding-bottom:4px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-file-text" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">계약서/영수증 <span style="color:var(--status-danger)">*</span></div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div id="inventory-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
+              '<button type="button" id="inventory-upload-cancel-btn" class="btn-secondary" style="padding:0 20px; cursor:pointer;">취소</button>' +
+              '<button type="button" id="inventory-upload-submit-btn" class="btn-primary" style="padding:0 24px; cursor:pointer;">AI 분석 실행</button>' +
+            '</div>' +
+            '<div id="inventory-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px 0; gap:12px;">' +
+              '<div style="width:40px; height:40px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary); font-size:14px; font-weight:700;">Gemini AI가 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary); font-size:12px; text-align:center; max-width:320px; line-height:1.4;">영수증 및 자재 정보를 추출하여 자동 매핑하고 있습니다. 잠시만 기다려주세요.</div>' +
+            '</div>' +
+            '<div id="inventory-analysis-result-container" style="display:none; flex-direction:column; gap:12px; margin-top:12px;">' +
+              '<h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+              '<div style="font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.4;">AI가 추출한 정보입니다. 실제 영수증 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-inventory-save-form" style="display:flex; flex-direction:column; gap:12px;">' +
+                '<input type="hidden" name="contract_path">' +
+                '<input type="hidden" name="photo_front">' +
+                '<input type="hidden" name="photo_rear">' +
+                '<input type="hidden" name="photo_left">' +
+                '<input type="hidden" name="photo_right">' +
+                '<input type="hidden" name="details">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>자재/장비 종류 (Category)</label>' +
+                    '<input type="text" name="equipment_type" required placeholder="예: Power Tool (전동공구)">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>자재/장비 모델명</label>' +
+                    '<input type="text" name="model" required>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>구매처/브랜드 (Vendor)</label>' +
+                    '<input type="text" name="vendor">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>수량 (Qty)</label>' +
+                    '<input type="number" name="quantity" min="1" value="1">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="inventory-ai-extracted-summary" style="display:none; font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.6;"></div>' +
+                '<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">' +
+                  '<div style="grid-column:span 4;">' +
+                    '<label>구매 일자 (Purchase Date)</label>' +
+                    '<input type="date" name="rent_start">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>취득 가치/단가 ($)</label>' +
+                    '<input type="number" name="daily_rate" min="0">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>배송비 ($)</label>' +
+                    '<input type="number" name="delivery_fee" min="0">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="inventory-ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px;"></div>' +
+                '<div style="margin-top:8px; display:flex; justify-content:flex-end; gap:12px;">' +
+                  '<button type="button" id="inventory-save-cancel-btn" class="btn-secondary" style="padding:0 20px;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success) !important; padding:0 24px; border:none; cursor:pointer;">자산 등록 및 저장</button>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var inventoryFiles = {
+          contract: null,
+          photo_front: null,
+          photo_rear: null,
+          photo_left: null,
+          photo_right: null
+        };
+
+        var currentActiveSlot = 'contract';
+        var currentCameraMode = 'upload';
+        var localVideoStream = null;
+        var availableCameraDevices = [];
+
+        var btnToggleUpload = modal.querySelector('#inventory-btn-toggle-upload');
+        var btnToggleCamera = modal.querySelector('#inventory-btn-toggle-camera');
+        var uploadArea = modal.querySelector('#inventory-upload-area');
+        var cameraArea = modal.querySelector('#inventory-camera-area');
+        var initialControls = modal.querySelector('#inventory-initial-controls');
+        var loadingDiv = modal.querySelector('#inventory-analysis-loading');
+        var resultDiv = modal.querySelector('#inventory-analysis-result-container');
+        var saveForm = modal.querySelector('#ai-inventory-save-form');
+        var deviceSelect = modal.querySelector('#inventory-camera-device-select');
+        var deviceSelectContainer = modal.querySelector('#inventory-camera-select-container');
+
+        function showUploadMode() {
+          currentCameraMode = 'upload';
+          btnToggleUpload.className = 'btn-primary';
+          btnToggleCamera.className = 'btn-secondary';
+          uploadArea.style.display = 'flex';
+          cameraArea.style.display = 'none';
+          stopCamera();
         }
+
+        async function showCameraMode() {
+          currentCameraMode = 'camera';
+          btnToggleUpload.className = 'btn-secondary';
+          btnToggleCamera.className = 'btn-primary';
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'grid';
+          await startCamera();
+        }
+
+        btnToggleUpload.onclick = showUploadMode;
+        btnToggleCamera.onclick = showCameraMode;
+
+        var cards = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#inventory-card-' + slot);
+          if (card) {
+            card.onclick = function(e) {
+              if (e.target.closest('.trash-btn')) return;
+              modal.querySelector('#inventory-file-' + slot).click();
+            };
+          }
+
+          var fileInput = modal.querySelector('#inventory-file-' + slot);
+          if (fileInput) {
+            fileInput.onchange = function(e) {
+              var file = e.target.files[0];
+              if (file) {
+                setFileSlot(slot, file);
+              }
+            };
+          }
+        });
+
+        function setFileSlot(slot, file) {
+          inventoryFiles[slot] = file;
+          var url = URL.createObjectURL(file);
+
+          var card = modal.querySelector('#inventory-card-' + slot);
+          if (card) {
+            card.dataset.hasFile = 'true';
+            card.style.borderColor = 'var(--border-default)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'none';
+            previewState.style.display = 'block';
+
+            if (slot === 'contract') {
+              var isImg = file.type.startsWith('image/');
+              var previewImg = previewState.querySelector('.preview-img');
+              var iconWrapper = previewState.querySelector('.preview-icon-wrapper');
+              if (isImg) {
+                previewImg.src = url;
+                previewImg.style.display = 'block';
+                iconWrapper.style.display = 'none';
+              } else {
+                previewImg.style.display = 'none';
+                iconWrapper.style.display = 'block';
+              }
+              previewState.querySelector('.file-name').innerText = file.name;
+            } else {
+              var img = previewState.querySelector('.preview-img');
+              img.src = url;
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            slotRow.querySelector('.slot-status').innerText = '완료';
+            slotRow.querySelector('.slot-status').style.color = 'var(--status-success)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'inline-block';
+            
+            var thumb = slotRow.querySelector('.slot-thumbnail');
+            var isImg = file.type.startsWith('image/');
+            if (isImg || slot !== 'contract') {
+              thumb.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+            } else {
+              thumb.innerHTML = '<i class="ph ph-file-pdf" style="color:var(--brand-primary); font-size:18px;"></i>';
+            }
+          }
+        }
+
+        function clearFileSlot(slot) {
+          inventoryFiles[slot] = null;
+          var fileInput = modal.querySelector('#inventory-file-' + slot);
+          if (fileInput) fileInput.value = '';
+
+          var card = modal.querySelector('#inventory-card-' + slot);
+          if (card) {
+            delete card.dataset.hasFile;
+            card.style.borderColor = 'var(--border-strong)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'flex';
+            previewState.style.display = 'none';
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var iconName = (slot === 'contract') ? 'ph-file-text' : 'ph-camera';
+            slotRow.querySelector('.slot-thumbnail').innerHTML = '<i class="ph ' + iconName + '" style="color:var(--text-tertiary);"></i>';
+            slotRow.querySelector('.slot-status').innerText = (slot === 'contract') ? '선택된 파일 없음' : '선택된 사진 없음';
+            slotRow.querySelector('.slot-status').style.color = 'var(--text-tertiary)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'none';
+          }
+        }
+
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#inventory-card-' + slot);
+          if (card) {
+            var trashBtn = card.querySelector('.trash-btn');
+            if (trashBtn) {
+              trashBtn.onclick = function(e) {
+                e.stopPropagation();
+                clearFileSlot(slot);
+              };
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var delBtn = slotRow.querySelector('.slot-delete-btn');
+            delBtn.onclick = function(e) {
+              e.stopPropagation();
+              clearFileSlot(slot);
+            };
+          }
+        });
+
+        var slotRows = modal.querySelectorAll('.webcam-slot-card');
+        slotRows.forEach(function(row) {
+          row.onclick = function() {
+            var slot = row.dataset.slot;
+            setActiveTargetSlot(slot);
+          };
+        });
+
+        function setActiveTargetSlot(slot) {
+          currentActiveSlot = slot;
+          
+          slotRows.forEach(function(row) {
+            if (row.dataset.slot === slot) {
+              row.classList.add('active-target');
+              row.style.background = 'rgba(124,58,237,0.1)';
+              row.style.borderColor = 'var(--brand-primary)';
+              row.querySelector('.target-badge').style.display = 'inline-block';
+            } else {
+              row.classList.remove('active-target');
+              row.style.background = 'var(--bg-base)';
+              row.style.borderColor = 'var(--border-strong)';
+              row.querySelector('.target-badge').style.display = 'none';
+            }
+          });
+
+          var labelMap = {
+            contract: '구매 영수증 / 계약서',
+            photo_front: '장비 전면 사진',
+            photo_rear: '장비 후면 사진',
+            photo_left: '장비 좌측 사진',
+            photo_right: '장비 우측 사진'
+          };
+          modal.querySelector('#inventory-camera-overlay-label').innerText = '촬영 대상: ' + (labelMap[slot] || slot);
+        }
+
+        async function startCamera(preferredDeviceId) {
+          stopCamera();
+          var video = modal.querySelector('#inventory-video-stream');
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            var constraints = {
+              video: { facingMode: 'environment' }
+            };
+            if (preferredDeviceId) {
+              constraints.video = { deviceId: { exact: preferredDeviceId } };
+            }
+            try {
+              var stream = await navigator.mediaDevices.getUserMedia(constraints);
+              localVideoStream = stream;
+              video.srcObject = stream;
+              
+              if (availableCameraDevices.length === 0) {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameraDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                if (availableCameraDevices.length > 1) {
+                  deviceSelectContainer.style.display = 'flex';
+                  deviceSelect.innerHTML = '';
+                  availableCameraDevices.forEach(function(d, idx) {
+                    var opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || ('Camera ' + (idx + 1));
+                    if (preferredDeviceId && d.deviceId === preferredDeviceId) {
+                      opt.selected = true;
+                    }
+                    deviceSelect.appendChild(opt);
+                  });
+                  deviceSelect.onchange = function() {
+                    startCamera(deviceSelect.value);
+                  };
+                }
+              }
+            } catch (err) {
+              console.error('Camera stream error:', err);
+              alert('카메라를 활성화할 수 없습니다: ' + err.message);
+              showUploadMode();
+            }
+          } else {
+            alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+            showUploadMode();
+          }
+        }
+
+        function stopCamera() {
+          var video = modal.querySelector('#inventory-video-stream');
+          if (video && video.srcObject) {
+            var stream = video.srcObject;
+            var tracks = stream.getTracks();
+            tracks.forEach(function(track) { track.stop(); });
+            video.srcObject = null;
+          }
+          localVideoStream = null;
+        }
+
+        modal.querySelector('#inventory-btn-capture').onclick = function() {
+          var video = modal.querySelector('#inventory-video-stream');
+          if (!video || !video.srcObject) return;
+
+          var canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          var dataUrl = canvas.toDataURL('image/jpeg');
+          var fileName = 'webcam_' + currentActiveSlot + '.jpg';
+          var file = dataURLtoFile(dataUrl, fileName);
+
+          setFileSlot(currentActiveSlot, file);
+
+          var sequence = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+          var nextSlotIdx = sequence.indexOf(currentActiveSlot) + 1;
+          
+          var foundNext = false;
+          for (var i = 0; i < sequence.length; i++) {
+            var s = sequence[(nextSlotIdx + i) % sequence.length];
+            if (!inventoryFiles[s]) {
+              setActiveTargetSlot(s);
+              foundNext = true;
+              break;
+            }
+          }
+          if (!foundNext) {
+            showToast('모든 슬롯이 촬영되었습니다.');
+          }
+        };
+
+        function cleanUpAndClose() {
+          stopCamera();
+          modal.remove();
+        }
+
+        modal.querySelector('#inventory-modal-close-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#inventory-upload-cancel-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#inventory-save-cancel-btn').onclick = cleanUpAndClose;
+
+        modal.querySelector('#inventory-upload-submit-btn').onclick = async function(e) {
+          e.preventDefault();
+
+          if (!inventoryFiles.contract) {
+            alert('구매 영수증 / 계약서는 필수 등록 항목입니다.');
+            return;
+          }
+
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'none';
+          btnToggleUpload.parentElement.style.display = 'none';
+          initialControls.style.display = 'none';
+          loadingDiv.style.display = 'flex';
+          stopCamera();
+
+          var formData = new FormData();
+          formData.append('contract', inventoryFiles.contract);
+          if (inventoryFiles.photo_front) formData.append('photo_front', inventoryFiles.photo_front);
+          if (inventoryFiles.photo_rear) formData.append('photo_rear', inventoryFiles.photo_rear);
+          if (inventoryFiles.photo_left) formData.append('photo_left', inventoryFiles.photo_left);
+          if (inventoryFiles.photo_right) formData.append('photo_right', inventoryFiles.photo_right);
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/scan-inventory', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || 'AI 분석 중 오류가 발생했습니다.');
+            }
+
+            var res = await response.json();
+            loadingDiv.style.display = 'none';
+            resultDiv.style.display = 'flex';
+
+            var data = res.data || {};
+            var files = res.files || {};
+
+            saveForm.querySelector('[name="equipment_type"]').value = data.equipment_type || '';
+            saveForm.querySelector('[name="model"]').value = data.model || '';
+            saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+            saveForm.querySelector('[name="quantity"]').value = data.quantity || 1;
+            saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
+            saveForm.querySelector('[name="daily_rate"]').value = data.daily_rate || 0;
+            saveForm.querySelector('[name="delivery_fee"]').value = data.delivery_fee || 0;
+            saveForm.querySelector('[name="details"]').value = data.details ? JSON.stringify(data.details) : '';
+
+            var d = data.details || {};
+            var sumRows = [];
+            if (data.rate_amount) sumRows.push('<b>총 가격/단가</b> $' + data.rate_amount);
+            if (d.quote_no) sumRows.push('<b>영수증 번호</b> ' + d.quote_no);
+            if (d.ship_to_address) sumRows.push('<b>주소</b> ' + d.ship_to_address);
+            if (d.lessor && d.lessor.name) sumRows.push('<b>판매사(Lessor/Seller)</b> ' + d.lessor.name);
+            if (d.pricing && d.pricing.total_with_tax) sumRows.push('<b>총 세금포함</b> $' + d.pricing.total_with_tax);
+            if (d.terms && d.terms.payment_terms) sumRows.push('<b>지급 조건</b> ' + d.terms.payment_terms);
+            if (d.specs) sumRows.push('<b>장비 스펙/시리얼</b> ' + d.specs);
+            
+            var sumDiv = saveForm.querySelector('#inventory-ai-extracted-summary');
+            if (sumRows.length && sumDiv) {
+              sumDiv.innerHTML = '<div style="font-weight:700;color:var(--text-primary);margin-bottom:4px">📋 AI 추출 추가 정보 (저장됨)</div>' + sumRows.join(' &nbsp;·&nbsp; ');
+              sumDiv.style.display = 'block';
+            }
+
+            saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
+            saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
+            saveForm.querySelector('[name="photo_rear"]').value = files.photo_rear || '';
+            saveForm.querySelector('[name="photo_left"]').value = files.photo_left || '';
+            saveForm.querySelector('[name="photo_right"]').value = files.photo_right || '';
+
+            var previewsDiv = saveForm.querySelector('#inventory-ai-uploaded-previews');
+            previewsDiv.innerHTML = '';
+            var directions = [
+              { key: 'photo_front', label: '전면' },
+              { key: 'photo_rear', label: '후면' },
+              { key: 'photo_left', label: '좌측' },
+              { key: 'photo_right', label: '우측' }
+            ];
+            directions.forEach(function(d) {
+              var src = '';
+              if (inventoryFiles[d.key]) {
+                src = URL.createObjectURL(inventoryFiles[d.key]);
+              } else if (files[d.key]) {
+                src = files[d.key];
+              }
+
+              if (src) {
+                var previewCard = document.createElement('div');
+                previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
+                previewCard.innerHTML = 
+                  '<img src="' + src + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+                  '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
+                previewsDiv.appendChild(previewCard);
+              }
+            });
+
+          } catch (err) {
+            loadingDiv.style.display = 'none';
+            btnToggleUpload.parentElement.style.display = 'flex';
+            initialControls.style.display = 'flex';
+            if (currentCameraMode === 'camera') {
+              cameraArea.style.display = 'grid';
+              startCamera();
+            } else {
+              uploadArea.style.display = 'flex';
+            }
+            alert('오류: ' + err.message);
+          }
+        };
+
+        saveForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var detailsRaw = saveForm.querySelector('[name="details"]').value;
+          var detailsObj = null;
+          if (detailsRaw) { try { detailsObj = JSON.parse(detailsRaw); } catch (e) { detailsObj = null; } }
+
+          var payload = {
+            equipment_type: saveForm.querySelector('[name="equipment_type"]').value,
+            model: saveForm.querySelector('[name="model"]').value,
+            vendor: saveForm.querySelector('[name="vendor"]').value,
+            quantity: parseInt(saveForm.querySelector('[name="quantity"]').value, 10) || 1,
+            rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
+            daily_rate: parseInt(saveForm.querySelector('[name="daily_rate"]').value, 10) || 0,
+            delivery_fee: parseInt(saveForm.querySelector('[name="delivery_fee"]').value, 10) || 0,
+            details: detailsObj,
+            contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
+            photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
+            photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
+            photo_left: saveForm.querySelector('[name="photo_left"]').value || null,
+            photo_right: saveForm.querySelector('[name="photo_right"]').value || null
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/save-inventory', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '자재 정보를 저장하는 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('자재가 정상적으로 등록되었습니다.');
+            window.refreshInventory();
+          } catch(err) {
+            alert('저장 실패: ' + err.message);
+          }
+        };
       };
 
       // ìžì‚° ìƒì„¸ ëª¨ë‹¬

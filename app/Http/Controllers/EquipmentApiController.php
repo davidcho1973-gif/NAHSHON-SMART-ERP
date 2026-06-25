@@ -378,5 +378,124 @@ class EquipmentApiController extends Controller
             ], 400);
         }
     }
+
+    public function scanInventory(Request $request): JsonResponse
+    {
+        $request->validate([
+            'contract' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'photo_front' => 'nullable|image|max:10240',
+            'photo_rear' => 'nullable|image|max:10240',
+            'photo_left' => 'nullable|image|max:10240',
+            'photo_right' => 'nullable|image|max:10240',
+        ]);
+
+        try {
+            $filesToAnalyze = [];
+            $savedPaths = [];
+
+            $storeFile = function ($fileKey) use ($request, &$filesToAnalyze, &$savedPaths): void {
+                if ($request->hasFile($fileKey)) {
+                    $file = $request->file($fileKey);
+                    $path = $file->store('equipments', 'public');
+                    $absolutePath = Storage::disk('public')->path($path);
+                    
+                    $filesToAnalyze[] = [
+                        'path' => $absolutePath,
+                        'mime_type' => $file->getClientMimeType(),
+                    ];
+                    $savedPaths[$fileKey] = '/storage/' . $path;
+                }
+            };
+
+            $storeFile('contract');
+            $storeFile('photo_front');
+            $storeFile('photo_rear');
+            $storeFile('photo_left');
+            $storeFile('photo_right');
+
+            // Analyze via Gemini (configured for general purchase receipts and rental documents)
+            $analysis = $this->analyzer->analyze($filesToAnalyze);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analysis,
+                'files' => $savedPaths,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function saveInventory(Request $request): JsonResponse
+    {
+        $request->validate([
+            'equipment_type' => 'required|string|max:100',
+            'model' => 'required|string|max:100',
+            'vendor' => 'nullable|string|max:100',
+            'quantity' => 'nullable|integer|min:1|max:100',
+            'rent_start' => 'nullable|date', // Purchase date
+            'daily_rate' => 'nullable|integer|min:0', // Asset/Purchase cost
+            'delivery_fee' => 'nullable|integer|min:0',
+            'details' => 'nullable|array',
+            'photo_front' => 'nullable|string',
+            'photo_rear' => 'nullable|string',
+            'photo_left' => 'nullable|string',
+            'photo_right' => 'nullable|string',
+            'contract_path' => 'nullable|string',
+        ]);
+
+        $user = auth()->user();
+        $employee = $user->employee;
+        $companyId = $employee?->company_id ?? $user->allowed_company_id;
+        $siteId = $employee?->site_id ?? $user->allowed_site_id;
+        $teamId = $employee?->team_id ?? $user->allowed_team_id;
+
+        $quantity = (int) ($request->input('quantity') ?: 1);
+
+        $payload = array_filter([
+            'return_fee' => 0,
+            'details' => $request->input('details'),
+            'order_quantity' => $quantity,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        $created = DB::transaction(function () use ($request, $siteId, $quantity, $payload): array {
+            $rows = [];
+
+            for ($i = 0; $i < $quantity; $i++) {
+                $rows[] = Equipment::create([
+                    'company_id' => null, // Stays in storage / available
+                    'site_id' => $siteId,
+                    'team_id' => null,
+                    'employee_id' => null,
+                    'equipment_type' => $request->input('equipment_type'),
+                    'model' => $request->input('model'),
+                    'vendor' => $request->input('vendor'),
+                    'rent_start' => $request->input('rent_start'),
+                    'rent_end' => null,
+                    'daily_rate' => $request->input('daily_rate') ?? 0,
+                    'delivery_fee' => $request->input('delivery_fee') ?? 0,
+                    'status' => '대기중',
+                    'photo_front' => $request->input('photo_front'),
+                    'photo_rear' => $request->input('photo_rear'),
+                    'photo_left' => $request->input('photo_left'),
+                    'photo_right' => $request->input('photo_right'),
+                    'contract_path' => $request->input('contract_path'),
+                    'registration_method' => 'AI자동분석',
+                    'payload' => $payload ?: null,
+                ]);
+            }
+
+            return $rows;
+        });
+
+        return response()->json([
+            'success' => true,
+            'count' => count($created),
+            'equipment' => $created[0] ?? null,
+        ]);
+    }
 }
 

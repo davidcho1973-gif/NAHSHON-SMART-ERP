@@ -120,41 +120,40 @@ class GeminiEquipmentAnalyzer
     private function prompt(): string
     {
         return <<<'PROMPT'
-You are analyzing a US construction equipment/material rental or lease document
-(e.g. a heavy-equipment rental from United Rentals/Sunbelt/Herc, or a storage
-container / modular office lease from WillScot/Williams Scotsman), plus optional
-equipment condition photos. Extract EVERY field you can read. Return JSON only.
+You are analyzing a US construction equipment/material rental agreement, lease contract, purchase agreement, sales invoice, or purchase receipt document (e.g. rental from United Rentals/Sunbelt/Herc, modular lease from WillScot, or purchase/sales invoices from Home Depot, Lowe's, CAT, or other dealers), plus optional equipment condition photos. Extract EVERY field you can read. Return JSON only.
 Do NOT invent values — use an empty string / 0 / empty array when a field is absent.
 
-Read carefully: these documents contain far more than type/model/vendor. Capture
-the agreement identifiers, both parties, the ship-to/delivery site, the full
-pricing breakdown (recurring rate AND its billing period, delivery, return/pickup,
-totals with and without tax), quantity of units, specs, and the lease terms.
+Read carefully: these documents contain far more than type/model/vendor. Capture the agreement identifiers, both parties, the ship-to/delivery site, the full pricing breakdown (recurring rate or purchase rate, delivery fee, totals with and without tax), quantity of units, specs, and any terms.
+
+If the document is a purchase receipt, sales agreement, or invoice rather than a rental contract:
+- Treat the purchase/invoice date as 'rent_start', and leave 'rent_end' as "".
+- Treat the purchase unit cost or total asset price as 'rate_amount' or 'daily_rate'.
+- Treat the seller/dealer as 'vendor'.
 
 Top-level fields:
-- equipment_type: category (e.g. "Storage Container", "Boom Lift", "Excavator", "Generator", "Modular Office", "Other").
-- model: model/description (e.g. "40' CONTAINER", "Genie S-60", "CAT 320").
-- vendor: rental/lessor company short name (e.g. "WillScot", "United Rentals").
+- equipment_type: category (e.g. "Storage Container", "Boom Lift", "Excavator", "Generator", "Modular Office", "Power Tool (전동공구)", "Hand Tool (수공구)", "Safety & PPE (안전 용품)", "Other Materials (기타 자재/공구)", or "Other").
+- model: model/description (e.g. "40' CONTAINER", "Genie S-60", "CAT 320", "Hilti TE 70").
+- vendor: rental/seller company short name (e.g. "WillScot", "United Rentals", "Home Depot", "Lowe's").
 - quantity: number of identical units on this order (integer, default 1).
-- rent_start: start/estimated delivery date (YYYY-MM-DD) or "".
-- rent_end: end date (YYYY-MM-DD) or "" if open/month-to-month.
-- rate_amount: the recurring rental rate amount per billing period (number).
-- rate_period: the billing period for rate_amount, e.g. "day", "week", "month", "28-day cycle". "" if unknown.
-- daily_rate: best daily-equivalent rate if available, else the recurring rate_amount (integer).
+- rent_start: start/estimated delivery date / purchase date (YYYY-MM-DD) or "".
+- rent_end: end date (YYYY-MM-DD) or "" if open/month-to-month or purchase.
+- rate_amount: the recurring rate or purchase unit price (number).
+- rate_period: the billing period (e.g. "day", "week", "month", "once", "one-time") or "".
+- daily_rate: best daily-equivalent rate or purchase unit cost (integer).
 - delivery_fee: delivery/transport charge (integer).
-- return_fee: estimated return/pickup charge (integer).
+- return_fee: estimated return/pickup charge (integer, default 0).
 
 details: a nested object with the full contract metadata:
-- quote_no, document_type, revision, quote_date (YYYY-MM-DD), expiration_date (YYYY-MM-DD).
-- account_no: customer/lessee account number.
+- quote_no, document_type (e.g., "Rental Contract", "Purchase Invoice", "Sales Receipt", "Proposal"), revision, quote_date (YYYY-MM-DD), expiration_date (YYYY-MM-DD).
+- account_no: customer account number.
 - ship_to_address: full delivery/job-site address.
 - delivery_date (YYYY-MM-DD).
 - sales_rep: { name, phone, email }.
-- lessor: { name, address, phone } (the rental company).
-- lessee: { name, address, contact_name, contact_phone, contact_email } (the customer).
-- specs: free-text dimensions/volume/capacity.
-- scope_of_work: what is included (e.g. "(3) Lights and Lock").
-- addons: array of { name, quantity, price } (shelving, waivers, insurance, etc.).
+- lessor: { name, address, phone } (the rental company or seller).
+- lessee: { name, address, contact_name, contact_phone, contact_email } (the customer or buyer).
+- specs: free-text dimensions/volume/capacity/serial numbers.
+- scope_of_work: what is included.
+- addons: array of { name, quantity, price }.
 - pricing: { recurring_per_cycle, recurring_with_tax, delivery, return, total, total_with_tax } (numbers).
 - terms: { billing_cycle, payment_terms, min_lease_term, late_interest, lease_type, taxes_responsibility } (strings).
 - po_number.
