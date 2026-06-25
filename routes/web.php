@@ -59,6 +59,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/mobile-equipment/scan-photos-batch', [\App\Http\Controllers\MobileEquipmentController::class, 'scanPhotosBatch'])->name('mobile-equipment.scan-photos-batch');
     Route::post('/mobile-equipment/store', [\App\Http\Controllers\MobileEquipmentController::class, 'store'])->name('mobile-equipment.store');
     Route::post('/mobile-equipment/store-batch', [\App\Http\Controllers\MobileEquipmentController::class, 'storeBatch'])->name('mobile-equipment.store-batch');
+    Route::put('/mobile-equipment/{equipment}', [\App\Http\Controllers\MobileEquipmentController::class, 'update'])->name('mobile-equipment.update');
+    Route::delete('/mobile-equipment/{equipment}', [\App\Http\Controllers\MobileEquipmentController::class, 'destroy'])->name('mobile-equipment.destroy');
 
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');

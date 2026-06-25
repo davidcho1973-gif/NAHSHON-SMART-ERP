@@ -40,12 +40,29 @@ class MobileEquipmentController extends Controller
         $operableCount = $equipments->where('status', '사용중')->count();
         $availableCount = $equipments->where('status', '대기중')->count();
 
+        // Load reference data for inline editing
+        $employee = $user->employee;
+        if ($employee && $employee->company_id) {
+            $sites = Site::query()
+                ->where('company_id', $employee->company_id)
+                ->where('status', 'active')
+                ->get();
+        } else {
+            $sites = Site::query()->where('status', 'active')->get();
+        }
+
+        $teams = Team::query()->get();
+        $employees = Employee::query()->where('employment_status', 'active')->get();
+
         return view('mobile-equipment.index', [
             'equipments' => $equipments,
             'totalCount' => $totalCount,
             'operableCount' => $operableCount,
             'availableCount' => $availableCount,
             'currentSite' => $siteCode ?: 'ALL',
+            'sites' => $sites,
+            'teams' => $teams,
+            'employees' => $employees,
         ]);
     }
 
@@ -293,5 +310,48 @@ class MobileEquipmentController extends Controller
 
         return redirect()->route('mobile-equipment.index')
             ->with('success', '총 ' . count($request->input('items')) . '건의 장비/자재가 일괄 등록되었습니다.');
+    }
+
+    public function update(Request $request, Equipment $equipment)
+    {
+        $request->validate([
+            'equipment_type' => 'required|string|max:100',
+            'model' => 'required|string|max:100',
+            'vendor' => 'nullable|string|max:100',
+            'status' => 'required|string|in:대기중,사용중,정비중',
+            'site_id' => 'nullable|exists:sites,id',
+            'team_id' => 'nullable|exists:teams,id',
+            'employee_id' => 'nullable|exists:employees,id',
+            'photo' => 'nullable|image|max:10240', // 10MB limit
+        ]);
+
+        $data = [
+            'equipment_type' => $request->input('equipment_type'),
+            'model' => $request->input('model'),
+            'vendor' => $request->input('vendor'),
+            'status' => $request->input('status'),
+            'site_id' => $request->input('site_id'),
+            'team_id' => $request->input('team_id'),
+            'employee_id' => $request->input('employee_id'),
+        ];
+
+        if ($request->hasFile('photo')) {
+            $file = $request->file('photo');
+            $path = $file->store('equipments', 'public');
+            $data['photo_front'] = '/storage/' . $path;
+        }
+
+        $equipment->update($data);
+
+        return redirect()->route('mobile-equipment.index')
+            ->with('success', '장비 정보가 정상적으로 수정되었습니다.');
+    }
+
+    public function destroy(Equipment $equipment)
+    {
+        $equipment->delete();
+
+        return redirect()->route('mobile-equipment.index')
+            ->with('success', '장비가 정상적으로 삭제되었습니다.');
     }
 }

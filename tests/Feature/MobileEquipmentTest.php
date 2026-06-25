@@ -456,5 +456,68 @@ class MobileEquipmentTest extends TestCase
         $this->assertSame('Box of Nails', $data['items'][1]['model']);
         $this->assertTrue($data['items'][1]['is_bulk']);
     }
+
+    public function test_mobile_equipment_update_saves_changes_and_optional_photo(): void
+    {
+        Storage::fake('public');
+        
+        $equipment = Equipment::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'equipment_type' => 'Power Tool (전동공구)',
+            'model' => 'Old Model',
+            'vendor' => 'Old Brand',
+            'status' => '대기중',
+        ]);
+
+        $updateData = [
+            'equipment_type' => 'Hand Tool (수공구)',
+            'model' => 'New Model',
+            'vendor' => 'New Brand',
+            'status' => '사용중',
+            'site_id' => $this->site->id,
+            'team_id' => $this->team->id,
+            'employee_id' => $this->employee->id,
+            'photo' => \Illuminate\Http\UploadedFile::fake()->create('new_photo.jpg', 800, 'image/jpeg'),
+        ];
+
+        $response = $this->actingAs($this->user)->put(route('mobile-equipment.update', $equipment), $updateData);
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+        $response->assertSessionHas('success');
+
+        $equipment->refresh();
+        $this->assertSame('Hand Tool (수공구)', $equipment->equipment_type);
+        $this->assertSame('New Model', $equipment->model);
+        $this->assertSame('New Brand', $equipment->vendor);
+        $this->assertSame('사용중', $equipment->status);
+        $this->assertSame($this->team->id, $equipment->team_id);
+        $this->assertSame($this->employee->id, $equipment->employee_id);
+        
+        $this->assertNotNull($equipment->photo_front);
+        $storedFilename = basename($equipment->photo_front);
+        Storage::disk('public')->assertExists('equipments/' . $storedFilename);
+    }
+
+    public function test_mobile_equipment_destroy_removes_record(): void
+    {
+        $equipment = Equipment::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'equipment_type' => 'Power Tool (전동공구)',
+            'model' => 'To Be Deleted',
+            'status' => '대기중',
+        ]);
+
+        $response = $this->actingAs($this->user)->delete(route('mobile-equipment.destroy', $equipment));
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('equipments', [
+            'id' => $equipment->id,
+        ]);
+    }
 }
+
 

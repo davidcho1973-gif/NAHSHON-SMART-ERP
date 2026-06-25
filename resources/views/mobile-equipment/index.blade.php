@@ -309,6 +309,28 @@
       object-fit: contain;
       background: var(--bg-base);
     }
+    .btn-batch-action {
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+    }
+    .btn-batch-action.secondary {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }
+    .btn-batch-action.success {
+      background: linear-gradient(135deg, var(--status-success), #15803d);
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -357,13 +379,18 @@
           }
           
           $equipmentPayload = [
+              'id' => $equipment->id,
               'code' => $equipment->equipment_code,
               'type' => $equipment->equipment_type,
               'model' => $equipment->model,
               'vendor' => $equipment->vendor ?: '-',
+              'vendor_raw' => $equipment->vendor ?: '',
               'site' => $equipment->site ? $equipment->site->name : '-',
+              'site_id' => $equipment->site_id,
               'team' => $equipment->team ? $equipment->team->name : '-',
+              'team_id' => $equipment->team_id,
               'operator' => $equipment->employee ? $equipment->employee->name : '-',
+              'employee_id' => $equipment->employee_id,
               'status' => $equipment->status,
               'photo' => $photoUrl
           ];
@@ -416,57 +443,174 @@
   <!-- Detail Modal -->
   <div class="modal-overlay" id="detailModal" onclick="closeDetailModal(event)">
     <div class="modal-content" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h2 class="modal-title">장비 상세 정보</h2>
-        <button class="modal-close" onclick="document.getElementById('detailModal').style.display='none'">
-          <i class="ph ph-x"></i>
-        </button>
+      
+      <!-- Read-Only View -->
+      <div id="detailView" style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="modal-header">
+          <h2 class="modal-title">장비 상세 정보</h2>
+          <button class="modal-close" onclick="closeDetailModal()">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">장비 코드</span>
+            <span class="detail-value" id="modalCode" style="font-family:var(--font-mono);font-weight:700">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">장비 상태</span>
+            <span class="detail-value" id="modalStatus">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">장비 분류</span>
+            <span class="detail-value" id="modalType">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">제조사/브랜드</span>
+            <span class="detail-value" id="modalVendor">-</span>
+          </div>
+          <div class="detail-item" style="grid-column: span 2">
+            <span class="detail-label">모델명</span>
+            <span class="detail-value" id="modalModel" style="font-weight:700">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">배정 현장</span>
+            <span class="detail-value" id="modalSite">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">배정 팀</span>
+            <span class="detail-value" id="modalTeam">-</span>
+          </div>
+          <div class="detail-item" style="grid-column: span 2">
+            <span class="detail-label">담당자 (운영자)</span>
+            <span class="detail-value" id="modalOperator">-</span>
+          </div>
+        </div>
+        <div class="detail-item" id="photoPreviewWrap" style="display:none">
+          <span class="detail-label">장비 실물 사진</span>
+          <img class="photo-preview" id="modalPhotoImg" src="" alt="장비 사진">
+        </div>
+        <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button class="btn-batch-action secondary" onclick="switchToEditMode()" style="padding:10px; font-size:12px;">
+            <i class="ph ph-pencil-simple"></i> 수정하기
+          </button>
+          <button class="btn-batch-action secondary" onclick="deleteEquipment()" style="padding:10px; font-size:12px; color:var(--status-danger); border-color:rgba(239, 68, 68, 0.2);">
+            <i class="ph ph-trash"></i> 삭제하기
+          </button>
+        </div>
+        <div style="margin-top:4px;">
+          <button class="btn-batch-action secondary" style="width:100%; padding:10px; font-size:12px;" onclick="closeDetailModal()">닫기</button>
+        </div>
       </div>
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span class="detail-label">장비 코드</span>
-          <span class="detail-value" id="modalCode" style="font-family:var(--font-mono);font-weight:700">-</span>
+
+      <!-- Edit View Form -->
+      <form id="editEquipmentForm" method="POST" enctype="multipart/form-data" style="display: none; flex-direction: column; gap: 14px;">
+        @csrf
+        @method('PUT')
+        <div class="modal-header">
+          <h2 class="modal-title">장비 정보 수정</h2>
+          <button type="button" class="modal-close" onclick="closeDetailModal()">
+            <i class="ph ph-x"></i>
+          </button>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">장비 상태</span>
-          <span class="detail-value" id="modalStatus">-</span>
+
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+          <div class="form-group-sm">
+            <label class="form-label-sm">분류</label>
+            <select name="equipment_type" id="editType" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
+              <option value="Power Tool (전동공구)">Power Tool (전동공구)</option>
+              <option value="Hand Tool (수공구)">Hand Tool (수공구)</option>
+              <option value="Pipes & Fittings (배관 자재)">Pipes & Fittings (배관 자재)</option>
+              <option value="Conduit & Electrical (전선관/전기 자재)">Conduit & Electrical (전선관/전기 자재)</option>
+              <option value="Wires & Cables (전선/케이블)">Wires & Cables (전선/케이블)</option>
+              <option value="Valves & Controls (밸브/계측기)">Valves & Controls (밸브/계측기)</option>
+              <option value="Fasteners & Anchors (체결류/피스)">Fasteners & Anchors (체결류/피스)</option>
+              <option value="Generator & Power (발전기/동력원)">Generator & Power (발전기/동력원)</option>
+              <option value="Welding Machine (용접기)">Welding Machine (용접기)</option>
+              <option value="Heavy Equipment (중장비)">Heavy Equipment (중장비)</option>
+              <option value="Safety & PPE (안전 용품)">Safety & PPE (안전 용품)</option>
+              <option value="Other Materials (기타 자재/공구)">Other Materials (기타 자재/공구)</option>
+            </select>
+          </div>
+          <div class="form-group-sm">
+            <label class="form-label-sm">제조사</label>
+            <input type="text" name="vendor" id="editVendor" class="input-text-sm" placeholder="예: Honda">
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">장비 분류</span>
-          <span class="detail-value" id="modalType">-</span>
+
+        <div class="form-group-sm">
+          <label class="form-label-sm">모델명/설명 <span style="color:var(--status-danger)">*</span></label>
+          <input type="text" name="model" id="editModel" class="input-text-sm" required>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">제조사/브랜드</span>
-          <span class="detail-value" id="modalVendor">-</span>
+
+        <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+          <div class="form-group-sm">
+            <label class="form-label-sm">상태</label>
+            <select name="status" id="editStatus" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
+              <option value="대기중">대기중</option>
+              <option value="사용중">사용중</option>
+              <option value="정비중">정비중</option>
+            </select>
+          </div>
         </div>
-        <div class="detail-item" style="grid-column: span 2">
-          <span class="detail-label">모델명</span>
-          <span class="detail-value" id="modalModel" style="font-weight:700">-</span>
+
+        <div class="form-group-sm">
+          <label class="form-label-sm">배정 현장 (Site)</label>
+          <select name="site_id" id="editSite" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
+            <option value="">지정 안함 (Global / Office)</option>
+            @foreach($sites as $site)
+              <option value="{{ $site->id }}">{{ $site->code }} - {{ $site->name }}</option>
+            @endforeach
+          </select>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">배정 현장</span>
-          <span class="detail-value" id="modalSite">-</span>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div class="form-group-sm">
+            <label class="form-label-sm">배정 팀 (Team)</label>
+            <select name="team_id" id="editTeam" class="input-text-sm" style="background-color: var(--bg-surface-elevated); padding: 8px;">
+              <option value="">지정 안함</option>
+              @foreach($teams as $team)
+                <option value="{{ $team->id }}">{{ $team->name }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="form-group-sm">
+            <label class="form-label-sm">담당 운영자 (Operator)</label>
+            <select name="employee_id" id="editOperator" class="input-text-sm" style="background-color: var(--bg-surface-elevated); padding: 8px;">
+              <option value="">지정 안함</option>
+              @foreach($employees as $emp)
+                <option value="{{ $emp->id }}">{{ $emp->name }}</option>
+              @endforeach
+            </select>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">배정 팀</span>
-          <span class="detail-value" id="modalTeam">-</span>
+
+        <div class="form-group-sm">
+          <label class="form-label-sm">실물 사진 변경</label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <img id="editPhotoPreview" src="" style="width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: none;">
+            <input type="file" name="photo" accept="image/*" capture="environment" class="input-text-sm" style="flex-grow: 1;">
+          </div>
         </div>
-        <div class="detail-item" style="grid-column: span 2">
-          <span class="detail-label">담당자 (운영자)</span>
-          <span class="detail-value" id="modalOperator">-</span>
+
+        <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button type="button" class="btn-batch-action secondary" onclick="switchToDetailMode()" style="padding:10px; font-size:12px;">취소</button>
+          <button type="submit" class="btn-batch-action success" style="padding:10px; font-size:12px;">저장하기</button>
         </div>
-      </div>
-      <div class="detail-item" id="photoPreviewWrap" style="display:none">
-        <span class="detail-label">장비 실물 사진</span>
-        <img class="photo-preview" id="modalPhotoImg" src="" alt="장비 사진">
-      </div>
-      <div style="margin-top:12px; display:flex; justify-content:center;">
-        <button class="btn-secondary" style="width:100%; padding:12px;" onclick="closeDetailModal()">닫기</button>
-      </div>
+      </form>
+
     </div>
   </div>
 
+  <!-- Hidden Delete Form -->
+  <form id="deleteEquipmentForm" method="POST" style="display:none">
+    @csrf
+    @method('DELETE')
+  </form>
+
   <script>
+    let currentSelectedEquipment = null;
+
     function filterStatus(status, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -489,6 +633,9 @@
     }
 
     function openDetailModal(eq) {
+      currentSelectedEquipment = eq;
+      switchToDetailMode();
+
       document.getElementById('modalCode').textContent = eq.code;
       document.getElementById('modalStatus').textContent = eq.status;
       document.getElementById('modalType').textContent = eq.type;
@@ -512,7 +659,51 @@
     }
 
     function closeDetailModal(e) {
-      document.getElementById('detailModal').style.display = 'none';
+      if (!e || e.target === document.getElementById('detailModal') || e.target.classList.contains('modal-close') || e.target.closest('.modal-close')) {
+        document.getElementById('detailModal').style.display = 'none';
+      }
+    }
+
+    function switchToEditMode() {
+      if (!currentSelectedEquipment) return;
+      const eq = currentSelectedEquipment;
+
+      document.getElementById('editModel').value = eq.model;
+      document.getElementById('editVendor').value = eq.vendor_raw;
+      document.getElementById('editType').value = eq.type;
+      document.getElementById('editStatus').value = eq.status;
+      document.getElementById('editSite').value = eq.site_id || '';
+      document.getElementById('editTeam').value = eq.team_id || '';
+      document.getElementById('editOperator').value = eq.employee_id || '';
+
+      const editPreview = document.getElementById('editPhotoPreview');
+      if (eq.photo) {
+        editPreview.src = eq.photo;
+        editPreview.style.display = 'block';
+      } else {
+        editPreview.src = '';
+        editPreview.style.display = 'none';
+      }
+
+      const updateUrl = "/mobile-equipment/" + eq.id;
+      document.getElementById('editEquipmentForm').action = updateUrl;
+
+      document.getElementById('detailView').style.display = 'none';
+      document.getElementById('editEquipmentForm').style.display = 'flex';
+    }
+
+    function switchToDetailMode() {
+      document.getElementById('editEquipmentForm').style.display = 'none';
+      document.getElementById('detailView').style.display = 'flex';
+    }
+
+    function deleteEquipment() {
+      if (!currentSelectedEquipment) return;
+      if (confirm('정말로 이 장비/자재를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+        const deleteForm = document.getElementById('deleteEquipmentForm');
+        deleteForm.action = "/mobile-equipment/" + currentSelectedEquipment.id;
+        deleteForm.submit();
+      }
     }
   </script>
 </body>
