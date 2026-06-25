@@ -972,7 +972,7 @@ class SmartCompanyData
         try {
             if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
                 return \App\Models\Equipment::query()
-                    ->with(['company', 'team', 'employee'])
+                    ->with(['company', 'team', 'employee', 'site'])
                     ->visibleTo(auth()->user())
                     ->get()
                     ->map(fn (\App\Models\Equipment $e): array => [
@@ -990,6 +990,8 @@ class SmartCompanyData
                         'companyId' => $e->company_id,
                         'team' => $e->team?->name ?: '-',
                         'teamId' => $e->team_id,
+                        'siteId' => $e->site_id,
+                        'siteCode' => $e->site?->code ?: '창고',
                         'operator' => $e->employee?->name ?: ($e->payload['custom_operator'] ?? ''),
                         'operatorId' => $e->employee_id,
                         'contract_path' => $e->contract_path,
