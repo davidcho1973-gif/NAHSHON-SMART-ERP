@@ -4179,11 +4179,28 @@
       // â”€â”€ INVENTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // ì¹´í…Œê³ ë¦¬ë³„ ì•„ì´ì½˜ + ìƒ‰ìƒ
       window.INV_CATEGORY_META = {
+        '중장비':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
+        '전동공구': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
+        '측정기':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
+        '수공구':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
+        '안전장비': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
         'ì¤‘ìž¥ë¹„':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
-        'ì „ë™ê³µêµ¬': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
+        'ì „ë ™ê³µêµ¬': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
         'ì¸¡ì •ê¸°':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
         'ìˆ˜ê³µêµ¬':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
-        'ì•ˆì „ìž¥ë¹„': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' }
+        'ì•ˆì „ìž¥ë¹„': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
+        'Power Tool (전동공구)': { icon: 'ph-screwdriver', color: '#3b82f6', prefix: 'TL' },
+        'Hand Tool (수공구)': { icon: 'ph-wrench', color: '#10b981', prefix: 'HT' },
+        'Pipes & Fittings (배관 자재)': { icon: 'ph-line-segments', color: '#06b6d4', prefix: 'PP' },
+        'Conduit & Electrical (전선관/전기 자재)': { icon: 'ph-lightning', color: '#f59e0b', prefix: 'EL' },
+        'Wires & Cables (전선/케이블)': { icon: 'ph-sketch-logo', color: '#a78bfa', prefix: 'CB' },
+        'Valves & Controls (밸브/계측기)': { icon: 'ph-gauge', color: '#ec4899', prefix: 'VL' },
+        'Fasteners & Anchors (체결류/피스)': { icon: 'ph-nut', color: '#64748b', prefix: 'FT' },
+        'Generator & Power (발전기/동력원)': { icon: 'ph-lightning-slash', color: '#eab308', prefix: 'GN' },
+        'Welding Machine (용접기)': { icon: 'ph-flame', color: '#f97316', prefix: 'WD' },
+        'Heavy Equipment (중장비)': { icon: 'ph-truck', color: '#ef4444', prefix: 'EQ' },
+        'Safety & PPE (안전 용품)': { icon: 'ph-shield-check', color: '#10b981', prefix: 'SF' },
+        'Other Materials (기타 자재/공구)': { icon: 'ph-package', color: '#94a3b8', prefix: 'INV' }
       };
       window.getInvCatMeta = function(cat) {
         return window.INV_CATEGORY_META[cat] || { icon: 'ph-package', color: '#94a3b8', prefix: 'INV' };

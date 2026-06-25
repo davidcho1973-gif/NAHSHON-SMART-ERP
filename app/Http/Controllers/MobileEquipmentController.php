@@ -252,6 +252,7 @@ class MobileEquipmentController extends Controller
             'items.*.model' => 'required|string|max:100',
             'items.*.vendor' => 'nullable|string|max:100',
             'items.*.photo_front' => 'nullable|string',
+            'items.*.photo' => 'nullable|image|max:10240',
             'items.*.status' => 'required|string|in:대기중,사용중,정비중',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.is_bulk' => 'nullable|string',
@@ -266,9 +267,16 @@ class MobileEquipmentController extends Controller
         $batchEmployeeId = $request->input('employee_id');
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($request, $companyId, $batchSiteId, $batchTeamId, $batchEmployeeId): void {
-            foreach ($request->input('items') as $item) {
+            foreach ($request->input('items') as $key => $item) {
                 $quantity = (int) ($item['quantity'] ?? 1);
                 $isBulk = isset($item['is_bulk']) && ($item['is_bulk'] === 'on' || $item['is_bulk'] == 1 || $item['is_bulk'] === 'true');
+
+                $photoPath = $item['photo_front'] ?? null;
+                if ($request->hasFile("items.{$key}.photo")) {
+                    $file = $request->file("items.{$key}.photo");
+                    $path = $file->store('equipments', 'public');
+                    $photoPath = '/storage/' . $path;
+                }
 
                 if ($isBulk) {
                     Equipment::create([
@@ -280,7 +288,7 @@ class MobileEquipmentController extends Controller
                         'model' => $item['model'],
                         'vendor' => $item['vendor'] ?? null,
                         'status' => $item['status'] ?? '대기중',
-                        'photo_front' => $item['photo_front'] ?? null,
+                        'photo_front' => $photoPath,
                         'registration_method' => 'AI자동분석',
                         'payload' => null,
                         'quantity' => $quantity,
@@ -297,7 +305,7 @@ class MobileEquipmentController extends Controller
                             'model' => $item['model'],
                             'vendor' => $item['vendor'] ?? null,
                             'status' => $item['status'] ?? '대기중',
-                            'photo_front' => $item['photo_front'] ?? null,
+                            'photo_front' => $photoPath,
                             'registration_method' => 'AI자동분석',
                             'payload' => null,
                             'quantity' => 1,

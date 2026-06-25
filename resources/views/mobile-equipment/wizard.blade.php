@@ -246,6 +246,46 @@
       position: relative;
       background: var(--bg-base);
       flex-shrink: 0;
+      cursor: pointer;
+    }
+    .batch-card-img-wrap:hover .img-overlay {
+      opacity: 1;
+    }
+    .img-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.7);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+    .btn-delete-card-photo {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: rgba(239, 68, 68, 0.9);
+      border: none;
+      color: white;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 10px;
+      z-index: 5;
+    }
+    .btn-delete-card-photo:hover {
+      background: #dc2626;
     }
     .batch-card-img {
       width: 100%;
@@ -496,7 +536,10 @@
       <div class="empty-state" id="queueEmptyState">
         <i class="ph ph-camera-rotate empty-icon" style="color:var(--brand-primary)"></i>
         <span style="font-weight:600;">등록된 사진이 없습니다.</span>
-        <span style="font-size:11px; color:var(--text-secondary);">아래 카메라 촬영 버튼을 눌러 현장 사진을 여러 장 추가해 주세요.</span>
+        <span style="font-size:11px; color:var(--text-secondary); margin-bottom: 8px;">아래 카메라 촬영 버튼을 눌러 현장 사진을 여러 장 추가해 주세요.</span>
+        <button type="button" class="btn-batch-action secondary" style="font-size: 11px; padding: 8px 14px; width: auto; height: auto;" onclick="renderAnalysisResultBoard([])">
+          <i class="ph ph-keyboard"></i> 사진 없이 수동 등록하기
+        </button>
       </div>
 
       <input type="file" id="queueFileInput" accept="image/*" capture="environment" style="display:none" onchange="handleAddPhoto(event)" multiple>
@@ -743,19 +786,34 @@
       const quantity = data.quantity || 1;
       const isBulk = data.is_bulk === true;
 
+      // Handle secure proxy URLs for direct storage images
+      let displayUrl = imageUrl;
+      if (displayUrl.startsWith('/storage/')) {
+        const path = displayUrl.replace('/storage/', '');
+        displayUrl = `/equipment-api/file?path=${path}`;
+      }
+
       const cardHtml = `
         <div class="batch-card" id="card-${cardId}">
-          <button type="button" class="btn-remove-card" onclick="removeCard('${cardId}')">
+          <button type="button" class="btn-remove-card" onclick="removeCard('${cardId}')" title="항목 삭제">
             <i class="ph ph-trash"></i>
           </button>
           
           <div class="batch-card-body">
-            <div class="batch-card-img-wrap">
-              <img src="${imageUrl}" class="batch-card-img">
+            <div class="batch-card-img-wrap" onclick="triggerCardPhotoUpload(${cardId})" title="사진 변경">
+              <button type="button" class="btn-delete-card-photo" id="btn-del-photo-${cardId}" onclick="deleteCardPhoto(event, ${cardId})" style="${imageUrl === '/images/nahshon-app-icon.svg' ? 'display:none' : ''}" title="사진 삭제">
+                <i class="ph ph-trash-simple"></i>
+              </button>
+              <img src="${displayUrl}" id="img-preview-${cardId}" class="batch-card-img">
+              <div class="img-overlay">
+                <i class="ph ph-camera" style="font-size: 16px;"></i>
+                <span>사진 변경</span>
+              </div>
             </div>
             
             <div class="batch-card-fields">
-              <input type="hidden" name="items[${cardId}][photo_front]" value="${imageUrl}">
+              <input type="hidden" name="items[${cardId}][photo_front]" id="photo-front-${cardId}" value="${imageUrl}">
+              <input type="file" name="items[${cardId}][photo]" id="photo-input-${cardId}" accept="image/*" capture="environment" style="display:none" onchange="previewCardPhoto(event, ${cardId})">
               
               <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
                 <div class="form-group-sm">
@@ -820,6 +878,28 @@
       if (selectEl && selectEl.selectedIndex === -1) {
         selectEl.value = "Other (기타)";
       }
+    }
+
+    function triggerCardPhotoUpload(cardId) {
+      document.getElementById('photo-input-' + cardId).click();
+    }
+
+    function previewCardPhoto(event, cardId) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      document.getElementById('img-preview-' + cardId).src = url;
+      document.getElementById('photo-front-' + cardId).value = ''; // clear initial backend scanned string
+      document.getElementById('btn-del-photo-' + cardId).style.display = 'flex';
+    }
+
+    function deleteCardPhoto(event, cardId) {
+      event.stopPropagation(); // prevent triggering click event of parent batch-card-img-wrap
+      document.getElementById('img-preview-' + cardId).src = '/images/nahshon-app-icon.svg';
+      document.getElementById('photo-front-' + cardId).value = '';
+      document.getElementById('photo-input-' + cardId).value = '';
+      document.getElementById('btn-del-photo-' + cardId).style.display = 'none';
     }
 
     function addNewManualItem() {

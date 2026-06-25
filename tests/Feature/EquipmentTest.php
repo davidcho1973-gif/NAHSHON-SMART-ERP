@@ -377,4 +377,43 @@ class EquipmentTest extends TestCase
         $traversalResponse = $this->get(route('equipment.file', ['path' => 'equipments/../../test_photo.jpg']));
         $traversalResponse->assertStatus(403);
     }
+
+    public function test_smart_company_data_equipment_list_and_dashboard_use_real_database(): void
+    {
+        $this->actingAs($this->user);
+
+        Equipment::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'equipment_type' => 'Generator (발전기)',
+            'model' => 'EU3000is',
+            'vendor' => 'Honda',
+            'status' => '사용중',
+            'photo_front' => '/storage/equipments/test_honda.jpg',
+            'quantity' => 1,
+        ]);
+
+        // Assert SmartCompanyData::equipmentList returns the real database item
+        $list = \App\Support\SmartCompanyData::equipmentList();
+        $this->assertCount(1, $list);
+        $this->assertSame('EU3000is', $list[0]['name']);
+        $this->assertSame('Generator (발전기)', $list[0]['category']);
+        $this->assertNotNull($list[0]['photoUrl']);
+        $this->assertStringContainsString('equipment-api/file', $list[0]['photoUrl']);
+
+        // Assert SmartCompanyData::equipmentStats returns DB-accurate counts
+        $stats = \App\Support\SmartCompanyData::equipmentStats();
+        $this->assertSame(1, $stats['total']);
+        $this->assertSame(1, $stats['operable']);
+        $this->assertSame(0, $stats['inoperable']);
+
+        // Assert SmartCompanyData::inventoryDashboard returns DB-accurate structures
+        $dashboard = \App\Support\SmartCompanyData::inventoryDashboard();
+        $this->assertTrue($dashboard['success']);
+        $this->assertSame(1, $dashboard['totals']['assets']);
+        $this->assertSame(1, $dashboard['totals']['inUse']);
+        $this->assertSame(0, $dashboard['totals']['inStorage']);
+        $this->assertContains('Generator (발전기)', $dashboard['matrix']['categories']);
+        $this->assertSame(1, $dashboard['matrix']['cells']['Generator (발전기)']['LGES-AZ']);
+    }
 }

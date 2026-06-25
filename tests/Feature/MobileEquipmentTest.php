@@ -398,6 +398,52 @@ class MobileEquipmentTest extends TestCase
         $this->assertSame($this->site->id, $bulkRecord->site_id);
     }
 
+    public function test_mobile_equipment_store_batch_saves_uploaded_files(): void
+    {
+        Storage::fake('public');
+
+        $postData = [
+            'site_id' => $this->site->id,
+            'items' => [
+                'card_1' => [
+                    'equipment_type' => 'Generator (발전기)',
+                    'model' => 'EU2000i',
+                    'vendor' => 'Honda',
+                    'photo_front' => '', // Empty, rely on upload
+                    'photo' => \Illuminate\Http\UploadedFile::fake()->create('custom_generator.jpg', 800, 'image/jpeg'),
+                    'status' => '대기중',
+                    'quantity' => 1,
+                    'is_bulk' => '0',
+                ],
+                'card_2' => [
+                    'equipment_type' => 'Other (기타)',
+                    'model' => 'Static Photo',
+                    'vendor' => 'Grip-Rite',
+                    'photo_front' => '/storage/equipments/screws.jpg', // No upload, keep static
+                    'status' => '대기중',
+                    'quantity' => 1,
+                    'is_bulk' => 'on',
+                ],
+            ]
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), $postData);
+
+        $response->assertRedirect(route('mobile-equipment.index'));
+
+        // Check card_1 uploaded image is stored and persisted
+        $card1 = Equipment::where('model', 'EU2000i')->first();
+        $this->assertNotNull($card1);
+        $this->assertNotNull($card1->photo_front);
+        $this->assertStringStartsWith('/storage/equipments/', $card1->photo_front);
+        Storage::disk('public')->assertExists('equipments/' . basename($card1->photo_front));
+
+        // Check card_2 static image path remains
+        $card2 = Equipment::where('model', 'Static Photo')->first();
+        $this->assertNotNull($card2);
+        $this->assertSame('/storage/equipments/screws.jpg', $card2->photo_front);
+    }
+
     public function test_mobile_equipment_scan_photos_batch_requires_auth(): void
     {
         $response = $this->postJson(route('mobile-equipment.scan-photos-batch'));
