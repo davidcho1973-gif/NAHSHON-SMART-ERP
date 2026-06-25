@@ -24,6 +24,7 @@ NAHSHON SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-06-25 | Antigravity | AI Equipment Rental Management / Desktop ERP | Rendered and formatted the complete set of AI-extracted contract metadata (billing cycle, lessor/lessee contacts, site address, scope of work, pricing breakdown, and add-ons) in the equipment details modal. | 276f41f | Visual verification locally; pushed to staging. |
 | 2026-06-25 | Antigravity | AI Equipment Rental Management / Desktop ERP | Invalidated cached equipment lists and stats on create, edit, delete, assign, and return mutations, resolving the latency where changes didn't show up immediately. | ef83dd0 | Visual verification locally; pushed to staging. |
 | 2026-06-25 | Antigravity | AI Equipment Rental Management / Desktop ERP | Fixed connection errors/failures during equipment deletion on staging by changing the HTTP DELETE route to a POST endpoint (`/equipment-api/{equipment}/delete`). This bypasses proxy/gateway restrictions on staging. | ad46fb6 | `php artisan test --filter=EquipmentTest` passed (26 tests, 177 assertions). Pushed to staging. |
 | 2026-06-25 | Antigravity | AI Equipment Rental Management / Desktop ERP | Implemented Edit and Delete features inside the desktop "장비 상세 정보" modal. Users can now modify categories, model, vendor, rates, dates, status, 4-directional photos, and contract files or delete the equipment entirely via AJAX without refreshing the tab. | 9726ab8 | `php artisan test --filter=EquipmentTest` passed (26 tests, 177 assertions). Pushed changes to staging branch for Laravel Cloud staging deploy. |
@@ -220,6 +221,7 @@ Use this section for manual owner checks, business decisions, and final approval
 
 ### Completed
 
+- 2026-06-25: Rendered and formatted the complete set of AI-extracted contract metadata (billing cycle, lessor/lessee contacts, site address, scope of work, pricing breakdown, and add-ons) in the equipment details modal.
 - 2026-06-25: Invalidated cached equipment lists and stats on create, edit, delete, assign, and return mutations to force immediate UI updates.
 - 2026-06-25: Fixed connection errors/failures during equipment deletion on staging by changing the HTTP DELETE route to a POST endpoint (`/equipment-api/{equipment}/delete`).
 - 2026-06-25: Implemented Edit and Delete features inside the desktop "장비 상세 정보" modal. Users can now modify categories, model, vendor, rates, dates, status, 4-directional photos, and contract files or delete the equipment entirely via AJAX without refreshing the tab. Cleaned up the dev login helper route after verifying locally.
