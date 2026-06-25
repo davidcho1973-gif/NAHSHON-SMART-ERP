@@ -229,7 +229,18 @@ Look at all the images collectively and identify ALL the distinct tools, machine
 
 For each identified item, determine:
 1. equipment_type: category of the equipment. Choose the best match from:
-   "Generator (발전기)", "Welding Machine (용접기)", "Power Tool (전동공구)", "Hand Tool (수공구)", "Forklift (지게차)", "Boom Lift (고소작업대)", "Excavator (굴착기)", "Skid Steer (스키드로더)", "Compressor (콤프레샤)", "Other (기타)".
+   - "Power Tool (전동공구)" (e.g. drills, grinders, saws, impact drivers, rotary hammers)
+   - "Hand Tool (수공구)" (e.g. hammers, wrenches, screwdrivers, pliers, tape measures, levels)
+   - "Pipes & Fittings (배관 자재)" (e.g. copper/PVC/steel pipes, elbows, couplings, tees, flanges, pipe clamps)
+   - "Conduit & Electrical (전선관/전기 자재)" (e.g. electrical conduits, junction boxes, outlets, switches, fittings)
+   - "Wires & Cables (전선/케이블)" (e.g. extension cords, reels of wire, cables, wire harnesses)
+   - "Valves & Controls (밸브/계측기)" (e.g. ball valves, gate valves, pressure gauges, thermostats, meters)
+   - "Fasteners & Anchors (체결류/피스)" (e.g. screws, drywall screws, bolts, nuts, washers, concrete anchors)
+   - "Generator & Power (발전기/동력원)" (e.g. generators, battery packs, power chargers, transformers)
+   - "Welding Machine (용접기)" (e.g. arc welders, MIG/TIG machines, gas torches, welding masks)
+   - "Heavy Equipment (중장비)" (e.g. forklifts, boom lifts, scissor lifts, excavators, skid steers)
+   - "Safety & PPE (안전 용품)" (e.g. safety vests, hard hats, safety glasses, gloves, harnesses, traffic cones)
+   - "Other Materials (기타 자재/공구)" (e.g. toolboxes, ladders, tape, caulking, adhesives, cleaning supplies, paint, rope)
 2. model: specific model name or number (e.g. "EU2200i", "DCD771", "LXT"). If no model is visible, provide a short 2-3 word description of the item.
 3. vendor: brand, manufacturer, or company name (e.g. "Honda", "DeWalt", "Makita", "Bosch", "Caterpillar", "JLG").
 4. quantity: the count of this specific tool/material visible in the images.
@@ -257,7 +268,7 @@ PROMPT;
                         'properties' => [
                             'equipment_type' => [
                                 'type' => 'string',
-                                'description' => 'Category: Generator (발전기), Power Tool (전동공구), Hand Tool (수공구), Other (기타), etc.'
+                                'description' => 'Category: Power Tool (전동공구), Hand Tool (수공구), Pipes & Fittings (배관 자재), Conduit & Electrical (전선관/전기 자재), Wires & Cables (전선/케이블), Valves & Controls (밸브/계측기), Fasteners & Anchors (체결류/피스), Generator & Power (발전기/동력원), Welding Machine (용접기), Heavy Equipment (중장비), Safety & PPE (안전 용품), Other Materials (기타 자재/공구)'
                             ],
                             'model' => [
                                 'type' => 'string',
@@ -298,7 +309,7 @@ Return JSON only. Do not guess wild values; if you cannot find the model or vend
 
 Fields:
 - equipment_type: The category of the equipment. Choose the best match from:
-  "Generator (발전기)", "Welding Machine (용접기)", "Power Tool (전동공구)", "Hand Tool (수공구)", "Forklift (지게차)", "Boom Lift (고소작업대)", "Excavator (굴착기)", "Skid Steer (스키드로더)", "Compressor (콤프레샤)", "Other (기타)".
+  "Power Tool (전동공구)", "Hand Tool (수공구)", "Pipes & Fittings (배관 자재)", "Conduit & Electrical (전선관/전기 자재)", "Wires & Cables (전선/케이블)", "Valves & Controls (밸브/계측기)", "Fasteners & Anchors (체결류/피스)", "Generator & Power (발전기/동력원)", "Welding Machine (용접기)", "Heavy Equipment (중장비)", "Safety & PPE (안전 용품)", "Other Materials (기타 자재/공구)".
 - model: The specific model name or number visible on the equipment (e.g. "EU2200i", "DCD771", "LXT"). If no model is visible, provide a short 2-3 word description of the item.
 - vendor: The brand, manufacturer, or company name (e.g. "Honda", "DeWalt", "Makita", "Bosch", "Caterpillar", "JLG").
 PROMPT;
@@ -314,7 +325,7 @@ PROMPT;
             'properties' => [
                 'equipment_type' => [
                     'type' => 'string',
-                    'description' => 'Equipment category. e.g. Generator (발전기), Power Tool (전동공구)'
+                    'description' => 'Equipment category: Power Tool (전동공구), Hand Tool (수공구), Pipes & Fittings (배관 자재), Conduit & Electrical (전선관/전기 자재), Wires & Cables (전선/케이블), Valves & Controls (밸브/계측기), Fasteners & Anchors (체결류/피스), Generator & Power (발전기/동력원), Welding Machine (용접기), Heavy Equipment (중장비), Safety & PPE (안전 용품), Other Materials (기타 자재/공구)'
                 ],
                 'model' => [
                     'type' => 'string',

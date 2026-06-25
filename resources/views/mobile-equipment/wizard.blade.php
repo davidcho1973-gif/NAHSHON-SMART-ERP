@@ -761,16 +761,18 @@
                 <div class="form-group-sm">
                   <label class="form-label-sm">분류</label>
                   <select name="items[${cardId}][equipment_type]" id="type-${cardId}" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
-                    <option value="Generator (발전기)" ${type.includes('발전기') || type.toLowerCase().includes('generator') ? 'selected' : ''}>Generator (발전기)</option>
-                    <option value="Welding Machine (용접기)" ${type.includes('용접기') || type.toLowerCase().includes('welding') ? 'selected' : ''}>Welding Machine (용접기)</option>
-                    <option value="Power Tool (전동공구)" ${type.includes('전동공구') || type.toLowerCase().includes('power') ? 'selected' : ''}>Power Tool (전동공구)</option>
-                    <option value="Hand Tool (수공구)" ${type.includes('수공구') || type.toLowerCase().includes('hand') ? 'selected' : ''}>Hand Tool (수공구)</option>
-                    <option value="Forklift (지게차)" ${type.includes('지게차') || type.toLowerCase().includes('forklift') ? 'selected' : ''}>Forklift (지게차)</option>
-                    <option value="Boom Lift (고소작업대)" ${type.includes('고소작업대') || type.toLowerCase().includes('boom') ? 'selected' : ''}>Boom Lift (고소작업대)</option>
-                    <option value="Excavator (굴착기)" ${type.includes('굴착기') || type.toLowerCase().includes('excavator') ? 'selected' : ''}>Excavator (굴착기)</option>
-                    <option value="Skid Steer (스키드로더)" ${type.includes('스키드로더') || type.toLowerCase().includes('skid') ? 'selected' : ''}>Skid Steer (스키드로더)</option>
-                    <option value="Compressor (콤프레샤)" ${type.includes('콤프레샤') || type.toLowerCase().includes('compressor') ? 'selected' : ''}>Compressor (콤프레샤)</option>
-                    <option value="Other (기타)" ${type.includes('기타') || type.toLowerCase().includes('other') ? 'selected' : ''}>Other (기타)</option>
+                    <option value="Power Tool (전동공구)" ${type.includes('전동공구') || type.toLowerCase().includes('power tool') || type.toLowerCase().includes('power_tool') ? 'selected' : ''}>Power Tool (전동공구)</option>
+                    <option value="Hand Tool (수공구)" ${type.includes('수공구') || type.toLowerCase().includes('hand tool') || type.toLowerCase().includes('hand_tool') ? 'selected' : ''}>Hand Tool (수공구)</option>
+                    <option value="Pipes & Fittings (배관 자재)" ${type.includes('배관') || type.toLowerCase().includes('pipe') || type.toLowerCase().includes('fitting') ? 'selected' : ''}>Pipes & Fittings (배관 자재)</option>
+                    <option value="Conduit & Electrical (전선관/전기 자재)" ${type.includes('전기') || type.includes('전선관') || type.toLowerCase().includes('conduit') || type.toLowerCase().includes('electrical') ? 'selected' : ''}>Conduit & Electrical (전선관/전기 자재)</option>
+                    <option value="Wires & Cables (전선/케이블)" ${type.includes('케이블') || type.toLowerCase().includes('wire') || type.toLowerCase().includes('cable') ? 'selected' : ''}>Wires & Cables (전선/케이블)</option>
+                    <option value="Valves & Controls (밸브/계측기)" ${type.includes('밸브') || type.includes('계측') || type.toLowerCase().includes('valve') || type.toLowerCase().includes('control') || type.toLowerCase().includes('gauge') ? 'selected' : ''}>Valves & Controls (밸브/계측기)</option>
+                    <option value="Fasteners & Anchors (체결류/피스)" ${type.includes('체결') || type.includes('피스') || type.toLowerCase().includes('fastener') || type.toLowerCase().includes('screw') || type.toLowerCase().includes('bolt') || type.toLowerCase().includes('nut') || type.toLowerCase().includes('anchor') ? 'selected' : ''}>Fasteners & Anchors (체결류/피스)</option>
+                    <option value="Generator & Power (발전기/동력원)" ${type.includes('발전기') || type.toLowerCase().includes('generator') || type.toLowerCase().includes('power source') || type.toLowerCase().includes('battery') ? 'selected' : ''}>Generator & Power (발전기/동력원)</option>
+                    <option value="Welding Machine (용접기)" ${type.includes('용접기') || type.toLowerCase().includes('welding') || type.toLowerCase().includes('welder') ? 'selected' : ''}>Welding Machine (용접기)</option>
+                    <option value="Heavy Equipment (중장비)" ${type.includes('중장비') || type.toLowerCase().includes('heavy') || type.toLowerCase().includes('forklift') || type.toLowerCase().includes('lift') || type.toLowerCase().includes('excavator') || type.toLowerCase().includes('steer') ? 'selected' : ''}>Heavy Equipment (중장비)</option>
+                    <option value="Safety & PPE (안전 용품)" ${type.includes('안전') || type.toLowerCase().includes('safety') || type.toLowerCase().includes('ppe') || type.toLowerCase().includes('vest') || type.toLowerCase().includes('hat') || type.toLowerCase().includes('glove') ? 'selected' : ''}>Safety & PPE (안전 용품)</option>
+                    <option value="Other Materials (기타 자재/공구)" ${type.includes('기타') || type.toLowerCase().includes('other') ? 'selected' : ''}>Other Materials (기타 자재/공구)</option>
                   </select>
                 </div>
                 <div class="form-group-sm">
@@ -822,7 +824,7 @@
 
     function addNewManualItem() {
       addNewItemCard({
-        equipment_type: 'Other (기타)',
+        equipment_type: 'Other Materials (기타 자재/공구)',
         vendor: '',
         model: '',
         quantity: 1,
