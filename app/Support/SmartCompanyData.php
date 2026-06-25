@@ -1055,7 +1055,7 @@ class SmartCompanyData
                         'companyId' => $e->company_id,
                         'team' => $e->team?->name ?: '-',
                         'teamId' => $e->team_id,
-                        'operator' => $e->employee?->name ?: '',
+                        'operator' => $e->employee?->name ?: ($e->payload['custom_operator'] ?? ''),
                         'operatorId' => $e->employee_id,
                         'contract_path' => $e->contract_path,
                         'photo_front' => $e->photo_front,

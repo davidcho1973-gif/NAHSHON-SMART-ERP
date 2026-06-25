@@ -7399,12 +7399,16 @@
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">모델명 / 렌트사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + r.model + ' / ' + r.vendor + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">단가 / 배송 비용 (Rate & Delivery)</span><strong style="font-size:15px;color:var(--text-primary);">' + rateAmountText + ' / ' + deliveryFeeText + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">계약 총 비용</span><strong style="font-size:15px;color:#7c3aed;">$' + totalLeaseCost.toLocaleString() + ' (' + leaseDays + '일 기준)</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">Quote / 계약번호</span><strong style="font-size:15px;color:var(--text-primary);">' + (details.quote_no || '-') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">PO 번호</span><strong style="font-size:15px;color:var(--text-primary);">' + (details.po_number || '-') + '</strong></div>' +
                 '</div>' +
                 '<div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정회사 / 팀</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.company || '-') + ' / ' + (r.team || '-') + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 운영자 / 담당자</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.operator || '미배정') + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">대여 기간</span><strong style="font-size:15px;color:var(--text-primary);">' + r.startDate + ' ~ ' + r.endDate + '</strong></div>' +
                   '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 상태</span><div>' + statusPill(r.status) + '</div></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">상세 규격 (Specs)</span><strong style="font-size:15px;color:var(--text-primary);">' + (details.specs || '-') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">반납 요금 (Return Fee)</span><strong style="font-size:15px;color:var(--text-primary);">' + (payload.return_fee ? '$' + parseInt(payload.return_fee).toLocaleString() : '-') + '</strong></div>' +
                 '</div>' +
               '</div>' +
               photosHtml +
@@ -7487,6 +7491,27 @@
                   '</div>' +
                 '</div>' +
                 
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 배정회사 (Assigned Company)</label>' +
+                    '<select name="company_id" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;"></select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 배정팀 (Assigned Team)</label>' +
+                    '<select name="team_id" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;"></select>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 운영자 (Operator Select)</label>' +
+                    '<select name="employee_id" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;"></select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 운영자 직접 입력 (Manual Operator Entry)</label>' +
+                    '<input type="text" name="custom_operator" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" placeholder="직접 입력 시 선택이 해제됩니다.">' +
+                  '</div>' +
+                '</div>' +
+                
                 '<div>' +
                   '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">장비 사진 변경 (4방향)</label>' +
                   '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' +
@@ -7547,8 +7572,17 @@
         };
 
         // Switch to Edit
-        modal.querySelector('.btn-eq-edit-trigger').onclick = function() {
-          editForm.querySelector('[name="equipment_type"]').value = r.equipType || '';
+        modal.querySelector('.btn-eq-edit-trigger').onclick = async function() {
+          var eqTypeSelect = editForm.querySelector('[name="equipment_type"]');
+          var optionExists = Array.from(eqTypeSelect.options).some(function(opt) { return opt.value === r.equipType; });
+          if (r.equipType && !optionExists) {
+            var newOpt = document.createElement('option');
+            newOpt.value = r.equipType;
+            newOpt.textContent = r.equipType;
+            eqTypeSelect.appendChild(newOpt);
+          }
+          eqTypeSelect.value = r.equipType || '';
+          
           editForm.querySelector('[name="model"]').value = r.model || '';
           editForm.querySelector('[name="vendor"]').value = r.vendor === '-' ? '' : r.vendor;
           editForm.querySelector('[name="status"]').value = r.status || '대기중';
@@ -7556,6 +7590,81 @@
           editForm.querySelector('[name="delivery_fee"]').value = r.deliveryFee || 0;
           editForm.querySelector('[name="rent_start"]').value = r.startDate === '-' ? '' : r.startDate;
           editForm.querySelector('[name="rent_end"]').value = r.endDate === '-' ? '' : r.endDate;
+
+          // Fetch company, team, and employee lists
+          var companies = [];
+          var teams = [];
+          var employees = [];
+          try {
+            var res = await Promise.all([
+              gsRun('api_getCompanyList', [], []),
+              gsRun('api_getTeamList', [], []),
+              gsRun('api_getEmployeeList', [], [])
+            ]);
+            companies = res[0] || [];
+            teams = res[1] || [];
+            employees = res[2] || [];
+          } catch(err) {
+            console.error('Failed to load companies/teams/employees:', err);
+          }
+
+          // Populate selects
+          var companySelect = editForm.querySelector('[name="company_id"]');
+          companySelect.innerHTML = '<option value="">미배정 (Unassigned)</option>';
+          companies.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            companySelect.appendChild(opt);
+          });
+          companySelect.value = r.companyId || '';
+
+          var teamSelect = editForm.querySelector('[name="team_id"]');
+          teamSelect.innerHTML = '<option value="">미배정 (Unassigned)</option>';
+          teams.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            teamSelect.appendChild(opt);
+          });
+          teamSelect.value = r.teamId || '';
+
+          var employeeSelect = editForm.querySelector('[name="employee_id"]');
+          var customOperatorInput = editForm.querySelector('[name="custom_operator"]');
+
+          var updateEmployees = function() {
+            var selectedCompanyId = companySelect.value;
+            employeeSelect.innerHTML = '<option value="">미배정 (Unassigned)</option>';
+            employees.forEach(function(e) {
+              if (!selectedCompanyId || String(e.company_id) === String(selectedCompanyId)) {
+                var opt = document.createElement('option');
+                opt.value = e.id;
+                opt.textContent = e.name;
+                employeeSelect.appendChild(opt);
+              }
+            });
+          };
+
+          updateEmployees();
+          employeeSelect.value = r.operatorId || '';
+          customOperatorInput.value = (payload && payload.custom_operator) || '';
+
+          companySelect.onchange = function() {
+            updateEmployees();
+            employeeSelect.value = '';
+          };
+
+          employeeSelect.onchange = function() {
+            if (employeeSelect.value) {
+              customOperatorInput.value = '';
+            }
+          };
+
+          customOperatorInput.oninput = function() {
+            if (customOperatorInput.value.trim()) {
+              employeeSelect.value = '';
+            }
+          };
 
           var setPreview = function(path, imgId) {
             var img = editForm.querySelector('#' + imgId);

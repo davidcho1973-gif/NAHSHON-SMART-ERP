@@ -292,12 +292,20 @@ class EquipmentApiController extends Controller
             'daily_rate' => 'nullable|integer|min:0',
             'delivery_fee' => 'nullable|integer|min:0',
             'status' => 'required|string|max:40',
+            'company_id' => 'nullable|exists:companies,id',
+            'team_id' => 'nullable|exists:teams,id',
+            'employee_id' => 'nullable|exists:employees,id',
+            'custom_operator' => 'nullable|string|max:100',
             'photo_front_file' => 'nullable|image|max:10240',
             'photo_rear_file' => 'nullable|image|max:10240',
             'photo_left_file' => 'nullable|image|max:10240',
             'photo_right_file' => 'nullable|image|max:10240',
             'contract_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ]);
+
+        $companyId = $request->input('company_id');
+        $teamId = $request->input('team_id');
+        $employeeId = $request->input('employee_id');
 
         $data = [
             'equipment_type' => $request->input('equipment_type'),
@@ -308,7 +316,23 @@ class EquipmentApiController extends Controller
             'daily_rate' => $request->input('daily_rate') ?? 0,
             'delivery_fee' => $request->input('delivery_fee') ?? 0,
             'status' => $request->input('status'),
+            'company_id' => filled($companyId) ? $companyId : null,
+            'team_id' => filled($teamId) ? $teamId : null,
         ];
+
+        // Maintain custom operator in payload
+        $payload = is_array($equipment->payload) ? $equipment->payload : [];
+        if (filled($employeeId)) {
+            $data['employee_id'] = $employeeId;
+            unset($payload['custom_operator']);
+        } elseif (filled($request->input('custom_operator'))) {
+            $data['employee_id'] = null;
+            $payload['custom_operator'] = $request->input('custom_operator');
+        } else {
+            $data['employee_id'] = null;
+            unset($payload['custom_operator']);
+        }
+        $data['payload'] = $payload;
 
         // Store photo files if present
         $storePhoto = function ($key) use ($request, &$data): void {

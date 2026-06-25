@@ -455,6 +455,58 @@ class EquipmentTest extends TestCase
         $this->assertSame('사용중', $equipment->status);
     }
 
+    public function test_desktop_equipment_update_with_assignments(): void
+    {
+        $this->actingAs($this->user);
+
+        $equipment = Equipment::create([
+            'company_id' => null,
+            'site_id' => $this->site->id,
+            'equipment_type' => 'Generator (발전기)',
+            'model' => 'Old Model',
+            'status' => '대기중',
+            'quantity' => 1,
+        ]);
+
+        // 1. Assign to Company, Team, and Employee
+        $payload = [
+            'equipment_type' => 'Generator (발전기)',
+            'model' => 'Old Model',
+            'status' => '사용중',
+            'company_id' => $this->company->id,
+            'team_id' => $this->team->id,
+            'employee_id' => $this->employee->id,
+        ];
+
+        $response = $this->post(route('equipment.update', $equipment), $payload);
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+
+        $equipment->refresh();
+        $this->assertEquals($this->company->id, $equipment->company_id);
+        $this->assertEquals($this->team->id, $equipment->team_id);
+        $this->assertEquals($this->employee->id, $equipment->employee_id);
+        $this->assertArrayNotHasKey('custom_operator', $equipment->payload ?? []);
+
+        // 2. Clear employee and assign a custom operator name instead
+        $payload = [
+            'equipment_type' => 'Generator (발전기)',
+            'model' => 'Old Model',
+            'status' => '사용중',
+            'company_id' => $this->company->id,
+            'team_id' => $this->team->id,
+            'employee_id' => '',
+            'custom_operator' => 'John Doe',
+        ];
+
+        $response = $this->post(route('equipment.update', $equipment), $payload);
+        $response->assertOk();
+
+        $equipment->refresh();
+        $this->assertNull($equipment->employee_id);
+        $this->assertSame('John Doe', $equipment->payload['custom_operator']);
+    }
+
     public function test_desktop_equipment_delete(): void
     {
         $this->actingAs($this->user);
