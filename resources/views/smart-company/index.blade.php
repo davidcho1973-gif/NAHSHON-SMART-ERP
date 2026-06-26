@@ -10634,8 +10634,6 @@ window.submitVendorCreate = function() {
   </script>
 
   <!-- NFC ì°¨ëŸ‰ ë°°ì • ëª¨ë‹¬ -->
-  <div id="nfcAssignModal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6);"
-    class="flex-center">
     <!-- NFC ê³µìš© ë°°ì • ëª¨ë‹¬ -->
     <div id="nfcAssignModal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6);"
       class="flex-center">
