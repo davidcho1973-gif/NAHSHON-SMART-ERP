@@ -1030,6 +1030,8 @@
       const alertBadge = document.getElementById('alert-badge');
       const accountStorageKey = 'nahshonAccountProfile';
       const authenticatedAccount = @json($authUser);
+      // 별도 스크립트 블록(출퇴근 모달 등)에서도 참조할 수 있도록 전역 노출.
+      window.authenticatedAccount = authenticatedAccount;
       const accountDefaults = {
         company: 'NAHSHON MEP',
         name: authenticatedAccount.name || 'ERP User',
