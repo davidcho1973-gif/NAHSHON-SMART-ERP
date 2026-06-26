@@ -30,6 +30,51 @@ class DirectEmployeeRegistrationTest extends TestCase
         Livewire::test(ManageEmployees::class)->assertOk();
     }
 
+    public function test_one_shot_register_creates_employee_and_worker_login(): void
+    {
+        $this->actingAs($this->admin());
+
+        Livewire::test(ManageEmployees::class)
+            ->mountAction('registerWithAccount')
+            ->set('mountedActions.0.data', [
+                'full_name' => 'New Worker',
+                'email' => 'newworker@gmail.com',
+                'email_confirm' => 'newworker@gmail.com',
+                'account_type' => 'worker',
+                'access_scope' => 'self',
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $emp = Employee::where('email', 'newworker@gmail.com')->first();
+        $this->assertNotNull($emp);
+        $this->assertNotNull($emp->employee_number); // 사번 자동 생성
+        $user = User::where('employee_id', $emp->id)->first();
+        $this->assertNotNull($user);
+        $this->assertSame('worker', $user->access_role);
+        $this->assertSame('active', $user->account_status);
+    }
+
+    public function test_one_shot_register_rejects_mismatched_email_confirmation(): void
+    {
+        $this->actingAs($this->admin());
+
+        Livewire::test(ManageEmployees::class)
+            ->mountAction('registerWithAccount')
+            ->set('mountedActions.0.data', [
+                'full_name' => 'Typo Person',
+                'email' => 'right@gmail.com',
+                'email_confirm' => 'wrong@gmail.com',
+                'account_type' => 'worker',
+                'access_scope' => 'self',
+            ])
+            ->callMountedAction()
+            ->assertHasActionErrors(['email_confirm']);
+
+        // 오타로 막혔으니 아무 것도 생성되지 않는다.
+        $this->assertSame(0, Employee::where('email', 'right@gmail.com')->count());
+    }
+
     public function test_grant_account_action_creates_admin_login_for_employee(): void
     {
         $this->actingAs($this->admin());

@@ -285,7 +285,9 @@ class EmployeeResource extends Resource
                     ->icon('heroicon-o-key')
                     ->color('warning')
                     ->modalHeading('로그인 계정 부여 / 권한 설정')
-                    ->modalDescription('이 직원에게 로그인 계정을 만들고 관리자 또는 작업자 권한을 부여합니다. 로그인은 직원 이메일(구글)로 이뤄집니다.')
+                    ->modalDescription(fn (Employee $record): string => $record->email
+                        ? '로그인 이메일: ' . $record->email . ' — 이 구글 계정으로 로그인합니다. (틀리면 먼저 [수정]에서 이메일을 고치세요)'
+                        : '⚠ 이 직원은 이메일이 없습니다. 먼저 [수정]에서 구글 이메일을 입력하세요.')
                     ->modalSubmitActionLabel('계정 부여')
                     ->visible(fn (): bool => in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager'], true))
                     ->fillForm(fn (Employee $record): array => [
@@ -334,8 +336,10 @@ class EmployeeResource extends Resource
                             return;
                         }
 
-                        Notification::make()->success()->title('로그인 계정 부여 완료')
-                            ->body($record->email . ' · ' . (User::ROLE_OPTIONS[$role] ?? $role))->send();
+                        Notification::make()->success()->persistent()->title('로그인 계정 부여 완료')
+                            ->body('안내: ' . $record->email . ' 구글 계정으로 ' . route('login')
+                                . ' 에서 로그인하면 됩니다. (권한: ' . (User::ROLE_OPTIONS[$role] ?? $role) . ')')
+                            ->send();
                     }),
                 Action::make('badgeQr')
                     ->label('Badge QR')
