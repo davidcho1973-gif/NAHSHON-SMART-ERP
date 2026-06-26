@@ -445,6 +445,10 @@ class EquipmentApiController extends Controller
             'photo_left' => 'nullable|string',
             'photo_right' => 'nullable|string',
             'contract_path' => 'nullable|string',
+            // 구분(구매/임대) + 취득 목적(왜 샀나) — 현 위치(site_id)와는 별개.
+            'acquisition_type' => 'nullable|in:소유,임대,리스',
+            'project_id' => 'nullable|integer|exists:projects,id',
+            'purchased_for_site_id' => 'nullable|integer|exists:sites,id',
         ]);
 
         $user = auth()->user();
@@ -468,6 +472,10 @@ class EquipmentApiController extends Controller
                 $rows[] = Equipment::create([
                     'company_id' => null, // Stays in storage / available
                     'site_id' => $siteId,
+                    // AI 등록은 회사 보유(구매)가 기본. 취득 목적 현장 미지정 시 등록자 현장으로 추정.
+                    'acquisition_type' => $request->input('acquisition_type') ?: '소유',
+                    'project_id' => $request->input('project_id'),
+                    'purchased_for_site_id' => $request->input('purchased_for_site_id') ?: $siteId,
                     'team_id' => null,
                     'employee_id' => null,
                     'equipment_type' => $request->input('equipment_type'),

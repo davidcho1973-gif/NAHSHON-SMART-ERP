@@ -96,6 +96,8 @@ class SmartCompanyData
             'api_getCompanyList' => \App\Models\Company::query()->where('status', 'active')->orderBy('name')->get()->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->all(),
             'api_getTeamList' => \App\Models\Team::query()->where('status', 'active')->orderBy('name')->get()->map(fn($t) => ['id' => $t->id, 'name' => $t->name, 'site_id' => $t->site_id])->all(),
             'api_getEmployeeList' => \App\Models\Employee::query()->where('employment_status', 'active')->orderBy('name')->get()->map(fn($e) => ['id' => $e->id, 'name' => $e->name, 'company_id' => $e->company_id, 'team_id' => $e->team_id])->all(),
+            'api_getSiteList' => Schema::hasTable('sites') ? \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get()->map(fn($s) => ['id' => $s->id, 'code' => $s->code, 'name' => $s->name])->all() : [],
+            'api_getProjectList' => Schema::hasTable('projects') ? \App\Models\Project::query()->orderByDesc('id')->get()->map(fn($p) => ['id' => $p->id, 'code' => $p->project_code, 'name' => $p->name, 'site_id' => $p->site_id])->all() : [],
             'api_createVendor' => ['success' => true, 'id' => 'V-' . random_int(100, 999)],
             'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\nNAHSHON MEP"],
             'api_translateToEnglish' => ['success' => true, 'text' => (string) ($args[0] ?? '')],
@@ -838,7 +840,7 @@ class SmartCompanyData
     {
         try {
             if (! Schema::hasTable('equipments')) {
-                return ['success' => true, 'totals' => ['count' => 0, 'value' => 0, 'inUse' => 0, 'inStorage' => 0, 'repair' => 0, 'inspectionDue' => 0], 'matrix' => ['categories' => [], 'sites' => [], 'cells' => []], 'recent' => [], 'upcomingInspections' => []];
+                return ['success' => true, 'totals' => ['count' => 0, 'value' => 0, 'owned' => 0, 'rented' => 0, 'inUse' => 0, 'inStorage' => 0, 'repair' => 0, 'inspectionDue' => 0], 'matrix' => ['categories' => [], 'sites' => [], 'cells' => [], 'categoryMeta' => []], 'groups' => [], 'assets' => [], 'recent' => [], 'upcomingInspections' => []];
             }
 
             return app(\App\Services\Inventory\InventoryService::class)->dashboard($siteId);
@@ -972,13 +974,18 @@ class SmartCompanyData
         try {
             if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
                 return \App\Models\Equipment::query()
-                    ->with(['company', 'team', 'employee', 'site'])
+                    ->with(['company', 'team', 'employee', 'site', 'project', 'purchasedForSite'])
                     ->visibleTo(auth()->user())
                     ->get()
                     ->map(fn (\App\Models\Equipment $e): array => [
                         'id' => $e->equipment_code,
                         'realId' => $e->id,
                         'equipType' => $e->equipment_type,
+                        'group' => $e->resolvedGroup(),
+                        'trade' => $e->resolvedTrade(),
+                        'acquisitionType' => $e->acquisition_type ?: '임대',
+                        'purposeProject' => $e->project?->project_code ?: '-',
+                        'purposeSite' => $e->purchasedForSite?->code ?: '-',
                         'model' => $e->model,
                         'vendor' => $e->vendor ?: '-',
                         'startDate' => $e->rent_start ? $e->rent_start->toDateString() : '-',

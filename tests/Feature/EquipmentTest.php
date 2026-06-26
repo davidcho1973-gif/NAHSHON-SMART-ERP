@@ -267,6 +267,43 @@ class EquipmentTest extends TestCase
         $this->assertSame('REC-9928112', $first->payload['details']['quote_no']);
         $this->assertSame('AI자동분석', $first->registration_method);
         $this->assertSame('대기중', $first->status);
+        // 구분 미지정 시 회사 보유(구매)가 기본, 분류는 라벨에서 자동.
+        $this->assertSame('소유', $first->acquisition_type);
+        $this->assertSame('tool', $first->category_group);
+        $this->assertSame('power_tool', $first->trade);
+    }
+
+    public function test_save_inventory_persists_acquisition_and_purpose(): void
+    {
+        $this->actingAs($this->user);
+
+        $project = \App\Models\Project::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'project_code' => 'LG-AZ-2026-001',
+            'name' => 'AZ Battery',
+            'construction_type' => 'piping',
+        ]);
+
+        $response = $this->postJson(route('equipment.save-inventory'), [
+            'equipment_type' => 'Plumbing Tool (플러밍 공구)',
+            'model' => 'RIDGID 300',
+            'quantity' => 1,
+            'daily_rate' => 3200,
+            'acquisition_type' => '임대',
+            'project_id' => $project->id,
+            'purchased_for_site_id' => $this->site->id,
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true);
+
+        $eq = Equipment::where('model', 'RIDGID 300')->firstOrFail();
+        $this->assertSame('임대', $eq->acquisition_type);
+        $this->assertSame($project->id, $eq->project_id);
+        $this->assertSame($this->site->id, $eq->purchased_for_site_id);
+        // 라벨에서 기능 분류 자동 채움(플러밍 → 공구/플러밍).
+        $this->assertSame('tool', $eq->category_group);
+        $this->assertSame('plumbing', $eq->trade);
     }
 
     public function test_analyzer_extracts_rich_contract_metadata(): void

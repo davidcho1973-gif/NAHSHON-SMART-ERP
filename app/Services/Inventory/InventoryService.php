@@ -23,7 +23,9 @@ class InventoryService
      */
     public function dashboard(string $siteId = 'ALL'): array
     {
-        $query = Equipment::query()->orderByDesc('id');
+        $query = Equipment::query()
+            ->with(['project', 'purchasedForSite', 'employee', 'activeRental.employee', 'activeRental.site'])
+            ->orderByDesc('id');
 
         // Respect the existing access-control scope when available.
         if (method_exists(Equipment::class, 'scopeVisibleTo')) {
@@ -41,20 +43,47 @@ class InventoryService
         // Bulk materials carry a quantity; individual assets count as 1.
         $qty = fn (Equipment $e): int => max(1, (int) ($e->quantity ?? 1));
 
-        $location = fn (Equipment $e): string => $e->site_id
-            ? (string) ($siteCodes[$e->site_id] ?? '미지정')
-            : '창고';
+        // 현 위치 = 활성 배정(반납 안 됨) 우선 → 없으면 등록 현장 → 둘 다 없으면 창고.
+        $currentSite = function (Equipment $e) use ($siteCodes): string {
+            $sid = $e->activeRental?->site_id ?? $e->site_id;
 
-        // ── 매트릭스 (카테고리 × 위치) ──
+            return $sid ? (string) ($siteCodes[$sid] ?? '미지정') : '창고';
+        };
+
+        // 현 사용자 = 활성 배정 담당자 → 등록 담당자 → 커스텀 → 미배정.
+        $holder = fn (Equipment $e): string => $e->activeRental?->employee?->name
+            ?: ($e->employee?->name ?: (is_array($e->payload) ? ($e->payload['custom_operator'] ?? '') : '') ?: '미배정');
+
+        // ── 매트릭스 (카테고리 × 위치) — 위치는 '현 위치' 기준 ──
         $categories = [];
         $sites = [];
         $cells = [];
+        $categoryMeta = [];
+        $groupCounts = [];
         foreach ($items as $e) {
             $cat = $e->equipment_type ?: '기타';
-            $loc = $location($e);
+            $loc = $currentSite($e);
             $categories[$cat] = true;
             $sites[$loc] = true;
             $cells[$cat][$loc] = ($cells[$cat][$loc] ?? 0) + $qty($e);
+
+            // 기능 분류 메타 — UI가 행을 대분류로 묶고 색/라벨을 칠하도록.
+            $gk = $e->resolvedGroup();
+            $tk = $e->resolvedTrade();
+            $categoryMeta[$cat] = [
+                'group' => $gk,
+                'groupLabel' => Equipment::CATEGORY_GROUPS[$gk] ?? $gk,
+                'trade' => $tk,
+                'tradeLabel' => Equipment::TRADES[$tk] ?? $tk,
+            ];
+            $groupCounts[$gk] = ($groupCounts[$gk] ?? 0) + $qty($e);
+        }
+
+        $groups = [];
+        foreach (Equipment::CATEGORY_GROUPS as $key => $label) {
+            if (! empty($groupCounts[$key])) {
+                $groups[] = ['key' => $key, 'label' => $label, 'count' => $groupCounts[$key]];
+            }
         }
 
         // ── 점검 임박 (오늘+30일 이내, 지연분 포함) ──
@@ -91,7 +120,34 @@ class InventoryService
                 'categories' => array_keys($categories),
                 'sites' => array_keys($sites),
                 'cells' => $cells,
+                'categoryMeta' => $categoryMeta,
             ],
+            // 대분류 요약(필터 칩/그룹 헤더용).
+            'groups' => $groups,
+            // 자산 추적 리스트 — 취득 목적(프로젝트/현장) + 현 위치/현 사용자 + 구매·임대.
+            'assets' => $items->map(fn (Equipment $e): array => [
+                'assetId' => $e->equipment_code,
+                'realId' => $e->id,
+                'name' => $e->model,
+                'category' => $e->equipment_type ?: '기타',
+                'group' => $e->resolvedGroup(),
+                'groupLabel' => Equipment::CATEGORY_GROUPS[$e->resolvedGroup()] ?? $e->resolvedGroup(),
+                'trade' => $e->resolvedTrade(),
+                'tradeLabel' => Equipment::TRADES[$e->resolvedTrade()] ?? $e->resolvedTrade(),
+                'acquisitionType' => $e->acquisition_type ?: '임대',
+                'vendor' => $e->vendor ?: '-',
+                // 취득 목적 — 왜 샀나.
+                'purposeProject' => $e->project?->project_code ?: '-',
+                'purposeProjectName' => $e->project?->name ?: '',
+                'purposeSite' => $e->purchased_for_site_id
+                    ? (string) ($siteCodes[$e->purchased_for_site_id] ?? '-')
+                    : '-',
+                // 현 상태 — 지금 어디서 누가.
+                'currentSite' => $currentSite($e),
+                'holder' => $holder($e),
+                'status' => $e->status ?: '대기중',
+            ])->values()->all(),
+            // 하위호환: 기존 갤러리/테스트가 참조하던 recent(화면 갤러리는 제거됨).
             'recent' => $items->take(10)->map(fn (Equipment $e): array => [
                 'assetId' => $e->equipment_code,
                 'category' => $e->equipment_type ?: '기타',
@@ -111,24 +167,40 @@ class InventoryService
      */
     public function assetDetail(string $assetId): array
     {
-        $e = Equipment::query()->where('equipment_code', $assetId)->first();
+        $e = Equipment::query()
+            ->with(['project', 'purchasedForSite', 'site', 'employee', 'activeRental.employee', 'activeRental.site', 'rentals.employee', 'rentals.site'])
+            ->where('equipment_code', $assetId)
+            ->first();
 
         if (! $e) {
             return ['success' => false, 'error' => "자산을 찾을 수 없습니다: {$assetId}"];
         }
 
-        $siteCode = $e->site_id ? Site::query()->where('id', $e->site_id)->value('code') : '창고';
+        $currentSite = $e->activeRental?->site?->code
+            ?: ($e->site?->code ?: '창고');
+        $holder = $e->activeRental?->employee?->name
+            ?: ($e->employee?->name ?: (is_array($e->payload) ? ($e->payload['custom_operator'] ?? '') : '') ?: '미배정');
 
         return [
             'success' => true,
             'asset' => [
                 'assetId' => $e->equipment_code,
                 'category' => $e->equipment_type,
+                'group' => $e->resolvedGroup(),
+                'groupLabel' => Equipment::CATEGORY_GROUPS[$e->resolvedGroup()] ?? $e->resolvedGroup(),
+                'trade' => $e->resolvedTrade(),
+                'tradeLabel' => Equipment::TRADES[$e->resolvedTrade()] ?? $e->resolvedTrade(),
                 'name' => $e->model,
                 'brand' => $e->vendor,
                 'acquisitionType' => $e->acquisition_type,
                 'status' => $e->status,
-                'location' => $siteCode,
+                // 취득 목적(왜 샀나) vs 현 상태(지금 어디서 누가).
+                'purposeProject' => $e->project?->project_code,
+                'purposeProjectName' => $e->project?->name,
+                'purposeSite' => $e->purchasedForSite?->code,
+                'currentSite' => $currentSite,
+                'holder' => $holder,
+                'location' => $currentSite,
                 'assetValue' => (float) $e->asset_value,
                 'inspectionDue' => $e->inspection_due_on?->format('Y-m-d'),
                 'rentStart' => $e->rent_start?->format('Y-m-d'),
@@ -139,7 +211,14 @@ class InventoryService
                 $e->photo_front, $e->photo_rear, $e->photo_left, $e->photo_right,
             ])),
             'contract' => is_array($e->payload) ? ($e->payload['details'] ?? null) : null,
-            'transactions' => [],
+            // 배정 이력 타임라인 — 누가·어느 현장·언제 가져갔고 반납했는지.
+            'transactions' => $e->rentals->map(fn ($r): array => [
+                'site' => $r->site?->code ?: '-',
+                'holder' => $r->employee?->name ?: '-',
+                'rentedAt' => $r->rented_at?->format('Y-m-d'),
+                'returnedAt' => $r->returned_at?->format('Y-m-d'),
+                'status' => $r->status,
+            ])->values()->all(),
         ];
     }
 }

@@ -19,9 +19,13 @@ class Equipment extends Model
         'equipment_code',
         'company_id',
         'site_id',
+        'project_id',
+        'purchased_for_site_id',
         'team_id',
         'employee_id',
         'equipment_type',
+        'category_group',
+        'trade',
         'model',
         'vendor',
         'acquisition_type',
@@ -43,6 +47,87 @@ class Equipment extends Model
         'is_bulk',
     ];
 
+    /**
+     * 대분류 (자재/공구/장비/안전/가설) — 기능 분류의 상위 묶음.
+     *
+     * @var array<string, string>
+     */
+    public const CATEGORY_GROUPS = [
+        'material' => '자재 (Material)',
+        'tool' => '공구 (Tool)',
+        'equipment' => '장비 (Equipment)',
+        'safety' => '안전 (Safety)',
+        'facility' => '가설/시설 (Facility)',
+    ];
+
+    /**
+     * 기능 분류 (trade) — 플러밍/전기/파워툴/배관툴 등 용도별.
+     *
+     * @var array<string, string>
+     */
+    public const TRADES = [
+        'plumbing' => '플러밍 (Plumbing)',
+        'piping' => '배관 (Piping)',
+        'electrical' => '전기 (Electrical)',
+        'power_tool' => '파워툴 (Power Tool)',
+        'welding' => '용접 (Welding)',
+        'measuring' => '측정/계측 (Measuring)',
+        'hand_tool' => '수공구 (Hand Tool)',
+        'heavy' => '중장비 (Heavy Equipment)',
+        'power' => '발전/동력 (Generator & Power)',
+        'rigging' => '리깅 (Rigging)',
+        'ppe' => '안전용품 (PPE)',
+        'general' => '기타 (General)',
+    ];
+
+    /**
+     * equipment_type(표시 라벨)에서 대분류 + 기능 분류를 추론한다.
+     * 신규 등록은 group/trade를 직접 받지만, 기존/AI 등록분은 라벨로 백필한다.
+     *
+     * @return array{group: string, trade: string}
+     */
+    public static function classify(?string $equipmentType): array
+    {
+        $t = mb_strtolower((string) $equipmentType);
+
+        $has = fn (string ...$needles): bool => array_reduce(
+            $needles,
+            fn (bool $carry, string $n): bool => $carry || str_contains($t, $n),
+            false,
+        );
+
+        return match (true) {
+            $has('plumb', '플러밍') => ['group' => 'tool', 'trade' => 'plumbing'],
+            $has('welding', 'weld', '용접') => ['group' => 'equipment', 'trade' => 'welding'],
+            $has('generator', '발전', '동력') => ['group' => 'equipment', 'trade' => 'power'],
+            $has('heavy', 'boom', 'lift', '중장비', '굴착', '지게차') => ['group' => 'equipment', 'trade' => 'heavy'],
+            $has('rigging', '리깅', 'crane', '크레인') => ['group' => 'equipment', 'trade' => 'rigging'],
+            $has('safety', 'ppe', '안전') => ['group' => 'safety', 'trade' => 'ppe'],
+            $has('measur', 'gauge', '측정', '계측') => ['group' => 'tool', 'trade' => 'measuring'],
+            $has('power tool', '전동공구') => ['group' => 'tool', 'trade' => 'power_tool'],
+            $has('hand tool', '수공구') => ['group' => 'tool', 'trade' => 'hand_tool'],
+            $has('valve', '밸브') => ['group' => 'material', 'trade' => 'piping'],
+            $has('pipe', 'fitting', '배관') => ['group' => 'material', 'trade' => 'piping'],
+            $has('conduit', 'wire', 'cable', 'electrical', '전선', '전기') => ['group' => 'material', 'trade' => 'electrical'],
+            $has('fastener', 'anchor', '체결', '피스') => ['group' => 'material', 'trade' => 'general'],
+            $has('container', 'office', '컨테이너', '사무실') => ['group' => 'facility', 'trade' => 'general'],
+            default => ['group' => 'material', 'trade' => 'general'],
+        };
+    }
+
+    /**
+     * 저장된 분류가 비어 있으면 라벨에서 추론해 채운다(읽기 시점 폴백).
+     */
+    public function resolvedGroup(): string
+    {
+        return $this->category_group ?: self::classify($this->equipment_type)['group'];
+    }
+
+    public function resolvedTrade(): string
+    {
+        return $this->trade ?: self::classify($this->equipment_type)['trade'];
+    }
+
     protected function casts(): array
     {
         return [
@@ -63,6 +148,15 @@ class Equipment extends Model
         static::creating(function (Equipment $equipment): void {
             if (blank($equipment->equipment_code)) {
                 $equipment->equipment_code = self::makeEquipmentCode();
+            }
+        });
+
+        // 분류가 비어 있으면 라벨에서 자동 채움(소유/임대 어느 경로로 들어와도 일관).
+        static::saving(function (Equipment $equipment): void {
+            if (blank($equipment->category_group) || blank($equipment->trade)) {
+                $c = self::classify($equipment->equipment_type);
+                $equipment->category_group = $equipment->category_group ?: $c['group'];
+                $equipment->trade = $equipment->trade ?: $c['trade'];
             }
         });
     }
@@ -90,6 +184,22 @@ class Equipment extends Model
     public function site(): BelongsTo
     {
         return $this->belongsTo(Site::class);
+    }
+
+    /**
+     * 취득 목적 프로젝트 — "왜 샀나"(고정). 현 위치(site_id)와는 별개.
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * 취득 목적 현장 — 구매/임대 시점에 배정한 현장(고정).
+     */
+    public function purchasedForSite(): BelongsTo
+    {
+        return $this->belongsTo(Site::class, 'purchased_for_site_id');
     }
 
     public function team(): BelongsTo

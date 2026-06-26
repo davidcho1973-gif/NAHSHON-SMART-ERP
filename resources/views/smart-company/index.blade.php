@@ -860,7 +860,7 @@
       uploadEmployeePhoto: (badgeId, base64, mimeType) => gsRun('api_uploadEmployeePhoto', [_siteId(), badgeId, base64, mimeType || 'image/jpeg'], { success: false }),
       setupEmployeePhotosFolder: () => gsRun('setupEmployeePhotosFolder', [_siteId()], { success: false }),
       getPayrollDashboard: (periodStart) => gsRun('api_getPayrollDashboard', [_siteId(), periodStart || ''], { success: false, companies: [], anomalies: [], employees: [], totals: {}, period: {} }),
-      getInventoryDashboard: () => gsRun('api_getInventoryDashboard', [], { success: false, totals: {}, matrix: { categories: [], sites: [], cells: {} }, recent: [], upcomingInspections: [] }),
+      getInventoryDashboard: () => gsRun('api_getInventoryDashboard', [], { success: false, totals: {}, matrix: { categories: [], sites: [], cells: {}, categoryMeta: {} }, groups: [], assets: [], recent: [], upcomingInspections: [] }),
       getInventoryAssetDetail: (assetId) => gsRun('api_getInventoryAssetDetail', [assetId], { success: false }),
       processInventoryPhotos: () => gsRun('api_processInventoryPhotos', [], { success: false, processed: 0, saved: 0, errors: 0, results: [] }),
       setupInventorySheets: () => gsRun('setupInventorySheets', [], { success: false }),
@@ -919,6 +919,8 @@
       getVehicleStats: () => gsRun('api_getVehicleStats', [], { total: 0, active: 0, available: 0, maintenance: 0 }),
       processRentalContracts: () => gsRun('api_processRentalContracts', [], { success: false, processed: 0, saved: 0, errors: 0, results: [] }),
       getRentalList: () => gsRun('api_getRentalList', [], []),
+      getSiteList: () => gsRun('api_getSiteList', [], []),
+      getProjectList: () => gsRun('api_getProjectList', [], []),
       getRentalStats: () => gsRun('api_getRentalStats', [], { total: 0, active: 0, overdue: 0, returned: 0, returningSoon: 0, mtdCost: 0 }),
       createRental: (payload) => gsRun('api_createRental', [payload], { success: false }),
       returnRental: (id, date) => gsRun('api_returnRental', [id, date], { success: false }),
@@ -4212,83 +4214,129 @@
           var res = await window.API.getInventoryDashboard();
           if (!res || !res.success) {
             pageContainer.innerHTML =
-              '<div class="header-section"><div><h1 class="page-title">ìžìž¬ / ìž¥ë¹„ (Inventory)</h1>' +
-              '<p class="page-subtitle">íšŒì‚¬ ë³´ìœ  ìžì‚° â€” ì‚¬ì§„ AI ë“±ë¡</p></div></div>' +
-              '<div class="panel"><div class="panel-body padded">' +
-                '<div style="color:var(--status-warning);text-align:center;padding:24px">' +
-                'âš  ì‹œíŠ¸ ë¯¸ì´ˆê¸°í™” â€” Apps Scriptì—ì„œ ë‹¤ìŒ í•¨ìˆ˜ 1íšŒì”© ì‹¤í–‰ í•„ìš”:<br><br>' +
-                '<strong>1. setupInventorySheets</strong> â€” ì‹œíŠ¸ 3ê°œ ìžë™ ìƒì„±<br>' +
-                '<strong>2. setupInventoryFolders</strong> â€” Drive í´ë” 6ê°œ ìžë™ ìƒì„±<br>' +
-                '<small style="color:var(--text-tertiary)">' + (res && res.error || '') + '</small>' +
-                '<br><br><button class="btn-primary" onclick="window.bootstrapInventory()"><i class="ph ph-rocket-launch"></i> ìžë™ ì…‹ì—… ì‹¤í–‰</button>' +
-                '</div></div></div>';
+              '<div class="header-section"><div><h1 class="page-title">자재 / 장비 (Inventory)</h1>' +
+              '<p class="page-subtitle">회사 보유 자산 · 사진 AI 등록</p></div></div>' +
+              '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">' +
+              '데이터를 불러오지 못했습니다: ' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
             return;
           }
 
           var totals = res.totals || {};
-          var matrix = res.matrix || { categories: [], sites: [], cells: {} };
-          var recent = res.recent || [];
+          var matrix = res.matrix || { categories: [], sites: [], cells: {}, categoryMeta: {} };
+          var catMeta = matrix.categoryMeta || {};
+          var assets = res.assets || [];
+          var groups = res.groups || [];
           var inspections = res.upcomingInspections || [];
 
-          // â”€â”€ 1. í—¤ë” + ì•¡ì…˜ â”€â”€
+          var GROUP_META = {
+            material:  { label: '자재 (Material)',  icon: 'ph-stack',        color: '#06b6d4' },
+            tool:      { label: '공구 (Tool)',      icon: 'ph-wrench',       color: '#3b82f6' },
+            equipment: { label: '장비 (Equipment)', icon: 'ph-truck',        color: '#f59e0b' },
+            safety:    { label: '안전 (Safety)',    icon: 'ph-shield-check', color: '#10b981' },
+            facility:  { label: '가설/시설',        icon: 'ph-buildings',    color: '#a78bfa' }
+          };
+          var GROUP_ORDER = ['material', 'tool', 'equipment', 'safety', 'facility'];
+          window._invGroupMeta = GROUP_META;
+
+          // ── 1. 헤더 + 액션 ──
           var headerHtml =
-            '<div class="header-section"><div><h1 class="page-title">ìžìž¬ / ìž¥ë¹„ (Inventory)</h1>' +
-            '<p class="page-subtitle">íšŒì‚¬ ë³´ìœ  ìžì‚° Â· ì‚¬ì§„ AI ë“±ë¡ Â· 5ê°œ ì¹´í…Œê³ ë¦¬</p></div>' +
+            '<div class="header-section"><div><h1 class="page-title">자재 / 장비 (Inventory)</h1>' +
+            '<p class="page-subtitle">기능별 분류 · 구매/임대 구분 · 현장·담당자 사용 추적</p></div>' +
             '<div class="action-row">' +
-              '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> ìƒˆë¡œê³ ì¹¨</button>' +
+              '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> 새로고침</button>' +
               '<button class="btn-secondary" onclick="window.downloadInventoryExcel()"><i class="ph ph-file-csv"></i> 엑셀 다운로드</button>' +
-              '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> ðŸ¤– AI ì‚¬ì§„ ë“±ë¡</button>' +
+              '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> AI 사진 등록</button>' +
             '</div></div>';
 
-          // â”€â”€ 2. KPI 5ì¢… â”€â”€
+          // ── 2. KPI 5종 (총 자산가치 제거 → 구매/임대/배치/보관/점검) ──
+          function kpiCard(label, value, icon, color, meta) {
+            return '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">' + label +
+              '<i class="ph ' + icon + '" style="font-size:12px;color:' + color + '"></i></div>' +
+              '<div class="kpi-value" style="font-size:22px;color:' + color + ';line-height:1.1">' + value + '</div>' +
+              '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + meta + '</span></div></div>';
+          }
+          var inspColor = (totals.inspectionDue > 0) ? 'var(--status-danger)' : 'var(--status-success)';
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ ìžì‚°ê°€ì¹˜<i class="ph ph-currency-dollar" style="font-size:12px;color:#a78bfa"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:#a78bfa;line-height:1.1">$' + Number(totals.value || 0).toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì „ì²´ ' + (totals.count || 0) + 'ê°œ</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì‚¬ìš©ì¤‘/í˜„ìž¥<i class="ph ph-truck" style="font-size:12px;color:#10b981"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:#10b981;line-height:1.1">' + (totals.inUse || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">í˜„ìž¥ ë°°ì¹˜</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì°½ê³  ë³´ê´€<i class="ph ph-package" style="font-size:12px;color:#3b82f6"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.inStorage || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì¦‰ì‹œ ì‚¬ìš© ê°€ëŠ¥</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ìˆ˜ë¦¬ì¤‘<i class="ph ph-wrench" style="font-size:12px;color:#f59e0b"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.repair || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì‚¬ìš© ë¶ˆê°€</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì ê²€ ìž„ë°•<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:' + (totals.inspectionDue > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + (totals.inspectionDue || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">30ì¼ ì´ë‚´</span></div></div>' +
+              kpiCard('구매 (소유)', (totals.owned || 0), 'ph-shopping-cart-simple', '#10b981', '자사 자산') +
+              kpiCard('임대', (totals.rented || 0), 'ph-handshake', '#f59e0b', '렌탈 계약') +
+              kpiCard('현장 배치중', (totals.inUse || 0), 'ph-truck', '#3b82f6', '사용중') +
+              kpiCard('창고 보관', (totals.inStorage || 0), 'ph-package', '#a78bfa', '즉시 사용 가능') +
+              kpiCard('점검 임박', (totals.inspectionDue || 0), 'ph-warning-circle', inspColor, '30일 이내') +
             '</div>';
 
-          // â”€â”€ 3. ì¹´í…Œê³ ë¦¬ Ã— í˜„ìž¥ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
+          // ── 3. 필터바 (구매/임대 · 대분류 · 검색) ──
+          window._invFilter = window._invFilter || { own: 'ALL', group: 'ALL', q: '' };
+          var f = window._invFilter;
+          var ownSeg = [['ALL', '전체'], ['소유', '구매'], ['임대', '임대']].map(function(o) {
+            var on = f.own === o[0];
+            return '<button onclick="window.setInvFilter(\'own\',\'' + o[0] + '\')" style="padding:5px 12px;border-radius:6px;border:1px solid ' +
+              (on ? 'var(--brand-primary)' : 'var(--border-default)') + ';background:' + (on ? 'rgba(124,58,237,0.15)' : 'transparent') +
+              ';color:' + (on ? '#a78bfa' : 'var(--text-secondary)') + ';font-size:11px;font-weight:600;cursor:pointer">' + o[1] + '</button>';
+          }).join('');
+          var groupChips = [['ALL', '전체 분류', 'ph-squares-four']].concat(groups.map(function(g) {
+            var gm = GROUP_META[g.key] || { icon: 'ph-package' };
+            return [g.key, g.label + ' ' + g.count, gm.icon];
+          })).map(function(o) {
+            var on = f.group === o[0];
+            return '<button onclick="window.setInvFilter(\'group\',\'' + o[0] + '\')" style="padding:5px 10px;border-radius:6px;border:1px solid ' +
+              (on ? 'var(--brand-primary)' : 'var(--border-default)') + ';background:' + (on ? 'rgba(124,58,237,0.15)' : 'transparent') +
+              ';color:' + (on ? '#a78bfa' : 'var(--text-secondary)') + ';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">' +
+              '<i class="ph ' + o[2] + '" style="margin-right:4px"></i>' + o[1] + '</button>';
+          }).join('');
+          var filterHtml =
+            '<div class="panel" style="margin-bottom:14px"><div class="panel-body" style="padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">' +
+              '<div style="display:flex;gap:6px">' + ownSeg + '</div>' +
+              '<div style="width:1px;height:20px;background:var(--border-default)"></div>' +
+              '<div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">' + groupChips + '</div>' +
+              '<div style="position:relative"><i class="ph ph-magnifying-glass" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px"></i>' +
+              '<input id="inv-search" type="text" value="' + (f.q || '') + '" placeholder="모델/자산ID/현장 검색" oninput="window.setInvFilter(\'q\', this.value)" ' +
+              'style="padding:6px 10px 6px 28px;border-radius:6px;border:1px solid var(--border-default);background:var(--bg-body);color:var(--text-primary);font-size:11px;width:190px;outline:none"></div>' +
+            '</div></div>';
+
+          // ── 4. 기능 분류 × 현 위치 매트릭스 (대분류로 묶음) ──
           var matrixHtml = '';
           if (matrix.sites.length > 0) {
             var thSites = matrix.sites.map(function(s) {
-              var icon = s === 'ì°½ê³ ' ? 'ph-package' : (s === 'ë³´ìœ ìž' ? 'ph-user' : 'ph-buildings');
-              return '<th style="padding:10px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-primary);font-size:11px;font-weight:700;letter-spacing:0.3px;text-align:center;text-transform:uppercase">' +
+              var icon = s === '창고' ? 'ph-package' : 'ph-buildings';
+              return '<th style="padding:10px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-primary);font-size:11px;font-weight:700;text-align:center">' +
                 '<i class="ph ' + icon + '" style="font-size:13px;margin-right:4px;color:#a78bfa"></i>' + s + '</th>';
             }).join('');
 
-            var rowsHtml = matrix.categories.map(function(cat) {
-              var meta = window.getInvCatMeta(cat);
-              var cells = matrix.sites.map(function(site) {
-                var v = (matrix.cells[cat] && matrix.cells[cat][site]) || 0;
-                var emptyClass = v === 0 ? 'opacity:0.25' : '';
-                return '<td style="padding:0;border-bottom:1px solid var(--border-subtle);text-align:center;position:relative;height:42px;cursor:pointer;' + emptyClass + '" ' +
-                  'onclick="window.filterInventory(\'' + cat + '\', \'' + site + '\')">' +
-                  '<span class="cell-mono" style="font-size:15px;font-weight:700;color:' + (v > 0 ? meta.color : 'var(--text-tertiary)') + '">' + v + '</span></td>';
-              }).join('');
-              return '<tr>' +
-                '<td style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);background:var(--bg-base);text-align:left;font-weight:600;font-size:12px;white-space:nowrap">' +
-                '<i class="ph ' + meta.icon + '" style="color:' + meta.color + ';margin-right:8px;font-size:14px"></i>' + cat + '</td>' +
-                cells + '</tr>';
-            }).join('');
+            var byGroup = {};
+            matrix.categories.forEach(function(cat) {
+              var gk = (catMeta[cat] && catMeta[cat].group) || 'material';
+              (byGroup[gk] = byGroup[gk] || []).push(cat);
+            });
+
+            var bodyRows = '';
+            GROUP_ORDER.forEach(function(gk) {
+              var cats = byGroup[gk];
+              if (!cats || !cats.length) return;
+              var gm = GROUP_META[gk] || { label: gk, icon: 'ph-package', color: '#94a3b8' };
+              bodyRows += '<tr><td colspan="' + (matrix.sites.length + 1) + '" style="padding:8px 14px;background:var(--bg-base);border-top:1px solid var(--border-default);border-bottom:1px solid var(--border-subtle)">' +
+                '<span style="font-size:11px;font-weight:700;color:' + gm.color + ';letter-spacing:0.4px"><i class="ph ' + gm.icon + '" style="margin-right:6px"></i>' + gm.label + '</span></td></tr>';
+              cats.forEach(function(cat) {
+                var meta = window.getInvCatMeta(cat);
+                var tradeLabel = (catMeta[cat] && catMeta[cat].tradeLabel) || '';
+                var cells = matrix.sites.map(function(site) {
+                  var v = (matrix.cells[cat] && matrix.cells[cat][site]) || 0;
+                  var dim = v === 0 ? 'opacity:0.25' : '';
+                  return '<td style="padding:0;border-bottom:1px solid var(--border-subtle);text-align:center;height:40px;cursor:pointer;' + dim + '" ' +
+                    'onclick="window.filterInventory(\'' + cat.replace(/'/g, "\\'") + '\',\'' + site + '\')">' +
+                    '<span class="cell-mono" style="font-size:15px;font-weight:700;color:' + (v > 0 ? meta.color : 'var(--text-tertiary)') + '">' + v + '</span></td>';
+                }).join('');
+                bodyRows += '<tr>' +
+                  '<td style="padding:9px 14px 9px 28px;border-bottom:1px solid var(--border-subtle);text-align:left;font-weight:600;font-size:12px;white-space:nowrap">' +
+                  '<i class="ph ' + meta.icon + '" style="color:' + meta.color + ';margin-right:8px;font-size:14px"></i>' + cat +
+                  (tradeLabel ? '<span style="color:var(--text-tertiary);font-size:10px;margin-left:6px">' + tradeLabel + '</span>' : '') + '</td>' +
+                  cells + '</tr>';
+              });
+            });
 
             var subtotalCells = matrix.sites.map(function(site) {
               var sum = 0;
-              matrix.categories.forEach(function(cat) {
-                sum += (matrix.cells[cat] && matrix.cells[cat][site]) || 0;
-              });
+              matrix.categories.forEach(function(cat) { sum += (matrix.cells[cat] && matrix.cells[cat][site]) || 0; });
               return '<td style="padding:12px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),transparent);text-align:center">' +
                 '<span class="cell-mono" style="font-size:16px;font-weight:800;color:#a78bfa">' + sum + '</span></td>';
             }).join('');
@@ -4298,58 +4346,41 @@
                 '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px">' +
                   '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
                     '<i class="ph ph-chart-bar" style="font-size:18px;color:#a78bfa"></i>' +
-                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">ì¹´í…Œê³ ë¦¬ Ã— ìœ„ì¹˜ ë§¤íŠ¸ë¦­ìŠ¤</span>' +
-                    '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:#a78bfa;border-radius:4px;font-weight:600">ì…€ í´ë¦­ ì‹œ í•„í„°</span>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">기능 분류 × 현 위치 매트릭스</span>' +
+                    '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:#a78bfa;border-radius:4px;font-weight:600">셀 클릭 시 필터</span>' +
                   '</div></div>' +
                 '<div class="panel-body" style="padding:0"><div style="overflow-x:auto">' +
                   '<table style="width:100%;border-collapse:collapse"><thead>' +
-                    '<tr><th style="padding:10px 14px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:10px;font-weight:700;letter-spacing:1px;text-align:left;text-transform:uppercase">ì¹´í…Œê³ ë¦¬</th>' +
+                    '<tr><th style="padding:10px 14px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:10px;font-weight:700;letter-spacing:1px;text-align:left">카테고리</th>' +
                     thSites + '</tr>' +
-                  '</thead><tbody>' + rowsHtml +
-                    '<tr style="border-top:2px solid var(--border-default)"><td style="padding:12px 14px;background:linear-gradient(90deg,rgba(167,139,250,0.18),rgba(167,139,250,0.08));text-align:left;font-weight:700;font-size:13px"><i class="ph ph-equals" style="color:#a78bfa;margin-right:8px"></i>ì†Œ ê³„</td>' +
+                  '</thead><tbody>' + bodyRows +
+                    '<tr style="border-top:2px solid var(--border-default)"><td style="padding:12px 14px;background:linear-gradient(90deg,rgba(167,139,250,0.18),rgba(167,139,250,0.08));text-align:left;font-weight:700;font-size:13px"><i class="ph ph-equals" style="color:#a78bfa;margin-right:8px"></i>소 계</td>' +
                     subtotalCells + '</tr>' +
                   '</tbody></table>' +
                 '</div></div></div>';
           }
 
-          // â”€â”€ 4. ìµœê·¼ ë“±ë¡ ì‚¬ì§„ ê°¤ëŸ¬ë¦¬ â”€â”€
-          var recentHtml = '';
-          if (recent.length > 0) {
-            var photoCards = recent.map(function(r) {
-              var meta = window.getInvCatMeta(r.category);
-              var hasPhoto = r.photoUrl && /^https?:\/\//.test(r.photoUrl);
-              return '<div style="cursor:pointer;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;overflow:hidden;transition:transform 0.15s" ' +
-                'onclick="window.openInventoryAssetModal(\'' + r.assetId + '\')" ' +
-                'onmouseover="this.style.transform=\'translateY(-2px)\';this.style.borderColor=\'' + meta.color + '\'" ' +
-                'onmouseout="this.style.transform=\'\';this.style.borderColor=\'var(--border-subtle)\'">' +
-                '<div style="height:120px;background:' + meta.color + '22;display:flex;align-items:center;justify-content:center">' +
-                  (hasPhoto ? '<img src="' + r.photoUrl + '" style="width:100%;height:100%;object-fit:cover">' :
-                    '<i class="ph ' + meta.icon + '" style="font-size:42px;color:' + meta.color + '"></i>') +
-                '</div>' +
-                '<div style="padding:8px 10px">' +
-                  '<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:' + meta.color + ';font-weight:700;text-transform:uppercase">' +
-                    '<i class="ph ' + meta.icon + '"></i> ' + r.category + '</div>' +
-                  '<div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.name || '-') + '</div>' +
-                  '<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px">' + (r.brand || '-') + '</div>' +
-                  '<div class="cell-mono" style="font-size:10px;color:var(--text-tertiary);margin-top:2px">' + r.assetId + '</div>' +
-                '</div></div>';
-            }).join('');
-            recentHtml =
-              '<div class="panel" style="margin-bottom:14px">' +
-                '<div class="panel-header"><div class="panel-title"><i class="ph ph-image"></i> ìµœê·¼ ë“±ë¡ ìžì‚°</div></div>' +
-                '<div class="panel-body" style="padding:14px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">' +
-                  photoCards +
-                '</div></div></div>';
-          }
+          // ── 5. 자산 추적 테이블 (취득 목적 + 현 위치/담당자 + 구매·임대) ──
+          window._invAssets = assets;
+          var assetPanel =
+            '<div class="panel" style="margin-bottom:14px">' +
+              '<div class="panel-header"><div class="panel-title" style="display:flex;align-items:center;gap:8px">' +
+                '<i class="ph ph-list-magnifying-glass" style="color:#a78bfa"></i> 자산 추적 ' +
+                '<span id="inv-asset-count" style="font-size:11px;color:var(--text-tertiary);font-weight:500"></span></div></div>' +
+              '<div class="panel-body" style="padding:0"><div style="overflow-x:auto">' +
+              '<table class="data-table" style="width:100%"><thead><tr>' +
+                '<th>자산ID</th><th>분류</th><th>모델</th><th>구분</th><th>취득 목적 (프로젝트·현장)</th><th>현 위치</th><th>현 담당자</th><th>상태</th>' +
+              '</tr></thead><tbody id="inv-asset-tbody"></tbody></table>' +
+              '</div></div></div>';
 
-          // â”€â”€ 5. ì ê²€ ìž„ë°• â”€â”€
+          // ── 6. 점검 임박 ──
           var inspHtml = '';
           if (inspections.length > 0) {
             inspHtml =
               '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-warning)">' +
-                '<div class="panel-header"><div class="panel-title" style="color:var(--status-warning)"><i class="ph ph-clock-countdown"></i> ì ê²€/ìº˜ë¦¬ë¸Œë ˆì´ì…˜ ìž„ë°• (' + inspections.length + ')</div></div>' +
+                '<div class="panel-header"><div class="panel-title" style="color:var(--status-warning)"><i class="ph ph-clock-countdown"></i> 점검/캘리브레이션 임박 (' + inspections.length + ')</div></div>' +
                 '<div class="panel-body" style="padding:0">' +
-                '<table class="data-table"><thead><tr><th>AssetID</th><th>ì¹´í…Œê³ ë¦¬</th><th>ì´ë¦„</th><th>ì ê²€ì¼</th><th>D-day</th></tr></thead><tbody>' +
+                '<table class="data-table"><thead><tr><th>자산ID</th><th>카테고리</th><th>이름</th><th>점검일</th><th>D-day</th></tr></thead><tbody>' +
                   inspections.map(function(i) {
                     var meta = window.getInvCatMeta(i.category);
                     var dColor = i.dDay < 0 ? 'var(--status-danger)' : (i.dDay <= 7 ? 'var(--status-warning)' : 'var(--text-secondary)');
@@ -4364,20 +4395,72 @@
                 '</tbody></table></div></div>';
           }
 
-          // ë¹ˆ ìƒíƒœ
           var emptyHtml = totals.count === 0
             ? '<div class="panel"><div class="panel-body padded"><div style="text-align:center;padding:48px;color:var(--text-tertiary)">' +
-              '<i class="ph ph-image-square" style="font-size:48px;display:block;margin-bottom:12px;opacity:0.5"></i>' +
-              'ì•„ì§ ë“±ë¡ëœ ìžì‚°ì´ ì—†ìŠµë‹ˆë‹¤.<br>' +
-              '<small>Drive [INVENTORY_PHOTOS/PENDING] í´ë”ì— ì‚¬ì§„ì„ ë„£ê³ <br>ìœ„ [ðŸ¤– AI ì‚¬ì§„ ë“±ë¡] ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”.</small>' +
+              '<i class="ph ph-package" style="font-size:48px;display:block;margin-bottom:12px;opacity:0.5"></i>' +
+              '아직 등록된 자산이 없습니다.<br><small>상단 [AI 사진 등록] 버튼으로 자재/장비를 등록하세요.</small>' +
               '</div></div></div>'
             : '';
 
-          pageContainer.innerHTML = headerHtml + kpiHtml + matrixHtml + recentHtml + inspHtml + emptyHtml;
+          pageContainer.innerHTML = headerHtml + kpiHtml + filterHtml + matrixHtml + assetPanel + inspHtml + emptyHtml;
+          window.renderInvAssets();
         } catch (err) {
-          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">ìžìž¬/ìž¥ë¹„ ë¡œë”© ì‹¤íŒ¨: ' + err.message + '</div></div></div>';
+          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">자재/장비 로딩 실패: ' + err.message + '</div></div></div>';
         }
       }
+
+      // 필터 변경 — own/group은 칩 스타일 갱신 위해 전체 재렌더, 검색어는 테이블만 갱신
+      window.setInvFilter = function(key, val) {
+        window._invFilter = window._invFilter || { own: 'ALL', group: 'ALL', q: '' };
+        window._invFilter[key] = val;
+        if (key === 'q') { window.renderInvAssets(); }
+        else { renderInventory(); }
+      };
+
+      // 자산 추적 테이블 본문 렌더 (클라이언트 필터)
+      window.renderInvAssets = function() {
+        var tbody = document.getElementById('inv-asset-tbody');
+        if (!tbody) return;
+        var f = window._invFilter || { own: 'ALL', group: 'ALL', q: '' };
+        var q = (f.q || '').trim().toLowerCase();
+        var GM = window._invGroupMeta || {};
+        var rows = (window._invAssets || []).filter(function(a) {
+          if (f.own !== 'ALL' && a.acquisitionType !== f.own) return false;
+          if (f.group !== 'ALL' && a.group !== f.group) return false;
+          if (q) {
+            var hay = (a.assetId + ' ' + a.name + ' ' + a.currentSite + ' ' + a.holder + ' ' + a.purposeProject + ' ' + a.purposeSite + ' ' + a.tradeLabel).toLowerCase();
+            if (hay.indexOf(q) < 0) return false;
+          }
+          return true;
+        });
+        var cnt = document.getElementById('inv-asset-count');
+        if (cnt) cnt.textContent = '(' + rows.length + '건)';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-tertiary);padding:28px">조건에 맞는 자산이 없습니다.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function(a) {
+          var gm = GM[a.group] || { color: '#94a3b8', icon: 'ph-package' };
+          var ownPill = a.acquisitionType === '소유'
+            ? '<span style="font-size:10px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 8px;border-radius:10px">구매</span>'
+            : '<span style="font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px">임대</span>';
+          var purpose = (a.purposeProject && a.purposeProject !== '-')
+            ? '<span class="cell-mono" style="font-size:11px">' + a.purposeProject + '</span>'
+            : '<span style="color:var(--text-tertiary)">미지정</span>';
+          if (a.purposeSite && a.purposeSite !== '-') purpose += ' <span style="color:var(--text-secondary);font-size:11px">· ' + a.purposeSite + '</span>';
+          var holder = (a.holder && a.holder !== '미배정') ? a.holder : '<span style="color:var(--text-tertiary)">미배정</span>';
+          return '<tr style="cursor:pointer" onclick="window.openInventoryAssetModal(\'' + a.assetId + '\')">' +
+            '<td class="cell-mono">' + a.assetId + '</td>' +
+            '<td><i class="ph ' + gm.icon + '" style="color:' + gm.color + ';margin-right:5px"></i>' + a.tradeLabel + '</td>' +
+            '<td class="cell-primary">' + a.name + '</td>' +
+            '<td>' + ownPill + '</td>' +
+            '<td>' + purpose + '</td>' +
+            '<td>' + (a.currentSite || '창고') + '</td>' +
+            '<td>' + holder + '</td>' +
+            '<td>' + statusPill(a.status) + '</td>' +
+          '</tr>';
+        }).join('');
+      };
 
       // ìƒˆë¡œê³ ì¹¨
       window.refreshInventory = function() { renderInventory(); };
@@ -4467,6 +4550,7 @@
       '#ai-inventory-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
       '#ai-inventory-reg-modal input[type="text"],' +
       '#ai-inventory-reg-modal input[type="number"],' +
+      '#ai-inventory-reg-modal select,' +
       '#ai-inventory-reg-modal input[type="date"] {' +
       '  width: 100%;' +
       '  background: var(--bg-base);' +
@@ -4480,6 +4564,7 @@
       '}' +
       '#ai-inventory-reg-modal input[type="text"]:focus,' +
       '#ai-inventory-reg-modal input[type="number"]:focus,' +
+      '#ai-inventory-reg-modal select:focus,' +
       '#ai-inventory-reg-modal input[type="date"]:focus {' +
       '  border-color: #7c3aed;' +
       '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
@@ -4745,6 +4830,21 @@
               '<input type="number" name="quantity" min="1" value="1">' +
             '</div>' +
           '</div>' +
+          // 구분(구매/임대) + 취득 목적(어느 프로젝트/현장 쓰려고) — "왜 샀나" 기록.
+          '<div style="display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:10px;">' +
+            '<div>' +
+              '<label>구분 (구매/임대)</label>' +
+              '<select name="acquisition_type"><option value="소유">구매 (보유)</option><option value="임대">임대 (렌탈)</option><option value="리스">리스</option></select>' +
+            '</div>' +
+            '<div>' +
+              '<label>취득 목적 프로젝트</label>' +
+              '<select name="project_id"><option value="">미지정</option></select>' +
+            '</div>' +
+            '<div>' +
+              '<label>취득 목적 현장</label>' +
+              '<select name="purchased_for_site_id"><option value="">미지정</option></select>' +
+            '</div>' +
+          '</div>' +
           '<div id="inventory-ai-extracted-summary" style="display:none; font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.6;"></div>' +
           '<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">' +
             '<div style="grid-column:span 4;">' +
@@ -4796,6 +4896,33 @@
   var saveForm = modal.querySelector('#ai-inventory-save-form');
   var deviceSelect = modal.querySelector('#inventory-camera-device-select');
   var deviceSelectContainer = modal.querySelector('#inventory-camera-select-container');
+
+  // 취득 목적 드롭다운(프로젝트/현장) 채우기 — 등록 시 "어느 프로젝트/현장용"을 한 번에 지정.
+  (async function populateInventoryPurposeOptions() {
+    try {
+      var projSel = saveForm.querySelector('[name="project_id"]');
+      var siteSel = saveForm.querySelector('[name="purchased_for_site_id"]');
+      var results = await Promise.allSettled([window.API.getProjectList(), window.API.getSiteList()]);
+      var projects = results[0].status === 'fulfilled' ? (results[0].value || []) : [];
+      var sites = results[1].status === 'fulfilled' ? (results[1].value || []) : [];
+      if (projSel) {
+        projects.forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = (p.code ? p.code + ' · ' : '') + (p.name || '');
+          projSel.appendChild(o);
+        });
+      }
+      if (siteSel) {
+        sites.forEach(function(s) {
+          var o = document.createElement('option');
+          o.value = s.id;
+          o.textContent = (s.code || '') + (s.name ? ' (' + s.name + ')' : '');
+          siteSel.appendChild(o);
+        });
+      }
+    } catch (e) { console.error('취득 목적 옵션 로딩 실패', e); }
+  })();
 
   function showUploadMode() {
     currentCameraMode = 'upload';
@@ -5206,6 +5333,9 @@
       model: saveForm.querySelector('[name="model"]').value,
       vendor: saveForm.querySelector('[name="vendor"]').value,
       quantity: parseInt(saveForm.querySelector('[name="quantity"]').value, 10) || 1,
+      acquisition_type: saveForm.querySelector('[name="acquisition_type"]').value || '소유',
+      project_id: parseInt(saveForm.querySelector('[name="project_id"]').value, 10) || null,
+      purchased_for_site_id: parseInt(saveForm.querySelector('[name="purchased_for_site_id"]').value, 10) || null,
       rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
       daily_rate: parseInt(saveForm.querySelector('[name="daily_rate"]').value, 10) || 0,
       delivery_fee: parseInt(saveForm.querySelector('[name="delivery_fee"]').value, 10) || 0,
