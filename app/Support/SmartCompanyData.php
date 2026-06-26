@@ -28,6 +28,7 @@ class SmartCompanyData
             'api_uploadEmployeePhoto' => ['success' => true, 'message' => 'Photo upload endpoint is ready. Configure filesystem disk for production.'],
             'api_getHrDirectory' => self::hrDirectory($siteId),
             'api_getHrAttendanceRecords' => self::hrAttendanceRecords($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_getHrAttendanceEvents' => self::hrAttendanceEvents($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_getHrAttendanceSummary' => self::hrAttendanceSummary($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_clockIn' => self::clockIn($args[0] ?? null),
             'api_clockOut' => self::clockOut($args[0] ?? null),
@@ -2032,6 +2033,49 @@ class SmartCompanyData
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage(), 'records' => []];
+        }
+    }
+
+    /**
+     * 일자별 집계가 아니라 개별 출퇴근 이벤트(펀치) 단위로 반환한다.
+     */
+    public static function hrAttendanceEvents(mixed $employeeId = null, ?string $startDate = null, ?string $endDate = null): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '직원 정보가 없습니다.', 'events' => []];
+            }
+
+            $start = $startDate ?: Carbon::now()->startOfMonth()->toDateString();
+            $end = $endDate ?: Carbon::now()->endOfMonth()->toDateString();
+
+            if (! Schema::hasTable('attendance_logs')) {
+                return ['success' => true, 'events' => []];
+            }
+
+            $logs = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->whereBetween('attendance_date', [$start, $end])
+                ->orderBy('event_at', 'desc')
+                ->get();
+
+            $events = $logs->map(function ($log): array {
+                $eventAt = $log->event_at ? Carbon::parse($log->event_at) : null;
+
+                return [
+                    'date' => Carbon::parse($log->attendance_date)->format('M d, Y'),
+                    'raw_date' => Carbon::parse($log->attendance_date)->toDateString(),
+                    'time' => $eventAt ? $eventAt->format('H:i:s') : '-',
+                    'event_type' => $log->event_type,
+                    'source' => $log->source,
+                    'status' => $log->status,
+                ];
+            })->all();
+
+            return ['success' => true, 'events' => $events];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'events' => []];
         }
     }
 
