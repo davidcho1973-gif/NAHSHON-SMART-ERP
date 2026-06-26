@@ -105,6 +105,9 @@
               <li class="nav-item active" data-view="dashboard" id="nav-dashboard">
                 <i class="ph ph-squares-four"></i><span>ëŒ€ì‹œë³´ë“œ (Overview)</span>
               </li>
+              <li class="nav-item" data-view="my-attendance" id="nav-my-attendance">
+                <i class="ph ph-clock"></i><span>내 출퇴근 기록</span>
+              </li>
               <li class="nav-item" data-view="command" id="nav-command">
                 <i class="ph ph-command" style="color:#38bdf8"></i><span>AI í˜„ìž¥ ì§€íœ˜ì‹¤</span>
                 <span class="nav-badge" style="background:rgba(56,189,248,.14);color:#38bdf8">NEW</span>
@@ -894,6 +897,12 @@
       clockInWithTeamQr: (teamCode, eventType) => gsRun('api_clockInWithTeamQr', [teamCode, eventType || null], { success: false }),
       clockIn: () => { delete window.apiCache['api_clockIn[]']; return gsRun('api_clockIn', [], { success: false }); },
       clockOut: () => { delete window.apiCache['api_clockOut[]']; return gsRun('api_clockOut', [], { success: false }); },
+      getHrAttendanceSummary: (start, end) => {
+        const empId = (window.authenticatedAccount || {}).employee_id || null;
+        const args = [empId, start || null, end || null];
+        delete window.apiCache['api_getHrAttendanceSummary' + JSON.stringify(args)];
+        return gsRun('api_getHrAttendanceSummary', args, { success: false, kpis: { work_hours: 0, lates: 0, early_outs: 0, absences: 0 }, records: [] });
+      },
       getEmployeeDetail: (badgeId) => gsRun('api_getEmployeeDetail', [badgeId, _siteId()], { success: false }),
       getCompanyTeamStats: (date) => gsRun('api_getCompanyTeamStats', [_siteId(), date || null], { success: false, byCompany: [], byTeam: [] }),
       getAvailableDates: () => gsRun('api_getAvailableDates', [_siteId()], { success: false, dates: [] }),
@@ -1083,6 +1092,7 @@
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
+        'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
         'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '영수증처리', render: renderFinance },
         'messages': { title: '메세지', render: renderAlerts },
@@ -10891,6 +10901,100 @@ async function renderVendors() {
     // TEAM QR COMMUTE / ATTENDANCE logic
     // ============================================================
     window._scannedTeamCode = null;
+
+    // ── 내 출퇴근 기록 전용 페이지 ───────────────────────────────
+    window.renderMyAttendance = function() {
+      const pc = document.getElementById('page-container');
+      if (!pc) return;
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const fmt = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      const monthStart = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+      // 기본 종료일은 당월 말일 — 브라우저/서버 타임존 차이로 오늘 기록이 누락되지 않도록.
+      const today = fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+      pc.innerHTML =
+        '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-clock" style="color:var(--brand-primary);"></i> 내 출퇴근 기록</h1>' +
+        '<p class="page-subtitle">기간별 출퇴근 이력과 근태 요약을 확인합니다.</p></div>' +
+        '<div class="action-row"><button class="btn-primary" style="padding:8px 16px; border-radius:8px; border:none; background:var(--brand-primary); color:white; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="window.openMyCommuteModal()"><i class="ph ph-plus"></i> 출퇴근 등록</button></div></div>' +
+        '<div class="panel" style="margin-bottom:16px; border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">' +
+        '<span style="font-size:12px; color:var(--text-tertiary); font-weight:600;">조회 기간</span>' +
+        '<input type="date" id="my-att-start" value="' + monthStart + '" style="padding:8px 10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-base); color:var(--text-primary); font-size:13px;">' +
+        '<span style="color:var(--text-tertiary);">~</span>' +
+        '<input type="date" id="my-att-end" value="' + today + '" style="padding:8px 10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-base); color:var(--text-primary); font-size:13px;">' +
+        '<button class="btn-secondary" style="padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;" onclick="window.loadMyAttendance()"><i class="ph ph-magnifying-glass"></i> 조회</button>' +
+        '</div>' +
+        '<div id="my-att-kpis" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px;"></div>' +
+        '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
+        '<div class="panel-header" style="padding:14px 20px; border-bottom:1px solid var(--border-subtle);"><div class="panel-title" style="font-size:13px; font-weight:700;"><i class="ph ph-list-bullets"></i> 일자별 기록</div></div>' +
+        '<div class="panel-body" style="padding:0; overflow-x:auto;">' +
+        '<table class="data-table" style="width:100%; border-collapse:collapse;">' +
+        '<thead><tr>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">날짜</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">출근</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">퇴근</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">근무시간</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">구분</th>' +
+        '</tr></thead>' +
+        '<tbody id="my-att-body"><tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr></tbody>' +
+        '</table></div></div>';
+
+      window.loadMyAttendance();
+    };
+
+    window.loadMyAttendance = async function() {
+      const kpiEl = document.getElementById('my-att-kpis');
+      const body = document.getElementById('my-att-body');
+      if (!body) return;
+      const start = (document.getElementById('my-att-start') || {}).value || null;
+      const end = (document.getElementById('my-att-end') || {}).value || null;
+      body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr>';
+
+      const kpiCard = (label, value, color) =>
+        '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 18px;">' +
+        '<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:6px;">' + label + '</div>' +
+        '<div style="font-size:24px; font-weight:700; color:' + (color || 'var(--text-primary)') + ';">' + value + '</div></div>';
+
+      try {
+        const res = await window.API.getHrAttendanceSummary(start, end);
+        if (!res || !res.success) {
+          if (kpiEl) kpiEl.innerHTML = '';
+          body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--status-warning);">' +
+            (res && res.message ? res.message : '출퇴근 기록을 불러올 수 없습니다.') +
+            '<br><span style="font-size:11px; color:var(--text-tertiary);">계정에 연결된 직원 정보가 없으면 관리자에게 직원 연동을 요청하세요.</span></td></tr>';
+          return;
+        }
+        const k = res.kpis || {};
+        if (kpiEl) {
+          kpiEl.innerHTML =
+            kpiCard('총 근무시간', (k.work_hours || 0) + ' h', 'var(--brand-primary)') +
+            kpiCard('지각', (k.lates || 0) + ' 회', (k.lates ? 'var(--status-warning)' : 'var(--text-primary)')) +
+            kpiCard('조기퇴근', (k.early_outs || 0) + ' 회', (k.early_outs ? 'var(--status-warning)' : 'var(--text-primary)')) +
+            kpiCard('결근(평일)', (k.absences || 0) + ' 일', (k.absences ? 'var(--status-danger)' : 'var(--text-primary)'));
+        }
+        const records = res.records || [];
+        if (records.length === 0) {
+          body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">해당 기간의 출퇴근 기록이 없습니다.</td></tr>';
+          return;
+        }
+        body.innerHTML = records.map(r => {
+          const hasIn = r.clock_in && r.clock_in !== '-';
+          const hasOut = r.clock_out && r.clock_out !== '-';
+          const cin = hasIn ? '<span style="color:var(--status-success); font-weight:700;">' + r.clock_in + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+          const cout = hasOut ? '<span style="color:var(--status-warning); font-weight:700;">' + r.clock_out + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+          const hours = r.work_hours && r.work_hours !== '-' ? r.work_hours : '-';
+          return '<tr style="border-bottom:1px solid var(--border-subtle);">' +
+            '<td style="padding:12px 16px; font-weight:600;">' + (r.date || '-') + '</td>' +
+            '<td class="cell-mono" style="padding:12px 16px;">' + cin + '</td>' +
+            '<td class="cell-mono" style="padding:12px 16px;">' + cout + '</td>' +
+            '<td style="padding:12px 16px;">' + hours + '</td>' +
+            '<td style="padding:12px 16px; color:var(--text-secondary);">' + (r.status || '-') + '</td></tr>';
+        }).join('');
+      } catch (err) {
+        if (kpiEl) kpiEl.innerHTML = '';
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--status-danger);">조회 실패: ' + err.message + '</td></tr>';
+      }
+    };
 
     window._myCommuteHtmlTemplate = function(scannedCode) {
       const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
