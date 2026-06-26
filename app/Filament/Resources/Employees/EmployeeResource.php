@@ -4,11 +4,14 @@ namespace App\Filament\Resources\Employees;
 
 use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\Employees\Pages\ManageEmployees;
+use App\Filament\Resources\UserAccesses\UserAccessResource;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
+use App\Models\User;
 use App\Services\GeminiBadgeAnalyzer;
+use App\Services\Hr\AccessAccountProvisioner;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -243,6 +246,15 @@ class EmployeeResource extends Resource
                 TextColumn::make('attendance_app_role')->label('QR role')->badge()->sortable()->toggleable(),
                 TextColumn::make('start_date')->label('Hire date')->date()->sortable()->toggleable(),
                 TextColumn::make('employment_status')->label('Status')->badge()->sortable(),
+                TextColumn::make('user.access_role')
+                    ->label('로그인 권한')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state ? (User::ROLE_OPTIONS[$state] ?? $state) : '계정 없음')
+                    ->color(fn (?string $state): string => $state === null
+                        ? 'gray'
+                        : (in_array($state, User::ADMIN_PANEL_ROLES, true) ? 'success' : 'info'))
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('badge_number')->label('NFC ID')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_printed_number')->label('Badge printed')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_company_name')->label('Badge company')->searchable()->toggleable(isToggledHiddenByDefault: true),
@@ -268,6 +280,63 @@ class EmployeeResource extends Resource
                     ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all()),
             ])
             ->recordActions([
+                Action::make('grantAccount')
+                    ->label('로그인 계정')
+                    ->icon('heroicon-o-key')
+                    ->color('warning')
+                    ->modalHeading('로그인 계정 부여 / 권한 설정')
+                    ->modalDescription('이 직원에게 로그인 계정을 만들고 관리자 또는 작업자 권한을 부여합니다. 로그인은 직원 이메일(구글)로 이뤄집니다.')
+                    ->modalSubmitActionLabel('계정 부여')
+                    ->visible(fn (): bool => in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager'], true))
+                    ->fillForm(fn (Employee $record): array => [
+                        'account_type' => ($record->user && ! in_array($record->user->access_role, ['worker', null], true)) ? 'admin' : 'worker',
+                        'admin_role' => ($record->user && $record->user->access_role !== 'worker') ? $record->user->access_role : null,
+                        'access_scope' => $record->user?->access_scope ?? 'self',
+                    ])
+                    ->form([
+                        Select::make('account_type')
+                            ->label('계정 유형')
+                            ->options([
+                                'worker' => '작업자 — 현장 출퇴근 앱 (/attendance-app)',
+                                'admin' => '관리자 — 관리 패널 (/admin)',
+                            ])
+                            ->default('worker')
+                            ->required()
+                            ->live(),
+                        Select::make('admin_role')
+                            ->label('관리자 역할')
+                            ->options(fn (): array => array_diff_key(UserAccessResource::assignableRoles(), ['worker' => '']))
+                            ->visible(fn (Get $get): bool => $get('account_type') === 'admin')
+                            ->required(fn (Get $get): bool => $get('account_type') === 'admin')
+                            ->helperText('관리자(admin) 이상 권한은 슈퍼관리자만 부여할 수 있습니다.'),
+                        Select::make('access_scope')
+                            ->label('데이터 범위 (Scope)')
+                            ->options(User::SCOPE_OPTIONS)
+                            ->default('self')
+                            ->required()
+                            ->helperText('작업자는 보통 Self, 관리자는 담당 현장/회사/전체 범위를 선택하세요.'),
+                    ])
+                    ->action(function (Employee $record, array $data): void {
+                        $role = $data['account_type'] === 'admin' ? ($data['admin_role'] ?? null) : 'worker';
+
+                        if (! $role || ! array_key_exists($role, UserAccessResource::assignableRoles())) {
+                            Notification::make()->danger()->title('권한 부족')
+                                ->body('해당 역할을 부여할 권한이 없습니다.')->send();
+
+                            return;
+                        }
+
+                        try {
+                            app(AccessAccountProvisioner::class)->grant($record, $role, $data['access_scope'] ?? 'self');
+                        } catch (\Throwable $e) {
+                            Notification::make()->danger()->title('계정 생성 실패')->body($e->getMessage())->send();
+
+                            return;
+                        }
+
+                        Notification::make()->success()->title('로그인 계정 부여 완료')
+                            ->body($record->email . ' · ' . (User::ROLE_OPTIONS[$role] ?? $role))->send();
+                    }),
                 Action::make('badgeQr')
                     ->label('Badge QR')
                     ->icon('heroicon-o-qr-code')

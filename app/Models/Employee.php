@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Employee extends Model
@@ -130,6 +131,14 @@ class Employee extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * 직원에 연결된 로그인 계정(있으면). 직접 등록 시 관리자/작업자 권한이 여기에 부여된다.
+     */
+    public function user(): HasOne
+    {
+        return $this->hasOne(User::class);
     }
 
     public function attendanceLogs(): HasMany

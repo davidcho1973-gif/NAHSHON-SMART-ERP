@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"C:/Users/handy/AppData/Local/Temp/claude/c--Users-handy-OneDrive-Desktop-NAHSHON-SMART-ERP/fd3da2b0-71a8-4b34-acd6-91d8d05fb689/scratchpad/verify-commute.mjs\" \"c:/Users/handy/OneDrive/Desktop/NAHSHON-SMART-ERP/_verify-commute.mjs\")",
+      "Bash(node _verify-commute.mjs)",
+      "Bash(rm -f _verify-commute.mjs)",
+      "Bash(npm remove *)",
+      "Bash(node _verify-att.mjs)"
+    ]
+  }
+}
