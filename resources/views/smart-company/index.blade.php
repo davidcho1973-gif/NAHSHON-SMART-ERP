@@ -903,12 +903,6 @@
         delete window.apiCache['api_getHrAttendanceSummary' + JSON.stringify(args)];
         return gsRun('api_getHrAttendanceSummary', args, { success: false, kpis: { work_hours: 0, lates: 0, early_outs: 0, absences: 0 }, records: [] });
       },
-      getHrAttendanceEvents: (start, end) => {
-        const empId = (window.authenticatedAccount || {}).employee_id || null;
-        const args = [empId, start || null, end || null];
-        delete window.apiCache['api_getHrAttendanceEvents' + JSON.stringify(args)];
-        return gsRun('api_getHrAttendanceEvents', args, { success: false, events: [] });
-      },
       getEmployeeDetail: (badgeId) => gsRun('api_getEmployeeDetail', [badgeId, _siteId()], { success: false }),
       getCompanyTeamStats: (date) => gsRun('api_getCompanyTeamStats', [_siteId(), date || null], { success: false, byCompany: [], byTeam: [] }),
       getAvailableDates: () => gsRun('api_getAvailableDates', [_siteId()], { success: false, dates: [] }),
@@ -10937,12 +10931,11 @@ async function renderVendors() {
         '<table class="data-table" style="width:100%; border-collapse:collapse;">' +
         '<thead><tr>' +
         '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">날짜</th>' +
-        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">시각</th>' +
-        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">구분</th>' +
-        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">방식</th>' +
-        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">상태</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">출근</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">퇴근</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">근무시간</th>' +
         '</tr></thead>' +
-        '<tbody id="my-att-body"><tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr></tbody>' +
+        '<tbody id="my-att-body"><tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr></tbody>' +
         '</table></div></div>';
 
       window.loadMyAttendance();
@@ -10954,7 +10947,7 @@ async function renderVendors() {
       if (!body) return;
       const start = (document.getElementById('my-att-start') || {}).value || null;
       const end = (document.getElementById('my-att-end') || {}).value || null;
-      body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr>';
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr>';
 
       const kpiCard = (label, value, color) =>
         '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 18px;">' +
@@ -10962,21 +10955,18 @@ async function renderVendors() {
         '<div style="font-size:24px; font-weight:700; color:' + (color || 'var(--text-primary)') + ';">' + value + '</div></div>';
 
       try {
-        // KPI 요약과 이벤트(펀치)별 기록을 함께 조회한다.
-        const [summary, ev] = await Promise.all([
-          window.API.getHrAttendanceSummary(start, end),
-          window.API.getHrAttendanceEvents(start, end),
-        ]);
+        // 일자별 집계(출근·퇴근·근무시간을 하루 한 줄로) 조회 — KPI도 동일 응답에 포함된다.
+        const summary = await window.API.getHrAttendanceSummary(start, end);
 
-        if ((!summary || !summary.success) && (!ev || !ev.success)) {
+        if (!summary || !summary.success) {
           if (kpiEl) kpiEl.innerHTML = '';
-          body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--status-warning);">' +
-            ((summary && summary.message) || (ev && ev.message) || '출퇴근 기록을 불러올 수 없습니다.') +
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--status-warning);">' +
+            ((summary && summary.message) || '출퇴근 기록을 불러올 수 없습니다.') +
             '<br><span style="font-size:11px; color:var(--text-tertiary);">계정에 연결된 직원 정보가 없으면 관리자에게 직원 연동을 요청하세요.</span></td></tr>';
           return;
         }
 
-        const k = (summary && summary.kpis) || {};
+        const k = summary.kpis || {};
         if (kpiEl) {
           kpiEl.innerHTML =
             kpiCard('총 근무시간', (k.work_hours || 0) + ' h', 'var(--brand-primary)') +
@@ -10985,31 +10975,26 @@ async function renderVendors() {
             kpiCard('결근(평일)', (k.absences || 0) + ' 일', (k.absences ? 'var(--status-danger)' : 'var(--text-primary)'));
         }
 
-        const events = (ev && ev.events) || [];
-        if (events.length === 0) {
-          body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-tertiary);">해당 기간의 출퇴근 기록이 없습니다.</td></tr>';
+        const records = summary.records || [];
+        if (records.length === 0) {
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">해당 기간의 출퇴근 기록이 없습니다.</td></tr>';
           return;
         }
-        body.innerHTML = events.map(e => {
-          const isIn = e.event_type === 'clock_in';
-          const type = isIn
-            ? '<span style="color:var(--status-success); font-weight:700;"><i class="ph ph-sign-in"></i> 출근</span>'
-            : '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-sign-out"></i> 퇴근</span>';
-          const method = e.source === 'team_qr' ? 'QR 스캔' : e.source === 'nfc_reader' ? 'NFC 리더' : e.source === 'gps' ? 'GPS' : '웹 포탈';
-          const status = e.status === 'approved' ? '<span style="color:var(--status-success);">승인완료</span>'
-            : e.status === 'pending' ? '<span style="color:var(--status-warning);">대기중</span>'
-            : e.status === 'rejected' ? '<span style="color:var(--status-danger);">반려</span>'
-            : (e.status || '-');
+        body.innerHTML = records.map(r => {
+          const hasIn = r.clock_in && r.clock_in !== '-';
+          const hasOut = r.clock_out && r.clock_out !== '-';
+          const cin = hasIn ? '<span style="color:var(--status-success); font-weight:700;">' + r.clock_in + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+          const cout = hasOut ? '<span style="color:var(--status-warning); font-weight:700;">' + r.clock_out + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+          const hours = r.work_hours && r.work_hours !== '-' ? r.work_hours : '-';
           return '<tr style="border-bottom:1px solid var(--border-subtle);">' +
-            '<td style="padding:12px 16px; font-weight:600;">' + (e.date || '-') + '</td>' +
-            '<td class="cell-mono" style="padding:12px 16px;">' + (e.time || '-') + '</td>' +
-            '<td style="padding:12px 16px;">' + type + '</td>' +
-            '<td style="padding:12px 16px; color:var(--text-secondary);">' + method + '</td>' +
-            '<td style="padding:12px 16px;">' + status + '</td></tr>';
+            '<td style="padding:12px 16px; font-weight:600;">' + (r.date || '-') + '</td>' +
+            '<td class="cell-mono" style="padding:12px 16px;">' + cin + '</td>' +
+            '<td class="cell-mono" style="padding:12px 16px;">' + cout + '</td>' +
+            '<td style="padding:12px 16px; font-weight:600;">' + hours + '</td></tr>';
         }).join('');
       } catch (err) {
         if (kpiEl) kpiEl.innerHTML = '';
-        body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--status-danger);">조회 실패: ' + err.message + '</td></tr>';
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--status-danger);">조회 실패: ' + err.message + '</td></tr>';
       }
     };
 

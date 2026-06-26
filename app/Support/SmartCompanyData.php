@@ -1565,14 +1565,17 @@ class SmartCompanyData
             }
 
             $today = Carbon::today()->toDateString();
-            $lastLog = AttendanceLog::query()
+
+            // 하루 1회만 허용: 오늘 이미 출근 기록(반려 제외)이 있으면 차단.
+            $alreadyIn = AttendanceLog::query()
                 ->where('employee_id', $employeeId)
                 ->where('attendance_date', $today)
-                ->orderBy('event_at', 'desc')
-                ->first();
+                ->where('event_type', 'clock_in')
+                ->where('status', '!=', 'rejected')
+                ->exists();
 
-            if ($lastLog && $lastLog->event_type === 'clock_in') {
-                return ['success' => false, 'message' => '이미 출근(Clock In) 처리가 완료되었습니다.'];
+            if ($alreadyIn) {
+                return ['success' => false, 'message' => '오늘은 이미 출근(Clock In) 처리가 완료되었습니다.'];
             }
 
             AttendanceLog::create([
@@ -1607,14 +1610,28 @@ class SmartCompanyData
             }
 
             $today = Carbon::today()->toDateString();
-            $lastLog = AttendanceLog::query()
+
+            $hasClockIn = AttendanceLog::query()
                 ->where('employee_id', $employeeId)
                 ->where('attendance_date', $today)
-                ->orderBy('event_at', 'desc')
-                ->first();
+                ->where('event_type', 'clock_in')
+                ->where('status', '!=', 'rejected')
+                ->exists();
 
-            if (! $lastLog || $lastLog->event_type !== 'clock_in') {
+            if (! $hasClockIn) {
                 return ['success' => false, 'message' => '출근(Clock In) 기록이 없습니다. 먼저 출근해 주세요.'];
+            }
+
+            // 하루 1회만 허용: 오늘 이미 퇴근 기록(반려 제외)이 있으면 차단.
+            $alreadyOut = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('attendance_date', $today)
+                ->where('event_type', 'clock_out')
+                ->where('status', '!=', 'rejected')
+                ->exists();
+
+            if ($alreadyOut) {
+                return ['success' => false, 'message' => '오늘은 이미 퇴근(Clock Out) 처리가 완료되었습니다.'];
             }
 
             AttendanceLog::create([
