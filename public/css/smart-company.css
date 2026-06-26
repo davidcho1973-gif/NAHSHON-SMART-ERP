@@ -48,6 +48,25 @@
     --shadow-pop: 0 8px 30px rgba(0,0,0,0.5);
 }
 
+body[data-theme="light"] {
+    --bg-base: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f1f5f9;
+    --bg-surface-hover: #e2e8f0;
+    --border-subtle: #cbd5e1;
+    --border-strong: #94a3b8;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #64748b;
+    --brand-primary: #2563eb;
+    --brand-primary-dim: rgba(37, 99, 235, 0.12);
+}
+body[data-theme="light"] .account-card.light .account-card-title { border-bottom-color: #cbd5e1; color: #0f172a; }
+body[data-theme="light"] .account-card.light .account-info-value,
+body[data-theme="light"] .account-card.light .account-info-label { color: #0f172a; }
+body[data-theme="light"] .account-card.light .account-input,
+body[data-theme="light"] .account-card.light .account-select { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
+
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
     background-color: var(--bg-base);

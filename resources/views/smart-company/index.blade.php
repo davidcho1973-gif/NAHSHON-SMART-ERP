@@ -69,6 +69,17 @@
 </head>
 
 <body>
+  <script>
+    (function() {
+      try {
+        var pref = localStorage.getItem('smartCompanyThemePreference') || 'auto';
+        var theme = pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : (pref === 'auto' ? 'light' : pref);
+        document.body.setAttribute('data-theme', theme);
+      } catch (e) {
+        // ignore storage errors
+      }
+    })();
+  </script>
   @php
     $authUser = $authUser ?? [
       'name' => 'ERP User',
@@ -1042,6 +1053,29 @@
         }
       }
       let accountProfile = loadAccountProfileData();
+      const themeStorageKey = 'smartCompanyThemePreference';
+      function getSystemTheme() {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+        return 'light';
+      }
+      function loadThemePreference() {
+        return localStorage.getItem(themeStorageKey) || 'auto';
+      }
+      function applyThemePreference(pref) {
+        var effective = pref === 'auto' ? getSystemTheme() : pref;
+        document.body.setAttribute('data-theme', effective);
+        document.body.dataset.themePreference = pref;
+      }
+      function setThemePreference(pref) {
+        localStorage.setItem(themeStorageKey, pref);
+        applyThemePreference(pref);
+      }
+      applyThemePreference(loadThemePreference());
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+          if (loadThemePreference() === 'auto') applyThemePreference('auto');
+        });
+      }
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
@@ -1419,11 +1453,12 @@
 
       function renderAccountUiSettings() {
         var lang = localStorage.getItem('smartCompanyLanguage') || 'ko';
+        var themePreference = loadThemePreference();
         var body =
           '<section class="account-card">' +
             '<div class="account-card-title"><i class="ph ph-monitor"></i> Display Settings</div>' +
             '<div class="settings-row"><div><div class="settings-title">Interface Style <span class="readonly-badge">Beta</span></div><div class="settings-desc">Choose between Classic and the new left sidebar interface.</div></div><select class="account-select"><option>New Interface (Left Sidebar)</option><option>Classic (Top Navbar)</option></select></div>' +
-            '<div class="settings-row"><div><div class="settings-title">Theme</div><div class="settings-desc">Choose light, dark, or automatic based on system settings.</div></div><select class="account-select"><option>Auto (System)</option><option>Dark</option><option>Light</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Theme</div><div class="settings-desc">Choose light, dark, or automatic based on system settings.</div></div><select class="account-select" id="account-theme-select"><option value="auto">Auto (System)</option><option value="dark">Dark</option><option value="light">Light</option></select></div>' +
             '<div class="settings-row"><div><div class="settings-title">Language</div><div class="settings-desc">Select the language displayed in the interface.</div></div><select class="account-select" id="account-language-select" data-no-i18n><option value="ko">한국어</option><option value="en">English</option><option value="es">Español</option></select></div>' +
             '<div class="settings-row"><div><div class="settings-title">Timezone</div><div class="settings-desc">Select the timezone used for displaying dates and times.</div></div><select class="account-select"><option value="America/Phoenix">(UTC-07:00) Arizona Time</option><option value="America/Los_Angeles">(UTC-08:00) Pacific Time</option><option value="America/New_York">(UTC-05:00) Eastern Time</option></select></div>' +
           '</section>' +
@@ -1438,7 +1473,15 @@
         if (langSelect) {
           langSelect.value = lang;
           langSelect.addEventListener('change', function () {
+            localStorage.setItem('smartCompanyLanguage', langSelect.value);
             if (window.smartCompanySetLanguage) window.smartCompanySetLanguage(langSelect.value);
+          });
+        }
+        var themeSelect = document.getElementById('account-theme-select');
+        if (themeSelect) {
+          themeSelect.value = themePreference;
+          themeSelect.addEventListener('change', function () {
+            setThemePreference(themeSelect.value);
           });
         }
       }
