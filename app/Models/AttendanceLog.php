@@ -6,10 +6,21 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Carbon;
 
 class AttendanceLog extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        // attendance_date는 event_at의 날짜와 항상 일치해야 한다(관리자 패널 직접 등록/수정 대비).
+        static::saving(function (self $log): void {
+            if ($log->event_at && empty($log->attendance_date)) {
+                $log->attendance_date = Carbon::parse($log->event_at)->toDateString();
+            }
+        });
+    }
 
     protected $fillable = [
         'employee_id',
