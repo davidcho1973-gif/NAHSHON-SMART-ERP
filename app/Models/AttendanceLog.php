@@ -20,6 +20,26 @@ class AttendanceLog extends Model
                 $log->attendance_date = Carbon::parse($log->event_at)->toDateString();
             }
         });
+
+        // 출퇴근 → 급여 타임시트 유기적 연동: 어떤 경로의 출퇴근 기록이든
+        // 저장/삭제되면 해당 일자의 payroll_timesheets를 자동 재계산한다.
+        static::saved(fn (self $log) => self::syncTimesheet($log));
+        static::deleted(fn (self $log) => self::syncTimesheet($log));
+    }
+
+    private static function syncTimesheet(self $log): void
+    {
+        if (! $log->employee_id || ! $log->attendance_date) {
+            return;
+        }
+
+        try {
+            app(\App\Services\Payroll\AttendanceTimesheetSync::class)
+                ->syncDay((int) $log->employee_id, Carbon::parse($log->attendance_date)->toDateString());
+        } catch (\Throwable $e) {
+            // 급여 동기화 실패가 출퇴근 기록 자체를 막지 않도록 격리한다.
+            report($e);
+        }
     }
 
     protected $fillable = [
