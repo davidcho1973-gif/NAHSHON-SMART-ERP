@@ -253,7 +253,7 @@
               style="background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:700;cursor:pointer;outline:none;font-family:inherit;padding:0 4px;max-width:200px;">
                <option value="ALL" selected style="background:#1e2030;">Global</option>
                @foreach (($siteOptions ?? []) as $site)
-                 <option value="{{ $site['code'] }}" style="background:#1e2030;">{{ $site['label'] }}</option>
+                 <option value="{{ $site['code'] }}" data-setup-pending="{{ ($site['setup_pending'] ?? false) ? 'true' : 'false' }}" style="background:#1e2030;">{{ $site['label'] }}</option>
                @endforeach
             </select>
           </div>
@@ -368,6 +368,138 @@
       if (typeof loadView === 'function') {
         loadView(window._currentView || 'hr');
       }
+    };
+
+    window.openSetupWizard = async function() {
+      // 1. Loading active assets
+      var res = await gsRun('api_getSetupWizardAssets', [], { success: false, employees: [], equipments: [] });
+      if (!res.success) {
+        alert('셋업 자원을 불러오는데 실패했습니다: ' + (res.error || '알 수 없는 오류'));
+        return;
+      }
+
+      // Create modal container
+      var modal = document.createElement('div');
+      modal.id = 'setup-wizard-modal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;font-family:inherit;';
+
+      var employeesOptions = res.employees.map(function(e) {
+        return '<option value="' + e.id + '">' + e.name + ' (' + (e.role || '작업자') + ')</option>';
+      }).join('');
+
+      var equipmentsList = res.equipments.map(function(eq) {
+        return '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;cursor:pointer;font-size:12px;color:#fff;"><input type="checkbox" name="wizard-equipments" value="' + eq.id + '"> ' + eq.name + ' (' + eq.status + ')</label>';
+      }).join('');
+      if (equipmentsList === '') equipmentsList = '<div style="color:var(--text-tertiary);font-size:12px;">대기 중인 장비가 없습니다.</div>';
+
+      var workersList = res.employees.map(function(e) {
+        return '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;cursor:pointer;font-size:12px;color:#fff;"><input type="checkbox" name="wizard-employees" value="' + e.id + '"> ' + e.name + ' (' + (e.role || '작업자') + ')</label>';
+      }).join('');
+
+      var currentSiteLabel = window.SITE_NAMES[window.currentSiteId] || window.currentSiteId;
+
+      modal.innerHTML = 
+        '<div style="background:#1e293b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:550px;max-height:90%;overflow-y:auto;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);display:flex;flex-direction:column;">' +
+        // Header
+        '<div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+        '<h2 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0;">🚀 현장 초기 셋업 마법사</h2>' +
+        '<p style="font-size:12px;color:var(--text-secondary);margin:0;">프로젝트: <strong style="color:#3b82f6;">' + currentSiteLabel + '</strong></p>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'setup-wizard-modal\').remove()" style="background:transparent;border:none;color:var(--text-tertiary);font-size:20px;cursor:pointer;">&times;</button>' +
+        '</div>' +
+        // Body (Steps)
+        '<div style="padding:24px;display:flex;flex-direction:column;gap:20px;">' +
+        
+        // Step 1: PM
+        '<div>' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">1단계. 현장 소장 (Site Manager) 지정</label>' +
+        '<select id="wizard-manager-id" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;padding:8px 12px;font-size:13px;outline:none;">' +
+        '<option value="">소장 지정 안함</option>' +
+        employeesOptions +
+        '</select>' +
+        '</div>' +
+
+        // Step 2: WBS
+        '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">2단계. 표준 WBS 공정 템플릿 로드</div>' +
+        '<div style="font-size:11px;color:var(--text-tertiary);">현장 오픈에 필요한 기본 공정 단계(Stage/Task)를 자동 구축합니다.</div>' +
+        '</div>' +
+        '<input type="checkbox" id="wizard-load-wbs" checked style="width:18px;height:18px;cursor:pointer;">' +
+        '</div>' +
+
+        // Step 3: Equipments
+        '<div>' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">3단계. 투입 장비 배정 (대기 중인 자산)</label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:120px;overflow-y:auto;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;">' +
+        equipmentsList +
+        '</div>' +
+        '</div>' +
+
+        // Step 4: Workers
+        '<div>' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">4단계. 현장 작업인원 배정</label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:120px;overflow-y:auto;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;">' +
+        workersList +
+        '</div>' +
+        '</div>' +
+
+        '</div>' +
+        // Footer (Actions)
+        '<div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:12px;">' +
+        '<button onclick="document.getElementById(\'setup-wizard-modal\').remove()" style="background:rgba(255,255,255,0.08);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">취소</button>' +
+        '<button id="wizard-submit-btn" style="background:#2563eb;border:none;color:#fff;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">' +
+        '<span>셋업 완료 및 현장 활성화</span>' +
+        '</button>' +
+        '</div>' +
+        '</div>';
+
+      document.body.appendChild(modal);
+
+      // Submit handler
+      document.getElementById('wizard-submit-btn').onclick = async function() {
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span>처리 중...</span>';
+
+        var managerId = document.getElementById('wizard-manager-id').value;
+        var loadWbs = document.getElementById('wizard-load-wbs').checked;
+
+        var selectedEqs = [];
+        document.querySelectorAll('input[name="wizard-equipments"]:checked').forEach(function(el) {
+          selectedEqs.push(parseInt(el.value));
+        });
+
+        var selectedEmps = [];
+        document.querySelectorAll('input[name="wizard-employees"]:checked').forEach(function(el) {
+          selectedEmps.push(parseInt(el.value));
+        });
+
+        var postData = {
+          manager_id: managerId ? parseInt(managerId) : null,
+          load_default_wbs: loadWbs,
+          equipment_ids: selectedEqs,
+          employee_ids: selectedEmps
+        };
+
+        var setupRes = await gsRun('api_setupSite', [window.currentSiteId, postData], { success: false });
+        if (setupRes.success) {
+          alert('현장 초기 셋업이 완료되었습니다!');
+          var opt = document.querySelector('#project-context-switcher option[value="' + window.currentSiteId + '"]');
+          if (opt) {
+            opt.setAttribute('data-setup-pending', 'false');
+          }
+          modal.remove();
+          if (typeof loadView === 'function') {
+            loadView(window._currentView || 'dashboard');
+          }
+        } else {
+          alert('셋업 처리 중 오류가 발생했습니다: ' + (setupRes.error || '알 수 없는 오류'));
+          btn.disabled = false;
+          btn.innerHTML = '<span>셋업 완료 및 현장 활성화</span>';
+        }
+      };
     };
 
         // ============================================================
@@ -1817,7 +1949,30 @@
               '<div style="font-size:11px;color:var(--text-tertiary);margin-top:5px;text-align:right">ì™„ë£Œ ì˜ˆì •: ' + p.endDate + '</div></div>';
           }).join('');
 
+          var selectedOpt = document.querySelector('#project-context-switcher option:checked');
+          var isSetupPending = selectedOpt ? selectedOpt.getAttribute('data-setup-pending') === 'true' : false;
+          var setupBannerHtml = '';
+          if (isSetupPending) {
+            setupBannerHtml = 
+              '<div class="setup-wizard-banner" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.04) 100%); border: 1px solid rgba(37, 99, 235, 0.35); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); backdrop-filter: blur(8px);">' +
+              '<div style="display:flex; align-items:center; gap:16px;">' +
+              '<div style="background: rgba(37, 99, 235, 0.2); width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;">' +
+              '<i class="ph ph-magic-wand" style="font-size:22px;"></i>' +
+              '</div>' +
+              '<div>' +
+              '<h3 style="font-size:14px; font-weight:700; color:#fff; margin:0 0 4px 0;">⚡ 신설 현장 초기 셋업 마법사 (Setup Wizard Required)</h3>' +
+              '<p style="font-size:12px; color:var(--text-secondary); margin:0;">이 프로젝트는 새롭게 생성되어 아직 초기 셋업이 완료되지 않았습니다. 셋업을 마쳐야 모듈 연동이 활성화됩니다.</p>' +
+              '</div>' +
+              '</div>' +
+              '<button class="btn-primary" onclick="window.openSetupWizard()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:#2563eb; color:white; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">' +
+              '<i class="ph ph-rocket"></i>' +
+              '<span>셋업 시작하기</span>' +
+              '</button>' +
+              '</div>';
+          }
+
           pageContainer.innerHTML =
+            setupBannerHtml +
             '<div class="header-section"><div>' +
             '<h1 class="page-title">Executive Dashboard</h1>' +
             '<p class="page-subtitle">NAHSHON MEP Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™© Â· ' + new Date().toLocaleDateString('ko-KR') + '</p>' +

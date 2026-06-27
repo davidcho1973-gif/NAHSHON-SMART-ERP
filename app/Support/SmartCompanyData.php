@@ -49,6 +49,8 @@ class SmartCompanyData
             'api_runPayroll' => self::runPayroll($args[1] ?? $args[0] ?? null, $siteId),
             'api_approvePayroll' => self::approvePayroll($args[0] ?? null),
             'api_payPayroll' => self::payPayroll($args[0] ?? null),
+            'api_setupSite' => self::setupSite($args[0] ?? null, $args[1] ?? []),
+            'api_getSetupWizardAssets' => self::getSetupWizardAssets(),
 
             'api_getEquipmentStats' => self::equipmentStats(),
             'api_getEquipmentList' => self::equipmentList(),
@@ -899,6 +901,158 @@ class SmartCompanyData
             return ['success' => true, 'message' => '지급 완료 처리 및 회계 전표 반영이 완료되었습니다.'];
         } catch (\Throwable $e) {
             report($e);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function setupSite(mixed $siteCode, mixed $data): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager'], true)) {
+            return ['success' => false, 'error' => '현장 초기 셋업 권한이 없습니다.'];
+        }
+
+        if (! $siteCode) {
+            return ['success' => false, 'error' => '현장 코드가 지정되지 않았습니다.'];
+        }
+
+        try {
+            $site = Site::where('code', $siteCode)->firstOrFail();
+
+            DB::transaction(function () use ($site, $data): void {
+                $updateData = ['setup_completed_at' => now()];
+
+                if (! empty($data['manager_id'])) {
+                    $updateData['manager_employee_id'] = $data['manager_id'];
+                }
+
+                $site->update($updateData);
+
+                // 1. Assign Manager Employee to this Site
+                if (! empty($data['manager_id'])) {
+                    \App\Models\Employee::where('id', $data['manager_id'])->update(['site_id' => $site->id]);
+                }
+
+                // 2. Load Default WBS Template
+                if (! empty($data['load_default_wbs'])) {
+                    $exists = DB::table('wbs_items')->where('site_id', $site->id)->exists();
+                    if (! $exists && Schema::hasTable('wbs_items')) {
+                        $stageId = DB::table('wbs_items')->insertGetId([
+                            'project_code' => "PRJ-{$site->code}",
+                            'level' => 'stage',
+                            'wbs_code' => "WBS-{$site->code}-STG1",
+                            'node_no' => '1',
+                            'name' => 'STAGE 1. Winder (권취 공정)',
+                            'status' => '검수완료',
+                            'site_id' => $site->id,
+                            'company_id' => $site->company_id,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                        $taskId = DB::table('wbs_items')->insertGetId([
+                            'project_code' => "PRJ-{$site->code}",
+                            'parent_id' => $stageId,
+                            'level' => 'task',
+                            'wbs_code' => "WBS-{$site->code}-TSK1",
+                            'node_no' => '1.1',
+                            'name' => 'Air Caster 머신 포지션 이동 (Move-in)',
+                            'status' => '진행중',
+                            'site_id' => $site->id,
+                            'company_id' => $site->company_id,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                        DB::table('wbs_items')->insert([
+                            [
+                                'project_code' => "PRJ-{$site->code}",
+                                'parent_id' => $taskId,
+                                'level' => 'subtask',
+                                'wbs_code' => "WBS-{$site->code}-SUB1",
+                                'node_no' => '1.1.1',
+                                'name' => '수령 및 목재 패킹 해체 (Lay-down Area)',
+                                'status' => '진행중',
+                                'progress' => 0,
+                                'site_id' => $site->id,
+                                'company_id' => $site->company_id,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ],
+                            [
+                                'project_code' => "PRJ-{$site->code}",
+                                'parent_id' => $taskId,
+                                'level' => 'subtask',
+                                'wbs_code' => "WBS-{$site->code}-SUB2",
+                                'node_no' => '1.1.2',
+                                'name' => 'Rough / Final 레벨링',
+                                'status' => '진행중',
+                                'progress' => 0,
+                                'site_id' => $site->id,
+                                'company_id' => $site->company_id,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ],
+                        ]);
+                    }
+                }
+
+                // 3. Assign Selected Equipments
+                if (! empty($data['equipment_ids']) && is_array($data['equipment_ids'])) {
+                    if (Schema::hasTable('equipments')) {
+                        DB::table('equipments')
+                            ->whereIn('id', $data['equipment_ids'])
+                            ->update(['site_id' => $site->id]);
+                    }
+                }
+
+                // 4. Assign Selected Employees
+                if (! empty($data['employee_ids']) && is_array($data['employee_ids'])) {
+                    \App\Models\Employee::whereIn('id', $data['employee_ids'])->update(['site_id' => $site->id]);
+                }
+            });
+
+            return ['success' => true, 'message' => '현장 초기 셋업이 완료되었습니다.'];
+        } catch (\Throwable $e) {
+            report($e);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function getSetupWizardAssets(): array
+    {
+        try {
+            $employees = \App\Models\Employee::query()
+                ->where('employment_status', 'active')
+                ->get()
+                ->map(fn ($e) => [
+                    'id' => $e->id,
+                    'name' => trim(($e->first_name ?? '') . ' ' . ($e->last_name ?? '')),
+                    'role' => $e->role,
+                ])
+                ->all();
+
+            $equipments = [];
+            if (Schema::hasTable('equipments')) {
+                $equipments = DB::table('equipments')
+                    ->whereNull('site_id')
+                    ->orWhere('status', '대기중')
+                    ->get()
+                    ->map(fn ($eq) => [
+                        'id' => $eq->id,
+                        'name' => trim(($eq->equipment_type ?? '장비') . ' - ' . ($eq->model ?? '')),
+                        'status' => $eq->status ?? '대기중',
+                    ])
+                    ->all();
+            }
+
+            return [
+                'success' => true,
+                'employees' => $employees,
+                'equipments' => $equipments,
+            ];
+        } catch (\Throwable $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }

@@ -20,12 +20,15 @@ class Site extends Model
         'timezone',
         'status',
         'payload',
+        'setup_completed_at',
+        'manager_employee_id',
     ];
 
     protected function casts(): array
     {
         return [
             'payload' => 'array',
+            'setup_completed_at' => 'datetime',
         ];
     }
 

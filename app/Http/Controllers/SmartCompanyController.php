@@ -16,16 +16,25 @@ class SmartCompanyController extends Controller
     public function index(): View
     {
         $siteOptions = [];
+        $user = auth()->user();
 
         try {
             if (Schema::hasTable('sites')) {
-                $siteOptions = Site::query()
-                    ->whereHas('employees', fn ($query) => $query->where('employment_status', 'active'))
-                    ->orderBy('code')
+                $query = Site::query()->where('status', 'active');
+
+                // Role-based filtering for site visibility
+                if ($user && ! in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+                    if ($user->allowed_site_id) {
+                        $query->where('id', $user->allowed_site_id);
+                    }
+                }
+
+                $siteOptions = $query->orderBy('code')
                     ->get()
                     ->map(fn (Site $site): array => [
                         'code' => $site->code,
                         'label' => trim($site->code . ' - ' . $site->name),
+                        'setup_pending' => is_null($site->setup_completed_at),
                     ])
                     ->values()
                     ->all();
@@ -38,8 +47,6 @@ class SmartCompanyController extends Controller
         foreach ($siteOptions as $site) {
             $siteNames[$site['code']] = $site['label'];
         }
-
-        $user = auth()->user();
 
         return view('smart-company.index', [
             'siteOptions' => $siteOptions,
