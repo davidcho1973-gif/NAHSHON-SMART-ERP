@@ -1252,17 +1252,95 @@ class SmartCompanyData
     public static function realDailyTeamMatrix(string $siteId): array
     {
         $people = self::activeRealPersonnel($siteId);
-        $teams = array_values(array_unique(array_map(fn ($p) => $p['team'] ?: 'Unassigned', $people)));
+
+        $teamSet = [];
+        $foremen = [];
+        $companies = [];
+        $grand = ['manager' => 0, 'korean' => 0, 'local' => 0];
+        $managerByCompany = [];
+
+        foreach ($people as $person) {
+            $company = $person['company'] ?: 'Unassigned';
+            $team = $person['team'] ?: 'Unassigned';
+            $division = self::classifyDivision($person['role'] ?? null, $person['nationality'] ?? null);
+
+            $teamSet[$team] = true;
+
+            $companies[$company] ??= [
+                'name' => $company,
+                'matrix' => ['관리자' => [], '한국인' => [], '외국인' => []],
+                'subtotals' => [],
+                'totals' => ['manager' => 0, 'korean' => 0, 'local' => 0, 'total' => 0],
+            ];
+
+            $companies[$company]['matrix'][$division][$team] = ($companies[$company]['matrix'][$division][$team] ?? 0) + 1;
+            $companies[$company]['subtotals'][$team] = ($companies[$company]['subtotals'][$team] ?? 0) + 1;
+            $companies[$company]['totals']['total']++;
+
+            if ($division === '관리자') {
+                $companies[$company]['totals']['manager']++;
+                $grand['manager']++;
+                $managerByCompany[$company] = ($managerByCompany[$company] ?? 0) + 1;
+                // 팀장(foreman) 이름: 해당 팀의 첫 관리자.
+                if (! isset($foremen[$team]) && $team !== 'Unassigned') {
+                    $foremen[$team] = $person['nameEn'] ?: ($person['nameKr'] ?? '—');
+                }
+            } elseif ($division === '한국인') {
+                $companies[$company]['totals']['korean']++;
+                $grand['korean']++;
+            } else {
+                $companies[$company]['totals']['local']++;
+                $grand['local']++;
+            }
+        }
+
+        $teams = array_keys($teamSet);
+        sort($teams);
+        // MAIN(사무실)을 맨 앞으로.
+        usort($teams, fn ($a, $b) => ($a === 'MAIN' ? -1 : ($b === 'MAIN' ? 1 : 0)));
+
+        $byCompany = array_values($companies);
+        usort($byCompany, fn ($a, $b) => ($b['totals']['total'] ?? 0) <=> ($a['totals']['total'] ?? 0));
 
         return [
             'success' => true,
             'date' => Carbon::now()->toDateString(),
             'teams' => $teams,
-            'matrix' => [],
-            'foremen' => [],
-            'subtotals' => [],
-            'totals' => ['total' => count($people)],
+            'foremen' => $foremen,
+            'byCompany' => $byCompany,
+            'totals' => [
+                'manager' => $grand['manager'],
+                'korean' => $grand['korean'],
+                'local' => $grand['local'],
+                'grandTotal' => $grand['manager'] + $grand['korean'] + $grand['local'],
+            ],
+            'registered' => [
+                'total' => count($people),
+                'managerTotal' => $grand['manager'],
+                'managerByCompany' => $managerByCompany,
+            ],
+            'unclassified' => [],
         ];
+    }
+
+    /**
+     * 인원을 관리자/한국인/외국인으로 분류한다. 직무(role)가 관리직이면 관리자,
+     * 아니면 국적(nationality)이 한국이면 한국인, 그 외는 외국인.
+     */
+    private static function classifyDivision(?string $role, ?string $nationality): string
+    {
+        $role = trim((string) $role);
+        if ($role !== '' && preg_match('/manager|foreman|supervisor|super|lead|director|chief|\bpm\b|소장|관리|감독|팀장|반장/i', $role)) {
+            return '관리자';
+        }
+
+        $nat = strtolower(trim((string) $nationality));
+        $koreanAliases = ['kr', 'kor', 'korea', 'korean', 'south korea', 'republic of korea', '한국', '대한민국', '내국인'];
+        if ($nat !== '' && in_array($nat, $koreanAliases, true)) {
+            return '한국인';
+        }
+
+        return '외국인';
     }
 
     public static function realDailyAttendanceDetail(string $siteId, mixed $date): array
