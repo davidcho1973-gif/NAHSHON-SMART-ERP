@@ -22,6 +22,9 @@ class Site extends Model
         'payload',
         'setup_completed_at',
         'manager_employee_id',
+        'latitude',
+        'longitude',
+        'radius_meters',
     ];
 
     protected function casts(): array

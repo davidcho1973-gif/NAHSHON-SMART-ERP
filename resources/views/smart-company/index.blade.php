@@ -11225,6 +11225,149 @@ async function renderVendors() {
         '</table></div></div>';
     };
 
+    window.getUserGpsLocation = function() {
+      return new Promise(function(resolve, reject) {
+        if (!navigator.geolocation) {
+          reject(new Error('이 브라우저는 GPS 위치 정보(Geolocation)를 지원하지 않습니다.'));
+          return;
+        }
+
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        };
+
+        navigator.geolocation.getCurrentPosition(
+          function(position) {
+            let isMocked = false;
+            if (position.mocked === true || (position.coords && position.coords.mocked)) {
+              isMocked = true;
+            }
+            if (position.coords.accuracy === 0) {
+              isMocked = true;
+            }
+            resolve({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              isMocked: isMocked,
+              timestamp: Math.floor(Date.now() / 1000)
+            });
+          },
+          function(error) {
+            let msg = 'GPS 위치 정보를 가져오는데 실패했습니다.';
+            if (error.code === error.PERMISSION_DENIED) {
+              msg = '위치 정보 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해 주세요.';
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+              msg = '위치 정보를 사용할 수 없습니다. GPS 신호 수신이 원활한 실외에서 시도해 주세요.';
+            } else if (error.code === error.TIMEOUT) {
+              msg = '위치 정보 수신 시간이 초과되었습니다. 다시 시도해 주세요.';
+            }
+            reject(new Error(msg));
+          },
+          options
+        );
+      });
+    };
+
+    window.saveOfflineCommute = async function(eventType, lat, lng, accuracy) {
+      const now = new Date();
+      const localTimeStr = now.getFullYear() + '-' + 
+        String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(now.getDate()).padStart(2, '0') + ' ' + 
+        String(now.getHours()).padStart(2, '0') + ':' + 
+        String(now.getMinutes()).padStart(2, '0') + ':' + 
+        String(now.getSeconds()).padStart(2, '0');
+
+      const empId = (window.authenticatedAccount || {}).employee_id || null;
+      if (!empId) {
+        throw new Error('인증 계정에 연동된 직원 정보가 없어 오프라인 기록을 할 수 없습니다.');
+      }
+      
+      const secret = '{{ config('app.key') ?: 'base64:nahshonsmarterpdefaultkey' }}';
+      const message = empId + '_' + eventType + '_' + localTimeStr + '_' + lat + '_' + lng;
+      let token = '';
+      try {
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(secret);
+        const messageData = encoder.encode(message);
+        const cryptoKey = await window.crypto.subtle.importKey(
+          'raw', 
+          keyData, 
+          { name: 'HMAC', hash: 'SHA-256' }, 
+          false, 
+          ['sign']
+        );
+        const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, messageData);
+        const hashArray = Array.from(new Uint8Array(signature));
+        token = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      } catch (e) {
+        token = 'fallback_token';
+      }
+
+      const logItem = {
+        employee_id: empId,
+        event_type: eventType,
+        event_at: localTimeStr,
+        latitude: lat,
+        longitude: lng,
+        accuracy: accuracy,
+        token: token
+      };
+
+      let queue = [];
+      try {
+        queue = JSON.parse(localStorage.getItem('smart_attendance_offline_queue') || '[]');
+      } catch (err) {
+        queue = [];
+      }
+      
+      const isDup = queue.some(item => item.event_type === eventType && item.event_at.slice(0, 10) === localTimeStr.slice(0, 10));
+      if (!isDup) {
+        queue.push(logItem);
+        localStorage.setItem('smart_attendance_offline_queue', JSON.stringify(queue));
+      }
+
+      return {
+        success: true,
+        message: '인터넷 오프라인 상태입니다. 출퇴근 기록이 기기에 안전하게 저장되었으며, 네트워크 복구 시 자동 전송됩니다.'
+      };
+    };
+
+    window.syncOfflineCommutes = async function() {
+      if (!navigator.onLine) return;
+      
+      let queue = [];
+      try {
+        queue = JSON.parse(localStorage.getItem('smart_attendance_offline_queue') || '[]');
+      } catch (err) {
+        return;
+      }
+      
+      if (queue.length === 0) return;
+      
+      console.log('오프라인 출퇴근 대기록 감지: ' + queue.length + '건 동기화 실행');
+      
+      try {
+        const res = await gsRun('api_syncOfflineAttendance', [queue], { success: false });
+        if (res && res.success) {
+          localStorage.removeItem('smart_attendance_offline_queue');
+          showToast('⚡ 오프라인 상태에서 기록된 출퇴근 내역이 서버에 동기화 완료되었습니다!');
+          if (typeof window.loadMyCommuteLogs === 'function') {
+            window.loadMyCommuteLogs();
+          }
+        } else {
+          console.warn('동기화 실패:', res.message);
+        }
+      } catch (err) {
+        console.error('동기화 처리 실패:', err);
+      }
+    };
+
+    window.addEventListener('online', window.syncOfflineCommutes);
+    setTimeout(window.syncOfflineCommutes, 3000);
+
     window.openMyCommuteModal = function(teamCode) {
       window._scannedTeamCode = teamCode || null;
       const modal = document.getElementById('myCommuteModalOverlay');
@@ -11299,11 +11442,52 @@ async function renderVendors() {
       if (btnIn) btnIn.disabled = true;
       if (btnOut) btnOut.disabled = true;
 
+      showToast('GPS 위치 정보 수집 중...');
+      let gpsData = null;
+      try {
+        gpsData = await window.getUserGpsLocation();
+      } catch (gpsErr) {
+        alert(gpsErr.message);
+        if (msgEl) {
+          msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-warning"></i> GPS 수집 실패</span>';
+        }
+        if (btnIn) btnIn.disabled = false;
+        if (btnOut) btnOut.disabled = false;
+        return;
+      }
+
+      if (!navigator.onLine) {
+        showToast('오프라인 감지: 로컬 백업 중...');
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, null);
+          if (offlineRes.success) {
+            showToast(offlineRes.message);
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> 오프라인 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (err) {
+          alert('오프라인 저장 실패: ' + err.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+        return;
+      }
+
       showToast(eventType === 'clock_in' ? '출근 기록 중...' : '퇴근 기록 중...');
       try {
-        const res = eventType === 'clock_in'
-          ? await window.API.clockIn()
-          : await window.API.clockOut();
+        const res = await gsRun('api_clockInWithGps', [
+          eventType,
+          gpsData.lat,
+          gpsData.lng,
+          gpsData.accuracy,
+          gpsData.isMocked,
+          gpsData.timestamp
+        ], { success: false });
+
         if (res && res.success) {
           showToast(res.message);
           window.loadMyCommuteLogs();
@@ -11322,9 +11506,23 @@ async function renderVendors() {
           if (btnOut) btnOut.disabled = false;
         }
       } catch (err) {
-        alert('서버 요청 실패: ' + err.message);
-        if (btnIn) btnIn.disabled = false;
-        if (btnOut) btnOut.disabled = false;
+        console.warn('서버 전송 오류, 오프라인 임시 저장으로 전환합니다.', err);
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, null);
+          if (offlineRes.success) {
+            showToast('네트워크 오류로 오프라인 저장 완료');
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> 오프라인 임시 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (backupErr) {
+          alert('서버 전송 오류 및 오프라인 백업 실패: ' + backupErr.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
       }
     };
 
@@ -11335,16 +11533,51 @@ async function renderVendors() {
       }
       const btnIn = document.getElementById('btn-clock-in');
       const btnOut = document.getElementById('btn-clock-out');
+      const msgEl = document.getElementById('commute-message');
       if (btnIn) btnIn.disabled = true;
       if (btnOut) btnOut.disabled = true;
 
-      showToast('스캔 정보를 전송 및 소속 팀 검증 중...');
+      showToast('GPS 위치 정보 수집 중...');
+      let gpsData = null;
+      try {
+        gpsData = await window.getUserGpsLocation();
+      } catch (gpsErr) {
+        alert(gpsErr.message);
+        if (msgEl) {
+          msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-warning"></i> GPS 수집 실패</span>';
+        }
+        if (btnIn) btnIn.disabled = false;
+        if (btnOut) btnOut.disabled = false;
+        return;
+      }
+
+      if (!navigator.onLine) {
+        showToast('오프라인 감지: QR 스캔 정보 오프라인 저장 중...');
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, window._scannedTeamCode);
+          if (offlineRes.success) {
+            showToast('QR 오프라인 저장 완료');
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> QR 오프라인 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (err) {
+          alert('오프라인 저장 실패: ' + err.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+        return;
+      }
+
+      showToast('스캔 정보 전송 및 소속 팀 검증 중...');
       try {
         const res = await window.API.clockInWithTeamQr(window._scannedTeamCode, eventType);
         if (res && res.success) {
           showToast(res.message);
           window.loadMyCommuteLogs();
-          const msgEl = document.getElementById('commute-message');
           if (msgEl) {
             msgEl.innerHTML = '<span style="color:var(--status-success); font-weight:700;"><i class="ph ph-check-circle"></i> ' + res.message + '</span>';
           }
@@ -11352,7 +11585,6 @@ async function renderVendors() {
             window.closeMyCommuteModal();
           }, 2000);
         } else {
-          const msgEl = document.getElementById('commute-message');
           if (msgEl) {
             msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-x-circle"></i> ' + (res.message || '인증 오류') + '</span>';
           }
@@ -11361,9 +11593,23 @@ async function renderVendors() {
           if (btnOut) btnOut.disabled = false;
         }
       } catch (err) {
-        alert('서버 검증 실패: ' + err.message);
-        if (btnIn) btnIn.disabled = false;
-        if (btnOut) btnOut.disabled = false;
+        console.warn('QR 서버 검증 실패, 오프라인 임시 저장으로 전환합니다.', err);
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, window._scannedTeamCode);
+          if (offlineRes.success) {
+            showToast('네트워크 오류로 QR 오프라인 저장 완료');
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> QR 오프라인 임시 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (backupErr) {
+          alert('서버 전송 오류 및 QR 오프라인 백업 실패: ' + backupErr.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
       }
     };
 </script>

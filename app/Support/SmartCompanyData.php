@@ -35,7 +35,8 @@ class SmartCompanyData
             'api_clockIn' => self::clockIn($args[0] ?? null),
             'api_clockOut' => self::clockOut($args[0] ?? null),
             'api_requestCorrection' => self::requestCorrection($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
-            'api_clockInWithGps' => self::clockInWithGps($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
+            'api_clockInWithGps' => self::clockInWithGps($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null, $args[4] ?? null, $args[5] ?? null),
+            'api_syncOfflineAttendance' => self::syncOfflineAttendance($args[0] ?? []),
             'api_clockInWithTeamQr' => self::clockInWithTeamQr($args[0] ?? null, $args[1] ?? null),
             'api_submitNfcTag' => self::submitNfcTag($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_submitBatchPhotoScan' => self::submitBatchPhotoScan($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null, $args[4] ?? null),
@@ -1953,7 +1954,7 @@ class SmartCompanyData
         }
     }
 
-    public static function clockInWithGps(mixed $eventType = null, mixed $lat = null, mixed $lng = null, mixed $accuracy = null): array
+    public static function clockInWithGps(mixed $eventType = null, mixed $lat = null, mixed $lng = null, mixed $accuracy = null, mixed $isMocked = null, mixed $clientTimestamp = null): array
     {
         try {
             $employeeId = auth()->user()?->employee_id;
@@ -1975,15 +1976,35 @@ class SmartCompanyData
                 return ['success' => false, 'message' => '배정된 현장 모델을 찾을 수 없습니다.'];
             }
 
-            // GPS 정보 획득
-            $siteLat = null;
-            $siteLng = null;
-            $radius = 150; // 기본 반경 150미터
+            // 1. 가상 위치(Fake GPS) 및 조작 앱 감지
+            if ($isMocked === true || $isMocked === 'true' || $isMocked === 1 || $isMocked === '1') {
+                return ['success' => false, 'message' => '가상 위치 조작 앱(Fake GPS) 사용이 감지되어 출퇴근 등록이 차단되었습니다.'];
+            }
 
-            if ($site->payload && is_array($site->payload)) {
-                $siteLat = $site->payload['latitude'] ?? null;
-                $siteLng = $site->payload['longitude'] ?? null;
-                $radius = $site->payload['radius'] ?? 150;
+            // 2. 시간 조작 감지
+            if ($clientTimestamp) {
+                $diff = abs(time() - (int) $clientTimestamp);
+                if ($diff > 300) { // 5분
+                    return ['success' => false, 'message' => '휴대폰 기기 시간 조작이 감지되었습니다. 인터넷 표준 시간 설정(자동 설정)을 켜주세요.'];
+                }
+            }
+
+            // 3. 정확도 상한선 체크
+            if (is_null($accuracy) || (float) $accuracy > 200) {
+                return ['success' => false, 'message' => 'GPS 신호 정밀도가 낮거나 유효하지 않습니다. GPS를 켜고 실외에서 다시 시도해 주세요.'];
+            }
+
+            // GPS 정보 획득 (DB 컬럼 우선, 없을 시 payload Fallback)
+            $siteLat = $site->latitude;
+            $siteLng = $site->longitude;
+            $radius = $site->radius_meters ?: 150;
+
+            if (is_null($siteLat) || is_null($siteLng)) {
+                if ($site->payload && is_array($site->payload)) {
+                    $siteLat = $site->payload['latitude'] ?? null;
+                    $siteLng = $site->payload['longitude'] ?? null;
+                    $radius = $site->payload['radius'] ?? $radius;
+                }
             }
 
             // 현장별 대표 GPS Fallback (Hoffman, LGES-AZ, NV-05)
@@ -2133,6 +2154,194 @@ class SmartCompanyData
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    public static function syncOfflineAttendance(array $queue): array
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return ['success' => false, 'message' => '로그인이 필요합니다.'];
+        }
+
+        $employeeId = $user->employee_id;
+        if (! $employeeId) {
+            return ['success' => false, 'message' => '직원 정보가 없습니다.'];
+        }
+
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'message' => '직원 모델을 찾을 수 없습니다.'];
+        }
+
+        $site = Site::find($employee->site_id);
+        if (! $site) {
+            return ['success' => false, 'message' => '배정된 현장 모델을 찾을 수 없습니다.'];
+        }
+
+        $successCount = 0;
+        $failedLogs = [];
+
+        DB::transaction(function () use ($queue, $employee, $site, &$successCount, &$failedLogs): void {
+            $secretKey = config('app.key') ?: 'base64:nahshonsmarterpdefaultkey';
+
+            foreach ($queue as $item) {
+                $eventType = $item['event_type'] ?? '';
+                $eventAtStr = $item['event_at'] ?? '';
+                $lat = $item['latitude'] ?? null;
+                $lng = $item['longitude'] ?? null;
+                $accuracy = $item['accuracy'] ?? null;
+                $token = $item['token'] ?? '';
+                $teamCode = $item['team_code'] ?? null;
+
+                // 1. 무결성 해시 토큰 검증
+                $expectedToken = hash_hmac(
+                    'sha256',
+                    $employee->id . '_' . $eventType . '_' . $eventAtStr . '_' . $lat . '_' . $lng . '_' . ($teamCode ?: ''),
+                    $secretKey
+                );
+
+                if ($token !== $expectedToken) {
+                    $failedLogs[] = [
+                        'event_at' => $eventAtStr,
+                        'reason' => '출퇴근 데이터 무결성 검증 실패 (시간/위치 임의 조작 의심)',
+                    ];
+                    continue;
+                }
+
+                // 1.5 QR 스캔 오프라인 팀 정합성 검사
+                $teamId = $employee->team_id;
+                if ($teamCode) {
+                    $team = \App\Models\Team::query()
+                        ->whereRaw('lower(code) = ?', [strtolower(trim($teamCode))])
+                        ->first();
+                    if (! $team) {
+                        $failedLogs[] = [
+                            'event_at' => $eventAtStr,
+                            'reason' => "스캔된 팀({$teamCode}) 정보를 찾을 수 없습니다.",
+                        ];
+                        continue;
+                    }
+                    if ($team->id !== $employee->team_id) {
+                        $failedLogs[] = [
+                            'event_at' => $eventAtStr,
+                            'reason' => "본인의 소속 팀과 일치하지 않는 QR 코드입니다. (스캔: {$teamCode})",
+                        ];
+                        continue;
+                    }
+                    $teamId = $team->id;
+                }
+
+                // 2. 오프라인 시간 조작 2차 검사: 미래 시각 방지
+                $eventTime = Carbon::parse($eventAtStr);
+                if ($eventTime->isFuture() && $eventTime->diffInMinutes(Carbon::now()) > 5) {
+                    $failedLogs[] = [
+                        'event_at' => $eventAtStr,
+                        'reason' => '미래의 시각으로 출퇴근할 수 없습니다.',
+                    ];
+                    continue;
+                }
+
+                // 3. 지오펜싱 거리 판정
+                $siteLat = $site->latitude;
+                $siteLng = $site->longitude;
+                $radius = $site->radius_meters ?: 150;
+
+                if (is_null($siteLat) || is_null($siteLng)) {
+                    if ($site->payload && is_array($site->payload)) {
+                        $siteLat = $site->payload['latitude'] ?? null;
+                        $siteLng = $site->payload['longitude'] ?? null;
+                        $radius = $site->payload['radius'] ?? $radius;
+                    }
+                }
+
+                // Fallback coordinates if unset
+                if (is_null($siteLat) || is_null($siteLng)) {
+                    $code = strtoupper($site->code);
+                    if ($code === 'HFF-02') {
+                        $siteLat = 33.4255;
+                        $siteLng = -111.9400;
+                    } elseif ($code === 'LGES-AZ') {
+                        $siteLat = 32.8410;
+                        $siteLng = -111.7580;
+                    } elseif ($code === 'NV-05') {
+                        $siteLat = 39.5296;
+                        $siteLng = -119.8138;
+                    }
+                }
+
+                $distance = null;
+                if (! is_null($siteLat) && ! is_null($siteLng) && ! is_null($lat) && ! is_null($lng)) {
+                    $earthRadius = 6371000;
+                    $latFrom = deg2rad($lat);
+                    $lonFrom = deg2rad($lng);
+                    $latTo = deg2rad($siteLat);
+                    $lonTo = deg2rad($siteLng);
+
+                    $latDelta = $latTo - $latFrom;
+                    $lonDelta = $lonTo - $lonFrom;
+
+                    $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+                        cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+                    $distance = $angle * $earthRadius;
+
+                    if ($distance > $radius) {
+                        $failedLogs[] = [
+                            'event_at' => $eventAtStr,
+                            'reason' => sprintf('현장 반경 외에서 오프라인 기록됨 (거리: %.1fm)', $distance),
+                        ];
+                        continue;
+                    }
+                }
+
+                // 4. 중복 체크
+                $attendanceDate = $eventTime->toDateString();
+                $exists = AttendanceLog::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('attendance_date', $attendanceDate)
+                    ->where('event_type', $eventType)
+                    ->where('status', '!=', 'rejected')
+                    ->exists();
+
+                if ($exists) {
+                    $failedLogs[] = [
+                        'event_at' => $eventAtStr,
+                        'reason' => "이미 해당 일자({$attendanceDate})의 동일한 기록이 존재합니다.",
+                    ];
+                    continue;
+                }
+
+                // 5. 기록 적재
+                AttendanceLog::create([
+                    'employee_id' => $employee->id,
+                    'company_id' => $employee->company_id,
+                    'site_id' => $employee->site_id,
+                    'team_id' => $teamId,
+                    'attendance_date' => $attendanceDate,
+                    'event_type' => $eventType,
+                    'event_at' => $eventTime,
+                    'source' => 'offline_gps_sync',
+                    'status' => 'approved',
+                    'notes' => '오프라인 저장 후 사후 동기화 완료.',
+                    'payload' => [
+                        'latitude' => $lat,
+                        'longitude' => $lng,
+                        'accuracy' => $accuracy,
+                        'distance_meters' => $distance,
+                        'offline_synced_at' => Carbon::now()->toDateTimeString(),
+                        'integrity_token_verified' => true,
+                    ]
+                ]);
+
+                $successCount++;
+            }
+        });
+
+        return [
+            'success' => true,
+            'synced_count' => $successCount,
+            'failed_logs' => $failedLogs,
+            'message' => "오프라인 기록 동기화 완료: {$successCount}건 성공, " . count($failedLogs) . '건 실패.',
+        ];
     }
 
     public static function clockInWithTeamQr(?string $teamCode, ?string $eventType = null): array
