@@ -82,6 +82,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/badge/{token}', [AttendanceAppController::class, 'badge'])->name('attendance-app.badge');
     Route::get('/attendance-app/employee/{employee}/badge-qr', [AttendanceAppController::class, 'employeeBadgeQr'])->name('attendance-app.employee.badge-qr');
 
+    // HR daily attendance status report — styled Excel (.xlsx) export
+    Route::get('/hr/attendance/export', \App\Http\Controllers\HrAttendanceExportController::class . '@export')
+        ->name('hr.attendance.export');
+
     // Team QR Code Printable Sheet
     Route::get('/team/{team}/qr', [SmartCompanyController::class, 'teamQr'])->name('team.qr');
 

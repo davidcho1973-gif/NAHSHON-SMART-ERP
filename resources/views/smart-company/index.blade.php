@@ -837,9 +837,16 @@
               (c.teams || []).forEach(function(t) {
                 t.name = t.team;
                 t.employees = (t.members || []).map(function(m) {
+                  var full = (m.nameEn || m.name || '').trim();
+                  var parts = full ? full.split(/\s+/) : [];
                   return Object.assign({}, m, {
                     isWorking: !!m.isOpen,
-                    currentRole: m.role
+                    currentRole: m.role,
+                    firstName: m.firstName || parts[0] || '',
+                    lastName: m.lastName || parts.slice(1).join(' ') || '',
+                    inTime: m.inTime || m.todayIn || '',
+                    outTime: m.outTime || (m.todayOut && m.todayOut !== '미마감' ? m.todayOut : ''),
+                    photoUrl: m.photoUrl || m.photo || ''
                   });
                 });
               });
@@ -881,9 +888,10 @@
       setupInventoryFolders: () => gsRun('setupInventoryFolders', [], { success: false }),
       getEmployeeDetail: function(badgeId, date) {
         // ìºì‹œ ë¬´ë ¥í™” â€” ì§ì› í´ë¦­ ì‹œ í•­ìƒ ìµœì‹  ë°ì´í„° ê°€ì ¸ì˜´
-        const cacheKey = 'api_getEmployeeDetail' + JSON.stringify([_siteId(), badgeId, date || '']);
+        // 백엔드는 args[0]을 badgeId로 사용한다(현장은 요청 siteId로 별도 전달).
+        const cacheKey = 'api_getEmployeeDetail' + JSON.stringify([badgeId, date || '']);
         if (window.apiCache && window.apiCache[cacheKey]) delete window.apiCache[cacheKey];
-        return gsRun('api_getEmployeeDetail', [_siteId(), badgeId, date || ''], { success: false })
+        return gsRun('api_getEmployeeDetail', [badgeId, date || ''], { success: false })
           .then(function(r) {
             if (r && r.employee) {
               r.employee.todayInTime  = r.employee.todayIn || '';
@@ -893,7 +901,6 @@
             return r;
           });
       },
-      getAttendanceDetailed: (date) => gsRun('api_getAttendanceDetailed', [_siteId(), date || null], { success: false, companies: [], totalCount: 0 }),
       clockInWithTeamQr: (teamCode, eventType) => gsRun('api_clockInWithTeamQr', [teamCode, eventType || null], { success: false }),
       clockIn: () => { delete window.apiCache['api_clockIn[]']; return gsRun('api_clockIn', [], { success: false }); },
       clockOut: () => { delete window.apiCache['api_clockOut[]']; return gsRun('api_clockOut', [], { success: false }); },
@@ -903,8 +910,6 @@
         delete window.apiCache['api_getHrAttendanceSummary' + JSON.stringify(args)];
         return gsRun('api_getHrAttendanceSummary', args, { success: false, kpis: { work_hours: 0, lates: 0, early_outs: 0, absences: 0 }, records: [] });
       },
-      getEmployeeDetail: (badgeId) => gsRun('api_getEmployeeDetail', [badgeId, _siteId()], { success: false }),
-      getCompanyTeamStats: (date) => gsRun('api_getCompanyTeamStats', [_siteId(), date || null], { success: false, byCompany: [], byTeam: [] }),
       getAvailableDates: () => gsRun('api_getAvailableDates', [_siteId()], { success: false, dates: [] }),
       getLgesProcessData: async () => MockAPI.getLgesProcessData ? await MockAPI.getLgesProcessData() : [],
       getPersonnelList: () => gsRun('api_getPersonnelList', [_siteId()], []),
@@ -3568,7 +3573,7 @@
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
               '<p class="page-subtitle">NAHSHON MEP ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button><button class="btn-primary" onclick="openGoogleForm(\'hr\')"><i class="ph ph-user-plus"></i> êµ¬ê¸€í¼: ì‹ ê·œ ë“±ë¡</button></div></div>' +
+              '<div class="action-row"><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
@@ -3666,6 +3671,15 @@
         var f = String(first || '').trim().charAt(0).toUpperCase();
         var l = String(last  || '').trim().charAt(0).toUpperCase();
         return (f + l) || '?';
+      };
+
+      window.downloadHrAttendanceExcel = function() {
+        var site = (typeof _siteId === 'function') ? _siteId() : 'ALL';
+        var picker = document.getElementById('stats-date-picker');
+        var date = (picker && picker.value) ? picker.value : '';
+        var url = '/hr/attendance/export?site=' + encodeURIComponent(site) + (date ? '&date=' + encodeURIComponent(date) : '');
+        if (typeof showToast === 'function') showToast('현황보고 엑셀을 생성하는 중...');
+        window.location.href = url;
       };
 
       window.loadAttendanceDetail = async function(date) {

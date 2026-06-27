@@ -23,7 +23,7 @@ class SmartCompanyData
             'api_getGlobalAttendance' => self::realGlobalAttendance(),
             'api_getAttendanceLive' => self::realAttendanceLive($siteId),
             'api_getDailyTeamMatrix' => self::realDailyTeamMatrix($siteId),
-            'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, $args[1] ?? $args[0] ?? null),
+            'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, (isset($args[1]) && is_string($args[1]) && $args[1] !== '') ? $args[1] : null),
             'api_getEmployeeDetail' => self::realEmployeeDetail((string) ($args[0] ?? ''), $siteId),
             'api_uploadEmployeePhoto' => ['success' => true, 'message' => 'Photo upload endpoint is ready. Configure filesystem disk for production.'],
             'api_getHrDirectory' => self::hrDirectory($siteId),
@@ -1268,7 +1268,11 @@ class SmartCompanyData
     public static function realDailyAttendanceDetail(string $siteId, mixed $date): array
     {
         $people = self::activeRealPersonnel($siteId);
-        $targetDate = $date ? Carbon::parse($date)->toDateString() : Carbon::now()->toDateString();
+        try {
+            $targetDate = $date ? Carbon::parse($date)->toDateString() : Carbon::now()->toDateString();
+        } catch (\Throwable) {
+            $targetDate = Carbon::now()->toDateString();
+        }
         $attendance = self::realAttendanceMap($people, $targetDate);
         $companies = [];
 
