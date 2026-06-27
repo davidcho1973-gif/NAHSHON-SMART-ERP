@@ -6,10 +6,12 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
+use App\Models\PayrollRun;
 use App\Models\SmartRecord;
 use App\Models\Site;
 use App\Services\AttendanceQrService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SmartCompanyData
@@ -45,6 +47,8 @@ class SmartCompanyData
             'api_getExpenses' => self::expenses($siteId),
             'api_getPayrollDashboard' => self::payrollDashboard($args[1] ?? null, $siteId),
             'api_runPayroll' => self::runPayroll($args[1] ?? $args[0] ?? null, $siteId),
+            'api_approvePayroll' => self::approvePayroll($args[0] ?? null),
+            'api_payPayroll' => self::payPayroll($args[0] ?? null),
 
             'api_getEquipmentStats' => self::equipmentStats(),
             'api_getEquipmentList' => self::equipmentList(),
@@ -834,6 +838,67 @@ class SmartCompanyData
         } catch (\Throwable $e) {
             report($e);
 
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function approvePayroll(mixed $runId): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+            return ['success' => false, 'error' => '급여 확정 권한이 없습니다.'];
+        }
+
+        if (! $runId) {
+            return ['success' => false, 'error' => '급여 대장 ID가 지정되지 않았습니다.'];
+        }
+
+        try {
+            $run = PayrollRun::findOrFail($runId);
+            $run->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+            ]);
+
+            return ['success' => true, 'message' => '급여 정산 대장이 확정되었습니다.'];
+        } catch (\Throwable $e) {
+            report($e);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function payPayroll(mixed $runId): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+            return ['success' => false, 'error' => '급여 지급 완료 권한이 없습니다.'];
+        }
+
+        if (! $runId) {
+            return ['success' => false, 'error' => '급여 대장 ID가 지정되지 않았습니다.'];
+        }
+
+        try {
+            $run = PayrollRun::findOrFail($runId);
+
+            DB::transaction(function () use ($run): void {
+                $run->update([
+                    'status' => 'paid',
+                    'pay_date' => now()->toDateString(),
+                ]);
+
+                // Update associated payslips status
+                $run->payslips()->update(['status' => 'paid']);
+
+                // Synchronize into the accounting system (generate mobile expenses)
+                app(\App\Services\Payroll\PayrollExpenseConnector::class)->syncExpense($run);
+            });
+
+            return ['success' => true, 'message' => '지급 완료 처리 및 회계 전표 반영이 완료되었습니다.'];
+        } catch (\Throwable $e) {
+            report($e);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
