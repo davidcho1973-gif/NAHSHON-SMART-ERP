@@ -105,6 +105,9 @@
               <li class="nav-item active" data-view="dashboard" id="nav-dashboard">
                 <i class="ph ph-squares-four"></i><span>ëŒ€ì‹œë³´ë“œ (Overview)</span>
               </li>
+              <li class="nav-item" data-view="global-hr" id="nav-global-hr">
+                <i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i><span>글로벌 현황 (Global)</span>
+              </li>
               <li class="nav-item" data-view="my-attendance" id="nav-my-attendance">
                 <i class="ph ph-clock"></i><span>내 출퇴근 기록</span>
               </li>
@@ -1014,6 +1017,7 @@
       setupEmployeePhotosFolder: () => gsRun('setupEmployeePhotosFolder', [_siteId()], { success: false }),
       getPayrollDashboard: (periodStart) => gsRun('api_getPayrollDashboard', [_siteId(), periodStart || ''], { success: false, companies: [], anomalies: [], employees: [], totals: {}, period: {} }),
       getInventoryDashboard: () => gsRun('api_getInventoryDashboard', [], { success: false, totals: {}, matrix: { categories: [], sites: [], cells: {}, categoryMeta: {} }, groups: [], assets: [], recent: [], upcomingInspections: [] }),
+      getGlobalHrOverview: (country) => gsRun('api_getGlobalHrOverview', [country || 'ALL'], { success: false, totals: {}, countries: [], matrix: [], recent: [] }),
       getInventoryAssetDetail: (assetId) => gsRun('api_getInventoryAssetDetail', [assetId], { success: false }),
       processInventoryPhotos: () => gsRun('api_processInventoryPhotos', [], { success: false, processed: 0, saved: 0, errors: 0, results: [] }),
       setupInventorySheets: () => gsRun('setupInventorySheets', [], { success: false }),
@@ -1229,6 +1233,7 @@
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
+        'global-hr': { title: '글로벌 현황 (Global)', render: function () { return window.renderGlobalHr(); } },
         'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
         'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '영수증처리', render: renderFinance },
@@ -1917,6 +1922,119 @@
       };
 
       // â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 글로벌 인사·출퇴근 현황 (국가 → 현장 → 원청사 → 팀) ──────────
+      window._globalHrCountry = window._globalHrCountry || 'ALL';
+
+      function ghrRateColor(r) { return r >= 90 ? '#10b981' : r >= 75 ? '#f59e0b' : '#ef4444'; }
+
+      window.changeGlobalHrCountry = function (c) { window._globalHrCountry = c; window.renderGlobalHr(); };
+
+      window.renderGlobalHr = async function () {
+        pageContainer.innerHTML = skeleton();
+        try {
+          var res = await window.API.getGlobalHrOverview(window._globalHrCountry);
+          if (!res || !res.success) { renderError('글로벌 현황 로딩 실패: ' + (res && res.error ? res.error : '')); return; }
+          window._globalHrData = res;
+          var t = res.totals || {};
+          var cur = window._globalHrCountry;
+
+          var tabDefs = [['ALL', '전체'], ['US', '🇺🇸 USA'], ['KR', '🇰🇷 KOREA'], ['CA', '🇨🇦 CANADA']];
+          var tabs = tabDefs.map(function (d) {
+            var on = cur === d[0];
+            return '<button onclick="window.changeGlobalHrCountry(\'' + d[0] + '\')" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border-default);' +
+              (on ? 'background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-color:transparent' : 'background:var(--bg-surface);color:var(--text-secondary)') + '">' + d[1] + '</button>';
+          }).join('');
+
+          var rate = t.rate || 0;
+          var kpis = '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
+            '<div class="kpi-card"><div class="kpi-label">총 인원</div><div class="kpi-value">' + (t.employees || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">활성 직원</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid ' + ghrRateColor(rate) + '"><div class="kpi-label">현재 출근</div><div class="kpi-value" style="color:' + ghrRateColor(rate) + '">' + (t.present || 0) + '</div>' +
+            '<div style="height:5px;background:var(--bg-base);border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:' + rate + '%;background:' + ghrRateColor(rate) + '"></div></div><div class="kpi-meta">출근율 ' + rate + '%</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">결근/미출근</div><div class="kpi-value" style="color:var(--status-warning)">' + (t.absent || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">미출근</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">활성 현장</div><div class="kpi-value">' + (t.sites || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (t.countries || 0) + '개국 · 원청사 ' + (t.companies || 0) + '</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">국가</div><div class="kpi-value">' + (t.countries || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">글로벌</span></div></div>' +
+            '</div>';
+
+          var countriesHtml = '';
+          if (!res.countries || res.countries.length === 0) {
+            countriesHtml = '<div class="panel"><div class="panel-body padded"><div style="text-align:center;padding:48px;color:var(--text-tertiary)">표시할 현장/인원이 없습니다. (활성 현장·직원 등록 후 표시)</div></div></div>';
+          } else {
+            countriesHtml = res.countries.map(function (c) {
+              var sites = c.sites.map(function (s) {
+                var sc = ghrRateColor(s.rate);
+                var chips = (s.companies || []).map(function (co) {
+                  return '<span style="font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg-surface-elevated);color:var(--text-secondary);border:1px solid var(--border-subtle)">' + co.company + ' ' + co.total + '</span>';
+                }).join(' ');
+                return '<div onclick="window.openGlobalSite(\'' + s.code + '\')" style="background:var(--bg-panel);border:1px solid var(--border-default);border-left:3px solid ' + sc + ';border-radius:12px;padding:16px;cursor:pointer;position:relative">' +
+                  '<span style="position:absolute;top:14px;right:14px;font-size:11px;color:var(--brand-primary);font-weight:700">상세 →</span>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);font-family:monospace">' + s.code + '</div>' +
+                  '<div style="font-size:15px;font-weight:800;margin:2px 0">' + s.name + '</div>' +
+                  '<div style="font-size:11px;color:#a78bfa;font-weight:700">🏢 ' + s.primaryCompany + '</div>' +
+                  '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:12px"><div><div style="font-size:24px;font-weight:800">' + s.total + '</div><div style="font-size:11px;color:var(--text-secondary)">출근 ' + s.present + ' / ' + s.total + '</div></div>' +
+                  '<div style="font-size:20px;font-weight:800;color:' + sc + '">' + s.rate + '%</div></div>' +
+                  '<div style="height:6px;background:var(--bg-base);border-radius:3px;margin-top:8px;overflow:hidden"><div style="height:100%;width:' + s.rate + '%;background:' + sc + '"></div></div>' +
+                  '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' + chips + '</div></div>';
+              }).join('');
+              return '<div style="margin:18px 0 10px;display:flex;align-items:center;gap:10px"><span style="font-size:20px">' + c.flag + '</span><span style="font-size:15px;font-weight:800">' + c.label + '</span>' +
+                '<span style="font-size:11px;color:var(--text-secondary);background:var(--bg-surface-elevated);padding:3px 10px;border-radius:20px">' + c.sites.length + ' 현장 · ' + c.employees + '명 · 출근 ' + c.present + '</span></div>' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">' + sites + '</div>';
+            }).join('');
+          }
+
+          var matrixRows = (res.matrix || []).map(function (m) {
+            return '<tr><td class="cell-mono">' + m.site + '</td><td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa">' + m.company + '</span></td><td>' + m.team + '</td>' +
+              '<td class="tac cell-mono">' + m.total + '</td><td class="tac cell-mono" style="color:var(--status-success)">' + m.present + '</td><td class="tac" style="font-weight:700">' + m.rate + '%</td></tr>';
+          }).join('');
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i> 글로벌 인원·출퇴근 현황</h1>' +
+            '<p class="page-subtitle">' + (t.countries || 0) + '개국 · ' + (t.sites || 0) + '개 현장 · 실시간 출근 현황</p></div>' +
+            '<div class="action-row" style="gap:8px">' + tabs + '</div></div>' +
+            kpis +
+            '<div class="section-title" style="font-size:13px;font-weight:800;margin:20px 0 4px">📍 국가 → 현장별 인원 현황 <span style="color:var(--text-tertiary);font-weight:400;font-size:11px">(현장 클릭 시 상세)</span></div>' +
+            countriesHtml +
+            '<div class="panel" style="margin-top:18px"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar"></i> 통합 매트릭스 — 현장 × 원청사 × 팀</div></div>' +
+            '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr><th>현장</th><th>원청사</th><th>팀</th><th class="tac">총원</th><th class="tac">출근</th><th class="tac">출근율</th></tr></thead><tbody>' +
+            (matrixRows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-tertiary)">데이터 없음</td></tr>') + '</tbody></table></div></div>';
+        } catch (err) { renderError('글로벌 현황 로딩 실패: ' + err.message); console.error(err); }
+      };
+
+      window.openGlobalSite = function (code) {
+        var data = window._globalHrData;
+        if (!data) { window.renderGlobalHr(); return; }
+        var site = null, country = null;
+        (data.countries || []).forEach(function (c) { (c.sites || []).forEach(function (s) { if (s.code === code) { site = s; country = c; } }); });
+        if (!site) { window.renderGlobalHr(); return; }
+
+        var teamCount = 0;
+        var companyBlocks = (site.companies || []).map(function (co) {
+          var teamRows = (co.teams || []).map(function (tm) {
+            teamCount++;
+            var r = tm.total > 0 ? Math.round(tm.present / tm.total * 100) : 0;
+            return '<div style="display:grid;grid-template-columns:1.4fr .7fr 1.2fr .8fr;gap:8px;padding:10px 16px;border-top:1px solid var(--border-subtle);align-items:center;font-size:12px">' +
+              '<div><b>' + tm.team + '</b></div><div class="tac cell-mono">' + tm.total + '</div>' +
+              '<div><span style="display:inline-block;width:90px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden;vertical-align:middle"><span style="display:block;height:100%;width:' + r + '%;background:' + ghrRateColor(r) + '"></span></span> <span class="cell-mono">' + tm.present + '/' + tm.total + '</span></div>' +
+              '<div class="tac" style="font-weight:700;color:' + ghrRateColor(r) + '">' + r + '%</div></div>';
+          }).join('');
+          return '<div class="panel" style="margin-bottom:12px;overflow:hidden"><div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,.12),transparent)"><div class="panel-title">🏢 ' + co.company + ' <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa">원청사</span></div><div style="font-size:12px;color:var(--text-secondary)">총원 ' + co.total + ' · 출근 ' + co.present + '</div></div>' +
+            '<div style="display:grid;grid-template-columns:1.4fr .7fr 1.2fr .8fr;gap:8px;padding:9px 16px;background:var(--bg-base);color:var(--text-tertiary);font-size:10px;font-weight:700;text-transform:uppercase">' +
+            '<div>팀</div><div class="tac">총원</div><div>출근 현황</div><div class="tac">출근율</div></div>' + teamRows + '</div>';
+        }).join('');
+
+        pageContainer.innerHTML =
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.renderGlobalHr()">🌐 글로벌</span> › ' + country.flag + ' ' + country.label + ' › <b style="color:var(--text-primary)">' + site.code + ' · ' + site.name + '</b></div>' +
+          '<div class="header-section"><div><h1 class="page-title">🏗️ ' + site.name + ' 인원·출퇴근 현황</h1><p class="page-subtitle">원청사 ' + (site.companies || []).length + ' · 팀 ' + teamCount + '</p></div>' +
+          '<div class="action-row"><button class="btn-secondary" onclick="window.renderGlobalHr()"><i class="ph ph-arrow-left"></i> 글로벌로</button></div></div>' +
+          '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
+          '<div class="kpi-card"><div class="kpi-label">현장 총원</div><div class="kpi-value">' + site.total + '</div></div>' +
+          '<div class="kpi-card" style="border-left:3px solid ' + ghrRateColor(site.rate) + '"><div class="kpi-label">현재 출근</div><div class="kpi-value" style="color:' + ghrRateColor(site.rate) + '">' + site.present + '</div><div class="kpi-meta">출근율 ' + site.rate + '%</div></div>' +
+          '<div class="kpi-card"><div class="kpi-label">미출근</div><div class="kpi-value" style="color:var(--status-warning)">' + (site.total - site.present) + '</div></div>' +
+          '<div class="kpi-card"><div class="kpi-label">원청사 / 팀</div><div class="kpi-value">' + (site.companies || []).length + ' / ' + teamCount + '</div></div>' +
+          '</div>' +
+          '<div class="section-title" style="font-size:13px;font-weight:800;margin:20px 0 10px">🏢 원청사별 → 팀별 인원 현황</div>' +
+          companyBlocks;
+      };
+
       async function renderDashboard() {
         pageContainer.innerHTML = skeleton();
         try {
