@@ -19,6 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
             guests: '/login',
             users: '/',
         );
+
+        // 언어 쿠키는 클라이언트(JS)가 평문으로 설정하므로 암호화에서 제외.
+        $middleware->encryptCookies(except: ['app_locale']);
+
+        // 모든 웹 요청에 선택 언어를 적용.
+        $middleware->web(append: [
+            \App\Http\Middleware\SetLocale::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
