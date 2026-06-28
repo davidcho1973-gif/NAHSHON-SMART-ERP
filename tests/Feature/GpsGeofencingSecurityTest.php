@@ -74,7 +74,7 @@ class GpsGeofencingSecurityTest extends TestCase
     public function test_it_blocks_low_accuracy_gps_signals(): void
     {
         $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
-            'args' => ['clock_in', 33.4255, -111.9400, 300.0, false, time()], // accuracy = 300m
+            'args' => ['clock_in', 33.4255, -111.9400, 600.0, false, time()], // accuracy = 600m (> 500m 임계값)
             'siteId' => 'ALL',
         ]);
 
@@ -82,6 +82,53 @@ class GpsGeofencingSecurityTest extends TestCase
         $response->assertJson([
             'success' => false,
             'message' => 'GPS 신호 정밀도가 낮거나 유효하지 않습니다. GPS를 켜고 실외에서 다시 시도해 주세요.',
+        ]);
+    }
+
+    public function test_it_allows_accuracy_within_relaxed_500m_threshold(): void
+    {
+        // 200m → 500m 완화: 현장 좌표·반경 내, 정확도 450m 는 이제 허용된다.
+        $response = $this->actingAs($this->user)->postJson('/smart-company-api/api_clockInWithGps', [
+            'args' => ['clock_in', 33.4255, -111.9400, 450.0, false, time()],
+            'siteId' => 'ALL',
+        ]);
+
+        $response->assertStatus(200)->assertJsonPath('success', true);
+        $this->assertDatabaseHas('attendance_logs', [
+            'employee_id' => $this->employee->id,
+            'event_type' => 'clock_in',
+            'source' => 'mobile_gps',
+        ]);
+    }
+
+    public function test_admin_bypasses_accuracy_and_geofence_for_desktop(): void
+    {
+        $adminEmployee = Employee::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'first_name' => 'Desk',
+            'last_name' => 'Admin',
+            'email' => 'desk.admin@example.com',
+            'employment_status' => 'active',
+        ]);
+        $admin = User::factory()->create([
+            'email' => 'desk.admin@example.com',
+            'employee_id' => $adminEmployee->id,
+            'access_role' => 'admin',
+            'account_status' => 'active',
+        ]);
+
+        // 데스크톱: 끔찍한 정확도(5000m) + 현장에서 멀리 떨어진 좌표 → 관리자라 통과해야 함.
+        $response = $this->actingAs($admin)->postJson('/smart-company-api/api_clockInWithGps', [
+            'args' => ['clock_in', 40.7128, -74.0060, 5000.0, false, time()],
+            'siteId' => 'ALL',
+        ]);
+
+        $response->assertStatus(200)->assertJsonPath('success', true);
+        $this->assertDatabaseHas('attendance_logs', [
+            'employee_id' => $adminEmployee->id,
+            'event_type' => 'clock_in',
+            'source' => 'web_portal',
         ]);
     }
 
