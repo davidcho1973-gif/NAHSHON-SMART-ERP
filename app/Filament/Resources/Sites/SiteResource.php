@@ -84,6 +84,13 @@ class SiteResource extends Resource
                                         ->columnSpanFull(),
                                     self::companySelect('company_id', '대표 관리 회사')
                                         ->helperText('접근제어와 현장 QR 기본 회사로 사용할 대표 회사를 선택합니다.'),
+                                    Select::make('country')
+                                        ->label('국가 (Country)')
+                                        ->options(\App\Models\Site::COUNTRY_OPTIONS)
+                                        ->default('US')
+                                        ->required()
+                                        ->native(false)
+                                        ->helperText('글로벌 인원·출퇴근 현황의 국가 분류 기준입니다 (미국/한국/캐나다).'),
                                     TextInput::make('timezone')
                                         ->label('타임존')
                                         ->default('America/Phoenix')
@@ -342,6 +349,11 @@ class SiteResource extends Resource
                     ->label('현장명')
                     ->sortable()
                     ->searchable(),
+                TextColumn::make('country')
+                    ->label('국가')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => \App\Models\Site::COUNTRY_OPTIONS[$state] ?? ($state ?: '-'))
+                    ->sortable(),
                 TextColumn::make('address')
                     ->label('주소')
                     ->limit(36)

@@ -30,6 +30,7 @@ class SiteCreationTest extends TestCase
             ->set('mountedActions.0.data', [
                 'code' => 'NEW-SITE',
                 'name' => 'New Site Name',
+                'country' => 'US',
                 'timezone' => 'America/Phoenix',
                 'status' => 'active',
             ])
