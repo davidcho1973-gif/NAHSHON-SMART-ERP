@@ -12,6 +12,13 @@ class Site extends Model
 {
     use HasFactory;
 
+    /** 글로벌 인원·출퇴근 현황의 국가 분류 (ISO-2). */
+    public const COUNTRY_OPTIONS = [
+        'US' => '🇺🇸 United States',
+        'KR' => '🇰🇷 Korea',
+        'CA' => '🇨🇦 Canada',
+    ];
+
     protected $fillable = [
         'company_id',
         'code',
