@@ -105,9 +105,6 @@
               <li class="nav-item active" data-view="dashboard" id="nav-dashboard">
                 <i class="ph ph-squares-four"></i><span>ëŒ€ì‹œë³´ë“œ (Overview)</span>
               </li>
-              <li class="nav-item" data-view="global-hr" id="nav-global-hr">
-                <i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i><span>글로벌 현황 (Global)</span>
-              </li>
               <li class="nav-item" data-view="my-attendance" id="nav-my-attendance">
                 <i class="ph ph-clock"></i><span>내 출퇴근 기록</span>
               </li>
@@ -1235,7 +1232,6 @@
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
-        'global-hr': { title: '글로벌 현황 (Global)', render: function () { return window.renderGlobalHr(); } },
         'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
         'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '영수증처리', render: renderFinance },
@@ -1929,10 +1925,10 @@
 
       function ghrRateColor(r) { return r >= 90 ? '#10b981' : r >= 75 ? '#f59e0b' : '#ef4444'; }
 
-      window.changeGlobalHrCountry = function (c) { window._globalHrCountry = c; window.renderGlobalHr(); };
+      window.changeGlobalHrCountry = function (c) { window._globalHrCountry = c; window.renderGlobalHrInto(window._ghrTarget || pageContainer, window._ghrEmbedded); };
 
       window._globalHrView = window._globalHrView || 'overview';
-      window.switchGlobalHrView = function (v) { window._globalHrView = v; window.renderGlobalHr(); };
+      window.switchGlobalHrView = function (v) { window._globalHrView = v; window.renderGlobalHrInto(window._ghrTarget || pageContainer, window._ghrEmbedded); };
 
       // 실시간 출퇴근 피드 (recent 는 글로벌 집계에 이미 포함됨 → 추가 호출 없이 렌더)
       function ghrFeedHtml(res) {
@@ -1957,11 +1953,17 @@
         return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-pulse"></i> 실시간 출퇴근 피드 (오늘 · 최신순)</div></div><div class="panel-body" style="padding:0">' + rows + '</div></div>';
       }
 
-      window.renderGlobalHr = async function () {
-        pageContainer.innerHTML = skeleton();
+      window.renderGlobalHr = function () { return window.renderGlobalHrInto(pageContainer, false); };
+      window.backToGlobalHr = function () { window._pendingHrTab = 'global'; window.goToView('hr'); };
+
+      window.renderGlobalHrInto = async function (target, embedded) {
+        target = target || pageContainer;
+        window._ghrTarget = target;
+        window._ghrEmbedded = embedded;
+        target.innerHTML = skeleton();
         try {
           var res = await window.API.getGlobalHrOverview(window._globalHrCountry);
-          if (!res || !res.success) { renderError('글로벌 현황 로딩 실패: ' + (res && res.error ? res.error : '')); return; }
+          if (!res || !res.success) { target.innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:32px">글로벌 현황 로딩 실패: ' + (res && res.error ? res.error : '') + '</div>'; return; }
           window._globalHrData = res;
           var t = res.totals || {};
           var cur = window._globalHrCountry;
@@ -2030,21 +2032,22 @@
             '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr><th>현장</th><th>원청사</th><th>소속사</th><th>팀</th><th class="tac">총원</th><th class="tac">출근</th><th class="tac">출근율</th></tr></thead><tbody>' +
             (matrixRows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-tertiary)">데이터 없음</td></tr>') + '</tbody></table></div></div>';
 
-          pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i> 글로벌 인원·출퇴근 현황</h1>' +
-            '<p class="page-subtitle">' + (t.countries || 0) + '개국 · ' + (t.sites || 0) + '개 현장 · 실시간 출근 현황</p></div>' +
-            '<div class="action-row" style="gap:8px;flex-wrap:wrap">' + viewTabs + '<span style="width:1px;background:var(--border-default);margin:0 2px"></span>' + tabs + '</div></div>' +
-            kpis +
-            (view === 'feed' ? ghrFeedHtml(res) : overviewBody);
-        } catch (err) { renderError('글로벌 현황 로딩 실패: ' + err.message); console.error(err); }
+          var headerHtml = embedded
+            ? '<div class="action-row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">' + viewTabs + '<span style="width:1px;background:var(--border-default);margin:0 2px"></span>' + tabs + '</div>'
+            : '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i> 글로벌 인원·출퇴근 현황</h1>' +
+              '<p class="page-subtitle">' + (t.countries || 0) + '개국 · ' + (t.sites || 0) + '개 현장 · 실시간 출근 현황</p></div>' +
+              '<div class="action-row" style="gap:8px;flex-wrap:wrap">' + viewTabs + '<span style="width:1px;background:var(--border-default);margin:0 2px"></span>' + tabs + '</div></div>';
+
+          target.innerHTML = headerHtml + kpis + (view === 'feed' ? ghrFeedHtml(res) : overviewBody);
+        } catch (err) { target.innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:32px">글로벌 현황 로딩 실패: ' + err.message + '</div>'; console.error(err); }
       };
 
       window.openGlobalSite = function (code) {
         var data = window._globalHrData;
-        if (!data) { window.renderGlobalHr(); return; }
+        if (!data) { window.backToGlobalHr(); return; }
         var site = null, country = null;
         (data.countries || []).forEach(function (c) { (c.sites || []).forEach(function (s) { if (s.code === code) { site = s; country = c; } }); });
-        if (!site) { window.renderGlobalHr(); return; }
+        if (!site) { window.backToGlobalHr(); return; }
 
         var teamCount = 0;
         var companyBlocks = (site.companies || []).map(function (co) {
@@ -2062,9 +2065,9 @@
         }).join('');
 
         pageContainer.innerHTML =
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.renderGlobalHr()">🌐 글로벌</span> › ' + country.flag + ' ' + country.label + ' › <b style="color:var(--text-primary)">' + site.code + ' · ' + site.name + '</b></div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.backToGlobalHr()">🌐 글로벌</span> › ' + country.flag + ' ' + country.label + ' › <b style="color:var(--text-primary)">' + site.code + ' · ' + site.name + '</b></div>' +
           '<div class="header-section"><div><h1 class="page-title">🏗️ ' + site.name + ' 인원·출퇴근 현황</h1><p class="page-subtitle">원청사 ' + (site.companies || []).length + ' · 팀 ' + teamCount + '</p></div>' +
-          '<div class="action-row" style="gap:8px"><button class="btn-secondary" onclick="window.openTeamBoard(\'' + site.code + '\')"><i class="ph ph-puzzle-piece"></i> 팀 편성</button><button class="btn-secondary" onclick="window.renderGlobalHr()"><i class="ph ph-arrow-left"></i> 글로벌로</button></div></div>' +
+          '<div class="action-row" style="gap:8px"><button class="btn-secondary" onclick="window.openTeamBoard(\'' + site.code + '\')"><i class="ph ph-puzzle-piece"></i> 팀 편성</button><button class="btn-secondary" onclick="window.backToGlobalHr()"><i class="ph ph-arrow-left"></i> 글로벌로</button></div></div>' +
           '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
           '<div class="kpi-card"><div class="kpi-label">현장 총원</div><div class="kpi-value">' + site.total + '</div></div>' +
           '<div class="kpi-card" style="border-left:3px solid ' + ghrRateColor(site.rate) + '"><div class="kpi-label">현재 출근</div><div class="kpi-value" style="color:' + ghrRateColor(site.rate) + '">' + site.present + '</div><div class="kpi-meta">출근율 ' + site.rate + '%</div></div>' +
@@ -3628,8 +3631,8 @@
               '<h3 style="font-size:13px;font-weight:700;color:var(--text-secondary);margin:8px 0 12px;text-transform:uppercase;letter-spacing:.06em">í˜„ìž¥ë³„ ì¶œê·¼ í˜„í™©</h3>' +
               '<div class="kpi-row" style="grid-template-columns:repeat(' + Math.min(siteKeys.length, 4) + ',1fr);margin-bottom:16px">' + siteCardsHtml + '</div>' +
               // ì¶œí‡´ê·¼ íƒ­
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="attendance">ðŸŒ í†µí•© ì¶œí‡´ê·¼ ëª©ë¡</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
-              '<div id="tab-attendance">' +
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸŒ í†µí•© ì¶œí‡´ê·¼ ëª©ë¡</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
+              '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
               '<div class="panel"><div class="panel-header"><div class="panel-title" style="color:var(--status-success)"><i class="ph ph-check-circle"></i> ì¶œê·¼ ì™„ë£Œ (' + attendance.totalPresent + 'ëª…)</div></div>' +
               '<div class="panel-body"><table class="data-table"><thead><tr><th>ì„±ëª…</th><th>ì†Œì†</th><th>íŒ€</th><th>í˜„ìž¥</th><th>ì²´í¬ì¸</th><th>í‡´ê·¼</th></tr></thead><tbody>' + (globalCheckedInHtml || '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary)">ì¶œê·¼ ê¸°ë¡ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>' +
@@ -3949,8 +3952,8 @@
                 '<div class="kpi-value" style="font-size:22px;color:var(--status-success);line-height:1.1">' + totalAttended + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--status-warning)">ë¯¸ì¶œì„ ' + totalAbsent + 'ëª…</span></div></div>' +
               '</div>' +
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="attendance">ðŸ”– ì¶œí‡´ê·¼ í˜„í™©</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
-              '<div id="tab-attendance">' +
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸ”– ì¶œí‡´ê·¼ í˜„í™©</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
+              '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
               matrixHtml +
               // â”€â”€ ì¶œê·¼ ìƒì„¸ ë³´ê³  (ì¢Œ) + íšŒì‚¬ë³„ í†µê³„ ë„í‘œ (ìš°) â€” ì»¨í…Œì´ë„ˆë§Œ â”€â”€
               '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px" class="hr-detail-grid">' +
@@ -3975,13 +3978,19 @@
           }
 
           // ê³µí†µ: íƒ­ ì´ë²¤íŠ¸ + ê²€ìƒ‰
+          function ensureGlobalTab() {
+            var gt = document.getElementById('tab-global');
+            if (gt && !gt.getAttribute('data-loaded')) { gt.setAttribute('data-loaded', '1'); window.renderGlobalHrInto(gt, true); }
+          }
           document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
               document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (b) { b.classList.remove('active'); });
               btn.classList.add('active');
               var tab = btn.dataset.tab;
+              var g = document.getElementById('tab-global'); if (g) g.style.display = tab === 'global' ? '' : 'none';
               document.getElementById('tab-attendance').style.display = tab === 'attendance' ? '' : 'none';
               document.getElementById('tab-personnel').style.display = tab === 'personnel' ? '' : 'none';
+              if (tab === 'global') ensureGlobalTab();
             });
           });
           if (window._pendingHrTab) {
