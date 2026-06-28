@@ -82,8 +82,11 @@ class SiteResource extends Resource
                                         ->label('현장 주소')
                                         ->maxLength(255)
                                         ->columnSpanFull(),
-                                    self::companySelect('company_id', '대표 관리 회사')
-                                        ->helperText('접근제어와 현장 QR 기본 회사로 사용할 대표 회사를 선택합니다.'),
+                                    self::companySelect('company_id', '대표 관리 회사 (소속사)')
+                                        ->helperText('접근제어와 현장 QR 기본 회사로 사용할 대표 회사(고용/소속사)를 선택합니다.'),
+                                    self::companySelect('client_company_id', '원청사 (발주처/Client)')
+                                        ->required(false)
+                                        ->helperText('이 현장의 발주처/원청(LG에너지·SK온 등). 글로벌 현황의 원청사 분류 기준입니다.'),
                                     Select::make('country')
                                         ->label('국가 (Country)')
                                         ->options(\App\Models\Site::COUNTRY_OPTIONS)

@@ -1018,6 +1018,8 @@
       getPayrollDashboard: (periodStart) => gsRun('api_getPayrollDashboard', [_siteId(), periodStart || ''], { success: false, companies: [], anomalies: [], employees: [], totals: {}, period: {} }),
       getInventoryDashboard: () => gsRun('api_getInventoryDashboard', [], { success: false, totals: {}, matrix: { categories: [], sites: [], cells: {}, categoryMeta: {} }, groups: [], assets: [], recent: [], upcomingInspections: [] }),
       getGlobalHrOverview: (country) => gsRun('api_getGlobalHrOverview', [country || 'ALL'], { success: false, totals: {}, countries: [], matrix: [], recent: [] }),
+      getTeamBoard: (siteCode) => gsRun('api_getTeamBoard', [siteCode], { success: false, teams: [], unassigned: [] }),
+      assignEmployeeTeam: (empId, teamId) => gsRun('api_assignEmployeeTeam', [empId, teamId], { success: false }),
       getInventoryAssetDetail: (assetId) => gsRun('api_getInventoryAssetDetail', [assetId], { success: false }),
       processInventoryPhotos: () => gsRun('api_processInventoryPhotos', [], { success: false, processed: 0, saved: 0, errors: 0, results: [] }),
       setupInventorySheets: () => gsRun('setupInventorySheets', [], { success: false }),
@@ -1929,6 +1931,32 @@
 
       window.changeGlobalHrCountry = function (c) { window._globalHrCountry = c; window.renderGlobalHr(); };
 
+      window._globalHrView = window._globalHrView || 'overview';
+      window.switchGlobalHrView = function (v) { window._globalHrView = v; window.renderGlobalHr(); };
+
+      // 실시간 출퇴근 피드 (recent 는 글로벌 집계에 이미 포함됨 → 추가 호출 없이 렌더)
+      function ghrFeedHtml(res) {
+        var ev = res.recent || [];
+        if (!ev.length) {
+          return '<div class="panel"><div class="panel-body padded"><div style="text-align:center;padding:48px;color:var(--text-tertiary)">오늘 출퇴근 기록이 아직 없습니다.</div></div></div>';
+        }
+        var srcLabel = function (s) { return s === 'team_qr' ? 'QR 스캔' : s === 'nfc_reader' ? 'NFC 리더' : s === 'mobile_gps' ? 'GPS' : s === 'web_portal' ? '웹 포털' : s === 'offline_gps_sync' ? '오프라인 동기화' : (s || '-'); };
+        var rows = ev.map(function (e) {
+          var rejected = e.status && e.status !== 'approved';
+          var isIn = e.event_type === 'clock_in';
+          var color = rejected ? '#ef4444' : isIn ? '#10b981' : '#f59e0b';
+          var label = rejected ? '이상' : isIn ? '출근' : '퇴근';
+          var icon = rejected ? '!' : isIn ? '↓' : '↑';
+          return '<div style="display:grid;grid-template-columns:58px 26px 1fr auto;gap:12px;align-items:center;padding:11px 18px;border-top:1px solid var(--border-subtle)">' +
+            '<span class="cell-mono" style="font-weight:700;font-size:13px">' + (e.time || '') + '</span>' +
+            '<span style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + color + '22;color:' + color + ';font-weight:700">' + icon + '</span>' +
+            '<div><span style="font-weight:700">' + e.name + '</span> <span style="font-size:11px;color:var(--text-secondary)">· ' + e.team + ' · ' + e.company + '</span>' +
+            '<div style="font-size:11px;color:var(--text-tertiary)">' + e.flag + ' ' + e.site + ' · ' + srcLabel(e.source) + '</div></div>' +
+            '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:' + color + '22;color:' + color + '">' + label + '</span></div>';
+        }).join('');
+        return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-pulse"></i> 실시간 출퇴근 피드 (오늘 · 최신순)</div></div><div class="panel-body" style="padding:0">' + rows + '</div></div>';
+      }
+
       window.renderGlobalHr = async function () {
         pageContainer.innerHTML = skeleton();
         try {
@@ -1969,7 +1997,7 @@
                   '<span style="position:absolute;top:14px;right:14px;font-size:11px;color:var(--brand-primary);font-weight:700">상세 →</span>' +
                   '<div style="font-size:11px;color:var(--text-tertiary);font-family:monospace">' + s.code + '</div>' +
                   '<div style="font-size:15px;font-weight:800;margin:2px 0">' + s.name + '</div>' +
-                  '<div style="font-size:11px;color:#a78bfa;font-weight:700">🏢 ' + s.primaryCompany + '</div>' +
+                  '<div style="font-size:11px;color:#a78bfa;font-weight:700">🏢 원청사: ' + (s.client || '-') + '</div>' +
                   '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:12px"><div><div style="font-size:24px;font-weight:800">' + s.total + '</div><div style="font-size:11px;color:var(--text-secondary)">출근 ' + s.present + ' / ' + s.total + '</div></div>' +
                   '<div style="font-size:20px;font-weight:800;color:' + sc + '">' + s.rate + '%</div></div>' +
                   '<div style="height:6px;background:var(--bg-base);border-radius:3px;margin-top:8px;overflow:hidden"><div style="height:100%;width:' + s.rate + '%;background:' + sc + '"></div></div>' +
@@ -1982,20 +2010,32 @@
           }
 
           var matrixRows = (res.matrix || []).map(function (m) {
-            return '<tr><td class="cell-mono">' + m.site + '</td><td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa">' + m.company + '</span></td><td>' + m.team + '</td>' +
+            return '<tr><td class="cell-mono">' + m.site + '</td>' +
+              '<td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa">' + (m.client || '-') + '</span></td>' +
+              '<td style="font-size:11px;color:var(--text-secondary)">' + m.company + '</td><td>' + m.team + '</td>' +
               '<td class="tac cell-mono">' + m.total + '</td><td class="tac cell-mono" style="color:var(--status-success)">' + m.present + '</td><td class="tac" style="font-weight:700">' + m.rate + '%</td></tr>';
           }).join('');
+
+          var view = window._globalHrView;
+          var viewTabs = [['overview', '📊 현황'], ['feed', '🟢 실시간 출퇴근']].map(function (d) {
+            var on = view === d[0];
+            return '<button onclick="window.switchGlobalHrView(\'' + d[0] + '\')" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border-default);' +
+              (on ? 'background:var(--bg-surface-elevated);color:var(--text-primary);border-color:var(--brand-primary)' : 'background:var(--bg-surface);color:var(--text-secondary)') + '">' + d[1] + '</button>';
+          }).join('');
+
+          var overviewBody =
+            '<div class="section-title" style="font-size:13px;font-weight:800;margin:20px 0 4px">📍 국가 → 현장별 인원 현황 <span style="color:var(--text-tertiary);font-weight:400;font-size:11px">(현장 클릭 시 상세)</span></div>' +
+            countriesHtml +
+            '<div class="panel" style="margin-top:18px"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar"></i> 통합 매트릭스 — 현장 × 원청사 × 소속사 × 팀</div></div>' +
+            '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr><th>현장</th><th>원청사</th><th>소속사</th><th>팀</th><th class="tac">총원</th><th class="tac">출근</th><th class="tac">출근율</th></tr></thead><tbody>' +
+            (matrixRows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-tertiary)">데이터 없음</td></tr>') + '</tbody></table></div></div>';
 
           pageContainer.innerHTML =
             '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i> 글로벌 인원·출퇴근 현황</h1>' +
             '<p class="page-subtitle">' + (t.countries || 0) + '개국 · ' + (t.sites || 0) + '개 현장 · 실시간 출근 현황</p></div>' +
-            '<div class="action-row" style="gap:8px">' + tabs + '</div></div>' +
+            '<div class="action-row" style="gap:8px;flex-wrap:wrap">' + viewTabs + '<span style="width:1px;background:var(--border-default);margin:0 2px"></span>' + tabs + '</div></div>' +
             kpis +
-            '<div class="section-title" style="font-size:13px;font-weight:800;margin:20px 0 4px">📍 국가 → 현장별 인원 현황 <span style="color:var(--text-tertiary);font-weight:400;font-size:11px">(현장 클릭 시 상세)</span></div>' +
-            countriesHtml +
-            '<div class="panel" style="margin-top:18px"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar"></i> 통합 매트릭스 — 현장 × 원청사 × 팀</div></div>' +
-            '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr><th>현장</th><th>원청사</th><th>팀</th><th class="tac">총원</th><th class="tac">출근</th><th class="tac">출근율</th></tr></thead><tbody>' +
-            (matrixRows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-tertiary)">데이터 없음</td></tr>') + '</tbody></table></div></div>';
+            (view === 'feed' ? ghrFeedHtml(res) : overviewBody);
         } catch (err) { renderError('글로벌 현황 로딩 실패: ' + err.message); console.error(err); }
       };
 
@@ -2016,7 +2056,7 @@
               '<div><span style="display:inline-block;width:90px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden;vertical-align:middle"><span style="display:block;height:100%;width:' + r + '%;background:' + ghrRateColor(r) + '"></span></span> <span class="cell-mono">' + tm.present + '/' + tm.total + '</span></div>' +
               '<div class="tac" style="font-weight:700;color:' + ghrRateColor(r) + '">' + r + '%</div></div>';
           }).join('');
-          return '<div class="panel" style="margin-bottom:12px;overflow:hidden"><div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,.12),transparent)"><div class="panel-title">🏢 ' + co.company + ' <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa">원청사</span></div><div style="font-size:12px;color:var(--text-secondary)">총원 ' + co.total + ' · 출근 ' + co.present + '</div></div>' +
+          return '<div class="panel" style="margin-bottom:12px;overflow:hidden"><div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,.12),transparent)"><div class="panel-title">🏢 ' + co.company + ' <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(59,130,246,.15);color:#60a5fa">소속사</span></div><div style="font-size:12px;color:var(--text-secondary)">총원 ' + co.total + ' · 출근 ' + co.present + '</div></div>' +
             '<div style="display:grid;grid-template-columns:1.4fr .7fr 1.2fr .8fr;gap:8px;padding:9px 16px;background:var(--bg-base);color:var(--text-tertiary);font-size:10px;font-weight:700;text-transform:uppercase">' +
             '<div>팀</div><div class="tac">총원</div><div>출근 현황</div><div class="tac">출근율</div></div>' + teamRows + '</div>';
         }).join('');
@@ -2024,15 +2064,59 @@
         pageContainer.innerHTML =
           '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.renderGlobalHr()">🌐 글로벌</span> › ' + country.flag + ' ' + country.label + ' › <b style="color:var(--text-primary)">' + site.code + ' · ' + site.name + '</b></div>' +
           '<div class="header-section"><div><h1 class="page-title">🏗️ ' + site.name + ' 인원·출퇴근 현황</h1><p class="page-subtitle">원청사 ' + (site.companies || []).length + ' · 팀 ' + teamCount + '</p></div>' +
-          '<div class="action-row"><button class="btn-secondary" onclick="window.renderGlobalHr()"><i class="ph ph-arrow-left"></i> 글로벌로</button></div></div>' +
+          '<div class="action-row" style="gap:8px"><button class="btn-secondary" onclick="window.openTeamBoard(\'' + site.code + '\')"><i class="ph ph-puzzle-piece"></i> 팀 편성</button><button class="btn-secondary" onclick="window.renderGlobalHr()"><i class="ph ph-arrow-left"></i> 글로벌로</button></div></div>' +
           '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
           '<div class="kpi-card"><div class="kpi-label">현장 총원</div><div class="kpi-value">' + site.total + '</div></div>' +
           '<div class="kpi-card" style="border-left:3px solid ' + ghrRateColor(site.rate) + '"><div class="kpi-label">현재 출근</div><div class="kpi-value" style="color:' + ghrRateColor(site.rate) + '">' + site.present + '</div><div class="kpi-meta">출근율 ' + site.rate + '%</div></div>' +
           '<div class="kpi-card"><div class="kpi-label">미출근</div><div class="kpi-value" style="color:var(--status-warning)">' + (site.total - site.present) + '</div></div>' +
-          '<div class="kpi-card"><div class="kpi-label">원청사 / 팀</div><div class="kpi-value">' + (site.companies || []).length + ' / ' + teamCount + '</div></div>' +
+          '<div class="kpi-card"><div class="kpi-label">소속사 / 팀</div><div class="kpi-value">' + (site.companies || []).length + ' / ' + teamCount + '</div></div>' +
           '</div>' +
-          '<div class="section-title" style="font-size:13px;font-weight:800;margin:20px 0 10px">🏢 원청사별 → 팀별 인원 현황</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin:6px 0 0">원청사(발주처): <b style="color:#a78bfa">' + (site.client || '-') + '</b></div>' +
+          '<div class="section-title" style="font-size:13px;font-weight:800;margin:14px 0 10px">👷 소속사별 → 팀별 인원 현황</div>' +
           companyBlocks;
+      };
+
+      // ── 팀 편성 드래그 보드 ──────────────────────────────────────
+      window.openTeamBoard = async function (siteCode) {
+        pageContainer.innerHTML = skeleton();
+        try {
+          var res = await window.API.getTeamBoard(siteCode);
+          if (!res || !res.success) { renderError('팀 편성 로딩 실패: ' + (res && res.error ? res.error : '')); return; }
+          window._teamBoardSite = siteCode;
+          var totalAssigned = res.teams.reduce(function (a, t) { return a + t.members.length; }, 0);
+
+          var cardHtml = function (m) {
+            return '<div draggable="true" ondragstart="window.ghrDrag(event,' + m.id + ')" style="background:var(--bg-surface-elevated);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;cursor:grab">' +
+              '<span style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0">' + String(m.name || '?').slice(0, 1) + '</span>' +
+              '<div><div style="font-size:12px;font-weight:700">' + m.name + '</div><div style="font-size:10px;color:var(--text-secondary)">' + m.role + ' · ' + m.flag + '</div></div></div>';
+          };
+          var cols = res.teams.map(function (t) {
+            var members = t.members.map(cardHtml).join('') || '<div style="font-size:11px;color:var(--text-tertiary);text-align:center;padding:8px">비어있음</div>';
+            return '<div ondragover="window.ghrAllow(event)" ondrop="window.ghrDrop(event,' + t.id + ')" style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:12px;overflow:hidden">' +
+              '<div style="padding:11px 14px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border-subtle)"><span>' + t.name + '</span><span style="font-size:11px;color:var(--text-tertiary)">' + t.members.length + '명</span></div>' +
+              '<div style="padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px">' + members + '</div></div>';
+          }).join('');
+          var unassigned = res.unassigned.map(cardHtml).join('') || '<div style="font-size:11px;color:var(--text-tertiary);padding:6px">미배치 인원 없음</div>';
+
+          pageContainer.innerHTML =
+            '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.openGlobalSite(\'' + siteCode + '\')">← ' + res.site.name + ' 현황</span></div>' +
+            '<div class="header-section"><div><h1 class="page-title">🧩 팀 편성 · 배치 — ' + res.site.name + '</h1><p class="page-subtitle">카드를 드래그해 다른 팀/미배치로 이동 · 배치 ' + totalAssigned + ' · 미배치 ' + res.unassigned.length + '</p></div></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">' + cols + '</div>' +
+            '<div class="section-title" style="font-size:13px;font-weight:800;margin:18px 0 8px">⚠️ 미배치 인원 (' + res.unassigned.length + ') — 팀으로 드래그</div>' +
+            '<div ondragover="window.ghrAllow(event)" ondrop="window.ghrDrop(event,null)" style="background:rgba(245,158,11,.06);border:1px dashed var(--status-warning);border-radius:12px;padding:12px;display:flex;gap:8px;flex-wrap:wrap;min-height:60px">' + unassigned + '</div>';
+        } catch (err) { renderError('팀 편성 로딩 실패: ' + err.message); }
+      };
+      window.ghrDrag = function (ev, empId) { ev.dataTransfer.setData('text/plain', String(empId)); };
+      window.ghrAllow = function (ev) { ev.preventDefault(); };
+      window.ghrDrop = async function (ev, teamId) {
+        ev.preventDefault();
+        var empId = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+        if (!empId) return;
+        try {
+          var res = await window.API.assignEmployeeTeam(empId, teamId);
+          if (res && res.success) { showToast(res.message || '배치 완료'); window.openTeamBoard(window._teamBoardSite); }
+          else { alert(res && res.message ? res.message : '배치 실패'); }
+        } catch (e) { alert('오류: ' + e.message); }
       };
 
       async function renderDashboard() {

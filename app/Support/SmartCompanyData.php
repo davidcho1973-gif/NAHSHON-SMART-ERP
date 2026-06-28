@@ -20,6 +20,8 @@ class SmartCompanyData
     {
         return match ($method) {
             'api_getGlobalHrOverview' => self::globalHrOverview((string) ($args[0] ?? 'ALL')),
+            'api_getTeamBoard' => self::teamBoard((string) ($args[0] ?? '')),
+            'api_assignEmployeeTeam' => self::assignEmployeeTeam((int) ($args[0] ?? 0), $args[1] !== null && $args[1] !== '' ? (int) $args[1] : null),
             'api_getHRData' => self::realHrData($siteId),
             'api_getPersonnelList' => self::realPersonnel($siteId),
             'api_getPersonnelStats' => self::realPersonnelStats($siteId),
@@ -1371,6 +1373,24 @@ class SmartCompanyData
             return app(\App\Services\Hr\GlobalHrService::class)->overview($country);
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => $e->getMessage(), 'countries' => [], 'matrix' => [], 'recent' => []];
+        }
+    }
+
+    public static function teamBoard(string $siteCode): array
+    {
+        try {
+            return app(\App\Services\Hr\GlobalHrService::class)->teamBoard($siteCode);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function assignEmployeeTeam(int $employeeId, ?int $teamId): array
+    {
+        try {
+            return app(\App\Services\Hr\GlobalHrService::class)->assignTeam($employeeId, $teamId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
