@@ -64,6 +64,8 @@ class SmartCompanyController extends Controller
 
         return [
             'name' => $name,
+            // 등록(직원) 이름 — 출퇴근 등 본인 확인 화면에서 계정명 대신 실제 등록명을 표시.
+            'employee_name' => $user->employee?->name ?: $name,
             'email' => $user->email,
             'role' => User::ROLE_OPTIONS[$user->access_role] ?? Str::headline($user->access_role ?: 'user'),
             'initials' => $this->initials($name),

@@ -11204,7 +11204,7 @@ async function renderVendors() {
         '<div class="panel-body padded" style="padding:20px; display:flex; flex-direction:column; gap:16px;">' +
         validationHtml +
         '<div style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:8px; padding:14px; font-size:12px; display:flex; flex-direction:column; gap:10px;">' +
-        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 성명</span><span style="font-weight:700; color:var(--text-primary);">' + authenticatedAccount.name + '</span></div>' +
+        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 성명</span><span style="font-weight:700; color:var(--text-primary);">' + (authenticatedAccount.employee_name || authenticatedAccount.name) + '</span></div>' +
         '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 권한</span><span style="font-weight:700; color:var(--text-primary);">' + authenticatedAccount.role + '</span></div>' +
         statusRow +
         '</div>' +
@@ -11217,7 +11217,7 @@ async function renderVendors() {
         '<div id="commute-message" style="font-size:11px; text-align:center; color:var(--text-tertiary);">' + footerMsg + '</div>' +
         '</div></div>' +
         '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
-        '<div class="panel-header" style="padding:14px 20px; border-bottom:1px solid var(--border-subtle);"><div class="panel-title" style="font-size:13px;"><i class="ph ph-list-bullets"></i> 오늘 내 출퇴근 기록</div></div>' +
+        '<div class="panel-header" style="padding:14px 20px; border-bottom:1px solid var(--border-subtle);"><div class="panel-title" style="font-size:13px;"><i class="ph ph-list-bullets"></i> 내 출퇴근 기록 (최근 90일)</div></div>' +
         '<div class="panel-body" style="padding:0; overflow-x:auto;">' +
         '<table class="data-table" id="my-attendance-table" style="width:100%; border-collapse:collapse;">' +
         '<thead><tr><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">날짜</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">출근</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">퇴근</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">근무시간</th></tr></thead>' +
@@ -11392,12 +11392,16 @@ async function renderVendors() {
       if (!body) return;
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const args = [authenticatedAccount.employee_id, today, today];
+        // 오늘뿐 아니라 지난 기록도 함께 — 최근 90일 범위 조회.
+        const fromDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const args = [authenticatedAccount.employee_id, fromDate, today];
         // 방금 기록한 출퇴근이 즉시 반영되도록 캐시를 무효화하고 항상 최신 기록을 조회한다.
         delete window.apiCache['api_getHrAttendanceRecords' + JSON.stringify(args)];
         const res = await gsRun('api_getHrAttendanceRecords', args, { success: false, records: [] });
         if (res && res.success && res.records && res.records.length > 0) {
-          body.innerHTML = res.records.map(r => {
+          // 최신 날짜가 위로 오도록 정렬.
+          const sorted = res.records.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+          body.innerHTML = sorted.map(r => {
             const hasIn = r.clock_in && r.clock_in !== '-';
             const hasOut = r.clock_out && r.clock_out !== '-';
             const clockIn = hasIn ? '<span style="color:var(--status-success); font-weight:700;">' + r.clock_in + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
@@ -11406,7 +11410,7 @@ async function renderVendors() {
             return '<tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px 14px; font-weight:600;">' + (r.date || '-') + '</td><td class="cell-mono" style="padding:10px 14px;">' + clockIn + '</td><td class="cell-mono" style="padding:10px 14px;">' + clockOut + '</td><td style="padding:10px 14px;">' + hours + '</td></tr>';
           }).join('');
         } else {
-          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">오늘 출퇴근 기록이 존재하지 않습니다.</td></tr>';
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">최근 출퇴근 기록이 존재하지 않습니다.</td></tr>';
         }
       } catch (err) {
         body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--status-danger);">이력 조회 실패: ' + err.message + '</td></tr>';
