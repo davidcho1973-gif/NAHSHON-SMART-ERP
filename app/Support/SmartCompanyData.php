@@ -1967,6 +1967,11 @@ class SmartCompanyData
                 return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
             }
 
+            // 관리자/사무직은 데스크톱(GPS 없음)에서도 테스트·기록할 수 있도록 정확도/지오펜스 검증을 우회.
+            // 현장 작업자에게는 안티-스푸핑 지오펜싱이 그대로 적용된다.
+            $authUser = auth()->user();
+            $isAdmin = $authUser && in_array($authUser->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true);
+
             if (! $employee->site_id) {
                 return ['success' => false, 'message' => '배정된 현장 정보가 없습니다.'];
             }
@@ -1989,8 +1994,8 @@ class SmartCompanyData
                 }
             }
 
-            // 3. 정확도 상한선 체크
-            if (is_null($accuracy) || (float) $accuracy > 200) {
+            // 3. 정확도 상한선 체크 (200m → 500m 완화, 관리자/데스크톱은 예외)
+            if (! $isAdmin && (is_null($accuracy) || (float) $accuracy > 500)) {
                 return ['success' => false, 'message' => 'GPS 신호 정밀도가 낮거나 유효하지 않습니다. GPS를 켜고 실외에서 다시 시도해 주세요.'];
             }
 
@@ -2038,7 +2043,7 @@ class SmartCompanyData
                     cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
                 $distance = $angle * $earthRadius;
 
-                if ($distance > $radius) {
+                if (! $isAdmin && $distance > $radius) {
                     return [
                         'success' => false,
                         'message' => sprintf(
@@ -2130,9 +2135,11 @@ class SmartCompanyData
                 'attendance_date' => $today,
                 'event_type' => $resolvedType,
                 'event_at' => $eventTime,
-                'source' => 'mobile_gps',
+                'source' => $isAdmin ? 'web_portal' : 'mobile_gps',
                 'status' => 'approved',
-                'notes' => '모바일 GPS 기반 셀프 등록 완료.',
+                'notes' => $isAdmin
+                    ? '관리자/데스크톱 예외 등록 (GPS 정밀도·지오펜스 검증 우회).'
+                    : '모바일 GPS 기반 셀프 등록 완료.',
                 'payload' => [
                     'latitude' => $lat,
                     'longitude' => $lng,
@@ -2140,7 +2147,8 @@ class SmartCompanyData
                     'distance_meters' => $distance,
                     'geofence_lat' => $siteLat,
                     'geofence_lng' => $siteLng,
-                    'geofence_radius' => $radius
+                    'geofence_radius' => $radius,
+                    'admin_bypass' => $isAdmin,
                 ]
             ]);
 
