@@ -16,6 +16,7 @@ class Site extends Model
         'company_id',
         'code',
         'name',
+        'country',
         'address',
         'timezone',
         'status',

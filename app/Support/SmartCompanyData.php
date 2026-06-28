@@ -19,6 +19,7 @@ class SmartCompanyData
     public static function handle(string $method, array $args = [], string $siteId = 'ALL'): mixed
     {
         return match ($method) {
+            'api_getGlobalHrOverview' => self::globalHrOverview((string) ($args[0] ?? 'ALL')),
             'api_getHRData' => self::realHrData($siteId),
             'api_getPersonnelList' => self::realPersonnel($siteId),
             'api_getPersonnelStats' => self::realPersonnelStats($siteId),
@@ -1357,6 +1358,19 @@ class SmartCompanyData
             return app(\App\Services\Wbs\GeminiWbsAnalyzer::class)->processManual($projectId, $siteId);
         } catch (\Throwable $e) {
             return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function globalHrOverview(string $country = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('sites') || ! Schema::hasTable('employees')) {
+                return ['success' => true, 'totals' => ['employees' => 0, 'present' => 0, 'absent' => 0, 'rate' => 0, 'sites' => 0, 'countries' => 0, 'companies' => 0], 'countries' => [], 'matrix' => [], 'recent' => []];
+            }
+
+            return app(\App\Services\Hr\GlobalHrService::class)->overview($country);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage(), 'countries' => [], 'matrix' => [], 'recent' => []];
         }
     }
 
