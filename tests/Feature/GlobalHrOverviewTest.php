@@ -96,6 +96,48 @@ class GlobalHrOverviewTest extends TestCase
         $this->assertSame('KR', $d['countries'][0]['country']);
     }
 
+    public function test_site_client_is_used_as_wonchungsa(): void
+    {
+        $clientCo = Company::create(['code' => 'LGES-CLIENT', 'name' => 'LG Energy Solution', 'status' => 'active']);
+        $this->usSite->update(['client_company_id' => $clientCo->id]);
+
+        $d = app(GlobalHrService::class)->overview('US');
+        $usSite = collect($d['countries'][0]['sites'])->firstWhere('code', 'LGES-AZ');
+        $this->assertSame('LG Energy Solution', $usSite['client']);          // 원청사 = 현장 client
+        $this->assertSame('LG Energy', $usSite['primaryCompany']);            // 소속사 = employer
+
+        $row = collect($d['matrix'])->firstWhere('site', 'LGES-AZ');
+        $this->assertSame('LG Energy Solution', $row['client']);
+        $this->assertSame('LG Energy', $row['company']);
+    }
+
+    public function test_team_board_and_assign_moves_employee(): void
+    {
+        $mech = Team::where('code', 'MECH')->first();
+        $loose = $this->emp('KR-LOOSE', $this->krSite, $mech);
+        $loose->update(['team_id' => null]); // 미배치로
+
+        $board = app(GlobalHrService::class)->teamBoard('SDI-CJ');
+        $this->assertTrue($board['success']);
+        $this->assertCount(1, $board['unassigned']);
+        $this->assertSame(1, collect($board['teams'])->firstWhere('name', '기계')['members'] ? count(collect($board['teams'])->firstWhere('name', '기계')['members']) : 0);
+
+        $res = app(GlobalHrService::class)->assignTeam($loose->id, $mech->id);
+        $this->assertTrue($res['success']);
+
+        $after = app(GlobalHrService::class)->teamBoard('SDI-CJ');
+        $this->assertCount(0, $after['unassigned']);
+        $this->assertSame(2, count(collect($after['teams'])->firstWhere('name', '기계')['members']));
+    }
+
+    public function test_assign_rejects_team_from_other_site(): void
+    {
+        $usTeam = Team::where('code', 'ELEC')->first(); // US site team
+        $krEmp = Employee::where('name', 'KR-1')->first(); // KR site employee
+        $res = app(GlobalHrService::class)->assignTeam($krEmp->id, $usTeam->id);
+        $this->assertFalse($res['success']);
+    }
+
     public function test_api_global_overview_endpoint(): void
     {
         $user = User::factory()->create(['access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);

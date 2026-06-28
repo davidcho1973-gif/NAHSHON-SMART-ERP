@@ -31,7 +31,7 @@ class GlobalHrService
         if ($country !== 'ALL') {
             $siteQuery->where('country', $country);
         }
-        $sites = $siteQuery->orderBy('country')->orderBy('code')->get();
+        $sites = $siteQuery->with('client:id,name')->orderBy('country')->orderBy('code')->get();
 
         $employees = Employee::query()
             ->where('employment_status', 'active')
@@ -51,15 +51,18 @@ class GlobalHrService
         foreach ($sites as $site) {
             $emps = $bySite->get($site->id, collect());
             $cc = $site->country ?: 'US';
+            // 원청사(client) = 현장 발주처. 미지정 시 표시는 '-' (소속사 employer 와 구분).
+            $clientName = $site->client?->name ?: '-';
 
+            // 소속사(employer)별 → 팀별 (원청사는 현장 단위라 매트릭스에 별도 컬럼으로 표기).
             $companies = $emps->groupBy(fn (Employee $e) => $e->company?->name ?: '미지정')
-                ->map(function (Collection $cEmps, string $cName) use ($isPresent, $site, &$matrix, &$companySet): array {
+                ->map(function (Collection $cEmps, string $cName) use ($isPresent, $site, $clientName, &$matrix, &$companySet): array {
                     $companySet[$cName] = true;
                     $teams = $cEmps->groupBy(fn (Employee $e) => $e->team?->name ?: '미배정')
-                        ->map(function (Collection $tEmps, string $tName) use ($isPresent, $site, $cName, &$matrix): array {
+                        ->map(function (Collection $tEmps, string $tName) use ($isPresent, $site, $cName, $clientName, &$matrix): array {
                             $present = $tEmps->filter($isPresent)->count();
                             $matrix[] = [
-                                'site' => $site->code, 'company' => $cName, 'team' => $tName,
+                                'site' => $site->code, 'client' => $clientName, 'company' => $cName, 'team' => $tName,
                                 'total' => $tEmps->count(), 'present' => $present,
                                 'rate' => $this->rate($present, $tEmps->count()),
                             ];
@@ -68,7 +71,7 @@ class GlobalHrService
                         })->values()->all();
 
                     return [
-                        'company' => $cName,
+                        'company' => $cName, // 소속사 (employer)
                         'total' => $cEmps->count(),
                         'present' => $cEmps->filter($isPresent)->count(),
                         'teams' => $teams,
@@ -88,7 +91,8 @@ class GlobalHrService
             $countries[$cc]['sites'][] = [
                 'code' => $site->code,
                 'name' => $site->name,
-                'primaryCompany' => $companies[0]['company'] ?? '-',
+                'client' => $clientName,                         // 원청사 (발주처)
+                'primaryCompany' => $companies[0]['company'] ?? '-', // 소속사 (대표 고용사)
                 'total' => $emps->count(),
                 'present' => $present,
                 'rate' => $this->rate($present, $emps->count()),
@@ -182,5 +186,83 @@ class GlobalHrService
     private function rate(int $present, int $total): int
     {
         return $total > 0 ? (int) round($present / $total * 100) : 0;
+    }
+
+    /**
+     * 팀 편성 보드 — 현장의 팀별 인원 + 미배치 인원.
+     *
+     * @return array<string, mixed>
+     */
+    public function teamBoard(string $siteCode): array
+    {
+        $site = Site::query()->where('code', $siteCode)->first();
+        if (! $site) {
+            return ['success' => false, 'error' => "현장을 찾을 수 없습니다: {$siteCode}"];
+        }
+
+        $teams = \App\Models\Team::query()->where('site_id', $site->id)->where('status', 'active')->orderBy('name')->get();
+        $employees = Employee::query()->where('employment_status', 'active')->where('site_id', $site->id)
+            ->with('company:id,name')->get();
+        $byTeam = $employees->groupBy('team_id');
+
+        $card = fn (Employee $e): array => [
+            'id' => $e->id,
+            'name' => $e->name,
+            'role' => $e->role ?: '미정',
+            'company' => $e->company?->name ?: '-',
+            'flag' => $this->nationalityFlag($e->nationality),
+        ];
+
+        return [
+            'success' => true,
+            'site' => ['code' => $site->code, 'name' => $site->name],
+            'teams' => $teams->map(fn (\App\Models\Team $t): array => [
+                'id' => $t->id,
+                'name' => $t->name,
+                'members' => ($byTeam[$t->id] ?? collect())->map($card)->values()->all(),
+            ])->values()->all(),
+            'unassigned' => ($byTeam[null] ?? collect())->map($card)->values()->all(),
+        ];
+    }
+
+    /**
+     * 직원을 팀에 배치/이동 (같은 현장 내).
+     *
+     * @return array<string, mixed>
+     */
+    public function assignTeam(int $employeeId, ?int $teamId): array
+    {
+        $employee = Employee::query()->find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'message' => '직원을 찾을 수 없습니다.'];
+        }
+
+        if ($teamId !== null) {
+            $team = \App\Models\Team::query()->find($teamId);
+            if (! $team || $team->site_id !== $employee->site_id) {
+                return ['success' => false, 'message' => '같은 현장의 팀에만 배치할 수 있습니다.'];
+            }
+        }
+
+        $employee->team_id = $teamId;
+        $employee->save();
+
+        return ['success' => true, 'message' => '팀 배치가 변경되었습니다.'];
+    }
+
+    private function nationalityFlag(?string $nationality): string
+    {
+        $n = strtolower((string) $nationality);
+        if (str_contains($n, 'korea') || str_contains($n, '한국') || $n === 'kr') {
+            return '🇰🇷';
+        }
+        if (str_contains($n, 'canad') || $n === 'ca') {
+            return '🇨🇦';
+        }
+        if (str_contains($n, 'us') || str_contains($n, 'america') || $n === 'usa') {
+            return '🇺🇸';
+        }
+
+        return '🏳️';
     }
 }

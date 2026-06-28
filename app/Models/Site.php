@@ -21,6 +21,7 @@ class Site extends Model
 
     protected $fillable = [
         'company_id',
+        'client_company_id',
         'code',
         'name',
         'country',
@@ -46,6 +47,12 @@ class Site extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /** 원청사 (발주처/원청 — 그 현장의 client). */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'client_company_id');
     }
 
     public function companies(): BelongsToMany
