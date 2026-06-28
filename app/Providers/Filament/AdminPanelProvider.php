@@ -40,11 +40,17 @@ class AdminPanelProvider extends PanelProvider
                 fn (): string => Blade::render('@include("filament.auth.login-intro")'),
                 scopes: Login::class,
             )
+            // 관리자 페이지(팝업 포함) 한글 라벨을 선택 언어로 DOM 번역 + 언어 선택기.
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => '<script src="' . asset('js/admin-i18n.js') . '?v=' . (@filemtime(public_path('js/admin-i18n.js')) ?: time()) . '" defer></script>',
+            )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->middleware([
                 EncryptCookies::class,
+                \App\Http\Middleware\SetLocale::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
                 AuthenticateSession::class,

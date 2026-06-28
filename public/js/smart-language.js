@@ -586,7 +586,10 @@
   }
 
     window.smartCompanySetLanguage = function (lang) {
-    localStorage.setItem(STORAGE_KEY, ['ko', 'en', 'es'].includes(lang) ? lang : 'ko');
+    var safe = ['ko', 'en', 'es'].includes(lang) ? lang : 'ko';
+    localStorage.setItem(STORAGE_KEY, safe);
+    // 서버 로케일(관리자/Filament)도 같이 따라오도록 평문 쿠키로 공유.
+    document.cookie = 'app_locale=' + safe + ';path=/;max-age=31536000;samesite=lax';
     window.location.reload();
   };
 
