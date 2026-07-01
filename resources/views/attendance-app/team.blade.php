@@ -51,7 +51,7 @@
 
             <section class="context">
                 <div class="row"><span>현장</span><strong>{{ $qrCode->site?->name ?? '-' }}</strong></div>
-                <div class="row"><span>원청사/계약</span><strong>{{ $qrCode->siteContractor?->company_name ?? $qrCode->team?->contract_company_name ?? '-' }}</strong></div>
+                <div class="row"><span>원청사/계약</span><strong>{{ $qrCode->siteContractor?->company_name ?? $qrCode->team?->effectiveCompanyName() ?? '-' }}</strong></div>
                 <div class="row"><span>팀</span><strong>{{ $qrCode->team?->name ?? '-' }}</strong></div>
             </section>
 

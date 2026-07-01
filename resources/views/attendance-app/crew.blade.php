@@ -55,7 +55,7 @@
 
             <section class="context">
                 <strong>{{ $qrCode->site?->name ?? '-' }}</strong><br>
-                {{ $qrCode->siteContractor?->company_name ?? $qrCode->team?->contract_company_name ?? '-' }} / {{ $qrCode->team?->name ?? '-' }}
+                {{ $qrCode->siteContractor?->company_name ?? $qrCode->team?->effectiveCompanyName() ?? '-' }} / {{ $qrCode->team?->name ?? '-' }}
             </section>
 
             <form id="crewForm" method="POST" action="{{ route('attendance-app.crew.record', ['token' => $token]) }}">
