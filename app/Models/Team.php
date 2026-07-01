@@ -49,4 +49,14 @@ class Team extends Model
     {
         return $this->hasMany(Employee::class);
     }
+
+    /**
+     * 팀의 소속 계약사 이름 — 정규화된 마스터(company_id → companies.name)를 우선하고,
+     * 마스터 연결이 없을 때만 자유 입력 텍스트(contract_company_name)를 폴백으로 쓴다.
+     * 화면 표시·집계는 항상 이 접근자를 통해 일관된 값을 얻는다.
+     */
+    public function effectiveCompanyName(): ?string
+    {
+        return $this->company?->name ?: ($this->contract_company_name ?: null);
+    }
 }

@@ -277,11 +277,20 @@ class SiteResource extends Resource
                                                 ->label('팀명')
                                                 ->required()
                                                 ->maxLength(255),
+                                            self::companySelect('company_id', '기존 회사 연결')
+                                                ->helperText('주(主) 소속사 — 회사 마스터에서 선택. 표시·급여·집계는 이 값을 기준으로 합니다.')
+                                                ->live()
+                                                ->afterStateUpdated(function ($state, $set): void {
+                                                    // 마스터 회사를 고르면 표시용 텍스트를 자동 동기화한다.
+                                                    if ($state && ($name = Company::query()->whereKey($state)->value('name'))) {
+                                                        $set('contract_company_name', $name);
+                                                    }
+                                                }),
                                             TextInput::make('contract_company_name')
                                                 ->label('소속 계약 회사명')
+                                                ->helperText('회사 연결 시 자동 입력됩니다. 마스터에 없는 회사만 직접 입력하세요.')
                                                 ->placeholder('예: A Company')
                                                 ->maxLength(255),
-                                            self::companySelect('company_id', '기존 회사 연결'),
                                             Select::make('trade_type')
                                                 ->label('공종')
                                                 ->options([

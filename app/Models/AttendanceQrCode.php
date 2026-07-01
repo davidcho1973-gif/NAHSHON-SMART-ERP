@@ -89,7 +89,7 @@ class AttendanceQrCode extends Model
             'site_id' => $team->site_id,
             'site_contractor_id' => $siteContractor?->id,
             'team_id' => $team->id,
-            'name' => trim(($team->site?->code ? $team->site->code . ' / ' : '') . ($team->contract_company_name ?: $team->company?->name ?: 'Contract') . ' / ' . $team->name),
+            'name' => trim(($team->site?->code ? $team->site->code . ' / ' : '') . ($team->effectiveCompanyName() ?: 'Contract') . ' / ' . $team->name),
             'token' => $token,
             'token_hash' => self::hashToken($token),
             'mode' => 'auto',
