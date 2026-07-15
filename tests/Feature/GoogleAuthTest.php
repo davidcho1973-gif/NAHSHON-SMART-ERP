@@ -37,7 +37,7 @@ class GoogleAuthTest extends TestCase
             ->withSession(['google_oauth_state' => 'known-state'])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
-        $response->assertRedirect('/attendance-app');
+        $response->assertRedirect('/');
         $this->assertAuthenticatedAs($user->fresh());
         $this->assertSame('google-123', $user->fresh()->google_id);
         $this->assertNotNull($user->fresh()->last_login_at);
@@ -94,7 +94,7 @@ class GoogleAuthTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_google_callback_sends_admin_users_to_admin_panel(): void
+    public function test_google_callback_always_sends_admin_users_to_erp_home(): void
     {
         $this->configureGoogle();
 
@@ -115,11 +115,30 @@ class GoogleAuthTest extends TestCase
         ]);
 
         $response = $this
-            ->withSession(['google_oauth_state' => 'known-state'])
+            ->withSession([
+                'google_oauth_state' => 'known-state',
+                'url.intended' => '/admin/member-documents',
+            ])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
-        $response->assertRedirect('/admin');
+        $response->assertRedirect('/');
         $this->assertAuthenticatedAs($admin->fresh());
+    }
+
+    public function test_authenticated_login_page_always_redirects_to_erp_home(): void
+    {
+        $user = User::factory()->create([
+            'access_role' => 'safety_manager',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['url.intended' => '/admin/member-documents'])
+            ->get('/login');
+
+        $response->assertRedirect('/');
     }
 
     private function configureGoogle(): void

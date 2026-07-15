@@ -56,7 +56,7 @@ class SmartCompanyController extends Controller
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, bool|int|string|null>
      */
     private function authUserViewData(User $user): array
     {
@@ -72,6 +72,8 @@ class SmartCompanyController extends Controller
             'employee_id' => $user->employee_id,
             'raw_role' => $user->access_role,
             'site_code' => $user->employee?->site?->code,
+            'can_access_admin' => $user->account_status === 'active'
+                && in_array($user->access_role, User::ADMIN_PANEL_ROLES, true),
         ];
     }
 

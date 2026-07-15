@@ -278,6 +278,12 @@
             <span class="shortcut">âŒ˜K</span>
           </div>
           <div class="topbar-actions">
+            @if ($authUser['can_access_admin'] ?? false)
+              <a class="btn-primary" href="{{ url('/admin') }}" data-admin-entry title="관리자 화면으로 이동">
+                <i class="ph ph-shield-check" style="font-size:14px;"></i>
+                <span>관리자</span>
+              </a>
+            @endif
             <button class="btn-primary" id="btn-global-commute" title="내 출퇴근 등록" onclick="window.openMyCommuteModal()" style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:var(--brand-primary); color:white; cursor:pointer; margin-right:8px;">
               <i class="ph ph-clock" style="font-size:14px;"></i>
               <span>내 출퇴근</span>
@@ -307,6 +313,13 @@
                   </div>
                 </div>
               </div>
+              @if ($authUser['can_access_admin'] ?? false)
+                <div class="account-menu-group">
+                  <a class="account-menu-item" href="{{ url('/admin') }}" data-admin-entry>
+                    <i class="ph ph-shield-check"></i><span>관리자 화면</span>
+                  </a>
+                </div>
+              @endif
               <div class="account-menu-group">
                 <div class="account-menu-heading">My Profile</div>
                 <button class="account-menu-item" type="button" data-account-view="profile">
