@@ -7,6 +7,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -29,6 +30,13 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login(Login::class)
             ->brandName('SMART COMPANY')
+            ->navigationItems([
+                NavigationItem::make('ERP 홈')
+                    ->url(fn (): string => route('smart-company.index'))
+                    ->icon('heroicon-o-home')
+                    ->group('SMART COMPANY')
+                    ->sort(1000),
+            ])
             ->colors([
                 'primary' => Color::Blue,
                 'success' => Color::Emerald,

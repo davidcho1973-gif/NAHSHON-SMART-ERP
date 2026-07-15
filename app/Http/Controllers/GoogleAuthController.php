@@ -18,7 +18,7 @@ class GoogleAuthController extends Controller
         $user = $request->user();
 
         if ($user instanceof User) {
-            return redirect()->intended($this->landingPathFor($user));
+            return redirect()->route('smart-company.index');
         }
 
         return view('auth.google-login', [
@@ -164,7 +164,7 @@ class GoogleAuthController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended($this->landingPathFor($user));
+        return redirect()->route('smart-company.index');
     }
 
     private function deny(string $message): RedirectResponse
@@ -181,12 +181,5 @@ class GoogleAuthController extends Controller
     private function redirectUri(): string
     {
         return (string) (config('services.google.redirect') ?: route('auth.google.callback'));
-    }
-
-    private function landingPathFor(User $user): string
-    {
-        $path = $user->landingPath();
-
-        return str_starts_with($path, '/portal/') ? '/' : $path;
     }
 }
