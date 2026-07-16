@@ -877,7 +877,20 @@
     // ðŸ”´ LiveAPI (Actual Google Sheets Fetching) - Timing Issue Fixed
     // ============================================================
     window.apiCache = {}; // Global Response Cache (window scope for cross-function access)
+    window.sessionExpiryRedirectPending = false;
     const CACHE_TTL = 60000; // 60 seconds
+
+    function redirectToLoginForExpiredSession(status) {
+      if (status !== 401 && status !== 419) return false;
+
+      if (!window.sessionExpiryRedirectPending) {
+        window.sessionExpiryRedirectPending = true;
+        window.apiCache = {};
+        window.location.replace('/login?expired=1');
+      }
+
+      return true;
+    }
 
     function gsRun(fnName, args, defaultVal) {
       return new Promise(async function (resolve, reject) {
@@ -894,6 +907,7 @@
           const tokenEl = document.querySelector('meta[name="csrf-token"]');
           const response = await fetch('/smart-company-api/' + encodeURIComponent(fnName), {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
               'Accept': 'application/json',
               'Content-Type': 'application/json',
@@ -901,6 +915,11 @@
             },
             body: JSON.stringify({ args: args || [], siteId: _siteId() })
           });
+
+          if (redirectToLoginForExpiredSession(response.status)) {
+            resolve(defaultVal);
+            return;
+          }
 
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const res = await response.json();

@@ -39,6 +39,22 @@ class ErpAdminNavigationTest extends TestCase
             ->assertDontSee('data-admin-entry', escape: false);
     }
 
+    public function test_erp_home_redirects_expired_api_sessions_to_login(): void
+    {
+        $admin = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/')
+            ->assertOk()
+            ->assertSee("credentials: 'same-origin'", escape: false)
+            ->assertSee('status !== 401 && status !== 419', escape: false)
+            ->assertSee("window.location.replace('/login?expired=1')", escape: false);
+    }
+
     public function test_admin_panel_has_erp_home_navigation_link(): void
     {
         $admin = User::factory()->create([
