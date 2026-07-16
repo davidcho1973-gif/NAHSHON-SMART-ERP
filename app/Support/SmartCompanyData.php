@@ -1357,10 +1357,27 @@ class SmartCompanyData
     public static function processWbsManual(string $projectId, string $siteId = 'ALL'): array
     {
         try {
-            return app(\App\Services\Wbs\GeminiWbsAnalyzer::class)->processManual($projectId, $siteId);
+            return self::wbsAiAnalyzer()->processManual($projectId, $siteId);
         } catch (\Throwable $e) {
             return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * WBS AI 메뉴얼 분석 엔진 선택.
+     * - WBS_AI_ENGINE(config services.wbs.ai_engine) 가 'claude'/'gemini' 로 지정되면 그대로 사용.
+     * - 미지정 시: ANTHROPIC_API_KEY 가 있으면 Claude, 없으면 기존 Gemini 로 자동 폴백(라이브 무중단).
+     */
+    private static function wbsAiAnalyzer(): object
+    {
+        $engine = strtolower(trim((string) config('services.wbs.ai_engine', '')));
+        if ($engine === '') {
+            $engine = ((string) config('services.anthropic.api_key') !== '') ? 'claude' : 'gemini';
+        }
+
+        return $engine === 'claude'
+            ? app(\App\Services\Wbs\ClaudeWbsAnalyzer::class)
+            : app(\App\Services\Wbs\GeminiWbsAnalyzer::class);
     }
 
     public static function globalHrOverview(string $country = 'ALL'): array
