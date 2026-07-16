@@ -23,6 +23,7 @@ class GoogleAuthController extends Controller
 
         return view('auth.google-login', [
             'googleConfigured' => $this->googleIsConfigured(),
+            'sessionExpired' => $request->boolean('expired'),
         ]);
     }
 

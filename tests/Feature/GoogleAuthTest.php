@@ -141,6 +141,15 @@ class GoogleAuthTest extends TestCase
         $response->assertRedirect('/');
     }
 
+    public function test_login_page_explains_when_the_session_has_expired(): void
+    {
+        $this->configureGoogle();
+
+        $this->get('/login?expired=1')
+            ->assertOk()
+            ->assertSee('로그인 세션이 만료되었습니다.');
+    }
+
     private function configureGoogle(): void
     {
         config([
