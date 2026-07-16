@@ -2,13 +2,15 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Support\Facades\Log;
+use App\Services\Ocr\OcrEngine;
 use RuntimeException;
 
+/**
+ * 차량(렌탈 계약/사진) OCR 분석. 공통 OcrEngine(Gemini/Claude 전환)에 위임한다.
+ */
 class GeminiVehicleAnalyzer
 {
-    public function __construct(private readonly HttpFactory $http)
+    public function __construct(private readonly OcrEngine $engine)
     {
     }
 
@@ -20,13 +22,7 @@ class GeminiVehicleAnalyzer
      */
     public function analyze(array $files): array
     {
-        $apiKey = (string) config('services.gemini.api_key');
-
-        if ($apiKey === '') {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-
-        $parts = [];
+        $images = [];
 
         foreach ($files as $file) {
             $path = $file['path'];
@@ -34,87 +30,19 @@ class GeminiVehicleAnalyzer
                 throw new RuntimeException("Upload file '{$path}' is not readable.");
             }
 
-            $mimeType = $file['mime_type'] ?? mime_content_type($path) ?: 'image/jpeg';
-            $data = base64_encode((string) file_get_contents($path));
-
-            $parts[] = [
-                'inline_data' => [
-                    'mime_type' => $mimeType,
-                    'data' => $data,
-                ],
+            $images[] = [
+                'data' => base64_encode((string) file_get_contents($path)),
+                'mime_type' => $file['mime_type'] ?? (mime_content_type($path) ?: 'image/jpeg'),
             ];
         }
 
-        if (empty($parts)) {
+        if (empty($images)) {
             throw new RuntimeException('No files provided for AI analysis.');
         }
 
-        $parts[] = [
-            'text' => $this->prompt(),
-        ];
+        $result = $this->engine->analyze($images, $this->prompt(), $this->schema());
 
-        $models = [
-            'gemini-2.5-flash',
-            'gemini-3.5-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
-            'gemini-2.5-pro',
-        ];
-
-        $configuredModel = (string) config('services.gemini.model');
-        if ($configuredModel !== '') {
-            $models = array_filter($models, fn($m) => $m !== $configuredModel);
-            array_unshift($models, $configuredModel);
-        }
-
-        $lastException = null;
-
-        foreach ($models as $model) {
-            try {
-                $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
-                    . "/v1beta/models/{$model}:generateContent";
-
-                $response = $this->http
-                    ->timeout((int) config('services.gemini.timeout', 45)) // Multimodal tasks might take longer
-                    ->withHeaders([
-                        'x-goog-api-key' => $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->post($endpoint, [
-                        'contents' => [[
-                            'parts' => $parts,
-                        ]],
-                        'generationConfig' => [
-                            'responseMimeType' => 'application/json',
-                            'responseSchema' => $this->schema(),
-                        ],
-                    ]);
-
-                if ($response->failed()) {
-                    throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
-                }
-
-                $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
-
-                if (! is_string($text) || trim($text) === '') {
-                    throw new RuntimeException('Gemini returned no vehicle analysis text.');
-                }
-
-                $decoded = json_decode($this->stripJsonFence($text), true);
-
-                if (! is_array($decoded)) {
-                    throw new RuntimeException('Gemini vehicle analysis was not valid JSON.');
-                }
-
-                return $this->normalize($decoded, $model);
-
-            } catch (\Throwable $e) {
-                $lastException = $e;
-                Log::warning("Gemini model {$model} failed for vehicle scan, falling back. Error: " . $e->getMessage());
-            }
-        }
-
-        throw new RuntimeException('All Gemini models failed for vehicle scan. Last error: ' . $lastException->getMessage());
+        return $this->normalize($result['data'], $result['model']);
     }
 
     private function prompt(): string

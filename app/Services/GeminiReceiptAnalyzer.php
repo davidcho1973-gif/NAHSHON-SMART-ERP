@@ -2,13 +2,16 @@
 
 namespace App\Services;
 
+use App\Services\Ocr\OcrEngine;
 use App\Support\FinanceChartOfAccounts;
-use Illuminate\Http\Client\Factory as HttpFactory;
 use RuntimeException;
 
+/**
+ * 영수증 OCR 분석. 공통 OcrEngine(Gemini/Claude 전환)에 위임한다. 프롬프트·스키마·정규화만 소유.
+ */
 class GeminiReceiptAnalyzer
 {
-    public function __construct(private readonly HttpFactory $http)
+    public function __construct(private readonly OcrEngine $engine)
     {
     }
 
@@ -17,87 +20,20 @@ class GeminiReceiptAnalyzer
      */
     public function analyze(string $imagePath, ?string $mimeType = null): array
     {
-        $apiKey = (string) config('services.gemini.api_key');
-
-        if ($apiKey === '') {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-
         if (! is_file($imagePath) || ! is_readable($imagePath)) {
             throw new RuntimeException('Receipt image file is not readable.');
         }
 
-        $models = [
-            'gemini-2.5-pro',
-            'gemini-2.5-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
-        ];
+        $result = $this->engine->analyze(
+            [[
+                'data' => base64_encode((string) file_get_contents($imagePath)),
+                'mime_type' => $mimeType ?: (mime_content_type($imagePath) ?: 'image/jpeg'),
+            ]],
+            $this->prompt(),
+            $this->schema(),
+        );
 
-        $configuredModel = (string) config('services.gemini.model');
-        if ($configuredModel !== '') {
-            $models = array_filter($models, fn($m) => $m !== $configuredModel);
-            array_unshift($models, $configuredModel);
-        }
-
-        $lastException = null;
-
-        foreach ($models as $model) {
-            try {
-                $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
-                    . "/v1beta/models/{$model}:generateContent";
-
-                $response = $this->http
-                    ->timeout((int) config('services.gemini.timeout', 30))
-                    ->withHeaders([
-                        'x-goog-api-key' => $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->post($endpoint, [
-                        'contents' => [[
-                            'parts' => [
-                                [
-                                    'inline_data' => [
-                                        'mime_type' => $mimeType ?: mime_content_type($imagePath) ?: 'image/jpeg',
-                                        'data' => base64_encode((string) file_get_contents($imagePath)),
-                                    ],
-                                ],
-                                [
-                                    'text' => $this->prompt(),
-                                ],
-                            ],
-                        ]],
-                        'generationConfig' => [
-                            'responseMimeType' => 'application/json',
-                            'responseSchema' => $this->schema(),
-                        ],
-                    ]);
-
-                if ($response->failed()) {
-                    throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
-                }
-
-                $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
-
-                if (! is_string($text) || trim($text) === '') {
-                    throw new RuntimeException('Gemini returned no receipt analysis text.');
-                }
-
-                $decoded = json_decode($this->stripJsonFence($text), true);
-
-                if (! is_array($decoded)) {
-                    throw new RuntimeException('Gemini receipt analysis was not valid JSON.');
-                }
-
-                return $this->normalize($decoded, $model);
-
-            } catch (\Throwable $e) {
-                $lastException = $e;
-                \Illuminate\Support\Facades\Log::warning("Gemini model {$model} failed for receipt, falling back. Error: " . $e->getMessage());
-            }
-        }
-
-        throw new RuntimeException('All Gemini models failed for receipt. Last error: ' . $lastException->getMessage());
+        return $this->normalize($result['data'], $result['model']);
     }
 
     private function prompt(): string

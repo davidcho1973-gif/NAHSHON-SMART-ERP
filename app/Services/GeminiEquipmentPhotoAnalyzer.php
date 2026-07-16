@@ -2,13 +2,15 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Support\Facades\Log;
+use App\Services\Ocr\OcrEngine;
 use RuntimeException;
 
+/**
+ * 장비 사진 OCR 분석(단건/컬렉션). 공통 OcrEngine(Gemini/Claude 전환)에 위임한다.
+ */
 class GeminiEquipmentPhotoAnalyzer
 {
-    public function __construct(private readonly HttpFactory $http)
+    public function __construct(private readonly OcrEngine $engine)
     {
     }
 
@@ -21,88 +23,20 @@ class GeminiEquipmentPhotoAnalyzer
      */
     public function analyze(string $imagePath, ?string $mimeType = null): array
     {
-        $apiKey = (string) config('services.gemini.api_key');
-
-        if ($apiKey === '') {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-
         if (! is_file($imagePath) || ! is_readable($imagePath)) {
             throw new RuntimeException('Equipment image file is not readable.');
         }
 
-        $models = [
-            'gemini-2.5-flash',
-            'gemini-3.5-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
-            'gemini-2.5-pro',
-        ];
+        $result = $this->engine->analyze(
+            [[
+                'data' => base64_encode((string) file_get_contents($imagePath)),
+                'mime_type' => $mimeType ?: (mime_content_type($imagePath) ?: 'image/jpeg'),
+            ]],
+            $this->prompt(),
+            $this->schema(),
+        );
 
-        $configuredModel = (string) config('services.gemini.model');
-        if ($configuredModel !== '') {
-            $models = array_filter($models, fn($m) => $m !== $configuredModel);
-            array_unshift($models, $configuredModel);
-        }
-
-        $lastException = null;
-
-        foreach ($models as $model) {
-            try {
-                $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
-                    . "/v1beta/models/{$model}:generateContent";
-
-                $response = $this->http
-                    ->timeout((int) config('services.gemini.timeout', 45))
-                    ->withHeaders([
-                        'x-goog-api-key' => $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->post($endpoint, [
-                        'contents' => [[
-                            'parts' => [
-                                [
-                                    'inline_data' => [
-                                        'mime_type' => $mimeType ?: mime_content_type($imagePath) ?: 'image/jpeg',
-                                        'data' => base64_encode((string) file_get_contents($imagePath)),
-                                    ],
-                                ],
-                                [
-                                    'text' => $this->prompt(),
-                                ],
-                            ],
-                        ]],
-                        'generationConfig' => [
-                            'responseMimeType' => 'application/json',
-                            'responseSchema' => $this->schema(),
-                        ],
-                    ]);
-
-                if ($response->failed()) {
-                    throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
-                }
-
-                $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
-
-                if (! is_string($text) || trim($text) === '') {
-                    throw new RuntimeException('Gemini returned no equipment analysis text.');
-                }
-
-                $decoded = json_decode($this->stripJsonFence($text), true);
-
-                if (! is_array($decoded)) {
-                    throw new RuntimeException('Gemini equipment analysis was not valid JSON.');
-                }
-
-                return $this->normalize($decoded, $model);
-
-            } catch (\Throwable $e) {
-                $lastException = $e;
-                Log::warning("Gemini model {$model} failed for equipment photo scan, falling back. Error: " . $e->getMessage());
-            }
-        }
-
-        throw new RuntimeException('All Gemini models failed for equipment photo scan. Last error: ' . $lastException->getMessage());
+        return $this->normalize($result['data'], $result['model']);
     }
 
     /**
@@ -114,111 +48,44 @@ class GeminiEquipmentPhotoAnalyzer
      */
     public function analyzeCollection(array $imagePaths, array $mimeTypes = []): array
     {
-        $apiKey = (string) config('services.gemini.api_key');
-
-        if ($apiKey === '') {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-
         if (empty($imagePaths)) {
             return ['items' => []];
         }
 
-        $models = [
-            'gemini-2.5-flash',
-            'gemini-3.5-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
-            'gemini-2.5-pro',
-        ];
-
-        $configuredModel = (string) config('services.gemini.model');
-        if ($configuredModel !== '') {
-            $models = array_filter($models, fn($m) => $m !== $configuredModel);
-            array_unshift($models, $configuredModel);
-        }
-
-        $parts = [];
+        $images = [];
         foreach ($imagePaths as $i => $imagePath) {
             if (! is_file($imagePath) || ! is_readable($imagePath)) {
                 throw new RuntimeException("Image file at {$imagePath} is not readable.");
             }
-            $mime = $mimeTypes[$i] ?? null;
-            $parts[] = [
-                'inline_data' => [
-                    'mime_type' => $mime ?: mime_content_type($imagePath) ?: 'image/jpeg',
-                    'data' => base64_encode((string) file_get_contents($imagePath)),
-                ]
+            $images[] = [
+                'data' => base64_encode((string) file_get_contents($imagePath)),
+                'mime_type' => ($mimeTypes[$i] ?? null) ?: (mime_content_type($imagePath) ?: 'image/jpeg'),
             ];
         }
 
-        $parts[] = [
-            'text' => $this->promptCollection(),
-        ];
+        $result = $this->engine->analyze($images, $this->promptCollection(), $this->schemaCollection());
+        $decoded = $result['data'];
 
-        $lastException = null;
-
-        foreach ($models as $model) {
-            try {
-                $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
-                    . "/v1beta/models/{$model}:generateContent";
-
-                $response = $this->http
-                    ->timeout((int) config('services.gemini.timeout', 60))
-                    ->withHeaders([
-                        'x-goog-api-key' => $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->post($endpoint, [
-                        'contents' => [[
-                            'parts' => $parts,
-                        ]],
-                        'generationConfig' => [
-                            'responseMimeType' => 'application/json',
-                            'responseSchema' => $this->schemaCollection(),
-                        ],
-                    ]);
-
-                if ($response->failed()) {
-                    throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
-                }
-
-                $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
-
-                if (! is_string($text) || trim($text) === '') {
-                    throw new RuntimeException('Gemini returned no equipment analysis text.');
-                }
-
-                $decoded = json_decode($this->stripJsonFence($text), true);
-
-                if (! is_array($decoded) || ! isset($decoded['items'])) {
-                    throw new RuntimeException('Gemini equipment analysis was not valid JSON array of items.');
-                }
-
-                $normalizedItems = [];
-                foreach ($decoded['items'] as $item) {
-                    $normalizedItems[] = [
-                        'equipment_type' => trim((string) ($item['equipment_type'] ?? 'Other (기타)')),
-                        'model' => trim((string) ($item['model'] ?? '')),
-                        'vendor' => trim((string) ($item['vendor'] ?? '')),
-                        'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
-                        'is_bulk' => (bool) ($item['is_bulk'] ?? false),
-                        'photo_index' => (int) ($item['photo_index'] ?? 0),
-                    ];
-                }
-
-                return [
-                    'items' => $normalizedItems,
-                    'model_name' => $model,
-                ];
-
-            } catch (\Throwable $e) {
-                $lastException = $e;
-                Log::warning("Gemini model {$model} failed for equipment collection scan, falling back. Error: " . $e->getMessage());
-            }
+        if (! isset($decoded['items']) || ! is_array($decoded['items'])) {
+            throw new RuntimeException('AI equipment analysis was not a valid list of items.');
         }
 
-        throw new RuntimeException('All Gemini models failed for equipment collection scan. Last error: ' . $lastException->getMessage());
+        $normalizedItems = [];
+        foreach ($decoded['items'] as $item) {
+            $normalizedItems[] = [
+                'equipment_type' => trim((string) ($item['equipment_type'] ?? 'Other (기타)')),
+                'model' => trim((string) ($item['model'] ?? '')),
+                'vendor' => trim((string) ($item['vendor'] ?? '')),
+                'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
+                'is_bulk' => (bool) ($item['is_bulk'] ?? false),
+                'photo_index' => (int) ($item['photo_index'] ?? 0),
+            ];
+        }
+
+        return [
+            'items' => $normalizedItems,
+            'model_name' => $result['model'],
+        ];
     }
 
     private function promptCollection(): string
