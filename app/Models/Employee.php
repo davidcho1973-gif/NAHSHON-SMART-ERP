@@ -146,6 +146,16 @@ class Employee extends Model
         return $this->hasMany(AttendanceLog::class);
     }
 
+    public function communicationRoomMemberships(): HasMany
+    {
+        return $this->hasMany(CommunicationRoomMember::class);
+    }
+
+    public function communicationMessages(): HasMany
+    {
+        return $this->hasMany(CommunicationMessage::class, 'sender_employee_id');
+    }
+
     public function badgeQrTokens(): HasMany
     {
         return $this->hasMany(EmployeeBadgeQrToken::class);

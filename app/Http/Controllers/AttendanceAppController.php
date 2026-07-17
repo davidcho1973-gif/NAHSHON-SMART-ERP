@@ -7,6 +7,7 @@ use App\Models\AttendanceQrCode;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
 use App\Services\AttendanceQrService;
+use App\Services\Communication\CommunicationService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,10 @@ use Illuminate\Support\Carbon;
 
 class AttendanceAppController extends Controller
 {
-    public function __construct(private readonly AttendanceQrService $attendanceQrService)
+    public function __construct(
+        private readonly AttendanceQrService $attendanceQrService,
+        private readonly CommunicationService $communicationService,
+    )
     {
     }
 
@@ -39,6 +43,7 @@ class AttendanceAppController extends Controller
             'employee' => $employee,
             'todayLogs' => $todayLogs,
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
+            'messageUnreadCount' => $user ? $this->communicationService->unreadCountForUser($user) : 0,
         ]);
     }
 
