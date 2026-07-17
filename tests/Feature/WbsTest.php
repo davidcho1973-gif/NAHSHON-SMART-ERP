@@ -120,6 +120,54 @@ class WbsTest extends TestCase
         $this->assertSame('2026-07-01', $item->planned_end->format('Y-m-d'));
     }
 
+    public function test_update_row_clears_assignment_fields_with_empty_string(): void
+    {
+        $this->seedTree();
+        app(WbsService::class)->updateRow('TST-01-W-1.1.1', ['종료예정' => '2026-07-01']);
+
+        // 담당사/예정일은 빈 값('')으로 배정 해제, 그 외('작업명' 등)는 ''를 무시.
+        $res = app(WbsService::class)->updateRow('TST-01-W-1.1.1', [
+            '담당사' => '', '종료예정' => '', '작업명' => '',
+        ]);
+
+        $this->assertTrue($res['success']);
+        $item = WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->first();
+        $this->assertNull($item->company);
+        $this->assertNull($item->planned_end);
+        $this->assertSame('앵커 설치', $item->name);
+    }
+
+    public function test_update_row_does_not_gate_when_status_unchanged(): void
+    {
+        // 이미 진행중인 TBM 미완료 연동 행이라도, 상태가 그대로면 공수/일정 편집이 가능해야 한다.
+        SafetyWorkItem::create([
+            'work_code' => 'WRK-GATE-EDIT', 'title' => '게이트 편집 검증', 'progress' => 0,
+            'plan_status' => '검토중', 'tbm_status' => '대기', 'close_status' => '시작전', 'progress_status' => '미분석',
+        ]);
+        $this->seedTree([
+            ['no' => '1.1.9', 'name' => '게이트 행', 'mh' => 8, 'status' => '진행중', 'progress' => 10, 'safety' => 'WRK-GATE-EDIT'],
+        ]);
+
+        $res = app(WbsService::class)->updateRow('TST-01-W-1.1.9', ['상태' => '진행중', '공수' => 12]);
+
+        $this->assertTrue($res['success']);
+        $this->assertSame(12.0, (float) WbsItem::where('wbs_code', 'TST-01-W-1.1.9')->value('manhours'));
+
+        // 상태를 실제로 완료로 "바꾸는" 것은 여전히 게이트에 막힌다.
+        $gated = app(WbsService::class)->updateRow('TST-01-W-1.1.9', ['상태' => '완료']);
+        $this->assertFalse($gated['success']);
+        $this->assertTrue($gated['gated']);
+    }
+
+    public function test_tree_reports_unscoped_total_for_site_scope_distinction(): void
+    {
+        $this->seedTree();
+
+        $tree = app(WbsService::class)->tree('TST-01');
+
+        $this->assertSame(2, $tree['unscopedTotal']);
+    }
+
     public function test_process_manual_generates_and_persists_wbs(): void
     {
         config(['services.gemini.api_key' => 'test-key', 'services.gemini.model' => 'gemini-3.5-flash']);
@@ -222,5 +270,19 @@ class WbsTest extends TestCase
         ]);
 
         $res->assertStatus(200)->assertJsonPath('success', true)->assertJsonPath('stages.0.stage_name', '설치');
+    }
+
+    public function test_api_update_row_clears_company_through_http_middleware(): void
+    {
+        // ConvertEmptyStringsToNull 미들웨어가 '' 를 null 로 바꿔도 배정 해제가 동작해야 한다.
+        $this->seedTree();
+        $user = User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active']);
+
+        $res = $this->actingAs($user)->postJson('/smart-company-api/api_updateWbsRow', [
+            'args' => ['TST-01-W-1.1.1', ['담당사' => '']], 'siteId' => 'ALL',
+        ]);
+
+        $res->assertStatus(200)->assertJsonPath('success', true);
+        $this->assertNull(WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->value('company'));
     }
 }

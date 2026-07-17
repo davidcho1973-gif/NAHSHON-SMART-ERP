@@ -43,7 +43,14 @@ class WbsService
             ];
         })->values()->all();
 
-        return ['success' => true, 'projectId' => $projectCode, 'stages' => $stages];
+        // 현장(site) 스코프로 걸러져 비어 보이는 경우를 프론트가 구분할 수 있게,
+        // 스코프 없이 존재하는 SubTask 총수를 함께 내려준다.
+        $unscopedTotal = WbsItem::query()
+            ->where('project_code', $projectCode)
+            ->where('level', WbsItem::LEVEL_SUBTASK)
+            ->count();
+
+        return ['success' => true, 'projectId' => $projectCode, 'stages' => $stages, 'unscopedTotal' => $unscopedTotal];
     }
 
     /**
@@ -113,8 +120,9 @@ class WbsService
             return ['success' => false, 'error' => "WBS 항목을 찾을 수 없습니다: {$wbsCode}"];
         }
 
+        // TBM 게이트는 상태가 실제로 "바뀔" 때만 적용 — 이미 진행중인 행의 공수/일정 편집을 막지 않는다.
         $targetStatus = (string) ($updates['상태'] ?? $updates['status'] ?? '');
-        if ($targetStatus !== '' && ($gate = $this->tbmGate($item, $targetStatus))) {
+        if ($targetStatus !== '' && $targetStatus !== $item->status && ($gate = $this->tbmGate($item, $targetStatus))) {
             return ['success' => false, 'error' => $gate, 'gated' => true];
         }
 
@@ -129,9 +137,19 @@ class WbsService
             '작업명' => 'name', 'name' => 'name',
         ];
 
+        // 빈 값은 기본적으로 "변경 없음"이지만, 배정 해제가 의미 있는 컬럼은 명시적 클리어로 처리.
+        // (HTTP 경로에서는 ConvertEmptyStringsToNull 미들웨어가 '' 를 null 로 바꿔 도달하므로 둘 다 클리어로 본다.)
+        $clearable = ['company', 'planned_start', 'planned_end'];
+
         foreach ($updates as $key => $value) {
             $column = $map[$key] ?? null;
-            if ($column === null || $value === '' || $value === null) {
+            if ($column === null) {
+                continue;
+            }
+            if ($value === '' || $value === null) {
+                if (in_array($column, $clearable, true)) {
+                    $item->{$column} = null;
+                }
                 continue;
             }
             $item->{$column} = $value;

@@ -107,6 +107,8 @@ class WbsItem extends Model
             'days' => (int) $this->days,
             'status' => $this->status,
             'ehs' => $this->ehs ?? '',
+            'plannedStart' => $this->planned_start?->toDateString(),
+            'plannedEnd' => $this->planned_end?->toDateString(),
             'progress' => $this->effectiveProgress(),
             'safetyWorkCode' => $this->safety_work_code,
             'tbmGated' => $tbmGated,
