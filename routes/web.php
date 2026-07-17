@@ -38,6 +38,11 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/expense-pre-approval/{expensePreApproval}/approve', [ExpensePreApprovalController::class, 'approve'])->name('expense-pre-approval.approve');
     Route::patch('/expense-pre-approval/{expensePreApproval}/reject', [ExpensePreApprovalController::class, 'reject'])->name('expense-pre-approval.reject');
 
+    // WBS 공정 — AI 매뉴얼 분석 (업로드 → 분석, 분석된 매뉴얼 리스트)
+    Route::post('/wbs-api/upload-manual', [App\Http\Controllers\WbsManualController::class, 'upload'])->name('wbs-manual.upload');
+    Route::get('/wbs-api/manuals', [App\Http\Controllers\WbsManualController::class, 'index'])->name('wbs-manual.index');
+    Route::get('/wbs-api/manual/{manual}', [App\Http\Controllers\WbsManualController::class, 'show'])->name('wbs-manual.show');
+
     // Vehicle API Routes
     Route::post('/vehicle-api/scan-rental', [App\Http\Controllers\VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
     Route::post('/vehicle-api/save', [App\Http\Controllers\VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');

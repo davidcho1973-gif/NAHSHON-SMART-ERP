@@ -7493,7 +7493,108 @@
         }
       };
 
-      window.runWbsAiAnalysis = async function() {
+      // AI 메뉴얼 분석 — 파일 업로드 → 분석 / 분석된 매뉴얼 리스트에서 적용
+      window.__wbsManualModal = async function() {
+        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
+        var siteId = window.currentSiteId || 'ALL';
+        var tokenEl = document.querySelector('meta[name="csrf-token"]');
+        var csrf = tokenEl ? tokenEl.getAttribute('content') : '';
+
+        function clearWbsCache() {
+          if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) {
+            if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) delete window.apiCache[k];
+          });
+        }
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:640px;max-width:100%;max-height:88vh;overflow-y:auto">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<h2 style="font-size:18px;margin:0;display:flex;align-items:center;gap:8px"><i class="ph ph-robot" style="color:#7c3aed"></i> AI 메뉴얼 분석</h2>' +
+              '<button id="wbsm-close" style="background:none;border:none;color:var(--text-tertiary);font-size:24px;line-height:1;cursor:pointer">&times;</button>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">현장/프로젝트: <b>' + projectId + '</b></div>' +
+            '<div style="border:1px dashed var(--border-default);border-radius:12px;padding:16px;margin-bottom:18px">' +
+              '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-upload-simple"></i> 새 매뉴얼 업로드 → 분석</div>' +
+              '<input type="file" id="wbsm-file" accept=".pdf,image/*" style="width:100%;color:var(--text-secondary);font-size:12px;margin-bottom:10px">' +
+              '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">PDF 또는 이미지(최대 32MB). 선택된 AI 엔진이 매뉴얼 본문을 직접 읽어 WBS를 생성합니다. (수 분 소요 가능)</div>' +
+              '<button id="wbsm-analyze" style="width:100%;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">📄 업로드 &amp; 분석 실행</button>' +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-list-checks"></i> 분석된 매뉴얼</div>' +
+            '<div id="wbsm-list" style="font-size:12px;color:var(--text-tertiary)">불러오는 중...</div>' +
+          '</div>';
+        document.body.appendChild(modal);
+
+        function close() { modal.remove(); }
+        modal.querySelector('#wbsm-close').addEventListener('click', close);
+        modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+
+        function statusPill(s) {
+          var c = s === 'completed' ? 'var(--status-success)' : (s === 'failed' ? 'var(--status-danger)' : 'var(--status-warning)');
+          var t = s === 'completed' ? '완료' : (s === 'failed' ? '실패' : '분석중');
+          return '<span style="color:' + c + ';font-weight:700">' + t + '</span>';
+        }
+
+        async function loadList() {
+          var box = modal.querySelector('#wbsm-list');
+          try {
+            var res = await fetch('/wbs-api/manuals?project=' + encodeURIComponent(projectId), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            var json = await res.json();
+            var items = (json && json.manuals) || [];
+            if (!items.length) { box.innerHTML = '<div style="padding:12px 0;color:var(--text-tertiary)">아직 분석된 매뉴얼이 없습니다. 위에서 파일을 업로드하세요.</div>'; return; }
+            box.innerHTML = items.map(function (m) {
+              return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-subtle)">' +
+                '<div style="min-width:0">' +
+                  '<div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="ph ph-file-text"></i> ' + (m.original_name || '-') + '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + (m.engine ? (m.engine === 'claude' ? 'Claude' : 'Gemini') : '-') + ' · ' + (m.stages || 0) + ' Stages / ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' Sub · ' + (m.analyzed_at || m.created_at || '') + ' · ' + statusPill(m.status) + '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-shrink:0">' +
+                  '<a href="' + m.url + '" target="_blank" style="padding:6px 10px;font-size:11px;text-decoration:none;border:1px solid var(--border-default);border-radius:6px;color:var(--text-secondary)">보기</a>' +
+                  '<button class="wbsm-apply" data-project="' + m.project_code + '" style="padding:6px 10px;font-size:11px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer">적용</button>' +
+                '</div>' +
+              '</div>';
+            }).join('');
+            box.querySelectorAll('.wbsm-apply').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                window.WBS_CURRENT_PROJECT = btn.getAttribute('data-project');
+                clearWbsCache();
+                close();
+                renderWbs();
+              });
+            });
+          } catch (e) { box.innerHTML = '<div style="color:var(--status-danger)">리스트 로드 실패: ' + e.message + '</div>'; }
+        }
+
+        modal.querySelector('#wbsm-analyze').addEventListener('click', async function () {
+          var input = modal.querySelector('#wbsm-file');
+          if (!input.files || !input.files[0]) { alert('분석할 매뉴얼 파일을 선택하세요.'); return; }
+          var btn = this; btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = '🤖 분석 중... (수 분 소요 가능)';
+          var fd = new FormData();
+          fd.append('manual', input.files[0]);
+          fd.append('project_code', projectId);
+          fd.append('site_id', siteId);
+          try {
+            var res = await fetch('/wbs-api/upload-manual', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, credentials: 'same-origin', body: fd });
+            var json = await res.json();
+            if (json && json.success) {
+              var r = (json.result && json.result.results && json.result.results[0]) || {};
+              alert('✅ 분석 완료: ' + (r.stages || 0) + ' Stages · ' + (r.tasks || 0) + ' Tasks · ' + (r.subTasks || 0) + ' SubTasks');
+              clearWbsCache();
+              loadList();
+              renderWbs();
+            } else {
+              alert('❌ 분석 실패: ' + (json && json.error ? json.error : ('HTTP ' + res.status)));
+            }
+          } catch (e) { alert('❌ 오류: ' + e.message); }
+          btn.disabled = false; btn.textContent = oldLabel;
+        });
+
+        loadList();
+      };
+      window.runWbsAiAnalysis = function () { return window.__wbsManualModal(); };
+
+      window.__legacyRunWbsAiAnalysis = async function() {
         var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
         var ok = confirm('ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ì„ ì‹¤í–‰í•˜ì‹œê² ìŠµë‹ˆê¹Œ?\n\ní˜„ìž¥: ' + projectId + '\ní´ë”: WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°\n\nGemini 2.5 Proê°€ í´ë” ë‚´ ëª¨ë“  ë§¤ë‰´ì–¼ì„ ë¶„ì„í•˜ì—¬\nWBSë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤. (ìˆ˜ ë¶„ ì†Œìš” ê°€ëŠ¥)');
         if (!ok) return;
@@ -8163,7 +8264,108 @@
         }
       };
 
-      window.runWbsAiAnalysis = async function() {
+      // AI 메뉴얼 분석 — 파일 업로드 → 분석 / 분석된 매뉴얼 리스트에서 적용
+      window.__wbsManualModal = async function() {
+        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
+        var siteId = window.currentSiteId || 'ALL';
+        var tokenEl = document.querySelector('meta[name="csrf-token"]');
+        var csrf = tokenEl ? tokenEl.getAttribute('content') : '';
+
+        function clearWbsCache() {
+          if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) {
+            if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) delete window.apiCache[k];
+          });
+        }
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:640px;max-width:100%;max-height:88vh;overflow-y:auto">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<h2 style="font-size:18px;margin:0;display:flex;align-items:center;gap:8px"><i class="ph ph-robot" style="color:#7c3aed"></i> AI 메뉴얼 분석</h2>' +
+              '<button id="wbsm-close" style="background:none;border:none;color:var(--text-tertiary);font-size:24px;line-height:1;cursor:pointer">&times;</button>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">현장/프로젝트: <b>' + projectId + '</b></div>' +
+            '<div style="border:1px dashed var(--border-default);border-radius:12px;padding:16px;margin-bottom:18px">' +
+              '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-upload-simple"></i> 새 매뉴얼 업로드 → 분석</div>' +
+              '<input type="file" id="wbsm-file" accept=".pdf,image/*" style="width:100%;color:var(--text-secondary);font-size:12px;margin-bottom:10px">' +
+              '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">PDF 또는 이미지(최대 32MB). 선택된 AI 엔진이 매뉴얼 본문을 직접 읽어 WBS를 생성합니다. (수 분 소요 가능)</div>' +
+              '<button id="wbsm-analyze" style="width:100%;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">📄 업로드 &amp; 분석 실행</button>' +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-list-checks"></i> 분석된 매뉴얼</div>' +
+            '<div id="wbsm-list" style="font-size:12px;color:var(--text-tertiary)">불러오는 중...</div>' +
+          '</div>';
+        document.body.appendChild(modal);
+
+        function close() { modal.remove(); }
+        modal.querySelector('#wbsm-close').addEventListener('click', close);
+        modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+
+        function statusPill(s) {
+          var c = s === 'completed' ? 'var(--status-success)' : (s === 'failed' ? 'var(--status-danger)' : 'var(--status-warning)');
+          var t = s === 'completed' ? '완료' : (s === 'failed' ? '실패' : '분석중');
+          return '<span style="color:' + c + ';font-weight:700">' + t + '</span>';
+        }
+
+        async function loadList() {
+          var box = modal.querySelector('#wbsm-list');
+          try {
+            var res = await fetch('/wbs-api/manuals?project=' + encodeURIComponent(projectId), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            var json = await res.json();
+            var items = (json && json.manuals) || [];
+            if (!items.length) { box.innerHTML = '<div style="padding:12px 0;color:var(--text-tertiary)">아직 분석된 매뉴얼이 없습니다. 위에서 파일을 업로드하세요.</div>'; return; }
+            box.innerHTML = items.map(function (m) {
+              return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-subtle)">' +
+                '<div style="min-width:0">' +
+                  '<div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="ph ph-file-text"></i> ' + (m.original_name || '-') + '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + (m.engine ? (m.engine === 'claude' ? 'Claude' : 'Gemini') : '-') + ' · ' + (m.stages || 0) + ' Stages / ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' Sub · ' + (m.analyzed_at || m.created_at || '') + ' · ' + statusPill(m.status) + '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-shrink:0">' +
+                  '<a href="' + m.url + '" target="_blank" style="padding:6px 10px;font-size:11px;text-decoration:none;border:1px solid var(--border-default);border-radius:6px;color:var(--text-secondary)">보기</a>' +
+                  '<button class="wbsm-apply" data-project="' + m.project_code + '" style="padding:6px 10px;font-size:11px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer">적용</button>' +
+                '</div>' +
+              '</div>';
+            }).join('');
+            box.querySelectorAll('.wbsm-apply').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                window.WBS_CURRENT_PROJECT = btn.getAttribute('data-project');
+                clearWbsCache();
+                close();
+                renderWbs();
+              });
+            });
+          } catch (e) { box.innerHTML = '<div style="color:var(--status-danger)">리스트 로드 실패: ' + e.message + '</div>'; }
+        }
+
+        modal.querySelector('#wbsm-analyze').addEventListener('click', async function () {
+          var input = modal.querySelector('#wbsm-file');
+          if (!input.files || !input.files[0]) { alert('분석할 매뉴얼 파일을 선택하세요.'); return; }
+          var btn = this; btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = '🤖 분석 중... (수 분 소요 가능)';
+          var fd = new FormData();
+          fd.append('manual', input.files[0]);
+          fd.append('project_code', projectId);
+          fd.append('site_id', siteId);
+          try {
+            var res = await fetch('/wbs-api/upload-manual', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, credentials: 'same-origin', body: fd });
+            var json = await res.json();
+            if (json && json.success) {
+              var r = (json.result && json.result.results && json.result.results[0]) || {};
+              alert('✅ 분석 완료: ' + (r.stages || 0) + ' Stages · ' + (r.tasks || 0) + ' Tasks · ' + (r.subTasks || 0) + ' SubTasks');
+              clearWbsCache();
+              loadList();
+              renderWbs();
+            } else {
+              alert('❌ 분석 실패: ' + (json && json.error ? json.error : ('HTTP ' + res.status)));
+            }
+          } catch (e) { alert('❌ 오류: ' + e.message); }
+          btn.disabled = false; btn.textContent = oldLabel;
+        });
+
+        loadList();
+      };
+      window.runWbsAiAnalysis = function () { return window.__wbsManualModal(); };
+
+      window.__legacyRunWbsAiAnalysis = async function() {
         var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
         var ok = confirm('ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ì„ ì‹¤í–‰í•˜ì‹œê² ìŠµë‹ˆê¹Œ?\n\ní˜„ìž¥: ' + projectId + '\ní´ë”: WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°\n\nGemini 2.5 Proê°€ í´ë” ë‚´ ëª¨ë“  ë§¤ë‰´ì–¼ì„ ë¶„ì„í•˜ì—¬\nWBSë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤. (ìˆ˜ ë¶„ ì†Œìš” ê°€ëŠ¥)');
         if (!ok) return;
