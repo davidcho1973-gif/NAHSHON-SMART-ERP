@@ -1164,6 +1164,11 @@
       getProjectProgressSummary: (projectId) => gsRun('api_getProjectProgressSummary', [projectId], { success: false }),
       processWbsManual: (projectId) => gsRun('api_processWbsManual', [projectId], { success: false }),
       markWbsStatus: (wbsId, status) => gsRun('api_markWbsStatus', [wbsId, status], { success: false }),
+      createSafetyCardForWbs: (wbsId, date) => gsRun('api_createSafetyCardForWbs', [wbsId, date || null], { success: false }),
+      getTodayWbsWork: (projectId) => gsRun('api_getTodayWbsWork', [projectId], { success: false, items: [] }),
+      getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
+      assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
+      getAssignableEmployees: () => gsRun('api_getAssignableEmployees', [], []),
       getToolTransactions: () => gsRun('api_getToolTransactions', [], []),
       getVendorList:      () => gsRun('api_getVendorList',     [], []),
       createVendor:       (data) => gsRun('api_createVendor',  [data], {success:false}),
@@ -7634,7 +7639,7 @@
         '보류':     { color: '#64748b', bg: 'rgba(100,116,139,0.13)', icon: 'ph-pause-circle' }
       };
       var WBS_COMPANY_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
-      var WBS_GRID_COLS = '92px 64px minmax(220px,1fr) 110px 64px 52px 150px 118px';
+      var WBS_GRID_COLS = '92px 58px minmax(220px,1fr) 100px 62px 60px 48px 132px 132px';
 
       function wbsEsc(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, function(ch) {
@@ -7656,6 +7661,94 @@
         var idx = companies.indexOf(name);
         return idx >= 0 ? WBS_COMPANY_COLORS[idx % WBS_COMPANY_COLORS.length] : '#64748b';
       }
+      // 임계경로 — 여기가 밀리면 준공이 밀린다.
+      function wbsCpBadge(sub) {
+        if (!sub.isCritical) return '';
+        return '<span title="임계경로 — 이 작업이 지연되면 준공일이 그대로 밀립니다" style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap">★ 임계</span>';
+      }
+
+      // 여유(float)가 적은 작업은 곧 임계경로가 된다.
+      function wbsPredsChip(sub) {
+        var out = '';
+        if (sub.preds && sub.preds.length) {
+          out += '<span title="선행작업: ' + wbsEsc(sub.preds.join(', ')) + '" style="color:var(--text-tertiary);font-size:10px;margin-left:8px;white-space:nowrap"><i class="ph ph-arrow-elbow-down-right"></i> ' + sub.preds.length + '</span>';
+        }
+        if (!sub.isCritical && sub.floatDays !== null && sub.floatDays !== undefined && sub.floatDays <= 5) {
+          out += '<span title="총 여유 ' + sub.floatDays + '일 — 임계경로에 근접" style="color:#f59e0b;font-size:10px;margin-left:6px;white-space:nowrap">여유 ' + sub.floatDays + 'd</span>';
+        }
+        return out;
+      }
+
+      // 인원 · 장비 — 안전계획의 입력값. 계획 대비 실제 서명 인원을 같이 보여준다.
+      function wbsCrewLabel(sub) {
+        if (!sub.crewSize) return '<span style="color:var(--text-tertiary)">-</span>';
+        var eq = (sub.equipment && sub.equipment.length)
+          ? ' <i class="ph ph-crane-tower" style="color:#f59e0b" title="장비: ' + wbsEsc(sub.equipment.join(', ')) + '"></i>' : '';
+        var actual = sub.actualCrew > 0 ? '<span style="color:#10b981">' + sub.actualCrew + '</span>/' : '';
+        return actual + sub.crewSize + '명' + eq;
+      }
+
+      function wbsSafetyChip(sub) {
+        if (sub.tbmGated) {
+          return '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="오늘 안전카드(' + wbsEsc(sub.safetyWorkCode || '') + ')의 TBM/서명이 완료되어야 공정을 진행할 수 있습니다" style="cursor:pointer;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-lock-key"></i> TBM 대기</span>';
+        }
+        if (sub.hasCardToday) {
+          return '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="오늘 안전카드 ' + wbsEsc(sub.safetyWorkCode || '') + ' — TBM 완료" style="cursor:pointer;background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-shield-check"></i> 안전완료</span>';
+        }
+        if (sub.safetyCardCount > 0) {
+          return '<span title="지난 안전카드 ' + sub.safetyCardCount + '장 (오늘자는 없음)" style="color:var(--text-tertiary);font-size:10px;margin-left:8px;white-space:nowrap"><i class="ph ph-shield"></i> ' + sub.safetyCardCount + '</span>';
+        }
+        return '';
+      }
+
+      // 오늘 할 일 — 현장이 매일 보는 목록. 임계경로 먼저, 다음 행동이 버튼으로 바로 보인다.
+      function wbsTodayPanel(today) {
+        if (!today || !today.success) return '';
+
+        var rows = (today.items || []).map(function(it) {
+          var act = it.nextAction;
+          var actColor = act === '안전계획' ? '#3b82f6' : act === 'TBM' ? '#f59e0b' : act === '시작' ? '#10b981' : 'var(--text-tertiary)';
+          var actIcon = act === '안전계획' ? 'ph-shield-plus' : act === 'TBM' ? 'ph-signature' : act === '시작' ? 'ph-play' : 'ph-arrows-clockwise';
+          var onClick = act === '안전계획'
+            ? 'window.createWbsSafetyCard(\'' + wbsJsArg(it.wbs_id) + '\')'
+            : act === 'TBM'
+              ? 'window.goToView(\'safety\')'
+              : act === '시작'
+                ? 'window.toggleWbsComplete(\'' + wbsJsArg(it.wbs_id) + '\',\'진행중\')'
+                : 'window.openWbsLaborModal(\'' + wbsJsArg(it.wbs_id) + '\')';
+
+          return '<div style="display:grid;grid-template-columns:auto minmax(200px,1fr) 150px 110px 96px;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-subtle);' +
+            (it.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;') + '">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:44px">' + wbsEsc(it.activity_id || '') + '</span>' +
+            '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary)">' + wbsEsc(it.sub_name) + '</span>' +
+            (it.isCritical ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">★</span>' : '') +
+            (it.ehs === 'high' ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">고위험</span>' : '') +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.stagePath || '') + '</div></span>' +
+            '<span style="font-size:11px;color:var(--text-secondary);cursor:pointer" onclick="window.openWbsLaborModal(\'' + wbsJsArg(it.wbs_id) + '\')" title="' + wbsEsc(it.crewText || '') + ' — 클릭하면 실투입 확인">' +
+            (it.crewSize ? '<i class="ph ph-users"></i> ' + it.crewSize + '명' : '<span style="color:var(--text-tertiary)">인원 없음</span>') +
+            ((it.equipment && it.equipment.length) ? ' <i class="ph ph-crane-tower" style="color:#f59e0b" title="' + wbsEsc(it.equipment.join(', ')) + '"></i>' : '') + '</span>' +
+            '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(it.plannedStart || '') + '~</span>' +
+            '<button onclick="' + onClick + '" style="background:none;border:1px solid ' + actColor + ';color:' + actColor + ';border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + actIcon + '"></i> ' + act + '</button>' +
+            '</div>';
+        }).join('');
+
+        var body = today.total === 0
+          ? '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">오늘(' + wbsEsc(today.date) + ') 예정된 작업이 없습니다.</div>'
+          : rows;
+
+        return '<div class="panel" style="margin-bottom:18px;border:1px solid rgba(59,130,246,0.35)">' +
+          '<div class="panel-header" style="background:rgba(59,130,246,0.06)">' +
+          '<div class="panel-title"><i class="ph ph-calendar-check" style="color:#3b82f6"></i> 오늘 할 일 — ' + wbsEsc(today.date) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:14px;font-size:11px">' +
+          '<span style="color:var(--text-secondary)">작업 <strong style="color:var(--text-primary)">' + today.total + '</strong></span>' +
+          (today.criticalCount > 0 ? '<span style="color:#ef4444">★ 임계 ' + today.criticalCount + '</span>' : '') +
+          (today.needsPlanCount > 0 ? '<span style="color:#3b82f6">안전계획 필요 ' + today.needsPlanCount + '</span>' : '') +
+          (today.tbmWaitCount > 0 ? '<span style="color:#f59e0b">TBM 대기 ' + today.tbmWaitCount + '</span>' : '') +
+          (today.plannedCrew > 0 ? '<span style="color:var(--text-secondary)">계획 인원 <strong style="color:var(--text-primary)">' + today.plannedCrew + '명</strong></span>' : '') +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:720px">' + body + '</div></div></div>';
+      }
+
       function wbsProgressBar(pct, color, width) {
         var p = Math.max(0, Math.min(100, Number(pct) || 0));
         return '<div style="display:flex;align-items:center;gap:8px;min-width:' + (width || 110) + 'px">' +
@@ -7752,10 +7845,11 @@
 
           var results = await Promise.all([
             window.API.getProjectWbsTree(projectId),
-            window.API.getProjectProgressSummary(projectId)
+            window.API.getProjectProgressSummary(projectId),
+            window.API.getTodayWbsWork(projectId)
           ]);
           if (gen !== _wbsRenderGen) return;
-          var treeRes = results[0], sumRes = results[1];
+          var treeRes = results[0], sumRes = results[1], todayRes = results[2];
 
           // 서버 오류를 "WBS 없음"으로 위장하지 않는다 — 오류는 오류로 표시.
           if (!treeRes || treeRes.success !== true) {
@@ -7788,7 +7882,8 @@
           (sum.stages || []).forEach(function(s) { stageProgressMap[String(s.stage_no)] = s.progress; });
 
           // 통계 집계 + 편집 모달용 SubTask 인덱스.
-          var totalSubTasks = 0, totalManhours = 0, ehsHigh = 0, safetyLinked = 0, tbmGatedCount = 0;
+          var totalSubTasks = 0, totalManhours = 0, ehsHigh = 0, tbmGatedCount = 0;
+          var criticalCount = 0, criticalDone = 0, cardsToday = 0, plannedCost = 0;
           var byCompany = {};
           window._wbsSubIndex = {};
           tree.forEach(function(stage) {
@@ -7797,6 +7892,7 @@
                 totalSubTasks++;
                 var mh = parseFloat(sub.manhours) || 0;
                 totalManhours += mh;
+                plannedCost += parseFloat(sub.plannedCost) || 0;
                 var comp = sub.company || '';
                 if (comp) {
                   if (!byCompany[comp]) byCompany[comp] = { mh: 0, doneMh: 0 };
@@ -7804,7 +7900,8 @@
                   if (sub.status === '완료') byCompany[comp].doneMh += mh;
                 }
                 if (sub.ehs === 'high') ehsHigh++;
-                if (sub.safetyWorkCode) safetyLinked++;
+                if (sub.isCritical) { criticalCount++; if (sub.status === '완료') criticalDone++; }
+                if (sub.hasCardToday) cardsToday++;
                 if (sub.tbmGated) tbmGatedCount++;
                 window._wbsSubIndex[sub.wbs_id] = sub;
               });
@@ -7813,14 +7910,15 @@
           var companies = Object.keys(byCompany).sort(function(a, b) { return byCompany[b].mh - byCompany[a].mh; });
 
           // KPI (6개)
-          var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">' +
+          var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(7,1fr)">' +
             '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">전체 진척률</div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
             '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">SubTask 완료</div><div class="kpi-value"><span style="color:#10b981">' + (sum.completedCount || 0) + '</span><span style="font-size:15px;color:var(--text-tertiary)"> / ' + totalSubTasks + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">진행중</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">예상 총공수</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">임계경로</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">지연 시 준공 밀림</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">EHS 고위험</div><div class="kpi-value" style="color:' + (ehsHigh > 0 ? '#ef4444' : 'var(--text-tertiary)') + '">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">위험작업</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">안전 연동</div><div class="kpi-value" style="color:' + (safetyLinked > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + safetyLinked + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건' : '작업카드 연결') + '</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건' : '오늘 계획됨') + '</span></div></div>' +
             '</div>';
 
           // 협력사 작업 부하 (DB 데이터 기반 동적 목록).
@@ -7856,7 +7954,7 @@
 
           // WBS 트리 — 컬럼 헤더 + Stage(접기) > Task > SubTask 행.
           var colHeader = '<div style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:6px 12px;font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em">' +
-            '<span>상태</span><span>NO</span><span>작업명</span><span>담당</span><span style="text-align:right">공수</span><span style="text-align:right">일수</span><span>진척</span><span style="text-align:right">액션</span></div>';
+            '<span>상태</span><span>ID</span><span>작업명</span><span>공종</span><span style="text-align:right">인원·장비</span><span style="text-align:right">공수</span><span style="text-align:right">일수</span><span>진척</span><span style="text-align:right">액션</span></div>';
 
           var openAll = tree.length <= 4;
           var treeHtml = tree.map(function(stage, sIdx) {
@@ -7882,31 +7980,32 @@
                   ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-warning"></i> 고위험</span>'
                   : sub.ehs === 'medium'
                     ? '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap">주의</span>' : '';
-                var safetyChip = '';
-                if (sub.safetyWorkCode) {
-                  safetyChip = sub.tbmGated
-                    ? '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="연결된 안전 작업카드의 TBM/서명 완료 후 공정을 진행할 수 있습니다" style="cursor:pointer;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-lock-key"></i> TBM 대기</span>'
-                    : '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="안전 작업카드 ' + wbsEsc(sub.safetyWorkCode) + ' 연결됨 — 현장 진행률이 자동 반영됩니다" style="cursor:pointer;background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-shield-check"></i> 안전연동</span>';
-                }
+                var safetyChip = wbsSafetyChip(sub);
                 var compColor = wbsCompanyColor(sub.company, companies);
                 var progColor = isDone ? '#10b981' : isProg ? '#f59e0b' : 'var(--text-tertiary)';
-                var nameStyle = isDone ? 'color:var(--text-secondary);text-decoration:line-through;opacity:0.8' : 'color:white';
-                // 상태 워크플로: AI생성/검수완료/보류 → [시작] · 진행중 → [완료] · 완료 → [되돌리기]
+                var nameStyle = isDone ? 'color:var(--text-secondary);text-decoration:line-through;opacity:0.8' : 'color:var(--text-primary)';
+                // 상태 워크플로: 검수완료/보류 → [시작] · 진행중 → [완료] · 완료 → [되돌리기]
                 var actionBtn;
                 if (isDone) {
                   actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'검수완료\')" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-arrow-counter-clockwise"></i> 되돌리기</button>';
                 } else if (isProg) {
                   actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'완료\')" style="background:#10b981;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-check"></i> 완료</button>';
+                } else if (!sub.hasCardToday) {
+                  // 안전 없이 공정 없다 — 카드가 없으면 시작이 아니라 "안전계획"이 먼저다.
+                  actionBtn = '<button onclick="event.stopPropagation();window.createWbsSafetyCard(\'' + wbsJsArg(sub.wbs_id) + '\')" title="오늘자 안전 작업카드를 만들고 인원·장비를 배정합니다" style="background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-shield-plus"></i> 안전계획</button>';
                 } else {
-                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'진행중\')" ' + (sub.tbmGated ? 'title="TBM 미완료 — 안전 작업카드의 TBM/서명 완료 후 시작할 수 있습니다" ' : '') + 'style="background:' + (sub.tbmGated ? 'var(--bg-base)' : 'rgba(245,158,11,0.15)') + ';color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + (sub.tbmGated ? 'ph-lock-key' : 'ph-play') + '"></i> 시작</button>';
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'진행중\')" ' + (sub.tbmGated ? 'title="TBM 미완료 — 오늘 안전카드의 TBM/서명 완료 후 시작할 수 있습니다" ' : '') + 'style="background:' + (sub.tbmGated ? 'var(--bg-base)' : 'rgba(245,158,11,0.15)') + ';color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + (sub.tbmGated ? 'ph-lock-key' : 'ph-play') + '"></i> 시작</button>';
                 }
                 actionBtn += '<button onclick="event.stopPropagation();window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" title="상세 편집" style="background:none;border:none;color:var(--text-tertiary);cursor:pointer;padding:4px;font-size:14px"><i class="ph ph-pencil-simple"></i></button>';
 
-                return '<div class="wbs-subtask" data-wbsid="' + wbsEsc(sub.wbs_id) + '" style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:7px 12px;border-radius:6px;background:' + (isDone ? 'rgba(16,185,129,0.05)' : 'transparent') + ';border-bottom:1px solid var(--border-subtle)">' +
+                var rowBorder = sub.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;';
+
+                return '<div class="wbs-subtask" data-wbsid="' + wbsEsc(sub.wbs_id) + '" style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:7px 12px;border-radius:6px;' + rowBorder + 'background:' + (isDone ? 'rgba(16,185,129,0.05)' : 'transparent') + ';border-bottom:1px solid var(--border-subtle)">' +
                   '<span>' + wbsStatusPill(status) + '</span>' +
-                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(sub.sub_no || '') + '</span>' +
-                  '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + ehsBadge + safetyChip + '</span>' +
+                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(sub.activity_id || sub.sub_no || '') + '</span>' +
+                  '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + wbsCpBadge(sub) + ehsBadge + safetyChip + wbsPredsChip(sub) + '</span>' +
                   '<span style="font-size:11px;color:' + compColor + ';font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(sub.company || '-') + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right" title="' + wbsEsc(sub.crewText || '') + '">' + wbsCrewLabel(sub) + '</span>' +
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (parseFloat(sub.manhours) || 0) + '</span>' +
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (sub.days || 0) + '</span>' +
                   wbsProgressBar(sub.progress, progColor, 100) +
@@ -7947,7 +8046,7 @@
             '</div></div>' +
             '<div class="panel-body">' + treeHtml + '</div></div>';
 
-          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + panelsHtml + treePanel;
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + panelsHtml + treePanel;
 
         } catch (err) {
           if (gen !== _wbsRenderGen) return;
@@ -7964,7 +8063,7 @@
       window.refreshWbs = function() {
         if (window.apiCache) {
           Object.keys(window.apiCache).forEach(function(k) {
-            if (k.indexOf('api_getProjectList') >= 0 || k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) {
+            if (k.indexOf('api_getProjectList') >= 0 || k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0 || k.indexOf('api_getSafetyWorkItems') >= 0 || k.indexOf('api_getTodayWbsWork') >= 0 || k.indexOf('api_getWbsLabor') >= 0) {
               delete window.apiCache[k];
             }
           });
@@ -8003,6 +8102,156 @@
           alert('오류: ' + e.message);
           if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
         }
+      };
+
+      // 공정 → 안전. "작업을 시작한다"는 곧 "오늘 이 작업의 안전계획을 세운다"는 뜻이다.
+      //
+      // 날짜는 반드시 서버가 정한다. 브라우저에서 계산하면(특히 toISOString 은 UTC) 현장 시간대와
+      // 어긋나 "내일자" 카드가 만들어지고, 게이트가 오늘 카드를 못 찾아 안전 확인 없이 공정이 시작된다.
+      window.createWbsSafetyCard = async function(wbsId) {
+        var sub = (window._wbsSubIndex || {})[wbsId] || {};
+
+        var lines = ['오늘자 안전 작업카드를 만들까요?', '', '작업: ' + (sub.sub_name || wbsId)];
+        if (sub.crewText) lines.push('투입: ' + sub.crewText + (sub.crewSize ? ' (약 ' + sub.crewSize + '명)' : ''));
+        if (sub.equipment && sub.equipment.length) lines.push('장비: ' + sub.equipment.join(', '));
+        if (sub.ehs === 'high') lines.push('⚠ 고위험 작업입니다.');
+        lines.push('', '카드 생성 후 안전관리 화면에서 계획서 → TBM/서명을 진행하세요.');
+        lines.push('TBM 이 완료되어야 이 공정을 시작할 수 있습니다.');
+
+        if (!confirm(lines.join('\n'))) return;
+
+        try {
+          var res = await window.API.createSafetyCardForWbs(wbsId, null); // null = 서버가 오늘을 정함
+          if (res && res.success) {
+            showToast(res.created
+              ? res.date + ' 안전 작업카드 ' + res.work_code + ' 생성됨 — 안전관리에서 TBM 을 진행하세요.'
+              : '이미 ' + res.date + ' 카드(' + res.work_code + ')가 있습니다.');
+            window.refreshWbs();
+          } else {
+            alert((res && res.error) || '안전카드 생성에 실패했습니다.');
+          }
+        } catch (e) {
+          alert('오류: ' + e.message);
+        }
+      };
+
+      // 인원 모달 — 계획(공정표) 대비 실투입(안전카드 서명 → 출퇴근 → 급여)을 한 화면에서 본다.
+      // 여기서 서명란에 실제 직원을 배정하면 그 사람의 그날 근무시간이 이 공정에 귀속된다.
+      window.openWbsLaborModal = async function(wbsId) {
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:680px;max-height:82vh;overflow-y:auto"><div style="text-align:center;padding:30px;color:var(--text-tertiary)">불러오는 중...</div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+        var box = modal.firstChild;
+        try {
+          var results = await Promise.all([window.API.getWbsLabor(wbsId), window.API.getAssignableEmployees()]);
+          var labor = results[0];
+          window._assignableEmployees = Array.isArray(results[1]) ? results[1] : [];
+
+          if (!labor || !labor.success) {
+            box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--status-danger)">' + wbsEsc((labor && labor.error) || '불러오지 못했습니다.') + '</div>';
+            return;
+          }
+
+          var pct = labor.consumedPct;
+          var pctColor = pct === null ? 'var(--text-tertiary)' : pct > 100 ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
+
+          var daysHtml = (labor.days || []).length === 0
+            ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:12px">아직 안전 작업카드가 없습니다.<br>공정 행의 <strong>안전계획</strong> 버튼으로 오늘자 카드를 만드세요.</div>'
+            : labor.days.map(function(d) {
+                var people = (d.people || []).map(function(p) {
+                  var hrs = p.hours === null
+                    ? '<span style="color:var(--text-tertiary)" title="출퇴근 기록이 아직 없습니다">기록 대기</span>'
+                    : '<span class="cell-mono" style="color:#10b981">' + p.hours + 'h</span>';
+                  return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0">' +
+                    '<i class="ph ph-user-circle" style="color:var(--text-tertiary)"></i>' +
+                    '<span style="color:var(--text-primary)">' + wbsEsc(p.name) + '</span>' +
+                    '<span style="color:var(--text-tertiary);font-size:10px">' + wbsEsc(p.role || '') + '</span>' +
+                    '<span style="margin-left:auto">' + hrs + '</span></div>';
+                }).join('') || '<div style="font-size:11px;color:var(--text-tertiary);padding:3px 0">서명한 인원이 없습니다.</div>';
+
+                return '<div style="border:1px solid var(--border-default);border-radius:8px;padding:12px;margin-bottom:8px">' +
+                  '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+                  '<span class="cell-mono" style="font-size:12px;font-weight:700;color:var(--text-primary)">' + wbsEsc(d.date) + '</span>' +
+                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(d.workCode) + '</span>' +
+                  (d.tbmCleared
+                    ? '<span style="background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 완료</span>'
+                    : '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 대기</span>') +
+                  '<span style="margin-left:auto;font-size:11px;color:var(--text-secondary)">서명 ' + d.signedCount + '/' + d.slotCount + ' · 실근무 <strong class="cell-mono" style="color:var(--text-primary)">' + d.hours + 'h</strong></span>' +
+                  '<button class="btn-secondary" style="padding:3px 9px;font-size:11px" onclick="window.openSignerAssign(\'' + wbsJsArg(d.workCode) + '\')"><i class="ph ph-user-plus"></i> 인원 배정</button>' +
+                  '</div>' + people + '</div>';
+              }).join('');
+
+          box.innerHTML =
+            '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-users-three" style="color:#3b82f6"></i> 인원 · 실투입</h3>' +
+            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">' + wbsEsc(labor.name) + ' <span style="font-family:monospace">· ' + wbsEsc(wbsId) + '</span></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">계획 인원</div><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + (labor.plannedCrew !== null ? labor.plannedCrew + '명' : '-') + '</div></div>' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">계획 공수</div><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + labor.plannedHours + ' MH</div></div>' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">실투입 (출퇴근 기준)</div><div style="font-size:18px;font-weight:700;color:' + pctColor + '">' + labor.actualHours + 'h' + (pct !== null ? ' <span style="font-size:12px">(' + pct + '%)</span>' : '') + '</div></div>' +
+            '</div>' +
+            '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px">일자별 투입</div>' +
+            daysHtml +
+            '<button class="btn-secondary" style="width:100%;margin-top:10px" onclick="this.closest(\'div[style*=fixed]\').remove()">닫기</button>';
+        } catch (e) {
+          box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--status-danger)">오류: ' + wbsEsc(e.message) + '</div>';
+        }
+      };
+
+      // 서명란에 실제 직원 배정 — 여기가 "인원 몇 명"이 실제 사람이 되는 지점이다.
+      window.openSignerAssign = async function(workCode) {
+        var res = await gsRun('api_getSafetyWorkItems', [], null);
+        var card = (res && res.items || []).filter(function(c) { return c.id === workCode; })[0];
+        if (!card) { alert('안전카드를 찾을 수 없습니다: ' + workCode); return; }
+
+        var employees = window._assignableEmployees || [];
+        if (employees.length === 0) {
+          alert('배정할 직원이 없습니다.\n관리자 → 인원관리에서 직원을 먼저 등록하세요.');
+          return;
+        }
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+        var opts = '<option value="">— 미배정 —</option>' + employees.map(function(e) {
+          return '<option value="' + e.id + '">' + wbsEsc(e.name) + (e.number ? ' (' + wbsEsc(e.number) + ')' : '') + '</option>';
+        }).join('');
+
+        var rows = (card.signatures || []).map(function(s, i) {
+          var locked = s.signed;
+          return '<div style="display:grid;grid-template-columns:88px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(s.role || ('인원 ' + (i + 1))) + '</span>' +
+            (locked
+              ? '<span style="font-size:12px;color:var(--text-primary)">' + wbsEsc(s.name) + '</span><span style="font-size:10px;color:#10b981;white-space:nowrap"><i class="ph ph-check-circle"></i> 서명완료 ' + wbsEsc(s.time) + '</span>'
+              : '<select data-sigid="' + s.id + '" class="signer-select" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:6px;border-radius:6px;font-size:12px">' + opts + '</select>' +
+                '<span style="font-size:10px;color:var(--text-tertiary);white-space:nowrap">미서명</span>') +
+            '</div>';
+        }).join('');
+
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:22px;width:480px;max-height:78vh;overflow-y:auto">' +
+          '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-user-plus" style="color:#3b82f6"></i> 인원 배정</h3>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:14px">' + wbsEsc(workCode) + ' · 배정하면 이 사람의 출퇴근 시간이 이 공정에 귀속됩니다.</div>' +
+          (rows || '<div style="color:var(--text-tertiary);font-size:12px;padding:14px 0">서명란이 없습니다.</div>') +
+          '<div style="display:flex;gap:8px;margin-top:16px"><button id="signer-close" class="btn-secondary" style="flex:1">닫기</button></div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+        modal.querySelector('#signer-close').addEventListener('click', function() { modal.remove(); });
+
+        // 기존 배정 반영
+        modal.querySelectorAll('.signer-select').forEach(function(sel, i) {
+          var sig = (card.signatures || []).filter(function(s) { return !s.signed; })[i];
+          if (sig && sig.employeeId) sel.value = String(sig.employeeId);
+          sel.addEventListener('change', async function() {
+            var sigId = parseInt(sel.getAttribute('data-sigid'), 10);
+            var empId = sel.value ? parseInt(sel.value, 10) : null;
+            try {
+              var r = await window.API.assignSafetySigner(sigId, empId);
+              if (r && r.success) { showToast(empId ? (r.name + ' 배정됨') : '배정 해제됨'); }
+              else { alert((r && r.error) || '배정 실패'); }
+            } catch (e) { alert('오류: ' + e.message); }
+          });
+        });
       };
 
       window.runWbsAiAnalysis = async function() {
