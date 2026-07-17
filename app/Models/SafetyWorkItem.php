@@ -13,7 +13,7 @@ class SafetyWorkItem extends Model
 
     protected $fillable = [
         'work_code', 'company_id', 'site_id', 'team_id',
-        'project', 'location', 'title', 'crew', 'unit',
+        'project', 'location', 'title', 'work_date', 'wbs_code', 'crew', 'unit',
         'planned_qty', 'done_qty', 'total_qty', 'progress', 'due_label',
         'plan_status', 'tbm_status', 'close_status', 'progress_status',
         'work_text', 'close_text', 'plan_payload', 'created_by_id',
@@ -22,11 +22,20 @@ class SafetyWorkItem extends Model
     protected function casts(): array
     {
         return [
+            'work_date' => 'date',
             'planned_qty' => 'decimal:2',
             'done_qty' => 'decimal:2',
             'total_qty' => 'decimal:2',
             'plan_payload' => 'array',
         ];
+    }
+
+    /**
+     * 이 카드가 속한 공정(WBS SubTask). 하루치 실행 기록이 계획에 매달리는 지점.
+     */
+    public function wbsItem(): BelongsTo
+    {
+        return $this->belongsTo(WbsItem::class, 'wbs_code', 'wbs_code');
     }
 
     public function signatures(): HasMany
@@ -85,10 +94,13 @@ class SafetyWorkItem extends Model
             'workText' => $this->work_text ?? '',
             'closeText' => $this->close_text ?? '',
             'signatures' => $this->signatures->map(fn (SafetyWorkSignature $s): array => [
+                'id' => $s->id,
                 'name' => $s->name,
                 'role' => $s->role ?? '',
                 'signed' => (bool) $s->signed,
                 'time' => $s->signed_at?->format('H:i') ?? '-',
+                // 실제 직원 링크 — 이게 있어야 서명이 인원관리/급여로 이어진다.
+                'employeeId' => $s->employee_id,
             ])->all(),
             'issues' => $this->issues->map(fn (SafetyWorkIssue $i): array => [
                 'type' => $i->type,

@@ -2,6 +2,7 @@
 
 namespace App\Services\Wbs;
 
+use App\Models\SafetyWorkItem;
 use App\Models\Site;
 use App\Models\WbsItem;
 use Illuminate\Support\Collection;
@@ -91,7 +92,7 @@ class WbsService
      */
     public function markStatus(string $wbsCode, string $status): array
     {
-        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItem')->first();
+        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItems.signatures')->first();
         if (! $item) {
             return ['success' => false, 'error' => "WBS 항목을 찾을 수 없습니다: {$wbsCode}"];
         }
@@ -115,7 +116,7 @@ class WbsService
      */
     public function updateRow(string $wbsCode, array $updates): array
     {
-        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItem')->first();
+        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItems.signatures')->first();
         if (! $item) {
             return ['success' => false, 'error' => "WBS 항목을 찾을 수 없습니다: {$wbsCode}"];
         }
@@ -162,6 +163,184 @@ class WbsService
         $item->save();
 
         return ['success' => true, 'wbs_id' => $wbsCode];
+    }
+
+    /**
+     * "오늘 해야 할 작업" — 공정표에서 파생한 그날의 작업 목록.
+     *
+     * 일별 계획을 따로 저장하지 않고 계획일정(ES~EF)에서 파생한다. 일정이 바뀌면 목록도 같이
+     * 바뀌어야 하는데, 별도 테이블로 떠두면 곧 어긋나기 때문이다.
+     *
+     * 정렬은 현장이 실제로 판단하는 순서를 따른다: 임계경로 먼저 → 여유 적은 것 → 시작일 순.
+     *
+     * @return array<string, mixed>
+     */
+    public function todayWork(string $projectCode, string $siteId = 'ALL', ?string $date = null): array
+    {
+        $date ??= now()->toDateString();
+
+        $items = $this->itemsFor($projectCode, $siteId)
+            ->where('level', WbsItem::LEVEL_SUBTASK)
+            ->filter(function (WbsItem $i) use ($date): bool {
+                // 오늘 창에 걸린 작업: 시작 <= 오늘 <= 종료. 일정이 없으면 진행중인 것만.
+                $start = $i->planned_start?->toDateString();
+                $end = $i->planned_end?->toDateString();
+
+                if ($start === null || $end === null) {
+                    return $i->status === WbsItem::STATUS_IN_PROGRESS;
+                }
+
+                return $start <= $date && $date <= $end;
+            })
+            ->reject(fn (WbsItem $i) => $i->status === WbsItem::STATUS_DONE);
+
+        $rows = $items->map(function (WbsItem $i) use ($date): array {
+            $card = $i->safetyCardFor($date);
+            $needsPlan = (float) $i->crew_size > 0 && $card === null;
+
+            return $i->toSubtaskArray($date) + [
+                'stagePath' => $this->stagePath($i),
+                // 현장이 지금 무엇을 해야 하는지 한 단어로: 안전계획 → TBM → 진행 → 마감
+                'nextAction' => match (true) {
+                    $needsPlan => '안전계획',
+                    $card !== null && ! $card->isTbmCleared() => 'TBM',
+                    $i->status !== WbsItem::STATUS_IN_PROGRESS => '시작',
+                    default => '진행중',
+                },
+                'blocked' => $needsPlan || ($card !== null && ! $card->isTbmCleared()),
+            ];
+        })->values();
+
+        // 임계경로 → 여유 적은 순 → 시작일 순.
+        $sorted = $rows->sortBy([
+            fn ($a, $b) => ($b['isCritical'] <=> $a['isCritical']),
+            fn ($a, $b) => (($a['floatDays'] ?? 9999) <=> ($b['floatDays'] ?? 9999)),
+            fn ($a, $b) => (($a['plannedStart'] ?? '') <=> ($b['plannedStart'] ?? '')),
+        ])->values()->all();
+
+        return [
+            'success' => true,
+            'projectId' => $projectCode,
+            'date' => $date,
+            'items' => $sorted,
+            'total' => count($sorted),
+            'criticalCount' => $rows->where('isCritical', true)->count(),
+            'needsPlanCount' => $rows->where('nextAction', '안전계획')->count(),
+            'tbmWaitCount' => $rows->where('nextAction', 'TBM')->count(),
+            'plannedCrew' => round((float) $rows->sum(fn ($r) => (float) ($r['crewSize'] ?? 0)), 1),
+        ];
+    }
+
+    /**
+     * "Stage > Task" 경로 — 오늘 목록에서 작업의 위치를 알려준다.
+     */
+    private function stagePath(WbsItem $sub): string
+    {
+        $task = $sub->parent()->first();
+        $stage = $task?->parent()->first();
+
+        return trim(implode(' › ', array_filter([$stage?->name, $task?->name])));
+    }
+
+    /**
+     * 공정 → 안전 작업카드 생성. "작업을 시작한다"의 실제 구현체.
+     *
+     * 계획(인원·장비·물량)을 그날의 안전카드로 옮긴다. 여기서부터 TBM/서명 → 출퇴근 → 급여로 이어진다.
+     * 같은 날 카드가 이미 있으면 새로 만들지 않고 그 카드를 돌려준다(중복 방지).
+     *
+     * @return array<string, mixed>
+     */
+    public function createSafetyCard(string $wbsCode, ?string $date = null, ?int $userId = null): array
+    {
+        $date ??= now()->toDateString();
+
+        $item = WbsItem::query()->where('wbs_code', $wbsCode)->with('safetyWorkItems.signatures')->first();
+        if (! $item) {
+            return ['success' => false, 'error' => "WBS 항목을 찾을 수 없습니다: {$wbsCode}"];
+        }
+        if ($item->level !== WbsItem::LEVEL_SUBTASK) {
+            return ['success' => false, 'error' => '안전 작업카드는 SubTask(실행 단위)에만 만들 수 있습니다.'];
+        }
+
+        if ($existing = $item->safetyCardFor($date)) {
+            return ['success' => true, 'work_code' => $existing->work_code, 'created' => false, 'date' => $date];
+        }
+
+        $card = DB::transaction(function () use ($item, $date, $userId): SafetyWorkItem {
+            $card = SafetyWorkItem::query()->create([
+                'work_code' => $this->nextWorkCode($date),
+                'wbs_code' => $item->wbs_code,
+                'work_date' => $date,
+                'site_id' => $item->site_id,
+                'project' => $item->project_code,
+                'title' => $item->name,
+                'crew' => (int) ceil((float) $item->crew_size),
+                'due_label' => $date,
+                'plan_status' => '미생성',
+                'tbm_status' => '대기',
+                'close_status' => '시작전',
+                'progress_status' => '미분석',
+                // 계획된 인원·장비를 안전계획 입력값으로 넘긴다 — 이 둘이 안전계획을 결정한다.
+                'work_text' => $this->planSeedText($item),
+                'plan_payload' => [
+                    'from_wbs' => $item->wbs_code,
+                    'activity_id' => $item->activity_id,
+                    'crew_text' => $item->crew_text,
+                    'crew_roles' => $item->crew_roles,
+                    'equipment' => $item->equipment,
+                    'ehs' => $item->ehs,
+                ],
+                'created_by_id' => $userId,
+            ]);
+
+            // 계획 인원만큼 서명란을 미리 깔아둔다 — TBM 때 이름만 채우면 되게.
+            $order = 0;
+            foreach ((array) $item->crew_roles as $role) {
+                if (($role['external'] ?? false) || ($role['count'] ?? null) === null) {
+                    continue;
+                }
+                for ($i = 0; $i < (int) ceil((float) $role['count']); $i++) {
+                    $card->signatures()->create([
+                        'name' => '', 'role' => (string) ($role['role'] ?? ''), 'signed' => false, 'sort_order' => $order++,
+                    ]);
+                }
+            }
+
+            return $card;
+        });
+
+        return ['success' => true, 'work_code' => $card->work_code, 'created' => true, 'date' => $date];
+    }
+
+    /**
+     * 안전계획 입력값 초안 — "인원 몇 명 · 어떤 장비"가 안전계획을 결정한다는 원칙을 문장으로 옮긴다.
+     */
+    private function planSeedText(WbsItem $item): string
+    {
+        $parts = [$item->name . '.'];
+
+        if ($item->crew_text) {
+            $parts[] = '투입: ' . $item->crew_text . ($item->crew_size ? " (약 {$item->crew_size}명)" : '') . '.';
+        }
+        if (! empty($item->equipment)) {
+            $parts[] = '장비: ' . implode(', ', (array) $item->equipment) . '.';
+        }
+        if ($item->days) {
+            $parts[] = '공기 ' . $item->days . '일.';
+        }
+
+        return implode(' ', $parts);
+    }
+
+    private function nextWorkCode(string $date): string
+    {
+        $prefix = 'WRK-' . str_replace('-', '', mb_substr($date, 2, 8));
+
+        do {
+            $code = $prefix . '-' . str_pad((string) random_int(1, 999), 3, '0', STR_PAD_LEFT);
+        } while (SafetyWorkItem::query()->where('work_code', $code)->exists());
+
+        return $code;
     }
 
     /**
@@ -250,7 +429,6 @@ class WbsService
                             // 보존: 기존 현장 진행 상태/진척/안전카드 링크가 있으면 유지.
                             'status' => $keep->status ?? '검수완료',
                             'progress' => $keep->progress ?? 0,
-                            'safety_work_code' => $keep->safety_work_code ?? null,
                             'sort_order' => $subOrder++,
                         ]);
                         $counts['subtasks']++;
@@ -263,12 +441,18 @@ class WbsService
     }
 
     /**
-     * TBM 게이트 — "안전 없이 공정 없다". 안전카드에 연결된 SubTask 를 진행중/완료로 바꾸려면
-     * 연결된 작업의 TBM/서명이 완료되어야 한다. 막혀야 하면 사유 문자열, 통과면 null.
+     * TBM 게이트 — "안전 없이 공정 없다".
+     *
+     * 안전은 하루 단위 행위이므로 "그날의 안전카드"를 본다. 날짜는 서버 시간대(현장 시간대)로만 정한다 —
+     * 클라이언트가 계산한 날짜를 믿으면 시간대가 어긋나 게이트가 통째로 무력화된다.
+     *
+     *  - 현장 인원이 투입되는 작업(crew_size > 0)인데 그날 카드가 없다 → 막는다. 안전계획이 먼저다.
+     *  - 그날 카드가 있고 TBM 미완료 → 막는다.
+     *  - 인원 투입이 없는 작업(조달/발주 등, crew "-") → 게이트 없음. TBM 이 성립하지 않는다.
      */
-    private function tbmGate(WbsItem $item, string $targetStatus): ?string
+    private function tbmGate(WbsItem $item, string $targetStatus, ?string $date = null): ?string
     {
-        if ($item->level !== WbsItem::LEVEL_SUBTASK || blank($item->safety_work_code)) {
+        if ($item->level !== WbsItem::LEVEL_SUBTASK) {
             return null;
         }
 
@@ -276,13 +460,28 @@ class WbsService
             return null;
         }
 
-        $card = $item->relationLoaded('safetyWorkItem') ? $item->safetyWorkItem : $item->safetyWorkItem()->first();
-
-        if (! $card || $card->isTbmCleared()) {
+        // 현장 인원이 없는 작업(조달·리드타임 등)은 안전계획 대상이 아니다.
+        if ((float) $item->crew_size <= 0) {
             return null;
         }
 
-        return "TBM 미완료 — 연결된 안전 작업({$item->safety_work_code})의 TBM/서명이 완료되어야 공정을 진행할 수 있습니다.";
+        $date ??= now()->toDateString();
+
+        if (! $item->relationLoaded('safetyWorkItems')) {
+            $item->load('safetyWorkItems.signatures');
+        }
+
+        $card = $item->safetyCardFor($date);
+
+        if (! $card) {
+            return "안전계획 미수립 — {$date} 안전 작업카드를 먼저 만들고 TBM 을 완료해야 공정을 진행할 수 있습니다.";
+        }
+
+        if ($card->isTbmCleared()) {
+            return null;
+        }
+
+        return "TBM 미완료 — {$date} 안전 작업({$card->work_code})의 TBM/서명이 완료되어야 공정을 진행할 수 있습니다.";
     }
 
     /**
@@ -292,7 +491,7 @@ class WbsService
     {
         $query = WbsItem::query()
             ->where('project_code', $projectCode)
-            ->with('safetyWorkItem')
+            ->with('safetyWorkItems.signatures')
             ->orderBy('sort_order')
             ->orderBy('id');
 

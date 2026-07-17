@@ -36,10 +36,11 @@ class DemoDataCleanupTest extends TestCase
             '데모 안전 작업카드가 정리 마이그레이션 이후에도 남아 있습니다.'
         );
 
+        // 링크 방향이 카드 → 공정으로 바뀐 뒤에도(2026_07_16_000210) 데모 잔재가 없어야 한다.
         $this->assertSame(
             0,
-            DB::table('wbs_items')->whereIn('safety_work_code', $demoCodes)->count(),
-            '삭제된 데모 안전카드를 가리키는 WBS 링크가 남아 있습니다.'
+            DB::table('safety_work_items')->whereIn('work_code', $demoCodes)->whereNotNull('wbs_code')->count(),
+            '삭제된 데모 안전카드의 공정 링크가 남아 있습니다.'
         );
     }
 }
