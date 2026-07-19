@@ -30,7 +30,10 @@ class GeminiWbsAnalyzer
      *
      * @return array<string, mixed>
      */
-    public function processManual(string $projectCode, string $siteId = 'ALL'): array
+    /**
+     * @param  array{data: string, media_type?: string}|null  $pdf  base64 PDF (선택) — 있으면 매뉴얼 본문을 근거로 분석
+     */
+    public function processManual(string $projectCode, string $siteId = 'ALL', ?array $pdf = null): array
     {
         $apiKey = (string) config('services.gemini.api_key');
         if ($apiKey === '') {
@@ -38,7 +41,7 @@ class GeminiWbsAnalyzer
         }
 
         $context = $this->buildContext($projectCode);
-        $structure = $this->generate($this->wbsPrompt($context), $this->wbsSchema());
+        $structure = $this->generate($this->wbsPrompt($context), $this->wbsSchema(), $pdf);
 
         $stages = is_array($structure['stages'] ?? null) ? $structure['stages'] : [];
         if ($stages === []) {
@@ -53,6 +56,7 @@ class GeminiWbsAnalyzer
             'results' => [[
                 'file' => $context['label'],
                 'status' => 'success',
+                'engine' => 'gemini',
                 'stages' => $counts['stages'],
                 'tasks' => $counts['tasks'],
                 'subTasks' => $counts['subtasks'],
@@ -93,12 +97,27 @@ class GeminiWbsAnalyzer
      * @param  array<string, mixed>  $schema
      * @return array<string, mixed>
      */
-    private function generate(string $prompt, array $schema): array
+    /**
+     * @param  array<string, mixed>  $schema
+     * @param  array{data: string, media_type?: string}|null  $pdf
+     * @return array<string, mixed>
+     */
+    private function generate(string $prompt, array $schema, ?array $pdf = null): array
     {
         $apiKey = (string) config('services.gemini.api_key');
         if ($apiKey === '') {
             throw new RuntimeException('GEMINI_API_KEY is not configured.');
         }
+
+        // 매뉴얼 파일이 있으면 본문(inline_data)을 프롬프트 앞에 붙인다. Gemini 는 PDF/이미지 inline 지원.
+        $parts = [];
+        if ($pdf !== null && ($pdf['data'] ?? '') !== '') {
+            $parts[] = ['inline_data' => [
+                'mime_type' => (string) ($pdf['media_type'] ?? 'application/pdf'),
+                'data' => (string) $pdf['data'],
+            ]];
+        }
+        $parts[] = ['text' => $prompt];
 
         $lastException = null;
 
@@ -111,7 +130,7 @@ class GeminiWbsAnalyzer
                     ->timeout((int) config('services.gemini.timeout', 60))
                     ->withHeaders(['x-goog-api-key' => $apiKey, 'Content-Type' => 'application/json'])
                     ->post($endpoint, [
-                        'contents' => [['parts' => [['text' => $prompt]]]],
+                        'contents' => [['parts' => $parts]],
                         'generationConfig' => [
                             'responseMimeType' => 'application/json',
                             'responseSchema' => $schema,
