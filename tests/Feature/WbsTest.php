@@ -42,8 +42,19 @@ class WbsTest extends TestCase
                 'wbs_code' => 'TST-01-W-' . $s['no'], 'node_no' => $s['no'], 'name' => $s['name'],
                 'company' => $s['company'] ?? 'NAHSHON', 'manhours' => $s['mh'], 'days' => 1,
                 'ehs' => $s['ehs'] ?? 'medium', 'status' => $s['status'], 'progress' => $s['progress'],
-                'safety_work_code' => $s['safety'] ?? null, 'sort_order' => $i,
+                // 기본 픽스처는 조달성 작업(현장 인원 0) — 게이트가 개입하지 않는다.
+                // 안전 게이트를 검증하는 테스트는 'crew' 를 명시해 현장작업으로 만든다.
+                'crew_size' => $s['crew'] ?? 0,
+                'sort_order' => $i,
             ]);
+
+            // 안전카드는 이제 공정을 가리킨다(1:N). 링크는 카드 쪽에서 건다.
+            if (isset($s['safety'])) {
+                SafetyWorkItem::where('work_code', $s['safety'])->update([
+                    'wbs_code' => 'TST-01-W-' . $s['no'],
+                    'work_date' => $s['safety_date'] ?? now()->toDateString(),
+                ]);
+            }
         }
     }
 
@@ -70,7 +81,7 @@ class WbsTest extends TestCase
         ]);
 
         $this->seedTree([
-            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '진행중', 'progress' => 20, 'safety' => 'WRK-LINK-1'],
+            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '진행중', 'progress' => 20, 'safety' => 'WRK-LINK-1', 'crew' => 2],
         ]);
 
         $tree = app(WbsService::class)->tree('TST-01');
@@ -118,6 +129,54 @@ class WbsTest extends TestCase
         $this->assertSame('M-SOL', $item->company);
         $this->assertSame('진행중', $item->status);
         $this->assertSame('2026-07-01', $item->planned_end->format('Y-m-d'));
+    }
+
+    public function test_update_row_clears_assignment_fields_with_empty_string(): void
+    {
+        $this->seedTree();
+        app(WbsService::class)->updateRow('TST-01-W-1.1.1', ['종료예정' => '2026-07-01']);
+
+        // 담당사/예정일은 빈 값('')으로 배정 해제, 그 외('작업명' 등)는 ''를 무시.
+        $res = app(WbsService::class)->updateRow('TST-01-W-1.1.1', [
+            '담당사' => '', '종료예정' => '', '작업명' => '',
+        ]);
+
+        $this->assertTrue($res['success']);
+        $item = WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->first();
+        $this->assertNull($item->company);
+        $this->assertNull($item->planned_end);
+        $this->assertSame('앵커 설치', $item->name);
+    }
+
+    public function test_update_row_does_not_gate_when_status_unchanged(): void
+    {
+        // 이미 진행중인 TBM 미완료 연동 행이라도, 상태가 그대로면 공수/일정 편집이 가능해야 한다.
+        SafetyWorkItem::create([
+            'work_code' => 'WRK-GATE-EDIT', 'title' => '게이트 편집 검증', 'progress' => 0,
+            'plan_status' => '검토중', 'tbm_status' => '대기', 'close_status' => '시작전', 'progress_status' => '미분석',
+        ]);
+        $this->seedTree([
+            ['no' => '1.1.9', 'name' => '게이트 행', 'mh' => 8, 'status' => '진행중', 'progress' => 10, 'safety' => 'WRK-GATE-EDIT', 'crew' => 2],
+        ]);
+
+        $res = app(WbsService::class)->updateRow('TST-01-W-1.1.9', ['상태' => '진행중', '공수' => 12]);
+
+        $this->assertTrue($res['success']);
+        $this->assertSame(12.0, (float) WbsItem::where('wbs_code', 'TST-01-W-1.1.9')->value('manhours'));
+
+        // 상태를 실제로 완료로 "바꾸는" 것은 여전히 게이트에 막힌다.
+        $gated = app(WbsService::class)->updateRow('TST-01-W-1.1.9', ['상태' => '완료']);
+        $this->assertFalse($gated['success']);
+        $this->assertTrue($gated['gated']);
+    }
+
+    public function test_tree_reports_unscoped_total_for_site_scope_distinction(): void
+    {
+        $this->seedTree();
+
+        $tree = app(WbsService::class)->tree('TST-01');
+
+        $this->assertSame(2, $tree['unscopedTotal']);
     }
 
     public function test_process_manual_generates_and_persists_wbs(): void
@@ -175,7 +234,7 @@ class WbsTest extends TestCase
         $card->signatures()->create(['name' => '김반장', 'role' => '반장', 'signed' => false, 'sort_order' => 0]);
 
         $this->seedTree([
-            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '검수완료', 'progress' => 0, 'safety' => 'WRK-GATE-1'],
+            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '검수완료', 'progress' => 0, 'safety' => 'WRK-GATE-1', 'crew' => 2],
         ]);
 
         $res = app(WbsService::class)->markStatus('TST-01-W-1.1.3', '완료');
@@ -193,7 +252,7 @@ class WbsTest extends TestCase
         ]);
 
         $this->seedTree([
-            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '검수완료', 'progress' => 0, 'safety' => 'WRK-GATE-2'],
+            ['no' => '1.1.3', 'name' => '앵커 현장작업', 'mh' => 20, 'status' => '검수완료', 'progress' => 0, 'safety' => 'WRK-GATE-2', 'crew' => 2],
         ]);
 
         $res = app(WbsService::class)->markStatus('TST-01-W-1.1.3', '완료');
@@ -202,14 +261,30 @@ class WbsTest extends TestCase
         $this->assertSame('완료', WbsItem::where('wbs_code', 'TST-01-W-1.1.3')->value('status'));
     }
 
-    public function test_tbm_gate_ignores_unlinked_subtask(): void
+    public function test_tbm_gate_ignores_subtask_without_field_crew(): void
     {
-        // No safety link → no gate, advancing is always allowed.
+        // 조달/발주처럼 현장 인원이 없는 작업은 TBM 대상이 아니다 → 게이트 없음.
         $this->seedTree();
 
         $res = app(WbsService::class)->markStatus('TST-01-W-1.1.2', '완료');
 
         $this->assertTrue($res['success']);
+    }
+
+    public function test_field_work_without_a_safety_card_cannot_advance(): void
+    {
+        // 예전 계약은 "안전카드 링크가 없으면 무조건 통과"였다 — 이것이 곧 안전 구멍이었다.
+        // 이제는 현장 인원이 투입되는 작업이면 그날의 안전카드가 반드시 있어야 한다.
+        $this->seedTree([
+            ['no' => '1.1.4', 'name' => '카드 없는 현장작업', 'mh' => 16, 'status' => '검수완료', 'progress' => 0, 'crew' => 3],
+        ]);
+
+        $res = app(WbsService::class)->markStatus('TST-01-W-1.1.4', '진행중');
+
+        $this->assertFalse($res['success']);
+        $this->assertTrue($res['gated']);
+        $this->assertStringContainsString('안전계획 미수립', $res['error']);
+        $this->assertSame('검수완료', WbsItem::where('wbs_code', 'TST-01-W-1.1.4')->value('status'));
     }
 
     public function test_api_get_wbs_tree_endpoint(): void
@@ -222,5 +297,19 @@ class WbsTest extends TestCase
         ]);
 
         $res->assertStatus(200)->assertJsonPath('success', true)->assertJsonPath('stages.0.stage_name', '설치');
+    }
+
+    public function test_api_update_row_clears_company_through_http_middleware(): void
+    {
+        // ConvertEmptyStringsToNull 미들웨어가 '' 를 null 로 바꿔도 배정 해제가 동작해야 한다.
+        $this->seedTree();
+        $user = User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active']);
+
+        $res = $this->actingAs($user)->postJson('/smart-company-api/api_updateWbsRow', [
+            'args' => ['TST-01-W-1.1.1', ['담당사' => '']], 'siteId' => 'ALL',
+        ]);
+
+        $res->assertStatus(200)->assertJsonPath('success', true);
+        $this->assertNull(WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->value('company'));
     }
 }

@@ -1164,6 +1164,11 @@
       getProjectProgressSummary: (projectId) => gsRun('api_getProjectProgressSummary', [projectId], { success: false }),
       processWbsManual: (projectId) => gsRun('api_processWbsManual', [projectId], { success: false }),
       markWbsStatus: (wbsId, status) => gsRun('api_markWbsStatus', [wbsId, status], { success: false }),
+      createSafetyCardForWbs: (wbsId, date) => gsRun('api_createSafetyCardForWbs', [wbsId, date || null], { success: false }),
+      getTodayWbsWork: (projectId) => gsRun('api_getTodayWbsWork', [projectId], { success: false, items: [] }),
+      getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
+      assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
+      getAssignableEmployees: () => gsRun('api_getAssignableEmployees', [], []),
       getToolTransactions: () => gsRun('api_getToolTransactions', [], []),
       getVendorList:      () => gsRun('api_getVendorList',     [], []),
       createVendor:       (data) => gsRun('api_createVendor',  [data], {success:false}),
@@ -2523,7 +2528,7 @@
         pageContainer.innerHTML = skeleton();
         try {
           var safetyStorageKey = 'smart_ai_safety_work_items_v2';
-          var selectedWorkId = window._safetySelectedWorkId || 'WRK-2605-001';
+          var selectedWorkId = window._safetySelectedWorkId || null;
           var currentFilter = window._safetyFilter || 'all';
 
           var CP1252_MAP = {
@@ -2577,50 +2582,27 @@
             return obj;
           }
 
+          // 데모 카드 시드는 폐기됨(2026-07-16 정리) — 빈 서버는 빈 목록으로 시작한다.
+          var DEMO_SAFETY_IDS = ['WRK-2605-001', 'WRK-2605-002', 'WRK-2605-003'];
           function defaultSafetyItems() {
-            return [
-              {
-                id:'WRK-2605-001', project:'LGES-AZ 오피스 전기', site:'2층 사무실',
-                title:'천장 전기 배선 정리 및 신규 케이블 포설', crew:3, qty:30, unit:'m',
-                due:'오늘 17:00', planStatus:'승인완료', tbmStatus:'완료', closeStatus:'마감대기',
-                progressStatus:'미분석', progress:60, doneQty:18, totalQty:30,
-                workText:'천장 전기 배선 정리 및 신규 케이블 포설. 작업자는 3명이고 사다리를 사용합니다. 예정 작업량은 30m입니다.',
-                closeText:'천장 배선 18m 포설 완료. 자재 부족으로 나머지 12m는 내일 진행 예정. 천장 내부 장애물로 작업 속도 지연.',
-                signatures:[{name:'김철수', role:'전기공', signed:true, time:'07:42'}, {name:'이민준', role:'보조', signed:true, time:'07:43'}, {name:'임성훈', role:'감시자', signed:false, time:'-'}],
-                issues:[{type:'미조치', text:'자재 부족으로 잔여 12m 대기', owner:'구매팀', status:'조치중'}]
-              },
-              {
-                id:'WRK-2605-002', project:'HFF-02 장비 설치', site:'Production Bay B',
-                title:'컨트롤 패널 앵커 설치 및 케이블 트레이 보강', crew:4, qty:10, unit:'ea',
-                due:'오늘 13:00', planStatus:'검토중', tbmStatus:'대기', closeStatus:'시작전',
-                progressStatus:'미분석', progress:35, doneQty:0, totalQty:10,
-                workText:'컨트롤 패널 앵커 설치 및 케이블 트레이 보강. 해머드릴, 앵커볼트, 사다리 사용. 예정 작업량은 10개소입니다.',
-                closeText:'', signatures:[{name:'박지호', role:'팀리더', signed:false, time:'-'}, {name:'최동혁', role:'설치', signed:false, time:'-'}, {name:'강승우', role:'장비', signed:false, time:'-'}, {name:'임성훈', role:'보조', signed:false, time:'-'}],
-                issues:[{type:'위험상황', text:'케이블 트레이 모서리 날카로움', owner:'박소장', status:'조치중'}]
-              },
-              {
-                id:'WRK-2605-003', project:'SST-03 배관 수정', site:'Utility Room',
-                title:'기존 배관 철거 후 신규 라인 12m 설치', crew:5, qty:12, unit:'m',
-                due:'내일', planStatus:'초안', tbmStatus:'대기', closeStatus:'시작전',
-                progressStatus:'미분석', progress:15, doneQty:0, totalQty:12,
-                workText:'기존 배관 철거 후 신규 라인 12m 설치. 절단 공구와 리프트를 사용합니다.',
-                closeText:'', signatures:[{name:'김철수', role:'배관공', signed:false, time:'-'}, {name:'이민준', role:'보조', signed:false, time:'-'}],
-                issues:[{type:'아차사고', text:'배관 자재 이동 중 통로 협소', owner:'현장팀', status:'완료'}]
-              }
-            ];
+            return [];
+          }
+          function stripDemoSafetyItems(items) {
+            if (!Array.isArray(items)) return [];
+            return items.filter(function(it) { return it && DEMO_SAFETY_IDS.indexOf(it.id) < 0; });
           }
 
           function loadSafetyItemsOffline() {
             try {
               var raw = localStorage.getItem(safetyStorageKey);
               if (raw) {
-                return JSON.parse(raw);
+                return stripDemoSafetyItems(JSON.parse(raw));
               }
               var legacyRaw = localStorage.getItem('smart_ai_safety_work_items_v1');
               if (legacyRaw) {
                 var legacyData = JSON.parse(legacyRaw);
                 if (Array.isArray(legacyData)) {
-                  var repairedData = repairObject(legacyData);
+                  var repairedData = stripDemoSafetyItems(repairObject(legacyData));
                   localStorage.setItem(safetyStorageKey, JSON.stringify(repairedData));
                   return repairedData;
                 }
@@ -2636,6 +2618,8 @@
             try {
               var res = await gsRun('api_getSafetyWorkItems', [], null);
               if (res && res.success && Array.isArray(res.items)) {
+                // 정리 마이그레이션이 아직 안 돈 서버(백업 복원 등)에서 데모 카드가 부활하지 않게 서버 응답도 필터.
+                res.items = stripDemoSafetyItems(res.items);
                 if (res.items.length === 0) {
                   // First run with an empty server: migrate any local-only items up.
                   var local = loadSafetyItemsOffline();
@@ -2903,6 +2887,19 @@
 
           function renderAllSafetyTabs() {
             renderKpis();
+            // 등록된 작업이 없으면(데모 카드 제거 후 초기 상태) 선택 작업에 의존하는 탭 대신 빈 상태 안내.
+            if (safetyItems.length === 0) {
+              var emptyHtml = '<div class="panel"><div class="panel-body" style="padding:48px 24px;text-align:center">'
+                + '<i class="ph ph-clipboard-text" style="font-size:48px;color:var(--text-tertiary)"></i>'
+                + '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin:12px 0 6px">등록된 작업이 없습니다</div>'
+                + '<div style="font-size:13px;color:var(--text-secondary)">상단의 <strong>오늘 작업 등록</strong> 버튼으로 첫 작업을 등록하면<br>AI 계획서 → TBM/서명 → 마감 → 공정율 추천 흐름이 시작됩니다.</div>'
+                + '</div></div>';
+              ['s-today', 's-ai-plan', 's-tbm', 's-close', 's-issues', 's-records'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.innerHTML = emptyHtml;
+              });
+              return;
+            }
             renderTodayTab();
             renderPlanTab();
             renderTbmTab();
@@ -7276,426 +7273,6 @@
         });
       };
 
-      // ══════════════════════════════════════════════════════
-      // WBS — 실시간 공정 관리 (AI 메뉴얼 분석 기반)
-      // ══════════════════════════════════════════════════════
-      window.WBS_PROJECTS = [
-        { id: 'HFF-02',  name: 'Hoffman Logistics Hub' },
-        { id: 'LGES-AZ', name: 'LGES Battery Plant AZ' },
-        { id: 'NV-05',   name: 'Nevada EV Plant' },
-        { id: 'SST-03',  name: 'Samsung Taylor Fab' },
-        { id: 'HWH-04',  name: 'Hanwha Solar Site' }
-      ];
-      window.WBS_CURRENT_PROJECT = 'HFF-02';
-
-      async function renderWbs() {
-        pageContainer.innerHTML = skeleton();
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
-        try {
-          var [treeRes, sumRes] = await Promise.all([
-            window.API.getProjectWbsTree(projectId),
-            window.API.getProjectProgressSummary(projectId)
-          ]);
-
-          var tree = treeRes && treeRes.success ? (treeRes.stages || []) : [];
-          var sum  = sumRes  && sumRes.success  ? sumRes : { totalWbsCount: 0, progress: 0 };
-
-          // Stageë³„ ì§„ì²™ë¥  ë§µ (ì„œë²„ì—ì„œ ë°›ì€ ë°ì´í„°)
-          var stageProgressMap = {};
-          (sum.stages || []).forEach(function(s){ stageProgressMap[String(s.stage_no)] = s.progress; });
-
-          // í†µê³„ ê³„ì‚°
-          var totalSubTasks = 0;
-          var totalManhours = 0;
-          var byCompany = { NAHSHON: 0, AUTORICA: 0, 'AI-KOREA': 0, 'M-SOL': 0 };
-          var ehsHigh = 0;
-          tree.forEach(function(stage){
-            (stage.tasks||[]).forEach(function(task){
-              (task.sub_tasks||[]).forEach(function(sub){
-                totalSubTasks++;
-                totalManhours += parseFloat(sub.manhours)||0;
-                if (byCompany[sub.company] !== undefined) byCompany[sub.company] += parseFloat(sub.manhours)||0;
-                if (sub.ehs === 'high') ehsHigh++;
-              });
-            });
-          });
-
-          var projOptions = window.WBS_PROJECTS.map(function(p){
-            return '<option value="' + p.id + '"' + (p.id === projectId ? ' selected' : '') + '>' + p.id + ' â€” ' + p.name + '</option>';
-          }).join('');
-
-          // í˜‘ë ¥ì‚¬ ë§‰ëŒ€
-          var companyBars = Object.keys(byCompany).map(function(c){
-            var mh = byCompany[c];
-            var pct = totalManhours > 0 ? (mh / totalManhours * 100) : 0;
-            var color = c === 'NAHSHON' ? '#2563eb' : c === 'AUTORICA' ? '#f59e0b' : c === 'AI-KOREA' ? '#10b981' : '#8b5cf6';
-            return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:3px"><span>' + c + '</span><span class="cell-mono">' + mh.toLocaleString() + ' MH (' + pct.toFixed(0) + '%)</span></div>' +
-              '<div style="height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + '"></div></div></div>';
-          }).join('');
-
-          // WBS íŠ¸ë¦¬
-          var treeHtml;
-          if (tree.length === 0) {
-            treeHtml = '<div style="text-align:center;padding:48px;color:var(--text-tertiary)">' +
-              '<i class="ph ph-tree-structure" style="font-size:48px;color:#7c3aed;margin-bottom:12px"></i>' +
-              '<div style="font-size:16px;color:white;margin-bottom:8px">ì•„ì§ WBSê°€ ìƒì„±ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤</div>' +
-              '<div style="font-size:13px">ë§¤ë‰´ì–¼ PDFë¥¼ <strong style="color:#7c3aed">WBS_MANUAL/01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„<br>ì•„ëž˜ <strong>AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”.</div>' +
-              '</div>';
-          } else {
-            treeHtml = tree.map(function(stage, sIdx){
-              var stageMh = 0, subCount = 0, stageCompleted = 0;
-              (stage.tasks||[]).forEach(function(t){ (t.sub_tasks||[]).forEach(function(s){
-                stageMh += parseFloat(s.manhours)||0;
-                subCount++;
-                if (s.status === 'ì™„ë£Œ') stageCompleted++;
-              }); });
-              var stagePct = stageProgressMap[String(stage.stage_no)] || 0;
-              var stageColor = stagePct >= 100 ? '#10b981' : stagePct >= 50 ? '#f59e0b' : '#7c3aed';
-
-              var tasksHtml = (stage.tasks||[]).map(function(task, tIdx){
-                // Taskë³„ ì§„ì²™ë¥  (sub_tasks í‰ê· )
-                var taskCompleted = 0, taskTotal = (task.sub_tasks||[]).length;
-                (task.sub_tasks||[]).forEach(function(s){ if (s.status === 'ì™„ë£Œ') taskCompleted++; });
-                var taskPct = taskTotal > 0 ? (taskCompleted / taskTotal * 100) : 0;
-
-                var subHtml = (task.sub_tasks||[]).map(function(sub){
-                  var status = sub.status || 'AIìƒì„±';
-                  var isDone = status === 'ì™„ë£Œ';
-                  var isProg = status === 'ì§„í–‰ì¤‘';
-                  var ehsBadge = sub.ehs === 'high' ? '<span style="background:#ef4444;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">ðŸ”´ ìœ„í—˜</span>' : sub.ehs === 'medium' ? '<span style="background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">âš ï¸ ì£¼ì˜</span>' : '';
-                  var companyColor = sub.company === 'NAHSHON' ? '#2563eb' : sub.company === 'AUTORICA' ? '#f59e0b' : sub.company === 'AI-KOREA' ? '#10b981' : sub.company === 'M-SOL' ? '#8b5cf6' : '#64748b';
-                  var rowBg = isDone ? 'rgba(16,185,129,0.08)' : isProg ? 'rgba(245,158,11,0.08)' : 'var(--bg-base)';
-                  var rowBorder = isDone ? '#10b981' : isProg ? '#f59e0b' : 'transparent';
-                  var nameStyle = isDone ? 'text-decoration:line-through;color:#10b981;opacity:0.85' : 'color:white';
-                  var statusIcon = isDone ? '<i class="ph ph-check-circle" style="color:#10b981;font-size:18px"></i>'
-                    : isProg ? '<i class="ph ph-spinner" style="color:#f59e0b;font-size:18px"></i>'
-                    : '<i class="ph ph-circle" style="color:var(--text-tertiary);font-size:18px"></i>';
-                  // ë¹ ë¥¸ í† ê¸€ ë²„íŠ¼ (ì™„ë£Œ â†” AIìƒì„±)
-                  var toggleAction = isDone ? 'AIìƒì„±' : 'ì™„ë£Œ';
-                  var toggleLabel = isDone ? 'â†» ë¯¸ì™„ë£Œë¡œ' : 'âœ“ ì™„ë£Œ';
-                  var toggleBg = isDone ? '#64748b' : '#10b981';
-
-                  return '<div class="wbs-subtask" data-wbsid="' + sub.wbs_id + '" data-status="' + status + '" style="display:grid;grid-template-columns:auto auto 1fr auto auto auto auto;gap:10px;align-items:center;padding:8px 12px;border-radius:6px;background:' + rowBg + ';margin-bottom:4px;border:1px solid ' + rowBorder + ';transition:all 0.15s">' +
-                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center" title="' + toggleLabel + '">' + statusIcon + '</button>' +
-                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:60px">' + (sub.sub_no || '') + '</span>' +
-                    '<span style="font-size:13px;' + nameStyle + ';cursor:pointer" onclick="openWbsEditModal(\'' + sub.wbs_id + '\')">' + (sub.sub_name || '') + ehsBadge + '</span>' +
-                    '<span style="font-size:11px;color:' + companyColor + ';font-weight:700;min-width:80px;text-align:right">' + (sub.company || '-') + '</span>' +
-                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:60px;text-align:right">' + (sub.manhours || 0) + 'MH</span>' +
-                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:50px;text-align:right">' + (sub.days || 0) + 'ì¼</span>' +
-                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:' + toggleBg + ';color:white;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">' + toggleLabel + '</button>' +
-                    '</div>';
-                }).join('');
-
-                return '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:6px 10px;background:rgba(124,58,237,0.08);border-left:3px solid #7c3aed;border-radius:4px">' +
-                  '<span class="cell-mono" style="font-size:11px;color:#7c3aed;font-weight:700">Task ' + (task.task_no||'') + '</span>' +
-                  '<span style="font-size:14px;color:white;font-weight:600">' + (task.task_name||'') + '</span>' +
-                  '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
-                  '<span>' + taskCompleted + '/' + taskTotal + ' ì™„ë£Œ</span>' +
-                  '<div style="width:80px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
-                  '<span class="cell-mono" style="color:white;font-weight:700;min-width:32px;text-align:right">' + taskPct.toFixed(0) + '%</span>' +
-                  '</span></div>' + subHtml + '</div>';
-              }).join('');
-
-              return '<details ' + (sIdx === 0 ? 'open' : '') + ' style="margin-bottom:18px;border:1px solid var(--border-default);border-radius:10px;overflow:hidden">' +
-                '<summary style="padding:14px 18px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
-                '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
-                '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700">STAGE ' + (stage.stage_no || sIdx + 1) + '</span>' +
-                '<span style="font-size:16px;font-weight:700;color:white">' + (stage.stage_name || '') + '</span>' +
-                '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
-                '<span><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
-                '<span><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
-                '<div style="display:flex;align-items:center;gap:8px"><div style="width:120px;height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + stagePct + '%;background:' + stageColor + '"></div></div>' +
-                '<span class="cell-mono" style="color:' + stageColor + ';font-weight:700;min-width:44px;text-align:right">' + stagePct.toFixed(1) + '%</span></div>' +
-                '</div></summary>' +
-                '<div style="padding:14px 18px">' + tasksHtml + '</div></details>';
-            }).join('');
-          }
-
-          pageContainer.innerHTML =
-            '<div class="header-section"><div>' +
-            '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> ê³µì • ê´€ë¦¬ (WBS)</h1>' +
-            '<p class="page-subtitle">AI ë©”ë‰´ì–¼ ë¶„ì„ ê¸°ë°˜ ì‹¤ì‹œê°„ ê³µì • ì¶”ì  Â· Stage â†’ Task â†’ SubTask ê³„ì¸µ êµ¬ì¡°</p>' +
-            '</div>' +
-            '<div class="action-row" style="gap:8px">' +
-            '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">' + projOptions + '</select>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
-            '<i class="ph ph-robot"></i> ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„</button>' +
-            '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> ë©”ë‰´ì–¼ í´ë”</button>' +
-            '</div></div>' +
-            // KPI Row (6ê°œ)
-            '<div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ SubTask</div><div class="kpi-value">' + totalSubTasks + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
-            '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">ì „ì²´ ì§„ì²™ë¥ </div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
-            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:4px"><div style="height:100%;width:' + (sum.progress||0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">âœ… ì™„ë£Œ</div><div class="kpi-value" style="color:#10b981">' + (sum.completedCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (totalSubTasks > 0 ? ((sum.completedCount||0)/totalSubTasks*100).toFixed(0) : 0) + '% of all</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">â³ ì§„í–‰ì¤‘</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì˜ˆìƒ ì´ê³µìˆ˜</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">EHS ê³ ìœ„í—˜</div><div class="kpi-value" style="color:#ef4444">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ìœ„í—˜ìž‘ì—…</span></div></div>' +
-            '</div>' +
-            // í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜ + AI ì•ˆë‚´
-            '<div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:18px">' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜</div></div>' +
-            '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px">WBS ë°ì´í„° ì—†ìŒ</div>') + '</div></div>' +
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:18px;display:flex;align-items:center;gap:18px">' +
-            '<i class="ph ph-robot" style="font-size:42px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div style="flex:1">' +
-            '<div style="font-size:14px;font-weight:700;color:#c4b5fd;margin-bottom:6px">ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ ì‹œìŠ¤í…œ</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">ì„¤ì¹˜ ë§¤ë‰´ì–¼/ì‹œë°©ì„œ PDFë¥¼ <strong style="color:white">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„ <strong style="color:#c4b5fd">AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ë©´, Gemini 2.5 Proê°€ ìžë™ìœ¼ë¡œ ìž‘ì—…ì„ ìž˜ê²Œ ìª¼ê°œ WBSë¥¼ ìƒì„±í•©ë‹ˆë‹¤. Stage / Task / SubTask 3ë‹¨ê³„ ê³„ì¸µ êµ¬ì¡°ë¡œ í˜‘ë ¥ì‚¬/EHS/ê³µìˆ˜ê¹Œì§€ ìžë™ ë¶„ë¥˜.</div>' +
-            '</div></div></div>' +
-            // WBS íŠ¸ë¦¬
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> WBS êµ¬ì¡° â€” ' + projectId + '</div>' +
-            '<div style="font-size:11px;color:var(--text-tertiary)">í´ë¦­í•˜ì—¬ ìƒì„¸ íŽ¸ì§‘</div></div>' +
-            '<div class="panel-body">' + treeHtml + '</div></div>';
-
-        } catch (err) {
-          renderError('WBS ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message);
-          console.error(err);
-        }
-      }
-
-      window.changeWbsProject = function(projectId) {
-        window.WBS_CURRENT_PROJECT = projectId;
-        renderWbs();
-      };
-
-      window.openWbsManualFolder = function() {
-        window.open('https://drive.google.com/drive/folders/1rC8RSb966nL3H_vaqKD-LkDLWsNdfnl3', '_blank');
-      };
-
-      // ë¹ ë¥¸ ì™„ë£Œ í† ê¸€ â€” KPI/Stage/Task ì§„ì²™ë¥  ì¦‰ì‹œ ê°±ì‹ 
-      window.toggleWbsComplete = async function(wbsId, newStatus) {
-        // ìºì‹œ ë¬´íš¨í™” (ì§„ì²™ë¥  ì¦‰ì‹œ ë°˜ì˜)
-        if (window.apiCache) {
-          Object.keys(window.apiCache).forEach(function(k){
-            if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) {
-              delete window.apiCache[k];
-            }
-          });
-        }
-        // ë‚™ê´€ì  UI: í´ë¦­ ì¦‰ì‹œ í–‰ ìƒ‰ìƒ ë³€ê²½
-        var row = document.querySelector('.wbs-subtask[data-wbsid="' + wbsId + '"]');
-        if (row) {
-          row.style.opacity = '0.5';
-          row.style.pointerEvents = 'none';
-        }
-        try {
-          var res = await window.API.markWbsStatus(wbsId, newStatus);
-          if (res && res.success) {
-            // ì „ì²´ ë¦¬ë Œë” (KPI + Stage ì§„ì²™ë¥  ëª¨ë‘ ê°±ì‹ )
-            renderWbs();
-          } else {
-            alert('ìƒíƒœ ë³€ê²½ ì‹¤íŒ¨: ' + (res && res.error ? res.error : 'unknown'));
-            if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
-          }
-        } catch(e) {
-          alert('ì˜¤ë¥˜: ' + e.message);
-          if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
-        }
-      };
-
-      // AI 메뉴얼 분석 — 파일 업로드 → 분석 / 분석된 매뉴얼 리스트에서 적용
-      window.__wbsManualModal = async function() {
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
-        var siteId = window.currentSiteId || 'ALL';
-        var tokenEl = document.querySelector('meta[name="csrf-token"]');
-        var csrf = tokenEl ? tokenEl.getAttribute('content') : '';
-
-        function clearWbsCache() {
-          if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) {
-            if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) delete window.apiCache[k];
-          });
-        }
-
-        var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-        modal.innerHTML =
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:640px;max-width:100%;max-height:88vh;overflow-y:auto">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<h2 style="font-size:18px;margin:0;display:flex;align-items:center;gap:8px"><i class="ph ph-robot" style="color:#7c3aed"></i> AI 메뉴얼 분석</h2>' +
-              '<button id="wbsm-close" style="background:none;border:none;color:var(--text-tertiary);font-size:24px;line-height:1;cursor:pointer">&times;</button>' +
-            '</div>' +
-            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">현장/프로젝트: <b>' + projectId + '</b></div>' +
-            '<div style="border:1px dashed var(--border-default);border-radius:12px;padding:16px;margin-bottom:18px">' +
-              '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-upload-simple"></i> 새 매뉴얼 업로드 → 분석</div>' +
-              '<input type="file" id="wbsm-file" accept=".pdf,image/*" style="width:100%;color:var(--text-secondary);font-size:12px;margin-bottom:10px">' +
-              '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">PDF 또는 이미지(최대 32MB). 선택된 AI 엔진이 매뉴얼 본문을 직접 읽어 WBS를 생성합니다. (수 분 소요 가능)</div>' +
-              '<button id="wbsm-analyze" style="width:100%;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">📄 업로드 &amp; 분석 실행</button>' +
-            '</div>' +
-            '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-list-checks"></i> 분석된 매뉴얼</div>' +
-            '<div id="wbsm-list" style="font-size:12px;color:var(--text-tertiary)">불러오는 중...</div>' +
-          '</div>';
-        document.body.appendChild(modal);
-
-        function close() { modal.remove(); }
-        modal.querySelector('#wbsm-close').addEventListener('click', close);
-        modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
-
-        function statusPill(s) {
-          var c = s === 'completed' ? 'var(--status-success)' : (s === 'failed' ? 'var(--status-danger)' : 'var(--status-warning)');
-          var t = s === 'completed' ? '완료' : (s === 'failed' ? '실패' : '분석중');
-          return '<span style="color:' + c + ';font-weight:700">' + t + '</span>';
-        }
-
-        async function loadList() {
-          var box = modal.querySelector('#wbsm-list');
-          try {
-            var res = await fetch('/wbs-api/manuals?project=' + encodeURIComponent(projectId), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
-            var json = await res.json();
-            var items = (json && json.manuals) || [];
-            if (!items.length) { box.innerHTML = '<div style="padding:12px 0;color:var(--text-tertiary)">아직 분석된 매뉴얼이 없습니다. 위에서 파일을 업로드하세요.</div>'; return; }
-            box.innerHTML = items.map(function (m) {
-              return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-subtle)">' +
-                '<div style="min-width:0">' +
-                  '<div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="ph ph-file-text"></i> ' + (m.original_name || '-') + '</div>' +
-                  '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + (m.engine ? (m.engine === 'claude' ? 'Claude' : 'Gemini') : '-') + ' · ' + (m.stages || 0) + ' Stages / ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' Sub · ' + (m.analyzed_at || m.created_at || '') + ' · ' + statusPill(m.status) + '</div>' +
-                '</div>' +
-                '<div style="display:flex;gap:6px;flex-shrink:0">' +
-                  '<a href="' + m.url + '" target="_blank" style="padding:6px 10px;font-size:11px;text-decoration:none;border:1px solid var(--border-default);border-radius:6px;color:var(--text-secondary)">보기</a>' +
-                  '<button class="wbsm-apply" data-project="' + m.project_code + '" style="padding:6px 10px;font-size:11px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer">적용</button>' +
-                '</div>' +
-              '</div>';
-            }).join('');
-            box.querySelectorAll('.wbsm-apply').forEach(function (btn) {
-              btn.addEventListener('click', function () {
-                window.WBS_CURRENT_PROJECT = btn.getAttribute('data-project');
-                clearWbsCache();
-                close();
-                renderWbs();
-              });
-            });
-          } catch (e) { box.innerHTML = '<div style="color:var(--status-danger)">리스트 로드 실패: ' + e.message + '</div>'; }
-        }
-
-        modal.querySelector('#wbsm-analyze').addEventListener('click', async function () {
-          var input = modal.querySelector('#wbsm-file');
-          if (!input.files || !input.files[0]) { alert('분석할 매뉴얼 파일을 선택하세요.'); return; }
-          var btn = this; btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = '🤖 분석 중... (수 분 소요 가능)';
-          var fd = new FormData();
-          fd.append('manual', input.files[0]);
-          fd.append('project_code', projectId);
-          fd.append('site_id', siteId);
-          try {
-            var res = await fetch('/wbs-api/upload-manual', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, credentials: 'same-origin', body: fd });
-            var json = await res.json();
-            if (json && json.success) {
-              var r = (json.result && json.result.results && json.result.results[0]) || {};
-              alert('✅ 분석 완료: ' + (r.stages || 0) + ' Stages · ' + (r.tasks || 0) + ' Tasks · ' + (r.subTasks || 0) + ' SubTasks');
-              clearWbsCache();
-              loadList();
-              renderWbs();
-            } else {
-              alert('❌ 분석 실패: ' + (json && json.error ? json.error : ('HTTP ' + res.status)));
-            }
-          } catch (e) { alert('❌ 오류: ' + e.message); }
-          btn.disabled = false; btn.textContent = oldLabel;
-        });
-
-        loadList();
-      };
-      window.runWbsAiAnalysis = function () { return window.__wbsManualModal(); };
-
-      window.__legacyRunWbsAiAnalysis = async function() {
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
-        var ok = confirm('ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ì„ ì‹¤í–‰í•˜ì‹œê² ìŠµë‹ˆê¹Œ?\n\ní˜„ìž¥: ' + projectId + '\ní´ë”: WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°\n\nGemini 2.5 Proê°€ í´ë” ë‚´ ëª¨ë“  ë§¤ë‰´ì–¼ì„ ë¶„ì„í•˜ì—¬\nWBSë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤. (ìˆ˜ ë¶„ ì†Œìš” ê°€ëŠ¥)');
-        if (!ok) return;
-
-        var overlay = document.createElement('div');
-        overlay.id = 'wbs-ai-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px';
-        overlay.innerHTML =
-          '<div style="width:80px;height:80px;border:5px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:18px;font-weight:700">ðŸ¤– Gemini 2.5 Pro ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.7);font-size:13px">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” â†’ AI ë¶„ì„ â†’ WBS ìƒì„±</div>' +
-          '<div style="color:rgba(255,255,255,0.5);font-size:11px">ëŒ€ìš©ëŸ‰ PDFì˜ ê²½ìš° 2~5ë¶„ ì†Œìš”ë©ë‹ˆë‹¤. íŽ˜ì´ì§€ ë‹«ì§€ ë§ˆì„¸ìš”.</div>';
-        document.body.appendChild(overlay);
-
-        try {
-          var result = await window.API.processWbsManual(projectId);
-          overlay.remove();
-
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
-          var icon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var detailRows = (result.results || []).map(function(r) {
-            var sIcon = r.status === 'success' ? 'âœ…' : 'âŒ';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.stages + ' Stages Â· ' + r.tasks + ' Tasks Â· ' + r.subTasks + ' SubTasks</span>'
-              : '<span style="color:var(--status-danger)">' + (r.error || '') + '</span>';
-            return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-              sIcon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
-          }).join('');
-
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:560px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:42px;text-align:center;margin-bottom:12px">' + icon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:12px">AI ë©”ë‰´ì–¼ ë¶„ì„ ê²°ê³¼</h2>' +
-            (result.processed === 0 && result.success
-              ? '<div style="text-align:center;color:var(--text-secondary);padding:20px">ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.<br><span style="font-size:11px;color:var(--text-tertiary)">01_ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ë§¤ë‰´ì–¼ì„ ì—…ë¡œë“œí•˜ì„¸ìš”.</span></div>'
-              : !result.success
-                ? '<div style="text-align:center;color:var(--status-danger);padding:20px">' + (result.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div>'
-                : '<div style="max-height:320px;overflow-y:auto;margin-bottom:18px">' + detailRows + '</div>') +
-            '<button id="wbs-result-close" style="width:100%;background:#7c3aed;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-          modal.querySelector('#wbs-result-close').addEventListener('click', function() {
-            modal.remove();
-            renderWbs();
-          });
-        } catch(err) {
-          if (document.getElementById('wbs-ai-overlay')) document.getElementById('wbs-ai-overlay').remove();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜:\n' + err.message);
-        }
-      };
-
-      window.openWbsEditModal = function(wbsId) {
-        var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
-        modal.innerHTML =
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:480px">' +
-          '<h3 style="margin:0 0 14px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS íŽ¸ì§‘</h3>' +
-          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsId + '</div>' +
-          '<div style="display:grid;gap:12px">' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ìƒíƒœ</label>' +
-          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
-          '<option value="AIìƒì„±">ðŸ“ AIìƒì„± (ëŒ€ê¸°)</option><option value="ê²€ìˆ˜ì™„ë£Œ">âœ… ê²€ìˆ˜ì™„ë£Œ</option><option value="ì§„í–‰ì¤‘">â³ ì§„í–‰ì¤‘</option><option value="ì™„ë£Œ">ðŸŽ¯ ì™„ë£Œ</option><option value="ë³´ë¥˜">â¸ï¸ ë³´ë¥˜</option></select></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ë‹´ë‹¹ì‚¬</label>' +
-          '<select id="wbs-edit-company" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
-          '<option value="NAHSHON">NAHSHON</option><option value="AUTORICA">AUTORICA</option><option value="AI-KOREA">AI-KOREA</option><option value="M-SOL">M-SOL</option></select></div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì‹œìž‘ì˜ˆì •</label>' +
-          '<input type="date" id="wbs-edit-start" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì¢…ë£Œì˜ˆì •</label>' +
-          '<input type="date" id="wbs-edit-end" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
-          '</div></div>' +
-          '<div style="display:flex;gap:10px;margin-top:18px">' +
-          '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">ì·¨ì†Œ</button>' +
-          '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">ì €ìž¥</button>' +
-          '</div></div>';
-        document.body.appendChild(modal);
-
-        modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
-        modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
-          var updates = {
-            'ìƒíƒœ': document.getElementById('wbs-edit-status').value,
-            'ë‹´ë‹¹ì‚¬': document.getElementById('wbs-edit-company').value,
-            'ì‹œìž‘ì˜ˆì •': document.getElementById('wbs-edit-start').value,
-            'ì¢…ë£Œì˜ˆì •': document.getElementById('wbs-edit-end').value
-          };
-          try {
-            var res = await window.API.updateWbsRow(wbsId, updates);
-            if (res.success) {
-              modal.remove();
-              renderWbs();
-            } else {
-              alert('ì €ìž¥ ì‹¤íŒ¨: ' + (res.error || 'unknown'));
-            }
-          } catch(e) {
-            alert('ì €ìž¥ ì˜¤ë¥˜: ' + e.message);
-          }
-        });
-        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-      };
-
       // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
@@ -8049,177 +7626,431 @@
 
       // ══════════════════════════════════════════════════════
       // WBS — 실시간 공정 관리 (AI 메뉴얼 분석 기반)
+      // 프로젝트 목록/공정 트리는 전부 DB(projects, wbs_items)에서 로드한다.
+      // 안전 작업카드와 연결된 SubTask 는 TBM 게이트("안전 없이 공정 없다")가 적용된다.
       // ══════════════════════════════════════════════════════
-      window.WBS_PROJECTS = [
-        { id: 'HFF-02',  name: 'Hoffman Logistics Hub' },
-        { id: 'LGES-AZ', name: 'LGES Battery Plant AZ' },
-        { id: 'NV-05',   name: 'Nevada EV Plant' },
-        { id: 'SST-03',  name: 'Samsung Taylor Fab' },
-        { id: 'HWH-04',  name: 'Hanwha Solar Site' }
-      ];
-      window.WBS_CURRENT_PROJECT = 'HFF-02';
+      window.WBS_CURRENT_PROJECT = null;
+
+      var WBS_STATUS_META = {
+        'AI생성':   { color: '#8b5cf6', bg: 'rgba(139,92,246,0.13)',  icon: 'ph-sparkle' },
+        '검수완료': { color: '#3b82f6', bg: 'rgba(59,130,246,0.13)',  icon: 'ph-clipboard-text' },
+        '진행중':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.13)',  icon: 'ph-arrows-clockwise' },
+        '완료':     { color: '#10b981', bg: 'rgba(16,185,129,0.13)',  icon: 'ph-check-circle' },
+        '보류':     { color: '#64748b', bg: 'rgba(100,116,139,0.13)', icon: 'ph-pause-circle' }
+      };
+      var WBS_COMPANY_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
+      var WBS_GRID_COLS = '92px 58px minmax(220px,1fr) 100px 62px 60px 48px 132px 132px';
+
+      function wbsEsc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function(ch) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+        });
+      }
+      function wbsJsArg(v) {
+        return wbsEsc(String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+      }
+      function wbsStatusMeta(status) {
+        return WBS_STATUS_META[status] || { color: 'var(--text-tertiary)', bg: 'var(--bg-base)', icon: 'ph-circle' };
+      }
+      function wbsStatusPill(status) {
+        var m = wbsStatusMeta(status);
+        return '<span style="display:inline-flex;align-items:center;gap:5px;background:' + m.bg + ';color:' + m.color + ';font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap">' +
+          '<i class="ph ' + m.icon + '"></i>' + wbsEsc(status || '-') + '</span>';
+      }
+      function wbsCompanyColor(name, companies) {
+        var idx = companies.indexOf(name);
+        return idx >= 0 ? WBS_COMPANY_COLORS[idx % WBS_COMPANY_COLORS.length] : '#64748b';
+      }
+      // 임계경로 — 여기가 밀리면 준공이 밀린다.
+      function wbsCpBadge(sub) {
+        if (!sub.isCritical) return '';
+        return '<span title="임계경로 — 이 작업이 지연되면 준공일이 그대로 밀립니다" style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap">★ 임계</span>';
+      }
+
+      // 여유(float)가 적은 작업은 곧 임계경로가 된다.
+      function wbsPredsChip(sub) {
+        var out = '';
+        if (sub.preds && sub.preds.length) {
+          out += '<span title="선행작업: ' + wbsEsc(sub.preds.join(', ')) + '" style="color:var(--text-tertiary);font-size:10px;margin-left:8px;white-space:nowrap"><i class="ph ph-arrow-elbow-down-right"></i> ' + sub.preds.length + '</span>';
+        }
+        if (!sub.isCritical && sub.floatDays !== null && sub.floatDays !== undefined && sub.floatDays <= 5) {
+          out += '<span title="총 여유 ' + sub.floatDays + '일 — 임계경로에 근접" style="color:#f59e0b;font-size:10px;margin-left:6px;white-space:nowrap">여유 ' + sub.floatDays + 'd</span>';
+        }
+        return out;
+      }
+
+      // 인원 · 장비 — 안전계획의 입력값. 계획 대비 실제 서명 인원을 같이 보여준다.
+      function wbsCrewLabel(sub) {
+        if (!sub.crewSize) return '<span style="color:var(--text-tertiary)">-</span>';
+        var eq = (sub.equipment && sub.equipment.length)
+          ? ' <i class="ph ph-crane-tower" style="color:#f59e0b" title="장비: ' + wbsEsc(sub.equipment.join(', ')) + '"></i>' : '';
+        var actual = sub.actualCrew > 0 ? '<span style="color:#10b981">' + sub.actualCrew + '</span>/' : '';
+        return actual + sub.crewSize + '명' + eq;
+      }
+
+      function wbsSafetyChip(sub) {
+        if (sub.tbmGated) {
+          return '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="오늘 안전카드(' + wbsEsc(sub.safetyWorkCode || '') + ')의 TBM/서명이 완료되어야 공정을 진행할 수 있습니다" style="cursor:pointer;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-lock-key"></i> TBM 대기</span>';
+        }
+        if (sub.hasCardToday) {
+          return '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="오늘 안전카드 ' + wbsEsc(sub.safetyWorkCode || '') + ' — TBM 완료" style="cursor:pointer;background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-shield-check"></i> 안전완료</span>';
+        }
+        if (sub.safetyCardCount > 0) {
+          return '<span title="지난 안전카드 ' + sub.safetyCardCount + '장 (오늘자는 없음)" style="color:var(--text-tertiary);font-size:10px;margin-left:8px;white-space:nowrap"><i class="ph ph-shield"></i> ' + sub.safetyCardCount + '</span>';
+        }
+        return '';
+      }
+
+      // 오늘 할 일 — 현장이 매일 보는 목록. 임계경로 먼저, 다음 행동이 버튼으로 바로 보인다.
+      function wbsTodayPanel(today) {
+        if (!today || !today.success) return '';
+
+        var rows = (today.items || []).map(function(it) {
+          var act = it.nextAction;
+          var actColor = act === '안전계획' ? '#3b82f6' : act === 'TBM' ? '#f59e0b' : act === '시작' ? '#10b981' : 'var(--text-tertiary)';
+          var actIcon = act === '안전계획' ? 'ph-shield-plus' : act === 'TBM' ? 'ph-signature' : act === '시작' ? 'ph-play' : 'ph-arrows-clockwise';
+          var onClick = act === '안전계획'
+            ? 'window.createWbsSafetyCard(\'' + wbsJsArg(it.wbs_id) + '\')'
+            : act === 'TBM'
+              ? 'window.goToView(\'safety\')'
+              : act === '시작'
+                ? 'window.toggleWbsComplete(\'' + wbsJsArg(it.wbs_id) + '\',\'진행중\')'
+                : 'window.openWbsLaborModal(\'' + wbsJsArg(it.wbs_id) + '\')';
+
+          return '<div style="display:grid;grid-template-columns:auto minmax(200px,1fr) 150px 110px 96px;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-subtle);' +
+            (it.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;') + '">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:44px">' + wbsEsc(it.activity_id || '') + '</span>' +
+            '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary)">' + wbsEsc(it.sub_name) + '</span>' +
+            (it.isCritical ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">★</span>' : '') +
+            (it.ehs === 'high' ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">고위험</span>' : '') +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.stagePath || '') + '</div></span>' +
+            '<span style="font-size:11px;color:var(--text-secondary);cursor:pointer" onclick="window.openWbsLaborModal(\'' + wbsJsArg(it.wbs_id) + '\')" title="' + wbsEsc(it.crewText || '') + ' — 클릭하면 실투입 확인">' +
+            (it.crewSize ? '<i class="ph ph-users"></i> ' + it.crewSize + '명' : '<span style="color:var(--text-tertiary)">인원 없음</span>') +
+            ((it.equipment && it.equipment.length) ? ' <i class="ph ph-crane-tower" style="color:#f59e0b" title="' + wbsEsc(it.equipment.join(', ')) + '"></i>' : '') + '</span>' +
+            '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(it.plannedStart || '') + '~</span>' +
+            '<button onclick="' + onClick + '" style="background:none;border:1px solid ' + actColor + ';color:' + actColor + ';border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + actIcon + '"></i> ' + act + '</button>' +
+            '</div>';
+        }).join('');
+
+        var body = today.total === 0
+          ? '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">오늘(' + wbsEsc(today.date) + ') 예정된 작업이 없습니다.</div>'
+          : rows;
+
+        return '<div class="panel" style="margin-bottom:18px;border:1px solid rgba(59,130,246,0.35)">' +
+          '<div class="panel-header" style="background:rgba(59,130,246,0.06)">' +
+          '<div class="panel-title"><i class="ph ph-calendar-check" style="color:#3b82f6"></i> 오늘 할 일 — ' + wbsEsc(today.date) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:14px;font-size:11px">' +
+          '<span style="color:var(--text-secondary)">작업 <strong style="color:var(--text-primary)">' + today.total + '</strong></span>' +
+          (today.criticalCount > 0 ? '<span style="color:#ef4444">★ 임계 ' + today.criticalCount + '</span>' : '') +
+          (today.needsPlanCount > 0 ? '<span style="color:#3b82f6">안전계획 필요 ' + today.needsPlanCount + '</span>' : '') +
+          (today.tbmWaitCount > 0 ? '<span style="color:#f59e0b">TBM 대기 ' + today.tbmWaitCount + '</span>' : '') +
+          (today.plannedCrew > 0 ? '<span style="color:var(--text-secondary)">계획 인원 <strong style="color:var(--text-primary)">' + today.plannedCrew + '명</strong></span>' : '') +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:720px">' + body + '</div></div></div>';
+      }
+
+      function wbsProgressBar(pct, color, width) {
+        var p = Math.max(0, Math.min(100, Number(pct) || 0));
+        return '<div style="display:flex;align-items:center;gap:8px;min-width:' + (width || 110) + 'px">' +
+          '<div style="flex:1;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + p + '%;background:' + color + ';border-radius:3px"></div></div>' +
+          '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:34px;text-align:right">' + p + '%</span></div>';
+      }
+
+      function wbsHeaderHtml(projOptions) {
+        return '<div class="header-section"><div>' +
+          '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> 공정 관리 (WBS)</h1>' +
+          '<p class="page-subtitle">AI 메뉴얼 분석 기반 실시간 공정 추적 · Stage → Task → SubTask 계층 구조</p>' +
+          '</div>' +
+          '<div class="action-row" style="gap:8px">' +
+          (projOptions
+            ? '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;max-width:280px">' + projOptions + '</select>'
+            : '') +
+          '<button class="btn-secondary" onclick="window.refreshWbs()" title="프로젝트 목록/공정 데이터 새로고침"><i class="ph ph-arrows-clockwise"></i></button>' +
+          '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
+          '<i class="ph ph-robot"></i> AI 메뉴얼 분석</button>' +
+          '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>' +
+          '</div></div>';
+      }
+
+      // 프로젝트가 하나도 없을 때 — 새 프로젝트 시작 온보딩.
+      function wbsNoProjectsHtml() {
+        return '<div class="panel"><div class="panel-body" style="padding:56px 24px;text-align:center">' +
+          '<i class="ph ph-buildings" style="font-size:52px;color:var(--text-tertiary)"></i>' +
+          '<div style="font-size:18px;font-weight:700;color:var(--text-primary);margin:14px 0 6px">등록된 프로젝트가 없습니다</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:28px">새 프로젝트를 시작하려면 아래 순서대로 진행하세요.</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;max-width:860px;margin:0 auto;text-align:left">' +
+          wbsOnboardStep(1, 'ph-buildings', '프로젝트 등록', '관리자 → 현장 / PROJECT 관리에서 프로젝트를 등록하면 이 화면의 드롭다운에 나타납니다.', '<button class="btn-secondary" style="margin-top:10px" onclick="window.open(\'/admin\',\'_blank\')"><i class="ph ph-arrow-square-out"></i> 관리자 열기</button>') +
+          wbsOnboardStep(2, 'ph-file-pdf', '매뉴얼 업로드', '설치 매뉴얼/시방서 PDF 를 WBS_MANUAL / 01_처리대기 폴더에 업로드합니다.', '<button class="btn-secondary" style="margin-top:10px" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>') +
+          wbsOnboardStep(3, 'ph-robot', 'AI 메뉴얼 분석', 'AI 가 매뉴얼을 분석해 Stage / Task / SubTask 공정 트리를 자동 생성합니다.', '') +
+          '</div></div></div>';
+      }
+
+      // WBS 는 존재하지만 현재 선택된 현장(site) 스코프 밖에 있을 때 — 파괴적 재생성 유도 금지.
+      function wbsSiteScopedHtml(projectId, total) {
+        return '<div class="panel"><div class="panel-body" style="padding:48px 24px;text-align:center">' +
+          '<i class="ph ph-map-pin-line" style="font-size:48px;color:#f59e0b"></i>' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin:12px 0 6px">' + wbsEsc(projectId) + ' — 현재 현장 범위에 표시할 공정이 없습니다</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7">이 프로젝트에는 SubTask ' + total + '건의 WBS 가 있지만, 상단에서 선택한 현장 범위 밖에 있습니다.<br>' +
+          '상단 <strong>현장 선택을 Global</strong> 로 바꾸거나, 해당 WBS 가 속한 현장을 선택하세요.</div>' +
+          '</div></div>';
+      }
+
+      // 프로젝트는 있으나 WBS 가 아직 없을 때.
+      function wbsEmptyTreeHtml(projectId) {
+        return '<div class="panel"><div class="panel-body" style="padding:56px 24px;text-align:center">' +
+          '<i class="ph ph-tree-structure" style="font-size:52px;color:#7c3aed"></i>' +
+          '<div style="font-size:18px;font-weight:700;color:var(--text-primary);margin:14px 0 6px">' + wbsEsc(projectId) + ' — 아직 생성된 공정(WBS)이 없습니다</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:28px">매뉴얼을 업로드하고 AI 분석을 실행하면 공정 트리가 자동으로 만들어집니다.</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;max-width:640px;margin:0 auto;text-align:left">' +
+          wbsOnboardStep(1, 'ph-file-pdf', '매뉴얼 업로드', 'WBS_MANUAL / 01_처리대기 폴더에 설치 매뉴얼/시방서 PDF 를 업로드합니다.', '<button class="btn-secondary" style="margin-top:10px" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>') +
+          wbsOnboardStep(2, 'ph-robot', 'AI 메뉴얼 분석 실행', 'Stage / Task / SubTask 3단계 계층과 협력사 · EHS · 공수가 자동 분류됩니다.', '<button class="btn-primary" style="margin-top:10px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()"><i class="ph ph-robot"></i> AI 메뉴얼 분석</button>') +
+          '</div></div></div>';
+      }
+
+      function wbsOnboardStep(no, icon, title, desc, actionHtml) {
+        return '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:10px;padding:16px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+          '<span style="width:22px;height:22px;border-radius:50%;background:rgba(124,58,237,0.18);color:#a78bfa;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">' + no + '</span>' +
+          '<i class="ph ' + icon + '" style="font-size:18px;color:#a78bfa"></i>' +
+          '<span style="font-size:13px;font-weight:700;color:var(--text-primary)">' + title + '</span></div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">' + desc + '</div>' + actionHtml +
+          '</div>';
+      }
+
+      // 렌더 세대 토큰 — 프로젝트/현장을 빠르게 전환할 때 늦게 도착한 응답이 화면을 덮어쓰지 않게 한다.
+      var _wbsRenderGen = 0;
 
       async function renderWbs() {
+        var gen = ++_wbsRenderGen;
         pageContainer.innerHTML = skeleton();
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
         try {
-          var [treeRes, sumRes] = await Promise.all([
+          var projects = await window.API.getProjectList();
+          if (gen !== _wbsRenderGen) return;
+          projects = (Array.isArray(projects) ? projects : []).filter(function(p) { return p && p.code; });
+
+          if (projects.length === 0) {
+            pageContainer.innerHTML = wbsHeaderHtml('') + wbsNoProjectsHtml();
+            return;
+          }
+
+          var codes = projects.map(function(p) { return p.code; });
+          if (!window.WBS_CURRENT_PROJECT || codes.indexOf(window.WBS_CURRENT_PROJECT) < 0) {
+            window.WBS_CURRENT_PROJECT = codes[0];
+          }
+          var projectId = window.WBS_CURRENT_PROJECT;
+          var projOptions = projects.map(function(p) {
+            return '<option value="' + wbsEsc(p.code) + '"' + (p.code === projectId ? ' selected' : '') + '>' + wbsEsc(p.code) + ' — ' + wbsEsc(p.name) + '</option>';
+          }).join('');
+          var headerHtml = wbsHeaderHtml(projOptions);
+
+          var results = await Promise.all([
             window.API.getProjectWbsTree(projectId),
-            window.API.getProjectProgressSummary(projectId)
+            window.API.getProjectProgressSummary(projectId),
+            window.API.getTodayWbsWork(projectId)
           ]);
+          if (gen !== _wbsRenderGen) return;
+          var treeRes = results[0], sumRes = results[1], todayRes = results[2];
 
-          var tree = treeRes && treeRes.success ? (treeRes.stages || []) : [];
-          var sum  = sumRes  && sumRes.success  ? sumRes : { totalWbsCount: 0, progress: 0 };
+          // 서버 오류를 "WBS 없음"으로 위장하지 않는다 — 오류는 오류로 표시.
+          if (!treeRes || treeRes.success !== true) {
+            pageContainer.innerHTML = headerHtml +
+              '<div class="panel"><div class="panel-body" style="padding:40px 24px;text-align:center">' +
+              '<i class="ph ph-warning-circle" style="font-size:40px;color:#ef4444"></i>' +
+              '<div style="font-size:15px;font-weight:700;color:var(--text-primary);margin:10px 0 6px">WBS 데이터를 불러오지 못했습니다</div>' +
+              '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">' + wbsEsc((treeRes && treeRes.error) || '알 수 없는 오류') + '</div>' +
+              '<button class="btn-secondary" onclick="window.refreshWbs()"><i class="ph ph-arrows-clockwise"></i> 다시 시도</button>' +
+              '</div></div>';
+            return;
+          }
 
-          // Stageë³„ ì§„ì²™ë¥  ë§µ (ì„œë²„ì—ì„œ ë°›ì€ ë°ì´í„°)
+          var tree = treeRes.stages || [];
+          var sumOk = !!(sumRes && sumRes.success);
+          var sum = sumOk ? sumRes : { totalWbsCount: 0, progress: 0, completedCount: 0, inProgressCount: 0, stages: [] };
+          var sumWarnHtml = sumOk ? '' :
+            '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#f59e0b">' +
+            '<i class="ph ph-warning"></i> 진척률 요약을 불러오지 못했습니다' + ((sumRes && sumRes.error) ? ': ' + wbsEsc(sumRes.error) : '') + ' — 아래 진척률/KPI 수치는 실제와 다를 수 있습니다.</div>';
+
+          if (tree.length === 0) {
+            // 현장(site) 스코프 때문에 비어 보이는 경우와 진짜 WBS 가 없는 경우를 구분.
+            var unscopedTotal = Number(treeRes.unscopedTotal) || 0;
+            pageContainer.innerHTML = headerHtml + (unscopedTotal > 0 ? wbsSiteScopedHtml(projectId, unscopedTotal) : wbsEmptyTreeHtml(projectId));
+            return;
+          }
+
+          // Stage별 진척률 맵 (서버 공수 가중 집계).
           var stageProgressMap = {};
-          (sum.stages || []).forEach(function(s){ stageProgressMap[String(s.stage_no)] = s.progress; });
+          (sum.stages || []).forEach(function(s) { stageProgressMap[String(s.stage_no)] = s.progress; });
 
-          // í†µê³„ ê³„ì‚°
-          var totalSubTasks = 0;
-          var totalManhours = 0;
-          var byCompany = { NAHSHON: 0, AUTORICA: 0, 'AI-KOREA': 0, 'M-SOL': 0 };
-          var ehsHigh = 0;
-          tree.forEach(function(stage){
-            (stage.tasks||[]).forEach(function(task){
-              (task.sub_tasks||[]).forEach(function(sub){
+          // 통계 집계 + 편집 모달용 SubTask 인덱스.
+          var totalSubTasks = 0, totalManhours = 0, ehsHigh = 0, tbmGatedCount = 0;
+          var criticalCount = 0, criticalDone = 0, cardsToday = 0, plannedCost = 0;
+          var byCompany = {};
+          window._wbsSubIndex = {};
+          tree.forEach(function(stage) {
+            (stage.tasks || []).forEach(function(task) {
+              (task.sub_tasks || []).forEach(function(sub) {
                 totalSubTasks++;
-                totalManhours += parseFloat(sub.manhours)||0;
-                if (byCompany[sub.company] !== undefined) byCompany[sub.company] += parseFloat(sub.manhours)||0;
+                var mh = parseFloat(sub.manhours) || 0;
+                totalManhours += mh;
+                plannedCost += parseFloat(sub.plannedCost) || 0;
+                var comp = sub.company || '';
+                if (comp) {
+                  if (!byCompany[comp]) byCompany[comp] = { mh: 0, doneMh: 0 };
+                  byCompany[comp].mh += mh;
+                  if (sub.status === '완료') byCompany[comp].doneMh += mh;
+                }
                 if (sub.ehs === 'high') ehsHigh++;
+                if (sub.isCritical) { criticalCount++; if (sub.status === '완료') criticalDone++; }
+                if (sub.hasCardToday) cardsToday++;
+                if (sub.tbmGated) tbmGatedCount++;
+                window._wbsSubIndex[sub.wbs_id] = sub;
               });
             });
           });
+          var companies = Object.keys(byCompany).sort(function(a, b) { return byCompany[b].mh - byCompany[a].mh; });
 
-          var projOptions = window.WBS_PROJECTS.map(function(p){
-            return '<option value="' + p.id + '"' + (p.id === projectId ? ' selected' : '') + '>' + p.id + ' â€” ' + p.name + '</option>';
-          }).join('');
+          // KPI (6개)
+          var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(7,1fr)">' +
+            '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">전체 진척률</div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
+            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">SubTask 완료</div><div class="kpi-value"><span style="color:#10b981">' + (sum.completedCount || 0) + '</span><span style="font-size:15px;color:var(--text-tertiary)"> / ' + totalSubTasks + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">진행중</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">예상 총공수</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">임계경로</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">지연 시 준공 밀림</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">EHS 고위험</div><div class="kpi-value" style="color:' + (ehsHigh > 0 ? '#ef4444' : 'var(--text-tertiary)') + '">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">위험작업</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건' : '오늘 계획됨') + '</span></div></div>' +
+            '</div>';
 
-          // í˜‘ë ¥ì‚¬ ë§‰ëŒ€
-          var companyBars = Object.keys(byCompany).map(function(c){
-            var mh = byCompany[c];
+          // 협력사 작업 부하 (DB 데이터 기반 동적 목록).
+          var companyBars = companies.map(function(c) {
+            var mh = byCompany[c].mh;
             var pct = totalManhours > 0 ? (mh / totalManhours * 100) : 0;
-            var color = c === 'NAHSHON' ? '#2563eb' : c === 'AUTORICA' ? '#f59e0b' : c === 'AI-KOREA' ? '#10b981' : '#8b5cf6';
-            return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:3px"><span>' + c + '</span><span class="cell-mono">' + mh.toLocaleString() + ' MH (' + pct.toFixed(0) + '%)</span></div>' +
-              '<div style="height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + '"></div></div></div>';
+            var donePct = mh > 0 ? Math.round(byCompany[c].doneMh / mh * 100) : 0;
+            var color = wbsCompanyColor(c, companies);
+            return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">' +
+              '<span style="color:var(--text-secondary);font-weight:600">' + wbsEsc(c) + '</span>' +
+              '<span class="cell-mono" style="color:var(--text-tertiary)">' + mh.toLocaleString() + ' MH · ' + pct.toFixed(0) + '% <span style="color:' + color + '">(완료 ' + donePct + '%)</span></span></div>' +
+              '<div style="height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + ';opacity:0.9"></div></div></div>';
           }).join('');
 
-          // WBS íŠ¸ë¦¬
-          var treeHtml;
-          if (tree.length === 0) {
-            treeHtml = '<div style="text-align:center;padding:48px;color:var(--text-tertiary)">' +
-              '<i class="ph ph-tree-structure" style="font-size:48px;color:#7c3aed;margin-bottom:12px"></i>' +
-              '<div style="font-size:16px;color:white;margin-bottom:8px">ì•„ì§ WBSê°€ ìƒì„±ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤</div>' +
-              '<div style="font-size:13px">ë§¤ë‰´ì–¼ PDFë¥¼ <strong style="color:#7c3aed">WBS_MANUAL/01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„<br>ì•„ëž˜ <strong>AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”.</div>' +
-              '</div>';
-          } else {
-            treeHtml = tree.map(function(stage, sIdx){
-              var stageMh = 0, subCount = 0, stageCompleted = 0;
-              (stage.tasks||[]).forEach(function(t){ (t.sub_tasks||[]).forEach(function(s){
-                stageMh += parseFloat(s.manhours)||0;
-                subCount++;
-                if (s.status === 'ì™„ë£Œ') stageCompleted++;
-              }); });
-              var stagePct = stageProgressMap[String(stage.stage_no)] || 0;
-              var stageColor = stagePct >= 100 ? '#10b981' : stagePct >= 50 ? '#f59e0b' : '#7c3aed';
+          // Stage별 진척 요약.
+          var stageBars = tree.map(function(stage, sIdx) {
+            var pct = Number(stageProgressMap[String(stage.stage_no)]) || 0;
+            var count = 0;
+            (stage.tasks || []).forEach(function(t) { count += (t.sub_tasks || []).length; });
+            var color = pct >= 100 ? '#10b981' : pct > 0 ? '#f59e0b' : 'var(--text-tertiary)';
+            return '<div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;margin-bottom:10px">' +
+              '<span class="cell-mono" style="font-size:11px;font-weight:700;color:#a78bfa;min-width:70px">S' + wbsEsc(stage.stage_no || sIdx + 1) + ' · ' + count + '개</span>' +
+              '<div><div style="font-size:12px;color:var(--text-secondary);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">' + wbsEsc(stage.stage_name || '') + '</div>' +
+              '<div style="height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + '"></div></div></div>' +
+              '<span class="cell-mono" style="font-size:12px;font-weight:700;color:' + color + ';min-width:40px;text-align:right">' + pct + '%</span></div>';
+          }).join('');
 
-              var tasksHtml = (stage.tasks||[]).map(function(task, tIdx){
-                // Taskë³„ ì§„ì²™ë¥  (sub_tasks í‰ê· )
-                var taskCompleted = 0, taskTotal = (task.sub_tasks||[]).length;
-                (task.sub_tasks||[]).forEach(function(s){ if (s.status === 'ì™„ë£Œ') taskCompleted++; });
-                var taskPct = taskTotal > 0 ? (taskCompleted / taskTotal * 100) : 0;
+          var panelsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 협력사 작업 부하</div></div>' +
+            '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px;font-size:12px">협력사 배정 데이터가 없습니다</div>') + '</div></div>' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-steps"></i> Stage별 진척</div></div>' +
+            '<div class="panel-body">' + stageBars + '</div></div></div>';
 
-                var subHtml = (task.sub_tasks||[]).map(function(sub){
-                  var status = sub.status || 'AIìƒì„±';
-                  var isDone = status === 'ì™„ë£Œ';
-                  var isProg = status === 'ì§„í–‰ì¤‘';
-                  var ehsBadge = sub.ehs === 'high' ? '<span style="background:#ef4444;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">ðŸ”´ ìœ„í—˜</span>' : sub.ehs === 'medium' ? '<span style="background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">âš ï¸ ì£¼ì˜</span>' : '';
-                  var companyColor = sub.company === 'NAHSHON' ? '#2563eb' : sub.company === 'AUTORICA' ? '#f59e0b' : sub.company === 'AI-KOREA' ? '#10b981' : sub.company === 'M-SOL' ? '#8b5cf6' : '#64748b';
-                  var rowBg = isDone ? 'rgba(16,185,129,0.08)' : isProg ? 'rgba(245,158,11,0.08)' : 'var(--bg-base)';
-                  var rowBorder = isDone ? '#10b981' : isProg ? '#f59e0b' : 'transparent';
-                  var nameStyle = isDone ? 'text-decoration:line-through;color:#10b981;opacity:0.85' : 'color:white';
-                  var statusIcon = isDone ? '<i class="ph ph-check-circle" style="color:#10b981;font-size:18px"></i>'
-                    : isProg ? '<i class="ph ph-spinner" style="color:#f59e0b;font-size:18px"></i>'
-                    : '<i class="ph ph-circle" style="color:var(--text-tertiary);font-size:18px"></i>';
-                  // ë¹ ë¥¸ í† ê¸€ ë²„íŠ¼ (ì™„ë£Œ â†” AIìƒì„±)
-                  var toggleAction = isDone ? 'AIìƒì„±' : 'ì™„ë£Œ';
-                  var toggleLabel = isDone ? 'â†» ë¯¸ì™„ë£Œë¡œ' : 'âœ“ ì™„ë£Œ';
-                  var toggleBg = isDone ? '#64748b' : '#10b981';
+          // WBS 트리 — 컬럼 헤더 + Stage(접기) > Task > SubTask 행.
+          var colHeader = '<div style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:6px 12px;font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em">' +
+            '<span>상태</span><span>ID</span><span>작업명</span><span>공종</span><span style="text-align:right">인원·장비</span><span style="text-align:right">공수</span><span style="text-align:right">일수</span><span>진척</span><span style="text-align:right">액션</span></div>';
 
-                  return '<div class="wbs-subtask" data-wbsid="' + sub.wbs_id + '" data-status="' + status + '" style="display:grid;grid-template-columns:auto auto 1fr auto auto auto auto;gap:10px;align-items:center;padding:8px 12px;border-radius:6px;background:' + rowBg + ';margin-bottom:4px;border:1px solid ' + rowBorder + ';transition:all 0.15s">' +
-                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center" title="' + toggleLabel + '">' + statusIcon + '</button>' +
-                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:60px">' + (sub.sub_no || '') + '</span>' +
-                    '<span style="font-size:13px;' + nameStyle + ';cursor:pointer" onclick="openWbsEditModal(\'' + sub.wbs_id + '\')">' + (sub.sub_name || '') + ehsBadge + '</span>' +
-                    '<span style="font-size:11px;color:' + companyColor + ';font-weight:700;min-width:80px;text-align:right">' + (sub.company || '-') + '</span>' +
-                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:60px;text-align:right">' + (sub.manhours || 0) + 'MH</span>' +
-                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:50px;text-align:right">' + (sub.days || 0) + 'ì¼</span>' +
-                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:' + toggleBg + ';color:white;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">' + toggleLabel + '</button>' +
-                    '</div>';
-                }).join('');
+          var openAll = tree.length <= 4;
+          var treeHtml = tree.map(function(stage, sIdx) {
+            var stageMh = 0, subCount = 0, stageCompleted = 0;
+            (stage.tasks || []).forEach(function(t) { (t.sub_tasks || []).forEach(function(s) {
+              stageMh += parseFloat(s.manhours) || 0;
+              subCount++;
+              if (s.status === '완료') stageCompleted++;
+            }); });
+            var stagePct = Number(stageProgressMap[String(stage.stage_no)]) || 0;
+            var stageColor = stagePct >= 100 ? '#10b981' : stagePct > 0 ? '#f59e0b' : '#7c3aed';
 
-                return '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:6px 10px;background:rgba(124,58,237,0.08);border-left:3px solid #7c3aed;border-radius:4px">' +
-                  '<span class="cell-mono" style="font-size:11px;color:#7c3aed;font-weight:700">Task ' + (task.task_no||'') + '</span>' +
-                  '<span style="font-size:14px;color:white;font-weight:600">' + (task.task_name||'') + '</span>' +
-                  '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
-                  '<span>' + taskCompleted + '/' + taskTotal + ' ì™„ë£Œ</span>' +
-                  '<div style="width:80px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
-                  '<span class="cell-mono" style="color:white;font-weight:700;min-width:32px;text-align:right">' + taskPct.toFixed(0) + '%</span>' +
-                  '</span></div>' + subHtml + '</div>';
+            var tasksHtml = (stage.tasks || []).map(function(task) {
+              var taskTotal = (task.sub_tasks || []).length, taskCompleted = 0;
+              (task.sub_tasks || []).forEach(function(s) { if (s.status === '완료') taskCompleted++; });
+              var taskPct = taskTotal > 0 ? Math.round(taskCompleted / taskTotal * 100) : 0;
+
+              var subHtml = (task.sub_tasks || []).map(function(sub) {
+                var status = sub.status || '검수완료';
+                var isDone = status === '완료';
+                var isProg = status === '진행중';
+                var ehsBadge = sub.ehs === 'high'
+                  ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-warning"></i> 고위험</span>'
+                  : sub.ehs === 'medium'
+                    ? '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap">주의</span>' : '';
+                var safetyChip = wbsSafetyChip(sub);
+                var compColor = wbsCompanyColor(sub.company, companies);
+                var progColor = isDone ? '#10b981' : isProg ? '#f59e0b' : 'var(--text-tertiary)';
+                var nameStyle = isDone ? 'color:var(--text-secondary);text-decoration:line-through;opacity:0.8' : 'color:var(--text-primary)';
+                // 상태 워크플로: 검수완료/보류 → [시작] · 진행중 → [완료] · 완료 → [되돌리기]
+                var actionBtn;
+                if (isDone) {
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'검수완료\')" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-arrow-counter-clockwise"></i> 되돌리기</button>';
+                } else if (isProg) {
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'완료\')" style="background:#10b981;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-check"></i> 완료</button>';
+                } else if (!sub.hasCardToday) {
+                  // 안전 없이 공정 없다 — 카드가 없으면 시작이 아니라 "안전계획"이 먼저다.
+                  actionBtn = '<button onclick="event.stopPropagation();window.createWbsSafetyCard(\'' + wbsJsArg(sub.wbs_id) + '\')" title="오늘자 안전 작업카드를 만들고 인원·장비를 배정합니다" style="background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-shield-plus"></i> 안전계획</button>';
+                } else {
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'진행중\')" ' + (sub.tbmGated ? 'title="TBM 미완료 — 오늘 안전카드의 TBM/서명 완료 후 시작할 수 있습니다" ' : '') + 'style="background:' + (sub.tbmGated ? 'var(--bg-base)' : 'rgba(245,158,11,0.15)') + ';color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + (sub.tbmGated ? 'ph-lock-key' : 'ph-play') + '"></i> 시작</button>';
+                }
+                actionBtn += '<button onclick="event.stopPropagation();window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" title="상세 편집" style="background:none;border:none;color:var(--text-tertiary);cursor:pointer;padding:4px;font-size:14px"><i class="ph ph-pencil-simple"></i></button>';
+
+                var rowBorder = sub.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;';
+
+                return '<div class="wbs-subtask" data-wbsid="' + wbsEsc(sub.wbs_id) + '" style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:7px 12px;border-radius:6px;' + rowBorder + 'background:' + (isDone ? 'rgba(16,185,129,0.05)' : 'transparent') + ';border-bottom:1px solid var(--border-subtle)">' +
+                  '<span>' + wbsStatusPill(status) + '</span>' +
+                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(sub.activity_id || sub.sub_no || '') + '</span>' +
+                  '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + wbsCpBadge(sub) + ehsBadge + safetyChip + wbsPredsChip(sub) + '</span>' +
+                  '<span style="font-size:11px;color:' + compColor + ';font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(sub.company || '-') + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right" title="' + wbsEsc(sub.crewText || '') + '">' + wbsCrewLabel(sub) + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (parseFloat(sub.manhours) || 0) + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (sub.days || 0) + '</span>' +
+                  wbsProgressBar(sub.progress, progColor, 100) +
+                  '<span style="display:flex;align-items:center;justify-content:flex-end;gap:2px">' + actionBtn + '</span>' +
+                  '</div>';
               }).join('');
 
-              return '<details ' + (sIdx === 0 ? 'open' : '') + ' style="margin-bottom:18px;border:1px solid var(--border-default);border-radius:10px;overflow:hidden">' +
-                '<summary style="padding:14px 18px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
-                '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
-                '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700">STAGE ' + (stage.stage_no || sIdx + 1) + '</span>' +
-                '<span style="font-size:16px;font-weight:700;color:white">' + (stage.stage_name || '') + '</span>' +
-                '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
-                '<span><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
-                '<span><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
-                '<div style="display:flex;align-items:center;gap:8px"><div style="width:120px;height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + stagePct + '%;background:' + stageColor + '"></div></div>' +
-                '<span class="cell-mono" style="color:' + stageColor + ';font-weight:700;min-width:44px;text-align:right">' + stagePct.toFixed(1) + '%</span></div>' +
-                '</div></summary>' +
-                '<div style="padding:14px 18px">' + tasksHtml + '</div></details>';
+              return '<div style="margin-bottom:14px">' +
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;padding:7px 12px;background:rgba(124,58,237,0.07);border-left:3px solid #7c3aed;border-radius:4px">' +
+                '<span class="cell-mono" style="font-size:11px;color:#a78bfa;font-weight:700">Task ' + wbsEsc(task.task_no || '') + '</span>' +
+                '<span style="font-size:13px;color:white;font-weight:600">' + wbsEsc(task.task_name || '') + '</span>' +
+                '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
+                '<span class="cell-mono">' + taskCompleted + '/' + taskTotal + '</span>' +
+                '<div style="width:70px;height:5px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
+                '<span class="cell-mono" style="color:var(--text-secondary);font-weight:700;min-width:32px;text-align:right">' + taskPct + '%</span>' +
+                '</span></div>' + colHeader + subHtml + '</div>';
             }).join('');
-          }
 
-          pageContainer.innerHTML =
-            '<div class="header-section"><div>' +
-            '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> ê³µì • ê´€ë¦¬ (WBS)</h1>' +
-            '<p class="page-subtitle">AI ë©”ë‰´ì–¼ ë¶„ì„ ê¸°ë°˜ ì‹¤ì‹œê°„ ê³µì • ì¶”ì  Â· Stage â†’ Task â†’ SubTask ê³„ì¸µ êµ¬ì¡°</p>' +
-            '</div>' +
-            '<div class="action-row" style="gap:8px">' +
-            '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">' + projOptions + '</select>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
-            '<i class="ph ph-robot"></i> ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„</button>' +
-            '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> ë©”ë‰´ì–¼ í´ë”</button>' +
+            return '<details ' + (openAll || sIdx === 0 ? 'open' : '') + ' style="margin-bottom:14px;border:1px solid var(--border-default);border-radius:10px;overflow:hidden">' +
+              '<summary style="padding:13px 16px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
+              '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
+              '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap">STAGE ' + wbsEsc(stage.stage_no || sIdx + 1) + '</span>' +
+              '<span style="font-size:15px;font-weight:700;color:white">' + wbsEsc(stage.stage_name || '') + '</span>' +
+              '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
+              '<span class="cell-mono"><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
+              '<span class="cell-mono"><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
+              '<div style="display:flex;align-items:center;gap:8px"><div style="width:110px;height:7px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + stagePct + '%;background:' + stageColor + '"></div></div>' +
+              '<span class="cell-mono" style="color:' + stageColor + ';font-weight:700;min-width:40px;text-align:right">' + stagePct + '%</span></div>' +
+              '</div></summary>' +
+              '<div style="padding:12px 16px;overflow-x:auto"><div style="min-width:900px">' + tasksHtml + '</div></div></details>';
+          }).join('');
+
+          var treePanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> WBS 구조 — ' + wbsEsc(projectId) + '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
+            Object.keys(WBS_STATUS_META).map(function(s) {
+              return '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:' + WBS_STATUS_META[s].color + '"></span>' + s + '</span>';
+            }).join('') +
             '</div></div>' +
-            // KPI Row (6ê°œ)
-            '<div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ SubTask</div><div class="kpi-value">' + totalSubTasks + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
-            '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">ì „ì²´ ì§„ì²™ë¥ </div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
-            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:4px"><div style="height:100%;width:' + (sum.progress||0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">âœ… ì™„ë£Œ</div><div class="kpi-value" style="color:#10b981">' + (sum.completedCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (totalSubTasks > 0 ? ((sum.completedCount||0)/totalSubTasks*100).toFixed(0) : 0) + '% of all</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">â³ ì§„í–‰ì¤‘</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì˜ˆìƒ ì´ê³µìˆ˜</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">EHS ê³ ìœ„í—˜</div><div class="kpi-value" style="color:#ef4444">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ìœ„í—˜ìž‘ì—…</span></div></div>' +
-            '</div>' +
-            // í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜ + AI ì•ˆë‚´
-            '<div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:18px">' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜</div></div>' +
-            '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px">WBS ë°ì´í„° ì—†ìŒ</div>') + '</div></div>' +
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:18px;display:flex;align-items:center;gap:18px">' +
-            '<i class="ph ph-robot" style="font-size:42px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div style="flex:1">' +
-            '<div style="font-size:14px;font-weight:700;color:#c4b5fd;margin-bottom:6px">ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ ì‹œìŠ¤í…œ</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">ì„¤ì¹˜ ë§¤ë‰´ì–¼/ì‹œë°©ì„œ PDFë¥¼ <strong style="color:white">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„ <strong style="color:#c4b5fd">AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ë©´, Gemini 2.5 Proê°€ ìžë™ìœ¼ë¡œ ìž‘ì—…ì„ ìž˜ê²Œ ìª¼ê°œ WBSë¥¼ ìƒì„±í•©ë‹ˆë‹¤. Stage / Task / SubTask 3ë‹¨ê³„ ê³„ì¸µ êµ¬ì¡°ë¡œ í˜‘ë ¥ì‚¬/EHS/ê³µìˆ˜ê¹Œì§€ ìžë™ ë¶„ë¥˜.</div>' +
-            '</div></div></div>' +
-            // WBS íŠ¸ë¦¬
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> WBS êµ¬ì¡° â€” ' + projectId + '</div>' +
-            '<div style="font-size:11px;color:var(--text-tertiary)">í´ë¦­í•˜ì—¬ ìƒì„¸ íŽ¸ì§‘</div></div>' +
             '<div class="panel-body">' + treeHtml + '</div></div>';
 
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + panelsHtml + treePanel;
+
         } catch (err) {
-          renderError('WBS ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message);
+          if (gen !== _wbsRenderGen) return;
+          renderError('WBS 데이터 로딩 실패: ' + err.message);
           console.error(err);
         }
       }
@@ -8229,22 +8060,32 @@
         renderWbs();
       };
 
+      window.refreshWbs = function() {
+        if (window.apiCache) {
+          Object.keys(window.apiCache).forEach(function(k) {
+            if (k.indexOf('api_getProjectList') >= 0 || k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0 || k.indexOf('api_getSafetyWorkItems') >= 0 || k.indexOf('api_getTodayWbsWork') >= 0 || k.indexOf('api_getWbsLabor') >= 0) {
+              delete window.apiCache[k];
+            }
+          });
+        }
+        renderWbs();
+      };
+
       window.openWbsManualFolder = function() {
         window.open('https://drive.google.com/drive/folders/1rC8RSb966nL3H_vaqKD-LkDLWsNdfnl3', '_blank');
       };
 
-      // ë¹ ë¥¸ ì™„ë£Œ í† ê¸€ â€” KPI/Stage/Task ì§„ì²™ë¥  ì¦‰ì‹œ ê°±ì‹ 
+      // 빠른 상태 전환 (시작/완료/되돌리기) — TBM 게이트는 서버가 판정.
       window.toggleWbsComplete = async function(wbsId, newStatus) {
-        // ìºì‹œ ë¬´íš¨í™” (ì§„ì²™ë¥  ì¦‰ì‹œ ë°˜ì˜)
         if (window.apiCache) {
-          Object.keys(window.apiCache).forEach(function(k){
+          Object.keys(window.apiCache).forEach(function(k) {
             if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) {
               delete window.apiCache[k];
             }
           });
         }
-        // ë‚™ê´€ì  UI: í´ë¦­ ì¦‰ì‹œ í–‰ ìƒ‰ìƒ ë³€ê²½
-        var row = document.querySelector('.wbs-subtask[data-wbsid="' + wbsId + '"]');
+        var safeId = (window.CSS && CSS.escape) ? CSS.escape(wbsId) : String(wbsId).replace(/["\\]/g, '\\$&');
+        var row = document.querySelector('.wbs-subtask[data-wbsid="' + safeId + '"]');
         if (row) {
           row.style.opacity = '0.5';
           row.style.pointerEvents = 'none';
@@ -8252,19 +8093,167 @@
         try {
           var res = await window.API.markWbsStatus(wbsId, newStatus);
           if (res && res.success) {
-            // ì „ì²´ ë¦¬ë Œë” (KPI + Stage ì§„ì²™ë¥  ëª¨ë‘ ê°±ì‹ )
             renderWbs();
           } else {
-            alert('ìƒíƒœ ë³€ê²½ ì‹¤íŒ¨: ' + (res && res.error ? res.error : 'unknown'));
+            alert((res && res.error) || '상태 변경에 실패했습니다.');
             if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
           }
-        } catch(e) {
-          alert('ì˜¤ë¥˜: ' + e.message);
+        } catch (e) {
+          alert('오류: ' + e.message);
           if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
         }
       };
 
-      // AI 메뉴얼 분석 — 파일 업로드 → 분석 / 분석된 매뉴얼 리스트에서 적용
+      // 공정 → 안전. "작업을 시작한다"는 곧 "오늘 이 작업의 안전계획을 세운다"는 뜻이다.
+      //
+      // 날짜는 반드시 서버가 정한다. 브라우저에서 계산하면(특히 toISOString 은 UTC) 현장 시간대와
+      // 어긋나 "내일자" 카드가 만들어지고, 게이트가 오늘 카드를 못 찾아 안전 확인 없이 공정이 시작된다.
+      window.createWbsSafetyCard = async function(wbsId) {
+        var sub = (window._wbsSubIndex || {})[wbsId] || {};
+
+        var lines = ['오늘자 안전 작업카드를 만들까요?', '', '작업: ' + (sub.sub_name || wbsId)];
+        if (sub.crewText) lines.push('투입: ' + sub.crewText + (sub.crewSize ? ' (약 ' + sub.crewSize + '명)' : ''));
+        if (sub.equipment && sub.equipment.length) lines.push('장비: ' + sub.equipment.join(', '));
+        if (sub.ehs === 'high') lines.push('⚠ 고위험 작업입니다.');
+        lines.push('', '카드 생성 후 안전관리 화면에서 계획서 → TBM/서명을 진행하세요.');
+        lines.push('TBM 이 완료되어야 이 공정을 시작할 수 있습니다.');
+
+        if (!confirm(lines.join('\n'))) return;
+
+        try {
+          var res = await window.API.createSafetyCardForWbs(wbsId, null); // null = 서버가 오늘을 정함
+          if (res && res.success) {
+            showToast(res.created
+              ? res.date + ' 안전 작업카드 ' + res.work_code + ' 생성됨 — 안전관리에서 TBM 을 진행하세요.'
+              : '이미 ' + res.date + ' 카드(' + res.work_code + ')가 있습니다.');
+            window.refreshWbs();
+          } else {
+            alert((res && res.error) || '안전카드 생성에 실패했습니다.');
+          }
+        } catch (e) {
+          alert('오류: ' + e.message);
+        }
+      };
+
+      // 인원 모달 — 계획(공정표) 대비 실투입(안전카드 서명 → 출퇴근 → 급여)을 한 화면에서 본다.
+      // 여기서 서명란에 실제 직원을 배정하면 그 사람의 그날 근무시간이 이 공정에 귀속된다.
+      window.openWbsLaborModal = async function(wbsId) {
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:680px;max-height:82vh;overflow-y:auto"><div style="text-align:center;padding:30px;color:var(--text-tertiary)">불러오는 중...</div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+        var box = modal.firstChild;
+        try {
+          var results = await Promise.all([window.API.getWbsLabor(wbsId), window.API.getAssignableEmployees()]);
+          var labor = results[0];
+          window._assignableEmployees = Array.isArray(results[1]) ? results[1] : [];
+
+          if (!labor || !labor.success) {
+            box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--status-danger)">' + wbsEsc((labor && labor.error) || '불러오지 못했습니다.') + '</div>';
+            return;
+          }
+
+          var pct = labor.consumedPct;
+          var pctColor = pct === null ? 'var(--text-tertiary)' : pct > 100 ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
+
+          var daysHtml = (labor.days || []).length === 0
+            ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:12px">아직 안전 작업카드가 없습니다.<br>공정 행의 <strong>안전계획</strong> 버튼으로 오늘자 카드를 만드세요.</div>'
+            : labor.days.map(function(d) {
+                var people = (d.people || []).map(function(p) {
+                  var hrs = p.hours === null
+                    ? '<span style="color:var(--text-tertiary)" title="출퇴근 기록이 아직 없습니다">기록 대기</span>'
+                    : '<span class="cell-mono" style="color:#10b981">' + p.hours + 'h</span>';
+                  return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0">' +
+                    '<i class="ph ph-user-circle" style="color:var(--text-tertiary)"></i>' +
+                    '<span style="color:var(--text-primary)">' + wbsEsc(p.name) + '</span>' +
+                    '<span style="color:var(--text-tertiary);font-size:10px">' + wbsEsc(p.role || '') + '</span>' +
+                    '<span style="margin-left:auto">' + hrs + '</span></div>';
+                }).join('') || '<div style="font-size:11px;color:var(--text-tertiary);padding:3px 0">서명한 인원이 없습니다.</div>';
+
+                return '<div style="border:1px solid var(--border-default);border-radius:8px;padding:12px;margin-bottom:8px">' +
+                  '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+                  '<span class="cell-mono" style="font-size:12px;font-weight:700;color:var(--text-primary)">' + wbsEsc(d.date) + '</span>' +
+                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(d.workCode) + '</span>' +
+                  (d.tbmCleared
+                    ? '<span style="background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 완료</span>'
+                    : '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 대기</span>') +
+                  '<span style="margin-left:auto;font-size:11px;color:var(--text-secondary)">서명 ' + d.signedCount + '/' + d.slotCount + ' · 실근무 <strong class="cell-mono" style="color:var(--text-primary)">' + d.hours + 'h</strong></span>' +
+                  '<button class="btn-secondary" style="padding:3px 9px;font-size:11px" onclick="window.openSignerAssign(\'' + wbsJsArg(d.workCode) + '\')"><i class="ph ph-user-plus"></i> 인원 배정</button>' +
+                  '</div>' + people + '</div>';
+              }).join('');
+
+          box.innerHTML =
+            '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-users-three" style="color:#3b82f6"></i> 인원 · 실투입</h3>' +
+            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">' + wbsEsc(labor.name) + ' <span style="font-family:monospace">· ' + wbsEsc(wbsId) + '</span></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">계획 인원</div><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + (labor.plannedCrew !== null ? labor.plannedCrew + '명' : '-') + '</div></div>' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">계획 공수</div><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + labor.plannedHours + ' MH</div></div>' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">실투입 (출퇴근 기준)</div><div style="font-size:18px;font-weight:700;color:' + pctColor + '">' + labor.actualHours + 'h' + (pct !== null ? ' <span style="font-size:12px">(' + pct + '%)</span>' : '') + '</div></div>' +
+            '</div>' +
+            '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px">일자별 투입</div>' +
+            daysHtml +
+            '<button class="btn-secondary" style="width:100%;margin-top:10px" onclick="this.closest(\'div[style*=fixed]\').remove()">닫기</button>';
+        } catch (e) {
+          box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--status-danger)">오류: ' + wbsEsc(e.message) + '</div>';
+        }
+      };
+
+      // 서명란에 실제 직원 배정 — 여기가 "인원 몇 명"이 실제 사람이 되는 지점이다.
+      window.openSignerAssign = async function(workCode) {
+        var res = await gsRun('api_getSafetyWorkItems', [], null);
+        var card = (res && res.items || []).filter(function(c) { return c.id === workCode; })[0];
+        if (!card) { alert('안전카드를 찾을 수 없습니다: ' + workCode); return; }
+
+        var employees = window._assignableEmployees || [];
+        if (employees.length === 0) {
+          alert('배정할 직원이 없습니다.\n관리자 → 인원관리에서 직원을 먼저 등록하세요.');
+          return;
+        }
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+        var opts = '<option value="">— 미배정 —</option>' + employees.map(function(e) {
+          return '<option value="' + e.id + '">' + wbsEsc(e.name) + (e.number ? ' (' + wbsEsc(e.number) + ')' : '') + '</option>';
+        }).join('');
+
+        var rows = (card.signatures || []).map(function(s, i) {
+          var locked = s.signed;
+          return '<div style="display:grid;grid-template-columns:88px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(s.role || ('인원 ' + (i + 1))) + '</span>' +
+            (locked
+              ? '<span style="font-size:12px;color:var(--text-primary)">' + wbsEsc(s.name) + '</span><span style="font-size:10px;color:#10b981;white-space:nowrap"><i class="ph ph-check-circle"></i> 서명완료 ' + wbsEsc(s.time) + '</span>'
+              : '<select data-sigid="' + s.id + '" class="signer-select" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:6px;border-radius:6px;font-size:12px">' + opts + '</select>' +
+                '<span style="font-size:10px;color:var(--text-tertiary);white-space:nowrap">미서명</span>') +
+            '</div>';
+        }).join('');
+
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:22px;width:480px;max-height:78vh;overflow-y:auto">' +
+          '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-user-plus" style="color:#3b82f6"></i> 인원 배정</h3>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:14px">' + wbsEsc(workCode) + ' · 배정하면 이 사람의 출퇴근 시간이 이 공정에 귀속됩니다.</div>' +
+          (rows || '<div style="color:var(--text-tertiary);font-size:12px;padding:14px 0">서명란이 없습니다.</div>') +
+          '<div style="display:flex;gap:8px;margin-top:16px"><button id="signer-close" class="btn-secondary" style="flex:1">닫기</button></div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+        modal.querySelector('#signer-close').addEventListener('click', function() { modal.remove(); });
+
+        // 기존 배정 반영
+        modal.querySelectorAll('.signer-select').forEach(function(sel, i) {
+          var sig = (card.signatures || []).filter(function(s) { return !s.signed; })[i];
+          if (sig && sig.employeeId) sel.value = String(sig.employeeId);
+          sel.addEventListener('change', async function() {
+            var sigId = parseInt(sel.getAttribute('data-sigid'), 10);
+            var empId = sel.value ? parseInt(sel.value, 10) : null;
+            try {
+              var r = await window.API.assignSafetySigner(sigId, empId);
+              if (r && r.success) { showToast(empId ? (r.name + ' 배정됨') : '배정 해제됨'); }
+              else { alert((r && r.error) || '배정 실패'); }
+            } catch (e) { alert('오류: ' + e.message); }
+          });
+        });
+      };
+
       window.__wbsManualModal = async function() {
         var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
         var siteId = window.currentSiteId || 'ALL';
@@ -8365,103 +8354,98 @@
       };
       window.runWbsAiAnalysis = function () { return window.__wbsManualModal(); };
 
-      window.__legacyRunWbsAiAnalysis = async function() {
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
-        var ok = confirm('ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ì„ ì‹¤í–‰í•˜ì‹œê² ìŠµë‹ˆê¹Œ?\n\ní˜„ìž¥: ' + projectId + '\ní´ë”: WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°\n\nGemini 2.5 Proê°€ í´ë” ë‚´ ëª¨ë“  ë§¤ë‰´ì–¼ì„ ë¶„ì„í•˜ì—¬\nWBSë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤. (ìˆ˜ ë¶„ ì†Œìš” ê°€ëŠ¥)');
-        if (!ok) return;
-
-        var overlay = document.createElement('div');
-        overlay.id = 'wbs-ai-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px';
-        overlay.innerHTML =
-          '<div style="width:80px;height:80px;border:5px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:18px;font-weight:700">ðŸ¤– Gemini 2.5 Pro ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.7);font-size:13px">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” â†’ AI ë¶„ì„ â†’ WBS ìƒì„±</div>' +
-          '<div style="color:rgba(255,255,255,0.5);font-size:11px">ëŒ€ìš©ëŸ‰ PDFì˜ ê²½ìš° 2~5ë¶„ ì†Œìš”ë©ë‹ˆë‹¤. íŽ˜ì´ì§€ ë‹«ì§€ ë§ˆì„¸ìš”.</div>';
-        document.body.appendChild(overlay);
-
-        try {
-          var result = await window.API.processWbsManual(projectId);
-          overlay.remove();
-
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
-          var icon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var detailRows = (result.results || []).map(function(r) {
-            var sIcon = r.status === 'success' ? 'âœ…' : 'âŒ';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.stages + ' Stages Â· ' + r.tasks + ' Tasks Â· ' + r.subTasks + ' SubTasks</span>'
-              : '<span style="color:var(--status-danger)">' + (r.error || '') + '</span>';
-            return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-              sIcon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
-          }).join('');
-
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:560px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:42px;text-align:center;margin-bottom:12px">' + icon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:12px">AI ë©”ë‰´ì–¼ ë¶„ì„ ê²°ê³¼</h2>' +
-            (result.processed === 0 && result.success
-              ? '<div style="text-align:center;color:var(--text-secondary);padding:20px">ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.<br><span style="font-size:11px;color:var(--text-tertiary)">01_ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ë§¤ë‰´ì–¼ì„ ì—…ë¡œë“œí•˜ì„¸ìš”.</span></div>'
-              : !result.success
-                ? '<div style="text-align:center;color:var(--status-danger);padding:20px">' + (result.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div>'
-                : '<div style="max-height:320px;overflow-y:auto;margin-bottom:18px">' + detailRows + '</div>') +
-            '<button id="wbs-result-close" style="width:100%;background:#7c3aed;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-          modal.querySelector('#wbs-result-close').addEventListener('click', function() {
-            modal.remove();
-            renderWbs();
-          });
-        } catch(err) {
-          if (document.getElementById('wbs-ai-overlay')) document.getElementById('wbs-ai-overlay').remove();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜:\n' + err.message);
-        }
-      };
-
+      // 상세 편집 모달 — 현재 행 데이터를 프리필하고, 담당사는 현 트리의 협력사 목록을 제안.
       window.openWbsEditModal = function(wbsId) {
+        var sub = (window._wbsSubIndex || {})[wbsId] || {};
+        var statuses = ['AI생성', '검수완료', '진행중', '완료', '보류'];
+        var statusOptions = statuses.map(function(s) {
+          return '<option value="' + s + '"' + (s === sub.status ? ' selected' : '') + '>' + s + '</option>';
+        }).join('');
+        var companySet = {};
+        Object.keys(window._wbsSubIndex || {}).forEach(function(k) {
+          var c = window._wbsSubIndex[k].company;
+          if (c) companySet[c] = true;
+        });
+        var companyOptions = Object.keys(companySet).sort().map(function(c) {
+          return '<option value="' + wbsEsc(c) + '"></option>';
+        }).join('');
+
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
         modal.innerHTML =
           '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:480px">' +
-          '<h3 style="margin:0 0 14px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS íŽ¸ì§‘</h3>' +
-          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsId + '</div>' +
+          '<h3 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS 상세 편집</h3>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsEsc(wbsId) + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
           '<div style="display:grid;gap:12px">' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ìƒíƒœ</label>' +
-          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
-          '<option value="AIìƒì„±">ðŸ“ AIìƒì„± (ëŒ€ê¸°)</option><option value="ê²€ìˆ˜ì™„ë£Œ">âœ… ê²€ìˆ˜ì™„ë£Œ</option><option value="ì§„í–‰ì¤‘">â³ ì§„í–‰ì¤‘</option><option value="ì™„ë£Œ">ðŸŽ¯ ì™„ë£Œ</option><option value="ë³´ë¥˜">â¸ï¸ ë³´ë¥˜</option></select></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ë‹´ë‹¹ì‚¬</label>' +
-          '<select id="wbs-edit-company" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
-          '<option value="NAHSHON">NAHSHON</option><option value="AUTORICA">AUTORICA</option><option value="AI-KOREA">AI-KOREA</option><option value="M-SOL">M-SOL</option></select></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">작업명</label>' +
+          '<input type="text" id="wbs-edit-name" value="' + wbsEsc(sub.sub_name || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì‹œìž‘ì˜ˆì •</label>' +
-          '<input type="date" id="wbs-edit-start" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì¢…ë£Œì˜ˆì •</label>' +
-          '<input type="date" id="wbs-edit-end" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">상태</label>' +
+          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' + statusOptions + '</select></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">담당사</label>' +
+          '<input type="text" id="wbs-edit-company" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="협력사명" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
+          '<datalist id="wbs-company-options">' + companyOptions + '</datalist></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">공수 (MH)</label>' +
+          '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" value="' + (parseFloat(sub.manhours) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">일수</label>' +
+          '<input type="number" step="1" min="0" id="wbs-edit-days" value="' + (parseInt(sub.days, 10) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">시작예정</label>' +
+          '<input type="date" id="wbs-edit-start" value="' + wbsEsc(sub.plannedStart || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">종료예정</label>' +
+          '<input type="date" id="wbs-edit-end" value="' + wbsEsc(sub.plannedEnd || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
           '</div></div>' +
           '<div style="display:flex;gap:10px;margin-top:18px">' +
-          '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">ì·¨ì†Œ</button>' +
-          '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">ì €ìž¥</button>' +
+          '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">저장</button>' +
           '</div></div>';
         document.body.appendChild(modal);
 
         modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
         modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
-          var updates = {
-            'ìƒíƒœ': document.getElementById('wbs-edit-status').value,
-            'ë‹´ë‹¹ì‚¬': document.getElementById('wbs-edit-company').value,
-            'ì‹œìž‘ì˜ˆì •': document.getElementById('wbs-edit-start').value,
-            'ì¢…ë£Œì˜ˆì •': document.getElementById('wbs-edit-end').value
+          var name = document.getElementById('wbs-edit-name').value.trim();
+          if (!name) { alert('작업명은 비울 수 없습니다.'); return; }
+
+          // 변경된 필드만 전송 — 담당사/시작예정/종료예정은 빈 값('')으로 배정 해제 가능.
+          var current = {
+            '작업명': name,
+            '상태': document.getElementById('wbs-edit-status').value,
+            '담당사': document.getElementById('wbs-edit-company').value.trim(),
+            '공수': document.getElementById('wbs-edit-manhours').value,
+            '일수': document.getElementById('wbs-edit-days').value,
+            '시작예정': document.getElementById('wbs-edit-start').value,
+            '종료예정': document.getElementById('wbs-edit-end').value
           };
+          var original = {
+            '작업명': sub.sub_name || '',
+            '상태': sub.status || '',
+            '담당사': sub.company || '',
+            '공수': String(parseFloat(sub.manhours) || 0),
+            '일수': String(parseInt(sub.days, 10) || 0),
+            '시작예정': sub.plannedStart || '',
+            '종료예정': sub.plannedEnd || ''
+          };
+          var updates = {};
+          Object.keys(current).forEach(function(k) {
+            if (String(current[k]) !== String(original[k])) updates[k] = current[k];
+          });
+          // 숫자 입력이 비어 있으면(잘못된 입력) 조용히 되돌리지 말고 무시.
+          if (updates['공수'] === '') delete updates['공수'];
+          if (updates['일수'] === '') delete updates['일수'];
+          if (Object.keys(updates).length === 0) { modal.remove(); return; }
           try {
             var res = await window.API.updateWbsRow(wbsId, updates);
             if (res.success) {
               modal.remove();
-              renderWbs();
+              window.refreshWbs();
             } else {
-              alert('ì €ìž¥ ì‹¤íŒ¨: ' + (res.error || 'unknown'));
+              alert((res && res.error) || '저장에 실패했습니다.');
             }
-          } catch(e) {
-            alert('ì €ìž¥ ì˜¤ë¥˜: ' + e.message);
+          } catch (e) {
+            alert('저장 오류: ' + e.message);
           }
         });
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });

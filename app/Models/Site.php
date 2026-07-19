@@ -75,6 +75,11 @@ class Site extends Model
         return $this->hasMany(Employee::class);
     }
 
+    public function communicationRooms(): HasMany
+    {
+        return $this->hasMany(CommunicationRoom::class);
+    }
+
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);

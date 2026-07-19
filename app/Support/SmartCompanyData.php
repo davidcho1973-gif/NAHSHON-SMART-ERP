@@ -90,6 +90,18 @@ class SmartCompanyData
             'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02'), $siteId),
             'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02'), $siteId),
             'api_markWbsStatus' => app(\App\Services\Wbs\WbsService::class)->markStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
+            'api_createSafetyCardForWbs' => app(\App\Services\Wbs\WbsService::class)->createSafetyCard(
+                (string) ($args[0] ?? ''),
+                ($args[1] ?? null) ? (string) $args[1] : null,
+                auth()->id()
+            ),
+            'api_assignSafetySigner' => app(\App\Services\Wbs\WbsLaborService::class)->assignEmployee(
+                (int) ($args[0] ?? 0),
+                ($args[1] ?? null) !== null ? (int) $args[1] : null
+            ),
+            'api_getWbsLabor' => app(\App\Services\Wbs\WbsLaborService::class)->laborFor((string) ($args[0] ?? '')),
+            'api_getAssignableEmployees' => self::assignableEmployees($siteId),
+            'api_getTodayWbsWork' => app(\App\Services\Wbs\WbsService::class)->todayWork((string) ($args[0] ?? ''), $siteId),
             'api_updateWbsRow' => app(\App\Services\Wbs\WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
             'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
@@ -389,6 +401,40 @@ class SmartCompanyData
             'flights' => self::flightList(),
         ];
     }
+    /**
+     * 안전카드 서명란에 배정할 수 있는 직원 목록 (현장 스코프 적용).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function assignableEmployees(string $siteId = 'ALL'): array
+    {
+        if (! Schema::hasTable('employees')) {
+            return [];
+        }
+
+        $query = \App\Models\Employee::query()->orderBy('name');
+
+        if ($siteId !== 'ALL') {
+            $resolved = \App\Models\Site::query()->where('code', $siteId)->value('id');
+            $query->where(function ($q) use ($resolved): void {
+                $q->whereNull('site_id')->orWhere('site_id', $resolved);
+            });
+        }
+
+        // 퇴사자 등은 배정 대상에서 제외 — 상태값 표기가 현장마다 달라 '재직' 계열만 통과시킨다.
+        $query->where(function ($q): void {
+            $q->whereNull('employment_status')
+                ->orWhereNotIn('employment_status', ['퇴사', 'terminated', 'resigned', 'inactive']);
+        });
+
+        return $query->limit(500)->get()->map(fn (\App\Models\Employee $e) => [
+            'id' => $e->id,
+            'name' => trim((string) ($e->name ?: trim(((string) $e->last_name) . ' ' . ((string) $e->first_name)))) ?: ('EMP-' . $e->id),
+            'number' => $e->employee_number ?? $e->badge_number,
+            'siteId' => $e->site_id,
+        ])->all();
+    }
+
     public static function projects(): array
     {
         $fromDb = self::smartRecords('wbs');

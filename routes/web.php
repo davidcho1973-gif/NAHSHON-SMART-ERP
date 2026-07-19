@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\AttendanceAppController;
+use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileExpenseController;
@@ -80,6 +81,11 @@ Route::middleware('auth')->group(function (): void {
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
+    Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
+    Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
+    Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
+    Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
+    Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
     Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');
     Route::post('/attendance-app/team/{token}', [AttendanceAppController::class, 'recordTeam'])->name('attendance-app.team.record');
     Route::get('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'crew'])->name('attendance-app.crew');

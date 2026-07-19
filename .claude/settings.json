@@ -5,7 +5,12 @@
       "Bash(node _verify-commute.mjs)",
       "Bash(rm -f _verify-commute.mjs)",
       "Bash(npm remove *)",
-      "Bash(node _verify-att.mjs)"
+      "Bash(node _verify-att.mjs)",
+      "Bash(rm -f _verify-admin.mjs _verify-att.mjs _verify-commute.mjs)",
+      "Bash(node -e ' *)",
+      "Bash(node _verify-hr.mjs)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -nA6 '\"scripts\"' composer.json)"
     ]
   }
 }

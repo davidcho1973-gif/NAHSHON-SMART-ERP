@@ -25,6 +25,7 @@ class AttendanceLog extends Model
         // 저장/삭제되면 해당 일자의 payroll_timesheets를 자동 재계산한다.
         static::saved(fn (self $log) => self::syncTimesheet($log));
         static::deleted(fn (self $log) => self::syncTimesheet($log));
+        static::created(fn (self $log) => self::publishCommunicationAlert($log));
     }
 
     private static function syncTimesheet(self $log): void
@@ -38,6 +39,15 @@ class AttendanceLog extends Model
                 ->syncDay((int) $log->employee_id, Carbon::parse($log->attendance_date)->toDateString());
         } catch (\Throwable $e) {
             // 급여 동기화 실패가 출퇴근 기록 자체를 막지 않도록 격리한다.
+            report($e);
+        }
+    }
+
+    private static function publishCommunicationAlert(self $log): void
+    {
+        try {
+            app(\App\Services\Communication\CommunicationService::class)->publishAttendanceAlert($log);
+        } catch (\Throwable $e) {
             report($e);
         }
     }
@@ -103,6 +113,21 @@ class AttendanceLog extends Model
     public function employerCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'employer_company_id');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function site(): BelongsTo
+    {
+        return $this->belongsTo(Site::class);
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 
     public function recordedBy(): BelongsTo
