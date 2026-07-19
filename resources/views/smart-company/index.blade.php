@@ -8016,7 +8016,7 @@
               return '<div style="margin-bottom:14px">' +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;padding:7px 12px;background:rgba(124,58,237,0.07);border-left:3px solid #7c3aed;border-radius:4px">' +
                 '<span class="cell-mono" style="font-size:11px;color:#a78bfa;font-weight:700">Task ' + wbsEsc(task.task_no || '') + '</span>' +
-                '<span style="font-size:13px;color:white;font-weight:600">' + wbsEsc(task.task_name || '') + '</span>' +
+                '<span style="font-size:13px;color:var(--text-primary);font-weight:600">' + wbsEsc(task.task_name || '') + '</span>' +
                 '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
                 '<span class="cell-mono">' + taskCompleted + '/' + taskTotal + '</span>' +
                 '<div style="width:70px;height:5px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
@@ -8028,7 +8028,7 @@
               '<summary style="padding:13px 16px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
               '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
               '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap">STAGE ' + wbsEsc(stage.stage_no || sIdx + 1) + '</span>' +
-              '<span style="font-size:15px;font-weight:700;color:white">' + wbsEsc(stage.stage_name || '') + '</span>' +
+              '<span style="font-size:15px;font-weight:700;color:var(--text-primary)">' + wbsEsc(stage.stage_name || '') + '</span>' +
               '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
               '<span class="cell-mono"><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
               '<span class="cell-mono"><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
