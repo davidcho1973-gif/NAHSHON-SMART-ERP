@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AnalyzeWbsManualJob;
 use App\Models\Site;
 use App\Models\WbsManual;
-use App\Support\SmartCompanyData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -53,34 +53,15 @@ class WbsManualController extends Controller
                 'analyzed_by_id' => optional($request->user())->id,
             ]);
 
-            $pdf = [
-                'data' => base64_encode((string) file_get_contents($absolutePath)),
-                'media_type' => $mime,
-            ];
-
-            $result = SmartCompanyData::analyzeWbsManual($projectCode, $siteScope, $pdf);
-
-            if (! ($result['success'] ?? false)) {
-                $manual->update(['status' => 'failed', 'error' => (string) ($result['error'] ?? 'AI 분석 실패')]);
-
-                return response()->json(['success' => false, 'error' => $result['error'] ?? 'AI 분석 실패', 'manual' => $this->present($manual)], 422);
-            }
-
-            $row = $result['results'][0] ?? [];
-            $manual->update([
-                'status' => 'completed',
-                'engine' => (string) ($row['engine'] ?? null),
-                'stages' => (int) ($row['stages'] ?? 0),
-                'tasks' => (int) ($row['tasks'] ?? 0),
-                'subtasks' => (int) ($row['subTasks'] ?? 0),
-                'analyzed_at' => now(),
-            ]);
+            // CPM 전량 추출은 수십 초~수 분 걸려 동기 처리 시 게이트웨이 504 가 난다.
+            // 응답을 먼저 보내고(202) 분석은 그 뒤에 같은 프로세스에서 진행 — 프론트가 상태를 폴링한다.
+            AnalyzeWbsManualJob::dispatch($manual->id, $projectCode, $siteScope)->afterResponse();
 
             return response()->json([
                 'success' => true,
+                'status' => 'analyzing',
                 'manual' => $this->present($manual->fresh()),
-                'result' => $result,
-            ]);
+            ], 202);
         } catch (\Throwable $e) {
             report($e);
 
