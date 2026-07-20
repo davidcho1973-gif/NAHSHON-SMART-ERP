@@ -27,7 +27,7 @@ class WbsItem extends Model
 
     protected $fillable = [
         'project_id', 'project_code', 'parent_id', 'level', 'wbs_code', 'node_no', 'activity_id', 'name',
-        'company', 'crew_text', 'crew_size', 'crew_roles', 'equipment', 'status', 'ehs', 'manhours', 'days',
+        'company', 'trade', 'crew_text', 'crew_size', 'crew_roles', 'equipment', 'status', 'ehs', 'manhours', 'days',
         'planned_start', 'planned_end', 'preds', 'float_days', 'is_critical', 'late_start', 'late_end',
         'planned_cost', 'progress', 'sort_order', 'company_id', 'site_id', 'source', 'payload',
     ];
@@ -154,6 +154,7 @@ class WbsItem extends Model
             'activity_id' => $this->activity_id,
             'sub_no' => $this->node_no ?? '',
             'sub_name' => $this->name,
+            'trade' => $this->trade ?? '',
             'company' => $this->company ?? '',
             'manhours' => (float) $this->manhours,
             'days' => (int) $this->days,

@@ -8004,7 +8004,7 @@
                   '<span>' + wbsStatusPill(status) + '</span>' +
                   '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(sub.activity_id || sub.sub_no || '') + '</span>' +
                   '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + wbsCpBadge(sub) + ehsBadge + safetyChip + wbsPredsChip(sub) + '</span>' +
-                  '<span style="font-size:11px;color:' + compColor + ';font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(sub.company || '-') + '</span>' +
+                  '<span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="공종: ' + wbsEsc(sub.trade || '-') + (sub.company ? ' / 협력사: ' + wbsEsc(sub.company) : ' / 협력사 미배정') + '"><span style="color:var(--text-secondary)">' + wbsEsc(sub.trade || '-') + '</span>' + (sub.company ? ' <span style="color:' + compColor + ';font-weight:700">· ' + wbsEsc(sub.company) + '</span>' : ' <span style="color:var(--text-tertiary);font-weight:400">· 미배정</span>') + '</span>' +
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right" title="' + wbsEsc(sub.crewText || '') + '">' + wbsCrewLabel(sub) + '</span>' +
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (parseFloat(sub.manhours) || 0) + '</span>' +
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (sub.days || 0) + '</span>' +
@@ -8382,10 +8382,12 @@
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">상태</label>' +
           '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' + statusOptions + '</select></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">담당사</label>' +
-          '<input type="text" id="wbs-edit-company" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="협력사명" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">담당사 <span style="color:var(--text-tertiary);font-weight:400">(실제 계약사)</span></label>' +
+          '<input type="text" id="wbs-edit-company" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="계약 협력사 선택/입력" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px">' +
           '<datalist id="wbs-company-options">' + companyOptions + '</datalist></div>' +
           '</div>' +
+          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">공종 <span style="color:var(--text-tertiary);font-weight:400">(AI 분류)</span></label>' +
+          '<input type="text" id="wbs-edit-trade" value="' + wbsEsc(sub.trade || '') + '" placeholder="예: 전기 / 배관 / 기계설치 / 리깅 / 용접 / 안전" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">공수 (MH)</label>' +
           '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" value="' + (parseFloat(sub.manhours) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
@@ -8404,6 +8406,14 @@
           '</div></div>';
         document.body.appendChild(modal);
 
+        // 담당사 후보를 "실제 계약사"(현장 계약사 + 등록 회사)로 채운다 — AI 임의 배정이 아니라 사람이 선택.
+        gsRun('api_getWbsCompanyOptions', [window.currentSiteId || 'ALL'], []).then(function(opts) {
+          var dl = modal.querySelector('#wbs-company-options');
+          if (dl && Array.isArray(opts) && opts.length) {
+            dl.innerHTML = opts.map(function(n) { return '<option value="' + wbsEsc(n) + '"></option>'; }).join('');
+          }
+        }).catch(function() {});
+
         modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
         modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
           var name = document.getElementById('wbs-edit-name').value.trim();
@@ -8414,6 +8424,7 @@
             '작업명': name,
             '상태': document.getElementById('wbs-edit-status').value,
             '담당사': document.getElementById('wbs-edit-company').value.trim(),
+            '공종': document.getElementById('wbs-edit-trade').value.trim(),
             '공수': document.getElementById('wbs-edit-manhours').value,
             '일수': document.getElementById('wbs-edit-days').value,
             '시작예정': document.getElementById('wbs-edit-start').value,
@@ -8423,6 +8434,7 @@
             '작업명': sub.sub_name || '',
             '상태': sub.status || '',
             '담당사': sub.company || '',
+            '공종': sub.trade || '',
             '공수': String(parseFloat(sub.manhours) || 0),
             '일수': String(parseInt(sub.days, 10) || 0),
             '시작예정': sub.plannedStart || '',
