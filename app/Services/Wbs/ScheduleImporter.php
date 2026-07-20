@@ -362,7 +362,7 @@ class ScheduleImporter
                         'wbs_code' => "{$projectCode}-T-{$taskNo}",
                         'node_no' => $taskNo,
                         'name' => $trade,
-                        'company' => $trade,
+                        'trade' => $trade,
                         'sort_order' => $tIdx,
                     ]);
                     $counts['tasks']++;
@@ -382,7 +382,9 @@ class ScheduleImporter
                             'node_no' => $subNo,
                             'activity_id' => $a['activity_id'],
                             'name' => $a['name'],
-                            'company' => $a['trade'],
+                            // 공종은 trade 로, 협력사(company)는 사람이 배정 — 재수입 시 기존 배정 보존.
+                            'trade' => $a['trade'],
+                            'company' => $keep->company ?? null,
                             'days' => $a['dur'] ?: null,
                             'manhours' => $this->estimateManhours($a),
                             'planned_start' => $a['es'],

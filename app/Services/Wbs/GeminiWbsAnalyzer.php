@@ -201,7 +201,7 @@ class GeminiWbsAnalyzer
 - sub_tasks: task 당 2~6개. 각 항목:
   - sub_no: 예 "1.2.3"
   - sub_name: 구체적 작업명
-  - company: 담당 협력사. NAHSHON / AUTORICA / AI-KOREA / M-SOL 중 하나로 배정.
+  - trade: 공종(담당 협력사 아님). 전기 / 배관 / 기계설치 / 리깅 / 용접 / 강구조 / 장비설치 / 시운전 / 안전 / 일반 중 하나. 실제 협력사는 사람이 나중에 배정하므로 회사명은 절대 넣지 마라.
   - manhours: 예상 공수(정수, man-hour)
   - days: 예상 소요일(정수)
   - ehs: 안전 위험도. high(고소·중량물·전기·밀폐) / medium / low 중 하나.
@@ -237,7 +237,7 @@ PROMPT;
                                                 'properties' => [
                                                     'sub_no' => ['type' => 'string'],
                                                     'sub_name' => ['type' => 'string'],
-                                                    'company' => ['type' => 'string'],
+                                                    'trade' => ['type' => 'string'],
                                                     'manhours' => ['type' => 'integer'],
                                                     'days' => ['type' => 'integer'],
                                                     'ehs' => ['type' => 'string'],

@@ -130,6 +130,7 @@ class WbsService
         $map = [
             '상태' => 'status', 'status' => 'status',
             '담당사' => 'company', 'company' => 'company',
+            '공종' => 'trade', 'trade' => 'trade',
             '시작예정' => 'planned_start', 'planned_start' => 'planned_start',
             '종료예정' => 'planned_end', 'planned_end' => 'planned_end',
             'EHS' => 'ehs', 'ehs' => 'ehs',
@@ -422,7 +423,10 @@ class WbsService
                             'wbs_code' => "{$projectCode}-W-{$subNo}",
                             'node_no' => $subNo,
                             'name' => (string) ($sub['sub_name'] ?? "Sub {$subNo}"),
-                            'company' => $sub['company'] ?? null,
+                            // AI 는 공종(trade)만 분류한다. 협력사(company)는 사람이 실제 계약사에서 배정하므로
+                            // 재생성 시 기존 배정을 보존하고, 새 항목은 비워둔다(미배정).
+                            'trade' => $sub['trade'] ?? ($sub['company'] ?? null),
+                            'company' => $keep->company ?? null,
                             'manhours' => isset($sub['manhours']) ? (float) $sub['manhours'] : null,
                             'days' => isset($sub['days']) ? (int) $sub['days'] : null,
                             'ehs' => $sub['ehs'] ?? null,

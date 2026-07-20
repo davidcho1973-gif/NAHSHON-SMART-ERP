@@ -117,6 +117,7 @@ class SmartCompanyData
             'api_getOfficeSupplies' => self::officeSupplies(),
             'api_getVendorList' => self::vendors(),
             'api_getCompanyList' => \App\Models\Company::query()->where('status', 'active')->orderBy('name')->get()->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->all(),
+            'api_getWbsCompanyOptions' => self::wbsCompanyOptions($siteId),
             'api_getTeamList' => \App\Models\Team::query()->where('status', 'active')->orderBy('name')->get()->map(fn($t) => ['id' => $t->id, 'name' => $t->name, 'site_id' => $t->site_id])->all(),
             'api_getEmployeeList' => \App\Models\Employee::query()->where('employment_status', 'active')->orderBy('name')->get()->map(fn($e) => ['id' => $e->id, 'name' => $e->name, 'company_id' => $e->company_id, 'team_id' => $e->team_id])->all(),
             'api_getSiteList' => Schema::hasTable('sites') ? \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get()->map(fn($s) => ['id' => $s->id, 'code' => $s->code, 'name' => $s->name])->all() : [],
@@ -1422,6 +1423,36 @@ class SmartCompanyData
         } catch (\Throwable $e) {
             return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * WBS 담당사(협력사) 배정 옵션 — "실제 계약사"에서 사람이 고르도록.
+     * 현장에 등록된 계약사(site_contractors)를 우선하고, 전체 등록 회사(companies)를 합쳐 중복 제거.
+     *
+     * @return array<int, string>
+     */
+    public static function wbsCompanyOptions(string $siteId = 'ALL'): array
+    {
+        $names = collect();
+
+        if ($siteId !== 'ALL' && class_exists(\App\Models\SiteContractor::class)) {
+            $siteRowId = \App\Models\Site::query()->where('code', $siteId)->value('id');
+            if ($siteRowId) {
+                $names = \App\Models\SiteContractor::query()
+                    ->where('site_id', $siteRowId)
+                    ->pluck('company_name')
+                    ->filter();
+            }
+        }
+
+        $all = \App\Models\Company::query()->where('status', 'active')->orderBy('name')->pluck('name');
+
+        return $names->merge($all)
+            ->map(fn ($n) => trim((string) $n))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
