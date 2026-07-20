@@ -57,7 +57,8 @@ class GeminiModelResolver
             array_unshift($base, $configured);
         }
 
-        return array_values(array_unique($base));
+        // 상위 후보만 시도한다 — 실패 시 순차 재시도가 여러 모델로 쌓여 시간이 폭증하는 것을 막는다.
+        return array_slice(array_values(array_unique($base)), 0, 6);
     }
 
     /**

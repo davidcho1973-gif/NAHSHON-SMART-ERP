@@ -55,8 +55,10 @@ class WbsManualUploadTest extends TestCase
         $this->post(route('wbs-manual.upload'))->assertRedirect(route('login'));
     }
 
-    public function test_upload_pdf_analyzes_and_records_manual(): void
+    public function test_upload_queues_analysis_and_returns_immediately(): void
     {
+        // 동기 분석은 게이트웨이 504 를 유발하므로, 업로드는 즉시 202(analyzing)를 돌려주고
+        // 실제 분석은 응답 후 백그라운드(afterResponse) 잡이 처리한다.
         Storage::fake('public');
         $this->fakeClaudeWbs();
 
@@ -68,17 +70,50 @@ class WbsManualUploadTest extends TestCase
             'site_id' => 'ALL',
         ]);
 
-        $response->assertOk()->assertJson(['success' => true]);
-        $response->assertJsonPath('manual.engine', 'claude');
-        $response->assertJsonPath('manual.stages', 1);
-        $response->assertJsonPath('manual.subtasks', 1);
+        // 응답 계약: 즉시 202 + status=analyzing (실제 분석은 응답 후 잡이 처리).
+        $response->assertStatus(202)->assertJson(['success' => true, 'status' => 'analyzing']);
+        $response->assertJsonPath('manual.status', 'analyzing');
 
-        // Manual row + stored file + persisted WBS.
         $manual = WbsManual::first();
         $this->assertNotNull($manual);
-        $this->assertSame('completed', $manual->status);
         Storage::disk('public')->assertExists($manual->path);
+    }
+
+    public function test_analyze_job_completes_manual_and_persists_wbs(): void
+    {
+        Storage::fake('public');
+        $this->fakeClaudeWbs();
+
+        Storage::disk('public')->put('wbs-manuals/setup.pdf', '%PDF-1.4 fake manual');
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01', 'original_name' => 'setup.pdf', 'disk' => 'public',
+            'path' => 'wbs-manuals/setup.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
+        ]);
+
+        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+
+        $manual->refresh();
+        $this->assertSame('completed', $manual->status);
+        $this->assertSame('claude', $manual->engine);
+        $this->assertSame(1, $manual->stages);
+        $this->assertSame(1, $manual->subtasks);
         $this->assertSame(1, WbsItem::where('project_code', 'MAN-01')->where('level', 'stage')->count());
+    }
+
+    public function test_analyze_job_marks_failed_on_error(): void
+    {
+        Storage::fake('public');
+        // 파일이 없으면 실패로 기록.
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01', 'original_name' => 'gone.pdf', 'disk' => 'public',
+            'path' => 'wbs-manuals/gone.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
+        ]);
+
+        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+
+        $manual->refresh();
+        $this->assertSame('failed', $manual->status);
+        $this->assertNotEmpty($manual->error);
     }
 
     public function test_index_lists_analyzed_manuals_for_project(): void

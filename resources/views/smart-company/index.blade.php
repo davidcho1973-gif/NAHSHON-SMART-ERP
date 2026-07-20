@@ -8506,7 +8506,7 @@
         modal.querySelector('#wbsm-analyze').addEventListener('click', async function () {
           var input = modal.querySelector('#wbsm-file');
           if (!input.files || !input.files[0]) { alert('분석할 매뉴얼 파일을 선택하세요.'); return; }
-          var btn = this; btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = '🤖 분석 중... (수 분 소요 가능)';
+          var btn = this; btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = '⬆️ 업로드 중...';
           var fd = new FormData();
           fd.append('manual', input.files[0]);
           fd.append('project_code', projectId);
@@ -8514,14 +8514,40 @@
           try {
             var res = await fetch('/wbs-api/upload-manual', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, credentials: 'same-origin', body: fd });
             var json = await res.json();
-            if (json && json.success) {
-              var r = (json.result && json.result.results && json.result.results[0]) || {};
-              alert('✅ 분석 완료: ' + (r.stages || 0) + ' Stages · ' + (r.tasks || 0) + ' Tasks · ' + (r.subTasks || 0) + ' SubTasks');
-              clearWbsCache();
+            if (!json || !json.success || !json.manual) {
+              alert('❌ 업로드 실패: ' + (json && json.error ? json.error : ('HTTP ' + res.status)));
+              btn.disabled = false; btn.textContent = oldLabel; return;
+            }
+            // 분석은 응답 후 백그라운드로 진행된다(504 방지) — 상태를 폴링한다.
+            var manualId = json.manual.id;
+            loadList();
+            btn.textContent = '🤖 분석 중... (백그라운드)';
+            var done = false, tries = 0, maxTries = 150; // 약 10분 (4초 간격)
+            while (!done && tries < maxTries) {
+              await new Promise(function (r) { setTimeout(r, 4000); });
+              tries++;
+              var m = null;
+              try {
+                var lr = await fetch('/wbs-api/manuals?project=' + encodeURIComponent(projectId), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                var lj = await lr.json();
+                (lj.manuals || []).forEach(function (x) { if (x.id === manualId) m = x; });
+              } catch (e) { /* 일시 오류는 무시하고 다음 폴링 */ }
+              if (!m) continue;
+              if (m.status === 'completed') {
+                done = true;
+                alert('✅ 분석 완료: ' + (m.stages || 0) + ' Stages · ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' 작업');
+                clearWbsCache(); loadList(); renderWbs();
+              } else if (m.status === 'failed') {
+                done = true;
+                alert('❌ 분석 실패: ' + (m.error || '알 수 없는 오류'));
+                loadList();
+              } else {
+                btn.textContent = '🤖 분석 중... (' + (tries * 4) + '초)';
+              }
+            }
+            if (!done) {
+              alert('⏳ 분석이 예상보다 오래 걸립니다. 잠시 후 "분석된 매뉴얼" 목록에서 완료 여부를 확인하세요.');
               loadList();
-              renderWbs();
-            } else {
-              alert('❌ 분석 실패: ' + (json && json.error ? json.error : ('HTTP ' + res.status)));
             }
           } catch (e) { alert('❌ 오류: ' + e.message); }
           btn.disabled = false; btn.textContent = oldLabel;
