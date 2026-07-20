@@ -190,22 +190,13 @@ class GeminiWbsAnalyzer
     }
 
     /**
+     * 시도할 Gemini 모델 목록 — 실제 사용 가능한 모델을 조회해 고른다(하드코딩 404 방지).
+     *
      * @return array<int, string>
      */
     private function models(): array
     {
-        $models = [
-            'gemini-3.5-pro', 'gemini-2.5-pro', 'gemini-2.0-pro', 'gemini-1.5-pro',
-            'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash',
-        ];
-
-        $configured = (string) config('services.gemini.model');
-        if ($configured !== '') {
-            $models = array_values(array_filter($models, fn ($m) => $m !== $configured));
-            array_unshift($models, $configured);
-        }
-
-        return $models;
+        return app(\App\Support\GeminiModelResolver::class)->candidates();
     }
 
     private function stripJsonFence(string $text): string
