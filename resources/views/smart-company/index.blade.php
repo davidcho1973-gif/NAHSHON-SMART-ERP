@@ -4283,7 +4283,7 @@
           '<canvas id="cam-canvas" style="display:none"></canvas>' +
           '<div style="display:flex;gap:10px">' +
             '<button id="cam-snap" style="background:var(--brand-primary);color:white;border:none;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer"><i class="ph ph-camera"></i> ì´¬ì˜</button>' +
-            '<button id="cam-flip" style="background:var(--bg-base);color:white;border:1px solid var(--border-default);padding:12px 16px;border-radius:8px;font-size:13px;cursor:pointer" title="ì „í›„ë°© ì¹´ë©”ë¼ ì „í™˜"><i class="ph ph-arrows-clockwise"></i></button>' +
+            '<button id="cam-flip" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:12px 16px;border-radius:8px;font-size:13px;cursor:pointer" title="ì „í›„ë°© ì¹´ë©”ë¼ ì „í™˜"><i class="ph ph-arrows-clockwise"></i></button>' +
             '<button id="cam-cancel" style="background:var(--bg-base);color:var(--text-secondary);border:1px solid var(--border-default);padding:12px 24px;border-radius:8px;font-size:13px;cursor:pointer">ì·¨ì†Œ</button>' +
           '</div>' +
           '<div style="color:rgba(255,255,255,0.6);font-size:11px">ESC ë˜ëŠ” [ì·¨ì†Œ] ëˆ„ë¥´ë©´ ë‹«íž˜</div>';
@@ -7763,7 +7763,7 @@
           '</div>' +
           '<div class="action-row" style="gap:8px">' +
           (projOptions
-            ? '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;max-width:280px">' + projOptions + '</select>'
+            ? '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;max-width:280px">' + projOptions + '</select>'
             : '') +
           '<button class="btn-secondary" onclick="window.refreshWbs()" title="프로젝트 목록/공정 데이터 새로고침"><i class="ph ph-arrows-clockwise"></i></button>' +
           '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
@@ -8378,10 +8378,10 @@
           '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsEsc(wbsId) + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
           '<div style="display:grid;gap:12px">' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">작업명</label>' +
-          '<input type="text" id="wbs-edit-name" value="' + wbsEsc(sub.sub_name || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<input type="text" id="wbs-edit-name" value="' + wbsEsc(sub.sub_name || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">상태</label>' +
-          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' + statusOptions + '</select></div>' +
+          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px">' + statusOptions + '</select></div>' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">담당사 <span style="color:var(--text-tertiary);font-weight:400">(실제 계약사)</span></label>' +
           '<input type="text" id="wbs-edit-company" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="계약 협력사 선택/입력" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px">' +
           '<datalist id="wbs-company-options">' + companyOptions + '</datalist></div>' +
@@ -8390,15 +8390,15 @@
           '<input type="text" id="wbs-edit-trade" value="' + wbsEsc(sub.trade || '') + '" placeholder="예: 전기 / 배관 / 기계설치 / 리깅 / 용접 / 안전" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">공수 (MH)</label>' +
-          '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" value="' + (parseFloat(sub.manhours) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" value="' + (parseFloat(sub.manhours) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">일수</label>' +
-          '<input type="number" step="1" min="0" id="wbs-edit-days" value="' + (parseInt(sub.days, 10) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<input type="number" step="1" min="0" id="wbs-edit-days" value="' + (parseInt(sub.days, 10) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">시작예정</label>' +
-          '<input type="date" id="wbs-edit-start" value="' + wbsEsc(sub.plannedStart || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<input type="date" id="wbs-edit-start" value="' + wbsEsc(sub.plannedStart || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">종료예정</label>' +
-          '<input type="date" id="wbs-edit-end" value="' + wbsEsc(sub.plannedEnd || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
+          '<input type="date" id="wbs-edit-end" value="' + wbsEsc(sub.plannedEnd || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
           '</div></div>' +
           '<div style="display:flex;gap:10px;margin-top:18px">' +
           '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">취소</button>' +
