@@ -41,8 +41,12 @@ class ClaudeWbsAnalyzer
         }
 
         $context = $this->buildContext($projectCode);
+        // PDF 면 서버가 표 텍스트를 뽑아 정본으로 준다(vision 이 조밀한 표의 행을 빠뜨리는 문제 회피).
+        // 텍스트가 충분하면 바이너리(vision)는 생략해 텍스트 전량 추출을 강제한다.
+        $pdfText = \App\Support\PdfText::fromPayload($pdf);
+        $binary = $pdfText !== null ? null : $pdf;
         // 충실한 추출 우선: 문서가 CPM/공정표면 모든 행을 activities 로, 산문형이면 stages 로 반환.
-        $structure = $this->generate(CpmExtraction::prompt($context), CpmExtraction::schema(true), $pdf);
+        $structure = $this->generate(CpmExtraction::prompt($context, $pdfText), CpmExtraction::schema(true), $binary);
 
         $activities = is_array($structure['activities'] ?? null) ? $structure['activities'] : [];
         if ($activities !== []) {
