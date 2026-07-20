@@ -22,10 +22,28 @@ final class CpmExtraction
      * 분석 프롬프트. 문서가 공정표면 모든 행 추출, 아니면 WBS 생성.
      *
      * @param  array{label: string, project: string, type: string, scope: string}  $c
+     * @param  string|null  $pdfText  서버가 PDF 에서 추출한 표 텍스트(정본). 있으면 이걸 근거로 전량 추출.
      */
-    public static function prompt(array $c): string
+    public static function prompt(array $c, ?string $pdfText = null): string
     {
+        $tableBlock = '';
+        if ($pdfText !== null && trim($pdfText) !== '') {
+            $tableBlock = <<<TBL
+
+━━━ [공정표 원문 텍스트 — 정본] ━━━
+아래는 첨부 문서(공정표)에서 서버가 추출한 표 텍스트다. **이 텍스트가 정본이며, 여기 있는 모든 행을 하나도 빠짐없이 activities 로 추출하라.**
+각 행의 열 순서는 대개: ID → 작업명(한글) → Activity(영문) → 공기(일) → 선행작업 → ES일자 → EF일자 → LS일자 → LF일자 → 여유 → CP(★=임계) → 배분원가 → 공종 → 투입조.
+**공종(예: GC/ELEC/PLUMB)과 투입조(예: PM/PE, 2 carpenters + 3 laborers)는 서로 다른 열이다 — 절대 합치지 마라**(trade 에는 공종 코드만, crew 에는 투입조 원문만).
+행 수가 많다(수십 개일 수 있다). 몇 개만 반환하면 잘못된 것이다 — 텍스트에 있는 모든 ID 행을 전부 추출하라.
+─────────────────────────────
+{$pdfText}
+─────────────────────────────
+
+TBL;
+        }
+
         return <<<PROMPT
+{$tableBlock}
 당신은 미국 내 한국 대기업 플랜트/공장(LG배터리·SK반도체·현대차 등) 설치공사의 공정관리(CPM/스케줄) 전문가입니다.
 첨부된 문서를 분석하여 공정관리(WBS) 데이터를 만듭니다. JSON 만 반환하세요.
 
