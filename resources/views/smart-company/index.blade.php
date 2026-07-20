@@ -7820,6 +7820,173 @@
       // 렌더 세대 토큰 — 프로젝트/현장을 빠르게 전환할 때 늦게 도착한 응답이 화면을 덮어쓰지 않게 한다.
       var _wbsRenderGen = 0;
 
+      // ===== 공정표(간트) — 날짜 축 위에 모든 액티비티를 ES~EF 막대로, 날짜 클릭 시 그날 작업 =====
+      var WBS_DAY_PX = 26;              // 하루 폭(px)
+      var WBS_GANTT_LABEL_W = 300;      // 좌측 고정 라벨 폭(px)
+      var WBS_WD = ['일', '월', '화', '수', '목', '금', '토'];
+      var WBS_TRADE_COLORS = { GC: '#64748b', ELEC: '#f59e0b', PLUMB: '#3b82f6', MECH: '#06b6d4', FIRE: '#ef4444', FRAME: '#8b5cf6', DEMO: '#a16207', DOOR: '#0ea5e9', PAINT: '#ec4899', CEIL: '#14b8a6', TILE: '#10b981', MILL: '#d97706', FLOOR: '#84cc16', SPEC: '#6366f1', INSP: '#94a3b8', LV: '#22d3ee', DRY: '#0891b2', PE: '#64748b' };
+      function wbsTradeColor(t) { if (!t) return '#7c3aed'; var k = String(t).toUpperCase().trim(); return WBS_TRADE_COLORS[k] || '#7c3aed'; }
+      function wbsPD(s) { if (!s) return null; var p = String(s).split('-'); if (p.length !== 3) return null; var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); return isNaN(d.getTime()) ? null : d; }
+      function wbsDaysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+      function wbsAddDays(d, n) { return new Date(d.getTime() + n * 86400000); }
+      function wbsISOdate(d) { return d.toISOString().slice(0, 10); }
+      function wbsWeekdayNum(d) { return d.getUTCDay(); }
+      function wbsTodayISO() { return new Date().toISOString().slice(0, 10); }
+
+      // tree(stages > tasks > sub_tasks) → 간트 공정표 HTML.
+      function wbsGanttPanel(tree, projectId) {
+        var acts = [];
+        (tree || []).forEach(function(stage) {
+          (stage.tasks || []).forEach(function(task) {
+            (task.sub_tasks || []).forEach(function(sub) { acts.push(sub); });
+          });
+        });
+        var minD = null, maxD = null;
+        acts.forEach(function(sub) {
+          var s = wbsPD(sub.plannedStart), e = wbsPD(sub.plannedEnd) || s;
+          if (s) { if (!minD || s < minD) minD = s; if (!maxD || s > maxD) maxD = s; }
+          if (e) { if (!maxD || e > maxD) maxD = e; }
+        });
+        if (!minD || !maxD) {
+          return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-calendar-blank"></i> 공정표 (간트)</div></div>' +
+            '<div class="panel-body" style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">시작·종료 예정일이 있는 작업이 없어 공정표를 그릴 수 없습니다.<br>CPM을 다시 임포트하거나 작업 편집에서 예정일을 입력하세요.</div></div>';
+        }
+        var totalDays = wbsDaysBetween(minD, maxD) + 1;
+        var trackW = totalDays * WBS_DAY_PX;
+        var todayISO = wbsTodayISO(), todayD = wbsPD(todayISO);
+        var todayOff = (todayD && todayD >= minD && todayD <= maxD) ? wbsDaysBetween(minD, todayD) : null;
+
+        // 헤더: 월 구간 + 일자(클릭 가능, 일요일/오늘 강조).
+        var months = [], dayCells = '';
+        for (var i = 0; i < totalDays; i++) {
+          var d = wbsAddDays(minD, i);
+          var iso = wbsISOdate(d), wd = wbsWeekdayNum(d), dn = d.getUTCDate();
+          var isSun = (wd === 0), isSat = (wd === 6), isToday = (iso === todayISO);
+          var mkey = d.getUTCFullYear() + '.' + (d.getUTCMonth() + 1);
+          if (months.length === 0 || months[months.length - 1].key !== mkey) months.push({ key: mkey, count: 1 });
+          else months[months.length - 1].count++;
+          var cellBg = isToday ? 'background:rgba(124,58,237,0.28);color:#a78bfa;font-weight:700;' : isSun ? 'background:rgba(239,68,68,0.10);color:#ef8a8a;' : isSat ? 'background:rgba(148,163,184,0.10);color:var(--text-tertiary);' : 'color:var(--text-tertiary);';
+          dayCells += '<div onclick="window.showWbsDayWork(\'' + iso + '\')" title="' + iso + ' (' + WBS_WD[wd] + ') — 클릭: 그날 작업" style="width:' + WBS_DAY_PX + 'px;flex:none;box-sizing:border-box;text-align:center;font-size:9px;line-height:1.15;padding:3px 0;cursor:pointer;border-left:1px solid var(--border-subtle);' + cellBg + '">' + dn + '</div>';
+        }
+        var monthsHtml = months.map(function(m) { return '<div style="width:' + (m.count * WBS_DAY_PX) + 'px;flex:none;box-sizing:border-box;text-align:center;font-size:10px;font-weight:700;color:var(--text-secondary);border-left:1px solid var(--border-default);padding:3px 0">' + m.key + '</div>'; }).join('');
+
+        // 행: Stage 구분 + 액티비티(시작일 정렬) 막대.
+        var rowsHtml = '';
+        (tree || []).forEach(function(stage, sIdx) {
+          var subs = [];
+          (stage.tasks || []).forEach(function(task) { (task.sub_tasks || []).forEach(function(sub) { subs.push(sub); }); });
+          if (subs.length === 0) return;
+          subs.sort(function(a, b) { return String(a.plannedStart || '9999').localeCompare(String(b.plannedStart || '9999')) || String(a.activity_id || '').localeCompare(String(b.activity_id || '')); });
+          rowsHtml += '<div style="display:flex;align-items:stretch;background:var(--bg-surface-elevated);border-top:1px solid var(--border-default)">' +
+            '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:3;background:var(--bg-surface-elevated);padding:6px 12px;font-size:12px;font-weight:700;color:#a78bfa;border-right:1px solid var(--border-default);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">STAGE ' + wbsEsc(stage.stage_no || sIdx + 1) + ' · ' + wbsEsc(stage.stage_name || '') + '</div>' +
+            '<div style="width:' + trackW + 'px;flex:none"></div></div>';
+          subs.forEach(function(sub) {
+            var s = wbsPD(sub.plannedStart), e = wbsPD(sub.plannedEnd) || s;
+            var barHtml = '';
+            if (s) {
+              var off = wbsDaysBetween(minD, s), dur = wbsDaysBetween(s, e) + 1;
+              var left = off * WBS_DAY_PX, w = Math.max(dur * WBS_DAY_PX, 6);
+              var color = sub.isCritical ? '#ef4444' : wbsTradeColor(sub.trade);
+              var done = sub.status === '완료';
+              var prog = Math.max(0, Math.min(100, parseInt(sub.progress, 10) || 0));
+              var label = (w > 54 ? wbsEsc(sub.sub_name || '') : '');
+              barHtml = '<div onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" title="' + wbsEsc((sub.activity_id ? sub.activity_id + ' · ' : '') + (sub.sub_name || '')) + ' (' + wbsEsc(sub.plannedStart || '') + '~' + wbsEsc(sub.plannedEnd || '') + ')' + (sub.crewText ? ' · ' + wbsEsc(sub.crewText) : '') + (sub.isCritical ? ' · 임계경로' : (sub.floatDays != null ? ' · 여유 ' + sub.floatDays + 'd' : '')) + '" ' +
+                'style="position:absolute;left:' + left + 'px;top:4px;height:18px;width:' + w + 'px;background:' + color + ';opacity:' + (done ? '0.55' : '0.92') + ';border-radius:4px;cursor:pointer;overflow:hidden;display:flex;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.25)">' +
+                (prog > 0 && !done ? '<div style="position:absolute;left:0;top:0;bottom:0;width:' + prog + '%;background:rgba(255,255,255,0.25)"></div>' : '') +
+                (done ? '<i class="ph ph-check" style="color:#fff;font-size:11px;margin:0 3px;position:relative"></i>' : '') +
+                (label ? '<span style="position:relative;color:#fff;font-size:10px;font-weight:600;white-space:nowrap;padding:0 5px;text-shadow:0 1px 1px rgba(0,0,0,0.4)">' + label + '</span>' : '') +
+                '</div>';
+            }
+            var critDot = sub.isCritical ? '<span style="color:#ef4444;margin-right:3px">★</span>' : '';
+            rowsHtml += '<div style="display:flex;align-items:stretch;border-top:1px solid var(--border-subtle)">' +
+              '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:2;background:var(--bg-panel);padding:4px 12px;border-right:1px solid var(--border-default);display:flex;align-items:center;gap:6px;overflow:hidden">' +
+                '<span class="cell-mono" style="font-size:9px;color:var(--text-tertiary);flex:none;width:38px">' + wbsEsc(sub.activity_id || '') + '</span>' +
+                '<span onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" style="font-size:12px;color:var(--text-primary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1" title="' + wbsEsc(sub.sub_name || '') + '">' + critDot + wbsEsc(sub.sub_name || '') + '</span>' +
+                '<span style="font-size:9px;font-weight:700;color:' + wbsTradeColor(sub.trade) + ';flex:none">' + wbsEsc(sub.trade || '') + '</span>' +
+              '</div>' +
+              '<div style="width:' + trackW + 'px;flex:none;position:relative;height:26px">' + barHtml + '</div>' +
+            '</div>';
+          });
+        });
+
+        var todayLine = todayOff !== null ? '<div style="position:absolute;top:0;bottom:0;left:' + (WBS_GANTT_LABEL_W + todayOff * WBS_DAY_PX) + 'px;width:2px;background:#7c3aed;opacity:0.7;z-index:4;pointer-events:none"></div>' : '';
+
+        return '<div class="panel">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar-horizontal"></i> 공정표 (간트) — ' + wbsEsc(projectId) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-tertiary);flex-wrap:wrap">' +
+            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:#ef4444;border-radius:2px"></span>임계경로</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:#3b82f6;border-radius:2px"></span>공종색</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:12px;background:#7c3aed"></span>오늘</span>' +
+            '<span><i class="ph ph-cursor-click"></i> 날짜 클릭 = 그날 작업</span>' +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto;overflow-y:hidden">' +
+            '<div style="position:relative;width:' + (WBS_GANTT_LABEL_W + trackW) + 'px">' +
+              '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg-panel);border-bottom:1px solid var(--border-default)">' +
+                '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:6;background:var(--bg-panel);border-right:1px solid var(--border-default)"></div>' +
+                '<div style="display:flex">' + monthsHtml + '</div>' +
+              '</div>' +
+              '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg-panel);border-bottom:1px solid var(--border-default)">' +
+                '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:6;background:var(--bg-panel);border-right:1px solid var(--border-default);font-size:10px;color:var(--text-tertiary);display:flex;align-items:center;padding:0 12px">작업 ' + acts.length + '개</div>' +
+                '<div style="display:flex">' + dayCells + '</div>' +
+              '</div>' +
+              rowsHtml + todayLine +
+            '</div>' +
+          '</div></div>';
+      }
+
+      // 특정 날짜에 진행 중인 작업 목록 + 계획 인원 합계 (간트 날짜 클릭 시).
+      window.showWbsDayWork = function(iso) {
+        var idx = window._wbsSubIndex || {};
+        var items = Object.keys(idx).map(function(k) { return idx[k]; }).filter(function(s) {
+          if (!s.plannedStart) return false;
+          var e = s.plannedEnd || s.plannedStart;
+          return s.plannedStart <= iso && iso <= e;
+        });
+        items.sort(function(a, b) { return (b.isCritical ? 1 : 0) - (a.isCritical ? 1 : 0) || String(a.trade || '').localeCompare(String(b.trade || '')) || String(a.activity_id || '').localeCompare(String(b.activity_id || '')); });
+        var crewSum = 0, critN = 0;
+        items.forEach(function(s) { crewSum += parseFloat(s.crewSize) || 0; if (s.isCritical) critN++; });
+        var d = wbsPD(iso), wd = d ? WBS_WD[wbsWeekdayNum(d)] : '';
+        var rows = items.length ? items.map(function(s) {
+          var color = s.isCritical ? '#ef4444' : wbsTradeColor(s.trade);
+          return '<div onclick="window.openWbsEditModal(\'' + wbsJsArg(s.wbs_id) + '\')" style="display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:6px;border-left:3px solid ' + color + ';background:var(--bg-base);margin-bottom:6px;cursor:pointer">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(s.activity_id || '') + '</span>' +
+            '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.isCritical ? '<span style="color:#ef4444">★ </span>' : '') + wbsEsc(s.sub_name || '') + '</span>' +
+              '<span style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(s.trade || '') + (s.company ? ' · ' + wbsEsc(s.company) : ' · 미배정') + (s.crewText ? ' · ' + wbsEsc(s.crewText) : '') + '</span></span>' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-secondary);text-align:right;white-space:nowrap">' + wbsEsc(s.plannedStart || '') + '<br>~ ' + wbsEsc(s.plannedEnd || '') + '</span>' +
+          '</div>';
+        }).join('') : '<div style="text-align:center;color:var(--text-tertiary);padding:28px;font-size:13px">이 날짜에 예정된 작업이 없습니다.</div>';
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:22px;width:560px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+            '<h3 style="margin:0;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--text-primary)"><i class="ph ph-calendar-check" style="color:#7c3aed"></i> ' + wbsEsc(iso) + ' (' + wd + ')</h3>' +
+            '<button id="wbs-day-close" style="background:none;border:none;color:var(--text-tertiary);font-size:22px;cursor:pointer;line-height:1">&times;</button></div>' +
+          '<div style="display:flex;gap:18px;font-size:12px;color:var(--text-secondary);margin-bottom:14px">' +
+            '<span>진행 작업 <b style="color:var(--text-primary);font-size:15px">' + items.length + '</b> 개</span>' +
+            '<span>계획 인원 <b style="color:#7c3aed;font-size:15px">' + crewSum + '</b> 명</span>' +
+            '<span>임계 <b style="color:#ef4444;font-size:15px">' + critN + '</b> 건</span></div>' +
+          '<div style="overflow-y:auto;flex:1">' + rows + '</div></div>';
+        document.body.appendChild(modal);
+        var close = function() { modal.remove(); };
+        modal.querySelector('#wbs-day-close').addEventListener('click', close);
+        modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+      };
+
+      // 공정표(간트) / 상세(트리) 뷰 전환 — 재조회 없이 표시만 토글.
+      window.setWbsView = function(mode) {
+        window._wbsViewMode = mode;
+        var g = document.getElementById('wbs-view-gantt'), t = document.getElementById('wbs-view-tree');
+        if (g) g.style.display = (mode === 'gantt' ? '' : 'none');
+        if (t) t.style.display = (mode === 'tree' ? '' : 'none');
+        [['wbs-view-gantt-btn', 'gantt'], ['wbs-view-tree-btn', 'tree']].forEach(function(p) {
+          var btn = document.getElementById(p[0]); if (!btn) return;
+          var active = (p[1] === mode);
+          btn.style.background = active ? '#7c3aed' : 'transparent';
+          btn.style.color = active ? '#fff' : 'var(--text-secondary)';
+        });
+      };
+
       async function renderWbs() {
         var gen = ++_wbsRenderGen;
         pageContainer.innerHTML = skeleton();
@@ -8046,7 +8213,17 @@
             '</div></div>' +
             '<div class="panel-body">' + treeHtml + '</div></div>';
 
-          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + panelsHtml + treePanel;
+          // 뷰 전환: 공정표(간트) ↔ 상세(트리). 기본은 공정표.
+          var vm = window._wbsViewMode || 'gantt';
+          var viewToggle = '<div style="display:inline-flex;gap:2px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:9px;padding:3px;margin-bottom:14px">' +
+            '<button id="wbs-view-gantt-btn" onclick="window.setWbsView(\'gantt\')" style="border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:' + (vm === 'gantt' ? '#7c3aed' : 'transparent') + ';color:' + (vm === 'gantt' ? '#fff' : 'var(--text-secondary)') + '"><i class="ph ph-chart-bar-horizontal"></i> 공정표</button>' +
+            '<button id="wbs-view-tree-btn" onclick="window.setWbsView(\'tree\')" style="border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:' + (vm === 'tree' ? '#7c3aed' : 'transparent') + ';color:' + (vm === 'tree' ? '#fff' : 'var(--text-secondary)') + '"><i class="ph ph-list-checks"></i> 상세</button>' +
+            '</div>';
+          var ganttHtml = wbsGanttPanel(tree, projectId);
+
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + viewToggle +
+            '<div id="wbs-view-gantt"' + (vm === 'gantt' ? '' : ' style="display:none"') + '>' + ganttHtml + '</div>' +
+            '<div id="wbs-view-tree"' + (vm === 'tree' ? '' : ' style="display:none"') + '>' + panelsHtml + treePanel + '</div>';
 
         } catch (err) {
           if (gen !== _wbsRenderGen) return;
