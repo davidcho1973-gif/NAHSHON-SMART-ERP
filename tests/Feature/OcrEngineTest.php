@@ -29,10 +29,12 @@ class OcrEngineTest extends TestCase
         $this->assertInstanceOf(GeminiOcrEngine::class, app(OcrEngine::class));
     }
 
-    public function test_resolver_auto_selects_claude_when_anthropic_key_present(): void
+    public function test_resolver_stays_gemini_even_when_anthropic_key_present(): void
     {
+        // Default is Gemini; an ANTHROPIC key alone must NOT auto-switch to Claude
+        // (Claude is opt-in via AI_OCR_ENGINE=claude) — avoids failing on a no-credit Anthropic account.
         config(['services.ai_ocr.engine' => null, 'services.anthropic.api_key' => 'sk-ant-x']);
-        $this->assertInstanceOf(ClaudeOcrEngine::class, app(OcrEngine::class));
+        $this->assertInstanceOf(GeminiOcrEngine::class, app(OcrEngine::class));
     }
 
     public function test_resolver_honours_explicit_engine_override(): void
