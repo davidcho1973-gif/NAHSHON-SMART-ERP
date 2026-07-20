@@ -68,6 +68,80 @@ class ScheduleImporter
     }
 
     /**
+     * AI(문서 추출) 경로용: 이미 파싱된 액티비티 배열을 받아 XLSX 와 **동일한** 영속화 로직을 재사용한다.
+     *
+     * AI 가 CPM/공정표 PDF 에서 뽑아낸 각 행을 내부 액티비티 형태로 정규화(투입조는 CrewParser 로,
+     * 날짜/여유는 XLSX 리더와 같은 함수로)한 뒤 persist() 로 넘긴다 — 그래서 PDF 든 엑셀이든
+     * 결과 트리(마일스톤 → 공종 → 액티비티)와 보존 규칙(협력사 배정 유지)이 정확히 같다.
+     *
+     * @param  array<int, array<string, mixed>>  $rawActivities  각 항목 키: id, name_ko, name_en, dur,
+     *         preds(string[]|string), es, ef, ls, lf, float_days, is_critical(bool), cost, trade, crew(string)
+     * @param  array<int, array{name?: string, date?: string}>  $rawMilestones
+     * @param  array<int, string>  $warnings
+     * @return array{stages: int, tasks: int, subtasks: int, milestones: int, activities: int, warnings: array<int, string>}
+     */
+    public function persistExtracted(
+        string $projectCode,
+        string $siteId,
+        array $rawActivities,
+        array $rawMilestones = [],
+        array $warnings = []
+    ): array {
+        $activities = [];
+        foreach ($rawActivities as $r) {
+            if (! is_array($r)) {
+                continue;
+            }
+            $id = trim((string) ($r['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+
+            $predsRaw = $r['preds'] ?? '';
+            $preds = is_array($predsRaw)
+                ? array_values(array_filter(array_map(fn ($p) => trim((string) $p), $predsRaw)))
+                : $this->splitPreds($predsRaw);
+
+            $float = $r['float_days'] ?? null;
+            $activities[$id] = [
+                'activity_id' => $id,
+                'name' => trim((string) ($r['name_ko'] ?? '')) ?: trim((string) ($r['name_en'] ?? '')) ?: $id,
+                'name_en' => trim((string) ($r['name_en'] ?? '')),
+                'dur' => (int) $this->numeric($r['dur'] ?? 0),
+                'preds' => $preds,
+                'es' => $this->toDate($r['es'] ?? null),
+                'ef' => $this->toDate($r['ef'] ?? null),
+                'ls' => $this->toDate($r['ls'] ?? null),
+                'lf' => $this->toDate($r['lf'] ?? null),
+                'float' => ($float === null || $float === '') ? null : (int) $this->numeric($float),
+                'cp' => filter_var($r['is_critical'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'cost' => $this->numeric($r['cost'] ?? 0),
+                'trade' => trim((string) ($r['trade'] ?? '')) ?: '미지정',
+                'crew' => $this->crewParser->parse((string) ($r['crew'] ?? '')),
+            ];
+        }
+
+        if ($activities === []) {
+            throw new RuntimeException('추출된 액티비티가 없습니다. 문서가 공정표(액티비티 목록)인지 확인하세요.');
+        }
+
+        $milestones = [];
+        foreach ($rawMilestones as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $name = trim((string) ($m['name'] ?? ''));
+            $date = $this->toDate($m['date'] ?? null);
+            if ($name !== '' && $date !== null) {
+                $milestones[] = ['name' => $name, 'date' => $date];
+            }
+        }
+        usort($milestones, fn ($a, $b) => strcmp($a['date'], $b['date']));
+
+        return $this->persist($projectCode, $siteId, $activities, $milestones, $warnings);
+    }
+
+    /**
      * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>, 2: array<int, string>}
      */
     private function readXlsx(string $path): array
