@@ -22,6 +22,7 @@ class GeminiWbsAnalyzer
     public function __construct(
         private readonly HttpFactory $http,
         private readonly WbsService $wbs,
+        private readonly ScheduleImporter $scheduleImporter,
     ) {
     }
 
@@ -41,8 +42,32 @@ class GeminiWbsAnalyzer
         }
 
         $context = $this->buildContext($projectCode);
-        $structure = $this->generate($this->wbsPrompt($context), $this->wbsSchema(), $pdf);
+        // 충실한 추출 우선: 문서가 CPM/공정표면 모든 행을 activities 로, 산문형이면 stages 로 반환.
+        $structure = $this->generate(CpmExtraction::prompt($context), CpmExtraction::schema(false), $pdf);
 
+        $activities = is_array($structure['activities'] ?? null) ? $structure['activities'] : [];
+        if ($activities !== []) {
+            $milestones = is_array($structure['milestones'] ?? null) ? $structure['milestones'] : [];
+            $counts = $this->scheduleImporter->persistExtracted($projectCode, $siteId, $activities, $milestones);
+
+            return [
+                'success' => true,
+                'processed' => 1,
+                'results' => [[
+                    'file' => $context['label'],
+                    'status' => 'success',
+                    'engine' => 'gemini',
+                    'mode' => 'cpm',
+                    'activities' => $counts['activities'],
+                    'milestones' => $counts['milestones'],
+                    'stages' => $counts['stages'],
+                    'tasks' => $counts['tasks'],
+                    'subTasks' => $counts['subtasks'],
+                ]],
+            ];
+        }
+
+        // 폴백: 산문형 작업범위 → 표준 WBS 생성.
         $stages = is_array($structure['stages'] ?? null) ? $structure['stages'] : [];
         if ($stages === []) {
             return ['success' => true, 'processed' => 0, 'results' => [], 'error' => 'AI가 생성한 WBS가 비어 있습니다.'];
@@ -57,6 +82,7 @@ class GeminiWbsAnalyzer
                 'file' => $context['label'],
                 'status' => 'success',
                 'engine' => 'gemini',
+                'mode' => 'wbs',
                 'stages' => $counts['stages'],
                 'tasks' => $counts['tasks'],
                 'subTasks' => $counts['subtasks'],
@@ -134,6 +160,8 @@ class GeminiWbsAnalyzer
                         'generationConfig' => [
                             'responseMimeType' => 'application/json',
                             'responseSchema' => $schema,
+                            // CPM 전량 추출이면 출력이 크다 — 기본(8k)에서 잘리지 않게 상향.
+                            'maxOutputTokens' => 32000,
                         ],
                     ]);
 
@@ -178,80 +206,6 @@ class GeminiWbsAnalyzer
         }
 
         return $models;
-    }
-
-    /**
-     * @param  array{label: string, project: string, type: string, scope: string}  $c
-     */
-    private function wbsPrompt(array $c): string
-    {
-        return <<<PROMPT
-당신은 미국 내 한국 대기업 플랜트/공장(LG배터리·SK반도체·현대차 등) 설치공사의 공정관리 전문가입니다.
-아래 프로젝트의 작업범위를 분석하여 **WBS(작업분해구조)**를 Stage → Task → SubTask 3단계로 분해하세요.
-현실적인 설치 시퀀스(반입→설치→배관/배선→시운전)를 따르고, JSON만 반환합니다.
-
-[프로젝트] {$c['project']}
-[공종] {$c['type']}
-[작업범위]
-{$c['scope']}
-
-요구사항:
-- stages: 3~6개. 각 stage 는 stage_no(예 "1"), stage_name, tasks 를 가짐.
-- tasks: stage 당 2~5개. 각 task 는 task_no(예 "1.2"), task_name, sub_tasks 를 가짐.
-- sub_tasks: task 당 2~6개. 각 항목:
-  - sub_no: 예 "1.2.3"
-  - sub_name: 구체적 작업명
-  - trade: 공종(담당 협력사 아님). 전기 / 배관 / 기계설치 / 리깅 / 용접 / 강구조 / 장비설치 / 시운전 / 안전 / 일반 중 하나. 실제 협력사는 사람이 나중에 배정하므로 회사명은 절대 넣지 마라.
-  - manhours: 예상 공수(정수, man-hour)
-  - days: 예상 소요일(정수)
-  - ehs: 안전 위험도. high(고소·중량물·전기·밀폐) / medium / low 중 하나.
-PROMPT;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function wbsSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'stages' => [
-                    'type' => 'array',
-                    'items' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'stage_no' => ['type' => 'string'],
-                            'stage_name' => ['type' => 'string'],
-                            'tasks' => [
-                                'type' => 'array',
-                                'items' => [
-                                    'type' => 'object',
-                                    'properties' => [
-                                        'task_no' => ['type' => 'string'],
-                                        'task_name' => ['type' => 'string'],
-                                        'sub_tasks' => [
-                                            'type' => 'array',
-                                            'items' => [
-                                                'type' => 'object',
-                                                'properties' => [
-                                                    'sub_no' => ['type' => 'string'],
-                                                    'sub_name' => ['type' => 'string'],
-                                                    'trade' => ['type' => 'string'],
-                                                    'manhours' => ['type' => 'integer'],
-                                                    'days' => ['type' => 'integer'],
-                                                    'ehs' => ['type' => 'string'],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-        ];
     }
 
     private function stripJsonFence(string $text): string
