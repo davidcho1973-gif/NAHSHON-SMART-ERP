@@ -2840,8 +2840,9 @@
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
               + safetyPlanBody(w)
-              +'<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-secondary" id="edit-plan-btn" '+(w.aiPlan ? '' : 'disabled')+' title="AI 추천을 현장에 맞게 수정"><i class="ph ph-pencil-simple"></i> 계획 편집</button><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+              +'<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-secondary" id="edit-plan-btn" '+(w.aiPlan ? '' : 'disabled')+' title="AI 추천을 현장에 맞게 수정"><i class="ph ph-pencil-simple"></i> 계획 편집</button><button class="btn-secondary" id="ptw-btn" title="화기·고소·밀폐·전기 LOTO 등 작업허가서 발행·서명"><i class="ph ph-shield-check"></i> 작업허가서</button><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
             document.getElementById('edit-plan-btn').addEventListener('click', function(){ if (w.aiPlan) window.openSafetyPlanEdit(w.id); });
+            document.getElementById('ptw-btn').addEventListener('click', function(){ window.openPtwModal(w.id); });
             document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'승인완료', tbmStatus: w.tbmStatus === '대기' ? '대기' : w.tbmStatus}); switchTab('s-tbm'); });
             document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'수정필요'}); });
             document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'초안'}); });
@@ -2918,6 +2919,67 @@
             }
             root.querySelector('#sp-save').addEventListener('click', function(){ persist(false); });
             root.querySelector('#sp-save-approve').addEventListener('click', function(){ persist(true); });
+          };
+
+          window.openPtwModal = async function(workCode) {
+            var root = document.getElementById('safety-modal-root');
+            function statusColor(s){ return s === '서명완료' ? '#10b981' : s === '승인' ? '#3b82f6' : s === '취소' ? '#ef4444' : s === '만료' ? '#94a3b8' : '#f59e0b'; }
+            async function reload(){
+              var res = await gsRun('api_getCardPermits', [workCode], { permits: [] });
+              var permits = (res && res.permits) || [];
+              var body = root.querySelector('#ptw-body');
+              if (!body) return;
+              if (!permits.length){ body.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-tertiary);font-size:13px">발행된 작업허가서가 없습니다.<br>아래 <b>"AI 계획서에서 발행"</b>을 누르면 계획서의 필요 허가(화기·고소·밀폐·전기 LOTO)가 발행됩니다.</div>'; return; }
+              body.innerHTML = permits.map(function(p){
+                var acts = '';
+                if (p.status === '발행') acts += '<button class="ptw-act btn-secondary" data-id="' + p.id + '" data-action="approve" style="padding:4px 10px;font-size:11px">승인</button>';
+                if (p.status === '승인') acts += '<button class="ptw-act btn-primary" data-id="' + p.id + '" data-action="sign" style="padding:4px 10px;font-size:11px;background:#10b981">서명</button>';
+                if (p.status !== '서명완료' && p.status !== '취소') acts += '<button class="ptw-act btn-secondary" data-id="' + p.id + '" data-action="cancel" style="padding:4px 10px;font-size:11px;color:#ef4444;border-color:rgba(239,68,68,.4)">취소</button>';
+                var prec = (p.precautions || []).slice(0, 4).map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('');
+                return '<div style="border:1px solid var(--border-default);border-radius:10px;padding:12px;margin-bottom:10px">' +
+                  '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
+                    '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + esc(p.permitNo) + '</span>' +
+                    '<span style="font-weight:700;font-size:13px;color:var(--text-primary)">' + esc(p.title) + '</span>' +
+                    '<span style="margin-left:auto;background:' + statusColor(p.status) + '22;color:' + statusColor(p.status) + ';font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px">' + esc(p.status) + '</span>' +
+                  '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px">유효 ' + esc(p.validFrom || '') + (p.validTo && p.validTo !== p.validFrom ? ' ~ ' + esc(p.validTo) : '') + (p.signedBy ? ' · 서명 ' + esc(p.signedBy) : '') + '</div>' +
+                  (prec ? '<div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:2px">안전 조치</div><ul style="margin:0 0 8px;padding-left:18px;font-size:11px;color:var(--text-secondary);line-height:1.7">' + prec + '</ul>' : '') +
+                  '<div style="display:flex;gap:6px">' + acts + '</div>' +
+                '</div>';
+              }).join('');
+              body.querySelectorAll('.ptw-act').forEach(function(btn){
+                btn.addEventListener('click', async function(){
+                  var action = btn.getAttribute('data-action'); var id = btn.getAttribute('data-id');
+                  var signedBy = null;
+                  if (action === 'sign'){ signedBy = prompt('서명자(작업 책임자) 이름'); if (signedBy === null) return; }
+                  if (action === 'cancel' && !confirm('이 작업허가서를 취소할까요?')) return;
+                  btn.disabled = true;
+                  var r = await gsRun('api_actPermit', [Number(id), action, signedBy], {});
+                  if (!r || !r.success){ alert(r && r.error || '처리 실패'); btn.disabled = false; return; }
+                  reload();
+                });
+              });
+            }
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+              '<div class="panel" style="width:620px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-shield-check"></i> 작업허가서 (PTW)</div><button id="ptw-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto"><div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">발행 → 승인 → 서명완료. 고위험 작업은 서명완료된 허가서가 있어야 착수할 수 있습니다.</div><div id="ptw-body">불러오는 중...</div></div>' +
+              '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+                '<button id="ptw-close2" class="btn-secondary" style="flex:1">닫기</button>' +
+                '<button id="ptw-issue" class="btn-primary" style="flex:1;background:#7c3aed"><i class="ph ph-plus"></i> AI 계획서에서 발행</button>' +
+              '</div></div></div>';
+            root.querySelector('#ptw-close').addEventListener('click', function(){ root.innerHTML = ''; });
+            root.querySelector('#ptw-close2').addEventListener('click', function(){ root.innerHTML = ''; });
+            root.querySelector('#ptw-issue').addEventListener('click', async function(){
+              var b = this; b.disabled = true;
+              var r = await gsRun('api_issuePermitsForCard', [workCode], {});
+              b.disabled = false;
+              if (!r || !r.success){ alert(r && r.error || '발행 실패'); return; }
+              if (r.issued === 0) alert('새로 발행할 허가가 없습니다(이미 발행됨).');
+              reload();
+            });
+            reload();
           };
 
           function renderTbmTab() {
