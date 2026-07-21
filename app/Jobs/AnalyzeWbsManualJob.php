@@ -67,7 +67,12 @@ class AnalyzeWbsManualJob implements ShouldQueue
 
             $result = SmartCompanyData::analyzeWbsManual($this->projectCode, $this->siteScope, $pdf);
 
-            if (! ($result['success'] ?? false)) {
+            if (
+                ! ($result['success'] ?? false)
+                || (int) ($result['processed'] ?? 0) < 1
+                || ! is_array($result['results'] ?? null)
+                || $result['results'] === []
+            ) {
                 $manual->update(['status' => 'failed', 'error' => (string) ($result['error'] ?? 'AI 분석 실패')]);
 
                 return;

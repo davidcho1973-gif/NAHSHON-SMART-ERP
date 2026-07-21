@@ -896,8 +896,11 @@
       return new Promise(async function (resolve, reject) {
         const cacheKey = fnName + JSON.stringify(args || []);
         const now = Date.now();
+        // Only read endpoints are cacheable. Caching a mutation (clear/save/run/etc.)
+        // can suppress a repeated request for 60 seconds while returning stale success.
+        const cacheable = fnName.indexOf('api_get') === 0;
 
-        if (window.apiCache[cacheKey] && (now - window.apiCache[cacheKey].timestamp < CACHE_TTL)) {
+        if (cacheable && window.apiCache[cacheKey] && (now - window.apiCache[cacheKey].timestamp < CACHE_TTL)) {
           console.log('[Cache Hit]', fnName);
           resolve(JSON.parse(JSON.stringify(window.apiCache[cacheKey].data)));
           return;
@@ -924,7 +927,7 @@
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const res = await response.json();
           const isFailed = (res && (res.success === false || res.error));
-          if (!isFailed) {
+          if (cacheable && !isFailed) {
             window.apiCache[cacheKey] = { data: JSON.parse(JSON.stringify(res)), timestamp: Date.now() };
           }
           resolve(res != null ? res : defaultVal);
@@ -2706,6 +2709,7 @@
             var site = window.currentSiteId || 'ALL';
             try {
               var res = await gsRun('api_clearSafetyWork', [site], []);
+              if (!res || res.success === false) throw new Error((res && res.error) || '초기화 요청이 거부되었습니다.');
               try { localStorage.removeItem('smart_ai_safety_work_items_v2'); localStorage.removeItem('smart_ai_safety_work_items_v1'); } catch (e) {}
               if (window.apiCache) { Object.keys(window.apiCache).forEach(function(k) { if (k.indexOf('api_getSafetyWorkItems') >= 0) delete window.apiCache[k]; }); }
               window._safetySelectedWorkId = null;
@@ -2717,6 +2721,8 @@
 
           function renderSafetyShell() {
             var c = counts();
+            var safetyRole = ((window.authenticatedAccount || {}).raw_role || '').toLowerCase();
+            var canClearSafetyWork = ['super_admin', 'admin'].includes(safetyRole);
             if (alertBadge) alertBadge.textContent = c.issues;
             pageContainer.innerHTML =
               '<div class="header-section"><div>'
@@ -2724,7 +2730,7 @@
               +'<p class="page-subtitle">작업내용 입력 → 안전 작업 계획서 생성 → TBM/서명 → 작업 마감 → AI 공정율 추천</p>'
               +'</div><div class="action-row">'
               +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button>'
-              +'<button class="btn-secondary" onclick="window.clearSafetyWork()" style="border-color:rgba(239,68,68,0.4);color:#ef4444"><i class="ph ph-trash"></i> 전체 초기화</button>'
+              +(canClearSafetyWork ? '<button class="btn-secondary" onclick="window.clearSafetyWork()" style="border-color:rgba(239,68,68,0.4);color:#ef4444"><i class="ph ph-trash"></i> 전체 초기화</button>' : '')
               +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> 오늘 작업 등록</button>'
               +'</div></div>'
               +'<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)" id="safety-kpis"></div>'
@@ -7948,7 +7954,11 @@
       function wbsAddDays(d, n) { return new Date(d.getTime() + n * 86400000); }
       function wbsISOdate(d) { return d.toISOString().slice(0, 10); }
       function wbsWeekdayNum(d) { return d.getUTCDay(); }
-      function wbsTodayISO() { return new Date().toISOString().slice(0, 10); }
+      function wbsTodayISO() {
+        if (window._wbsServerTodayISO) return window._wbsServerTodayISO;
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      }
 
       // tree(stages > tasks > sub_tasks) → 간트 공정표 HTML.
       function wbsGanttPanel(tree, projectId) {
@@ -8134,6 +8144,9 @@
           ]);
           if (gen !== _wbsRenderGen) return;
           var treeRes = results[0], sumRes = results[1], todayRes = results[2];
+          // The server owns the work date. UTC-based browser dates can be one day
+          // ahead of America/Phoenix and previously broke the daily safety flow.
+          if (todayRes && todayRes.date) window._wbsServerTodayISO = todayRes.date;
 
           // 서버 오류를 "WBS 없음"으로 위장하지 않는다 — 오류는 오류로 표시.
           if (!treeRes || treeRes.success !== true) {
@@ -8600,12 +8613,12 @@
             box.innerHTML = items.map(function (m) {
               return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-subtle)">' +
                 '<div style="min-width:0">' +
-                  '<div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="ph ph-file-text"></i> ' + (m.original_name || '-') + '</div>' +
-                  '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + (m.engine ? (m.engine === 'claude' ? 'Claude' : 'Gemini') : '-') + ' · ' + (m.stages || 0) + ' Stages / ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' Sub · ' + (m.analyzed_at || m.created_at || '') + ' · ' + statusPill(m.status) + '</div>' +
+                  '<div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="ph ph-file-text"></i> ' + wbsEsc(m.original_name || '-') + '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + (m.engine ? (m.engine === 'claude' ? 'Claude' : 'Gemini') : '-') + ' · ' + (m.stages || 0) + ' Stages / ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' Sub · ' + wbsEsc(m.analyzed_at || m.created_at || '') + ' · ' + statusPill(m.status) + '</div>' +
                 '</div>' +
                 '<div style="display:flex;gap:6px;flex-shrink:0">' +
-                  '<a href="' + m.url + '" target="_blank" style="padding:6px 10px;font-size:11px;text-decoration:none;border:1px solid var(--border-default);border-radius:6px;color:var(--text-secondary)">보기</a>' +
-                  '<button class="wbsm-apply" data-project="' + m.project_code + '" style="padding:6px 10px;font-size:11px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer">적용</button>' +
+                  '<a href="' + wbsEsc(m.url || '#') + '" target="_blank" rel="noopener" style="padding:6px 10px;font-size:11px;text-decoration:none;border:1px solid var(--border-default);border-radius:6px;color:var(--text-secondary)">보기</a>' +
+                  '<button class="wbsm-apply" data-project="' + wbsEsc(m.project_code || '') + '" style="padding:6px 10px;font-size:11px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer">적용</button>' +
                 '</div>' +
               '</div>';
             }).join('');

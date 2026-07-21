@@ -70,7 +70,7 @@ class SmartCompanyData
             'api_getSafetyStats' => self::safetyStats(),
             'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
-            'api_clearSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId),
+            'api_clearSafetyWork' => self::clearSafetyWork($siteId),
             'api_generateSafetyPlan' => self::generateSafetyPlan($args[0] ?? null, $siteId),
             'api_recommendSafetyProgress' => self::recommendSafetyProgress($args[0] ?? null, $siteId),
             'api_getPtwList' => self::ptwList(),
@@ -800,6 +800,35 @@ class SmartCompanyData
             $saved = app(\App\Services\Safety\SafetyWorkService::class)->save($items, $siteId, auth()->id());
 
             return ['success' => true, 'saved' => $saved];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Delete safety cards and their legal TBM records only for ERP administrators.
+     *
+     * This endpoint is intentionally stricter than ordinary safety editing: it is a
+     * destructive, irreversible reset that can remove every site's signatures when
+     * the global site is selected. The UI confirmation is not an authorization
+     * boundary, so the role check must live on the server.
+     */
+    public static function clearSafetyWork(string $siteId = 'ALL'): array
+    {
+        $user = auth()->user();
+
+        if (
+            ! $user
+            || $user->account_status !== 'active'
+            || ! in_array($user->access_role, ['super_admin', 'admin'], true)
+        ) {
+            return ['success' => false, 'error' => '안전관리 전체 초기화 권한이 없습니다.'];
+        }
+
+        try {
+            return app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId);
         } catch (\Throwable $e) {
             report($e);
 
