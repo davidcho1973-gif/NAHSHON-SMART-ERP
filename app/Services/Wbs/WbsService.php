@@ -251,6 +251,114 @@ class WbsService
      *
      * @return array<string, mixed>
      */
+    /**
+     * "오늘 작업 등록" 피커용 — 프로젝트의 실행 단위(SubTask) 목록 + 그날 카드 유무.
+     * 안전관리에서 이 목록을 보고 오늘 할 작업을 골라 안전카드를 만든다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function pickList(string $projectCode, string $siteId = 'ALL', ?string $date = null): array
+    {
+        $date ??= now()->toDateString();
+
+        $query = WbsItem::query()
+            ->where('project_code', $projectCode)
+            ->where('level', WbsItem::LEVEL_SUBTASK)
+            ->with(['safetyWorkItems' => fn ($q) => $q->where('work_date', $date)])
+            ->orderByRaw('planned_start is null, planned_start')
+            ->orderBy('node_no')
+            ->orderBy('id');
+
+        if ($siteId !== 'ALL') {
+            $query->where('site_id', Site::query()->where('code', $siteId)->value('id'));
+        }
+
+        return $query->get()->map(fn (WbsItem $it): array => [
+            'wbs_code' => $it->wbs_code,
+            'activity_id' => $it->activity_id,
+            'name' => $it->name,
+            'trade' => $it->trade,
+            'company' => $it->company,
+            'crewText' => $it->crew_text,
+            'crewSize' => $it->crew_size !== null ? (float) $it->crew_size : null,
+            'equipment' => $it->equipment ?? [],
+            'ehs' => $it->ehs,
+            'plannedStart' => $it->planned_start?->toDateString(),
+            'plannedEnd' => $it->planned_end?->toDateString(),
+            'isCritical' => (bool) $it->is_critical,
+            'status' => $it->status,
+            'hasCardToday' => $it->safetyWorkItems->isNotEmpty(),
+        ])->values()->all();
+    }
+
+    /**
+     * 공정관리에 없는 작업을 현장에서 직접 등록 — "현장 추가(비계획)" Stage 아래 SubTask 로 삽입하고
+     * 곧바로 그날 안전 작업카드를 생성한다. 계획 외 작업이 공정표·집계에서 누락되지 않게.
+     *
+     * @param  array<string, mixed>  $data  name(필수), trade, location, crew_text, equipment[], days, ehs, date
+     * @return array<string, mixed>
+     */
+    public function addManualActivity(string $projectCode, array $data, string $siteId = 'ALL', ?int $userId = null): array
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            return ['success' => false, 'error' => '작업명을 입력하세요.'];
+        }
+
+        $trade = trim((string) ($data['trade'] ?? '')) ?: '미지정';
+        $date = trim((string) ($data['date'] ?? '')) ?: now()->toDateString();
+        $siteRowId = $siteId !== 'ALL' ? Site::query()->where('code', $siteId)->value('id') : null;
+        $projectRowId = \App\Models\Project::query()->where('project_code', $projectCode)->value('id');
+        $crew = app(CrewParser::class)->parse((string) ($data['crew_text'] ?? ''));
+
+        $wbsCode = DB::transaction(function () use ($projectCode, $projectRowId, $siteRowId, $trade, $name, $date, $data, $crew): string {
+            $base = ['project_id' => $projectRowId, 'project_code' => $projectCode, 'site_id' => $siteRowId, 'source' => 'manual'];
+
+            // "현장 추가(비계획)" Stage (프로젝트당 하나) → 공종별 Task → SubTask.
+            $stage = WbsItem::query()->firstOrCreate(
+                ['project_code' => $projectCode, 'level' => WbsItem::LEVEL_STAGE, 'node_no' => 'M'],
+                $base + ['wbs_code' => "{$projectCode}-S-M", 'name' => '현장 추가(비계획)', 'sort_order' => 999]
+            );
+
+            $task = WbsItem::query()->firstOrCreate(
+                ['project_code' => $projectCode, 'level' => WbsItem::LEVEL_TASK, 'parent_id' => $stage->id, 'name' => $trade],
+                $base + ['wbs_code' => "{$projectCode}-T-M-{$trade}", 'node_no' => "M.{$trade}", 'trade' => $trade, 'sort_order' => 0]
+            );
+
+            $seq = WbsItem::query()->where('parent_id', $task->id)->count() + 1;
+            $stamp = now()->format('ymdHis');
+
+            $sub = WbsItem::query()->create($base + [
+                'parent_id' => $task->id,
+                'level' => WbsItem::LEVEL_SUBTASK,
+                'wbs_code' => "{$projectCode}-W-M-{$stamp}-{$seq}",
+                'node_no' => "M.{$trade}.{$seq}",
+                'activity_id' => "M{$stamp}{$seq}",
+                'name' => $name,
+                'trade' => $trade,
+                'crew_text' => $crew['raw'] !== '' ? $crew['raw'] : null,
+                'crew_size' => $crew['size'] ?: null,
+                'crew_roles' => $crew['roles'] ?: null,
+                'equipment' => is_array($data['equipment'] ?? null) && $data['equipment'] !== [] ? $data['equipment'] : ($crew['equipment'] ?: null),
+                'days' => isset($data['days']) ? (int) $data['days'] : null,
+                'ehs' => $data['ehs'] ?? null,
+                'planned_start' => $date,
+                'planned_end' => $date,
+                'status' => '검수완료',
+                'progress' => 0,
+                'sort_order' => $seq,
+                'payload' => ['manual' => true, 'location' => $data['location'] ?? null],
+            ]);
+
+            return $sub->wbs_code;
+        });
+
+        // 곧바로 그날 안전 작업카드 생성(계획 인원 → 서명란).
+        $card = $this->createSafetyCard($wbsCode, $date, $userId);
+
+        return ['success' => true, 'wbs_code' => $wbsCode, 'card' => $card];
+    }
+
     public function createSafetyCard(string $wbsCode, ?string $date = null, ?int $userId = null): array
     {
         $date ??= now()->toDateString();

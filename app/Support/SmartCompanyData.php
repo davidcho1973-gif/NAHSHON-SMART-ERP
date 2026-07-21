@@ -103,6 +103,8 @@ class SmartCompanyData
             'api_getWbsLabor' => app(\App\Services\Wbs\WbsLaborService::class)->laborFor((string) ($args[0] ?? '')),
             'api_getAssignableEmployees' => self::assignableEmployees($siteId),
             'api_getTodayWbsWork' => app(\App\Services\Wbs\WbsService::class)->todayWork((string) ($args[0] ?? ''), $siteId),
+            'api_getWbsPickList' => app(\App\Services\Wbs\WbsService::class)->pickList((string) ($args[0] ?? ''), $siteId, ($args[1] ?? null) ? (string) $args[1] : null),
+            'api_addManualWbsWork' => app(\App\Services\Wbs\WbsService::class)->addManualActivity((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], $siteId, auth()->id()),
             'api_updateWbsRow' => app(\App\Services\Wbs\WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
             'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
