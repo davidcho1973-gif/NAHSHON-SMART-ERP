@@ -8692,34 +8692,54 @@
 
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        var ehsVal = sub.ehs || '';
+        var ehsOpts = [['', '— 없음 —'], ['high', '고위험'], ['medium', '주의'], ['low', '낮음']].map(function(o) {
+          return '<option value="' + o[0] + '"' + (o[0] === ehsVal ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('');
+        var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:5px';
+        var HINT = 'color:var(--text-tertiary);font-weight:400';
         modal.innerHTML =
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:480px">' +
-          '<h3 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS 상세 편집</h3>' +
-          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsEsc(wbsId) + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
-          '<div style="display:grid;gap:12px">' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">작업명</label>' +
-          '<input type="text" id="wbs-edit-name" value="' + wbsEsc(sub.sub_name || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">상태</label>' +
-          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px">' + statusOptions + '</select></div>' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">담당사 <span style="color:var(--text-tertiary);font-weight:400">(실제 계약사)</span></label>' +
-          '<input type="text" id="wbs-edit-company" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="계약 협력사 선택/입력" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px">' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-strong);border-radius:14px;padding:22px;width:560px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-pop)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<h3 style="margin:0;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--text-primary)"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS 상세 편집</h3>' +
+            '<button id="wbs-edit-cancel-x" style="background:none;border:none;color:var(--text-tertiary);font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;font-family:var(--font-mono)">' + wbsEsc(wbsId) + (sub.activity_id ? ' · ' + wbsEsc(sub.activity_id) : '') + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check" style="color:#10b981"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
+          '<div class="wbs-edit-section" style="display:grid;gap:13px">' +
+          '<div><label style="' + LBL + '">작업명</label>' +
+          '<input type="text" id="wbs-edit-name" class="wbs-edit-field" value="' + wbsEsc(sub.sub_name || '') + '"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">상태</label>' +
+          '<select id="wbs-edit-status" class="wbs-edit-field">' + statusOptions + '</select></div>' +
+          '<div><label style="' + LBL + '">담당사 <span style="' + HINT + '">(실제 계약사)</span></label>' +
+          '<input type="text" id="wbs-edit-company" class="wbs-edit-field" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="계약 협력사 선택/입력">' +
           '<datalist id="wbs-company-options">' + companyOptions + '</datalist></div>' +
           '</div>' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">공종 <span style="color:var(--text-tertiary);font-weight:400">(AI 분류)</span></label>' +
-          '<input type="text" id="wbs-edit-trade" value="' + wbsEsc(sub.trade || '') + '" placeholder="예: 전기 / 배관 / 기계설치 / 리깅 / 용접 / 안전" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">공수 (MH)</label>' +
-          '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" value="' + (parseFloat(sub.manhours) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">일수</label>' +
-          '<input type="number" step="1" min="0" id="wbs-edit-days" value="' + (parseInt(sub.days, 10) || 0) + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">공종 <span style="' + HINT + '">(AI 분류)</span></label>' +
+          '<input type="text" id="wbs-edit-trade" class="wbs-edit-field" value="' + wbsEsc(sub.trade || '') + '" placeholder="예: ELEC / PLUMB / GC"></div>' +
+          '<div><label style="' + LBL + '">안전 위험도 <span style="' + HINT + '">(EHS)</span></label>' +
+          '<select id="wbs-edit-ehs" class="wbs-edit-field">' + ehsOpts + '</select></div>' +
           '</div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">시작예정</label>' +
-          '<input type="date" id="wbs-edit-start" value="' + wbsEsc(sub.plannedStart || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
-          '<div><label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:4px">종료예정</label>' +
-          '<input type="date" id="wbs-edit-end" value="' + wbsEsc(sub.plannedEnd || '') + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px;border-radius:6px"></div>' +
-          '</div></div>' +
+          '<div><label style="' + LBL + '">투입조 / 인원 <span style="' + HINT + '">(안전카드 서명란 기준)</span></label>' +
+          '<input type="text" id="wbs-edit-crew" class="wbs-edit-field" value="' + wbsEsc(sub.crewText || '') + '" placeholder="예: 2 electricians + 1 helper"></div>' +
+          '<div><label style="' + LBL + '">장비 <span style="' + HINT + '">(쉼표로 구분)</span></label>' +
+          '<input type="text" id="wbs-edit-equip" class="wbs-edit-field" value="' + wbsEsc((sub.equipment || []).join(', ')) + '" placeholder="예: 시저리프트, 용접기"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">공수 (MH)</label>' +
+          '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" class="wbs-edit-field" value="' + (parseFloat(sub.manhours) || 0) + '"></div>' +
+          '<div><label style="' + LBL + '">일수</label>' +
+          '<input type="number" step="1" min="0" id="wbs-edit-days" class="wbs-edit-field" value="' + (parseInt(sub.days, 10) || 0) + '"></div>' +
+          '<div><label style="' + LBL + '">진척률 (%)</label>' +
+          '<input type="number" step="5" min="0" max="100" id="wbs-edit-progress" class="wbs-edit-field" value="' + (parseInt(sub.progress, 10) || 0) + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">시작예정</label>' +
+          '<input type="date" id="wbs-edit-start" class="wbs-edit-field" value="' + wbsEsc(sub.plannedStart || '') + '"></div>' +
+          '<div><label style="' + LBL + '">종료예정</label>' +
+          '<input type="date" id="wbs-edit-end" class="wbs-edit-field" value="' + wbsEsc(sub.plannedEnd || '') + '"></div>' +
+          '</div>' +
+          '</div>' +
           '<div style="display:flex;gap:10px;margin-top:18px">' +
           '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">취소</button>' +
           '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">저장</button>' +
@@ -8735,6 +8755,8 @@
         }).catch(function() {});
 
         modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
+        modal.querySelector('#wbs-edit-cancel-x').addEventListener('click', function() { modal.remove(); });
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
         modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
           var name = document.getElementById('wbs-edit-name').value.trim();
           if (!name) { alert('작업명은 비울 수 없습니다.'); return; }
@@ -8745,8 +8767,12 @@
             '상태': document.getElementById('wbs-edit-status').value,
             '담당사': document.getElementById('wbs-edit-company').value.trim(),
             '공종': document.getElementById('wbs-edit-trade').value.trim(),
+            'EHS': document.getElementById('wbs-edit-ehs').value,
+            '투입조': document.getElementById('wbs-edit-crew').value.trim(),
+            '장비': document.getElementById('wbs-edit-equip').value.trim(),
             '공수': document.getElementById('wbs-edit-manhours').value,
             '일수': document.getElementById('wbs-edit-days').value,
+            '진척률': document.getElementById('wbs-edit-progress').value,
             '시작예정': document.getElementById('wbs-edit-start').value,
             '종료예정': document.getElementById('wbs-edit-end').value
           };
@@ -8755,8 +8781,12 @@
             '상태': sub.status || '',
             '담당사': sub.company || '',
             '공종': sub.trade || '',
+            'EHS': sub.ehs || '',
+            '투입조': sub.crewText || '',
+            '장비': (sub.equipment || []).join(', '),
             '공수': String(parseFloat(sub.manhours) || 0),
             '일수': String(parseInt(sub.days, 10) || 0),
+            '진척률': String(parseInt(sub.progress, 10) || 0),
             '시작예정': sub.plannedStart || '',
             '종료예정': sub.plannedEnd || ''
           };

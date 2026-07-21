@@ -137,6 +137,9 @@ class WbsService
             '공수' => 'manhours', 'manhours' => 'manhours',
             '일수' => 'days', 'days' => 'days',
             '작업명' => 'name', 'name' => 'name',
+            '투입조' => 'crew_text', 'crew_text' => 'crew_text',
+            '장비' => 'equipment', 'equipment' => 'equipment',
+            '진척률' => 'progress', 'progress' => 'progress',
         ];
 
         // 빈 값은 기본적으로 "변경 없음"이지만, 배정 해제가 의미 있는 컬럼은 명시적 클리어로 처리.
@@ -148,6 +151,32 @@ class WbsService
             if ($column === null) {
                 continue;
             }
+
+            // 투입조: 자유 텍스트를 인원 수·역할로 재파싱해 함께 갱신(안전카드 서명란이 이 값을 쓴다).
+            if ($column === 'crew_text') {
+                $crew = app(CrewParser::class)->parse((string) $value);
+                $item->crew_text = $crew['raw'] !== '' ? $crew['raw'] : null;
+                $item->crew_size = $crew['size'] ?: null;
+                $item->crew_roles = $crew['roles'] ?: null;
+                continue;
+            }
+            // 장비: 쉼표 구분 문자열 → 배열(캐스트).
+            if ($column === 'equipment') {
+                $arr = is_array($value)
+                    ? $value
+                    : array_values(array_filter(array_map('trim', explode(',', (string) $value))));
+                $item->equipment = $arr ?: null;
+                continue;
+            }
+            // 진척률: 0~100 정수. 빈 값이면 변경 없음.
+            if ($column === 'progress') {
+                if ($value === '' || $value === null) {
+                    continue;
+                }
+                $item->progress = max(0, min(100, (int) $value));
+                continue;
+            }
+
             if ($value === '' || $value === null) {
                 if (in_array($column, $clearable, true)) {
                     $item->{$column} = null;
