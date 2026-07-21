@@ -65,6 +65,8 @@ class WbsWorkRegistrationTest extends TestCase
         $this->assertSame('긴급 배수 처리', $sub->name);
         $this->assertSame('PLUMB', $sub->trade);
         $this->assertSame('manual', $sub->source);
+        // 표시용 ID 는 짧아야 한다(M01…) — 길면 간트/목록 라벨칸을 넘쳐 작업명과 겹친다.
+        $this->assertMatchesRegularExpression('/^M\d{2}$/', $sub->activity_id);
         $this->assertSame('2026-08-15', $sub->planned_start->toDateString());
         $this->assertSame(2.0, (float) $sub->crew_size); // CrewParser: 1 + 1
 

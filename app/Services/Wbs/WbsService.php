@@ -327,13 +327,17 @@ class WbsService
 
             $seq = WbsItem::query()->where('parent_id', $task->id)->count() + 1;
             $stamp = now()->format('ymdHis');
+            // 표시용 activity_id 는 짧게(M01, M02…) — 길면 간트/목록 라벨칸을 넘쳐 작업명과 겹친다.
+            // 프로젝트 전체 수동 작업 순번 기준. wbs_code 는 타임스탬프로 유일성 보장.
+            $manualNo = WbsItem::query()->where('project_code', $projectCode)->where('source', 'manual')
+                ->where('level', WbsItem::LEVEL_SUBTASK)->count() + 1;
 
             $sub = WbsItem::query()->create($base + [
                 'parent_id' => $task->id,
                 'level' => WbsItem::LEVEL_SUBTASK,
                 'wbs_code' => "{$projectCode}-W-M-{$stamp}-{$seq}",
                 'node_no' => "M.{$trade}.{$seq}",
-                'activity_id' => "M{$stamp}{$seq}",
+                'activity_id' => 'M' . str_pad((string) $manualNo, 2, '0', STR_PAD_LEFT),
                 'name' => $name,
                 'trade' => $trade,
                 'crew_text' => $crew['raw'] !== '' ? $crew['raw'] : null,
