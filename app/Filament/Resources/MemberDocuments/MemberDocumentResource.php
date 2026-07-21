@@ -5,6 +5,7 @@ namespace App\Filament\Resources\MemberDocuments;
 use App\Filament\Resources\MemberDocuments\Pages\ManageMemberDocuments;
 use App\Filament\Resources\MemberDocuments\Pages\ManageMemberUploadedDocuments;
 use App\Models\MemberRegistration;
+use App\Services\GeminiDocumentAnalyzer;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DatePicker;
@@ -12,8 +13,14 @@ use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -69,9 +76,86 @@ class MemberDocumentResource extends Resource
             DatePicker::make('issued_on'),
             DatePicker::make('expires_on'),
             TextInput::make('file_path')->label('File path / Drive URL')->maxLength(255)->columnSpanFull(),
+            Actions::make([
+                Action::make('ai_analyze_document')
+                    ->label('🤖 AI 문서 분석')
+                    ->color('primary')
+                    ->action(fn (Set $set, Get $get) => self::analyzeMemberDocument((string) $get('file_path'), $set, $get)),
+            ])->columnSpanFull(),
             KeyValue::make('extracted_data')->keyLabel('Field')->valueLabel('Value')->columnSpanFull(),
             Textarea::make('review_notes')->columnSpanFull(),
         ]);
+    }
+
+    /**
+     * 로컬에 저장된 문서를 AI 로 읽어 문서유형·발행/만료일·추출데이터를 비어 있는 칸에 채운다.
+     */
+    public static function analyzeMemberDocument(string $filePath, Set $set, Get $get): void
+    {
+        $path = self::resolveLocalDocument($filePath);
+        if ($path === null) {
+            Notification::make()->warning()->title('AI 분석 불가')
+                ->body('로컬에 저장된 파일만 분석할 수 있습니다(외부 Drive URL 등은 미지원). 파일 경로를 확인하세요.')->send();
+
+            return;
+        }
+
+        try {
+            $data = app(GeminiDocumentAnalyzer::class)->analyze($path, mime_content_type($path) ?: null);
+        } catch (Throwable $e) {
+            Notification::make()->warning()->title('AI 문서 분석 건너뜀')->body($e->getMessage())->send();
+
+            return;
+        }
+
+        $fillEmpty = static function (string $key, mixed $value) use ($set, $get): void {
+            if ($value !== null && $value !== '' && blank($get($key))) {
+                $set($key, $value);
+            }
+        };
+
+        // 분석기의 계약 유형 키 → 멤버 문서 유형 키 매핑.
+        $typeMap = [
+            'certificate_of_insurance' => 'insurance', 'bond' => 'insurance',
+            'visa' => 'visa', 'work_authorization' => 'visa',
+            'license' => 'certification', 'certificate' => 'certification',
+            'executed_contract' => 'contract', 'amendment' => 'contract',
+        ];
+        $memberType = $data['document_type'] !== null ? ($typeMap[$data['document_type']] ?? null) : null;
+        if ($memberType !== null) {
+            $fillEmpty('document_type', $memberType);
+        }
+        $fillEmpty('title', $data['title']);
+        $fillEmpty('issued_on', $data['issued_on']);
+        $fillEmpty('expires_on', $data['expires_on']);
+
+        $extracted = $data['fields'];
+        foreach (['document_number', 'issuer', 'counterparty', 'amount', 'currency', 'summary'] as $k) {
+            if ($data[$k] !== null) {
+                $extracted[$k] = $data[$k];
+            }
+        }
+        if ($extracted !== []) {
+            $set('extracted_data', $extracted);
+        }
+
+        Notification::make()->success()->title('AI 문서 분석 완료')
+            ->body('발행/만료일·추출 데이터를 채웠습니다. 확인 후 저장하세요.')->send();
+    }
+
+    private static function resolveLocalDocument(string $filePath): ?string
+    {
+        $filePath = trim($filePath);
+        if ($filePath === '' || str_starts_with($filePath, 'http')) {
+            return null;
+        }
+        foreach (['public', 'local'] as $disk) {
+            if (Storage::disk($disk)->exists($filePath)) {
+                return Storage::disk($disk)->path($filePath);
+            }
+        }
+
+        return is_file($filePath) && is_readable($filePath) ? $filePath : null;
     }
 
     public static function table(Table $table): Table
