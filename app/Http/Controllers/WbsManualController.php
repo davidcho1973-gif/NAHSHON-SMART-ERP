@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\AnalyzeWbsManualJob;
+use App\Models\Project;
 use App\Models\Site;
 use App\Models\WbsManual;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -21,9 +23,11 @@ class WbsManualController extends Controller
      */
     public function upload(Request $request): JsonResponse
     {
+        $this->authorizeManage($request);
+
         $request->validate([
             'manual' => 'required|file|mimes:pdf,png,jpg,jpeg,webp|max:32768', // 32MB
-            'project_code' => 'required|string|max:80',
+            'project_code' => 'required|string|max:80|exists:projects,project_code',
             'site_id' => 'nullable',
         ]);
 
@@ -34,8 +38,18 @@ class WbsManualController extends Controller
             }
 
             $projectCode = (string) $request->input('project_code');
-            $siteRowId = $this->resolveSiteId($request->input('site_id'));
-            $siteScope = $this->resolveSiteScope($request->input('site_id'));
+            $project = Project::query()->where('project_code', $projectCode)->firstOrFail();
+            $requestedSiteId = $this->resolveSiteId($request->input('site_id'));
+
+            if ($requestedSiteId !== null && $project->site_id !== null && $requestedSiteId !== (int) $project->site_id) {
+                return response()->json(['success' => false, 'error' => '선택한 현장과 프로젝트 현장이 일치하지 않습니다.'], 422);
+            }
+
+            $siteRowId = $requestedSiteId ?? ($project->site_id ? (int) $project->site_id : null);
+            $this->authorizeSite($request, $siteRowId);
+            $siteScope = $siteRowId !== null
+                ? (string) (Site::query()->whereKey($siteRowId)->value('code') ?: 'ALL')
+                : 'ALL';
 
             $path = $file->store('wbs-manuals', 'public');
             $absolutePath = Storage::disk('public')->path($path);
@@ -74,7 +88,10 @@ class WbsManualController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $this->authorizeManage($request);
+
         $query = WbsManual::query()->with('analyzedBy')->latest();
+        $this->scopeManualQuery($request, $query);
 
         if (filled($request->query('project'))) {
             $query->where('project_code', (string) $request->query('project'));
@@ -88,8 +105,10 @@ class WbsManualController extends Controller
     /**
      * 저장된 매뉴얼 원본 파일 열람.
      */
-    public function show(WbsManual $manual)
+    public function show(Request $request, WbsManual $manual)
     {
+        $this->authorizeManage($request);
+        $this->authorizeSite($request, $manual->site_id ? (int) $manual->site_id : null);
         abort_unless(Storage::disk($manual->disk ?: 'public')->exists($manual->path), 404);
 
         return Storage::disk($manual->disk ?: 'public')->response(
@@ -131,23 +150,62 @@ class WbsManualController extends Controller
         }
 
         if (is_numeric($site)) {
-            return (int) $site;
+            $resolved = Site::query()->whereKey((int) $site)->value('id');
+        } else {
+            $resolved = Site::query()->where('code', (string) $site)->value('id');
         }
 
-        return Site::query()->where('code', (string) $site)->value('id');
+        if (! $resolved) {
+            throw new RuntimeException('선택한 현장을 찾을 수 없습니다.');
+        }
+
+        return (int) $resolved;
     }
 
-    private function resolveSiteScope(mixed $site): string
+    private function authorizeManage(Request $request): void
     {
-        $site = is_string($site) ? trim($site) : $site;
-        if ($site === null || $site === '' || $site === 'ALL') {
-            return 'ALL';
+        $user = $request->user();
+
+        abort_unless(
+            $user
+            && $user->account_status === 'active'
+            && in_array($user->access_role, ['super_admin', 'admin', 'site_manager', 'safety_manager'], true),
+            403,
+        );
+    }
+
+    private function authorizeSite(Request $request, ?int $siteId): void
+    {
+        $user = $request->user();
+        $hasGlobalAccess = $user
+            && (in_array($user->access_role, ['super_admin', 'admin'], true) || $user->access_scope === 'all_sites');
+
+        if ($hasGlobalAccess) {
+            return;
         }
 
-        if (is_numeric($site)) {
-            return (string) (Site::query()->whereKey((int) $site)->value('code') ?: 'ALL');
+        abort_unless(
+            $user
+            && $user->access_scope === 'site'
+            && $siteId !== null
+            && (int) $user->allowed_site_id === $siteId,
+            403,
+        );
+    }
+
+    private function scopeManualQuery(Request $request, Builder $query): void
+    {
+        $user = $request->user();
+        if ($user && (in_array($user->access_role, ['super_admin', 'admin'], true) || $user->access_scope === 'all_sites')) {
+            return;
         }
 
-        return (string) $site;
+        if ($user && $user->access_scope === 'site' && $user->allowed_site_id) {
+            $query->where('site_id', $user->allowed_site_id);
+
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
     }
 }

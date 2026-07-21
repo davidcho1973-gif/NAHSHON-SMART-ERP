@@ -24,7 +24,11 @@ class WbsManualUploadTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create();
+        $this->user = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
         Project::query()->create(['project_code' => 'MAN-01', 'name' => 'Manual Project', 'construction_type' => 'mechanical']);
     }
 
@@ -45,6 +49,20 @@ class WbsManualUploadTest extends TestCase
                             ],
                         ]],
                     ]]]),
+                ]],
+            ]),
+        ]);
+    }
+
+    private function fakeClaudeEmptyResult(): void
+    {
+        config(['services.anthropic.api_key' => 'sk-ant-test', 'services.wbs.ai_engine' => 'claude']);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'stop_reason' => 'end_turn',
+                'content' => [[
+                    'type' => 'text',
+                    'text' => json_encode(['activities' => [], 'milestones' => [], 'stages' => []]),
                 ]],
             ]),
         ]);
@@ -116,6 +134,24 @@ class WbsManualUploadTest extends TestCase
         $this->assertNotEmpty($manual->error);
     }
 
+    public function test_analyze_job_marks_empty_ai_result_as_failed(): void
+    {
+        Storage::fake('public');
+        $this->fakeClaudeEmptyResult();
+
+        Storage::disk('public')->put('wbs-manuals/empty.pdf', '%PDF-1.4 empty manual');
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01', 'original_name' => 'empty.pdf', 'disk' => 'public',
+            'path' => 'wbs-manuals/empty.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
+        ]);
+
+        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+
+        $manual->refresh();
+        $this->assertSame('failed', $manual->status);
+        $this->assertStringContainsString('비어', (string) $manual->error);
+    }
+
     public function test_index_lists_analyzed_manuals_for_project(): void
     {
         WbsManual::create(['project_code' => 'MAN-01', 'original_name' => 'a.pdf', 'path' => 'wbs-manuals/a.pdf', 'engine' => 'claude', 'status' => 'completed', 'stages' => 2, 'tasks' => 3, 'subtasks' => 8]);
@@ -140,5 +176,44 @@ class WbsManualUploadTest extends TestCase
             'manual' => $file,
             'project_code' => 'MAN-01',
         ])->assertStatus(422);
+    }
+
+    public function test_worker_cannot_upload_or_list_wbs_manuals(): void
+    {
+        Storage::fake('public');
+        $worker = User::factory()->create([
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($worker)->postJson(route('wbs-manual.upload'), [
+            'manual' => UploadedFile::fake()->create('manual.pdf', 20, 'application/pdf'),
+            'project_code' => 'MAN-01',
+        ])->assertForbidden();
+
+        $this->actingAs($worker)->getJson(route('wbs-manual.index'))->assertForbidden();
+    }
+
+    public function test_site_manager_cannot_open_another_sites_manual(): void
+    {
+        Storage::fake('public');
+        $allowed = \App\Models\Site::create(['code' => 'ALLOWED', 'name' => 'Allowed']);
+        $other = \App\Models\Site::create(['code' => 'OTHER', 'name' => 'Other']);
+        $manager = User::factory()->create([
+            'access_role' => 'site_manager',
+            'access_scope' => 'site',
+            'allowed_site_id' => $allowed->id,
+            'account_status' => 'active',
+        ]);
+        Storage::disk('public')->put('wbs-manuals/other.pdf', '%PDF-1.4 other');
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01',
+            'site_id' => $other->id,
+            'original_name' => 'other.pdf',
+            'path' => 'wbs-manuals/other.pdf',
+        ]);
+
+        $this->actingAs($manager)->get(route('wbs-manual.show', $manual))->assertForbidden();
     }
 }
