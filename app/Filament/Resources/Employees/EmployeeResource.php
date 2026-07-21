@@ -27,6 +27,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -76,153 +77,193 @@ class EmployeeResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('employee_number')
-                ->label('Employee ID')
-                ->unique(ignoreRecord: true)
-                ->placeholder('Auto-generated if blank')
-                ->helperText('Leave blank to let the ERP create an Employee ID automatically.')
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(80),
-            TextInput::make('badge_number')
-                ->label('NFC ID')
-                ->helperText('Use the ERP NFC ID format, such as N-842853E04. AI OCR does not fill this field.')
-                ->unique(ignoreRecord: true)
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(80),
-            FileUpload::make('badge_photo_path')
-                ->label('Badge photo / camera')
-                ->disk('public')
-                ->directory('employee-badges')
-                ->visibility('public')
-                ->image()
-                ->imagePreviewHeight('180')
-                ->maxSize(10240)
-                ->openable()
-                ->downloadable()
-                ->helperText('Take a photo on mobile or upload a badge image. Gemini 3.5 Flash analyzes it after upload.')
-                ->extraInputAttributes(['accept' => 'image/*', 'capture' => 'environment'], merge: true)
-                ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
-                    if (! $state instanceof TemporaryUploadedFile) {
-                        return;
-                    }
+            Section::make('① 직원 기본정보')
+                ->description('사번은 비워두면 자동 생성됩니다. 성과 이름을 입력하면 전체 이름도 자동으로 조합됩니다.')
+                ->icon('heroicon-o-user')
+                ->columns(['default' => 1, 'lg' => 2])
+                ->schema([
+                    TextInput::make('employee_number')
+                        ->label('Employee ID / 사번')
+                        ->unique(ignoreRecord: true)
+                        ->placeholder('비워두면 자동 생성')
+                        ->helperText('ERP가 중복되지 않는 사번을 자동 생성합니다.')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(80),
+                    TextInput::make('email')
+                        ->label('구글 이메일')
+                        ->email()
+                        ->unique(ignoreRecord: true)
+                        ->helperText('로그인 계정을 부여할 직원은 실제 구글 이메일을 정확히 입력하세요.')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state, lower: true))
+                        ->maxLength(255),
+                    TextInput::make('first_name')
+                        ->label('First name / 이름')
+                        ->maxLength(120)
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
+                    TextInput::make('last_name')
+                        ->label('Last name / 성')
+                        ->maxLength(120)
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
+                    TextInput::make('name')
+                        ->label('Full name / 전체 이름')
+                        ->helperText('성과 이름을 입력했다면 비워두어도 됩니다.')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(255),
+                    TextInput::make('nationality')
+                        ->label('Nationality / 국적')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(80),
+                    DatePicker::make('start_date')
+                        ->label('Hire date / 입사일'),
+                    Select::make('employment_status')
+                        ->label('재직 상태')
+                        ->options([
+                            'active' => 'Active / 재직',
+                            'pending' => 'Pending / 대기',
+                            'on_leave' => 'On leave / 휴직',
+                            'inactive' => 'Inactive / 비활성',
+                            'terminated' => 'Terminated / 퇴사',
+                        ])
+                        ->default('active')
+                        ->required(),
+                ]),
 
-                    self::analyzeBadgePhoto($state, $set, $get);
-                })
-                ->columnSpanFull(),
-            Actions::make([
-                Action::make('analyzeBadgePhoto')
-                    ->label('Analyze badge photo')
-                    ->icon('heroicon-o-sparkles')
-                    ->color('info')
-                    ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
-            ])->columnSpanFull(),
-            TextInput::make('badge_printed_number')
-                ->label('Badge printed number')
-                ->helperText('OCR reference only. This is not used as the NFC ID.')
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(120),
-            TextInput::make('first_name')
-                ->label('First name')
-                ->maxLength(120)
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
-            TextInput::make('last_name')
-                ->label('Last name')
-                ->maxLength(120)
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Set $set, Get $get): null => self::syncFullName($set, $get)),
-            TextInput::make('name')
-                ->label('Full name')
-                ->helperText('Leave blank if first and last name are filled; the ERP will combine them.')
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(255),
-            TextInput::make('email')
-                ->email()
-                ->unique(ignoreRecord: true)
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state, lower: true))
-                ->maxLength(255),
-            TextInput::make('badge_company_name')
-                ->label('Badge company name')
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(255),
-            DatePicker::make('badge_issued_on')
-                ->label('Badge issued on'),
-            Select::make('company_id')
-                ->label('Company')
-                ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
-                ->searchable(),
-            Select::make('site_id')
-                ->label('Site')
-                ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
-                ->searchable(),
-            Select::make('team_id')
-                ->label('Team')
-                ->options(fn (): array => Team::query()->orderBy('name')->pluck('name', 'id')->all())
-                ->searchable(),
-            TextInput::make('role')
-                ->label('Role / Trade')
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(120),
-            TextInput::make('nationality')
-                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
-                ->maxLength(80),
-            DatePicker::make('start_date')
-                ->label('Hire date / 입사일'),
-            Select::make('employment_status')
-                ->label('Status')
-                ->options([
-                    'active' => 'Active',
-                    'pending' => 'Pending',
-                    'on_leave' => 'On leave',
-                    'inactive' => 'Inactive',
-                    'terminated' => 'Terminated',
-                ])
-                ->default('active')
-                ->required(),
-            Select::make('attendance_app_role')
-                ->label('QR attendance role')
-                ->options([
-                    'worker' => 'Worker - self attendance only',
-                    'foreman' => 'Foreman / Team lead',
-                    'safety_manager' => 'Safety manager',
-                    'attendance_admin' => 'Attendance admin',
-                ])
-                ->default('worker')
-                ->required(),
-            Select::make('attendance_app_scope')
-                ->label('QR attendance scope')
-                ->options([
-                    'self' => 'Self only',
-                    'team' => 'Assigned team',
-                    'site' => 'Assigned site',
-                    'all_sites' => 'All sites',
-                ])
-                ->default('self')
-                ->required(),
-            DatePicker::make('visa_expires_on')
-                ->label('Visa expires'),
-            DatePicker::make('safety_training_expires_on')
-                ->label('Safety training expires'),
-            KeyValue::make('payload')
-                ->label('Extra data')
-                ->keyLabel('Field')
-                ->valueLabel('Value')
-                ->columnSpanFull(),
-            Hidden::make('badge_analysis_model'),
-            Hidden::make('badge_analyzed_at'),
-            Hidden::make('badge_analysis_payload')
-                ->formatStateUsing(fn (?Employee $record): ?string => self::encodeBadgeAnalysisPayload($record?->badge_analysis_payload))
-                ->dehydrateStateUsing(fn (mixed $state): ?array => self::normalizeBadgeAnalysisPayload($state)),
-            Textarea::make('badge_analysis_preview')
-                ->label('Gemini badge analysis')
-                ->formatStateUsing(fn (Get $get, ?Employee $record): ?string => self::formatBadgeAnalysisPayload($get('badge_analysis_payload') ?? $record?->badge_analysis_payload))
-                ->disabled()
-                ->dehydrated(false)
-                ->rows(10)
-                ->visible(fn (Get $get, ?Employee $record): bool => filled($get('badge_analysis_preview')) || filled($record?->badge_analysis_payload))
-                ->columnSpanFull(),
+            Section::make('② 소속 및 업무 배정')
+                ->description('회사 → 현장 → 팀 순서로 지정하고, 실제 담당 직종을 입력합니다.')
+                ->icon('heroicon-o-building-office-2')
+                ->columns(['default' => 1, 'lg' => 2])
+                ->schema([
+                    Select::make('company_id')
+                        ->label('Company / 회사')
+                        ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable(),
+                    Select::make('site_id')
+                        ->label('Site / 현장')
+                        ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all())
+                        ->searchable(),
+                    Select::make('team_id')
+                        ->label('Team / 팀')
+                        ->options(fn (): array => Team::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable(),
+                    TextInput::make('role')
+                        ->label('Role / Trade / 직종')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(120),
+                ]),
+
+            Section::make('③ Badge · NFC')
+                ->description('뱃지 사진을 먼저 올리면 AI가 이름·회사·직종·발급일을 판독합니다. NFC ID는 직접 확인해 입력합니다.')
+                ->icon('heroicon-o-identification')
+                ->columns(['default' => 1, 'lg' => 2])
+                ->collapsible()
+                ->schema([
+                    TextInput::make('badge_number')
+                        ->label('NFC ID')
+                        ->helperText('예: N-842853E04. AI OCR은 이 값을 자동 입력하지 않습니다.')
+                        ->unique(ignoreRecord: true)
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(80),
+                    TextInput::make('badge_printed_number')
+                        ->label('Badge printed number')
+                        ->helperText('뱃지 인쇄번호 참고값이며 NFC ID와 다릅니다.')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(120),
+                    TextInput::make('badge_company_name')
+                        ->label('Badge company name')
+                        ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                        ->maxLength(255),
+                    DatePicker::make('badge_issued_on')
+                        ->label('Badge issued on'),
+                    FileUpload::make('badge_photo_path')
+                        ->label('Badge photo / camera')
+                        ->disk('public')
+                        ->directory('employee-badges')
+                        ->visibility('public')
+                        ->image()
+                        ->imagePreviewHeight('180')
+                        ->maxSize(10240)
+                        ->openable()
+                        ->downloadable()
+                        ->helperText('모바일 카메라로 촬영하거나 뱃지 이미지를 업로드하세요.')
+                        ->extraInputAttributes(['accept' => 'image/*', 'capture' => 'environment'], merge: true)
+                        ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                            if (! $state instanceof TemporaryUploadedFile) {
+                                return;
+                            }
+
+                            self::analyzeBadgePhoto($state, $set, $get);
+                        })
+                        ->columnSpanFull(),
+                    Actions::make([
+                        Action::make('analyzeBadgePhoto')
+                            ->label('뱃지 사진 AI 분석')
+                            ->icon('heroicon-o-sparkles')
+                            ->color('info')
+                            ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
+                    ])->columnSpanFull(),
+                    Hidden::make('badge_analysis_model'),
+                    Hidden::make('badge_analyzed_at'),
+                    Hidden::make('badge_analysis_payload')
+                        ->formatStateUsing(fn (?Employee $record): ?string => self::encodeBadgeAnalysisPayload($record?->badge_analysis_payload))
+                        ->dehydrateStateUsing(fn (mixed $state): ?array => self::normalizeBadgeAnalysisPayload($state)),
+                    Textarea::make('badge_analysis_preview')
+                        ->label('Gemini badge analysis')
+                        ->formatStateUsing(fn (Get $get, ?Employee $record): ?string => self::formatBadgeAnalysisPayload($get('badge_analysis_payload') ?? $record?->badge_analysis_payload))
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->rows(10)
+                        ->visible(fn (Get $get, ?Employee $record): bool => filled($get('badge_analysis_preview')) || filled($record?->badge_analysis_payload))
+                        ->columnSpanFull(),
+                ]),
+
+            Section::make('④ 출퇴근 앱 권한')
+                ->description('일반 작업자는 Worker + Self를 사용하고, 반장·현장 관리자만 담당 범위를 넓혀 주세요.')
+                ->icon('heroicon-o-qr-code')
+                ->columns(['default' => 1, 'lg' => 2])
+                ->schema([
+                    Select::make('attendance_app_role')
+                        ->label('QR attendance role')
+                        ->options([
+                            'worker' => 'Worker - 본인 출퇴근만',
+                            'foreman' => 'Foreman / Team lead',
+                            'safety_manager' => 'Safety manager',
+                            'attendance_admin' => 'Attendance admin',
+                        ])
+                        ->default('worker')
+                        ->required(),
+                    Select::make('attendance_app_scope')
+                        ->label('QR attendance scope')
+                        ->options([
+                            'self' => 'Self only / 본인',
+                            'team' => 'Assigned team / 담당 팀',
+                            'site' => 'Assigned site / 담당 현장',
+                            'all_sites' => 'All sites / 전체 현장',
+                        ])
+                        ->default('self')
+                        ->required(),
+                ]),
+
+            Section::make('⑤ 만료일 · 추가정보')
+                ->description('비자·안전교육 만료일과 시스템 확장값이 필요할 때만 입력합니다.')
+                ->icon('heroicon-o-document-text')
+                ->columns(['default' => 1, 'lg' => 2])
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                    DatePicker::make('visa_expires_on')
+                        ->label('Visa expires'),
+                    DatePicker::make('safety_training_expires_on')
+                        ->label('Safety training expires'),
+                    KeyValue::make('payload')
+                        ->label('Extra data')
+                        ->keyLabel('Field')
+                        ->valueLabel('Value')
+                        ->columnSpanFull(),
+                ]),
         ]);
     }
 

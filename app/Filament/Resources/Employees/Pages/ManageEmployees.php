@@ -22,6 +22,11 @@ class ManageEmployees extends ManageRecords
 {
     protected static string $resource = EmployeeResource::class;
 
+    public function getSubheading(): ?string
+    {
+        return '지원서 온보딩을 거치지 않는 직원은 여기서 직접 등록하고, 필요할 때 로그인 권한까지 함께 부여합니다.';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -33,6 +38,7 @@ class ManageEmployees extends ManageRecords
                 ->modalHeading('직접 인사등록 — 직원 + 로그인 계정 한 번에')
                 ->modalDescription('이름·구글 이메일·유형만 정하면 직원 기록과 로그인 계정을 함께 만듭니다. 로그인은 적어주신 구글 이메일로 이뤄집니다.')
                 ->modalSubmitActionLabel('등록')
+                ->modalWidth('3xl')
                 ->visible(fn (): bool => in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager'], true))
                 ->form([
                     TextInput::make('full_name')
@@ -121,7 +127,11 @@ class ManageEmployees extends ManageRecords
                         ->send();
                 }),
             // 계정 없이 인사 기록만 만들고 싶을 때.
-            CreateAction::make()->label('직원만 등록 (계정 없음)'),
+            CreateAction::make()
+                ->label('직원 상세 등록 (계정 없음)')
+                ->modalHeading('직원 상세 등록')
+                ->modalDescription('인적사항·소속·Badge/NFC·출퇴근 앱 권한을 단계별 섹션에서 입력합니다.')
+                ->modalWidth('5xl'),
         ];
     }
 }

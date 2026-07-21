@@ -1,0 +1,387 @@
+/*
+ * SMART COMPANY Admin — refined visual bridge between Filament and the ERP.
+ * This file is loaded after Filament styles by AdminPanelProvider.
+ */
+
+:root {
+    --smart-admin-bg: #f4f7fb;
+    --smart-admin-surface: rgba(255, 255, 255, 0.9);
+    --smart-admin-surface-solid: #ffffff;
+    --smart-admin-surface-soft: #f7f9fd;
+    --smart-admin-border: rgba(15, 23, 42, 0.09);
+    --smart-admin-border-strong: rgba(37, 99, 235, 0.22);
+    --smart-admin-text: #0f172a;
+    --smart-admin-muted: #64748b;
+    --smart-admin-primary: #2563eb;
+    --smart-admin-secondary: #7c3aed;
+    --smart-admin-glow: rgba(37, 99, 235, 0.12);
+    --smart-admin-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+    --smart-admin-shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.dark {
+    --smart-admin-bg: #080b12;
+    --smart-admin-surface: rgba(17, 22, 33, 0.88);
+    --smart-admin-surface-solid: #111621;
+    --smart-admin-surface-soft: #161c29;
+    --smart-admin-border: rgba(148, 163, 184, 0.13);
+    --smart-admin-border-strong: rgba(96, 165, 250, 0.32);
+    --smart-admin-text: #f1f5f9;
+    --smart-admin-muted: #94a3b8;
+    --smart-admin-primary: #3b82f6;
+    --smart-admin-secondary: #8b5cf6;
+    --smart-admin-glow: rgba(37, 99, 235, 0.18);
+    --smart-admin-shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
+    --smart-admin-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+html.fi,
+.fi-body {
+    background-color: var(--smart-admin-bg);
+}
+
+.fi-body {
+    color: var(--smart-admin-text);
+    font-family: Inter, Pretendard, "Segoe UI", system-ui, -apple-system, sans-serif;
+    background-image:
+        radial-gradient(circle at 78% 2%, color-mix(in srgb, var(--smart-admin-primary) 13%, transparent) 0, transparent 30rem),
+        radial-gradient(circle at 20% 88%, color-mix(in srgb, var(--smart-admin-secondary) 9%, transparent) 0, transparent 32rem);
+    background-attachment: fixed;
+}
+
+/* Topbar and identity */
+.fi-topbar-ctn {
+    overflow: visible;
+}
+
+.fi-topbar {
+    min-height: 4.5rem;
+    border-bottom: 1px solid var(--smart-admin-border);
+    background: color-mix(in srgb, var(--smart-admin-surface-solid) 84%, transparent);
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+    backdrop-filter: blur(18px) saturate(145%);
+}
+
+.dark .fi-topbar {
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22);
+}
+
+.fi-logo {
+    align-items: center;
+    gap: 0.65rem;
+    letter-spacing: -0.025em;
+}
+
+.fi-logo::before {
+    width: 0.58rem;
+    height: 1.7rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--smart-admin-primary), var(--smart-admin-secondary));
+    box-shadow: 0 0 22px color-mix(in srgb, var(--smart-admin-primary) 55%, transparent);
+    content: "";
+}
+
+/* Sidebar */
+.fi-sidebar {
+    border-inline-end: 1px solid var(--smart-admin-border);
+    background: color-mix(in srgb, var(--smart-admin-surface-solid) 92%, transparent);
+    box-shadow: 14px 0 38px rgba(15, 23, 42, 0.04);
+    backdrop-filter: blur(18px);
+}
+
+.dark .fi-sidebar {
+    box-shadow: 16px 0 42px rgba(0, 0, 0, 0.2);
+}
+
+.fi-sidebar-nav {
+    gap: 2rem;
+    padding: 1.6rem 1rem 2rem;
+}
+
+.fi-sidebar-nav-groups {
+    gap: 1.6rem;
+}
+
+.fi-sidebar-group-label {
+    color: var(--smart-admin-muted);
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.fi-sidebar-group-btn {
+    padding-inline: 0.75rem;
+}
+
+.fi-sidebar-item-btn,
+.fi-sidebar-group-dropdown-trigger-btn {
+    min-height: 2.75rem;
+    border: 1px solid transparent;
+    border-radius: 0.85rem;
+    padding-inline: 0.85rem;
+    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.fi-sidebar-item-has-url > .fi-sidebar-item-btn:hover,
+.fi-sidebar-group-dropdown-trigger-btn:hover {
+    border-color: var(--smart-admin-border);
+    background: var(--smart-admin-surface-soft);
+    transform: translateX(2px);
+}
+
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
+    border-color: color-mix(in srgb, var(--smart-admin-primary) 38%, transparent);
+    background: linear-gradient(118deg, var(--smart-admin-primary), var(--smart-admin-secondary));
+    box-shadow: 0 10px 26px color-mix(in srgb, var(--smart-admin-primary) 24%, transparent);
+}
+
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label,
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-icon {
+    color: #ffffff;
+}
+
+.fi-sidebar-item-label {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+/* Page rhythm */
+.fi-main {
+    padding-inline: clamp(1rem, 2.4vw, 2.5rem);
+}
+
+.fi-page-header-main-ctn {
+    gap: 2rem;
+    padding-block: clamp(1.8rem, 4vw, 3.2rem);
+}
+
+.fi-page-content {
+    gap: 2rem;
+    padding-bottom: 3rem;
+}
+
+.fi-header-heading {
+    color: var(--smart-admin-text);
+    font-size: clamp(1.75rem, 2.6vw, 2.35rem);
+    font-weight: 780;
+    letter-spacing: -0.04em;
+}
+
+.fi-header-heading::after {
+    display: block;
+    width: 3.1rem;
+    height: 0.22rem;
+    margin-top: 0.75rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--smart-admin-primary), var(--smart-admin-secondary));
+    box-shadow: 0 0 18px color-mix(in srgb, var(--smart-admin-primary) 38%, transparent);
+    content: "";
+}
+
+.fi-header-subheading {
+    max-width: 54rem;
+    color: var(--smart-admin-muted);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+/* Sections, tables, wizards and modals */
+.fi-section:not(.fi-section-not-contained),
+.fi-ta-ctn,
+.fi-sc-wizard.fi-contained,
+.fi-sc-wizard:not(.fi-contained) .fi-sc-wizard-header,
+.fi-modal-window,
+.fi-simple-main {
+    border: 1px solid var(--smart-admin-border);
+    border-radius: 1.15rem;
+    background: var(--smart-admin-surface);
+    box-shadow: var(--smart-admin-shadow-soft);
+    backdrop-filter: blur(14px);
+}
+
+.fi-section:not(.fi-section-not-contained):hover,
+.fi-ta-ctn:hover {
+    border-color: var(--smart-admin-border-strong);
+    box-shadow: var(--smart-admin-shadow);
+}
+
+.fi-section:not(.fi-section-not-contained),
+.fi-ta-ctn {
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.fi-section > .fi-section-header {
+    padding: 1.15rem 1.4rem;
+}
+
+.fi-section .fi-section-header-heading {
+    font-size: 1rem;
+    font-weight: 720;
+    letter-spacing: -0.015em;
+}
+
+.fi-section .fi-section-header-description {
+    color: var(--smart-admin-muted);
+    line-height: 1.65;
+}
+
+.fi-section.fi-section-has-header:not(.fi-collapsed) > .fi-section-content-ctn,
+.fi-ta-header,
+.fi-ta-header-toolbar,
+.fi-ta-ctn .fi-pagination {
+    border-color: var(--smart-admin-border);
+}
+
+.fi-modal-close-overlay {
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(5px);
+}
+
+.fi-modal-window {
+    overflow: hidden;
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+}
+
+/* Tables */
+.fi-ta-ctn {
+    overflow: hidden;
+}
+
+.fi-ta-content-ctn,
+.fi-ta-table,
+.fi-ta-content:not(.fi-ta-content-grid) {
+    border-color: var(--smart-admin-border);
+    background: transparent;
+}
+
+.fi-ta-table > thead > tr,
+.fi-ta-content-header,
+.fi-ta-table-stacked-header-cell {
+    background: color-mix(in srgb, var(--smart-admin-surface-soft) 86%, transparent);
+}
+
+.fi-ta-header-cell {
+    color: var(--smart-admin-text);
+    font-size: 0.76rem;
+    font-weight: 720;
+    letter-spacing: 0.035em;
+}
+
+.fi-ta-table > tbody,
+.fi-ta-table > tbody > .fi-ta-row,
+.fi-ta-content .fi-ta-record {
+    border-color: var(--smart-admin-border);
+    background: transparent;
+}
+
+.fi-ta-row:hover,
+.fi-ta-content .fi-ta-record:hover {
+    background: color-mix(in srgb, var(--smart-admin-primary) 7%, var(--smart-admin-surface-solid));
+}
+
+/* Tabs and wizard steps */
+.fi-tabs:not(.fi-contained) {
+    gap: 0.35rem;
+    border: 1px solid var(--smart-admin-border);
+    border-radius: 1rem;
+    background: var(--smart-admin-surface);
+    box-shadow: var(--smart-admin-shadow-soft);
+}
+
+.fi-tabs-item {
+    border-radius: 0.75rem;
+}
+
+.fi-tabs-item.fi-active {
+    background: color-mix(in srgb, var(--smart-admin-primary) 13%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--smart-admin-primary) 24%, transparent);
+}
+
+.fi-sc-wizard-header-step.fi-active .fi-sc-wizard-header-step-icon-ctn {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--smart-admin-primary) 12%, transparent);
+}
+
+/* Inputs and controls */
+.fi-input-wrp {
+    border: 1px solid var(--smart-admin-border);
+    border-radius: 0.8rem;
+    background: color-mix(in srgb, var(--smart-admin-surface-solid) 82%, transparent);
+    box-shadow: none;
+}
+
+.fi-input-wrp:not(.fi-disabled):focus-within {
+    border-color: var(--smart-admin-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--smart-admin-primary) 13%, transparent);
+}
+
+.fi-fo-field-label-content,
+.fi-fo-field-label-content > span {
+    font-weight: 620;
+}
+
+.fi-btn,
+.fi-icon-btn {
+    border-radius: 0.78rem;
+}
+
+.fi-btn {
+    min-height: 2.45rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.fi-header-actions-ctn .fi-btn.fi-color:not(.fi-outlined) {
+    border: 1px solid color-mix(in srgb, var(--smart-admin-primary) 35%, transparent);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--smart-admin-primary) 20%, transparent);
+}
+
+.fi-badge {
+    border-radius: 999px;
+    font-weight: 650;
+}
+
+@media (max-width: 1023px) {
+    .fi-sidebar {
+        background: var(--smart-admin-surface-solid);
+    }
+
+    .fi-header-actions-ctn,
+    .fi-header-actions-ctn > .fi-ac {
+        width: 100%;
+    }
+
+    .fi-header-actions-ctn .fi-btn {
+        flex: 1;
+    }
+}
+
+@media (max-width: 640px) {
+    .fi-topbar {
+        min-height: 4rem;
+    }
+
+    .fi-page-header-main-ctn {
+        padding-block: 1.4rem 2rem;
+    }
+
+    .fi-header-heading::after {
+        margin-top: 0.55rem;
+    }
+
+    .fi-section > .fi-section-header,
+    .fi-section:not(.fi-divided) > .fi-section-content-ctn > .fi-section-content {
+        padding-inline: 1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fi-sidebar-item-btn,
+    .fi-sidebar-group-dropdown-trigger-btn,
+    .fi-section,
+    .fi-ta-ctn {
+        transition: none;
+    }
+}

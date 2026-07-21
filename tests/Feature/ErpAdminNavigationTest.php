@@ -67,7 +67,10 @@ class ErpAdminNavigationTest extends TestCase
             ->followingRedirects()
             ->get('/admin')
             ->assertOk()
+            ->assertSee(asset('css/admin-theme.css'), escape: false)
             ->assertSee('ERP 홈')
             ->assertSee(route('smart-company.index'));
+
+        $this->assertFileExists(public_path('css/admin-theme.css'));
     }
 }

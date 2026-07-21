@@ -48,6 +48,10 @@ class AdminPanelProvider extends PanelProvider
                 fn (): string => Blade::render('@include("filament.auth.login-intro")'),
                 scopes: Login::class,
             )
+            ->renderHook(
+                PanelsRenderHook::STYLES_AFTER,
+                fn (): string => '<link rel="stylesheet" href="' . asset('css/admin-theme.css') . '?v=' . (@filemtime(public_path('css/admin-theme.css')) ?: time()) . '">',
+            )
             // 관리자 페이지(팝업 포함) 한글 라벨을 선택 언어로 DOM 번역 + 언어 선택기.
             ->renderHook(
                 PanelsRenderHook::BODY_END,
