@@ -45,6 +45,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/wbs-api/manuals', [App\Http\Controllers\WbsManualController::class, 'index'])->name('wbs-manual.index');
     Route::get('/wbs-api/manual/{manual}', [App\Http\Controllers\WbsManualController::class, 'show'])->name('wbs-manual.show');
 
+    // 문서통합관리 — 업로드(멀티파트) → AI 자동분석(백그라운드) → 상태 폴링 → 원본 열람
+    Route::post('/docs-api/upload', [App\Http\Controllers\IntegratedDocumentController::class, 'upload'])->name('docs.upload');
+    Route::get('/docs-api/status', [App\Http\Controllers\IntegratedDocumentController::class, 'status'])->name('docs.status');
+    Route::get('/docs-api/file/{document}', [App\Http\Controllers\IntegratedDocumentController::class, 'show'])->name('docs.show');
+
     // Vehicle API Routes
     Route::post('/vehicle-api/scan-rental', [App\Http\Controllers\VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
     Route::post('/vehicle-api/save', [App\Http\Controllers\VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');

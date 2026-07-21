@@ -138,6 +138,10 @@
                 <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>ê³µì • ê´€ë¦¬ (WBS)</span>
                 <span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
+              <li class="nav-item" data-view="docs" id="nav-docs" style="padding-left:26px">
+                <i class="ph ph-folders" style="color:#818cf8"></i><span>문서통합관리</span>
+                <span class="nav-badge" style="background:rgba(129,140,248,.16);color:#818cf8">AI</span>
+              </li>
               <li class="nav-item" data-view="finance" id="nav-finance">
                 <i class="ph ph-currency-dollar"></i><span>ìž¬ë¬´ (Finance)</span>
               </li>
@@ -1286,6 +1290,7 @@
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
+        'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
         'vehicle': { title: 'ì°¨ëŸ‰ ê´€ë¦¬', render: renderVehicle },
@@ -8240,6 +8245,446 @@
           btn.style.color = active ? '#fff' : 'var(--text-secondary)';
         });
       };
+
+      // ═══════════════════════ 문서통합관리 (Integrated Document Management) ═══════════════════════
+      // 공정관리 하위 SPA 페이지. 직원·협력사·현장 작업자가 올린 서류를 AI(GeminiDocumentAnalyzer)가
+      // 종류 판별·9개 폴더 자동 분류·중복 감지하여 저장한다. 백엔드: /docs-api/* + api_doc* (SmartCompanyData).
+      window._docsState = window._docsState || { view: 'dashboard', folder: '03', docId: null, query: '', queue: [], watching: {} };
+
+      function docEsc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+      function docCsrf() {
+        var el = document.querySelector('meta[name="csrf-token"]');
+        return el ? el.getAttribute('content') : '';
+      }
+      function docBadge(type) {
+        var t = docEsc(type || 'DOC');
+        return '<span class="doc-badge ' + t + '">' + t + '</span>';
+      }
+      window.docsGo = function (view, opts) {
+        opts = opts || {};
+        var st = window._docsState;
+        st.view = view;
+        if (opts.folder) st.folder = opts.folder;
+        if (opts.docId != null) st.docId = opts.docId;
+        if (typeof opts.query === 'string') st.query = opts.query;
+        renderDocs();
+      };
+
+      function docsShell(bodyHtml) {
+        var st = window._docsState;
+        function tab(key, icon, label) {
+          return '<button class="docs-tab' + (st.view === key || (key === 'browse' && st.view === 'detail') ? ' active' : '') +
+            '" onclick="window.docsGo(\'' + key + '\')"><i class="ph ' + icon + '"></i>' + label + '</button>';
+        }
+        return '<div class="docs-wrap">' +
+          '<div class="docs-head">' +
+          '<div><h1><i class="ph ph-folders" style="color:#818cf8;margin-right:8px"></i>문서통합관리</h1>' +
+          '<p>직원·협력사·현장 작업자가 올린 모든 서류를 AI가 분석·분류하여 자동 정리합니다.</p></div>' +
+          '<div class="docs-live"><span class="dot"></span>AI 분석 엔진 정상 가동중</div>' +
+          '</div>' +
+          '<div class="docs-tabs">' +
+          tab('dashboard', 'ph-squares-four', '대시보드') +
+          tab('upload', 'ph-upload-simple', '문서 업로드') +
+          tab('browse', 'ph-folder-open', '폴더 브라우저') +
+          tab('search', 'ph-magnifying-glass', '전체 검색') +
+          '</div>' +
+          '<div id="docs-body">' + (bodyHtml || '') + '</div>' +
+          '</div>';
+      }
+
+      function docsLoading(msg) {
+        return '<div style="padding:60px 20px;text-align:center;color:var(--text-tertiary)">' +
+          '<i class="ph ph-circle-notch docs-spin" style="font-size:30px;color:var(--brand-primary)"></i>' +
+          '<div style="margin-top:12px;font-size:13px">' + docEsc(msg || '불러오는 중...') + '</div></div>';
+      }
+
+      async function renderDocs() {
+        var st = window._docsState;
+        pageContainer.innerHTML = docsShell(docsLoading());
+        try {
+          if (st.view === 'dashboard') return await docsRenderDashboard();
+          if (st.view === 'upload') return docsRenderUpload();
+          if (st.view === 'browse') return await docsRenderBrowse();
+          if (st.view === 'detail') return await docsRenderDetail();
+          if (st.view === 'search') return await docsRenderSearch();
+        } catch (e) {
+          console.warn('[docs] render error', e);
+          var body = document.getElementById('docs-body');
+          if (body) body.innerHTML = '<div class="docs-card" style="padding:30px;text-align:center;color:var(--status-danger)">문서 데이터를 불러오지 못했습니다: ' + docEsc(e.message || e) + '</div>';
+        }
+      }
+
+      // ─────────── 대시보드 ───────────
+      async function docsRenderDashboard() {
+        var d = await gsRun('api_getDocDashboard', [], { stats: [], reviewQueue: [], dist: [], duplicates: 0, insight: '' });
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+
+        var statHtml = (d.stats || []).map(function (s) {
+          return '<div class="docs-stat"><div class="label">' + docEsc(s.label) + '</div>' +
+            '<div class="value">' + docEsc(s.value) + '</div><div class="sub">' + docEsc(s.sub) + '</div></div>';
+        }).join('');
+
+        var queueHtml = (d.reviewQueue || []).length ? (d.reviewQueue || []).map(function (r) {
+          return '<div class="docs-row" onclick="window.docsGo(\'detail\',{docId:' + r.id + '})">' +
+            docBadge(r.type) +
+            '<div class="t"><div class="name">' + docEsc(r.title) + '</div><div class="meta">' + docEsc(r.sub) + ' · ' + docEsc(r.date) + '</div></div>' +
+            '<div style="text-align:right"><div style="font-size:11px;color:var(--text-tertiary)">제안 폴더</div>' +
+            '<div style="font-size:12px;color:var(--text-primary);font-weight:600">' + docEsc(r.suggest) +
+            ' <span class="docs-conf" style="color:' + docEsc(r.confColor) + '">' + docEsc(r.conf) + '</span></div></div>' +
+            (r.dup ? '<i class="ph ph-copy" title="중복 의심" style="color:#ea580c;font-size:15px"></i>' : '') +
+            '</div>';
+        }).join('') : '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">검토 대기 문서가 없습니다. 문서를 업로드하면 AI가 자동 분류합니다.</div>';
+
+        var distHtml = (d.dist || []).map(function (c) {
+          return '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px">' +
+            '<span style="color:var(--text-secondary);font-weight:600"><span style="font-family:var(--font-mono,monospace);color:var(--text-tertiary);font-size:11px">' + docEsc(c.code) + '</span> ' + docEsc(c.name) + '</span>' +
+            '<span style="color:var(--text-tertiary)">' + docEsc(c.count) + '</span></div>' +
+            '<div style="height:7px;background:var(--bg-subtle);border-radius:4px;overflow:hidden">' +
+            '<div style="height:100%;width:' + (c.pct || 0) + '%;background:' + docEsc(c.color) + ';border-radius:4px"></div></div></div>';
+        }).join('');
+
+        body.innerHTML =
+          '<div class="docs-stat-grid">' + statHtml + '</div>' +
+          '<div class="docs-two-col" style="display:grid;grid-template-columns:1.55fr 1fr;gap:18px">' +
+          '<div class="docs-card"><div class="docs-card-head"><div class="docs-card-title">AI 분류 검토 대기' +
+          (d.duplicates ? ' <span style="font-size:11px;font-weight:700;color:#ea580c;background:#fff7ed;padding:2px 8px;border-radius:8px;margin-left:6px">중복 ' + d.duplicates + '건</span>' : '') +
+          '</div><span style="font-size:12.5px;color:var(--brand-primary);cursor:pointer;font-weight:600" onclick="window.docsGo(\'browse\')">전체 보기 →</span></div>' + queueHtml + '</div>' +
+          '<div class="docs-card" style="padding:16px 18px"><div class="docs-card-title" style="margin-bottom:4px">폴더별 문서 분포</div>' +
+          '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:14px">AI 자동 분류 결과</div>' + distHtml + '</div>' +
+          '</div>' +
+          '<div class="docs-ai-panel" style="margin-top:18px;display:flex;align-items:center;gap:20px">' +
+          '<div class="docs-ai-glow">✦</div>' +
+          '<div style="flex:1"><div class="kicker">AI INSIGHT</div>' +
+          '<div style="font-size:14px;font-weight:600;margin-top:4px;color:#fff">' + docEsc(d.insight || '문서함이 최신 상태입니다.') + '</div></div>' +
+          '<button onclick="window.docsGo(\'search\')" style="background:#fff;color:#312e81;border:none;border-radius:9px;padding:9px 15px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">자세히 보기</button>' +
+          '</div>';
+      }
+
+      // ─────────── 업로드 + AI 분석 ───────────
+      function docsRenderUpload() {
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        body.innerHTML =
+          '<div class="docs-dropzone" id="docs-drop">' +
+          '<div class="ic">⬆</div>' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">파일을 여기에 끌어다 놓으세요</div>' +
+          '<div style="font-size:13px;color:var(--text-tertiary);margin-top:7px">또는 클릭하여 파일 선택 · 여러 개 동시 업로드 가능</div>' +
+          '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">' +
+          ['PDF', '사진 IMG', '스캔 SCAN'].map(function (x) { return '<span class="docs-chip">' + x + '</span>'; }).join('') +
+          '</div>' +
+          '<input type="file" id="docs-file-input" accept=".pdf,image/*" multiple style="display:none">' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:11px;margin-top:16px;padding:13px 16px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:12px">' +
+          '<span style="font-size:16px;color:var(--brand-primary)">✦</span>' +
+          '<span style="font-size:12.5px;color:var(--text-secondary)">협력사·현장 작업자가 올린 문서도 AI 분석 후 <b>검토 대기</b>에 모이며, 관리자가 확인·확정합니다. PDF·사진·스캔본을 지원합니다.</span></div>' +
+          '<div id="docs-queue" style="margin-top:16px"></div>';
+
+        var drop = document.getElementById('docs-drop');
+        var input = document.getElementById('docs-file-input');
+        drop.addEventListener('click', function () { input.click(); });
+        input.addEventListener('change', function () { docsHandleFiles(input.files); });
+        ['dragover', 'dragenter'].forEach(function (ev) {
+          drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('drag'); });
+        });
+        ['dragleave', 'drop'].forEach(function (ev) {
+          drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('drag'); });
+        });
+        drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) docsHandleFiles(e.dataTransfer.files); });
+
+        if ((window._docsState.queue || []).length) docsRenderQueue();
+      }
+
+      function docsRenderQueue() {
+        var box = document.getElementById('docs-queue');
+        if (!box) return;
+        var q = window._docsState.queue || [];
+        if (!q.length) { box.innerHTML = ''; return; }
+        var rows = q.map(function (it) {
+          var right;
+          if (it.status === 'uploading') right = '<span class="docs-conf" style="color:var(--text-tertiary)"><i class="ph ph-circle-notch docs-spin"></i> 업로드…</span>';
+          else if (it.status === 'analyzing') right = '<span class="docs-conf" style="color:var(--brand-primary)"><i class="ph ph-sparkle docs-spin"></i> AI 분석중…</span>';
+          else if (it.status === 'failed') right = '<span class="docs-conf" style="color:var(--status-danger)">실패</span>';
+          else {
+            right = '<span class="docs-conf" style="color:' + (it.dup ? '#ea580c' : 'var(--status-success)') + '">→ ' + docEsc(it.folder) + ' ' + docEsc(it.conf || '') + '</span>';
+          }
+          var sub = it.status === 'done'
+            ? docEsc(it.typeLabel || '') + (it.dup ? ' · ⚠ ' + docEsc(it.dupNote || '중복 의심') : (it.summary ? ' · ' + docEsc(it.summary) : ''))
+            : docEsc(it.sizeLabel || '');
+          var click = it.status === 'done' && it.docId ? ' style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + it.docId + '})"' : '';
+          return '<div class="docs-row"' + click + '>' + docBadge(it.badge) +
+            '<div class="t"><div class="name">' + docEsc(it.name) + '</div><div class="meta">' + sub + '</div></div>' + right + '</div>';
+        }).join('');
+        var doneCount = q.filter(function (x) { return x.status === 'done'; }).length;
+        box.innerHTML = '<div class="docs-card' + (doneCount ? ' docs-floatup' : '') + '"><div class="docs-card-head"><div class="docs-card-title">업로드 · AI 분석 (' + q.length + '건)</div>' +
+          (doneCount === q.length ? '<span style="font-size:12.5px;color:var(--brand-primary);cursor:pointer;font-weight:600" onclick="window.docsGo(\'browse\')">폴더에서 보기 →</span>' : '') +
+          '</div>' + rows + '</div>';
+      }
+
+      function docsHandleFiles(fileList) {
+        var files = Array.prototype.slice.call(fileList || []);
+        if (!files.length) return;
+        var st = window._docsState;
+        files.forEach(function (f) {
+          var ext = (f.name.split('.').pop() || '').toLowerCase();
+          var badge = ext === 'pdf' ? 'PDF' : (/(jpg|jpeg|png|webp)/.test(ext) ? 'IMG' : 'DOC');
+          var item = { name: f.name, badge: badge, sizeLabel: docHumanSize(f.size), status: 'uploading', file: f };
+          st.queue.unshift(item);
+          docsUploadOne(item);
+        });
+        docsRenderQueue();
+      }
+
+      function docHumanSize(bytes) {
+        if (!bytes) return '';
+        var u = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + ' ' + u[i];
+      }
+
+      async function docsUploadOne(item) {
+        try {
+          var fd = new FormData();
+          fd.append('file', item.file);
+          fd.append('site_id', _siteId());
+          if (window.WBS_CURRENT_PROJECT) fd.append('project_code', window.WBS_CURRENT_PROJECT);
+          var res = await fetch('/docs-api/upload', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRF-TOKEN': docCsrf(), 'Accept': 'application/json' }, body: fd
+          });
+          var json = await res.json();
+          if (!json || !json.success || !json.document) {
+            item.status = 'failed'; docsRenderQueue(); return;
+          }
+          item.docId = json.document.id;
+          item.status = 'analyzing';
+          docsRenderQueue();
+          docsWatch(item);
+        } catch (e) {
+          console.warn('[docs] upload failed', e);
+          item.status = 'failed'; docsRenderQueue();
+        }
+      }
+
+      async function docsWatch(item) {
+        var tries = 0;
+        while (tries < 80) { // 최대 ~4분 (3초 간격)
+          await new Promise(function (r) { setTimeout(r, 3000); });
+          tries++;
+          var doc = null;
+          try {
+            var lr = await fetch('/docs-api/status?ids=' + item.docId, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            var lj = await lr.json();
+            (lj.documents || []).forEach(function (x) { if (x.id === item.docId) doc = x; });
+          } catch (e) { /* 일시 오류 무시 */ }
+          if (!doc) continue;
+          if (doc.status === 'needs_review' || doc.status === 'confirmed') {
+            item.status = 'done';
+            item.folder = doc.folder_name;
+            item.conf = Math.min(doc.type_confidence, doc.folder_confidence) + '%';
+            item.typeLabel = doc.type_label;
+            item.dup = doc.duplicate;
+            item.dupNote = doc.duplicate_note;
+            item.summary = (doc.summary || [])[0] || '';
+            docsRenderQueue();
+            clearDocCache();
+            return;
+          }
+          if (doc.status === 'failed') { item.status = 'failed'; item.summary = doc.error || ''; docsRenderQueue(); return; }
+        }
+        item.status = 'failed'; item.summary = '분석 지연 — 잠시 후 폴더에서 확인하세요.'; docsRenderQueue();
+      }
+
+      function clearDocCache() {
+        Object.keys(window.apiCache || {}).forEach(function (k) {
+          if (k.indexOf('api_getDoc') === 0 || k.indexOf('api_searchDocs') === 0) delete window.apiCache[k];
+        });
+      }
+
+      // ─────────── 폴더 브라우저 ───────────
+      async function docsRenderBrowse() {
+        var st = window._docsState;
+        var results = await Promise.all([
+          gsRun('api_getDocFolders', [], []),
+          gsRun('api_getDocFolder', [st.folder], { folder: {}, docs: [] })
+        ]);
+        var folders = results[0] || [], data = results[1] || { folder: {}, docs: [] };
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+
+        var folderHtml = folders.map(function (f) {
+          return '<div class="docs-folder' + (f.code === st.folder ? ' active' : '') + '" onclick="window.docsGo(\'browse\',{folder:\'' + f.code + '\'})">' +
+            '<span class="swatch" style="background:' + docEsc(f.color) + '"></span>' +
+            '<span class="fname"><span class="fcode">' + docEsc(f.code) + '</span> ' + docEsc(f.name) + '</span>' +
+            '<span class="fcount">' + f.count + '</span></div>';
+        }).join('');
+
+        var rows = (data.docs || []).length ? (data.docs || []).map(function (dc) {
+          return '<div class="docs-row" onclick="window.docsGo(\'detail\',{docId:' + dc.id + '})">' + docBadge(dc.type) +
+            '<div class="t"><div class="name">' + docEsc(dc.title) + (dc.dup ? ' <i class="ph ph-copy" style="color:#ea580c;font-size:13px" title="중복 의심"></i>' : '') +
+            '</div><div class="meta">' + docEsc(dc.sub) + ' · ' + docEsc(dc.from) + '</div></div>' +
+            '<span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + docEsc(dc.date) + '</span>' +
+            '<span class="docs-conf" style="color:' + docEsc(dc.confColor) + ';min-width:44px;text-align:right">' + docEsc(dc.conf) + '</span>' +
+            (dc.status === 'confirmed' ? '<i class="ph ph-check-circle" style="color:var(--status-success);font-size:15px" title="확정됨"></i>' : '<span style="width:15px"></span>') +
+            '</div>';
+        }).join('') : '<div style="padding:40px;text-align:center;color:var(--text-tertiary);font-size:13px">이 폴더에 문서가 없습니다.</div>';
+
+        body.innerHTML =
+          '<div style="display:flex;gap:0;border:1px solid var(--border-subtle);border-radius:14px;overflow:hidden;background:var(--bg-panel)">' +
+          '<div class="docs-folder-list">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.6px;padding:2px 8px 10px">폴더</div>' + folderHtml + '</div>' +
+          '<div style="flex:1;min-width:0;padding:20px 22px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+          '<div><h2 style="margin:0;font-size:18px;font-weight:800;color:var(--text-primary)">' + docEsc(data.folder.name || '') + '</h2>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-top:3px">AI 자동 분류 · DB 저장됨 · 언제든 검색 가능</div></div></div>' +
+          '<div class="docs-card">' + rows + '</div></div></div>';
+      }
+
+      // ─────────── 상세 (AI 추출 매핑) ───────────
+      async function docsRenderDetail() {
+        var st = window._docsState;
+        var doc = await gsRun('api_getDocDetail', [st.docId], null);
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        if (!doc) { body.innerHTML = '<div class="docs-card" style="padding:30px;text-align:center;color:var(--text-tertiary)">문서를 찾을 수 없습니다.</div>'; return; }
+
+        var summaryHtml = (doc.summary || []).length ? (doc.summary || []).map(function (l) {
+          return '<div style="display:flex;gap:10px;font-size:13px;color:var(--text-secondary);line-height:1.55;margin-bottom:8px"><span style="color:#818cf8">•</span><span>' + docEsc(l) + '</span></div>';
+        }).join('') : '<div style="font-size:12.5px;color:var(--text-tertiary)">요약 없음</div>';
+
+        var fieldsHtml = (doc.fields || []).length ? (doc.fields || []).map(function (f) {
+          return '<div class="docs-meta-tile"><div class="k">' + docEsc(f.k) + '</div><div class="v">' + docEsc(f.v) + '</div></div>';
+        }).join('') : '<div style="font-size:12.5px;color:var(--text-tertiary)">추출된 필드 없음</div>';
+
+        var numbersHtml = (doc.numbers || []).map(function (n) {
+          return '<div style="flex:1;min-width:120px;border:1px solid var(--border-subtle);background:var(--brand-primary-dim);border-radius:11px;padding:12px 14px">' +
+            '<div style="font-size:11px;color:var(--brand-primary);font-weight:600">' + docEsc(n.label) + '</div>' +
+            '<div style="font-size:16px;font-weight:800;color:var(--text-primary);margin-top:4px;font-family:var(--font-mono,monospace)">' + docEsc(n.v) + '</div></div>';
+        }).join('');
+
+        var tagsHtml = (doc.tags || []).map(function (t) { return '<span class="docs-chip">#' + docEsc(t) + '</span>'; }).join(' ');
+        var folderOpts = (doc.folders || []).map(function (f) {
+          return '<option value="' + f.code + '"' + (f.code === doc.folderCode ? ' selected' : '') + '>' + docEsc(f.code) + ' ' + docEsc(f.name) + '</option>';
+        }).join('');
+
+        var dupHtml = doc.dup ? '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:13px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
+          '<span style="width:30px;height:30px;border-radius:8px;background:#ea580c;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 30px">⚠</span>' +
+          '<div><div style="font-size:12.5px;font-weight:700;color:#9a3412">중복 · 유사 문서 감지</div><div style="font-size:12px;color:#c2410c;margin-top:2px">' + docEsc(doc.dup.text) + '</div></div></div>' : '';
+
+        body.innerHTML =
+          '<div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:14px">' +
+          '<span style="cursor:pointer;color:var(--brand-primary);font-weight:600" onclick="window.docsGo(\'browse\',{folder:\'' + doc.folderCode + '\'})">← 폴더 브라우저</span> / ' + docEsc(doc.folderName) + '</div>' +
+          '<div class="docs-two-col" style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start">' +
+          // LEFT: 파일 정보 + 미리보기 링크
+          '<div>' +
+          '<div style="background:#334155;border-radius:14px 14px 0 0;padding:14px 18px;display:flex;align-items:center;gap:11px">' +
+          '<span style="font-size:10px;font-weight:800;color:#fff;background:rgba(255,255,255,.16);padding:5px 8px;border-radius:7px">' + docEsc(doc.type || 'DOC') + '</span>' +
+          '<span style="font-size:13px;color:#e2e8f0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + docEsc(doc.title) + '</span></div>' +
+          '<div style="background:var(--bg-subtle);padding:24px;border-radius:0 0 14px 14px;min-height:220px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">' +
+          (doc.fileUrl ? '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" style="text-decoration:none"><div style="width:130px;height:170px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--brand-primary);box-shadow:0 8px 24px rgba(15,23,42,.12)"><i class="ph ph-file-text"></i></div></a>' +
+            '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" class="docs-chip" style="text-decoration:none"><i class="ph ph-arrow-square-out"></i> 원본 열기</a>' : '<div style="color:var(--text-tertiary);font-size:13px">원본 파일 없음</div>') +
+          '</div>' +
+          '<div class="docs-card" style="margin-top:16px;padding:16px 18px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:.4px;margin-bottom:12px">파일 정보</div>' +
+          [['문서번호', doc.docno], ['발행처', doc.issuer || '—'], ['상대방', doc.counterparty || '—'], ['업로드', doc.by], ['용량', doc.size], ['관련 현장', doc.site], ['발행일', doc.issued_on || '—'], ['만료일', doc.expires_on || '—']].map(function (kv) {
+            return '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:8px"><span style="color:var(--text-tertiary)">' + docEsc(kv[0]) + '</span><span style="font-weight:600;color:var(--text-primary)">' + docEsc(kv[1]) + '</span></div>';
+          }).join('') + '</div></div>' +
+          // RIGHT: AI 추출
+          '<div style="display:flex;flex-direction:column;gap:16px">' +
+          '<div class="docs-ai-panel">' +
+          '<div style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span class="docs-ai-glow" style="width:30px;height:30px;font-size:16px">✦</span><span class="kicker">AI 자동 분석 결과</span></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#a5b4fc">문서 종류</div>' +
+          '<div style="font-size:16px;font-weight:700;color:#fff;margin-top:4px">' + docEsc(doc.docType) + '</div><div style="font-size:11px;color:#c7d2fe;margin-top:4px">판별 신뢰도 ' + doc.typeConf + '%</div></div>' +
+          '<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#a5b4fc">자동 분류 폴더</div>' +
+          '<div style="font-size:16px;font-weight:700;color:#fff;margin-top:4px">' + docEsc(doc.folderName) + '</div><div style="font-size:11px;color:#c7d2fe;margin-top:4px">매핑 신뢰도 ' + doc.folderConf + '%</div></div>' +
+          '</div></div>' +
+          dupHtml +
+          '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">핵심 요약 <span style="font-size:10px;font-weight:700;color:var(--brand-primary);background:var(--brand-primary-dim);padding:2px 7px;border-radius:6px">AI 생성</span></div>' + summaryHtml + '</div>' +
+          '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:14px;color:var(--text-primary)">추출된 메타데이터</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">' + fieldsHtml + '</div></div>' +
+          (numbersHtml ? '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:14px;color:var(--text-primary)">금액 · 수량 추출</div><div style="display:flex;gap:11px;flex-wrap:wrap">' + numbersHtml + '</div></div>' : '') +
+          (tagsHtml ? '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:13px;color:var(--text-primary)">자동 생성 태그 · 키워드</div><div style="display:flex;gap:8px;flex-wrap:wrap">' + tagsHtml + '</div></div>' : '') +
+          '<div style="display:flex;gap:10px;align-items:center">' +
+          '<select id="docs-folder-sel" style="height:44px;padding:0 12px;background:var(--bg-panel);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:11px;font-size:13px;font-family:inherit">' + folderOpts + '</select>' +
+          '<button onclick="window.docsConfirm(' + doc.id + ')" style="flex:1;height:44px;background:var(--brand-primary);color:#fff;border:none;border-radius:11px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit">' +
+          (doc.status === 'confirmed' ? '폴더 변경 저장' : '분류 확정 · DB 저장') + '</button>' +
+          '<button onclick="window.docsDelete(' + doc.id + ')" title="삭제" style="height:44px;padding:0 14px;background:var(--bg-panel);color:var(--status-danger);border:1px solid var(--border-subtle);border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit"><i class="ph ph-trash"></i></button>' +
+          '</div></div></div>';
+      }
+
+      window.docsConfirm = async function (id) {
+        var sel = document.getElementById('docs-folder-sel');
+        var folder = sel ? sel.value : '';
+        var r = await gsRun('api_confirmDoc', [id, folder], { success: false });
+        clearDocCache();
+        if (r && r.success) {
+          if (window.showToast) window.showToast('문서 분류를 확정했습니다.', 'success');
+          window.docsGo('browse', { folder: r.folder_code });
+        } else {
+          alert('확정 실패: ' + ((r && r.error) || '알 수 없는 오류'));
+        }
+      };
+
+      window.docsDelete = async function (id) {
+        if (!confirm('이 문서를 삭제할까요? 원본 파일도 함께 삭제됩니다.')) return;
+        var r = await gsRun('api_deleteDoc', [id], { success: false });
+        clearDocCache();
+        if (r && r.success) { window.docsGo('browse'); } else { alert('삭제 실패'); }
+      };
+
+      // ─────────── 전체 검색 ───────────
+      async function docsRenderSearch() {
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        var st = window._docsState;
+        body.innerHTML =
+          '<div style="display:flex;align-items:center;gap:11px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:13px;padding:4px 6px 4px 16px;margin-bottom:14px">' +
+          '<i class="ph ph-magnifying-glass" style="font-size:18px;color:var(--text-tertiary)"></i>' +
+          '<input id="docs-search-input" value="' + docEsc(st.query) + '" placeholder="문서명 · 발신처 · 내용 · 태그 · 금액으로 검색" style="flex:1;border:none;outline:none;font-size:15px;padding:12px 0;font-family:inherit;color:var(--text-primary);background:transparent">' +
+          '<span class="docs-chip">DB 전체 검색</span></div>' +
+          '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;font-size:12px;color:var(--text-tertiary)"><span>추천:</span>' +
+          ['계약', '영수증', '보험', '만료', '접지'].map(function (t) { return '<span style="color:var(--brand-primary);cursor:pointer" onclick="window.docsSearchNow(\'' + t + '\')">' + t + '</span>'; }).join('<span style="color:var(--border-strong)">·</span>') +
+          '</div><div id="docs-search-results"></div>';
+
+        var input = document.getElementById('docs-search-input');
+        var timer = null;
+        input.addEventListener('input', function () {
+          clearTimeout(timer);
+          timer = setTimeout(function () { docsDoSearch(input.value); }, 350);
+        });
+        input.focus();
+        docsDoSearch(st.query);
+      }
+
+      window.docsSearchNow = function (q) {
+        var input = document.getElementById('docs-search-input');
+        if (input) input.value = q;
+        window._docsState.query = q;
+        docsDoSearch(q);
+      };
+
+      async function docsDoSearch(query) {
+        window._docsState.query = query;
+        var box = document.getElementById('docs-search-results');
+        if (!box) return;
+        box.innerHTML = docsLoading('검색 중...');
+        var r = await gsRun('api_searchDocs', [query || ''], { count: 0, hits: [] });
+        var hits = r.hits || [];
+        var head = '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px"><b style="color:var(--text-primary)">' + (r.count || 0) + '건</b>의 문서를 찾았습니다</div>';
+        if (!hits.length) { box.innerHTML = head + '<div class="docs-card" style="padding:36px;text-align:center;color:var(--text-tertiary);font-size:13px">일치하는 문서가 없습니다.</div>'; return; }
+        box.innerHTML = head + '<div style="display:flex;flex-direction:column;gap:10px">' + hits.map(function (d) {
+          var tags = (d.tags || []).map(function (t) { return '<span style="font-size:11px;color:var(--brand-primary);background:var(--brand-primary-dim);padding:3px 9px;border-radius:14px">#' + docEsc(t) + '</span>'; }).join(' ');
+          return '<div class="docs-card" style="padding:15px 17px;cursor:pointer;display:flex;gap:15px;align-items:flex-start" onclick="window.docsGo(\'detail\',{docId:' + d.id + '})">' + docBadge(d.type) +
+            '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:14.5px;font-weight:700;color:var(--text-primary)">' + docEsc(d.title) + '</span><span style="font-size:11px;color:var(--text-tertiary)">' + docEsc(d.sub) + '</span></div>' +
+            '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:6px">' + docEsc(d.docType) + ' · ' + docEsc(d.from) + ' · ' + docEsc(d.date) + '</div>' +
+            (tags ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">' + tags + '</div>' : '') + '</div>' +
+            '<span class="docs-conf" style="color:' + docEsc(d.confColor) + '">' + docEsc(d.conf) + '</span></div>';
+        }).join('') + '</div>';
+      }
+
 
       async function renderWbs() {
         var gen = ++_wbsRenderGen;
