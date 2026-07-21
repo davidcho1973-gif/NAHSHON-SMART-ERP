@@ -142,6 +142,10 @@ class GeminiSafetyAnalyzer
         $crew = (string) ($c['crew'] ?? '');
         $qty = (string) ($c['qty'] ?? '');
         $unit = (string) ($c['unit'] ?? '');
+        $trade = (string) ($c['trade'] ?? '');
+        $ehs = (string) ($c['ehs'] ?? '');
+        $equipment = (string) ($c['equipment'] ?? '');
+        $crewText = (string) ($c['crew_text'] ?? '');
 
         return <<<PROMPT
 당신은 미국 내 한국 대기업 플랜트/공장(LG배터리·SK반도체·현대차 등) 기계·전기·배관 설치 현장의
@@ -152,17 +156,27 @@ OSHA 및 미국 건설 안전기준을 반영하고, 현실적이고 구체적�
 - 프로젝트: {$project}
 - 작업장소: {$location}
 - 작업명: {$title}
+- 공종: {$trade}
+- 안전위험도(EHS): {$ehs}
+- 투입조: {$crewText}
+- 사용장비: {$equipment}
 - 작업인원: {$crew}명
 - 예정 작업량: {$qty} {$unit}
 - 작업내용: {$work}
+
+**공종·안전위험도·사용장비에 딱 맞춰** 위험요인·PPE·작업허가를 구체화하세요
+(예: 전기=감전·아크플래시·전기 LOTO·절연장갑, 고소/리프트=추락·안전대·고소작업허가,
+용접=화상·화기작업허가·차광면, 밀폐=산소결핍·밀폐공간허가·가스측정).
 
 요구 항목:
 - summary: 작업 요약 1~2문장.
 - hazards: PHA 위험성평가. 각 항목 {hazard(위험요인), risk_level(상/중/하), control(대책)} 3~6개.
 - ptp_steps: PTP 작업 전 점검 단계 4~7개(순서대로).
-- required_ppe: 필수 개인보호구 목록.
+- required_ppe: 공종·위험에 맞는 필수 개인보호구(기본 안전모·안전화·보안경 + 공종별 추가).
 - tbm_topics: TBM(툴박스미팅) 토의 주제 3~5개.
-- permits: 필요한 작업허가(PTW) 목록(예: 화기작업, 고소작업, 밀폐공간, 전기 LOTO 등). 해당 없으면 빈 배열.
+- permits: 필요한 작업허가(PTW) 목록(화기작업/고소작업/밀폐공간/전기 LOTO 등). 해당 없으면 빈 배열.
+- heat_environment: 현장·계절 환경 대책 2~4개. 특히 미국 애리조나(피닉스) 여름 폭염 시 열사병 예방
+  (수분 섭취 주기·그늘 휴식·초기증상 공유)과 현장 환경(분진·소음·조도·밀폐 등) 대책.
 - key_risk: 가장 주의해야 할 핵심 위험 한 줄.
 PROMPT;
     }
@@ -220,6 +234,7 @@ PROMPT;
                 'required_ppe' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'tbm_topics' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'permits' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'heat_environment' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'key_risk' => ['type' => 'string'],
             ],
         ];

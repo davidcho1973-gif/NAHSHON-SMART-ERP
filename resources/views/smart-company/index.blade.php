@@ -2817,7 +2817,7 @@
           function safetyPlanBody(w) {
             var p = w.aiPlan;
             if (!p) {
-              return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성평가</div><div style="font-size:12px;color:var(--text-tertiary);line-height:1.8">「AI 안전계획 생성」을 누르면 작업내용 기반으로 위험성평가·PTP·보호구·TBM 주제가 생성됩니다.</div></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><div style="font-size:12px;color:var(--text-tertiary)">생성 대기 중</div></div></div>';
+              return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성평가</div><div style="font-size:12px;color:var(--text-tertiary);line-height:1.8">「AI 안전계획 생성」을 누르면 공종·위험도 기반으로 위험성평가·PTP·필수 PPE·작업허가·폭염/환경·TBM 주제가 생성됩니다.</div></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><div style="font-size:12px;color:var(--text-tertiary)">생성 대기 중</div></div></div>';
             }
             function chips(arr, color){ return (arr||[]).map(function(x){ return '<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:'+color+'22;color:'+color+';font-size:11px">'+esc(x)+'</span>'; }).join(''); }
             function riskColor(lv){ return lv==='상'?'var(--status-danger)':lv==='중'?'var(--status-warning)':'var(--status-success)'; }
@@ -2830,6 +2830,7 @@
               + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 단계</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+ptp+'</ol></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#a78bfa">TBM 토의 주제</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+tbm+'</ul></div></div>'
               + '<div style="margin-top:12px;font-size:12px;font-weight:700;color:var(--text-secondary)">필수 보호구</div><div style="margin:4px 0">'+chips(p.required_ppe, '#3b82f6')+'</div>'
               + ((p.permits&&p.permits.length) ? '<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--text-secondary)">필요 허가(PTW)</div><div style="margin:4px 0">'+chips(p.permits, '#f59e0b')+'</div>' : '')
+              + ((p.heat_environment&&p.heat_environment.length) ? '<div style="margin-top:12px;padding:10px 12px;background:rgba(245,158,11,.10);border-left:3px solid #f59e0b;border-radius:6px"><div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:4px"><i class="ph ph-thermometer-hot"></i> 폭염·환경 대책</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+(p.heat_environment||[]).map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul></div>' : '')
               + (p.key_risk ? '<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,.08);border-left:3px solid var(--status-danger);border-radius:6px;font-size:12px;color:var(--text-primary)"><b>핵심 위험:</b> '+esc(p.key_risk)+'</div>' : '');
           }
 

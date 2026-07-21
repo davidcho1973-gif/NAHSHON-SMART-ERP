@@ -427,6 +427,7 @@ class WbsService
                 'plan_payload' => [
                     'from_wbs' => $item->wbs_code,
                     'activity_id' => $item->activity_id,
+                    'trade' => $item->trade,
                     'crew_text' => $item->crew_text,
                     'crew_roles' => $item->crew_roles,
                     'equipment' => $item->equipment,
