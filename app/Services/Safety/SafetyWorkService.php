@@ -139,6 +139,35 @@ class SafetyWorkService
     }
 
     /**
+     * 편집된 AI 안전계획을 저장한다 — AI 초안을 현장 판단으로 다듬어 확정하는 마지막 고리.
+     * approve=true 면 곧바로 승인완료 처리(편집 후 승인).
+     *
+     * @param  array<string, mixed>  $plan
+     * @return array<string, mixed>
+     */
+    public function savePlan(string $workCode, array $plan, bool $approve = false): array
+    {
+        $item = SafetyWorkItem::query()->where('work_code', $workCode)->first();
+        if (! $item) {
+            return ['success' => false, 'error' => "안전카드를 찾을 수 없습니다: {$workCode}"];
+        }
+
+        $payload = is_array($item->plan_payload) ? $item->plan_payload : [];
+        $payload['plan'] = $plan;
+        $payload['plan_edited_at'] = Carbon::now()->toIso8601String();
+        $item->plan_payload = $payload;
+
+        if ($approve) {
+            $item->plan_status = '승인완료';
+        } elseif (in_array($item->plan_status, ['미생성', '초안'], true)) {
+            $item->plan_status = '검토중';
+        }
+        $item->save();
+
+        return ['success' => true, 'item' => $item->fresh(['signatures', 'issues'])->toClientArray()];
+    }
+
+    /**
      * Persist the (edited) close report, get an AI progress recommendation, store it,
      * and return the refreshed client item plus the recommendation.
      *
