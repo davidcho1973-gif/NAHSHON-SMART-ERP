@@ -307,7 +307,7 @@ class ProjectContractResource extends Resource
                         ->required(),
                     FileUpload::make('file_path')
                         ->label('파일 업로드')
-                        ->disk('local')
+                        ->disk((string) config('document-intelligence.disk', 'local'))
                         ->directory('project-contract-documents')
                         ->visibility('private')
                         ->acceptedFileTypes([
@@ -338,7 +338,7 @@ class ProjectContractResource extends Resource
                         ->label('검토 메모')
                         ->rows(4)
                         ->columnSpanFull(),
-                    Hidden::make('disk')->default('local'),
+                    Hidden::make('disk')->default(fn (): string => (string) config('document-intelligence.disk', 'local')),
                     Hidden::make('original_file_name'),
                     Hidden::make('uploaded_by')->default(fn (): ?int => auth()->id()),
                 ]),

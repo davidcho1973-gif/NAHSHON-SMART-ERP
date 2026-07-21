@@ -67,7 +67,7 @@ class ProjectContractDocument extends Model
     protected static function booted(): void
     {
         static::saving(function (ProjectContractDocument $document): void {
-            $document->disk = $document->disk ?: 'local';
+            $document->disk = $document->disk ?: (string) config('document-intelligence.disk', 'local');
 
             if (blank($document->file_path) || ! Storage::disk($document->disk)->exists($document->file_path)) {
                 return;
@@ -84,7 +84,7 @@ class ProjectContractDocument extends Model
             }
 
             $oldPath = $document->getOriginal('file_path');
-            $oldDisk = $document->getOriginal('disk') ?: 'local';
+            $oldDisk = $document->getOriginal('disk') ?: (string) config('document-intelligence.disk', 'local');
 
             if (filled($oldPath) && $oldPath !== $document->file_path) {
                 Storage::disk($oldDisk)->delete($oldPath);
@@ -93,7 +93,7 @@ class ProjectContractDocument extends Model
 
         static::deleting(function (ProjectContractDocument $document): void {
             if (filled($document->file_path)) {
-                Storage::disk($document->disk ?: 'local')->delete($document->file_path);
+                Storage::disk($document->disk ?: (string) config('document-intelligence.disk', 'local'))->delete($document->file_path);
             }
         });
     }

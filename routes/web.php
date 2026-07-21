@@ -3,6 +3,7 @@
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\CommunicationController;
+use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileExpenseController;
@@ -83,6 +84,18 @@ Route::middleware('auth')->group(function (): void {
     // Private contract files — authenticated and access-scope checked before download.
     Route::get('/contracts/documents/{document}/download', [ProjectContractDocumentController::class, 'download'])
         ->name('project-contract-document.download');
+
+    // AI construction document intelligence hub — private originals, search index and preventive actions.
+    Route::get('/document-hub', [DocumentIntelligenceController::class, 'index'])->name('document-intelligence.index');
+    Route::get('/document-hub/api/documents', [DocumentIntelligenceController::class, 'documents'])->name('document-intelligence.documents');
+    Route::post('/document-hub/api/upload', [DocumentIntelligenceController::class, 'upload'])->name('document-intelligence.upload');
+    Route::get('/document-hub/api/index.csv', [DocumentIntelligenceController::class, 'exportIndex'])->name('document-intelligence.export-index');
+    Route::get('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'show'])->name('document-intelligence.show');
+    Route::post('/document-hub/api/documents/{document}/reanalyze', [DocumentIntelligenceController::class, 'reanalyze'])->name('document-intelligence.reanalyze');
+    Route::patch('/document-hub/api/documents/{document}/review', [DocumentIntelligenceController::class, 'review'])->name('document-intelligence.review');
+    Route::patch('/document-hub/api/actions/{action}', [DocumentIntelligenceController::class, 'updateAction'])->name('document-intelligence.action.update');
+    Route::get('/document-hub/documents/{document}/download', [DocumentIntelligenceController::class, 'download'])->name('document-intelligence.download');
+    Route::get('/document-hub/documents/{document}/preview', [DocumentIntelligenceController::class, 'preview'])->name('document-intelligence.preview');
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
