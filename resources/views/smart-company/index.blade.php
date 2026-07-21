@@ -2698,6 +2698,23 @@
             return {total:total, plans:plans, tbm:tbm, progressWait:progressWait, issues:issues};
           }
 
+          // 안전관리 전체 초기화 — 새 프로젝트 시작 시 화면을 깨끗이 비운다.
+          // 서버 삭제 + 오프라인 캐시(localStorage)까지 비운다: 캐시를 안 비우면 다음 로드에서
+          // 삭제분이 서버로 재업로드돼 되살아난다(사용자가 겪은 "또 생김"의 원인).
+          window.clearSafetyWork = async function() {
+            if (!confirm('현재 안전관리의 모든 작업 카드(AI 계획서 · TBM 서명 · 이슈 포함)를 삭제하고 처음부터 시작합니다.\n되돌릴 수 없습니다. 진행할까요?')) return;
+            var site = window.currentSiteId || 'ALL';
+            try {
+              var res = await gsRun('api_clearSafetyWork', [site], []);
+              try { localStorage.removeItem('smart_ai_safety_work_items_v2'); localStorage.removeItem('smart_ai_safety_work_items_v1'); } catch (e) {}
+              if (window.apiCache) { Object.keys(window.apiCache).forEach(function(k) { if (k.indexOf('api_getSafetyWorkItems') >= 0) delete window.apiCache[k]; }); }
+              window._safetySelectedWorkId = null;
+              var d = (res && res.deleted) || {};
+              alert('✅ 초기화 완료: 작업카드 ' + (d.cards || 0) + '건 삭제 (서명 ' + (d.signatures || 0) + ' · 이슈 ' + (d.issues || 0) + ')');
+              renderSafety();
+            } catch (e) { alert('❌ 초기화 실패: ' + (e && e.message ? e.message : e)); }
+          };
+
           function renderSafetyShell() {
             var c = counts();
             if (alertBadge) alertBadge.textContent = c.issues;
@@ -2707,6 +2724,7 @@
               +'<p class="page-subtitle">작업내용 입력 → 안전 작업 계획서 생성 → TBM/서명 → 작업 마감 → AI 공정율 추천</p>'
               +'</div><div class="action-row">'
               +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button>'
+              +'<button class="btn-secondary" onclick="window.clearSafetyWork()" style="border-color:rgba(239,68,68,0.4);color:#ef4444"><i class="ph ph-trash"></i> 전체 초기화</button>'
               +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> 오늘 작업 등록</button>'
               +'</div></div>'
               +'<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)" id="safety-kpis"></div>'
