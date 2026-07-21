@@ -3072,7 +3072,7 @@
                   var carded = it.hasCardToday;
                   return '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border-subtle);' + (carded ? 'opacity:.55' : 'cursor:pointer') + '">' +
                     '<input type="checkbox" class="nw-pick" value="' + esc(it.wbs_code) + '" ' + (carded ? 'disabled checked' : '') + '>' +
-                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);width:40px;flex:none">' + esc(it.activity_id || '') + '</span>' +
+                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);width:46px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.activity_id || '') + '">' + esc(it.activity_id || '') + '</span>' +
                     '<span style="flex:1;min-width:0"><span style="font-size:13px;color:var(--text-primary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it.isCritical ? '<span style="color:#ef4444">★ </span>' : '') + esc(it.name || '') + '</span>' +
                     '<span style="font-size:11px;color:var(--text-tertiary)">' + esc(it.trade || '') + (it.crewText ? ' · ' + esc(it.crewText) : '') + ' ' + ehsBadge(it.ehs) + (carded ? ' · <span style="color:#10b981">오늘 등록됨</span>' : '') + '</span></span>' +
                   '</label>';
@@ -8017,8 +8017,8 @@
             var critDot = sub.isCritical ? '<span style="color:#ef4444;margin-right:3px">★</span>' : '';
             rowsHtml += '<div style="display:flex;align-items:stretch;border-top:1px solid var(--border-subtle)">' +
               '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:2;background:var(--bg-panel);padding:4px 12px;border-right:1px solid var(--border-default);display:flex;align-items:center;gap:6px;overflow:hidden">' +
-                '<span class="cell-mono" style="font-size:9px;color:var(--text-tertiary);flex:none;width:38px">' + wbsEsc(sub.activity_id || '') + '</span>' +
-                '<span onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" style="font-size:12px;color:var(--text-primary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1" title="' + wbsEsc(sub.sub_name || '') + '">' + critDot + wbsEsc(sub.sub_name || '') + '</span>' +
+                '<span class="cell-mono" style="font-size:9px;color:var(--text-tertiary);flex:none;width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + wbsEsc(sub.activity_id || '') + '">' + wbsEsc(sub.activity_id || '') + '</span>' +
+                '<span onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" style="font-size:12px;color:var(--text-primary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0" title="' + wbsEsc(sub.sub_name || '') + '">' + critDot + wbsEsc(sub.sub_name || '') + '</span>' +
                 '<span style="font-size:9px;font-weight:700;color:' + wbsTradeColor(sub.trade) + ';flex:none">' + wbsEsc(sub.trade || '') + '</span>' +
               '</div>' +
               '<div style="width:' + trackW + 'px;flex:none;position:relative;height:26px">' + barHtml + '</div>' +
