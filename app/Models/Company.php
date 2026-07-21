@@ -60,4 +60,14 @@ class Company extends Model
     {
         return $this->hasMany(Project::class, 'epc_company_id');
     }
+
+    public function projectContracts(): HasMany
+    {
+        return $this->hasMany(ProjectContract::class);
+    }
+
+    public function counterpartyProjectContracts(): HasMany
+    {
+        return $this->hasMany(ProjectContract::class, 'counterparty_company_id');
+    }
 }

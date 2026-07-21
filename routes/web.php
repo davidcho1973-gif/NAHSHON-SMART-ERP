@@ -8,6 +8,7 @@ use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileExpenseController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\ProjectContractDocumentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
@@ -78,6 +79,10 @@ Route::middleware('auth')->group(function (): void {
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
+
+    // Private contract files — authenticated and access-scope checked before download.
+    Route::get('/contracts/documents/{document}/download', [ProjectContractDocumentController::class, 'download'])
+        ->name('project-contract-document.download');
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');

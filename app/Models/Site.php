@@ -84,4 +84,9 @@ class Site extends Model
     {
         return $this->hasMany(Project::class);
     }
+
+    public function projectContracts(): HasMany
+    {
+        return $this->hasMany(ProjectContract::class);
+    }
 }
