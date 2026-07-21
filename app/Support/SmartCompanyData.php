@@ -112,6 +112,15 @@ class SmartCompanyData
             'api_updateWbsRow' => app(\App\Services\Wbs\WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
             'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
+            // 문서통합관리 (공정관리 하위 SPA 페이지)
+            'api_getDocDashboard' => app(\App\Services\IntegratedDocumentService::class)->dashboard(self::resolveSiteId($siteId)),
+            'api_getDocFolders' => app(\App\Services\IntegratedDocumentService::class)->folders(self::resolveSiteId($siteId)),
+            'api_getDocFolder' => app(\App\Services\IntegratedDocumentService::class)->browse(self::resolveSiteId($siteId), (string) ($args[0] ?? '03')),
+            'api_getDocDetail' => app(\App\Services\IntegratedDocumentService::class)->detail((int) ($args[0] ?? 0)),
+            'api_searchDocs' => app(\App\Services\IntegratedDocumentService::class)->search(self::resolveSiteId($siteId), (string) ($args[0] ?? '')),
+            'api_confirmDoc' => app(\App\Services\IntegratedDocumentService::class)->confirm((int) ($args[0] ?? 0), ($args[1] ?? null) !== null && $args[1] !== '' ? (string) $args[1] : null),
+            'api_deleteDoc' => app(\App\Services\IntegratedDocumentService::class)->deleteDocument((int) ($args[0] ?? 0)),
+
             'api_getVehicleList' => self::vehicleList(),
             'api_getVehicleStats' => self::vehicleStats(),
             'api_getRentalList' => self::rentalList(),

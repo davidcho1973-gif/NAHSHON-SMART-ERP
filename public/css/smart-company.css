@@ -1658,3 +1658,77 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
         min-width: 68px;
     }
 }
+
+/* ═══════════════════════ 문서통합관리 (Integrated Document Management) ═══════════════════════ */
+.docs-wrap { padding: 24px 28px 64px; max-width: 1260px; margin: 0 auto; }
+.docs-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.docs-head h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.4px; color: var(--text-primary); }
+.docs-head p { margin: 6px 0 0; font-size: 13px; color: var(--text-secondary); }
+.docs-live { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 9px; padding: 8px 13px; }
+.docs-live .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: docsPulse 1.6s infinite; }
+
+.docs-tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; }
+.docs-tab { padding: 10px 16px; font-size: 13.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; font-family: inherit; display: flex; align-items: center; gap: 7px; }
+.docs-tab:hover { color: var(--text-primary); }
+.docs-tab.active { color: var(--brand-primary); border-bottom-color: var(--brand-primary); }
+
+.docs-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.docs-stat { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 14px; padding: 16px 18px; }
+.docs-stat .label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.docs-stat .value { font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: var(--text-primary); margin-top: 8px; }
+.docs-stat .sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
+
+.docs-card { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 14px; overflow: hidden; }
+.docs-card-head { padding: 15px 18px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+.docs-card-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.docs-row { display: flex; align-items: center; gap: 13px; padding: 13px 18px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
+.docs-row:last-child { border-bottom: none; }
+.docs-row:hover { background: var(--bg-subtle); }
+.docs-row .t { flex: 1; min-width: 0; }
+.docs-row .t .name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.docs-row .t .meta { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+
+.doc-badge { font-size: 9.5px; font-weight: 800; padding: 4px 6px; border-radius: 6px; letter-spacing: .3px; min-width: 40px; text-align: center; flex: 0 0 auto; }
+.doc-badge.PDF { color: #dc2626; background: #fef2f2; }
+.doc-badge.IMG { color: #0e7490; background: #ecfeff; }
+.doc-badge.SCAN { color: #ea580c; background: #fff7ed; }
+.doc-badge.DOC { color: #2563eb; background: #eff6ff; }
+
+.docs-ai-panel { background: linear-gradient(110deg, #1e1b4b, #312e81); border-radius: 14px; padding: 20px 22px; color: #e0e7ff; }
+.docs-ai-panel .kicker { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #a5b4fc; }
+.docs-ai-glow { width: 44px; height: 44px; border-radius: 12px; background: rgba(129,140,248,.2); display: flex; align-items: center; justify-content: center; font-size: 20px; animation: docsGlow 2.6s infinite; flex: 0 0 auto; }
+
+.docs-dropzone { border: 2px dashed var(--brand-primary); background: var(--bg-subtle); border-radius: 18px; padding: 48px 30px; text-align: center; cursor: pointer; transition: background .15s; }
+.docs-dropzone:hover, .docs-dropzone.drag { background: var(--brand-primary-dim); }
+.docs-dropzone .ic { width: 62px; height: 62px; border-radius: 18px; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; margin: 0 auto 16px; }
+
+.docs-folder-list { width: 258px; flex: 0 0 258px; border-right: 1px solid var(--border-subtle); background: var(--bg-panel); padding: 16px 12px; overflow-y: auto; }
+.docs-folder { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; }
+.docs-folder:hover { border-color: var(--border-strong); }
+.docs-folder.active { background: var(--brand-primary-dim); border-color: var(--brand-primary); }
+.docs-folder .swatch { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 9px; }
+.docs-folder .fname { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.docs-folder .fcode { color: var(--text-tertiary); font-size: 11px; font-family: var(--font-mono, monospace); }
+.docs-folder .fcount { font-size: 11px; color: var(--text-tertiary); }
+
+.docs-conf { font-size: 11px; font-weight: 700; }
+.docs-chip { font-size: 12px; font-weight: 600; color: var(--brand-primary); background: var(--brand-primary-dim); border: 1px solid var(--border-subtle); padding: 5px 11px; border-radius: 18px; }
+.docs-meta-tile { background: var(--bg-subtle); border-radius: 10px; padding: 11px 13px; }
+.docs-meta-tile .k { font-size: 11px; color: var(--text-tertiary); margin-bottom: 3px; }
+.docs-meta-tile .v { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
+
+.docs-scanline { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #818cf8, transparent); animation: docsScan 2.2s linear infinite; }
+
+@keyframes docsPulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes docsGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(129,140,248,.35); } 50% { box-shadow: 0 0 0 10px rgba(129,140,248,0); } }
+@keyframes docsScan { 0% { top: 0; } 100% { top: 100%; } }
+@keyframes docsSpin { to { transform: rotate(360deg); } }
+@keyframes docsFloatUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.docs-spin { animation: docsSpin .8s linear infinite; display: inline-block; }
+.docs-floatup { animation: docsFloatUp .4s ease; }
+
+@media (max-width: 900px) {
+    .docs-stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .docs-two-col { grid-template-columns: 1fr !important; }
+    .docs-folder-list { display: none; }
+}
