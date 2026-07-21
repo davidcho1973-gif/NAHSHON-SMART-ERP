@@ -3009,22 +3009,121 @@
           }
 
           function openNewWorkModal() {
-            document.getElementById('safety-modal-root').innerHTML =
-              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px"><div class="panel" style="width:560px;max-width:96vw;margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-plus-circle"></i> 오늘 작업 등록</div><button id="close-new-work-modal" class="icon-btn"><i class="ph ph-x"></i></button></div><div class="panel-body padded"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><input id="new-project" class="search-inline" style="width:100%" placeholder="프로젝트명"><input id="new-site" class="search-inline" style="width:100%" placeholder="작업장소"><input id="new-crew" class="search-inline" style="width:100%" placeholder="작업인원" value="3"><input id="new-due" class="search-inline" style="width:100%" placeholder="기한" value="오늘"></div><textarea id="new-work-text" style="width:100%;height:120px;margin-top:10px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical" placeholder="작업내용을 입력하세요"></textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px"><input id="new-qty" class="search-inline" style="width:100%" placeholder="예정 수량" value="1"><select id="new-unit" class="search-inline" style="width:100%"><option>ea</option><option>m</option><option>%</option><option>단계</option></select></div><button id="save-new-work" class="btn-primary" style="width:100%;margin-top:14px"><i class="ph ph-check-circle"></i> 작업 등록 후 AI 계획서 작성</button></div></div></div>';
-            document.getElementById('close-new-work-modal').addEventListener('click', function(){ document.getElementById('safety-modal-root').innerHTML=''; });
-            document.getElementById('save-new-work').addEventListener('click', function(){
-              var text = document.getElementById('new-work-text').value.trim();
-              if (!text) { alert('작업내용을 입력하세요.'); return; }
-              var id = 'WRK-' + new Date().getTime().toString().slice(-8);
-              var project = document.getElementById('new-project').value || '신규 프로젝트';
-              var site = document.getElementById('new-site').value || '작업장소 미정';
-              safetyItems.push({ id:id, project:project, site:site, title:text.slice(0,42), crew:Number(document.getElementById('new-crew').value || 1), qty:Number(document.getElementById('new-qty').value || 1), unit:document.getElementById('new-unit').value, due:document.getElementById('new-due').value || '오늘', planStatus:'미생성', tbmStatus:'대기', closeStatus:'시작전', progressStatus:'미분석', progress:0, doneQty:0, totalQty:Number(document.getElementById('new-qty').value || 1), workText:text, closeText:'', signatures:[], issues:[] });
-              selectedWorkId = id;
-              window._safetySelectedWorkId = id;
-              saveSafetyItems();
-              document.getElementById('safety-modal-root').innerHTML='';
+            var root = document.getElementById('safety-modal-root');
+            var proj = window.WBS_CURRENT_PROJECT || '';
+            var today = new Date().toISOString().slice(0, 10);
+            var TRADES = ['GC', 'ELEC', 'PLUMB', 'MECH', 'FIRE', 'FRAME', 'DEMO', 'DOOR', 'PAINT', 'CEIL', 'TILE', 'MILL', 'FLOOR', 'SPEC', 'INSP', 'LV'];
+            function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+            function ehsBadge(e) { return e === 'high' ? '<span style="color:#ef4444;font-size:10px;font-weight:700">● 고위험</span>' : e === 'medium' ? '<span style="color:#f59e0b;font-size:10px;font-weight:700">● 주의</span>' : ''; }
+
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px">' +
+              '<div class="panel" style="width:720px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-plus-circle"></i> 오늘 작업 등록</div><button id="nw-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto">' +
+                '<div style="display:flex;gap:6px;margin-bottom:14px">' +
+                  '<button id="nw-tab-wbs" class="btn-primary" style="flex:1"><i class="ph ph-list-checks"></i> 공정에서 불러오기</button>' +
+                  '<button id="nw-tab-manual" class="btn-secondary" style="flex:1"><i class="ph ph-pencil-simple"></i> 직접 추가 (공정에 없음)</button>' +
+                '</div>' +
+                '<div id="nw-pane-wbs">' +
+                  '<div style="display:grid;grid-template-columns:1fr 160px;gap:10px;margin-bottom:10px">' +
+                    '<select id="nw-project" class="search-inline" style="width:100%"></select>' +
+                    '<input id="nw-date" type="date" class="search-inline" style="width:100%" value="' + today + '">' +
+                  '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px">오늘 진행할 작업을 선택하세요(여러 개 가능). 계획 인원·장비가 안전카드로 옮겨지고, <b>실제 작업자는 TBM 때 출석자에서 배정</b>합니다.</div>' +
+                  '<div id="nw-list" style="max-height:38vh;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px">불러오는 중...</div>' +
+                  '<button id="nw-register" class="btn-primary" style="width:100%;margin-top:12px"><i class="ph ph-check-circle"></i> 선택 작업 등록 → 안전카드 생성</button>' +
+                '</div>' +
+                '<div id="nw-pane-manual" style="display:none">' +
+                  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                    '<input id="nwm-name" class="search-inline" placeholder="작업명 *" style="width:100%">' +
+                    '<input id="nwm-trade" class="search-inline" list="nwm-trades" placeholder="공종 (예: ELEC)" style="width:100%">' +
+                    '<input id="nwm-loc" class="search-inline" placeholder="작업 위치/구역" style="width:100%">' +
+                    '<input id="nwm-crew" class="search-inline" placeholder="투입조 (예: 2 electricians + 1 helper)" style="width:100%">' +
+                    '<input id="nwm-equip" class="search-inline" placeholder="장비 (쉼표, 예: 시저리프트, 용접기)" style="width:100%">' +
+                    '<input id="nwm-date" type="date" class="search-inline" style="width:100%" value="' + today + '">' +
+                  '</div>' +
+                  '<datalist id="nwm-trades">' + TRADES.map(function (t) { return '<option value="' + t + '">'; }).join('') + '</datalist>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin:8px 0">이 작업은 공정관리(WBS)의 <b>"현장 추가(비계획)"</b> 구간에 새 작업으로 삽입되고, 동시에 오늘 안전카드가 생성됩니다. (상단 프로젝트 선택 기준)</div>' +
+                  '<button id="nwm-register" class="btn-primary" style="width:100%;margin-top:6px"><i class="ph ph-plus"></i> 공정에 추가 + 안전카드 생성</button>' +
+                '</div>' +
+              '</div></div></div>';
+
+            root.querySelector('#nw-close').addEventListener('click', function () { root.innerHTML = ''; });
+            function showPane(which) {
+              root.querySelector('#nw-pane-wbs').style.display = which === 'wbs' ? '' : 'none';
+              root.querySelector('#nw-pane-manual').style.display = which === 'manual' ? '' : 'none';
+              root.querySelector('#nw-tab-wbs').className = which === 'wbs' ? 'btn-primary' : 'btn-secondary';
+              root.querySelector('#nw-tab-manual').className = which === 'manual' ? 'btn-primary' : 'btn-secondary';
+            }
+            root.querySelector('#nw-tab-wbs').addEventListener('click', function () { showPane('wbs'); });
+            root.querySelector('#nw-tab-manual').addEventListener('click', function () { showPane('manual'); });
+
+            function loadPick() {
+              var box = root.querySelector('#nw-list');
+              var p = root.querySelector('#nw-project').value;
+              var d = root.querySelector('#nw-date').value;
+              if (!p) { box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">프로젝트를 선택하세요.</div>'; return; }
+              box.innerHTML = '<div style="padding:16px;color:var(--text-tertiary)">불러오는 중...</div>';
+              gsRun('api_getWbsPickList', [p, d], []).then(function (items) {
+                items = Array.isArray(items) ? items : [];
+                if (!items.length) { box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">이 프로젝트에 등록된 작업이 없습니다. 먼저 공정관리에서 CPM을 분석하거나 "직접 추가"로 등록하세요.</div>'; return; }
+                box.innerHTML = items.map(function (it) {
+                  var carded = it.hasCardToday;
+                  return '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border-subtle);' + (carded ? 'opacity:.55' : 'cursor:pointer') + '">' +
+                    '<input type="checkbox" class="nw-pick" value="' + esc(it.wbs_code) + '" ' + (carded ? 'disabled checked' : '') + '>' +
+                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);width:40px;flex:none">' + esc(it.activity_id || '') + '</span>' +
+                    '<span style="flex:1;min-width:0"><span style="font-size:13px;color:var(--text-primary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it.isCritical ? '<span style="color:#ef4444">★ </span>' : '') + esc(it.name || '') + '</span>' +
+                    '<span style="font-size:11px;color:var(--text-tertiary)">' + esc(it.trade || '') + (it.crewText ? ' · ' + esc(it.crewText) : '') + ' ' + ehsBadge(it.ehs) + (carded ? ' · <span style="color:#10b981">오늘 등록됨</span>' : '') + '</span></span>' +
+                  '</label>';
+                }).join('');
+              }).catch(function (e) { box.innerHTML = '<div style="padding:16px;color:var(--status-danger)">불러오기 실패: ' + (e && e.message || e) + '</div>'; });
+            }
+
+            gsRun('api_getProjectList', [], []).then(function (list) {
+              var sel = root.querySelector('#nw-project');
+              var arr = (Array.isArray(list) ? list : []).filter(function (p) { return p && p.code; });
+              sel.innerHTML = arr.length ? arr.map(function (p) { return '<option value="' + esc(p.code) + '"' + (p.code === proj ? ' selected' : '') + '>' + esc(p.code) + ' — ' + esc(p.name || '') + '</option>'; }).join('') : '<option value="">(등록된 프로젝트 없음)</option>';
+              loadPick();
+            }).catch(function () { loadPick(); });
+
+            root.querySelector('#nw-project').addEventListener('change', loadPick);
+            root.querySelector('#nw-date').addEventListener('change', loadPick);
+
+            root.querySelector('#nw-register').addEventListener('click', async function () {
+              var picks = Array.prototype.slice.call(root.querySelectorAll('.nw-pick:checked:not(:disabled)')).map(function (c) { return c.value; });
+              if (!picks.length) { alert('등록할 작업을 선택하세요.'); return; }
+              var btn = this; btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '등록 중...';
+              var d = root.querySelector('#nw-date').value;
+              var ok = 0, fail = 0;
+              for (var i = 0; i < picks.length; i++) {
+                try { var r = await gsRun('api_createSafetyCardForWbs', [picks[i], d], []); if (r && r.success) ok++; else fail++; } catch (e) { fail++; }
+              }
+              safetyItems = await loadSafetyItems();
               renderAllSafetyTabs();
+              root.innerHTML = '';
+              alert('✅ ' + ok + '건 등록 완료' + (fail ? (' · ' + fail + '건 실패') : '') + '\nAI 계획서 탭에서 위험요인·PPE·작업허가를 생성하세요.');
               switchTab('s-ai-plan');
+            });
+
+            root.querySelector('#nwm-register').addEventListener('click', async function () {
+              var name = root.querySelector('#nwm-name').value.trim();
+              if (!name) { alert('작업명을 입력하세요.'); return; }
+              var p = root.querySelector('#nw-project').value || proj;
+              if (!p) { alert('상단 "공정에서 불러오기"에서 프로젝트를 먼저 선택하세요.'); return; }
+              var equip = root.querySelector('#nwm-equip').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+              var payload = { name: name, trade: root.querySelector('#nwm-trade').value.trim(), location: root.querySelector('#nwm-loc').value.trim(), crew_text: root.querySelector('#nwm-crew').value.trim(), equipment: equip, date: root.querySelector('#nwm-date').value };
+              var btn = this; btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '추가 중...';
+              try {
+                var r = await gsRun('api_addManualWbsWork', [p, payload], []);
+                if (!r || !r.success) { alert('❌ 추가 실패: ' + (r && r.error || '오류')); btn.disabled = false; btn.innerHTML = old; return; }
+                safetyItems = await loadSafetyItems();
+                renderAllSafetyTabs();
+                if (window.apiCache) { Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getProjectWbsTree') >= 0) delete window.apiCache[k]; }); }
+                root.innerHTML = '';
+                alert('✅ 공정에 추가 + 안전카드 생성 완료.\nAI 계획서 탭에서 안전계획을 생성하세요.');
+                switchTab('s-ai-plan');
+              } catch (e) { alert('❌ 오류: ' + (e && e.message || e)); btn.disabled = false; btn.innerHTML = old; }
             });
           }
 
