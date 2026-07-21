@@ -101,7 +101,7 @@ class SmartCompanyData
                 ($args[1] ?? null) !== null ? (int) $args[1] : null
             ),
             'api_getWbsLabor' => app(\App\Services\Wbs\WbsLaborService::class)->laborFor((string) ($args[0] ?? '')),
-            'api_getAssignableEmployees' => self::assignableEmployees($siteId),
+            'api_getAssignableEmployees' => self::assignableEmployees($siteId, ($args[0] ?? null) ? (string) $args[0] : null),
             'api_getTodayWbsWork' => app(\App\Services\Wbs\WbsService::class)->todayWork((string) ($args[0] ?? ''), $siteId),
             'api_getWbsPickList' => app(\App\Services\Wbs\WbsService::class)->pickList((string) ($args[0] ?? ''), $siteId, ($args[1] ?? null) ? (string) $args[1] : null),
             'api_addManualWbsWork' => app(\App\Services\Wbs\WbsService::class)->addManualActivity((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], $siteId, auth()->id()),
@@ -410,7 +410,7 @@ class SmartCompanyData
      *
      * @return array<int, array<string, mixed>>
      */
-    public static function assignableEmployees(string $siteId = 'ALL'): array
+    public static function assignableEmployees(string $siteId = 'ALL', ?string $date = null): array
     {
         if (! Schema::hasTable('employees')) {
             return [];
@@ -431,12 +431,41 @@ class SmartCompanyData
                 ->orWhereNotIn('employment_status', ['퇴사', 'terminated', 'resigned', 'inactive']);
         });
 
-        return $query->limit(500)->get()->map(fn (\App\Models\Employee $e) => [
+        $employees = $query->limit(500)->get();
+
+        // 그날 출근(clock_in)한 직원 집합 — TBM 서명은 "실제 출석자"로 배정한다.
+        // 계획 인원은 미리 잡되, 실제 누가 일했는지는 출근 기록으로 확정(사장님 설계).
+        $presentIds = [];
+        $clockIn = [];
+        if ($date !== null && Schema::hasTable('attendance_logs')) {
+            $siteRowId = $siteId !== 'ALL' ? \App\Models\Site::query()->where('code', $siteId)->value('id') : null;
+            \App\Models\AttendanceLog::query()
+                ->where('attendance_date', $date)
+                ->where('event_type', 'clock_in')
+                ->when($siteRowId !== null, fn ($q) => $q->where('site_id', $siteRowId))
+                ->orderBy('event_at')
+                ->get(['employee_id', 'event_at'])
+                ->each(function ($log) use (&$presentIds, &$clockIn): void {
+                    if ($log->employee_id) {
+                        $presentIds[$log->employee_id] = true;
+                        $clockIn[$log->employee_id] ??= $log->event_at?->format('H:i');
+                    }
+                });
+        }
+
+        $mapped = $employees->map(fn (\App\Models\Employee $e) => [
             'id' => $e->id,
             'name' => trim((string) ($e->name ?: trim(((string) $e->last_name) . ' ' . ((string) $e->first_name)))) ?: ('EMP-' . $e->id),
             'number' => $e->employee_number ?? $e->badge_number,
             'siteId' => $e->site_id,
+            'present' => isset($presentIds[$e->id]),          // 그날 출근했는가
+            'clockIn' => $clockIn[$e->id] ?? null,             // 출근 시각(HH:MM)
         ])->all();
+
+        // 출근자 먼저, 그 안에서 이름순.
+        usort($mapped, fn ($a, $b) => (($b['present'] ? 1 : 0) <=> ($a['present'] ? 1 : 0)) ?: strcmp((string) $a['name'], (string) $b['name']));
+
+        return $mapped;
     }
 
     public static function projects(): array

@@ -1168,7 +1168,7 @@
       getTodayWbsWork: (projectId) => gsRun('api_getTodayWbsWork', [projectId], { success: false, items: [] }),
       getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
       assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
-      getAssignableEmployees: () => gsRun('api_getAssignableEmployees', [], []),
+      getAssignableEmployees: (date) => gsRun('api_getAssignableEmployees', [date || null], []),
       getToolTransactions: () => gsRun('api_getToolTransactions', [], []),
       getVendorList:      () => gsRun('api_getVendorList',     [], []),
       createVendor:       (data) => gsRun('api_createVendor',  [data], {success:false}),
@@ -8475,7 +8475,7 @@
                     ? '<span style="background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 완료</span>'
                     : '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 대기</span>') +
                   '<span style="margin-left:auto;font-size:11px;color:var(--text-secondary)">서명 ' + d.signedCount + '/' + d.slotCount + ' · 실근무 <strong class="cell-mono" style="color:var(--text-primary)">' + d.hours + 'h</strong></span>' +
-                  '<button class="btn-secondary" style="padding:3px 9px;font-size:11px" onclick="window.openSignerAssign(\'' + wbsJsArg(d.workCode) + '\')"><i class="ph ph-user-plus"></i> 인원 배정</button>' +
+                  '<button class="btn-secondary" style="padding:3px 9px;font-size:11px" onclick="window.openSignerAssign(\'' + wbsJsArg(d.workCode) + '\',\'' + wbsJsArg(d.date) + '\')"><i class="ph ph-user-plus"></i> 인원 배정</button>' +
                   '</div>' + people + '</div>';
               }).join('');
 
@@ -8496,22 +8496,27 @@
       };
 
       // 서명란에 실제 직원 배정 — 여기가 "인원 몇 명"이 실제 사람이 되는 지점이다.
-      window.openSignerAssign = async function(workCode) {
+      window.openSignerAssign = async function(workCode, date) {
         var res = await gsRun('api_getSafetyWorkItems', [], null);
         var card = (res && res.items || []).filter(function(c) { return c.id === workCode; })[0];
         if (!card) { alert('안전카드를 찾을 수 없습니다: ' + workCode); return; }
 
-        var employees = window._assignableEmployees || [];
+        // 그날 출근한 사람(출근 기록 기준)을 우선 배정 — "실제로 누가 일했나"를 확정한다.
+        var employees = await window.API.getAssignableEmployees(date || card.date || null);
+        employees = Array.isArray(employees) ? employees : [];
         if (employees.length === 0) {
           alert('배정할 직원이 없습니다.\n관리자 → 인원관리에서 직원을 먼저 등록하세요.');
           return;
         }
+        var present = employees.filter(function(e) { return e.present; });
+        var absent = employees.filter(function(e) { return !e.present; });
+        function signerOpt(e, showClock) { return '<option value="' + e.id + '">' + wbsEsc(e.name) + (showClock && e.clockIn ? ' · 출근 ' + wbsEsc(e.clockIn) : '') + (e.number ? ' (' + wbsEsc(e.number) + ')' : '') + '</option>'; }
 
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
-        var opts = '<option value="">— 미배정 —</option>' + employees.map(function(e) {
-          return '<option value="' + e.id + '">' + wbsEsc(e.name) + (e.number ? ' (' + wbsEsc(e.number) + ')' : '') + '</option>';
-        }).join('');
+        var opts = '<option value="">— 미배정 —</option>' +
+          (present.length ? '<optgroup label="오늘 출근 (' + present.length + '명)">' + present.map(function(e) { return signerOpt(e, true); }).join('') + '</optgroup>' : '') +
+          (absent.length ? '<optgroup label="미출근 / 기타">' + absent.map(function(e) { return signerOpt(e, false); }).join('') + '</optgroup>' : '');
 
         var rows = (card.signatures || []).map(function(s, i) {
           var locked = s.signed;
@@ -8526,7 +8531,10 @@
 
         modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:22px;width:480px;max-height:78vh;overflow-y:auto">' +
           '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-user-plus" style="color:#3b82f6"></i> 인원 배정</h3>' +
-          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:14px">' + wbsEsc(workCode) + ' · 배정하면 이 사람의 출퇴근 시간이 이 공정에 귀속됩니다.</div>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px">' + wbsEsc(workCode) + ' · 배정하면 이 사람의 출퇴근 시간이 이 공정에 귀속됩니다.</div>' +
+          (present.length
+            ? '<div style="font-size:11px;color:#10b981;margin-bottom:14px"><i class="ph ph-check-circle"></i> 오늘 출근 ' + present.length + '명 — 목록 상단에 표시됩니다.</div>'
+            : '<div style="font-size:11px;color:#f59e0b;margin-bottom:14px"><i class="ph ph-warning"></i> 오늘 출근 기록이 없습니다 — 출퇴근이 등록되면 상단에 뜹니다.</div>') +
           (rows || '<div style="color:var(--text-tertiary);font-size:12px;padding:14px 0">서명란이 없습니다.</div>') +
           '<div style="display:flex;gap:8px;margin-top:16px"><button id="signer-close" class="btn-secondary" style="flex:1">닫기</button></div></div>';
         document.body.appendChild(modal);
