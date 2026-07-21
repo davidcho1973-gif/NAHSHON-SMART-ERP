@@ -2840,11 +2840,85 @@
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
               + safetyPlanBody(w)
-              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+              +'<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-secondary" id="edit-plan-btn" '+(w.aiPlan ? '' : 'disabled')+' title="AI 추천을 현장에 맞게 수정"><i class="ph ph-pencil-simple"></i> 계획 편집</button><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+            document.getElementById('edit-plan-btn').addEventListener('click', function(){ if (w.aiPlan) window.openSafetyPlanEdit(w.id); });
             document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'승인완료', tbmStatus: w.tbmStatus === '대기' ? '대기' : w.tbmStatus}); switchTab('s-tbm'); });
             document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'수정필요'}); });
             document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'초안'}); });
           }
+
+          window.openSafetyPlanEdit = function(workCode) {
+            var item = (safetyItems || []).filter(function(c){ return c.id === workCode; })[0];
+            var p = (item && item.aiPlan) || {};
+            var root = document.getElementById('safety-modal-root');
+            function lines(arr){ return (arr || []).join('\n'); }
+            function hazRow(h){ h = h || {}; return '<div class="sp-haz-row" style="display:grid;grid-template-columns:1fr 64px 1fr 28px;gap:6px;margin-bottom:6px;align-items:center">' +
+              '<input class="wbs-edit-field sp-haz" placeholder="위험요인" value="' + esc(h.hazard || '') + '">' +
+              '<select class="wbs-edit-field sp-risk">' + ['상','중','하'].map(function(r){ return '<option' + (h.risk_level === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select>' +
+              '<input class="wbs-edit-field sp-ctrl" placeholder="대책" value="' + esc(h.control || '') + '">' +
+              '<button type="button" class="sp-haz-del" style="background:none;border:none;color:var(--status-danger);cursor:pointer;font-size:18px;line-height:1">&times;</button></div>'; }
+            var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin:12px 0 5px';
+
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+              '<div class="panel" style="width:720px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple"></i> AI 안전계획 편집</div><button id="sp-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto">' +
+                '<div style="font-size:11px;color:var(--text-tertiary)">AI 추천을 현장 상황에 맞게 수정하세요. 위험요인은 행 추가/삭제, 목록은 한 줄에 하나씩.</div>' +
+                '<label style="' + LBL + '">요약</label>' +
+                '<input id="sp-summary" class="wbs-edit-field" value="' + esc(p.summary || '') + '">' +
+                '<label style="' + LBL + '">위험요인 · 위험도 · 대책 (PHA)</label>' +
+                '<div id="sp-haz-list">' + ((p.hazards && p.hazards.length ? p.hazards : [{}]).map(hazRow).join('')) + '</div>' +
+                '<button type="button" id="sp-haz-add" class="btn-secondary" style="padding:5px 10px;font-size:12px"><i class="ph ph-plus"></i> 위험 추가</button>' +
+                '<label style="' + LBL + '">필수 PPE (한 줄에 하나)</label><textarea id="sp-ppe" class="wbs-edit-field" style="height:70px;resize:vertical">' + esc(lines(p.required_ppe)) + '</textarea>' +
+                '<label style="' + LBL + '">작업허가 PTW (한 줄에 하나)</label><textarea id="sp-permits" class="wbs-edit-field" style="height:58px;resize:vertical">' + esc(lines(p.permits)) + '</textarea>' +
+                '<label style="' + LBL + '">폭염 · 환경 대책 (한 줄에 하나)</label><textarea id="sp-heat" class="wbs-edit-field" style="height:58px;resize:vertical">' + esc(lines(p.heat_environment)) + '</textarea>' +
+                '<label style="' + LBL + '">PTP 작업 전 단계 (한 줄에 하나)</label><textarea id="sp-ptp" class="wbs-edit-field" style="height:70px;resize:vertical">' + esc(lines(p.ptp_steps)) + '</textarea>' +
+                '<label style="' + LBL + '">TBM 주제 (한 줄에 하나)</label><textarea id="sp-tbm" class="wbs-edit-field" style="height:58px;resize:vertical">' + esc(lines(p.tbm_topics)) + '</textarea>' +
+                '<label style="' + LBL + '">핵심 위험</label><input id="sp-keyrisk" class="wbs-edit-field" value="' + esc(p.key_risk || '') + '">' +
+              '</div>' +
+              '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+                '<button id="sp-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+                '<button id="sp-save" class="btn-secondary" style="flex:1"><i class="ph ph-floppy-disk"></i> 저장</button>' +
+                '<button id="sp-save-approve" class="btn-primary" style="flex:1;background:#7c3aed"><i class="ph ph-check-circle"></i> 저장 후 승인</button>' +
+              '</div></div></div>';
+
+            function close(){ root.innerHTML = ''; }
+            root.querySelector('#sp-close').addEventListener('click', close);
+            root.querySelector('#sp-cancel').addEventListener('click', close);
+            root.querySelector('#sp-haz-add').addEventListener('click', function(){
+              var d = document.createElement('div'); d.innerHTML = hazRow({}); root.querySelector('#sp-haz-list').appendChild(d.firstChild);
+            });
+            root.querySelector('#sp-haz-list').addEventListener('click', function(e){
+              var b = e.target.closest ? e.target.closest('.sp-haz-del') : null;
+              if (b) b.parentNode.remove();
+            });
+
+            function collect(){
+              function txtLines(id){ return root.querySelector(id).value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean); }
+              var hazards = Array.prototype.slice.call(root.querySelectorAll('.sp-haz-row')).map(function(row){
+                return { hazard: row.querySelector('.sp-haz').value.trim(), risk_level: row.querySelector('.sp-risk').value, control: row.querySelector('.sp-ctrl').value.trim() };
+              }).filter(function(h){ return h.hazard || h.control; });
+              return {
+                summary: root.querySelector('#sp-summary').value.trim(), hazards: hazards,
+                required_ppe: txtLines('#sp-ppe'), permits: txtLines('#sp-permits'), heat_environment: txtLines('#sp-heat'),
+                ptp_steps: txtLines('#sp-ptp'), tbm_topics: txtLines('#sp-tbm'), key_risk: root.querySelector('#sp-keyrisk').value.trim()
+              };
+            }
+            async function persist(approve){
+              var btns = root.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
+              try {
+                var res = await gsRun('api_saveSafetyPlan', [workCode, collect(), !!approve], {});
+                if (!res || !res.success){ alert('저장 실패: ' + (res && res.error || '오류')); btns.forEach(function(b){ b.disabled = false; }); return; }
+                safetyItems = await loadSafetyItems();
+                renderAllSafetyTabs();
+                close();
+                if (approve) switchTab('s-tbm');
+              } catch(e){ alert('오류: ' + (e && e.message || e)); btns.forEach(function(b){ b.disabled = false; }); }
+            }
+            root.querySelector('#sp-save').addEventListener('click', function(){ persist(false); });
+            root.querySelector('#sp-save-approve').addEventListener('click', function(){ persist(true); });
+          };
 
           function renderTbmTab() {
             var w = selectedItem();

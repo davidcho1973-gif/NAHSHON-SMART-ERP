@@ -72,6 +72,7 @@ class SmartCompanyData
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
             'api_clearSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId),
             'api_generateSafetyPlan' => self::generateSafetyPlan($args[0] ?? null, $siteId),
+            'api_saveSafetyPlan' => app(\App\Services\Safety\SafetyWorkService::class)->savePlan((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], (bool) ($args[2] ?? false)),
             'api_recommendSafetyProgress' => self::recommendSafetyProgress($args[0] ?? null, $siteId),
             'api_getPtwList' => self::ptwList(),
             'api_getPtwStats' => ['todayActive' => 4, 'pending' => 2, 'completed' => 18, 'rejected' => 1],
