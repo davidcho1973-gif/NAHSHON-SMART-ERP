@@ -2,6 +2,7 @@
 
 namespace App\Services\Safety;
 
+use App\Models\SafetyWorkIssue;
 use App\Models\SafetyWorkItem;
 use App\Models\SafetyWorkSignature;
 use App\Models\Site;
@@ -28,6 +29,31 @@ class SafetyWorkService
         }
 
         return $query->get()->map->toClientArray()->values()->all();
+    }
+
+    /**
+     * 안전관리 작업 카드 전체 초기화 — 새 프로젝트 시작 시 화면을 깨끗이 비운다.
+     *
+     * 서명(TBM)·이슈까지 함께 삭제한다(WbsClear 와 동일한 삭제 집합·순서). site 스코프가
+     * 있으면 그 현장 카드만, 'ALL' 이면 전체. 되돌릴 수 없으므로 프론트에서 확인 후 호출한다.
+     *
+     * @return array{success: bool, deleted: array{cards: int, signatures: int, issues: int}}
+     */
+    public function clearAll(string $siteId = 'ALL'): array
+    {
+        return DB::transaction(function () use ($siteId): array {
+            $query = SafetyWorkItem::query();
+            if ($siteId !== 'ALL') {
+                $query->where('site_id', Site::query()->where('code', $siteId)->value('id'));
+            }
+            $ids = $query->pluck('id');
+
+            $signatures = SafetyWorkSignature::query()->whereIn('safety_work_item_id', $ids)->delete();
+            $issues = SafetyWorkIssue::query()->whereIn('safety_work_item_id', $ids)->delete();
+            $cards = SafetyWorkItem::query()->whereIn('id', $ids)->delete();
+
+            return ['success' => true, 'deleted' => ['cards' => (int) $cards, 'signatures' => (int) $signatures, 'issues' => (int) $issues]];
+        });
     }
 
     /**
