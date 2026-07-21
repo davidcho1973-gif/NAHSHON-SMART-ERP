@@ -109,6 +109,8 @@ class SafetyWorkService
         $this->save([$data], $siteId, $userId);
         $item = SafetyWorkItem::query()->where('work_code', $data['id'])->firstOrFail();
 
+        // WBS 에서 넘어온 공종·안전위험도·투입조·장비를 AI 에 함께 넘겨 추천을 공종에 맞게 정확히.
+        $seed = is_array($item->plan_payload) ? $item->plan_payload : [];
         $plan = app(GeminiSafetyAnalyzer::class)->generatePlan([
             'title' => $item->title,
             'workText' => $item->work_text,
@@ -117,6 +119,10 @@ class SafetyWorkService
             'crew' => $item->crew,
             'qty' => $item->planned_qty,
             'unit' => $item->unit,
+            'trade' => (string) ($seed['trade'] ?? ''),
+            'ehs' => (string) ($seed['ehs'] ?? ''),
+            'crew_text' => (string) ($seed['crew_text'] ?? ''),
+            'equipment' => is_array($seed['equipment'] ?? null) ? implode(', ', $seed['equipment']) : (string) ($seed['equipment'] ?? ''),
         ]);
 
         $payload = is_array($item->plan_payload) ? $item->plan_payload : [];

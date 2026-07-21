@@ -107,6 +107,35 @@ class SafetyAiPlanTest extends TestCase
         $res->assertStatus(200)->assertJsonPath('success', true)->assertJsonPath('plan.key_risk', '핵심 위험');
     }
 
+    public function test_plan_uses_trade_risk_context_and_returns_heat_environment(): void
+    {
+        // 풀세트: 공종·안전위험도·장비가 프롬프트에 반영되고, 폭염/환경 대책이 출력에 포함된다.
+        $this->fakeGemini([
+            'summary' => '고소 전기 배선', 'hazards' => [['hazard' => '감전', 'risk_level' => '상', 'control' => 'LOTO 차단']],
+            'ptp_steps' => ['LOTO 확인'], 'required_ppe' => ['절연장갑', '안전대'], 'tbm_topics' => ['LOTO 담당'],
+            'permits' => ['고소작업 허가', '전기 LOTO'],
+            'heat_environment' => ['15분마다 수분 섭취', '그늘에서 30분 주기 휴식'],
+            'key_risk' => '감전·추락',
+        ]);
+
+        $plan = app(GeminiSafetyAnalyzer::class)->generatePlan([
+            'title' => '천장 전기 배선', 'workText' => '고소 전기 배선 작업',
+            'trade' => 'ELEC', 'ehs' => 'high', 'crew_text' => '2 electricians + 1 helper', 'equipment' => '시저리프트',
+        ]);
+
+        $this->assertSame(['15분마다 수분 섭취', '그늘에서 30분 주기 휴식'], $plan['heat_environment']);
+
+        Http::assertSent(function (\Illuminate\Http\Client\Request $request): bool {
+            if (! str_contains($request->url(), ':generateContent')) {
+                return false;
+            }
+            $body = json_encode($request->data(), JSON_UNESCAPED_UNICODE);
+
+            return str_contains($body, 'ELEC') && str_contains($body, '안전위험도')
+                && str_contains($body, '시저리프트') && str_contains($body, '폭염');
+        });
+    }
+
     public function test_missing_api_key_returns_graceful_error(): void
     {
         config(['services.gemini.api_key' => '']);
