@@ -8602,7 +8602,10 @@
           '<span style="font-size:13px;color:#e2e8f0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + docEsc(doc.title) + '</span></div>' +
           '<div style="background:var(--bg-subtle);padding:24px;border-radius:0 0 14px 14px;min-height:220px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">' +
           (doc.fileUrl ? '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" style="text-decoration:none"><div style="width:130px;height:170px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--brand-primary);box-shadow:0 8px 24px rgba(15,23,42,.12)"><i class="ph ph-file-text"></i></div></a>' +
-            '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" class="docs-chip" style="text-decoration:none"><i class="ph ph-arrow-square-out"></i> 원본 열기</a>' : '<div style="color:var(--text-tertiary);font-size:13px">원본 파일 없음</div>') +
+            '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" class="docs-chip" style="text-decoration:none"><i class="ph ph-arrow-square-out"></i> 원본 열기</a>'
+            : (doc.fileMissing
+              ? '<div style="text-align:center;color:var(--status-warning);font-size:12.5px;line-height:1.6"><i class="ph ph-warning-circle" style="font-size:26px;display:block;margin-bottom:8px"></i>원본 파일이 서버에 없습니다.<br>메타데이터는 보존되어 있으니<br><b>같은 문서를 다시 업로드</b>해 주세요.</div>'
+              : '<div style="color:var(--text-tertiary);font-size:13px">원본 파일 없음</div>')) +
           '</div>' +
           '<div class="docs-card" style="margin-top:16px;padding:16px 18px">' +
           '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:.4px;margin-bottom:12px">파일 정보</div>' +

@@ -179,4 +179,16 @@ class IntegratedDocument extends Model
     {
         return filled($this->path) ? route('docs.show', ['document' => $this->id]) : null;
     }
+
+    /** 영구 보관 디스크(설정 시 오브젝트 스토리지, 기본 public). */
+    public static function storageDisk(): string
+    {
+        return (string) config('filesystems.documents_disk', 'public');
+    }
+
+    /** 원본 파일이 실제로 디스크에 남아 있는지(배포 유실 감지). */
+    public function fileExists(): bool
+    {
+        return filled($this->path) && Storage::disk($this->disk ?: 'public')->exists($this->path);
+    }
 }
