@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Services\Ocr\OcrEngine;
+use App\Support\OfficeText;
 use App\Support\PdfText;
 use RuntimeException;
 
@@ -35,19 +36,29 @@ class GeminiDocumentAnalyzer
 
         $bytes = (string) file_get_contents($path);
         $mime = $mimeType ?: (mime_content_type($path) ?: 'application/octet-stream');
-        $pdfText = str_contains($mime, 'pdf') ? PdfText::extract($bytes) : null;
 
-        // 텍스트 PDF 면 본문 텍스트만 보내고(정확·저렴), 이미지/스캔본은 파일을 비전으로 보낸다.
-        $parts = [];
-        if ($pdfText === null) {
-            if (str_contains($mime, 'pdf') || str_contains($mime, 'image')) {
-                $parts[] = ['data' => base64_encode($bytes), 'mime_type' => $mime];
-            } else {
-                throw new RuntimeException('AI 자동분석은 PDF 또는 이미지 문서만 지원합니다(Word/Excel은 PDF로 변환해 올려주세요).');
+        // 본문 텍스트를 뽑을 수 있으면(텍스트 PDF·Word·Excel) 정본으로 넣는다 — 정확·저렴.
+        $docText = null;
+        if (str_contains($mime, 'pdf')) {
+            $docText = PdfText::extract($bytes);
+        } elseif (OfficeText::isSupported($mime, $path)) {
+            $docText = OfficeText::extract($bytes, $mime, $path);
+            if ($docText === null) {
+                throw new RuntimeException('Word/Excel 문서에서 본문 텍스트를 추출하지 못했습니다(빈 문서이거나 구형 .doc/.xls). PDF로 변환해 올려주세요.');
             }
         }
 
-        $result = $this->engine->analyze($parts, $this->prompt($pdfText), $this->schema());
+        // 텍스트를 못 뽑은 경우: 이미지/스캔 PDF 는 비전으로, 그 밖의 형식은 미지원 안내.
+        $parts = [];
+        if ($docText === null) {
+            if (str_contains($mime, 'pdf') || str_contains($mime, 'image')) {
+                $parts[] = ['data' => base64_encode($bytes), 'mime_type' => $mime];
+            } else {
+                throw new RuntimeException('AI 자동분석은 PDF·이미지·Word(.docx)·Excel(.xlsx) 문서만 지원합니다.');
+            }
+        }
+
+        $result = $this->engine->analyze($parts, $this->prompt($docText), $this->schema());
 
         return $this->normalize(is_array($result['data'] ?? null) ? $result['data'] : [])
             + ['engine' => $this->engine->name(), 'model' => (string) ($result['model'] ?? '')];

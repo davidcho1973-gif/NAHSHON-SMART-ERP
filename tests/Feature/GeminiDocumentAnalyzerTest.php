@@ -84,4 +84,33 @@ class GeminiDocumentAnalyzerTest extends TestCase
             @unlink($tmp);
         }
     }
+
+    public function test_docx_word_document_is_extracted_and_analyzed(): void
+    {
+        $this->fakeEngine([
+            'document_type' => 'safety_plan', 'title' => 'JSA - Electrical', 'summary' => '전기배관 JSA',
+            'fields' => [['label' => 'PPE', 'value' => 'gloves, harness']],
+        ]);
+
+        // 최소 .docx(OOXML zip) 를 즉석에서 만든다.
+        $tmp = tempnam(sys_get_temp_dir(), 'doc') . '.docx';
+        $zip = new \ZipArchive();
+        $zip->open($tmp, \ZipArchive::CREATE);
+        $zip->addFromString('word/document.xml',
+            '<?xml version="1.0"?><w:document xmlns:w="x"><w:body>'
+            . '<w:p><w:r><w:t>JOB SAFETY ANALYSIS (JSA)</w:t></w:r></w:p>'
+            . '<w:p><w:r><w:t>Task: Electrical conduit installation. Hazard: shock. PPE: gloves.</w:t></w:r></w:p>'
+            . '</w:body></w:document>');
+        $zip->close();
+
+        $data = app(GeminiDocumentAnalyzer::class)->analyze(
+            $tmp,
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
+        @unlink($tmp);
+
+        $this->assertSame('safety_plan', $data['document_type']);
+        $this->assertSame('JSA - Electrical', $data['title']);
+        $this->assertSame(['PPE' => 'gloves, harness'], $data['fields']);
+    }
 }

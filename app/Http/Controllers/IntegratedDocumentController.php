@@ -26,7 +26,7 @@ class IntegratedDocumentController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => 'required|file|mimes:pdf,png,jpg,jpeg,webp|max:32768', // 32MB
+            'file' => 'required|file|max:32768', // 32MB
             'site_id' => 'nullable',
             'project_code' => 'nullable|string|max:80',
             'title' => 'nullable|string|max:255',
@@ -36,6 +36,16 @@ class IntegratedDocumentController extends Controller
             $file = $request->file('file');
             if (! $file) {
                 throw new RuntimeException('No file uploaded.');
+            }
+
+            // 형식 검증은 확장자 화이트리스트로(마임 추정이 docx=zip 로 어긋나는 문제 회피).
+            $ext = strtolower($file->getClientOriginalExtension());
+            $allowed = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'xlsx'];
+            if (! in_array($ext, $allowed, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => sprintf('지원하지 않는 형식입니다(.%s). PDF·이미지·Word(.docx)·Excel(.xlsx)만 업로드하세요. 한글(HWP)·구형 .doc/.xls·도면은 PDF로 변환해 올려주세요.', $ext ?: '?'),
+                ], 422);
             }
 
             $path = $file->store('integrated-documents', 'public');
