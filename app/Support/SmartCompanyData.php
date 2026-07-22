@@ -113,6 +113,16 @@ class SmartCompanyData
             'api_updateWbsRow' => app(\App\Services\Wbs\WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
             'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
+            // 조달 관리 (공정관리 하위 — 발주·조달성 공정의 납기 추적)
+            'api_getProcurement' => app(\App\Services\Procurement\ProcurementService::class)->list((string) ($args[0] ?? ''), $siteId),
+            'api_updateProcurement' => app(\App\Services\Procurement\ProcurementService::class)->update(
+                (string) ($args[0] ?? ''),
+                (string) ($args[1] ?? ''),
+                is_array($args[2] ?? null) ? $args[2] : [],
+                $siteId,
+                auth()->id()
+            ),
+
             // 문서통합관리 (공정관리 하위 SPA 페이지)
             'api_getDocDashboard' => app(\App\Services\IntegratedDocumentService::class)->dashboard(self::resolveSiteId($siteId)),
             'api_getDocFolders' => app(\App\Services\IntegratedDocumentService::class)->folders(self::resolveSiteId($siteId)),
