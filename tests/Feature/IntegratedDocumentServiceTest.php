@@ -125,6 +125,19 @@ class IntegratedDocumentServiceTest extends TestCase
         $this->assertContains('DWG', $out->tags);
     }
 
+    public function test_detail_flags_file_missing_when_original_is_gone(): void
+    {
+        $this->fakeEngine(['document_type' => 'w9', 'title' => 'W-9', 'fields' => []]);
+        $doc = app(IntegratedDocumentService::class)->analyzeAndClassify($this->makeDoc());
+
+        // 배포/인스턴스 전환으로 원본이 유실된 상황을 재현.
+        Storage::disk('public')->delete($doc->path);
+
+        $detail = app(IntegratedDocumentService::class)->detail($doc->id);
+        $this->assertTrue($detail['fileMissing']);
+        $this->assertNull($detail['fileUrl']);
+    }
+
     public function test_dashboard_and_search_and_confirm(): void
     {
         $this->fakeEngine([

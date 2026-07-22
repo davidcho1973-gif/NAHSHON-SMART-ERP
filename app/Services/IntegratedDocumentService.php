@@ -34,7 +34,20 @@ class IntegratedDocumentService
                 return $doc;
             }
 
-            $data = $this->analyzer->analyze(Storage::disk($disk)->path($doc->path), $doc->mime_type ?: null);
+            // 어떤 디스크(로컬/오브젝트 스토리지)든 임시 로컬 파일로 받아 분석기에 넘긴다.
+            // 원본 확장자를 유지해 OfficeText(docx/xlsx/pptx) 판별이 마임 외에도 동작하게 한다.
+            $ext = pathinfo($doc->original_name ?: $doc->path, PATHINFO_EXTENSION);
+            $tmp = tempnam(sys_get_temp_dir(), 'idoc');
+            if ($ext !== '' && @rename($tmp, $tmp . '.' . $ext)) {
+                $tmp .= '.' . $ext;
+            }
+            file_put_contents($tmp, Storage::disk($disk)->get($doc->path));
+
+            try {
+                $data = $this->analyzer->analyze($tmp, $doc->mime_type ?: null);
+            } finally {
+                @unlink($tmp);
+            }
             $folder = IntegratedDocument::classifyFolder($data);
             $duplicate = $this->findDuplicate($doc, $data, $folder['code']);
 
@@ -257,7 +270,8 @@ class IntegratedDocumentService
             'counterparty' => $d->counterparty,
             'issued_on' => optional($d->issued_on)?->toDateString(),
             'expires_on' => optional($d->expires_on)?->toDateString(),
-            'fileUrl' => $d->fileUrl(),
+            'fileUrl' => $d->fileExists() ? $d->fileUrl() : null,
+            'fileMissing' => ! $d->fileExists(),
             'dup' => $d->duplicate_of_id ? ['text' => $d->duplicate_note] : null,
             'folders' => $this->folders($d->site_id),
         ];

@@ -52,16 +52,18 @@ class IntegratedDocumentController extends Controller
                 ], 422);
             }
 
-            $path = $file->store('integrated-documents', 'public');
-            $absolute = Storage::disk('public')->path($path);
-            $mime = $file->getClientMimeType() ?: (mime_content_type($absolute) ?: 'application/octet-stream');
+            // 영구 보관 디스크에 저장(오브젝트 스토리지 설정 시 배포에도 유실되지 않음).
+            $disk = IntegratedDocument::storageDisk();
+            $path = $file->store('integrated-documents', $disk);
+            // 마임은 업로드 시점(로컬 임시파일)에서 판별 — 원격 디스크에서도 안전.
+            $mime = $file->getClientMimeType() ?: ($file->getMimeType() ?: 'application/octet-stream');
             $user = $request->user();
 
             $doc = IntegratedDocument::create([
                 'site_id' => $this->service->resolveSiteId($request->input('site_id')),
                 'project_code' => $request->input('project_code'),
                 'title' => (string) ($request->input('title') ?: ($file->getClientOriginalName() ?: basename($path))),
-                'disk' => 'public',
+                'disk' => $disk,
                 'path' => $path,
                 'original_name' => $file->getClientOriginalName() ?: basename($path),
                 'mime_type' => $mime,
