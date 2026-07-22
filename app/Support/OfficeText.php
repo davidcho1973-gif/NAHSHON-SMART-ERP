@@ -25,12 +25,16 @@ final class OfficeText
 
         $isWord = str_contains($mime, 'wordprocessingml') || str_ends_with($name, '.docx');
         $isExcel = str_contains($mime, 'spreadsheetml') || str_ends_with($name, '.xlsx');
+        $isPpt = str_contains($mime, 'presentationml') || str_ends_with($name, '.pptx');
 
         if ($isWord) {
             return self::docx($bytes);
         }
         if ($isExcel) {
             return self::xlsx($bytes);
+        }
+        if ($isPpt) {
+            return self::pptx($bytes);
         }
 
         return null;
@@ -42,7 +46,8 @@ final class OfficeText
         $mime = strtolower($mime);
 
         return str_contains($mime, 'wordprocessingml') || str_ends_with($name, '.docx')
-            || str_contains($mime, 'spreadsheetml') || str_ends_with($name, '.xlsx');
+            || str_contains($mime, 'spreadsheetml') || str_ends_with($name, '.xlsx')
+            || str_contains($mime, 'presentationml') || str_ends_with($name, '.pptx');
     }
 
     private static function docx(string $bytes): ?string
@@ -79,6 +84,73 @@ final class OfficeText
         }
 
         return self::cleanup(implode("\n", $texts));
+    }
+
+    private static function pptx(string $bytes): ?string
+    {
+        // 모든 슬라이드(ppt/slides/slideN.xml)의 텍스트런 <a:t> 를 순서대로 모은다.
+        $slides = self::readZipEntriesMatching($bytes, '#^ppt/slides/slide\d+\.xml$#');
+        if ($slides === []) {
+            return null;
+        }
+
+        // 슬라이드 번호 순으로 정렬(slide2 가 slide10 보다 앞).
+        uksort($slides, static function (string $a, string $b): int {
+            preg_match('/(\d+)/', $a, $ma);
+            preg_match('/(\d+)/', $b, $mb);
+
+            return ((int) ($ma[1] ?? 0)) <=> ((int) ($mb[1] ?? 0));
+        });
+
+        $texts = [];
+        foreach ($slides as $xml) {
+            if (preg_match_all('/<a:t[^>]*>(.*?)<\/a:t>/s', $xml, $m)) {
+                $texts = array_merge($texts, $m[1]);
+            }
+        }
+
+        return $texts === [] ? null : self::cleanup(implode("\n", $texts));
+    }
+
+    /**
+     * zip 안에서 정규식에 맞는 엔트리들을 [경로 => 내용] 으로 읽는다.
+     *
+     * @return array<string, string>
+     */
+    private static function readZipEntriesMatching(string $bytes, string $regex): array
+    {
+        if ($bytes === '') {
+            return [];
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'ofc');
+        if ($tmp === false) {
+            return [];
+        }
+
+        try {
+            file_put_contents($tmp, $bytes);
+            $zip = new ZipArchive();
+            if ($zip->open($tmp) !== true) {
+                return [];
+            }
+            $out = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entry = (string) $zip->getNameIndex($i);
+                if (preg_match($regex, $entry)) {
+                    $content = $zip->getFromIndex($i);
+                    if ($content !== false && $content !== '') {
+                        $out[$entry] = $content;
+                    }
+                }
+            }
+            $zip->close();
+
+            return $out;
+        } catch (Throwable) {
+            return [];
+        } finally {
+            @unlink($tmp);
+        }
     }
 
     private static function readZipEntry(string $bytes, string $entry): ?string
@@ -118,6 +190,6 @@ final class OfficeText
         $text = trim($text);
 
         // 너무 짧으면(빈 문서/추출 실패) 실패로 처리.
-        return mb_strlen($text) >= 20 ? $text : null;
+        return mb_strlen($text) >= 10 ? $text : null;
     }
 }

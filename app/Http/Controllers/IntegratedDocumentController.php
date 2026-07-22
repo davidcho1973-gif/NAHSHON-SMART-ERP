@@ -40,11 +40,15 @@ class IntegratedDocumentController extends Controller
 
             // 형식 검증은 확장자 화이트리스트로(마임 추정이 docx=zip 로 어긋나는 문제 회피).
             $ext = strtolower($file->getClientOriginalExtension());
-            $allowed = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'xlsx'];
+            // AI 가 본문을 읽어 자동분석하는 형식.
+            $analyzable = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'xlsx', 'pptx'];
+            // 본문 추출이 안 되는 형식 — 분석 없이 "보관 등록"(파일 저장 + 폴더 수동 확인).
+            $storageOnly = ['dwg', 'dxf', 'ppt', 'doc', 'xls', 'hwp'];
+            $allowed = array_merge($analyzable, $storageOnly);
             if (! in_array($ext, $allowed, true)) {
                 return response()->json([
                     'success' => false,
-                    'error' => sprintf('지원하지 않는 형식입니다(.%s). PDF·이미지·Word(.docx)·Excel(.xlsx)만 업로드하세요. 한글(HWP)·구형 .doc/.xls·도면은 PDF로 변환해 올려주세요.', $ext ?: '?'),
+                    'error' => sprintf('지원하지 않는 형식입니다(.%s). PDF·이미지·Office(docx/xlsx/pptx)·CAD(dwg/dxf)만 업로드하세요.', $ext ?: '?'),
                 ], 422);
             }
 
@@ -67,9 +71,16 @@ class IntegratedDocumentController extends Controller
                 'uploaded_by_label' => optional($user)->name,
             ]);
 
-            AnalyzeIntegratedDocumentJob::dispatch($doc->id)->afterResponse();
+            if (in_array($ext, $analyzable, true)) {
+                AnalyzeIntegratedDocumentJob::dispatch($doc->id)->afterResponse();
 
-            return response()->json(['success' => true, 'status' => 'analyzing', 'document' => $this->present($doc)], 202);
+                return response()->json(['success' => true, 'status' => 'analyzing', 'document' => $this->present($doc)], 202);
+            }
+
+            // 보관 등록 형식(CAD 도면·구형 오피스 등) — AI 없이 즉시 폴더 배정.
+            $doc = $this->service->registerWithoutAi($doc, $ext);
+
+            return response()->json(['success' => true, 'status' => 'needs_review', 'document' => $this->present($doc)], 201);
         } catch (\Throwable $e) {
             report($e);
 

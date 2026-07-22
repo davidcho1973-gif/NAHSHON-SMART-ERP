@@ -74,6 +74,48 @@ class IntegratedDocumentService
     }
 
     /**
+     * AI 로 본문을 읽을 수 없는 형식(CAD 도면 .dwg/.dxf, 구형 .ppt/.doc/.xls, HWP 등)을
+     * 분석 없이 "보관 등록"한다 — 파일은 저장되고 폴더·태그로 검색되며, 폴더는 사람이 확인·조정.
+     */
+    public function registerWithoutAi(IntegratedDocument $doc, string $ext): IntegratedDocument
+    {
+        $ext = strtolower($ext);
+        $type = in_array($ext, ['dwg', 'dxf'], true)
+            ? 'drawing'
+            : (in_array($ext, ['ppt', 'pptx'], true) ? 'presentation' : 'other');
+
+        // 도면은 시공·공정(03)으로 편향, 그 외는 파일명 키워드로 추정.
+        $folder = in_array($ext, ['dwg', 'dxf'], true)
+            ? ['code' => '03', 'confidence' => 70]
+            : IntegratedDocument::classifyFolder([
+                'document_type' => 'other',
+                'title' => $doc->title ?: $doc->original_name,
+                'summary' => [], 'fields' => [],
+            ]);
+
+        $doc->update([
+            'document_type' => $type,
+            'type_confidence' => $folder['confidence'],   // AI 미분석 — 폴더 신뢰도로 표기.
+            'folder_code' => $folder['code'],
+            'folder_confidence' => $folder['confidence'],
+            'title' => $doc->title ?: ($doc->original_name ?: '무제 문서'),
+            'summary' => ['AI 미분석 형식(' . strtoupper($ext) . ') — 파일로 보관되었습니다. 폴더가 맞는지 확인·조정 후 확정하세요.'],
+            'tags' => array_values(array_unique([
+                IntegratedDocument::FOLDERS[$folder['code']]['name'] ?? '문서',
+                IntegratedDocument::typeLabel($type),
+                strtoupper($ext),
+            ])),
+            'status' => 'needs_review',
+            'engine' => null,
+            'model' => null,
+            'error' => null,
+            'analyzed_at' => now(),
+        ]);
+
+        return $doc->fresh();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function dashboard(?int $siteId): array
@@ -403,6 +445,8 @@ class IntegratedDocumentService
             'lien_waiver', 'license', 'certificate', 'test_report', 'inspection', 'safety_plan', 'schedule' => 'PDF',
             'site_photo' => 'IMG',
             'receipt' => 'SCAN',
+            'drawing' => 'CAD',
+            'presentation' => 'PPT',
             default => 'DOC',
         };
     }
@@ -416,6 +460,8 @@ class IntegratedDocumentService
             'IMG' => ['fg' => '#0e7490', 'bg' => '#ecfeff'],
             'SCAN' => ['fg' => '#ea580c', 'bg' => '#fff7ed'],
             'DOC' => ['fg' => '#2563eb', 'bg' => '#eff6ff'],
+            'CAD' => ['fg' => '#7c3aed', 'bg' => '#f5f3ff'],
+            'PPT' => ['fg' => '#c2410c', 'bg' => '#fff7ed'],
             default => ['fg' => '#dc2626', 'bg' => '#fef2f2'],
         };
     }

@@ -113,6 +113,8 @@ class IntegratedDocument extends Model
             'inspection' => '검사서',
             'receipt' => '영수증',
             'site_photo' => '현장사진',
+            'drawing' => '도면(CAD)',
+            'presentation' => '프레젠테이션',
             'other', null => '기타 문서',
             default => $type,
         };
@@ -133,7 +135,7 @@ class IntegratedDocument extends Model
             'executed_contract' => '01', 'amendment' => '01', 'change_order' => '01',
             'scope_of_work' => '01', 'notice_to_proceed' => '01', 'correspondence' => '01', 'w9' => '01',
             'license' => '02', 'certificate' => '02',
-            'schedule' => '03', 'site_photo' => '03',
+            'schedule' => '03', 'site_photo' => '03', 'drawing' => '03', 'presentation' => '03',
             'test_report' => '04', 'inspection' => '04',
             'safety_plan' => '05',
             'purchase_order' => '06',

@@ -113,4 +113,24 @@ class GeminiDocumentAnalyzerTest extends TestCase
         $this->assertSame('JSA - Electrical', $data['title']);
         $this->assertSame(['PPE' => 'gloves, harness'], $data['fields']);
     }
+
+    public function test_pptx_presentation_is_extracted_and_analyzed(): void
+    {
+        $this->fakeEngine(['document_type' => 'safety_plan', 'title' => '안전교육 자료', 'fields' => []]);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'ppt') . '.pptx';
+        $zip = new \ZipArchive();
+        $zip->open($tmp, \ZipArchive::CREATE);
+        $zip->addFromString('ppt/slides/slide1.xml', '<p:sld xmlns:a="a"><a:t>현장 안전 교육 자료</a:t><a:t>추락 방지 대책 및 PPE 착용</a:t></p:sld>');
+        $zip->close();
+
+        $data = app(GeminiDocumentAnalyzer::class)->analyze(
+            $tmp,
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        );
+        @unlink($tmp);
+
+        $this->assertSame('safety_plan', $data['document_type']);
+        $this->assertSame('안전교육 자료', $data['title']);
+    }
 }

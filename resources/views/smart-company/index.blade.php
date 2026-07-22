@@ -8375,13 +8375,13 @@
           '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">파일을 여기에 끌어다 놓으세요</div>' +
           '<div style="font-size:13px;color:var(--text-tertiary);margin-top:7px">또는 클릭하여 파일 선택 · 여러 개 동시 업로드 가능</div>' +
           '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">' +
-          ['PDF', '사진 IMG', '스캔 SCAN', 'Word DOCX', 'Excel XLSX'].map(function (x) { return '<span class="docs-chip">' + x + '</span>'; }).join('') +
+          ['PDF', '사진 IMG', '스캔 SCAN', 'Word DOCX', 'Excel XLSX', 'PPT', 'CAD 도면'].map(function (x) { return '<span class="docs-chip">' + x + '</span>'; }).join('') +
           '</div>' +
-          '<input type="file" id="docs-file-input" accept=".pdf,image/*,.docx,.xlsx" multiple style="display:none">' +
+          '<input type="file" id="docs-file-input" accept=".pdf,image/*,.docx,.xlsx,.pptx,.ppt,.dwg,.dxf" multiple style="display:none">' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:11px;margin-top:16px;padding:13px 16px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:12px">' +
           '<span style="font-size:16px;color:var(--brand-primary)">✦</span>' +
-          '<span style="font-size:12.5px;color:var(--text-secondary)">협력사·현장 작업자가 올린 문서도 AI 분석 후 <b>검토 대기</b>에 모이며, 관리자가 확인·확정합니다. PDF·사진·스캔본을 지원합니다.</span></div>' +
+          '<span style="font-size:12.5px;color:var(--text-secondary)">협력사·현장 작업자가 올린 문서도 AI 분석 후 <b>검토 대기</b>에 모이며, 관리자가 확인·확정합니다. PDF·사진·Office(docx·xlsx·pptx)는 AI가 본문을 분석하고, CAD 도면(dwg·dxf)은 폴더에 바로 보관 등록됩니다.</span></div>' +
           '<div id="docs-queue" style="margin-top:16px"></div>';
 
         var drop = document.getElementById('docs-drop');
@@ -8432,7 +8432,10 @@
         var st = window._docsState;
         files.forEach(function (f) {
           var ext = (f.name.split('.').pop() || '').toLowerCase();
-          var badge = ext === 'pdf' ? 'PDF' : (/(jpg|jpeg|png|webp)/.test(ext) ? 'IMG' : 'DOC');
+          var badge = ext === 'pdf' ? 'PDF'
+            : (/(jpg|jpeg|png|webp)/.test(ext) ? 'IMG'
+              : (/(dwg|dxf)/.test(ext) ? 'CAD'
+                : (/(ppt|pptx)/.test(ext) ? 'PPT' : 'DOC')));
           var item = { name: f.name, badge: badge, sizeLabel: docHumanSize(f.size), status: 'uploading', file: f };
           st.queue.unshift(item);
           docsUploadOne(item);
@@ -8463,6 +8466,17 @@
             docsRenderQueue(); return;
           }
           item.docId = json.document.id;
+          // 보관 등록 형식(CAD·구형 오피스)은 서버가 즉시 needs_review 로 응답 — 바로 완료 처리.
+          if (json.document.status === 'needs_review') {
+            var dd = json.document;
+            item.status = 'done';
+            item.folder = dd.folder_name;
+            item.conf = Math.min(dd.type_confidence, dd.folder_confidence) + '%';
+            item.typeLabel = dd.type_label;
+            item.dup = dd.duplicate;
+            item.summary = (dd.summary || [])[0] || '';
+            docsRenderQueue(); clearDocCache(); return;
+          }
           item.status = 'analyzing';
           docsRenderQueue();
           docsWatch(item);

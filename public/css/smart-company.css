@@ -1693,6 +1693,8 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
 .doc-badge.IMG { color: #0e7490; background: #ecfeff; }
 .doc-badge.SCAN { color: #ea580c; background: #fff7ed; }
 .doc-badge.DOC { color: #2563eb; background: #eff6ff; }
+.doc-badge.CAD { color: #7c3aed; background: #f5f3ff; }
+.doc-badge.PPT { color: #c2410c; background: #fff7ed; }
 
 .docs-ai-panel { background: linear-gradient(110deg, #1e1b4b, #312e81); border-radius: 14px; padding: 20px 22px; color: #e0e7ff; }
 .docs-ai-panel .kicker { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #a5b4fc; }
