@@ -106,6 +106,25 @@ class IntegratedDocumentServiceTest extends TestCase
         $this->assertNotNull($second->duplicate_note);
     }
 
+    public function test_register_without_ai_files_cad_drawing_to_construction_folder(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('integrated-documents/plan.dwg', 'DWG binary');
+        $doc = IntegratedDocument::create([
+            'title' => '3F 전기배관 도면', 'disk' => 'public', 'path' => 'integrated-documents/plan.dwg',
+            'original_name' => 'plan.dwg', 'mime_type' => 'application/acad', 'size' => 2048, 'status' => 'analyzing',
+        ]);
+
+        $out = app(IntegratedDocumentService::class)->registerWithoutAi($doc, 'dwg');
+
+        $this->assertSame('needs_review', $out->status);
+        $this->assertSame('drawing', $out->document_type);
+        $this->assertSame('03', $out->folder_code);     // 도면 → 시공·공정
+        $this->assertNull($out->engine);                 // AI 미분석
+        $this->assertNotEmpty($out->summary);
+        $this->assertContains('DWG', $out->tags);
+    }
+
     public function test_dashboard_and_search_and_confirm(): void
     {
         $this->fakeEngine([
