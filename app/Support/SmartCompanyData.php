@@ -71,6 +71,7 @@ class SmartCompanyData
             'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
             'api_clearSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId),
+            'api_deleteSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->deleteWork((string) ($args[0] ?? ''), $siteId),
             'api_generateSafetyPlan' => self::generateSafetyPlan($args[0] ?? null, $siteId),
             'api_saveSafetyPlan' => app(\App\Services\Safety\SafetyWorkService::class)->savePlan((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], (bool) ($args[2] ?? false)),
             'api_issuePermitsForCard' => app(\App\Services\Safety\SafetyPermitService::class)->issueFromCard((string) ($args[0] ?? ''), auth()->id()),
