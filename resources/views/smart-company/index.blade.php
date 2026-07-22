@@ -1170,6 +1170,8 @@
       markWbsStatus: (wbsId, status) => gsRun('api_markWbsStatus', [wbsId, status], { success: false }),
       createSafetyCardForWbs: (wbsId, date) => gsRun('api_createSafetyCardForWbs', [wbsId, date || null], { success: false }),
       getTodayWbsWork: (projectId) => gsRun('api_getTodayWbsWork', [projectId], { success: false, items: [] }),
+      getProcurement: (projectId) => gsRun('api_getProcurement', [projectId], { success: false, items: [] }),
+      updateProcurement: (projectId, wbsCode, patch) => gsRun('api_updateProcurement', [projectId, wbsCode, patch || {}], { success: false }),
       getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
       assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
       getAssignableEmployees: (date) => gsRun('api_getAssignableEmployees', [date || null], []),
@@ -8081,6 +8083,160 @@
           '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:720px">' + body + '</div></div></div>';
       }
 
+
+      // ===== 오늘 할 일(현장 노무) ↔ 조달 관리(자재 납기) 구분 토글 =====
+      function wbsOpsBlock(today, procure) {
+        var view = window._wbsOpsView || 'today';
+        var todayN = (today && today.total) || 0;
+        var procN = (procure && procure.total) || 0;
+        var atRisk = (procure && procure.atRisk) || 0;
+        function tab(key, icon, label, count, badge) {
+          var on = view === key;
+          return '<button onclick="window.wbsSetOpsView(\'' + key + '\')" style="border:none;border-radius:8px 8px 0 0;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;background:' + (on ? 'var(--bg-panel)' : 'transparent') + ';color:' + (on ? 'var(--text-primary)' : 'var(--text-tertiary)') + ';border-bottom:2px solid ' + (on ? '#7c3aed' : 'transparent') + '">' +
+            '<i class="ph ' + icon + '"></i> ' + label + ' <span style="opacity:.6">' + count + '</span>' +
+            (badge > 0 ? ' <span style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:2px">' + badge + '</span>' : '') + '</button>';
+        }
+        return '<div id="wbs-ops-block" style="margin-bottom:18px">' +
+          '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border-subtle)">' +
+          tab('today', 'ph-calendar-check', '오늘 할 일', todayN, 0) +
+          tab('procure', 'ph-package', '조달 관리', procN, atRisk) +
+          '</div>' +
+          '<div id="wbs-ops-today"' + (view === 'today' ? '' : ' style="display:none"') + '>' + wbsTodayPanel(today) + '</div>' +
+          '<div id="wbs-ops-procure"' + (view === 'procure' ? '' : ' style="display:none"') + '>' + wbsProcurementPanel(procure) + '</div>' +
+          '</div>';
+      }
+
+      window.wbsSetOpsView = function(v) {
+        window._wbsOpsView = v;
+        var el = document.getElementById('wbs-ops-block');
+        if (el) el.outerHTML = wbsOpsBlock(window._wbsToday, window._wbsProcure);
+      };
+
+      async function wbsReloadProcurement(keepView) {
+        var pid = window.WBS_CURRENT_PROJECT;
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function(k){ if (k.indexOf('api_getProcurement') >= 0) delete window.apiCache[k]; });
+        var pr = await window.API.getProcurement(pid);
+        window._wbsProcure = pr;
+        if (keepView !== false) window._wbsOpsView = 'procure';
+        var el = document.getElementById('wbs-ops-block');
+        if (el) el.outerHTML = wbsOpsBlock(window._wbsToday, pr);
+      }
+
+      function wbsProcurementPanel(p) {
+        if (!p || !p.success) return '<div class="panel" style="margin:0"><div class="panel-body" style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">조달 데이터를 불러오지 못했습니다.</div></div>';
+        var STAGES = p.statuses || ['발주대기','발주완료','생산중','선적중','통관중','입고완료'];
+        var rows = (p.items || []).map(function(it){ return wbsProcureRow(it, STAGES); }).join('');
+        var body = (p.total === 0)
+          ? '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">조달·발주 공정이 없습니다.<br><span style="font-size:11px">WBS 작업 이름에 <b>조달·발주·구매·제작</b>이 있고 인원이 없는 공정이 자동으로 여기에 모입니다.</span></div>'
+          : rows;
+        return '<div class="panel" style="margin:0;border:1px solid rgba(234,88,12,0.3)">' +
+          '<div class="panel-header" style="background:rgba(234,88,12,0.06)">' +
+          '<div class="panel-title"><i class="ph ph-package" style="color:#ea580c"></i> 조달 관리 — 자재 납기</div>' +
+          '<div style="display:flex;align-items:center;gap:14px;font-size:11px">' +
+          '<span style="color:var(--text-secondary)">품목 <strong style="color:var(--text-primary)">' + p.total + '</strong></span>' +
+          (p.inTransit > 0 ? '<span style="color:#3b82f6">배송중 ' + p.inTransit + '</span>' : '') +
+          (p.delivered > 0 ? '<span style="color:#10b981">입고 ' + p.delivered + '</span>' : '') +
+          (p.atRisk > 0 ? '<span style="color:#ef4444;font-weight:700">⚠ 지연위험 ' + p.atRisk + '</span>' : '') +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:900px">' +
+          '<div style="display:grid;grid-template-columns:54px minmax(170px,1fr) 116px 158px 92px 92px 96px 96px;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border-default);font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:.3px">' +
+          '<span>코드</span><span>품목 · 공종</span><span>협력사</span><span>상태</span><span>ETA</span><span>납기</span><span>여유</span><span style="text-align:right">관리</span></div>' +
+          body + '</div></div></div>';
+      }
+
+      function wbsProcureRow(it, STAGES) {
+        var alertBorder = it.alert === 'critical' ? '#ef4444' : it.alert === 'warning' ? '#f59e0b' : it.alert === 'watch' ? '#eab308' : 'transparent';
+        var stageColor = it.status === '입고완료' ? '#10b981' : it.status === '통관중' || it.status === '선적중' ? '#3b82f6' : it.status === '생산중' ? '#8b5cf6' : it.status === '발주완료' ? '#0ea5e9' : 'var(--text-tertiary)';
+
+        // 여유(slack) 라벨.
+        var slackHtml;
+        if (it.delay === 'done') slackHtml = '<span style="color:#10b981;font-size:11px;font-weight:700">입고완료</span>';
+        else if (it.delay === 'unknown') slackHtml = '<span style="color:var(--text-tertiary);font-size:11px">ETA 미정</span>';
+        else if (it.slack < 0) slackHtml = '<span style="color:#ef4444;font-size:11px;font-weight:800">지연 ' + (-it.slack) + '일</span>';
+        else if (it.slack <= 7) slackHtml = '<span style="color:#f59e0b;font-size:11px;font-weight:700">여유 ' + it.slack + '일</span>';
+        else slackHtml = '<span style="color:#10b981;font-size:11px;font-weight:600">여유 ' + it.slack + '일</span>';
+
+        var advanceBtn = it.status === '입고완료' ? '' :
+          '<button onclick="window.wbsProcAdvance(\'' + wbsJsArg(it.wbs_id) + '\')" title="다음 단계로 (' + wbsEsc(it.nextStatus) + ')" style="background:none;border:1px solid #ea580c;color:#ea580c;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer"><i class="ph ph-arrow-right"></i></button>';
+
+        return '<div style="display:grid;grid-template-columns:54px minmax(170px,1fr) 116px 158px 92px 92px 96px 96px;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-subtle);border-left:3px solid ' + alertBorder + '">' +
+          '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(it.activityId || '') + '</span>' +
+          '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary)">' + wbsEsc(it.name) + '</span>' +
+          (it.isCritical ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">★</span>' : '') +
+          '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.stagePath || it.trade || '') + '</div></span>' +
+          '<span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.vendor || '—') + '</span>' +
+          '<span>' + '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:' + stageColor + '">' + wbsEsc(it.status) + '</span></div>' +
+          '<div style="height:5px;background:var(--bg-base);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:' + (it.progress || 0) + '%;background:' + stageColor + '"></div></div></span>' +
+          '<span class="cell-mono" style="font-size:11px;color:' + (it.delay === 'late' ? '#ef4444' : 'var(--text-secondary)') + '">' + wbsEsc(it.eta || '—') + '</span>' +
+          '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(it.needBy || '—') + '</span>' +
+          '<span>' + slackHtml + '</span>' +
+          '<span style="display:flex;gap:4px;justify-content:flex-end">' + advanceBtn +
+          '<button onclick="window.wbsProcEdit(\'' + wbsJsArg(it.wbs_id) + '\')" title="조달 상세 편집" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer"><i class="ph ph-pencil-simple"></i></button>' +
+          '</span></div>';
+      }
+
+      window.wbsProcAdvance = async function(wbsCode) {
+        var it = ((window._wbsProcure && window._wbsProcure.items) || []).filter(function(x){ return x.wbs_id === wbsCode; })[0];
+        if (!it) return;
+        var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, { status: it.nextStatus });
+        if (!r || !r.success) { alert('상태 변경 실패: ' + ((r && r.error) || '오류')); return; }
+        await wbsReloadProcurement();
+      };
+
+      window.wbsProcEdit = function(wbsCode) {
+        var it = ((window._wbsProcure && window._wbsProcure.items) || []).filter(function(x){ return x.wbs_id === wbsCode; })[0];
+        if (!it) return;
+        var STAGES = (window._wbsProcure && window._wbsProcure.statuses) || ['발주대기','발주완료','생산중','선적중','통관중','입고완료'];
+        var root = document.getElementById('safety-modal-root') || (function(){ var d = document.createElement('div'); d.id = 'wbs-proc-modal-root'; document.body.appendChild(d); return d; })();
+        var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin:12px 0 5px';
+        root.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:540px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-package"></i> 조달 상세 — ' + wbsEsc(it.name) + '</div><button id="pe-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" style="overflow-y:auto">' +
+          '<div style="font-size:11px;color:var(--text-tertiary)">납기 ' + wbsEsc(it.needBy || '미정') + ' (WBS 종료일) · ' + (it.isCritical ? '<b style="color:#ef4444">임계경로</b>' : '여유 공정') + '</div>' +
+          '<label style="' + LBL + '">상태</label><select id="pe-status" class="wbs-edit-field">' + STAGES.map(function(s){ return '<option' + (it.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" value="' + wbsEsc(it.vendor || '') + '"></div>' +
+          '<div><label style="' + LBL + '">발주번호(PO)</label><input id="pe-pono" class="wbs-edit-field" value="' + wbsEsc(it.poNo || '') + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="' + LBL + '">발주일</label><input id="pe-ordered" type="date" class="wbs-edit-field" value="' + wbsEsc(it.orderedOn || '') + '"></div>' +
+          '<div><label style="' + LBL + '">도착예정(ETA)</label><input id="pe-eta" type="date" class="wbs-edit-field" value="' + wbsEsc(it.eta || '') + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">' +
+          '<div><label style="' + LBL + '">금액</label><input id="pe-amount" type="number" step="any" min="0" class="wbs-edit-field" value="' + (it.amount != null ? it.amount : '') + '"></div>' +
+          '<div><label style="' + LBL + '">통화</label><input id="pe-currency" class="wbs-edit-field" value="' + wbsEsc(it.currency || 'USD') + '"></div>' +
+          '</div>' +
+          '<label style="' + LBL + '">메모</label><textarea id="pe-note" class="wbs-edit-field" style="height:60px;resize:vertical">' + wbsEsc(it.note || '') + '</textarea>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+          '<button id="pe-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button id="pe-save" class="btn-primary" style="flex:1;background:#ea580c;border:none"><i class="ph ph-floppy-disk"></i> 저장</button>' +
+          '</div></div></div>';
+        function close(){ root.innerHTML = ''; }
+        root.querySelector('#pe-close').addEventListener('click', close);
+        root.querySelector('#pe-cancel').addEventListener('click', close);
+        root.querySelector('#pe-save').addEventListener('click', async function(){
+          var patch = {
+            status: root.querySelector('#pe-status').value,
+            vendor: root.querySelector('#pe-vendor').value.trim(),
+            po_no: root.querySelector('#pe-pono').value.trim(),
+            ordered_on: root.querySelector('#pe-ordered').value,
+            eta: root.querySelector('#pe-eta').value,
+            amount: root.querySelector('#pe-amount').value,
+            currency: root.querySelector('#pe-currency').value.trim(),
+            note: root.querySelector('#pe-note').value
+          };
+          var btn = this; btn.disabled = true;
+          var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, patch);
+          if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); btn.disabled = false; return; }
+          close();
+          await wbsReloadProcurement();
+          if (window.showToast) window.showToast('조달 정보를 저장했습니다.', 'success');
+        });
+      };
+
       function wbsProgressBar(pct, color, width) {
         var p = Math.max(0, Math.min(100, Number(pct) || 0));
         return '<div style="display:flex;align-items:center;gap:8px;min-width:' + (width || 110) + 'px">' +
@@ -8805,10 +8961,12 @@
           var results = await Promise.all([
             window.API.getProjectWbsTree(projectId),
             window.API.getProjectProgressSummary(projectId),
-            window.API.getTodayWbsWork(projectId)
+            window.API.getTodayWbsWork(projectId),
+            window.API.getProcurement(projectId)
           ]);
           if (gen !== _wbsRenderGen) return;
-          var treeRes = results[0], sumRes = results[1], todayRes = results[2];
+          var treeRes = results[0], sumRes = results[1], todayRes = results[2], procureRes = results[3];
+          window._wbsProcure = procureRes; window._wbsToday = todayRes;
 
           // 서버 오류를 "WBS 없음"으로 위장하지 않는다 — 오류는 오류로 표시.
           if (!treeRes || treeRes.success !== true) {
@@ -9013,7 +9171,7 @@
             '</div>';
           var ganttHtml = wbsGanttPanel(tree, projectId);
 
-          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + viewToggle +
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsOpsBlock(todayRes, procureRes) + viewToggle +
             '<div id="wbs-view-gantt"' + (vm === 'gantt' ? '' : ' style="display:none"') + '>' + ganttHtml + '</div>' +
             '<div id="wbs-view-tree"' + (vm === 'tree' ? '' : ' style="display:none"') + '>' + panelsHtml + treePanel + '</div>';
 
