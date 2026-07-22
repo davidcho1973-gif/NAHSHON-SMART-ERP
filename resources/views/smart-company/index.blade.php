@@ -8375,9 +8375,9 @@
           '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">파일을 여기에 끌어다 놓으세요</div>' +
           '<div style="font-size:13px;color:var(--text-tertiary);margin-top:7px">또는 클릭하여 파일 선택 · 여러 개 동시 업로드 가능</div>' +
           '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">' +
-          ['PDF', '사진 IMG', '스캔 SCAN'].map(function (x) { return '<span class="docs-chip">' + x + '</span>'; }).join('') +
+          ['PDF', '사진 IMG', '스캔 SCAN', 'Word DOCX', 'Excel XLSX'].map(function (x) { return '<span class="docs-chip">' + x + '</span>'; }).join('') +
           '</div>' +
-          '<input type="file" id="docs-file-input" accept=".pdf,image/*" multiple style="display:none">' +
+          '<input type="file" id="docs-file-input" accept=".pdf,image/*,.docx,.xlsx" multiple style="display:none">' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:11px;margin-top:16px;padding:13px 16px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:12px">' +
           '<span style="font-size:16px;color:var(--brand-primary)">✦</span>' +
@@ -8412,9 +8412,10 @@
           else {
             right = '<span class="docs-conf" style="color:' + (it.dup ? '#ea580c' : 'var(--status-success)') + '">→ ' + docEsc(it.folder) + ' ' + docEsc(it.conf || '') + '</span>';
           }
-          var sub = it.status === 'done'
-            ? docEsc(it.typeLabel || '') + (it.dup ? ' · ⚠ ' + docEsc(it.dupNote || '중복 의심') : (it.summary ? ' · ' + docEsc(it.summary) : ''))
-            : docEsc(it.sizeLabel || '');
+          var sub;
+          if (it.status === 'done') sub = docEsc(it.typeLabel || '') + (it.dup ? ' · ⚠ ' + docEsc(it.dupNote || '중복 의심') : (it.summary ? ' · ' + docEsc(it.summary) : ''));
+          else if (it.status === 'failed') sub = '<span style="color:var(--status-danger)">' + docEsc(it.summary || '업로드/분석 실패') + '</span>';
+          else sub = docEsc(it.sizeLabel || '');
           var click = it.status === 'done' && it.docId ? ' style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + it.docId + '})"' : '';
           return '<div class="docs-row"' + click + '>' + docBadge(it.badge) +
             '<div class="t"><div class="name">' + docEsc(it.name) + '</div><div class="meta">' + sub + '</div></div>' + right + '</div>';
@@ -8457,7 +8458,9 @@
           });
           var json = await res.json();
           if (!json || !json.success || !json.document) {
-            item.status = 'failed'; docsRenderQueue(); return;
+            item.status = 'failed';
+            item.summary = (json && (json.error || json.message)) || ('HTTP ' + res.status);
+            docsRenderQueue(); return;
           }
           item.docId = json.document.id;
           item.status = 'analyzing';
