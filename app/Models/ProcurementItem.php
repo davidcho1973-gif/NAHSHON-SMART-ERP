@@ -26,6 +26,7 @@ class ProcurementItem extends Model
     protected $fillable = [
         'project_code', 'site_id', 'wbs_code', 'wbs_item_id',
         'status', 'vendor', 'po_no', 'amount', 'currency', 'ordered_on', 'eta', 'note', 'created_by_id',
+        'document_disk', 'document_path', 'document_name',
     ];
 
     protected function casts(): array

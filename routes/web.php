@@ -50,6 +50,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/docs-api/status', [App\Http\Controllers\IntegratedDocumentController::class, 'status'])->name('docs.status');
     Route::get('/docs-api/file/{document}', [App\Http\Controllers\IntegratedDocumentController::class, 'show'])->name('docs.show');
 
+    // 조달 관리 — 발주서/선적서 AI 분석(업로드 → 추출·단계 판정) + 근거 서류 열람
+    Route::post('/procurement-api/analyze', [App\Http\Controllers\ProcurementController::class, 'analyze'])->name('procurement.analyze');
+    Route::get('/procurement-api/file/{item}', [App\Http\Controllers\ProcurementController::class, 'showFile'])->name('procurement.file');
+
     // Vehicle API Routes
     Route::post('/vehicle-api/scan-rental', [App\Http\Controllers\VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
     Route::post('/vehicle-api/save', [App\Http\Controllers\VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');

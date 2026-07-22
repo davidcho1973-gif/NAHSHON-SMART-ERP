@@ -8195,6 +8195,14 @@
           '<div class="panel-header"><div class="panel-title"><i class="ph ph-package"></i> 조달 상세 — ' + wbsEsc(it.name) + '</div><button id="pe-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
           '<div class="panel-body padded" style="overflow-y:auto">' +
           '<div style="font-size:11px;color:var(--text-tertiary)">납기 ' + wbsEsc(it.needBy || '미정') + ' (WBS 종료일) · ' + (it.isCritical ? '<b style="color:#ef4444">임계경로</b>' : '여유 공정') + '</div>' +
+          '<div style="margin:12px 0 4px;padding:12px;border:1px dashed #ea580c;border-radius:10px;background:rgba(234,88,12,0.06)">' +
+          '<div style="font-size:12px;font-weight:700;color:#ea580c;margin-bottom:6px"><i class="ph ph-sparkle"></i> 발주서 · 서류 AI 분석</div>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px">발주서/선적서/통관/납품확인서를 올리면 벤더·PO·금액·ETA 를 자동 기입하고 <b>단계를 자동 판정</b>합니다.</div>' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+          '<input type="file" id="pe-aifile" accept=".pdf,image/*,.docx,.xlsx" style="flex:1;font-size:11px;color:var(--text-secondary)">' +
+          '<button type="button" id="pe-analyze" class="btn-secondary" style="white-space:nowrap;border-color:#ea580c;color:#ea580c"><i class="ph ph-robot"></i> 분석</button>' +
+          '</div><div id="pe-ai-result" style="font-size:11px;margin-top:8px">' + (it.documentUrl ? '<a href="' + wbsEsc(it.documentUrl) + '" target="_blank" style="color:#ea580c"><i class="ph ph-paperclip"></i> ' + wbsEsc(it.documentName || '첨부 서류') + '</a>' : '') + '</div>' +
+          '</div>' +
           '<label style="' + LBL + '">상태</label><select id="pe-status" class="wbs-edit-field">' + STAGES.map(function(s){ return '<option' + (it.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" value="' + wbsEsc(it.vendor || '') + '"></div>' +
@@ -8217,6 +8225,38 @@
         function close(){ root.innerHTML = ''; }
         root.querySelector('#pe-close').addEventListener('click', close);
         root.querySelector('#pe-cancel').addEventListener('click', close);
+
+        // 발주서/서류 AI 분석 — 업로드 → 추출·단계 판정 → 폼 자동 채움(사람 확인 후 저장).
+        var pendingFile = null;
+        root.querySelector('#pe-analyze').addEventListener('click', async function(){
+          var input = root.querySelector('#pe-aifile');
+          if (!input.files || !input.files[0]) { alert('분석할 서류 파일을 선택하세요.'); return; }
+          var btn = this; btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '<i class="ph ph-circle-notch"></i> 분석 중...';
+          var resEl = root.querySelector('#pe-ai-result');
+          resEl.innerHTML = '<span style="color:var(--text-tertiary)">AI가 서류를 읽는 중…</span>';
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var fd = new FormData(); fd.append('file', input.files[0]);
+            var res = await fetch('/procurement-api/analyze', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : '', 'Accept': 'application/json' }, body: fd });
+            var json = await res.json();
+            if (!json || !json.success) { resEl.innerHTML = '<span style="color:var(--status-danger)">분석 실패: ' + wbsEsc((json && (json.error || json.message)) || ('HTTP ' + res.status)) + '</span>'; btn.disabled = false; btn.innerHTML = old; return; }
+            var d = json.data || {};
+            pendingFile = json.file || null;
+            if (d.stage) root.querySelector('#pe-status').value = d.stage;
+            if (d.vendor) root.querySelector('#pe-vendor').value = d.vendor;
+            if (d.po_no) root.querySelector('#pe-pono').value = d.po_no;
+            if (d.order_date) root.querySelector('#pe-ordered').value = d.order_date;
+            if (d.eta) root.querySelector('#pe-eta').value = d.eta;
+            if (d.amount != null) root.querySelector('#pe-amount').value = d.amount;
+            if (d.currency) root.querySelector('#pe-currency').value = d.currency;
+            var noteEl = root.querySelector('#pe-note');
+            if ((d.item_summary || d.summary) && !noteEl.value.trim()) noteEl.value = (d.item_summary || d.summary);
+            var kindLabel = { purchase_order: '발주서', shipping: '선적서', customs: '통관서류', delivery: '납품확인서', production: '생산', invoice: '인보이스', quote: '견적서', other: '기타 서류' }[d.doc_kind] || d.doc_kind || '서류';
+            resEl.innerHTML = '<span style="color:#10b981"><i class="ph ph-check-circle"></i> ' + wbsEsc(kindLabel) + ' 인식' + (d.stage ? ' → 단계: <b>' + wbsEsc(d.stage) + '</b>' : ' (단계 변경 없음)') + '. 값 확인 후 저장하세요.' + (pendingFile ? ' <i class="ph ph-paperclip"></i> ' + wbsEsc(pendingFile.name) : '') + '</span>';
+          } catch (e) { resEl.innerHTML = '<span style="color:var(--status-danger)">분석 중 오류가 발생했습니다.</span>'; }
+          btn.disabled = false; btn.innerHTML = old;
+        });
+
         root.querySelector('#pe-save').addEventListener('click', async function(){
           var patch = {
             status: root.querySelector('#pe-status').value,
@@ -8228,6 +8268,7 @@
             currency: root.querySelector('#pe-currency').value.trim(),
             note: root.querySelector('#pe-note').value
           };
+          if (pendingFile) { patch.document_disk = pendingFile.disk; patch.document_path = pendingFile.path; patch.document_name = pendingFile.name; }
           var btn = this; btn.disabled = true;
           var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, patch);
           if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); btn.disabled = false; return; }

@@ -73,6 +73,8 @@ class ProcurementService
                 'delay' => $delay,                                 // done/late/risk/ok/unknown
                 'alert' => $this->alertLevel($delay, (bool) $i->is_critical),
                 'note' => $t?->note,
+                'documentName' => $t?->document_name,
+                'documentUrl' => ($t && filled($t->document_path)) ? route('procurement.file', ['item' => $t->id]) : null,
                 'plannedStart' => $i->planned_start?->toDateString(),
             ];
         })->sort(function (array $a, array $b): int {
@@ -129,7 +131,7 @@ class ProcurementService
                 $item->ordered_on = now()->toDateString();
             }
         }
-        foreach (['vendor', 'po_no', 'currency', 'note'] as $k) {
+        foreach (['vendor', 'po_no', 'currency', 'note', 'document_disk', 'document_path', 'document_name'] as $k) {
             if (array_key_exists($k, $patch)) {
                 $item->{$k} = ($patch[$k] === '' ? null : $patch[$k]);
             }
