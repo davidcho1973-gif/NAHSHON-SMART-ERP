@@ -57,6 +57,41 @@ class SafetyWorkService
     }
 
     /**
+     * 잘못 등록된 작업 카드 1건을 삭제한다(work_code 기준).
+     * 관련 서명(TBM)·이슈·작업허가서(PTW)도 함께 정리한다. 연결된 WBS 공정 활동은
+     * 실제 일정이므로 건드리지 않는다(공정관리에 그대로 남는다).
+     *
+     * @return array{success: bool, work_code?: string, error?: string}
+     */
+    public function deleteWork(string $workCode, string $siteId = 'ALL'): array
+    {
+        $workCode = trim($workCode);
+        if ($workCode === '') {
+            return ['success' => false, 'error' => '작업 코드가 없습니다.'];
+        }
+
+        return DB::transaction(function () use ($workCode, $siteId): array {
+            $query = SafetyWorkItem::query()->where('work_code', $workCode);
+            if ($siteId !== 'ALL') {
+                $query->where('site_id', Site::query()->where('code', $siteId)->value('id'));
+            }
+            $item = $query->first();
+            if (! $item) {
+                return ['success' => false, 'error' => '해당 작업을 찾을 수 없습니다.'];
+            }
+
+            SafetyWorkSignature::query()->where('safety_work_item_id', $item->id)->delete();
+            SafetyWorkIssue::query()->where('safety_work_item_id', $item->id)->delete();
+            if (class_exists(\App\Models\SafetyPermit::class)) {
+                \App\Models\SafetyPermit::query()->where('safety_work_item_id', $item->id)->delete();
+            }
+            $item->delete();
+
+            return ['success' => true, 'work_code' => $workCode];
+        });
+    }
+
+    /**
      * Upsert each client work card (by work_code) plus its signatures and issues.
      *
      * @param  array<int, mixed>  $items

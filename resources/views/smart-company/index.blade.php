@@ -2779,7 +2779,12 @@
                 +'<td class="cell-mono">'+esc(w.id)+'</td>'
                 +'<td><div class="cell-primary">'+esc(w.title)+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+esc(w.project)+' · '+esc(w.site)+'</div></td>'
                 +'<td style="text-align:center">'+esc(w.crew)+'명</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td>'
-                +'<td style="min-width:150px">'+bar(w.progress)+'</td><td class="cell-mono">'+esc(w.due)+'</td><td><button class="btn-secondary safety-next-btn" data-id="'+esc(w.id)+'" style="padding:4px 8px;font-size:11px">'+esc(nextAction(w))+'</button></td></tr>';
+                +'<td style="min-width:150px">'+bar(w.progress)+'</td><td class="cell-mono">'+esc(w.due)+'</td>'
+                +'<td><div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">'
+                +'<button class="btn-secondary safety-next-btn" data-id="'+esc(w.id)+'" style="padding:4px 8px;font-size:11px">'+esc(nextAction(w))+'</button>'
+                +'<button class="icon-btn" title="작업 수정" onclick="event.stopPropagation(); window._safetyEditWork(\''+esc(w.id)+'\')" style="padding:4px 6px"><i class="ph ph-pencil-simple"></i></button>'
+                +'<button class="icon-btn" title="작업 삭제" onclick="event.stopPropagation(); window._safetyDeleteWork(\''+esc(w.id)+'\')" style="padding:4px 6px;color:var(--status-danger)"><i class="ph ph-trash"></i></button>'
+                +'</div></td></tr>';
             }).join('');
             document.getElementById('s-today').innerHTML =
               '<div style="display:grid;grid-template-columns:1.45fr .9fr;gap:16px">'
@@ -3278,6 +3283,74 @@
             selectedWorkId = id;
             window._safetySelectedWorkId = id;
             goNextStep(selectedItem());
+          };
+
+          // 잘못 등록된 작업 수정 — 핵심 필드를 고쳐 기존 업서트 경로로 저장한다.
+          window._safetyEditWork = function(id) {
+            var w = safetyItems.find(function(x){ return x.id === id; });
+            if (!w) return;
+            var root = document.getElementById('safety-modal-root');
+            var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin:12px 0 5px';
+            var units = ['m','ea','%','단계'];
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+              '<div class="panel" style="width:560px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple"></i> 작업 수정</div><button id="swe-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto">' +
+                '<div style="font-size:11px;color:var(--text-tertiary)">잘못 등록된 작업을 현장에 맞게 수정하세요. 작업코드 ' + esc(w.id) + '</div>' +
+                '<label style="' + LBL + '">작업내용(제목)</label><input id="swe-title" class="wbs-edit-field" value="' + esc(w.title || '') + '">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                  '<div><label style="' + LBL + '">프로젝트</label><input id="swe-project" class="wbs-edit-field" value="' + esc(w.project || '') + '"></div>' +
+                  '<div><label style="' + LBL + '">현장 / 장소</label><input id="swe-site" class="wbs-edit-field" value="' + esc(w.site || '') + '"></div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
+                  '<div><label style="' + LBL + '">인원(명)</label><input id="swe-crew" type="number" min="0" class="wbs-edit-field" value="' + esc(w.crew || 0) + '"></div>' +
+                  '<div><label style="' + LBL + '">예정 작업량</label><input id="swe-qty" type="number" min="0" step="any" class="wbs-edit-field" value="' + esc(w.qty || 0) + '"></div>' +
+                  '<div><label style="' + LBL + '">단위</label><select id="swe-unit" class="wbs-edit-field">' + units.map(function(u){ return '<option' + (w.unit === u ? ' selected' : '') + '>' + u + '</option>'; }).join('') + '</select></div>' +
+                '</div>' +
+                '<label style="' + LBL + '">기한</label><input id="swe-due" class="wbs-edit-field" value="' + esc(w.due || '') + '">' +
+                '<label style="' + LBL + '">상세 작업내용</label><textarea id="swe-worktext" class="wbs-edit-field" style="height:80px;resize:vertical">' + esc(w.workText || '') + '</textarea>' +
+              '</div>' +
+              '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+                '<button id="swe-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+                '<button id="swe-save" class="btn-primary" style="flex:1"><i class="ph ph-floppy-disk"></i> 저장</button>' +
+              '</div></div></div>';
+            function close(){ root.innerHTML = ''; }
+            root.querySelector('#swe-close').addEventListener('click', close);
+            root.querySelector('#swe-cancel').addEventListener('click', close);
+            root.querySelector('#swe-save').addEventListener('click', function(){
+              var patch = {
+                title: root.querySelector('#swe-title').value.trim() || w.title,
+                project: root.querySelector('#swe-project').value.trim(),
+                site: root.querySelector('#swe-site').value.trim(),
+                crew: Number(root.querySelector('#swe-crew').value || 0),
+                qty: Number(root.querySelector('#swe-qty').value || 0),
+                unit: root.querySelector('#swe-unit').value,
+                due: root.querySelector('#swe-due').value.trim(),
+                workText: root.querySelector('#swe-worktext').value
+              };
+              patch.totalQty = patch.qty;
+              updateWork(id, patch);
+              close();
+              if (window.showToast) window.showToast('작업을 수정했습니다.', 'success');
+            });
+          };
+
+          // 잘못 등록된 작업 삭제 — 서버에서 카드·서명·이슈·PTW 를 함께 제거한다.
+          window._safetyDeleteWork = async function(id) {
+            var w = safetyItems.find(function(x){ return x.id === id; });
+            if (!w) return;
+            if (!confirm('작업 "' + (w.title || id) + '" 을(를) 삭제할까요?\n\nTBM 서명·이슈·작업허가서(PTW)도 함께 삭제되며 되돌릴 수 없습니다.\n(공정관리의 연결된 공정 활동은 그대로 유지됩니다.)')) return;
+            safetyItems = safetyItems.filter(function(x){ return x.id !== id; });
+            if (selectedWorkId === id) { selectedWorkId = null; window._safetySelectedWorkId = null; }
+            localStorage.setItem(safetyStorageKey, JSON.stringify(safetyItems));
+            if (window.apiCache) { delete window.apiCache['api_getSafetyWorkItems[]']; }
+            renderAllSafetyTabs();
+            try {
+              var r = await gsRun('api_deleteSafetyWork', [id], { success: false });
+              if (!r || !r.success) { alert('서버 삭제 실패: ' + ((r && r.error) || '알 수 없는 오류') + '\n화면을 새로고침하면 실제 상태를 확인할 수 있습니다.'); }
+              else if (window.showToast) { window.showToast('작업을 삭제했습니다.', 'success'); }
+            } catch (e) { alert('서버 삭제 중 오류가 발생했습니다.'); }
           };
 
           renderSafetyShell();
