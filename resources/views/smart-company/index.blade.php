@@ -13042,10 +13042,55 @@ async function renderVendors() {
         (st.needsReview ? '<div style="color:var(--status-warning);font-size:12px">⚠ 어제 미마감(관리자 확인 필요)</div>' : '') +
         '</div>' +
         '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.autoAttShowLocation()"><i class="ph ph-crosshair"></i> 내 위치 확인</button><span id="auto-att-loc" style="font-size:12px;color:var(--text-tertiary);margin-left:10px"></span></div>' +
+        '<div id="auto-att-geo-admin"></div>' +
         (noGeo
-          ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:12px;font-size:12.5px;color:#b45309">이 현장은 GPS 지오펜스가 아직 설정되지 않아 자동 판정이 안 됩니다. <b>현장에서</b> 현재 위치를 현장 중심으로 등록하세요(관리자만 가능).<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:12px">반경</span><input id="auto-att-radius" type="number" value="322" style="width:88px;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary)"><span style="font-size:12px">m</span><button class="btn-primary" style="padding:7px 12px" onclick="window.autoAttSetGeofence()"><i class="ph ph-crosshair-simple"></i> 현재 위치를 현장 중심으로 설정</button></div></div>'
+          ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:12px;font-size:12.5px;color:#b45309">이 현장(' + (site ? site.code : '미배정') + ')은 GPS 지오펜스가 아직 설정되지 않아 자동 판정이 안 됩니다. 관리자는 아래 <b>현장 지오펜스 관리</b>에서 현장을 골라 <b>현장에 서서</b> 현재 위치를 중심으로 등록하세요.</div>'
           : '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn-' + (running ? 'secondary' : 'primary') + '" onclick="window.autoAttToggle()" style="padding:10px 18px;font-weight:700">' + (running ? '<i class="ph ph-stop-circle"></i> 자동 감지 중지' : '<i class="ph ph-play-circle"></i> 자동 출퇴근 시작') + '</button><span style="font-size:11.5px;color:var(--text-tertiary);max-width:420px">' + (running ? '위치 감지 중… 이 화면을 열어두면 현장 진입=출근/근무중, 이탈이 자동 기록됩니다. 자정에 마지막 이탈이 퇴근으로 확정됩니다.' : '시작을 누르고 위치 권한을 허용하세요. 현장 반경 안=근무중, 밖 10분=이탈.') + '</span></div>');
+      autoAttLoadGeoManager();
     }
+
+    // 관리자: 현장을 골라 그 현장의 지오펜스를 현재 위치로 등록한다.
+    async function autoAttLoadGeoManager() {
+      var host = document.getElementById('auto-att-geo-admin');
+      if (!host) return;
+      var d = null;
+      try { d = await autoAttScApi('api_getGeofenceSites', []); } catch (e) { /* ignore */ }
+      if (!d || !d.canManage || !d.sites || !d.sites.length) { host.innerHTML = ''; return; }
+      window._autoAttGeoSites = d.sites;
+      var opts = d.sites.map(function (s) {
+        var label = s.code + (s.name ? ' · ' + s.name : '') + (s.hasGeo ? ' (반경 ' + s.radius + 'm)' : ' (미설정)');
+        var sel = (d.mySiteId && s.id === d.mySiteId) ? ' selected' : '';
+        return '<option value="' + s.id + '"' + sel + '>' + label + '</option>';
+      }).join('');
+      host.innerHTML =
+        '<div style="border:1px dashed var(--brand-primary);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--brand-primary-dim)">' +
+        '<div style="font-weight:700;font-size:12.5px;margin-bottom:8px"><i class="ph ph-gear-six"></i> 현장 지오펜스 관리 (관리자)</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<span style="font-size:12px">현장</span>' +
+          '<select id="auto-att-site" onchange="window.autoAttSiteInfo()" style="padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary);max-width:280px">' + opts + '</select>' +
+          '<span style="font-size:12px">반경</span>' +
+          '<input id="auto-att-radius" type="number" value="322" style="width:82px;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary)">' +
+          '<span style="font-size:12px">m</span>' +
+          '<button class="btn-primary" style="padding:7px 12px" onclick="window.autoAttSetGeofence()"><i class="ph ph-crosshair-simple"></i> 선택 현장에 현재 위치 등록</button>' +
+        '</div>' +
+        '<div id="auto-att-site-info" style="font-size:11.5px;color:var(--text-tertiary);margin-top:8px"></div>' +
+        '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">※ 등록하려는 현장에 실제로 서 있는 상태에서(실내 진입 전, 현장 외곽 권장) 눌러야 정확합니다.</div>' +
+        '</div>';
+      window.autoAttSiteInfo();
+    }
+
+    window.autoAttSiteInfo = function () {
+      var sel = document.getElementById('auto-att-site'); var info = document.getElementById('auto-att-site-info');
+      if (!sel || !info) return;
+      var s = (window._autoAttGeoSites || []).filter(function (x) { return String(x.id) === String(sel.value); })[0];
+      if (!s) { info.textContent = ''; return; }
+      if (s.hasGeo) {
+        info.innerHTML = '현재 등록됨 — 위도 <b>' + Number(s.lat).toFixed(6) + '</b>, 경도 <b>' + Number(s.lng).toFixed(6) + '</b>, 반경 <b>' + s.radius + 'm</b>. 다시 등록하면 덮어씁니다.';
+        var rad = document.getElementById('auto-att-radius'); if (rad) rad.value = s.radius;
+      } else {
+        info.innerHTML = '<span style="color:#b45309">아직 지오펜스가 없습니다. 이 현장에 서서 등록하세요.</span>';
+      }
+    };
 
     window.autoAttToggle = function () {
       if (window._autoAtt.watchId != null) { navigator.geolocation.clearWatch(window._autoAtt.watchId); window._autoAtt.watchId = null; autoAttRefresh(); return; }
@@ -13084,9 +13129,13 @@ async function renderVendors() {
     window.autoAttSetGeofence = function () {
       if (!navigator.geolocation) { alert('위치 미지원'); return; }
       var radius = (document.getElementById('auto-att-radius') || {}).value || 322;
+      var siteSel = document.getElementById('auto-att-site');
+      var siteId = siteSel ? siteSel.value : null;
+      var siteLabel = siteSel && siteSel.selectedIndex >= 0 ? siteSel.options[siteSel.selectedIndex].text : '내 현장';
+      if (!confirm('[' + siteLabel + '] 현장의 지오펜스를 지금 내 위치(반경 ' + radius + 'm)로 설정할까요?\n이 현장에 실제로 서 있어야 정확합니다.')) return;
       navigator.geolocation.getCurrentPosition(async function (pos) {
-        var r = await autoAttScApi('api_setMySiteGeofence', [pos.coords.latitude, pos.coords.longitude, Number(radius)]);
-        if (r && r.success) { if (window.showToast) window.showToast('현장 지오펜스를 설정했습니다(반경 ' + r.radius + 'm). 이제 자동 출퇴근을 시작하세요.', 'success'); autoAttRefresh(); }
+        var r = await autoAttScApi('api_setMySiteGeofence', [pos.coords.latitude, pos.coords.longitude, Number(radius), siteId]);
+        if (r && r.success) { if (window.showToast) window.showToast('현장 ' + r.site + ' 지오펜스를 설정했습니다(반경 ' + r.radius + 'm). 해당 현장 작업자 전원에게 적용됩니다.', 'success'); autoAttRefresh(); }
         else alert('설정 실패: ' + ((r && r.error) || '오류'));
       }, function (err) { alert('위치 권한이 필요합니다: ' + err.message); }, { enableHighAccuracy: true });
     };
