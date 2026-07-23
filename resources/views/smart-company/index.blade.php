@@ -1163,6 +1163,7 @@
       getProjectStatus: () => gsRun('api_getProjectStatus', [], []),
       getActionItems: () => gsRun('api_getActionItems', [], []),
       getOpsDashboard: () => gsRun('api_getOpsDashboard', [], { success: false }),
+      getLaborAllocation: () => gsRun('api_getLaborAllocation', [_siteId()], { success: false, items: [], kpi: {} }),
       // WBS ê³µì •ê´€ë¦¬ APIs
       getProjectWbsTree: (projectId) => gsRun('api_getProjectWbsTree', [projectId], { success: false, stages: [] }),
       updateWbsRow: (wbsId, updates) => gsRun('api_updateWbsRow', [wbsId, updates], { success: false }),
@@ -4497,8 +4498,9 @@
                 '<div class="kpi-value" style="font-size:22px;color:var(--status-success);line-height:1.1">' + totalAttended + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--status-warning)">ë¯¸ì¶œì„ ' + totalAbsent + 'ëª…</span></div></div>' +
               '</div>' +
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸ”– ì¶œí‡´ê·¼ í˜„í™©</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
-              '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="labor">🔗 공정 배치</button><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn" data-tab="attendance">🔖 출퇴근 현황</button><button class="tab-btn" data-tab="personnel">👤 인원 마스터</button></div>' +
+              '<div id="tab-labor"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 공정 배치 현황 로딩 중...</div></div>' +
+              '<div id="tab-global" style="display:none"></div><div id="tab-attendance" style="display:none">' +
               matrixHtml +
               // â”€â”€ ì¶œê·¼ ìƒì„¸ ë³´ê³  (ì¢Œ) + íšŒì‚¬ë³„ í†µê³„ ë„í‘œ (ìš°) â€” ì»¨í…Œì´ë„ˆë§Œ â”€â”€
               '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px" class="hr-detail-grid">' +
@@ -4527,17 +4529,25 @@
             var gt = document.getElementById('tab-global');
             if (gt && !gt.getAttribute('data-loaded')) { gt.setAttribute('data-loaded', '1'); window.renderGlobalHrInto(gt, true); }
           }
+          function ensureLaborTab() {
+            var lt = document.getElementById('tab-labor');
+            if (lt && !lt.getAttribute('data-loaded')) { lt.setAttribute('data-loaded', '1'); window.renderLaborAllocation(lt); }
+          }
           document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
               document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (b) { b.classList.remove('active'); });
               btn.classList.add('active');
               var tab = btn.dataset.tab;
+              var lb = document.getElementById('tab-labor'); if (lb) lb.style.display = tab === 'labor' ? '' : 'none';
               var g = document.getElementById('tab-global'); if (g) g.style.display = tab === 'global' ? '' : 'none';
               document.getElementById('tab-attendance').style.display = tab === 'attendance' ? '' : 'none';
               document.getElementById('tab-personnel').style.display = tab === 'personnel' ? '' : 'none';
               if (tab === 'global') ensureGlobalTab();
+              if (tab === 'labor') ensureLaborTab();
             });
           });
+          // 기본 진입 탭이 공정 배치이므로 즉시 로드
+          ensureLaborTab();
           if (window._pendingHrTab) {
             var pendingHrTab = window._pendingHrTab;
             window._pendingHrTab = null;
@@ -4561,6 +4571,77 @@
           }
         } catch (err) { renderError('ì¸ì› ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message); console.error(err); }
       }
+
+      // ─────────────────────────────────────────────
+      // 🔗 공정 배치 현황 — 오늘 WBS 작업 계획인원 vs 실투입(안전카드 서명)
+      // ─────────────────────────────────────────────
+      window.renderLaborAllocation = async function (host) {
+        var el = (typeof host === 'string') ? document.getElementById(host) : host;
+        if (!el) return;
+        el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 공정 배치 현황 로딩 중...</div>';
+        try {
+          var d = await window.API.getLaborAllocation();
+          if (!d || d.success === false) { el.innerHTML = '<div class="panel"><div class="panel-body" style="padding:24px;color:var(--status-warning)">공정 배치 데이터를 불러오지 못했습니다.</div></div>'; return; }
+          var items = d.items || [];
+          var k = d.kpi || {};
+          var fillRate = (k.demand > 0) ? Math.round((k.assigned || 0) / k.demand * 100) : 0;
+          var mhRate = (k.plannedMH > 0) ? Math.round((k.actualMH || 0) / k.plannedMH * 100) : 0;
+
+          var STATUS = {
+            na:             { label: '인원계획없음', color: 'var(--text-tertiary)', bg: 'transparent' },
+            surplus:        { label: '초과 투입',    color: '#3b82f6', bg: 'rgba(59,130,246,.08)' },
+            ok:             { label: '충족',         color: '#10b981', bg: 'rgba(16,185,129,.08)' },
+            short:          { label: '인력 부족',    color: '#f59e0b', bg: 'rgba(245,158,11,.10)' },
+            critical_short: { label: '임계 부족',    color: '#ef4444', bg: 'rgba(239,68,68,.12)' }
+          };
+
+          var kpi =
+            '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">' +
+              '<div class="kpi-card"><div class="kpi-label">오늘 출역 / 필요</div>' +
+                '<div class="kpi-value" style="color:var(--brand-primary)">' + (k.present || 0) + ' <span style="font-size:14px;color:var(--text-tertiary)">/ ' + (k.demand || 0) + '명</span></div>' +
+                '<div class="kpi-meta"><span style="color:var(--text-secondary)">미배치 ' + (k.unassigned || 0) + '명</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">공정 배치율</div>' +
+                '<div class="kpi-value" style="color:' + (fillRate >= 90 ? '#10b981' : (fillRate >= 60 ? '#f59e0b' : '#ef4444')) + '">' + fillRate + '%</div>' +
+                '<div class="kpi-meta"><span style="color:var(--text-secondary)">실투입 ' + (k.assigned || 0) + ' / 계획 ' + (k.demand || 0) + '</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">임계작업 인력부족</div>' +
+                '<div class="kpi-value" style="color:' + ((k.criticalShort || 0) > 0 ? '#ef4444' : '#10b981') + '">' + (k.criticalShort || 0) + '<span style="font-size:14px;color:var(--text-tertiary)"> 건</span></div>' +
+                '<div class="kpi-meta"><span style="color:' + ((k.criticalShort || 0) > 0 ? 'var(--status-danger)' : 'var(--text-secondary)') + '">' + ((k.criticalShort || 0) > 0 ? '즉시 인원 보강 필요' : '임계경로 정상') + '</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">공수 (MH)</div>' +
+                '<div class="kpi-value" style="color:var(--brand-primary)">' + (k.actualMH || 0) + '<span style="font-size:14px;color:var(--text-tertiary)"> / ' + (k.plannedMH || 0) + '</span></div>' +
+                '<div class="kpi-meta"><span style="color:var(--text-secondary)">달성 ' + mhRate + '%</span></div></div>' +
+            '</div>';
+
+          var rows = items.map(function (r) {
+            var st = STATUS[r.status] || STATUS.na;
+            var pct = r.fillPct || 0;
+            var tradeTxt = r.tradeLabel ? (r.tradeLabel + (r.trade ? ' (' + r.trade + ')' : '')) : (r.trade || '-');
+            var critBadge = r.isCritical ? '<span title="임계경로" style="display:inline-block;margin-left:6px;font-size:9px;font-weight:700;color:#ef4444;border:1px solid #ef4444;border-radius:4px;padding:0 4px">CP</span>' : '';
+            var ehsBadge = r.ehsHigh ? '<span title="고위험 작업" style="display:inline-block;margin-left:4px;font-size:9px;font-weight:700;color:#f59e0b;border:1px solid #f59e0b;border-radius:4px;padding:0 4px">EHS</span>' : '';
+            return '<tr style="background:' + st.bg + '">' +
+              '<td><div style="font-weight:600">' + (r.name || '-') + critBadge + ehsBadge + '</div><div style="font-size:10px;color:var(--text-tertiary)">' + (r.wbsId || r.activityId || '') + '</div></td>' +
+              '<td>' + tradeTxt + '</td>' +
+              '<td class="tac" style="font-weight:600">' + r.planned + '</td>' +
+              '<td class="tac" style="font-weight:700;color:' + st.color + '">' + r.actual + (r.shortBy > 0 ? ' <span style="font-size:10px;color:#ef4444">(-' + r.shortBy + ')</span>' : '') + '</td>' +
+              '<td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:7px;border-radius:4px;background:var(--bg-base);overflow:hidden"><div style="height:100%;width:' + Math.min(100, pct) + '%;background:' + st.color + '"></div></div><span style="font-size:11px;color:var(--text-secondary);min-width:34px;text-align:right">' + pct + '%</span></div></td>' +
+              '<td class="tac"><span style="font-size:11px;font-weight:600;color:' + st.color + '">' + st.label + '</span></td>' +
+            '</tr>';
+          }).join('');
+
+          var emptyRow = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--text-tertiary)">오늘 진행 중인 공정 작업이 없습니다.</td></tr>';
+
+          el.innerHTML = kpi +
+            '<div class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
+              '<div class="panel-title" style="color:var(--brand-primary)"><i class="ph ph-users-three"></i> 공정별 인력 배치 현황 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">· ' + (d.site || '') + ' · ' + (d.date || '') + '</span></div>' +
+              '<span style="font-size:11px;color:var(--text-tertiary)">계획인원 ↔ 실투입(안전카드 서명)</span>' +
+            '</div>' +
+            '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr>' +
+              '<th>공정 (작업)</th><th>공종</th><th class="tac">계획</th><th class="tac">실투입</th><th>충족률</th><th class="tac">상태</th>' +
+            '</tr></thead><tbody>' + (rows || emptyRow) + '</tbody></table></div></div>';
+        } catch (err) {
+          el.innerHTML = '<div class="panel"><div class="panel-body" style="padding:24px;color:var(--status-danger)">공정 배치 로딩 실패: ' + (err && err.message ? err.message : err) + '</div></div>';
+          console.error(err);
+        }
+      };
 
       // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // ðŸ‘¥ ì¶œê·¼ ìƒì„¸ ë³´ê³  â€” íšŒì‚¬ë³„ â†’ íŒ€ë³„ ê·¸ë£¹í•‘ ë Œë”

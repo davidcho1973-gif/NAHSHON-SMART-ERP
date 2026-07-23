@@ -93,6 +93,7 @@ class SmartCompanyData
             'api_getProjectStatus' => self::projects(),
             'api_getActionItems' => self::actionItems(),
             'api_getOpsDashboard' => app(\App\Services\DashboardService::class)->overview($siteId),
+            'api_getLaborAllocation' => app(\App\Services\Wbs\LaborAllocationService::class)->forSite((string) ($args[0] ?? $siteId)),
 
             // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반
             'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
