@@ -3941,6 +3941,46 @@
       }
 
       // â”€â”€ HR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // 작업자 QR 셀프 등록 — 현장을 고르면 인쇄용 QR 포스터를 열고, 작업자가 스캔해 직접 입사지원.
+      window.openWorkerJoinModal = async function () {
+        var host = document.getElementById('worker-join-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'worker-join-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:580px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-qr-code"></i> 작업자 QR 셀프 등록</div><button id="wj-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" id="wj-body" style="overflow-y:auto"><div style="color:var(--text-tertiary);font-size:13px">현장 목록을 불러오는 중…</div></div></div></div>';
+        host.querySelector('#wj-close').addEventListener('click', function () { host.innerHTML = ''; });
+
+        var sites = [];
+        try { sites = await gsRun('api_getSiteList', [], []); } catch (e) { /* ignore */ }
+        var body = host.querySelector('#wj-body');
+        if (!body) return;
+        if (!sites || !sites.length) {
+          body.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);padding:24px;font-size:13px">등록된 현장이 없습니다. 관리자 → 현장(PROJECT) 관리에서 현장을 먼저 등록하세요.</div>';
+          return;
+        }
+        body.innerHTML =
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">현장을 고르면 <b>인쇄용 QR 포스터</b>가 열립니다. 현장 게시판에 붙이면 작업자가 휴대폰으로 스캔해 <b>직접 입사지원서</b>를 작성합니다. (제출 → 관리자 검토 → 인사 등록)</div>' +
+          sites.map(function (s) {
+            var poster = '/member/site/' + s.id + '/apply/qr';
+            var form = window.location.origin + '/member/site/' + s.id + '/apply';
+            return '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border-subtle)">' +
+              '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(form) + '</div></div>' +
+              '<button class="btn-secondary" style="padding:6px 10px;font-size:12px" onclick="window.wjCopyLink(\'' + form + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + poster + '\',\'_blank\')"><i class="ph ph-printer"></i> 포스터</button>' +
+              '</div>';
+          }).join('');
+      };
+      window.wjCopyLink = function (url, btn) {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url).then(function () {
+            if (btn) { var o = btn.innerHTML; btn.innerHTML = '<i class="ph ph-check"></i> 복사됨'; setTimeout(function () { btn.innerHTML = o; }, 1500); }
+          });
+        }
+      };
+
       async function renderHR() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -4040,7 +4080,7 @@
               '<div class="header-section"><div>' +
               '<h1 class="page-title">ðŸŒ í†µí•© í˜„í™© â€” ì „ì²´ í˜„ìž¥</h1>' +
               '<p class="page-subtitle">ëª¨ë“  ì—°ë™ í˜„ìž¥ì˜ ì¶œí‡´ê·¼ ë°ì´í„°ë¥¼ í†µí•© ì§‘ê³„í•©ë‹ˆë‹¤ (' + attendance.date + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
               // ì „ì²´ KPI
               '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
               '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì¶œê·¼ ì¸ì› <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
@@ -4362,7 +4402,7 @@
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
               '<p class="page-subtitle">NAHSHON MEP ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +

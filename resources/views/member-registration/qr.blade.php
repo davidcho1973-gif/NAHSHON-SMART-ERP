@@ -169,7 +169,7 @@
 </head>
 <body>
     @php
-        $qrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=16&data=' . rawurlencode($intakeUrl);
+        $qrImage = \App\Support\QrSvg::dataUri($intakeUrl, 320);
     @endphp
 
     <main class="sheet">

@@ -31,7 +31,7 @@
 </head>
 <body>
     @php
-        $qrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=16&data=' . rawurlencode($badgeUrl);
+        $qrImage = \App\Support\QrSvg::dataUri($badgeUrl, 320);
     @endphp
 
     <main class="sheet">
