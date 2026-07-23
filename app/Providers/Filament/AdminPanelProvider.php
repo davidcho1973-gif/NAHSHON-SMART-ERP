@@ -30,6 +30,8 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login(Login::class)
             ->brandName('SMART COMPANY')
+            // 상단 브랜드("SMART COMPANY") 클릭 시 관리자 대시보드가 아니라 메인 ERP 로 이동.
+            ->homeUrl(fn (): string => route('smart-company.index'))
             ->navigationItems([
                 NavigationItem::make('ERP 홈')
                     ->url(fn (): string => route('smart-company.index'))
