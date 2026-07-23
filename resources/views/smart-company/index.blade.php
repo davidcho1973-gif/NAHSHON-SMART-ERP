@@ -1162,6 +1162,7 @@
       },
       getProjectStatus: () => gsRun('api_getProjectStatus', [], []),
       getActionItems: () => gsRun('api_getActionItems', [], []),
+      getOpsDashboard: () => gsRun('api_getOpsDashboard', [], { success: false }),
       // WBS ê³µì •ê´€ë¦¬ APIs
       getProjectWbsTree: (projectId) => gsRun('api_getProjectWbsTree', [projectId], { success: false, stages: [] }),
       updateWbsRow: (wbsId, updates) => gsRun('api_updateWbsRow', [wbsId, updates], { success: false }),
@@ -2166,79 +2167,144 @@
         } catch (e) { alert('오류: ' + e.message); }
       };
 
+      // 현장 운영 대시보드 — 리스크·예외(③) 트리아지 상단 + 현장 일일 운영(②) 하단. 전부 실데이터.
       async function renderDashboard() {
         pageContainer.innerHTML = skeleton();
         try {
-          var [kpis, actionItems, projects] = await Promise.all([
-            window.API.getKPIs(),
-            window.API.getActionItems(),
-            window.API.getProjectStatus()
-          ]);
-
-          var kpisHtml = kpis.map(function (k) {
-            var trendIcon = k.trendType === 'up' ? 'ph-arrow-up-right' : k.trendType === 'down' ? 'ph-arrow-down-right' : 'ph-arrows-left-right';
-            return '<div class="kpi-card">' +
-              '<div class="kpi-label">' + k.label + '<i class="ph ' + k.icon + '" style="font-size:15px;color:var(--text-tertiary)"></i></div>' +
-              '<div class="kpi-value">' + k.value + '<span style="font-size:11px;color:var(--text-tertiary);font-weight:500"> ' + k.unit + '</span></div>' +
-              '<div class="kpi-meta"><span class="trend-' + k.trendType + '"><i class="ph ' + trendIcon + '"></i></span><span style="color:var(--text-secondary)">' + k.trend + '</span></div>' +
-              '</div>';
-          }).join('');
-
-          var actionItemsHtml = actionItems.map(function (a) {
-            var statusText = a.status === 'critical' ? 'ê¸´ê¸‰' : a.status === 'warning' ? 'ì£¼ì˜' : a.status === 'pending' ? 'ë¯¸ì²˜ë¦¬' : 'ì™„ë£Œ';
-            return '<tr><td class="cell-mono">' + a.id + '</td><td>' + a.type + '</td><td class="cell-primary">' + a.summary + '</td><td>' + a.assignee + '</td><td>' + statusPill(statusText) + '</td><td class="cell-mono" style="text-align:right">' + a.date + '</td></tr>';
-          }).join('');
-
-          var projectsHtml = projects.map(function (p) {
-            return '<div><div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
-              '<div><div style="font-weight:600;font-size:13px;color:var(--text-primary)">' + p.name + '</div>' +
-              '<div class="cell-mono" style="color:var(--text-tertiary);margin-top:2px">' + p.code + ' | PM: ' + p.manager + '</div></div></div>' +
-              '<div class="progress-wrapper"><div class="progress-bar"><div class="progress-fill" style="width:' + p.progress + '%;background:' + p.color + '"></div></div>' +
-              '<div class="progress-text cell-primary">' + p.progress + '%</div></div>' +
-              '<div style="font-size:11px;color:var(--text-tertiary);margin-top:5px;text-align:right">ì™„ë£Œ ì˜ˆì •: ' + p.endDate + '</div></div>';
-          }).join('');
+          var d = await window.API.getOpsDashboard();
+          if (!d || !d.success) { renderError('대시보드 데이터를 불러오지 못했습니다'); return; }
 
           var selectedOpt = document.querySelector('#project-context-switcher option:checked');
           var isSetupPending = selectedOpt ? selectedOpt.getAttribute('data-setup-pending') === 'true' : false;
           var setupBannerHtml = '';
           if (isSetupPending) {
-            setupBannerHtml = 
-              '<div class="setup-wizard-banner" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.04) 100%); border: 1px solid rgba(37, 99, 235, 0.35); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); backdrop-filter: blur(8px);">' +
+            setupBannerHtml =
+              '<div class="setup-wizard-banner" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.04) 100%); border: 1px solid rgba(37, 99, 235, 0.35); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">' +
               '<div style="display:flex; align-items:center; gap:16px;">' +
-              '<div style="background: rgba(37, 99, 235, 0.2); width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;">' +
-              '<i class="ph ph-magic-wand" style="font-size:22px;"></i>' +
-              '</div>' +
-              '<div>' +
-              '<h3 style="font-size:14px; font-weight:700; color:#fff; margin:0 0 4px 0;">⚡ 신설 현장 초기 셋업 마법사 (Setup Wizard Required)</h3>' +
-              '<p style="font-size:12px; color:var(--text-secondary); margin:0;">이 프로젝트는 새롭게 생성되어 아직 초기 셋업이 완료되지 않았습니다. 셋업을 마쳐야 모듈 연동이 활성화됩니다.</p>' +
-              '</div>' +
-              '</div>' +
-              '<button class="btn-primary" onclick="window.openSetupWizard()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:#2563eb; color:white; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">' +
-              '<i class="ph ph-rocket"></i>' +
-              '<span>셋업 시작하기</span>' +
-              '</button>' +
-              '</div>';
+              '<div style="background: rgba(37, 99, 235, 0.2); width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;"><i class="ph ph-magic-wand" style="font-size:22px;"></i></div>' +
+              '<div><h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0 0 4px 0;">⚡ 신설 현장 초기 셋업 마법사</h3>' +
+              '<p style="font-size:12px; color:var(--text-secondary); margin:0;">이 프로젝트는 아직 초기 셋업이 완료되지 않았습니다. 셋업을 마쳐야 모듈 연동이 활성화됩니다.</p></div></div>' +
+              '<button class="btn-primary" onclick="window.openSetupWizard()" style="padding:8px 16px; font-size:12px; font-weight:600;"><i class="ph ph-rocket"></i> 셋업 시작하기</button></div>';
           }
 
           pageContainer.innerHTML =
             setupBannerHtml +
             '<div class="header-section"><div>' +
-            '<h1 class="page-title">Executive Dashboard</h1>' +
-            '<p class="page-subtitle">NAHSHON MEP Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™© Â· ' + new Date().toLocaleDateString('ko-KR') + '</p>' +
+            '<h1 class="page-title"><i class="ph ph-squares-four" style="color:var(--brand-primary)"></i> 현장 운영 대시보드</h1>' +
+            '<p class="page-subtitle">' + dashEsc(d.scope.label) + ' · 실시간 운영 현황 · ' + dashEsc(d.date) + '</p>' +
             '</div><div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.goToView(\'command\')"><i class="ph ph-command"></i> AI í˜„ìž¥ ì§€íœ˜ì‹¤</button>' +
-            '<button class="btn-primary" onclick="openQuickActions()"><i class="ph ph-lightning"></i> í€µ ì•¡ì…˜ ì„¼í„°</button>' +
+            '<button class="btn-secondary" onclick="window.goToView(\'command\')"><i class="ph ph-command"></i> AI 현장 지휘실</button>' +
+            '<button class="btn-primary" onclick="openQuickActions()"><i class="ph ph-lightning"></i> 퀵 액션</button>' +
             '</div></div>' +
-            '<div class="kpi-row">' + kpisHtml + '</div>' +
-            '<div class="dashboard-grid-main">' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> ê¸´ê¸‰ ì²˜ë¦¬ í•„ìš”</div></div>' +
-            '<div class="panel-body"><table class="data-table"><thead><tr>' +
-            '<th style="width:100px">ID</th><th style="width:70px">êµ¬ë¶„</th><th>ë‚´ìš©</th><th style="width:90px">ë‹´ë‹¹</th><th style="width:80px">ìƒíƒœ</th><th style="width:90px;text-align:right">ë‚ ì§œ</th>' +
-            '</tr></thead><tbody>' + actionItemsHtml + '</tbody></table></div></div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-kanban"></i> í”„ë¡œì íŠ¸ í˜„í™©</div></div>' +
-            '<div class="panel-body padded" style="display:flex;flex-direction:column;gap:20px">' + projectsHtml + '</div></div>' +
-            '</div>';
-        } catch (err) { renderError('ëŒ€ì‹œë³´ë“œ ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
+            dashRiskBlock(d.risk) +
+            dashAiBrief(d.aiBrief, d.risk.counts) +
+            dashOpsBlock(d.ops);
+        } catch (err) { renderError('대시보드 로딩 실패'); console.error(err); }
+      }
+
+      function dashEsc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+      }
+
+      // ③ 리스크·예외 — 즉시조치 / 주의 / 정상 3단 트리아지
+      function dashRiskBlock(risk) {
+        function col(title, emoji, color, count, items, isNormal) {
+          var body = (items && items.length) ? items.map(function (it) {
+            if (isNormal) {
+              return '<div style="padding:10px 13px;border-top:1px solid var(--border-subtle);display:flex;gap:9px">' +
+                '<div style="width:3px;border-radius:2px;background:' + color + '"></div>' +
+                '<div><div style="font-size:12.5px;font-weight:600;color:var(--text-primary)">' + dashEsc(it.label) + '</div>' +
+                '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(it.detail) + '</div></div></div>';
+            }
+            return '<div style="padding:10px 13px;border-top:1px solid var(--border-subtle);display:flex;gap:9px">' +
+              '<div style="width:3px;border-radius:2px;background:' + color + '"></div>' +
+              '<div style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text-primary);display:flex;gap:6px;align-items:center">' +
+              '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:5px;background:' + color + '22;color:' + color + '">' + dashEsc(it.module) + '</span>' + dashEsc(it.title) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">' + dashEsc(it.detail) + '</div></div></div>';
+          }).join('') : '<div style="padding:16px 13px;border-top:1px solid var(--border-subtle);font-size:11.5px;color:var(--text-tertiary);text-align:center">해당 항목 없음</div>';
+          return '<div style="border:1px solid ' + color + '55;border-radius:12px;overflow:hidden">' +
+            '<div style="padding:10px 13px;background:' + color + '18;color:' + color + ';display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:800">' +
+            '<span>' + emoji + ' ' + title + '</span><span style="font-size:15px">' + count + '</span></div>' + body + '</div>';
+        }
+        return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px" class="dash-triage">' +
+          col('즉시조치', '🔴', '#ef4444', risk.counts.critical, risk.critical, false) +
+          col('주의', '🟠', '#f59e0b', risk.counts.warning, risk.warning, false) +
+          col('정상', '🟢', '#10b981', '양호', risk.normal, true) +
+          '</div>';
+      }
+
+      function dashAiBrief(brief, counts) {
+        if (!brief) return '';
+        return '<div style="background:linear-gradient(100deg,#1e1b4b,#312e81);border-radius:13px;padding:15px 18px;color:#e0e7ff;display:flex;align-items:center;gap:15px;margin-bottom:18px">' +
+          '<div style="width:36px;height:36px;border-radius:10px;background:rgba(129,140,248,.22);display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 auto">✦</div>' +
+          '<div style="flex:1"><div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:#a5b4fc">AI 브리핑</div>' +
+          '<div style="font-size:13px;font-weight:500;margin-top:3px;color:#fff;line-height:1.5">' + dashEsc(brief) + '</div></div></div>';
+      }
+
+      // ② 현장 일일 운영 — KPI + 오늘 할 일 / 인원 / 자재 / 이슈
+      function dashOpsBlock(ops) {
+        var att = ops.attendance, tasks = ops.tasks, tbm = ops.tbm, arr = ops.arrivals;
+        var kpis =
+          dashKpi('#3b82f6', 'ph-users', '오늘 출역', att.present + '<small>/' + att.planned + '명</small>', att.rate + '% 출역', (att.byCompany || []).map(function (c) { return dashEsc(c.name) + ' ' + c.count; }).join(' · ') || '출근 데이터 없음') +
+          dashKpi('#8b5cf6', 'ph-list-checks', '오늘 작업', tasks.total + '<small>건</small>', (tasks.critical ? '★임계 ' + tasks.critical : '') + (tasks.highRisk ? ' · 고위험 ' + tasks.highRisk : '') || '진행 작업', '현장 노무 기준') +
+          dashKpi('#10b981', 'ph-signature', 'TBM / 안전카드', tbm.done + '<small>/' + tbm.cards + '</small>', (tbm.waiting ? '서명 대기 ' + tbm.waiting + '건' : '완료'), '오늘 생성 카드') +
+          dashKpi('#06b6d4', 'ph-package', '오늘 자재 입고', arr.total + '<small>건</small>', (arr.inTransit ? '배송중 ' + arr.inTransit : '도착 예정'), 'ETA 오늘');
+
+        // 오늘 할 일 리스트
+        var taskRows = (tasks.list || []).length ? tasks.list.map(function (t) {
+          var ac = t.nextAction === '안전계획' ? '#3b82f6' : t.nextAction === 'TBM' ? '#f59e0b' : t.nextAction === '시작' ? '#10b981' : 'var(--text-tertiary)';
+          return '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);width:46px">' + dashEsc(t.activityId || '') + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(t.name) +
+            (t.isCritical ? ' <span style="background:rgba(239,68,68,.15);color:#ef4444;font-size:9.5px;padding:1px 5px;border-radius:4px;font-weight:700">★</span>' : '') +
+            (t.ehsHigh ? ' <span style="background:rgba(239,68,68,.15);color:#ef4444;font-size:9.5px;padding:1px 5px;border-radius:4px;font-weight:700">고위험</span>' : '') + '</div>' +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(t.trade || '') + (t.crewSize ? ' · ' + t.crewSize + '명' : ' · 인원 없음') + '</div></div>' +
+            '<span style="font-size:10.5px;font-weight:700;color:' + ac + ';border:1px solid ' + ac + ';border-radius:6px;padding:2px 8px">' + dashEsc(t.nextAction) + '</span></div>';
+        }).join('') : '<div style="padding:22px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 예정된 현장 작업이 없습니다.</div>';
+
+        // 인원 회사별 바
+        var compBars = (att.byCompany || []).length ? att.byCompany.map(function (c) {
+          var pct = att.present > 0 ? Math.round(c.count / att.present * 100) : 0;
+          return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--text-secondary)">' + dashEsc(c.name) + '</span><span class="cell-mono" style="color:var(--text-primary)">' + c.count + '명</span></div>' +
+            '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:var(--brand-primary)"></div></div></div>';
+        }).join('') : '<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:12px">오늘 출근 기록이 없습니다.</div>';
+
+        // 오늘 도착 자재
+        var arrRows = (arr.list || []).length ? arr.list.map(function (a) {
+          var c = a.delay === 'late' ? '#ef4444' : a.delay === 'risk' ? '#f59e0b' : '#10b981';
+          var s = a.delay === 'late' ? '지연' : a.delay === 'risk' ? '임박' : '정시';
+          return '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:9.5px;font-weight:800;padding:3px 6px;border-radius:5px;background:rgba(6,182,212,.16);color:#06b6d4">' + dashEsc(a.status) + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(a.name) + '</div>' +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(a.vendor || '') + '</div></div>' +
+            '<span style="font-size:10.5px;font-weight:700;color:' + c + '">' + s + '</span></div>';
+        }).join('') : '<div style="padding:18px;text-align:center;color:var(--text-tertiary);font-size:12px">오늘 도착 예정 자재가 없습니다.</div>';
+
+        // 오늘 안전 이슈
+        var issueRows = (ops.issues || []).length ? ops.issues.map(function (i) {
+          return '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:9.5px;font-weight:800;padding:3px 6px;border-radius:5px;background:rgba(245,158,11,.16);color:#f59e0b">' + dashEsc(i.kind) + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(i.title) + '</div></div>' +
+            '<span style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc(i.detail) + '</span></div>';
+        }).join('') : '<div style="padding:18px;text-align:center;color:var(--text-tertiary);font-size:12px">미조치 안전 이슈가 없습니다.</div>';
+
+        return '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' + kpis + '</div>' +
+          '<div class="dashboard-grid-main dash-ops2" style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px">' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-calendar-check"></i> 오늘 할 일 · 공정</div><span style="font-size:11px;color:var(--brand-primary);cursor:pointer" onclick="window.goToView(\'wbs\')">공정관리 →</span></div><div class="panel-body padded" style="padding-top:4px">' + taskRows + '</div></div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-users-three"></i> 인원 실시간</div><span style="font-size:11px;color:var(--text-tertiary)">출역 ' + att.rate + '%</span></div><div class="panel-body padded">' + compBars + '</div></div>' +
+          '</div>' +
+          '<div class="dash-ops2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-truck"></i> 오늘 도착 예정 자재</div><span style="font-size:11px;color:var(--brand-primary);cursor:pointer" onclick="window.goToView(\'wbs\')">조달 →</span></div><div class="panel-body padded" style="padding-top:4px">' + arrRows + '</div></div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> 오늘 안전 이슈</div><span style="font-size:11px;color:var(--brand-primary);cursor:pointer" onclick="window.goToView(\'safety\')">안전관리 →</span></div><div class="panel-body padded" style="padding-top:4px">' + issueRows + '</div></div>' +
+          '</div>';
+      }
+
+      function dashKpi(color, icon, label, value, meta, sub) {
+        return '<div class="kpi-card" style="border-left:3px solid ' + color + '">' +
+          '<div class="kpi-label">' + dashEsc(label) + ' <i class="ph ' + icon + '" style="font-size:15px;color:' + color + '"></i></div>' +
+          '<div class="kpi-value">' + value + '</div>' +
+          '<div class="kpi-meta" style="color:var(--text-secondary)">' + meta + '</div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(sub) + '</div></div>';
       }
 
       // â”€â”€ ANALYTICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

@@ -1734,3 +1734,9 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
     .docs-two-col { grid-template-columns: 1fr !important; }
     .docs-folder-list { display: none; }
 }
+
+/* 현장 운영 대시보드 — 트리아지/오퍼레이션 그리드 반응형 */
+@media (max-width: 860px) {
+    .dash-triage { grid-template-columns: 1fr !important; }
+    .dash-ops2 { grid-template-columns: 1fr !important; }
+}

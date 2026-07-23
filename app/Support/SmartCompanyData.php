@@ -92,6 +92,7 @@ class SmartCompanyData
 
             'api_getProjectStatus' => self::projects(),
             'api_getActionItems' => self::actionItems(),
+            'api_getOpsDashboard' => app(\App\Services\DashboardService::class)->overview($siteId),
             'api_getConstructionCommandCenter' => self::commandCenter($siteId),
             'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02'), $siteId),
             'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02'), $siteId),
