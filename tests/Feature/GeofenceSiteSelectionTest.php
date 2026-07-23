@@ -140,4 +140,27 @@ class GeofenceSiteSelectionTest extends TestCase
 
         $res->assertStatus(200)->assertJsonPath('canManage', false);
     }
+
+    public function test_admin_can_manually_finalize_attendance_as_scheduler_fallback(): void
+    {
+        // 자정 스케줄러가 안 돌았을 때의 수동 마감(관리자 fallback).
+        $admin = $this->userWith('admin', $this->siteA);
+
+        $res = $this->actingAs($admin)->postJson('/smart-company-api/api_finalizeAttendanceNow', [
+            'args' => ['2026-07-21'], 'siteId' => 'ALL',
+        ]);
+
+        $res->assertStatus(200)->assertJsonPath('success', true)->assertJsonPath('date', '2026-07-21');
+    }
+
+    public function test_worker_cannot_finalize_attendance(): void
+    {
+        $worker = $this->userWith('worker', $this->siteA);
+
+        $res = $this->actingAs($worker)->postJson('/smart-company-api/api_finalizeAttendanceNow', [
+            'args' => ['2026-07-21'], 'siteId' => 'ALL',
+        ]);
+
+        $res->assertStatus(200)->assertJsonPath('success', false);
+    }
 }

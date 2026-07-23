@@ -98,6 +98,7 @@ class SmartCompanyData
             // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반
             'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
             'api_getGeofenceSites' => self::getGeofenceSites(),
+            'api_finalizeAttendanceNow' => self::finalizeAttendanceNow($args[0] ?? null),
             'api_getSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->list((string) ($args[0] ?? $siteId)),
             'api_saveSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->save((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             'api_deleteSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->delete((int) ($args[0] ?? 0)),
@@ -792,6 +793,28 @@ class SmartCompanyData
         $site->update(['latitude' => (float) $lat, 'longitude' => (float) $lng, 'radius_meters' => $r]);
 
         return ['success' => true, 'site' => $site->code, 'radius' => $r];
+    }
+
+    /**
+     * 자동 출퇴근 세션 수동 마감 — 자정 스케줄러가 아직 안 돌았거나 미설정일 때의 안전장치(관리자용).
+     * 기본은 어제 세션을 마감한다. (오늘을 넣으면 아직 근무 중인 인원이 조기 퇴근될 수 있어 어제로 고정 권장.)
+     *
+     * @return array<string, mixed>
+     */
+    public static function finalizeAttendanceNow(mixed $date = null): array
+    {
+        $user = auth()->user();
+        if (! $user || ! in_array($user->access_role, self::GEOFENCE_ROLES, true)) {
+            return ['success' => false, 'error' => '출퇴근 마감 실행 권한이 없습니다.'];
+        }
+
+        $target = (is_string($date) && $date !== '')
+            ? \Illuminate\Support\Carbon::parse($date)
+            : \Illuminate\Support\Carbon::yesterday();
+
+        $r = app(\App\Services\Attendance\AttendanceGeoService::class)->finalize($target);
+
+        return array_merge($r, ['date' => $target->toDateString()]);
     }
 
     /**

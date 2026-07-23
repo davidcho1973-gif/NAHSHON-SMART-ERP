@@ -99,6 +99,13 @@ class AttendanceGeoService
             }
         }
 
+        // 현장 안이 확인될 때마다 "마지막 재실 시각"을 남긴다 — 이탈 신호를 놓쳐도(앱 종료 등)
+        // 자정 마감에서 이 시각을 퇴근으로 추정할 수 있게 하는 안전장치.
+        if ($session && $onSiteStay) {
+            $session->last_onsite_at = $now;
+            $session->save();
+        }
+
         AttendanceGeoEvent::create([
             'employee_id' => $employee->id, 'site_id' => $site->id, 'kind' => $kind, 'source' => $source,
             'on_site' => $onSiteStay, 'lat' => $lat, 'lng' => $lng, 'accuracy' => $accuracy, 'bssid' => $bssid,
@@ -163,8 +170,19 @@ class AttendanceGeoService
                 $this->closeAttendanceLog($s);
                 $s->update(['status' => 'finalized', 'finalized_at' => now()]);
                 $finalized++;
+            } elseif ($s->last_onsite_at && $s->last_enter_at && $s->last_onsite_at->gt($s->last_enter_at)) {
+                // 이탈 신호는 못 받았지만(앱을 닫고 퇴근한 경우), 낮 동안 현장 재실이 추적됐다.
+                // → 마지막 재실 시각을 퇴근으로 자동 확정한다. (근본 원인 해결: 자동 퇴근 누락 방지)
+                $s->on_site_seconds += max(0, $s->last_enter_at->diffInSeconds($s->last_onsite_at));
+                $s->last_exit_at = $s->last_onsite_at;
+                $s->pending_exit_at = null;
+                $s->status = 'finalized';
+                $s->finalized_at = now();
+                $s->save();
+                $this->closeAttendanceLog($s);
+                $finalized++;
             } else {
-                // 아직 현장 안(이탈 기록 없음) → 자동 퇴근 안 함, 미마감으로 관리자 확인.
+                // 진입 후 재실 추적이 전혀 없음(입장 핑 1회 등) → 퇴근 시각을 알 수 없어 미마감(관리자 확인).
                 $s->update(['needs_review' => true, 'status' => 'finalized', 'finalized_at' => now()]);
                 $review++;
             }
