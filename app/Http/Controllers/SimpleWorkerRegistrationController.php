@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\Site;
+use App\Models\WbsItem;
 use App\Support\QrSvg;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -36,9 +37,29 @@ class SimpleWorkerRegistrationController extends Controller
         return view('worker-join.form', [
             'site' => $site,
             'companies' => Company::query()->where('status', 'active')->orderBy('name')->get(['id', 'name']),
-            'roles' => MemberRegistration::roleOptions(),
+            'roles' => $this->tradeOptions($site),
             'done' => false,
         ]);
+    }
+
+    /**
+     * 공정(Trade) 선택지 — 공정관리(WBS)에서 실제로 쓰이는 공종을 추출한다.
+     * 현장 WBS 우선, 없으면 전체 WBS, 그것도 없으면 기본 직군. (폼에서 직접 입력도 가능)
+     *
+     * @return array<int, string>
+     */
+    private function tradeOptions(Site $site): array
+    {
+        $trades = WbsItem::query()->where('site_id', $site->id)
+            ->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade');
+
+        if ($trades->isEmpty()) {
+            $trades = WbsItem::query()->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade');
+        }
+
+        $list = $trades->map(fn ($t) => trim((string) $t))->filter()->unique()->sort()->values()->all();
+
+        return $list !== [] ? $list : array_values(MemberRegistration::roleOptions());
     }
 
     /** 즉시 등록 — MemberRegistration 생성 후 곧바로 활성 Employee 로 동기화. */

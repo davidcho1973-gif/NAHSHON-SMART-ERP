@@ -61,12 +61,13 @@
                 </select>
 
                 <label>공정 (Trade) <span class="req">*</span></label>
-                <select name="role" required>
-                    <option value="">선택하세요</option>
-                    @foreach ($roles as $key => $label)
-                        <option value="{{ $key }}" @selected(old('role') === $key)>{{ $label }}</option>
+                <input type="text" name="role" list="trade-list" value="{{ old('role') }}" placeholder="목록에서 선택하거나 직접 입력" required autocomplete="off">
+                <datalist id="trade-list">
+                    @foreach ($roles as $t)
+                        <option value="{{ $t }}"></option>
                     @endforeach
-                </select>
+                </datalist>
+                <div style="font-size:.78rem;color:#64748b;margin-top:5px">공정관리(WBS)의 공종 목록이며, 없으면 직접 입력하세요.</div>
 
                 <label>이메일 <span class="req">*</span></label>
                 <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com" required>
