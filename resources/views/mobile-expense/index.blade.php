@@ -353,12 +353,16 @@
     <div class="expense-list" id="expenseList">
       @forelse($expenses as $expense)
         @php
+          $submitterName = trim(($expense->employee->first_name ?? '').' '.($expense->employee->last_name ?? ''));
+          $submitterName = $submitterName !== '' ? $submitterName : ($expense->employee->email ?? '미상');
           $expensePayload = $expense->toArray();
           $expensePayload['category'] = $expense->accounting_account ?: $expense->category;
           $expensePayload['receipt_view_url'] = $expense->receipt_path ? route('mobile-expense.receipt', $expense) : null;
+          $expensePayload['submitter'] = $submitterName;
           $canModifyExpense = $canManageAllExpenses || ((int) $expense->employee_id === (int) auth()->user()?->employee_id && in_array($expense->status, ['draft', 'pending', 'rejected'], true));
           $expensePayload['edit_url'] = $canModifyExpense ? route('mobile-expense.edit', $expense) : null;
           $expensePayload['delete_url'] = $canModifyExpense ? route('mobile-expense.destroy', $expense) : null;
+          $expensePayload['review_url'] = $canManageAllExpenses ? route('mobile-expense.review', $expense) : null;
         @endphp
         <div class="expense-card" data-status="{{ $expense->status }}" onclick="openDetailModal({{ Illuminate\Support\Js::from($expensePayload) }})">
           <div class="card-top">
@@ -369,7 +373,7 @@
             {{ $expense->description }}
           </div>
           <div class="card-bottom">
-            <span class="card-date">{{ $expense->expense_date->format('Y-m-d') }}</span>
+            <span class="card-date"><i class="ph ph-user" style="opacity:.6"></i> {{ $submitterName }} · {{ $expense->expense_date->format('Y-m-d') }}</span>
             <span class="status-badge {{ $expense->status }}">
               {{ $expense->status === 'pending' ? '승인대기' : ($expense->status === 'approved' ? '승인완료' : ($expense->status === 'paid' ? '지급완료' : ($expense->status === 'rejected' ? '반려됨' : $expense->status))) }}
             </span>
@@ -426,6 +430,10 @@
           <span class="detail-value" id="modalClass">-</span>
         </div>
         <div class="detail-item">
+          <span class="detail-label">제출자 (등록자)</span>
+          <span class="detail-value" id="modalSubmitter">-</span>
+        </div>
+        <div class="detail-item">
           <span class="detail-label">승인 상태</span>
           <span class="detail-value" id="modalStatus">-</span>
         </div>
@@ -437,6 +445,20 @@
       <div class="detail-item" id="receiptPreviewWrap" style="display:none">
         <span class="detail-label">영수증 첨부</span>
         <img class="receipt-preview" id="modalReceiptImg" src="" alt="영수증 미리보기">
+      </div>
+      <div id="modalReview" style="display:none;gap:8px;margin-top:12px">
+        <form id="reviewApproveForm" method="POST" style="flex:1">
+          @csrf
+          @method('PATCH')
+          <input type="hidden" name="decision" value="approved">
+          <button type="submit" style="width:100%;padding:12px;border:none;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;background:var(--status-success);color:#fff"><i class="ph ph-check-circle"></i> 승인</button>
+        </form>
+        <form id="reviewRejectForm" method="POST" style="flex:1" onsubmit="return confirm('이 영수증을 반려할까요?')">
+          @csrf
+          @method('PATCH')
+          <input type="hidden" name="decision" value="rejected">
+          <button type="submit" style="width:100%;padding:12px;border:1px solid var(--status-danger);border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;background:transparent;color:var(--status-danger)"><i class="ph ph-x-circle"></i> 반려</button>
+        </form>
       </div>
       <div class="modal-actions" id="modalActions" style="display:none">
         <a href="#" class="btn-edit" id="editExpenseLink">
@@ -499,6 +521,7 @@
         'rejected': '반려됨'
       };
       document.getElementById('modalStatus').textContent = statusLabels[expense.status] || expense.status;
+      document.getElementById('modalSubmitter').textContent = expense.submitter || '-';
 
       const preApprovalItem = document.getElementById('modalPreApprovalItem');
       const preApproval = expense.pre_approval || null;
@@ -533,6 +556,16 @@
         actions.style.display = 'none';
         editLink.href = '#';
         deleteForm.action = '';
+      }
+
+      // 관리자 원클릭 승인/반려 — 승인대기 상태에서만 노출.
+      const reviewBox = document.getElementById('modalReview');
+      if (expense.review_url && expense.status === 'pending') {
+        reviewBox.style.display = 'flex';
+        document.getElementById('reviewApproveForm').action = expense.review_url;
+        document.getElementById('reviewRejectForm').action = expense.review_url;
+      } else {
+        reviewBox.style.display = 'none';
       }
 
       document.getElementById('detailModal').style.display = 'flex';
