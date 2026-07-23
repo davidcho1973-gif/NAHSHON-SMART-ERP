@@ -3961,15 +3961,17 @@
           return;
         }
         body.innerHTML =
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">현장을 고르면 <b>인쇄용 QR 포스터</b>가 열립니다. 현장 게시판에 붙이면 작업자가 휴대폰으로 스캔해 <b>직접 입사지원서</b>를 작성합니다. (제출 → 관리자 검토 → 인사 등록)</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. 포스터를 인쇄해 현장에 붙이면 작업자가 스캔해 스스로 등록합니다.</div>' +
           sites.map(function (s) {
-            var poster = '/member/site/' + s.id + '/apply/qr';
-            var form = window.location.origin + '/member/site/' + s.id + '/apply';
-            return '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border-subtle)">' +
-              '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
-              '<div style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(form) + '</div></div>' +
-              '<button class="btn-secondary" style="padding:6px 10px;font-size:12px" onclick="window.wjCopyLink(\'' + form + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
-              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + poster + '\',\'_blank\')"><i class="ph ph-printer"></i> 포스터</button>' +
+            var quickPoster = '/join/w/' + s.id + '/qr';
+            var quickForm = window.location.origin + '/join/w/' + s.id;
+            var fullPoster = '/member/site/' + s.id + '/apply/qr';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
+              '<div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(quickForm) + '</div></div>' +
+              '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
+              '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickPoster + '\',\'_blank\')"><i class="ph ph-qr-code"></i> 간편등록 QR</button>' +
               '</div>';
           }).join('');
       };
