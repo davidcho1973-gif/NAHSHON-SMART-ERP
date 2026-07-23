@@ -297,6 +297,28 @@ class MobileExpenseController extends Controller
         return ltrim($path, '/');
     }
 
+    /**
+     * 영수증 한 건을 즉시 승인/반려/지급완료 처리(관리자 전용). 목록에서 원클릭 승인용.
+     */
+    public function review(Request $request, MobileExpense $expense): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($this->canManageAllExpenses(), 403);
+
+        $data = $request->validate(['decision' => 'required|in:approved,rejected,paid']);
+
+        $expense->update([
+            'status' => $data['decision'],
+            'reviewed_by_user_id' => auth()->id(),
+            'reviewed_at' => now(),
+            'paid_by_user_id' => $data['decision'] === 'paid' ? auth()->id() : $expense->paid_by_user_id,
+            'paid_at' => $data['decision'] === 'paid' ? now() : $expense->paid_at,
+        ]);
+
+        $label = ['approved' => '승인', 'rejected' => '반려', 'paid' => '지급완료'][$data['decision']];
+
+        return back()->with('success', "영수증을 {$label} 처리했습니다.");
+    }
+
     private function canAccessExpense(MobileExpense $expense): bool
     {
         return $this->canManageAllExpenses()

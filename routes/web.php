@@ -31,6 +31,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/mobile-expense/upload-receipt', [MobileExpenseController::class, 'uploadReceipt'])->name('mobile-expense.upload-receipt');
     Route::post('/mobile-expense/store', [MobileExpenseController::class, 'store'])->name('mobile-expense.store');
     Route::put('/mobile-expense/{expense}', [MobileExpenseController::class, 'update'])->name('mobile-expense.update');
+    Route::patch('/mobile-expense/{expense}/review', [MobileExpenseController::class, 'review'])->name('mobile-expense.review');
     Route::delete('/mobile-expense/{expense}', [MobileExpenseController::class, 'destroy'])->name('mobile-expense.destroy');
 
     // Expense Pre-Approval Routes
