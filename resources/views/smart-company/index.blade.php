@@ -3079,11 +3079,55 @@
           function renderCloseTab() {
             var w = selectedItem();
             var canClose = w.tbmStatus === '완료';
+            window._closePhotos = [];
             document.getElementById('s-close').innerHTML =
-              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>마감 저장</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI 공정율 분석</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
+              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select><div style="margin-top:12px"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px"><i class="ph ph-camera"></i> 현장 사진 첨부 <span style="color:var(--brand-primary)">(AI 종합분석)</span></label><input id="close-photo-input" type="file" accept="image/*" multiple capture="environment" style="font-size:12px;color:var(--text-secondary);max-width:100%"><div id="close-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div><div style="font-size:10px;color:var(--text-tertiary);margin-top:4px">사진을 첨부하고 <b>AI 공정율 분석</b>을 누르면 시공 상태·품질·안전을 함께 분석합니다. (최대 6장)</div></div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>마감 저장</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI 공정율 분석</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
             document.getElementById('save-close-btn').addEventListener('click', function(){ saveClose(w.id, false); });
             document.getElementById('ai-progress-btn').addEventListener('click', function(){ saveClose(w.id, true); });
+            var photoInput = document.getElementById('close-photo-input');
+            if (photoInput) photoInput.addEventListener('change', function(){ handleClosePhotos(this.files); });
             renderProgressResult(w);
+          }
+
+          // 첨부 사진을 캔버스로 다운스케일(최대 1600px, JPEG 0.8)해 base64 로 보관 — 전송량 절감.
+          function handleClosePhotos(fileList) {
+            var files = Array.prototype.slice.call(fileList || []);
+            window._closePhotos = window._closePhotos || [];
+            files.forEach(function(file){
+              if (window._closePhotos.length >= 6) return;
+              if (!/^image\//.test(file.type)) return;
+              var reader = new FileReader();
+              reader.onload = function(e){
+                var img = new Image();
+                img.onload = function(){
+                  var max = 1600, w2 = img.width, h2 = img.height;
+                  if (w2 > max || h2 > max) { var r = Math.min(max / w2, max / h2); w2 = Math.round(w2 * r); h2 = Math.round(h2 * r); }
+                  var cv = document.createElement('canvas'); cv.width = w2; cv.height = h2;
+                  cv.getContext('2d').drawImage(img, 0, 0, w2, h2);
+                  var dataUrl = cv.toDataURL('image/jpeg', 0.8);
+                  window._closePhotos.push({ data: dataUrl.split(',')[1], mime_type: 'image/jpeg', name: file.name || ('photo' + (window._closePhotos.length + 1)) });
+                  renderClosePhotoStrip();
+                };
+                img.src = e.target.result;
+              };
+              reader.readAsDataURL(file);
+            });
+          }
+
+          function renderClosePhotoStrip() {
+            var strip = document.getElementById('close-photo-strip');
+            if (!strip) return;
+            strip.innerHTML = (window._closePhotos || []).map(function(p, i){
+              return '<div style="position:relative;width:56px;height:56px;border-radius:6px;overflow:hidden;border:1px solid var(--border-subtle)">'
+                + '<img src="data:' + p.mime_type + ';base64,' + p.data + '" style="width:100%;height:100%;object-fit:cover">'
+                + '<button onclick="window.removeClosePhoto(' + i + ')" title="삭제" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.6);color:#fff;border:none;width:16px;height:16px;line-height:16px;font-size:11px;cursor:pointer;padding:0">×</button></div>';
+            }).join('');
+          }
+          window.removeClosePhoto = function(i){ (window._closePhotos || []).splice(i, 1); renderClosePhotoStrip(); };
+
+          function aiFlags(title, arr, color) {
+            if (!arr || !arr.length) return '';
+            return '<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:'+color+'">'+title+'</div><ul style="margin:4px 0 0;padding-left:16px">'+arr.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('')+'</ul></div>';
           }
 
           function renderProgressResult(w) {
@@ -3097,8 +3141,17 @@
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">완료</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">잔여</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI 추천</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
               + (ai
-                  ? '<div style="margin-top:14px;padding:12px;background:rgba(37,99,235,.06);border-left:3px solid var(--brand-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--brand-primary)">AI 추천 ('+esc(ai.status || '')+')</b><br>'+esc(ai.rationale || '')+(ai.follow_up ? '<br><span style="color:var(--text-tertiary)">후속: '+esc(ai.follow_up)+'</span>' : '')+'</div>'
-                  : '<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">「AI 공정율 분석」을 누르면 마감 보고를 바탕으로 AI가 공정율을 추천합니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>')
+                  ? '<div style="margin-top:14px;padding:12px;background:rgba(37,99,235,.06);border-left:3px solid var(--brand-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.7">'
+                    + '<b style="color:var(--brand-primary)">AI 추천 ('+esc(ai.status || '')+')</b>'
+                    + (ai.photo_count ? ' <span style="font-size:10px;color:var(--text-tertiary)">· 📸 사진 '+ai.photo_count+'장 종합분석</span>' : '')
+                    + '<br>'+esc(ai.summary || ai.rationale || '')
+                    + (ai.summary && ai.rationale ? '<br><span style="color:var(--text-tertiary)">근거: '+esc(ai.rationale)+'</span>' : '')
+                    + aiFlags('📸 사진 소견', ai.photo_findings, 'var(--text-secondary)')
+                    + aiFlags('⚠ 품질 지적', ai.quality_flags, 'var(--status-warning)')
+                    + aiFlags('🦺 안전 지적', ai.safety_flags, 'var(--status-danger)')
+                    + (ai.follow_up ? '<div style="margin-top:6px;color:var(--text-tertiary)">후속: '+esc(ai.follow_up)+'</div>' : '')
+                    + '</div>'
+                  : '<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">「AI 공정율 분석」을 누르면 마감 보고(첨부 사진 포함)를 바탕으로 AI가 공정율·품질·안전을 종합 분석합니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>')
               +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== '추천완료' ? 'disabled' : '')+'>공정율 확정 반영</button><button class="btn-secondary" id="next-work-btn">다음 작업 생성</button></div>';
             document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'확정완료', closeStatus:'완료'}); switchTab('s-records'); });
             document.getElementById('next-work-btn').addEventListener('click', function(){ createNextWork(w); });
@@ -3185,10 +3238,12 @@
             w.totalQty = Number(document.getElementById('total-qty-input').value || w.qty || 0);
             w.closeStatus = '저장완료';
             if (!analyze) { saveSafetyItems(); renderAllSafetyTabs(); return; }
+            var photos = (window._closePhotos || []).map(function(p){ return { data: p.data, mime_type: p.mime_type }; });
             var btn = document.getElementById('ai-progress-btn');
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 공정율 분석 중...'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> ' + (photos.length ? '사진 종합분석 중...' : 'AI 공정율 분석 중...'); }
             try {
-              var res = await gsRun('api_recommendSafetyProgress', [w], null);
+              var payload = Object.assign({}, w, { photos: photos });
+              var res = await gsRun('api_recommendSafetyProgress', [payload], null);
               if (res && res.success && res.item) { applyServerItem(id, res.item); return; }
               alert((res && res.error) || 'AI 공정율 분석에 실패했습니다. (GEMINI_API_KEY 설정 확인)');
             } catch (e) { alert('AI 공정율 분석 오류: ' + e.message); }
