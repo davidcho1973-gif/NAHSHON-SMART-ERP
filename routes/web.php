@@ -54,6 +54,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/procurement-api/analyze', [App\Http\Controllers\ProcurementController::class, 'analyze'])->name('procurement.analyze');
     Route::get('/procurement-api/file/{item}', [App\Http\Controllers\ProcurementController::class, 'showFile'])->name('procurement.file');
 
+    // 하이브리드 자동 출퇴근 — 작업자 앱이 위치/WiFi 신호 전송 + 현재 상태 조회
+    Route::post('/attendance-geo/ping', [App\Http\Controllers\AttendanceGeoController::class, 'ping'])->name('attendance-geo.ping');
+    Route::get('/attendance-geo/status', [App\Http\Controllers\AttendanceGeoController::class, 'status'])->name('attendance-geo.status');
+
     // Vehicle API Routes
     Route::post('/vehicle-api/scan-rental', [App\Http\Controllers\VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
     Route::post('/vehicle-api/save', [App\Http\Controllers\VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');
