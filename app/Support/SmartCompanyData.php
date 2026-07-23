@@ -95,6 +95,7 @@ class SmartCompanyData
             'api_getOpsDashboard' => app(\App\Services\DashboardService::class)->overview($siteId),
 
             // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반
+            'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_getSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->list((string) ($args[0] ?? $siteId)),
             'api_saveSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->save((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             'api_deleteSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->delete((int) ($args[0] ?? 0)),
@@ -746,6 +747,34 @@ class SmartCompanyData
         }
 
         $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * 관리자가 "현재 위치를 현장 중심으로" 지오펜스를 설정 — 자동 출퇴근을 즉시 활성화한다.
+     *
+     * @return array<string, mixed>
+     */
+    public static function setMySiteGeofence(mixed $lat, mixed $lng, mixed $radius): array
+    {
+        $user = auth()->user();
+        if (! $user || ! in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true)) {
+            return ['success' => false, 'error' => '현장 지오펜스를 설정할 권한이 없습니다.'];
+        }
+
+        $employee = $user->employee_id ? Employee::find($user->employee_id) : null;
+        $site = $employee?->site_id ? Site::find($employee->site_id) : null;
+        if (! $site) {
+            return ['success' => false, 'error' => '내 계정에 연결된 현장이 없습니다. 직원-현장 배정을 먼저 확인하세요.'];
+        }
+
+        if (! is_numeric($lat) || ! is_numeric($lng)) {
+            return ['success' => false, 'error' => 'GPS 좌표가 유효하지 않습니다.'];
+        }
+        $r = is_numeric($radius) ? max(30, min(5000, (int) $radius)) : 322; // 기본 0.2마일
+
+        $site->update(['latitude' => (float) $lat, 'longitude' => (float) $lng, 'radius_meters' => $r]);
+
+        return ['success' => true, 'site' => $site->code, 'radius' => $r];
     }
 
     private static function resolveSiteId(string $siteId): ?int

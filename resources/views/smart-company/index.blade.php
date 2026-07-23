@@ -12927,6 +12927,78 @@ async function renderVendors() {
     window._scannedTeamCode = null;
 
     // ── 내 출퇴근 기록 전용 페이지 ───────────────────────────────
+    // ── 자동 출퇴근(GPS 지오펜스) — 브라우저 위치를 하이브리드 판정 엔드포인트로 전송 ──
+    window._autoAtt = window._autoAtt || { watchId: null };
+    function autoAttCsrf() { var e = document.querySelector('meta[name="csrf-token"]'); return e ? e.getAttribute('content') : ''; }
+    function autoAttFmtDur(sec) { sec = Math.max(0, sec || 0); return Math.floor(sec / 3600) + '시간 ' + Math.floor((sec % 3600) / 60) + '분'; }
+    async function autoAttScApi(fn, args) {
+      var r = await fetch('/smart-company-api/' + fn, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': autoAttCsrf(), 'Accept': 'application/json' }, body: JSON.stringify({ args: args || [] }) });
+      return await r.json();
+    }
+
+    window.initAutoAttendance = function () { autoAttRefresh(); };
+
+    async function autoAttRefresh() {
+      var body = document.getElementById('auto-att-body'); var pill = document.getElementById('auto-att-state');
+      if (!body) return;
+      var st = null;
+      try { var r = await fetch('/attendance-geo/status', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }); st = await r.json(); } catch (e) { /* ignore */ }
+      if (!st || st.success === false) {
+        body.innerHTML = '<div style="color:var(--status-warning);font-size:13px">' + ((st && st.error) || '출퇴근 상태를 불러올 수 없습니다. 계정에 직원 정보가 연결되어 있어야 합니다.') + '</div>';
+        if (pill) { pill.textContent = '연결 안됨'; pill.style.color = 'var(--status-warning)'; }
+        return;
+      }
+      var stateMap = { on_site: ['근무중', 'var(--status-success)'], left: ['이탈', 'var(--status-warning)'], finalized: ['마감', 'var(--text-tertiary)'], off_site: ['현장 밖', 'var(--text-tertiary)'] };
+      var sm = stateMap[st.state] || stateMap.off_site;
+      if (pill) { pill.textContent = sm[0]; pill.style.color = sm[1]; }
+      var running = window._autoAtt.watchId != null;
+      var site = st.site; var noGeo = !site || !site.radius;
+      body.innerHTML =
+        '<div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;margin-bottom:14px">' +
+        '<div><div style="font-size:11px;color:var(--text-tertiary)">현재 상태</div><div style="font-size:19px;font-weight:800;color:' + sm[1] + '">' + sm[0] + '</div></div>' +
+        '<div><div style="font-size:11px;color:var(--text-tertiary)">오늘 근무시간</div><div style="font-size:19px;font-weight:800;color:var(--text-primary)">' + autoAttFmtDur(st.onSiteSeconds) + '</div></div>' +
+        '<div><div style="font-size:11px;color:var(--text-tertiary)">현장</div><div style="font-size:14px;font-weight:600;color:var(--text-primary)">' + (site ? (site.code + ' · 반경 ' + (site.radius || '미설정') + (site.radius ? 'm' : '')) : '미배정') + '</div></div>' +
+        (st.needsReview ? '<div style="color:var(--status-warning);font-size:12px">⚠ 어제 미마감(관리자 확인 필요)</div>' : '') +
+        '</div>' +
+        (noGeo
+          ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:12px;font-size:12.5px;color:#b45309">이 현장은 GPS 지오펜스가 아직 설정되지 않아 자동 판정이 안 됩니다. <b>현장에서</b> 현재 위치를 현장 중심으로 등록하세요(관리자만 가능).<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:12px">반경</span><input id="auto-att-radius" type="number" value="322" style="width:88px;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary)"><span style="font-size:12px">m</span><button class="btn-primary" style="padding:7px 12px" onclick="window.autoAttSetGeofence()"><i class="ph ph-crosshair-simple"></i> 현재 위치를 현장 중심으로 설정</button></div></div>'
+          : '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn-' + (running ? 'secondary' : 'primary') + '" onclick="window.autoAttToggle()" style="padding:10px 18px;font-weight:700">' + (running ? '<i class="ph ph-stop-circle"></i> 자동 감지 중지' : '<i class="ph ph-play-circle"></i> 자동 출퇴근 시작') + '</button><span style="font-size:11.5px;color:var(--text-tertiary);max-width:420px">' + (running ? '위치 감지 중… 이 화면을 열어두면 현장 진입=출근/근무중, 이탈이 자동 기록됩니다. 자정에 마지막 이탈이 퇴근으로 확정됩니다.' : '시작을 누르고 위치 권한을 허용하세요. 현장 반경 안=근무중, 밖 10분=이탈.') + '</span></div>');
+    }
+
+    window.autoAttToggle = function () {
+      if (window._autoAtt.watchId != null) { navigator.geolocation.clearWatch(window._autoAtt.watchId); window._autoAtt.watchId = null; autoAttRefresh(); return; }
+      if (!navigator.geolocation) { alert('이 브라우저는 위치를 지원하지 않습니다.'); return; }
+      window._autoAtt.watchId = navigator.geolocation.watchPosition(
+        function (pos) { autoAttPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+        function (err) { alert('위치 권한이 필요합니다: ' + err.message); if (window._autoAtt.watchId != null) { navigator.geolocation.clearWatch(window._autoAtt.watchId); window._autoAtt.watchId = null; } autoAttRefresh(); },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      );
+      autoAttRefresh();
+    };
+
+    async function autoAttPing(lat, lng, acc) {
+      try {
+        var r = await fetch('/attendance-geo/ping', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': autoAttCsrf(), 'Accept': 'application/json' }, body: JSON.stringify({ lat: lat, lng: lng, accuracy: Math.round(acc || 0), clientTs: Math.floor(Date.now() / 1000) }) });
+        var j = await r.json();
+        var pill = document.getElementById('auto-att-state');
+        if (j && j.success && pill) {
+          var m = { on_site: ['근무중', 'var(--status-success)'], left: ['이탈', 'var(--status-warning)'], off_site: ['현장 밖', 'var(--text-tertiary)'] }[j.status] || ['현장 밖', 'var(--text-tertiary)'];
+          pill.textContent = m[0] + (j.kind === 'enter' ? ' (출근)' : (j.kind === 'exit' ? ' (이탈)' : ''));
+          pill.style.color = m[1];
+        }
+      } catch (e) { /* 일시 오류 무시 */ }
+    }
+
+    window.autoAttSetGeofence = function () {
+      if (!navigator.geolocation) { alert('위치 미지원'); return; }
+      var radius = (document.getElementById('auto-att-radius') || {}).value || 322;
+      navigator.geolocation.getCurrentPosition(async function (pos) {
+        var r = await autoAttScApi('api_setMySiteGeofence', [pos.coords.latitude, pos.coords.longitude, Number(radius)]);
+        if (r && r.success) { if (window.showToast) window.showToast('현장 지오펜스를 설정했습니다(반경 ' + r.radius + 'm). 이제 자동 출퇴근을 시작하세요.', 'success'); autoAttRefresh(); }
+        else alert('설정 실패: ' + ((r && r.error) || '오류'));
+      }, function (err) { alert('위치 권한이 필요합니다: ' + err.message); }, { enableHighAccuracy: true });
+    };
+
     window.renderMyAttendance = function() {
       const pc = document.getElementById('page-container');
       if (!pc) return;
@@ -12941,6 +13013,10 @@ async function renderVendors() {
         '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-clock" style="color:var(--brand-primary);"></i> 내 출퇴근 기록</h1>' +
         '<p class="page-subtitle">기간별 출퇴근 이력과 근태 요약을 확인합니다.</p></div>' +
         '<div class="action-row"><button class="btn-primary" style="padding:8px 16px; border-radius:8px; border:none; background:var(--brand-primary); color:white; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="window.openMyCommuteModal()"><i class="ph ph-plus"></i> 출퇴근 등록</button></div></div>' +
+        '<div class="panel" id="auto-att-card" style="margin-bottom:16px;border:1px solid var(--brand-primary);border-radius:12px;overflow:hidden">' +
+        '<div class="panel-header" style="background:var(--brand-primary-dim);padding:14px 20px;display:flex;align-items:center;justify-content:space-between"><div class="panel-title" style="font-size:14px;font-weight:800"><i class="ph ph-map-pin-area" style="color:var(--brand-primary)"></i> 자동 출퇴근 (GPS)</div><span id="auto-att-state" style="font-size:12px;font-weight:700;color:var(--text-tertiary)">확인 중…</span></div>' +
+        '<div class="panel-body" id="auto-att-body" style="padding:16px 20px"><div style="color:var(--text-tertiary);font-size:13px">GPS 상태 확인 중…</div></div>' +
+        '</div>' +
         '<div class="panel" style="margin-bottom:16px; border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">' +
         '<span style="font-size:12px; color:var(--text-tertiary); font-weight:600;">조회 기간</span>' +
         '<input type="date" id="my-att-start" value="' + monthStart + '" style="padding:8px 10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-base); color:var(--text-primary); font-size:13px;">' +
@@ -12963,6 +13039,7 @@ async function renderVendors() {
         '</table></div></div>';
 
       window.loadMyAttendance();
+      window.initAutoAttendance();
     };
 
     window.loadMyAttendance = async function() {
