@@ -96,7 +96,8 @@ class SmartCompanyData
             'api_getLaborAllocation' => app(\App\Services\Wbs\LaborAllocationService::class)->forSite((string) ($args[0] ?? $siteId)),
 
             // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반
-            'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
+            'api_getGeofenceSites' => self::getGeofenceSites(),
             'api_getSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->list((string) ($args[0] ?? $siteId)),
             'api_saveSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->save((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             'api_deleteSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->delete((int) ($args[0] ?? 0)),
@@ -755,17 +756,32 @@ class SmartCompanyData
      *
      * @return array<string, mixed>
      */
-    public static function setMySiteGeofence(mixed $lat, mixed $lng, mixed $radius): array
+    /** 관리자 권한을 가진 역할. 지오펜스 설정/조회의 공통 게이트. */
+    private const GEOFENCE_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+
+    public static function setMySiteGeofence(mixed $lat, mixed $lng, mixed $radius, mixed $siteId = null): array
     {
         $user = auth()->user();
-        if (! $user || ! in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true)) {
+        if (! $user || ! in_array($user->access_role, self::GEOFENCE_ROLES, true)) {
             return ['success' => false, 'error' => '현장 지오펜스를 설정할 권한이 없습니다.'];
         }
 
-        $employee = $user->employee_id ? Employee::find($user->employee_id) : null;
-        $site = $employee?->site_id ? Site::find($employee->site_id) : null;
+        // 현장을 직접 고른 경우 그 현장에, 아니면 내 배정 현장에 등록한다.
+        $resolvedId = ($siteId !== null && $siteId !== '') ? self::resolveSiteId((string) $siteId) : null;
+        $site = $resolvedId ? Site::find($resolvedId) : null;
         if (! $site) {
-            return ['success' => false, 'error' => '내 계정에 연결된 현장이 없습니다. 직원-현장 배정을 먼저 확인하세요.'];
+            $employee = $user->employee_id ? Employee::find($user->employee_id) : null;
+            $site = $employee?->site_id ? Site::find($employee->site_id) : null;
+        }
+        // site_manager/hr_manager 는 자기 배정 현장만 설정 가능.
+        if ($site && ! in_array($user->access_role, ['super_admin', 'admin'], true)) {
+            $employee = $user->employee_id ? Employee::find($user->employee_id) : null;
+            if ($employee?->site_id && $site->id !== $employee->site_id) {
+                return ['success' => false, 'error' => '배정된 현장의 지오펜스만 설정할 수 있습니다.'];
+            }
+        }
+        if (! $site) {
+            return ['success' => false, 'error' => '현장을 찾을 수 없습니다. 현장을 선택하거나 직원-현장 배정을 확인하세요.'];
         }
 
         if (! is_numeric($lat) || ! is_numeric($lng)) {
@@ -776,6 +792,39 @@ class SmartCompanyData
         $site->update(['latitude' => (float) $lat, 'longitude' => (float) $lng, 'radius_meters' => $r]);
 
         return ['success' => true, 'site' => $site->code, 'radius' => $r];
+    }
+
+    /**
+     * 지오펜스를 등록할 수 있는 현장 목록 + 각 현장의 현재 설정 상태.
+     * super_admin/admin 은 전체 현장, site_manager/hr_manager 는 배정 현장만.
+     *
+     * @return array<string, mixed>
+     */
+    public static function getGeofenceSites(): array
+    {
+        $user = auth()->user();
+        $canManage = $user && in_array($user->access_role, self::GEOFENCE_ROLES, true);
+
+        $employee = ($user && $user->employee_id) ? Employee::find($user->employee_id) : null;
+        $mySiteId = $employee?->site_id;
+
+        $query = Site::query()->where('status', 'active')->orderBy('code');
+        if ($canManage && ! in_array($user->access_role, ['super_admin', 'admin'], true) && $mySiteId) {
+            $query->whereKey($mySiteId);
+        }
+
+        $sites = $query->get()->map(fn (Site $s): array => [
+            'id' => $s->id,
+            'code' => $s->code,
+            'name' => $s->name,
+            'radius' => $s->radius_meters,
+            'hasGeo' => $s->latitude !== null && $s->longitude !== null && (bool) $s->radius_meters,
+            'lat' => $s->latitude,
+            'lng' => $s->longitude,
+            'isMine' => $mySiteId !== null && $s->id === $mySiteId,
+        ])->values()->all();
+
+        return ['success' => true, 'canManage' => (bool) $canManage, 'mySiteId' => $mySiteId, 'sites' => $sites];
     }
 
     private static function resolveSiteId(string $siteId): ?int
