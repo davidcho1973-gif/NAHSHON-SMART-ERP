@@ -211,6 +211,10 @@ class SafetyWorkService
      */
     public function recommendProgress(array $data, string $siteId = 'ALL', ?int $userId = null): array
     {
+        // 사진은 저장 대상 컬럼이 아니므로 분석용으로 분리한 뒤 마감 보고만 저장한다.
+        $photos = is_array($data['photos'] ?? null) ? $data['photos'] : [];
+        unset($data['photos']);
+
         $this->save([$data], $siteId, $userId);
         $item = SafetyWorkItem::query()->where('work_code', $data['id'])->firstOrFail();
 
@@ -220,6 +224,7 @@ class SafetyWorkService
             'doneQty' => $item->done_qty,
             'totalQty' => $item->total_qty,
             'unit' => $item->unit,
+            'photos' => $photos,
         ]);
 
         $payload = is_array($item->plan_payload) ? $item->plan_payload : [];
