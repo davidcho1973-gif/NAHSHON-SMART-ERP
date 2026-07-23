@@ -93,6 +93,11 @@ class SmartCompanyData
             'api_getProjectStatus' => self::projects(),
             'api_getActionItems' => self::actionItems(),
             'api_getOpsDashboard' => app(\App\Services\DashboardService::class)->overview($siteId),
+
+            // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반
+            'api_getSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->list((string) ($args[0] ?? $siteId)),
+            'api_saveSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->save((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
+            'api_deleteSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->delete((int) ($args[0] ?? 0)),
             'api_getConstructionCommandCenter' => self::commandCenter($siteId),
             'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02'), $siteId),
             'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02'), $siteId),

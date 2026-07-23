@@ -3983,6 +3983,80 @@
         }
       };
 
+      // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반.
+      window.openSiteWifiModal = async function () {
+        var host = document.getElementById('site-wifi-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'site-wifi-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:640px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록 (자동 출퇴근용)</div><button id="sw-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" style="overflow-y:auto">' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">현장 WiFi 공유기(AP)의 <b>BSSID(MAC 주소)</b>를 등록하면, 작업자가 그 AP에 연결됐을 때 <b>실내에서도 현장에 있음</b>이 확인됩니다(GPS 안 잡히는 철골 안 보완). 이름(SSID)이 아닌 BSSID로 검증해 가짜 WiFi를 막습니다.</div>' +
+          '<label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:6px">현장 선택</label>' +
+          '<select id="sw-site" class="wbs-edit-field"><option value="">현장을 선택하세요</option></select>' +
+          '<div id="sw-body" style="margin-top:14px"></div>' +
+          '</div></div></div>';
+        host.querySelector('#sw-close').addEventListener('click', function () { host.innerHTML = ''; });
+
+        var sel = host.querySelector('#sw-site');
+        var sites = [];
+        try { sites = await gsRun('api_getSiteList', [], []); } catch (e) { /* ignore */ }
+        (sites || []).forEach(function (s) {
+          var o = document.createElement('option'); o.value = s.id; o.textContent = s.code + ' · ' + s.name; sel.appendChild(o);
+        });
+        sel.addEventListener('change', function () { window.swLoad(sel.value); });
+      };
+
+      window.swLoad = async function (siteId) {
+        var body = document.getElementById('sw-body');
+        if (!body) return;
+        if (!siteId) { body.innerHTML = ''; return; }
+        body.innerHTML = '<div style="color:var(--text-tertiary);font-size:13px;padding:12px">불러오는 중…</div>';
+        var d = await gsRun('api_getSiteWifi', [siteId], { success: false, aps: [] });
+        if (!d || !d.success) { body.innerHTML = '<div style="color:var(--status-danger);font-size:13px;padding:12px">' + dashEsc((d && d.error) || '불러오기 실패') + '</div>'; return; }
+
+        var geo = d.geofence || {};
+        var geoWarn = (geo.lat == null || geo.lng == null || !geo.radius)
+          ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:9px 12px;font-size:11.5px;color:#f59e0b;margin-bottom:12px"><i class="ph ph-warning"></i> 이 현장은 GPS 지오펜스(위도·경도·반경)가 설정되지 않았습니다. 관리자 → 현장 관리에서 위치·반경을 입력하면 실외 자동 출퇴근이 활성화됩니다.</div>'
+          : '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:12px">GPS 지오펜스: 반경 <b style="color:var(--text-secondary)">' + geo.radius + 'm</b> (실외 경계). WiFi는 실내 보완.</div>';
+
+        var rows = (d.aps || []).length ? (d.aps || []).map(function (a) {
+          return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<i class="ph ph-wifi-high" style="color:' + (a.active ? 'var(--status-success)' : 'var(--text-tertiary)') + '"></i>' +
+            '<div style="flex:1;min-width:0"><div class="cell-mono" style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(a.bssid) + '</div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc([a.ssid, a.label].filter(Boolean).join(' · ') || '—') + '</div></div>' +
+            '<button class="icon-btn" title="삭제" style="color:var(--status-danger)" onclick="window.swDelete(' + a.id + ',\'' + siteId + '\')"><i class="ph ph-trash"></i></button></div>';
+        }).join('') : '<div style="padding:14px;text-align:center;color:var(--text-tertiary);font-size:12.5px">등록된 AP가 없습니다. 아래에서 추가하세요.</div>';
+
+        body.innerHTML = geoWarn +
+          '<div class="docs-card" style="border:1px solid var(--border-subtle);border-radius:10px;padding:6px 14px;margin-bottom:14px">' + rows + '</div>' +
+          '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:8px;align-items:end">' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">BSSID (MAC) *</label><input id="sw-bssid" class="wbs-edit-field" placeholder="a4:5e:60:11:22:33"></div>' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">WiFi 이름(SSID)</label><input id="sw-ssid" class="wbs-edit-field" placeholder="NAHSHON-SITE"></div>' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">위치 메모</label><input id="sw-label" class="wbs-edit-field" placeholder="정문 / B동 2층"></div>' +
+          '<button class="btn-primary" style="height:38px" onclick="window.swSave(\'' + siteId + '\')"><i class="ph ph-plus"></i> 추가</button>' +
+          '</div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:8px">BSSID 확인: 폰에서 그 WiFi에 연결 → 상세정보, 또는 안드로이드 "WiFi Analyzer" 앱. 한 공유기가 2.4/5GHz로 BSSID가 다르면 둘 다 등록하세요.</div>';
+      };
+
+      window.swSave = async function (siteId) {
+        var bssid = (document.getElementById('sw-bssid') || {}).value || '';
+        if (!bssid.trim()) { alert('BSSID를 입력하세요.'); return; }
+        var payload = { bssid: bssid.trim(), ssid: (document.getElementById('sw-ssid') || {}).value || '', label: (document.getElementById('sw-label') || {}).value || '' };
+        var r = await gsRun('api_saveSiteWifi', [siteId, payload], { success: false });
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getSiteWifi') >= 0) delete window.apiCache[k]; });
+        if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); return; }
+        window.swLoad(siteId);
+      };
+
+      window.swDelete = async function (id, siteId) {
+        if (!confirm('이 AP를 삭제할까요?')) return;
+        await gsRun('api_deleteSiteWifi', [id], { success: false });
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getSiteWifi') >= 0) delete window.apiCache[k]; });
+        window.swLoad(siteId);
+      };
+
       async function renderHR() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -4082,7 +4156,7 @@
               '<div class="header-section"><div>' +
               '<h1 class="page-title">ðŸŒ í†µí•© í˜„í™© â€” ì „ì²´ í˜„ìž¥</h1>' +
               '<p class="page-subtitle">ëª¨ë“  ì—°ë™ í˜„ìž¥ì˜ ì¶œí‡´ê·¼ ë°ì´í„°ë¥¼ í†µí•© ì§‘ê³„í•©ë‹ˆë‹¤ (' + attendance.date + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
               // ì „ì²´ KPI
               '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
               '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì¶œê·¼ ì¸ì› <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
@@ -4404,7 +4478,7 @@
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
               '<p class="page-subtitle">NAHSHON MEP ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
