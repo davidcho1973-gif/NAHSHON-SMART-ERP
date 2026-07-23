@@ -12,7 +12,7 @@ class AttendanceSession extends Model
 {
     protected $fillable = [
         'employee_id', 'site_id', 'work_date', 'status',
-        'first_enter_at', 'last_enter_at', 'pending_exit_at', 'last_exit_at',
+        'first_enter_at', 'last_enter_at', 'pending_exit_at', 'last_exit_at', 'last_onsite_at',
         'on_site_seconds', 'needs_review', 'finalized_at',
     ];
 
@@ -24,6 +24,7 @@ class AttendanceSession extends Model
             'last_enter_at' => 'datetime',
             'pending_exit_at' => 'datetime',
             'last_exit_at' => 'datetime',
+            'last_onsite_at' => 'datetime',
             'finalized_at' => 'datetime',
             'on_site_seconds' => 'integer',
             'needs_review' => 'boolean',
