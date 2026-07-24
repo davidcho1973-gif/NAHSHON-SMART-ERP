@@ -130,6 +130,12 @@ Route::get('/join/w/{site}/qr', [App\Http\Controllers\SimpleWorkerRegistrationCo
 Route::get('/join/w/{site}', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'form'])->name('worker-join.form');
 Route::post('/join/w/{site}', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'store'])->name('worker-join.store');
 
+// 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
+Route::get('/gate/{site}/qr', [App\Http\Controllers\GateAttendanceController::class, 'qr'])->name('gate.qr');
+Route::get('/gate/{site}', [App\Http\Controllers\GateAttendanceController::class, 'show'])->name('gate.show');
+Route::post('/gate/{site}/search', [App\Http\Controllers\GateAttendanceController::class, 'search'])->name('gate.search');
+Route::post('/gate/{site}/punch', [App\Http\Controllers\GateAttendanceController::class, 'punch'])->name('gate.punch');
+
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
 Route::post('/member/register/{token}', [MemberRegistrationController::class, 'store'])->name('member-registration.store');
