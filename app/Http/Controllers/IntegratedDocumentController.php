@@ -25,11 +25,14 @@ class IntegratedDocumentController extends Controller
      */
     public function upload(Request $request): JsonResponse
     {
+        $maxKb = (int) config('filesystems.documents_max_kb', 262144); // 기본 256MB
         $request->validate([
-            'file' => 'required|file|max:32768', // 32MB
+            'file' => 'required|file|max:' . $maxKb,
             'site_id' => 'nullable',
             'project_code' => 'nullable|string|max:80',
             'title' => 'nullable|string|max:255',
+        ], [
+            'file.max' => sprintf('파일이 너무 큽니다. 최대 %dMB 까지 업로드할 수 있습니다.', intdiv($maxKb, 1024)),
         ]);
 
         try {
@@ -73,13 +76,17 @@ class IntegratedDocumentController extends Controller
                 'uploaded_by_label' => optional($user)->name,
             ]);
 
-            if (in_array($ext, $analyzable, true)) {
+            // 대용량은 AI 분석을 건너뛰고 보관만 한다 — 메모리 폭주/무한 '분석중' 방지.
+            $analyzeMaxBytes = ((int) config('filesystems.documents_analyze_max_kb', 51200)) * 1024;
+            $tooBigToAnalyze = (int) $file->getSize() > $analyzeMaxBytes;
+
+            if (in_array($ext, $analyzable, true) && ! $tooBigToAnalyze) {
                 AnalyzeIntegratedDocumentJob::dispatch($doc->id)->afterResponse();
 
                 return response()->json(['success' => true, 'status' => 'analyzing', 'document' => $this->present($doc)], 202);
             }
 
-            // 보관 등록 형식(CAD 도면·구형 오피스 등) — AI 없이 즉시 폴더 배정.
+            // 보관 등록 형식(CAD 도면·구형 오피스) 또는 대용량 파일 — AI 없이 즉시 폴더 배정.
             $doc = $this->service->registerWithoutAi($doc, $ext);
 
             return response()->json(['success' => true, 'status' => 'needs_review', 'document' => $this->present($doc)], 201);
