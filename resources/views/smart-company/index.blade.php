@@ -4017,7 +4017,7 @@
           return;
         }
         body.innerHTML =
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. 포스터를 인쇄해 현장에 붙이면 작업자가 스캔해 스스로 등록합니다.</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
           sites.map(function (s) {
             var quickPoster = '/join/w/' + s.id + '/qr';
             var quickForm = window.location.origin + '/join/w/' + s.id;
@@ -4028,6 +4028,7 @@
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
               '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickPoster + '\',\'_blank\')"><i class="ph ph-qr-code"></i> 간편등록 QR</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#059669;border-color:#059669" onclick="window.open(\'/gate/' + s.id + '/qr\',\'_blank\')" title="출입구 부착용 출퇴근 QR(앱 불필요)"><i class="ph ph-sign-in"></i> 게이트 출퇴근 QR</button>' +
               '</div>';
           }).join('');
       };
