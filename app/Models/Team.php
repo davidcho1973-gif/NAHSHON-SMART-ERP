@@ -50,6 +50,11 @@ class Team extends Model
         return $this->hasMany(Employee::class);
     }
 
+    public function dailyCrewReports(): HasMany
+    {
+        return $this->hasMany(DailyCrewReport::class);
+    }
+
     /**
      * 팀의 소속 계약사 이름 — 정규화된 마스터(company_id → companies.name)를 우선하고,
      * 마스터 연결이 없을 때만 자유 입력 텍스트(contract_company_name)를 폴백으로 쓴다.

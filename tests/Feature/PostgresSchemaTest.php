@@ -24,6 +24,7 @@ class PostgresSchemaTest extends TestCase
             'attendance_qr_codes',
             'employee_badge_qr_tokens',
             'daily_work_assignments',
+            'daily_crew_reports',
             'photo_uploads',
             'ocr_results',
             'attendance_logs',
@@ -68,6 +69,24 @@ class PostgresSchemaTest extends TestCase
             'site_contractor_id',
         ] as $column) {
             $this->assertTrue(Schema::hasColumn('payroll_timesheets', $column), "Missing payroll_timesheets column: {$column}");
+        }
+
+        foreach ([
+            'company_id',
+            'site_id',
+            'site_contractor_id',
+            'team_id',
+            'attendance_qr_code_id',
+            'work_date',
+            'scanned_headcount',
+            'external_headcount',
+            'manual_adjustment',
+            'final_headcount',
+            'status',
+            'reported_by_id',
+            'closed_by_id',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('daily_crew_reports', $column), "Missing daily_crew_reports column: {$column}");
         }
 
         foreach ([

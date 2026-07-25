@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
+use App\Services\DailyCrewReportService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class AttendanceAppController extends Controller
     public function __construct(
         private readonly AttendanceQrService $attendanceQrService,
         private readonly CommunicationService $communicationService,
+        private readonly DailyCrewReportService $dailyCrewReportService,
     )
     {
     }
@@ -98,7 +100,7 @@ class AttendanceAppController extends Controller
         $recentLogs = AttendanceLog::query()
             ->with('employee')
             ->where('attendance_qr_code_id', $qrCode->id)
-            ->whereDate('attendance_date', Carbon::today($qrCode->site?->timezone ?: config('app.timezone'))->toDateString())
+            ->whereDate('attendance_date', $this->dailyCrewReportService->todayFor($qrCode))
             ->orderBy('event_at', 'desc')
             ->limit(20)
             ->get();
@@ -107,7 +109,9 @@ class AttendanceAppController extends Controller
             'qrCode' => $qrCode,
             'token' => $token,
             'recentLogs' => $recentLogs,
+            'dailyCrewSummary' => $this->dailyCrewReportService->summary($qrCode),
             'result' => session('attendance_result'),
+            'dailyCrewResult' => session('daily_crew_result'),
             'error' => session('attendance_error'),
         ]);
     }
@@ -144,6 +148,42 @@ class AttendanceAppController extends Controller
             return redirect()->route('attendance-app.crew', ['token' => $token])->with('attendance_result', $this->viewResult($result));
         } catch (\Throwable $exception) {
             return redirect()->route('attendance-app.crew', ['token' => $token])->with('attendance_error', $exception->getMessage());
+        }
+    }
+
+    public function closeCrewDay(Request $request, string $token): RedirectResponse
+    {
+        $qrCode = AttendanceQrCode::activeForToken($token);
+        if (! $qrCode) {
+            return redirect()->route('attendance-app.index')->with('attendance_error', 'This attendance QR is inactive or invalid.');
+        }
+
+        $validated = $request->validate([
+            'external_headcount' => ['required', 'integer', 'min:0', 'max:5000'],
+            'manual_adjustment' => ['nullable', 'integer', 'between:-5000,5000'],
+            'work_description' => ['nullable', 'string', 'max:500'],
+            'adjustment_reason' => ['nullable', 'string', 'max:500'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $report = $this->dailyCrewReportService->closeDay(
+                $request->user(),
+                $qrCode,
+                $validated,
+            );
+
+            return redirect()
+                ->route('attendance-app.crew', ['token' => $token])
+                ->with('daily_crew_result', [
+                    'final_headcount' => $report->final_headcount,
+                    'closed_at' => $report->closed_at?->format('Y-m-d H:i'),
+                ]);
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('attendance-app.crew', ['token' => $token])
+                ->withInput()
+                ->with('attendance_error', $exception->getMessage());
         }
     }
 
