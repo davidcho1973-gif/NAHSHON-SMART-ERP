@@ -109,6 +109,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/attendance-app/team/{token}', [AttendanceAppController::class, 'recordTeam'])->name('attendance-app.team.record');
     Route::get('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'crew'])->name('attendance-app.crew');
     Route::post('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'recordCrew'])->name('attendance-app.crew.record');
+    Route::post('/attendance-app/team/{token}/crew/daily-close', [AttendanceAppController::class, 'closeCrewDay'])->name('attendance-app.crew.daily-close');
     Route::get('/attendance-app/badge/{token}', [AttendanceAppController::class, 'badge'])->name('attendance-app.badge');
     Route::get('/attendance-app/employee/{employee}/badge-qr', [AttendanceAppController::class, 'employeeBadgeQr'])->name('attendance-app.employee.badge-qr');
 
