@@ -138,6 +138,10 @@
                 <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>ê³µì • ê´€ë¦¬ (WBS)</span>
                 <span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
+              <li class="nav-item" data-view="opsroom" id="nav-opsroom" style="padding-left:26px">
+                <i class="ph ph-broadcast" style="color:#22c55e"></i><span>현장 상황실</span>
+                <span class="nav-badge" style="background:rgba(34,197,94,.16);color:#22c55e">AI</span>
+              </li>
               <li class="nav-item" data-view="docs" id="nav-docs" style="padding-left:26px">
                 <i class="ph ph-folders" style="color:#818cf8"></i><span>문서통합관리</span>
                 <span class="nav-badge" style="background:rgba(129,140,248,.16);color:#818cf8">AI</span>
@@ -1294,6 +1298,7 @@
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
+        'opsroom': { title: '현장 상황실', render: renderOpsRoom },
         'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
@@ -8833,6 +8838,131 @@
           btn.style.background = active ? '#7c3aed' : 'transparent';
           btn.style.color = active ? '#fff' : 'var(--text-secondary)';
         });
+      };
+
+      // ═══════════════════════ 현장 상황실 (Ops Room) ═══════════════════════
+      // 형식 없이 올린 글·카톡 붙여넣기를 AI 가 읽고 "공정 반영 제안"으로 바꾼다.
+      function opsEsc(v) {
+        return String(v === null || v === undefined ? '' : v)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      var OPS_CAT = {
+        progress:    { label: '작업 마감·진행', color: '#22c55e', icon: 'ph-flag-checkered' },
+        plan:        { label: '작업 계획',     color: '#3b82f6', icon: 'ph-calendar-plus' },
+        procurement: { label: '자재·조달',     color: '#ea580c', icon: 'ph-package' },
+        labor:       { label: '인력·출역',     color: '#a855f7', icon: 'ph-users-three' },
+        expense:     { label: '지출·영수증',   color: '#16a34a', icon: 'ph-receipt' },
+        issue:       { label: '이슈·안전',     color: '#ef4444', icon: 'ph-warning-circle' },
+        noise:       { label: '잡담',          color: '#94a3b8', icon: 'ph-chat-dots' }
+      };
+
+      async function renderOpsRoom() {
+        const pc = document.getElementById('page-container');
+        if (!pc) return;
+        pc.innerHTML =
+          '<div class="header-section"><div>' +
+          '<h1 class="page-title"><i class="ph ph-broadcast" style="color:#22c55e"></i> 현장 상황실</h1>' +
+          '<p class="page-subtitle">오늘 한 일 · 내일 할 일 · 자재 · 영수증 · 이슈를 그냥 올리세요. AI 가 읽고 공정 반영안을 만듭니다.</p>' +
+          '</div></div>' +
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-note-pencil"></i> 현장 이야기 붙여넣기</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">카카오톡 대화를 통째로 붙여넣어도 됩니다</span>' +
+          '</div><div class="panel-body padded">' +
+          '<textarea id="ops-input" placeholder="예)&#10;김철수: 천장 배관 20개 중 12개 했습니다&#10;이민준: 그레이바 자재 화요일 도착한대요&#10;내일 전기 3명 투입해서 트레이 작업합니다" ' +
+          'style="width:100%;height:150px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
+          '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">' +
+          '<button class="btn-primary" id="ops-read-btn" style="padding:10px 18px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
+          '<span id="ops-read-msg" style="font-size:12px;color:var(--text-tertiary)">잡담은 자동으로 걸러집니다. 공정표는 확인 후 반영됩니다.</span>' +
+          '</div></div></div>' +
+          '<div id="ops-result"></div>' +
+          '<div class="panel"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-list-checks"></i> 확인 대기 목록</div>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button>' +
+          '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>';
+
+        document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
+        window.opsLoadPending();
+      }
+
+      window.opsRead = async function () {
+        var box = document.getElementById('ops-input');
+        var btn = document.getElementById('ops-read-btn');
+        var msg = document.getElementById('ops-read-msg');
+        if (!box || !box.value.trim()) { if (msg) msg.textContent = '내용을 먼저 입력하세요.'; return; }
+        var original = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> 판독 중…';
+        try {
+          var r = await gsRun('api_opsIngest', [box.value], { success: false });
+          if (!r || !r.success) {
+            if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '판독 실패') + '</span>';
+            return;
+          }
+          if (msg) msg.textContent = '판독 완료 — ' + r.parsed + '건 중 업무 ' + r.actionable + '건, 잡담 ' + r.noise + '건 제외';
+          box.value = '';
+          document.getElementById('ops-result').innerHTML =
+            '<div class="panel" style="margin-bottom:16px;border-left:3px solid #22c55e"><div class="panel-header">' +
+            '<div class="panel-title" style="color:#22c55e"><i class="ph ph-check-circle"></i> 방금 판독한 내용</div></div>' +
+            '<div class="panel-body" style="padding:0">' + opsRows(r.items || [], true) + '</div></div>';
+          window.opsLoadPending();
+        } catch (e) {
+          if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">오류: ' + opsEsc(e.message || e) + '</span>';
+        } finally {
+          btn.disabled = false; btn.innerHTML = original;
+        }
+      };
+
+      window.opsLoadPending = async function () {
+        var host = document.getElementById('ops-pending');
+        if (!host) return;
+        var d = await gsRun('api_getOpsPending', [], { count: 0, items: [] });
+        var items = (d && d.items) || [];
+        host.innerHTML = items.length
+          ? opsRows(items, false)
+          : '<div style="padding:32px;text-align:center;color:var(--text-tertiary);font-size:13px">확인 대기 중인 항목이 없습니다.</div>';
+      };
+
+      function opsRows(items, showNoise) {
+        var list = showNoise ? items : items.filter(function (i) { return i.category !== 'noise'; });
+        if (!list.length) return '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">업무로 인식된 항목이 없습니다.</div>';
+        return list.map(function (it) {
+          var c = OPS_CAT[it.category] || OPS_CAT.noise;
+          var needs = it.status === 'needs_input';
+          var faded = it.category === 'noise' ? 'opacity:.5;' : '';
+          var changes = Object.keys(it.proposed || {}).map(function (k) {
+            return '<span style="display:inline-block;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;padding:2px 8px;font-size:11.5px;margin-right:5px">' +
+              opsEsc(OPS_FIELD[k] || k) + ' → <b style="color:var(--text-primary)">' + opsEsc(it.proposed[k]) + '</b></span>';
+          }).join('');
+          return '<div style="padding:14px 18px;border-bottom:1px solid var(--border-subtle);' + faded + '">' +
+            '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px">' +
+            '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:' + c.color + '">' +
+            '<i class="ph ' + c.icon + '"></i>' + opsEsc(c.label) + '</span>' +
+            (it.targetName ? '<span style="font-size:12px;color:var(--text-primary);font-weight:600">' + opsEsc(it.targetName) + '</span>' : '') +
+            (it.targetCode ? '<span style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + opsEsc(it.targetCode) + '</span>' : '') +
+            '<span style="margin-left:auto;font-size:11px;color:var(--text-tertiary)">확신도 ' + (it.confidence || 0) + '%</span>' +
+            '</div>' +
+            '<div style="font-size:13px;color:var(--text-primary);font-weight:600;margin-bottom:4px">' + opsEsc(it.summary || '') + '</div>' +
+            (changes ? '<div style="margin:7px 0">' + changes + '</div>' : '') +
+            (needs ? '<div style="margin:7px 0;padding:8px 11px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.4);border-radius:7px;font-size:12px;color:#b45309">' +
+              '<b>확인 필요</b> · ' + opsEsc(it.question || '대상을 특정하지 못했습니다.') + '</div>' : '') +
+            '<div style="font-size:11.5px;color:var(--text-tertiary);font-style:italic;margin-top:5px">' +
+            (it.speaker ? opsEsc(it.speaker) + ': ' : '') + '"' + opsEsc(it.raw || '') + '"</div>' +
+            (it.category !== 'noise' ? '<div style="margin-top:9px;display:flex;gap:7px">' +
+              '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsDismiss(' + it.id + ')"><i class="ph ph-x"></i> 무시</button>' +
+              '<span style="font-size:11px;color:var(--text-tertiary);align-self:center">※ 공정표 자동 반영은 2단계에서 추가됩니다</span>' +
+              '</div>' : '') +
+            '</div>';
+        }).join('');
+      }
+
+      var OPS_FIELD = {
+        progress: '진행률(%)', status: '상태', planned_start: '시작일', planned_end: '종료일',
+        crew_size: '인원', eta: '납기(ETA)', name: '작업명'
+      };
+
+      window.opsDismiss = async function (id) {
+        await gsRun('api_dismissOpsItem', [id], { success: false });
+        window.opsLoadPending();
       };
 
       // ═══════════════════════ 문서통합관리 (Integrated Document Management) ═══════════════════════
