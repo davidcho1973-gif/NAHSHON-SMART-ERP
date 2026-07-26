@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use App\Models\Employee;
 use App\Models\MobileExpense;
+use App\Models\ProcurementItem;
+use App\Models\ProjectContractDocument;
 use App\Observers\EmployeePayrollProfileObserver;
+use App\Observers\LinkedDocumentFilingObserver;
 use App\Observers\MobileExpenseReceiptObserver;
 use App\Services\Ocr\ClaudeOcrEngine;
 use App\Services\Ocr\GeminiOcrEngine;
@@ -39,5 +42,9 @@ class AppServiceProvider extends ServiceProvider
 
         // 재무관리 영수증 등록 → 문서함 "자재·구매" 폴더 자동 편철.
         MobileExpense::observe(MobileExpenseReceiptObserver::class);
+
+        // 조달(발주)·계약 첨부서류 → 문서통합관리 자동 편철.
+        ProcurementItem::saved(fn (ProcurementItem $i) => app(LinkedDocumentFilingObserver::class)->procurementSaved($i));
+        ProjectContractDocument::saved(fn (ProjectContractDocument $d) => app(LinkedDocumentFilingObserver::class)->contractDocumentSaved($d));
     }
 }

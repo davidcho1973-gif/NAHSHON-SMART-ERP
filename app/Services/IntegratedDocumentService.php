@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\IntegratedDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
+use App\Models\ProjectContractDocument;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +22,9 @@ use Throwable;
  */
 class IntegratedDocumentService
 {
+    /** 저장할 본문 텍스트 최대 길이(자). 대용량 도면·제출본이 DB 를 잠식하지 않게 자른다. */
+    private const BODY_TEXT_LIMIT = 200000;
+
     public function __construct(private readonly GeminiDocumentAnalyzer $analyzer)
     {
     }
@@ -75,6 +79,7 @@ class IntegratedDocumentService
                 'amount' => $data['amount'],
                 'currency' => $data['currency'],
                 'summary' => $this->summaryLines($data['summary'] ?? null),
+                'body_text' => $this->bodyTextFor($data),
                 'fields' => $data['fields'],
                 'tags' => $this->deriveTags($data, $folder['code']),
                 'duplicate_of_id' => $duplicate?->id,
@@ -313,14 +318,16 @@ class IntegratedDocumentService
                     ->orWhere('document_type', 'ilike', $like)
                     ->orWhere('summary', 'ilike', $like)
                     ->orWhere('fields', 'ilike', $like)
-                    ->orWhere('tags', 'ilike', $like);
+                    ->orWhere('tags', 'ilike', $like)
+                    ->orWhere('body_text', 'ilike', $like);   // 본문 전문검색
             });
         }
 
-        $hits = $builder->latest()->limit(50)->get()->map(function (IntegratedDocument $d): array {
+        $hits = $builder->latest()->limit(50)->get()->map(function (IntegratedDocument $d) use ($q): array {
             $row = $this->summaryRow($d);
             $row['from'] = $d->issuer ?: ($d->counterparty ?: '—');
             $row['docType'] = IntegratedDocument::typeLabel($d->document_type);
+            $row['snippet'] = $this->snippet($d->body_text, $q);
 
             return $row;
         })->all();
@@ -359,6 +366,46 @@ class IntegratedDocumentService
         $d->delete();
 
         return ['success' => true];
+    }
+
+    /**
+     * 전문검색용 본문 텍스트 — 지나치게 큰 문서는 잘라 저장한다(인덱스·메모리 보호).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function bodyTextFor(array $data): ?string
+    {
+        $text = $data['body_text'] ?? null;
+        if (! is_string($text)) {
+            return null;
+        }
+        $text = trim(preg_replace('/[ \t]+/u', ' ', preg_replace('/\R+/u', "\n", $text)) ?? '');
+        if ($text === '') {
+            return null;
+        }
+
+        return mb_substr($text, 0, self::BODY_TEXT_LIMIT);
+    }
+
+    /**
+     * 본문에서 검색어 주변을 잘라 보여준다 — "어디가 걸렸는지"를 알 수 있게.
+     */
+    private function snippet(?string $body, string $query, int $pad = 60): ?string
+    {
+        $body = trim((string) $body);
+        $query = trim($query);
+        if ($body === '' || $query === '') {
+            return null;
+        }
+        $pos = mb_stripos($body, $query);
+        if ($pos === false) {
+            return null;
+        }
+        $start = max(0, $pos - $pad);
+        $len = mb_strlen($query) + ($pad * 2);
+        $cut = trim(mb_substr($body, $start, $len));
+
+        return ($start > 0 ? '… ' : '') . $cut . (($start + $len) < mb_strlen($body) ? ' …' : '');
     }
 
     // ───────────────────────── 문서 ↔ 업무 연결 ─────────────────────────
@@ -685,6 +732,159 @@ class IntegratedDocumentService
         ]);
 
         return $doc;
+    }
+
+    /**
+     * 조달(발주) 첨부서류를 문서함 "자재·구매" 폴더에 자동 편철하고 발주 건에 연결한다.
+     */
+    public function fileProcurementDocument(ProcurementItem $item): ?IntegratedDocument
+    {
+        if (blank($item->document_path)) {
+            return null;
+        }
+        $existing = IntegratedDocument::query()->where('procurement_item_id', $item->id)
+            ->whereJsonContains('fields->source', 'procurement')->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $name = $item->document_name ?: ('procurement-' . $item->id);
+        $copied = $this->copyIntoDocuments($item->document_disk ?: 'public', $item->document_path, $name);
+        if ($copied === null) {
+            return null;
+        }
+
+        return IntegratedDocument::create([
+            'site_id' => $item->site_id,
+            'project_code' => $item->project_code,
+            'procurement_item_id' => $item->id,
+            'wbs_code' => $item->wbs_code,
+            'link_locked' => true,
+            'folder_code' => IntegratedDocument::FOLDER_MATERIAL_PURCHASE,
+            'folder_confidence' => 100,
+            'folder_locked' => true,
+            'document_type' => 'purchase_order',
+            'type_confidence' => 100,
+            'title' => mb_substr(trim(($item->po_no ? $item->po_no . ' · ' : '') . ($item->vendor ?: '발주서')), 0, 255),
+            'document_number' => $item->po_no,
+            'issuer' => $item->vendor,
+            'issued_on' => $item->ordered_on,
+            'amount' => $item->amount,
+            'currency' => $item->currency ?: 'USD',
+            'summary' => array_values(array_filter([
+                $item->vendor ? ('공급사 ' . $item->vendor) : null,
+                $item->eta ? ('납기(ETA) ' . $item->eta->toDateString()) : null,
+                '조달관리 등록 시 자동 편철됨',
+            ])),
+            'fields' => ['source' => 'procurement', 'procurement_item_id' => $item->id, 'status' => $item->status],
+            'tags' => array_values(array_filter(['자재·구매', '발주서', $item->vendor])),
+            'disk' => $copied['disk'],
+            'path' => $copied['path'],
+            'original_name' => $name,
+            'mime_type' => $copied['mime'],
+            'size' => $copied['size'],
+            'status' => 'needs_review',
+            'analyzed_at' => now(),
+        ]);
+    }
+
+    /**
+     * 계약 문서를 문서함 "계약·행정" 폴더에 자동 편철한다.
+     *
+     * 기밀(is_confidential) 문서는 제외한다 — 문서함에는 아직 폴더별 열람권한이 없어,
+     * 편철하면 권한 없는 사용자에게 노출될 수 있다.
+     */
+    public function fileContractDocument(ProjectContractDocument $cdoc): ?IntegratedDocument
+    {
+        if ($cdoc->is_confidential || blank($cdoc->file_path)) {
+            return null;
+        }
+        $existing = IntegratedDocument::query()
+            ->whereJsonContains('fields->contract_document_id', $cdoc->id)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $name = $cdoc->original_file_name ?: ('contract-' . $cdoc->id);
+        $copied = $this->copyIntoDocuments($cdoc->disk ?: 'local', $cdoc->file_path, $name);
+        if ($copied === null) {
+            return null;
+        }
+
+        $contract = $cdoc->contract ?? null;
+
+        return IntegratedDocument::create([
+            'site_id' => $contract?->site_id,
+            'company_id' => $contract?->counterparty_company_id ?? $contract?->company_id,
+            'link_locked' => true,
+            'folder_code' => '01',                 // 계약·행정
+            'folder_confidence' => 100,
+            'folder_locked' => true,
+            'document_type' => $cdoc->document_type ?: 'executed_contract',
+            'type_confidence' => 100,
+            'title' => mb_substr($cdoc->title ?: $name, 0, 255),
+            'document_number' => $cdoc->document_number,
+            'issued_on' => $cdoc->issued_on,
+            'effective_on' => $cdoc->effective_on,
+            'expires_on' => $cdoc->expires_on,     // 만료 감시(2단계)로 자동 연결된다.
+            'summary' => array_values(array_filter([
+                $cdoc->version ? ('버전 ' . $cdoc->version) : null,
+                '계약관리 등록 시 자동 편철됨',
+            ])),
+            'fields' => ['source' => 'contract', 'contract_document_id' => $cdoc->id, 'project_contract_id' => $cdoc->project_contract_id],
+            'tags' => array_values(array_filter(['계약·행정', IntegratedDocument::typeLabel($cdoc->document_type)])),
+            'disk' => $copied['disk'],
+            'path' => $copied['path'],
+            'original_name' => $name,
+            'mime_type' => $copied['mime'] ?: $cdoc->mime_type,
+            'size' => $copied['size'],
+            'status' => 'needs_review',
+            'analyzed_at' => now(),
+        ]);
+    }
+
+    /**
+     * 원본 디스크의 파일을 문서함 전용 사본으로 복사한다.
+     * (원본과 분리 — 문서함에서 지워도 조달·계약 원본은 남는다.)
+     *
+     * @return array{disk: string, path: string, mime: string, size: int}|null
+     */
+    private function copyIntoDocuments(string $sourceDisk, string $sourcePath, string $name): ?array
+    {
+        try {
+            if (! Storage::disk($sourceDisk)->exists($sourcePath)) {
+                return null;
+            }
+            $bytes = Storage::disk($sourceDisk)->get($sourcePath);
+        } catch (Throwable) {
+            return null;
+        }
+
+        $disk = IntegratedDocument::storageDisk();
+        $ext = pathinfo($name, PATHINFO_EXTENSION) ?: pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'bin';
+        $path = 'integrated-documents/linked-' . substr(md5($sourceDisk . $sourcePath . $name), 0, 12) . '.' . $ext;
+        Storage::disk($disk)->put($path, $bytes);
+
+        return [
+            'disk' => $disk,
+            'path' => $path,
+            'mime' => $this->guessMime($ext),
+            'size' => strlen($bytes),
+        ];
+    }
+
+    private function guessMime(string $ext): string
+    {
+        return match (strtolower($ext)) {
+            'pdf' => 'application/pdf',
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            default => 'application/octet-stream',
+        };
     }
 
     /**

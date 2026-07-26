@@ -8942,7 +8942,9 @@
         var queueHtml = (d.reviewQueue || []).length ? (d.reviewQueue || []).map(function (r) {
           return '<div class="docs-row" onclick="window.docsGo(\'detail\',{docId:' + r.id + '})">' +
             docBadge(r.type) +
-            '<div class="t"><div class="name">' + docEsc(r.title) + '</div><div class="meta">' + docEsc(r.sub) + ' · ' + docEsc(r.date) + '</div></div>' +
+            '<div class="t"><div class="name">' + docEsc(r.title) + '</div><div class="meta">' + docEsc(r.sub) + ' · ' + docEsc(r.date) + '</div>' +
+            (r.snippet ? '<div style="margin-top:5px;font-size:11.5px;color:var(--text-secondary);background:var(--bg-base);border-left:2px solid var(--brand-primary);padding:5px 9px;border-radius:5px;line-height:1.55">' + docEsc(r.snippet) + '</div>' : '') +
+            '</div>' +
             '<div style="text-align:right"><div style="font-size:11px;color:var(--text-tertiary)">제안 폴더</div>' +
             '<div style="font-size:12px;color:var(--text-primary);font-weight:600">' + docEsc(r.suggest) +
             ' <span class="docs-conf" style="color:' + docEsc(r.confColor) + '">' + docEsc(r.conf) + '</span></div></div>' +
