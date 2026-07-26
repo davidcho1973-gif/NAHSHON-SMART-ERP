@@ -26,8 +26,43 @@ class IntegratedDocument extends Model
         '09' => ['name' => '환경·민원', 'color' => '#65a30d'],
     ];
 
+    /** 영수증 등 재무 첨부가 자동으로 들어가는 폴더(자재·구매). */
+    public const FOLDER_MATERIAL_PURCHASE = '06';
+
+    /** @var array<string, array{name: string, color: string}>|null 요청 단위 캐시. */
+    private static ?array $folderMapCache = null;
+
+    /**
+     * 기본 폴더 + 관리자가 만든 사용자 폴더를 합친 전체 폴더 맵.
+     *
+     * @return array<string, array{name: string, color: string}>
+     */
+    public static function folderMap(): array
+    {
+        if (self::$folderMapCache !== null) {
+            return self::$folderMapCache;
+        }
+
+        $map = self::FOLDERS;
+        try {
+            foreach (DocumentFolder::query()->orderBy('sort_order')->orderBy('code')->get() as $f) {
+                $map[$f->code] = ['name' => $f->name, 'color' => $f->color];
+            }
+        } catch (\Throwable) {
+            // 마이그레이션 전(테이블 없음)이면 기본 폴더만 사용한다.
+        }
+
+        return self::$folderMapCache = $map;
+    }
+
+    /** 폴더 목록이 바뀐 뒤 캐시를 비운다. */
+    public static function forgetFolderMap(): void
+    {
+        self::$folderMapCache = null;
+    }
+
     protected $fillable = [
-        'site_id', 'project_code', 'folder_code', 'document_type', 'type_confidence', 'folder_confidence',
+        'site_id', 'project_code', 'folder_code', 'document_type', 'type_confidence', 'folder_confidence', 'folder_locked',
         'title', 'document_number', 'issuer', 'counterparty', 'issued_on', 'effective_on', 'expires_on',
         'amount', 'currency', 'summary', 'fields', 'tags', 'duplicate_note', 'duplicate_of_id',
         'disk', 'path', 'original_name', 'mime_type', 'size',
@@ -43,6 +78,7 @@ class IntegratedDocument extends Model
             'amount' => 'decimal:2',
             'type_confidence' => 'integer',
             'folder_confidence' => 'integer',
+            'folder_locked' => 'boolean',
             'size' => 'integer',
             'summary' => 'array',
             'fields' => 'array',
@@ -77,12 +113,12 @@ class IntegratedDocument extends Model
 
     public function folderName(): string
     {
-        return self::FOLDERS[$this->folder_code]['name'] ?? '미분류';
+        return self::folderMap()[$this->folder_code]['name'] ?? '미분류';
     }
 
     public function folderColor(): string
     {
-        return self::FOLDERS[$this->folder_code]['color'] ?? '#94a3b8';
+        return self::folderMap()[$this->folder_code]['color'] ?? '#94a3b8';
     }
 
     /**
