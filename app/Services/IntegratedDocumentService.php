@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\DocumentFolder;
 use App\Models\IntegratedDocument;
+use App\Models\MobileExpense;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -49,6 +51,10 @@ class IntegratedDocumentService
                 @unlink($tmp);
             }
             $folder = IntegratedDocument::classifyFolder($data);
+            // 업로드할 때 사람이 폴더를 직접 골랐으면 AI 추측으로 덮어쓰지 않는다.
+            if ($doc->folder_locked && filled($doc->folder_code)) {
+                $folder = ['code' => $doc->folder_code, 'confidence' => 100];
+            }
             $duplicate = $this->findDuplicate($doc, $data, $folder['code']);
 
             $doc->update([
@@ -105,6 +111,10 @@ class IntegratedDocumentService
                 'title' => $doc->title ?: $doc->original_name,
                 'summary' => [], 'fields' => [],
             ]);
+        // 사람이 고른 폴더가 우선.
+        if ($doc->folder_locked && filled($doc->folder_code)) {
+            $folder = ['code' => $doc->folder_code, 'confidence' => 100];
+        }
 
         $doc->update([
             'document_type' => $type,
@@ -114,7 +124,7 @@ class IntegratedDocumentService
             'title' => $doc->title ?: ($doc->original_name ?: '무제 문서'),
             'summary' => ['AI 미분석 형식(' . strtoupper($ext) . ') — 파일로 보관되었습니다. 폴더가 맞는지 확인·조정 후 확정하세요.'],
             'tags' => array_values(array_unique([
-                IntegratedDocument::FOLDERS[$folder['code']]['name'] ?? '문서',
+                IntegratedDocument::folderMap()[$folder['code']]['name'] ?? '문서',
                 IntegratedDocument::typeLabel($type),
                 strtoupper($ext),
             ])),
@@ -155,7 +165,7 @@ class IntegratedDocumentService
         // 폴더 분포.
         $counts = (clone $base)->selectRaw('folder_code, count(*) as c')->groupBy('folder_code')->pluck('c', 'folder_code');
         $dist = [];
-        foreach (IntegratedDocument::FOLDERS as $code => $meta) {
+        foreach (IntegratedDocument::folderMap() as $code => $meta) {
             $c = (int) ($counts[$code] ?? 0);
             $dist[] = [
                 'code' => $code,
@@ -190,7 +200,7 @@ class IntegratedDocumentService
             ->selectRaw('folder_code, count(*) as c')->groupBy('folder_code')->pluck('c', 'folder_code');
 
         $out = [];
-        foreach (IntegratedDocument::FOLDERS as $code => $meta) {
+        foreach (IntegratedDocument::folderMap() as $code => $meta) {
             $out[] = [
                 'code' => $code,
                 'name' => $meta['name'],
@@ -216,7 +226,7 @@ class IntegratedDocumentService
         return [
             'folder' => [
                 'code' => $folderCode,
-                'name' => IntegratedDocument::FOLDERS[$folderCode]['name'] ?? '미분류',
+                'name' => IntegratedDocument::folderMap()[$folderCode]['name'] ?? '미분류',
             ],
             'docs' => $docs,
         ];
@@ -322,7 +332,7 @@ class IntegratedDocumentService
             return ['success' => false, 'error' => '문서를 찾을 수 없습니다.'];
         }
 
-        if ($folderCode !== null && isset(IntegratedDocument::FOLDERS[$folderCode]) && $folderCode !== $d->folder_code) {
+        if ($folderCode !== null && isset(IntegratedDocument::folderMap()[$folderCode]) && $folderCode !== $d->folder_code) {
             $d->folder_code = $folderCode;
             $d->folder_confidence = 100; // 사람이 확정.
         }
@@ -341,6 +351,164 @@ class IntegratedDocumentService
         $d->delete();
 
         return ['success' => true];
+    }
+
+    // ───────────────────────── 사용자 폴더 ─────────────────────────
+
+    /**
+     * 폴더를 직접 만든다(기본 9개 폴더 뒤에 코드 10, 11… 순서로 붙는다).
+     *
+     * @return array<string, mixed>
+     */
+    public function createFolder(string $name, ?string $color = null, ?int $userId = null): array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return ['success' => false, 'error' => '폴더 이름을 입력하세요.'];
+        }
+        if (mb_strlen($name) > 40) {
+            return ['success' => false, 'error' => '폴더 이름은 40자 이내로 입력하세요.'];
+        }
+        foreach (IntegratedDocument::folderMap() as $meta) {
+            if (mb_strtolower(trim($meta['name'])) === mb_strtolower($name)) {
+                return ['success' => false, 'error' => '같은 이름의 폴더가 이미 있습니다.'];
+            }
+        }
+
+        $color = (is_string($color) && preg_match('/^#[0-9a-fA-F]{6}$/', $color)) ? $color : '#64748b';
+        $folder = DocumentFolder::create([
+            'code' => DocumentFolder::nextCode(),
+            'name' => $name,
+            'color' => $color,
+            'sort_order' => DocumentFolder::query()->max('sort_order') + 1,
+            'created_by_id' => $userId,
+        ]);
+        IntegratedDocument::forgetFolderMap();
+
+        return ['success' => true, 'folder' => ['code' => $folder->code, 'name' => $folder->name, 'color' => $folder->color, 'count' => 0]];
+    }
+
+    /**
+     * 사용자 폴더 삭제. 기본 폴더(01~09)는 지울 수 없고, 문서가 남아 있으면 막는다.
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteFolder(string $code): array
+    {
+        if (isset(IntegratedDocument::FOLDERS[$code])) {
+            return ['success' => false, 'error' => '기본 폴더는 삭제할 수 없습니다.'];
+        }
+        $folder = DocumentFolder::query()->where('code', $code)->first();
+        if (! $folder) {
+            return ['success' => false, 'error' => '폴더를 찾을 수 없습니다.'];
+        }
+        $count = IntegratedDocument::query()->where('folder_code', $code)->count();
+        if ($count > 0) {
+            return ['success' => false, 'error' => sprintf('이 폴더에 문서 %d건이 있습니다. 먼저 옮기거나 삭제하세요.', $count)];
+        }
+        $folder->delete();
+        IntegratedDocument::forgetFolderMap();
+
+        return ['success' => true];
+    }
+
+    // ───────────────────────── 영수증 자동 편철 ─────────────────────────
+
+    /**
+     * 재무관리에서 등록된 영수증을 문서함(자재·구매 폴더)에 자동으로 편철한다.
+     *
+     * 원본 파일은 문서함 전용으로 복사한다 — 문서를 지워도 지출결의 영수증이 사라지지 않게.
+     */
+    public function fileReceipt(MobileExpense $expense): ?IntegratedDocument
+    {
+        // 이미 편철된 영수증이면 중복 생성하지 않는다.
+        $already = IntegratedDocument::query()
+            ->where('document_type', 'receipt')
+            ->whereJsonContains('fields->mobile_expense_id', $expense->id)
+            ->first();
+        if ($already) {
+            return $already;
+        }
+
+        $source = $this->receiptSourcePath($expense);
+        if ($source === null) {
+            return null;
+        }
+
+        $disk = IntegratedDocument::storageDisk();
+        $ext = pathinfo($source['name'], PATHINFO_EXTENSION) ?: 'jpg';
+        $path = 'integrated-documents/receipt-' . $expense->id . '-' . substr(md5($source['name'] . $expense->id), 0, 8) . '.' . $ext;
+        Storage::disk($disk)->put($path, $source['bytes']);
+
+        $vendor = trim((string) (is_array($expense->ocr_data) ? ($expense->ocr_data['vendor_name'] ?? '') : ''));
+        $title = '영수증 · ' . ($vendor !== '' ? $vendor : ($expense->description ?: '지출'));
+        $amount = (float) $expense->amount;
+
+        $doc = IntegratedDocument::create([
+            'site_id' => $expense->site_id,
+            'folder_code' => IntegratedDocument::FOLDER_MATERIAL_PURCHASE,
+            'folder_confidence' => 100,
+            'folder_locked' => true,           // 재무에서 온 영수증은 자재·구매 폴더에 고정.
+            'document_type' => 'receipt',
+            'type_confidence' => 100,
+            'title' => mb_substr($title, 0, 255),
+            'issuer' => $vendor !== '' ? $vendor : null,
+            'issued_on' => $expense->expense_date,
+            'amount' => $amount ?: null,
+            'currency' => 'USD',
+            'summary' => array_values(array_filter([
+                $expense->description ? mb_substr((string) $expense->description, 0, 300) : null,
+                $amount ? ('금액 $' . number_format($amount, 2)) : null,
+                '재무관리 영수증 등록 시 자동 편철됨',
+            ])),
+            'fields' => ['mobile_expense_id' => $expense->id, 'accounting_account' => $expense->accounting_account],
+            'tags' => array_values(array_unique(array_filter([
+                IntegratedDocument::folderMap()[IntegratedDocument::FOLDER_MATERIAL_PURCHASE]['name'] ?? '자재·구매',
+                '영수증',
+                $vendor !== '' ? $vendor : null,
+            ]))),
+            'disk' => $disk,
+            'path' => $path,
+            'original_name' => $source['name'],
+            'mime_type' => $source['mime'],
+            'size' => strlen($source['bytes']),
+            'status' => 'needs_review',
+            'uploaded_by_id' => $expense->employee?->user?->id,
+            'uploaded_by_label' => $expense->employee?->name,
+            'analyzed_at' => now(),
+        ]);
+
+        return $doc;
+    }
+
+    /**
+     * 영수증 원본 바이트를 찾아온다(DB 저장본 우선, 없으면 public 디스크 경로).
+     *
+     * @return array{bytes: string, name: string, mime: string}|null
+     */
+    private function receiptSourcePath(MobileExpense $expense): ?array
+    {
+        $name = $expense->receipt_original_name ?: ('receipt-' . $expense->id . '.jpg');
+        $mime = $expense->receipt_mime_type ?: 'image/jpeg';
+
+        if (filled($expense->receipt_file)) {
+            try {
+                $bytes = \App\Support\ReceiptFilePayload::decode($expense->receipt_file);
+                if (is_string($bytes) && $bytes !== '') {
+                    return ['bytes' => $bytes, 'name' => $name, 'mime' => $mime];
+                }
+            } catch (Throwable) {
+                // 디코드 실패 시 파일 경로로 폴백.
+            }
+        }
+
+        $path = ltrim((string) $expense->receipt_path, '/');
+        $path = str_starts_with($path, 'storage/') ? substr($path, strlen('storage/')) : $path;
+        if ($path !== '' && Storage::disk('public')->exists($path)) {
+            return ['bytes' => Storage::disk('public')->get($path), 'name' => $name, 'mime' => $mime];
+        }
+
+        return null;
     }
 
     // ───────────────────────── 내부 헬퍼 ─────────────────────────
@@ -403,7 +571,7 @@ class IntegratedDocumentService
     private function deriveTags(array $data, string $folderCode): array
     {
         $tags = [];
-        $tags[] = IntegratedDocument::FOLDERS[$folderCode]['name'] ?? '문서';
+        $tags[] = IntegratedDocument::folderMap()[$folderCode]['name'] ?? '문서';
         if (filled($data['document_type'] ?? null)) {
             $tags[] = IntegratedDocument::typeLabel($data['document_type']);
         }

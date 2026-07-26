@@ -8959,6 +8959,13 @@
         var body = document.getElementById('docs-body');
         if (!body) return;
         body.innerHTML =
+          '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:12px">' +
+          '<span style="font-size:12.5px;font-weight:700;color:var(--text-primary)"><i class="ph ph-folder"></i> 저장 폴더</span>' +
+          '<select id="docs-target-folder" style="height:36px;padding:0 10px;background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:9px;font-size:12.5px;font-family:inherit;min-width:180px">' +
+          '<option value="">AI 자동 분류 (권장)</option></select>' +
+          '<button class="btn-secondary" style="padding:6px 11px;font-size:12px" onclick="window.docsNewFolder()"><i class="ph ph-folder-plus"></i> 새 폴더</button>' +
+          '<span id="docs-folder-hint" style="font-size:11.5px;color:var(--text-tertiary)">폴더를 고르면 AI 분류 대신 그 폴더에 바로 저장됩니다.</span>' +
+          '</div>' +
           '<div class="docs-dropzone" id="docs-drop">' +
           '<div class="ic">⬆</div>' +
           '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">파일을 여기에 끌어다 놓으세요</div>' +
@@ -8985,8 +8992,50 @@
         });
         drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) docsHandleFiles(e.dataTransfer.files); });
 
+        docsLoadFolderOptions();
         if ((window._docsState.queue || []).length) docsRenderQueue();
       }
+
+      // 업로드 폴더 선택지 로드 (기본 폴더 + 사용자 폴더)
+      async function docsLoadFolderOptions() {
+        var sel = document.getElementById('docs-target-folder');
+        if (!sel) return;
+        var folders = await gsRun('api_getDocFolders', [], []);
+        var keep = window._docsState.targetFolder || '';
+        sel.innerHTML = '<option value="">AI 자동 분류 (권장)</option>' + (folders || []).map(function (f) {
+          return '<option value="' + docEsc(f.code) + '"' + (f.code === keep ? ' selected' : '') + '>' + docEsc(f.code) + ' · ' + docEsc(f.name) + '</option>';
+        }).join('');
+        sel.addEventListener('change', function () {
+          window._docsState.targetFolder = sel.value;
+          var hint = document.getElementById('docs-folder-hint');
+          if (hint) hint.textContent = sel.value
+            ? '선택한 폴더에 바로 저장됩니다 (AI 분류 건너뜀).'
+            : '폴더를 고르면 AI 분류 대신 그 폴더에 바로 저장됩니다.';
+        });
+      }
+
+      // 새 폴더 만들기 — 문서함 어디서든 호출 가능
+      window.docsNewFolder = async function () {
+        var name = prompt('새 폴더 이름을 입력하세요 (예: 협력사 제출서류)');
+        if (!name || !name.trim()) return;
+        var res = await gsRun('api_createDocFolder', [name.trim(), ''], { success: false });
+        if (!res || !res.success) { alert((res && res.error) || '폴더 생성에 실패했습니다.'); return; }
+        clearDocCache();
+        if (window.showToast) window.showToast('폴더 "' + name.trim() + '" 를 만들었습니다.', 'success');
+        var sel = document.getElementById('docs-target-folder');
+        if (sel) { await docsLoadFolderOptions(); sel.value = res.folder.code; window._docsState.targetFolder = res.folder.code; }
+        else docsRender();
+      };
+
+      // 사용자 폴더 삭제 (기본 폴더는 서버에서 거부)
+      window.docsDeleteFolder = async function (code, name) {
+        if (!confirm('폴더 "' + name + '" 를 삭제할까요?\n(폴더 안에 문서가 있으면 삭제되지 않습니다.)')) return;
+        var res = await gsRun('api_deleteDocFolder', [code], { success: false });
+        if (!res || !res.success) { alert((res && res.error) || '폴더 삭제에 실패했습니다.'); return; }
+        clearDocCache();
+        window._docsState.folder = '03';
+        docsRender();
+      };
 
       function docsRenderQueue() {
         var box = document.getElementById('docs-queue');
@@ -9044,6 +9093,7 @@
           fd.append('file', item.file);
           fd.append('site_id', _siteId());
           if (window.WBS_CURRENT_PROJECT) fd.append('project_code', window.WBS_CURRENT_PROJECT);
+          if (window._docsState.targetFolder) fd.append('folder_code', window._docsState.targetFolder);
           var res = await fetch('/docs-api/upload', {
             method: 'POST', credentials: 'same-origin',
             headers: { 'X-CSRF-TOKEN': docCsrf(), 'Accept': 'application/json' }, body: fd
@@ -9141,11 +9191,16 @@
         body.innerHTML =
           '<div style="display:flex;gap:0;border:1px solid var(--border-subtle);border-radius:14px;overflow:hidden;background:var(--bg-panel)">' +
           '<div class="docs-folder-list">' +
-          '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.6px;padding:2px 8px 10px">폴더</div>' + folderHtml + '</div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px 10px">' +
+          '<span style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.6px">폴더</span>' +
+          '<button onclick="window.docsNewFolder()" title="새 폴더 만들기" style="background:none;border:none;color:var(--brand-primary);cursor:pointer;font-size:11.5px;font-weight:700;padding:0;font-family:inherit"><i class="ph ph-folder-plus"></i> 새 폴더</button>' +
+          '</div>' + folderHtml + '</div>' +
           '<div style="flex:1;min-width:0;padding:20px 22px">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
           '<div><h2 style="margin:0;font-size:18px;font-weight:800;color:var(--text-primary)">' + docEsc(data.folder.name || '') + '</h2>' +
-          '<div style="font-size:12px;color:var(--text-tertiary);margin-top:3px">AI 자동 분류 · DB 저장됨 · 언제든 검색 가능</div></div></div>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-top:3px">AI 자동 분류 · DB 저장됨 · 언제든 검색 가능</div></div>' +
+          (Number(st.folder) > 9 ? '<button onclick="window.docsDeleteFolder(\'' + docEsc(st.folder) + '\',\'' + docEsc(data.folder.name || '') + '\')" style="background:none;border:1px solid var(--border-subtle);color:var(--status-danger);border-radius:9px;padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit"><i class="ph ph-trash"></i> 폴더 삭제</button>' : '') +
+          '</div>' +
           '<div class="docs-card">' + rows + '</div></div></div>';
       }
 

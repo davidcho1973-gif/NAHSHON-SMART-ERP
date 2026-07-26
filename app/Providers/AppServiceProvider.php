@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Models\Employee;
+use App\Models\MobileExpense;
 use App\Observers\EmployeePayrollProfileObserver;
+use App\Observers\MobileExpenseReceiptObserver;
 use App\Services\Ocr\ClaudeOcrEngine;
 use App\Services\Ocr\GeminiOcrEngine;
 use App\Services\Ocr\OcrEngine;
@@ -34,5 +36,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Provision a payroll wage profile whenever a new employee is created.
         Employee::observe(EmployeePayrollProfileObserver::class);
+
+        // 재무관리 영수증 등록 → 문서함 "자재·구매" 폴더 자동 편철.
+        MobileExpense::observe(MobileExpenseReceiptObserver::class);
     }
 }

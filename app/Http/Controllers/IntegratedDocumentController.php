@@ -31,6 +31,7 @@ class IntegratedDocumentController extends Controller
             'site_id' => 'nullable',
             'project_code' => 'nullable|string|max:80',
             'title' => 'nullable|string|max:255',
+            'folder_code' => 'nullable|string|max:8',
         ], [
             'file.max' => sprintf('파일이 너무 큽니다. 최대 %dMB 까지 업로드할 수 있습니다.', intdiv($maxKb, 1024)),
         ]);
@@ -62,7 +63,13 @@ class IntegratedDocumentController extends Controller
             $mime = $file->getClientMimeType() ?: ($file->getMimeType() ?: 'application/octet-stream');
             $user = $request->user();
 
+            // 업로드할 때 폴더를 직접 고른 경우 — AI 자동분류 대신 이 폴더로 고정한다.
+            $chosenFolder = (string) $request->input('folder_code', '');
+            $chosenFolder = isset(IntegratedDocument::folderMap()[$chosenFolder]) ? $chosenFolder : null;
+
             $doc = IntegratedDocument::create([
+                // 폴더를 안 골랐으면 folder_code 를 넘기지 않는다(컬럼 기본값 '03' 유지 → AI 가 이후 분류).
+                ...($chosenFolder !== null ? ['folder_code' => $chosenFolder, 'folder_locked' => true] : []),
                 'site_id' => $this->service->resolveSiteId($request->input('site_id')),
                 'project_code' => $request->input('project_code'),
                 'title' => (string) ($request->input('title') ?: ($file->getClientOriginalName() ?: basename($path))),

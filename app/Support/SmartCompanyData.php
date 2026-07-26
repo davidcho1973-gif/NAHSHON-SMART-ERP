@@ -141,6 +141,8 @@ class SmartCompanyData
             'api_searchDocs' => app(\App\Services\IntegratedDocumentService::class)->search(self::resolveSiteId($siteId), (string) ($args[0] ?? '')),
             'api_confirmDoc' => app(\App\Services\IntegratedDocumentService::class)->confirm((int) ($args[0] ?? 0), ($args[1] ?? null) !== null && $args[1] !== '' ? (string) $args[1] : null),
             'api_deleteDoc' => app(\App\Services\IntegratedDocumentService::class)->deleteDocument((int) ($args[0] ?? 0)),
+            'api_createDocFolder' => app(\App\Services\IntegratedDocumentService::class)->createFolder((string) ($args[0] ?? ''), ($args[1] ?? null) !== '' ? ($args[1] ?? null) : null, auth()->id()),
+            'api_deleteDocFolder' => app(\App\Services\IntegratedDocumentService::class)->deleteFolder((string) ($args[0] ?? '')),
 
             'api_getVehicleList' => self::vehicleList(),
             'api_getVehicleStats' => self::vehicleStats(),
