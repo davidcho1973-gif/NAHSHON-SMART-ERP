@@ -8878,7 +8878,9 @@
           '<div id="ops-result"></div>' +
           '<div class="panel"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-list-checks"></i> 확인 대기 목록</div>' +
-          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button>' +
+          '<div style="display:flex;gap:7px">' +
+          '<button class="btn-primary" style="padding:5px 12px;font-size:12px;font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> 전체 반영</button>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button></div>' +
           '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>';
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
@@ -8929,9 +8931,11 @@
           var c = OPS_CAT[it.category] || OPS_CAT.noise;
           var needs = it.status === 'needs_input';
           var faded = it.category === 'noise' ? 'opacity:.5;' : '';
+          var prev = it.previous || {};
           var changes = Object.keys(it.proposed || {}).map(function (k) {
+            var before = (prev[k] !== undefined && prev[k] !== null && prev[k] !== '') ? opsEsc(prev[k]) + ' → ' : '';
             return '<span style="display:inline-block;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;padding:2px 8px;font-size:11.5px;margin-right:5px">' +
-              opsEsc(OPS_FIELD[k] || k) + ' → <b style="color:var(--text-primary)">' + opsEsc(it.proposed[k]) + '</b></span>';
+              opsEsc(OPS_FIELD[k] || k) + ': ' + before + '<b style="color:var(--text-primary)">' + opsEsc(it.proposed[k]) + '</b></span>';
           }).join('');
           return '<div style="padding:14px 18px;border-bottom:1px solid var(--border-subtle);' + faded + '">' +
             '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px">' +
@@ -8947,9 +8951,14 @@
               '<b>확인 필요</b> · ' + opsEsc(it.question || '대상을 특정하지 못했습니다.') + '</div>' : '') +
             '<div style="font-size:11.5px;color:var(--text-tertiary);font-style:italic;margin-top:5px">' +
             (it.speaker ? opsEsc(it.speaker) + ': ' : '') + '"' + opsEsc(it.raw || '') + '"</div>' +
-            (it.category !== 'noise' ? '<div style="margin-top:9px;display:flex;gap:7px">' +
-              '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsDismiss(' + it.id + ')"><i class="ph ph-x"></i> 무시</button>' +
-              '<span style="font-size:11px;color:var(--text-tertiary);align-self:center">※ 공정표 자동 반영은 2단계에서 추가됩니다</span>' +
+            (it.category !== 'noise' ? '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">' +
+              (it.status === 'applied'
+                ? '<span style="font-size:11.5px;font-weight:700;color:#22c55e;align-self:center"><i class="ph ph-check-circle"></i> 반영됨' + (it.appliedAt ? ' · ' + opsEsc(it.appliedAt) : '') + '</span>' +
+                  '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsRevert(' + it.id + ')"><i class="ph ph-arrow-counter-clockwise"></i> 되돌리기</button>'
+                : ((it.targetCode && Object.keys(it.proposed || {}).length)
+                    ? '<button class="btn-primary" style="padding:5px 13px;font-size:11.5px;font-weight:700" onclick="window.opsApply(' + it.id + ')"><i class="ph ph-check"></i> 공정표에 반영</button>'
+                    : '<span style="font-size:11px;color:var(--text-tertiary);align-self:center">대상·변경안이 없어 반영할 수 없습니다</span>') +
+                  '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsDismiss(' + it.id + ')"><i class="ph ph-x"></i> 무시</button>') +
               '</div>' : '') +
             '</div>';
         }).join('');
@@ -8962,6 +8971,34 @@
 
       window.opsDismiss = async function (id) {
         await gsRun('api_dismissOpsItem', [id], { success: false });
+        window.opsLoadPending();
+      };
+
+      window.opsApply = async function (id) {
+        var r = await gsRun('api_applyOpsItem', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
+        if (window.showToast) window.showToast('공정표에 반영했습니다.', 'success');
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('Wbs') >= 0 || k.indexOf('Procurement') >= 0) delete window.apiCache[k]; });
+        window.opsLoadPending();
+      };
+
+      window.opsApplyAll = async function () {
+        if (!confirm('확인 대기 중인 제안을 한 번에 공정표·조달에 반영할까요?\n(확인 필요 항목은 건너뜁니다. 되돌릴 수 있습니다.)')) return;
+        var r = await gsRun('api_applyAllOpsItems', [], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
+        var msg = r.applied + '건 반영' + (r.failed ? ', ' + r.failed + '건 실패' : '');
+        if (window.showToast) window.showToast(msg, r.failed ? 'warning' : 'success'); else alert(msg);
+        if ((r.failures || []).length) {
+          console.warn('[ops] 반영 실패', r.failures);
+        }
+        window.opsLoadPending();
+      };
+
+      window.opsRevert = async function (id) {
+        if (!confirm('이 반영을 되돌릴까요? 이전 값으로 복원됩니다.')) return;
+        var r = await gsRun('api_revertOpsItem', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '되돌리기에 실패했습니다.'); return; }
+        if (window.showToast) window.showToast('되돌렸습니다.', 'success');
         window.opsLoadPending();
       };
 
