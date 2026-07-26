@@ -144,6 +144,14 @@ class SmartCompanyData
             'api_linkDoc' => app(\App\Services\IntegratedDocumentService::class)->linkDocument((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
             'api_getDocsForEntity' => app(\App\Services\IntegratedDocumentService::class)->forEntity((string) ($args[0] ?? ''), $args[1] ?? 0),
             'api_getDocExpiring' => app(\App\Services\DocumentExpiryService::class)->overview(self::resolveSiteId($siteId), (int) ($args[0] ?? 60)),
+            // 현장 상황실 — 자유 형식 글/카톡 붙여넣기 판독
+            'api_opsIngest' => app(\App\Services\Ops\OpsIntakeService::class)->ingest(
+                (string) ($args[0] ?? ''),
+                self::resolveSiteId($siteId) ? \App\Models\Site::find(self::resolveSiteId($siteId)) : null,
+                auth()->id(),
+            ),
+            'api_getOpsPending' => app(\App\Services\Ops\OpsIntakeService::class)->pending(self::resolveSiteId($siteId)),
+            'api_dismissOpsItem' => app(\App\Services\Ops\OpsIntakeService::class)->dismiss((int) ($args[0] ?? 0)),
             'api_getDocStorageHealth' => app(\App\Services\IntegratedDocumentService::class)->storageHealth(),
             'api_createDocFolder' => app(\App\Services\IntegratedDocumentService::class)->createFolder((string) ($args[0] ?? ''), ($args[1] ?? null) !== '' ? ($args[1] ?? null) : null, auth()->id()),
             'api_deleteDocFolder' => app(\App\Services\IntegratedDocumentService::class)->deleteFolder((string) ($args[0] ?? '')),
