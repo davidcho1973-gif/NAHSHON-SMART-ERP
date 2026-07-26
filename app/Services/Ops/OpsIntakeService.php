@@ -24,8 +24,10 @@ class OpsIntakeService
 
     private const CATEGORIES = ['progress', 'plan', 'procurement', 'labor', 'expense', 'issue', 'noise'];
 
-    public function __construct(private readonly OpsIntakeAnalyzer $analyzer)
-    {
+    public function __construct(
+        private readonly OpsIntakeAnalyzer $analyzer,
+        private readonly OpsLearningService $learning,
+    ) {
     }
 
     /**
@@ -46,7 +48,9 @@ class OpsIntakeService
         $today = Carbon::today()->toDateString();
 
         try {
-            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images);
+            // 지금까지 축적된 현장 용어·오판 사례를 함께 넘긴다 — 쓸수록 정확해진다.
+            $learned = $this->learning->promptBlock($site?->id);
+            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned);
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => 'AI 판독에 실패했습니다: ' . $e->getMessage()];
         }

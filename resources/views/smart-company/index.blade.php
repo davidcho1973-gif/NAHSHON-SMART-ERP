@@ -8875,6 +8875,7 @@
           '<button class="btn-primary" id="ops-read-btn" style="padding:10px 18px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
           '<span id="ops-read-msg" style="font-size:12px;color:var(--text-tertiary)">잡담은 자동으로 걸러집니다. 공정표는 확인 후 반영됩니다.</span>' +
           '</div></div></div>' +
+          '<div id="ops-digest"></div>' +
           '<div id="ops-result"></div>' +
           '<div class="panel"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-list-checks"></i> 확인 대기 목록</div>' +
@@ -8885,7 +8886,29 @@
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
         window.opsLoadPending();
+        window.opsLoadDigest();
       }
+
+      // 오늘 요약 — 저녁 다이제스트와 같은 집계를 화면에서도 바로 본다.
+      window.opsLoadDigest = async function () {
+        var host = document.getElementById('ops-digest');
+        if (!host) return;
+        var d = await gsRun('api_getOpsDigest', [], { actionable: 0 });
+        if (!d || !d.actionable) { host.innerHTML = ''; return; }
+        function stat(label, value, color) {
+          return '<div style="flex:1;min-width:96px;padding:10px 12px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:10px">' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + label + '</div>' +
+            '<div style="font-size:20px;font-weight:800;color:' + color + '">' + value + '</div></div>';
+        }
+        host.innerHTML =
+          '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">' +
+          stat('오늘 인식', d.actionable, 'var(--brand-primary)') +
+          stat('반영됨', d.applied || 0, '#22c55e') +
+          stat('대기', d.pending || 0, '#f59e0b') +
+          stat('확인 필요', d.needsInput || 0, (d.needsInput ? '#ef4444' : 'var(--text-tertiary)')) +
+          stat('잡담 제외', d.noise || 0, 'var(--text-tertiary)') +
+          '</div>';
+      };
 
       window.opsRead = async function () {
         var box = document.getElementById('ops-input');
@@ -8978,6 +9001,7 @@
         var r = await gsRun('api_applyOpsItem', [id], { success: false });
         if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
         if (window.showToast) window.showToast('공정표에 반영했습니다.', 'success');
+        window.opsLoadDigest();
         if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('Wbs') >= 0 || k.indexOf('Procurement') >= 0) delete window.apiCache[k]; });
         window.opsLoadPending();
       };

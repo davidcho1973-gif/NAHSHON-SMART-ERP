@@ -13,3 +13,6 @@ Schedule::command('attendance:finalize-sessions')->dailyAt('00:05');
 
 // 만료 임박 문서(COI·면허·인허가·비자) 알림 — 매일 아침 업무 시작 전.
 Schedule::command('docs:alert-expiring')->dailyAt('07:00');
+
+// 현장 상황실 하루 요약 — 일과 종료 무렵.
+Schedule::command('ops:digest')->dailyAt('18:00');
