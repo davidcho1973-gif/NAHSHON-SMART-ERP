@@ -27,9 +27,9 @@ class OpsIntakeAnalyzer
      * @param  array<int, array{data: string, mime_type: string}>  $images
      * @return array<int, array<string, mixed>>
      */
-    public function read(string $text, array $activities, array $purchases, string $today, array $images = []): array
+    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = ''): array
     {
-        $prompt = $this->prompt($text, $activities, $purchases, $today);
+        $prompt = $this->prompt($text, $activities, $purchases, $today) . $learned;
 
         $result = $images !== []
             ? $this->ocr->analyze($images, $prompt, $this->schema())['data'] ?? []

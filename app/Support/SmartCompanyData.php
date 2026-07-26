@@ -150,6 +150,7 @@ class SmartCompanyData
                 self::resolveSiteId($siteId) ? \App\Models\Site::find(self::resolveSiteId($siteId)) : null,
                 auth()->id(),
             ),
+            'api_getOpsDigest' => app(\App\Services\Ops\OpsDigestService::class)->summary(self::resolveSiteId($siteId)),
             'api_getOpsPending' => app(\App\Services\Ops\OpsIntakeService::class)->pending(self::resolveSiteId($siteId)),
             'api_applyOpsItem' => app(\App\Services\Ops\OpsIntakeService::class)->apply((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : null, auth()->id()),
             'api_applyAllOpsItems' => app(\App\Services\Ops\OpsIntakeService::class)->applyAll(self::resolveSiteId($siteId), auth()->id()),
