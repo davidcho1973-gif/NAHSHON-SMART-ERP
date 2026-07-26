@@ -62,7 +62,7 @@ class IntegratedDocument extends Model
     }
 
     protected $fillable = [
-        'site_id', 'project_code', 'folder_code', 'document_type', 'type_confidence', 'folder_confidence', 'folder_locked',
+        'site_id', 'project_code', 'procurement_item_id', 'employee_id', 'company_id', 'wbs_code', 'link_locked', 'folder_code', 'document_type', 'type_confidence', 'folder_confidence', 'folder_locked',
         'title', 'document_number', 'issuer', 'counterparty', 'issued_on', 'effective_on', 'expires_on',
         'amount', 'currency', 'summary', 'fields', 'tags', 'duplicate_note', 'duplicate_of_id',
         'disk', 'path', 'original_name', 'mime_type', 'size',
@@ -79,6 +79,7 @@ class IntegratedDocument extends Model
             'type_confidence' => 'integer',
             'folder_confidence' => 'integer',
             'folder_locked' => 'boolean',
+            'link_locked' => 'boolean',
             'size' => 'integer',
             'summary' => 'array',
             'fields' => 'array',
@@ -104,6 +105,21 @@ class IntegratedDocument extends Model
     public function uploadedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by_id');
+    }
+
+    public function procurementItem(): BelongsTo
+    {
+        return $this->belongsTo(ProcurementItem::class);
+    }
+
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function duplicateOf(): BelongsTo
