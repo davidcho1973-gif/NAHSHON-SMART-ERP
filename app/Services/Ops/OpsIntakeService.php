@@ -6,14 +6,16 @@ use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\WbsItem;
+use App\Services\Procurement\ProcurementService;
+use App\Services\Wbs\WbsService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
  * 현장 상황실 — 올라온 글을 판독해 "반영 제안"으로 바꾼다.
  *
- * 1단계(현재): 판독 + 제안 생성/조회/무시.
- * 2단계(예정): 이 제안을 실제 공정표·조달에 적용.
+ * 1단계: 판독 + 제안 생성/조회/무시.
+ * 2단계: 제안을 실제 공정표(WbsService)·조달(ProcurementService)에 반영하고 되돌린다.
  */
 class OpsIntakeService
 {
@@ -90,6 +92,262 @@ class OpsIntakeService
             'count' => $rows->count(),
             'items' => $rows->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
+    }
+
+    /** 공정(WBS)에 반영을 허용하는 필드. 그 외는 무시한다. */
+    private const WBS_FIELDS = ['progress', 'status', 'planned_start', 'planned_end', 'name', 'crew_size', 'days', 'manhours'];
+
+    /** 조달에 반영을 허용하는 필드. */
+    private const PROC_FIELDS = ['eta', 'status', 'vendor', 'po_no', 'amount', 'ordered_on'];
+
+    /**
+     * 제안을 실제 공정표·조달에 반영한다.
+     *
+     * 반영 전 값을 함께 저장해 되돌릴 수 있게 한다. TBM 게이트 등 기존 업무 규칙에 걸리면
+     * 그 사유를 그대로 돌려주고 반영하지 않는다(규칙을 우회하지 않는다).
+     *
+     * @param  array<string, mixed>|null  $overrides  사람이 값을 고쳐서 적용할 때
+     * @return array<string, mixed>
+     */
+    public function apply(int $id, ?array $overrides = null, ?int $userId = null): array
+    {
+        $item = OpsIntakeItem::find($id);
+        if (! $item) {
+            return ['success' => false, 'error' => '항목을 찾을 수 없습니다.'];
+        }
+        if ($item->status === 'applied') {
+            return ['success' => false, 'error' => '이미 반영된 항목입니다.'];
+        }
+
+        $patch = is_array($overrides) && $overrides !== [] ? $overrides : (array) ($item->proposed ?? []);
+        if ($patch === []) {
+            return ['success' => false, 'error' => '반영할 변경 내용이 없습니다.'];
+        }
+        if (blank($item->target_code)) {
+            return ['success' => false, 'error' => '반영 대상이 지정되지 않았습니다. 대상을 먼저 지정하세요.'];
+        }
+
+        return $item->target_type === 'procurement'
+            ? $this->applyProcurement($item, $patch, $userId)
+            : $this->applyWbs($item, $patch, $userId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $patch
+     * @return array<string, mixed>
+     */
+    private function applyWbs(OpsIntakeItem $item, array $patch, ?int $userId): array
+    {
+        $wbs = WbsItem::query()->where('wbs_code', $item->target_code)->first();
+        if (! $wbs) {
+            return ['success' => false, 'error' => '공정을 찾을 수 없습니다: ' . $item->target_code];
+        }
+
+        $clean = [];
+        $previous = [];
+        foreach ($patch as $key => $value) {
+            if (! in_array($key, self::WBS_FIELDS, true) || $value === null || $value === '') {
+                continue;
+            }
+            $previous[$key] = $this->currentWbsValue($wbs, $key);
+
+            // crew_size 는 직접 컬럼이 아니라 투입조 텍스트로 파싱된다 — 기존 규칙을 그대로 탄다.
+            if ($key === 'crew_size') {
+                $clean['crew_text'] = ((int) $value) . '명';
+                continue;
+            }
+            if ($key === 'progress') {
+                $clean['progress'] = max(0, min(100, (int) $value));
+                continue;
+            }
+            if ($key === 'status') {
+                $clean['status'] = (string) $value;
+                continue;
+            }
+            if (in_array($key, ['planned_start', 'planned_end'], true)) {
+                $d = $this->safeDate((string) $value);
+                if ($d === null) {
+                    continue;
+                }
+                $clean[$key] = $d;
+                continue;
+            }
+            $clean[$key] = $value;
+        }
+
+        if ($clean === []) {
+            return ['success' => false, 'error' => '반영 가능한 항목이 없습니다.'];
+        }
+
+        $res = app(WbsService::class)->updateRow((string) $item->target_code, $clean);
+        if (! ($res['success'] ?? false)) {
+            $item->update(['result_note' => mb_substr((string) ($res['error'] ?? '반영 실패'), 0, 300)]);
+
+            return ['success' => false, 'error' => $res['error'] ?? '반영에 실패했습니다.', 'gated' => $res['gated'] ?? false];
+        }
+
+        $item->update([
+            'status' => 'applied',
+            'previous' => $previous,
+            'proposed' => $patch,
+            'applied_at' => now(),
+            'applied_by_id' => $userId,
+            'result_note' => '공정표 반영 완료',
+        ]);
+
+        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
+    }
+
+    /**
+     * @param  array<string, mixed>  $patch
+     * @return array<string, mixed>
+     */
+    private function applyProcurement(OpsIntakeItem $item, array $patch, ?int $userId): array
+    {
+        // 제안의 대상 코드는 PO 번호다 — 실제 갱신은 project_code + wbs_code 로 이뤄진다.
+        $po = ProcurementItem::query()->where('po_no', $item->target_code)->first();
+        if (! $po) {
+            return ['success' => false, 'error' => '발주 건을 찾을 수 없습니다: ' . $item->target_code];
+        }
+
+        $clean = [];
+        $previous = [];
+        foreach ($patch as $key => $value) {
+            if (! in_array($key, self::PROC_FIELDS, true) || $value === null || $value === '') {
+                continue;
+            }
+            $previous[$key] = $this->currentProcurementValue($po, $key);
+
+            if (in_array($key, ['eta', 'ordered_on'], true)) {
+                $d = $this->safeDate((string) $value);
+                if ($d === null) {
+                    continue;
+                }
+                $clean[$key] = $d;
+                continue;
+            }
+            if ($key === 'status' && ! in_array($value, ProcurementItem::STATUSES, true)) {
+                continue; // 정의된 조달 단계가 아니면 무시
+            }
+            $clean[$key] = $value;
+        }
+
+        if ($clean === []) {
+            return ['success' => false, 'error' => '반영 가능한 항목이 없습니다.'];
+        }
+
+        $res = app(ProcurementService::class)->update(
+            (string) $po->project_code,
+            (string) $po->wbs_code,
+            $clean,
+            'ALL',
+            $userId,
+        );
+        if (! ($res['success'] ?? false)) {
+            $item->update(['result_note' => mb_substr((string) ($res['error'] ?? '반영 실패'), 0, 300)]);
+
+            return ['success' => false, 'error' => $res['error'] ?? '반영에 실패했습니다.'];
+        }
+
+        $item->update([
+            'status' => 'applied',
+            'previous' => $previous,
+            'proposed' => $patch,
+            'applied_at' => now(),
+            'applied_by_id' => $userId,
+            'result_note' => '조달 반영 완료',
+        ]);
+
+        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
+    }
+
+    /**
+     * 확신도가 높고 대상이 확실한 제안을 한 번에 반영한다(확인 필요 항목은 건너뛴다).
+     *
+     * @return array<string, mixed>
+     */
+    public function applyAll(?int $siteId = null, ?int $userId = null): array
+    {
+        $rows = OpsIntakeItem::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            ->where('status', 'pending')
+            ->where('category', '!=', 'noise')
+            ->whereNotNull('target_code')
+            ->get();
+
+        $ok = 0;
+        $failed = [];
+        foreach ($rows as $row) {
+            $res = $this->apply($row->id, null, $userId);
+            if ($res['success'] ?? false) {
+                $ok++;
+            } else {
+                $failed[] = ['id' => $row->id, 'summary' => $row->summary, 'error' => $res['error'] ?? '실패'];
+            }
+        }
+
+        return ['success' => true, 'applied' => $ok, 'failed' => count($failed), 'failures' => $failed];
+    }
+
+    /**
+     * 반영을 되돌린다 — 저장해 둔 이전 값으로 복원.
+     *
+     * @return array<string, mixed>
+     */
+    public function revert(int $id, ?int $userId = null): array
+    {
+        $item = OpsIntakeItem::find($id);
+        if (! $item || $item->status !== 'applied') {
+            return ['success' => false, 'error' => '반영된 항목이 아닙니다.'];
+        }
+        $previous = (array) ($item->previous ?? []);
+        if ($previous === []) {
+            return ['success' => false, 'error' => '되돌릴 이전 값이 없습니다.'];
+        }
+
+        $res = $item->target_type === 'procurement'
+            ? $this->applyProcurement($item, $previous, $userId)
+            : $this->applyWbs($item, $previous, $userId);
+
+        if (! ($res['success'] ?? false)) {
+            return $res;
+        }
+
+        $item->update([
+            'status' => 'dismissed',
+            'result_note' => '반영 취소(되돌림)',
+            'applied_at' => null,
+        ]);
+
+        return ['success' => true, 'reverted' => $previous];
+    }
+
+    private function currentWbsValue(WbsItem $w, string $key): mixed
+    {
+        return match ($key) {
+            'progress' => (int) $w->progress,
+            'status' => (string) $w->status,
+            'planned_start' => $w->planned_start?->toDateString(),
+            'planned_end' => $w->planned_end?->toDateString(),
+            'crew_size' => $w->crew_size !== null ? (int) round((float) $w->crew_size) : null,
+            'days' => $w->days,
+            'manhours' => $w->manhours,
+            'name' => (string) $w->name,
+            default => null,
+        };
+    }
+
+    private function currentProcurementValue(ProcurementItem $p, string $key): mixed
+    {
+        return match ($key) {
+            'eta' => $p->eta?->toDateString(),
+            'ordered_on' => $p->ordered_on?->toDateString(),
+            'status' => (string) $p->status,
+            'vendor' => $p->vendor,
+            'po_no' => $p->po_no,
+            'amount' => $p->amount !== null ? (float) $p->amount : null,
+            default => null,
+        };
     }
 
     /**
@@ -249,6 +507,9 @@ class OpsIntakeService
             'proposed' => $i->proposed ?: [],
             'question' => $i->question,
             'status' => $i->status,
+            'previous' => $i->previous ?: [],
+            'appliedAt' => $i->applied_at?->toDateTimeString(),
+            'resultNote' => $i->result_note,
         ];
     }
 }

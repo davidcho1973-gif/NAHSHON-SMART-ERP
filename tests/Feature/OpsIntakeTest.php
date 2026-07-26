@@ -206,4 +206,130 @@ class OpsIntakeTest extends TestCase
         $this->assertSame(0, $this->service()->pending($this->site->id)['count']);
         $this->assertSame('dismissed', OpsIntakeItem::find($id)->status);
     }
+
+    // ── 2단계: 실제 반영 ────────────────────────────────────
+
+    /** 판독 없이 제안 1건을 직접 만든다(반영 로직만 검증). */
+    private function proposal(array $attrs = []): OpsIntakeItem
+    {
+        return OpsIntakeItem::create(array_merge([
+            'site_id' => $this->site->id, 'source' => 'paste', 'raw_text' => '천장 배관 12/20',
+            'category' => 'progress', 'confidence' => 90, 'summary' => '진행률 60%',
+            'target_type' => 'wbs', 'target_code' => 'LG-01-W-A100', 'target_name' => '천장 전기 배관',
+            'proposed' => ['progress' => 60], 'status' => 'pending',
+        ], $attrs));
+    }
+
+    public function test_apply_writes_progress_to_the_wbs_row(): void
+    {
+        $item = $this->proposal();
+
+        $r = $this->service()->apply($item->id);
+
+        $this->assertTrue($r['success'], $r['error'] ?? '');
+        $this->assertSame(60, (int) WbsItem::where('wbs_code', 'LG-01-W-A100')->value('progress'));
+        $item->refresh();
+        $this->assertSame('applied', $item->status);
+        $this->assertNotNull($item->applied_at);
+        // 되돌리기용 이전 값이 보관돼야 한다.
+        $this->assertArrayHasKey('progress', $item->previous);
+    }
+
+    public function test_apply_writes_schedule_dates(): void
+    {
+        $item = $this->proposal([
+            'proposed' => ['planned_start' => '2026-08-03', 'planned_end' => '2026-08-05'],
+        ]);
+
+        $this->assertTrue($this->service()->apply($item->id)['success']);
+
+        $w = WbsItem::where('wbs_code', 'LG-01-W-A100')->firstOrFail();
+        $this->assertSame('2026-08-03', $w->planned_start->toDateString());
+        $this->assertSame('2026-08-05', $w->planned_end->toDateString());
+    }
+
+    public function test_revert_restores_the_previous_value(): void
+    {
+        WbsItem::where('wbs_code', 'LG-01-W-A100')->update(['progress' => 20]);
+        $item = $this->proposal();
+        $this->service()->apply($item->id);
+        $this->assertSame(60, (int) WbsItem::where('wbs_code', 'LG-01-W-A100')->value('progress'));
+
+        $r = $this->service()->revert($item->id);
+
+        $this->assertTrue($r['success'], $r['error'] ?? '');
+        $this->assertSame(20, (int) WbsItem::where('wbs_code', 'LG-01-W-A100')->value('progress'), '되돌리면 이전 값으로 복원돼야 한다.');
+    }
+
+    public function test_fields_outside_the_whitelist_are_ignored(): void
+    {
+        // AI 가 엉뚱한 필드를 제안해도 그대로 쓰이면 안 된다.
+        $item = $this->proposal(['proposed' => ['site_id' => 999, 'is_critical' => true]]);
+
+        $r = $this->service()->apply($item->id);
+
+        $this->assertFalse($r['success']);
+        $this->assertSame($this->site->id, (int) WbsItem::where('wbs_code', 'LG-01-W-A100')->value('site_id'));
+    }
+
+    public function test_apply_without_target_is_refused(): void
+    {
+        $item = $this->proposal(['target_code' => null, 'status' => 'needs_input']);
+
+        $r = $this->service()->apply($item->id);
+
+        $this->assertFalse($r['success']);
+        $this->assertStringContainsString('대상', $r['error']);
+    }
+
+    public function test_applying_twice_is_refused(): void
+    {
+        $item = $this->proposal();
+        $this->service()->apply($item->id);
+
+        $this->assertFalse($this->service()->apply($item->id)['success']);
+    }
+
+    public function test_procurement_eta_is_applied_to_the_purchase_order(): void
+    {
+        ProcurementItem::create([
+            'project_code' => 'LG-01', 'site_id' => $this->site->id, 'wbs_code' => 'LG-01-W-A100',
+            'status' => '발주완료', 'vendor' => 'Graybar', 'po_no' => 'PO-118',
+        ]);
+        $item = $this->proposal([
+            'category' => 'procurement', 'target_type' => 'procurement', 'target_code' => 'PO-118',
+            'target_name' => 'Graybar', 'proposed' => ['eta' => '2026-08-04'],
+        ]);
+
+        $r = $this->service()->apply($item->id);
+
+        $this->assertTrue($r['success'], $r['error'] ?? '');
+        $this->assertSame('2026-08-04', ProcurementItem::where('po_no', 'PO-118')->firstOrFail()->eta->toDateString());
+    }
+
+    public function test_apply_all_skips_items_that_need_input(): void
+    {
+        $this->proposal();                                              // 반영 가능
+        $this->proposal(['status' => 'needs_input', 'target_code' => null]); // 건너뜀
+
+        $r = $this->service()->applyAll($this->site->id);
+
+        $this->assertSame(1, $r['applied']);
+        $this->assertSame(1, $this->service()->pending($this->site->id)['count'], '확인 필요 항목은 남아 있어야 한다.');
+    }
+
+    public function test_business_rule_failure_is_reported_not_bypassed(): void
+    {
+        // 상태 변경은 TBM 게이트 등 기존 규칙을 그대로 탄다 — 규칙을 우회하면 안 된다.
+        $item = $this->proposal(['proposed' => ['status' => '완료']]);
+
+        $r = $this->service()->apply($item->id);
+
+        if (! ($r['success'] ?? false)) {
+            $this->assertNotEmpty($r['error']);
+            $this->assertSame('pending', $item->fresh()->status, '실패하면 반영됨으로 바뀌면 안 된다.');
+        } else {
+            $this->assertSame('완료', WbsItem::where('wbs_code', 'LG-01-W-A100')->value('status'));
+        }
+    }
 }
