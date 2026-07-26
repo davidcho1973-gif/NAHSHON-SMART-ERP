@@ -8863,6 +8863,25 @@
         renderDocs();
       };
 
+      // 문서 보관 디스크 점검 — 임시 로컬이면 유실 위험을 화면에 드러낸다.
+      async function docsCheckStorage() {
+        var host = document.getElementById('docs-storage-banner');
+        if (!host) return;
+        var h = await gsRun('api_getDocStorageHealth', [], { level: 'ok', message: '' });
+        if (!h || h.level === 'ok') { host.innerHTML = ''; return; }
+        var crit = h.level === 'critical';
+        host.innerHTML =
+          '<div style="display:flex;align-items:flex-start;gap:11px;margin-bottom:16px;padding:13px 16px;border-radius:12px;' +
+          'background:' + (crit ? 'rgba(220,38,38,.10)' : 'rgba(245,158,11,.10)') + ';' +
+          'border:1px solid ' + (crit ? 'rgba(220,38,38,.45)' : 'rgba(245,158,11,.45)') + '">' +
+          '<span style="font-size:17px">' + (crit ? '\u26A0\uFE0F' : '\u2139\uFE0F') + '</span>' +
+          '<div style="flex:1"><div style="font-size:13px;font-weight:800;color:' + (crit ? '#dc2626' : '#b45309') + '">' +
+          (crit ? '문서 원본이 사라질 수 있습니다 (임시 저장소)' : '문서 보관 상태 주의') + '</div>' +
+          '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:3px;line-height:1.6">' + docEsc(h.message || '') +
+          (crit ? '<br>관리자: 오브젝트 스토리지(S3) 연결 후 환경변수 <b>DOCUMENT_DISK=s3</b> 를 설정하세요.' : '') +
+          '</div></div></div>';
+      }
+
       function docsShell(bodyHtml) {
         var st = window._docsState;
         function tab(key, icon, label) {
@@ -8875,6 +8894,7 @@
           '<p>직원·협력사·현장 작업자가 올린 모든 서류를 AI가 분석·분류하여 자동 정리합니다.</p></div>' +
           '<div class="docs-live"><span class="dot"></span>AI 분석 엔진 정상 가동중</div>' +
           '</div>' +
+          '<div id="docs-storage-banner"></div>' +
           '<div class="docs-tabs">' +
           tab('dashboard', 'ph-squares-four', '대시보드') +
           tab('upload', 'ph-upload-simple', '문서 업로드') +
@@ -8894,6 +8914,7 @@
       async function renderDocs() {
         var st = window._docsState;
         pageContainer.innerHTML = docsShell(docsLoading());
+        docsCheckStorage();
         try {
           if (st.view === 'dashboard') return await docsRenderDashboard();
           if (st.view === 'upload') return docsRenderUpload();
@@ -8946,12 +8967,41 @@
           '<div class="docs-card" style="padding:16px 18px"><div class="docs-card-title" style="margin-bottom:4px">폴더별 문서 분포</div>' +
           '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:14px">AI 자동 분류 결과</div>' + distHtml + '</div>' +
           '</div>' +
+          '<div id="docs-expiry-panel"></div>' +
           '<div class="docs-ai-panel" style="margin-top:18px;display:flex;align-items:center;gap:20px">' +
           '<div class="docs-ai-glow">✦</div>' +
           '<div style="flex:1"><div class="kicker">AI INSIGHT</div>' +
           '<div style="font-size:14px;font-weight:600;margin-top:4px;color:#fff">' + docEsc(d.insight || '문서함이 최신 상태입니다.') + '</div></div>' +
           '<button onclick="window.docsGo(\'search\')" style="background:#fff;color:#312e81;border:none;border-radius:9px;padding:9px 15px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">자세히 보기</button>' +
           '</div>';
+        docsRenderExpiry();
+      }
+
+      // 만료 임박/경과 문서 — 기한 있는 서류(COI·면허·인허가·비자)를 앞으로 끌어낸다.
+      async function docsRenderExpiry() {
+        var host = document.getElementById('docs-expiry-panel');
+        if (!host) return;
+        var d = await gsRun('api_getDocExpiring', [60], { items: [], expired: 0, critical: 0, soon: 0 });
+        var items = (d && d.items) || [];
+        if (!items.length) { host.innerHTML = ''; return; }
+        var color = { expired: '#dc2626', critical: '#ea580c', soon: '#b45309' };
+        var label = { expired: '만료됨', critical: '긴급', soon: '임박' };
+        var rows = items.slice(0, 8).map(function (it) {
+          var c = color[it.state], dl = it.daysLeft;
+          var when = dl < 0 ? (Math.abs(dl) + '일 경과') : (dl === 0 ? '오늘 만료' : 'D-' + dl);
+          return '<div class="docs-row" style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + it.id + '})">' +
+            '<span style="min-width:52px;font-size:11px;font-weight:800;color:' + c + '">' + docEsc(label[it.state]) + '</span>' +
+            '<div class="t"><div class="name">' + docEsc(it.title) + '</div>' +
+            '<div class="meta">' + docEsc(it.type) + ' · ' + docEsc(it.folder) + ' · ' + docEsc(it.issuer) + '</div></div>' +
+            '<span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + docEsc(it.expiresOn || '') + '</span>' +
+            '<span style="font-size:12.5px;font-weight:800;color:' + c + ';min-width:64px;text-align:right">' + docEsc(when) + '</span></div>';
+        }).join('');
+        host.innerHTML =
+          '<div class="docs-card" style="margin-top:18px;border-left:3px solid ' + (d.expired ? '#dc2626' : '#ea580c') + '">' +
+          '<div class="docs-card-head"><div class="docs-card-title">\u23F0 기한 관리 — 만료 임박 문서' +
+          (d.expired ? ' <span style="font-size:11px;font-weight:700;color:#dc2626;background:rgba(220,38,38,.1);padding:2px 8px;border-radius:8px;margin-left:6px">만료 ' + d.expired + '건</span>' : '') +
+          (d.critical ? ' <span style="font-size:11px;font-weight:700;color:#ea580c;background:rgba(234,88,12,.1);padding:2px 8px;border-radius:8px;margin-left:6px">14일 내 ' + d.critical + '건</span>' : '') +
+          '</div><span style="font-size:11.5px;color:var(--text-tertiary)">매일 아침 관리자 알림 발송</span></div>' + rows + '</div>';
       }
 
       // ─────────── 업로드 + AI 분석 ───────────
@@ -9204,6 +9254,40 @@
           '<div class="docs-card">' + rows + '</div></div></div>';
       }
 
+      // 연결된 업무 대상(발주·협력사·작업자·공정) 표시 — 클릭하면 그 대상의 서류 일체로 이동
+      function docsLinkHtml(doc) {
+        var links = (doc && doc.links) || [];
+        var chips = links.map(function (l) {
+          return '<span onclick="window.docsEntityDocs(\'' + docEsc(l.type) + '\',\'' + docEsc(String(l.id)) + '\',\'' + docEsc(l.name) + '\')" ' +
+            'style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:var(--brand-primary-dim);border:1px solid var(--border-subtle);' +
+            'border-radius:9px;padding:6px 11px;font-size:12px"><b style="color:var(--brand-primary)">' + docEsc(l.label) + '</b>' +
+            '<span style="color:var(--text-primary)">' + docEsc(l.name) + '</span></span>';
+        }).join('');
+        return '<div class="docs-card" style="padding:16px 20px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (links.length ? '11px' : '0') + '">' +
+          '<div style="font-size:13.5px;font-weight:700;color:var(--text-primary)">\uD83D\uDD17 업무 연결</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">' + (links.length ? '클릭하면 관련 서류 일체를 봅니다' : '연결된 업무 대상이 없습니다 (발주번호·발행처로 자동 연결)') + '</span></div>' +
+          (links.length ? '<div style="display:flex;gap:8px;flex-wrap:wrap">' + chips + '</div>' : '') + '</div>';
+      }
+
+      // 특정 업무 대상에 붙은 서류 목록 보기
+      window.docsEntityDocs = async function (type, id, name) {
+        var d = await gsRun('api_getDocsForEntity', [type, id], { success: false, docs: [] });
+        if (!d || d.success === false) { alert('관련 서류를 불러오지 못했습니다.'); return; }
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        var rows = (d.docs || []).length ? d.docs.map(function (dc) {
+          return '<div class="docs-row" style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + dc.id + '})">' + docBadge(dc.type) +
+            '<div class="t"><div class="name">' + docEsc(dc.title) + '</div><div class="meta">' + docEsc(dc.sub) + '</div></div>' +
+            '<span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + docEsc(dc.date) + '</span></div>';
+        }).join('') : '<div style="padding:36px;text-align:center;color:var(--text-tertiary);font-size:13px">이 대상에 연결된 서류가 없습니다.</div>';
+        body.innerHTML =
+          '<div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:12px">' +
+          '<span style="cursor:pointer;color:var(--brand-primary);font-weight:600" onclick="window.docsGo(\'browse\')">← 폴더 브라우저</span> / ' +
+          docEsc(d.label) + ' · ' + docEsc(name || '') + '</div>' +
+          '<div class="docs-card"><div class="docs-card-head"><div class="docs-card-title">' + docEsc(d.label) + ' 관련 서류 (' + d.count + '건)</div></div>' + rows + '</div>';
+      };
+
       // ─────────── 상세 (AI 추출 매핑) ───────────
       async function docsRenderDetail() {
         var st = window._docsState;
@@ -9266,6 +9350,7 @@
           '<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#a5b4fc">자동 분류 폴더</div>' +
           '<div style="font-size:16px;font-weight:700;color:#fff;margin-top:4px">' + docEsc(doc.folderName) + '</div><div style="font-size:11px;color:#c7d2fe;margin-top:4px">매핑 신뢰도 ' + doc.folderConf + '%</div></div>' +
           '</div></div>' +
+          docsLinkHtml(doc) +
           dupHtml +
           '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">핵심 요약 <span style="font-size:10px;font-weight:700;color:var(--brand-primary);background:var(--brand-primary-dim);padding:2px 7px;border-radius:6px">AI 생성</span></div>' + summaryHtml + '</div>' +
           '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:14px;color:var(--text-primary)">추출된 메타데이터</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">' + fieldsHtml + '</div></div>' +

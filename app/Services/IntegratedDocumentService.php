@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\DocumentFolder;
+use App\Models\Employee;
 use App\Models\IntegratedDocument;
 use App\Models\MobileExpense;
+use App\Models\ProcurementItem;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -84,6 +87,9 @@ class IntegratedDocumentService
                 'error' => null,
                 'analyzed_at' => now(),
             ]);
+
+            // 분석 결과(PO 번호·발행처·이름)를 근거로 업무 대상에 자동 연결.
+            $this->autoLink($doc->fresh());
         } catch (Throwable $e) {
             report($e);
             $doc->update(['status' => 'failed', 'error' => $e->getMessage()]);
@@ -237,7 +243,8 @@ class IntegratedDocumentService
      */
     public function detail(int $id): ?array
     {
-        $d = IntegratedDocument::query()->with(['site', 'uploadedBy', 'duplicateOf'])->find($id);
+        $d = IntegratedDocument::query()
+            ->with(['site', 'uploadedBy', 'duplicateOf', 'procurementItem', 'employee', 'company'])->find($id);
         if (! $d) {
             return null;
         }
@@ -266,6 +273,7 @@ class IntegratedDocumentService
             'folderCode' => $d->folder_code,
             'folderName' => $d->folderName(),
             'folderConf' => $d->folder_confidence,
+            'links' => $this->linkSummary($d),
             'docno' => $d->document_number ?: '—',
             'by' => $d->uploaded_by_label ?: (optional($d->uploadedBy)->name ?: '—'),
             'size' => $this->humanSize($d->size),
@@ -351,6 +359,204 @@ class IntegratedDocumentService
         $d->delete();
 
         return ['success' => true];
+    }
+
+    // ───────────────────────── 문서 ↔ 업무 연결 ─────────────────────────
+
+    /**
+     * AI 분석 결과를 근거로 문서를 업무 대상(발주·협력사·작업자·공정)에 자동 연결한다.
+     *
+     * 사람이 이미 연결해 둔 문서(link_locked)는 건드리지 않는다.
+     */
+    public function autoLink(IntegratedDocument $doc): IntegratedDocument
+    {
+        if ($doc->link_locked) {
+            return $doc;
+        }
+
+        $links = [];
+
+        // 1) 문서번호/제목의 PO 번호 → 조달 항목.
+        $poNo = trim((string) $doc->document_number);
+        $haystack = trim($poNo . ' ' . (string) $doc->title);
+        if ($haystack !== '') {
+            $po = ProcurementItem::query()
+                ->whereNotNull('po_no')->where('po_no', '!=', '')
+                ->get()
+                ->first(fn (ProcurementItem $p) => $poNo !== ''
+                    ? strcasecmp(trim((string) $p->po_no), $poNo) === 0
+                    : str_contains(mb_strtolower($haystack), mb_strtolower(trim((string) $p->po_no))));
+            if ($po) {
+                $links['procurement_item_id'] = $po->id;
+                $links['wbs_code'] = $links['wbs_code'] ?? $po->wbs_code;
+            }
+        }
+
+        // 2) 발행처/상대처 이름 → 협력사(회사).
+        foreach ([$doc->issuer, $doc->counterparty] as $name) {
+            $name = trim((string) $name);
+            if ($name === '' || isset($links['company_id'])) {
+                continue;
+            }
+            $company = Company::query()
+                ->where('name', 'ilike', $name)
+                ->orWhere('name', 'ilike', '%' . $name . '%')
+                ->orWhere('code', 'ilike', $name)
+                ->first();
+            if ($company) {
+                $links['company_id'] = $company->id;
+            }
+        }
+
+        // 3) 개인 서류(비자·취업허가·자격증)는 제목에서 직원 이름 매칭.
+        if (in_array((string) $doc->document_type, ['visa', 'work_authorization', 'certificate', 'license'], true)) {
+            $title = mb_strtolower((string) $doc->title);
+            if ($title !== '') {
+                $employee = Employee::query()
+                    ->where('employment_status', 'active')
+                    ->when($doc->site_id, fn ($q) => $q->where('site_id', $doc->site_id))
+                    ->get()
+                    ->first(function (Employee $e) use ($title): bool {
+                        $name = trim((string) ($e->name ?: ($e->first_name . ' ' . $e->last_name)));
+
+                        return $name !== '' && mb_strlen($name) >= 2 && str_contains($title, mb_strtolower($name));
+                    });
+                if ($employee) {
+                    $links['employee_id'] = $employee->id;
+                    $links['company_id'] = $links['company_id'] ?? $employee->company_id;
+                }
+            }
+        }
+
+        if ($links !== []) {
+            $doc->update($links);
+        }
+
+        return $doc;
+    }
+
+    /**
+     * 사람이 문서 연결을 직접 지정/해제한다(이후 자동 추정이 덮어쓰지 않도록 잠근다).
+     *
+     * @param  array<string, mixed>  $links
+     * @return array<string, mixed>
+     */
+    public function linkDocument(int $id, array $links): array
+    {
+        $doc = IntegratedDocument::find($id);
+        if (! $doc) {
+            return ['success' => false, 'error' => '문서를 찾을 수 없습니다.'];
+        }
+
+        $payload = ['link_locked' => true];
+        foreach (['procurement_item_id', 'employee_id', 'company_id'] as $key) {
+            if (array_key_exists($key, $links)) {
+                $payload[$key] = $links[$key] !== '' && $links[$key] !== null ? (int) $links[$key] : null;
+            }
+        }
+        if (array_key_exists('wbs_code', $links)) {
+            $payload['wbs_code'] = $links['wbs_code'] !== '' ? (string) $links['wbs_code'] : null;
+        }
+        $doc->update($payload);
+
+        return ['success' => true, 'links' => $this->linkSummary($doc->fresh())];
+    }
+
+    /**
+     * 특정 업무 대상에 붙은 문서 목록. 예: 이 발주 건 서류 일체.
+     *
+     * @return array<string, mixed>
+     */
+    public function forEntity(string $type, int|string $id): array
+    {
+        $map = [
+            'procurement' => ['column' => 'procurement_item_id', 'label' => '발주', 'cast' => 'int'],
+            'employee' => ['column' => 'employee_id', 'label' => '작업자', 'cast' => 'int'],
+            'company' => ['column' => 'company_id', 'label' => '협력사', 'cast' => 'int'],
+            'wbs' => ['column' => 'wbs_code', 'label' => '공정', 'cast' => 'string'],
+        ];
+        if (! isset($map[$type])) {
+            return ['success' => false, 'error' => '알 수 없는 연결 대상입니다.'];
+        }
+        $spec = $map[$type];
+        $label = $spec['label'];
+
+        $docs = IntegratedDocument::query()
+            ->where($spec['column'], $spec['cast'] === 'int' ? (int) $id : (string) $id)
+            ->latest()->limit(100)->get()->map(fn (IntegratedDocument $d) => $this->summaryRow($d))->all();
+
+        return ['success' => true, 'type' => $type, 'label' => $label, 'count' => count($docs), 'docs' => $docs];
+    }
+
+    /**
+     * 문서에 붙은 연결을 사람이 읽는 형태로.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function linkSummary(IntegratedDocument $doc): array
+    {
+        $out = [];
+        if ($doc->procurement_item_id && $po = $doc->procurementItem) {
+            $out[] = ['type' => 'procurement', 'id' => $po->id, 'label' => '발주', 'name' => trim(($po->po_no ?: 'PO') . ' · ' . ($po->vendor ?: ''))];
+        }
+        if ($doc->company_id && $c = $doc->company) {
+            $out[] = ['type' => 'company', 'id' => $c->id, 'label' => '협력사', 'name' => $c->name];
+        }
+        if ($doc->employee_id && $e = $doc->employee) {
+            $out[] = ['type' => 'employee', 'id' => $e->id, 'label' => '작업자', 'name' => $e->name ?: trim($e->first_name . ' ' . $e->last_name)];
+        }
+        if (filled($doc->wbs_code)) {
+            $out[] = ['type' => 'wbs', 'id' => $doc->wbs_code, 'label' => '공정', 'name' => $doc->wbs_code];
+        }
+
+        return $out;
+    }
+
+    // ───────────────────────── 스토리지 상태 ─────────────────────────
+
+    /**
+     * 문서 보관 디스크가 영구 저장소인지 점검한다.
+     *
+     * Laravel Cloud 의 로컬 디스크는 배포마다 초기화되므로(임시), 로컬에 보관 중이면
+     * 이미 올린 문서가 다음 배포에서 사라진다. 화면·CLI 에서 이 위험을 드러낸다.
+     *
+     * @return array<string, mixed>
+     */
+    public function storageHealth(): array
+    {
+        $disk = IntegratedDocument::storageDisk();
+        $driver = (string) config("filesystems.disks.{$disk}.driver", 'local');
+        $persistent = $driver !== 'local';
+        $docCount = IntegratedDocument::query()->count();
+
+        // 실제로 파일이 남아 있는지 표본 점검(유실이 이미 일어났는지 확인).
+        $missing = 0;
+        $sample = IntegratedDocument::query()->whereNotNull('path')->latest()->limit(20)->get();
+        foreach ($sample as $doc) {
+            try {
+                if (! Storage::disk($doc->disk ?: $disk)->exists($doc->path)) {
+                    $missing++;
+                }
+            } catch (Throwable) {
+                $missing++;
+            }
+        }
+
+        return [
+            'success' => true,
+            'disk' => $disk,
+            'driver' => $driver,
+            'persistent' => $persistent,
+            'documents' => $docCount,
+            'sampleChecked' => $sample->count(),
+            'sampleMissing' => $missing,
+            'level' => $persistent ? ($missing > 0 ? 'warn' : 'ok') : 'critical',
+            'message' => $persistent
+                ? ($missing > 0
+                    ? sprintf('영구 저장소(%s)를 쓰고 있으나 최근 문서 %d건의 원본 파일을 찾을 수 없습니다.', $disk, $missing)
+                    : sprintf('영구 저장소(%s)에 안전하게 보관 중입니다.', $disk))
+                : '문서가 임시 로컬 디스크에 저장되고 있습니다. 배포·재시작 시 원본 파일이 사라집니다. 오브젝트 스토리지(S3) 연결이 필요합니다.',
+        ];
     }
 
     // ───────────────────────── 사용자 폴더 ─────────────────────────

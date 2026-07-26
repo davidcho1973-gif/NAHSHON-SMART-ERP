@@ -141,6 +141,10 @@ class SmartCompanyData
             'api_searchDocs' => app(\App\Services\IntegratedDocumentService::class)->search(self::resolveSiteId($siteId), (string) ($args[0] ?? '')),
             'api_confirmDoc' => app(\App\Services\IntegratedDocumentService::class)->confirm((int) ($args[0] ?? 0), ($args[1] ?? null) !== null && $args[1] !== '' ? (string) $args[1] : null),
             'api_deleteDoc' => app(\App\Services\IntegratedDocumentService::class)->deleteDocument((int) ($args[0] ?? 0)),
+            'api_linkDoc' => app(\App\Services\IntegratedDocumentService::class)->linkDocument((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_getDocsForEntity' => app(\App\Services\IntegratedDocumentService::class)->forEntity((string) ($args[0] ?? ''), $args[1] ?? 0),
+            'api_getDocExpiring' => app(\App\Services\DocumentExpiryService::class)->overview(self::resolveSiteId($siteId), (int) ($args[0] ?? 60)),
+            'api_getDocStorageHealth' => app(\App\Services\IntegratedDocumentService::class)->storageHealth(),
             'api_createDocFolder' => app(\App\Services\IntegratedDocumentService::class)->createFolder((string) ($args[0] ?? ''), ($args[1] ?? null) !== '' ? ($args[1] ?? null) : null, auth()->id()),
             'api_deleteDocFolder' => app(\App\Services\IntegratedDocumentService::class)->deleteFolder((string) ($args[0] ?? '')),
 
