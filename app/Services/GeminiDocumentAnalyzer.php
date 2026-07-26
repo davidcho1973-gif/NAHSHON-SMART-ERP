@@ -61,7 +61,12 @@ class GeminiDocumentAnalyzer
         $result = $this->engine->analyze($parts, $this->prompt($docText), $this->schema());
 
         return $this->normalize(is_array($result['data'] ?? null) ? $result['data'] : [])
-            + ['engine' => $this->engine->name(), 'model' => (string) ($result['model'] ?? '')];
+            + [
+                'engine' => $this->engine->name(),
+                'model' => (string) ($result['model'] ?? ''),
+                // 추출한 본문 원문 — 전문검색용으로 보관한다(스캔/이미지는 null).
+                'body_text' => $docText,
+            ];
     }
 
     private function prompt(?string $pdfText): string
