@@ -6,6 +6,7 @@ use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\WbsItem;
+use App\Support\ImageParts;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
 use Illuminate\Support\Carbon;
@@ -39,6 +40,7 @@ class OpsIntakeService
     public function ingest(string $text, ?Site $site, ?int $userId = null, array $images = [], string $source = 'paste', ?int $messageId = null): array
     {
         $text = trim($text);
+        $images = ImageParts::sanitize($images);
         if ($text === '' && $images === []) {
             return ['success' => false, 'error' => '판독할 내용이 없습니다.'];
         }
