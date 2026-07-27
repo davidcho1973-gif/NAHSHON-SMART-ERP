@@ -141,6 +141,10 @@ Route::get('/gate/{site}/qr', [App\Http\Controllers\GateAttendanceController::cl
 Route::get('/gate/{site}', [App\Http\Controllers\GateAttendanceController::class, 'show'])->name('gate.show');
 Route::post('/gate/{site}/search', [App\Http\Controllers\GateAttendanceController::class, 'search'])->name('gate.search');
 Route::post('/gate/{site}/punch', [App\Http\Controllers\GateAttendanceController::class, 'punch'])->name('gate.punch');
+// 기억된 휴대폰으로 본인 자동 인식 — 이름 검색을 건너뛴다.
+Route::post('/gate/{site}/me', [App\Http\Controllers\GateAttendanceController::class, 'me'])->name('gate.me');
+Route::post('/gate/{site}/remember', [App\Http\Controllers\GateAttendanceController::class, 'remember'])->name('gate.remember');
+Route::post('/gate/{site}/forget', [App\Http\Controllers\GateAttendanceController::class, 'forget'])->name('gate.forget');
 
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
