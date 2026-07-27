@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Services\Attendance\GateAttendanceService;
-use App\Support\QrSvg;
+use App\Support\QrPosters;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -28,12 +28,9 @@ class GateAttendanceController extends Controller
     /** 인쇄용 게이트 QR 포스터. */
     public function qr(Site $site): View
     {
-        $gateUrl = route('gate.show', ['site' => $site]);
-
         return view('gate.qr', [
             'site' => $site,
-            'gateUrl' => $gateUrl,
-            'qrImage' => QrSvg::dataUri($gateUrl, 320),
+            'poster' => QrPosters::make($site, QrPosters::GATE),
         ]);
     }
 

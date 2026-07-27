@@ -4032,6 +4032,7 @@
               '<div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
               '<div style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(quickForm) + '</div></div>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
+              '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'/print/qr/' + s.id + '\',\'_blank\')" title="게이트·간편등록·지원서 QR을 한 번에 인쇄"><i class="ph ph-printer"></i> 모아 인쇄</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
               '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickDirect + '\',\'_blank\')" title="우리 회사 소속(시급) 작업자 등록 QR"><i class="ph ph-qr-code"></i> 직접고용 QR</button>' +
               '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#047857;border-color:#047857" onclick="window.open(\'' + quickIndirect + '\',\'_blank\')" title="하청업체 소속 작업자 등록 QR"><i class="ph ph-qr-code"></i> 협력사 QR</button>' +
