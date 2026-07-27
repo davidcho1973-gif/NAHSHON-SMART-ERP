@@ -13,7 +13,8 @@ class OpsIntakeBatch extends Model
 {
     protected $fillable = [
         'site_id', 'created_by_id', 'source', 'communication_message_id',
-        'raw_text', 'image_count', 'parsed_count', 'actionable_count', 'noise_count',
+        'raw_text', 'original_text', 'edited_by_id', 'edited_at',
+        'image_count', 'parsed_count', 'actionable_count', 'noise_count',
     ];
 
     protected function casts(): array
@@ -23,12 +24,18 @@ class OpsIntakeBatch extends Model
             'parsed_count' => 'integer',
             'actionable_count' => 'integer',
             'noise_count' => 'integer',
+            'edited_at' => 'datetime',
         ];
     }
 
     public function items(): HasMany
     {
         return $this->hasMany(OpsIntakeItem::class, 'ops_intake_batch_id');
+    }
+
+    public function editedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'edited_by_id');
     }
 
     public function createdBy(): BelongsTo
@@ -41,6 +48,6 @@ class OpsIntakeBatch extends Model
     {
         $text = trim(preg_replace('/\s+/u', ' ', (string) $this->raw_text) ?? '');
 
-        return $text === '' ? '(사진만 첨부)' : mb_substr($text, 0, $len) . (mb_strlen($text) > $len ? '…' : '');
+        return $text === '' ? '(사진만 첨부)' : mb_substr($text, 0, $len).(mb_strlen($text) > $len ? '…' : '');
     }
 }

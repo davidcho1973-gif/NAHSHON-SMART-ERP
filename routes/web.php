@@ -100,6 +100,8 @@ Route::middleware('auth')->group(function (): void {
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
+    // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
+    Route::get('/attendance-app/ops-room', [\App\Http\Controllers\MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
     Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
     Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');

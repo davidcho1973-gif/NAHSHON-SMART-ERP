@@ -161,13 +161,18 @@ class SmartCompanyData
                 is_array($args[1] ?? null) ? $args[1] : [],
             ),
             'api_getOpsDigest' => app(\App\Services\Ops\OpsDigestService::class)->summary(self::resolveSiteId($siteId)),
-            'api_getOpsBatches' => app(\App\Services\Ops\OpsIntakeService::class)->batches(self::resolveSiteId($siteId)),
+            'api_getOpsBatches' => self::opsBatches($siteId),
             'api_getOpsBatch' => app(\App\Services\Ops\OpsIntakeService::class)->batch((int) ($args[0] ?? 0)),
             'api_getOpsPending' => app(\App\Services\Ops\OpsIntakeService::class)->pending(self::resolveSiteId($siteId)),
             'api_applyOpsItem' => app(\App\Services\Ops\OpsIntakeService::class)->apply((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : null, auth()->id()),
             'api_applyAllOpsItems' => app(\App\Services\Ops\OpsIntakeService::class)->applyAll(self::resolveSiteId($siteId), auth()->id()),
             'api_revertOpsItem' => app(\App\Services\Ops\OpsIntakeService::class)->revert((int) ($args[0] ?? 0), auth()->id()),
             'api_dismissOpsItem' => app(\App\Services\Ops\OpsIntakeService::class)->dismiss((int) ($args[0] ?? 0)),
+            // 원문 기록 수정·삭제 — 근거 자료라 관리자만 손댈 수 있다.
+            'api_updateOpsBatch' => self::opsBatchGuard()
+                ?? app(\App\Services\Ops\OpsIntakeService::class)->updateBatch((int) ($args[0] ?? 0), (string) ($args[1] ?? ''), auth()->id()),
+            'api_deleteOpsBatch' => self::opsBatchGuard()
+                ?? app(\App\Services\Ops\OpsIntakeService::class)->deleteBatch((int) ($args[0] ?? 0)),
             'api_getDocStorageHealth' => app(\App\Services\IntegratedDocumentService::class)->storageHealth(),
             'api_createDocFolder' => app(\App\Services\IntegratedDocumentService::class)->createFolder((string) ($args[0] ?? ''), ($args[1] ?? null) !== '' ? ($args[1] ?? null) : null, auth()->id()),
             'api_deleteDocFolder' => app(\App\Services\IntegratedDocumentService::class)->deleteFolder((string) ($args[0] ?? '')),
@@ -789,6 +794,28 @@ class SmartCompanyData
      */
     /** 관리자 권한을 가진 역할. 지오펜스 설정/조회의 공통 게이트. */
     private const GEOFENCE_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+
+    /** 상황실 원문 기록을 고치거나 지울 수 있는 역할. */
+    private const OPS_BATCH_ROLES = ['super_admin', 'admin', 'site_manager', 'safety_manager'];
+
+    /** 원문 기록 목록 + 이 계정이 수정·삭제할 수 있는지(화면이 버튼을 감추는 데 쓴다). */
+    private static function opsBatches(string $siteId): array
+    {
+        $data = app(\App\Services\Ops\OpsIntakeService::class)->batches(self::resolveSiteId($siteId));
+        $data['canManage'] = self::opsBatchGuard() === null;
+
+        return $data;
+    }
+
+    /** 권한이 없으면 그대로 돌려줄 오류를, 있으면 null 을 반환한다. */
+    private static function opsBatchGuard(): ?array
+    {
+        $user = auth()->user();
+
+        return $user && in_array($user->access_role, self::OPS_BATCH_ROLES, true)
+            ? null
+            : ['success' => false, 'error' => '원문 기록을 수정·삭제할 권한이 없습니다.'];
+    }
 
     /**
      * 회사 구분 목록 — 미지정 회사가 위로 오게 정렬한다(설정해야 할 것부터 보이도록).
