@@ -29,7 +29,7 @@ class OpsIntakeAnalyzer
      */
     public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = ''): array
     {
-        $prompt = $this->prompt($text, $activities, $purchases, $today) . $learned;
+        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== []) . $learned;
 
         $result = $images !== []
             ? $this->ocr->analyze($images, $prompt, $this->schema())['data'] ?? []
@@ -44,7 +44,28 @@ class OpsIntakeAnalyzer
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function prompt(string $text, array $activities, array $purchases, string $today): string
+    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false): string
+    {
+        $photoRule = $withImages ? <<<'P'
+
+## 첨부 사진 판독 (사진이 함께 왔습니다)
+- 사진에 **실제로 보이는 시공 상태**로 진행 정도를 판단하세요(예: 트레이 3구간 중 2구간 포설 완료 → 약 66%).
+- 영수증 사진이면 category=expense 로, 상호·금액을 summary 에 적으세요.
+- 자재 납품/송장 사진이면 category=procurement 로 보세요.
+- 안전 위험(개구부·추락·정리불량·PPE 미착용)이 보이면 category=issue 로 잡으세요.
+- 글에 대상 작업이 적혀 있으면 **그 작업을 우선**하고, 사진은 상태 판정에만 쓰세요.
+- 사진만으로 대상을 확신할 수 없으면 target_code 를 비우고 question 에 되물으세요.
+- 사진에서 **확인되지 않는 수치는 만들지 마세요.**
+P : '';
+
+        return $this->body($text, $activities, $purchases, $today) . $photoRule;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $activities
+     * @param  array<int, array<string, mixed>>  $purchases
+     */
+    private function body(string $text, array $activities, array $purchases, string $today): string
     {
         $actList = collect($activities)->take(200)->map(
             fn (array $a) => sprintf(

@@ -332,4 +332,82 @@ class OpsIntakeTest extends TestCase
             $this->assertSame('완료', WbsItem::where('wbs_code', 'LG-01-W-A100')->value('status'));
         }
     }
+
+    // ── 사진 첨부 판독 ──────────────────────────────────────
+
+    private function photoItem(array $over = []): array
+    {
+        return array_merge([
+            'raw_text' => '[사진]', 'speaker' => '', 'category' => 'progress', 'confidence' => 80,
+            'summary' => '사진상 트레이 2/3 구간 포설 완료', 'target_type' => 'wbs',
+            'target_code' => 'LG-01-W-A100', 'target_name' => '천장 전기 배관',
+            'occurred_on' => '', 'proposed' => ['progress' => 66], 'question' => '',
+        ], $over);
+    }
+
+    public function test_photo_only_input_is_accepted(): void
+    {
+        $this->fakeAi([$this->photoItem()]);
+
+        $r = $this->service()->ingest('', $this->site, null, [
+            ['data' => 'aGVsbG8=', 'mime_type' => 'image/jpeg'],
+        ]);
+
+        $this->assertTrue($r['success'], '사진만 올려도 판독돼야 한다.');
+        $this->assertSame(66, OpsIntakeItem::firstOrFail()->proposed['progress']);
+    }
+
+    public function test_photo_is_sent_to_the_vision_engine_as_inline_data(): void
+    {
+        $this->fakeAi([$this->photoItem()]);
+
+        $this->service()->ingest('2층 트레이 사진입니다', $this->site, null, [
+            ['data' => 'aGVsbG8=', 'mime_type' => 'image/jpeg'],
+        ]);
+
+        Http::assertSent(function ($request): bool {
+            $parts = data_get($request->data(), 'contents.0.parts', []);
+            $hasImage = collect($parts)->contains(fn ($p) => isset($p['inline_data']['data']));
+            $prompt = json_encode($parts, JSON_UNESCAPED_UNICODE);
+
+            // 사진이 실려 나가고, 사진 판독 지침도 프롬프트에 붙어야 한다.
+            return $hasImage && str_contains((string) $prompt, '첨부 사진 판독');
+        });
+    }
+
+    public function test_data_url_prefixed_photo_is_accepted(): void
+    {
+        $this->fakeAi([$this->photoItem()]);
+
+        $r = $this->service()->ingest('', $this->site, null, [
+            ['data' => 'data:image/png;base64,iVBORw0KGgo=', 'mime_type' => ''],
+        ]);
+
+        $this->assertTrue($r['success']);
+    }
+
+    public function test_non_image_attachment_is_rejected(): void
+    {
+        $this->fakeAi([$this->photoItem()]);
+
+        // PDF 만 넣고 글이 없으면 판독할 게 없다.
+        $r = $this->service()->ingest('', $this->site, null, [
+            ['data' => 'JVBERi0=', 'mime_type' => 'application/pdf'],
+        ]);
+
+        $this->assertFalse($r['success']);
+    }
+
+    public function test_text_only_input_does_not_use_the_photo_prompt(): void
+    {
+        $this->fakeAi([$this->photoItem()]);
+
+        $this->service()->ingest('천장 배관 끝났습니다', $this->site);
+
+        Http::assertSent(function ($request): bool {
+            $prompt = json_encode($request->data(), JSON_UNESCAPED_UNICODE);
+
+            return ! str_contains((string) $prompt, '첨부 사진 판독');
+        });
+    }
 }

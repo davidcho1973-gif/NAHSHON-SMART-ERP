@@ -8871,6 +8871,12 @@
           '</div><div class="panel-body padded">' +
           '<textarea id="ops-input" placeholder="예)&#10;김철수: 천장 배관 20개 중 12개 했습니다&#10;이민준: 그레이바 자재 화요일 도착한대요&#10;내일 전기 3명 투입해서 트레이 작업합니다" ' +
           'style="width:100%;height:150px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
+          '<div style="margin-top:11px">' +
+          '<label style="display:block;font-size:11.5px;color:var(--text-tertiary);margin-bottom:6px"><i class="ph ph-camera"></i> 현장 사진 첨부 <span style="color:#22c55e">(AI가 사진도 함께 읽습니다)</span></label>' +
+          '<input type="file" id="ops-photo-input" accept="image/*" multiple capture="environment" style="font-size:12px;color:var(--text-secondary);max-width:100%">' +
+          '<div id="ops-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px">시공 사진·영수증·납품 사진 모두 인식합니다. 최대 6장. 글과 같이 올리면 가장 정확합니다.</div>' +
+          '</div>' +
           '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">' +
           '<button class="btn-primary" id="ops-read-btn" style="padding:10px 18px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
           '<span id="ops-read-msg" style="font-size:12px;color:var(--text-tertiary)">잡담은 자동으로 걸러집니다. 공정표는 확인 후 반영됩니다.</span>' +
@@ -8885,9 +8891,48 @@
           '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>';
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
+        window._opsPhotos = [];
+        var photoInput = document.getElementById('ops-photo-input');
+        if (photoInput) photoInput.addEventListener('change', function () { opsHandlePhotos(this.files); });
         window.opsLoadPending();
         window.opsLoadDigest();
       }
+
+      // 첨부 사진을 캔버스로 축소(최대 1600px, JPEG 0.8)해 base64 로 보관 — 전송량 절감.
+      function opsHandlePhotos(fileList) {
+        var files = Array.prototype.slice.call(fileList || []);
+        window._opsPhotos = window._opsPhotos || [];
+        files.forEach(function (file) {
+          if (window._opsPhotos.length >= 6) return;
+          if (!/^image\//.test(file.type)) return;
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            var img = new Image();
+            img.onload = function () {
+              var max = 1600, w = img.width, h = img.height;
+              if (w > max || h > max) { var r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
+              var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+              cv.getContext('2d').drawImage(img, 0, 0, w, h);
+              var url = cv.toDataURL('image/jpeg', 0.8);
+              window._opsPhotos.push({ data: url.split(',')[1], mime_type: 'image/jpeg' });
+              opsRenderPhotoStrip();
+            };
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function opsRenderPhotoStrip() {
+        var strip = document.getElementById('ops-photo-strip');
+        if (!strip) return;
+        strip.innerHTML = (window._opsPhotos || []).map(function (p, i) {
+          return '<div style="position:relative;width:58px;height:58px;border-radius:7px;overflow:hidden;border:1px solid var(--border-subtle)">' +
+            '<img src="data:' + p.mime_type + ';base64,' + p.data + '" style="width:100%;height:100%;object-fit:cover">' +
+            '<button onclick="window.opsRemovePhoto(' + i + ')" title="삭제" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.6);color:#fff;border:none;width:17px;height:17px;line-height:17px;font-size:11px;cursor:pointer;padding:0">×</button></div>';
+        }).join('');
+      }
+      window.opsRemovePhoto = function (i) { (window._opsPhotos || []).splice(i, 1); opsRenderPhotoStrip(); };
 
       // 오늘 요약 — 저녁 다이제스트와 같은 집계를 화면에서도 바로 본다.
       window.opsLoadDigest = async function () {
@@ -8914,17 +8959,22 @@
         var box = document.getElementById('ops-input');
         var btn = document.getElementById('ops-read-btn');
         var msg = document.getElementById('ops-read-msg');
-        if (!box || !box.value.trim()) { if (msg) msg.textContent = '내용을 먼저 입력하세요.'; return; }
+        var photos = window._opsPhotos || [];
+        if ((!box || !box.value.trim()) && !photos.length) { if (msg) msg.textContent = '내용이나 사진을 먼저 넣으세요.'; return; }
         var original = btn.innerHTML;
-        btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> 판독 중…';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ph ph-spinner-gap"></i> ' + (photos.length ? '사진 포함 판독 중…' : '판독 중…');
         try {
-          var r = await gsRun('api_opsIngest', [box.value], { success: false });
+          var r = await gsRun('api_opsIngest', [box ? box.value : '', photos], { success: false });
           if (!r || !r.success) {
             if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '판독 실패') + '</span>';
             return;
           }
           if (msg) msg.textContent = '판독 완료 — ' + r.parsed + '건 중 업무 ' + r.actionable + '건, 잡담 ' + r.noise + '건 제외';
-          box.value = '';
+          if (box) box.value = '';
+          window._opsPhotos = [];
+          opsRenderPhotoStrip();
+          var pin = document.getElementById('ops-photo-input'); if (pin) pin.value = '';
           document.getElementById('ops-result').innerHTML =
             '<div class="panel" style="margin-bottom:16px;border-left:3px solid #22c55e"><div class="panel-header">' +
             '<div class="panel-title" style="color:#22c55e"><i class="ph ph-check-circle"></i> 방금 판독한 내용</div></div>' +

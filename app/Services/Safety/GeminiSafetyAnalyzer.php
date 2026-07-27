@@ -3,6 +3,7 @@
 namespace App\Services\Safety;
 
 use App\Services\Ocr\OcrEngine;
+use App\Support\ImageParts;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -41,7 +42,7 @@ class GeminiSafetyAnalyzer
      */
     public function recommendProgress(array $context): array
     {
-        $photos = $this->sanitizePhotos($context['photos'] ?? []);
+        $photos = ImageParts::sanitize($context['photos'] ?? []);
         $withPhotos = $photos !== [];
 
         if ($withPhotos) {
@@ -64,44 +65,6 @@ class GeminiSafetyAnalyzer
         $result['photo_count'] = count($photos);
 
         return $result;
-    }
-
-    /**
-     * 클라이언트가 보낸 사진 파트를 검증·정리한다(최대 6장, 이미지 MIME 만).
-     *
-     * @return array<int, array{data: string, mime_type: string}>
-     */
-    private function sanitizePhotos(mixed $photos): array
-    {
-        if (! is_array($photos)) {
-            return [];
-        }
-
-        $out = [];
-        foreach (array_slice(array_values($photos), 0, 6) as $p) {
-            if (! is_array($p)) {
-                continue;
-            }
-            $data = (string) ($p['data'] ?? '');
-            $mime = (string) ($p['mime_type'] ?? $p['mimeType'] ?? 'image/jpeg');
-
-            // data:image/...;base64,XXXX 형태면 접두를 벗겨낸다.
-            if (str_starts_with($data, 'data:') && str_contains($data, ',')) {
-                if (preg_match('#^data:([^;]+);#', $data, $m)) {
-                    $mime = $m[1];
-                }
-                $data = substr($data, strpos($data, ',') + 1);
-            }
-            $mime = strtolower(trim($mime));
-            $mime = $mime === 'image/jpg' ? 'image/jpeg' : $mime;
-
-            if ($data === '' || ! in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'], true)) {
-                continue;
-            }
-            $out[] = ['data' => $data, 'mime_type' => $mime];
-        }
-
-        return $out;
     }
 
     /**
