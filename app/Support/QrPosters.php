@@ -11,11 +11,8 @@ use App\Models\Site;
  */
 final class QrPosters
 {
-    /** 등록 QR(직접고용). */
-    public const DIRECT = 'direct';
-
-    /** 등록 QR(협력사=간접고용). */
-    public const INDIRECT = 'indirect';
+    /** 작업자 간편 등록 QR — 한 장으로 전원(자사·협력사) 등록. 고용 형태는 소속회사로 정해진다. */
+    public const JOIN = 'join';
 
     /** 출입구 출퇴근 QR. */
     public const GATE = 'gate';
@@ -23,20 +20,19 @@ final class QrPosters
     /** 정식 입사지원서 QR. */
     public const APPLY = 'apply';
 
-    public const ORDER = [self::GATE, self::DIRECT, self::INDIRECT, self::APPLY];
-
-    /** 등록 QR 배지 문구 — 포스터와 등록 폼이 같은 말을 쓰게 한다. */
-    public const BADGE_LABELS = [
-        self::DIRECT => '직접고용',
-        self::INDIRECT => '협력사',
-    ];
+    public const ORDER = [self::GATE, self::JOIN, self::APPLY];
 
     public const LABELS = [
         self::GATE => '게이트 출퇴근 QR',
-        self::DIRECT => '간편 등록 QR (직접고용)',
-        self::INDIRECT => '간편 등록 QR (협력사)',
+        self::JOIN => '작업자 간편 등록 QR',
         self::APPLY => '정식 입사지원서 QR',
     ];
+
+    /**
+     * 이전에 인쇄해 현장에 붙여 둔 고용 형태별 QR(?type=direct|indirect) 값.
+     * 새 포스터는 한 장뿐이지만, 이미 붙은 QR 도 계속 동작해야 한다.
+     */
+    public const LEGACY_TYPE_KEYS = ['direct', 'indirect'];
 
     /**
      * 포스터 한 장의 렌더 데이터.
@@ -61,20 +57,16 @@ final class QrPosters
                     ['label' => '퇴근 OUT', 'class' => 'out'],
                 ],
             ],
-            self::DIRECT, self::INDIRECT => [
+            self::JOIN => [
                 'title' => '작업자 간편 등록',
-                'url' => route('worker-join.form', ['site' => $site, 'type' => $key]),
-                'hint' => ($key === self::INDIRECT ? '하청업체 소속 작업자용' : '우리 회사 소속(시급) 작업자용')
-                    .'입니다.<br>휴대폰 카메라로 아래 QR 코드를 스캔하세요.<br>이름·소속회사·공정·이메일·전화만 입력하면 <b>바로 작업자로 등록</b>됩니다.',
+                'url' => route('worker-join.form', ['site' => $site]),
+                'hint' => '<b>자사·협력사 모두 이 QR 하나</b>로 등록합니다.<br>이름·소속회사·공정·이메일·전화만 입력하면 <b>바로 작업자로 등록</b>됩니다.',
                 'steps' => [
                     '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                    '이름·소속회사·공정·이메일·전화번호를 입력합니다.',
+                    '이름·<b>소속회사</b>·공정·이메일·전화번호를 입력합니다.',
                     '등록 완료 — 현장 출퇴근을 시작할 수 있습니다.',
                 ],
-                'badge' => [
-                    'label' => self::BADGE_LABELS[$key],
-                    'class' => $key === self::INDIRECT ? 'type-indirect' : 'type-direct',
-                ],
+                'badge' => null,
                 'tags' => [],
             ],
             self::APPLY => [
@@ -119,9 +111,13 @@ final class QrPosters
         return array_map(fn (string $k): array => self::make($site, $k), $wanted);
     }
 
-    /** 등록 QR 키를 고용 형태로. 알 수 없으면 직접고용. */
-    public static function employmentType(string $key): string
+    /** 예전 등록 QR 의 ?type= 값을 고용 형태로. 그 외에는 null(=회사로 판정). */
+    public static function legacyEmploymentType(?string $type): ?string
     {
-        return $key === self::INDIRECT ? Employee::TYPE_INDIRECT : Employee::TYPE_DIRECT;
+        return match ($type) {
+            'direct' => Employee::TYPE_DIRECT,
+            'indirect' => Employee::TYPE_INDIRECT,
+            default => null,
+        };
     }
 }

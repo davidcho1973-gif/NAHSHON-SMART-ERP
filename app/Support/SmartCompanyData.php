@@ -99,6 +99,10 @@ class SmartCompanyData
             'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
             'api_getGeofenceSites' => self::getGeofenceSites(),
             'api_finalizeAttendanceNow' => self::finalizeAttendanceNow($args[0] ?? null),
+            // 회사 구분(자사/협력사) — 작업자 간편 등록의 고용 형태가 여기서 정해진다.
+            'api_getCompanyTypes' => self::companyTypes(),
+            'api_setCompanyType' => self::setCompanyType($args[0] ?? null, (string) ($args[1] ?? '')),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),
@@ -785,6 +789,62 @@ class SmartCompanyData
      */
     /** 관리자 권한을 가진 역할. 지오펜스 설정/조회의 공통 게이트. */
     private const GEOFENCE_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+
+    /**
+     * 회사 구분 목록 — 미지정 회사가 위로 오게 정렬한다(설정해야 할 것부터 보이도록).
+     *
+     * @return array<string, mixed>
+     */
+    private static function companyTypes(): array
+    {
+        if (! Schema::hasTable('companies')) {
+            return ['success' => true, 'companies' => [], 'options' => \App\Models\Company::COMPANY_TYPES, 'unclassified' => 0];
+        }
+
+        $companies = \App\Models\Company::query()->where('status', 'active')->orderBy('name')
+            ->get(['id', 'code', 'name', 'company_type'])
+            ->map(fn (\App\Models\Company $c): array => [
+                'id' => $c->id,
+                'code' => (string) $c->code,
+                'name' => (string) $c->name,
+                'type' => (string) ($c->company_type ?: \App\Models\Company::TYPE_UNKNOWN),
+                'typeLabel' => $c->companyTypeLabel(),
+                'employmentType' => $c->employmentType(),
+                'workers' => Employee::query()->where('company_id', $c->id)->count(),
+            ])
+            ->sortBy(fn (array $c): array => [$c['type'] === \App\Models\Company::TYPE_UNKNOWN ? 0 : 1, $c['name']])
+            ->values()->all();
+
+        return [
+            'success' => true,
+            'companies' => $companies,
+            'options' => \App\Models\Company::COMPANY_TYPES,
+            'unclassified' => count(array_filter($companies, fn (array $c): bool => $c['type'] === \App\Models\Company::TYPE_UNKNOWN)),
+        ];
+    }
+
+    /** 회사 구분 저장. 이후 그 회사로 등록되는 작업자의 고용 형태가 자동으로 정해진다. */
+    private static function setCompanyType(mixed $companyId, string $type): array
+    {
+        $user = auth()->user();
+        if (! $user || ! in_array($user->access_role, ['super_admin', 'admin', 'hr_manager'], true)) {
+            return ['success' => false, 'error' => '회사 구분을 변경할 권한이 없습니다.'];
+        }
+
+        if (! array_key_exists($type, \App\Models\Company::COMPANY_TYPES)) {
+            return ['success' => false, 'error' => '알 수 없는 회사 구분입니다.'];
+        }
+
+        $company = \App\Models\Company::query()->find($companyId);
+        if (! $company) {
+            return ['success' => false, 'error' => '회사를 찾을 수 없습니다.'];
+        }
+
+        $company->company_type = $type;
+        $company->save();
+
+        return ['success' => true, 'id' => $company->id, 'type' => $type, 'typeLabel' => $company->companyTypeLabel()];
+    }
 
     public static function setMySiteGeofence(mixed $lat, mixed $lng, mixed $radius, mixed $siteId = null): array
     {

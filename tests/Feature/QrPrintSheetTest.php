@@ -36,7 +36,7 @@ class QrPrintSheetTest extends TestCase
         $this->get('/print/qr/'.$site->id)->assertRedirect('/login');
     }
 
-    public function test_sheet_renders_all_four_posters(): void
+    public function test_sheet_renders_every_poster(): void
     {
         $site = $this->site();
 
@@ -47,7 +47,7 @@ class QrPrintSheetTest extends TestCase
             $res->assertSee($label);
         }
         // 포스터마다 자체 생성한 QR 이미지가 들어간다(외부 서비스 호출 없음).
-        $this->assertSame(4, substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
+        $this->assertSame(count(QrPosters::ORDER), substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
         $res->assertDontSee('api.qrserver.com');
     }
 
@@ -58,20 +58,22 @@ class QrPrintSheetTest extends TestCase
         $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id);
 
         $res->assertSee('/gate/'.$site->id, false);
-        $res->assertSee('type=direct', false);
-        $res->assertSee('type=indirect', false);
+        $res->assertSee('/join/w/'.$site->id, false);
         $res->assertSee('/member/site/'.$site->id.'/apply', false);
+        // 등록 QR 은 한 장뿐이라 고용 형태가 주소에 박히지 않는다.
+        $res->assertDontSee('type=direct', false);
+        $res->assertDontSee('type=indirect', false);
     }
 
     public function test_only_parameter_limits_posters(): void
     {
         $site = $this->site();
 
-        $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id.'?only=gate,indirect');
+        $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id.'?only=gate,join');
 
         $res->assertStatus(200);
         $res->assertSee(QrPosters::LABELS[QrPosters::GATE]);
-        $res->assertSee(QrPosters::LABELS[QrPosters::INDIRECT]);
+        $res->assertSee(QrPosters::LABELS[QrPosters::JOIN]);
         $this->assertSame(2, substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
     }
 
@@ -82,7 +84,7 @@ class QrPrintSheetTest extends TestCase
         $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id.'?only=nonsense');
 
         $res->assertStatus(200);
-        $this->assertSame(4, substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
+        $this->assertSame(count(QrPosters::ORDER), substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
     }
 
     public function test_poster_definitions_are_shared_with_single_posters(): void
@@ -93,8 +95,8 @@ class QrPrintSheetTest extends TestCase
         $gate = QrPosters::make($site, QrPosters::GATE);
         $this->get('/gate/'.$site->id.'/qr')->assertStatus(200)->assertSee($gate['url']);
 
-        $indirect = QrPosters::make($site, QrPosters::INDIRECT);
-        $this->get('/join/w/'.$site->id.'/qr?type=indirect')->assertStatus(200)->assertSee($indirect['url']);
-        $this->assertSame('협력사', $indirect['badge']['label']);
+        $join = QrPosters::make($site, QrPosters::JOIN);
+        $this->get('/join/w/'.$site->id.'/qr')->assertStatus(200)->assertSee($join['url']);
+        $this->assertNull($join['badge']);
     }
 }

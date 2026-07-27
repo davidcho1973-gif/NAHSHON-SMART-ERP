@@ -32,7 +32,7 @@ class SimpleWorkerRegistrationTest extends TestCase
     public function test_form_lists_companies_and_trades(): void
     {
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
-        Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active']);
+        Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
 
         $res = $this->get('/join/w/'.$site->id);
         $res->assertStatus(200);
@@ -43,7 +43,7 @@ class SimpleWorkerRegistrationTest extends TestCase
     public function test_form_reflects_wbs_trades_and_allows_manual_entry(): void
     {
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
-        Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active']);
+        Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
         WbsItem::create(['project_code' => 'P1', 'level' => 'subtask', 'wbs_code' => 'P1-A1', 'name' => '배선', 'trade' => 'ELEC', 'status' => '진행중', 'site_id' => $site->id]);
         WbsItem::create(['project_code' => 'P1', 'level' => 'subtask', 'wbs_code' => 'P1-A2', 'name' => '배관', 'trade' => 'MECH', 'status' => '진행중', 'site_id' => $site->id]);
 
@@ -66,7 +66,7 @@ class SimpleWorkerRegistrationTest extends TestCase
     public function test_submit_creates_active_worker_immediately(): void
     {
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
-        $company = Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active']);
+        $company = Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
 
         $res = $this->post('/join/w/'.$site->id, [
             'full_name' => 'HYUNSUK CHO',
