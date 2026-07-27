@@ -14,8 +14,8 @@ use App\Services\GeminiBadgeAnalyzer;
 use App\Services\Hr\AccessAccountProvisioner;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
@@ -61,7 +61,7 @@ class EmployeeResource extends Resource
 
     protected static ?string $model = Employee::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-identification';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-identification';
 
     protected static ?string $navigationLabel = 'Employees';
 
@@ -69,7 +69,7 @@ class EmployeeResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Employees';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'HUMAN RESOURCE';
+    protected static string|\UnitEnum|null $navigationGroup = 'HUMAN RESOURCE';
 
     protected static ?int $navigationSort = 2;
 
@@ -181,6 +181,12 @@ class EmployeeResource extends Resource
                 ])
                 ->default('active')
                 ->required(),
+            Select::make('employment_type')
+                ->label('고용 형태 / Employment type')
+                ->helperText('직접고용은 시급 관리(퇴근 자동마감 없음), 간접고용은 출역 인원 관리(퇴근 미기록 시 16:00 자동마감).')
+                ->options(Employee::EMPLOYMENT_TYPES)
+                ->default(Employee::TYPE_DIRECT)
+                ->required(),
             Select::make('attendance_app_role')
                 ->label('QR attendance role')
                 ->options([
@@ -245,6 +251,16 @@ class EmployeeResource extends Resource
                 TextColumn::make('role')->label('Role')->searchable()->toggleable(),
                 TextColumn::make('attendance_app_role')->label('QR role')->badge()->sortable()->toggleable(),
                 TextColumn::make('start_date')->label('Hire date')->date()->sortable()->toggleable(),
+                TextColumn::make('employment_type')
+                    ->label('고용 형태')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => Employee::EMPLOYMENT_TYPES[$state] ?? (string) $state)
+                    ->color(fn (?string $state): string => match ($state) {
+                        Employee::TYPE_DIRECT => 'info',
+                        Employee::TYPE_INDIRECT => 'success',
+                        default => 'gray',
+                    })
+                    ->sortable(),
                 TextColumn::make('employment_status')->label('Status')->badge()->sortable(),
                 TextColumn::make('user.access_role')
                     ->label('로그인 권한')
@@ -263,6 +279,9 @@ class EmployeeResource extends Resource
                 TextColumn::make('safety_training_expires_on')->date()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('employment_type')
+                    ->label('고용 형태')
+                    ->options(Employee::EMPLOYMENT_TYPES),
                 SelectFilter::make('employment_status')
                     ->label('Status')
                     ->options([
@@ -286,7 +305,7 @@ class EmployeeResource extends Resource
                     ->color('warning')
                     ->modalHeading('로그인 계정 부여 / 권한 설정')
                     ->modalDescription(fn (Employee $record): string => $record->email
-                        ? '로그인 이메일: ' . $record->email . ' — 이 구글 계정으로 로그인합니다. (틀리면 먼저 [수정]에서 이메일을 고치세요)'
+                        ? '로그인 이메일: '.$record->email.' — 이 구글 계정으로 로그인합니다. (틀리면 먼저 [수정]에서 이메일을 고치세요)'
                         : '⚠ 이 직원은 이메일이 없습니다. 먼저 [수정]에서 구글 이메일을 입력하세요.')
                     ->modalSubmitActionLabel('계정 부여')
                     ->visible(fn (): bool => in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager'], true))
@@ -337,8 +356,8 @@ class EmployeeResource extends Resource
                         }
 
                         Notification::make()->success()->persistent()->title('로그인 계정 부여 완료')
-                            ->body('안내: ' . $record->email . ' 구글 계정으로 ' . route('login')
-                                . ' 에서 로그인하면 됩니다. (권한: ' . (User::ROLE_OPTIONS[$role] ?? $role) . ')')
+                            ->body('안내: '.$record->email.' 구글 계정으로 '.route('login')
+                                .' 에서 로그인하면 됩니다. (권한: '.(User::ROLE_OPTIONS[$role] ?? $role).')')
                             ->send();
                     }),
                 Action::make('badgeQr')

@@ -24,6 +24,9 @@
         .done h1 { font-size: 1.5rem; }
         .done p { color: #475569; line-height: 1.6; }
         .badge { display: inline-block; background: #eef2ff; color: #4338ca; font-weight: 700; border-radius: 8px; padding: 6px 12px; margin-top: 6px; font-family: monospace; }
+        .type { display: inline-block; border-radius: 999px; padding: 5px 14px; font-size: .82rem; font-weight: 800; margin-bottom: 12px; }
+        .type-direct { background: #eef2ff; color: #4338ca; }
+        .type-indirect { background: #ecfdf5; color: #047857; }
     </style>
 </head>
 <body>
@@ -33,6 +36,7 @@
                 <div class="check">✓</div>
                 <p class="brand">NAHSHON MEP · {{ $site->code }} {{ $site->name }}</p>
                 <h1>등록 완료!</h1>
+                <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
                 <p><b>{{ $workerName }}</b> 님, 작업자로 등록되었습니다.<br>이제 현장 출퇴근을 시작할 수 있습니다.</p>
                 @if (!empty($employee?->employee_number))
                     <div class="badge">사번 {{ $employee->employee_number }}</div>
@@ -41,6 +45,7 @@
         @else
             <p class="brand">NAHSHON MEP · 작업자 간편 등록</p>
             <h1>작업자 등록</h1>
+            <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
             <p class="site">{{ $site->code }} {{ $site->name }}</p>
 
             @if ($errors->any())
@@ -49,6 +54,8 @@
 
             <form method="POST" action="{{ route('worker-join.store', ['site' => $site]) }}">
                 @csrf
+                {{-- 고용 형태는 QR 별로 다르다 — 폼에서 바꿀 수 없게 hidden 으로 넘긴다. --}}
+                <input type="hidden" name="employment_type" value="{{ $employmentType }}">
                 <label>이름 <span class="req">*</span></label>
                 <input type="text" name="full_name" value="{{ old('full_name') }}" placeholder="홍길동" required>
 
