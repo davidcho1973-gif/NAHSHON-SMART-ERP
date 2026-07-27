@@ -9021,7 +9021,8 @@
           '<div class="header-section"><div>' +
           '<h1 class="page-title"><i class="ph ph-broadcast" style="color:#22c55e"></i> 현장 상황실</h1>' +
           '<p class="page-subtitle">오늘 한 일 · 내일 할 일 · 자재 · 영수증 · 이슈를 그냥 올리세요. AI 가 읽고 공정 반영안을 만듭니다.</p>' +
-          '</div></div>' +
+          '</div>' +
+          '<div class="action-row"><button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 기록 <span id="ops-batch-count"></span></button></div></div>' +
           '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-note-pencil"></i> 현장 이야기 붙여넣기</div>' +
           '<span style="font-size:11.5px;color:var(--text-tertiary)">카카오톡 대화를 통째로 붙여넣어도 됩니다</span>' +
@@ -9046,9 +9047,9 @@
           '<button class="btn-primary" style="padding:5px 12px;font-size:12px;font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> 전체 반영</button>' +
           '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button></div>' +
           '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>' +
-          '<div class="panel" style="margin-top:16px"><div class="panel-header">' +
+          '<div class="panel" id="ops-batches-panel" style="margin-top:16px"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-scroll"></i> 원문 기록</div>' +
-          '<span style="font-size:11.5px;color:var(--text-tertiary)">붙여넣은 대화 원문이 그대로 보관됩니다</span>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">붙여넣은 대화 원문이 그대로 보관됩니다 · 수정·삭제 가능</span>' +
           '</div><div class="panel-body" id="ops-batches" style="padding:0"></div></div>';
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
@@ -9217,11 +9218,22 @@
       }
 
       // 붙여넣은 원문 이력 — 대화 내용은 지워지지 않고 여기 쌓인다.
+      window._opsCanManageBatches = false;
+
+      // 헤더 버튼 → 원문 기록 패널로 스크롤. (페이지 맨 아래라 못 찾는 일이 잦았다.)
+      window.opsGoBatches = function () {
+        var panel = document.getElementById('ops-batches-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+
       window.opsLoadBatches = async function () {
         var host = document.getElementById('ops-batches');
         if (!host) return;
         var d = await gsRun('api_getOpsBatches', [], { batches: [] });
         var list = (d && d.batches) || [];
+        window._opsCanManageBatches = !!(d && d.canManage);
+        var badge = document.getElementById('ops-batch-count');
+        if (badge) badge.textContent = list.length ? '(' + list.length + ')' : '';
         if (!list.length) {
           host.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:12.5px">아직 기록이 없습니다. 대화를 붙여넣으면 원문이 여기 보관됩니다.</div>';
           return;
@@ -9233,6 +9245,8 @@
             (b.by ? '<span style="font-size:11px;color:var(--text-secondary)">' + opsEsc(b.by) + '</span>' : '') +
             '<span style="font-size:10.5px;color:var(--brand-primary)">업무 ' + b.actionable + '건' + (b.noise ? ' · 잡담 ' + b.noise + '건 제외' : '') + '</span>' +
             (b.imageCount ? '<span style="font-size:10.5px;color:#22c55e">📷 ' + b.imageCount + '</span>' : '') +
+            (b.edited ? '<span style="font-size:10.5px;color:#f59e0b">✎ 수정됨</span>' : '') +
+            (b.applied ? '<span style="font-size:10.5px;color:#22c55e">반영 ' + b.applied + '건</span>' : '') +
             '<span style="margin-left:auto;font-size:11px;color:var(--brand-primary);font-weight:600">원문 보기 ›</span>' +
             '</div>' +
             '<div style="font-size:12.5px;color:var(--text-secondary)">' + opsEsc(b.preview) + '</div></div>';
@@ -9245,17 +9259,68 @@
         if (!d || d.success === false) { alert('원문을 불러오지 못했습니다.'); return; }
         var host = document.getElementById('ops-batches');
         if (!host) return;
+        window._opsBatch = d;
+        var manage = window._opsCanManageBatches
+          ? '<span style="margin-left:auto;display:flex;gap:6px">' +
+            '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsEditBatch(' + d.id + ')"><i class="ph ph-pencil-simple"></i> 수정</button>' +
+            '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;color:var(--status-danger)" onclick="window.opsDeleteBatch(' + d.id + ')"><i class="ph ph-trash"></i> 삭제</button>' +
+            '</span>'
+          : '';
         host.innerHTML =
           '<div style="padding:14px 18px">' +
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">' +
           '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsLoadBatches()">← 목록</button>' +
           '<span style="font-size:11.5px;color:var(--text-tertiary)">' + opsEsc(d.at || '') + (d.by ? ' · ' + opsEsc(d.by) : '') +
-          (d.imageCount ? ' · 사진 ' + d.imageCount + '장' : '') + '</span></div>' +
+          (d.imageCount ? ' · 사진 ' + d.imageCount + '장' : '') + '</span>' + manage + '</div>' +
+          (d.editedAt ? '<div style="font-size:11px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;margin-bottom:8px">' +
+            '✎ ' + opsEsc(d.editedAt) + (d.editedBy ? ' · ' + opsEsc(d.editedBy) : '') + ' 수정됨 — 처음 올라온 원문은 아래 <b>최초 원문</b>에서 볼 수 있습니다.</div>' : '') +
           '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:5px">붙여넣은 원문</div>' +
           '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;padding:12px;font-size:12.5px;color:var(--text-primary);font-family:inherit;margin:0 0 14px;max-height:340px;overflow:auto">' +
           opsEsc(d.raw || '(사진만 첨부)') + '</pre>' +
+          (d.originalText ? '<details style="margin-bottom:10px"><summary style="font-size:11px;font-weight:700;color:var(--text-tertiary);cursor:pointer">최초 원문 (수정 전) 보기</summary>' +
+            '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-base);border:1px dashed var(--border-subtle);border-radius:8px;padding:10px;font-size:12px;color:var(--text-tertiary);margin-top:6px">' +
+            opsEsc(d.originalText) + '</pre></details>' : '') +
           '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:5px">이 원문에서 뽑은 항목 (' + (d.items || []).length + '건)</div>' +
           '</div>' + opsRows(d.items || [], true);
+      };
+
+      // 원문 수정 — 오타·사진 오인식을 고친다. (판독 결과는 그대로 두고 근거만 바로잡는다.)
+      window.opsEditBatch = function (id) {
+        var d = window._opsBatch;
+        if (!d || d.id !== id) return;
+        var host = document.getElementById('ops-batches');
+        if (!host) return;
+        host.innerHTML =
+          '<div style="padding:14px 18px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsShowBatch(' + id + ')">← 취소</button>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">원문 수정 · ' + opsEsc(d.at || '') + '</span></div>' +
+          '<textarea id="ops-edit-text" style="width:100%;height:220px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-top:6px">고치기 전 내용은 <b>최초 원문</b>으로 보관되고, 누가 언제 고쳤는지 남습니다. 이미 반영된 공정표 값은 바뀌지 않습니다.</div>' +
+          '<div style="margin-top:10px;display:flex;gap:8px">' +
+          '<button class="btn-primary" style="padding:7px 16px;font-size:12.5px;font-weight:700" onclick="window.opsSaveBatch(' + id + ')"><i class="ph ph-check"></i> 저장</button>' +
+          '</div></div>';
+        document.getElementById('ops-edit-text').value = d.raw || '';
+      };
+
+      window.opsSaveBatch = async function (id) {
+        var el = document.getElementById('ops-edit-text');
+        if (!el) return;
+        var r = await gsRun('api_updateOpsBatch', [id, el.value], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '원문 수정에 실패했습니다.'); return; }
+        opsClearCache();
+        if (window.showToast) window.showToast('원문을 수정했습니다.', 'success');
+        window.opsShowBatch(id);
+      };
+
+      window.opsDeleteBatch = async function (id) {
+        if (!confirm('이 원문 기록을 삭제할까요?\n대화 원문과 그때 뽑힌 판독 항목이 함께 지워집니다. (되돌릴 수 없습니다)')) return;
+        var r = await gsRun('api_deleteOpsBatch', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+        opsClearCache();
+        if (window.showToast) window.showToast('원문 기록을 삭제했습니다.', 'success');
+        window.opsLoadBatches();
+        window.opsLoadPending();
       };
 
       window.opsDismiss = async function (id) {

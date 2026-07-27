@@ -7,9 +7,9 @@ use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\WbsItem;
-use App\Support\ImageParts;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
+use App\Support\ImageParts;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -29,8 +29,7 @@ class OpsIntakeService
     public function __construct(
         private readonly OpsIntakeAnalyzer $analyzer,
         private readonly OpsLearningService $learning,
-    ) {
-    }
+    ) {}
 
     /**
      * 자유 형식 텍스트(카톡 붙여넣기 포함)를 판독해 제안을 저장한다.
@@ -55,7 +54,7 @@ class OpsIntakeService
             $learned = $this->learning->promptBlock($site?->id);
             $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned);
         } catch (\Throwable $e) {
-            return ['success' => false, 'error' => 'AI 판독에 실패했습니다: ' . $e->getMessage()];
+            return ['success' => false, 'error' => 'AI 판독에 실패했습니다: '.$e->getMessage()];
         }
 
         $validCodes = $activities->pluck('code')->filter()->all();
@@ -127,6 +126,7 @@ class OpsIntakeService
         $rows = OpsIntakeBatch::query()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->with('createdBy')
+            ->withCount(['items as items_applied_count' => fn ($q) => $q->where('status', 'applied')])
             ->latest()->limit($limit)->get();
 
         return [
@@ -142,6 +142,8 @@ class OpsIntakeService
                 'noise' => $b->noise_count,
                 'by' => $b->createdBy?->name,
                 'at' => $b->created_at?->format('Y-m-d H:i'),
+                'edited' => $b->edited_at !== null,
+                'applied' => $b->items_applied_count ?? 0,
             ])->all(),
         ];
     }
@@ -153,7 +155,7 @@ class OpsIntakeService
      */
     public function batch(int $id): array
     {
-        $b = OpsIntakeBatch::with(['items', 'createdBy'])->find($id);
+        $b = OpsIntakeBatch::with(['items', 'createdBy', 'editedBy'])->find($id);
         if (! $b) {
             return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
         }
@@ -166,8 +168,80 @@ class OpsIntakeService
             'imageCount' => $b->image_count,
             'by' => $b->createdBy?->name,
             'at' => $b->created_at?->format('Y-m-d H:i'),
+            // 수정 이력 — 고친 사람과 고치기 전 원문을 함께 돌려준다.
+            'editedBy' => $b->editedBy?->name,
+            'editedAt' => $b->edited_at?->format('Y-m-d H:i'),
+            'originalText' => $b->original_text,
+            'appliedCount' => $b->items->where('status', 'applied')->count(),
             'items' => $b->items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
+    }
+
+    /**
+     * 원문 수정 — 오타·오인식(OCR)을 고칠 수 있게 한다.
+     *
+     * 원문은 "왜 이렇게 반영됐지?"를 되짚는 근거라, 처음 올라온 내용을 original_text 로
+     * 한 번만 보존하고 누가 언제 고쳤는지 남긴다. (판독 결과는 건드리지 않는다 —
+     * 다시 판독하고 싶으면 새로 올리는 편이 이력이 깔끔하다.)
+     *
+     * @return array<string, mixed>
+     */
+    public function updateBatch(int $id, string $raw, ?int $userId = null): array
+    {
+        $batch = OpsIntakeBatch::find($id);
+        if (! $batch) {
+            return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
+        }
+
+        $raw = trim($raw);
+        if ($raw === '' && (int) $batch->image_count === 0) {
+            return ['success' => false, 'error' => '내용을 비울 수 없습니다. 지우려면 삭제를 사용하세요.'];
+        }
+
+        if ($raw === (string) $batch->raw_text) {
+            return ['success' => true, 'unchanged' => true];
+        }
+
+        $batch->forceFill([
+            // 최초 원문은 한 번만 남긴다 — 두 번째 수정부터는 덮어쓰지 않는다.
+            'original_text' => $batch->original_text ?? (string) $batch->raw_text,
+            'raw_text' => $raw,
+            'edited_by_id' => $userId,
+            'edited_at' => now(),
+        ])->save();
+
+        return ['success' => true, 'id' => $batch->id];
+    }
+
+    /**
+     * 원문 삭제.
+     *
+     * 이미 공정표·조달에 반영된 항목이 딸려 있으면 지우지 않는다 — 원문이 사라지면
+     * 되돌릴 근거(previous 값)를 확인할 길이 없어진다. 먼저 되돌리게 안내한다.
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteBatch(int $id): array
+    {
+        $batch = OpsIntakeBatch::with('items')->find($id);
+        if (! $batch) {
+            return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
+        }
+
+        $applied = $batch->items->where('status', 'applied')->count();
+        if ($applied > 0) {
+            return [
+                'success' => false,
+                'error' => "이미 공정표에 반영된 항목 {$applied}건이 있습니다. 먼저 되돌린 뒤 삭제하세요.",
+                'appliedCount' => $applied,
+            ];
+        }
+
+        $items = $batch->items->count();
+        $batch->items()->delete();
+        $batch->delete();
+
+        return ['success' => true, 'deletedItems' => $items];
     }
 
     /** 공정(WBS)에 반영을 허용하는 필드. 그 외는 무시한다. */
@@ -216,7 +290,7 @@ class OpsIntakeService
     {
         $wbs = WbsItem::query()->where('wbs_code', $item->target_code)->first();
         if (! $wbs) {
-            return ['success' => false, 'error' => '공정을 찾을 수 없습니다: ' . $item->target_code];
+            return ['success' => false, 'error' => '공정을 찾을 수 없습니다: '.$item->target_code];
         }
 
         $clean = [];
@@ -229,15 +303,18 @@ class OpsIntakeService
 
             // crew_size 는 직접 컬럼이 아니라 투입조 텍스트로 파싱된다 — 기존 규칙을 그대로 탄다.
             if ($key === 'crew_size') {
-                $clean['crew_text'] = ((int) $value) . '명';
+                $clean['crew_text'] = ((int) $value).'명';
+
                 continue;
             }
             if ($key === 'progress') {
                 $clean['progress'] = max(0, min(100, (int) $value));
+
                 continue;
             }
             if ($key === 'status') {
                 $clean['status'] = (string) $value;
+
                 continue;
             }
             if (in_array($key, ['planned_start', 'planned_end'], true)) {
@@ -246,6 +323,7 @@ class OpsIntakeService
                     continue;
                 }
                 $clean[$key] = $d;
+
                 continue;
             }
             $clean[$key] = $value;
@@ -283,7 +361,7 @@ class OpsIntakeService
         // 제안의 대상 코드는 PO 번호다 — 실제 갱신은 project_code + wbs_code 로 이뤄진다.
         $po = ProcurementItem::query()->where('po_no', $item->target_code)->first();
         if (! $po) {
-            return ['success' => false, 'error' => '발주 건을 찾을 수 없습니다: ' . $item->target_code];
+            return ['success' => false, 'error' => '발주 건을 찾을 수 없습니다: '.$item->target_code];
         }
 
         $clean = [];
@@ -300,6 +378,7 @@ class OpsIntakeService
                     continue;
                 }
                 $clean[$key] = $d;
+
                 continue;
             }
             if ($key === 'status' && ! in_array($value, ProcurementItem::STATUSES, true)) {

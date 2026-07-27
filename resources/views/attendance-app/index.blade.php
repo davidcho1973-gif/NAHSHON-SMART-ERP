@@ -55,6 +55,11 @@
                     <span>현장에 붙은 팀 QR을 스캔하면 본인 출퇴근 화면이 열립니다.</span>
                 </a>
 
+                <a class="tile" href="{{ route('attendance-app.ops-room') }}">
+                    <strong>현장 상황실 · 원문 기록</strong>
+                    <span>올린 대화 원문을 확인하고, 현장에서 바로 올리거나 고칩니다.</span>
+                </a>
+
                 <a class="tile" href="{{ route('communication.index') }}">
                     <strong>내부 메신저{{ ($messageUnreadCount ?? 0) > 0 ? ' · ' . $messageUnreadCount : '' }}</strong>
                     <span>현장 채팅방과 공지 알림방을 확인합니다.</span>
