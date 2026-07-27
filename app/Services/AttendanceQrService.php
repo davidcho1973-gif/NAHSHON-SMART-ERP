@@ -406,9 +406,9 @@ class AttendanceQrService
     {
         return Company::query()
             ->where(fn ($query) => $query
-                ->whereRaw('lower(code) in (?, ?)', ['nahshon-mep', 'nahshon'])
-                ->orWhereRaw('lower(name) in (?, ?)', ['nahshon mep', 'nahshon-mep'])
-                ->orWhereRaw('lower(legal_name) in (?, ?)', ['nahshon mep', 'nahshon-mep']))
+                ->whereRaw('lower(code) in (?, ?)', ['dasol-prism-mep', 'dasol-prism'])
+                ->orWhereRaw('lower(name) in (?, ?)', ['dasol-prism mep', 'dasol-prism-mep'])
+                ->orWhereRaw('lower(legal_name) in (?, ?)', ['dasol-prism mep', 'dasol-prism-mep']))
             ->value('id');
     }
 }

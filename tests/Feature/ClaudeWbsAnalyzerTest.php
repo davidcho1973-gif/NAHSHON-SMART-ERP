@@ -28,7 +28,7 @@ class ClaudeWbsAnalyzerTest extends TestCase
                                 'task_no' => '1.1',
                                 'task_name' => '장비 반입',
                                 'sub_tasks' => [
-                                    ['sub_no' => '1.1.1', 'sub_name' => '크레인 양중', 'company' => 'NAHSHON', 'manhours' => 40, 'days' => 2, 'ehs' => 'high'],
+                                    ['sub_no' => '1.1.1', 'sub_name' => '크레인 양중', 'company' => 'DASOL PRISM', 'manhours' => 40, 'days' => 2, 'ehs' => 'high'],
                                     ['sub_no' => '1.1.2', 'sub_name' => '앵커 시공', 'company' => 'AI-KOREA', 'manhours' => 24, 'days' => 1, 'ehs' => 'medium'],
                                 ],
                             ]],

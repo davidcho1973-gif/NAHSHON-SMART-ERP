@@ -39,7 +39,7 @@
 </head>
 <body>
     <main class="sheet">
-        <p class="brand">NAHSHON MEP</p>
+        <p class="brand">DASOL PRISM</p>
         <h1>현장 출퇴근</h1>
         <p class="site">{{ $site->code }} · {{ $site->name }}</p>
 

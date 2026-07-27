@@ -1,13 +1,13 @@
 {
     "$schema":  "https://getcomposer.org/schema.json",
-    "name":  "nahshonmep/smart-company-laravel",
+    "name":  "dasol-prismmep/smart-company-laravel",
     "type":  "project",
     "description":  "SMART COMPANY ERP converted from Google Apps Script to Laravel and Filament.",
     "keywords":  [
                      "laravel",
                      "filament",
                      "erp",
-                     "nahshon",
+                     "dasol-prism",
                      "mep"
                  ],
     "license":  "MIT",

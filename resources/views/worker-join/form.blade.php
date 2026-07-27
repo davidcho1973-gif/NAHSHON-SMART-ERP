@@ -44,7 +44,7 @@
         @if ($done)
             <div class="done">
                 <div class="check">✓</div>
-                <p class="brand">NAHSHON MEP · {{ $site->code }} {{ $site->name }}</p>
+                <p class="brand">DASOL PRISM · {{ $site->code }} {{ $site->name }}</p>
                 <h1>등록 완료!</h1>
                 <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
                 <p><b>{{ $workerName }}</b> 님, 작업자로 등록되었습니다.<br>이제 현장 출퇴근을 시작할 수 있습니다.</p>
@@ -53,7 +53,7 @@
                 @endif
             </div>
         @else
-            <p class="brand">NAHSHON MEP · 작업자 간편 등록</p>
+            <p class="brand">DASOL PRISM · 작업자 간편 등록</p>
             <h1>작업자 등록</h1>
             <p class="site">{{ $site->code }} {{ $site->name }}</p>
 
@@ -84,7 +84,7 @@
                 <div class="ask" id="ask-type" style="display:none">
                     <p>소속 구분을 선택해 주세요 <span class="req">*</span></p>
                     <label class="opt"><input type="radio" name="employment_type" value="direct" @checked(old('employment_type') === 'direct')>
-                        <span>NAHSHON MEP 소속<small>NAHSHON MEP 에서 급여를 받습니다</small></span></label>
+                        <span>DASOL PRISM 소속<small>DASOL PRISM 에서 급여를 받습니다</small></span></label>
                     <label class="opt"><input type="radio" name="employment_type" value="indirect" @checked(old('employment_type') === 'indirect')>
                         <span>협력업체 소속<small>소속 업체에서 급여를 받습니다</small></span></label>
                 </div>
@@ -114,7 +114,7 @@
                     var note = document.getElementById('company-note');
                     var ask = document.getElementById('ask-type');
                     var radios = ask.querySelectorAll('input[type=radio]');
-                    var LABEL = { direct: 'NAHSHON MEP 소속(직접고용)', indirect: '협력사 소속(간접고용)', client: '원청 담당자' };
+                    var LABEL = { direct: 'DASOL PRISM 소속(직접고용)', indirect: '협력사 소속(간접고용)', client: '원청 담당자' };
 
                     function sync() {
                         var opt = sel.options[sel.selectedIndex];

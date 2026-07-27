@@ -66,7 +66,7 @@
   }));
 
   const replacementsEn = [
-    ['NAHSHON MEP Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™©', 'NAHSHON MEP Â· Live field operations'],
+    ['DASOL PRISM Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™©', 'DASOL PRISM Â· Live field operations'],
     ['ê¸´ê¸‰ ì²˜ë¦¬ í•„ìš”', 'Urgent Action Items'],
     ['í”„ë¡œì íŠ¸ í˜„í™©', 'Project Status'],
     ['ì˜¤ëŠ˜ì˜ ê²°ì • í', "Today's Decision Queue"],
@@ -399,8 +399,8 @@
   }));
 
   const replacementsEs = [
-    ['NAHSHON MEP Â· Live field operations', 'NAHSHON MEP Â· Operaciones de campo en vivo'],
-    ['NAHSHON MEP · Live field operations', 'NAHSHON MEP · Operaciones de campo en vivo'],
+    ['DASOL PRISM Â· Live field operations', 'DASOL PRISM Â· Operaciones de campo en vivo'],
+    ['DASOL PRISM · Live field operations', 'DASOL PRISM · Operaciones de campo en vivo'],
     ['Urgent Action Items', 'Acciones urgentes'],
     ['Project Status', 'Estado del proyecto'],
     ["Today's Decision Queue", 'Cola de decisiones de hoy'],

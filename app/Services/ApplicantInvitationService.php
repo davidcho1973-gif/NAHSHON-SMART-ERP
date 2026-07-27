@@ -55,7 +55,7 @@ class ApplicantInvitationService
         Mail::raw($this->emailBody($registration), function ($message) use ($registration, $recipientEmail): void {
             $message
                 ->to($recipientEmail, $registration->full_name)
-                ->subject('NAHSHON MEP application link');
+                ->subject('DASOL PRISM application link');
         });
     }
 
@@ -75,7 +75,7 @@ class ApplicantInvitationService
         $recipientEmail = $this->normalizeRecipientEmail($registration, $recipientEmail);
 
         return 'mailto:' . rawurlencode($recipientEmail) . '?' . http_build_query([
-            'subject' => 'NAHSHON MEP application link',
+            'subject' => 'DASOL PRISM application link',
             'body' => $this->emailBody($registration),
         ], '', '&', PHP_QUERY_RFC3986);
     }
@@ -130,7 +130,7 @@ class ApplicantInvitationService
         $url = $registration->intakeUrl();
 
         return <<<TEXT
-NAHSHON MEP 입사지원서 작성 링크입니다.
+DASOL PRISM 입사지원서 작성 링크입니다.
 
 아래 링크를 열고 입사지원서를 작성해 주세요.
 {$url}
@@ -140,7 +140,7 @@ Please open the link above and complete your job application.
 Abra el enlace de arriba y complete su solicitud de empleo.
 
 Thank you,
-NAHSHON MEP
+DASOL PRISM
 TEXT;
     }
 }

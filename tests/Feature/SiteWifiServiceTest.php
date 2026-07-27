@@ -20,7 +20,7 @@ class SiteWifiServiceTest extends TestCase
         $site = Site::create(['code' => 'AZ-01', 'name' => 'AZ', 'timezone' => 'America/Phoenix', 'status' => 'active', 'latitude' => 33.4, 'longitude' => -112.0, 'radius_meters' => 322]);
         $svc = app(SiteWifiService::class);
 
-        $r = $svc->save((string) $site->id, ['bssid' => 'A4-5E-60-11-22-33', 'ssid' => 'NAHSHON', 'label' => '정문']);
+        $r = $svc->save((string) $site->id, ['bssid' => 'A4-5E-60-11-22-33', 'ssid' => 'DASOL PRISM', 'label' => '정문']);
         $this->assertTrue($r['success']);
         $this->assertSame('a4:5e:60:11:22:33', $r['bssid']);  // 정규화
 

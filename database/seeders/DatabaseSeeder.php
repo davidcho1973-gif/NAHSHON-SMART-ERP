@@ -38,8 +38,8 @@ class DatabaseSeeder extends Seeder
     private function seedOperationalData(): void
     {
         Company::query()->updateOrCreate(
-            ['code' => 'NAHSHON-MEP'],
-            ['name' => 'NAHSHON MEP', 'legal_name' => 'NAHSHON MEP', 'status' => 'active']
+            ['code' => 'DASOL-PRISM'],
+            ['name' => 'DASOL PRISM', 'legal_name' => 'DASOL PRISM', 'status' => 'active']
         );
     }
 }
