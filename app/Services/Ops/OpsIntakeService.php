@@ -2,6 +2,7 @@
 
 namespace App\Services\Ops;
 
+use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
@@ -60,18 +61,34 @@ class OpsIntakeService
         $validCodes = $activities->pluck('code')->filter()->all();
         $validPos = $purchases->pluck('po')->filter()->all();
 
+        // 붙여넣은 원문 전체를 근거로 보관한다 — 나중에 "왜 이렇게 반영됐지?"를 되짚을 수 있게.
+        $batch = OpsIntakeBatch::create([
+            'site_id' => $site?->id,
+            'created_by_id' => $userId,
+            'source' => $source,
+            'communication_message_id' => $messageId,
+            'raw_text' => $text,
+            'image_count' => count($images),
+        ]);
+
         $saved = [];
         foreach ($raw as $r) {
-            $item = $this->persist($r, $site, $userId, $source, $messageId, $validCodes, $validPos, $text);
+            $item = $this->persist($r, $site, $userId, $source, $messageId, $validCodes, $validPos, $text, $batch->id);
             if ($item !== null) {
                 $saved[] = $item;
             }
         }
 
         $items = collect($saved);
+        $batch->update([
+            'parsed_count' => $items->count(),
+            'actionable_count' => $items->where('category', '!=', 'noise')->count(),
+            'noise_count' => $items->where('category', 'noise')->count(),
+        ]);
 
         return [
             'success' => true,
+            'batchId' => $batch->id,
             'parsed' => $items->count(),
             'actionable' => $items->where('category', '!=', 'noise')->count(),
             'noise' => $items->where('category', 'noise')->count(),
@@ -97,6 +114,59 @@ class OpsIntakeService
             'success' => true,
             'count' => $rows->count(),
             'items' => $rows->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
+        ];
+    }
+
+    /**
+     * 붙여넣은 원문 이력 — 최근 것부터.
+     *
+     * @return array<string, mixed>
+     */
+    public function batches(?int $siteId = null, int $limit = 50): array
+    {
+        $rows = OpsIntakeBatch::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            ->with('createdBy')
+            ->latest()->limit($limit)->get();
+
+        return [
+            'success' => true,
+            'count' => $rows->count(),
+            'batches' => $rows->map(fn (OpsIntakeBatch $b) => [
+                'id' => $b->id,
+                'preview' => $b->preview(),
+                'source' => $b->source,
+                'imageCount' => $b->image_count,
+                'parsed' => $b->parsed_count,
+                'actionable' => $b->actionable_count,
+                'noise' => $b->noise_count,
+                'by' => $b->createdBy?->name,
+                'at' => $b->created_at?->format('Y-m-d H:i'),
+            ])->all(),
+        ];
+    }
+
+    /**
+     * 원문 1건 + 그때 뽑힌 판독 결과.
+     *
+     * @return array<string, mixed>
+     */
+    public function batch(int $id): array
+    {
+        $b = OpsIntakeBatch::with(['items', 'createdBy'])->find($id);
+        if (! $b) {
+            return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
+        }
+
+        return [
+            'success' => true,
+            'id' => $b->id,
+            'raw' => (string) $b->raw_text,
+            'source' => $b->source,
+            'imageCount' => $b->image_count,
+            'by' => $b->createdBy?->name,
+            'at' => $b->created_at?->format('Y-m-d H:i'),
+            'items' => $b->items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
     }
 
@@ -381,7 +451,7 @@ class OpsIntakeService
      * @param  array<int, string>  $validCodes
      * @param  array<int, string>  $validPos
      */
-    private function persist(array $r, ?Site $site, ?int $userId, string $source, ?int $messageId, array $validCodes, array $validPos, string $fallbackText): ?OpsIntakeItem
+    private function persist(array $r, ?Site $site, ?int $userId, string $source, ?int $messageId, array $validCodes, array $validPos, string $fallbackText, ?int $batchId = null): ?OpsIntakeItem
     {
         $category = (string) ($r['category'] ?? 'noise');
         if (! in_array($category, self::CATEGORIES, true)) {
@@ -425,6 +495,7 @@ class OpsIntakeService
 
         return OpsIntakeItem::create([
             'site_id' => $site?->id,
+            'ops_intake_batch_id' => $batchId,
             'source' => $source,
             'communication_message_id' => $messageId,
             'created_by_id' => $userId,
@@ -513,6 +584,7 @@ class OpsIntakeService
             'proposed' => $i->proposed ?: [],
             'question' => $i->question,
             'status' => $i->status,
+            'batchId' => $i->ops_intake_batch_id,
             'previous' => $i->previous ?: [],
             'appliedAt' => $i->applied_at?->toDateTimeString(),
             'resultNote' => $i->result_note,
