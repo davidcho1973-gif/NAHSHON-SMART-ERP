@@ -4022,10 +4022,10 @@
           return;
         }
         body.innerHTML =
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. QR은 <b>직접고용</b>(우리 회사 시급)과 <b>협력사</b>(하청 출역 인원) 2종이며, 스캔한 QR에 따라 고용 형태가 자동 지정됩니다. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. QR은 <b>현장당 한 장</b>이고, 작업자가 고른 <b>소속회사</b>로 직접고용/협력사가 자동 지정됩니다(<b>회사 구분</b> 버튼에서 설정). <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
+          '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.openCompanyTypeModal()"><i class="ph ph-buildings"></i> 회사 구분 설정 (자사 / 협력사)</button></div>' +
           sites.map(function (s) {
-            var quickDirect = '/join/w/' + s.id + '/qr?type=direct';
-            var quickIndirect = '/join/w/' + s.id + '/qr?type=indirect';
+            var quickPoster = '/join/w/' + s.id + '/qr';
             var quickForm = window.location.origin + '/join/w/' + s.id;
             var fullPoster = '/member/site/' + s.id + '/apply/qr';
             return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
@@ -4034,8 +4034,7 @@
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'/print/qr/' + s.id + '\',\'_blank\')" title="게이트·간편등록·지원서 QR을 한 번에 인쇄"><i class="ph ph-printer"></i> 모아 인쇄</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
-              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickDirect + '\',\'_blank\')" title="우리 회사 소속(시급) 작업자 등록 QR"><i class="ph ph-qr-code"></i> 직접고용 QR</button>' +
-              '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#047857;border-color:#047857" onclick="window.open(\'' + quickIndirect + '\',\'_blank\')" title="하청업체 소속 작업자 등록 QR"><i class="ph ph-qr-code"></i> 협력사 QR</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickPoster + '\',\'_blank\')" title="자사·협력사 공용 등록 QR"><i class="ph ph-qr-code"></i> 간편등록 QR</button>' +
               '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#059669;border-color:#059669" onclick="window.open(\'/gate/' + s.id + '/qr\',\'_blank\')" title="출입구 부착용 출퇴근 QR(앱 불필요)"><i class="ph ph-sign-in"></i> 게이트 출퇴근 QR</button>' +
               '</div>';
           }).join('');
@@ -4046,6 +4045,60 @@
             if (btn) { var o = btn.innerHTML; btn.innerHTML = '<i class="ph ph-check"></i> 복사됨'; setTimeout(function () { btn.innerHTML = o; }, 1500); }
           });
         }
+      };
+
+      // 회사 구분(자사/협력사) — 간편 등록 QR 한 장으로 고용 형태를 자동 판정하는 근거 데이터.
+      window.openCompanyTypeModal = async function () {
+        var host = document.getElementById('company-type-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'company-type-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10003;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:620px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 회사 구분 설정</div><button id="ct-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" id="ct-body" style="overflow-y:auto"><div style="color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div></div>';
+        host.querySelector('#ct-close').addEventListener('click', function () { host.innerHTML = ''; });
+        window.ctLoad();
+      };
+
+      window.ctLoad = async function () {
+        var host = document.getElementById('company-type-modal-root');
+        if (!host) return;
+        var body = host.querySelector('#ct-body');
+        if (!body) return;
+        if (window.apiCache) delete window.apiCache['api_getCompanyTypes[]'];
+        var d = null;
+        try { d = await gsRun('api_getCompanyTypes', [], null); } catch (e) { /* ignore */ }
+        if (!d || !d.companies) { body.innerHTML = '<div style="color:var(--status-danger);font-size:13px">회사 목록을 불러오지 못했습니다.</div>'; return; }
+
+        var warn = d.unclassified > 0
+          ? '<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px"><b>미지정 ' + d.unclassified + '개</b> — 미지정 회사로 등록하는 작업자에게는 등록 폼이 소속 구분을 직접 묻습니다. 지금 지정해 두면 작업자는 회사만 고르면 됩니다.</div>'
+          : '<div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px">모든 회사가 분류되어 있습니다. 작업자는 소속회사만 고르면 고용 형태가 자동 지정됩니다.</div>';
+
+        var opts = Object.keys(d.options || {});
+        var rows = d.companies.map(function (c) {
+          var sel = '<select class="wbs-edit-field" style="width:170px;padding:6px 8px;font-size:12px" onchange="window.ctSave(' + c.id + ', this.value, this)">' +
+            opts.map(function (k) {
+              return '<option value="' + k + '"' + (c.type === k ? ' selected' : '') + '>' + dashEsc(d.options[k]) + '</option>';
+            }).join('') + '</select>';
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:8px 0"><div style="font-size:13px;font-weight:600">' + dashEsc(c.name) + '</div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc(c.code) + ' · 등록 인원 ' + c.workers + '명</div></td>' +
+            '<td style="padding:8px 0;text-align:right">' + sel + '</td></tr>';
+        }).join('');
+
+        body.innerHTML = warn +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px"><b>자사</b> 소속 → 직접고용(시급 관리). <b>협력사</b> 소속 → 간접고용(출역 인원 관리, 퇴근 미기록 시 16:00 자동 마감).</div>' +
+          (rows ? '<table style="width:100%;border-collapse:collapse">' + rows + '</table>'
+                : '<div style="color:var(--text-tertiary);font-size:12px">등록된 회사가 없습니다.</div>');
+      };
+
+      window.ctSave = async function (id, type, el) {
+        if (el) el.disabled = true;
+        var res = null;
+        try { res = await gsRun('api_setCompanyType', [id, type], null); } catch (e) { /* ignore */ }
+        if (el) el.disabled = false;
+        if (!res || !res.success) { alert((res && res.error) || '회사 구분 저장에 실패했습니다.'); return; }
+        window.ctLoad();
       };
 
       // 오늘 출역 현황 — 직접고용은 '몇 시간', 협력사는 '몇 명' 관점으로 나눠 본다.

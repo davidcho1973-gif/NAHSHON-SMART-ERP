@@ -27,6 +27,16 @@
         .type { display: inline-block; border-radius: 999px; padding: 5px 14px; font-size: .82rem; font-weight: 800; margin-bottom: 12px; }
         .type-direct { background: #eef2ff; color: #4338ca; }
         .type-indirect { background: #ecfdf5; color: #047857; }
+        .type-client, .type-staff { background: #f1f5f9; color: #475569; }
+        .note { font-size: .78rem; color: #64748b; margin-top: 6px; line-height: 1.5; }
+        .note.on-direct { color: #4338ca; font-weight: 700; }
+        .note.on-indirect { color: #047857; font-weight: 700; }
+        .ask { margin-top: 16px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 12px; padding: 14px; }
+        .ask p { margin: 0 0 10px; font-size: .85rem; font-weight: 700; color: #92400e; }
+        .ask .opt { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; margin-bottom: 8px; cursor: pointer; font-size: .92rem; }
+        .ask .opt:last-child { margin-bottom: 0; }
+        .ask input[type=radio] { width: 18px; height: 18px; accent-color: #4f46e5; }
+        .ask small { display: block; color: #64748b; font-size: .76rem; font-weight: 400; }
     </style>
 </head>
 <body>
@@ -45,7 +55,6 @@
         @else
             <p class="brand">NAHSHON MEP · 작업자 간편 등록</p>
             <h1>작업자 등록</h1>
-            <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
             <p class="site">{{ $site->code }} {{ $site->name }}</p>
 
             @if ($errors->any())
@@ -54,18 +63,31 @@
 
             <form method="POST" action="{{ route('worker-join.store', ['site' => $site]) }}">
                 @csrf
-                {{-- 고용 형태는 QR 별로 다르다 — 폼에서 바꿀 수 없게 hidden 으로 넘긴다. --}}
-                <input type="hidden" name="employment_type" value="{{ $employmentType }}">
+                @if ($lockedType)
+                    {{-- 예전에 인쇄해 붙여 둔 고용 형태별 QR 로 들어온 경우 — 그 값을 그대로 지킨다. --}}
+                    <input type="hidden" name="qr_type" value="{{ $lockedType }}">
+                @endif
+
                 <label>이름 <span class="req">*</span></label>
                 <input type="text" name="full_name" value="{{ old('full_name') }}" placeholder="홍길동" required>
 
                 <label>소속회사 <span class="req">*</span></label>
-                <select name="company_id" required>
+                <select name="company_id" id="company" required>
                     <option value="">선택하세요</option>
                     @foreach ($companies as $c)
-                        <option value="{{ $c->id }}" @selected(old('company_id') == $c->id)>{{ $c->name }}</option>
+                        <option value="{{ $c['id'] }}" data-etype="{{ $c['employment_type'] }}" @selected(old('company_id') == $c['id'])>{{ $c['name'] }}</option>
                     @endforeach
                 </select>
+                <div class="note" id="company-note">소속회사를 고르면 고용 구분이 자동으로 정해집니다.</div>
+
+                {{-- 회사가 아직 분류되지 않았을 때만 뜬다. 사내 용어 대신 "누가 급여를 주는가" 로 묻는다. --}}
+                <div class="ask" id="ask-type" style="display:none">
+                    <p>소속 구분을 선택해 주세요 <span class="req">*</span></p>
+                    <label class="opt"><input type="radio" name="employment_type" value="direct" @checked(old('employment_type') === 'direct')>
+                        <span>NAHSHON MEP 소속<small>NAHSHON MEP 에서 급여를 받습니다</small></span></label>
+                    <label class="opt"><input type="radio" name="employment_type" value="indirect" @checked(old('employment_type') === 'indirect')>
+                        <span>협력업체 소속<small>소속 업체에서 급여를 받습니다</small></span></label>
+                </div>
 
                 <label>공정 (Trade) <span class="req">*</span></label>
                 <input type="text" name="role" list="trade-list" value="{{ old('role') }}" placeholder="목록에서 선택하거나 직접 입력" required autocomplete="off">
@@ -74,7 +96,7 @@
                         <option value="{{ $t }}"></option>
                     @endforeach
                 </datalist>
-                <div style="font-size:.78rem;color:#64748b;margin-top:5px">공정관리(WBS)의 공종 목록이며, 없으면 직접 입력하세요.</div>
+                <div class="note">공정관리(WBS)의 공종 목록이며, 없으면 직접 입력하세요.</div>
 
                 <label>이메일 <span class="req">*</span></label>
                 <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com" required>
@@ -84,6 +106,45 @@
 
                 <button type="submit">작업자로 등록하기</button>
             </form>
+
+            <script>
+                (function () {
+                    var locked = @json($lockedType);
+                    var sel = document.getElementById('company');
+                    var note = document.getElementById('company-note');
+                    var ask = document.getElementById('ask-type');
+                    var radios = ask.querySelectorAll('input[type=radio]');
+                    var LABEL = { direct: 'NAHSHON MEP 소속(직접고용)', indirect: '협력사 소속(간접고용)', client: '원청 담당자' };
+
+                    function sync() {
+                        var opt = sel.options[sel.selectedIndex];
+                        // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
+                        var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
+
+                        if (!sel.value) {
+                            note.textContent = '소속회사를 고르면 고용 구분이 자동으로 정해집니다.';
+                            note.className = 'note';
+                            ask.style.display = 'none';
+                            radios.forEach(function (r) { r.required = false; });
+                            return;
+                        }
+                        if (etype) {
+                            note.textContent = LABEL[etype] + ' 으로 등록됩니다.';
+                            note.className = 'note on-' + etype;
+                            ask.style.display = 'none';
+                            radios.forEach(function (r) { r.required = false; });
+                        } else {
+                            note.textContent = '';
+                            note.className = 'note';
+                            ask.style.display = 'block';
+                            radios.forEach(function (r) { r.required = true; });
+                        }
+                    }
+
+                    sel.addEventListener('change', sync);
+                    sync();
+                })();
+            </script>
         @endif
     </div>
 </body>

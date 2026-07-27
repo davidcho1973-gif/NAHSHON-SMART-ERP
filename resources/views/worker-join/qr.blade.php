@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $poster['badge']['label'] }} 작업자 간편 등록 QR — {{ $site->code }} {{ $site->name }}</title>
+    <title>작업자 간편 등록 QR — {{ $site->code }} {{ $site->name }}</title>
     @include('partials.qr-poster-styles')
 </head>
 <body>
