@@ -7,7 +7,7 @@ use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\Site;
 use App\Models\WbsItem;
-use App\Support\QrSvg;
+use App\Support\QrPosters;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -19,12 +19,6 @@ use Illuminate\View\View;
  */
 class SimpleWorkerRegistrationController extends Controller
 {
-    /** 고용 형태별 안내 문구 — 포스터·폼에서 함께 쓴다. */
-    private const TYPE_META = [
-        Employee::TYPE_DIRECT => ['label' => '직접고용', 'hint' => '우리 회사 소속(시급) 작업자용'],
-        Employee::TYPE_INDIRECT => ['label' => '협력사', 'hint' => '하청업체 소속 작업자용'],
-    ];
-
     /** 요청의 고용 형태를 결정한다(기본: 직접고용). */
     private function resolveType(Request $request): string
     {
@@ -36,16 +30,9 @@ class SimpleWorkerRegistrationController extends Controller
     /** 인쇄용 QR 포스터 — 스캔하면 간편 등록 폼이 열린다. (직접/협력사 2종) */
     public function qr(Request $request, Site $site): View
     {
-        $type = $this->resolveType($request);
-        $formUrl = route('worker-join.form', ['site' => $site, 'type' => $type]);
-
         return view('worker-join.qr', [
             'site' => $site,
-            'formUrl' => $formUrl,
-            'qrImage' => QrSvg::dataUri($formUrl, 320),
-            'employmentType' => $type,
-            'typeLabel' => self::TYPE_META[$type]['label'],
-            'typeHint' => self::TYPE_META[$type]['hint'],
+            'poster' => QrPosters::make($site, $this->resolveType($request)),
         ]);
     }
 
@@ -60,7 +47,7 @@ class SimpleWorkerRegistrationController extends Controller
             'roles' => $this->tradeOptions($site),
             'done' => false,
             'employmentType' => $type,
-            'typeLabel' => self::TYPE_META[$type]['label'],
+            'typeLabel' => QrPosters::BADGE_LABELS[$type],
         ]);
     }
 
@@ -131,7 +118,7 @@ class SimpleWorkerRegistrationController extends Controller
             'roles' => [],
             'done' => true,
             'employmentType' => $employee->employment_type,
-            'typeLabel' => self::TYPE_META[$employee->employment_type]['label'] ?? '',
+            'typeLabel' => QrPosters::BADGE_LABELS[$employee->employment_type] ?? '',
             'employee' => $employee,
             'workerName' => $data['full_name'],
         ]);

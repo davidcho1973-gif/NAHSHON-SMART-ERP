@@ -126,6 +126,11 @@ Route::middleware('auth')->group(function (): void {
         ->name('api.smart-company');
 });
 
+// 현장 QR 모아 인쇄 — 게이트·간편등록(직접/협력사)·입사지원서 포스터를 한 번에 출력
+Route::get('/print/qr/{site}', [App\Http\Controllers\QrPrintController::class, 'sheet'])
+    ->middleware(['auth'])
+    ->name('qr-print.sheet');
+
 // 간편 작업자 등록 — 현장 QR 스캔 → 최소 정보 입력 → 즉시 활성 작업자 등록 (공개)
 Route::get('/join/w/{site}/qr', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'qr'])->name('worker-join.qr');
 Route::get('/join/w/{site}', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'form'])->name('worker-join.form');
