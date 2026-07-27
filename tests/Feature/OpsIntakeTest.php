@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\CommunicationRoom;
+use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Project;
@@ -409,5 +410,87 @@ class OpsIntakeTest extends TestCase
 
             return ! str_contains((string) $prompt, '첨부 사진 판독');
         });
+    }
+
+    // ── 원문 보관(대화가 사라지지 않게) ─────────────────────
+
+    public function test_original_conversation_is_kept_as_a_batch(): void
+    {
+        $this->fakeAi([[
+            'raw_text' => '천장 배관 끝', 'speaker' => '김철수', 'category' => 'progress', 'confidence' => 90,
+            'summary' => '완료', 'target_type' => 'wbs', 'target_code' => 'LG-01-W-A100',
+            'target_name' => '천장 전기 배관', 'occurred_on' => '', 'proposed' => ['status' => '완료'], 'question' => '',
+        ]]);
+        $conversation = "김철수: 천장 배관 끝\n박현우: 오늘 수고하셨습니다";
+
+        $r = $this->service()->ingest($conversation, $this->site);
+
+        $batch = OpsIntakeBatch::firstOrFail();
+        $this->assertSame($conversation, $batch->raw_text, '붙여넣은 대화 원문이 그대로 남아야 한다.');
+        $this->assertSame($batch->id, $r['batchId']);
+        // 판독된 항목이 그 원문에 연결된다 — "왜 이렇게 반영됐지?"를 되짚을 수 있게.
+        $this->assertSame($batch->id, OpsIntakeItem::firstOrFail()->ops_intake_batch_id);
+    }
+
+    public function test_batch_records_counts_and_appears_in_history(): void
+    {
+        $this->fakeAi([
+            [
+                'raw_text' => 'a', 'speaker' => '', 'category' => 'progress', 'confidence' => 90, 'summary' => 's',
+                'target_type' => 'wbs', 'target_code' => 'LG-01-W-A100', 'target_name' => 'n',
+                'occurred_on' => '', 'proposed' => ['progress' => 50], 'question' => '',
+            ],
+            [
+                'raw_text' => 'b', 'speaker' => '', 'category' => 'noise', 'confidence' => 99, 'summary' => '잡담',
+                'target_type' => '', 'target_code' => '', 'target_name' => '', 'occurred_on' => '',
+                'proposed' => [], 'question' => '',
+            ],
+        ]);
+        $this->service()->ingest("작업 절반 했습니다\n다들 수고", $this->site);
+
+        $list = $this->service()->batches($this->site->id);
+
+        $this->assertSame(1, $list['count']);
+        $this->assertSame(2, $list['batches'][0]['parsed']);
+        $this->assertSame(1, $list['batches'][0]['actionable']);
+        $this->assertSame(1, $list['batches'][0]['noise']);
+        $this->assertStringContainsString('작업 절반', $list['batches'][0]['preview']);
+    }
+
+    public function test_batch_detail_returns_original_text_with_its_items(): void
+    {
+        $this->fakeAi([[
+            'raw_text' => 'a', 'speaker' => '', 'category' => 'issue', 'confidence' => 90, 'summary' => '개구부 위험',
+            'target_type' => '', 'target_code' => '', 'target_name' => '', 'occurred_on' => '',
+            'proposed' => [], 'question' => '',
+        ]]);
+        $id = $this->service()->ingest('3층 개구부 덮개 없습니다', $this->site)['batchId'];
+
+        $d = $this->service()->batch($id);
+
+        $this->assertTrue($d['success']);
+        $this->assertSame('3층 개구부 덮개 없습니다', $d['raw']);
+        $this->assertCount(1, $d['items']);
+        $this->assertSame('개구부 위험', $d['items'][0]['summary']);
+    }
+
+    public function test_photo_only_batch_is_still_recorded(): void
+    {
+        $this->fakeAi([[
+            'raw_text' => '[사진]', 'speaker' => '', 'category' => 'progress', 'confidence' => 70, 'summary' => '사진 판독',
+            'target_type' => '', 'target_code' => '', 'target_name' => '', 'occurred_on' => '',
+            'proposed' => [], 'question' => '',
+        ]]);
+
+        $this->service()->ingest('', $this->site, null, [['data' => 'aGVsbG8=', 'mime_type' => 'image/jpeg']]);
+
+        $batch = OpsIntakeBatch::firstOrFail();
+        $this->assertSame(1, $batch->image_count);
+        $this->assertSame('(사진만 첨부)', $batch->preview());
+    }
+
+    public function test_missing_batch_returns_error(): void
+    {
+        $this->assertFalse($this->service()->batch(999999)['success']);
     }
 }

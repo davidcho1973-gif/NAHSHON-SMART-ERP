@@ -8888,7 +8888,11 @@
           '<div style="display:flex;gap:7px">' +
           '<button class="btn-primary" style="padding:5px 12px;font-size:12px;font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> 전체 반영</button>' +
           '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button></div>' +
-          '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>';
+          '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>' +
+          '<div class="panel" style="margin-top:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-scroll"></i> 원문 기록</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">붙여넣은 대화 원문이 그대로 보관됩니다</span>' +
+          '</div><div class="panel-body" id="ops-batches" style="padding:0"></div></div>';
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
         window._opsPhotos = [];
@@ -8896,6 +8900,7 @@
         if (photoInput) photoInput.addEventListener('change', function () { opsHandlePhotos(this.files); });
         window.opsLoadPending();
         window.opsLoadDigest();
+        window.opsLoadBatches();
       }
 
       // 첨부 사진을 캔버스로 축소(최대 1600px, JPEG 0.8)해 base64 로 보관 — 전송량 절감.
@@ -8970,7 +8975,9 @@
             if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '판독 실패') + '</span>';
             return;
           }
-          if (msg) msg.textContent = '판독 완료 — ' + r.parsed + '건 중 업무 ' + r.actionable + '건, 잡담 ' + r.noise + '건 제외';
+          if (msg) msg.textContent = '판독 완료 — ' + r.parsed + '건 중 업무 ' + r.actionable + '건, 잡담 ' + r.noise + '건 제외 (원문은 아래 기록에 보관됨)';
+          opsClearCache();
+          window.opsLoadBatches();
           if (box) box.value = '';
           window._opsPhotos = [];
           opsRenderPhotoStrip();
@@ -9023,7 +9030,9 @@
             (needs ? '<div style="margin:7px 0;padding:8px 11px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.4);border-radius:7px;font-size:12px;color:#b45309">' +
               '<b>확인 필요</b> · ' + opsEsc(it.question || '대상을 특정하지 못했습니다.') + '</div>' : '') +
             '<div style="font-size:11.5px;color:var(--text-tertiary);font-style:italic;margin-top:5px">' +
-            (it.speaker ? opsEsc(it.speaker) + ': ' : '') + '"' + opsEsc(it.raw || '') + '"</div>' +
+            (it.speaker ? opsEsc(it.speaker) + ': ' : '') + '"' + opsEsc(it.raw || '') + '"' +
+            (it.batchId ? ' <span style="cursor:pointer;color:var(--brand-primary);font-style:normal;font-weight:600" onclick="event.stopPropagation();window.opsShowBatch(' + it.batchId + ')">· 원문 보기</span>' : '') +
+            '</div>' +
             (it.category !== 'noise' ? '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">' +
               (it.status === 'applied'
                 ? '<span style="font-size:11.5px;font-weight:700;color:#22c55e;align-self:center"><i class="ph ph-check-circle"></i> 반영됨' + (it.appliedAt ? ' · ' + opsEsc(it.appliedAt) : '') + '</span>' +
@@ -9042,15 +9051,69 @@
         crew_size: '인원', eta: '납기(ETA)', name: '작업명'
       };
 
+      // 상황실 응답 캐시 무효화 — gsRun 이 60초 캐시하므로, 변경 후엔 반드시 비워야
+      // 화면이 예전 목록을 그대로 보여주지 않는다(무시/반영이 안 먹는 것처럼 보이던 원인).
+      function opsClearCache() {
+        Object.keys(window.apiCache || {}).forEach(function (k) {
+          if (k.indexOf('api_getOps') === 0) delete window.apiCache[k];
+        });
+      }
+
+      // 붙여넣은 원문 이력 — 대화 내용은 지워지지 않고 여기 쌓인다.
+      window.opsLoadBatches = async function () {
+        var host = document.getElementById('ops-batches');
+        if (!host) return;
+        var d = await gsRun('api_getOpsBatches', [], { batches: [] });
+        var list = (d && d.batches) || [];
+        if (!list.length) {
+          host.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:12.5px">아직 기록이 없습니다. 대화를 붙여넣으면 원문이 여기 보관됩니다.</div>';
+          return;
+        }
+        host.innerHTML = list.map(function (b) {
+          return '<div style="padding:12px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer" onclick="window.opsShowBatch(' + b.id + ')">' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">' +
+            '<span style="font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + opsEsc(b.at || '') + '</span>' +
+            (b.by ? '<span style="font-size:11px;color:var(--text-secondary)">' + opsEsc(b.by) + '</span>' : '') +
+            '<span style="font-size:10.5px;color:var(--brand-primary)">업무 ' + b.actionable + '건' + (b.noise ? ' · 잡담 ' + b.noise + '건 제외' : '') + '</span>' +
+            (b.imageCount ? '<span style="font-size:10.5px;color:#22c55e">📷 ' + b.imageCount + '</span>' : '') +
+            '<span style="margin-left:auto;font-size:11px;color:var(--brand-primary);font-weight:600">원문 보기 ›</span>' +
+            '</div>' +
+            '<div style="font-size:12.5px;color:var(--text-secondary)">' + opsEsc(b.preview) + '</div></div>';
+        }).join('');
+      };
+
+      // 원문 전체 + 그때 뽑힌 판독 결과를 함께 본다.
+      window.opsShowBatch = async function (id) {
+        var d = await gsRun('api_getOpsBatch', [id], { success: false });
+        if (!d || d.success === false) { alert('원문을 불러오지 못했습니다.'); return; }
+        var host = document.getElementById('ops-batches');
+        if (!host) return;
+        host.innerHTML =
+          '<div style="padding:14px 18px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsLoadBatches()">← 목록</button>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">' + opsEsc(d.at || '') + (d.by ? ' · ' + opsEsc(d.by) : '') +
+          (d.imageCount ? ' · 사진 ' + d.imageCount + '장' : '') + '</span></div>' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:5px">붙여넣은 원문</div>' +
+          '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;padding:12px;font-size:12.5px;color:var(--text-primary);font-family:inherit;margin:0 0 14px;max-height:340px;overflow:auto">' +
+          opsEsc(d.raw || '(사진만 첨부)') + '</pre>' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:5px">이 원문에서 뽑은 항목 (' + (d.items || []).length + '건)</div>' +
+          '</div>' + opsRows(d.items || [], true);
+      };
+
       window.opsDismiss = async function (id) {
-        await gsRun('api_dismissOpsItem', [id], { success: false });
+        var r = await gsRun('api_dismissOpsItem', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '무시 처리에 실패했습니다.'); return; }
+        opsClearCache();
         window.opsLoadPending();
+        window.opsLoadDigest();
       };
 
       window.opsApply = async function (id) {
         var r = await gsRun('api_applyOpsItem', [id], { success: false });
         if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
         if (window.showToast) window.showToast('공정표에 반영했습니다.', 'success');
+        opsClearCache();
         window.opsLoadDigest();
         if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('Wbs') >= 0 || k.indexOf('Procurement') >= 0) delete window.apiCache[k]; });
         window.opsLoadPending();
@@ -9065,7 +9128,9 @@
         if ((r.failures || []).length) {
           console.warn('[ops] 반영 실패', r.failures);
         }
+        opsClearCache();
         window.opsLoadPending();
+        window.opsLoadDigest();
       };
 
       window.opsRevert = async function (id) {
@@ -9073,7 +9138,9 @@
         var r = await gsRun('api_revertOpsItem', [id], { success: false });
         if (!r || !r.success) { alert((r && r.error) || '되돌리기에 실패했습니다.'); return; }
         if (window.showToast) window.showToast('되돌렸습니다.', 'success');
+        opsClearCache();
         window.opsLoadPending();
+        window.opsLoadDigest();
       };
 
       // ═══════════════════════ 문서통합관리 (Integrated Document Management) ═══════════════════════

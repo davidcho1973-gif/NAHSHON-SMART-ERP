@@ -22,7 +22,7 @@ class OpsIntakeItem extends Model
     ];
 
     protected $fillable = [
-        'site_id', 'project_code', 'source', 'communication_message_id', 'created_by_id',
+        'site_id', 'ops_intake_batch_id', 'project_code', 'source', 'communication_message_id', 'created_by_id',
         'raw_text', 'speaker', 'occurred_on',
         'category', 'confidence', 'summary',
         'target_type', 'target_code', 'target_name',
@@ -39,6 +39,11 @@ class OpsIntakeItem extends Model
             'previous' => 'array',
             'applied_at' => 'datetime',
         ];
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(OpsIntakeBatch::class, 'ops_intake_batch_id');
     }
 
     public function site(): BelongsTo
