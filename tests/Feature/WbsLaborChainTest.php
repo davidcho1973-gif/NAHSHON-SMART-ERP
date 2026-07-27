@@ -43,7 +43,7 @@ class WbsLaborChainTest extends TestCase
 
     private function makeEmployee(string $name): Employee
     {
-        $company = Company::firstOrCreate(['code' => 'NAHSHON'], ['name' => 'NAHSHON MEP']);
+        $company = Company::firstOrCreate(['code' => 'DASOL PRISM'], ['name' => 'DASOL PRISM']);
 
         return Employee::create([
             'company_id' => $company->id, 'name' => $name,

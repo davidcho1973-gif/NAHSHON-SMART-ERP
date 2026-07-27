@@ -42,7 +42,7 @@ class GeminiDocumentAnalyzerTest extends TestCase
         $this->fakeEngine([
             'document_type' => 'certificate_of_insurance', 'title' => 'COI - Acme', 'document_number' => 'GL-12345',
             'issued_on' => '2026-01-01', 'effective_on' => '2026-01-01', 'expires_on' => '2026-12-31',
-            'issuer' => 'Acme Insurance', 'counterparty' => 'NAHSHON MEP', 'amount' => 2000000, 'currency' => 'USD',
+            'issuer' => 'Acme Insurance', 'counterparty' => 'DASOL PRISM', 'amount' => 2000000, 'currency' => 'USD',
             'summary' => '일반배상책임 200만불',
             'fields' => [['label' => '보장한도', 'value' => '$2,000,000'], ['label' => '', 'value' => 'skip']],
         ]);

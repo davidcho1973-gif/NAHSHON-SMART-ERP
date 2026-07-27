@@ -1,4 +1,4 @@
-# NAHSHON SMART ERP
+# DASOL PRISM SMART ERP
 
 Laravel and Filament version of the SMART COMPANY ERP workflow.
 

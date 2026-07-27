@@ -20,10 +20,10 @@ This project should use only the environments below.
 
 ## Retire / Delete After Backup Check
 
-- Laravel Cloud app: `nahshon-erp`
-- URL: `https://nahshon-erp-main-ttend5.laravel.cloud`
-- GitHub repository: `davidcho1973-gif/nahshon-erp`
-- Reason: old separate application. It is not part of the current NAHSHON SMART ERP workflow.
+- Laravel Cloud app: `dasol-prism-erp`
+- URL: `https://dasol-prism-erp-main-ttend5.laravel.cloud`
+- GitHub repository: `davidcho1973-gif/dasol-prism-erp`
+- Reason: old separate application. It is not part of the current DASOL PRISM SMART ERP workflow.
 
 Before deleting this app, confirm there is no needed database, storage file, or environment variable inside it.
 
@@ -41,9 +41,9 @@ Before deleting this app, confirm there is no needed database, storage file, or 
 
 These actions must be done in the Laravel Cloud dashboard by an owner/admin account.
 
-1. Open `nahshon-erp`.
+1. Open `dasol-prism-erp`.
 2. Confirm there is no needed database, storage file, environment variable, or custom domain.
-3. Delete `nahshon-erp`.
+3. Delete `dasol-prism-erp`.
 4. Open `nahshon-smart-erp-staging`.
 5. Confirm the connected branch is `staging`.
 6. Deploy `staging` after each test-ready change.

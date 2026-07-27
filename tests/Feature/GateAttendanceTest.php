@@ -25,7 +25,7 @@ class GateAttendanceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'NAHSHON', 'name' => 'NAHSHON MEP', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'DASOL PRISM', 'name' => 'DASOL PRISM', 'status' => 'active']);
         $this->site = Site::create(['company_id' => $this->company->id, 'code' => 'LG-PH', 'name' => 'LG Phoenix', 'status' => 'active']);
         $this->otherSite = Site::create(['company_id' => $this->company->id, 'code' => 'SK-AZ', 'name' => 'SK AZ', 'status' => 'active']);
     }

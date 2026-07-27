@@ -60,7 +60,7 @@ class DailyHeadcountServiceTest extends TestCase
     public function test_splits_hours_for_direct_and_headcount_for_indirect(): void
     {
         $date = '2026-07-28';
-        $own = Company::create(['code' => 'NAH', 'name' => 'NAHSHON', 'status' => 'active']);
+        $own = Company::create(['code' => 'NAH', 'name' => 'DASOL PRISM', 'status' => 'active']);
         $sub = Company::create(['code' => 'SUB', 'name' => '한빛전기', 'status' => 'active']);
 
         $d1 = $this->worker('d1@example.com', Employee::TYPE_DIRECT, $own);
@@ -90,7 +90,7 @@ class DailyHeadcountServiceTest extends TestCase
         $this->assertSame('한빛전기', $d['companies'][0]['company']);
         $this->assertSame(Employee::TYPE_INDIRECT, $d['companies'][0]['type']);
         $this->assertSame(2, $d['companies'][0]['count']);
-        $this->assertSame('NAHSHON', $d['companies'][1]['company']);
+        $this->assertSame('DASOL PRISM', $d['companies'][1]['company']);
 
         $this->assertCount(4, $d['workers']);
     }

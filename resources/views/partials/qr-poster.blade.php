@@ -11,7 +11,7 @@
     $tags      선택: [['label' => '출근 IN', 'class' => 'in'], ...]
 --}}
 <main class="sheet">
-    <p class="brand">NAHSHON MEP</p>
+    <p class="brand">DASOL PRISM</p>
     <h1>{{ $title }}</h1>
     @if (! empty($badge))
         <div class="type {{ $badge['class'] }}">{{ $badge['label'] }}</div>

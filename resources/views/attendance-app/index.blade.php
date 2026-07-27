@@ -34,7 +34,7 @@
 <body>
     <div class="app">
         <header>
-            <p class="eyebrow">NAHSHON SMART ERP</p>
+            <p class="eyebrow">DASOL PRISM SMART ERP</p>
             <h1>QR 출퇴근 관리</h1>
             <p class="sub">팀 QR 또는 작업자 배지 QR로 현장 출퇴근을 기록합니다.</p>
         </header>

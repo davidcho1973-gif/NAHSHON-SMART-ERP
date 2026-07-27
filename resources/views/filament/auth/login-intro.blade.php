@@ -94,7 +94,7 @@
         <div class="smart-admin-login-mark">NS</div>
         <div>
             <p class="smart-admin-login-title">SMART COMPANY ERP</p>
-            <p class="smart-admin-login-copy">NAHSHON MEP 관리자 접근</p>
+            <p class="smart-admin-login-copy">DASOL PRISM 관리자 접근</p>
         </div>
     </div>
 

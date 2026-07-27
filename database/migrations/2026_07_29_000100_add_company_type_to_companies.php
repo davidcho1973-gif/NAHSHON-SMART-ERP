@@ -24,8 +24,8 @@ return new class extends Migration
             $table->string('company_type', 16)->default('unknown')->after('status')->index();
         });
 
-        // 시드로 만들어지는 자사(NAHSHON MEP)는 확실하므로 미리 분류해 둔다.
-        DB::table('companies')->where('code', 'NAHSHON-MEP')->update(['company_type' => 'own']);
+        // 시드로 만들어지는 자사(DASOL PRISM)는 확실하므로 미리 분류해 둔다.
+        DB::table('companies')->where('code', 'DASOL-PRISM')->update(['company_type' => 'own']);
     }
 
     public function down(): void

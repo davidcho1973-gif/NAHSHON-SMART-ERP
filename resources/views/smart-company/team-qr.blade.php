@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NAHSHON SMART ERP - {{ $team->name }} ({{ $team->code }}) 출퇴근 QR</title>
+    <title>DASOL PRISM SMART ERP - {{ $team->name }} ({{ $team->code }}) 출퇴근 QR</title>
     <style>
         :root {
             color-scheme: light;
@@ -221,7 +221,7 @@
     @endphp
 
     <main class="sheet">
-        <p class="brand">NAHSHON SMART ERP</p>
+        <p class="brand">DASOL PRISM SMART ERP</p>
         <h1>출퇴근 기록용 QR 코드</h1>
 
         <div class="team-info">

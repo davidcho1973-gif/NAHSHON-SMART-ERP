@@ -61,8 +61,8 @@ return new class extends Migration
         return [
             ['no' => '1', 'name' => '반입 및 준비 (Mobilization)', 'tasks' => [
                 ['no' => '1.1', 'name' => '자재 반입', 'subs' => [
-                    ['no' => '1.1.1', 'name' => '장비 하역 및 검수', 'company' => 'NAHSHON', 'mh' => 24, 'days' => 2, 'ehs' => 'medium', 'status' => '완료', 'progress' => 100],
-                    ['no' => '1.1.2', 'name' => '작업구역 양생 및 통제', 'company' => 'NAHSHON', 'mh' => 16, 'days' => 1, 'ehs' => 'low', 'status' => '완료', 'progress' => 100],
+                    ['no' => '1.1.1', 'name' => '장비 하역 및 검수', 'company' => 'DASOL PRISM', 'mh' => 24, 'days' => 2, 'ehs' => 'medium', 'status' => '완료', 'progress' => 100],
+                    ['no' => '1.1.2', 'name' => '작업구역 양생 및 통제', 'company' => 'DASOL PRISM', 'mh' => 16, 'days' => 1, 'ehs' => 'low', 'status' => '완료', 'progress' => 100],
                 ]],
             ]],
             ['no' => '2', 'name' => '설치 (Installation)', 'tasks' => [
@@ -83,7 +83,7 @@ return new class extends Migration
             ]],
             ['no' => '4', 'name' => '시운전 (Commissioning)', 'tasks' => [
                 ['no' => '4.1', 'name' => '시운전 지원', 'subs' => [
-                    ['no' => '4.1.1', 'name' => '단독 시운전 입회', 'company' => 'NAHSHON', 'mh' => 24, 'days' => 2, 'ehs' => 'medium', 'status' => 'AI생성', 'progress' => 0],
+                    ['no' => '4.1.1', 'name' => '단독 시운전 입회', 'company' => 'DASOL PRISM', 'mh' => 24, 'days' => 2, 'ehs' => 'medium', 'status' => 'AI생성', 'progress' => 0],
                 ]],
             ]],
         ];

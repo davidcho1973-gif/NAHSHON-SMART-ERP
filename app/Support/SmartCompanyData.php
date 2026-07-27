@@ -190,12 +190,12 @@ class SmartCompanyData
             'api_getSiteList' => Schema::hasTable('sites') ? \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get()->map(fn($s) => ['id' => $s->id, 'code' => $s->code, 'name' => $s->name])->all() : [],
             'api_getProjectList' => Schema::hasTable('projects') ? \App\Models\Project::query()->orderByDesc('id')->get()->map(fn($p) => ['id' => $p->id, 'code' => $p->project_code, 'name' => $p->name, 'site_id' => $p->site_id])->all() : [],
             'api_createVendor' => ['success' => true, 'id' => 'V-' . random_int(100, 999)],
-            'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\nNAHSHON MEP"],
+            'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\nDASOL PRISM"],
             'api_translateToEnglish' => ['success' => true, 'text' => (string) ($args[0] ?? '')],
             'api_sendVendorEmail' => ['success' => true],
             'api_getVendorReplies' => ['success' => true, 'replies' => []],
 
-            'api_getAllFolderFiles' => json_encode(['success' => true, 'data' => ['NAHSHON RECEIPT' => ['pending' => 3, 'done' => 28, 'total' => 31], 'UTILITY RECEIPT' => ['pending' => 1, 'done' => 12, 'total' => 13]]]),
+            'api_getAllFolderFiles' => json_encode(['success' => true, 'data' => ['DASOL PRISM RECEIPT' => ['pending' => 3, 'done' => 28, 'total' => 31], 'UTILITY RECEIPT' => ['pending' => 1, 'done' => 12, 'total' => 13]]]),
             'api_bulkProcessDriveFolder' => json_encode(['success' => true, 'log' => ['Scanned pending receipts', 'Updated finance records']]),
             'api_getFinanceExcelBase64' => '',
             'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
@@ -353,10 +353,10 @@ class SmartCompanyData
     {
         $fromDb = self::smartRecords('hr');
         $people = $fromDb ?: [
-            ['id' => 'EMP-1001', 'badgeId' => '1001', 'nameEn' => 'James Kim', 'nameKr' => '김제임스', 'company' => 'NAHSHON MEP', 'team' => 'Electrical A', 'role' => 'Foreman', 'site' => 'HFF-02', 'visa' => 'E-2', 'visaExpiry' => '2026-09-30', 'safety' => '정상', 'workerStatus' => '파견중', 'phone' => '480-555-0101'],
+            ['id' => 'EMP-1001', 'badgeId' => '1001', 'nameEn' => 'James Kim', 'nameKr' => '김제임스', 'company' => 'DASOL PRISM', 'team' => 'Electrical A', 'role' => 'Foreman', 'site' => 'HFF-02', 'visa' => 'E-2', 'visaExpiry' => '2026-09-30', 'safety' => '정상', 'workerStatus' => '파견중', 'phone' => '480-555-0101'],
             ['id' => 'EMP-1002', 'badgeId' => '1002', 'nameEn' => 'Min Lee', 'nameKr' => '이민', 'company' => 'AI Korea', 'team' => 'Pipe Crew', 'role' => 'Pipefitter', 'site' => 'HFF-02', 'visa' => 'B-1', 'visaExpiry' => '2026-08-15', 'safety' => '만료임박', 'workerStatus' => '파견중', 'phone' => '480-555-0102'],
             ['id' => 'EMP-1003', 'badgeId' => '1003', 'nameEn' => 'Carlos Rivera', 'nameKr' => '', 'company' => 'Local Union', 'team' => 'Electrical B', 'role' => 'Journeyman', 'site' => 'LGES-AZ', 'visa' => '-', 'visaExpiry' => '-', 'safety' => '정상', 'workerStatus' => '파견중', 'phone' => '480-555-0103'],
-            ['id' => 'EMP-1004', 'badgeId' => '1004', 'nameEn' => 'Sophia Park', 'nameKr' => '박소피아', 'company' => 'NAHSHON MEP', 'team' => 'Controls', 'role' => 'Engineer', 'site' => 'NV-05', 'visa' => 'H-1B', 'visaExpiry' => '2027-01-10', 'safety' => '정상', 'workerStatus' => '파견중', 'phone' => '480-555-0104'],
+            ['id' => 'EMP-1004', 'badgeId' => '1004', 'nameEn' => 'Sophia Park', 'nameKr' => '박소피아', 'company' => 'DASOL PRISM', 'team' => 'Controls', 'role' => 'Engineer', 'site' => 'NV-05', 'visa' => 'H-1B', 'visaExpiry' => '2027-01-10', 'safety' => '정상', 'workerStatus' => '파견중', 'phone' => '480-555-0104'],
             ['id' => 'EMP-1005', 'badgeId' => '1005', 'nameEn' => 'Daniel Cho', 'nameKr' => '조다니엘', 'company' => 'M-SOL', 'team' => 'QA/QC', 'role' => 'Inspector', 'site' => 'LGES-AZ', 'visa' => 'E-2', 'visaExpiry' => '2026-07-20', 'safety' => '주의', 'workerStatus' => '파견중', 'phone' => '480-555-0105'],
         ];
 
@@ -440,7 +440,7 @@ class SmartCompanyData
         return [
             'success' => true, 'date' => $date ?: Carbon::now()->toDateString(), 'availableDates' => [Carbon::now()->toDateString()],
             'companies' => [[
-                'name' => 'NAHSHON MEP', 'total' => count($people), 'divide' => ['manager' => 1, 'korean' => 2, 'local' => max(0, count($people)-3)],
+                'name' => 'DASOL PRISM', 'total' => count($people), 'divide' => ['manager' => 1, 'korean' => 2, 'local' => max(0, count($people)-3)],
                 'teams' => array_map(fn ($team, $members) => ['team' => $team, 'members' => array_values($members), 'count' => count($members)], array_keys($teams), $teams),
             ]],
             'teamStats' => array_map(fn ($team, $members) => ['team' => $team, 'count' => count($members)], array_keys($teams), $teams),
@@ -2580,7 +2580,7 @@ class SmartCompanyData
         $failedLogs = [];
 
         DB::transaction(function () use ($queue, $employee, $site, &$successCount, &$failedLogs): void {
-            $secretKey = config('app.key') ?: 'base64:nahshonsmarterpdefaultkey';
+            $secretKey = config('app.key') ?: 'base64:dasol-prismsmarterpdefaultkey';
 
             foreach ($queue as $item) {
                 $eventType = $item['event_type'] ?? '';
