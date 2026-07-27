@@ -128,6 +128,117 @@ final class WorkerLang
     }
 
     /**
+     * 인쇄 포스터 문구 — 벽에 붙는 종이라 언어 전환 버튼이 없다. 3개 언어를 한 장에 함께 찍는다.
+     *
+     * @return array<string, array<string, array<string, mixed>>> [포스터 키][언어] => title/hint/steps
+     */
+    public static function poster(): array
+    {
+        return [
+            'gate' => [
+                'ko' => [
+                    'title' => '출근 · 퇴근',
+                    'hint' => '출입할 때 휴대폰 카메라로 이 QR 을 스캔하세요. (앱 설치·로그인 불필요)',
+                    'steps' => [
+                        '휴대폰 카메라로 QR 코드를 스캔합니다.',
+                        '이름을 입력해 본인을 선택합니다. (한 번 등록하면 다음부터 자동)',
+                        '출근하기 / 퇴근하기 버튼을 누르면 끝.',
+                    ],
+                ],
+                'en' => [
+                    'title' => 'Clock In / Clock Out',
+                    'hint' => 'Scan this QR with your phone camera when you enter or leave. No app, no login.',
+                    'steps' => [
+                        'Scan the QR code with your phone camera.',
+                        'Type your name and pick yourself. (Remembered from next time)',
+                        'Tap CLOCK IN or CLOCK OUT. Done.',
+                    ],
+                ],
+                'es' => [
+                    'title' => 'Entrada / Salida',
+                    'hint' => 'Escanee este QR con la cámara de su teléfono al entrar y salir. Sin app ni contraseña.',
+                    'steps' => [
+                        'Escanee el código QR con la cámara.',
+                        'Escriba su nombre y elíjase. (Se recuerda la próxima vez)',
+                        'Pulse ENTRADA o SALIDA. Listo.',
+                    ],
+                ],
+            ],
+            'join' => [
+                'ko' => [
+                    'title' => '작업자 간편 등록',
+                    'hint' => '자사·협력사 모두 이 QR 하나로 등록합니다.',
+                    'steps' => [
+                        '휴대폰 카메라로 QR 코드를 스캔합니다.',
+                        '이름·소속회사·공정·이메일·전화번호를 입력합니다.',
+                        '등록 완료 — 바로 현장 출퇴근을 시작할 수 있습니다.',
+                    ],
+                ],
+                'en' => [
+                    'title' => 'Worker Sign-Up',
+                    'hint' => 'One QR for everyone — our own crew and subcontractors.',
+                    'steps' => [
+                        'Scan the QR code with your phone camera.',
+                        'Enter your name, company, trade, email and phone.',
+                        'Done — you can start clocking in right away.',
+                    ],
+                ],
+                'es' => [
+                    'title' => 'Registro de trabajador',
+                    'hint' => 'Un solo QR para todos: personal propio y subcontratistas.',
+                    'steps' => [
+                        'Escanee el código QR con la cámara.',
+                        'Ingrese su nombre, empresa, oficio, correo y teléfono.',
+                        'Listo — ya puede registrar su entrada.',
+                    ],
+                ],
+            ],
+            'apply' => [
+                'ko' => [
+                    'title' => '입사 지원서',
+                    'hint' => '신분증·경력 등을 포함한 정식 입사지원서입니다.',
+                    'steps' => [
+                        '휴대폰 카메라로 QR 코드를 스캔합니다.',
+                        '인적사항과 서류를 입력하고 제출합니다.',
+                        '관리자 검토 후 등록이 완료됩니다.',
+                    ],
+                ],
+                'en' => [
+                    'title' => 'Employment Application',
+                    'hint' => 'Full application including ID and work history.',
+                    'steps' => [
+                        'Scan the QR code with your phone camera.',
+                        'Fill in your details and upload documents.',
+                        'A manager reviews it and completes your registration.',
+                    ],
+                ],
+                'es' => [
+                    'title' => 'Solicitud de empleo',
+                    'hint' => 'Solicitud completa con identificación e historial laboral.',
+                    'steps' => [
+                        'Escanee el código QR con la cámara.',
+                        'Complete sus datos y suba los documentos.',
+                        'Un supervisor lo revisa y completa su registro.',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * 게이트 포스터의 IN/OUT 태그 — 세 언어를 한 칩에 담는다.
+     *
+     * @return array<int, array{label: string, class: string}>
+     */
+    public static function gateTags(): array
+    {
+        return [
+            ['label' => '출근 · IN · ENTRADA', 'class' => 'in'],
+            ['label' => '퇴근 · OUT · SALIDA', 'class' => 'out'],
+        ];
+    }
+
+    /**
      * 게이트 출퇴근 화면 문구.
      *
      * @return array<string, array<string, string>>

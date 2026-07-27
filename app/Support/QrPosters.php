@@ -37,58 +37,31 @@ final class QrPosters
     /**
      * 포스터 한 장의 렌더 데이터.
      *
-     * @return array{key: string, label: string, title: string, url: string, qrImage: string, hint: string, steps: array<int, string>, badge: ?array{label: string, class: string}, tags: array<int, array{label: string, class: string}>}
+     * 문구는 3개 언어를 모두 담는다 — 벽에 붙는 종이라 언어를 고를 수 없으니 전부 찍는다.
+     *
+     * @return array{key: string, label: string, title: string, url: string, qrImage: string, langs: array<string, array<string, mixed>>, badge: null, tags: array<int, array{label: string, class: string}>}
      */
     public static function make(Site $site, string $key): array
     {
-        $spec = match ($key) {
-            self::GATE => [
-                'title' => '출근 · 퇴근',
-                'url' => route('gate.show', ['site' => $site]),
-                'hint' => '출입할 때 휴대폰 카메라로 이 QR 을 스캔하세요.<br>이름만 선택하면 <b>출근·퇴근이 기록</b>됩니다. (앱 설치·로그인 불필요)',
-                'steps' => [
-                    '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                    '이름을 입력해 본인을 선택합니다.',
-                    '<b>출근하기 / 퇴근하기</b> 버튼을 누르면 끝.',
-                ],
-                'badge' => null,
-                'tags' => [
-                    ['label' => '출근 IN', 'class' => 'in'],
-                    ['label' => '퇴근 OUT', 'class' => 'out'],
-                ],
-            ],
-            self::JOIN => [
-                'title' => '작업자 간편 등록',
-                'url' => route('worker-join.form', ['site' => $site]),
-                'hint' => '<b>자사·협력사 모두 이 QR 하나</b>로 등록합니다.<br>이름·소속회사·공정·이메일·전화만 입력하면 <b>바로 작업자로 등록</b>됩니다.',
-                'steps' => [
-                    '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                    '이름·<b>소속회사</b>·공정·이메일·전화번호를 입력합니다.',
-                    '등록 완료 — 현장 출퇴근을 시작할 수 있습니다.',
-                ],
-                'badge' => null,
-                'tags' => [],
-            ],
-            self::APPLY => [
-                'title' => '입사 지원서',
-                'url' => route('member-registration.site.show', ['site' => $site]),
-                'hint' => '신분증·경력 등을 포함한 <b>정식 입사지원서</b>입니다.<br>휴대폰 카메라로 아래 QR 코드를 스캔하세요.',
-                'steps' => [
-                    '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                    '인적사항·서류를 입력하고 제출합니다.',
-                    '관리자 검토 후 등록이 완료됩니다.',
-                ],
-                'badge' => null,
-                'tags' => [],
-            ],
+        $url = match ($key) {
+            self::GATE => route('gate.show', ['site' => $site]),
+            self::JOIN => route('worker-join.form', ['site' => $site]),
+            self::APPLY => route('member-registration.site.show', ['site' => $site]),
             default => throw new \InvalidArgumentException("Unknown QR poster [{$key}]."),
         };
+
+        $langs = WorkerLang::poster()[$key];
 
         return [
             'key' => $key,
             'label' => self::LABELS[$key],
-            'qrImage' => QrSvg::dataUri($spec['url'], 320),
-            ...$spec,
+            'url' => $url,
+            'qrImage' => QrSvg::dataUri($url, 320),
+            // 브라우저 탭 제목용 — 화면에는 세 언어가 모두 나온다.
+            'title' => $langs[WorkerLang::DEFAULT]['title'],
+            'langs' => $langs,
+            'badge' => null,
+            'tags' => $key === self::GATE ? WorkerLang::gateTags() : [],
         ];
     }
 

@@ -1,21 +1,20 @@
 {{--
-    현장 부착용 QR 포스터 한 장.
+    현장 부착용 QR 포스터 한 장 — 한국어·English·Español 을 함께 찍는다.
+    (벽에 붙는 종이라 언어를 고를 수 없으므로 전부 인쇄한다.)
 
     $site      Site
-    $title     제목 (예: '작업자 간편 등록')
+    $langs     [언어 => ['title' => ..., 'hint' => ..., 'steps' => [...]]]
     $qrImage   data URI
     $url       QR 이 가리키는 주소(수동 입력용으로 함께 인쇄)
-    $hint      안내 문구 (개발자 작성 HTML — 사용자 입력 아님)
-    $steps     번호 목록 (개발자 작성 HTML)
-    $badge     선택: ['label' => '협력사', 'class' => 'type-indirect']
-    $tags      선택: [['label' => '출근 IN', 'class' => 'in'], ...]
+    $tags      선택: [['label' => '출근 · IN · ENTRADA', 'class' => 'in'], ...]
 --}}
+@php($primary = \App\Support\WorkerLang::DEFAULT)
 <main class="sheet">
     <p class="brand">DASOL PRISM</p>
-    <h1>{{ $title }}</h1>
-    @if (! empty($badge))
-        <div class="type {{ $badge['class'] }}">{{ $badge['label'] }}</div>
-    @endif
+    <h1>{{ $langs[$primary]['title'] }}</h1>
+    <p class="alt-titles">
+        @foreach ($langs as $code => $t)@if ($code !== $primary)<span>{{ $t['title'] }}</span>@endif @endforeach
+    </p>
     <p class="site">{{ $site->code }} {{ $site->name }}</p>
     @if ($site->address)<p class="addr">{{ $site->address }}</p>@endif
     @if (! empty($tags))
@@ -23,10 +22,19 @@
             @foreach ($tags as $tag)<span class="tag {{ $tag['class'] }}">{{ $tag['label'] }}</span>@endforeach
         </div>
     @endif
-    <p class="hint">{!! $hint !!}</p>
-    <div><img class="qr" src="{{ $qrImage }}" alt="{{ $title }} QR"></div>
-    <ol class="steps">
-        @foreach ($steps as $step)<li>{!! $step !!}</li>@endforeach
-    </ol>
+    <div><img class="qr" src="{{ $qrImage }}" alt="{{ $langs[$primary]['title'] }} QR"></div>
+
+    <div class="lang-blocks">
+        @foreach ($langs as $code => $t)
+            <section class="lang-block">
+                <p class="lang-chip">{{ \App\Support\WorkerLang::OPTIONS[$code] ?? $code }}</p>
+                <p class="lang-hint">{{ $t['hint'] }}</p>
+                <ol class="steps">
+                    @foreach ($t['steps'] as $step)<li>{{ $step }}</li>@endforeach
+                </ol>
+            </section>
+        @endforeach
+    </div>
+
     <p class="url">{{ $url }}</p>
 </main>

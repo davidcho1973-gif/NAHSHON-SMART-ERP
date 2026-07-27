@@ -46,12 +46,9 @@
                 <p class="page-label">{{ $poster['label'] }}</p>
                 @include('partials.qr-poster', [
                     'site' => $site,
-                    'title' => $poster['title'],
+                    'langs' => $poster['langs'],
                     'qrImage' => $poster['qrImage'],
                     'url' => $poster['url'],
-                    'hint' => $poster['hint'],
-                    'steps' => $poster['steps'],
-                    'badge' => $poster['badge'],
                     'tags' => $poster['tags'],
                 ])
             </section>
