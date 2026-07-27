@@ -61,6 +61,7 @@ class Employee extends Model
         'badge_analyzed_at',
         'badge_analysis_payload',
         'nationality',
+        'preferred_language',
         'role',
         'start_date',
         'employment_status',
@@ -190,6 +191,12 @@ class Employee extends Model
     public function badgeQrTokens(): HasMany
     {
         return $this->hasMany(EmployeeBadgeQrToken::class);
+    }
+
+    /** 기억해 둔 작업자 휴대폰들 — 게이트 QR 을 스캔하면 본인으로 바로 인식된다. */
+    public function devices(): HasMany
+    {
+        return $this->hasMany(WorkerDevice::class);
     }
 
     public function dailyWorkAssignments(): HasMany

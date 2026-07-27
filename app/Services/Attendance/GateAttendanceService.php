@@ -33,7 +33,7 @@ class GateAttendanceService
             ->where('employment_status', 'active');
 
         if ($q !== '') {
-            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
+            $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
             $query->where(fn ($w) => $w->where('name', 'ilike', $like)
                 ->orWhere('first_name', 'ilike', $like)
                 ->orWhere('last_name', 'ilike', $like)
@@ -43,14 +43,14 @@ class GateAttendanceService
         $tz = $site->timezone ?: config('app.timezone');
         $workDate = Carbon::now($tz)->toDateString();
 
-        return $query->orderBy('name')->limit($limit)->get()
+        return $query->with('company:id,name')->orderBy('name')->limit($limit)->get()
             ->map(function (Employee $e) use ($workDate, $tz): array {
                 $last = $this->lastTodayLog($e->id, $workDate);
 
                 return [
                     'id' => $e->id,
-                    'name' => $e->name ?: trim($e->first_name . ' ' . $e->last_name),
-                    'company' => $e->badge_company_name ?: '',
+                    'name' => $e->name ?: trim($e->first_name.' '.$e->last_name),
+                    'company' => $e->company?->name ?: ($e->badge_company_name ?: ''),
                     'role' => $e->role ?: '',
                     'lastEvent' => $last?->event_type,
                     'lastAt' => $last?->event_at?->timezone($tz)->format('H:i'),
@@ -73,7 +73,7 @@ class GateAttendanceService
 
         return [
             'success' => true,
-            'name' => $employee->name ?: trim($employee->first_name . ' ' . $employee->last_name),
+            'name' => $employee->name ?: trim($employee->first_name.' '.$employee->last_name),
             'lastEvent' => $last?->event_type,
             'lastAt' => $last?->event_at?->timezone($tz)->format('H:i'),
             'next' => $next,
@@ -129,7 +129,7 @@ class GateAttendanceService
 
         return [
             'success' => true,
-            'name' => $employee->name ?: trim($employee->first_name . ' ' . $employee->last_name),
+            'name' => $employee->name ?: trim($employee->first_name.' '.$employee->last_name),
             'event' => $event,
             'at' => $now->format('H:i'),
             'withinSite' => $within,

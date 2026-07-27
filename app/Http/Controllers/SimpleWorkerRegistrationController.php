@@ -7,7 +7,9 @@ use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\Site;
 use App\Models\WbsItem;
+use App\Models\WorkerDevice;
 use App\Support\QrPosters;
+use App\Support\WorkerLang;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -46,6 +48,10 @@ class SimpleWorkerRegistrationController extends Controller
             'done' => false,
             // 이미 붙어 있는 예전 QR(?type=direct|indirect) — 회사가 미분류일 때만 쓰이는 보조 값.
             'lockedType' => QrPosters::legacyEmploymentType($request->query('type')),
+            'lang' => WorkerLang::resolve($request->query('lang')),
+            'langOptions' => WorkerLang::OPTIONS,
+            'dict' => WorkerLang::join(),
+            'deviceToken' => null,
         ]);
     }
 
@@ -103,6 +109,7 @@ class SimpleWorkerRegistrationController extends Controller
             'email' => ['required', 'email', 'max:160'],
             'phone' => ['required', 'string', 'max:40'],
             'employment_type' => [$mustAsk ? 'required' : 'nullable', Rule::in(self::ASKABLE_TYPES)],
+            'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
         ], [
             'employment_type.required' => '소속 구분을 선택해 주세요.',
         ]);
@@ -111,6 +118,8 @@ class SimpleWorkerRegistrationController extends Controller
         $type = $company?->employmentType()
             ?? $locked
             ?? $data['employment_type'];
+
+        $lang = WorkerLang::resolve($data['preferred_language'] ?? null);
 
         $parts = preg_split('/\s+/', trim($data['full_name'])) ?: [];
         $firstName = $parts[0] ?? $data['full_name'];
@@ -125,7 +134,7 @@ class SimpleWorkerRegistrationController extends Controller
             'phone' => $data['phone'],
             'role' => $data['role'],
             'trade' => $data['role'],
-            'preferred_language' => 'ko',
+            'preferred_language' => $lang,
             'company_id' => $data['company_id'],
             'site_id' => $site->id,
             'identity_status' => 'pending',
@@ -138,7 +147,10 @@ class SimpleWorkerRegistrationController extends Controller
         ]);
 
         $employee = $registration->syncEmployee();
-        $employee->forceFill(['employment_type' => $type])->save();
+        $employee->forceFill(['employment_type' => $type, 'preferred_language' => $lang])->save();
+
+        // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
+        $deviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
 
         return view('worker-join.form', [
             'site' => $site,
@@ -146,6 +158,10 @@ class SimpleWorkerRegistrationController extends Controller
             'roles' => [],
             'done' => true,
             'lockedType' => null,
+            'lang' => $lang,
+            'langOptions' => WorkerLang::OPTIONS,
+            'dict' => WorkerLang::join(),
+            'deviceToken' => $deviceToken,
             'employmentType' => $employee->employment_type,
             'typeLabel' => $employee->employmentTypeLabel(),
             'employee' => $employee,
