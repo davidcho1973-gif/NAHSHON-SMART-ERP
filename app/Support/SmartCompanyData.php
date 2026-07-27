@@ -99,6 +99,11 @@ class SmartCompanyData
             'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
             'api_getGeofenceSites' => self::getGeofenceSites(),
             'api_finalizeAttendanceNow' => self::finalizeAttendanceNow($args[0] ?? null),
+            // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
+            'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
+                self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),
+                ($args[1] ?? null) ? (string) $args[1] : null
+            ),
             'api_getSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->list((string) ($args[0] ?? $siteId)),
             'api_saveSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->save((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             'api_deleteSiteWifi' => app(\App\Services\Attendance\SiteWifiService::class)->delete((int) ($args[0] ?? 0)),

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>작업자 간편 등록 QR — {{ $site->code }} {{ $site->name }}</title>
+    <title>{{ $typeLabel }} 작업자 간편 등록 QR — {{ $site->code }} {{ $site->name }}</title>
     <style>
         :root { color-scheme: light; font-family: 'Malgun Gothic', Arial, Helvetica, sans-serif; background: #f1f5f9; color: #0f172a; }
         body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; }
@@ -18,6 +18,9 @@
         .url { margin: 22px 0 0; overflow-wrap: anywhere; color: #4f46e5; font-size: .85rem; font-family: monospace; }
         .actions { margin-top: 26px; }
         button { appearance: none; border: 1px solid #4f46e5; background: #4f46e5; color: #fff; border-radius: 10px; padding: 12px 22px; font-weight: 700; font-size: .95rem; cursor: pointer; }
+        .type { display: inline-block; border-radius: 999px; padding: 7px 20px; font-size: 1rem; font-weight: 800; margin: 10px 0 0; }
+        .type-direct { background: #eef2ff; color: #4338ca; }
+        .type-indirect { background: #ecfdf5; color: #047857; }
         @media print { :root, body { background: #fff; } body { min-height: auto; padding: 0; } .sheet { width: auto; border: 0; border-radius: 0; box-shadow: none; padding: 15mm; } .actions { display: none; } }
     </style>
 </head>
@@ -25,9 +28,10 @@
     <main class="sheet">
         <p class="brand">NAHSHON MEP</p>
         <h1>작업자 간편 등록</h1>
+        <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
         <p class="site">{{ $site->code }} {{ $site->name }}</p>
         @if ($site->address)<p class="addr">{{ $site->address }}</p>@endif
-        <p class="hint">휴대폰 카메라로 아래 QR 코드를 스캔하세요.<br>이름·소속회사·공정·이메일·전화만 입력하면 <b>바로 작업자로 등록</b>됩니다.</p>
+        <p class="hint">{{ $typeHint }}입니다.<br>휴대폰 카메라로 아래 QR 코드를 스캔하세요.<br>이름·소속회사·공정·이메일·전화만 입력하면 <b>바로 작업자로 등록</b>됩니다.</p>
         <div><img class="qr" src="{{ $qrImage }}" alt="작업자 등록 QR"></div>
         <ol class="steps">
             <li>휴대폰 카메라로 QR 코드를 스캔합니다.</li>

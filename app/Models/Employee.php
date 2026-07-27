@@ -13,6 +13,36 @@ class Employee extends Model
 {
     use HasFactory;
 
+    /** 직접고용 — 우리 회사가 시급 지급. 시간 관리가 핵심(퇴근 자동마감 금지). */
+    public const TYPE_DIRECT = 'direct';
+
+    /** 간접고용 — 하청업체 직원. 출역 인원이 핵심(퇴근 누락 시 16:00 자동마감). */
+    public const TYPE_INDIRECT = 'indirect';
+
+    /** 관리직(현장/시스템 관리자). */
+    public const TYPE_STAFF = 'staff';
+
+    /** 원청 담당자 — 출퇴근 대상 아님. */
+    public const TYPE_CLIENT = 'client';
+
+    public const EMPLOYMENT_TYPES = [
+        self::TYPE_DIRECT => '직접고용 (시급)',
+        self::TYPE_INDIRECT => '간접고용 (협력사)',
+        self::TYPE_STAFF => '관리직',
+        self::TYPE_CLIENT => '원청',
+    ];
+
+    public function employmentTypeLabel(): string
+    {
+        return self::EMPLOYMENT_TYPES[$this->employment_type] ?? (string) $this->employment_type;
+    }
+
+    /** 시급 계산 대상인가(퇴근 시각이 임금에 직결되는가). */
+    public function isHourly(): bool
+    {
+        return $this->employment_type === self::TYPE_DIRECT;
+    }
+
     protected $fillable = [
         'company_id',
         'site_id',
@@ -34,6 +64,7 @@ class Employee extends Model
         'role',
         'start_date',
         'employment_status',
+        'employment_type',
         'visa_expires_on',
         'safety_training_expires_on',
         'attendance_app_role',
@@ -73,7 +104,7 @@ class Employee extends Model
 
                 $employee->name = $fullName !== ''
                     ? $fullName
-                    : 'Employee ' . $employee->employee_number;
+                    : 'Employee '.$employee->employee_number;
             }
 
             if (blank($employee->start_date) && filled($employee->badge_issued_on)) {
@@ -112,7 +143,7 @@ class Employee extends Model
     private static function makeEmployeeNumber(): string
     {
         do {
-            $employeeNumber = 'EMP-' . now()->format('ymd') . '-' . Str::upper(Str::random(5));
+            $employeeNumber = 'EMP-'.now()->format('ymd').'-'.Str::upper(Str::random(5));
         } while (self::query()->where('employee_number', $employeeNumber)->exists());
 
         return $employeeNumber;

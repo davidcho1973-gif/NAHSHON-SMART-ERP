@@ -4022,9 +4022,10 @@
           return;
         }
         body.innerHTML =
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. QR은 <b>직접고용</b>(우리 회사 시급)과 <b>협력사</b>(하청 출역 인원) 2종이며, 스캔한 QR에 따라 고용 형태가 자동 지정됩니다. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
           sites.map(function (s) {
-            var quickPoster = '/join/w/' + s.id + '/qr';
+            var quickDirect = '/join/w/' + s.id + '/qr?type=direct';
+            var quickIndirect = '/join/w/' + s.id + '/qr?type=indirect';
             var quickForm = window.location.origin + '/join/w/' + s.id;
             var fullPoster = '/member/site/' + s.id + '/apply/qr';
             return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
@@ -4032,7 +4033,8 @@
               '<div style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(quickForm) + '</div></div>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
-              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickPoster + '\',\'_blank\')"><i class="ph ph-qr-code"></i> 간편등록 QR</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickDirect + '\',\'_blank\')" title="우리 회사 소속(시급) 작업자 등록 QR"><i class="ph ph-qr-code"></i> 직접고용 QR</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#047857;border-color:#047857" onclick="window.open(\'' + quickIndirect + '\',\'_blank\')" title="하청업체 소속 작업자 등록 QR"><i class="ph ph-qr-code"></i> 협력사 QR</button>' +
               '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#059669;border-color:#059669" onclick="window.open(\'/gate/' + s.id + '/qr\',\'_blank\')" title="출입구 부착용 출퇴근 QR(앱 불필요)"><i class="ph ph-sign-in"></i> 게이트 출퇴근 QR</button>' +
               '</div>';
           }).join('');
@@ -4043,6 +4045,107 @@
             if (btn) { var o = btn.innerHTML; btn.innerHTML = '<i class="ph ph-check"></i> 복사됨'; setTimeout(function () { btn.innerHTML = o; }, 1500); }
           });
         }
+      };
+
+      // 오늘 출역 현황 — 직접고용은 '몇 시간', 협력사는 '몇 명' 관점으로 나눠 본다.
+      window.openDailyHeadcountModal = async function () {
+        var host = document.getElementById('headcount-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'headcount-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:760px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-users-three"></i> 오늘 출역 현황</div><button id="hc-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" style="overflow-y:auto">' +
+          '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">' +
+          '<select id="hc-site" class="wbs-edit-field" style="max-width:260px"><option value="">전체 현장</option></select>' +
+          '<input id="hc-date" type="date" class="wbs-edit-field" style="max-width:170px">' +
+          '<button class="btn-secondary" style="padding:6px 12px;font-size:12px" id="hc-reload"><i class="ph ph-arrow-clockwise"></i> 새로고침</button>' +
+          '</div><div id="hc-body"><div style="color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div>' +
+          '</div></div></div>';
+        host.querySelector('#hc-close').addEventListener('click', function () { host.innerHTML = ''; });
+
+        var sel = host.querySelector('#hc-site');
+        var sites = [];
+        try { sites = await gsRun('api_getSiteList', [], []); } catch (e) { /* ignore */ }
+        (sites || []).forEach(function (s) {
+          var o = document.createElement('option'); o.value = s.id; o.textContent = s.code + ' · ' + s.name; sel.appendChild(o);
+        });
+        sel.addEventListener('change', function () { window.hcLoad(); });
+        host.querySelector('#hc-date').addEventListener('change', function () { window.hcLoad(); });
+        host.querySelector('#hc-reload').addEventListener('click', function () { window.hcLoad(true); });
+        window.hcLoad();
+      };
+
+      window.hcLoad = async function (fresh) {
+        var host = document.getElementById('headcount-modal-root');
+        if (!host) return;
+        var body = host.querySelector('#hc-body');
+        var siteId = host.querySelector('#hc-site').value || '';
+        var date = host.querySelector('#hc-date').value || '';
+        if (!body) return;
+        if (fresh && window.apiCache) { delete window.apiCache['api_getDailyHeadcount'+ JSON.stringify([siteId, date])]; }
+        body.innerHTML = '<div style="color:var(--text-tertiary);font-size:13px">불러오는 중…</div>';
+        var d = null;
+        try { d = await gsRun('api_getDailyHeadcount', [siteId, date], null); } catch (e) { /* ignore */ }
+        if (!d) { body.innerHTML = '<div style="color:var(--status-danger);font-size:13px">출역 현황을 불러오지 못했습니다.</div>'; return; }
+        host.querySelector('#hc-date').value = d.date || '';
+
+        var kpi =
+          '<div class="kpi-row" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">' +
+          '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">직접고용 (시급)</div>' +
+            '<div class="kpi-value" style="font-size:22px;color:#4338ca;line-height:1.1">' + (d.direct.count || 0) + '명</div>' +
+            '<div class="kpi-meta" style="font-size:9.5px;color:var(--text-secondary)">총 ' + (d.direct.workedHours || 0) + 'h · 평균 ' + (d.direct.avgHours || 0) + 'h</div></div>' +
+          '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">협력사 (간접고용)</div>' +
+            '<div class="kpi-value" style="font-size:22px;color:#047857;line-height:1.1">' + (d.indirect.count || 0) + '명</div>' +
+            '<div class="kpi-meta" style="font-size:9.5px;color:var(--text-secondary)">퇴근 미기록 ' + (d.indirect.open || 0) + '명 · 16:00 자동마감</div></div>' +
+          '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">퇴근 미기록 (직접고용)</div>' +
+            '<div class="kpi-value" style="font-size:22px;color:' + ((d.direct.open || 0) > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + (d.direct.open || 0) + '명</div>' +
+            '<div class="kpi-meta" style="font-size:9.5px;color:var(--text-secondary)">자동마감 안 함 — 확인 필요</div></div>' +
+          '</div>';
+
+        var comp = (d.companies || []).map(function (c) {
+          var color = c.type === 'indirect' ? '#047857' : '#4338ca';
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:7px 0;font-size:12px">' + dashEsc(c.company) + '</td>' +
+            '<td style="padding:7px 0"><span style="color:' + color + ';font-size:11px;font-weight:700">' + dashEsc(c.typeLabel) + '</span></td>' +
+            '<td style="padding:7px 0;text-align:right;font-size:13px;font-weight:700">' + c.count + '명</td>' +
+            '<td style="padding:7px 0;text-align:right;font-size:12px;color:var(--text-secondary)">' + (c.type === 'indirect' ? '—' : c.hours + 'h') + '</td>' +
+            '<td style="padding:7px 0;text-align:right;font-size:12px;color:' + (c.open > 0 ? 'var(--status-danger)' : 'var(--text-tertiary)') + '">' + c.open + '</td>' +
+            '</tr>';
+        }).join('');
+
+        var rows = (d.workers || []).map(function (w) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:6px 0;font-size:12px">' + dashEsc(w.name) + '</td>' +
+            '<td style="padding:6px 0;font-size:11.5px;color:var(--text-secondary)">' + dashEsc(w.company) + '</td>' +
+            '<td style="padding:6px 0;font-size:11.5px;color:var(--text-secondary)">' + dashEsc(w.trade || '') + '</td>' +
+            '<td style="padding:6px 0;font-size:11.5px;color:' + (w.type === 'indirect' ? '#047857' : '#4338ca') + ';font-weight:700">' + dashEsc(w.typeLabel) + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12px">' + (w.in || '—') + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12px">' + (w.out || (w.open ? '재실' : '—')) + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700">' + (w.type === 'indirect' ? '—' : w.hours + 'h') + '</td>' +
+            '</tr>';
+        }).join('');
+
+        body.innerHTML = kpi +
+          '<div style="font-size:12.5px;font-weight:700;margin:4px 0 6px">업체별 출역</div>' +
+          (comp ? '<table style="width:100%;border-collapse:collapse;margin-bottom:16px"><thead><tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary);padding-bottom:5px">업체</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">고용형태</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">인원</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">근무시간</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">미퇴근</th>' +
+            '</tr></thead><tbody>' + comp + '</tbody></table>'
+            : '<div style="color:var(--text-tertiary);font-size:12px;margin-bottom:16px">오늘 출근 기록이 없습니다.</div>') +
+          '<div style="font-size:12.5px;font-weight:700;margin:4px 0 6px">인원 상세</div>' +
+          (rows ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary);padding-bottom:5px">이름</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">소속</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">공정</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">형태</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">출근</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">퇴근</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">시간</th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table>' : '');
       };
 
       // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반.
@@ -4218,7 +4321,7 @@
               '<div class="header-section"><div>' +
               '<h1 class="page-title">ðŸŒ í†µí•© í˜„í™© â€” ì „ì²´ í˜„ìž¥</h1>' +
               '<p class="page-subtitle">ëª¨ë“  ì—°ë™ í˜„ìž¥ì˜ ì¶œí‡´ê·¼ ë°ì´í„°ë¥¼ í†µí•© ì§‘ê³„í•©ë‹ˆë‹¤ (' + attendance.date + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
               // ì „ì²´ KPI
               '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
               '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì¶œê·¼ ì¸ì› <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
@@ -4540,7 +4643,7 @@
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
               '<p class="page-subtitle">NAHSHON MEP ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +

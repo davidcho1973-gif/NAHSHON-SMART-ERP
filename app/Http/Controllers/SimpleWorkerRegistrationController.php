@@ -19,26 +19,48 @@ use Illuminate\View\View;
  */
 class SimpleWorkerRegistrationController extends Controller
 {
-    /** 인쇄용 QR 포스터 — 스캔하면 간편 등록 폼이 열린다. */
-    public function qr(Site $site): View
+    /** 고용 형태별 안내 문구 — 포스터·폼에서 함께 쓴다. */
+    private const TYPE_META = [
+        Employee::TYPE_DIRECT => ['label' => '직접고용', 'hint' => '우리 회사 소속(시급) 작업자용'],
+        Employee::TYPE_INDIRECT => ['label' => '협력사', 'hint' => '하청업체 소속 작업자용'],
+    ];
+
+    /** 요청의 고용 형태를 결정한다(기본: 직접고용). */
+    private function resolveType(Request $request): string
     {
-        $formUrl = route('worker-join.form', ['site' => $site]);
+        $t = (string) $request->query('type', $request->input('employment_type', ''));
+
+        return $t === Employee::TYPE_INDIRECT ? Employee::TYPE_INDIRECT : Employee::TYPE_DIRECT;
+    }
+
+    /** 인쇄용 QR 포스터 — 스캔하면 간편 등록 폼이 열린다. (직접/협력사 2종) */
+    public function qr(Request $request, Site $site): View
+    {
+        $type = $this->resolveType($request);
+        $formUrl = route('worker-join.form', ['site' => $site, 'type' => $type]);
 
         return view('worker-join.qr', [
             'site' => $site,
             'formUrl' => $formUrl,
             'qrImage' => QrSvg::dataUri($formUrl, 320),
+            'employmentType' => $type,
+            'typeLabel' => self::TYPE_META[$type]['label'],
+            'typeHint' => self::TYPE_META[$type]['hint'],
         ]);
     }
 
     /** 간편 등록 폼(모바일). */
-    public function form(Site $site): View
+    public function form(Request $request, Site $site): View
     {
+        $type = $this->resolveType($request);
+
         return view('worker-join.form', [
             'site' => $site,
             'companies' => Company::query()->where('status', 'active')->orderBy('name')->get(['id', 'name']),
             'roles' => $this->tradeOptions($site),
             'done' => false,
+            'employmentType' => $type,
+            'typeLabel' => self::TYPE_META[$type]['label'],
         ]);
     }
 
@@ -100,11 +122,16 @@ class SimpleWorkerRegistrationController extends Controller
 
         $employee = $registration->syncEmployee();
 
+        // 고용 형태는 QR 에 박혀 온다 — 직접고용(시급 관리) / 협력사(출역 인원 관리).
+        $employee->forceFill(['employment_type' => $this->resolveType($request)])->save();
+
         return view('worker-join.form', [
             'site' => $site,
             'companies' => collect(),
             'roles' => [],
             'done' => true,
+            'employmentType' => $employee->employment_type,
+            'typeLabel' => self::TYPE_META[$employee->employment_type]['label'] ?? '',
             'employee' => $employee,
             'workerName' => $data['full_name'],
         ]);

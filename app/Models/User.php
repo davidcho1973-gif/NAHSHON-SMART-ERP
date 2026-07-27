@@ -7,9 +7,9 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -45,8 +45,23 @@ class User extends Authenticatable implements FilamentUser
         'foreman' => 'Foreman / Supervisor',
         'vendor_admin' => 'Vendor Admin',
         'worker' => 'Worker / Member',
+        'client' => 'Client / GC (원청)',
         'viewer' => 'Viewer',
     ];
+
+    /**
+     * 열람 전용 역할 — 원청(발주처)과 뷰어. 현황은 보되 어떤 데이터도 바꿀 수 없다.
+     */
+    public const READ_ONLY_ROLES = [
+        'client',
+        'viewer',
+    ];
+
+    /** 이 계정이 데이터를 바꿀 수 있는가. */
+    public function isReadOnly(): bool
+    {
+        return in_array($this->access_role, self::READ_ONLY_ROLES, true);
+    }
 
     public const SCOPE_OPTIONS = [
         'self' => 'Self only',
