@@ -5,11 +5,12 @@ namespace Tests\Feature;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\QrPosters;
+use App\Support\WorkerLang;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * 현장 QR 모아 인쇄 — 포스터 4종을 한 화면에서 골라 A4 한 장씩 출력한다.
+ * 현장 QR 모아 인쇄 — 포스터를 한 화면에서 골라 A4 한 장씩 출력한다(한 장에 3개 언어).
  */
 class QrPrintSheetTest extends TestCase
 {
@@ -85,6 +86,34 @@ class QrPrintSheetTest extends TestCase
 
         $res->assertStatus(200);
         $this->assertSame(count(QrPosters::ORDER), substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
+    }
+
+    public function test_every_poster_prints_all_three_languages(): void
+    {
+        $site = $this->site();
+
+        $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id);
+
+        $res->assertStatus(200);
+        foreach (QrPosters::ORDER as $key) {
+            foreach (WorkerLang::poster()[$key] as $code => $t) {
+                // 벽에 붙는 종이라 언어를 고를 수 없다 — 세 언어가 모두 찍혀야 한다.
+                $res->assertSee($t['hint']);
+                $res->assertSee($t['steps'][0]);
+                $res->assertSee(WorkerLang::OPTIONS[$code]);
+            }
+        }
+    }
+
+    public function test_gate_poster_tags_carry_all_three_languages(): void
+    {
+        $site = $this->site();
+
+        $res = $this->get('/gate/'.$site->id.'/qr');
+
+        $res->assertStatus(200);
+        $res->assertSee('출근 · IN · ENTRADA');
+        $res->assertSee('퇴근 · OUT · SALIDA');
     }
 
     public function test_poster_definitions_are_shared_with_single_posters(): void

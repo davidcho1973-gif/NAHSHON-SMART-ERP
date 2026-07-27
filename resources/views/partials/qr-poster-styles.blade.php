@@ -7,9 +7,16 @@
     h1 { margin: 0; font-size: 2.1rem; line-height: 1.15; }
     .site { margin: 14px 0 2px; font-size: 1.35rem; font-weight: 800; }
     .addr { margin: 0; color: #64748b; font-size: .98rem; }
-    .hint { margin: 14px auto 20px; color: #475569; line-height: 1.6; font-size: 1.02rem; max-width: 460px; }
-    .qr { width: min(78vw, 300px); height: min(78vw, 300px); border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; background: #fff; }
-    .steps { text-align: left; max-width: 440px; margin: 22px auto 0; color: #334155; line-height: 1.75; font-size: .98rem; padding-left: 20px; }
+        .qr { width: min(78vw, 300px); height: min(78vw, 300px); border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; background: #fff; }
+    .alt-titles { margin: 4px 0 0; color: #64748b; font-size: 1.02rem; font-weight: 700; }
+    .alt-titles span { white-space: nowrap; }
+    .alt-titles span + span::before { content: ' · '; color: #cbd5e1; }
+    .lang-blocks { margin: 22px auto 0; max-width: 460px; text-align: left; }
+    .lang-block { padding: 12px 0; border-top: 1px solid #e2e8f0; }
+    .lang-block:first-child { border-top: 0; padding-top: 4px; }
+    .lang-chip { display: inline-block; margin: 0 0 6px; padding: 3px 10px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-size: .72rem; font-weight: 800; letter-spacing: .04em; }
+    .lang-hint { margin: 0 0 6px; color: #475569; font-size: .9rem; line-height: 1.5; }
+    .steps { text-align: left; margin: 0; color: #334155; line-height: 1.6; font-size: .88rem; padding-left: 18px; }
     .big-in-out { display: flex; gap: 10px; justify-content: center; margin: 18px 0 0; }
     .tag { padding: 8px 16px; border-radius: 999px; font-weight: 800; font-size: .95rem; }
     .tag.in { background: #dcfce7; color: #059669; }
@@ -20,5 +27,21 @@
     .url { margin: 20px 0 0; overflow-wrap: anywhere; color: #4f46e5; font-size: .85rem; font-family: monospace; }
     .actions { margin-top: 26px; }
     button { appearance: none; border: 1px solid #4f46e5; background: #4f46e5; color: #fff; border-radius: 10px; padding: 12px 22px; font-weight: 700; font-size: .95rem; cursor: pointer; }
-    @media print { :root, body { background: #fff; } body { min-height: auto; padding: 0; } .sheet { width: auto; border: 0; border-radius: 0; box-shadow: none; padding: 15mm; } .actions, .no-print { display: none !important; } }
+    /* 인쇄: 3개 언어를 넣어도 포스터 한 장이 A4 한 페이지를 넘지 않게 죈다. */
+    @media print {
+        :root, body { background: #fff; }
+        body { min-height: auto; padding: 0; }
+        .sheet { width: auto; border: 0; border-radius: 0; box-shadow: none; padding: 10mm 12mm; }
+        .actions, .no-print { display: none !important; }
+        h1 { font-size: 1.85rem; }
+        .alt-titles { font-size: .95rem; }
+        .site { margin: 8px 0 2px; font-size: 1.2rem; }
+        .big-in-out { margin-top: 10px; }
+        .qr { width: 62mm; height: 62mm; padding: 8px; }
+        .lang-blocks { margin-top: 12px; max-width: none; }
+        .lang-block { padding: 7px 0; }
+        .lang-hint { font-size: .82rem; margin-bottom: 4px; }
+        .steps { font-size: .8rem; line-height: 1.45; }
+        .url { margin-top: 10px; font-size: .75rem; }
+    }
 </style>
