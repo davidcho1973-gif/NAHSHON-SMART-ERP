@@ -30,7 +30,12 @@ class OpsIntakeService
     /** 이 값 미만이면 사람에게 되물어야 하는 제안으로 본다. */
     public const LOW_CONFIDENCE = 60;
 
-    private const CATEGORIES = ['progress', 'plan', 'procurement', 'labor', 'expense', 'issue', 'noise'];
+    private const CATEGORIES = [
+        'progress', 'plan', 'procurement', 'labor', 'expense', 'issue',
+        // 공정·자재·인원 어디에도 안 들어가는 것들 — 액션 아이템으로 간다.
+        'request', 'approval', 'decision', 'todo',
+        'noise',
+    ];
 
     public function __construct(
         private readonly OpsIntakeAnalyzer $analyzer,
@@ -194,6 +199,7 @@ class OpsIntakeService
 
             $saved = [];
             $autoLabor = 0;
+            $autoAction = 0;
             foreach ($raw as $r) {
                 $item = $this->persist($r, $site, $batch->created_by_id, $batch->source, $batch->communication_message_id, $validCodes, $validPos, $text, $batch->id);
                 if ($item === null) {
@@ -201,7 +207,9 @@ class OpsIntakeService
                 }
                 $saved[] = $item;
                 // 3단계: 인원 보고처럼 바로 반영해도 되는 것은 여기서 즉시 모듈로 보낸다.
-                $autoLabor += $this->modules->autoRoute($batch, $item)['labor'];
+                $routed = $this->modules->autoRoute($batch, $item);
+                $autoLabor += $routed['labor'];
+                $autoAction += $routed['action'];
             }
 
             $items = collect($saved);
@@ -213,7 +221,7 @@ class OpsIntakeService
                 'error' => null,
                 'analyzed_at' => now(),
                 'photo_kinds' => $photoKinds ?: null,
-                'auto_applied' => $autoLabor,
+                'auto_applied' => $autoLabor + $autoAction,
             ]);
 
             $this->discardPhotos($batch, $photoKinds);

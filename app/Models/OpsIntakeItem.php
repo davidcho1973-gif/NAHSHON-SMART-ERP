@@ -18,8 +18,15 @@ class OpsIntakeItem extends Model
         'labor' => '인력·출역',
         'expense' => '지출·영수증',
         'issue' => '이슈·안전',
+        'request' => '지시·요청',
+        'approval' => '승인',
+        'decision' => '의사결정',
+        'todo' => '준비·조치',
         'noise' => '잡담',
     ];
+
+    /** 공정·자재·인원 어디에도 안 들어가고 액션 아이템으로 가는 분류. */
+    public const ACTION_CATEGORIES = ['request', 'approval', 'decision', 'todo'];
 
     protected $fillable = [
         'site_id', 'ops_intake_batch_id', 'project_code', 'source', 'communication_message_id', 'created_by_id',
