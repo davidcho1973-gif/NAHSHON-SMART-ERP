@@ -4,8 +4,10 @@ namespace App\Services\Ops;
 
 use App\Models\Company;
 use App\Models\MobileExpense;
+use App\Models\OpsActionItem;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
+use App\Models\OpsIntakeItem as Item;
 use App\Models\OpsLaborReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -29,15 +31,17 @@ class OpsModuleRouter
      * 인원 보고를 여기 두는 이유: 이 현장의 목적이 "오늘 몇 명 나왔나" 를 바로 아는 것이고,
      * 보고 인원은 근태(급여 근거)와 분리된 별도 값이라 틀려도 지우면 그만이다.
      *
-     * @return array{labor: int, expense: int}
+     * @return array{labor: int, expense: int, action: int}
      */
     public function autoRoute(OpsIntakeBatch $batch, OpsIntakeItem $item): array
     {
-        $done = ['labor' => 0, 'expense' => 0];
+        $done = ['labor' => 0, 'expense' => 0, 'action' => 0];
 
         try {
             if ($item->category === 'labor') {
                 $done['labor'] = $this->recordLabor($batch, $item) ? 1 : 0;
+            } elseif (in_array($item->category, Item::ACTION_CATEGORIES, true)) {
+                $done['action'] = $this->recordAction($batch, $item) ? 1 : 0;
             }
         } catch (\Throwable $e) {
             report($e);
@@ -57,8 +61,18 @@ class OpsModuleRouter
     {
         $proposed = (array) ($item->proposed ?? []);
         $headcount = (int) ($proposed['headcount'] ?? 0);
+
         if ($headcount < 1) {
-            return false;   // 인원수를 못 읽었으면 보고로 세지 않는다(추측 금지).
+            // 인원수를 못 읽었어도 **버리지 않는다** — 인원 보고가 사라지는 게 가장 나쁘다.
+            // ("플러밍팀 도착", "12시에 인원 충원됩니다" 처럼 수가 없는 보고가 실제로 많다.)
+            // 되물음으로 남겨 두면 관리자가 한 번 답하고 바로 반영된다.
+            $who = trim((string) ($proposed['company'] ?? '')) ?: '해당 업체';
+            $item->update([
+                'status' => 'needs_input',
+                'question' => $item->question ?: ($who.' 몇 명 나오셨나요?'),
+            ]);
+
+            return false;
         }
 
         $label = trim((string) ($proposed['company'] ?? ''));
@@ -86,6 +100,56 @@ class OpsModuleRouter
         );
 
         $item->update(['status' => 'applied', 'applied_at' => now(), 'result_note' => '인원 보고 반영']);
+
+        return true;
+    }
+
+    /**
+     * 공정·자재·인원 어디에도 안 들어가는 것을 액션 아이템으로 남긴다.
+     *
+     * 원청 지시("화기작업 승인 받으세요"), 승인 요청("연장작업 신청합니다"), 의사결정
+     * ("29,000불 네고할까요?"), 준비물("보안경 2-3 bag") — 전부 여기로 온다.
+     * 이걸 버리면 다음날 준비가 무너진다.
+     */
+    private function recordAction(OpsIntakeBatch $batch, OpsIntakeItem $item): bool
+    {
+        $proposed = (array) ($item->proposed ?? []);
+        $title = trim((string) ($proposed['title'] ?? '')) ?: trim((string) $item->summary);
+        if ($title === '') {
+            return false;
+        }
+
+        $occurred = $item->occurred_on
+            ? Carbon::parse($item->occurred_on)->toDateString()
+            : Carbon::parse($batch->created_at)->toDateString();
+
+        $due = trim((string) ($proposed['due_on'] ?? ''));
+        $due = $due !== '' ? Carbon::parse($due)->toDateString() : null;
+
+        // 승인이 이미 떨어진 건은 완료로 들어온다 — 할 일 목록을 깨끗하게 유지하기 위해서다.
+        $approved = $item->category === 'approval' && ($proposed['approved'] ?? false) === true;
+
+        OpsActionItem::create([
+            'site_id' => $batch->site_id,
+            'ops_intake_batch_id' => $batch->id,
+            'ops_intake_item_id' => $item->id,
+            'kind' => $item->category,
+            'title' => mb_substr($title, 0, 255),
+            'detail' => $item->raw_text,
+            'requester' => trim((string) ($proposed['requester'] ?? '')) ?: $item->speaker,
+            'assignee' => trim((string) ($proposed['assignee'] ?? '')) ?: null,
+            'due_on' => $due,
+            'occurred_on' => $occurred,
+            'is_blocker' => (bool) ($proposed['is_blocker'] ?? false),
+            'status' => $approved ? 'done' : 'open',
+            'done_at' => $approved ? now() : null,
+        ]);
+
+        $item->update([
+            'status' => 'applied',
+            'applied_at' => now(),
+            'result_note' => '액션 아이템 등록'.($approved ? ' (승인 완료)' : ''),
+        ]);
 
         return true;
     }

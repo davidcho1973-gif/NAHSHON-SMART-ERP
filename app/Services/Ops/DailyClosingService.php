@@ -26,6 +26,7 @@ class DailyClosingService
     public function __construct(
         private readonly OcrEngine $engine,
         private readonly DailyHeadcountService $headcount,
+        private readonly OpsActionService $actions,
     ) {}
 
     /**
@@ -152,6 +153,37 @@ class DailyClosingService
                 'amount' => (float) (($i->proposed['amount'] ?? 0)),
                 'status' => $i->status,
             ])->values()->all(),
+            // 공정·자재·인원 어디에도 안 들어가는 것들 — 원청 지시·승인·의사결정·준비물.
+            // 이게 곧 "오늘 한 일 / 내일 할 일" 이다.
+            'actions' => $this->actionSummary($siteId, $date),
+        ];
+    }
+
+    /**
+     * 액션 아이템 요약 — 오늘 처리한 것, 내일 할 것, 늦은 것, 막힌 것.
+     *
+     * @return array<string, mixed>
+     */
+    private function actionSummary(?int $siteId, string $date): array
+    {
+        $board = $this->actions->board($siteId, $date);
+
+        $strip = fn (array $rows): array => array_map(fn (array $r): array => [
+            'title' => $r['title'],
+            'kind' => $r['kindLabel'],
+            'requester' => $r['requester'],
+            'assignee' => $r['assignee'],
+            'dueOn' => $r['dueOn'],
+            'isBlocker' => $r['isBlocker'],
+        ], $rows);
+
+        return [
+            'doneToday' => $strip($board['doneToday']),
+            'tomorrow' => $strip($board['tomorrow']),
+            'overdue' => $strip($board['overdue']),
+            'blockers' => $strip($board['blockers']),
+            'undated' => $strip($board['undated']),
+            'openTotal' => $board['openTotal'],
         ];
     }
 
@@ -180,10 +212,17 @@ class DailyClosingService
    - gap > 0 : 보고보다 QR 기록이 적음 → 미등록 인원이거나 QR 미스캔
    - gap < 0 : QR 기록이 보고보다 많음 → 보고 누락
 3. 오늘 올라온 내용이 거의 없으면(batches 0~1) 억지로 길게 쓰지 말고 그렇다고 쓰세요.
+3-1. `actions` 는 공정·자재·인원 어디에도 안 들어가는 실무 항목입니다(원청 지시, 승인,
+   의사결정, 준비물). **여기 있는 내용을 반드시 보고서에 반영하세요.**
+   - `actions.doneToday`  → done 배열(오늘 한 일)에 넣으세요
+   - `actions.tomorrow` + `actions.undated` → tomorrow(내일 할 일)에 넣으세요
+   - `actions.blockers` 와 `actions.overdue` → attention(오늘 안에 확인) **최상단**에 넣으세요.
+     막힘 항목은 이게 안 되면 다른 작업이 멈추므로 가장 먼저 써야 합니다.
 4. 톤: 사실 위주, 담백하게. 과장·미사여구 금지. 각 항목은 한국어로.
 
 ## 반환 항목
 - headline    : 오늘 하루를 한 문장으로(예: "협력사 3개사 14명 출역, 3층 트레이 포설 60% 도달")
+- done        : 문자열 배열. **오늘 한 일** — 진도·자재·승인·처리한 지시를 항목별로. 없으면 빈 배열
 - summary     : 3~5문장 총평. 인원·진도·자재를 아우를 것
 - laborNote   : 인원에 대한 한 문단. gap 이 있으면 반드시 언급
 - progressNote: 공정 진행에 대한 한 문단. 없으면 "보고된 진도 없음"
@@ -196,6 +235,7 @@ PROMPT;
             'type' => 'object',
             'properties' => [
                 'headline' => ['type' => 'string'],
+                'done' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'summary' => ['type' => 'string'],
                 'laborNote' => ['type' => 'string'],
                 'progressNote' => ['type' => 'string'],
@@ -217,6 +257,7 @@ PROMPT;
             // AI 가 실패해도 보고서는 남아야 한다 — 숫자만으로도 마감은 성립한다.
             return [
                 'headline' => '자동 요약을 생성하지 못했습니다(집계는 정상).',
+                'done' => [],
                 'summary' => '',
                 'laborNote' => '',
                 'progressNote' => '',

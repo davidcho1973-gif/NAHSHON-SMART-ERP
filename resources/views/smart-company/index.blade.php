@@ -9045,6 +9045,10 @@
           '<div id="ops-digest"></div>' +
           '<div id="ops-result"></div>' +
           '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-check-square-offset"></i> 오늘 한 일 · 내일 할 일 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">지시·승인·준비물</span></div>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddAction()"><i class="ph ph-plus"></i> 직접 추가</button>' +
+          '</div><div class="panel-body" id="ops-actions" style="padding:0"></div></div>' +
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-users-three"></i> 오늘 출역 인원 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">보고 vs 게이트 QR</span></div>' +
           '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddLabor()"><i class="ph ph-plus"></i> 직접 입력</button>' +
           '</div><div class="panel-body" id="ops-labor" style="padding:0"></div></div>' +
@@ -9067,6 +9071,7 @@
         window.opsLoadDigest();
         window.opsLoadBatches();
         window.opsLoadLabor();
+        window.opsLoadActions();
       }
 
       // 사진은 원본 파일 그대로 들고 있다가 한 장씩 업로드한다.
@@ -9105,6 +9110,79 @@
       }
       window.opsRemovePhoto = function (i) { (window._opsFiles || []).splice(i, 1); opsRenderPhotoStrip(); };
 
+      // ── 오늘 한 일 · 내일 할 일
+      // 공정·자재·인원 어디에도 안 들어가는 것들(원청 지시, 승인, 의사결정, 준비물)이 여기 모인다.
+      // 이걸 버리면 다음날 준비가 무너진다 — 실제 현장 대화의 절반이 이것들이다.
+      var OPS_KIND_COLOR = { request: '#f59e0b', approval: '#22c55e', decision: '#a855f7', todo: 'var(--brand-primary)', info: 'var(--text-tertiary)' };
+
+      window.opsLoadActions = async function () {
+        var host = document.getElementById('ops-actions');
+        if (!host) return;
+        if (window.apiCache) delete window.apiCache['api_getOpsActions[]'];
+        var d = await gsRun('api_getOpsActions', [], null);
+        if (!d || !d.success) { host.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">불러오지 못했습니다.</div>'; return; }
+
+        function row(a, done) {
+          var color = OPS_KIND_COLOR[a.kind] || 'var(--text-tertiary)';
+          return '<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 18px;border-bottom:1px solid var(--border-subtle)">' +
+            '<input type="checkbox"' + (done ? ' checked' : '') + ' onchange="window.opsToggleAction(' + a.id + ')" style="width:16px;height:16px;margin-top:2px;accent-color:#22c55e;cursor:pointer">' +
+            '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12.5px;color:var(--text-primary);' + (done ? 'text-decoration:line-through;opacity:.6' : '') + '">' +
+              (a.isBlocker ? '<span style="color:var(--status-danger);font-weight:800">🔴 막힘 · </span>' : '') +
+              opsEsc(a.title) + '</div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' +
+              '<span style="color:' + color + ';font-weight:700">' + opsEsc(a.kindLabel) + '</span>' +
+              (a.requester ? ' · 요청 ' + opsEsc(a.requester) : '') +
+              (a.assignee ? ' · 담당 ' + opsEsc(a.assignee) : '') +
+              (a.dueOn ? ' · 기한 ' + opsEsc(a.dueOn) : '') +
+              (a.fromOps ? ' · 상황실' : '') + '</div></div>' +
+            '<button class="btn-secondary" style="padding:2px 7px;font-size:10.5px;flex-shrink:0" onclick="window.opsDeleteAction(' + a.id + ')">삭제</button>' +
+            '</div>';
+        }
+
+        function section(title, arr, color, done) {
+          if (!arr || !arr.length) return '';
+          return '<div style="padding:8px 18px 4px;font-size:11px;font-weight:800;color:' + color + ';background:var(--bg-base)">' +
+            title + ' <span style="color:var(--text-tertiary);font-weight:400">' + arr.length + '건</span></div>' +
+            arr.map(function (a) { return row(a, done); }).join('');
+        }
+
+        var html =
+          section('⚠ 기한 지남', d.overdue, 'var(--status-danger)', false) +
+          section('오늘 할 일', d.today, 'var(--brand-primary)', false) +
+          section('내일 할 일', d.tomorrow, '#0f766e', false) +
+          section('기한 미정', d.undated, 'var(--text-secondary)', false) +
+          section('이후', d.later, 'var(--text-tertiary)', false) +
+          section('✓ 오늘 한 일', d.doneToday, 'var(--status-success)', true);
+
+        host.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">지시·승인·준비물이 아직 없습니다.<br>상황실에 대화를 올리면 "화기작업 승인 받으세요" 같은 항목이 자동으로 잡힙니다.</div>';
+      };
+
+      window.opsToggleAction = async function (id) {
+        var r = await gsRun('api_completeOpsAction', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '처리에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadActions();
+      };
+
+      window.opsDeleteAction = async function (id) {
+        if (!confirm('이 항목을 삭제할까요?')) return;
+        var r = await gsRun('api_deleteOpsAction', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadActions();
+      };
+
+      window.opsAddAction = async function () {
+        var title = prompt('할 일을 입력하세요 (예: 화기작업 승인 신청)');
+        if (!title) return;
+        var due = prompt('기한을 입력하세요 (YYYY-MM-DD, 없으면 비워두세요)') || '';
+        var r = await gsRun('api_saveOpsAction', [{ title: title, dueOn: due, kind: 'todo' }], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '저장에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadActions();
+      };
+
       // ── 일일 마감 — 버튼 한 번으로 그날 올라온 내용을 정리한 보고서를 만든다.
       window.opsCloseDay = async function () {
         if (!confirm('오늘 상황실에 올라온 내용으로 일일 마감 보고서를 만들까요?')) return;
@@ -9139,6 +9217,7 @@
           window.opsRenderClosing(d);
           opsClearCache();
           window.opsLoadLabor();
+          window.opsLoadActions();
           return;
         }
       };
@@ -9193,6 +9272,7 @@
           (n.progressNote ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:4px">공정</div>' +
             '<div style="font-size:12.5px;line-height:1.75;color:var(--text-secondary)">' + opsEsc(n.progressNote) + '</div></div>' : '') +
 
+          list('오늘 한 일', n.done, 'var(--status-success)') +
           list('⚠ 오늘 확인 필요', n.attention, 'var(--status-danger)') +
           list('이슈', n.issues, '#f59e0b') +
           list('내일 할 일', n.tomorrow, 'var(--brand-primary)') +

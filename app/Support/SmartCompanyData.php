@@ -178,6 +178,16 @@ class SmartCompanyData
             ),
             'api_getDailyClosing' => app(\App\Services\Ops\DailyClosingService::class)->show((int) ($args[0] ?? 0)),
             'api_getDailyClosings' => app(\App\Services\Ops\DailyClosingService::class)->recent(self::resolveSiteId($siteId)),
+
+            // 오늘 한 일 · 내일 할 일 — 공정·자재·인원 어디에도 안 들어가는 것들의 종착지.
+            'api_getOpsActions' => app(\App\Services\Ops\OpsActionService::class)->board(
+                self::resolveSiteId($siteId), ($args[0] ?? null) ? (string) $args[0] : null,
+            ),
+            'api_saveOpsAction' => app(\App\Services\Ops\OpsActionService::class)->save(
+                self::resolveSiteId($siteId), is_array($args[0] ?? null) ? $args[0] : [],
+            ),
+            'api_completeOpsAction' => app(\App\Services\Ops\OpsActionService::class)->complete((int) ($args[0] ?? 0), auth()->id()),
+            'api_deleteOpsAction' => app(\App\Services\Ops\OpsActionService::class)->delete((int) ($args[0] ?? 0)),
             'api_getOpsDigest' => app(\App\Services\Ops\OpsDigestService::class)->summary(self::resolveSiteId($siteId)),
             'api_getOpsBatches' => self::opsBatches($siteId),
             'api_getOpsBatch' => app(\App\Services\Ops\OpsIntakeService::class)->batch((int) ($args[0] ?? 0)),
