@@ -9,6 +9,7 @@ use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\WbsItem;
+use App\Services\IntegratedDocumentService;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
 use App\Support\ImageDownscale;
@@ -34,6 +35,9 @@ class OpsIntakeService
     public function __construct(
         private readonly OpsIntakeAnalyzer $analyzer,
         private readonly OpsLearningService $learning,
+        private readonly OpsPhotoRouter $photoRouter,
+        private readonly OpsModuleRouter $modules,
+        private readonly IntegratedDocumentService $documents,
     ) {}
 
     /**
@@ -170,6 +174,11 @@ class OpsIntakeService
             $purchases = $this->purchaseContext($site);
             $learned = $this->learning->promptBlock($site?->id);
 
+            // 1단계: 사진이 무엇인지 먼저 가른다(영수증/납품서/시공/안전/출역명부).
+            // 글이 비어 있어도 여기서 종류가 잡히므로 "사진만 올려도" 판독이 된다.
+            $photoKinds = $images !== [] ? $this->photoRouter->classify($images) : [];
+
+            // 2단계: 종류를 알려주고 본 판독을 돌린다.
             $raw = $this->analyzer->read(
                 $text,
                 $activities->all(),
@@ -177,17 +186,22 @@ class OpsIntakeService
                 Carbon::today()->toDateString(),
                 $images,
                 $learned,
+                $photoKinds,
             );
 
             $validCodes = $activities->pluck('code')->filter()->all();
             $validPos = $purchases->pluck('po')->filter()->all();
 
             $saved = [];
+            $autoLabor = 0;
             foreach ($raw as $r) {
                 $item = $this->persist($r, $site, $batch->created_by_id, $batch->source, $batch->communication_message_id, $validCodes, $validPos, $text, $batch->id);
-                if ($item !== null) {
-                    $saved[] = $item;
+                if ($item === null) {
+                    continue;
                 }
+                $saved[] = $item;
+                // 3단계: 인원 보고처럼 바로 반영해도 되는 것은 여기서 즉시 모듈로 보낸다.
+                $autoLabor += $this->modules->autoRoute($batch, $item)['labor'];
             }
 
             $items = collect($saved);
@@ -198,9 +212,11 @@ class OpsIntakeService
                 'status' => 'done',
                 'error' => null,
                 'analyzed_at' => now(),
+                'photo_kinds' => $photoKinds ?: null,
+                'auto_applied' => $autoLabor,
             ]);
 
-            $this->discardPhotos($batch);
+            $this->discardPhotos($batch, $photoKinds);
         } catch (\Throwable $e) {
             report($e);
             $batch->update(['status' => 'failed', 'error' => $e->getMessage(), 'analyzed_at' => now()]);
@@ -277,21 +293,58 @@ class OpsIntakeService
         return $out;
     }
 
-    /** 판독이 끝나면 원본 사진은 지운다 — 근거는 원문 텍스트와 판독 항목으로 남는다. */
-    private function discardPhotos(OpsIntakeBatch $batch): void
+    /**
+     * 판독이 끝난 뒤 사진을 정리한다.
+     *
+     * 영수증·납품서·도면·안전 사진은 **원본이 곧 증빙**이라 문서함으로 옮겨 영구 보관한다.
+     * 단순 시공 사진만 지운다 — 진행률로 이미 반영됐고 원본을 계속 둘 이유가 없다.
+     *
+     * @param  array<int, array<string, mixed>>  $photoKinds
+     */
+    private function discardPhotos(OpsIntakeBatch $batch, array $photoKinds = []): void
     {
         $paths = is_array($batch->photo_paths) ? $batch->photo_paths : [];
         if ($paths === []) {
             return;
         }
 
+        $diskName = (string) ($batch->photo_disk ?: OpsPhotoController::disk());
+        $disk = Storage::disk($diskName);
+        $toDelete = [];
+        $filed = 0;
+
+        foreach ($paths as $i => $path) {
+            $kind = (string) ($photoKinds[$i]['kind'] ?? OpsPhotoRouter::KIND_OTHER);
+
+            if (! in_array($kind, OpsPhotoRouter::KEEP_AS_EVIDENCE, true)) {
+                $toDelete[] = $path;
+
+                continue;
+            }
+
+            try {
+                $title = trim((string) ($photoKinds[$i]['summary'] ?? '')) ?: (OpsPhotoRouter::KIND_LABELS[$kind] ?? '증빙');
+                $doc = $this->documents->fileOpsEvidence($diskName, $path, $kind, $title, $batch->site_id, $batch->created_by_id);
+                if ($doc !== null) {
+                    $filed++;
+                    $toDelete[] = $path;   // 문서함으로 복사됐으니 임시본은 지운다.
+                }
+            } catch (\Throwable $e) {
+                Log::warning('상황실 증빙 편철 실패: '.$e->getMessage());
+                // 편철에 실패하면 원본을 지우지 않는다 — 증빙을 잃는 것보다 남겨 두는 편이 낫다.
+            }
+        }
+
         try {
-            Storage::disk((string) ($batch->photo_disk ?: OpsPhotoController::disk()))->delete($paths);
+            if ($toDelete !== []) {
+                $disk->delete($toDelete);
+            }
         } catch (\Throwable $e) {
             Log::warning('상황실 사진 정리 실패: '.$e->getMessage());
         }
 
-        $batch->update(['photo_paths' => null]);
+        $remaining = array_values(array_diff($paths, $toDelete));
+        $batch->update(['photo_paths' => $remaining ?: null, 'evidence_filed' => $filed]);
     }
 
     /**
@@ -473,6 +526,11 @@ class OpsIntakeService
         }
         if (blank($item->target_code)) {
             return ['success' => false, 'error' => '반영 대상이 지정되지 않았습니다. 대상을 먼저 지정하세요.'];
+        }
+
+        // 지출은 공정·조달과 달리 전용 경로로 — 재무(MobileExpense)에 등록된다.
+        if ($item->category === 'expense') {
+            return $this->modules->applyExpense($item, $userId);
         }
 
         return $item->target_type === 'procurement'

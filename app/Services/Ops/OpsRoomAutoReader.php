@@ -16,9 +16,7 @@ use Throwable;
  */
 class OpsRoomAutoReader
 {
-    public function __construct(private readonly OpsIntakeService $intake)
-    {
-    }
+    public function __construct(private readonly OpsIntakeService $intake) {}
 
     /** AI 가 스스로 단 답글을 다시 판독하지 않도록 표시하는 값. */
     public const BOT_MARKER = 'ops_ai_reply';
@@ -48,7 +46,7 @@ class OpsRoomAutoReader
 
             $this->reply($message, $result);
         } catch (Throwable $e) {
-            Log::warning('상황실 자동 판독 실패: ' . $e->getMessage(), ['message_id' => $message->id]);
+            Log::warning('상황실 자동 판독 실패: '.$e->getMessage(), ['message_id' => $message->id]);
         }
     }
 
@@ -82,9 +80,9 @@ class OpsRoomAutoReader
 
         $lines = $items->take(5)->map(function (array $i): string {
             $head = $i['status'] === 'needs_input' ? '❓' : '•';
-            $target = $i['targetName'] ? ' [' . $i['targetName'] . ']' : '';
+            $target = $i['targetName'] ? ' ['.$i['targetName'].']' : '';
 
-            return $head . ' ' . ($i['summary'] ?: '(내용 없음)') . $target;
+            return $head.' '.($i['summary'] ?: '(내용 없음)').$target;
         })->implode("\n");
 
         $needs = $items->where('status', 'needs_input')->count();

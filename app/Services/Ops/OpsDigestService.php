@@ -8,8 +8,8 @@ use App\Models\CommunicationRoom;
 use App\Models\OpsIntakeItem;
 use App\Models\Site;
 use App\Models\User;
-use App\Services\Ops\OpsRoomAutoReader;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * 하루 다이제스트 — 그날 상황실에서 뽑아낸 것과 처리 결과를 한 장으로 정리해 알린다.
@@ -131,16 +131,16 @@ class OpsDigestService
         if ($s['byCategory'] !== []) {
             $parts = [];
             foreach ($s['byCategory'] as $cat => $n) {
-                $parts[] = (OpsIntakeItem::CATEGORY_LABELS[$cat] ?? $cat) . " {$n}";
+                $parts[] = (OpsIntakeItem::CATEGORY_LABELS[$cat] ?? $cat)." {$n}";
             }
-            $lines[] = '분류: ' . implode(' · ', $parts);
+            $lines[] = '분류: '.implode(' · ', $parts);
         }
 
         if ($s['needsItems'] !== []) {
             $lines[] = '';
             $lines[] = '❓ 확인이 필요한 항목:';
             foreach ($s['needsItems'] as $i) {
-                $lines[] = '  · ' . ($i['summary'] ?: $i['raw']) . ($i['question'] ? ' — ' . $i['question'] : '');
+                $lines[] = '  · '.($i['summary'] ?: $i['raw']).($i['question'] ? ' — '.$i['question'] : '');
             }
         }
 
@@ -148,7 +148,7 @@ class OpsDigestService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
     private function managers(int $siteId)
     {

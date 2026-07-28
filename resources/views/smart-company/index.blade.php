@@ -9022,7 +9022,10 @@
           '<h1 class="page-title"><i class="ph ph-broadcast" style="color:#22c55e"></i> 현장 상황실</h1>' +
           '<p class="page-subtitle">오늘 한 일 · 내일 할 일 · 자재 · 영수증 · 이슈를 그냥 올리세요. AI 가 읽고 공정 반영안을 만듭니다.</p>' +
           '</div>' +
-          '<div class="action-row"><button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 기록 <span id="ops-batch-count"></span></button></div></div>' +
+          '<div class="action-row">' +
+          '<button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 기록 <span id="ops-batch-count"></span></button>' +
+          '<button class="btn-primary" style="background:#0f766e;border-color:#0f766e" onclick="window.opsCloseDay()"><i class="ph ph-clipboard-text"></i> 일일 마감</button>' +
+          '</div></div>' +
           '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-note-pencil"></i> 현장 이야기 붙여넣기</div>' +
           '<span style="font-size:11.5px;color:var(--text-tertiary)">카카오톡 대화를 통째로 붙여넣어도 됩니다</span>' +
@@ -9041,6 +9044,10 @@
           '</div></div></div>' +
           '<div id="ops-digest"></div>' +
           '<div id="ops-result"></div>' +
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-users-three"></i> 오늘 출역 인원 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">보고 vs 게이트 QR</span></div>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddLabor()"><i class="ph ph-plus"></i> 직접 입력</button>' +
+          '</div><div class="panel-body" id="ops-labor" style="padding:0"></div></div>' +
           '<div class="panel"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-list-checks"></i> 확인 대기 목록</div>' +
           '<div style="display:flex;gap:7px">' +
@@ -9059,6 +9066,7 @@
         window.opsLoadPending();
         window.opsLoadDigest();
         window.opsLoadBatches();
+        window.opsLoadLabor();
       }
 
       // 사진은 원본 파일 그대로 들고 있다가 한 장씩 업로드한다.
@@ -9096,6 +9104,183 @@
         });
       }
       window.opsRemovePhoto = function (i) { (window._opsFiles || []).splice(i, 1); opsRenderPhotoStrip(); };
+
+      // ── 일일 마감 — 버튼 한 번으로 그날 올라온 내용을 정리한 보고서를 만든다.
+      window.opsCloseDay = async function () {
+        if (!confirm('오늘 상황실에 올라온 내용으로 일일 마감 보고서를 만들까요?')) return;
+        var host = document.getElementById('ops-result');
+        host.innerHTML = '<div class="panel" style="margin-bottom:16px"><div class="panel-body padded" id="ops-closing-msg" style="font-size:13px;color:var(--text-secondary)">마감 보고서 작성 중…</div></div>';
+
+        var r = await gsRun('api_startDailyClosing', [], { success: false });
+        if (!r || !r.success) {
+          document.getElementById('ops-closing-msg').innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '마감을 시작하지 못했습니다.') + '</span>';
+          return;
+        }
+
+        // 작성도 응답 후에 돈다 — 짧은 폴링으로 기다린다(게이트웨이 시간 제한과 무관).
+        var started = Date.now(), delay = 1500;
+        for (;;) {
+          await new Promise(function (res) { setTimeout(res, delay); });
+          delay = Math.min(delay * 1.25, 5000);
+          var elapsed = Math.round((Date.now() - started) / 1000);
+          var d = null;
+          try {
+            if (window.apiCache) delete window.apiCache['api_getDailyClosing' + JSON.stringify([r.reportId])];
+            d = await gsRun('api_getDailyClosing', [r.reportId], null);
+          } catch (e) { /* 재시도 */ }
+
+          var msgEl = document.getElementById('ops-closing-msg');
+          if (!d || !d.success) { if (msgEl) msgEl.textContent = '마감 보고서 작성 중… ' + elapsed + '초 경과'; continue; }
+          if (d.status === 'writing') { if (msgEl) msgEl.textContent = '마감 보고서 작성 중… ' + elapsed + '초 경과'; continue; }
+          if (d.status === 'failed') {
+            if (msgEl) msgEl.innerHTML = '<span style="color:var(--status-danger)">마감 실패: ' + opsEsc(d.error || '') + '</span>';
+            return;
+          }
+          window.opsRenderClosing(d);
+          opsClearCache();
+          window.opsLoadLabor();
+          return;
+        }
+      };
+
+      // 전문가용 일일 마감 보고서 — 숫자는 DB 집계, 문장은 AI 서술.
+      window.opsRenderClosing = function (d) {
+        var m = d.metrics || {}, n = d.narrative || {};
+        var labor = m.labor || {}, ops = m.ops || {};
+
+        function list(title, arr, color) {
+          if (!arr || !arr.length) return '';
+          return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;color:' + color + ';margin-bottom:6px">' + title + '</div>' +
+            '<ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--text-secondary);line-height:1.8">' +
+            arr.map(function (x) { return '<li>' + opsEsc(x) + '</li>'; }).join('') + '</ul></div>';
+        }
+        function stat(label, value, sub, color) {
+          return '<div style="flex:1;min-width:104px;padding:11px 13px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:10px">' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + label + '</div>' +
+            '<div style="font-size:21px;font-weight:800;color:' + color + ';line-height:1.15">' + value + '</div>' +
+            (sub ? '<div style="font-size:10px;color:var(--text-tertiary)">' + sub + '</div>' : '') + '</div>';
+        }
+
+        var byCompany = (labor.byCompany || []).map(function (c) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:6px 0;font-size:12px">' + opsEsc(c.company) + (c.trade ? ' · ' + opsEsc(c.trade) : '') + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12.5px;font-weight:700">' + c.headcount + '명</td></tr>';
+        }).join('');
+
+        document.getElementById('ops-result').innerHTML =
+          '<div class="panel" style="margin-bottom:16px;border-left:3px solid #0f766e">' +
+          '<div class="panel-header"><div class="panel-title" style="color:#0f766e"><i class="ph ph-clipboard-text"></i> 일일 마감 보고서 · ' + opsEsc(d.date) + '</div>' +
+          '<div style="display:flex;gap:7px"><button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.print()"><i class="ph ph-printer"></i> 인쇄</button></div></div>' +
+          '<div class="panel-body padded">' +
+
+          (n.headline ? '<div style="font-size:15px;font-weight:800;color:var(--text-primary);margin-bottom:12px">' + opsEsc(n.headline) + '</div>' : '') +
+
+          '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">' +
+          stat('보고 인원', (labor.reported || 0) + '명', 'AI·현장 보고', 'var(--brand-primary)') +
+          stat('QR 실적', (labor.actualQr || 0) + '명', '게이트 스캔', '#22c55e') +
+          stat('차이', (labor.gap > 0 ? '+' : '') + (labor.gap || 0), labor.gap ? '확인 필요' : '일치', labor.gap ? 'var(--status-danger)' : 'var(--status-success)') +
+          stat('직접고용 근무', (labor.directHours || 0) + 'h', '평균 ' + (labor.directAvgHours || 0) + 'h', '#4338ca') +
+          stat('상황실 접수', (ops.batches || 0) + '건', '사진 ' + (ops.photos || 0) + '장', 'var(--text-primary)') +
+          '</div>' +
+
+          (n.summary ? '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-line;margin-bottom:6px">' + opsEsc(n.summary) + '</div>' : '') +
+
+          (byCompany ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:5px">업체별 출역</div>' +
+            '<table style="width:100%;border-collapse:collapse">' + byCompany + '</table></div>' : '') +
+
+          (n.laborNote ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:4px">인원</div>' +
+            '<div style="font-size:12.5px;line-height:1.75;color:var(--text-secondary)">' + opsEsc(n.laborNote) + '</div></div>' : '') +
+          (n.progressNote ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:4px">공정</div>' +
+            '<div style="font-size:12.5px;line-height:1.75;color:var(--text-secondary)">' + opsEsc(n.progressNote) + '</div></div>' : '') +
+
+          list('⚠ 오늘 확인 필요', n.attention, 'var(--status-danger)') +
+          list('이슈', n.issues, '#f59e0b') +
+          list('내일 할 일', n.tomorrow, 'var(--brand-primary)') +
+
+          '<div style="margin-top:16px;padding-top:10px;border-top:1px solid var(--border-subtle);font-size:11px;color:var(--text-tertiary)">' +
+          '판독 ' + (ops.parsed || 0) + '건 · 반영 ' + (ops.applied || 0) + '건 · 대기 ' + (ops.pending || 0) + '건' +
+          (ops.evidenceFiled ? ' · 증빙 ' + ops.evidenceFiled + '건 문서함 편철' : '') +
+          (d.closedBy ? ' · 마감 ' + opsEsc(d.closedBy) : '') + (d.closedAt ? ' ' + opsEsc(d.closedAt) : '') +
+          '</div></div></div>';
+
+        document.getElementById('ops-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+
+      // ── 오늘 출역 인원 — 상황실 보고 vs 게이트 QR 실적
+      // 두 값을 나란히 두는 게 핵심이다. 보고 3명 / QR 2명이면 그 1명이 관리 포인트다.
+      window.opsLoadLabor = async function () {
+        var host = document.getElementById('ops-labor');
+        if (!host) return;
+        if (window.apiCache) delete window.apiCache['api_getOpsLabor[]'];
+        var d = await gsRun('api_getOpsLabor', [], null);
+        if (!d || !d.success) { host.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">인원 현황을 불러오지 못했습니다.</div>'; return; }
+
+        function gapChip(gap) {
+          if (!gap) return '<span style="color:var(--status-success);font-weight:700">일치</span>';
+          if (gap > 0) return '<span style="color:var(--status-danger);font-weight:700">미확인 ' + gap + '명</span>';
+          return '<span style="color:#f59e0b;font-weight:700">보고누락 ' + Math.abs(gap) + '명</span>';
+        }
+
+        var kpi =
+          '<div style="display:flex;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">현장 보고 인원</div>' +
+            '<div style="font-size:24px;font-weight:800;color:var(--brand-primary)">' + d.reportedTotal + '명</div></div>' +
+          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">게이트 QR 실적</div>' +
+            '<div style="font-size:24px;font-weight:800;color:#22c55e">' + d.actualTotal + '명</div></div>' +
+          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">차이</div>' +
+            '<div style="font-size:24px;font-weight:800;color:' + (d.gap ? 'var(--status-danger)' : 'var(--status-success)') + '">' +
+            (d.gap > 0 ? '+' : '') + d.gap + '</div></div>' +
+          '</div>';
+
+        var rows = (d.rows || []).map(function (r) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:9px 18px;font-size:12.5px">' + opsEsc(r.company) +
+              (r.trade ? '<span style="font-size:10.5px;color:var(--text-tertiary)"> · ' + opsEsc(r.trade) + '</span>' : '') +
+              (r.fromOps ? '<span style="font-size:10px;color:#22c55e"> · 상황실</span>' : '') + '</td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;font-weight:700">' + r.reported + '</td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;color:var(--text-secondary)">' + r.actualQr + '</td>' +
+            '<td style="padding:9px 12px;text-align:right;font-size:11.5px">' + gapChip(r.gap) + '</td>' +
+            '<td style="padding:9px 14px 9px 0;text-align:right"><button class="btn-secondary" style="padding:3px 8px;font-size:11px" onclick="window.opsDeleteLabor(' + r.id + ')">삭제</button></td>' +
+            '</tr>';
+        }).join('');
+
+        var qrOnly = (d.qrOnly || []).map(function (q) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle);background:rgba(245,158,11,.05)">' +
+            '<td style="padding:9px 18px;font-size:12.5px">' + opsEsc(q.company) + '<span style="font-size:10.5px;color:#f59e0b"> · 보고 없음</span></td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;color:var(--text-tertiary)">—</td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;font-weight:700">' + q.actualQr + '</td>' +
+            '<td style="padding:9px 12px;text-align:right;font-size:11.5px"><span style="color:#f59e0b;font-weight:700">보고누락</span></td>' +
+            '<td></td></tr>';
+        }).join('');
+
+        host.innerHTML = kpi + ((rows || qrOnly)
+          ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<th style="text-align:left;padding:7px 18px;font-size:10.5px;color:var(--text-tertiary)">업체</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">보고</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">QR</th>' +
+            '<th style="text-align:right;padding-right:12px;font-size:10.5px;color:var(--text-tertiary)">확인</th><th></th>' +
+            '</tr></thead><tbody>' + rows + qrOnly + '</tbody></table>'
+          : '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 올라온 인원 보고가 없습니다.<br>상황실에 "한빛전기 3명 나왔습니다" 처럼 올리면 자동으로 잡힙니다.</div>');
+      };
+
+      window.opsAddLabor = async function () {
+        var company = prompt('업체명을 입력하세요 (예: 한빛전기)');
+        if (!company) return;
+        var n = prompt('인원수는 몇 명입니까?');
+        if (n === null) return;
+        var r = await gsRun('api_saveOpsLabor', [{ company: company, headcount: parseInt(n, 10) || 0 }], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '저장에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadLabor();
+      };
+
+      window.opsDeleteLabor = async function (id) {
+        if (!confirm('이 인원 보고를 삭제할까요?')) return;
+        var r = await gsRun('api_deleteOpsLabor', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadLabor();
+      };
 
       // 오늘 요약 — 저녁 다이제스트와 같은 집계를 화면에서도 바로 본다.
       window.opsLoadDigest = async function () {

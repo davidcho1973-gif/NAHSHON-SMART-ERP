@@ -162,6 +162,22 @@ class SmartCompanyData
                 \App\Http\Controllers\OpsPhotoController::resolve(is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             ),
             'api_getOpsJob' => app(\App\Services\Ops\OpsIntakeService::class)->job((int) ($args[0] ?? 0)),
+            // 인원 보고 — 상황실이 읽은 "오늘 몇 명" 과 게이트 QR 실적을 나란히 본다.
+            'api_getOpsLabor' => app(\App\Services\Ops\OpsLaborService::class)->forDate(
+                self::resolveSiteId($siteId),
+                ($args[0] ?? null) ? (string) $args[0] : null,
+            ),
+            'api_saveOpsLabor' => app(\App\Services\Ops\OpsLaborService::class)->save(
+                self::resolveSiteId($siteId), is_array($args[0] ?? null) ? $args[0] : [], auth()->id(),
+            ),
+            'api_deleteOpsLabor' => app(\App\Services\Ops\OpsLaborService::class)->delete((int) ($args[0] ?? 0)),
+
+            // 일일 마감 — 버튼 한 번으로 그날 올라온 내용을 정리한 보고서를 만든다.
+            'api_startDailyClosing' => app(\App\Services\Ops\DailyClosingService::class)->start(
+                self::resolveSiteId($siteId), ($args[0] ?? null) ? (string) $args[0] : null, auth()->id(),
+            ),
+            'api_getDailyClosing' => app(\App\Services\Ops\DailyClosingService::class)->show((int) ($args[0] ?? 0)),
+            'api_getDailyClosings' => app(\App\Services\Ops\DailyClosingService::class)->recent(self::resolveSiteId($siteId)),
             'api_getOpsDigest' => app(\App\Services\Ops\OpsDigestService::class)->summary(self::resolveSiteId($siteId)),
             'api_getOpsBatches' => self::opsBatches($siteId),
             'api_getOpsBatch' => app(\App\Services\Ops\OpsIntakeService::class)->batch((int) ($args[0] ?? 0)),
