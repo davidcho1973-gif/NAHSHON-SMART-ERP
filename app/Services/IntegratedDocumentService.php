@@ -10,6 +10,7 @@ use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
 use App\Models\Site;
+use App\Support\ReceiptFilePayload;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -25,9 +26,7 @@ class IntegratedDocumentService
     /** 저장할 본문 텍스트 최대 길이(자). 대용량 도면·제출본이 DB 를 잠식하지 않게 자른다. */
     private const BODY_TEXT_LIMIT = 200000;
 
-    public function __construct(private readonly GeminiDocumentAnalyzer $analyzer)
-    {
-    }
+    public function __construct(private readonly GeminiDocumentAnalyzer $analyzer) {}
 
     /**
      * 업로드된 문서를 AI 로 분석·분류·중복감지하고 저장(상태를 needs_review/confirmed 로 전환).
@@ -47,8 +46,8 @@ class IntegratedDocumentService
             // 원본 확장자를 유지해 OfficeText(docx/xlsx/pptx) 판별이 마임 외에도 동작하게 한다.
             $ext = pathinfo($doc->original_name ?: $doc->path, PATHINFO_EXTENSION);
             $tmp = tempnam(sys_get_temp_dir(), 'idoc');
-            if ($ext !== '' && @rename($tmp, $tmp . '.' . $ext)) {
-                $tmp .= '.' . $ext;
+            if ($ext !== '' && @rename($tmp, $tmp.'.'.$ext)) {
+                $tmp .= '.'.$ext;
             }
             file_put_contents($tmp, Storage::disk($disk)->get($doc->path));
 
@@ -133,7 +132,7 @@ class IntegratedDocumentService
             'folder_code' => $folder['code'],
             'folder_confidence' => $folder['confidence'],
             'title' => $doc->title ?: ($doc->original_name ?: '무제 문서'),
-            'summary' => ['AI 미분석 형식(' . strtoupper($ext) . ') — 파일로 보관되었습니다. 폴더가 맞는지 확인·조정 후 확정하세요.'],
+            'summary' => ['AI 미분석 형식('.strtoupper($ext).') — 파일로 보관되었습니다. 폴더가 맞는지 확인·조정 후 확정하세요.'],
             'tags' => array_values(array_unique([
                 IntegratedDocument::folderMap()[$folder['code']]['name'] ?? '문서',
                 IntegratedDocument::typeLabel($type),
@@ -256,7 +255,7 @@ class IntegratedDocumentService
 
         $numbers = [];
         if ($d->amount !== null) {
-            $numbers[] = ['label' => '금액', 'v' => trim(($d->currency ? $d->currency . ' ' : '') . number_format((float) $d->amount, 2))];
+            $numbers[] = ['label' => '금액', 'v' => trim(($d->currency ? $d->currency.' ' : '').number_format((float) $d->amount, 2))];
         }
         foreach ((array) $d->fields as $k => $v) {
             if (preg_match('/금액|한도|수량|단가|합계|amount|limit|qty|total|Ω|㎡|m2/iu', (string) $k) && count($numbers) < 4) {
@@ -309,7 +308,7 @@ class IntegratedDocumentService
         $builder = IntegratedDocument::query()->when($siteId, fn ($b) => $b->where('site_id', $siteId));
 
         if ($q !== '') {
-            $like = '%' . $q . '%';
+            $like = '%'.$q.'%';
             $builder->where(function ($b) use ($like): void {
                 $b->where('title', 'ilike', $like)
                     ->orWhere('document_number', 'ilike', $like)
@@ -405,7 +404,7 @@ class IntegratedDocumentService
         $len = mb_strlen($query) + ($pad * 2);
         $cut = trim(mb_substr($body, $start, $len));
 
-        return ($start > 0 ? '… ' : '') . $cut . (($start + $len) < mb_strlen($body) ? ' …' : '');
+        return ($start > 0 ? '… ' : '').$cut.(($start + $len) < mb_strlen($body) ? ' …' : '');
     }
 
     // ───────────────────────── 문서 ↔ 업무 연결 ─────────────────────────
@@ -425,7 +424,7 @@ class IntegratedDocumentService
 
         // 1) 문서번호/제목의 PO 번호 → 조달 항목.
         $poNo = trim((string) $doc->document_number);
-        $haystack = trim($poNo . ' ' . (string) $doc->title);
+        $haystack = trim($poNo.' '.(string) $doc->title);
         if ($haystack !== '') {
             $po = ProcurementItem::query()
                 ->whereNotNull('po_no')->where('po_no', '!=', '')
@@ -447,7 +446,7 @@ class IntegratedDocumentService
             }
             $company = Company::query()
                 ->where('name', 'ilike', $name)
-                ->orWhere('name', 'ilike', '%' . $name . '%')
+                ->orWhere('name', 'ilike', '%'.$name.'%')
                 ->orWhere('code', 'ilike', $name)
                 ->first();
             if ($company) {
@@ -464,7 +463,7 @@ class IntegratedDocumentService
                     ->when($doc->site_id, fn ($q) => $q->where('site_id', $doc->site_id))
                     ->get()
                     ->first(function (Employee $e) use ($title): bool {
-                        $name = trim((string) ($e->name ?: ($e->first_name . ' ' . $e->last_name)));
+                        $name = trim((string) ($e->name ?: ($e->first_name.' '.$e->last_name)));
 
                         return $name !== '' && mb_strlen($name) >= 2 && str_contains($title, mb_strtolower($name));
                     });
@@ -544,13 +543,13 @@ class IntegratedDocumentService
     {
         $out = [];
         if ($doc->procurement_item_id && $po = $doc->procurementItem) {
-            $out[] = ['type' => 'procurement', 'id' => $po->id, 'label' => '발주', 'name' => trim(($po->po_no ?: 'PO') . ' · ' . ($po->vendor ?: ''))];
+            $out[] = ['type' => 'procurement', 'id' => $po->id, 'label' => '발주', 'name' => trim(($po->po_no ?: 'PO').' · '.($po->vendor ?: ''))];
         }
         if ($doc->company_id && $c = $doc->company) {
             $out[] = ['type' => 'company', 'id' => $c->id, 'label' => '협력사', 'name' => $c->name];
         }
         if ($doc->employee_id && $e = $doc->employee) {
-            $out[] = ['type' => 'employee', 'id' => $e->id, 'label' => '작업자', 'name' => $e->name ?: trim($e->first_name . ' ' . $e->last_name)];
+            $out[] = ['type' => 'employee', 'id' => $e->id, 'label' => '작업자', 'name' => $e->name ?: trim($e->first_name.' '.$e->last_name)];
         }
         if (filled($doc->wbs_code)) {
             $out[] = ['type' => 'wbs', 'id' => $doc->wbs_code, 'label' => '공정', 'name' => $doc->wbs_code];
@@ -690,11 +689,11 @@ class IntegratedDocumentService
 
         $disk = IntegratedDocument::storageDisk();
         $ext = pathinfo($source['name'], PATHINFO_EXTENSION) ?: 'jpg';
-        $path = 'integrated-documents/receipt-' . $expense->id . '-' . substr(md5($source['name'] . $expense->id), 0, 8) . '.' . $ext;
+        $path = 'integrated-documents/receipt-'.$expense->id.'-'.substr(md5($source['name'].$expense->id), 0, 8).'.'.$ext;
         Storage::disk($disk)->put($path, $source['bytes']);
 
         $vendor = trim((string) (is_array($expense->ocr_data) ? ($expense->ocr_data['vendor_name'] ?? '') : ''));
-        $title = '영수증 · ' . ($vendor !== '' ? $vendor : ($expense->description ?: '지출'));
+        $title = '영수증 · '.($vendor !== '' ? $vendor : ($expense->description ?: '지출'));
         $amount = (float) $expense->amount;
 
         $doc = IntegratedDocument::create([
@@ -711,7 +710,7 @@ class IntegratedDocumentService
             'currency' => 'USD',
             'summary' => array_values(array_filter([
                 $expense->description ? mb_substr((string) $expense->description, 0, 300) : null,
-                $amount ? ('금액 $' . number_format($amount, 2)) : null,
+                $amount ? ('금액 $'.number_format($amount, 2)) : null,
                 '재무관리 영수증 등록 시 자동 편철됨',
             ])),
             'fields' => ['mobile_expense_id' => $expense->id, 'accounting_account' => $expense->accounting_account],
@@ -735,6 +734,49 @@ class IntegratedDocumentService
     }
 
     /**
+     * 현장 상황실에 올라온 증빙 사진을 문서함에 편철한다.
+     *
+     * 영수증·납품서·도면·안전 사진은 원본 자체가 증빙이라, 판독이 끝났다고 지우면 안 된다.
+     * (단순 시공 사진은 대상이 아니다 — 진행률로 이미 반영됐고 원본을 계속 둘 이유가 없다.)
+     *
+     * @return array<string, mixed>|null 편철된 문서(생성 실패 시 null)
+     */
+    public function fileOpsEvidence(string $sourceDisk, string $sourcePath, string $kind, string $title, ?int $siteId, ?int $userId = null): ?IntegratedDocument
+    {
+        $copied = $this->copyIntoDocuments($sourceDisk, $sourcePath, $title.'.jpg');
+        if ($copied === null) {
+            return null;
+        }
+
+        $type = match ($kind) {
+            'receipt' => 'receipt',
+            'delivery' => 'delivery_note',
+            'safety' => 'safety_photo',
+            default => 'document',
+        };
+
+        return IntegratedDocument::create([
+            'site_id' => $siteId,
+            'folder_code' => IntegratedDocument::FOLDER_MATERIAL_PURCHASE,
+            'folder_confidence' => 80,
+            'document_type' => $type,
+            'type_confidence' => 80,
+            'title' => mb_substr($title, 0, 255),
+            'summary' => ['현장 상황실에서 올라온 증빙 사진 — 자동 편철'],
+            'fields' => ['source' => 'ops-room', 'ops_kind' => $kind],
+            'tags' => array_values(array_filter(['상황실', $kind])),
+            'disk' => $copied['disk'],
+            'path' => $copied['path'],
+            'original_name' => $title.'.jpg',
+            'mime_type' => $copied['mime'],
+            'size' => $copied['size'],
+            'status' => 'needs_review',
+            'uploaded_by_id' => $userId,
+            'analyzed_at' => now(),
+        ]);
+    }
+
+    /**
      * 조달(발주) 첨부서류를 문서함 "자재·구매" 폴더에 자동 편철하고 발주 건에 연결한다.
      */
     public function fileProcurementDocument(ProcurementItem $item): ?IntegratedDocument
@@ -748,7 +790,7 @@ class IntegratedDocumentService
             return $existing;
         }
 
-        $name = $item->document_name ?: ('procurement-' . $item->id);
+        $name = $item->document_name ?: ('procurement-'.$item->id);
         $copied = $this->copyIntoDocuments($item->document_disk ?: 'public', $item->document_path, $name);
         if ($copied === null) {
             return null;
@@ -765,15 +807,15 @@ class IntegratedDocumentService
             'folder_locked' => true,
             'document_type' => 'purchase_order',
             'type_confidence' => 100,
-            'title' => mb_substr(trim(($item->po_no ? $item->po_no . ' · ' : '') . ($item->vendor ?: '발주서')), 0, 255),
+            'title' => mb_substr(trim(($item->po_no ? $item->po_no.' · ' : '').($item->vendor ?: '발주서')), 0, 255),
             'document_number' => $item->po_no,
             'issuer' => $item->vendor,
             'issued_on' => $item->ordered_on,
             'amount' => $item->amount,
             'currency' => $item->currency ?: 'USD',
             'summary' => array_values(array_filter([
-                $item->vendor ? ('공급사 ' . $item->vendor) : null,
-                $item->eta ? ('납기(ETA) ' . $item->eta->toDateString()) : null,
+                $item->vendor ? ('공급사 '.$item->vendor) : null,
+                $item->eta ? ('납기(ETA) '.$item->eta->toDateString()) : null,
                 '조달관리 등록 시 자동 편철됨',
             ])),
             'fields' => ['source' => 'procurement', 'procurement_item_id' => $item->id, 'status' => $item->status],
@@ -805,7 +847,7 @@ class IntegratedDocumentService
             return $existing;
         }
 
-        $name = $cdoc->original_file_name ?: ('contract-' . $cdoc->id);
+        $name = $cdoc->original_file_name ?: ('contract-'.$cdoc->id);
         $copied = $this->copyIntoDocuments($cdoc->disk ?: 'local', $cdoc->file_path, $name);
         if ($copied === null) {
             return null;
@@ -828,7 +870,7 @@ class IntegratedDocumentService
             'effective_on' => $cdoc->effective_on,
             'expires_on' => $cdoc->expires_on,     // 만료 감시(2단계)로 자동 연결된다.
             'summary' => array_values(array_filter([
-                $cdoc->version ? ('버전 ' . $cdoc->version) : null,
+                $cdoc->version ? ('버전 '.$cdoc->version) : null,
                 '계약관리 등록 시 자동 편철됨',
             ])),
             'fields' => ['source' => 'contract', 'contract_document_id' => $cdoc->id, 'project_contract_id' => $cdoc->project_contract_id],
@@ -862,7 +904,7 @@ class IntegratedDocumentService
 
         $disk = IntegratedDocument::storageDisk();
         $ext = pathinfo($name, PATHINFO_EXTENSION) ?: pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'bin';
-        $path = 'integrated-documents/linked-' . substr(md5($sourceDisk . $sourcePath . $name), 0, 12) . '.' . $ext;
+        $path = 'integrated-documents/linked-'.substr(md5($sourceDisk.$sourcePath.$name), 0, 12).'.'.$ext;
         Storage::disk($disk)->put($path, $bytes);
 
         return [
@@ -894,12 +936,12 @@ class IntegratedDocumentService
      */
     private function receiptSourcePath(MobileExpense $expense): ?array
     {
-        $name = $expense->receipt_original_name ?: ('receipt-' . $expense->id . '.jpg');
+        $name = $expense->receipt_original_name ?: ('receipt-'.$expense->id.'.jpg');
         $mime = $expense->receipt_mime_type ?: 'image/jpeg';
 
         if (filled($expense->receipt_file)) {
             try {
-                $bytes = \App\Support\ReceiptFilePayload::decode($expense->receipt_file);
+                $bytes = ReceiptFilePayload::decode($expense->receipt_file);
                 if (is_string($bytes) && $bytes !== '') {
                     return ['bytes' => $bytes, 'name' => $name, 'mime' => $mime];
                 }
@@ -985,7 +1027,7 @@ class IntegratedDocumentService
             $tags[] = (string) $data['issuer'];
         }
         if (($data['expires_on'] ?? null) !== null) {
-            $tags[] = '만료 ' . $data['expires_on'];
+            $tags[] = '만료 '.$data['expires_on'];
         }
         foreach (array_keys((array) ($data['fields'] ?? [])) as $k) {
             if (count($tags) >= 6) {
@@ -1011,13 +1053,13 @@ class IntegratedDocumentService
             'tb' => $this->typeBadgeColor($d->document_type)['bg'],
             'title' => $d->title,
             'sub' => IntegratedDocument::typeLabel($d->document_type),
-            'meta' => trim(($d->issuer ?: '') . ' · ' . (optional($d->created_at)?->format('Y-m-d') ?: ''), ' ·'),
+            'meta' => trim(($d->issuer ?: '').' · '.(optional($d->created_at)?->format('Y-m-d') ?: ''), ' ·'),
             'by' => $d->uploaded_by_label ?: (optional($d->uploadedBy)->name ?: '—'),
             'from' => $d->issuer ?: ($d->counterparty ?: '—'),
             'date' => optional($d->created_at)?->format('Y-m-d') ?: '',
             'suggest' => $d->folderName(),
             'folderCode' => $d->folder_code,
-            'conf' => $conf . '%',
+            'conf' => $conf.'%',
             'confColor' => $conf >= 85 ? '#16a34a' : ($conf >= 70 ? '#ea580c' : '#dc2626'),
             'status' => $d->status,
             'dup' => (bool) $d->duplicate_of_id,
@@ -1082,7 +1124,7 @@ class IntegratedDocumentService
         $i = (int) floor(log($bytes, 1024));
         $i = max(0, min($i, count($units) - 1));
 
-        return round($bytes / (1024 ** $i), $i === 0 ? 0 : 1) . ' ' . $units[$i];
+        return round($bytes / (1024 ** $i), $i === 0 ? 0 : 1).' '.$units[$i];
     }
 
     public function resolveSiteId(mixed $site): ?int

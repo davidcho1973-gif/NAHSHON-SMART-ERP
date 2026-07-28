@@ -18,8 +18,7 @@ class OpsIntakeAnalyzer
     public function __construct(
         private readonly HttpFactory $http,
         private readonly OcrEngine $ocr,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<int, array{code: string, name: string, status?: string, start?: string, end?: string}>  $activities
@@ -27,9 +26,9 @@ class OpsIntakeAnalyzer
      * @param  array<int, array{data: string, mime_type: string}>  $images
      * @return array<int, array<string, mixed>>
      */
-    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = ''): array
+    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = []): array
     {
-        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== []) . $learned;
+        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== [], $photoKinds).$learned;
 
         $result = $images !== []
             ? $this->ocr->analyze($images, $prompt, $this->schema())['data'] ?? []
@@ -44,8 +43,12 @@ class OpsIntakeAnalyzer
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false): string
+    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false, array $photoKinds = []): string
     {
+        $kindLine = $photoKinds === [] ? '' : ("\n[첨부 사진 종류(자동 판별)]\n".collect($photoKinds)
+            ->map(fn (array $k, int $i) => sprintf('- %d번째 사진: %s%s', $i + 1, $k['label'] ?? '', ($k['summary'] ?? '') !== '' ? ' — '.$k['summary'] : ''))
+            ->implode("\n")."\n");
+
         $photoRule = $withImages ? <<<'P'
 
 ## 첨부 사진 판독 (사진이 함께 왔습니다)
@@ -55,10 +58,13 @@ class OpsIntakeAnalyzer
 - 안전 위험(개구부·추락·정리불량·PPE 미착용)이 보이면 category=issue 로 잡으세요.
 - 글에 대상 작업이 적혀 있으면 **그 작업을 우선**하고, 사진은 상태 판정에만 쓰세요.
 - 사진만으로 대상을 확신할 수 없으면 target_code 를 비우고 question 에 되물으세요.
+- 출역 명부·인원 명단 사진이면 category=labor 로, proposed 에 {"headcount": 인원수, "company": "업체명"} 을
+  넣으세요. 업체별로 나뉘어 있으면 **업체마다 별도 item** 으로 만드세요.
 - 사진에서 **확인되지 않는 수치는 만들지 마세요.**
+- **글이 비어 있어도 사진만으로 판독하세요.** 사진이 곧 보고 내용입니다. 빈 결과를 돌려주지 마세요.
 P : '';
 
-        return $this->body($text, $activities, $purchases, $today) . $photoRule;
+        return $this->body($text, $activities, $purchases, $today).$kindLine.$photoRule;
     }
 
     /**
@@ -80,8 +86,12 @@ P : '';
 
         return <<<PROMPT
 당신은 미국 내 한국 대기업 플랜트/공장 설치현장(기계·전기·배관)의 공정관리자입니다.
-아래는 현장 사람들이 **형식 없이 주고받은 대화/메모**입니다. 카카오톡 대화를 통째로 붙여넣었을
-수도 있습니다. 이것을 읽고 **업무에 반영할 항목만** 뽑아 구조화하세요. JSON 만 반환합니다.
+아래는 현장에서 올라온 보고입니다. 형식이 없는 대화/메모일 수도 있고(카카오톡 통째로 붙여넣기),
+**사진만 있고 글이 비어 있을 수도 있습니다.** 어느 쪽이든 **업무에 반영할 항목만** 뽑아
+구조화하세요. JSON 만 반환합니다.
+
+이 현장의 가장 중요한 보고는 **"오늘 몇 명이 나와서 무슨 일을 했나"** 입니다.
+인원과 진행 상황이 보이면 반드시 빠뜨리지 말고 뽑으세요.
 
 [오늘 날짜] {$today}
 
@@ -98,7 +108,8 @@ P : '';
 - progress : 이미 한 일. 마감·완료·진행률. (과거형: "했다", "끝냈다", "20개 중 12개")
 - plan     : 앞으로 할 일. 내일/다음주 계획, 신규 작업 추가, 인원 투입 예정.
 - procurement : 자재 발주·납기·입고. ("화요일 도착", "발주 넣었다")
-- labor    : 인력 투입·출역·결원. ("3명 투입", "김씨 오늘 못 나옴")
+- labor    : **출역 인원 보고**. ("한빛전기 3명 나왔습니다", "오늘 전기 5명", "김씨 오늘 못 나옴")
+             이 현장의 핵심 보고다. 업체별로 나뉘면 업체마다 별도 item 으로 만들 것.
 - expense  : 지출·영수증·구매 비용.
 - issue    : 사고·안전·하자·민원·작업중단 사유.
 - noise    : 업무와 무관한 잡담(인사, 식사, 날씨 한담 등). **반드시 noise 로 분류하고 무시되게 하세요.**
@@ -118,6 +129,9 @@ P : '';
 - 상태:   {"status": "진행중"} 또는 {"status": "완료"}
 - 일정:   {"planned_start": "2026-07-28", "planned_end": "2026-07-30"}
 - 인원:   {"crew_size": 3}
+- 출역 보고: {"headcount": 5, "company": "한빛전기", "trade": "전기"}
+  ("한빛전기 5명 나왔습니다" 처럼 **실제 출역 인원 보고**일 때. 계획 투입 인원은 crew_size 를 쓰세요.)
+- 지출:   {"amount": 340.50, "vendor": "Home Depot", "spent_on": "2026-07-28"}
 - 발주ETA:{"eta": "2026-07-29"}
 대화에서 확실히 읽히는 항목만 넣고, 나머지 키는 아예 넣지 마세요.
 
@@ -182,7 +196,7 @@ PROMPT;
         foreach ($this->models() as $model) {
             try {
                 $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
-                    . "/v1beta/models/{$model}:generateContent";
+                    ."/v1beta/models/{$model}:generateContent";
 
                 $response = $this->http
                     ->timeout((int) config('services.gemini.timeout', 60))
@@ -196,7 +210,7 @@ PROMPT;
                     ]);
 
                 if ($response->failed()) {
-                    throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
+                    throw new RuntimeException('Gemini API returned status '.$response->status().': '.$response->body());
                 }
 
                 $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
@@ -212,11 +226,11 @@ PROMPT;
                 return $decoded;
             } catch (\Throwable $e) {
                 $lastException = $e;
-                Log::warning("상황실 판독 모델 {$model} 실패, 폴백: " . $e->getMessage());
+                Log::warning("상황실 판독 모델 {$model} 실패, 폴백: ".$e->getMessage());
             }
         }
 
-        throw new RuntimeException('상황실 판독 실패: ' . ($lastException?->getMessage() ?? 'unknown'));
+        throw new RuntimeException('상황실 판독 실패: '.($lastException?->getMessage() ?? 'unknown'));
     }
 
     /**
