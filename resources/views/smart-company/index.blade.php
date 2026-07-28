@@ -9033,7 +9033,7 @@
           '<label style="display:block;font-size:11.5px;color:var(--text-tertiary);margin-bottom:6px"><i class="ph ph-camera"></i> 현장 사진 첨부 <span style="color:#22c55e">(AI가 사진도 함께 읽습니다)</span></label>' +
           '<input type="file" id="ops-photo-input" accept="image/*" multiple capture="environment" style="font-size:12px;color:var(--text-secondary);max-width:100%">' +
           '<div id="ops-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>' +
-          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px">시공 사진·영수증·납품 사진 모두 인식합니다. 최대 6장. 글과 같이 올리면 가장 정확합니다.</div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px">시공 사진·영수증·납품 사진 모두 인식합니다. 최대 20장, 크기 제한 없음(서버가 알아서 줄입니다). 글과 같이 올리면 가장 정확합니다.</div>' +
           '</div>' +
           '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">' +
           '<button class="btn-primary" id="ops-read-btn" style="padding:10px 18px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
@@ -9053,7 +9053,7 @@
           '</div><div class="panel-body" id="ops-batches" style="padding:0"></div></div>';
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
-        window._opsPhotos = [];
+        window._opsFiles = [];
         var photoInput = document.getElementById('ops-photo-input');
         if (photoInput) photoInput.addEventListener('change', function () { opsHandlePhotos(this.files); });
         window.opsLoadPending();
@@ -9061,41 +9061,41 @@
         window.opsLoadBatches();
       }
 
-      // 첨부 사진을 캔버스로 축소(최대 1600px, JPEG 0.8)해 base64 로 보관 — 전송량 절감.
+      // 사진은 원본 파일 그대로 들고 있다가 한 장씩 업로드한다.
+      // 브라우저에서 미리 줄이지 않는 이유: 사용자가 크기 걱정 없이 올릴 수 있어야 하고,
+      // 줄이는 일은 AI 에 넘기기 직전에 서버가 한다(ImageDownscale).
       function opsHandlePhotos(fileList) {
         var files = Array.prototype.slice.call(fileList || []);
-        window._opsPhotos = window._opsPhotos || [];
+        window._opsFiles = window._opsFiles || [];
+        var dropped = 0;
         files.forEach(function (file) {
-          if (window._opsPhotos.length >= 6) return;
-          if (!/^image\//.test(file.type)) return;
-          var reader = new FileReader();
-          reader.onload = function (e) {
-            var img = new Image();
-            img.onload = function () {
-              var max = 1600, w = img.width, h = img.height;
-              if (w > max || h > max) { var r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
-              var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-              cv.getContext('2d').drawImage(img, 0, 0, w, h);
-              var url = cv.toDataURL('image/jpeg', 0.8);
-              window._opsPhotos.push({ data: url.split(',')[1], mime_type: 'image/jpeg' });
-              opsRenderPhotoStrip();
-            };
-            img.src = e.target.result;
-          };
-          reader.readAsDataURL(file);
+          if (!/^image\//.test(file.type)) { return; }
+          if (window._opsFiles.length >= 20) { dropped++; return; }
+          window._opsFiles.push(file);
         });
+        if (dropped) {
+          var m = document.getElementById('ops-read-msg');
+          if (m) m.textContent = '한 번에 20장까지 올릴 수 있어 ' + dropped + '장은 제외했습니다.';
+        }
+        opsRenderPhotoStrip();
       }
 
       function opsRenderPhotoStrip() {
         var strip = document.getElementById('ops-photo-strip');
         if (!strip) return;
-        strip.innerHTML = (window._opsPhotos || []).map(function (p, i) {
+        var files = window._opsFiles || [];
+        strip.innerHTML = files.map(function (f, i) {
           return '<div style="position:relative;width:58px;height:58px;border-radius:7px;overflow:hidden;border:1px solid var(--border-subtle)">' +
-            '<img src="data:' + p.mime_type + ';base64,' + p.data + '" style="width:100%;height:100%;object-fit:cover">' +
-            '<button onclick="window.opsRemovePhoto(' + i + ')" title="삭제" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.6);color:#fff;border:none;width:17px;height:17px;line-height:17px;font-size:11px;cursor:pointer;padding:0">×</button></div>';
+            '<img id="ops-thumb-' + i + '" style="width:100%;height:100%;object-fit:cover">' +
+            '<button onclick="window.opsRemovePhoto(' + i + ')" title="삭제" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.6);color:#fff;border:none;width:17px;height:17px;line-height:1;cursor:pointer;font-size:11px">×</button></div>';
         }).join('');
+        // 썸네일만 objectURL 로 띄운다 — 원본을 base64 로 복사하지 않아 메모리를 아낀다.
+        files.forEach(function (f, i) {
+          var el = document.getElementById('ops-thumb-' + i);
+          if (el) { el.src = URL.createObjectURL(f); el.onload = function () { URL.revokeObjectURL(el.src); }; }
+        });
       }
-      window.opsRemovePhoto = function (i) { (window._opsPhotos || []).splice(i, 1); opsRenderPhotoStrip(); };
+      window.opsRemovePhoto = function (i) { (window._opsFiles || []).splice(i, 1); opsRenderPhotoStrip(); };
 
       // 오늘 요약 — 저녁 다이제스트와 같은 집계를 화면에서도 바로 본다.
       window.opsLoadDigest = async function () {
@@ -9118,37 +9118,103 @@
           '</div>';
       };
 
+      // 사진을 한 장씩 따로 올린다 — 요청 하나가 작아 크기 제한이 사실상 사라지고 진행률도 보인다.
+      window.opsUploadPhotos = async function (files, onProgress) {
+        var tokens = [];
+        for (var i = 0; i < files.length; i++) {
+          if (onProgress) onProgress(i + 1, files.length);
+          var fd = new FormData();
+          fd.append('photo', files[i]);
+          var res = await fetch(@json(route('ops.photo')), {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': (document.querySelector('meta[name=csrf-token]') || {}).content || '', 'Accept': 'application/json' },
+            body: fd
+          });
+          var d = await res.json();
+          if (!d || !d.success) { throw new Error((d && d.error) || '사진 업로드 실패'); }
+          tokens.push(d.token);
+        }
+        return tokens;
+      };
+
       window.opsRead = async function () {
         var box = document.getElementById('ops-input');
         var btn = document.getElementById('ops-read-btn');
         var msg = document.getElementById('ops-read-msg');
-        var photos = window._opsPhotos || [];
-        if ((!box || !box.value.trim()) && !photos.length) { if (msg) msg.textContent = '내용이나 사진을 먼저 넣으세요.'; return; }
+        var files = window._opsFiles || [];
+        if ((!box || !box.value.trim()) && !files.length) { if (msg) msg.textContent = '내용이나 사진을 먼저 넣으세요.'; return; }
         var original = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="ph ph-spinner-gap"></i> ' + (photos.length ? '사진 포함 판독 중…' : '판독 중…');
         try {
-          var r = await gsRun('api_opsIngest', [box ? box.value : '', photos], { success: false });
+          var tokens = [];
+          if (files.length) {
+            btn.innerHTML = '<i class="ph ph-spinner-gap"></i> 사진 올리는 중…';
+            tokens = await window.opsUploadPhotos(files, function (n, total) {
+              if (msg) msg.textContent = '사진 올리는 중 ' + n + '/' + total + '…';
+            });
+          }
+
+          btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 판독 중…';
+          // 판독은 응답 후에 돈다 — 이 요청 자체는 즉시 끝나므로 504 가 나지 않는다.
+          var r = await gsRun('api_opsIngest', [box ? box.value : '', tokens], { success: false });
           if (!r || !r.success) {
             if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '판독 실패') + '</span>';
             return;
           }
-          if (msg) msg.textContent = '판독 완료 — ' + r.parsed + '건 중 업무 ' + r.actionable + '건, 잡담 ' + r.noise + '건 제외 (원문은 아래 기록에 보관됨)';
-          opsClearCache();
-          window.opsLoadBatches();
+
           if (box) box.value = '';
-          window._opsPhotos = [];
+          window._opsFiles = [];
           opsRenderPhotoStrip();
           var pin = document.getElementById('ops-photo-input'); if (pin) pin.value = '';
-          document.getElementById('ops-result').innerHTML =
-            '<div class="panel" style="margin-bottom:16px;border-left:3px solid #22c55e"><div class="panel-header">' +
-            '<div class="panel-title" style="color:#22c55e"><i class="ph ph-check-circle"></i> 방금 판독한 내용</div></div>' +
-            '<div class="panel-body" style="padding:0">' + opsRows(r.items || [], true) + '</div></div>';
-          window.opsLoadPending();
+          opsClearCache();
+          window.opsLoadBatches();
+
+          await window.opsAwaitJob(r.batchId, msg);
         } catch (e) {
           if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">오류: ' + opsEsc(e.message || e) + '</span>';
         } finally {
           btn.disabled = false; btn.innerHTML = original;
+        }
+      };
+
+      // 판독이 끝날 때까지 상태만 짧게 되묻는다. 폴링 한 번은 수십 ms 라 시간 제한에 걸리지 않는다
+      // — 이것이 "대기 시간 무제한" 의 실제 구현이다.
+      window.opsAwaitJob = async function (batchId, msg) {
+        var started = Date.now();
+        var delay = 1500;
+        for (;;) {
+          await new Promise(function (r) { setTimeout(r, delay); });
+          delay = Math.min(delay * 1.25, 5000);   // 길어질수록 간격을 늘려 서버 부담을 줄인다
+          var elapsed = Math.round((Date.now() - started) / 1000);
+
+          var j = null;
+          try {
+            if (window.apiCache) delete window.apiCache['api_getOpsJob' + JSON.stringify([batchId])];
+            j = await gsRun('api_getOpsJob', [batchId], null);
+          } catch (e) { /* 현장 네트워크가 끊겼다 붙어도 결과를 잃지 않게 계속 되묻는다 */ }
+
+          if (!j || !j.success) {
+            if (msg) msg.textContent = 'AI 판독 중… ' + elapsed + '초 경과 (연결 재시도 중)';
+            continue;
+          }
+          if (j.status === 'analyzing') {
+            if (msg) msg.textContent = 'AI 판독 중… ' + elapsed + '초 경과' + (j.imageCount ? ' · 사진 ' + j.imageCount + '장' : '');
+            continue;
+          }
+          if (j.status === 'failed') {
+            if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">판독 실패: ' + opsEsc(j.error || '') + '</span>';
+            return;
+          }
+
+          if (msg) msg.textContent = '판독 완료 — ' + j.parsed + '건 중 업무 ' + j.actionable + '건, 잡담 ' + j.noise + '건 제외 (' + elapsed + '초, 원문은 아래 기록에 보관됨)';
+          document.getElementById('ops-result').innerHTML =
+            '<div class="panel" style="margin-bottom:16px;border-left:3px solid #22c55e"><div class="panel-header">' +
+            '<div class="panel-title" style="color:#22c55e"><i class="ph ph-check-circle"></i> 방금 판독한 내용</div></div>' +
+            '<div class="panel-body" style="padding:0">' + opsRows(j.items || [], true) + '</div></div>';
+          opsClearCache();
+          window.opsLoadBatches();
+          window.opsLoadPending();
+          return;
         }
       };
 

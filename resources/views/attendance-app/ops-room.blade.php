@@ -118,46 +118,87 @@
             window.scrollTo(0, 0);
         }
 
-        // 사진은 캔버스로 축소(최대 1600px, JPEG 0.8)해 전송량을 줄인다 — 현장 LTE 를 고려.
+        // 사진은 원본 그대로 들고 있다가 한 장씩 올린다 — 요청 하나가 작아 크기 제한이 사라지고,
+        // 줄이는 일은 AI 에 넘기기 직전에 서버가 한다.
         document.getElementById('photos').addEventListener('change', function () {
-            photos = [];
-            Array.prototype.slice.call(this.files || []).slice(0, 6).forEach(function (file) {
-                if (!/^image\//.test(file.type)) return;
-                var reader = new FileReader();
-                reader.onload = function (e) {
-                    var img = new Image();
-                    img.onload = function () {
-                        var scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-                        var c = document.createElement('canvas');
-                        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-                        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-                        photos.push({ data: c.toDataURL('image/jpeg', 0.8), mime_type: 'image/jpeg' });
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
+            photos = Array.prototype.slice.call(this.files || [])
+                .filter(function (f) { return /^image\//.test(f.type); })
+                .slice(0, 20);
+            var msg = document.getElementById('send-msg');
+            if (msg && photos.length) { msg.textContent = '사진 ' + photos.length + '장 준비됨.'; }
         });
+
+        function uploadPhotos(onProgress) {
+            var tokens = [];
+            return photos.reduce(function (chain, file, i) {
+                return chain.then(function () {
+                    if (onProgress) onProgress(i + 1, photos.length);
+                    var fd = new FormData();
+                    fd.append('photo', file);
+                    return fetch(@json(route('ops.photo')), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                        body: fd
+                    }).then(function (r) { return r.json(); }).then(function (d) {
+                        if (!d || !d.success) { throw new Error((d && d.error) || '사진 업로드 실패'); }
+                        tokens.push(d.token);
+                    });
+                });
+            }, Promise.resolve()).then(function () { return tokens; });
+        }
 
         document.getElementById('send').addEventListener('click', function () {
             var raw = document.getElementById('raw').value.trim();
             var msg = document.getElementById('send-msg');
             if (!raw && !photos.length) { msg.textContent = '내용이나 사진을 올려 주세요.'; return; }
             var btn = this;
-            btn.disabled = true; btn.textContent = 'AI 판독 중…';
-            api('api_opsIngest', [raw, photos]).then(function (d) {
-                btn.disabled = false; btn.textContent = 'AI 판독 요청';
-                if (!d || d.success === false) { msg.textContent = (d && d.error) || '판독에 실패했습니다. 다시 시도하세요.'; return; }
-                document.getElementById('raw').value = '';
-                document.getElementById('photos').value = '';
-                photos = [];
-                msg.textContent = '올렸습니다. 업무 ' + (d.actionable || 0) + '건을 찾았습니다. 공정표 반영은 PC 상황실에서 확인하세요.';
-                reload();
-            }).catch(function () {
-                btn.disabled = false; btn.textContent = 'AI 판독 요청';
-                msg.textContent = '네트워크 오류. 다시 시도하세요.';
-            });
+            btn.disabled = true; btn.textContent = photos.length ? '사진 올리는 중…' : 'AI 판독 중…';
+
+            uploadPhotos(function (n, total) { msg.textContent = '사진 올리는 중 ' + n + '/' + total + '…'; })
+                .then(function (tokens) {
+                    btn.textContent = 'AI 판독 중…';
+                    return api('api_opsIngest', [raw, tokens]);
+                })
+                .then(function (d) {
+                    if (!d || d.success === false) { throw new Error((d && d.error) || '판독에 실패했습니다.'); }
+                    document.getElementById('raw').value = '';
+                    document.getElementById('photos').value = '';
+                    photos = [];
+                    return awaitJob(d.batchId, msg);
+                })
+                .then(function () { btn.disabled = false; btn.textContent = 'AI 판독 요청'; reload(); })
+                .catch(function (e) {
+                    btn.disabled = false; btn.textContent = 'AI 판독 요청';
+                    msg.textContent = (e && e.message) || '네트워크 오류. 다시 시도하세요.';
+                });
         });
+
+        // 판독이 끝날 때까지 상태만 짧게 되묻는다 — 요청 하나가 수십 ms 라 시간 제한에 걸리지 않는다.
+        function awaitJob(batchId, msg) {
+            var started = Date.now();
+            var delay = 1500;
+            return new Promise(function (resolve) {
+                (function tick() {
+                    setTimeout(function () {
+                        delay = Math.min(delay * 1.25, 5000);
+                        var elapsed = Math.round((Date.now() - started) / 1000);
+                        api('api_getOpsJob', [batchId]).then(function (j) {
+                            if (!j || !j.success || j.status === 'analyzing') {
+                                msg.textContent = 'AI 판독 중… ' + elapsed + '초 경과';
+                                return tick();
+                            }
+                            if (j.status === 'failed') { msg.textContent = '판독 실패: ' + (j.error || ''); return resolve(); }
+                            msg.textContent = '판독 완료 — 업무 ' + (j.actionable || 0) + '건 (' + elapsed + '초)';
+                            resolve();
+                        }).catch(function () {
+                            // 현장 네트워크가 끊겼다 붙어도 결과를 잃지 않게 계속 되묻는다.
+                            msg.textContent = 'AI 판독 중… ' + elapsed + '초 경과 (연결 재시도 중)';
+                            tick();
+                        });
+                    }, delay);
+                })();
+            });
+        }
 
         function reload() {
             api('api_getOpsBatches', []).then(function (d) {

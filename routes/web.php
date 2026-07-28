@@ -100,6 +100,9 @@ Route::middleware('auth')->group(function (): void {
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
+    // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
+    Route::post('/ops-api/photo', [\App\Http\Controllers\OpsPhotoController::class, 'store'])->name('ops.photo');
+
     // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
     Route::get('/attendance-app/ops-room', [\App\Http\Controllers\MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
