@@ -15,6 +15,7 @@ class OpsIntakeBatch extends Model
         'site_id', 'created_by_id', 'source', 'communication_message_id',
         'raw_text', 'original_text', 'edited_by_id', 'edited_at',
         'image_count', 'parsed_count', 'actionable_count', 'noise_count',
+        'status', 'error', 'analyzed_at', 'photo_disk', 'photo_paths',
     ];
 
     protected function casts(): array
@@ -25,6 +26,8 @@ class OpsIntakeBatch extends Model
             'actionable_count' => 'integer',
             'noise_count' => 'integer',
             'edited_at' => 'datetime',
+            'analyzed_at' => 'datetime',
+            'photo_paths' => 'array',
         ];
     }
 

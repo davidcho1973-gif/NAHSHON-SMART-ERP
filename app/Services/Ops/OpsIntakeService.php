@@ -2,6 +2,8 @@
 
 namespace App\Services\Ops;
 
+use App\Http\Controllers\OpsPhotoController;
+use App\Jobs\AnalyzeOpsIntakeJob;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
@@ -9,9 +11,12 @@ use App\Models\Site;
 use App\Models\WbsItem;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
+use App\Support\ImageDownscale;
 use App\Support\ImageParts;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 현장 상황실 — 올라온 글을 판독해 "반영 제안"으로 바꾼다.
@@ -40,7 +45,7 @@ class OpsIntakeService
     public function ingest(string $text, ?Site $site, ?int $userId = null, array $images = [], string $source = 'paste', ?int $messageId = null): array
     {
         $text = trim($text);
-        $images = ImageParts::sanitize($images);
+        $images = ImageParts::sanitize($images, ImageParts::MAX_IMAGES);
         if ($text === '' && $images === []) {
             return ['success' => false, 'error' => '판독할 내용이 없습니다.'];
         }
@@ -94,6 +99,199 @@ class OpsIntakeService
             'needsInput' => $items->where('status', 'needs_input')->count(),
             'items' => $items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
+    }
+
+    /**
+     * 판독을 예약하고 즉시 돌아온다 — 실제 AI 호출은 응답을 보낸 뒤에 한다.
+     *
+     * 사진 여러 장을 비전 AI 로 읽으면 수십 초~수 분이 걸린다. 이걸 요청 안에서 기다리면
+     * 게이트웨이가 먼저 끊어 504 가 난다(David 리포트). 그래서 원문만 먼저 저장하고 상태를
+     * 'analyzing' 으로 두면, 프론트는 그 batchId 로 진행 상태를 폴링한다.
+     * 요청은 짧게 끝나고 판독은 시간 제한 없이 돌 수 있다.
+     *
+     * @param  array<int, string>  $photoPaths  업로드해 둔 사진의 저장 경로
+     * @return array<string, mixed>
+     */
+    public function queue(string $text, ?Site $site, ?int $userId = null, array $photoPaths = [], string $source = 'paste', ?int $messageId = null): array
+    {
+        $text = trim($text);
+        $photoPaths = array_values(array_slice($photoPaths, 0, ImageParts::MAX_IMAGES));
+
+        if ($text === '' && $photoPaths === []) {
+            return ['success' => false, 'error' => '판독할 내용이 없습니다.'];
+        }
+
+        $batch = OpsIntakeBatch::create([
+            'site_id' => $site?->id,
+            'created_by_id' => $userId,
+            'source' => $source,
+            'communication_message_id' => $messageId,
+            'raw_text' => $text,
+            'image_count' => count($photoPaths),
+            'status' => 'analyzing',
+            'photo_disk' => $photoPaths !== [] ? OpsPhotoController::disk() : null,
+            'photo_paths' => $photoPaths ?: null,
+        ]);
+
+        AnalyzeOpsIntakeJob::dispatch($batch->id)->afterResponse();
+
+        return [
+            'success' => true,
+            'status' => 'analyzing',
+            'batchId' => $batch->id,
+            'imageCount' => count($photoPaths),
+        ];
+    }
+
+    /**
+     * 예약된 원문을 실제로 판독한다(백그라운드에서 호출).
+     *
+     * 여기는 게이트웨이 제한 밖이라 AI 호출 타임아웃을 넉넉히 올린다 — 한 번에 다 읽게 하는 편이
+     * 짧게 끊고 여러 모델로 재시도하는 것보다 빠르고 정확하다.
+     */
+    public function analyze(int $batchId): void
+    {
+        $batch = OpsIntakeBatch::find($batchId);
+        if (! $batch || $batch->status === 'done') {
+            return;
+        }
+
+        config([
+            'services.gemini.timeout' => max(300, (int) config('services.gemini.timeout')),
+            'services.anthropic.timeout' => max(300, (int) config('services.anthropic.timeout')),
+        ]);
+
+        try {
+            $site = $batch->site_id ? Site::find($batch->site_id) : null;
+            $images = $this->loadPhotos($batch);
+            $text = (string) $batch->raw_text;
+
+            $activities = $this->activityContext($site);
+            $purchases = $this->purchaseContext($site);
+            $learned = $this->learning->promptBlock($site?->id);
+
+            $raw = $this->analyzer->read(
+                $text,
+                $activities->all(),
+                $purchases->all(),
+                Carbon::today()->toDateString(),
+                $images,
+                $learned,
+            );
+
+            $validCodes = $activities->pluck('code')->filter()->all();
+            $validPos = $purchases->pluck('po')->filter()->all();
+
+            $saved = [];
+            foreach ($raw as $r) {
+                $item = $this->persist($r, $site, $batch->created_by_id, $batch->source, $batch->communication_message_id, $validCodes, $validPos, $text, $batch->id);
+                if ($item !== null) {
+                    $saved[] = $item;
+                }
+            }
+
+            $items = collect($saved);
+            $batch->update([
+                'parsed_count' => $items->count(),
+                'actionable_count' => $items->where('category', '!=', 'noise')->count(),
+                'noise_count' => $items->where('category', 'noise')->count(),
+                'status' => 'done',
+                'error' => null,
+                'analyzed_at' => now(),
+            ]);
+
+            $this->discardPhotos($batch);
+        } catch (\Throwable $e) {
+            report($e);
+            $batch->update(['status' => 'failed', 'error' => $e->getMessage(), 'analyzed_at' => now()]);
+        }
+    }
+
+    /**
+     * 판독 진행 상태 — 프론트가 이걸 폴링한다. 요청 하나가 수십 ms 라 시간 제한에 걸리지 않는다.
+     *
+     * @return array<string, mixed>
+     */
+    public function job(int $batchId): array
+    {
+        $batch = OpsIntakeBatch::with('items')->find($batchId);
+        if (! $batch) {
+            return ['success' => false, 'error' => '판독 작업을 찾을 수 없습니다.'];
+        }
+
+        $status = (string) ($batch->status ?: 'done');
+        $out = [
+            'success' => true,
+            'status' => $status,
+            'batchId' => $batch->id,
+            'imageCount' => (int) $batch->image_count,
+            'elapsed' => (int) $batch->created_at->diffInSeconds(now()),
+        ];
+
+        if ($status === 'failed') {
+            return $out + ['error' => (string) $batch->error];
+        }
+        if ($status !== 'done') {
+            return $out;
+        }
+
+        $items = $batch->items;
+
+        return $out + [
+            'parsed' => $items->count(),
+            'actionable' => $items->where('category', '!=', 'noise')->count(),
+            'noise' => $items->where('category', 'noise')->count(),
+            'needsInput' => $items->where('status', 'needs_input')->count(),
+            'items' => $items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
+        ];
+    }
+
+    /**
+     * 저장해 둔 사진을 읽어 비전 입력 형태로 만든다. 이때 서버가 크기를 줄인다 —
+     * 그래서 사용자는 원본을 크기 제한 없이 올릴 수 있다.
+     *
+     * @return array<int, array{data: string, mime_type: string}>
+     */
+    private function loadPhotos(OpsIntakeBatch $batch): array
+    {
+        $paths = is_array($batch->photo_paths) ? $batch->photo_paths : [];
+        if ($paths === []) {
+            return [];
+        }
+
+        $disk = Storage::disk((string) ($batch->photo_disk ?: OpsPhotoController::disk()));
+        $out = [];
+
+        foreach ($paths as $path) {
+            try {
+                if (! $disk->exists($path)) {
+                    continue;
+                }
+                $shrunk = ImageDownscale::shrink((string) $disk->get($path));
+                $out[] = ['data' => base64_encode($shrunk['data']), 'mime_type' => $shrunk['mime']];
+            } catch (\Throwable $e) {
+                Log::warning('상황실 사진 로드 실패: '.$e->getMessage());
+            }
+        }
+
+        return $out;
+    }
+
+    /** 판독이 끝나면 원본 사진은 지운다 — 근거는 원문 텍스트와 판독 항목으로 남는다. */
+    private function discardPhotos(OpsIntakeBatch $batch): void
+    {
+        $paths = is_array($batch->photo_paths) ? $batch->photo_paths : [];
+        if ($paths === []) {
+            return;
+        }
+
+        try {
+            Storage::disk((string) ($batch->photo_disk ?: OpsPhotoController::disk()))->delete($paths);
+        } catch (\Throwable $e) {
+            Log::warning('상황실 사진 정리 실패: '.$e->getMessage());
+        }
+
+        $batch->update(['photo_paths' => null]);
     }
 
     /**

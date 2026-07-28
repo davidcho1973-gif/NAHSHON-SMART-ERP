@@ -154,12 +154,14 @@ class SmartCompanyData
             'api_getDocsForEntity' => app(\App\Services\IntegratedDocumentService::class)->forEntity((string) ($args[0] ?? ''), $args[1] ?? 0),
             'api_getDocExpiring' => app(\App\Services\DocumentExpiryService::class)->overview(self::resolveSiteId($siteId), (int) ($args[0] ?? 60)),
             // 현장 상황실 — 자유 형식 글/카톡 붙여넣기 판독
-            'api_opsIngest' => app(\App\Services\Ops\OpsIntakeService::class)->ingest(
+            // 판독 예약 — 사진이 많아도 요청은 즉시 끝나고, 실제 판독은 응답 후에 돈다(504 방지).
+            'api_opsIngest' => app(\App\Services\Ops\OpsIntakeService::class)->queue(
                 (string) ($args[0] ?? ''),
                 self::resolveSiteId($siteId) ? \App\Models\Site::find(self::resolveSiteId($siteId)) : null,
                 auth()->id(),
-                is_array($args[1] ?? null) ? $args[1] : [],
+                \App\Http\Controllers\OpsPhotoController::resolve(is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             ),
+            'api_getOpsJob' => app(\App\Services\Ops\OpsIntakeService::class)->job((int) ($args[0] ?? 0)),
             'api_getOpsDigest' => app(\App\Services\Ops\OpsDigestService::class)->summary(self::resolveSiteId($siteId)),
             'api_getOpsBatches' => self::opsBatches($siteId),
             'api_getOpsBatch' => app(\App\Services\Ops\OpsIntakeService::class)->batch((int) ($args[0] ?? 0)),

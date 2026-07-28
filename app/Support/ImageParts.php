@@ -9,6 +9,16 @@ namespace App\Support;
  */
 class ImageParts
 {
+    /**
+     * 비동기(응답 후) 판독 경로에서 쓰는 상한.
+     *
+     * 상황실은 판독을 요청 응답 후로 미뤄 게이트웨이 시간 제한이 없고, 사진도 AI 에 넘기기
+     * 직전에 서버가 줄이므로(ImageDownscale) 많이 받아도 된다. 반면 아직 요청 안에서
+     * 동기로 판독하는 경로(작업마감 사진 등)는 기본값 6장을 그대로 쓴다 — 그쪽에서 장수를
+     * 늘리면 다시 타임아웃이 난다.
+     */
+    public const MAX_IMAGES = 20;
+
     /** 허용 MIME. 그 외(PDF 등)는 비전 입력에서 제외한다. */
     private const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
