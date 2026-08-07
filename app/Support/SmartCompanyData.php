@@ -104,6 +104,14 @@ class SmartCompanyData
             'api_getCompanyTypes' => self::companyTypes(),
             'api_setCompanyType' => self::setCompanyType($args[0] ?? null, (string) ($args[1] ?? '')),
 
+            // 계정 · 권한 관리 (Filament Access Control 을 SPA 로 옮긴 것).
+            // 권한 판단은 전부 서비스 안에서 한다 — 화면에서 버튼을 숨기는 건 방어가 아니다.
+            'api_getUserAccessList' => app(\App\Services\Admin\UserAccessService::class)->list(),
+            'api_getUserAccessOptions' => app(\App\Services\Admin\UserAccessService::class)->options(),
+            'api_saveUserAccess' => app(\App\Services\Admin\UserAccessService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setUserAccessStatus' => app(\App\Services\Admin\UserAccessService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
+            'api_deleteUserAccess' => app(\App\Services\Admin\UserAccessService::class)->delete((int) ($args[0] ?? 0)),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),
