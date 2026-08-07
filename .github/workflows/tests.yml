@@ -121,6 +121,47 @@ jobs:
             *)   echo "::error title=배포 요청 거부됨::HTTP $code — Hook URL 이 유효한지 확인하세요."; exit 1 ;;
           esac
 
+      # 훅 호출이 실패했을 때 "무엇을 넣으셨는지" 를 값 노출 없이 되짚어 준다.
+      # 응답 코드만으로는 추측이 반복된다. 호스트·경로 모양·길이면 대시보드 주소인지
+      # 훅 주소인지 갈린다. 토큰이 들어 있는 마지막 구간은 길이만 세고 절대 찍지 않는다.
+      - name: Diagnose the hook URL shape
+        if: failure()
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_STAGING }}
+        run: |
+          scheme=$(printf '%s' "$HOOK" | sed -n 's#^\([a-zA-Z][a-zA-Z0-9+.-]*\)://.*#\1#p')
+          host=$(printf '%s' "$HOOK" | sed -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' -e 's#[/?].*##')
+          path=$(printf '%s' "$HOOK" | sed -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://[^/?]*##' -e 's#?.*##')
+
+          echo "프로토콜: ${scheme:-없음(주소가 http(s):// 로 시작하지 않습니다)}"
+          echo "호스트: ${host:-읽지 못함}"
+          echo "전체 길이: ${#HOOK}자"
+          echo "경로 구간:"
+          # `|| [ -n "$seg" ]` 가 없으면 개행으로 끝나지 않는 마지막 구간을 read 가 버린다.
+          # 하필 그 마지막 구간이 토큰이라, 있는지 없는지가 진단의 핵심이다.
+          printf '%s' "$path" | tr '/' '\n' | while IFS= read -r seg || [ -n "$seg" ]; do
+            [ -z "$seg" ] && continue
+            # 순수하게 소문자와 하이픈뿐인 짧은 구간만 사람이 읽는 단어로 보고 그대로 찍는다.
+            # 숫자나 대문자가 하나라도 섞였으면 토큰일 수 있으니 길이만 남긴다.
+            rest=$(printf '%s' "$seg" | tr -d 'a-z-')
+            if [ -z "$rest" ] && [ "${#seg}" -le 20 ]; then
+              echo "  /$seg"
+            else
+              echo "  /<${#seg}자>"
+            fi
+          done
+
+          echo
+          echo "판별:"
+          case "$path" in
+            *projects*|*environments*|*settings*|*dashboard*)
+              echo "  ✗ 경로에 대시보드 화면 이름이 들어 있습니다 — 브라우저 주소창 URL 입니다." ;;
+            *hook*|*deploy*)
+              echo "  ~ 훅처럼 생겼지만 302 가 났습니다. 토글을 켜기 전 예시 주소를 넣었거나, 훅이 재발급되어 주소가 바뀐 경우입니다." ;;
+            *)
+              echo "  ? 알려진 어느 형태와도 다릅니다." ;;
+          esac
+
       - name: Verify the deployed build
         if: success()
         env:
