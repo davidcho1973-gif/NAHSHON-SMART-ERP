@@ -14,6 +14,7 @@
     rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   <style>
@@ -180,6 +181,9 @@
               </li>
               <li class="nav-item" data-view="office" id="nav-office">
                 <i class="ph ph-archive"></i><span>í˜„ìž¥ì‚¬ë¬´ì‹¤ ë¹„í’ˆ</span>
+              </li>
+              <li class="nav-item" data-view="access-control" id="nav-access-control">
+                <i class="ph ph-shield-check" style="color:#0ea5e9"></i><span>계정 · 권한 관리</span>
               </li>
               <li class="nav-item" style="border-top: 1px solid var(--border-color); margin-top: 5px; padding-top: 5px;"
                 onclick="openUniversalScanner()">
@@ -909,8 +913,11 @@
       return new Promise(async function (resolve, reject) {
         const cacheKey = fnName + JSON.stringify(args || []);
         const now = Date.now();
+        // 조회만 캐시한다. 저장·삭제까지 캐시하면 같은 값으로 두 번째 누를 때
+        // 서버에 가지 않고 "성공" 만 돌아온다(활성 → 정지 → 활성 이 대표적).
+        const isRead = fnName.indexOf('api_get') === 0;
 
-        if (window.apiCache[cacheKey] && (now - window.apiCache[cacheKey].timestamp < CACHE_TTL)) {
+        if (isRead && window.apiCache[cacheKey] && (now - window.apiCache[cacheKey].timestamp < CACHE_TTL)) {
           console.log('[Cache Hit]', fnName);
           resolve(JSON.parse(JSON.stringify(window.apiCache[cacheKey].data)));
           return;
@@ -937,9 +944,11 @@
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const res = await response.json();
           const isFailed = (res && (res.success === false || res.error));
-          if (!isFailed) {
+          if (isRead && !isFailed) {
             window.apiCache[cacheKey] = { data: JSON.parse(JSON.stringify(res)), timestamp: Date.now() };
           }
+          // 무언가 바뀌었으면 조회 캐시는 더 이상 믿을 수 없다.
+          if (!isRead && !isFailed) window.apiCache = {};
           resolve(res != null ? res : defaultVal);
         } catch (e) {
           console.warn('[API] ' + fnName + ':', e);
@@ -948,6 +957,9 @@
       });
     }
 
+
+    // 관리자 화면(public/js/admin-*.js)이 같은 호출기를 쓰도록 전역에 노출한다.
+    window.gsRun = gsRun;
 
     // Laravel compatibility shim for legacy google.script.run calls.
     // It keeps the converted SPA stable while the backend moves from GAS to Laravel.
@@ -1313,6 +1325,7 @@
         'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
         'opsroom': { title: '현장 상황실', render: renderOpsRoom },
+        'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
