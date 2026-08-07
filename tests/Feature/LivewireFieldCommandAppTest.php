@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\FieldCommandApp;
+use App\Livewire\FieldApp\FieldCommandApp;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;

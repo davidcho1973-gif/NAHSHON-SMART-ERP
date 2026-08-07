@@ -1,8 +1,7 @@
 <?php
 
-namespace App\Livewire;
+namespace App\Livewire\FieldApp;
 
-use App\Models\DailyCrewReport;
 use App\Models\Equipment;
 use App\Models\Site;
 use Livewire\Component;
@@ -280,7 +279,7 @@ class FieldCommandApp extends Component
     {
         $sites = Site::query()->where('status', 'active')->orWhereNull('status')->orderBy('name')->get();
 
-        return view('livewire.field-command-app', [
+        return view('field-app.livewire.field-command-app', [
             'sites' => $sites,
         ]);
     }

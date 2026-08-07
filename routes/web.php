@@ -30,9 +30,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
 
     // Livewire 4 + Tailwind v4 Construction Field Command App
-    Route::get('/field-app', function () {
-        return view('field-app');
-    })->name('field-app.index');
+    Route::get('/field-app', [\App\Http\Controllers\FieldApp\FieldAppController::class, 'index'])->name('field-app.index');
 
     Route::post('/company/switch', CompanySwitchController::class)->name('company.switch');
 
