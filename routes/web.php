@@ -20,17 +20,15 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 
 
 
+// Construction Field Apps (Accessible directly on mobile at construction sites)
+Route::get('/daily-work-report', [\App\Http\Controllers\DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
+Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
+Route::get('/field-app', [\App\Http\Controllers\FieldApp\FieldAppController::class, 'index'])->name('field-app.index');
+
 Route::middleware('auth')->group(function (): void {
     Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
     Route::redirect('/erp', '/');
     Route::redirect('/dashboard', '/');
-
-    // Construction Daily Field Work Report App
-    Route::get('/daily-work-report', [\App\Http\Controllers\DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
-    Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
-
-    // Livewire 4 + Tailwind v4 Construction Field Command App
-    Route::get('/field-app', [\App\Http\Controllers\FieldApp\FieldAppController::class, 'index'])->name('field-app.index');
 
     Route::post('/company/switch', CompanySwitchController::class)->name('company.switch');
 
