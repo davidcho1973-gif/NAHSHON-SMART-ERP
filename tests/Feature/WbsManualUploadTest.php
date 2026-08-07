@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\AnalyzeWbsManualJob;
 use App\Models\Project;
+use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsItem;
 use App\Models\WbsManual;
@@ -24,7 +26,12 @@ class WbsManualUploadTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create();
+        // 매뉴얼은 관리 권한이 있어야 다룰 수 있다(팩토리 기본값은 worker 라 403 이 난다).
+        $this->user = User::factory()->create([
+            'access_role' => 'admin',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
         Project::query()->create(['project_code' => 'MAN-01', 'name' => 'Manual Project', 'construction_type' => 'mechanical']);
     }
 
@@ -45,6 +52,20 @@ class WbsManualUploadTest extends TestCase
                             ],
                         ]],
                     ]]]),
+                ]],
+            ]),
+        ]);
+    }
+
+    private function fakeClaudeEmptyResult(): void
+    {
+        config(['services.anthropic.api_key' => 'sk-ant-test', 'services.wbs.ai_engine' => 'claude']);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'stop_reason' => 'end_turn',
+                'content' => [[
+                    'type' => 'text',
+                    'text' => json_encode(['activities' => [], 'milestones' => [], 'stages' => []]),
                 ]],
             ]),
         ]);
@@ -90,7 +111,7 @@ class WbsManualUploadTest extends TestCase
             'path' => 'wbs-manuals/setup.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
         ]);
 
-        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+        (new AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
 
         $manual->refresh();
         $this->assertSame('completed', $manual->status);
@@ -109,7 +130,7 @@ class WbsManualUploadTest extends TestCase
             'path' => 'wbs-manuals/gone.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
         ]);
 
-        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+        (new AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
 
         $manual->refresh();
         $this->assertSame('failed', $manual->status);
@@ -140,5 +161,84 @@ class WbsManualUploadTest extends TestCase
             'manual' => $file,
             'project_code' => 'MAN-01',
         ])->assertStatus(422);
+    }
+
+    public function test_worker_cannot_upload_or_list_wbs_manuals(): void
+    {
+        // 매뉴얼에는 원청 도면·시방·계약 조건이 들어 있다. 로그인만 했다고 열려선 안 된다.
+        Storage::fake('public');
+        $worker = User::factory()->create([
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+        ]);
+
+        $this->actingAs($worker)->postJson(route('wbs-manual.upload'), [
+            'manual' => UploadedFile::fake()->create('manual.pdf', 20, 'application/pdf'),
+            'project_code' => 'MAN-01',
+        ])->assertForbidden();
+
+        $this->actingAs($worker)->getJson(route('wbs-manual.index'))->assertForbidden();
+    }
+
+    public function test_site_manager_cannot_open_another_sites_manual(): void
+    {
+        // 아이디만 바꿔 남의 현장 매뉴얼을 내려받는 경로(IDOR).
+        Storage::fake('public');
+        $allowed = Site::create(['code' => 'ALLOWED', 'name' => 'Allowed']);
+        $other = Site::create(['code' => 'OTHER', 'name' => 'Other']);
+        $manager = User::factory()->create([
+            'access_role' => 'site_manager',
+            'access_scope' => 'site',
+            'allowed_site_id' => $allowed->id,
+            'account_status' => 'active',
+        ]);
+        Storage::disk('public')->put('wbs-manuals/other.pdf', '%PDF-1.4 other');
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01',
+            'site_id' => $other->id,
+            'original_name' => 'other.pdf',
+            'path' => 'wbs-manuals/other.pdf',
+        ]);
+
+        $this->actingAs($manager)->get(route('wbs-manual.show', $manual))->assertForbidden();
+    }
+
+    public function test_site_manager_only_lists_their_own_sites_manuals(): void
+    {
+        $allowed = Site::create(['code' => 'ALLOWED2', 'name' => 'Allowed']);
+        $other = Site::create(['code' => 'OTHER2', 'name' => 'Other']);
+        $manager = User::factory()->create([
+            'access_role' => 'site_manager',
+            'access_scope' => 'site',
+            'allowed_site_id' => $allowed->id,
+            'account_status' => 'active',
+        ]);
+        WbsManual::create(['project_code' => 'MAN-01', 'site_id' => $allowed->id, 'original_name' => 'mine.pdf', 'path' => 'wbs-manuals/mine.pdf']);
+        WbsManual::create(['project_code' => 'MAN-01', 'site_id' => $other->id, 'original_name' => 'theirs.pdf', 'path' => 'wbs-manuals/theirs.pdf']);
+
+        $response = $this->actingAs($manager)->getJson(route('wbs-manual.index'));
+
+        $response->assertOk()->assertJsonCount(1, 'manuals');
+        $response->assertJsonPath('manuals.0.original_name', 'mine.pdf');
+    }
+
+    public function test_analyze_job_marks_empty_ai_result_as_failed(): void
+    {
+        // AI 가 아무것도 못 뽑았는데 "분석 완료" 로 보이면, 담당자가 WBS 가 생긴 줄 알고 넘어간다.
+        Storage::fake('public');
+        $this->fakeClaudeEmptyResult();
+
+        Storage::disk('public')->put('wbs-manuals/empty.pdf', '%PDF-1.4 empty manual');
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01', 'original_name' => 'empty.pdf', 'disk' => 'public',
+            'path' => 'wbs-manuals/empty.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
+        ]);
+
+        (new AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+
+        $manual->refresh();
+        $this->assertSame('failed', $manual->status);
+        $this->assertStringContainsString('비어', (string) $manual->error);
     }
 }
