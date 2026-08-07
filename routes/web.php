@@ -20,7 +20,19 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 
 
 
-// Construction Field Apps (Accessible directly on mobile at construction sites)
+Route::get('/debug-routes-sec', function () {
+    $routes = collect(Route::getRoutes())->map(fn ($r) => [
+        'uri' => $r->uri(),
+        'methods' => $r->methods(),
+        'name' => $r->getName(),
+    ]);
+    return response()->json([
+        'total' => $routes->count(),
+        'has_field_app' => $routes->pluck('uri')->contains('field-app'),
+        'field_app_routes' => $routes->filter(fn ($r) => str_contains($r['uri'], 'field-app'))->values(),
+        'sample_routes' => $routes->pluck('uri')->take(30),
+    ]);
+});
 Route::get('/daily-work-report', [\App\Http\Controllers\DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
 Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
 Route::get('/field-app', function () {
