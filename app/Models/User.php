@@ -8,10 +8,12 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
 #[Fillable([
     'employee_id',
@@ -34,6 +36,14 @@ class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Memoised per request. Named apart from accessibleCompanies() so Eloquent
+     * never mistakes it for a relationship.
+     *
+     * @var Collection<int, Company>|null
+     */
+    private ?Collection $accessibleCompaniesCache = null;
 
     public const ROLE_OPTIONS = [
         'super_admin' => 'Super Admin',
@@ -96,6 +106,33 @@ class User extends Authenticatable implements FilamentUser
     public function allowedCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'allowed_company_id');
+    }
+
+    /** Companies this user may switch between. */
+    public function companies(): BelongsToMany
+    {
+        return $this->belongsToMany(Company::class, 'company_user')
+            ->withPivot('is_default')
+            ->withTimestamps();
+    }
+
+    /**
+     * Companies the user can actually open. Admins reach every active company so
+     * a newly created one is never orphaned; everyone else is limited to their
+     * memberships.
+     *
+     * @return Collection<int, Company>
+     */
+    public function accessibleCompanies(): Collection
+    {
+        return $this->accessibleCompaniesCache ??= in_array($this->access_role, ['super_admin', 'admin'], true)
+            ? Company::query()->where('status', 'active')->orderBy('name')->get()
+            : $this->companies()->where('status', 'active')->orderBy('name')->get();
+    }
+
+    public function canAccessCompany(int $companyId): bool
+    {
+        return $this->accessibleCompanies()->contains('id', $companyId);
     }
 
     public function allowedSite(): BelongsTo

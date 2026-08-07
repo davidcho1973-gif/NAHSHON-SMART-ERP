@@ -10,6 +10,7 @@ use App\Models\PayrollRun;
 use App\Models\SmartRecord;
 use App\Models\Site;
 use App\Services\AttendanceQrService;
+use App\Services\CommandCenter\ConstructionCommandCenterService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -125,10 +126,13 @@ class SmartCompanyData
             'api_getEmployeeList' => \App\Models\Employee::query()->where('employment_status', 'active')->orderBy('name')->get()->map(fn($e) => ['id' => $e->id, 'name' => $e->name, 'company_id' => $e->company_id, 'team_id' => $e->team_id])->all(),
             'api_getSiteList' => Schema::hasTable('sites') ? \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get()->map(fn($s) => ['id' => $s->id, 'code' => $s->code, 'name' => $s->name])->all() : [],
             'api_getProjectList' => Schema::hasTable('projects') ? \App\Models\Project::query()->orderByDesc('id')->get()->map(fn($p) => ['id' => $p->id, 'code' => $p->project_code, 'name' => $p->name, 'site_id' => $p->site_id])->all() : [],
-            'api_createVendor' => ['success' => true, 'id' => 'V-' . random_int(100, 999)],
+            'api_createVendor' => self::createVendor(is_array($args[0] ?? null) ? $args[0] : []),
             'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\nNAHSHON MEP"],
-            'api_translateToEnglish' => ['success' => true, 'text' => (string) ($args[0] ?? '')],
+            // stub: 실제 번역 미구현 — 원문 그대로 반환. 'english' 키는 벤더 모달 translateDraft() JS 계약.
+            'api_translateToEnglish' => ['success' => true, 'english' => (string) ($args[0] ?? ''), 'text' => (string) ($args[0] ?? '')],
+            // stub: 실제 메일 발송 미구현 — Gmail 연동 전까지 성공 응답만 반환한다.
             'api_sendVendorEmail' => ['success' => true],
+            // stub: 수신 메일 조회 미구현 — 항상 빈 이력 반환.
             'api_getVendorReplies' => ['success' => true, 'replies' => []],
 
             'api_getAllFolderFiles' => json_encode(['success' => true, 'data' => ['NAHSHON RECEIPT' => ['pending' => 3, 'done' => 28, 'total' => 31], 'UTILITY RECEIPT' => ['pending' => 1, 'done' => 12, 'total' => 13]]]),
@@ -489,18 +493,11 @@ class SmartCompanyData
 
     public static function commandCenter(string $siteId): array
     {
-        return [
-            'success' => true,
-            'generatedAt' => Carbon::now()->format('Y-m-d H:i'),
-            'health' => ['decisionQueue' => 3, 'revenueAtRisk' => 18400, 'safetyBlockers' => 1, 'scheduleRisk' => 2],
-            'decisions' => [
-                ['title' => 'Approve rental extension', 'summary' => 'Scissor lift return date conflicts with ceiling rough-in.', 'priority' => 'warning', 'owner' => 'PM', 'action' => 'Extend 3 days'],
-                ['title' => 'Capture change order evidence', 'summary' => 'Owner requested extra receptacles in Area B.', 'priority' => 'critical', 'owner' => 'Foreman', 'action' => 'Create CO packet'],
-            ],
-            'projects' => self::projects(),
-            'billing' => [['label' => 'Unbilled CO candidates', 'amount' => 18400, 'status' => '주의', 'action' => 'Review'], ['label' => 'Pending rental invoice', 'amount' => 4200, 'status' => '승인대기', 'action' => 'Approve']],
-            'brief' => ['Attendance is synced across active sites.', 'One safety blocker requires action before work starts.', 'Two WBS items are behind target progress.'],
-        ];
+        $user = auth()->user();
+
+        return $user
+            ? app(ConstructionCommandCenterService::class)->snapshot($user, $siteId)
+            : ['success' => false, 'error' => '로그인이 필요합니다.'];
     }
 
     public static function financeStats(string $siteId = 'ALL'): array
@@ -1413,7 +1410,107 @@ class SmartCompanyData
     }
     public static function flightList(): array { return [['id' => 'FL-001', 'name' => 'Han Gildong', 'direction' => '입국', 'from' => 'ICN', 'to' => 'PHX', 'depDateTime' => '2026-06-28 10:30', 'airline' => 'Korean Air', 'pnr' => 'KXNV7T', 'price' => 1240, 'status' => '발권', 'needPickup' => true, 'pickupBy' => 'Lee', 'housingReady' => true]]; }
     public static function officeSupplies(): array { return [['id' => 'OF-001', 'category' => '소모품', 'name' => 'Copy Paper A4', 'qty' => 3, 'minQty' => 5, 'location' => 'Office cabinet', 'lastRestock' => '2026-06-01', 'unitPrice' => 45, 'reorder' => true], ['id' => 'OF-002', 'category' => 'Safety', 'name' => 'Safety Vest', 'qty' => 8, 'minQty' => 10, 'location' => 'Safety shelf', 'lastRestock' => '2026-05-24', 'unitPrice' => 35, 'reorder' => true]]; }
-    public static function vendors(): array { $fromDb = self::smartRecords('vendors'); return $fromDb ?: [['id' => 'VEN-001', 'name' => 'Graybar', 'category' => 'Electrical Supply', 'manager' => 'Amy', 'phone' => '602-555-0111', 'email' => 'quotes@graybar.example', 'contractStatus' => '진행중', 'site' => 'ALL'], ['id' => 'VEN-002', 'name' => 'United Rentals', 'category' => 'Equipment Rental', 'manager' => 'Mark', 'phone' => '602-555-0122', 'email' => 'az@united.example', 'contractStatus' => '진행중', 'site' => 'ALL']]; }
+    /**
+     * 거래처 마스터 — vendors 테이블 실제 조회. 응답 필드는 SPA renderVendors()/
+     * openVendorModal() 이 기대하는 shape(id/name/category/manager/phone/email/
+     * contractStatus/site)를 그대로 유지한다.
+     */
+    public static function vendors(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('vendors') && \App\Models\Vendor::query()->exists()) {
+                $query = \App\Models\Vendor::query()->orderBy('name');
+                self::applyVendorUserScope($query);
+
+                // 스코프 결과 0건이면 빈 배열 그대로 — SPA 빈 상태 UI가 동작해야 한다.
+                return $query->get()->map(fn (\App\Models\Vendor $v): array => [
+                    'id' => $v->id,
+                    'name' => $v->name,
+                    'category' => $v->trade ?: '-',
+                    'manager' => $v->contact_name ?: '-',
+                    'phone' => $v->phone ?: '-',
+                    'email' => $v->email ?: '',
+                    'contractStatus' => match ($v->status) {
+                        'active' => '진행중',
+                        'inactive' => '중지',
+                        default => (string) $v->status,
+                    },
+                    'site' => 'ALL',
+                ])->all();
+            }
+        } catch (\Throwable) {
+            // Fall through to the demo fallback below.
+        }
+
+        // demo fallback: vendors 테이블이 없거나 완전히 비어 있을 때만
+        return [['id' => 'VEN-001', 'name' => 'Graybar', 'category' => 'Electrical Supply', 'manager' => 'Amy', 'phone' => '602-555-0111', 'email' => 'quotes@graybar.example', 'contractStatus' => '진행중', 'site' => 'ALL'], ['id' => 'VEN-002', 'name' => 'United Rentals', 'category' => 'Equipment Rental', 'manager' => 'Mark', 'phone' => '602-555-0122', 'email' => 'az@united.example', 'contractStatus' => '진행중', 'site' => 'ALL']];
+    }
+
+    /**
+     * vendors 테이블은 company_id 만 가지므로 applyFinanceUserScope 의 규칙을
+     * 회사 필터로 축약: 특권 역할·all_sites 는 전체, 그 외에는 자기 회사 +
+     * 전사 공통(company_id null) 거래처만 보인다.
+     */
+    private static function applyVendorUserScope($query): void
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if (
+            in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)
+            || $user->access_scope === 'all_sites'
+        ) {
+            return;
+        }
+
+        $companyId = CurrentCompany::id() ?? ($user->allowed_company_id ?: $user->employee?->company_id);
+
+        if ($companyId) {
+            $query->where(function ($companyQuery) use ($companyId): void {
+                $companyQuery->where('company_id', $companyId)->orWhereNull('company_id');
+            });
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * SPA 신규 거래처 등록 모달({category, name, manager, phone, email}) 저장.
+     * 응답 shape 는 프론트 JS 계약 그대로 — 성공 {success:true, id}, 실패 {success:false, error}.
+     */
+    public static function createVendor(array $payload): array
+    {
+        $name = trim((string) ($payload['name'] ?? ''));
+
+        if ($name === '') {
+            return ['success' => false, 'error' => '업체명을 입력해주세요.'];
+        }
+
+        try {
+            $user = auth()->user();
+            $companyId = CurrentCompany::id() ?? $user?->employee?->company_id ?? $user?->allowed_company_id;
+
+            $vendor = \App\Models\Vendor::create([
+                'company_id' => $companyId,
+                'name' => $name,
+                'contact_name' => trim((string) ($payload['manager'] ?? '')) ?: null,
+                'phone' => trim((string) ($payload['phone'] ?? '')) ?: null,
+                'email' => trim((string) ($payload['email'] ?? '')) ?: null,
+                'trade' => mb_substr(trim((string) ($payload['category'] ?? '')), 0, 120) ?: null,
+                'status' => 'active',
+                'payload' => $payload,
+            ]);
+
+            return ['success' => true, 'id' => $vendor->id];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
 
     public static function wbsTree(string $projectId, string $siteId = 'ALL'): array
     {

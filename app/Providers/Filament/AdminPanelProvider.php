@@ -43,6 +43,11 @@ class AdminPanelProvider extends PanelProvider
                 'warning' => Color::Amber,
                 'danger' => Color::Red,
             ])
+            // 여러 법인에 소속된 사용자를 위한 상단 회사 전환기.
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_START,
+                fn (): string => Blade::render('@include("filament.company-switcher")'),
+            )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
                 fn (): string => Blade::render('@include("filament.auth.login-intro")'),
