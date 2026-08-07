@@ -35,8 +35,7 @@ class AnalyzeWbsManualJob implements ShouldQueue
         public int $manualId,
         public string $projectCode,
         public string $siteScope,
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {
@@ -67,7 +66,14 @@ class AnalyzeWbsManualJob implements ShouldQueue
 
             $result = SmartCompanyData::analyzeWbsManual($this->projectCode, $this->siteScope, $pdf);
 
-            if (! ($result['success'] ?? false)) {
+            // 아무것도 못 뽑았는데 success 만 true 로 오는 경우가 있다. 그대로 두면 공정 0개짜리
+            // 매뉴얼이 "분석 완료" 로 보여서, 담당자가 WBS 가 만들어진 줄 알고 넘어간다.
+            if (
+                ! ($result['success'] ?? false)
+                || (int) ($result['processed'] ?? 0) < 1
+                || ! is_array($result['results'] ?? null)
+                || $result['results'] === []
+            ) {
                 $manual->update(['status' => 'failed', 'error' => (string) ($result['error'] ?? 'AI 분석 실패')]);
 
                 return;

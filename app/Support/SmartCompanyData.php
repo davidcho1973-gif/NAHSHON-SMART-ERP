@@ -70,7 +70,7 @@ class SmartCompanyData
             'api_getSafetyStats' => self::safetyStats(),
             'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
-            'api_clearSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId),
+            'api_clearSafetyWork' => self::clearSafetyWork($siteId),
             'api_deleteSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->deleteWork((string) ($args[0] ?? ''), $siteId),
             'api_generateSafetyPlan' => self::generateSafetyPlan($args[0] ?? null, $siteId),
             'api_saveSafetyPlan' => app(\App\Services\Safety\SafetyWorkService::class)->savePlan((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], (bool) ($args[2] ?? false)),
@@ -1102,6 +1102,36 @@ class SmartCompanyData
             $saved = app(\App\Services\Safety\SafetyWorkService::class)->save($items, $siteId, auth()->id());
 
             return ['success' => true, 'saved' => $saved];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * 안전 작업카드와 거기 붙은 TBM 서명·지적사항을 통째로 지운다 — ERP 관리자 전용.
+     *
+     * 이 엔드포인트는 일반적인 안전 편집보다 의도적으로 더 엄격하다. 되돌릴 수 없는 삭제이고,
+     * 현장을 'ALL' 로 두면 모든 현장의 서명(= 법적 기록)까지 한 번에 날아간다. 화면의 확인창은
+     * 권한 경계가 아니므로 역할 검사는 서버에 있어야 한다.
+     *
+     * @return array<string, mixed>
+     */
+    public static function clearSafetyWork(string $siteId = 'ALL'): array
+    {
+        $user = auth()->user();
+
+        if (
+            ! $user
+            || $user->account_status !== 'active'
+            || ! in_array($user->access_role, ['super_admin', 'admin'], true)
+        ) {
+            return ['success' => false, 'error' => '안전관리 전체 초기화 권한이 없습니다.'];
+        }
+
+        try {
+            return app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId);
         } catch (\Throwable $e) {
             report($e);
 
