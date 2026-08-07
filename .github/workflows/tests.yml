@@ -112,6 +112,12 @@ jobs:
           case "$code" in
             2*) echo "::notice title=배포 시작됨::Laravel Cloud 가 ${GITHUB_SHA:0:7} 배포를 시작했습니다." ;;
             000) echo "::error title=배포 요청 실패::Deploy Hook 에 연결하지 못했습니다."; exit 1 ;;
+            # 3xx 는 대시보드 "페이지" 주소를 넣었을 때 나온다. 로그인 안 된 상태로 화면을
+            # 여니 Laravel 이 첫 화면으로 되돌려보내는 것이다. 훅은 리다이렉트하지 않는다.
+            # 여기서 -L 로 따라가면 첫 화면 HTML 을 200 으로 받아 "성공" 으로 오인하게 된다.
+            3*) echo "::error title=훅이 아니라 페이지 주소입니다::HTTP $code — 브라우저 주소창의 대시보드 URL 로 보입니다. Settings → Deployments → Deploy hook 토글을 켠 뒤 거기 표시되는 전용 주소를 넣으세요."; exit 1 ;;
+            401|403) echo "::error title=훅이 거부됨::HTTP $code — 주소는 맞지만 토큰이 만료됐거나 재발급된 것 같습니다. Deploy hook 을 재발급해 시크릿을 갱신하세요."; exit 1 ;;
+            404) echo "::error title=훅을 찾을 수 없음::HTTP $code — 주소 일부만 복사됐거나 훅이 삭제된 것 같습니다. 전체 주소를 다시 복사하세요."; exit 1 ;;
             *)   echo "::error title=배포 요청 거부됨::HTTP $code — Hook URL 이 유효한지 확인하세요."; exit 1 ;;
           esac
 
