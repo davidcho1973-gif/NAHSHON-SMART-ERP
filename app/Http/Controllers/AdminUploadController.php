@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Admin\ApplicantAdminService;
 use App\Services\Admin\ContractAdminService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,5 +39,24 @@ class AdminUploadController extends Controller
         );
 
         return response()->json($result, ($result['success'] ?? false) ? 200 : 200);
+    }
+
+    /**
+     * 지원자 배지 사진 업로드 + AI 판독.
+     */
+    public function applicantBadgePhoto(Request $request, int $applicant): JsonResponse
+    {
+        if ($request->hasFile('file') === false && $request->getContent() === '' && $request->post() === []) {
+            return response()->json([
+                'success' => false,
+                'error' => '사진이 너무 커서 서버가 받지 못했습니다. 더 작은 사진으로 올려 주세요.',
+            ], 413);
+        }
+
+        return response()->json(app(ApplicantAdminService::class)->uploadBadgePhoto(
+            $applicant,
+            $request->file('file'),
+            $request->input('analyze', '1') === '1',
+        ));
     }
 }

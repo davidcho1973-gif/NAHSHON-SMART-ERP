@@ -143,6 +143,18 @@ class SmartCompanyData
             'api_deleteContract' => app(\App\Services\Admin\ContractAdminService::class)->delete((int) ($args[0] ?? 0)),
             'api_deleteContractDocument' => app(\App\Services\Admin\ContractAdminService::class)->deleteDocument((int) ($args[0] ?? 0)),
 
+            // 입사지원 → 면접 → 안전교육 → 배지 → 활성화 (Filament MemberRegistrationResource).
+            // 배지 사진 업로드만 multipart 라 별도 라우트를 쓴다.
+            'api_getApplicants' => app(\App\Services\Admin\ApplicantAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getApplicantOptions' => app(\App\Services\Admin\ApplicantAdminService::class)->options(),
+            'api_inviteApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->invite(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setApplicantInterview' => app(\App\Services\Admin\ApplicantAdminService::class)->setInterview((int) ($args[0] ?? 0), (string) ($args[1] ?? ''), $args[2] ?? null),
+            'api_setApplicantSafety' => app(\App\Services\Admin\ApplicantAdminService::class)->setSafetyTraining((int) ($args[0] ?? 0), $args[1] ?? null, $args[2] ?? null),
+            'api_registerApplicantBadge' => app(\App\Services\Admin\ApplicantAdminService::class)->registerBadge((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_activateApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->activate((int) ($args[0] ?? 0)),
+            'api_rejectApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->reject((int) ($args[0] ?? 0), $args[1] ?? null),
+            'api_resyncApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->resync((int) ($args[0] ?? 0)),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),

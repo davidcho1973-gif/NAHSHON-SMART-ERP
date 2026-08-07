@@ -19,6 +19,7 @@
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-applicants.js') }}?v={{ filemtime(public_path('js/admin-applicants.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   <style>
@@ -191,6 +192,9 @@
               </li>
               <li class="nav-item" data-view="attendance-logs" id="nav-attendance-logs">
                 <i class="ph ph-clock-counter-clockwise" style="color:#0ea5e9"></i><span>출퇴근 기록</span>
+              </li>
+              <li class="nav-item" data-view="applicant-admin" id="nav-applicant-admin">
+                <i class="ph ph-identification-card" style="color:#0ea5e9"></i><span>입사지원 · 온보딩</span>
               </li>
               <li class="nav-item" data-view="employee-admin" id="nav-employee-admin">
                 <i class="ph ph-user-plus" style="color:#0ea5e9"></i><span>직원 등록 · 관리</span>
@@ -1346,6 +1350,7 @@
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
         'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
+        'applicant-admin': { title: '입사지원 · 온보딩', render: function () { return window.AdminApplicants.render(); } },
         'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
