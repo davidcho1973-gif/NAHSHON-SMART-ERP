@@ -15,7 +15,7 @@ class SmartCompanySeedRecordsTest extends TestCase
     {
         $expense = MobileExpense::create([
             'payment_type' => 'personal',
-            'category' => '7206 Office Supplies',
+            'category' => '6601 Office Supplies',
             'class' => 'Office',
             'description' => 'Receipt from field purchase',
             'amount' => 42.35,
@@ -30,7 +30,7 @@ class SmartCompanySeedRecordsTest extends TestCase
         $this->assertNotNull($financeRecord);
         $this->assertSame('finance', $financeRecord['module']);
         $this->assertSame('Receipt from field purchase', $financeRecord['name']);
-        $this->assertSame('7206 Office Supplies', $financeRecord['category']);
+        $this->assertSame('6601 Office Supplies', $financeRecord['category']);
         $this->assertSame(42.35, $financeRecord['amount']);
     }
 }

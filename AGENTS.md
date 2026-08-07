@@ -86,9 +86,13 @@
 
 ---
 
-## 5. 배포 노트
+## 5. 배포 / 테스트 운영 규칙
 
 - `main` 머지 시 Laravel Cloud가 자동 배포.
+- **공식 테스트 흐름은 Staging 배포 방식입니다.** 코드 수정 후 가능한 범위에서 로컬 서버, 로컬 DB, `php artisan test`, `npm run build` 등으로 먼저 확인한 뒤 `staging` 브랜치/Laravel Cloud staging 환경에 배포해 David가 실제 화면과 DB 흐름을 검증합니다.
+- **Staging은 테스트용 원격 환경입니다.** David가 "배포", "테스트 배포", "staging 배포"를 요청하면 `staging`에 배포해도 됩니다. 배포 후에는 변경 내용, 테스트 결과, staging 확인 주소를 작업 로그에 남깁니다.
+- **Production은 별도 승인 전까지 배포 금지입니다.** `main` push/merge 또는 production Laravel Cloud Deploy 버튼 실행은 David의 명시적인 production 배포 요청이 있을 때만 진행합니다.
+- 로컬에서 재현하거나 테스트할 수 없는 경우에는 staging에서 검증할 수 있으며, 그 이유와 영향 범위를 David에게 설명하고 결과를 공유합니다.
 - 배포 환경 마이그레이션 실행 여부·시드 정책·환경변수(키/토큰) 관리 방식은 **§6 질문에서 CODEX 확인 필요**.
 - 비밀값(AI 키, Telegram 토큰, Google 자격증명)은 절대 소스에 커밋 금지 — `.env` / Laravel Cloud 환경변수로만.
 

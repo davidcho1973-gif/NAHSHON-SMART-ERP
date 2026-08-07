@@ -6,9 +6,12 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
+use App\Models\PayrollRun;
 use App\Models\SmartRecord;
 use App\Models\Site;
+use App\Services\AttendanceQrService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SmartCompanyData
@@ -16,21 +19,28 @@ class SmartCompanyData
     public static function handle(string $method, array $args = [], string $siteId = 'ALL'): mixed
     {
         return match ($method) {
+            'api_getGlobalHrOverview' => self::globalHrOverview((string) ($args[0] ?? 'ALL')),
+            'api_getTeamBoard' => self::teamBoard((string) ($args[0] ?? '')),
+            'api_assignEmployeeTeam' => self::assignEmployeeTeam((int) ($args[0] ?? 0), $args[1] !== null && $args[1] !== '' ? (int) $args[1] : null),
             'api_getHRData' => self::realHrData($siteId),
             'api_getPersonnelList' => self::realPersonnel($siteId),
             'api_getPersonnelStats' => self::realPersonnelStats($siteId),
             'api_getGlobalAttendance' => self::realGlobalAttendance(),
             'api_getAttendanceLive' => self::realAttendanceLive($siteId),
             'api_getDailyTeamMatrix' => self::realDailyTeamMatrix($siteId),
-            'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, $args[1] ?? $args[0] ?? null),
+            'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, (isset($args[1]) && is_string($args[1]) && $args[1] !== '') ? $args[1] : null),
             'api_getEmployeeDetail' => self::realEmployeeDetail((string) ($args[0] ?? ''), $siteId),
             'api_uploadEmployeePhoto' => ['success' => true, 'message' => 'Photo upload endpoint is ready. Configure filesystem disk for production.'],
             'api_getHrDirectory' => self::hrDirectory($siteId),
             'api_getHrAttendanceRecords' => self::hrAttendanceRecords($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_getHrAttendanceEvents' => self::hrAttendanceEvents($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_getHrAttendanceSummary' => self::hrAttendanceSummary($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_clockIn' => self::clockIn($args[0] ?? null),
             'api_clockOut' => self::clockOut($args[0] ?? null),
             'api_requestCorrection' => self::requestCorrection($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
+            'api_clockInWithGps' => self::clockInWithGps($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null, $args[4] ?? null, $args[5] ?? null),
+            'api_syncOfflineAttendance' => self::syncOfflineAttendance($args[0] ?? []),
+            'api_clockInWithTeamQr' => self::clockInWithTeamQr($args[0] ?? null, $args[1] ?? null),
             'api_submitNfcTag' => self::submitNfcTag($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_submitBatchPhotoScan' => self::submitBatchPhotoScan($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null, $args[4] ?? null),
             'api_getPendingAttendanceLogs' => self::getPendingAttendanceLogs($siteId),
@@ -39,20 +49,30 @@ class SmartCompanyData
 
             'api_getFinanceStats' => self::financeStats($siteId),
             'api_getExpenses' => self::expenses($siteId),
-            'api_getPayrollDashboard' => self::payrollDashboard($args[0] ?? null),
+            'api_getPayrollDashboard' => self::payrollDashboard($args[1] ?? null, $siteId),
+            'api_runPayroll' => self::runPayroll($args[1] ?? $args[0] ?? null, $siteId),
+            'api_approvePayroll' => self::approvePayroll($args[0] ?? null),
+            'api_payPayroll' => self::payPayroll($args[0] ?? null),
+            'api_setupSite' => self::setupSite($args[0] ?? null, $args[1] ?? []),
+            'api_getSetupWizardAssets' => self::getSetupWizardAssets(),
 
             'api_getEquipmentStats' => self::equipmentStats(),
             'api_getEquipmentList' => self::equipmentList(),
             'api_getToolStats' => self::toolStats(),
             'api_getToolList' => self::toolList(),
             'api_getToolTransactions' => self::toolTransactions(),
-            'api_getInventoryDashboard' => self::inventoryDashboard(),
+            'api_getInventoryDashboard' => self::inventoryDashboard($siteId),
             'api_getInventoryAssetDetail' => self::inventoryAssetDetail((string) ($args[0] ?? '')),
             'api_processInventoryPhotos', 'setupInventorySheets', 'setupInventoryFolders' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
 
-            'api_getAlerts' => self::alerts($args[0] ?? 'all'),
-            'api_updateAlertStatus' => ['success' => true],
+            'api_getAlerts' => self::alerts($args[0] ?? 'all', $siteId),
+            'api_updateAlertStatus' => self::updateAlertStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
             'api_getSafetyStats' => self::safetyStats(),
+            'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
+            'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
+            'api_clearSafetyWork' => app(\App\Services\Safety\SafetyWorkService::class)->clearAll($siteId),
+            'api_generateSafetyPlan' => self::generateSafetyPlan($args[0] ?? null, $siteId),
+            'api_recommendSafetyProgress' => self::recommendSafetyProgress($args[0] ?? null, $siteId),
             'api_getPtwList' => self::ptwList(),
             'api_getPtwStats' => ['todayActive' => 4, 'pending' => 2, 'completed' => 18, 'rejected' => 1],
             'api_getInspections' => self::inspections(),
@@ -68,20 +88,43 @@ class SmartCompanyData
             'api_getProjectStatus' => self::projects(),
             'api_getActionItems' => self::actionItems(),
             'api_getConstructionCommandCenter' => self::commandCenter($siteId),
-            'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02')),
-            'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02')),
-            'api_updateWbsRow', 'api_markWbsStatus', 'api_processWbsManual' => ['success' => true],
+            'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02'), $siteId),
+            'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02'), $siteId),
+            'api_markWbsStatus' => app(\App\Services\Wbs\WbsService::class)->markStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
+            'api_createSafetyCardForWbs' => app(\App\Services\Wbs\WbsService::class)->createSafetyCard(
+                (string) ($args[0] ?? ''),
+                ($args[1] ?? null) ? (string) $args[1] : null,
+                auth()->id()
+            ),
+            'api_assignSafetySigner' => app(\App\Services\Wbs\WbsLaborService::class)->assignEmployee(
+                (int) ($args[0] ?? 0),
+                ($args[1] ?? null) !== null ? (int) $args[1] : null
+            ),
+            'api_getWbsLabor' => app(\App\Services\Wbs\WbsLaborService::class)->laborFor((string) ($args[0] ?? '')),
+            'api_getAssignableEmployees' => self::assignableEmployees($siteId, ($args[0] ?? null) ? (string) $args[0] : null),
+            'api_getTodayWbsWork' => app(\App\Services\Wbs\WbsService::class)->todayWork((string) ($args[0] ?? ''), $siteId),
+            'api_getWbsPickList' => app(\App\Services\Wbs\WbsService::class)->pickList((string) ($args[0] ?? ''), $siteId, ($args[1] ?? null) ? (string) $args[1] : null),
+            'api_addManualWbsWork' => app(\App\Services\Wbs\WbsService::class)->addManualActivity((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], $siteId, auth()->id()),
+            'api_updateWbsRow' => app(\App\Services\Wbs\WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
             'api_getVehicleList' => self::vehicleList(),
             'api_getVehicleStats' => self::vehicleStats(),
             'api_getRentalList' => self::rentalList(),
             'api_getRentalStats' => self::rentalStats(),
-            'api_createRental', 'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
+            'api_createRental' => self::createRental($args[0] ?? []),
+            'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
             'api_getHousingList' => self::housingList(),
             'api_getHousingStats' => self::housingStats(),
             'api_getFlightList' => self::flightList(),
             'api_getOfficeSupplies' => self::officeSupplies(),
             'api_getVendorList' => self::vendors(),
+            'api_getCompanyList' => \App\Models\Company::query()->where('status', 'active')->orderBy('name')->get()->map(fn($c) => ['id' => $c->id, 'name' => $c->name])->all(),
+            'api_getWbsCompanyOptions' => self::wbsCompanyOptions($siteId),
+            'api_getTeamList' => \App\Models\Team::query()->where('status', 'active')->orderBy('name')->get()->map(fn($t) => ['id' => $t->id, 'name' => $t->name, 'site_id' => $t->site_id])->all(),
+            'api_getEmployeeList' => \App\Models\Employee::query()->where('employment_status', 'active')->orderBy('name')->get()->map(fn($e) => ['id' => $e->id, 'name' => $e->name, 'company_id' => $e->company_id, 'team_id' => $e->team_id])->all(),
+            'api_getSiteList' => Schema::hasTable('sites') ? \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get()->map(fn($s) => ['id' => $s->id, 'code' => $s->code, 'name' => $s->name])->all() : [],
+            'api_getProjectList' => Schema::hasTable('projects') ? \App\Models\Project::query()->orderByDesc('id')->get()->map(fn($p) => ['id' => $p->id, 'code' => $p->project_code, 'name' => $p->name, 'site_id' => $p->site_id])->all() : [],
             'api_createVendor' => ['success' => true, 'id' => 'V-' . random_int(100, 999)],
             'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\nNAHSHON MEP"],
             'api_translateToEnglish' => ['success' => true, 'text' => (string) ($args[0] ?? '')],
@@ -94,7 +137,8 @@ class SmartCompanyData
             'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
             'api_syncWorkerStatus' => ['success' => true, 'messages' => ['Worker status updated', 'Related vehicle/housing assignments checked']],
             'api_universalAIScan' => self::universalAIScan($args),
-            'api_nfcAssignVehicle', 'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
+            'api_nfcAssignVehicle' => self::nfcAssignVehicle($args),
+            'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
 
             default => self::defaultResponse($method),
         };
@@ -140,9 +184,74 @@ class SmartCompanyData
             'site' => $site,
             'status' => $status,
             'amount' => $amount,
-            'occurred_on' => Carbon::now()->toDateString(),
+            'occurred_on' => \Illuminate\Support\Carbon::now()->toDateString(),
             'payload' => $payload,
         ];
+    }
+
+    public static function nfcAssignVehicle(array $args): array
+    {
+        $uid = $args[0] ?? null;
+        $vehicleCode = $args[1] ?? null;
+
+        if (blank($uid) || blank($vehicleCode)) {
+            return ['success' => false, 'error' => 'NFC 카드 UID 또는 차량 ID가 비어있습니다.'];
+        }
+
+        try {
+            $normalizedNfc = \App\Models\MemberRegistration::normalizeNfcUid($uid);
+            
+            $employee = \App\Models\Employee::where('badge_number', $normalizedNfc)->first();
+            if (! $employee) {
+                return ['success' => false, 'error' => '해당 NFC 카드를 소지한 직원을 찾을 수 없습니다. (NFC ID: ' . $normalizedNfc . ')'];
+            }
+
+            $vehicle = \App\Models\Vehicle::where('vehicle_code', $vehicleCode)->first();
+            if (! $vehicle) {
+                return ['success' => false, 'error' => '차량을 찾을 수 없습니다.'];
+            }
+
+            \Illuminate\Support\Facades\DB::transaction(function () use ($vehicle, $employee): void {
+                // Terminate active rentals for this vehicle
+                \App\Models\VehicleRental::where('vehicle_id', $vehicle->id)
+                    ->whereNull('returned_at')
+                    ->update([
+                        'returned_at' => now(),
+                        'end_mileage' => $vehicle->current_mileage,
+                        'status' => 'returned',
+                    ]);
+
+                // Terminate active rentals for this employee
+                \App\Models\VehicleRental::where('employee_id', $employee->id)
+                    ->whereNull('returned_at')
+                    ->update([
+                        'returned_at' => now(),
+                        'status' => 'returned',
+                    ]);
+
+                // Create active rental
+                \App\Models\VehicleRental::create([
+                    'vehicle_id' => $vehicle->id,
+                    'employee_id' => $employee->id,
+                    'company_id' => $employee->company_id,
+                    'site_id' => $employee->site_id,
+                    'rented_at' => now(),
+                    'start_mileage' => $vehicle->current_mileage,
+                    'status' => 'active',
+                    'notes' => 'NFC 태그 배정',
+                ]);
+
+                // Update vehicle
+                $vehicle->update(['status' => '운행중']);
+            });
+
+            return [
+                'success' => true, 
+                'message' => "NFC 카드 매핑 성공: {$employee->name}님에게 차량({$vehicle->model})이 배정되었습니다."
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     private static function smartRecords(string $module): array
@@ -296,6 +405,69 @@ class SmartCompanyData
             'flights' => self::flightList(),
         ];
     }
+    /**
+     * 안전카드 서명란에 배정할 수 있는 직원 목록 (현장 스코프 적용).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function assignableEmployees(string $siteId = 'ALL', ?string $date = null): array
+    {
+        if (! Schema::hasTable('employees')) {
+            return [];
+        }
+
+        $query = \App\Models\Employee::query()->orderBy('name');
+
+        if ($siteId !== 'ALL') {
+            $resolved = \App\Models\Site::query()->where('code', $siteId)->value('id');
+            $query->where(function ($q) use ($resolved): void {
+                $q->whereNull('site_id')->orWhere('site_id', $resolved);
+            });
+        }
+
+        // 퇴사자 등은 배정 대상에서 제외 — 상태값 표기가 현장마다 달라 '재직' 계열만 통과시킨다.
+        $query->where(function ($q): void {
+            $q->whereNull('employment_status')
+                ->orWhereNotIn('employment_status', ['퇴사', 'terminated', 'resigned', 'inactive']);
+        });
+
+        $employees = $query->limit(500)->get();
+
+        // 그날 출근(clock_in)한 직원 집합 — TBM 서명은 "실제 출석자"로 배정한다.
+        // 계획 인원은 미리 잡되, 실제 누가 일했는지는 출근 기록으로 확정(사장님 설계).
+        $presentIds = [];
+        $clockIn = [];
+        if ($date !== null && Schema::hasTable('attendance_logs')) {
+            $siteRowId = $siteId !== 'ALL' ? \App\Models\Site::query()->where('code', $siteId)->value('id') : null;
+            \App\Models\AttendanceLog::query()
+                ->where('attendance_date', $date)
+                ->where('event_type', 'clock_in')
+                ->when($siteRowId !== null, fn ($q) => $q->where('site_id', $siteRowId))
+                ->orderBy('event_at')
+                ->get(['employee_id', 'event_at'])
+                ->each(function ($log) use (&$presentIds, &$clockIn): void {
+                    if ($log->employee_id) {
+                        $presentIds[$log->employee_id] = true;
+                        $clockIn[$log->employee_id] ??= $log->event_at?->format('H:i');
+                    }
+                });
+        }
+
+        $mapped = $employees->map(fn (\App\Models\Employee $e) => [
+            'id' => $e->id,
+            'name' => trim((string) ($e->name ?: trim(((string) $e->last_name) . ' ' . ((string) $e->first_name)))) ?: ('EMP-' . $e->id),
+            'number' => $e->employee_number ?? $e->badge_number,
+            'siteId' => $e->site_id,
+            'present' => isset($presentIds[$e->id]),          // 그날 출근했는가
+            'clockIn' => $clockIn[$e->id] ?? null,             // 출근 시각(HH:MM)
+        ])->all();
+
+        // 출근자 먼저, 그 안에서 이름순.
+        usort($mapped, fn ($a, $b) => (($b['present'] ? 1 : 0) <=> ($a['present'] ? 1 : 0)) ?: strcmp((string) $a['name'], (string) $b['name']));
+
+        return $mapped;
+    }
+
     public static function projects(): array
     {
         $fromDb = self::smartRecords('wbs');
@@ -575,31 +747,144 @@ class SmartCompanyData
         return null;
     }
 
-    public static function equipmentStats(): array { return ['total' => count(self::equipmentList()), 'operable' => 4, 'inoperable' => 1, 'todayInspections' => 4]; }
+    public static function equipmentStats(): array
+    {
+        try {
+            if (class_exists(\App\Models\Equipment::class) && Schema::hasTable('equipments')) {
+                $user = auth()->user();
+                $all = \App\Models\Equipment::query()->visibleTo($user)->get();
+                return [
+                    'total' => $all->count(),
+                    'operable' => $all->where('status', '사용중')->count() + $all->where('status', '대기중')->count(),
+                    'inoperable' => $all->where('status', '정비중')->count(),
+                    'todayInspections' => 0,
+                ];
+            }
+        } catch (\Throwable) {
+        }
+        return ['total' => 0, 'operable' => 0, 'inoperable' => 0, 'todayInspections' => 0];
+    }
+
     public static function equipmentList(): array
     {
-        $fromDb = self::smartRecords('equipment');
-        return $fromDb ?: [
-            ['id' => 'EQ-001', 'name' => 'Genie S-65 Boom Lift', 'type' => 'Lift', 'site' => 'HFF-02', 'inspector' => 'Carlos', 'lastCheck' => '2026-06-19', 'checkStatus' => '완료', 'status' => '운행가능'],
-            ['id' => 'EQ-002', 'name' => 'JLG 1930ES Scissor Lift', 'type' => 'Lift', 'site' => 'LGES-AZ', 'inspector' => 'Min Lee', 'lastCheck' => '2026-06-19', 'checkStatus' => '완료', 'status' => '점검중'],
-            ['id' => 'EQ-003', 'name' => 'Ford F-250 Service Truck', 'type' => 'Vehicle', 'site' => 'NV-05', 'inspector' => 'Daniel', 'lastCheck' => '2026-06-18', 'checkStatus' => '주의', 'status' => '수리필요'],
-            ['id' => 'EQ-004', 'name' => 'Greenlee Bender', 'type' => 'Tooling', 'site' => 'HFF-02', 'inspector' => 'James', 'lastCheck' => '2026-06-19', 'checkStatus' => '완료', 'status' => '운행가능'],
-            ['id' => 'EQ-005', 'name' => 'Hilti Core Drill', 'type' => 'Tooling', 'site' => 'LGES-AZ', 'inspector' => 'Sophia', 'lastCheck' => '2026-06-19', 'checkStatus' => '완료', 'status' => '운행가능'],
-        ];
+        try {
+            if (class_exists(\App\Models\Equipment::class) && Schema::hasTable('equipments')) {
+                $user = auth()->user();
+                return \App\Models\Equipment::query()
+                    ->visibleTo($user)
+                    ->with('site')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(function ($eq) {
+                        $photoUrl = null;
+                        if ($eq->photo_front) {
+                            $relativePath = ltrim(str_replace('/storage/', '', $eq->photo_front), '/');
+                            $photoUrl = route('equipment.file', ['path' => $relativePath]);
+                        }
+                        return [
+                            'id' => $eq->equipment_code,
+                            'assetId' => $eq->equipment_code,
+                            'name' => $eq->model,
+                            'type' => $eq->equipment_type,
+                            'category' => $eq->equipment_type,
+                            'site' => $eq->site ? $eq->site->code : 'Global',
+                            'inspector' => '-',
+                            'lastCheck' => $eq->updated_at->toDateString(),
+                            'checkStatus' => '완료',
+                            'status' => $eq->status === '사용중' ? '운행가능' : ($eq->status === '정비중' ? '수리필요' : '대기중'),
+                            'brand' => $eq->vendor ?: '-',
+                            'photoUrl' => $photoUrl,
+                        ];
+                    })
+                    ->all();
+            }
+        } catch (\Throwable) {
+        }
+        return [];
     }
     public static function toolStats(): array { return ['total' => 18, 'available' => 12, 'checkedOut' => 6, 'damaged' => 2]; }
     public static function toolList(): array { return [['id' => 'TL-101', 'name' => 'Cordless Hammer Drill', 'category' => 'Power Tool', 'status' => '불출중', 'holder' => 'EMP-1002', 'checkoutDate' => '2026-06-18', 'condition' => '정상'], ['id' => 'TL-102', 'name' => 'Torque Wrench', 'category' => 'Hand Tool', 'status' => '보관중', 'holder' => null, 'checkoutDate' => null, 'condition' => '정상'], ['id' => 'TL-103', 'name' => 'Laser Level', 'category' => 'Survey', 'status' => '수리필요', 'holder' => null, 'checkoutDate' => null, 'condition' => '손상']]; }
     public static function toolTransactions(): array { return [['time' => '08:12', 'action' => '불출', 'toolName' => 'Cordless Hammer Drill', 'toolId' => 'TL-101', 'userId' => 'EMP-1002', 'condition' => '정상'], ['time' => '11:40', 'action' => '반납', 'toolName' => 'Laser Level', 'toolId' => 'TL-103', 'userId' => 'EMP-1005', 'condition' => '손상']]; }
 
     public static function safetyStats(): array { return ['daysNoIncident' => 47, 'unresolved' => 3, 'resolved' => 18, 'urgent' => 1, 'warning' => 2, 'normal' => 8]; }
-    public static function alerts(mixed $filter = 'all'): array
+
+    public static function safetyWorkItems(string $siteId = 'ALL'): array
     {
-        $fromDb = self::smartRecords('safety');
-        return $fromDb ?: [
-            ['id' => 'ALT-100', 'title' => 'Open edge protection missing', 'type' => 'Safety', 'site' => 'HFF-02', 'level' => 'critical', 'status' => '미처리', 'date' => '2026-06-19'],
-            ['id' => 'ALT-101', 'title' => 'Visa expiry review', 'type' => 'HR', 'site' => 'LGES-AZ', 'level' => 'warning', 'status' => '처리중', 'date' => '2026-06-18'],
-            ['id' => 'ALT-102', 'title' => 'Rental return due in 2 days', 'type' => 'Rental', 'site' => 'NV-05', 'level' => 'normal', 'status' => '미처리', 'date' => '2026-06-17'],
-        ];
+        try {
+            return ['success' => true, 'items' => app(\App\Services\Safety\SafetyWorkService::class)->items($siteId)];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage(), 'items' => []];
+        }
+    }
+
+    public static function saveSafetyWorkItems(mixed $items, string $siteId = 'ALL'): array
+    {
+        if (! is_array($items)) {
+            return ['success' => false, 'error' => 'Invalid work items payload.'];
+        }
+
+        try {
+            $saved = app(\App\Services\Safety\SafetyWorkService::class)->save($items, $siteId, auth()->id());
+
+            return ['success' => true, 'saved' => $saved];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function generateSafetyPlan(mixed $item, string $siteId = 'ALL'): array
+    {
+        if (! is_array($item) || blank($item['id'] ?? null)) {
+            return ['success' => false, 'error' => '작업 정보가 올바르지 않습니다.'];
+        }
+
+        try {
+            $result = app(\App\Services\Safety\SafetyWorkService::class)->generatePlan($item, $siteId, auth()->id());
+
+            return ['success' => true, 'item' => $result['item'], 'plan' => $result['plan']];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function recommendSafetyProgress(mixed $item, string $siteId = 'ALL'): array
+    {
+        if (! is_array($item) || blank($item['id'] ?? null)) {
+            return ['success' => false, 'error' => '작업 정보가 올바르지 않습니다.'];
+        }
+
+        try {
+            $result = app(\App\Services\Safety\SafetyWorkService::class)->recommendProgress($item, $siteId, auth()->id());
+
+            return ['success' => true, 'item' => $result['item'], 'recommendation' => $result['recommendation']];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    public static function alerts(mixed $filter = 'all', string $siteId = 'ALL'): array
+    {
+        $user = auth()->user();
+
+        return $user
+            ? app(\App\Services\Alerts\UnifiedAlertService::class)->forUser($user, $siteId, is_scalar($filter) ? (string) $filter : 'all')
+            : [];
+    }
+
+    public static function updateAlertStatus(string $identifier, string $status): array
+    {
+        $user = auth()->user();
+
+        return $user
+            ? app(\App\Services\Alerts\UnifiedAlertService::class)->updateStatus($user, $identifier, $status)
+            : ['success' => false, 'error' => '로그인이 필요합니다.'];
     }
     public static function ptwList(): array { return [['id' => 'PTW-01', 'job' => 'Hot work Area B', 'status' => '승인대기', 'owner' => 'Safety'], ['id' => 'PTW-02', 'job' => 'Lift work Level 3', 'status' => '완료', 'owner' => 'PM']]; }
     public static function inspections(): array { return [['id' => 'INS-01', 'area' => 'Area A', 'result' => 'Pass', 'inspector' => 'Carlos'], ['id' => 'INS-02', 'area' => 'Area C', 'result' => 'Fail', 'inspector' => 'Daniel']]; }
@@ -610,14 +895,438 @@ class SmartCompanyData
     public static function violations(): array { return [['id' => 'VIO-01', 'title' => 'PPE missing', 'status' => 'Corrected']]; }
     public static function tbmRecords(): array { return [['id' => 'TBM-01', 'topic' => 'Heat stress', 'attendees' => 18, 'date' => '2026-06-19']]; }
 
-    public static function payrollDashboard(mixed $periodStart): array { return ['success' => true, 'period' => ['start' => $periodStart ?: '2026-06-16', 'end' => '2026-06-22'], 'totals' => ['hours' => 212, 'regular' => 184, 'ot' => 28, 'gross' => 12480], 'companies' => [['name' => 'NAHSHON MEP', 'gross' => 7400], ['name' => 'Local Union', 'gross' => 5080]], 'anomalies' => [['employee' => 'Min Lee', 'issue' => 'Missing checkout']], 'employees' => self::personnel('ALL')]; }
-    public static function inventoryDashboard(): array { return ['success' => true, 'totals' => ['assets' => 42, 'available' => 31, 'checkedOut' => 8, 'repair' => 3], 'matrix' => ['categories' => ['Lift', 'Tooling', 'Vehicle'], 'sites' => array_keys(self::sites()), 'cells' => []], 'recent' => self::equipmentList(), 'upcomingInspections' => []]; }
-    public static function inventoryAssetDetail(string $assetId): array { return ['success' => true, 'asset' => collect(self::equipmentList())->firstWhere('id', $assetId) ?? self::equipmentList()[0], 'photos' => [], 'transactions' => self::toolTransactions()]; }
+    public static function payrollDashboard(mixed $periodStart, string $siteId = 'ALL'): array
+    {
+        try {
+            return app(\App\Services\Payroll\PayrollCalculator::class)
+                ->dashboard(is_string($periodStart) && $periodStart !== '' ? $periodStart : null, $siteId);
+        } catch (\Throwable $e) {
+            report($e);
 
-    public static function vehicleStats(): array { return ['total' => 6, 'active' => 4, 'available' => 1, 'maintenance' => 1]; }
-    public static function vehicleList(): array { return [['id' => 'VH-001', 'name' => 'Ford F-250', 'driver' => 'James Kim', 'site' => 'HFF-02', 'status' => '운행중'], ['id' => 'VH-002', 'name' => 'Toyota Sienna', 'driver' => 'Admin', 'site' => 'LGES-AZ', 'status' => '정비중']]; }
-    public static function rentalStats(): array { return ['total' => 8, 'active' => 5, 'overdue' => 1, 'returned' => 2, 'returningSoon' => 2, 'mtdCost' => 28600]; }
-    public static function rentalList(): array { return [['id' => 'RN-001', 'vendor' => 'United Rentals', 'item' => 'Scissor Lift', 'site' => 'HFF-02', 'startDate' => '2026-06-10', 'endDate' => '2026-06-24', 'cost' => 4200, 'status' => '반납예정'], ['id' => 'RN-002', 'vendor' => 'Sunbelt', 'item' => 'Telehandler', 'site' => 'LGES-AZ', 'startDate' => '2026-06-01', 'endDate' => '2026-06-18', 'cost' => 7600, 'status' => '만료임박']]; }
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function runPayroll(mixed $periodStart, string $siteId = 'ALL'): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+            return ['success' => false, 'error' => '급여 정산 실행 권한이 없습니다.'];
+        }
+
+        try {
+            $run = app(\App\Services\Payroll\PayrollCalculator::class)
+                ->runPayroll(is_string($periodStart) && $periodStart !== '' ? $periodStart : null, $siteId, $user?->id);
+
+            return [
+                'success' => true,
+                'runId' => $run->id,
+                'code' => $run->code,
+                'headcount' => $run->headcount,
+                'totalGross' => (float) $run->total_gross,
+                'totalNet' => (float) $run->total_net,
+                'certifiedUrl' => route('payroll.certified', $run),
+            ];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function approvePayroll(mixed $runId): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+            return ['success' => false, 'error' => '급여 확정 권한이 없습니다.'];
+        }
+
+        if (! $runId) {
+            return ['success' => false, 'error' => '급여 대장 ID가 지정되지 않았습니다.'];
+        }
+
+        try {
+            $run = PayrollRun::findOrFail($runId);
+            $run->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+            ]);
+
+            return ['success' => true, 'message' => '급여 정산 대장이 확정되었습니다.'];
+        } catch (\Throwable $e) {
+            report($e);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function payPayroll(mixed $runId): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+            return ['success' => false, 'error' => '급여 지급 완료 권한이 없습니다.'];
+        }
+
+        if (! $runId) {
+            return ['success' => false, 'error' => '급여 대장 ID가 지정되지 않았습니다.'];
+        }
+
+        try {
+            $run = PayrollRun::findOrFail($runId);
+
+            DB::transaction(function () use ($run): void {
+                $run->update([
+                    'status' => 'paid',
+                    'pay_date' => now()->toDateString(),
+                ]);
+
+                // Update associated payslips status
+                $run->payslips()->update(['status' => 'paid']);
+
+                // Synchronize into the accounting system (generate mobile expenses)
+                app(\App\Services\Payroll\PayrollExpenseConnector::class)->syncExpense($run);
+            });
+
+            return ['success' => true, 'message' => '지급 완료 처리 및 회계 전표 반영이 완료되었습니다.'];
+        } catch (\Throwable $e) {
+            report($e);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function setupSite(mixed $siteCode, mixed $data): array
+    {
+        $user = auth()->user();
+
+        if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager'], true)) {
+            return ['success' => false, 'error' => '현장 초기 셋업 권한이 없습니다.'];
+        }
+
+        if (! $siteCode) {
+            return ['success' => false, 'error' => '현장 코드가 지정되지 않았습니다.'];
+        }
+
+        try {
+            $site = Site::where('code', $siteCode)->firstOrFail();
+
+            DB::transaction(function () use ($site, $data): void {
+                $updateData = ['setup_completed_at' => now()];
+
+                if (! empty($data['manager_id'])) {
+                    $updateData['manager_employee_id'] = $data['manager_id'];
+                }
+
+                $site->update($updateData);
+
+                // 1. Assign Manager Employee to this Site
+                if (! empty($data['manager_id'])) {
+                    \App\Models\Employee::where('id', $data['manager_id'])->update(['site_id' => $site->id]);
+                }
+
+                // 2. Load Default WBS Template
+                if (! empty($data['load_default_wbs'])) {
+                    $exists = DB::table('wbs_items')->where('site_id', $site->id)->exists();
+                    if (! $exists && Schema::hasTable('wbs_items')) {
+                        $stageId = DB::table('wbs_items')->insertGetId([
+                            'project_code' => "PRJ-{$site->code}",
+                            'level' => 'stage',
+                            'wbs_code' => "WBS-{$site->code}-STG1",
+                            'node_no' => '1',
+                            'name' => 'STAGE 1. Winder (권취 공정)',
+                            'status' => '검수완료',
+                            'site_id' => $site->id,
+                            'company_id' => $site->company_id,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                        $taskId = DB::table('wbs_items')->insertGetId([
+                            'project_code' => "PRJ-{$site->code}",
+                            'parent_id' => $stageId,
+                            'level' => 'task',
+                            'wbs_code' => "WBS-{$site->code}-TSK1",
+                            'node_no' => '1.1',
+                            'name' => 'Air Caster 머신 포지션 이동 (Move-in)',
+                            'status' => '진행중',
+                            'site_id' => $site->id,
+                            'company_id' => $site->company_id,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                        DB::table('wbs_items')->insert([
+                            [
+                                'project_code' => "PRJ-{$site->code}",
+                                'parent_id' => $taskId,
+                                'level' => 'subtask',
+                                'wbs_code' => "WBS-{$site->code}-SUB1",
+                                'node_no' => '1.1.1',
+                                'name' => '수령 및 목재 패킹 해체 (Lay-down Area)',
+                                'status' => '진행중',
+                                'progress' => 0,
+                                'site_id' => $site->id,
+                                'company_id' => $site->company_id,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ],
+                            [
+                                'project_code' => "PRJ-{$site->code}",
+                                'parent_id' => $taskId,
+                                'level' => 'subtask',
+                                'wbs_code' => "WBS-{$site->code}-SUB2",
+                                'node_no' => '1.1.2',
+                                'name' => 'Rough / Final 레벨링',
+                                'status' => '진행중',
+                                'progress' => 0,
+                                'site_id' => $site->id,
+                                'company_id' => $site->company_id,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ],
+                        ]);
+                    }
+                }
+
+                // 3. Assign Selected Equipments
+                if (! empty($data['equipment_ids']) && is_array($data['equipment_ids'])) {
+                    if (Schema::hasTable('equipments')) {
+                        DB::table('equipments')
+                            ->whereIn('id', $data['equipment_ids'])
+                            ->update(['site_id' => $site->id]);
+                    }
+                }
+
+                // 4. Assign Selected Employees
+                if (! empty($data['employee_ids']) && is_array($data['employee_ids'])) {
+                    \App\Models\Employee::whereIn('id', $data['employee_ids'])->update(['site_id' => $site->id]);
+                }
+            });
+
+            return ['success' => true, 'message' => '현장 초기 셋업이 완료되었습니다.'];
+        } catch (\Throwable $e) {
+            report($e);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function getSetupWizardAssets(): array
+    {
+        try {
+            $employees = \App\Models\Employee::query()
+                ->where('employment_status', 'active')
+                ->get()
+                ->map(fn ($e) => [
+                    'id' => $e->id,
+                    'name' => trim(($e->first_name ?? '') . ' ' . ($e->last_name ?? '')),
+                    'role' => $e->role,
+                ])
+                ->all();
+
+            $equipments = [];
+            if (Schema::hasTable('equipments')) {
+                $equipments = DB::table('equipments')
+                    ->whereNull('site_id')
+                    ->orWhere('status', '대기중')
+                    ->get()
+                    ->map(fn ($eq) => [
+                        'id' => $eq->id,
+                        'name' => trim(($eq->equipment_type ?? '장비') . ' - ' . ($eq->model ?? '')),
+                        'status' => $eq->status ?? '대기중',
+                    ])
+                    ->all();
+            }
+
+            return [
+                'success' => true,
+                'employees' => $employees,
+                'equipments' => $equipments,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    public static function inventoryDashboard(string $siteId = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('equipments')) {
+                return ['success' => true, 'totals' => ['count' => 0, 'value' => 0, 'owned' => 0, 'rented' => 0, 'inUse' => 0, 'inStorage' => 0, 'repair' => 0, 'inspectionDue' => 0], 'matrix' => ['categories' => [], 'sites' => [], 'cells' => [], 'categoryMeta' => []], 'groups' => [], 'assets' => [], 'recent' => [], 'upcomingInspections' => []];
+            }
+
+            return app(\App\Services\Inventory\InventoryService::class)->dashboard($siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    public static function inventoryAssetDetail(string $assetId): array
+    {
+        try {
+            if (! Schema::hasTable('equipments')) {
+                return ['success' => false, 'error' => '자산 테이블이 없습니다.'];
+            }
+
+            return app(\App\Services\Inventory\InventoryService::class)->assetDetail($assetId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function vehicleStats(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('vehicles')) {
+                $query = \App\Models\Vehicle::query()->visibleTo(auth()->user());
+                $all = $query->get();
+
+                $total = $all->count();
+                $active = $all->where('status', '운행중')->count();
+                $maintenance = $all->where('status', '정비중')->count();
+                $available = $all->where('status', '대기중')->count();
+
+                // Rent expiring within 60 days
+                $limit60 = now()->addDays(60)->toDateString();
+                $today = now()->toDateString();
+                $rentExpiringSoon = $all->filter(fn($v) => $v->rent_end && $v->rent_end->toDateString() >= $today && $v->rent_end->toDateString() <= $limit60)->count();
+
+                return [
+                    'total' => $total,
+                    'active' => $active,
+                    'maintenance' => $maintenance,
+                    'available' => $available,
+                    'rentExpiringSoon' => $rentExpiringSoon,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in vehicleStats shim: ' . $e->getMessage());
+        }
+
+        return ['total' => 0, 'active' => 0, 'available' => 0, 'maintenance' => 0, 'rentExpiringSoon' => 0];
+    }
+
+    public static function vehicleList(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('vehicles')) {
+                return \App\Models\Vehicle::query()
+                    ->with(['activeRental.employee'])
+                    ->visibleTo(auth()->user())
+                    ->get()
+                    ->map(fn (\App\Models\Vehicle $v): array => [
+                        'id' => $v->vehicle_code,
+                        'realId' => $v->id,
+                        'plate' => $v->plate_number ?: '-',
+                        'type' => $v->vehicle_type ?: '차량',
+                        'model' => $v->model,
+                        'company' => $v->vendor ?: '-',
+                        'rentEnd' => $v->rent_end ? $v->rent_end->toDateString() : '-',
+                        'insuranceExp' => $v->insurance_expiry ? $v->insurance_expiry->toDateString() : '-',
+                        'assignee' => $v->activeRental?->employee?->name ?: '',
+                        'mileage' => (int) $v->current_mileage,
+                        'nextOil' => (int) $v->next_oil_change_mileage ?: ((int) $v->current_mileage + 5000),
+                        'status' => $v->status ?: '대기중',
+                        'registrationMethod' => $v->registration_method === 'AI자동분석' ? 'AI자동분석' : 'manual',
+                        'photo_front' => $v->photo_front,
+                        'photo_rear' => $v->photo_rear,
+                        'photo_left' => $v->photo_left,
+                        'photo_right' => $v->photo_right,
+                        'contract_path' => $v->contract_path,
+                    ])
+                    ->all();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in vehicleList shim: ' . $e->getMessage());
+        }
+
+        return [];
+    }
+    public static function rentalStats(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
+                $query = \App\Models\Equipment::query()->visibleTo(auth()->user());
+                $all = $query->get();
+
+                $total = $all->count();
+                $active = $all->where('status', '사용중')->count();
+                $available = $all->where('status', '대기중')->count();
+
+                // Group by company dynamically
+                $companies = \App\Models\Company::query()
+                    ->where('status', 'active')
+                    ->orderBy('name')
+                    ->get();
+
+                $byCompany = [];
+                foreach ($companies as $comp) {
+                    $inUse = $all->where('company_id', $comp->id)->where('status', '사용중')->count();
+                    $byCompany[] = [
+                        'name' => $comp->name,
+                        'count' => $inUse,
+                    ];
+                }
+
+                return [
+                    'total' => $total,
+                    'active' => $active,
+                    'available' => $available,
+                    'byCompany' => $byCompany,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in rentalStats shim: ' . $e->getMessage());
+        }
+
+        return ['total' => 0, 'active' => 0, 'available' => 0, 'byCompany' => []];
+    }
+
+    public static function rentalList(): array
+    {
+        try {
+            if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
+                return \App\Models\Equipment::query()
+                    ->with(['company', 'team', 'employee', 'site', 'project', 'purchasedForSite'])
+                    ->visibleTo(auth()->user())
+                    ->get()
+                    ->map(fn (\App\Models\Equipment $e): array => [
+                        'id' => $e->equipment_code,
+                        'realId' => $e->id,
+                        'equipType' => $e->equipment_type,
+                        'group' => $e->resolvedGroup(),
+                        'trade' => $e->resolvedTrade(),
+                        'acquisitionType' => $e->acquisition_type ?: '임대',
+                        'purposeProject' => $e->project?->project_code ?: '-',
+                        'purposeSite' => $e->purchasedForSite?->code ?: '-',
+                        'model' => $e->model,
+                        'vendor' => $e->vendor ?: '-',
+                        'startDate' => $e->rent_start ? $e->rent_start->toDateString() : '-',
+                        'endDate' => $e->rent_end ? $e->rent_end->toDateString() : '-',
+                        'dailyRate' => (int) $e->daily_rate,
+                        'deliveryFee' => (int) $e->delivery_fee,
+                        'status' => $e->status ?: '대기중',
+                        'company' => $e->company?->name ?: '-',
+                        'companyId' => $e->company_id,
+                        'team' => $e->team?->name ?: '-',
+                        'teamId' => $e->team_id,
+                        'siteId' => $e->site_id,
+                        'siteCode' => $e->site?->code ?: '창고',
+                        'operator' => $e->employee?->name ?: ($e->payload['custom_operator'] ?? ''),
+                        'operatorId' => $e->employee_id,
+                        'contract_path' => $e->contract_path,
+                        'photo_front' => $e->photo_front,
+                        'photo_rear' => $e->photo_rear,
+                        'photo_left' => $e->photo_left,
+                        'photo_right' => $e->photo_right,
+                        'payload' => $e->payload,
+                    ])
+                    ->all();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in rentalList shim: ' . $e->getMessage());
+        }
+
+        return [];
+    }
     public static function housingStats(): array
     {
         try {
@@ -677,12 +1386,159 @@ class SmartCompanyData
             default => (string) $status,
         };
     }
+
+    public static function createRental(array $payload): array
+    {
+        try {
+            $siteCode = $payload['siteId'] ?? 'HFF-02';
+            $siteId = \App\Models\Site::where('code', $siteCode)->value('id');
+
+            $equipment = \App\Models\Equipment::create([
+                'site_id' => $siteId,
+                'equipment_type' => $payload['equipType'] ?? 'Other',
+                'model' => $payload['model'] ?? '',
+                'vendor' => $payload['vendor'] ?? null,
+                'rent_start' => $payload['startDate'] ?? null,
+                'rent_end' => $payload['endDate'] ?? null,
+                'daily_rate' => (int) ($payload['dailyRate'] ?? 0),
+                'delivery_fee' => (int) ($payload['deliveryFee'] ?? 0),
+                'status' => '대기중',
+                'registration_method' => 'manual',
+            ]);
+
+            return ['success' => true, 'id' => $equipment->equipment_code];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
     public static function flightList(): array { return [['id' => 'FL-001', 'name' => 'Han Gildong', 'direction' => '입국', 'from' => 'ICN', 'to' => 'PHX', 'depDateTime' => '2026-06-28 10:30', 'airline' => 'Korean Air', 'pnr' => 'KXNV7T', 'price' => 1240, 'status' => '발권', 'needPickup' => true, 'pickupBy' => 'Lee', 'housingReady' => true]]; }
     public static function officeSupplies(): array { return [['id' => 'OF-001', 'category' => '소모품', 'name' => 'Copy Paper A4', 'qty' => 3, 'minQty' => 5, 'location' => 'Office cabinet', 'lastRestock' => '2026-06-01', 'unitPrice' => 45, 'reorder' => true], ['id' => 'OF-002', 'category' => 'Safety', 'name' => 'Safety Vest', 'qty' => 8, 'minQty' => 10, 'location' => 'Safety shelf', 'lastRestock' => '2026-05-24', 'unitPrice' => 35, 'reorder' => true]]; }
     public static function vendors(): array { $fromDb = self::smartRecords('vendors'); return $fromDb ?: [['id' => 'VEN-001', 'name' => 'Graybar', 'category' => 'Electrical Supply', 'manager' => 'Amy', 'phone' => '602-555-0111', 'email' => 'quotes@graybar.example', 'contractStatus' => '진행중', 'site' => 'ALL'], ['id' => 'VEN-002', 'name' => 'United Rentals', 'category' => 'Equipment Rental', 'manager' => 'Mark', 'phone' => '602-555-0122', 'email' => 'az@united.example', 'contractStatus' => '진행중', 'site' => 'ALL']]; }
 
-    public static function wbsTree(string $projectId): array { return ['success' => true, 'projectId' => $projectId, 'stages' => [['name' => 'Rough-in', 'progress' => 72, 'items' => [['id' => 'WBS-001', 'name' => 'Conduit install Area A', 'status' => '완료', 'progress' => 100], ['id' => 'WBS-002', 'name' => 'Cable tray Area B', 'status' => '처리중', 'progress' => 55]]], ['name' => 'Trim-out', 'progress' => 18, 'items' => [['id' => 'WBS-003', 'name' => 'Panel labeling', 'status' => '미처리', 'progress' => 0]]]]]; }
-    public static function projectProgressSummary(string $projectId): array { return ['success' => true, 'projectId' => $projectId, 'progress' => collect(self::projects())->firstWhere('code', $projectId)['progress'] ?? 0, 'risk' => 'medium']; }
+    public static function wbsTree(string $projectId, string $siteId = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('wbs_items')) {
+                return ['success' => true, 'projectId' => $projectId, 'stages' => []];
+            }
+
+            return app(\App\Services\Wbs\WbsService::class)->tree($projectId, $siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'projectId' => $projectId, 'stages' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function projectProgressSummary(string $projectId, string $siteId = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('wbs_items')) {
+                return ['success' => true, 'projectId' => $projectId, 'progress' => 0, 'totalWbsCount' => 0, 'completedCount' => 0, 'inProgressCount' => 0, 'stages' => []];
+            }
+
+            return app(\App\Services\Wbs\WbsService::class)->progressSummary($projectId, $siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'projectId' => $projectId, 'progress' => 0, 'stages' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function processWbsManual(string $projectId, string $siteId = 'ALL'): array
+    {
+        try {
+            return self::wbsAiAnalyzer()->processManual($projectId, $siteId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * 업로드된 매뉴얼 파일(PDF/이미지 base64)로 WBS 분석. 선택된 엔진(Claude/Gemini)이 본문을 직접 읽는다.
+     *
+     * @param  array{data: string, media_type?: string}|null  $pdf
+     * @return array<string, mixed>
+     */
+    public static function analyzeWbsManual(string $projectId, string $siteId, ?array $pdf): array
+    {
+        try {
+            return self::wbsAiAnalyzer()->processManual($projectId, $siteId, $pdf);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * WBS 담당사(협력사) 배정 옵션 — "실제 계약사"에서 사람이 고르도록.
+     * 현장에 등록된 계약사(site_contractors)를 우선하고, 전체 등록 회사(companies)를 합쳐 중복 제거.
+     *
+     * @return array<int, string>
+     */
+    public static function wbsCompanyOptions(string $siteId = 'ALL'): array
+    {
+        $names = collect();
+
+        if ($siteId !== 'ALL' && class_exists(\App\Models\SiteContractor::class)) {
+            $siteRowId = \App\Models\Site::query()->where('code', $siteId)->value('id');
+            if ($siteRowId) {
+                $names = \App\Models\SiteContractor::query()
+                    ->where('site_id', $siteRowId)
+                    ->pluck('company_name')
+                    ->filter();
+            }
+        }
+
+        $all = \App\Models\Company::query()->where('status', 'active')->orderBy('name')->pluck('name');
+
+        return $names->merge($all)
+            ->map(fn ($n) => trim((string) $n))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * WBS AI 메뉴얼 분석 엔진 선택.
+     * 기본은 Gemini(가장 안정적·설정됨). Claude 는 WBS_AI_ENGINE=claude 로 명시할 때만 사용한다.
+     * (ANTHROPIC 크레딧 부족/미설정 시 자동으로 Claude 로 가서 실패하던 문제 방지.)
+     */
+    private static function wbsAiAnalyzer(): object
+    {
+        $engine = strtolower(trim((string) config('services.wbs.ai_engine', 'gemini')));
+
+        return $engine === 'claude'
+            ? app(\App\Services\Wbs\ClaudeWbsAnalyzer::class)
+            : app(\App\Services\Wbs\GeminiWbsAnalyzer::class);
+    }
+
+    public static function globalHrOverview(string $country = 'ALL'): array
+    {
+        try {
+            if (! Schema::hasTable('sites') || ! Schema::hasTable('employees')) {
+                return ['success' => true, 'totals' => ['employees' => 0, 'present' => 0, 'absent' => 0, 'rate' => 0, 'sites' => 0, 'countries' => 0, 'companies' => 0], 'countries' => [], 'matrix' => [], 'recent' => []];
+            }
+
+            return app(\App\Services\Hr\GlobalHrService::class)->overview($country);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage(), 'countries' => [], 'matrix' => [], 'recent' => []];
+        }
+    }
+
+    public static function teamBoard(string $siteCode): array
+    {
+        try {
+            return app(\App\Services\Hr\GlobalHrService::class)->teamBoard($siteCode);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    public static function assignEmployeeTeam(int $employeeId, ?int $teamId): array
+    {
+        try {
+            return app(\App\Services\Hr\GlobalHrService::class)->assignTeam($employeeId, $teamId);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
 
     public static function realSites(): array
     {
@@ -796,23 +1652,105 @@ class SmartCompanyData
     public static function realDailyTeamMatrix(string $siteId): array
     {
         $people = self::activeRealPersonnel($siteId);
-        $teams = array_values(array_unique(array_map(fn ($p) => $p['team'] ?: 'Unassigned', $people)));
+
+        $teamSet = [];
+        $foremen = [];
+        $companies = [];
+        $grand = ['manager' => 0, 'korean' => 0, 'local' => 0];
+        $managerByCompany = [];
+
+        foreach ($people as $person) {
+            $company = $person['company'] ?: 'Unassigned';
+            $team = $person['team'] ?: 'Unassigned';
+            $division = self::classifyDivision($person['role'] ?? null, $person['nationality'] ?? null);
+
+            $teamSet[$team] = true;
+
+            $companies[$company] ??= [
+                'name' => $company,
+                'matrix' => ['관리자' => [], '한국인' => [], '외국인' => []],
+                'subtotals' => [],
+                'totals' => ['manager' => 0, 'korean' => 0, 'local' => 0, 'total' => 0],
+            ];
+
+            $companies[$company]['matrix'][$division][$team] = ($companies[$company]['matrix'][$division][$team] ?? 0) + 1;
+            $companies[$company]['subtotals'][$team] = ($companies[$company]['subtotals'][$team] ?? 0) + 1;
+            $companies[$company]['totals']['total']++;
+
+            if ($division === '관리자') {
+                $companies[$company]['totals']['manager']++;
+                $grand['manager']++;
+                $managerByCompany[$company] = ($managerByCompany[$company] ?? 0) + 1;
+                // 팀장(foreman) 이름: 해당 팀의 첫 관리자.
+                if (! isset($foremen[$team]) && $team !== 'Unassigned') {
+                    $foremen[$team] = $person['nameEn'] ?: ($person['nameKr'] ?? '—');
+                }
+            } elseif ($division === '한국인') {
+                $companies[$company]['totals']['korean']++;
+                $grand['korean']++;
+            } else {
+                $companies[$company]['totals']['local']++;
+                $grand['local']++;
+            }
+        }
+
+        $teams = array_keys($teamSet);
+        sort($teams);
+        // MAIN(사무실)을 맨 앞으로.
+        usort($teams, fn ($a, $b) => ($a === 'MAIN' ? -1 : ($b === 'MAIN' ? 1 : 0)));
+
+        $byCompany = array_values($companies);
+        usort($byCompany, fn ($a, $b) => ($b['totals']['total'] ?? 0) <=> ($a['totals']['total'] ?? 0));
 
         return [
             'success' => true,
             'date' => Carbon::now()->toDateString(),
             'teams' => $teams,
-            'matrix' => [],
-            'foremen' => [],
-            'subtotals' => [],
-            'totals' => ['total' => count($people)],
+            'foremen' => $foremen,
+            'byCompany' => $byCompany,
+            'totals' => [
+                'manager' => $grand['manager'],
+                'korean' => $grand['korean'],
+                'local' => $grand['local'],
+                'grandTotal' => $grand['manager'] + $grand['korean'] + $grand['local'],
+            ],
+            'registered' => [
+                'total' => count($people),
+                'managerTotal' => $grand['manager'],
+                'managerByCompany' => $managerByCompany,
+            ],
+            'unclassified' => [],
         ];
+    }
+
+    /**
+     * 인원을 관리자/한국인/외국인으로 분류한다. 직무(role)가 관리직이면 관리자,
+     * 아니면 국적(nationality)이 한국이면 한국인, 그 외는 외국인.
+     */
+    private static function classifyDivision(?string $role, ?string $nationality): string
+    {
+        $role = trim((string) $role);
+        if ($role !== '' && preg_match('/manager|foreman|supervisor|super|lead|director|chief|\bpm\b|소장|관리|감독|팀장|반장/i', $role)) {
+            return '관리자';
+        }
+
+        $nat = strtolower(trim((string) $nationality));
+        $koreanAliases = ['kr', 'kor', 'korea', 'korean', 'south korea', 'republic of korea', '한국', '대한민국', '내국인'];
+        if ($nat !== '' && in_array($nat, $koreanAliases, true)) {
+            return '한국인';
+        }
+
+        return '외국인';
     }
 
     public static function realDailyAttendanceDetail(string $siteId, mixed $date): array
     {
         $people = self::activeRealPersonnel($siteId);
-        $targetDate = $date ? Carbon::parse($date)->toDateString() : Carbon::now()->toDateString();
+        try {
+            $targetDate = $date ? Carbon::parse($date)->toDateString() : Carbon::now()->toDateString();
+        } catch (\Throwable) {
+            $targetDate = Carbon::now()->toDateString();
+        }
         $attendance = self::realAttendanceMap($people, $targetDate);
         $companies = [];
 
@@ -1109,14 +2047,17 @@ class SmartCompanyData
             }
 
             $today = Carbon::today()->toDateString();
-            $lastLog = AttendanceLog::query()
+
+            // 하루 1회만 허용: 오늘 이미 출근 기록(반려 제외)이 있으면 차단.
+            $alreadyIn = AttendanceLog::query()
                 ->where('employee_id', $employeeId)
                 ->where('attendance_date', $today)
-                ->orderBy('event_at', 'desc')
-                ->first();
+                ->where('event_type', 'clock_in')
+                ->where('status', '!=', 'rejected')
+                ->exists();
 
-            if ($lastLog && $lastLog->event_type === 'clock_in') {
-                return ['success' => false, 'message' => '이미 출근(Clock In) 처리가 완료되었습니다.'];
+            if ($alreadyIn) {
+                return ['success' => false, 'message' => '오늘은 이미 출근(Clock In) 처리가 완료되었습니다.'];
             }
 
             AttendanceLog::create([
@@ -1151,14 +2092,28 @@ class SmartCompanyData
             }
 
             $today = Carbon::today()->toDateString();
-            $lastLog = AttendanceLog::query()
+
+            $hasClockIn = AttendanceLog::query()
                 ->where('employee_id', $employeeId)
                 ->where('attendance_date', $today)
-                ->orderBy('event_at', 'desc')
-                ->first();
+                ->where('event_type', 'clock_in')
+                ->where('status', '!=', 'rejected')
+                ->exists();
 
-            if (! $lastLog || $lastLog->event_type !== 'clock_in') {
+            if (! $hasClockIn) {
                 return ['success' => false, 'message' => '출근(Clock In) 기록이 없습니다. 먼저 출근해 주세요.'];
+            }
+
+            // 하루 1회만 허용: 오늘 이미 퇴근 기록(반려 제외)이 있으면 차단.
+            $alreadyOut = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('attendance_date', $today)
+                ->where('event_type', 'clock_out')
+                ->where('status', '!=', 'rejected')
+                ->exists();
+
+            if ($alreadyOut) {
+                return ['success' => false, 'message' => '오늘은 이미 퇴근(Clock Out) 처리가 완료되었습니다.'];
             }
 
             AttendanceLog::create([
@@ -1174,6 +2129,549 @@ class SmartCompanyData
             ]);
 
             return ['success' => true, 'message' => '퇴근(Clock Out)이 성공적으로 기록되었습니다.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function clockInWithGps(mixed $eventType = null, mixed $lat = null, mixed $lng = null, mixed $accuracy = null, mixed $isMocked = null, mixed $clientTimestamp = null): array
+    {
+        try {
+            $employeeId = auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '현재 계정에 연결된 직원(Employee) 정보가 없습니다.'];
+            }
+
+            $employee = Employee::find($employeeId);
+            if (! $employee) {
+                return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
+            }
+
+            // 관리자/사무직은 데스크톱(GPS 없음)에서도 테스트·기록할 수 있도록 정확도/지오펜스 검증을 우회.
+            // 현장 작업자에게는 안티-스푸핑 지오펜싱이 그대로 적용된다.
+            $authUser = auth()->user();
+            $isAdmin = $authUser && in_array($authUser->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true);
+
+            if (! $employee->site_id) {
+                return ['success' => false, 'message' => '배정된 현장 정보가 없습니다.'];
+            }
+
+            $site = Site::find($employee->site_id);
+            if (! $site) {
+                return ['success' => false, 'message' => '배정된 현장 모델을 찾을 수 없습니다.'];
+            }
+
+            // 1. 가상 위치(Fake GPS) 및 조작 앱 감지
+            if ($isMocked === true || $isMocked === 'true' || $isMocked === 1 || $isMocked === '1') {
+                return ['success' => false, 'message' => '가상 위치 조작 앱(Fake GPS) 사용이 감지되어 출퇴근 등록이 차단되었습니다.'];
+            }
+
+            // 2. 시간 조작 감지
+            if ($clientTimestamp) {
+                $diff = abs(time() - (int) $clientTimestamp);
+                if ($diff > 300) { // 5분
+                    return ['success' => false, 'message' => '휴대폰 기기 시간 조작이 감지되었습니다. 인터넷 표준 시간 설정(자동 설정)을 켜주세요.'];
+                }
+            }
+
+            // 3. 정확도 상한선 체크 (200m → 500m 완화, 관리자/데스크톱은 예외)
+            if (! $isAdmin && (is_null($accuracy) || (float) $accuracy > 500)) {
+                return ['success' => false, 'message' => 'GPS 신호 정밀도가 낮거나 유효하지 않습니다. GPS를 켜고 실외에서 다시 시도해 주세요.'];
+            }
+
+            // GPS 정보 획득 (DB 컬럼 우선, 없을 시 payload Fallback)
+            $siteLat = $site->latitude;
+            $siteLng = $site->longitude;
+            $radius = $site->radius_meters ?: 150;
+
+            if (is_null($siteLat) || is_null($siteLng)) {
+                if ($site->payload && is_array($site->payload)) {
+                    $siteLat = $site->payload['latitude'] ?? null;
+                    $siteLng = $site->payload['longitude'] ?? null;
+                    $radius = $site->payload['radius'] ?? $radius;
+                }
+            }
+
+            // 현장별 대표 GPS Fallback (Hoffman, LGES-AZ, NV-05)
+            if (is_null($siteLat) || is_null($siteLng)) {
+                $code = strtoupper($site->code);
+                if ($code === 'HFF-02') {
+                    $siteLat = 33.4255;
+                    $siteLng = -111.9400;
+                } elseif ($code === 'LGES-AZ') {
+                    $siteLat = 32.8410;
+                    $siteLng = -111.7580;
+                } elseif ($code === 'NV-05') {
+                    $siteLat = 39.5296;
+                    $siteLng = -119.8138;
+                }
+            }
+
+            // 만약 지오펜싱 위치가 설정되어 있다면 거리 계산 수행
+            $distance = null;
+            if (!is_null($siteLat) && !is_null($siteLng) && !is_null($lat) && !is_null($lng)) {
+                $earthRadius = 6371000; // meters
+                $latFrom = deg2rad($lat);
+                $lonFrom = deg2rad($lng);
+                $latTo = deg2rad($siteLat);
+                $lonTo = deg2rad($siteLng);
+
+                $latDelta = $latTo - $latFrom;
+                $lonDelta = $lonTo - $lonFrom;
+
+                $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+                    cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+                $distance = $angle * $earthRadius;
+
+                if (! $isAdmin && $distance > $radius) {
+                    return [
+                        'success' => false,
+                        'message' => sprintf(
+                            '현장 반경을 벗어났습니다. (현재 거리: %.1fm, 허용 반경: %dm)',
+                            $distance,
+                            $radius
+                        )
+                    ];
+                }
+            } else {
+                // GPS 좌표가 넘어오지 않았거나 현장 GPS가 없는 경우
+                if (is_null($lat) || is_null($lng)) {
+                    return ['success' => false, 'message' => '기기의 GPS 정보가 전송되지 않았습니다.'];
+                }
+                // 현장 GPS 정보 자체가 셋팅 안되어 있다면 일단 허용
+            }
+
+            $today = Carbon::today()->toDateString();
+            $eventTime = Carbon::now();
+
+            // 5분 중복 태그 방지
+            $fiveMinutesAgo = (clone $eventTime)->subMinutes(5);
+            $recentLog = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('event_at', '>=', $fiveMinutesAgo)
+                ->where('event_at', '<=', $eventTime)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if ($recentLog) {
+                return [
+                    'success' => false,
+                    'message' => "태깅이 너무 빠릅니다. 잠시 후 다시 시도해 주세요. (최근 태깅: " . $recentLog->event_at->toTimeString() . ")"
+                ];
+            }
+
+            // 이벤트 타입 결정
+            $resolvedType = strtolower($eventType ?: '');
+            if ($resolvedType !== 'clock_in' && $resolvedType !== 'clock_out') {
+                // 수동 토글 처리
+                $lastLog = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('status', '!=', 'rejected')
+                    ->orderBy('event_at', 'desc')
+                    ->first();
+                $resolvedType = ($lastLog && $lastLog->event_type === 'clock_in') ? 'clock_out' : 'clock_in';
+            }
+
+            // 이전 상태 검증
+            if ($resolvedType === 'clock_in') {
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayIn) {
+                    return ['success' => false, 'message' => '이미 오늘 출근 처리가 되어 있습니다.'];
+                }
+            } else {
+                // clock_out
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if (! $lastTodayIn) {
+                    return ['success' => false, 'message' => '오늘 출근 기록이 존재하지 않습니다.'];
+                }
+                $lastTodayOut = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_out')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayOut) {
+                    return ['success' => false, 'message' => '이미 오늘 퇴근 처리가 되어 있습니다.'];
+                }
+            }
+
+            // AttendanceLog 생성
+            AttendanceLog::create([
+                'employee_id' => $employeeId,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => $resolvedType,
+                'event_at' => $eventTime,
+                'source' => $isAdmin ? 'web_portal' : 'mobile_gps',
+                'status' => 'approved',
+                'notes' => $isAdmin
+                    ? '관리자/데스크톱 예외 등록 (GPS 정밀도·지오펜스 검증 우회).'
+                    : '모바일 GPS 기반 셀프 등록 완료.',
+                'payload' => [
+                    'latitude' => $lat,
+                    'longitude' => $lng,
+                    'accuracy' => $accuracy,
+                    'distance_meters' => $distance,
+                    'geofence_lat' => $siteLat,
+                    'geofence_lng' => $siteLng,
+                    'geofence_radius' => $radius,
+                    'admin_bypass' => $isAdmin,
+                ]
+            ]);
+
+            $eventTypeName = $resolvedType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
+
+            return [
+                'success' => true,
+                'message' => "{$eventTypeName}이 성공적으로 등록되었습니다."
+            ];
+
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public static function syncOfflineAttendance(array $queue): array
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return ['success' => false, 'message' => '로그인이 필요합니다.'];
+        }
+
+        $employeeId = $user->employee_id;
+        if (! $employeeId) {
+            return ['success' => false, 'message' => '직원 정보가 없습니다.'];
+        }
+
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'message' => '직원 모델을 찾을 수 없습니다.'];
+        }
+
+        $site = Site::find($employee->site_id);
+        if (! $site) {
+            return ['success' => false, 'message' => '배정된 현장 모델을 찾을 수 없습니다.'];
+        }
+
+        $successCount = 0;
+        $failedLogs = [];
+
+        DB::transaction(function () use ($queue, $employee, $site, &$successCount, &$failedLogs): void {
+            $secretKey = config('app.key') ?: 'base64:nahshonsmarterpdefaultkey';
+
+            foreach ($queue as $item) {
+                $eventType = $item['event_type'] ?? '';
+                $eventAtStr = $item['event_at'] ?? '';
+                $lat = $item['latitude'] ?? null;
+                $lng = $item['longitude'] ?? null;
+                $accuracy = $item['accuracy'] ?? null;
+                $token = $item['token'] ?? '';
+                $teamCode = $item['team_code'] ?? null;
+
+                // 1. 무결성 해시 토큰 검증
+                $expectedToken = hash_hmac(
+                    'sha256',
+                    $employee->id . '_' . $eventType . '_' . $eventAtStr . '_' . $lat . '_' . $lng . '_' . ($teamCode ?: ''),
+                    $secretKey
+                );
+
+                if ($token !== $expectedToken) {
+                    $failedLogs[] = [
+                        'event_at' => $eventAtStr,
+                        'reason' => '출퇴근 데이터 무결성 검증 실패 (시간/위치 임의 조작 의심)',
+                    ];
+                    continue;
+                }
+
+                // 1.5 QR 스캔 오프라인 팀 정합성 검사
+                $teamId = $employee->team_id;
+                if ($teamCode) {
+                    $team = \App\Models\Team::query()
+                        ->whereRaw('lower(code) = ?', [strtolower(trim($teamCode))])
+                        ->first();
+                    if (! $team) {
+                        $failedLogs[] = [
+                            'event_at' => $eventAtStr,
+                            'reason' => "스캔된 팀({$teamCode}) 정보를 찾을 수 없습니다.",
+                        ];
+                        continue;
+                    }
+                    if ($team->id !== $employee->team_id) {
+                        $failedLogs[] = [
+                            'event_at' => $eventAtStr,
+                            'reason' => "본인의 소속 팀과 일치하지 않는 QR 코드입니다. (스캔: {$teamCode})",
+                        ];
+                        continue;
+                    }
+                    $teamId = $team->id;
+                }
+
+                // 2. 오프라인 시간 조작 2차 검사: 미래 시각 방지
+                $eventTime = Carbon::parse($eventAtStr);
+                if ($eventTime->isFuture() && $eventTime->diffInMinutes(Carbon::now()) > 5) {
+                    $failedLogs[] = [
+                        'event_at' => $eventAtStr,
+                        'reason' => '미래의 시각으로 출퇴근할 수 없습니다.',
+                    ];
+                    continue;
+                }
+
+                // 3. 지오펜싱 거리 판정
+                $siteLat = $site->latitude;
+                $siteLng = $site->longitude;
+                $radius = $site->radius_meters ?: 150;
+
+                if (is_null($siteLat) || is_null($siteLng)) {
+                    if ($site->payload && is_array($site->payload)) {
+                        $siteLat = $site->payload['latitude'] ?? null;
+                        $siteLng = $site->payload['longitude'] ?? null;
+                        $radius = $site->payload['radius'] ?? $radius;
+                    }
+                }
+
+                // Fallback coordinates if unset
+                if (is_null($siteLat) || is_null($siteLng)) {
+                    $code = strtoupper($site->code);
+                    if ($code === 'HFF-02') {
+                        $siteLat = 33.4255;
+                        $siteLng = -111.9400;
+                    } elseif ($code === 'LGES-AZ') {
+                        $siteLat = 32.8410;
+                        $siteLng = -111.7580;
+                    } elseif ($code === 'NV-05') {
+                        $siteLat = 39.5296;
+                        $siteLng = -119.8138;
+                    }
+                }
+
+                $distance = null;
+                if (! is_null($siteLat) && ! is_null($siteLng) && ! is_null($lat) && ! is_null($lng)) {
+                    $earthRadius = 6371000;
+                    $latFrom = deg2rad($lat);
+                    $lonFrom = deg2rad($lng);
+                    $latTo = deg2rad($siteLat);
+                    $lonTo = deg2rad($siteLng);
+
+                    $latDelta = $latTo - $latFrom;
+                    $lonDelta = $lonTo - $lonFrom;
+
+                    $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+                        cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+                    $distance = $angle * $earthRadius;
+
+                    if ($distance > $radius) {
+                        $failedLogs[] = [
+                            'event_at' => $eventAtStr,
+                            'reason' => sprintf('현장 반경 외에서 오프라인 기록됨 (거리: %.1fm)', $distance),
+                        ];
+                        continue;
+                    }
+                }
+
+                // 4. 중복 체크
+                $attendanceDate = $eventTime->toDateString();
+                $exists = AttendanceLog::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('attendance_date', $attendanceDate)
+                    ->where('event_type', $eventType)
+                    ->where('status', '!=', 'rejected')
+                    ->exists();
+
+                if ($exists) {
+                    $failedLogs[] = [
+                        'event_at' => $eventAtStr,
+                        'reason' => "이미 해당 일자({$attendanceDate})의 동일한 기록이 존재합니다.",
+                    ];
+                    continue;
+                }
+
+                // 5. 기록 적재
+                AttendanceLog::create([
+                    'employee_id' => $employee->id,
+                    'company_id' => $employee->company_id,
+                    'site_id' => $employee->site_id,
+                    'team_id' => $teamId,
+                    'attendance_date' => $attendanceDate,
+                    'event_type' => $eventType,
+                    'event_at' => $eventTime,
+                    'source' => 'offline_gps_sync',
+                    'status' => 'approved',
+                    'notes' => '오프라인 저장 후 사후 동기화 완료.',
+                    'payload' => [
+                        'latitude' => $lat,
+                        'longitude' => $lng,
+                        'accuracy' => $accuracy,
+                        'distance_meters' => $distance,
+                        'offline_synced_at' => Carbon::now()->toDateTimeString(),
+                        'integrity_token_verified' => true,
+                    ]
+                ]);
+
+                $successCount++;
+            }
+        });
+
+        return [
+            'success' => true,
+            'synced_count' => $successCount,
+            'failed_logs' => $failedLogs,
+            'message' => "오프라인 기록 동기화 완료: {$successCount}건 성공, " . count($failedLogs) . '건 실패.',
+        ];
+    }
+
+    public static function clockInWithTeamQr(?string $teamCode, ?string $eventType = null): array
+    {
+        try {
+            if ($teamCode) {
+                $team = \App\Models\Team::query()
+                    ->with(['site', 'company'])
+                    ->whereRaw('lower(code) = ?', [strtolower(trim($teamCode))])
+                    ->first();
+
+                if (! $team) {
+                    return ['success' => false, 'message' => "Team QR code {$teamCode} was not found."];
+                }
+
+                $qrCode = \App\Models\AttendanceQrCode::forTeam($team, auth()->id());
+                $result = app(AttendanceQrService::class)->recordSelfScan(auth()->user(), $qrCode, $eventType ?: 'auto');
+
+                return [
+                    'success' => true,
+                    'ignored' => $result['ignored'] ?? false,
+                    'event_type' => $result['event_type'] ?? null,
+                    'status' => $result['status'] ?? null,
+                    'message' => $result['message'] ?? 'QR attendance recorded.',
+                ];
+            }
+
+            if (!$teamCode) {
+                return ['success' => false, 'message' => '스캔한 팀 코드 정보가 비어있습니다.'];
+            }
+
+            $employeeId = auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '현재 계정에 연결된 직원(Employee) 정보가 없습니다.'];
+            }
+
+            $employee = Employee::query()->with('team')->find($employeeId);
+            if (! $employee) {
+                return ['success' => false, 'message' => '해당 직원을 찾을 수 없습니다.'];
+            }
+
+            if (! $employee->team) {
+                return ['success' => false, 'message' => '소속 팀이 배정되어 있지 않습니다. 관리자에게 문의하세요.'];
+            }
+
+            $myTeamCode = $employee->team->code;
+            if (strcasecmp(trim($myTeamCode ?? ''), trim($teamCode)) !== 0) {
+                return [
+                    'success' => false,
+                    'message' => "소속 팀의 QR 코드가 아닙니다. (본인 팀: {$employee->team->name})"
+                ];
+            }
+
+            $today = Carbon::today()->toDateString();
+            $eventTime = Carbon::now();
+
+            // 5분 중복 태그 방지
+            $fiveMinutesAgo = (clone $eventTime)->subMinutes(5);
+            $recentLog = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->where('event_at', '>=', $fiveMinutesAgo)
+                ->where('event_at', '<=', $eventTime)
+                ->orderBy('event_at', 'desc')
+                ->first();
+
+            if ($recentLog) {
+                return [
+                    'success' => false,
+                    'message' => "태깅이 너무 빠릅니다. 잠시 후 다시 시도해 주세요. (최근 태깅: " . $recentLog->event_at->toTimeString() . ")"
+                ];
+            }
+
+            // 이벤트 타입 결정
+            $resolvedType = strtolower($eventType ?: '');
+            if ($resolvedType !== 'clock_in' && $resolvedType !== 'clock_out') {
+                $lastLog = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('status', '!=', 'rejected')
+                    ->orderBy('event_at', 'desc')
+                    ->first();
+                $resolvedType = ($lastLog && $lastLog->event_type === 'clock_in') ? 'clock_out' : 'clock_in';
+            }
+
+            // 이전 상태 검증
+            if ($resolvedType === 'clock_in') {
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayIn) {
+                    return ['success' => false, 'message' => '이미 오늘 출근 처리가 되어 있습니다.'];
+                }
+            } else {
+                $lastTodayIn = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_in')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if (! $lastTodayIn) {
+                    return ['success' => false, 'message' => '오늘 출근 기록이 존재하지 않습니다.'];
+                }
+                $lastTodayOut = AttendanceLog::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('attendance_date', $today)
+                    ->where('event_type', 'clock_out')
+                    ->where('status', '!=', 'rejected')
+                    ->first();
+                if ($lastTodayOut) {
+                    return ['success' => false, 'message' => '이미 오늘 퇴근 처리가 되어 있습니다.'];
+                }
+            }
+
+            // AttendanceLog 생성
+            AttendanceLog::create([
+                'employee_id' => $employeeId,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'team_id' => $employee->team_id,
+                'attendance_date' => $today,
+                'event_type' => $resolvedType,
+                'event_at' => $eventTime,
+                'source' => 'team_qr',
+                'status' => 'approved',
+                'notes' => '팀 QR 코드 스캔을 통해 자동 기록됨.',
+                'payload' => [
+                    'scanned_team_code' => $teamCode,
+                    'employee_team_code' => $myTeamCode,
+                    'team_name' => $employee->team->name
+                ]
+            ]);
+
+            $eventTypeName = $resolvedType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
+
+            return [
+                'success' => true,
+                'message' => "{$eventTypeName}이 성공적으로 등록되었습니다."
+            ];
+
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
         }
@@ -1250,6 +2748,49 @@ class SmartCompanyData
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage(), 'records' => []];
+        }
+    }
+
+    /**
+     * 일자별 집계가 아니라 개별 출퇴근 이벤트(펀치) 단위로 반환한다.
+     */
+    public static function hrAttendanceEvents(mixed $employeeId = null, ?string $startDate = null, ?string $endDate = null): array
+    {
+        try {
+            $employeeId = $employeeId ?: auth()->user()?->employee_id;
+            if (! $employeeId) {
+                return ['success' => false, 'message' => '직원 정보가 없습니다.', 'events' => []];
+            }
+
+            $start = $startDate ?: Carbon::now()->startOfMonth()->toDateString();
+            $end = $endDate ?: Carbon::now()->endOfMonth()->toDateString();
+
+            if (! Schema::hasTable('attendance_logs')) {
+                return ['success' => true, 'events' => []];
+            }
+
+            $logs = AttendanceLog::query()
+                ->where('employee_id', $employeeId)
+                ->whereBetween('attendance_date', [$start, $end])
+                ->orderBy('event_at', 'desc')
+                ->get();
+
+            $events = $logs->map(function ($log): array {
+                $eventAt = $log->event_at ? Carbon::parse($log->event_at) : null;
+
+                return [
+                    'date' => Carbon::parse($log->attendance_date)->format('M d, Y'),
+                    'raw_date' => Carbon::parse($log->attendance_date)->toDateString(),
+                    'time' => $eventAt ? $eventAt->format('H:i:s') : '-',
+                    'event_type' => $log->event_type,
+                    'source' => $log->source,
+                    'status' => $log->status,
+                ];
+            })->all();
+
+            return ['success' => true, 'events' => $events];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'events' => []];
         }
     }
 
@@ -1457,6 +2998,8 @@ class SmartCompanyData
                 'notes' => 'NFC 태그 리더기를 통해 자동 기록됨.',
             ]);
 
+            app(AttendanceQrService::class)->syncTimesheetFor($employee, $today);
+
             $eventTypeName = $eventType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
 
             return [
@@ -1604,11 +3147,7 @@ class SmartCompanyData
             }
 
             $user = auth()->user();
-            $log->update([
-                'status' => 'approved',
-                'approved_by_id' => $user?->id ?: null,
-                'approved_at' => Carbon::now(),
-            ]);
+            app(AttendanceQrService::class)->approveLog($log, $user);
 
             return ['success' => true, 'message' => 'Attendance log approved successfully.'];
         } catch (\Throwable $e) {
@@ -1624,9 +3163,7 @@ class SmartCompanyData
                 return ['success' => false, 'message' => 'Attendance log not found.'];
             }
 
-            $log->update([
-                'status' => 'rejected',
-            ]);
+            app(AttendanceQrService::class)->rejectLog($log);
 
             return ['success' => true, 'message' => 'Attendance log rejected successfully.'];
         } catch (\Throwable $e) {

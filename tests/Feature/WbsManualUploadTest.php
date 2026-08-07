@@ -1,0 +1,144 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Project;
+use App\Models\User;
+use App\Models\WbsItem;
+use App\Models\WbsManual;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+/**
+ * 공정관리 AI 매뉴얼 분석: 업로드→분석(Claude 엔진)→WBS 생성 + 이력, 그리고 리스트 조회.
+ */
+class WbsManualUploadTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->user = User::factory()->create();
+        Project::query()->create(['project_code' => 'MAN-01', 'name' => 'Manual Project', 'construction_type' => 'mechanical']);
+    }
+
+    private function fakeClaudeWbs(): void
+    {
+        config(['services.anthropic.api_key' => 'sk-ant-test', 'services.wbs.ai_engine' => 'claude']);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'stop_reason' => 'end_turn',
+                'content' => [[
+                    'type' => 'text',
+                    'text' => json_encode(['stages' => [[
+                        'stage_no' => '1', 'stage_name' => '설치',
+                        'tasks' => [[
+                            'task_no' => '1.1', 'task_name' => '반입',
+                            'sub_tasks' => [
+                                ['sub_no' => '1.1.1', 'sub_name' => '양중', 'company' => 'NAHSHON', 'manhours' => 40, 'days' => 2, 'ehs' => 'high'],
+                            ],
+                        ]],
+                    ]]]),
+                ]],
+            ]),
+        ]);
+    }
+
+    public function test_upload_requires_auth(): void
+    {
+        $this->post(route('wbs-manual.upload'))->assertRedirect(route('login'));
+    }
+
+    public function test_upload_queues_analysis_and_returns_immediately(): void
+    {
+        // 동기 분석은 게이트웨이 504 를 유발하므로, 업로드는 즉시 202(analyzing)를 돌려주고
+        // 실제 분석은 응답 후 백그라운드(afterResponse) 잡이 처리한다.
+        Storage::fake('public');
+        $this->fakeClaudeWbs();
+
+        $file = UploadedFile::fake()->create('setup-manual.pdf', 200, 'application/pdf');
+
+        $response = $this->actingAs($this->user)->postJson(route('wbs-manual.upload'), [
+            'manual' => $file,
+            'project_code' => 'MAN-01',
+            'site_id' => 'ALL',
+        ]);
+
+        // 응답 계약: 즉시 202 + status=analyzing (실제 분석은 응답 후 잡이 처리).
+        $response->assertStatus(202)->assertJson(['success' => true, 'status' => 'analyzing']);
+        $response->assertJsonPath('manual.status', 'analyzing');
+
+        $manual = WbsManual::first();
+        $this->assertNotNull($manual);
+        Storage::disk('public')->assertExists($manual->path);
+    }
+
+    public function test_analyze_job_completes_manual_and_persists_wbs(): void
+    {
+        Storage::fake('public');
+        $this->fakeClaudeWbs();
+
+        Storage::disk('public')->put('wbs-manuals/setup.pdf', '%PDF-1.4 fake manual');
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01', 'original_name' => 'setup.pdf', 'disk' => 'public',
+            'path' => 'wbs-manuals/setup.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
+        ]);
+
+        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+
+        $manual->refresh();
+        $this->assertSame('completed', $manual->status);
+        $this->assertSame('claude', $manual->engine);
+        $this->assertSame(1, $manual->stages);
+        $this->assertSame(1, $manual->subtasks);
+        $this->assertSame(1, WbsItem::where('project_code', 'MAN-01')->where('level', 'stage')->count());
+    }
+
+    public function test_analyze_job_marks_failed_on_error(): void
+    {
+        Storage::fake('public');
+        // 파일이 없으면 실패로 기록.
+        $manual = WbsManual::create([
+            'project_code' => 'MAN-01', 'original_name' => 'gone.pdf', 'disk' => 'public',
+            'path' => 'wbs-manuals/gone.pdf', 'mime_type' => 'application/pdf', 'status' => 'analyzing',
+        ]);
+
+        (new \App\Jobs\AnalyzeWbsManualJob($manual->id, 'MAN-01', 'ALL'))->handle();
+
+        $manual->refresh();
+        $this->assertSame('failed', $manual->status);
+        $this->assertNotEmpty($manual->error);
+    }
+
+    public function test_index_lists_analyzed_manuals_for_project(): void
+    {
+        WbsManual::create(['project_code' => 'MAN-01', 'original_name' => 'a.pdf', 'path' => 'wbs-manuals/a.pdf', 'engine' => 'claude', 'status' => 'completed', 'stages' => 2, 'tasks' => 3, 'subtasks' => 8]);
+        WbsManual::create(['project_code' => 'OTHER', 'original_name' => 'b.pdf', 'path' => 'wbs-manuals/b.pdf', 'engine' => 'gemini', 'status' => 'completed']);
+
+        $response = $this->actingAs($this->user)->getJson(route('wbs-manual.index', ['project' => 'MAN-01']));
+
+        $response->assertOk()->assertJson(['success' => true]);
+        $response->assertJsonCount(1, 'manuals');
+        $response->assertJsonPath('manuals.0.original_name', 'a.pdf');
+        $response->assertJsonPath('manuals.0.stages', 2);
+    }
+
+    public function test_upload_rejects_disallowed_file_type(): void
+    {
+        Storage::fake('public');
+        $this->fakeClaudeWbs();
+
+        $file = UploadedFile::fake()->create('malware.exe', 10, 'application/octet-stream');
+
+        $this->actingAs($this->user)->postJson(route('wbs-manual.upload'), [
+            'manual' => $file,
+            'project_code' => 'MAN-01',
+        ])->assertStatus(422);
+    }
+}

@@ -15,6 +15,8 @@ class PayrollTimesheet extends Model
         'company_id',
         'site_id',
         'team_id',
+        'employer_company_id',
+        'site_contractor_id',
         'work_date',
         'check_in_at',
         'check_out_at',
@@ -42,5 +44,15 @@ class PayrollTimesheet extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function employerCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'employer_company_id');
+    }
+
+    public function siteContractor(): BelongsTo
+    {
+        return $this->belongsTo(SiteContractor::class);
     }
 }

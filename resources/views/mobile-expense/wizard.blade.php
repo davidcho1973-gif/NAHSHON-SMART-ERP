@@ -159,6 +159,26 @@
       font-size: 11px;
       color: var(--text-tertiary);
     }
+    .upload-preview {
+      display: none;
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      background: var(--bg-base);
+    }
+    .upload-preview.visible {
+      display: block;
+    }
+    .upload-area.has-preview {
+      padding: 14px;
+      border-style: solid;
+      align-items: stretch;
+    }
+    .upload-area.has-preview .upload-icon {
+      display: none;
+    }
     .analysis-card {
       display: none;
       flex-direction: column;
@@ -438,6 +458,7 @@
         </div>
         <div class="upload-area" onclick="document.getElementById('receiptFileInput').click()" id="uploadContainer">
           <div class="scanner-bar" id="scannerBar"></div>
+          <img class="upload-preview" id="receiptUploadPreview" src="" alt="Receipt preview">
           <i class="ph ph-receipt-bold upload-icon" id="uploadAreaIcon"></i>
           <span class="upload-label" id="uploadAreaLabel">사진 촬영 또는 파일 올리기</span>
           <span class="upload-sub" id="uploadAreaSub">JPG, PNG, PDF 최대 10MB</span>
@@ -590,6 +611,7 @@
     let currentStep = 1;
     const totalSteps = 6;
     let rawAmountString = "0";
+    let receiptPreviewObjectUrl = null;
     const accountOptions = @json($accountOptions ?? []);
     const fallbackAccount = '9999 Needs Review';
 
@@ -639,6 +661,27 @@
       document.getElementById('amountInput').value = parsed.toFixed(2);
     }
 
+    function showReceiptUploadPreview(file) {
+      const preview = document.getElementById('receiptUploadPreview');
+      const container = document.getElementById('uploadContainer');
+
+      if (!file || !file.type.startsWith('image/')) {
+        preview.removeAttribute('src');
+        preview.classList.remove('visible');
+        container.classList.remove('has-preview');
+        return;
+      }
+
+      if (receiptPreviewObjectUrl) {
+        URL.revokeObjectURL(receiptPreviewObjectUrl);
+      }
+
+      receiptPreviewObjectUrl = URL.createObjectURL(file);
+      preview.src = receiptPreviewObjectUrl;
+      preview.classList.add('visible');
+      container.classList.add('has-preview');
+    }
+
     async function handleReceiptUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -648,6 +691,8 @@
       const icon = document.getElementById('uploadAreaIcon');
       const label = document.getElementById('uploadAreaLabel');
       const sub = document.getElementById('uploadAreaSub');
+
+      showReceiptUploadPreview(file);
 
       // Start scanner animation
       scanner.style.display = 'block';

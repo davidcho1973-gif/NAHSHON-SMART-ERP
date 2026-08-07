@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>AI 문서 인텔리전스 | NAHSHON SMART ERP</title>
+    <style>
+        :root {
+            --navy:#0b1220; --navy-2:#111c30; --panel:#fff; --canvas:#f3f6fb; --line:#dfe6f0;
+            --text:#14213d; --muted:#67748c; --blue:#2563eb; --blue-soft:#eaf1ff; --cyan:#0891b2;
+            --red:#dc2626; --red-soft:#fff0f0; --amber:#d97706; --amber-soft:#fff7e8;
+            --green:#059669; --green-soft:#e9fbf5; --violet:#7c3aed; --shadow:0 16px 40px rgba(15,23,42,.08);
+        }
+        *{box-sizing:border-box} body{margin:0;background:var(--canvas);color:var(--text);font:14px/1.55 Inter,"Noto Sans KR",system-ui,-apple-system,sans-serif}
+        button,input,select{font:inherit} button{cursor:pointer}.app{min-height:100vh;display:grid;grid-template-columns:248px 1fr}
+        .sidebar{background:linear-gradient(180deg,var(--navy),#111827);color:#dbe7ff;padding:22px 17px;position:sticky;top:0;height:100vh}
+        .brand{display:flex;align-items:center;gap:11px;padding:2px 8px 24px;border-bottom:1px solid rgba(255,255,255,.1)}
+        .brand-mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#7c3aed);display:grid;place-items:center;font-weight:900;color:white}
+        .brand strong{display:block;font-size:14px}.brand small{color:#8fa4c4}.nav-label{font-size:10px;letter-spacing:.16em;color:#7184a3;font-weight:800;margin:23px 10px 9px}
+        .nav-link{display:flex;gap:10px;align-items:center;padding:11px 12px;border-radius:10px;color:#c5d3e8;text-decoration:none;margin:4px 0}
+        .nav-link:hover,.nav-link.active{background:rgba(59,130,246,.18);color:white}.nav-link.active{box-shadow:inset 3px 0 #60a5fa}
+        .sidebar-note{position:absolute;left:17px;right:17px;bottom:20px;padding:13px;border:1px solid rgba(96,165,250,.25);border-radius:12px;background:rgba(37,99,235,.1);font-size:11px;color:#a9bdd9}
+        main{min-width:0}.topbar{height:70px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:20}
+        .crumb{font-size:12px;color:var(--muted)}.crumb b{color:var(--text)}.top-actions{display:flex;gap:9px}.btn{border:1px solid var(--line);background:#fff;color:var(--text);padding:9px 13px;border-radius:9px;font-weight:700;display:inline-flex;align-items:center;gap:7px;text-decoration:none}
+        .btn:hover{border-color:#aab8ce}.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn.dark{background:var(--navy);border-color:var(--navy);color:#fff}.btn.small{padding:6px 9px;font-size:12px}
+        .content{padding:28px;max-width:1700px;margin:0 auto}.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:21px}
+        h1{font-size:27px;margin:0 0 5px;letter-spacing:-.03em}.hero p{margin:0;color:var(--muted)}.live-pill{padding:7px 11px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:11px;font-weight:800}
+        .stats{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:12px;margin-bottom:18px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 16px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
+        .stat span{font-size:11px;color:var(--muted);font-weight:700}.stat strong{font-size:25px;display:block;margin-top:3px}.stat.danger{border-left:3px solid var(--red)}.stat.warn{border-left:3px solid var(--amber)}
+        .workspace{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:17px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 20px rgba(15,23,42,.035);overflow:hidden}
+        .panel-head{display:flex;justify-content:space-between;align-items:center;padding:15px 18px;border-bottom:1px solid var(--line)}.panel-head h2{font-size:15px;margin:0}.panel-head p{font-size:11px;color:var(--muted);margin:2px 0 0}
+        .drop-panel{padding:16px}.scope-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:11px}.field label{display:block;font-size:10px;font-weight:800;color:var(--muted);margin:0 0 5px}
+        .field select,.field input{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:9px 10px;color:var(--text);outline:none}.field select:focus,.field input:focus{border-color:#7ca5fb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+        .dropzone{min-height:180px;border:2px dashed #a8bce0;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#f6f3ff);display:grid;place-items:center;text-align:center;padding:25px;transition:.2s}
+        .dropzone.drag{border-color:var(--blue);background:var(--blue-soft);transform:scale(1.005)}.drop-icon{width:55px;height:55px;border-radius:17px;background:#fff;box-shadow:var(--shadow);display:grid;place-items:center;font-size:27px;margin:0 auto 11px}
+        .dropzone strong{font-size:15px}.dropzone p{margin:5px 0 12px;color:var(--muted);font-size:12px}.dropzone small{display:block;color:#8b98ad;margin-top:9px}.queue{display:none;margin-top:11px;border:1px solid var(--line);border-radius:10px;padding:9px;background:#fafcff}
+        .queue.show{display:block}.queue-row{display:flex;justify-content:space-between;gap:8px;padding:5px 3px;font-size:11px}.progress{height:5px;background:#e8edf5;border-radius:10px;overflow:hidden;margin-top:7px}.progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--blue),var(--violet));transition:.25s}
+        .memory-list{padding:8px 16px 16px}.memory-item{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-top:8px}.memory-item.critical{background:var(--red-soft);border-color:#fecaca}.memory-item.warning{background:var(--amber-soft);border-color:#fde0a7}
+        .memory-item strong{display:block;font-size:12px}.memory-item p{font-size:11px;color:var(--muted);margin:4px 0}.memory-meta{display:flex;gap:7px;align-items:center;font-size:10px;color:var(--muted)}
+        .searchbar{display:grid;grid-template-columns:minmax(240px,1fr) 180px 180px auto;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);background:#fbfcfe}.searchbar input,.searchbar select{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text)}
+        .doc-table{width:100%;border-collapse:collapse}.doc-table th{text-align:left;padding:10px 12px;font-size:10px;letter-spacing:.03em;color:var(--muted);background:#f8fafc;border-bottom:1px solid var(--line)}.doc-table td{padding:11px 12px;border-bottom:1px solid #edf1f6;vertical-align:middle}.doc-table tr:hover td{background:#fafcff}
+        .doc-title{font-weight:750;font-size:12px;max-width:360px}.doc-sub{color:var(--muted);font-size:10px;margin-top:2px}.badge{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800;background:#eef2f7;color:#53637a}.badge.ready{background:var(--green-soft);color:var(--green)}.badge.analyzing,.badge.queued{background:var(--blue-soft);color:var(--blue)}.badge.review_required{background:var(--amber-soft);color:var(--amber)}.badge.failed{background:var(--red-soft);color:var(--red)}
+        .action-count{color:var(--red);font-weight:800}.empty{padding:55px 20px;text-align:center;color:var(--muted)}.loading{opacity:.55;pointer-events:none}
+        .drawer-bg{display:none;position:fixed;inset:0;background:rgba(2,8,23,.58);z-index:100}.drawer-bg.open{display:block}.drawer{position:absolute;right:0;top:0;bottom:0;width:min(780px,94vw);background:#f7f9fc;overflow:auto;box-shadow:-18px 0 50px rgba(0,0,0,.18)}
+        .drawer-head{position:sticky;top:0;z-index:3;background:#fff;border-bottom:1px solid var(--line);padding:16px 19px;display:flex;justify-content:space-between;gap:15px}.drawer-head h2{font-size:17px;margin:0}.drawer-body{padding:16px}.detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:13px}.detail-chip{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px}.detail-chip span{display:block;font-size:9px;color:var(--muted);font-weight:800}.detail-chip b{font-size:11px}
+        .section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 15px;margin-bottom:12px}.section h3{font-size:13px;margin:0 0 8px}.section p{font-size:12px;color:#46556d;white-space:pre-wrap}.fact{padding:8px 10px;margin:6px 0;border-left:3px solid var(--blue);background:#f5f8ff;border-radius:0 8px 8px 0;font-size:11px}.tag{display:inline-block;padding:3px 7px;border-radius:7px;background:#edf2fa;margin:2px;font-size:10px;color:#45546a}
+        .action-card{border:1px solid var(--line);border-radius:9px;padding:10px;margin-top:8px}.action-card.critical,.action-card.high{border-left:3px solid var(--red)}.action-card.warning{border-left:3px solid var(--amber)}.action-card strong{font-size:12px}.action-card p{margin:4px 0}.action-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:10px}
+        .toast{position:fixed;right:22px;bottom:22px;z-index:200;background:var(--navy);color:#fff;border-radius:10px;padding:11px 15px;box-shadow:var(--shadow);display:none}.toast.show{display:block}.toast.error{background:#991b1b}
+        @media(max-width:1100px){.app{grid-template-columns:78px 1fr}.brand div,.nav-link span,.nav-label,.sidebar-note{display:none}.brand{padding-left:3px}.sidebar{padding:18px 12px}.nav-link{justify-content:center}.workspace{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
+        @media(max-width:700px){.app{display:block}.sidebar{display:none}.topbar{padding:0 14px}.content{padding:17px 12px}.hero{align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}.scope-grid,.searchbar{grid-template-columns:1fr}.doc-table th:nth-child(3),.doc-table td:nth-child(3),.doc-table th:nth-child(4),.doc-table td:nth-child(4){display:none}.detail-grid{grid-template-columns:repeat(2,1fr)}}
+    </style>
+</head>
+<body>
+<div class="app">
+    <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">NS</div><div><strong>SMART COMPANY</strong><small>DOCUMENT CONTROL</small></div></div>
+        <div class="nav-label">WORKSPACE</div>
+        <a class="nav-link" href="/"><b>⌂</b><span>ERP 홈</span></a>
+        <a class="nav-link active" href="/document-hub"><b>✦</b><span>AI 통합 문서함</span></a>
+        <a class="nav-link" href="/?view=alerts"><b>♢</b><span>통합 알림센터</span></a>
+        <a class="nav-link" href="/admin/project-contracts"><b>▣</b><span>원청 계약·서류</span></a>
+        <div class="nav-label">PRINCIPLES</div>
+        <div class="nav-link"><b>✓</b><span>원본 불변</span></div>
+        <div class="nav-link"><b>⌕</b><span>본문·키워드 검색</span></div>
+        <div class="nav-link"><b>!</b><span>선제 위험 알림</span></div>
+        <div class="sidebar-note">파일은 비공개 Object Storage에 보관하고, AI 판단과 사람의 검토 이력을 함께 남깁니다.</div>
+    </aside>
+    <main>
+        <header class="topbar">
+            <div class="crumb">NAHSHON 통합관리　›　<b>AI 문서 인텔리전스</b></div>
+            <div class="top-actions">
+                <a class="btn" href="{{ route('document-intelligence.export-index') }}">⇩ 인덱스 CSV</a>
+                <a class="btn dark" href="/?view=alerts">통합 알림센터</a>
+            </div>
+        </header>
+        <div class="content">
+            <div class="hero">
+                <div><h1>AI 공사 문서 인텔리전스</h1><p>파일을 넣으면 AI가 읽고, 분류하고, 기억하고, 위험과 기한을 먼저 알려줍니다.</p></div>
+                <div class="live-pill">● PRIVATE STORAGE · AI INDEX ACTIVE</div>
+            </div>
+            <div class="stats">
+                <div class="stat"><span>전체 문서</span><strong id="stat-total">0</strong></div>
+                <div class="stat"><span>AI 분석 중</span><strong id="stat-analyzing">0</strong></div>
+                <div class="stat warn"><span>사람 검토 필요</span><strong id="stat-review">0</strong></div>
+                <div class="stat"><span>미완료 후속조치</span><strong id="stat-actions">0</strong></div>
+                <div class="stat danger"><span>긴급·고위험</span><strong id="stat-critical">0</strong></div>
+            </div>
+
+            <div class="workspace">
+                <section class="panel">
+                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><button class="btn small" id="refresh-btn">↻ 새로고침</button></div>
+                    <div class="searchbar">
+                        <input id="search" placeholder="예: RFI-023, backcharge, cable tray, 30일 notice…">
+                        <select id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
+                        <select id="project-filter"><option value="">전체 PROJECT</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
+                        <button class="btn primary" id="search-btn">검색</button>
+                    </div>
+                    <div style="overflow:auto"><table class="doc-table"><thead><tr><th>문서</th><th>AI 분류</th><th>PROJECT / 폴더</th><th>문서일·Revision</th><th>기억·조치</th><th></th></tr></thead><tbody id="doc-list"><tr><td colspan="6" class="empty">문서 인덱스를 불러오는 중입니다.</td></tr></tbody></table></div>
+                </section>
+
+                <aside>
+                    @if($canManage)
+                    <section class="panel" style="margin-bottom:17px">
+                        <div class="panel-head"><div><h2>AI 문서 드롭존</h2><p>최대 50개 파일을 한 번에 올릴 수 있습니다.</p></div></div>
+                        <div class="drop-panel">
+                            <div class="scope-grid">
+                                <div class="field"><label>회사</label><select id="upload-company"><option value="">자동/Global</option>@foreach($companies as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select></div>
+                                <div class="field"><label>현장</label><select id="upload-site"><option value="">자동/공통</option>@foreach($sites as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select></div>
+                                <div class="field"><label>PROJECT</label><select id="upload-project"><option value="">AI 확인</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select></div>
+                            </div>
+                            <div class="dropzone" id="dropzone">
+                                <div><div class="drop-icon">⇧</div><strong>문서를 여기에 끌어다 놓으세요</strong><p>또는 버튼을 눌러 여러 파일을 선택하세요.</p><button class="btn primary" id="pick-files">파일 선택</button><small>PDF · Word · Excel · CSV · TXT · 이미지 · EML / 파일당 최대 {{ $maxUploadMb }}MB</small></div>
+                            </div>
+                            <input id="file-input" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.eml">
+                            <div class="queue" id="upload-queue"><div id="queue-files"></div><div class="progress"><i id="upload-progress"></i></div></div>
+                        </div>
+                    </section>
+                    @endif
+                    <section class="panel">
+                        <div class="panel-head"><div><h2>기억·예방 큐</h2><p>문서에서 발견한 중요한 기한과 위험입니다.</p></div></div>
+                        <div class="memory-list" id="memory-list"><div class="empty" style="padding:28px 10px">문서를 선택하면 후속조치가 표시됩니다.</div></div>
+                    </section>
+                </aside>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div class="drawer-bg" id="drawer-bg"><div class="drawer"><div class="drawer-head"><div><h2 id="detail-title">문서 상세</h2><div class="doc-sub" id="detail-file"></div></div><button class="btn" id="drawer-close">닫기</button></div><div class="drawer-body" id="drawer-body"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+const canManage = @json($canManage);
+const endpoints = {
+    list: @json(route('document-intelligence.documents')),
+    upload: @json(route('document-intelligence.upload')),
+    show: @json(url('/document-hub/api/documents')),
+    actions: @json(url('/document-hub/api/actions')),
+};
+let currentDocuments = [];
+let pollTimer = null;
+const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const fmtBytes = bytes => !bytes ? '-' : bytes >= 1048576 ? (bytes/1048576).toFixed(1)+' MB' : (bytes/1024).toFixed(1)+' KB';
+const statusLabel = status => ({queued:'접수됨',analyzing:'AI 분석 중',ready:'정리 완료',review_required:'검토 필요',failed:'분석 실패'}[status] || status);
+function toast(message, error=false){const el=document.getElementById('toast');el.textContent=message;el.className='toast show'+(error?' error':'');setTimeout(()=>el.className='toast',3500)}
+async function jsonFetch(url, options={}){const response=await fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf,...(options.headers||{})},...options});const data=await response.json().catch(()=>({success:false,error:'응답을 읽을 수 없습니다.'}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||'요청 실패');return data}
+
+async function loadDocuments(){
+    const params=new URLSearchParams({q:document.getElementById('search').value,category:document.getElementById('category-filter').value,project_id:document.getElementById('project-filter').value});
+    const list=document.getElementById('doc-list'); list.classList.add('loading');
+    try{
+        const data=await jsonFetch(endpoints.list+'?'+params.toString()); currentDocuments=data.documents||[]; renderRows();
+        const s=data.stats||{};document.getElementById('stat-total').textContent=s.total||0;document.getElementById('stat-analyzing').textContent=s.analyzing||0;document.getElementById('stat-review').textContent=s.review_required||0;document.getElementById('stat-actions').textContent=s.open_actions||0;document.getElementById('stat-critical').textContent=s.critical_actions||0;
+        clearTimeout(pollTimer); if((s.analyzing||0)>0)pollTimer=setTimeout(loadDocuments,5000);
+    }catch(e){list.innerHTML='<tr><td colspan="6" class="empty">'+esc(e.message)+'</td></tr>'}finally{list.classList.remove('loading')}
+}
+function renderRows(){
+    const list=document.getElementById('doc-list');
+    if(!currentDocuments.length){list.innerHTML='<tr><td colspan="6" class="empty">검색된 문서가 없습니다. 오른쪽 드롭존에 첫 문서를 넣어보세요.</td></tr>';return}
+    list.innerHTML=currentDocuments.map(d=>`<tr>
+      <td><div class="doc-title">${esc(d.title)}</div><div class="doc-sub">${esc(d.fileName)} · ${fmtBytes(d.fileSize)}</div></td>
+      <td><span class="badge ${esc(d.aiStatus)}">${esc(statusLabel(d.aiStatus))}</span><div class="doc-sub">${esc(d.categoryLabel)}<br>${esc(d.documentTypeLabel)}</div></td>
+      <td><b style="font-size:11px">${esc(d.project||d.site||'Global')}</b><div class="doc-sub">${esc(d.virtualPath||'AI 분류 대기')}</div></td>
+      <td><div style="font-size:11px">${esc(d.documentDate||'-')}</div><div class="doc-sub">${d.documentNumber?'No. '+esc(d.documentNumber):''} ${d.revision?'· Rev '+esc(d.revision):''}</div></td>
+      <td>${d.openActions?`<span class="action-count">미처리 ${d.openActions}건</span>`:'<span class="badge ready">조치 없음</span>'}${d.responseDueOn?`<div class="doc-sub">회신 ${esc(d.responseDueOn)}</div>`:''}</td>
+      <td><button class="btn small" onclick="openDocument(${d.id})">열기</button></td></tr>`).join('');
+}
+async function openDocument(id){
+    document.getElementById('drawer-bg').classList.add('open');document.getElementById('drawer-body').innerHTML='<div class="empty">AI 문서 인덱스를 불러오는 중…</div>';
+    try{const {document:d}=await jsonFetch(endpoints.show+'/'+id);renderDetail(d);renderMemory(d.actions||[])}catch(e){document.getElementById('drawer-body').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+function renderMemory(actions){
+    const box=document.getElementById('memory-list');const open=actions.filter(a=>!['completed','ignored'].includes(a.status));
+    if(!open.length){box.innerHTML='<div class="empty" style="padding:28px 10px">현재 미완료 후속조치가 없습니다.</div>';return}
+    box.innerHTML=open.slice(0,8).map(a=>`<div class="memory-item ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.recommendedAction||a.details||'')}</p><div class="memory-meta"><span>${esc(a.severity)}</span><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'기한 확인 필요'}</span></div></div>`).join('');
+}
+function renderDetail(d){
+    document.getElementById('detail-title').textContent=d.title;document.getElementById('detail-file').textContent=d.fileName+' · '+fmtBytes(d.fileSize);
+    const facts=(d.keyFacts||[]).map(f=>`<div class="fact">${esc(f)}</div>`).join('')||'<p>추출된 핵심 사실이 없습니다.</p>';
+    const tags=[...(d.keywords||[]),...(d.tags||[])].slice(0,50).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+    const actions=(d.actions||[]).map(a=>`<div class="action-card ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.details||'')}</p>${a.recommendedAction?`<p><b>권고:</b> ${esc(a.recommendedAction)}</p>`:''}${a.sourceExcerpt?`<div class="doc-sub">근거: “${esc(a.sourceExcerpt)}”</div>`:''}<div class="action-foot"><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'명시 기한 없음'} · 신뢰도 ${esc(a.confidence||0)}%</span>${canManage&&!['completed','ignored'].includes(a.status)?`<button class="btn small" onclick="completeAction(${a.id},${d.id})">처리완료</button>`:`<span class="badge ${a.status==='completed'?'ready':''}">${esc(a.status)}</span>`}</div></div>`).join('')||'<p>AI가 발견한 필수 후속조치가 없습니다.</p>';
+    document.getElementById('drawer-body').innerHTML=`
+      <div class="detail-grid"><div class="detail-chip"><span>분류</span><b>${esc(d.categoryLabel)}</b></div><div class="detail-chip"><span>문서유형</span><b>${esc(d.documentTypeLabel)}</b></div><div class="detail-chip"><span>문서번호 / Revision</span><b>${esc(d.documentNumber||'-')} / ${esc(d.revision||'-')}</b></div><div class="detail-chip"><span>AI 신뢰도</span><b>${esc(d.aiConfidence||0)}%</b></div></div>
+      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn primary" target="_blank" href="${esc(d.previewUrl)}">바로 보기</a><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button>`:''}</div></div>
+      ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
+      <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
+      <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
+      <div class="section"><h3>위험·기한·후속조치</h3>${actions}</div>
+      <div class="section"><h3>검색 키워드</h3>${tags||'<p>키워드 생성 대기 중입니다.</p>'}</div>
+      <details class="section"><summary style="font-weight:800;cursor:pointer">OCR/추출 본문 보기</summary><p style="max-height:420px;overflow:auto">${esc(d.extractedText||'추출 가능한 본문이 없습니다. 이미지/PDF 원본을 확인하세요.')}</p></details>`;
+}
+async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
+async function reanalyze(id){try{await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast('AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+async function uploadFiles(files){
+    if(!files.length)return;const queue=document.getElementById('upload-queue');queue.classList.add('show');document.getElementById('queue-files').innerHTML=[...files].map(f=>`<div class="queue-row"><span>${esc(f.name)}</span><span>${fmtBytes(f.size)}</span></div>`).join('');document.getElementById('upload-progress').style.width='25%';
+    const form=new FormData();[...files].forEach(f=>form.append('files[]',f));['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v)form.append(k+'_id',v)});
+    try{const data=await jsonFetch(endpoints.upload,{method:'POST',body:form});document.getElementById('upload-progress').style.width='100%';toast(data.message+(data.duplicates?.length?` · 중복 ${data.duplicates.length}개 제외`:''));setTimeout(()=>{queue.classList.remove('show');document.getElementById('upload-progress').style.width='0';loadDocuments()},800)}catch(e){toast(e.message,true);document.getElementById('upload-progress').style.width='0'}
+}
+if(canManage){const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
+document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
+document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
+loadDocuments();const requested=new URLSearchParams(location.search).get('document');if(requested)setTimeout(()=>openDocument(Number(requested)),400);
+</script>
+</body>
+</html>

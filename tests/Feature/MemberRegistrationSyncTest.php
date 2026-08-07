@@ -241,6 +241,7 @@ class MemberRegistrationSyncTest extends TestCase
         $registration->refresh()->fill([
             'nfc_raw_uid' => '90227842853E04',
             'badge_photo_path' => 'member-badges/sekon.jpg',
+            'badge_printed_number' => 'HB-7788',
             'badge_company_name' => 'AUTORICA LLC',
             'badge_first_name' => 'SEKON',
             'badge_last_name' => 'KIM',
@@ -280,6 +281,7 @@ class MemberRegistrationSyncTest extends TestCase
             'safety_training_status' => 'completed',
             'nfc_raw_uid' => '90227842853E04',
             'badge_photo_path' => 'member-badges/sekon.jpg',
+            'badge_printed_number' => 'HB-7788',
             'badge_company_name' => 'AUTORICA LLC',
             'badge_first_name' => 'SEKON',
             'badge_last_name' => 'KIM',
@@ -298,6 +300,7 @@ class MemberRegistrationSyncTest extends TestCase
         $employee = $registration->activateAsEmployee();
 
         $this->assertSame('N-842853E04', $employee->badge_number);
+        $this->assertSame('HB-7788', $employee->badge_printed_number);
         $this->assertSame('SEKON', $employee->first_name);
         $this->assertSame('KIM', $employee->last_name);
         $this->assertSame('AUTORICA LLC', $employee->badge_company_name);
@@ -337,6 +340,7 @@ class MemberRegistrationSyncTest extends TestCase
                 'nfc_raw_uid' => '90227842853E04',
                 'badge_number' => 'N-842853E04',
                 'badge_photo_path' => ['member-badges/gianna.jpg'],
+                'badge_printed_number' => 'HB-9911',
                 'badge_company_name' => 'AUTORICA LLC',
                 'badge_last_name' => 'VILLARREAL',
                 'badge_first_name' => 'GERARD',
@@ -350,6 +354,7 @@ class MemberRegistrationSyncTest extends TestCase
                     'last_name' => 'VILLARREAL',
                     'role' => 'HELPER',
                     'issued_on' => '2026-02-18',
+                    'printed_badge_number' => 'HB-9911',
                     'confidence' => 95,
                     'model' => 'gemini-3.5-flash',
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -361,6 +366,7 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('badge_pending', $registration->onboarding_status);
         $this->assertSame('registered', $registration->badge_registration_status);
         $this->assertSame('N-842853E04', $registration->badge_number);
+        $this->assertSame('HB-9911', $registration->badge_printed_number);
         $this->assertSame('Test Applicant', $registration->full_name);
         $this->assertSame('GERARD', $registration->badge_first_name);
         $this->assertSame('VILLARREAL', $registration->badge_last_name);

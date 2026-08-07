@@ -463,7 +463,11 @@
 
       <div class="auth-actions">
       <h1>Sign In</h1>
-      <p class="subtitle">Google 인증 후 권한에 맞는 ERP 화면으로 이동합니다.</p>
+      <p class="subtitle">Google 인증 후 SMART COMPANY ERP 홈으로 이동합니다.</p>
+
+      @if ($sessionExpired ?? false)
+        <div class="notice error">로그인 세션이 만료되었습니다. Google로 다시 로그인해 주세요.</div>
+      @endif
 
       @if ($errors->has('google'))
         <div class="notice error">{{ $errors->first('google') }}</div>

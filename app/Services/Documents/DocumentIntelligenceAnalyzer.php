@@ -1,0 +1,138 @@
+<?php
+
+namespace App\Services\Documents;
+
+use App\Models\IntelligentDocument;
+use App\Services\Ocr\OcrEngine;
+use Illuminate\Support\Str;
+
+class DocumentIntelligenceAnalyzer
+{
+    public function __construct(
+        private readonly OcrEngine $engine,
+        private readonly DocumentTextExtractor $textExtractor,
+    ) {}
+
+    /** @return array{data: array<string, mixed>, extracted_text: string|null, engine: string, model: string} */
+    public function analyze(IntelligentDocument $document, string $bytes): array
+    {
+        $extractedText = $this->textExtractor->extract($bytes, $document->extension, $document->mime_type);
+        $parts = [];
+
+        if ($this->supportsNativeVision($document) && strlen($bytes) <= (int) config('document-intelligence.native_max_bytes', 15728640)) {
+            $parts[] = [
+                'data' => base64_encode($bytes),
+                'mime_type' => $document->mime_type ?: 'application/octet-stream',
+            ];
+        }
+
+        if ($parts === [] && blank($extractedText)) {
+            throw new \RuntimeException('이 파일은 서버에서 본문을 추출할 수 없거나 AI 직접 판독 크기 제한을 초과했습니다. PDF로 변환하거나 15MB 이하로 분할해 다시 분석해 주세요.');
+        }
+
+        $context = [
+            'today' => now()->toDateString(),
+            'company' => $document->company?->name,
+            'site' => $document->site?->code.' '.$document->site?->name,
+            'project' => $document->project?->project_code.' '.$document->project?->name,
+            'file_name' => $document->original_file_name,
+            'mime_type' => $document->mime_type,
+        ];
+
+        $prompt = $this->prompt($context, $extractedText);
+        $result = $this->engine->analyze($parts, $prompt, $this->schema());
+
+        return [
+            'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+            'extracted_text' => $extractedText,
+            'engine' => $this->engine->name(),
+            'model' => (string) ($result['model'] ?? ''),
+        ];
+    }
+
+    private function supportsNativeVision(IntelligentDocument $document): bool
+    {
+        return str_starts_with((string) $document->mime_type, 'image/')
+            || $document->mime_type === 'application/pdf'
+            || $document->extension === 'pdf';
+    }
+
+    /** @param array<string, mixed> $context */
+    private function prompt(array $context, ?string $text): string
+    {
+        $sourceText = $text ? Str::limit($text, 120000, '\n[본문 길이 제한]') : '[서버 추출 본문 없음 — 첨부 원본을 직접 판독]';
+
+        return <<<'PROMPT'
+당신은 미국 건설 프로젝트의 계약관리자, Document Controller, Project Controls Manager, 안전·품질·클레임 전문가다.
+첨부 문서 또는 아래 추출 본문을 읽고 단순 요약이 아니라 "사고·손실·기한 누락을 예방하는 문서 인텔리전스"를 생성하라.
+
+반드시 수행할 작업:
+1. 문서 제목, 문서유형, 공종, 발신/수신, 문서번호, Revision, 문서일자를 추출한다.
+2. contract/correspondence/rfi_submittal/drawing_spec/schedule/quality/safety/finance/procurement/hr/closeout/legal/general 중 category를 고른다.
+3. contract/change_order/amendment/notice/official_letter/email_correspondence/rfi/submittal/transmittal/drawing/specification/schedule/daily_report/meeting_minutes/inspection/ncr/safety_plan/incident_report/pay_application/invoice/lien_waiver/purchase_order/delivery_ticket/certificate/warranty/closeout_package/other 중 document_type을 고른다.
+4. 가상 폴더 구성요소를 [대분류, 문서유형, 연도] 순서의 folder_parts로 제안한다. 실제 PROJECT/회사는 시스템이 앞에 붙인다.
+5. 사람이 검색할 가능성이 높은 고유명사·장비·공종·도면번호·RFI/CO 번호·금액·날짜를 keywords와 tags로 충분히 만든다.
+6. 반드시 기억해야 하는 사실을 key_facts로 만든다. 금액, 책임범위, 제외사항, 승인조건, 통보기간, 회신기한, 보증, 안전·품질 요구를 누락하지 않는다.
+7. action_items에는 실제 행동이 필요한 것만 넣는다. 종류는 deadline/response/notice/compliance/safety/quality/financial/schedule/change/risk/missing_document 중 하나다.
+8. action_items의 due_on은 문서에 명시된 날짜 또는 문서일+통보기간을 계산한 YYYY-MM-DD다. 추측이면 details에 추정이라고 밝히고 confidence를 낮춘다.
+9. 권리 포기, 손해배상, Liquidated Damages, backcharge, scope gap, 승인 없는 추가작업, Notice 미제출, 잘못된 Revision, 안전중지, 검사실패, 지급보류 가능성은 high/critical로 표시한다.
+10. 문서에 없는 내용을 창작하지 않는다. 불명확한 값은 빈 문자열/빈 배열로 둔다.
+
+direction은 incoming/outgoing/internal, confidentiality는 public/internal/confidential/restricted 중 하나다.
+severity는 critical/high/warning/normal 중 하나다. confidence는 0~100 숫자다.
+PROMPT
+            ."\n\n시스템 컨텍스트:\n".json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+            ."\n\n문서 추출 본문:\n".$sourceText;
+    }
+
+    /** @return array<string, mixed> */
+    private function schema(): array
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'title' => ['type' => 'STRING'],
+                'category' => ['type' => 'STRING'],
+                'document_type' => ['type' => 'STRING'],
+                'discipline' => ['type' => 'STRING'],
+                'direction' => ['type' => 'STRING'],
+                'document_number' => ['type' => 'STRING'],
+                'revision' => ['type' => 'STRING'],
+                'sender' => ['type' => 'STRING'],
+                'recipients' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'document_date' => ['type' => 'STRING'],
+                'effective_on' => ['type' => 'STRING'],
+                'expires_on' => ['type' => 'STRING'],
+                'response_due_on' => ['type' => 'STRING'],
+                'confidentiality' => ['type' => 'STRING'],
+                'summary' => ['type' => 'STRING'],
+                'folder_parts' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'tags' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'keywords' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'key_facts' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'project_code' => ['type' => 'STRING'],
+                'confidence' => ['type' => 'NUMBER'],
+                'action_items' => [
+                    'type' => 'ARRAY',
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'action_type' => ['type' => 'STRING'],
+                            'related_module' => ['type' => 'STRING'],
+                            'severity' => ['type' => 'STRING'],
+                            'title' => ['type' => 'STRING'],
+                            'details' => ['type' => 'STRING'],
+                            'recommended_action' => ['type' => 'STRING'],
+                            'source_excerpt' => ['type' => 'STRING'],
+                            'due_on' => ['type' => 'STRING'],
+                            'remind_days_before' => ['type' => 'INTEGER'],
+                            'confidence' => ['type' => 'NUMBER'],
+                        ],
+                        'required' => ['action_type', 'severity', 'title'],
+                    ],
+                ],
+            ],
+            'required' => ['title', 'category', 'document_type', 'summary', 'keywords', 'key_facts', 'action_items', 'confidence'],
+        ];
+    }
+}

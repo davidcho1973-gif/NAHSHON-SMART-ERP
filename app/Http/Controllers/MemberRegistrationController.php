@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MemberDocument;
 use App\Models\MemberRegistration;
+use App\Models\Site;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +35,69 @@ class MemberRegistrationController extends Controller
         ]);
     }
 
+    public function siteQr(Request $request, Site $site): View
+    {
+        $language = $this->resolveLanguage($request->query('lang', 'es'));
+
+        return view('member-registration.qr', [
+            'registration' => $this->siteRegistrationDraft($site, $language),
+            'intakeUrl' => route('member-registration.site.show', [
+                'site' => $site,
+                'lang' => $language,
+            ]),
+            'language' => $language,
+            'mode' => 'site',
+            'site' => $site,
+        ]);
+    }
+
+    public function siteShow(Request $request, Site $site): View
+    {
+        $language = $this->resolveLanguage($request->query('lang', 'es'));
+
+        return $this->intakeView(
+            $this->siteRegistrationDraft($site, $language),
+            false,
+            $language,
+            route('member-registration.site.show', ['site' => $site]),
+            route('member-registration.site.store', ['site' => $site]),
+            true,
+        );
+    }
+
+    public function siteStore(Request $request, Site $site): View
+    {
+        $data = $this->validateApplication($request, false);
+        $language = $this->resolveLanguage($data['preferred_language']);
+        $companyId = $this->siteCompanyId($site);
+
+        $registration = MemberRegistration::query()->create([
+            'full_name' => 'Site QR Applicant',
+            'member_type' => 'worker',
+            'preferred_language' => $language,
+            'company_id' => $companyId,
+            'site_id' => $site->id,
+            'identity_status' => 'pending',
+            'document_status' => 'missing',
+            'onboarding_status' => 'invited',
+            'payload' => [
+                'invite' => [
+                    'source' => 'site-qr',
+                    'site_id' => $site->id,
+                    'site_code' => $site->code,
+                    'site_name' => $site->name,
+                    'site_address' => $site->address,
+                    'created_at' => now()->toISOString(),
+                ],
+                'application' => [
+                    'desired_site' => $this->siteLabel($site),
+                ],
+            ],
+        ]);
+
+        return $this->saveApplication($request, $registration, $data);
+    }
+
     public function store(Request $request, string $token): View
     {
         $registration = $this->registrationForToken($token);
@@ -48,7 +112,17 @@ class MemberRegistrationController extends Controller
             ->where('document_type', 'id')
             ->exists();
 
-        $data = $request->validate([
+        $data = $this->validateApplication($request, $hasIdentityDocument);
+
+        return $this->saveApplication($request, $registration, $data);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateApplication(Request $request, bool $hasIdentityDocument): array
+    {
+        return $request->validate([
             'preferred_language' => ['required', Rule::in(array_keys(MemberRegistration::languageOptions()))],
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['required', 'string', 'max:120'],
@@ -88,7 +162,13 @@ class MemberRegistrationController extends Controller
             'applicant_signature' => ['required', 'string', 'max:255'],
             'signed_on' => ['required', 'date'],
         ]);
+    }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function saveApplication(Request $request, MemberRegistration $registration, array $data): View
+    {
         $language = $this->resolveLanguage($data['preferred_language']);
         $fullName = trim($data['first_name'] . ' ' . $data['last_name']);
         $certificationFiles = $request->file('certifications', []);
@@ -107,7 +187,7 @@ class MemberRegistrationController extends Controller
                 'language' => $language,
                 'available_languages' => array_values(array_unique($availableLanguages)),
                 'nationality' => $data['nationality'] ?? null,
-                'desired_site' => $data['desired_site'] ?? null,
+                'desired_site' => $data['desired_site'] ?? data_get($registration->payload, 'application.desired_site'),
                 'previous_site_experience' => $data['previous_site_experience'] ?? null,
                 'hoffman_experience' => $data['hoffman_experience'],
                 'identity_document_type' => $data['identity_document_type'],
@@ -181,12 +261,22 @@ class MemberRegistrationController extends Controller
         return $this->intakeView($registration->fresh(['company', 'site', 'team', 'documents']), true, $language);
     }
 
-    private function intakeView(MemberRegistration $registration, bool $submitted, string $language): View
+    private function intakeView(
+        MemberRegistration $registration,
+        bool $submitted,
+        string $language,
+        ?string $languageActionUrl = null,
+        ?string $formActionUrl = null,
+        bool $siteIntake = false,
+    ): View
     {
         return view('member-registration.show', [
             'registration' => $registration,
             'submitted' => $submitted,
             'language' => $language,
+            'languageActionUrl' => $languageActionUrl,
+            'formActionUrl' => $formActionUrl,
+            'siteIntake' => $siteIntake,
             'languages' => MemberRegistration::languageOptions(),
             'roleOptions' => MemberRegistration::roleOptions(),
             'availableLanguageOptions' => MemberRegistration::availableLanguageOptions(),
@@ -208,6 +298,51 @@ class MemberRegistrationController extends Controller
             ->with(['company', 'site', 'team', 'documents'])
             ->where('invite_token', $token)
             ->firstOrFail();
+    }
+
+    private function siteRegistrationDraft(Site $site, string $language): MemberRegistration
+    {
+        $site->loadMissing(['company', 'companies']);
+        $company = $site->company ?: $site->companies->first();
+
+        $registration = new MemberRegistration([
+            'company_id' => $company?->id,
+            'site_id' => $site->id,
+            'member_type' => 'worker',
+            'preferred_language' => $language,
+            'onboarding_status' => 'invited',
+            'payload' => [
+                'application' => [
+                    'desired_site' => $this->siteLabel($site),
+                ],
+            ],
+        ]);
+
+        $registration->setRelation('company', $company);
+        $registration->setRelation('site', $site);
+        $registration->setRelation('documents', collect());
+
+        return $registration;
+    }
+
+    private function siteCompanyId(Site $site): ?int
+    {
+        if ($site->company_id) {
+            return $site->company_id;
+        }
+
+        return $site->companies()
+            ->select('companies.id')
+            ->value('companies.id');
+    }
+
+    private function siteLabel(Site $site): string
+    {
+        $siteLabel = trim("{$site->code} - {$site->name}");
+
+        return $site->address
+            ? "{$siteLabel} ({$site->address})"
+            : $siteLabel;
     }
 
     private function storeUploadedDocument(

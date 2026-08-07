@@ -94,7 +94,7 @@ class GoogleAuthTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_google_callback_sends_admin_users_to_admin_panel(): void
+    public function test_google_callback_always_sends_admin_users_to_erp_home(): void
     {
         $this->configureGoogle();
 
@@ -115,11 +115,39 @@ class GoogleAuthTest extends TestCase
         ]);
 
         $response = $this
-            ->withSession(['google_oauth_state' => 'known-state'])
+            ->withSession([
+                'google_oauth_state' => 'known-state',
+                'url.intended' => '/admin/member-documents',
+            ])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
-        $response->assertRedirect('/admin');
+        $response->assertRedirect('/');
         $this->assertAuthenticatedAs($admin->fresh());
+    }
+
+    public function test_authenticated_login_page_always_redirects_to_erp_home(): void
+    {
+        $user = User::factory()->create([
+            'access_role' => 'safety_manager',
+            'access_scope' => 'all_sites',
+            'account_status' => 'active',
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['url.intended' => '/admin/member-documents'])
+            ->get('/login');
+
+        $response->assertRedirect('/');
+    }
+
+    public function test_login_page_explains_when_the_session_has_expired(): void
+    {
+        $this->configureGoogle();
+
+        $this->get('/login?expired=1')
+            ->assertOk()
+            ->assertSee('로그인 세션이 만료되었습니다.');
     }
 
     private function configureGoogle(): void

@@ -69,6 +69,17 @@
 </head>
 
 <body>
+  <script>
+    (function() {
+      try {
+        var pref = localStorage.getItem('smartCompanyThemePreference') || 'auto';
+        var theme = pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : (pref === 'auto' ? 'light' : pref);
+        document.body.setAttribute('data-theme', theme);
+      } catch (e) {
+        // ignore storage errors
+      }
+    })();
+  </script>
   @php
     $authUser = $authUser ?? [
       'name' => 'ERP User',
@@ -94,6 +105,9 @@
               <li class="nav-item active" data-view="dashboard" id="nav-dashboard">
                 <i class="ph ph-squares-four"></i><span>ëŒ€ì‹œë³´ë“œ (Overview)</span>
               </li>
+              <li class="nav-item" data-view="my-attendance" id="nav-my-attendance">
+                <i class="ph ph-clock"></i><span>내 출퇴근 기록</span>
+              </li>
               <li class="nav-item" data-view="command" id="nav-command">
                 <i class="ph ph-command" style="color:#38bdf8"></i><span>AI í˜„ìž¥ ì§€íœ˜ì‹¤</span>
                 <span class="nav-badge" style="background:rgba(56,189,248,.14);color:#38bdf8">NEW</span>
@@ -104,6 +118,10 @@
               <li class="nav-item" data-view="alerts" id="nav-alerts">
                 <i class="ph ph-bell-ringing" style="color:#f97316"></i><span>ðŸ”” í†µí•© ì•Œë¦¼ ì„¼í„°</span>
                 <span class="nav-badge alert" id="alert-unread-badge" style="background:#ef4444">0</span>
+              </li>
+              <li class="nav-item" data-view="document-hub" id="nav-document-hub">
+                <i class="ph ph-files" style="color:#2563eb"></i><span>AI 통합 문서함</span>
+                <span class="nav-badge" style="background:rgba(37,99,235,.12);color:#2563eb">NEW</span>
               </li>
             </ul>
           </div>
@@ -219,6 +237,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여정산</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재장비</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="rental"><i class="ph ph-bulldozer"></i><span>장비렌탈</span></button>
+          <a class="mobile-more-tile" href="/mobile-equipment/index"><i class="ph ph-wrench"></i><span>장비스캔(AI)</span></a>
           <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="flights"><i class="ph ph-airplane"></i><span>항공권</span></button>
@@ -238,7 +257,7 @@
               style="background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:700;cursor:pointer;outline:none;font-family:inherit;padding:0 4px;max-width:200px;">
                <option value="ALL" selected style="background:#1e2030;">Global</option>
                @foreach (($siteOptions ?? []) as $site)
-                 <option value="{{ $site['code'] }}" style="background:#1e2030;">{{ $site['label'] }}</option>
+                 <option value="{{ $site['code'] }}" data-setup-pending="{{ ($site['setup_pending'] ?? false) ? 'true' : 'false' }}" style="background:#1e2030;">{{ $site['label'] }}</option>
                @endforeach
             </select>
           </div>
@@ -263,6 +282,16 @@
             <span class="shortcut">âŒ˜K</span>
           </div>
           <div class="topbar-actions">
+            @if ($authUser['can_access_admin'] ?? false)
+              <a class="btn-primary" href="{{ url('/admin') }}" data-admin-entry title="관리자 화면으로 이동">
+                <i class="ph ph-shield-check" style="font-size:14px;"></i>
+                <span>관리자</span>
+              </a>
+            @endif
+            <button class="btn-primary" id="btn-global-commute" title="내 출퇴근 등록" onclick="window.openMyCommuteModal()" style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:var(--brand-primary); color:white; cursor:pointer; margin-right:8px;">
+              <i class="ph ph-clock" style="font-size:14px;"></i>
+              <span>내 출퇴근</span>
+            </button>
             <button class="icon-btn" id="btn-notifications" title="ì•Œë¦¼">
               <i class="ph ph-bell"></i>
               <span class="status-dot"></span>
@@ -288,6 +317,13 @@
                   </div>
                 </div>
               </div>
+              @if ($authUser['can_access_admin'] ?? false)
+                <div class="account-menu-group">
+                  <a class="account-menu-item" href="{{ url('/admin') }}" data-admin-entry>
+                    <i class="ph ph-shield-check"></i><span>관리자 화면</span>
+                  </a>
+                </div>
+              @endif
               <div class="account-menu-group">
                 <div class="account-menu-heading">My Profile</div>
                 <button class="account-menu-item" type="button" data-account-view="profile">
@@ -349,6 +385,138 @@
       if (typeof loadView === 'function') {
         loadView(window._currentView || 'hr');
       }
+    };
+
+    window.openSetupWizard = async function() {
+      // 1. Loading active assets
+      var res = await gsRun('api_getSetupWizardAssets', [], { success: false, employees: [], equipments: [] });
+      if (!res.success) {
+        alert('셋업 자원을 불러오는데 실패했습니다: ' + (res.error || '알 수 없는 오류'));
+        return;
+      }
+
+      // Create modal container
+      var modal = document.createElement('div');
+      modal.id = 'setup-wizard-modal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;font-family:inherit;';
+
+      var employeesOptions = res.employees.map(function(e) {
+        return '<option value="' + e.id + '">' + e.name + ' (' + (e.role || '작업자') + ')</option>';
+      }).join('');
+
+      var equipmentsList = res.equipments.map(function(eq) {
+        return '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;cursor:pointer;font-size:12px;color:#fff;"><input type="checkbox" name="wizard-equipments" value="' + eq.id + '"> ' + eq.name + ' (' + eq.status + ')</label>';
+      }).join('');
+      if (equipmentsList === '') equipmentsList = '<div style="color:var(--text-tertiary);font-size:12px;">대기 중인 장비가 없습니다.</div>';
+
+      var workersList = res.employees.map(function(e) {
+        return '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;cursor:pointer;font-size:12px;color:#fff;"><input type="checkbox" name="wizard-employees" value="' + e.id + '"> ' + e.name + ' (' + (e.role || '작업자') + ')</label>';
+      }).join('');
+
+      var currentSiteLabel = window.SITE_NAMES[window.currentSiteId] || window.currentSiteId;
+
+      modal.innerHTML = 
+        '<div style="background:#1e293b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:550px;max-height:90%;overflow-y:auto;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);display:flex;flex-direction:column;">' +
+        // Header
+        '<div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+        '<h2 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0;">🚀 현장 초기 셋업 마법사</h2>' +
+        '<p style="font-size:12px;color:var(--text-secondary);margin:0;">프로젝트: <strong style="color:#3b82f6;">' + currentSiteLabel + '</strong></p>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'setup-wizard-modal\').remove()" style="background:transparent;border:none;color:var(--text-tertiary);font-size:20px;cursor:pointer;">&times;</button>' +
+        '</div>' +
+        // Body (Steps)
+        '<div style="padding:24px;display:flex;flex-direction:column;gap:20px;">' +
+        
+        // Step 1: PM
+        '<div>' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">1단계. 현장 소장 (Site Manager) 지정</label>' +
+        '<select id="wizard-manager-id" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;padding:8px 12px;font-size:13px;outline:none;">' +
+        '<option value="">소장 지정 안함</option>' +
+        employeesOptions +
+        '</select>' +
+        '</div>' +
+
+        // Step 2: WBS
+        '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">2단계. 표준 WBS 공정 템플릿 로드</div>' +
+        '<div style="font-size:11px;color:var(--text-tertiary);">현장 오픈에 필요한 기본 공정 단계(Stage/Task)를 자동 구축합니다.</div>' +
+        '</div>' +
+        '<input type="checkbox" id="wizard-load-wbs" checked style="width:18px;height:18px;cursor:pointer;">' +
+        '</div>' +
+
+        // Step 3: Equipments
+        '<div>' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">3단계. 투입 장비 배정 (대기 중인 자산)</label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:120px;overflow-y:auto;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;">' +
+        equipmentsList +
+        '</div>' +
+        '</div>' +
+
+        // Step 4: Workers
+        '<div>' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">4단계. 현장 작업인원 배정</label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:120px;overflow-y:auto;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;">' +
+        workersList +
+        '</div>' +
+        '</div>' +
+
+        '</div>' +
+        // Footer (Actions)
+        '<div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:12px;">' +
+        '<button onclick="document.getElementById(\'setup-wizard-modal\').remove()" style="background:rgba(255,255,255,0.08);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">취소</button>' +
+        '<button id="wizard-submit-btn" style="background:#2563eb;border:none;color:#fff;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">' +
+        '<span>셋업 완료 및 현장 활성화</span>' +
+        '</button>' +
+        '</div>' +
+        '</div>';
+
+      document.body.appendChild(modal);
+
+      // Submit handler
+      document.getElementById('wizard-submit-btn').onclick = async function() {
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span>처리 중...</span>';
+
+        var managerId = document.getElementById('wizard-manager-id').value;
+        var loadWbs = document.getElementById('wizard-load-wbs').checked;
+
+        var selectedEqs = [];
+        document.querySelectorAll('input[name="wizard-equipments"]:checked').forEach(function(el) {
+          selectedEqs.push(parseInt(el.value));
+        });
+
+        var selectedEmps = [];
+        document.querySelectorAll('input[name="wizard-employees"]:checked').forEach(function(el) {
+          selectedEmps.push(parseInt(el.value));
+        });
+
+        var postData = {
+          manager_id: managerId ? parseInt(managerId) : null,
+          load_default_wbs: loadWbs,
+          equipment_ids: selectedEqs,
+          employee_ids: selectedEmps
+        };
+
+        var setupRes = await gsRun('api_setupSite', [window.currentSiteId, postData], { success: false });
+        if (setupRes.success) {
+          alert('현장 초기 셋업이 완료되었습니다!');
+          var opt = document.querySelector('#project-context-switcher option[value="' + window.currentSiteId + '"]');
+          if (opt) {
+            opt.setAttribute('data-setup-pending', 'false');
+          }
+          modal.remove();
+          if (typeof loadView === 'function') {
+            loadView(window._currentView || 'dashboard');
+          }
+        } else {
+          alert('셋업 처리 중 오류가 발생했습니다: ' + (setupRes.error || '알 수 없는 오류'));
+          btn.disabled = false;
+          btn.innerHTML = '<span>셋업 완료 및 현장 활성화</span>';
+        }
+      };
     };
 
         // ============================================================
@@ -713,7 +881,20 @@
     // ðŸ”´ LiveAPI (Actual Google Sheets Fetching) - Timing Issue Fixed
     // ============================================================
     window.apiCache = {}; // Global Response Cache (window scope for cross-function access)
+    window.sessionExpiryRedirectPending = false;
     const CACHE_TTL = 60000; // 60 seconds
+
+    function redirectToLoginForExpiredSession(status) {
+      if (status !== 401 && status !== 419) return false;
+
+      if (!window.sessionExpiryRedirectPending) {
+        window.sessionExpiryRedirectPending = true;
+        window.apiCache = {};
+        window.location.replace('/login?expired=1');
+      }
+
+      return true;
+    }
 
     function gsRun(fnName, args, defaultVal) {
       return new Promise(async function (resolve, reject) {
@@ -730,6 +911,7 @@
           const tokenEl = document.querySelector('meta[name="csrf-token"]');
           const response = await fetch('/smart-company-api/' + encodeURIComponent(fnName), {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
               'Accept': 'application/json',
               'Content-Type': 'application/json',
@@ -737,6 +919,11 @@
             },
             body: JSON.stringify({ args: args || [], siteId: _siteId() })
           });
+
+          if (redirectToLoginForExpiredSession(response.status)) {
+            resolve(defaultVal);
+            return;
+          }
 
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const res = await response.json();
@@ -818,9 +1005,16 @@
               (c.teams || []).forEach(function(t) {
                 t.name = t.team;
                 t.employees = (t.members || []).map(function(m) {
+                  var full = (m.nameEn || m.name || '').trim();
+                  var parts = full ? full.split(/\s+/) : [];
                   return Object.assign({}, m, {
                     isWorking: !!m.isOpen,
-                    currentRole: m.role
+                    currentRole: m.role,
+                    firstName: m.firstName || parts[0] || '',
+                    lastName: m.lastName || parts.slice(1).join(' ') || '',
+                    inTime: m.inTime || m.todayIn || '',
+                    outTime: m.outTime || (m.todayOut && m.todayOut !== '미마감' ? m.todayOut : ''),
+                    photoUrl: m.photoUrl || m.photo || ''
                   });
                 });
               });
@@ -855,16 +1049,20 @@
       uploadEmployeePhoto: (badgeId, base64, mimeType) => gsRun('api_uploadEmployeePhoto', [_siteId(), badgeId, base64, mimeType || 'image/jpeg'], { success: false }),
       setupEmployeePhotosFolder: () => gsRun('setupEmployeePhotosFolder', [_siteId()], { success: false }),
       getPayrollDashboard: (periodStart) => gsRun('api_getPayrollDashboard', [_siteId(), periodStart || ''], { success: false, companies: [], anomalies: [], employees: [], totals: {}, period: {} }),
-      getInventoryDashboard: () => gsRun('api_getInventoryDashboard', [], { success: false, totals: {}, matrix: { categories: [], sites: [], cells: {} }, recent: [], upcomingInspections: [] }),
+      getInventoryDashboard: () => gsRun('api_getInventoryDashboard', [], { success: false, totals: {}, matrix: { categories: [], sites: [], cells: {}, categoryMeta: {} }, groups: [], assets: [], recent: [], upcomingInspections: [] }),
+      getGlobalHrOverview: (country) => gsRun('api_getGlobalHrOverview', [country || 'ALL'], { success: false, totals: {}, countries: [], matrix: [], recent: [] }),
+      getTeamBoard: (siteCode) => gsRun('api_getTeamBoard', [siteCode], { success: false, teams: [], unassigned: [] }),
+      assignEmployeeTeam: (empId, teamId) => gsRun('api_assignEmployeeTeam', [empId, teamId], { success: false }),
       getInventoryAssetDetail: (assetId) => gsRun('api_getInventoryAssetDetail', [assetId], { success: false }),
       processInventoryPhotos: () => gsRun('api_processInventoryPhotos', [], { success: false, processed: 0, saved: 0, errors: 0, results: [] }),
       setupInventorySheets: () => gsRun('setupInventorySheets', [], { success: false }),
       setupInventoryFolders: () => gsRun('setupInventoryFolders', [], { success: false }),
       getEmployeeDetail: function(badgeId, date) {
         // ìºì‹œ ë¬´ë ¥í™” â€” ì§ì› í´ë¦­ ì‹œ í•­ìƒ ìµœì‹  ë°ì´í„° ê°€ì ¸ì˜´
-        const cacheKey = 'api_getEmployeeDetail' + JSON.stringify([_siteId(), badgeId, date || '']);
+        // 백엔드는 args[0]을 badgeId로 사용한다(현장은 요청 siteId로 별도 전달).
+        const cacheKey = 'api_getEmployeeDetail' + JSON.stringify([badgeId, date || '']);
         if (window.apiCache && window.apiCache[cacheKey]) delete window.apiCache[cacheKey];
-        return gsRun('api_getEmployeeDetail', [_siteId(), badgeId, date || ''], { success: false })
+        return gsRun('api_getEmployeeDetail', [badgeId, date || ''], { success: false })
           .then(function(r) {
             if (r && r.employee) {
               r.employee.todayInTime  = r.employee.todayIn || '';
@@ -874,9 +1072,15 @@
             return r;
           });
       },
-      getAttendanceDetailed: (date) => gsRun('api_getAttendanceDetailed', [_siteId(), date || null], { success: false, companies: [], totalCount: 0 }),
-      getEmployeeDetail: (badgeId) => gsRun('api_getEmployeeDetail', [badgeId, _siteId()], { success: false }),
-      getCompanyTeamStats: (date) => gsRun('api_getCompanyTeamStats', [_siteId(), date || null], { success: false, byCompany: [], byTeam: [] }),
+      clockInWithTeamQr: (teamCode, eventType) => gsRun('api_clockInWithTeamQr', [teamCode, eventType || null], { success: false }),
+      clockIn: () => { delete window.apiCache['api_clockIn[]']; return gsRun('api_clockIn', [], { success: false }); },
+      clockOut: () => { delete window.apiCache['api_clockOut[]']; return gsRun('api_clockOut', [], { success: false }); },
+      getHrAttendanceSummary: (start, end) => {
+        const empId = (window.authenticatedAccount || {}).employee_id || null;
+        const args = [empId, start || null, end || null];
+        delete window.apiCache['api_getHrAttendanceSummary' + JSON.stringify(args)];
+        return gsRun('api_getHrAttendanceSummary', args, { success: false, kpis: { work_hours: 0, lates: 0, early_outs: 0, absences: 0 }, records: [] });
+      },
       getAvailableDates: () => gsRun('api_getAvailableDates', [_siteId()], { success: false, dates: [] }),
       getLgesProcessData: async () => MockAPI.getLgesProcessData ? await MockAPI.getLgesProcessData() : [],
       getPersonnelList: () => gsRun('api_getPersonnelList', [_siteId()], []),
@@ -913,6 +1117,8 @@
       getVehicleStats: () => gsRun('api_getVehicleStats', [], { total: 0, active: 0, available: 0, maintenance: 0 }),
       processRentalContracts: () => gsRun('api_processRentalContracts', [], { success: false, processed: 0, saved: 0, errors: 0, results: [] }),
       getRentalList: () => gsRun('api_getRentalList', [], []),
+      getSiteList: () => gsRun('api_getSiteList', [], []),
+      getProjectList: () => gsRun('api_getProjectList', [], []),
       getRentalStats: () => gsRun('api_getRentalStats', [], { total: 0, active: 0, overdue: 0, returned: 0, returningSoon: 0, mtdCost: 0 }),
       createRental: (payload) => gsRun('api_createRental', [payload], { success: false }),
       returnRental: (id, date) => gsRun('api_returnRental', [id, date], { success: false }),
@@ -962,6 +1168,11 @@
       getProjectProgressSummary: (projectId) => gsRun('api_getProjectProgressSummary', [projectId], { success: false }),
       processWbsManual: (projectId) => gsRun('api_processWbsManual', [projectId], { success: false }),
       markWbsStatus: (wbsId, status) => gsRun('api_markWbsStatus', [wbsId, status], { success: false }),
+      createSafetyCardForWbs: (wbsId, date) => gsRun('api_createSafetyCardForWbs', [wbsId, date || null], { success: false }),
+      getTodayWbsWork: (projectId) => gsRun('api_getTodayWbsWork', [projectId], { success: false, items: [] }),
+      getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
+      assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
+      getAssignableEmployees: (date) => gsRun('api_getAssignableEmployees', [date || null], []),
       getToolTransactions: () => gsRun('api_getToolTransactions', [], []),
       getVendorList:      () => gsRun('api_getVendorList',     [], []),
       createVendor:       (data) => gsRun('api_createVendor',  [data], {success:false}),
@@ -1009,6 +1220,8 @@
       const alertBadge = document.getElementById('alert-badge');
       const accountStorageKey = 'nahshonAccountProfile';
       const authenticatedAccount = @json($authUser);
+      // 별도 스크립트 블록(출퇴근 모달 등)에서도 참조할 수 있도록 전역 노출.
+      window.authenticatedAccount = authenticatedAccount;
       const accountDefaults = {
         company: 'NAHSHON MEP',
         name: authenticatedAccount.name || 'ERP User',
@@ -1034,12 +1247,36 @@
         }
       }
       let accountProfile = loadAccountProfileData();
+      const themeStorageKey = 'smartCompanyThemePreference';
+      function getSystemTheme() {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+        return 'light';
+      }
+      function loadThemePreference() {
+        return localStorage.getItem(themeStorageKey) || 'auto';
+      }
+      function applyThemePreference(pref) {
+        var effective = pref === 'auto' ? getSystemTheme() : pref;
+        document.body.setAttribute('data-theme', effective);
+        document.body.dataset.themePreference = pref;
+      }
+      function setThemePreference(pref) {
+        localStorage.setItem(themeStorageKey, pref);
+        applyThemePreference(pref);
+      }
+      applyThemePreference(loadThemePreference());
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+          if (loadThemePreference() === 'auto') applyThemePreference('auto');
+        });
+      }
 
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
+        'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
         'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '영수증처리', render: renderFinance },
-        'messages': { title: '메세지', render: renderAlerts },
+        'messages': { title: '메세지', render: renderUnifiedAlerts },
         'schedule': { title: '일정관리', render: renderWbs },
         'personnel': { title: '인원관리', render: function () { window._pendingHrTab = 'personnel'; return renderHR(); } },
         'profile': { title: 'My Profile', render: renderAccountProfile },
@@ -1048,10 +1285,11 @@
         'password': { title: 'Change Password', render: renderAccountPassword },
         'command': { title: 'AI í˜„ìž¥ ì§€íœ˜ì‹¤', render: renderCommandCenter },
         'analytics': { title: 'ë¶„ì„ ë°ì´í„°', render: renderAnalytics },
-        'alerts': { title: 'í†µí•© ì•Œë¦¼ ì„¼í„°', render: renderAlerts },
+        'alerts': { title: '통합 알림 센터', render: renderUnifiedAlerts },
+        'document-hub': { title: 'AI 통합 문서함', render: function () { window.location.assign('/document-hub'); } },
         'safety': { title: 'AI ìž‘ì—…ì•ˆì „ê´€ë¦¬', render: renderSafety },
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
-        'payroll': { title: 'ê¸‰ì—¬ / ì •ì‚°', render: renderPayroll },
+        'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
@@ -1411,11 +1649,12 @@
 
       function renderAccountUiSettings() {
         var lang = localStorage.getItem('smartCompanyLanguage') || 'ko';
+        var themePreference = loadThemePreference();
         var body =
           '<section class="account-card">' +
             '<div class="account-card-title"><i class="ph ph-monitor"></i> Display Settings</div>' +
             '<div class="settings-row"><div><div class="settings-title">Interface Style <span class="readonly-badge">Beta</span></div><div class="settings-desc">Choose between Classic and the new left sidebar interface.</div></div><select class="account-select"><option>New Interface (Left Sidebar)</option><option>Classic (Top Navbar)</option></select></div>' +
-            '<div class="settings-row"><div><div class="settings-title">Theme</div><div class="settings-desc">Choose light, dark, or automatic based on system settings.</div></div><select class="account-select"><option>Auto (System)</option><option>Dark</option><option>Light</option></select></div>' +
+            '<div class="settings-row"><div><div class="settings-title">Theme</div><div class="settings-desc">Choose light, dark, or automatic based on system settings.</div></div><select class="account-select" id="account-theme-select"><option value="auto">Auto (System)</option><option value="dark">Dark</option><option value="light">Light</option></select></div>' +
             '<div class="settings-row"><div><div class="settings-title">Language</div><div class="settings-desc">Select the language displayed in the interface.</div></div><select class="account-select" id="account-language-select" data-no-i18n><option value="ko">한국어</option><option value="en">English</option><option value="es">Español</option></select></div>' +
             '<div class="settings-row"><div><div class="settings-title">Timezone</div><div class="settings-desc">Select the timezone used for displaying dates and times.</div></div><select class="account-select"><option value="America/Phoenix">(UTC-07:00) Arizona Time</option><option value="America/Los_Angeles">(UTC-08:00) Pacific Time</option><option value="America/New_York">(UTC-05:00) Eastern Time</option></select></div>' +
           '</section>' +
@@ -1430,7 +1669,15 @@
         if (langSelect) {
           langSelect.value = lang;
           langSelect.addEventListener('change', function () {
+            localStorage.setItem('smartCompanyLanguage', langSelect.value);
             if (window.smartCompanySetLanguage) window.smartCompanySetLanguage(langSelect.value);
+          });
+        }
+        var themeSelect = document.getElementById('account-theme-select');
+        if (themeSelect) {
+          themeSelect.value = themePreference;
+          themeSelect.addEventListener('change', function () {
+            setThemePreference(themeSelect.value);
           });
         }
       }
@@ -1715,6 +1962,208 @@
       };
 
       // â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 글로벌 인사·출퇴근 현황 (국가 → 현장 → 원청사 → 팀) ──────────
+      window._globalHrCountry = window._globalHrCountry || 'ALL';
+
+      function ghrRateColor(r) { return r >= 90 ? '#10b981' : r >= 75 ? '#f59e0b' : '#ef4444'; }
+
+      window.changeGlobalHrCountry = function (c) { window._globalHrCountry = c; window.renderGlobalHrInto(window._ghrTarget || pageContainer, window._ghrEmbedded); };
+
+      window._globalHrView = window._globalHrView || 'overview';
+      window.switchGlobalHrView = function (v) { window._globalHrView = v; window.renderGlobalHrInto(window._ghrTarget || pageContainer, window._ghrEmbedded); };
+
+      // 실시간 출퇴근 피드 (recent 는 글로벌 집계에 이미 포함됨 → 추가 호출 없이 렌더)
+      function ghrFeedHtml(res) {
+        var ev = res.recent || [];
+        if (!ev.length) {
+          return '<div class="panel"><div class="panel-body padded"><div style="text-align:center;padding:48px;color:var(--text-tertiary)">오늘 출퇴근 기록이 아직 없습니다.</div></div></div>';
+        }
+        var srcLabel = function (s) { return s === 'team_qr' ? 'QR 스캔' : s === 'nfc_reader' ? 'NFC 리더' : s === 'mobile_gps' ? 'GPS' : s === 'web_portal' ? '웹 포털' : s === 'offline_gps_sync' ? '오프라인 동기화' : (s || '-'); };
+        var rows = ev.map(function (e) {
+          var rejected = e.status && e.status !== 'approved';
+          var isIn = e.event_type === 'clock_in';
+          var color = rejected ? '#ef4444' : isIn ? '#10b981' : '#f59e0b';
+          var label = rejected ? '이상' : isIn ? '출근' : '퇴근';
+          var icon = rejected ? '!' : isIn ? '↓' : '↑';
+          return '<div style="display:grid;grid-template-columns:58px 26px 1fr auto;gap:12px;align-items:center;padding:11px 18px;border-top:1px solid var(--border-subtle)">' +
+            '<span class="cell-mono" style="font-weight:700;font-size:13px">' + (e.time || '') + '</span>' +
+            '<span style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + color + '22;color:' + color + ';font-weight:700">' + icon + '</span>' +
+            '<div><span style="font-weight:700">' + e.name + '</span> <span style="font-size:11px;color:var(--text-secondary)">· ' + e.team + ' · ' + e.company + '</span>' +
+            '<div style="font-size:11px;color:var(--text-tertiary)">' + e.flag + ' ' + e.site + ' · ' + srcLabel(e.source) + '</div></div>' +
+            '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:' + color + '22;color:' + color + '">' + label + '</span></div>';
+        }).join('');
+        return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-pulse"></i> 실시간 출퇴근 피드 (오늘 · 최신순)</div></div><div class="panel-body" style="padding:0">' + rows + '</div></div>';
+      }
+
+      window.renderGlobalHr = function () { return window.renderGlobalHrInto(pageContainer, false); };
+      window.backToGlobalHr = function () { window._pendingHrTab = 'global'; window.goToView('hr'); };
+
+      window.renderGlobalHrInto = async function (target, embedded) {
+        target = target || pageContainer;
+        window._ghrTarget = target;
+        window._ghrEmbedded = embedded;
+        target.innerHTML = skeleton();
+        try {
+          var res = await window.API.getGlobalHrOverview(window._globalHrCountry);
+          if (!res || !res.success) { target.innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:32px">글로벌 현황 로딩 실패: ' + (res && res.error ? res.error : '') + '</div>'; return; }
+          window._globalHrData = res;
+          var t = res.totals || {};
+          var cur = window._globalHrCountry;
+
+          var tabDefs = [['ALL', '전체'], ['US', '🇺🇸 USA'], ['KR', '🇰🇷 KOREA'], ['CA', '🇨🇦 CANADA']];
+          var tabs = tabDefs.map(function (d) {
+            var on = cur === d[0];
+            return '<button onclick="window.changeGlobalHrCountry(\'' + d[0] + '\')" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border-default);' +
+              (on ? 'background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-color:transparent' : 'background:var(--bg-surface);color:var(--text-secondary)') + '">' + d[1] + '</button>';
+          }).join('');
+
+          var rate = t.rate || 0;
+          var kpis = '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
+            '<div class="kpi-card"><div class="kpi-label">총 인원</div><div class="kpi-value">' + (t.employees || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">활성 직원</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid ' + ghrRateColor(rate) + '"><div class="kpi-label">현재 출근</div><div class="kpi-value" style="color:' + ghrRateColor(rate) + '">' + (t.present || 0) + '</div>' +
+            '<div style="height:5px;background:var(--bg-base);border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:' + rate + '%;background:' + ghrRateColor(rate) + '"></div></div><div class="kpi-meta">출근율 ' + rate + '%</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">결근/미출근</div><div class="kpi-value" style="color:var(--status-warning)">' + (t.absent || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">미출근</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">활성 현장</div><div class="kpi-value">' + (t.sites || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (t.countries || 0) + '개국 · 원청사 ' + (t.companies || 0) + '</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">국가</div><div class="kpi-value">' + (t.countries || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">글로벌</span></div></div>' +
+            '</div>';
+
+          var countriesHtml = '';
+          if (!res.countries || res.countries.length === 0) {
+            countriesHtml = '<div class="panel"><div class="panel-body padded"><div style="text-align:center;padding:48px;color:var(--text-tertiary)">표시할 현장/인원이 없습니다. (활성 현장·직원 등록 후 표시)</div></div></div>';
+          } else {
+            countriesHtml = res.countries.map(function (c) {
+              var sites = c.sites.map(function (s) {
+                var sc = ghrRateColor(s.rate);
+                var chips = (s.companies || []).map(function (co) {
+                  return '<span style="font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg-surface-elevated);color:var(--text-secondary);border:1px solid var(--border-subtle)">' + co.company + ' ' + co.total + '</span>';
+                }).join(' ');
+                return '<div onclick="window.openGlobalSite(\'' + s.code + '\')" style="background:var(--bg-panel);border:1px solid var(--border-default);border-left:3px solid ' + sc + ';border-radius:12px;padding:16px;cursor:pointer;position:relative">' +
+                  '<span style="position:absolute;top:14px;right:14px;font-size:11px;color:var(--brand-primary);font-weight:700">상세 →</span>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);font-family:monospace">' + s.code + '</div>' +
+                  '<div style="font-size:15px;font-weight:800;margin:2px 0">' + s.name + '</div>' +
+                  '<div style="font-size:11px;color:#a78bfa;font-weight:700">🏢 원청사: ' + (s.client || '-') + '</div>' +
+                  '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:12px"><div><div style="font-size:24px;font-weight:800">' + s.total + '</div><div style="font-size:11px;color:var(--text-secondary)">출근 ' + s.present + ' / ' + s.total + '</div></div>' +
+                  '<div style="font-size:20px;font-weight:800;color:' + sc + '">' + s.rate + '%</div></div>' +
+                  '<div style="height:6px;background:var(--bg-base);border-radius:3px;margin-top:8px;overflow:hidden"><div style="height:100%;width:' + s.rate + '%;background:' + sc + '"></div></div>' +
+                  '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' + chips + '</div></div>';
+              }).join('');
+              return '<div style="margin:18px 0 10px;display:flex;align-items:center;gap:10px"><span style="font-size:20px">' + c.flag + '</span><span style="font-size:15px;font-weight:800">' + c.label + '</span>' +
+                '<span style="font-size:11px;color:var(--text-secondary);background:var(--bg-surface-elevated);padding:3px 10px;border-radius:20px">' + c.sites.length + ' 현장 · ' + c.employees + '명 · 출근 ' + c.present + '</span></div>' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">' + sites + '</div>';
+            }).join('');
+          }
+
+          var matrixRows = (res.matrix || []).map(function (m) {
+            return '<tr><td class="cell-mono">' + m.site + '</td>' +
+              '<td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(167,139,250,.15);color:#a78bfa">' + (m.client || '-') + '</span></td>' +
+              '<td style="font-size:11px;color:var(--text-secondary)">' + m.company + '</td><td>' + m.team + '</td>' +
+              '<td class="tac cell-mono">' + m.total + '</td><td class="tac cell-mono" style="color:var(--status-success)">' + m.present + '</td><td class="tac" style="font-weight:700">' + m.rate + '%</td></tr>';
+          }).join('');
+
+          var view = window._globalHrView;
+          var viewTabs = [['overview', '📊 현황'], ['feed', '🟢 실시간 출퇴근']].map(function (d) {
+            var on = view === d[0];
+            return '<button onclick="window.switchGlobalHrView(\'' + d[0] + '\')" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border-default);' +
+              (on ? 'background:var(--bg-surface-elevated);color:var(--text-primary);border-color:var(--brand-primary)' : 'background:var(--bg-surface);color:var(--text-secondary)') + '">' + d[1] + '</button>';
+          }).join('');
+
+          var overviewBody =
+            '<div class="section-title" style="font-size:13px;font-weight:800;margin:20px 0 4px">📍 국가 → 현장별 인원 현황 <span style="color:var(--text-tertiary);font-weight:400;font-size:11px">(현장 클릭 시 상세)</span></div>' +
+            countriesHtml +
+            '<div class="panel" style="margin-top:18px"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar"></i> 통합 매트릭스 — 현장 × 원청사 × 소속사 × 팀</div></div>' +
+            '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr><th>현장</th><th>원청사</th><th>소속사</th><th>팀</th><th class="tac">총원</th><th class="tac">출근</th><th class="tac">출근율</th></tr></thead><tbody>' +
+            (matrixRows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-tertiary)">데이터 없음</td></tr>') + '</tbody></table></div></div>';
+
+          var headerHtml = embedded
+            ? '<div class="action-row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">' + viewTabs + '<span style="width:1px;background:var(--border-default);margin:0 2px"></span>' + tabs + '</div>'
+            : '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-globe-hemisphere-west" style="color:#34d399"></i> 글로벌 인원·출퇴근 현황</h1>' +
+              '<p class="page-subtitle">' + (t.countries || 0) + '개국 · ' + (t.sites || 0) + '개 현장 · 실시간 출근 현황</p></div>' +
+              '<div class="action-row" style="gap:8px;flex-wrap:wrap">' + viewTabs + '<span style="width:1px;background:var(--border-default);margin:0 2px"></span>' + tabs + '</div></div>';
+
+          target.innerHTML = headerHtml + kpis + (view === 'feed' ? ghrFeedHtml(res) : overviewBody);
+        } catch (err) { target.innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:32px">글로벌 현황 로딩 실패: ' + err.message + '</div>'; console.error(err); }
+      };
+
+      window.openGlobalSite = function (code) {
+        var data = window._globalHrData;
+        if (!data) { window.backToGlobalHr(); return; }
+        var site = null, country = null;
+        (data.countries || []).forEach(function (c) { (c.sites || []).forEach(function (s) { if (s.code === code) { site = s; country = c; } }); });
+        if (!site) { window.backToGlobalHr(); return; }
+
+        var teamCount = 0;
+        var companyBlocks = (site.companies || []).map(function (co) {
+          var teamRows = (co.teams || []).map(function (tm) {
+            teamCount++;
+            var r = tm.total > 0 ? Math.round(tm.present / tm.total * 100) : 0;
+            return '<div style="display:grid;grid-template-columns:1.4fr .7fr 1.2fr .8fr;gap:8px;padding:10px 16px;border-top:1px solid var(--border-subtle);align-items:center;font-size:12px">' +
+              '<div><b>' + tm.team + '</b></div><div class="tac cell-mono">' + tm.total + '</div>' +
+              '<div><span style="display:inline-block;width:90px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden;vertical-align:middle"><span style="display:block;height:100%;width:' + r + '%;background:' + ghrRateColor(r) + '"></span></span> <span class="cell-mono">' + tm.present + '/' + tm.total + '</span></div>' +
+              '<div class="tac" style="font-weight:700;color:' + ghrRateColor(r) + '">' + r + '%</div></div>';
+          }).join('');
+          return '<div class="panel" style="margin-bottom:12px;overflow:hidden"><div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,.12),transparent)"><div class="panel-title">🏢 ' + co.company + ' <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(59,130,246,.15);color:#60a5fa">소속사</span></div><div style="font-size:12px;color:var(--text-secondary)">총원 ' + co.total + ' · 출근 ' + co.present + '</div></div>' +
+            '<div style="display:grid;grid-template-columns:1.4fr .7fr 1.2fr .8fr;gap:8px;padding:9px 16px;background:var(--bg-base);color:var(--text-tertiary);font-size:10px;font-weight:700;text-transform:uppercase">' +
+            '<div>팀</div><div class="tac">총원</div><div>출근 현황</div><div class="tac">출근율</div></div>' + teamRows + '</div>';
+        }).join('');
+
+        pageContainer.innerHTML =
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.backToGlobalHr()">🌐 글로벌</span> › ' + country.flag + ' ' + country.label + ' › <b style="color:var(--text-primary)">' + site.code + ' · ' + site.name + '</b></div>' +
+          '<div class="header-section"><div><h1 class="page-title">🏗️ ' + site.name + ' 인원·출퇴근 현황</h1><p class="page-subtitle">원청사 ' + (site.companies || []).length + ' · 팀 ' + teamCount + '</p></div>' +
+          '<div class="action-row" style="gap:8px"><button class="btn-secondary" onclick="window.openTeamBoard(\'' + site.code + '\')"><i class="ph ph-puzzle-piece"></i> 팀 편성</button><button class="btn-secondary" onclick="window.backToGlobalHr()"><i class="ph ph-arrow-left"></i> 글로벌로</button></div></div>' +
+          '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
+          '<div class="kpi-card"><div class="kpi-label">현장 총원</div><div class="kpi-value">' + site.total + '</div></div>' +
+          '<div class="kpi-card" style="border-left:3px solid ' + ghrRateColor(site.rate) + '"><div class="kpi-label">현재 출근</div><div class="kpi-value" style="color:' + ghrRateColor(site.rate) + '">' + site.present + '</div><div class="kpi-meta">출근율 ' + site.rate + '%</div></div>' +
+          '<div class="kpi-card"><div class="kpi-label">미출근</div><div class="kpi-value" style="color:var(--status-warning)">' + (site.total - site.present) + '</div></div>' +
+          '<div class="kpi-card"><div class="kpi-label">소속사 / 팀</div><div class="kpi-value">' + (site.companies || []).length + ' / ' + teamCount + '</div></div>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin:6px 0 0">원청사(발주처): <b style="color:#a78bfa">' + (site.client || '-') + '</b></div>' +
+          '<div class="section-title" style="font-size:13px;font-weight:800;margin:14px 0 10px">👷 소속사별 → 팀별 인원 현황</div>' +
+          companyBlocks;
+      };
+
+      // ── 팀 편성 드래그 보드 ──────────────────────────────────────
+      window.openTeamBoard = async function (siteCode) {
+        pageContainer.innerHTML = skeleton();
+        try {
+          var res = await window.API.getTeamBoard(siteCode);
+          if (!res || !res.success) { renderError('팀 편성 로딩 실패: ' + (res && res.error ? res.error : '')); return; }
+          window._teamBoardSite = siteCode;
+          var totalAssigned = res.teams.reduce(function (a, t) { return a + t.members.length; }, 0);
+
+          var cardHtml = function (m) {
+            return '<div draggable="true" ondragstart="window.ghrDrag(event,' + m.id + ')" style="background:var(--bg-surface-elevated);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;cursor:grab">' +
+              '<span style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0">' + String(m.name || '?').slice(0, 1) + '</span>' +
+              '<div><div style="font-size:12px;font-weight:700">' + m.name + '</div><div style="font-size:10px;color:var(--text-secondary)">' + m.role + ' · ' + m.flag + '</div></div></div>';
+          };
+          var cols = res.teams.map(function (t) {
+            var members = t.members.map(cardHtml).join('') || '<div style="font-size:11px;color:var(--text-tertiary);text-align:center;padding:8px">비어있음</div>';
+            return '<div ondragover="window.ghrAllow(event)" ondrop="window.ghrDrop(event,' + t.id + ')" style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:12px;overflow:hidden">' +
+              '<div style="padding:11px 14px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border-subtle)"><span>' + t.name + '</span><span style="font-size:11px;color:var(--text-tertiary)">' + t.members.length + '명</span></div>' +
+              '<div style="padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px">' + members + '</div></div>';
+          }).join('');
+          var unassigned = res.unassigned.map(cardHtml).join('') || '<div style="font-size:11px;color:var(--text-tertiary);padding:6px">미배치 인원 없음</div>';
+
+          pageContainer.innerHTML =
+            '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="cursor:pointer;color:var(--brand-primary)" onclick="window.openGlobalSite(\'' + siteCode + '\')">← ' + res.site.name + ' 현황</span></div>' +
+            '<div class="header-section"><div><h1 class="page-title">🧩 팀 편성 · 배치 — ' + res.site.name + '</h1><p class="page-subtitle">카드를 드래그해 다른 팀/미배치로 이동 · 배치 ' + totalAssigned + ' · 미배치 ' + res.unassigned.length + '</p></div></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">' + cols + '</div>' +
+            '<div class="section-title" style="font-size:13px;font-weight:800;margin:18px 0 8px">⚠️ 미배치 인원 (' + res.unassigned.length + ') — 팀으로 드래그</div>' +
+            '<div ondragover="window.ghrAllow(event)" ondrop="window.ghrDrop(event,null)" style="background:rgba(245,158,11,.06);border:1px dashed var(--status-warning);border-radius:12px;padding:12px;display:flex;gap:8px;flex-wrap:wrap;min-height:60px">' + unassigned + '</div>';
+        } catch (err) { renderError('팀 편성 로딩 실패: ' + err.message); }
+      };
+      window.ghrDrag = function (ev, empId) { ev.dataTransfer.setData('text/plain', String(empId)); };
+      window.ghrAllow = function (ev) { ev.preventDefault(); };
+      window.ghrDrop = async function (ev, teamId) {
+        ev.preventDefault();
+        var empId = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+        if (!empId) return;
+        try {
+          var res = await window.API.assignEmployeeTeam(empId, teamId);
+          if (res && res.success) { showToast(res.message || '배치 완료'); window.openTeamBoard(window._teamBoardSite); }
+          else { alert(res && res.message ? res.message : '배치 실패'); }
+        } catch (e) { alert('오류: ' + e.message); }
+      };
+
       async function renderDashboard() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -1747,7 +2196,30 @@
               '<div style="font-size:11px;color:var(--text-tertiary);margin-top:5px;text-align:right">ì™„ë£Œ ì˜ˆì •: ' + p.endDate + '</div></div>';
           }).join('');
 
+          var selectedOpt = document.querySelector('#project-context-switcher option:checked');
+          var isSetupPending = selectedOpt ? selectedOpt.getAttribute('data-setup-pending') === 'true' : false;
+          var setupBannerHtml = '';
+          if (isSetupPending) {
+            setupBannerHtml = 
+              '<div class="setup-wizard-banner" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.04) 100%); border: 1px solid rgba(37, 99, 235, 0.35); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); backdrop-filter: blur(8px);">' +
+              '<div style="display:flex; align-items:center; gap:16px;">' +
+              '<div style="background: rgba(37, 99, 235, 0.2); width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;">' +
+              '<i class="ph ph-magic-wand" style="font-size:22px;"></i>' +
+              '</div>' +
+              '<div>' +
+              '<h3 style="font-size:14px; font-weight:700; color:#fff; margin:0 0 4px 0;">⚡ 신설 현장 초기 셋업 마법사 (Setup Wizard Required)</h3>' +
+              '<p style="font-size:12px; color:var(--text-secondary); margin:0;">이 프로젝트는 새롭게 생성되어 아직 초기 셋업이 완료되지 않았습니다. 셋업을 마쳐야 모듈 연동이 활성화됩니다.</p>' +
+              '</div>' +
+              '</div>' +
+              '<button class="btn-primary" onclick="window.openSetupWizard()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:#2563eb; color:white; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">' +
+              '<i class="ph ph-rocket"></i>' +
+              '<span>셋업 시작하기</span>' +
+              '</button>' +
+              '</div>';
+          }
+
           pageContainer.innerHTML =
+            setupBannerHtml +
             '<div class="header-section"><div>' +
             '<h1 class="page-title">Executive Dashboard</h1>' +
             '<p class="page-subtitle">NAHSHON MEP Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™© Â· ' + new Date().toLocaleDateString('ko-KR') + '</p>' +
@@ -2056,60 +2528,298 @@
         } catch(err) { renderError('ì•Œë¦¼ ì„¼í„° ë¡œë”© ì‹¤íŒ¨: '+err.message); console.error(err); }
       }
 
+      // 실제 통합 알림 데이터베이스를 사용하는 새 알림 센터.
+      async function renderUnifiedAlerts() {
+        pageContainer.innerHTML = skeleton();
+
+        try {
+          var alerts = await window.API.getAlerts('all');
+          alerts = Array.isArray(alerts) ? alerts : [];
+
+          var moduleMeta = {
+            DOC:      { label: 'AI 문서', icon: 'ph-files', color: '#2563eb', bg: 'rgba(37,99,235,.10)' },
+            CONTRACT: { label: '계약', icon: 'ph-file-text', color: '#7c3aed', bg: 'rgba(124,58,237,.10)' },
+            WBS:      { label: '공정/프로젝트', icon: 'ph-tree-structure', color: '#0891b2', bg: 'rgba(8,145,178,.10)' },
+            SAFETY:   { label: '안전', icon: 'ph-shield-warning', color: '#dc2626', bg: 'rgba(220,38,38,.10)' },
+            HR:       { label: '인원', icon: 'ph-users', color: '#475569', bg: 'rgba(71,85,105,.10)' },
+            INV:      { label: '자재/장비', icon: 'ph-package', color: '#d97706', bg: 'rgba(217,119,6,.10)' },
+            VEH:      { label: '차량', icon: 'ph-car', color: '#2563eb', bg: 'rgba(37,99,235,.10)' },
+            HSG:      { label: '숙소', icon: 'ph-house', color: '#059669', bg: 'rgba(5,150,105,.10)' }
+          };
+          var severityMeta = {
+            '긴급': { dot: '#ef4444', color: '#b91c1c', bg: 'rgba(239,68,68,.08)', border: 'rgba(239,68,68,.24)' },
+            '주의': { dot: '#f59e0b', color: '#b45309', bg: 'rgba(245,158,11,.07)', border: 'rgba(245,158,11,.22)' },
+            '일반': { dot: '#3b82f6', color: '#1d4ed8', bg: 'rgba(59,130,246,.06)', border: 'rgba(59,130,246,.18)' }
+          };
+          var statusMeta = {
+            '미처리': { color: '#dc2626', bg: 'rgba(239,68,68,.10)' },
+            '처리중': { color: '#d97706', bg: 'rgba(245,158,11,.10)' },
+            '완료': { color: '#059669', bg: 'rgba(16,185,129,.10)' },
+            '무시': { color: '#64748b', bg: 'rgba(100,116,139,.10)' }
+          };
+          var state = window._unifiedAlertState || { severity: 'all', module: 'all', pending: false };
+          window._unifiedAlertState = state;
+          var today = new Date().toISOString().slice(0, 10);
+          var urgent = alerts.filter(function (a) { return a.severity === '긴급' && a.status !== '완료' && a.status !== '무시'; }).length;
+          var caution = alerts.filter(function (a) { return a.severity === '주의' && a.status !== '완료' && a.status !== '무시'; }).length;
+          var todayNew = alerts.filter(function (a) { return String(a.ts || '').slice(0, 10) === today; }).length;
+          var done = alerts.filter(function (a) { return a.status === '완료'; }).length;
+
+          var badge = document.getElementById('alert-unread-badge');
+          if (badge) badge.textContent = urgent + caution;
+
+          function elapsed(value) {
+            if (!value) return '';
+            var date = new Date(String(value).replace(' ', 'T'));
+            if (Number.isNaN(date.getTime())) return String(value);
+            var minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+            if (minutes < 60) return minutes + '분 전';
+            if (minutes < 1440) return Math.floor(minutes / 60) + '시간 전';
+            return Math.floor(minutes / 1440) + '일 전';
+          }
+
+          var modulesInUse = Array.from(new Set(alerts.map(function (a) { return a.module; }).filter(Boolean)));
+          var moduleOptions = modulesInUse.map(function (key) {
+            var meta = moduleMeta[key] || { label: key };
+            return '<option value="' + safeHtml(key) + '">' + safeHtml(meta.label) + '</option>';
+          }).join('');
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div>'
+              + '<h1 class="page-title"><i class="ph ph-bell-ringing" style="color:#f97316"></i> 통합 알림 센터</h1>'
+              + '<p class="page-subtitle">문서·계약·공정·안전·인원·장비의 기한과 위험 신호를 한곳에서 확인하고 조치합니다.</p>'
+            + '</div><div class="action-row">'
+              + '<a href="/document-hub" class="btn-secondary" style="text-decoration:none"><i class="ph ph-files"></i> AI 문서함</a>'
+              + '<button class="btn-primary" id="unified-alert-refresh"><i class="ph ph-arrows-clockwise"></i> 새로고침</button>'
+            + '</div></div>'
+            + '<div class="kpi-row" style="grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:16px">'
+              + '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">미처리 긴급</div><div class="kpi-value" style="color:#dc2626">' + urgent + '</div><div class="kpi-meta">즉시 조치 필요</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #f59e0b"><div class="kpi-label">미처리 주의</div><div class="kpi-value" style="color:#d97706">' + caution + '</div><div class="kpi-meta">기한 내 검토 필요</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #3b82f6"><div class="kpi-label">오늘 신규</div><div class="kpi-value" style="color:#2563eb">' + todayNew + '</div><div class="kpi-meta">오늘 발생</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #10b981"><div class="kpi-label">처리 완료</div><div class="kpi-value" style="color:#059669">' + done + '</div><div class="kpi-meta">조치 기록 보존</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #64748b"><div class="kpi-label">전체 알림</div><div class="kpi-value">' + alerts.length + '</div><div class="kpi-meta">권한 범위 내 누적</div></div>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:12px 14px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:10px">'
+              + '<span style="font-size:11px;font-weight:800;color:var(--text-tertiary)">긴급도</span>'
+              + '<button class="unified-severity btn-secondary" data-severity="all">전체</button>'
+              + '<button class="unified-severity btn-secondary" data-severity="긴급">긴급</button>'
+              + '<button class="unified-severity btn-secondary" data-severity="주의">주의</button>'
+              + '<button class="unified-severity btn-secondary" data-severity="일반">일반</button>'
+              + '<select id="unified-module" style="margin-left:8px;background:var(--bg-subtle);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 10px;border-radius:7px;font-size:11px"><option value="all">전체 모듈</option>' + moduleOptions + '</select>'
+              + '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text-secondary);cursor:pointer"><input id="unified-pending" type="checkbox"> 미처리만 보기</label>'
+            + '</div>'
+            + '<div id="unified-alert-list"></div>';
+
+          var moduleSelect = document.getElementById('unified-module');
+          var pendingCheck = document.getElementById('unified-pending');
+          moduleSelect.value = state.module;
+          pendingCheck.checked = state.pending;
+
+          function renderList() {
+            var list = alerts.filter(function (alertItem) {
+              if (state.severity !== 'all' && alertItem.severity !== state.severity) return false;
+              if (state.module !== 'all' && alertItem.module !== state.module) return false;
+              if (state.pending && (alertItem.status === '완료' || alertItem.status === '무시')) return false;
+              return true;
+            });
+            var target = document.getElementById('unified-alert-list');
+            if (!list.length) {
+              target.innerHTML = '<div class="panel"><div class="panel-body" style="padding:42px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-bell-slash" style="font-size:38px;display:block;margin-bottom:10px"></i>조건에 맞는 알림이 없습니다.</div></div>';
+              return;
+            }
+
+            target.innerHTML = list.map(function (alertItem) {
+              var severity = severityMeta[alertItem.severity] || severityMeta['일반'];
+              var module = moduleMeta[alertItem.module] || { label: alertItem.module || '기타', icon: 'ph-bell', color: '#64748b', bg: 'rgba(100,116,139,.10)' };
+              var status = statusMeta[alertItem.status] || statusMeta['미처리'];
+              var closed = alertItem.status === '완료' || alertItem.status === '무시';
+              var detailButton = alertItem.actionUrl
+                ? '<button class="btn-secondary unified-action" data-action="open" data-id="' + safeHtml(alertItem.id) + '"><i class="ph ph-arrow-square-out"></i> 관련 화면</button>'
+                : '';
+              var actionButtons = closed ? '' : '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">'
+                + detailButton
+                + '<button class="btn-secondary unified-action" data-action="complete" data-id="' + safeHtml(alertItem.id) + '" style="color:#059669"><i class="ph ph-check"></i> 처리 완료</button>'
+                + '<button class="btn-secondary unified-action" data-action="ignore" data-id="' + safeHtml(alertItem.id) + '"><i class="ph ph-x"></i> 무시</button>'
+                + '</div>';
+              return '<article style="border:1px solid ' + severity.border + ';background:' + severity.bg + ';border-radius:12px;padding:16px 18px;margin-bottom:10px;' + (closed ? 'opacity:.62;' : '') + '">'
+                + '<div style="display:flex;align-items:flex-start;gap:12px">'
+                  + '<span style="width:10px;height:10px;border-radius:50%;margin-top:6px;background:' + severity.dot + ';box-shadow:0 0 0 4px ' + severity.bg + '"></span>'
+                  + '<div style="flex:1;min-width:0">'
+                    + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:6px">'
+                      + '<span style="font-family:monospace;font-size:10px;font-weight:800;color:var(--text-tertiary)">' + safeHtml(alertItem.id) + '</span>'
+                      + '<span style="padding:3px 8px;border-radius:999px;background:' + module.bg + ';color:' + module.color + ';font-size:10px;font-weight:800"><i class="ph ' + module.icon + '"></i> ' + safeHtml(module.label) + '</span>'
+                      + '<span style="padding:3px 8px;border-radius:999px;background:' + status.bg + ';color:' + status.color + ';font-size:10px;font-weight:800">' + safeHtml(alertItem.status || '미처리') + '</span>'
+                      + '<span style="margin-left:auto;font-size:10px;color:var(--text-tertiary)">' + safeHtml(elapsed(alertItem.ts)) + '</span>'
+                    + '</div>'
+                    + '<div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:4px">' + safeHtml(alertItem.title || '알림') + '</div>'
+                    + '<div style="font-size:12px;line-height:1.6;color:var(--text-secondary)">' + safeHtml(alertItem.content || '') + '</div>'
+                    + (alertItem.dueAt ? '<div style="margin-top:7px;font-size:11px;font-weight:700;color:' + severity.color + '"><i class="ph ph-calendar-blank"></i> 기한 ' + safeHtml(alertItem.dueAt) + '</div>' : '')
+                    + actionButtons
+                  + '</div>'
+                + '</div>'
+              + '</article>';
+            }).join('');
+
+            document.querySelectorAll('.unified-action').forEach(function (button) {
+              button.addEventListener('click', async function () {
+                var alertItem = alerts.find(function (item) { return item.id === button.dataset.id; });
+                if (!alertItem) return;
+                if (button.dataset.action === 'open') {
+                  window.location.assign(alertItem.actionUrl);
+                  return;
+                }
+                button.disabled = true;
+                var nextStatus = button.dataset.action === 'complete' ? '완료' : '무시';
+                try {
+                  var result = await window.API.updateAlertStatus(alertItem.id, nextStatus);
+                  if (result && result.success === false) throw new Error(result.error || '알림 상태 변경 실패');
+                  alertItem.status = nextStatus;
+                  renderList();
+                } catch (error) {
+                  button.disabled = false;
+                  window.showToast(error.message || '알림 상태를 변경하지 못했습니다.', true);
+                }
+              });
+            });
+          }
+
+          document.querySelectorAll('.unified-severity').forEach(function (button) {
+            if (button.dataset.severity === state.severity) button.classList.add('btn-primary');
+            button.addEventListener('click', function () {
+              state.severity = button.dataset.severity;
+              document.querySelectorAll('.unified-severity').forEach(function (item) { item.classList.remove('btn-primary'); });
+              button.classList.add('btn-primary');
+              renderList();
+            });
+          });
+          moduleSelect.addEventListener('change', function () { state.module = moduleSelect.value; renderList(); });
+          pendingCheck.addEventListener('change', function () { state.pending = pendingCheck.checked; renderList(); });
+          document.getElementById('unified-alert-refresh').addEventListener('click', renderUnifiedAlerts);
+          renderList();
+        } catch (error) {
+          renderError('통합 알림 센터를 불러오지 못했습니다: ' + error.message);
+          console.error('[renderUnifiedAlerts]', error);
+        }
+      }
+
       // â”€â”€ SAFETY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       async function renderSafety() {
         pageContainer.innerHTML = skeleton();
         try {
-          var safetyStorageKey = 'smart_ai_safety_work_items_v1';
-          var selectedWorkId = window._safetySelectedWorkId || 'WRK-2605-001';
+          var safetyStorageKey = 'smart_ai_safety_work_items_v2';
+          var selectedWorkId = window._safetySelectedWorkId || null;
           var currentFilter = window._safetyFilter || 'all';
 
-          function defaultSafetyItems() {
-            return [
-              {
-                id:'WRK-2605-001', project:'LGES-AZ ì˜¤í”¼ìŠ¤ ì „ê¸°', site:'2ì¸µ ì‚¬ë¬´ì‹¤',
-                title:'ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤', crew:3, qty:30, unit:'m',
-                due:'ì˜¤ëŠ˜ 17:00', planStatus:'ìŠ¹ì¸ì™„ë£Œ', tbmStatus:'ì™„ë£Œ', closeStatus:'ë§ˆê°ëŒ€ê¸°',
-                progressStatus:'ë¯¸ë¶„ì„', progress:60, doneQty:18, totalQty:30,
-                workText:'ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤. ìž‘ì—…ìžëŠ” 3ëª…ì´ê³  ì‚¬ë‹¤ë¦¬ë¥¼ ì‚¬ìš©í•©ë‹ˆë‹¤. ì˜ˆì • ìž‘ì—…ëŸ‰ì€ 30mìž…ë‹ˆë‹¤.',
-                closeText:'ì²œìž¥ ë°°ì„  18m í¬ì„¤ ì™„ë£Œ. ìžìž¬ ë¶€ì¡±ìœ¼ë¡œ ë‚˜ë¨¸ì§€ 12mëŠ” ë‚´ì¼ ì§„í–‰ ì˜ˆì •. ì²œìž¥ ë‚´ë¶€ ìž¥ì• ë¬¼ë¡œ ìž‘ì—… ì†ë„ ì§€ì—°.',
-                signatures:[{name:'ê¹€ì² ìˆ˜', role:'ì „ê¸°ê³µ', signed:true, time:'07:42'}, {name:'ì´ë¯¼ì¤€', role:'ë³´ì¡°', signed:true, time:'07:43'}, {name:'ìž„ì„±í›ˆ', role:'ê°ì‹œìž', signed:false, time:'-'}],
-                issues:[{type:'ë¯¸ì¡°ì¹˜', text:'ìžìž¬ ë¶€ì¡±ìœ¼ë¡œ ìž”ì—¬ 12m ëŒ€ê¸°', owner:'êµ¬ë§¤íŒ€', status:'ì¡°ì¹˜ì¤‘'}]
-              },
-              {
-                id:'WRK-2605-002', project:'HFF-02 ìž¥ë¹„ ì„¤ì¹˜', site:'Production Bay B',
-                title:'ì»¨íŠ¸ë¡¤ íŒ¨ë„ ì•µì»¤ ì„¤ì¹˜ ë° ì¼€ì´ë¸” íŠ¸ë ˆì´ ë³´ê°•', crew:4, qty:10, unit:'ea',
-                due:'ì˜¤ëŠ˜ 13:00', planStatus:'ê²€í† ì¤‘', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „',
-                progressStatus:'ë¯¸ë¶„ì„', progress:35, doneQty:0, totalQty:10,
-                workText:'ì»¨íŠ¸ë¡¤ íŒ¨ë„ ì•µì»¤ ì„¤ì¹˜ ë° ì¼€ì´ë¸” íŠ¸ë ˆì´ ë³´ê°•. í•´ë¨¸ë“œë¦´, ì•µì»¤ë³¼íŠ¸, ì‚¬ë‹¤ë¦¬ ì‚¬ìš©. ì˜ˆì • ìž‘ì—…ëŸ‰ì€ 10ê°œì†Œìž…ë‹ˆë‹¤.',
-                closeText:'', signatures:[{name:'ë°•ì§€í˜¸', role:'íŒ€ë¦¬ë”', signed:false, time:'-'}, {name:'ìµœë™í˜', role:'ì„¤ì¹˜', signed:false, time:'-'}, {name:'ê°•ìŠ¹ìš°', role:'ìž¥ë¹„', signed:false, time:'-'}, {name:'ìž„ì„±í›ˆ', role:'ë³´ì¡°', signed:false, time:'-'}],
-                issues:[{type:'ìœ„í—˜ìƒí™©', text:'ì¼€ì´ë¸” íŠ¸ë ˆì´ ëª¨ì„œë¦¬ ë‚ ì¹´ë¡œì›€', owner:'ë°•ì†Œìž¥', status:'ì¡°ì¹˜ì¤‘'}]
-              },
-              {
-                id:'WRK-2605-003', project:'SST-03 ë°°ê´€ ìˆ˜ì •', site:'Utility Room',
-                title:'ê¸°ì¡´ ë°°ê´€ ì² ê±° í›„ ì‹ ê·œ ë¼ì¸ 12m ì„¤ì¹˜', crew:5, qty:12, unit:'m',
-                due:'ë‚´ì¼', planStatus:'ì´ˆì•ˆ', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „',
-                progressStatus:'ë¯¸ë¶„ì„', progress:15, doneQty:0, totalQty:12,
-                workText:'ê¸°ì¡´ ë°°ê´€ ì² ê±° í›„ ì‹ ê·œ ë¼ì¸ 12m ì„¤ì¹˜. ì ˆë‹¨ ê³µêµ¬ì™€ ë¦¬í”„íŠ¸ë¥¼ ì‚¬ìš©í•©ë‹ˆë‹¤.',
-                closeText:'', signatures:[{name:'ê¹€ì² ìˆ˜', role:'ë°°ê´€ê³µ', signed:false, time:'-'}, {name:'ì´ë¯¼ì¤€', role:'ë³´ì¡°', signed:false, time:'-'}],
-                issues:[{type:'ì•„ì°¨ì‚¬ê³ ', text:'ë°°ê´€ ìžìž¬ ì´ë™ ì¤‘ í†µë¡œ í˜‘ì†Œ', owner:'í˜„ìž¥íŒ€', status:'ì™„ë£Œ'}]
-              }
-            ];
-          }
+          var CP1252_MAP = {
+            '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87,
+            'ˆ': 0x88, '‰': 0x89, 'Š': 0x8A, '‹': 0x8B, 'Œ': 0x8C, 'Ž': 0x8E,
+            '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97,
+            '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F
+          };
 
-          function loadSafetyItems() {
+          function repairMojibake(text) {
+            if (!text || typeof text !== 'string') return text;
+            if (!/[ÃÂâ€ðŸìíëêÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞß]/.test(text)) return text;
             try {
-              var raw = localStorage.getItem(safetyStorageKey);
-              return raw ? JSON.parse(raw) : defaultSafetyItems();
+              var bytes = [];
+              for (var i = 0; i < text.length; i++) {
+                var ch = text[i];
+                var code = ch.charCodeAt(0);
+                if (CP1252_MAP[ch] !== undefined) {
+                  bytes.push(CP1252_MAP[ch]);
+                } else if (code <= 255) {
+                  bytes.push(code);
+                } else {
+                  return text;
+                }
+              }
+              var decoded = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
+              if (!decoded || decoded.indexOf('\uFFFD') !== -1) return text;
+              return decoded;
             } catch (e) {
-              return defaultSafetyItems();
+              return text;
             }
           }
 
-          var safetyItems = loadSafetyItems();
+          function repairObject(obj) {
+            if (obj === null || obj === undefined) return obj;
+            if (typeof obj === 'string') {
+              return repairMojibake(obj);
+            }
+            if (Array.isArray(obj)) {
+              return obj.map(function(item) { return repairObject(item); });
+            }
+            if (typeof obj === 'object') {
+              var newObj = {};
+              for (var key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                  newObj[key] = repairObject(obj[key]);
+                }
+              }
+              return newObj;
+            }
+            return obj;
+          }
+
+          // 데모 카드 시드는 폐기됨(2026-07-16 정리) — 빈 서버는 빈 목록으로 시작한다.
+          var DEMO_SAFETY_IDS = ['WRK-2605-001', 'WRK-2605-002', 'WRK-2605-003'];
+          function defaultSafetyItems() {
+            return [];
+          }
+          function stripDemoSafetyItems(items) {
+            if (!Array.isArray(items)) return [];
+            return items.filter(function(it) { return it && DEMO_SAFETY_IDS.indexOf(it.id) < 0; });
+          }
+
+          function loadSafetyItemsOffline() {
+            try {
+              var raw = localStorage.getItem(safetyStorageKey);
+              if (raw) {
+                return stripDemoSafetyItems(JSON.parse(raw));
+              }
+              var legacyRaw = localStorage.getItem('smart_ai_safety_work_items_v1');
+              if (legacyRaw) {
+                var legacyData = JSON.parse(legacyRaw);
+                if (Array.isArray(legacyData)) {
+                  var repairedData = stripDemoSafetyItems(repairObject(legacyData));
+                  localStorage.setItem(safetyStorageKey, JSON.stringify(repairedData));
+                  return repairedData;
+                }
+              }
+            } catch (e) {}
+            return defaultSafetyItems();
+          }
+
+          // Server is the source of truth (TBM signatures / close reports are legal records).
+          // localStorage is kept only as an offline cache + fallback.
+          async function loadSafetyItems() {
+            if (window.apiCache) { delete window.apiCache['api_getSafetyWorkItems[]']; }
+            try {
+              var res = await gsRun('api_getSafetyWorkItems', [], null);
+              if (res && res.success && Array.isArray(res.items)) {
+                // 정리 마이그레이션이 아직 안 돈 서버(백업 복원 등)에서 데모 카드가 부활하지 않게 서버 응답도 필터.
+                res.items = stripDemoSafetyItems(res.items);
+                if (res.items.length === 0) {
+                  // First run with an empty server: migrate any local-only items up.
+                  var local = loadSafetyItemsOffline();
+                  if (Array.isArray(local) && local.length) {
+                    gsRun('api_saveSafetyWorkItems', [local]).catch(function(){});
+                    return local;
+                  }
+                }
+                localStorage.setItem(safetyStorageKey, JSON.stringify(res.items));
+                return res.items;
+              }
+            } catch (e) {}
+            return loadSafetyItemsOffline();
+          }
+
+          var safetyItems = await loadSafetyItems();
 
           function saveSafetyItems() {
             localStorage.setItem(safetyStorageKey, JSON.stringify(safetyItems));
+            if (window.apiCache) { delete window.apiCache['api_getSafetyWorkItems[]']; }
+            try { gsRun('api_saveSafetyWorkItems', [safetyItems]).catch(function(){}); } catch (e) {}
           }
 
           function esc(v) {
@@ -2123,8 +2833,8 @@
           }
 
           function badge(text) {
-            var ok = ['ìŠ¹ì¸ì™„ë£Œ','ì™„ë£Œ','í™•ì •ì™„ë£Œ','ì¡°ì¹˜ì™„ë£Œ'].indexOf(text) !== -1;
-            var warn = ['ê²€í† ì¤‘','ë§ˆê°ëŒ€ê¸°','ì¶”ì²œì™„ë£Œ','ì¡°ì¹˜ì¤‘','ì„œëª…ì¤‘','ì§„í–‰ì¤‘'].indexOf(text) !== -1;
+            var ok = ['승인완료','완료','확정완료','조치완료'].indexOf(text) !== -1;
+            var warn = ['검토중','마감대기','추천완료','조치중','서명중','진행중'].indexOf(text) !== -1;
             var color = ok ? 'var(--status-success)' : warn ? 'var(--status-warning)' : 'var(--text-tertiary)';
             var bg = ok ? 'rgba(16,185,129,.12)' : warn ? 'rgba(245,158,11,.12)' : 'var(--bg-surface-elevated)';
             return '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;background:'+bg+';color:'+color+';font-size:10px;font-weight:700">'+esc(text)+'</span>';
@@ -2136,56 +2846,74 @@
           }
 
           function nextAction(w) {
-            if (w.planStatus === 'ë¯¸ìƒì„±' || w.planStatus === 'ì´ˆì•ˆ' || w.planStatus === 'ìˆ˜ì •í•„ìš”') return 'AI ê³„íšì„œ ìƒì„±';
-            if (w.planStatus === 'ê²€í† ì¤‘') return 'ìŠ¹ì¸';
-            if (w.tbmStatus === 'ëŒ€ê¸°') return 'TBM ì‹œìž‘';
-            if (w.tbmStatus === 'ì§„í–‰ì¤‘' || w.tbmStatus === 'ì„œëª…ì¤‘') return 'ì„œëª…/ì™„ë£Œ';
-            if (w.closeStatus !== 'ì €ìž¥ì™„ë£Œ' && w.closeStatus !== 'ì™„ë£Œ') return 'ìž‘ì—… ë§ˆê°';
-            if (w.progressStatus !== 'í™•ì •ì™„ë£Œ') return 'ê³µì • í™•ì •';
-            return 'ê¸°ë¡ ë³´ê¸°';
+            if (w.planStatus === '미생성' || w.planStatus === '초안' || w.planStatus === '수정필요') return 'AI 계획서 생성';
+            if (w.planStatus === '검토중') return '승인';
+            if (w.tbmStatus === '대기') return 'TBM 시작';
+            if (w.tbmStatus === '진행중' || w.tbmStatus === '서명중') return '서명/완료';
+            if (w.closeStatus !== '저장완료' && w.closeStatus !== '완료') return '작업 마감';
+            if (w.progressStatus !== '확정완료') return '공정 확정';
+            return '기록 보기';
           }
 
           function filterItems() {
             return safetyItems.filter(function(w) {
               if (currentFilter === 'all') return true;
-              if (currentFilter === 'plan') return w.planStatus !== 'ìŠ¹ì¸ì™„ë£Œ';
-              if (currentFilter === 'tbm') return w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ' && w.tbmStatus !== 'ì™„ë£Œ';
-              if (currentFilter === 'close') return w.tbmStatus === 'ì™„ë£Œ' && w.closeStatus !== 'ì™„ë£Œ' && w.closeStatus !== 'ì €ìž¥ì™„ë£Œ';
-              if (currentFilter === 'progress') return w.closeStatus === 'ì €ìž¥ì™„ë£Œ' && w.progressStatus !== 'í™•ì •ì™„ë£Œ';
-              if (currentFilter === 'issue') return (w.issues || []).some(function(i){ return i.status !== 'ì™„ë£Œ' && i.status !== 'ì¡°ì¹˜ì™„ë£Œ'; });
-              if (currentFilter === 'done') return w.progressStatus === 'í™•ì •ì™„ë£Œ';
+              if (currentFilter === 'plan') return w.planStatus !== '승인완료';
+              if (currentFilter === 'tbm') return w.planStatus === '승인완료' && w.tbmStatus !== '완료';
+              if (currentFilter === 'close') return w.tbmStatus === '완료' && w.closeStatus !== '완료' && w.closeStatus !== '저장완료';
+              if (currentFilter === 'progress') return w.closeStatus === '저장완료' && w.progressStatus !== '확정완료';
+              if (currentFilter === 'issue') return (w.issues || []).some(function(i){ return i.status !== '완료' && i.status !== '조치완료'; });
+              if (currentFilter === 'done') return w.progressStatus === '확정완료';
               return true;
             });
           }
 
           function counts() {
             var total = safetyItems.length;
-            var plans = safetyItems.filter(function(w){ return w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ'; }).length;
-            var tbm = safetyItems.filter(function(w){ return w.tbmStatus === 'ì™„ë£Œ'; }).length;
-            var progressWait = safetyItems.filter(function(w){ return w.progressStatus === 'ì¶”ì²œì™„ë£Œ'; }).length;
-            var issues = safetyItems.reduce(function(sum,w){ return sum + (w.issues || []).filter(function(i){ return i.status !== 'ì™„ë£Œ' && i.status !== 'ì¡°ì¹˜ì™„ë£Œ'; }).length; }, 0);
+            var plans = safetyItems.filter(function(w){ return w.planStatus === '승인완료'; }).length;
+            var tbm = safetyItems.filter(function(w){ return w.tbmStatus === '완료'; }).length;
+            var progressWait = safetyItems.filter(function(w){ return w.progressStatus === '추천완료'; }).length;
+            var issues = safetyItems.reduce(function(sum,w){ return sum + (w.issues || []).filter(function(i){ return i.status !== '완료' && i.status !== '조치완료'; }).length; }, 0);
             return {total:total, plans:plans, tbm:tbm, progressWait:progressWait, issues:issues};
           }
+
+          // 안전관리 전체 초기화 — 새 프로젝트 시작 시 화면을 깨끗이 비운다.
+          // 서버 삭제 + 오프라인 캐시(localStorage)까지 비운다: 캐시를 안 비우면 다음 로드에서
+          // 삭제분이 서버로 재업로드돼 되살아난다(사용자가 겪은 "또 생김"의 원인).
+          window.clearSafetyWork = async function() {
+            if (!confirm('현재 안전관리의 모든 작업 카드(AI 계획서 · TBM 서명 · 이슈 포함)를 삭제하고 처음부터 시작합니다.\n되돌릴 수 없습니다. 진행할까요?')) return;
+            var site = window.currentSiteId || 'ALL';
+            try {
+              var res = await gsRun('api_clearSafetyWork', [site], []);
+              try { localStorage.removeItem('smart_ai_safety_work_items_v2'); localStorage.removeItem('smart_ai_safety_work_items_v1'); } catch (e) {}
+              if (window.apiCache) { Object.keys(window.apiCache).forEach(function(k) { if (k.indexOf('api_getSafetyWorkItems') >= 0) delete window.apiCache[k]; }); }
+              window._safetySelectedWorkId = null;
+              var d = (res && res.deleted) || {};
+              alert('✅ 초기화 완료: 작업카드 ' + (d.cards || 0) + '건 삭제 (서명 ' + (d.signatures || 0) + ' · 이슈 ' + (d.issues || 0) + ')');
+              renderSafety();
+            } catch (e) { alert('❌ 초기화 실패: ' + (e && e.message ? e.message : e)); }
+          };
 
           function renderSafetyShell() {
             var c = counts();
             if (alertBadge) alertBadge.textContent = c.issues;
             pageContainer.innerHTML =
               '<div class="header-section"><div>'
-              +'<h1 class="page-title">AI ìž‘ì—…ì•ˆì „ê´€ë¦¬</h1>'
-              +'<p class="page-subtitle">ìž‘ì—…ë‚´ìš© ìž…ë ¥ â†’ ì•ˆì „ ìž‘ì—… ê³„íšì„œ ìƒì„± â†’ TBM/ì„œëª… â†’ ìž‘ì—… ë§ˆê° â†’ AI ê³µì •ìœ¨ ì¶”ì²œ</p>'
+              +'<h1 class="page-title">AI 작업안전관리</h1>'
+              +'<p class="page-subtitle">작업내용 입력 → 안전 작업 계획서 생성 → TBM/서명 → 작업 마감 → AI 공정율 추천</p>'
               +'</div><div class="action-row">'
-              +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button>'
-              +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> ì˜¤ëŠ˜ ìž‘ì—… ë“±ë¡</button>'
+              +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button>'
+              +'<button class="btn-secondary" onclick="window.clearSafetyWork()" style="border-color:rgba(239,68,68,0.4);color:#ef4444"><i class="ph ph-trash"></i> 전체 초기화</button>'
+              +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> 오늘 작업 등록</button>'
               +'</div></div>'
               +'<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)" id="safety-kpis"></div>'
               +'<div class="tab-nav" id="safety-tabs">'
-              +'<button class="tab-btn active" data-tab="s-today"><i class="ph ph-calendar-check"></i> ì˜¤ëŠ˜ì˜ ìž‘ì—…</button>'
-              +'<button class="tab-btn" data-tab="s-ai-plan"><i class="ph ph-sparkle"></i> AI ê³„íšì„œ</button>'
-              +'<button class="tab-btn" data-tab="s-tbm"><i class="ph ph-signature"></i> TBM / ì„œëª…</button>'
-              +'<button class="tab-btn" data-tab="s-close"><i class="ph ph-chart-pie-slice"></i> ìž‘ì—… ë§ˆê° / ê³µì •</button>'
-              +'<button class="tab-btn" data-tab="s-issues"><i class="ph ph-warning-circle"></i> ì´ìŠˆ</button>'
-              +'<button class="tab-btn" data-tab="s-records"><i class="ph ph-folder-open"></i> í”„ë¡œì íŠ¸ ê¸°ë¡</button>'
+              +'<button class="tab-btn active" data-tab="s-today"><i class="ph ph-calendar-check"></i> 오늘의 작업</button>'
+              +'<button class="tab-btn" data-tab="s-ai-plan"><i class="ph ph-sparkle"></i> AI 계획서</button>'
+              +'<button class="tab-btn" data-tab="s-tbm"><i class="ph ph-signature"></i> TBM / 서명</button>'
+              +'<button class="tab-btn" data-tab="s-close"><i class="ph ph-chart-pie-slice"></i> 작업 마감 / 공정</button>'
+              +'<button class="tab-btn" data-tab="s-issues"><i class="ph ph-warning-circle"></i> 이슈</button>'
+              +'<button class="tab-btn" data-tab="s-records"><i class="ph ph-folder-open"></i> 프로젝트 기록</button>'
               +'</div>'
               +'<div id="s-today" class="tab-content" style="display:block"></div>'
               +'<div id="s-ai-plan" class="tab-content" style="display:none"></div>'
@@ -2211,11 +2939,11 @@
           function renderKpis() {
             var c = counts();
             document.getElementById('safety-kpis').innerHTML =
-              '<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> ì˜¤ëŠ˜ ì§„í–‰ ìž‘ì—…</div><div class="kpi-value" style="color:var(--brand-primary)">'+c.total+'</div><div class="kpi-meta">ë‹¨ê¸° í”„ë¡œì íŠ¸ ìž‘ì—… ì¹´ë“œ</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> ì•ˆì „ê³„íš ìŠ¹ì¸</div><div class="kpi-value" style="color:var(--status-success)">'+c.plans+' / '+c.total+'</div><div class="kpi-meta">PHA Â· PTP Â· TBM ì´ˆì•ˆ í¬í•¨</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM ì™„ë£Œ</div><div class="kpi-value" style="color:#8b5cf6">'+c.tbm+' / '+c.total+'</div><div class="kpi-meta">ìž‘ì—…ìž ì„œëª… ê¸°ì¤€</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">'+c.progressWait+'</div><div class="kpi-meta">AI ì¶”ì²œ í›„ ê´€ë¦¬ìž í™•ì •</div></div>'
-              +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> ë¯¸ì¡°ì¹˜ ì´ìŠˆ</div><div class="kpi-value" style="color:var(--status-danger)">'+c.issues+'</div><div class="kpi-meta">ë§ˆê° ì „ ì¡°ì¹˜ í•„ìš”</div></div>';
+              '<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> 오늘 진행 작업</div><div class="kpi-value" style="color:var(--brand-primary)">'+c.total+'</div><div class="kpi-meta">단기 프로젝트 작업 카드</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> 안전계획 승인</div><div class="kpi-value" style="color:var(--status-success)">'+c.plans+' / '+c.total+'</div><div class="kpi-meta">PHA · PTP · TBM 초안 포함</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM 완료</div><div class="kpi-value" style="color:#8b5cf6">'+c.tbm+' / '+c.total+'</div><div class="kpi-meta">작업자 서명 기준</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> 공정 반영 대기</div><div class="kpi-value" style="color:var(--status-warning)">'+c.progressWait+'</div><div class="kpi-meta">AI 추천 후 관리자 확정</div></div>'
+              +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> 미조치 이슈</div><div class="kpi-value" style="color:var(--status-danger)">'+c.issues+'</div><div class="kpi-meta">마감 전 조치 필요</div></div>';
           }
 
           function renderTodayTab() {
@@ -2223,16 +2951,16 @@
               var selected = w.id === selectedWorkId ? 'background:rgba(37,99,235,.06)' : '';
               return '<tr style="cursor:pointer;'+selected+'" onclick="window._safetySelectWork(\''+w.id+'\')">'
                 +'<td class="cell-mono">'+esc(w.id)+'</td>'
-                +'<td><div class="cell-primary">'+esc(w.title)+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+esc(w.project)+' Â· '+esc(w.site)+'</div></td>'
-                +'<td style="text-align:center">'+esc(w.crew)+'ëª…</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td>'
+                +'<td><div class="cell-primary">'+esc(w.title)+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+esc(w.project)+' · '+esc(w.site)+'</div></td>'
+                +'<td style="text-align:center">'+esc(w.crew)+'명</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td>'
                 +'<td style="min-width:150px">'+bar(w.progress)+'</td><td class="cell-mono">'+esc(w.due)+'</td><td><button class="btn-secondary safety-next-btn" data-id="'+esc(w.id)+'" style="padding:4px 8px;font-size:11px">'+esc(nextAction(w))+'</button></td></tr>';
             }).join('');
             document.getElementById('s-today').innerHTML =
               '<div style="display:grid;grid-template-columns:1.45fr .9fr;gap:16px">'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> ì˜¤ëŠ˜ ìž‘ì—… íë¦„</div>'
-              +'<select id="safety-filter" class="search-inline" style="width:180px"><option value="all">ì „ì²´</option><option value="plan">ê³„íšì„œ ë¯¸ì™„ë£Œ</option><option value="tbm">TBM ëŒ€ê¸°</option><option value="close">ë§ˆê° ëŒ€ê¸°</option><option value="progress">ê³µì • ë°˜ì˜ ëŒ€ê¸°</option><option value="issue">ë¯¸ì¡°ì¹˜ ìžˆìŒ</option><option value="done">ì™„ë£Œ</option></select></div>'
-              +'<div class="panel-body"><table class="data-table"><thead><tr><th>ID</th><th>ìž‘ì—…ë‚´ìš©</th><th>ì¸ì›</th><th>ê³„íšì„œ</th><th>TBM</th><th>ë§ˆê°</th><th>ê³µì •ìœ¨</th><th>ê¸°í•œ</th><th>ë‹¤ìŒ</th></tr></thead><tbody>'+(rows || '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-tertiary)">í•´ë‹¹ ì¡°ê±´ì˜ ìž‘ì—…ì´ ì—†ìŠµë‹ˆë‹¤.</td></tr>')+'</tbody></table></div></div>'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> ì˜¤ëŠ˜ í•´ì•¼ í•  ì¼</div></div><div class="panel-body padded" id="safety-next-list"></div></div></div>';
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> 오늘 작업 흐름</div>'
+              +'<select id="safety-filter" class="search-inline" style="width:180px"><option value="all">전체</option><option value="plan">계획서 미완료</option><option value="tbm">TBM 대기</option><option value="close">마감 대기</option><option value="progress">공정 반영 대기</option><option value="issue">미조치 있음</option><option value="done">완료</option></select></div>'
+              +'<div class="panel-body"><table class="data-table"><thead><tr><th>ID</th><th>작업내용</th><th>인원</th><th>계획서</th><th>TBM</th><th>마감</th><th>공정율</th><th>기한</th><th>다음</th></tr></thead><tbody>'+(rows || '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-tertiary)">해당 조건의 작업이 없습니다.</td></tr>')+'</tbody></table></div></div>'
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> 오늘 해야 할 일</div></div><div class="panel-body padded" id="safety-next-list"></div></div></div>';
             document.getElementById('safety-filter').value = currentFilter;
             document.getElementById('safety-filter').addEventListener('change', function(){ currentFilter = this.value; window._safetyFilter = currentFilter; renderAllSafetyTabs(); });
             document.querySelectorAll('.safety-next-btn').forEach(function(btn){
@@ -2244,7 +2972,7 @@
           function renderNextList() {
             var items = safetyItems.map(function(w){
               return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);cursor:pointer" onclick="window._safetySelectWork(\''+w.id+'\'); window._safetyGoNext(\''+w.id+'\')">'
-                +'<div style="font-weight:700;font-size:12px;color:var(--brand-primary)">'+esc(w.project)+' Â· '+esc(nextAction(w))+'</div>'
+                +'<div style="font-weight:700;font-size:12px;color:var(--brand-primary)">'+esc(w.project)+' · '+esc(nextAction(w))+'</div>'
                 +'<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">'+esc(w.title)+'</div></div>';
             }).join('');
             var el = document.getElementById('safety-next-list');
@@ -2255,49 +2983,68 @@
             var w = selectedItem();
             document.getElementById('s-ai-plan').innerHTML =
               '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px">'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple-line"></i> ìž‘ì—…ë‚´ìš© ìž…ë ¥</div>'+badge(w.planStatus)+'</div><div class="panel-body padded">'
-              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">í”„ë¡œì íŠ¸ / ìž¥ì†Œ</label><input id="ai-project-input" class="search-inline" style="width:100%;margin-bottom:10px" value="'+esc(w.project+' / '+w.site)+'">'
-              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">ìž‘ì—…ë‚´ìš©</label><textarea id="ai-work-input" style="width:100%;height:138px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.workText)+'</textarea>'
-              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="ai-qty-input" class="search-inline" style="width:100%" value="'+esc(w.qty)+'"><select id="ai-unit-input" class="search-inline" style="width:100%"><option '+(w.unit==='m'?'selected':'')+'>m</option><option '+(w.unit==='ea'?'selected':'')+'>ea</option><option '+(w.unit==='%'?'selected':'')+'>%</option><option '+(w.unit==='ë‹¨ê³„'?'selected':'')+'>ë‹¨ê³„</option></select></div>'
-              +'<button class="btn-primary" id="ai-generate-plan" style="width:100%;margin-top:14px"><i class="ph ph-sparkle"></i> AI ì•ˆì „ê³„íš ìƒì„±</button></div></div>'
-              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-text"></i> PHA Â· PTP Â· TBM ì´ˆì•ˆ</div><span style="font-size:10px;color:var(--status-warning);font-weight:700">í˜„ìž¥ ì±…ìž„ìž í™•ì¸ í•„ìš”</span></div><div class="panel-body padded" id="ai-plan-preview"></div></div></div>';
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple-line"></i> 작업내용 입력</div>'+badge(w.planStatus)+'</div><div class="panel-body padded">'
+              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">프로젝트 / 장소</label><input id="ai-project-input" class="search-inline" style="width:100%;margin-bottom:10px" value="'+esc(w.project+' / '+w.site)+'">'
+              +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">작업내용</label><textarea id="ai-work-input" style="width:100%;height:138px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.workText)+'</textarea>'
+              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="ai-qty-input" class="search-inline" style="width:100%" value="'+esc(w.qty)+'"><select id="ai-unit-input" class="search-inline" style="width:100%"><option '+(w.unit==='m'?'selected':'')+'>m</option><option '+(w.unit==='ea'?'selected':'')+'>ea</option><option '+(w.unit==='%'?'selected':'')+'>%</option><option '+(w.unit==='단계'?'selected':'')+'>단계</option></select></div>'
+              +'<button class="btn-primary" id="ai-generate-plan" style="width:100%;margin-top:14px"><i class="ph ph-sparkle"></i> AI 안전계획 생성</button></div></div>'
+              +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-text"></i> PHA · PTP · TBM 초안</div><span style="font-size:10px;color:var(--status-warning);font-weight:700">현장 책임자 확인 필요</span></div><div class="panel-body padded" id="ai-plan-preview"></div></div></div>';
             document.getElementById('ai-generate-plan').addEventListener('click', function(){ generatePlan(w.id); });
             renderPlanPreview(w);
+          }
+
+          function safetyPlanBody(w) {
+            var p = w.aiPlan;
+            if (!p) {
+              return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성평가</div><div style="font-size:12px;color:var(--text-tertiary);line-height:1.8">「AI 안전계획 생성」을 누르면 공종·위험도 기반으로 위험성평가·PTP·필수 PPE·작업허가·폭염/환경·TBM 주제가 생성됩니다.</div></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><div style="font-size:12px;color:var(--text-tertiary)">생성 대기 중</div></div></div>';
+            }
+            function chips(arr, color){ return (arr||[]).map(function(x){ return '<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:'+color+'22;color:'+color+';font-size:11px">'+esc(x)+'</span>'; }).join(''); }
+            function riskColor(lv){ return lv==='상'?'var(--status-danger)':lv==='중'?'var(--status-warning)':'var(--status-success)'; }
+            var hazardRows = (p.hazards||[]).map(function(h){ return '<tr><td style="font-size:12px">'+esc(h.hazard)+'</td><td><span style="color:'+riskColor(h.risk_level)+';font-weight:700;font-size:11px">'+esc(h.risk_level)+'</span></td><td style="font-size:12px;color:var(--text-secondary)">'+esc(h.control)+'</td></tr>'; }).join('');
+            var ptp = (p.ptp_steps||[]).map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('');
+            var tbm = (p.tbm_topics||[]).map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('');
+            return ''
+              + (p.summary ? '<div style="padding:10px 12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b style="color:var(--text-primary)">요약:</b> '+esc(p.summary)+'</div>' : '')
+              + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성평가</div><table class="data-table" style="margin-bottom:14px"><thead><tr><th>위험요인</th><th>위험도</th><th>대책</th></tr></thead><tbody>'+(hazardRows||'<tr><td colspan="3" style="color:var(--text-tertiary)">-</td></tr>')+'</tbody></table>'
+              + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 단계</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+ptp+'</ol></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#a78bfa">TBM 토의 주제</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+tbm+'</ul></div></div>'
+              + '<div style="margin-top:12px;font-size:12px;font-weight:700;color:var(--text-secondary)">필수 보호구</div><div style="margin:4px 0">'+chips(p.required_ppe, '#3b82f6')+'</div>'
+              + ((p.permits&&p.permits.length) ? '<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--text-secondary)">필요 허가(PTW)</div><div style="margin:4px 0">'+chips(p.permits, '#f59e0b')+'</div>' : '')
+              + ((p.heat_environment&&p.heat_environment.length) ? '<div style="margin-top:12px;padding:10px 12px;background:rgba(245,158,11,.10);border-left:3px solid #f59e0b;border-radius:6px"><div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:4px"><i class="ph ph-thermometer-hot"></i> 폭염·환경 대책</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)">'+(p.heat_environment||[]).map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul></div>' : '')
+              + (p.key_risk ? '<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,.08);border-left:3px solid var(--status-danger);border-radius:6px;font-size:12px;color:var(--text-primary)"><b>핵심 위험:</b> '+esc(p.key_risk)+'</div>' : '');
           }
 
           function renderPlanPreview(w) {
             var el = document.getElementById('ai-plan-preview');
             if (!el) return;
             el.innerHTML =
-              '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ìž‘ì—…ëª…</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ì˜ˆì • ìž‘ì—…ëŸ‰</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">ìŠ¹ì¸ ìƒíƒœ</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
-              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA ìœ„í—˜ì„± ë¶„ì„</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>ìž‘ì—…êµ¬ì—­ ë‚´ ë‚™í•˜, í˜‘ì°©, ì „ë„ ìœ„í—˜ í™•ì¸</li><li>ì‚¬ìš© ìž¥ë¹„ì™€ ê³µêµ¬ì˜ ì‚¬ì „ ì ê²€ í•„ìš”</li><li>ìž‘ì—…ìž ë™ì„ ê³¼ ì¶œìž… í†µì œ í•„ìš”</li><li>ë¹„ì •ìƒ ìƒí™© ë°œìƒ ì‹œ ìž‘ì—… ì¤‘ì§€</li></ul></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP ìž‘ì—… ì „ ê³„íš</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>ìž‘ì—… ë²”ìœ„ì™€ ë‹´ë‹¹ìž í™•ì¸</li><li>í•„ìˆ˜ ë³´í˜¸êµ¬ ì°©ìš© í™•ì¸</li><li>ìž¥ë¹„ì™€ ê³µêµ¬ ìƒíƒœ í™•ì¸</li><li>ìž‘ì—… ìˆ˜í–‰ ë° ì¤‘ê°„ ì ê²€</li><li>ì •ë¦¬ì •ëˆ ë° ì™„ë£Œ ì‚¬ì§„ ê¸°ë¡</li></ol></div></div>'
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">TBM ë©˜íŠ¸:</b> ì˜¤ëŠ˜ ìž‘ì—…ì€ '+esc(w.workText)+' ì£¼ìš” ìœ„í—˜ìš”ì†Œë¥¼ í™•ì¸í•˜ê³ , ì´ìƒ ìƒí™© ë°œìƒ ì‹œ ì¦‰ì‹œ ìž‘ì—…ì„ ì¤‘ì§€í•©ë‹ˆë‹¤.</div>'
-              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> ìŠ¹ì¸</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> ë°˜ë ¤</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> ì´ˆì•ˆ ì €ìž¥</button></div>';
-            document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'ìŠ¹ì¸ì™„ë£Œ', tbmStatus: w.tbmStatus === 'ëŒ€ê¸°' ? 'ëŒ€ê¸°' : w.tbmStatus}); switchTab('s-tbm'); });
-            document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'ìˆ˜ì •í•„ìš”'}); });
-            document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'ì´ˆì•ˆ'}); });
+              '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
+              + safetyPlanBody(w)
+              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+            document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'승인완료', tbmStatus: w.tbmStatus === '대기' ? '대기' : w.tbmStatus}); switchTab('s-tbm'); });
+            document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'수정필요'}); });
+            document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'초안'}); });
           }
 
           function renderTbmTab() {
             var w = selectedItem();
-            var canStart = w.planStatus === 'ìŠ¹ì¸ì™„ë£Œ';
+            var canStart = w.planStatus === '승인완료';
             var signRows = (w.signatures || []).map(function(s, idx){
-              return '<tr><td class="cell-primary">'+esc(s.name)+'</td><td>'+esc(s.role)+'</td><td class="cell-mono">'+esc(s.time)+'</td><td>'+badge(s.signed ? 'ì™„ë£Œ' : 'ëŒ€ê¸°')+'</td><td><button class="btn-secondary sign-worker-btn" data-idx="'+idx+'" style="padding:4px 8px;font-size:11px" '+(!canStart || s.signed ? 'disabled' : '')+'>ì„œëª…</button></td></tr>';
+              return '<tr><td class="cell-primary">'+esc(s.name)+'</td><td>'+esc(s.role)+'</td><td class="cell-mono">'+esc(s.time)+'</td><td>'+badge(s.signed ? '완료' : '대기')+'</td><td><button class="btn-secondary sign-worker-btn" data-idx="'+idx+'" style="padding:4px 8px;font-size:11px" '+(!canStart || s.signed ? 'disabled' : '')+'>서명</button></td></tr>';
             }).join('');
             document.getElementById('s-tbm').innerHTML =
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-megaphone"></i> TBM ì§„í–‰ ë‚´ìš©</div>'+badge(w.tbmStatus)+'</div><div class="panel-body padded"><div style="font-size:13px;font-weight:700;margin-bottom:8px">'+esc(w.title)+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.7">ìŠ¹ì¸ëœ ì•ˆì „ê³„íšì„œë¥¼ ê¸°ì¤€ìœ¼ë¡œ ì£¼ìš” ìœ„í—˜, ìž‘ì—…ìˆœì„œ, ë³´í˜¸êµ¬, ìž‘ì—… ì¤‘ì§€ ê¸°ì¤€ì„ ê³µìœ í•©ë‹ˆë‹¤. ìž‘ì—…ìžëŠ” ë‚´ìš©ì„ í™•ì¸í•œ ë’¤ ì„œëª…í•©ë‹ˆë‹¤.</div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="tbm-start-btn" '+(!canStart || w.tbmStatus !== 'ëŒ€ê¸°' ? 'disabled' : '')+'>TBM ì‹œìž‘</button><button class="btn-secondary" id="tbm-sign-all-btn" '+(!canStart || w.tbmStatus === 'ì™„ë£Œ' ? 'disabled' : '')+'>ì „ì²´ ì„œëª… ì²˜ë¦¬</button><button class="btn-primary" id="tbm-complete-btn" '+(!canStart || w.signatures.some(function(s){return !s.signed;}) || w.tbmStatus === 'ì™„ë£Œ' ? 'disabled' : '')+'>TBM ì™„ë£Œ</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-signature"></i> ìž‘ì—…ìž ì„œëª…</div><button class="btn-secondary" id="add-worker-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> ìž‘ì—…ìž ì¶”ê°€</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>ìž‘ì—…ìž</th><th>ì—­í• </th><th>í™•ì¸ì‹œê°„</th><th>ì„œëª…</th><th></th></tr></thead><tbody>'+signRows+'</tbody></table></div></div></div>';
-            document.getElementById('tbm-start-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'ì„œëª…ì¤‘'}); });
-            document.getElementById('tbm-sign-all-btn').addEventListener('click', function(){ w.signatures.forEach(function(s){ s.signed = true; s.time = new Date().toTimeString().slice(0,5); }); updateWork(w.id, {tbmStatus:'ì„œëª…ì¤‘'}); });
-            document.getElementById('tbm-complete-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'ì™„ë£Œ', closeStatus:'ë§ˆê°ëŒ€ê¸°'}); switchTab('s-close'); });
-            document.getElementById('add-worker-btn').addEventListener('click', function(){ var name = prompt('ìž‘ì—…ìž ì´ë¦„'); if (!name) return; w.signatures.push({name:name, role:'ìž‘ì—…ìž', signed:false, time:'-'}); updateWork(w.id, {tbmStatus:w.tbmStatus}); });
-            document.querySelectorAll('.sign-worker-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var idx = Number(btn.getAttribute('data-idx')); w.signatures[idx].signed = true; w.signatures[idx].time = new Date().toTimeString().slice(0,5); updateWork(w.id, {tbmStatus:'ì„œëª…ì¤‘'}); }); });
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-megaphone"></i> TBM 진행 내용</div>'+badge(w.tbmStatus)+'</div><div class="panel-body padded"><div style="font-size:13px;font-weight:700;margin-bottom:8px">'+esc(w.title)+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.7">승인된 안전계획서를 기준으로 주요 위험, 작업순서, 보호구, 작업 중지 기준을 공유합니다. 작업자는 내용을 확인한 뒤 서명합니다.</div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="tbm-start-btn" '+(!canStart || w.tbmStatus !== '대기' ? 'disabled' : '')+'>TBM 시작</button><button class="btn-secondary" id="tbm-sign-all-btn" '+(!canStart || w.tbmStatus === '완료' ? 'disabled' : '')+'>전체 서명 처리</button><button class="btn-primary" id="tbm-complete-btn" '+(!canStart || w.signatures.some(function(s){return !s.signed;}) || w.tbmStatus === '완료' ? 'disabled' : '')+'>TBM 완료</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-signature"></i> 작업자 서명</div><button class="btn-secondary" id="add-worker-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> 작업자 추가</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>작업자</th><th>역할</th><th>확인시간</th><th>서명</th><th></th></tr></thead><tbody>'+signRows+'</tbody></table></div></div></div>';
+            document.getElementById('tbm-start-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'서명중'}); });
+            document.getElementById('tbm-sign-all-btn').addEventListener('click', function(){ w.signatures.forEach(function(s){ s.signed = true; s.time = new Date().toTimeString().slice(0,5); }); updateWork(w.id, {tbmStatus:'서명중'}); });
+            document.getElementById('tbm-complete-btn').addEventListener('click', function(){ updateWork(w.id, {tbmStatus:'완료', closeStatus:'마감대기'}); switchTab('s-close'); });
+            document.getElementById('add-worker-btn').addEventListener('click', function(){ var name = prompt('작업자 이름'); if (!name) return; w.signatures.push({name:name, role:'작업자', signed:false, time:'-'}); updateWork(w.id, {tbmStatus:w.tbmStatus}); });
+            document.querySelectorAll('.sign-worker-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var idx = Number(btn.getAttribute('data-idx')); w.signatures[idx].signed = true; w.signatures[idx].time = new Date().toTimeString().slice(0,5); updateWork(w.id, {tbmStatus:'서명중'}); }); });
           }
 
           function renderCloseTab() {
             var w = selectedItem();
-            var canClose = w.tbmStatus === 'ì™„ë£Œ';
+            var canClose = w.tbmStatus === '완료';
             document.getElementById('s-close').innerHTML =
-              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> ìž‘ì—… ë§ˆê° ìž…ë ¥</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">ì‹¤ì œ ì™„ë£Œë‚´ìš©</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>ì¼ë¶€ ì™„ë£Œ</option><option>ì™„ë£Œ</option><option>ì§€ì—°</option><option>ì¤‘ë‹¨</option><option>ìž¬ìž‘ì—… í•„ìš”</option></select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>ë§ˆê° ì €ìž¥</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI ê³µì •ìœ¨ ë¶„ì„</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
+              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>마감 저장</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI 공정율 분석</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
             document.getElementById('save-close-btn').addEventListener('click', function(){ saveClose(w.id, false); });
             document.getElementById('ai-progress-btn').addEventListener('click', function(){ saveClose(w.id, true); });
             renderProgressResult(w);
@@ -2308,13 +3055,16 @@
             if (!el) return;
             var total = Number(w.totalQty || w.qty || 0);
             var done = Number(w.doneQty || 0);
-            var rate = total > 0 ? Math.round(done / total * 100) : Number(w.progress || 0);
+            var ai = w.aiProgress;
+            var rate = ai ? Math.max(0, Math.min(100, Number(ai.recommended_progress || 0))) : (total > 0 ? Math.round(done / total * 100) : Number(w.progress || 0));
             var remain = Math.max(total - done, 0);
             el.innerHTML =
-              '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ì˜ˆì •</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">ì™„ë£Œ</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">ìž”ì—¬</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI ì¶”ì²œ</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">ë§ˆê° ë‚´ìš©ì„ ì €ìž¥í•˜ë©´ AI ì¶”ì²œ ê³µì •ìœ¨ì´ ìƒì„±ë©ë‹ˆë‹¤. ê´€ë¦¬ìžê°€ í™•ì •í•˜ë©´ í”„ë¡œì íŠ¸ ê¸°ë¡ì— ë°˜ì˜ë©ë‹ˆë‹¤.</div>'
-              +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== 'ì¶”ì²œì™„ë£Œ' ? 'disabled' : '')+'>ê³µì •ìœ¨ í™•ì • ë°˜ì˜</button><button class="btn-secondary" id="next-work-btn">ë‹¤ìŒ ìž‘ì—… ìƒì„±</button></div>';
-            document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'í™•ì •ì™„ë£Œ', closeStatus:'ì™„ë£Œ'}); switchTab('s-records'); });
+              '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">완료</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">잔여</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI 추천</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
+              + (ai
+                  ? '<div style="margin-top:14px;padding:12px;background:rgba(37,99,235,.06);border-left:3px solid var(--brand-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--brand-primary)">AI 추천 ('+esc(ai.status || '')+')</b><br>'+esc(ai.rationale || '')+(ai.follow_up ? '<br><span style="color:var(--text-tertiary)">후속: '+esc(ai.follow_up)+'</span>' : '')+'</div>'
+                  : '<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">「AI 공정율 분석」을 누르면 마감 보고를 바탕으로 AI가 공정율을 추천합니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>')
+              +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== '추천완료' ? 'disabled' : '')+'>공정율 확정 반영</button><button class="btn-secondary" id="next-work-btn">다음 작업 생성</button></div>';
+            document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'확정완료', closeStatus:'완료'}); switchTab('s-records'); });
             document.getElementById('next-work-btn').addEventListener('click', function(){ createNextWork(w); });
           }
 
@@ -2322,19 +3072,32 @@
             var allIssues = [];
             safetyItems.forEach(function(w){ (w.issues || []).forEach(function(i, idx){ allIssues.push({work:w, issue:i, idx:idx}); }); });
             document.getElementById('s-issues').innerHTML =
-              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> ì‚¬ê³  Â· ì•„ì°¨ì‚¬ê³  Â· ë¯¸ì¡°ì¹˜ ì‚¬í•­</div><button class="btn-primary" id="add-issue-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> ë“±ë¡</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>ìœ í˜•</th><th>ìž‘ì—…</th><th>ë‚´ìš©</th><th>ë‹´ë‹¹</th><th>ìƒíƒœ</th><th></th></tr></thead><tbody>'+allIssues.map(function(x){ return '<tr><td>'+esc(x.issue.type)+'</td><td>'+esc(x.work.project)+'</td><td class="cell-primary">'+esc(x.issue.text)+'</td><td>'+esc(x.issue.owner || '-')+'</td><td>'+badge(x.issue.status)+'</td><td><button class="btn-secondary issue-done-btn" data-work="'+esc(x.work.id)+'" data-idx="'+x.idx+'" style="padding:4px 8px;font-size:11px">ì¡°ì¹˜ ì™„ë£Œ</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
-            document.getElementById('add-issue-btn').addEventListener('click', function(){ var w = selectedItem(); var text = prompt('ì´ìŠˆ ë‚´ìš©ì„ ìž…ë ¥í•˜ì„¸ìš”'); if (!text) return; w.issues = w.issues || []; w.issues.push({type:'ë¯¸ì¡°ì¹˜', text:text, owner:'ë‹´ë‹¹ìž ë¯¸ì •', status:'ëŒ€ê¸°'}); updateWork(w.id, {}); });
-            document.querySelectorAll('.issue-done-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var w = safetyItems.find(function(x){ return x.id === btn.getAttribute('data-work'); }); if (!w) return; w.issues[Number(btn.getAttribute('data-idx'))].status = 'ì¡°ì¹˜ì™„ë£Œ'; updateWork(w.id, {}); }); });
+              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> 사고 · 아차사고 · 미조치 사항</div><button class="btn-primary" id="add-issue-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> 등록</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>유형</th><th>작업</th><th>내용</th><th>담당</th><th>상태</th><th></th></tr></thead><tbody>'+allIssues.map(function(x){ return '<tr><td>'+esc(x.issue.type)+'</td><td>'+esc(x.work.project)+'</td><td class="cell-primary">'+esc(x.issue.text)+'</td><td>'+esc(x.issue.owner || '-')+'</td><td>'+badge(x.issue.status)+'</td><td><button class="btn-secondary issue-done-btn" data-work="'+esc(x.work.id)+'" data-idx="'+x.idx+'" style="padding:4px 8px;font-size:11px">조치 완료</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
+            document.getElementById('add-issue-btn').addEventListener('click', function(){ var w = selectedItem(); var text = prompt('이슈 내용을 입력하세요'); if (!text) return; w.issues = w.issues || []; w.issues.push({type:'미조치', text:text, owner:'담당자 미정', status:'대기'}); updateWork(w.id, {}); });
+            document.querySelectorAll('.issue-done-btn').forEach(function(btn){ btn.addEventListener('click', function(){ var w = safetyItems.find(function(x){ return x.id === btn.getAttribute('data-work'); }); if (!w) return; w.issues[Number(btn.getAttribute('data-idx'))].status = '조치완료'; updateWork(w.id, {}); }); });
           }
 
           function renderRecordsTab() {
             document.getElementById('s-records').innerHTML =
-              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-archive"></i> í”„ë¡œì íŠ¸ ì•ˆì „Â·ìž‘ì—… ê¸°ë¡</div><button class="btn-secondary" id="pdf-report-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-file-pdf"></i> PDF ì¶œë ¥</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>í”„ë¡œì íŠ¸</th><th>ìž‘ì—…</th><th>ì•ˆì „ê³„íš</th><th>TBM</th><th>ë§ˆê°</th><th>ê³µì •</th><th>ì´ìŠˆ</th></tr></thead><tbody>'+safetyItems.map(function(w){ return '<tr><td class="cell-primary">'+esc(w.project)+'</td><td>'+esc(w.title)+'</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td><td>'+bar(w.progress)+'</td><td>'+((w.issues || []).length)+'ê±´</td></tr>'; }).join('')+'</tbody></table></div></div>';
-            document.getElementById('pdf-report-btn').addEventListener('click', function(){ alert('PDF ë¦¬í¬íŠ¸ ìƒì„± ì¤€ë¹„ ì™„ë£Œ: ì‹¤ì œ PDF ì¶œë ¥ API ì—°ê²° ë‹¨ê³„ìž…ë‹ˆë‹¤.'); });
+              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-archive"></i> 프로젝트 안전·작업 기록</div><button class="btn-secondary" id="pdf-report-btn" style="padding:4px 10px;font-size:12px"><i class="ph ph-file-pdf"></i> PDF 출력</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>프로젝트</th><th>작업</th><th>안전계획</th><th>TBM</th><th>마감</th><th>공정</th><th>이슈</th></tr></thead><tbody>'+safetyItems.map(function(w){ return '<tr><td class="cell-primary">'+esc(w.project)+'</td><td>'+esc(w.title)+'</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td><td>'+bar(w.progress)+'</td><td>'+((w.issues || []).length)+'건</td></tr>'; }).join('')+'</tbody></table></div></div>';
+            document.getElementById('pdf-report-btn').addEventListener('click', function(){ alert('PDF 리포트 생성 준비 완료: 실제 PDF 출력 API 연결 단계입니다.'); });
           }
 
           function renderAllSafetyTabs() {
             renderKpis();
+            // 등록된 작업이 없으면(데모 카드 제거 후 초기 상태) 선택 작업에 의존하는 탭 대신 빈 상태 안내.
+            if (safetyItems.length === 0) {
+              var emptyHtml = '<div class="panel"><div class="panel-body" style="padding:48px 24px;text-align:center">'
+                + '<i class="ph ph-clipboard-text" style="font-size:48px;color:var(--text-tertiary)"></i>'
+                + '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin:12px 0 6px">등록된 작업이 없습니다</div>'
+                + '<div style="font-size:13px;color:var(--text-secondary)">상단의 <strong>오늘 작업 등록</strong> 버튼으로 첫 작업을 등록하면<br>AI 계획서 → TBM/서명 → 마감 → 공정율 추천 흐름이 시작됩니다.</div>'
+                + '</div></div>';
+              ['s-today', 's-ai-plan', 's-tbm', 's-close', 's-issues', 's-records'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.innerHTML = emptyHtml;
+              });
+              return;
+            }
             renderTodayTab();
             renderPlanTab();
             renderTbmTab();
@@ -2351,7 +3114,14 @@
             renderAllSafetyTabs();
           }
 
-          function generatePlan(id) {
+          function applyServerItem(id, item) {
+            var i = safetyItems.findIndex(function(x){ return x.id === id; });
+            if (i >= 0 && item) { safetyItems[i] = item; }
+            localStorage.setItem(safetyStorageKey, JSON.stringify(safetyItems));
+            renderAllSafetyTabs();
+          }
+
+          async function generatePlan(id) {
             var w = safetyItems.find(function(x){ return x.id === id; });
             if (!w) return;
             var project = document.getElementById('ai-project-input').value.split('/');
@@ -2361,34 +3131,43 @@
             w.qty = Number(document.getElementById('ai-qty-input').value || w.qty || 0);
             w.totalQty = w.qty;
             w.unit = document.getElementById('ai-unit-input').value;
-            w.planStatus = 'ê²€í† ì¤‘';
-            saveSafetyItems();
-            renderAllSafetyTabs();
+            var btn = document.getElementById('ai-generate-plan');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 안전계획 분석 중...'; }
+            try {
+              var res = await gsRun('api_generateSafetyPlan', [w], null);
+              if (res && res.success && res.item) { applyServerItem(id, res.item); return; }
+              alert((res && res.error) || 'AI 계획 생성에 실패했습니다. (GEMINI_API_KEY 설정 확인)');
+            } catch (e) { alert('AI 계획 생성 오류: ' + e.message); }
+            w.planStatus = '검토중'; saveSafetyItems(); renderAllSafetyTabs();
           }
 
-          function saveClose(id, analyze) {
+          async function saveClose(id, analyze) {
             var w = safetyItems.find(function(x){ return x.id === id; });
             if (!w) return;
             w.closeText = document.getElementById('close-work-input').value;
             w.doneQty = Number(document.getElementById('done-qty-input').value || 0);
             w.totalQty = Number(document.getElementById('total-qty-input').value || w.qty || 0);
-            w.closeStatus = 'ì €ìž¥ì™„ë£Œ';
-            if (analyze) {
-              w.progress = w.totalQty > 0 ? Math.round(w.doneQty / w.totalQty * 100) : w.progress;
-              w.progressStatus = 'ì¶”ì²œì™„ë£Œ';
-            }
-            saveSafetyItems();
-            renderAllSafetyTabs();
+            w.closeStatus = '저장완료';
+            if (!analyze) { saveSafetyItems(); renderAllSafetyTabs(); return; }
+            var btn = document.getElementById('ai-progress-btn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 공정율 분석 중...'; }
+            try {
+              var res = await gsRun('api_recommendSafetyProgress', [w], null);
+              if (res && res.success && res.item) { applyServerItem(id, res.item); return; }
+              alert((res && res.error) || 'AI 공정율 분석에 실패했습니다. (GEMINI_API_KEY 설정 확인)');
+            } catch (e) { alert('AI 공정율 분석 오류: ' + e.message); }
+            w.progress = w.totalQty > 0 ? Math.round(w.doneQty / w.totalQty * 100) : w.progress;
+            w.progressStatus = '추천완료'; saveSafetyItems(); renderAllSafetyTabs();
           }
 
           function createNextWork(w) {
             var remain = Math.max(Number(w.totalQty || 0) - Number(w.doneQty || 0), 0);
-            if (!remain) { alert('ìž”ì—¬ ìˆ˜ëŸ‰ì´ ì—†ìŠµë‹ˆë‹¤.'); return; }
+            if (!remain) { alert('잔여 수량이 없습니다.'); return; }
             var id = 'WRK-' + new Date().getTime().toString().slice(-8);
             safetyItems.push({
-              id:id, project:w.project, site:w.site, title:'ìž”ì—¬ ìž‘ì—…: '+w.title, crew:w.crew, qty:remain, unit:w.unit, due:'ë‹¤ìŒ ìž‘ì—…ì¼',
-              planStatus:'ë¯¸ìƒì„±', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „', progressStatus:'ë¯¸ë¶„ì„', progress:0, doneQty:0, totalQty:remain,
-              workText:'ì´ì „ ìž‘ì—… ìž”ì—¬ '+remain+w.unit+' ì§„í–‰. '+w.title, closeText:'', signatures:[], issues:[]
+              id:id, project:w.project, site:w.site, title:'잔여 작업: '+w.title, crew:w.crew, qty:remain, unit:w.unit, due:'다음 작업일',
+              planStatus:'미생성', tbmStatus:'대기', closeStatus:'시작전', progressStatus:'미분석', progress:0, doneQty:0, totalQty:remain,
+              workText:'이전 작업 잔여 '+remain+w.unit+' 진행. '+w.title, closeText:'', signatures:[], issues:[]
             });
             selectedWorkId = id;
             window._safetySelectedWorkId = id;
@@ -2398,9 +3177,9 @@
 
           function goNextStep(w) {
             var action = nextAction(w);
-            if (action === 'AI ê³„íšì„œ ìƒì„±' || action === 'ìŠ¹ì¸') switchTab('s-ai-plan');
-            else if (action === 'TBM ì‹œìž‘' || action === 'ì„œëª…/ì™„ë£Œ') switchTab('s-tbm');
-            else if (action === 'ìž‘ì—… ë§ˆê°' || action === 'ê³µì • í™•ì •') switchTab('s-close');
+            if (action === 'AI 계획서 생성' || action === '승인') switchTab('s-ai-plan');
+            else if (action === 'TBM 시작' || action === '서명/완료') switchTab('s-tbm');
+            else if (action === '작업 마감' || action === '공정 확정') switchTab('s-close');
             else switchTab('s-records');
           }
 
@@ -2410,22 +3189,121 @@
           }
 
           function openNewWorkModal() {
-            document.getElementById('safety-modal-root').innerHTML =
-              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px"><div class="panel" style="width:560px;max-width:96vw;margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-plus-circle"></i> ì˜¤ëŠ˜ ìž‘ì—… ë“±ë¡</div><button id="close-new-work-modal" class="icon-btn"><i class="ph ph-x"></i></button></div><div class="panel-body padded"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><input id="new-project" class="search-inline" style="width:100%" placeholder="í”„ë¡œì íŠ¸ëª…"><input id="new-site" class="search-inline" style="width:100%" placeholder="ìž‘ì—…ìž¥ì†Œ"><input id="new-crew" class="search-inline" style="width:100%" placeholder="ìž‘ì—…ì¸ì›" value="3"><input id="new-due" class="search-inline" style="width:100%" placeholder="ê¸°í•œ" value="ì˜¤ëŠ˜"></div><textarea id="new-work-text" style="width:100%;height:120px;margin-top:10px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical" placeholder="ìž‘ì—…ë‚´ìš©ì„ ìž…ë ¥í•˜ì„¸ìš”"></textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px"><input id="new-qty" class="search-inline" style="width:100%" placeholder="ì˜ˆì • ìˆ˜ëŸ‰" value="1"><select id="new-unit" class="search-inline" style="width:100%"><option>ea</option><option>m</option><option>%</option><option>ë‹¨ê³„</option></select></div><button id="save-new-work" class="btn-primary" style="width:100%;margin-top:14px"><i class="ph ph-check-circle"></i> ìž‘ì—… ë“±ë¡ í›„ AI ê³„íšì„œ ìž‘ì„±</button></div></div></div>';
-            document.getElementById('close-new-work-modal').addEventListener('click', function(){ document.getElementById('safety-modal-root').innerHTML=''; });
-            document.getElementById('save-new-work').addEventListener('click', function(){
-              var text = document.getElementById('new-work-text').value.trim();
-              if (!text) { alert('ìž‘ì—…ë‚´ìš©ì„ ìž…ë ¥í•˜ì„¸ìš”.'); return; }
-              var id = 'WRK-' + new Date().getTime().toString().slice(-8);
-              var project = document.getElementById('new-project').value || 'ì‹ ê·œ í”„ë¡œì íŠ¸';
-              var site = document.getElementById('new-site').value || 'ìž‘ì—…ìž¥ì†Œ ë¯¸ì •';
-              safetyItems.push({ id:id, project:project, site:site, title:text.slice(0,42), crew:Number(document.getElementById('new-crew').value || 1), qty:Number(document.getElementById('new-qty').value || 1), unit:document.getElementById('new-unit').value, due:document.getElementById('new-due').value || 'ì˜¤ëŠ˜', planStatus:'ë¯¸ìƒì„±', tbmStatus:'ëŒ€ê¸°', closeStatus:'ì‹œìž‘ì „', progressStatus:'ë¯¸ë¶„ì„', progress:0, doneQty:0, totalQty:Number(document.getElementById('new-qty').value || 1), workText:text, closeText:'', signatures:[], issues:[] });
-              selectedWorkId = id;
-              window._safetySelectedWorkId = id;
-              saveSafetyItems();
-              document.getElementById('safety-modal-root').innerHTML='';
+            var root = document.getElementById('safety-modal-root');
+            var proj = window.WBS_CURRENT_PROJECT || '';
+            var today = new Date().toISOString().slice(0, 10);
+            var TRADES = ['GC', 'ELEC', 'PLUMB', 'MECH', 'FIRE', 'FRAME', 'DEMO', 'DOOR', 'PAINT', 'CEIL', 'TILE', 'MILL', 'FLOOR', 'SPEC', 'INSP', 'LV'];
+            function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+            function ehsBadge(e) { return e === 'high' ? '<span style="color:#ef4444;font-size:10px;font-weight:700">● 고위험</span>' : e === 'medium' ? '<span style="color:#f59e0b;font-size:10px;font-weight:700">● 주의</span>' : ''; }
+
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px">' +
+              '<div class="panel" style="width:720px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-plus-circle"></i> 오늘 작업 등록</div><button id="nw-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto">' +
+                '<div style="display:flex;gap:6px;margin-bottom:14px">' +
+                  '<button id="nw-tab-wbs" class="btn-primary" style="flex:1"><i class="ph ph-list-checks"></i> 공정에서 불러오기</button>' +
+                  '<button id="nw-tab-manual" class="btn-secondary" style="flex:1"><i class="ph ph-pencil-simple"></i> 직접 추가 (공정에 없음)</button>' +
+                '</div>' +
+                '<div id="nw-pane-wbs">' +
+                  '<div style="display:grid;grid-template-columns:1fr 160px;gap:10px;margin-bottom:10px">' +
+                    '<select id="nw-project" class="search-inline" style="width:100%"></select>' +
+                    '<input id="nw-date" type="date" class="search-inline" style="width:100%" value="' + today + '">' +
+                  '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px">오늘 진행할 작업을 선택하세요(여러 개 가능). 계획 인원·장비가 안전카드로 옮겨지고, <b>실제 작업자는 TBM 때 출석자에서 배정</b>합니다.</div>' +
+                  '<div id="nw-list" style="max-height:38vh;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px">불러오는 중...</div>' +
+                  '<button id="nw-register" class="btn-primary" style="width:100%;margin-top:12px"><i class="ph ph-check-circle"></i> 선택 작업 등록 → 안전카드 생성</button>' +
+                '</div>' +
+                '<div id="nw-pane-manual" style="display:none">' +
+                  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                    '<input id="nwm-name" class="search-inline" placeholder="작업명 *" style="width:100%">' +
+                    '<input id="nwm-trade" class="search-inline" list="nwm-trades" placeholder="공종 (예: ELEC)" style="width:100%">' +
+                    '<input id="nwm-loc" class="search-inline" placeholder="작업 위치/구역" style="width:100%">' +
+                    '<input id="nwm-crew" class="search-inline" placeholder="투입조 (예: 2 electricians + 1 helper)" style="width:100%">' +
+                    '<input id="nwm-equip" class="search-inline" placeholder="장비 (쉼표, 예: 시저리프트, 용접기)" style="width:100%">' +
+                    '<input id="nwm-date" type="date" class="search-inline" style="width:100%" value="' + today + '">' +
+                  '</div>' +
+                  '<datalist id="nwm-trades">' + TRADES.map(function (t) { return '<option value="' + t + '">'; }).join('') + '</datalist>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin:8px 0">이 작업은 공정관리(WBS)의 <b>"현장 추가(비계획)"</b> 구간에 새 작업으로 삽입되고, 동시에 오늘 안전카드가 생성됩니다. (상단 프로젝트 선택 기준)</div>' +
+                  '<button id="nwm-register" class="btn-primary" style="width:100%;margin-top:6px"><i class="ph ph-plus"></i> 공정에 추가 + 안전카드 생성</button>' +
+                '</div>' +
+              '</div></div></div>';
+
+            root.querySelector('#nw-close').addEventListener('click', function () { root.innerHTML = ''; });
+            function showPane(which) {
+              root.querySelector('#nw-pane-wbs').style.display = which === 'wbs' ? '' : 'none';
+              root.querySelector('#nw-pane-manual').style.display = which === 'manual' ? '' : 'none';
+              root.querySelector('#nw-tab-wbs').className = which === 'wbs' ? 'btn-primary' : 'btn-secondary';
+              root.querySelector('#nw-tab-manual').className = which === 'manual' ? 'btn-primary' : 'btn-secondary';
+            }
+            root.querySelector('#nw-tab-wbs').addEventListener('click', function () { showPane('wbs'); });
+            root.querySelector('#nw-tab-manual').addEventListener('click', function () { showPane('manual'); });
+
+            function loadPick() {
+              var box = root.querySelector('#nw-list');
+              var p = root.querySelector('#nw-project').value;
+              var d = root.querySelector('#nw-date').value;
+              if (!p) { box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">프로젝트를 선택하세요.</div>'; return; }
+              box.innerHTML = '<div style="padding:16px;color:var(--text-tertiary)">불러오는 중...</div>';
+              gsRun('api_getWbsPickList', [p, d], []).then(function (items) {
+                items = Array.isArray(items) ? items : [];
+                if (!items.length) { box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">이 프로젝트에 등록된 작업이 없습니다. 먼저 공정관리에서 CPM을 분석하거나 "직접 추가"로 등록하세요.</div>'; return; }
+                box.innerHTML = items.map(function (it) {
+                  var carded = it.hasCardToday;
+                  return '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border-subtle);' + (carded ? 'opacity:.55' : 'cursor:pointer') + '">' +
+                    '<input type="checkbox" class="nw-pick" value="' + esc(it.wbs_code) + '" ' + (carded ? 'disabled checked' : '') + '>' +
+                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);width:46px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.activity_id || '') + '">' + esc(it.activity_id || '') + '</span>' +
+                    '<span style="flex:1;min-width:0"><span style="font-size:13px;color:var(--text-primary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it.isCritical ? '<span style="color:#ef4444">★ </span>' : '') + esc(it.name || '') + '</span>' +
+                    '<span style="font-size:11px;color:var(--text-tertiary)">' + esc(it.trade || '') + (it.crewText ? ' · ' + esc(it.crewText) : '') + ' ' + ehsBadge(it.ehs) + (carded ? ' · <span style="color:#10b981">오늘 등록됨</span>' : '') + '</span></span>' +
+                  '</label>';
+                }).join('');
+              }).catch(function (e) { box.innerHTML = '<div style="padding:16px;color:var(--status-danger)">불러오기 실패: ' + (e && e.message || e) + '</div>'; });
+            }
+
+            gsRun('api_getProjectList', [], []).then(function (list) {
+              var sel = root.querySelector('#nw-project');
+              var arr = (Array.isArray(list) ? list : []).filter(function (p) { return p && p.code; });
+              sel.innerHTML = arr.length ? arr.map(function (p) { return '<option value="' + esc(p.code) + '"' + (p.code === proj ? ' selected' : '') + '>' + esc(p.code) + ' — ' + esc(p.name || '') + '</option>'; }).join('') : '<option value="">(등록된 프로젝트 없음)</option>';
+              loadPick();
+            }).catch(function () { loadPick(); });
+
+            root.querySelector('#nw-project').addEventListener('change', loadPick);
+            root.querySelector('#nw-date').addEventListener('change', loadPick);
+
+            root.querySelector('#nw-register').addEventListener('click', async function () {
+              var picks = Array.prototype.slice.call(root.querySelectorAll('.nw-pick:checked:not(:disabled)')).map(function (c) { return c.value; });
+              if (!picks.length) { alert('등록할 작업을 선택하세요.'); return; }
+              var btn = this; btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '등록 중...';
+              var d = root.querySelector('#nw-date').value;
+              var ok = 0, fail = 0;
+              for (var i = 0; i < picks.length; i++) {
+                try { var r = await gsRun('api_createSafetyCardForWbs', [picks[i], d], []); if (r && r.success) ok++; else fail++; } catch (e) { fail++; }
+              }
+              safetyItems = await loadSafetyItems();
               renderAllSafetyTabs();
+              root.innerHTML = '';
+              alert('✅ ' + ok + '건 등록 완료' + (fail ? (' · ' + fail + '건 실패') : '') + '\nAI 계획서 탭에서 위험요인·PPE·작업허가를 생성하세요.');
               switchTab('s-ai-plan');
+            });
+
+            root.querySelector('#nwm-register').addEventListener('click', async function () {
+              var name = root.querySelector('#nwm-name').value.trim();
+              if (!name) { alert('작업명을 입력하세요.'); return; }
+              var p = root.querySelector('#nw-project').value || proj;
+              if (!p) { alert('상단 "공정에서 불러오기"에서 프로젝트를 먼저 선택하세요.'); return; }
+              var equip = root.querySelector('#nwm-equip').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+              var payload = { name: name, trade: root.querySelector('#nwm-trade').value.trim(), location: root.querySelector('#nwm-loc').value.trim(), crew_text: root.querySelector('#nwm-crew').value.trim(), equipment: equip, date: root.querySelector('#nwm-date').value };
+              var btn = this; btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '추가 중...';
+              try {
+                var r = await gsRun('api_addManualWbsWork', [p, payload], []);
+                if (!r || !r.success) { alert('❌ 추가 실패: ' + (r && r.error || '오류')); btn.disabled = false; btn.innerHTML = old; return; }
+                safetyItems = await loadSafetyItems();
+                renderAllSafetyTabs();
+                if (window.apiCache) { Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getProjectWbsTree') >= 0) delete window.apiCache[k]; }); }
+                root.innerHTML = '';
+                alert('✅ 공정에 추가 + 안전카드 생성 완료.\nAI 계획서 탭에서 안전계획을 생성하세요.');
+                switchTab('s-ai-plan');
+              } catch (e) { alert('❌ 오류: ' + (e && e.message || e)); btn.disabled = false; btn.innerHTML = old; }
             });
           }
 
@@ -2487,7 +3365,7 @@
             +'<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> ì˜¤ëŠ˜ ì§„í–‰ ìž‘ì—…</div><div class="kpi-value" style="color:var(--brand-primary)">3</div><div class="kpi-meta">ë‹¨ê¸° í”„ë¡œì íŠ¸ ìž‘ì—… ì¹´ë“œ</div></div>'
             +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> ì•ˆì „ê³„íš ìŠ¹ì¸</div><div class="kpi-value" style="color:var(--status-success)">1 / 3</div><div class="kpi-meta">PHA Â· PTP Â· TBM ì´ˆì•ˆ í¬í•¨</div></div>'
             +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM ì™„ë£Œ</div><div class="kpi-value" style="color:#8b5cf6">1 / 3</div><div class="kpi-meta">ìž‘ì—…ìž ì„œëª… ê¸°ì¤€</div></div>'
-            +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">1</div><div class="kpi-meta">AI ì¶”ì²œ í›„ ê´€ë¦¬ìž í™•ì •</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">1</div><div class="kpi-meta">AI ì¶”ì²œ í›„ 관리자 í™•ì •</div></div>'
             +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> ë¯¸ì¡°ì¹˜ ì´ìŠˆ</div><div class="kpi-value" style="color:var(--status-danger)">2</div><div class="kpi-meta">ë§ˆê° ì „ ì¡°ì¹˜ í•„ìš”</div></div>'
             +'</div>'
 
@@ -2542,7 +3420,7 @@
             +'<select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>ì¼ë¶€ ì™„ë£Œ</option><option>ì™„ë£Œ</option><option>ì§€ì—°</option><option>ì¤‘ë‹¨</option><option>ìž¬ìž‘ì—… í•„ìš”</option></select>'
             +'<button class="btn-primary" id="ai-progress-btn" style="width:100%;margin-top:14px"><i class="ph ph-chart-line-up"></i> AI ê³µì •ìœ¨ ë¶„ì„</button>'
             +'</div></div>'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div><span style="font-size:10px;color:var(--text-tertiary)">AI ì¶”ì²œ + ê´€ë¦¬ìž í™•ì •</span></div><div class="panel-body padded" id="progress-result"></div></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div><span style="font-size:10px;color:var(--text-tertiary)">AI ì¶”ì²œ + 관리자 í™•ì •</span></div><div class="panel-body padded" id="progress-result"></div></div>'
             +'</div></div>'
 
             +'<div id="s-issues" class="tab-content" style="display:none">'
@@ -2963,7 +3841,20 @@
       async function renderHR() {
         pageContainer.innerHTML = skeleton();
         try {
+          var userRole = (authenticatedAccount.raw_role || '').toLowerCase();
+          var isAdmin = ['super_admin', 'admin', 'hr_manager', 'site_manager'].includes(userRole);
           var isGlobal = (_siteId() === 'ALL');
+
+          if (!isAdmin) {
+            pageContainer.innerHTML =
+              '<div class="header-section"><div><h1 class="page-title">📍 내 출퇴근 등록 (GPS)</h1>' +
+              '<p class="page-subtitle">현장 반경 내에서 출근 및 퇴근을 기록합니다.</p></div></div>' +
+              '<div id="tab-my-commute" style="display:block;">' + (typeof window._myCommuteHtmlTemplate === 'function' ? window._myCommuteHtmlTemplate() : '') + '</div>';
+
+            if (typeof window.loadMyCommuteLogs === 'function') window.loadMyCommuteLogs();
+            if (typeof window.initMyCommuteGps === 'function') window.initMyCommuteGps();
+            return;
+          }
 
           // í†µí•©ë·°: getHRData(stats/personnel) + getAttendanceLive(global merged)
           // ë‹¨ì¼ë·°: getHRData + getDailyTeamMatrix + getDailyAttendanceDetail ë³‘ë ¬
@@ -3066,8 +3957,8 @@
               '<h3 style="font-size:13px;font-weight:700;color:var(--text-secondary);margin:8px 0 12px;text-transform:uppercase;letter-spacing:.06em">í˜„ìž¥ë³„ ì¶œê·¼ í˜„í™©</h3>' +
               '<div class="kpi-row" style="grid-template-columns:repeat(' + Math.min(siteKeys.length, 4) + ',1fr);margin-bottom:16px">' + siteCardsHtml + '</div>' +
               // ì¶œí‡´ê·¼ íƒ­
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="attendance">ðŸŒ í†µí•© ì¶œí‡´ê·¼ ëª©ë¡</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
-              '<div id="tab-attendance">' +
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸŒ í†µí•© ì¶œí‡´ê·¼ ëª©ë¡</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
+              '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
               '<div class="panel"><div class="panel-header"><div class="panel-title" style="color:var(--status-success)"><i class="ph ph-check-circle"></i> ì¶œê·¼ ì™„ë£Œ (' + attendance.totalPresent + 'ëª…)</div></div>' +
               '<div class="panel-body"><table class="data-table"><thead><tr><th>ì„±ëª…</th><th>ì†Œì†</th><th>íŒ€</th><th>í˜„ìž¥</th><th>ì²´í¬ì¸</th><th>í‡´ê·¼</th></tr></thead><tbody>' + (globalCheckedInHtml || '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary)">ì¶œê·¼ ê¸°ë¡ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>' +
@@ -3132,9 +4023,9 @@
               var yy = dateParts[0] || '----', mm = dateParts[1] || '--', dd = dateParts[2] || '--';
 
               // ìƒ‰ìƒ í† í° â€” ì˜ë¯¸ì  ë§¤í•‘
-              var COLOR_MGR = '#f59e0b';   // ê´€ë¦¬ìž = ì£¼í™© (ì±…ìž„ìž)
-              var COLOR_KOR = '#3b82f6';   // í•œêµ­ì¸ = íŒŒëž‘
-              var COLOR_LOC = '#10b981';   // ì™¸êµ­ì¸ = ë…¹ìƒ‰
+              var COLOR_MGR = '#f59e0b';   // 관리자 = ì£¼í™© (ì±…ìž„ìž)
+              var COLOR_KOR = '#3b82f6';   // 한국인 = íŒŒëž‘
+              var COLOR_LOC = '#10b981';   // 외국인 = ë…¹ìƒ‰
               var COLOR_TOTAL = '#a78bfa'; // í•©ê³„ = ë³´ë¼ (brand)
 
               // â”€â”€ ìš°ì¸¡: ì¸í„°ëž™í‹°ë¸Œ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
@@ -3177,7 +4068,7 @@
               // 1) íšŒì‚¬ê°€ ì‚¬ìš©í•œ íŒ€ ì¶”ì¶œ (matrixì— ì¹´ìš´íŠ¸ê°€ ìžˆëŠ” íŒ€)
               function extractCompanyTeams(companyData) {
                 var s = new Set();
-                ['ê´€ë¦¬ìž','í•œêµ­ì¸','ì™¸êµ­ì¸'].forEach(function(div) {
+                ['관리자','한국인','외국인'].forEach(function(div) {
                   Object.keys((companyData.matrix && companyData.matrix[div]) || {}).forEach(function(t) {
                     if ((companyData.matrix[div][t] || 0) > 0) s.add(t);
                   });
@@ -3212,9 +4103,9 @@
                     '</div>' +
                     '<span class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + ';line-height:1">' + (t.total || 0) + '</span>' +
                   '</div>' +
-                  row('ê´€ë¦¬ìž', t.manager || 0, pctMgr, COLOR_MGR, 'ph-crown') +
-                  row('í•œêµ­ì¸', t.korean  || 0, pctKor, COLOR_KOR, 'ph-flag') +
-                  row('ì™¸êµ­ì¸', t.local   || 0, pctLoc, COLOR_LOC, 'ph-globe') +
+                  row('관리자', t.manager || 0, pctMgr, COLOR_MGR, 'ph-crown') +
+                  row('한국인', t.korean  || 0, pctKor, COLOR_KOR, 'ph-flag') +
+                  row('외국인', t.local   || 0, pctLoc, COLOR_LOC, 'ph-globe') +
                   '<div style="margin-top:4px;padding:6px 10px;background:' + compColor + '22;border-radius:6px;display:flex;justify-content:space-between;align-items:center">' +
                     '<span style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;text-transform:uppercase">í•©ê³„</span>' +
                     '<span class="cell-mono" style="font-size:13px;font-weight:800;color:' + compColor + '">' + (t.total || 0) + ' ëª…</span>' +
@@ -3275,9 +4166,9 @@
                         '<tr><th style="padding:5px 12px;background:var(--bg-base);border-bottom:1px solid var(--border-subtle);color:var(--text-tertiary);font-size:9px;font-weight:600;letter-spacing:0.5px;text-align:left;text-transform:uppercase">FOREMAN</th>' + thForemen + '</tr>' +
                       '</thead>' +
                       '<tbody>' +
-                        buildRow('ê´€ë¦¬ìž', 'ê´€ë¦¬ìž', COLOR_MGR, 'ph-crown') +
-                        buildRow('í•œêµ­ì¸', 'í•œêµ­ì¸', COLOR_KOR, 'ph-flag') +
-                        buildRow('ì™¸êµ­ì¸', 'ì™¸êµ­ì¸', COLOR_LOC, 'ph-globe') +
+                        buildRow('관리자', '관리자', COLOR_MGR, 'ph-crown') +
+                        buildRow('한국인', '한국인', COLOR_KOR, 'ph-flag') +
+                        buildRow('외국인', '외국인', COLOR_LOC, 'ph-globe') +
                         '<tr style="border-top:2px solid ' + compColor + '44">' +
                           '<td style="padding:10px 12px;background:linear-gradient(90deg,' + compColor + '22,' + compColor + '08);text-align:left;font-weight:800;font-size:12px;color:var(--text-primary);letter-spacing:0.3px">' +
                           '<i class="ph ph-equals" style="color:' + compColor + ';margin-right:6px;font-size:13px"></i>ì†Œ ê³„</td>' +
@@ -3295,7 +4186,7 @@
                 if (!existingNames.has(cn)) {
                   companies.push({
                     name: cn,
-                    matrix: { 'ê´€ë¦¬ìž': {}, 'í•œêµ­ì¸': {}, 'ì™¸êµ­ì¸': {} },
+                    matrix: { '관리자': {}, '한국인': {}, '외국인': {} },
                     totals: { manager: 0, korean: 0, local: 0, total: 0 },
                     subtotals: {}
                   });
@@ -3322,15 +4213,15 @@
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary);background:var(--bg-base);padding:3px 8px;border-radius:4px">' + companies.length + 'ê°œì‚¬</span>' +
                 '</div>' +
                 '<div style="display:flex;align-items:center;gap:18px;font-size:12px">' +
-                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="color:var(--text-tertiary)">ê´€ë¦¬ìž</span><span class="cell-mono" style="color:' + COLOR_MGR + ';font-weight:800">' + (tm.totals.manager||0) + '</span></span>' +
-                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="color:var(--text-tertiary)">í•œêµ­ì¸</span><span class="cell-mono" style="color:' + COLOR_KOR + ';font-weight:800">' + (tm.totals.korean||0) + '</span></span>' +
-                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="color:var(--text-tertiary)">ì™¸êµ­ì¸</span><span class="cell-mono" style="color:' + COLOR_LOC + ';font-weight:800">' + (tm.totals.local||0) + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="color:var(--text-tertiary)">관리자</span><span class="cell-mono" style="color:' + COLOR_MGR + ';font-weight:800">' + (tm.totals.manager||0) + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="color:var(--text-tertiary)">한국인</span><span class="cell-mono" style="color:' + COLOR_KOR + ';font-weight:800">' + (tm.totals.korean||0) + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="color:var(--text-tertiary)">외국인</span><span class="cell-mono" style="color:' + COLOR_LOC + ';font-weight:800">' + (tm.totals.local||0) + '</span></span>' +
                   '<span style="display:flex;align-items:center;gap:5px;padding-left:14px;border-left:1px solid var(--border-default)"><span style="color:var(--text-tertiary)">ì´</span><span class="cell-mono" style="font-size:18px;color:' + COLOR_TOTAL + ';font-weight:800">' + grandTotal + '</span><span style="color:var(--text-tertiary)">ëª…</span></span>' +
                 '</div></div>';
 
               var unclassifiedHtml = (tm.unclassified && tm.unclassified.length > 0)
                 ? '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(239,68,68,0.10);border-radius:8px;border:1px solid rgba(239,68,68,0.25);font-size:11px;color:var(--status-danger)">' +
-                  '<i class="ph ph-warning"></i>Pì—´ ë¯¸ë¶„ë¥˜ <strong>' + tm.unclassified.length + 'ëª…</strong> (ê´€ë¦¬ìž ìˆ˜ë™ ì§€ì • í•„ìš”)</div>'
+                  '<i class="ph ph-warning"></i>Pì—´ ë¯¸ë¶„ë¥˜ <strong>' + tm.unclassified.length + 'ëª…</strong> (관리자 ìˆ˜ë™ ì§€ì • í•„ìš”)</div>'
                 : '';
 
               // â”€â”€ ì „ì²´ íŒ¨ë„ ì»¨í…Œì´ë„ˆ â”€â”€
@@ -3360,7 +4251,7 @@
             var totals = (teamMatrix && teamMatrix.totals) || { manager: 0, korean: 0, local: 0, grandTotal: 0 };
             var totalAttended = totals.grandTotal || 0;
             var totalAbsent = (regInfo.total || 0) - totalAttended;
-            // íšŒì‚¬ë³„ ê´€ë¦¬ìž ë¶„í¬ ë¯¸ë‹ˆ í‘œì‹œ
+            // íšŒì‚¬ë³„ 관리자 ë¶„í¬ ë¯¸ë‹ˆ í‘œì‹œ
             var mgrCompanyHint = Object.keys(regInfo.managerByCompany || {}).map(function(cn) {
               return cn + ' ' + regInfo.managerByCompany[cn];
             }).join(' Â· ');
@@ -3368,16 +4259,16 @@
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
               '<p class="page-subtitle">NAHSHON MEP ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button><button class="btn-primary" onclick="openGoogleForm(\'hr\')"><i class="ph ph-user-plus"></i> êµ¬ê¸€í¼: ì‹ ê·œ ë“±ë¡</button></div></div>' +
+              '<div class="action-row"><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ê´€ë¦¬ìž ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (regInfo.managerTotal || 0) + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (mgrCompanyHint || 'íšŒì‚¬ë³„ ë“±ë¡ í•©ê³„') + '</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í•œêµ­ì¸<i class="ph ph-flag" style="font-size:12px;color:#3b82f6"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">한국인<i class="ph ph-flag" style="font-size:12px;color:#3b82f6"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.korean || 0) + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì˜¤ëŠ˜ ì¶œê·¼</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì™¸êµ­ì¸<i class="ph ph-globe" style="font-size:12px;color:#10b981"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">외국인<i class="ph ph-globe" style="font-size:12px;color:#10b981"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#10b981;line-height:1.1">' + (totals.local || 0) + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì˜¤ëŠ˜ ì¶œê·¼</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ ë“±ë¡ì¸ì›<i class="ph ph-identification-card" style="font-size:12px;color:var(--brand-primary)"></i></div>' +
@@ -3387,8 +4278,8 @@
                 '<div class="kpi-value" style="font-size:22px;color:var(--status-success);line-height:1.1">' + totalAttended + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--status-warning)">ë¯¸ì¶œì„ ' + totalAbsent + 'ëª…</span></div></div>' +
               '</div>' +
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="attendance">ðŸ”– ì¶œí‡´ê·¼ í˜„í™©</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
-              '<div id="tab-attendance">' +
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸ”– ì¶œí‡´ê·¼ í˜„í™©</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
+              '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
               matrixHtml +
               // â”€â”€ ì¶œê·¼ ìƒì„¸ ë³´ê³  (ì¢Œ) + íšŒì‚¬ë³„ í†µê³„ ë„í‘œ (ìš°) â€” ì»¨í…Œì´ë„ˆë§Œ â”€â”€
               '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px" class="hr-detail-grid">' +
@@ -3413,13 +4304,19 @@
           }
 
           // ê³µí†µ: íƒ­ ì´ë²¤íŠ¸ + ê²€ìƒ‰
+          function ensureGlobalTab() {
+            var gt = document.getElementById('tab-global');
+            if (gt && !gt.getAttribute('data-loaded')) { gt.setAttribute('data-loaded', '1'); window.renderGlobalHrInto(gt, true); }
+          }
           document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
               document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (b) { b.classList.remove('active'); });
               btn.classList.add('active');
               var tab = btn.dataset.tab;
+              var g = document.getElementById('tab-global'); if (g) g.style.display = tab === 'global' ? '' : 'none';
               document.getElementById('tab-attendance').style.display = tab === 'attendance' ? '' : 'none';
               document.getElementById('tab-personnel').style.display = tab === 'personnel' ? '' : 'none';
+              if (tab === 'global') ensureGlobalTab();
             });
           });
           if (window._pendingHrTab) {
@@ -3466,6 +4363,15 @@
         var f = String(first || '').trim().charAt(0).toUpperCase();
         var l = String(last  || '').trim().charAt(0).toUpperCase();
         return (f + l) || '?';
+      };
+
+      window.downloadHrAttendanceExcel = function() {
+        var site = (typeof _siteId === 'function') ? _siteId() : 'ALL';
+        var picker = document.getElementById('stats-date-picker');
+        var date = (picker && picker.value) ? picker.value : '';
+        var url = '/hr/attendance/export?site=' + encodeURIComponent(site) + (date ? '&date=' + encodeURIComponent(date) : '');
+        if (typeof showToast === 'function') showToast('현황보고 엑셀을 생성하는 중...');
+        window.location.href = url;
       };
 
       window.loadAttendanceDetail = async function(date) {
@@ -3560,14 +4466,14 @@
                 '<span class="cell-mono" style="font-size:13px;font-weight:700;color:' + compColor + '">' + c.total + 'ëª…</span>' +
               '</div>' +
               '<div style="height:24px;background:var(--bg-base);border-radius:6px;overflow:hidden;display:flex;width:' + w + '%;min-width:60px;border:1px solid var(--border-subtle)">' +
-                (c.manager > 0 ? '<div title="ê´€ë¦¬ìž ' + c.manager + 'ëª…" style="width:' + mgrW + '%;background:' + COLOR_MGR + ';display:flex;align-items:center;justify-content:center;color:#000;font-size:10px;font-weight:700">' + (mgrW > 12 ? c.manager : '') + '</div>' : '') +
-                (c.korean  > 0 ? '<div title="í•œêµ­ì¸ ' + c.korean  + 'ëª…" style="width:' + korW + '%;background:' + COLOR_KOR + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (korW > 12 ? c.korean : '') + '</div>' : '') +
-                (c.local   > 0 ? '<div title="ì™¸êµ­ì¸ ' + c.local   + 'ëª…" style="width:' + locW + '%;background:' + COLOR_LOC + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (locW > 12 ? c.local : '') + '</div>' : '') +
+                (c.manager > 0 ? '<div title="관리자 ' + c.manager + 'ëª…" style="width:' + mgrW + '%;background:' + COLOR_MGR + ';display:flex;align-items:center;justify-content:center;color:#000;font-size:10px;font-weight:700">' + (mgrW > 12 ? c.manager : '') + '</div>' : '') +
+                (c.korean  > 0 ? '<div title="한국인 ' + c.korean  + 'ëª…" style="width:' + korW + '%;background:' + COLOR_KOR + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (korW > 12 ? c.korean : '') + '</div>' : '') +
+                (c.local   > 0 ? '<div title="외국인 ' + c.local   + 'ëª…" style="width:' + locW + '%;background:' + COLOR_LOC + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (locW > 12 ? c.local : '') + '</div>' : '') +
               '</div>' +
               '<div style="display:flex;gap:10px;font-size:10px;color:var(--text-tertiary);margin-top:4px">' +
-                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_MGR + ';border-radius:2px;margin-right:4px"></span>ê´€ë¦¬ìž ' + c.manager + '</span>' +
-                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_KOR + ';border-radius:2px;margin-right:4px"></span>í•œêµ­ì¸ ' + c.korean + '</span>' +
-                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_LOC + ';border-radius:2px;margin-right:4px"></span>ì™¸êµ­ì¸ ' + c.local + '</span>' +
+                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_MGR + ';border-radius:2px;margin-right:4px"></span>관리자 ' + c.manager + '</span>' +
+                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_KOR + ';border-radius:2px;margin-right:4px"></span>한국인 ' + c.korean + '</span>' +
+                '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_LOC + ';border-radius:2px;margin-right:4px"></span>외국인 ' + c.local + '</span>' +
               '</div>' +
             '</div>';
           }).join('');
@@ -3586,7 +4492,7 @@
 
           body.innerHTML =
             '<div style="margin-bottom:18px">' +
-              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-buildings" style="margin-right:4px"></i>íšŒì‚¬ë³„ ë¶„í¬ (ê´€ë¦¬ìž/í•œêµ­ì¸/ì™¸êµ­ì¸)</div>' +
+              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-buildings" style="margin-right:4px"></i>íšŒì‚¬ë³„ ë¶„í¬ (관리자/한국인/외국인)</div>' +
               companyHtml +
             '</div>' +
             '<div style="border-top:1px solid var(--border-subtle);padding-top:14px">' +
@@ -3674,7 +4580,7 @@
           '<canvas id="cam-canvas" style="display:none"></canvas>' +
           '<div style="display:flex;gap:10px">' +
             '<button id="cam-snap" style="background:var(--brand-primary);color:white;border:none;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer"><i class="ph ph-camera"></i> ì´¬ì˜</button>' +
-            '<button id="cam-flip" style="background:var(--bg-base);color:white;border:1px solid var(--border-default);padding:12px 16px;border-radius:8px;font-size:13px;cursor:pointer" title="ì „í›„ë°© ì¹´ë©”ë¼ ì „í™˜"><i class="ph ph-arrows-clockwise"></i></button>' +
+            '<button id="cam-flip" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:12px 16px;border-radius:8px;font-size:13px;cursor:pointer" title="ì „í›„ë°© ì¹´ë©”ë¼ ì „í™˜"><i class="ph ph-arrows-clockwise"></i></button>' +
             '<button id="cam-cancel" style="background:var(--bg-base);color:var(--text-secondary);border:1px solid var(--border-default);padding:12px 24px;border-radius:8px;font-size:13px;cursor:pointer">ì·¨ì†Œ</button>' +
           '</div>' +
           '<div style="color:rgba(255,255,255,0.6);font-size:11px">ESC ë˜ëŠ” [ì·¨ì†Œ] ëˆ„ë¥´ë©´ ë‹«íž˜</div>';
@@ -3728,12 +4634,12 @@
         startCam(facingMode);
       };
 
-      // â”€â”€ íŒŒì¼ ì—…ë¡œë“œ (ê´€ë¦¬ìž â€” ë¹„ë°€ë²ˆí˜¸ 1234) â”€â”€
+      // â”€â”€ íŒŒì¼ ì—…ë¡œë“œ (관리자 â€” ë¹„ë°€ë²ˆí˜¸ 1234) â”€â”€
       window.empPhotoUpload = async function(badgeId) {
         var SITE_ID_PATTERNS = /^(HFF|NV|LGES|SST|HWH)[-_][A-Z0-9]+$/i;
         if (!badgeId || SITE_ID_PATTERNS.test(badgeId)) return;
 
-        var pw = prompt('ðŸ”’ ê´€ë¦¬ìž ë¹„ë°€ë²ˆí˜¸ë¥¼ ìž…ë ¥í•˜ì„¸ìš” (' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ)');
+        var pw = prompt('ðŸ”’ 관리자 ë¹„ë°€ë²ˆí˜¸ë¥¼ ìž…ë ¥í•˜ì„¸ìš” (' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ)');
         if (pw === null) return;
         if (pw !== window.ADMIN_PASSWORD) {
           alert('âŒ ë¹„ë°€ë²ˆí˜¸ê°€ í‹€ë¦½ë‹ˆë‹¤.');
@@ -3820,9 +4726,9 @@
             : '<div style="width:160px;height:160px;border-radius:12px;background:linear-gradient(135deg,' + compColor + ',' + compColor + 'AA);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:48px;border:3px solid ' + compColor + '">' + window.getInitials(e.firstName, e.lastName) + '</div>';
 
           var natFlag = '';
-          if (e.divide === 'í•œêµ­ì¸' || /korea/i.test(e.nationality)) natFlag = 'ðŸ‡°ðŸ‡· í•œêµ­ì¸';
-          else if (e.divide === 'ê´€ë¦¬ìž') natFlag = 'ðŸ‘‘ ê´€ë¦¬ìž';
-          else natFlag = 'ðŸŒ ì™¸êµ­ì¸';
+          if (e.divide === '한국인' || /korea/i.test(e.nationality)) natFlag = 'ðŸ‡°ðŸ‡· 한국인';
+          else if (e.divide === '관리자') natFlag = 'ðŸ‘‘ 관리자';
+          else natFlag = 'ðŸŒ 외국인';
 
           var fullName = (e.firstName + ' ' + e.lastName).trim() || badgeId;
           var workingBadge = e.todayWorking
@@ -3856,7 +4762,7 @@
                   '<div style="display:flex;gap:6px;width:100%">' +
                     '<button onclick="window.empPhotoCapture(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="ì¹´ë©”ë¼ë¡œ ì´¬ì˜">' +
                       '<i class="ph ph-camera" style="font-size:13px"></i>ì´¬ì˜</button>' +
-                    '<button onclick="window.empPhotoUpload(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-secondary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="ê´€ë¦¬ìž: íŒŒì¼ ì—…ë¡œë“œ (ë¹„ë°€ë²ˆí˜¸)">' +
+                    '<button onclick="window.empPhotoUpload(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-secondary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="관리자: íŒŒì¼ ì—…ë¡œë“œ (ë¹„ë°€ë²ˆí˜¸)">' +
                       '<i class="ph ph-upload-simple" style="font-size:13px"></i>ì—…ë¡œë“œ<i class="ph ph-lock-key" style="font-size:10px;opacity:0.6"></i></button>' +
                   '</div>' +
                   '<div style="text-align:center">' +
@@ -4038,11 +4944,28 @@
       // â”€â”€ INVENTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // ì¹´í…Œê³ ë¦¬ë³„ ì•„ì´ì½˜ + ìƒ‰ìƒ
       window.INV_CATEGORY_META = {
+        '중장비':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
+        '전동공구': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
+        '측정기':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
+        '수공구':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
+        '안전장비': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
         'ì¤‘ìž¥ë¹„':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
-        'ì „ë™ê³µêµ¬': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
+        'ì „ë ™ê³µêµ¬': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
         'ì¸¡ì •ê¸°':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
         'ìˆ˜ê³µêµ¬':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
-        'ì•ˆì „ìž¥ë¹„': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' }
+        'ì•ˆì „ìž¥ë¹„': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
+        'Power Tool (전동공구)': { icon: 'ph-screwdriver', color: '#3b82f6', prefix: 'TL' },
+        'Hand Tool (수공구)': { icon: 'ph-wrench', color: '#10b981', prefix: 'HT' },
+        'Pipes & Fittings (배관 자재)': { icon: 'ph-line-segments', color: '#06b6d4', prefix: 'PP' },
+        'Conduit & Electrical (전선관/전기 자재)': { icon: 'ph-lightning', color: '#f59e0b', prefix: 'EL' },
+        'Wires & Cables (전선/케이블)': { icon: 'ph-sketch-logo', color: '#a78bfa', prefix: 'CB' },
+        'Valves & Controls (밸브/계측기)': { icon: 'ph-gauge', color: '#ec4899', prefix: 'VL' },
+        'Fasteners & Anchors (체결류/피스)': { icon: 'ph-nut', color: '#64748b', prefix: 'FT' },
+        'Generator & Power (발전기/동력원)': { icon: 'ph-lightning-slash', color: '#eab308', prefix: 'GN' },
+        'Welding Machine (용접기)': { icon: 'ph-flame', color: '#f97316', prefix: 'WD' },
+        'Heavy Equipment (중장비)': { icon: 'ph-truck', color: '#ef4444', prefix: 'EQ' },
+        'Safety & PPE (안전 용품)': { icon: 'ph-shield-check', color: '#10b981', prefix: 'SF' },
+        'Other Materials (기타 자재/공구)': { icon: 'ph-package', color: '#94a3b8', prefix: 'INV' }
       };
       window.getInvCatMeta = function(cat) {
         return window.INV_CATEGORY_META[cat] || { icon: 'ph-package', color: '#94a3b8', prefix: 'INV' };
@@ -4054,83 +4977,129 @@
           var res = await window.API.getInventoryDashboard();
           if (!res || !res.success) {
             pageContainer.innerHTML =
-              '<div class="header-section"><div><h1 class="page-title">ìžìž¬ / ìž¥ë¹„ (Inventory)</h1>' +
-              '<p class="page-subtitle">íšŒì‚¬ ë³´ìœ  ìžì‚° â€” ì‚¬ì§„ AI ë“±ë¡</p></div></div>' +
-              '<div class="panel"><div class="panel-body padded">' +
-                '<div style="color:var(--status-warning);text-align:center;padding:24px">' +
-                'âš  ì‹œíŠ¸ ë¯¸ì´ˆê¸°í™” â€” Apps Scriptì—ì„œ ë‹¤ìŒ í•¨ìˆ˜ 1íšŒì”© ì‹¤í–‰ í•„ìš”:<br><br>' +
-                '<strong>1. setupInventorySheets</strong> â€” ì‹œíŠ¸ 3ê°œ ìžë™ ìƒì„±<br>' +
-                '<strong>2. setupInventoryFolders</strong> â€” Drive í´ë” 6ê°œ ìžë™ ìƒì„±<br>' +
-                '<small style="color:var(--text-tertiary)">' + (res && res.error || '') + '</small>' +
-                '<br><br><button class="btn-primary" onclick="window.bootstrapInventory()"><i class="ph ph-rocket-launch"></i> ìžë™ ì…‹ì—… ì‹¤í–‰</button>' +
-                '</div></div></div>';
+              '<div class="header-section"><div><h1 class="page-title">자재 / 장비 (Inventory)</h1>' +
+              '<p class="page-subtitle">회사 보유 자산 · 사진 AI 등록</p></div></div>' +
+              '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">' +
+              '데이터를 불러오지 못했습니다: ' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
             return;
           }
 
           var totals = res.totals || {};
-          var matrix = res.matrix || { categories: [], sites: [], cells: {} };
-          var recent = res.recent || [];
+          var matrix = res.matrix || { categories: [], sites: [], cells: {}, categoryMeta: {} };
+          var catMeta = matrix.categoryMeta || {};
+          var assets = res.assets || [];
+          var groups = res.groups || [];
           var inspections = res.upcomingInspections || [];
 
-          // â”€â”€ 1. í—¤ë” + ì•¡ì…˜ â”€â”€
+          var GROUP_META = {
+            material:  { label: '자재 (Material)',  icon: 'ph-stack',        color: '#06b6d4' },
+            tool:      { label: '공구 (Tool)',      icon: 'ph-wrench',       color: '#3b82f6' },
+            equipment: { label: '장비 (Equipment)', icon: 'ph-truck',        color: '#f59e0b' },
+            safety:    { label: '안전 (Safety)',    icon: 'ph-shield-check', color: '#10b981' },
+            facility:  { label: '가설/시설',        icon: 'ph-buildings',    color: '#a78bfa' }
+          };
+          var GROUP_ORDER = ['material', 'tool', 'equipment', 'safety', 'facility'];
+          window._invGroupMeta = GROUP_META;
+
+          // ── 1. 헤더 + 액션 ──
           var headerHtml =
-            '<div class="header-section"><div><h1 class="page-title">ìžìž¬ / ìž¥ë¹„ (Inventory)</h1>' +
-            '<p class="page-subtitle">íšŒì‚¬ ë³´ìœ  ìžì‚° Â· ì‚¬ì§„ AI ë“±ë¡ Â· 5ê°œ ì¹´í…Œê³ ë¦¬</p></div>' +
+            '<div class="header-section"><div><h1 class="page-title">자재 / 장비 (Inventory)</h1>' +
+            '<p class="page-subtitle">기능별 분류 · 구매/임대 구분 · 현장·담당자 사용 추적</p></div>' +
             '<div class="action-row">' +
-              '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> ìƒˆë¡œê³ ì¹¨</button>' +
-              '<button class="btn-secondary" onclick="window.openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button>' +
-              '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> ðŸ¤– AI ì‚¬ì§„ ë“±ë¡</button>' +
+              '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> 새로고침</button>' +
+              '<button class="btn-secondary" onclick="window.downloadInventoryExcel()"><i class="ph ph-file-csv"></i> 엑셀 다운로드</button>' +
+              '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> AI 사진 등록</button>' +
             '</div></div>';
 
-          // â”€â”€ 2. KPI 5ì¢… â”€â”€
+          // ── 2. KPI 5종 (총 자산가치 제거 → 구매/임대/배치/보관/점검) ──
+          function kpiCard(label, value, icon, color, meta) {
+            return '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">' + label +
+              '<i class="ph ' + icon + '" style="font-size:12px;color:' + color + '"></i></div>' +
+              '<div class="kpi-value" style="font-size:22px;color:' + color + ';line-height:1.1">' + value + '</div>' +
+              '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + meta + '</span></div></div>';
+          }
+          var inspColor = (totals.inspectionDue > 0) ? 'var(--status-danger)' : 'var(--status-success)';
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ ìžì‚°ê°€ì¹˜<i class="ph ph-currency-dollar" style="font-size:12px;color:#a78bfa"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:#a78bfa;line-height:1.1">$' + Number(totals.value || 0).toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì „ì²´ ' + (totals.count || 0) + 'ê°œ</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì‚¬ìš©ì¤‘/í˜„ìž¥<i class="ph ph-truck" style="font-size:12px;color:#10b981"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:#10b981;line-height:1.1">' + (totals.inUse || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">í˜„ìž¥ ë°°ì¹˜</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì°½ê³  ë³´ê´€<i class="ph ph-package" style="font-size:12px;color:#3b82f6"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.inStorage || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì¦‰ì‹œ ì‚¬ìš© ê°€ëŠ¥</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ìˆ˜ë¦¬ì¤‘<i class="ph ph-wrench" style="font-size:12px;color:#f59e0b"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.repair || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì‚¬ìš© ë¶ˆê°€</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì ê²€ ìž„ë°•<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
-                '<div class="kpi-value" style="font-size:22px;color:' + (totals.inspectionDue > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + (totals.inspectionDue || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">30ì¼ ì´ë‚´</span></div></div>' +
+              kpiCard('구매 (소유)', (totals.owned || 0), 'ph-shopping-cart-simple', '#10b981', '자사 자산') +
+              kpiCard('임대', (totals.rented || 0), 'ph-handshake', '#f59e0b', '렌탈 계약') +
+              kpiCard('현장 배치중', (totals.inUse || 0), 'ph-truck', '#3b82f6', '사용중') +
+              kpiCard('창고 보관', (totals.inStorage || 0), 'ph-package', '#a78bfa', '즉시 사용 가능') +
+              kpiCard('점검 임박', (totals.inspectionDue || 0), 'ph-warning-circle', inspColor, '30일 이내') +
             '</div>';
 
-          // â”€â”€ 3. ì¹´í…Œê³ ë¦¬ Ã— í˜„ìž¥ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
+          // ── 3. 필터바 (구매/임대 · 대분류 · 검색) ──
+          window._invFilter = window._invFilter || { own: 'ALL', group: 'ALL', q: '' };
+          var f = window._invFilter;
+          var ownSeg = [['ALL', '전체'], ['소유', '구매'], ['임대', '임대']].map(function(o) {
+            var on = f.own === o[0];
+            return '<button onclick="window.setInvFilter(\'own\',\'' + o[0] + '\')" style="padding:5px 12px;border-radius:6px;border:1px solid ' +
+              (on ? 'var(--brand-primary)' : 'var(--border-default)') + ';background:' + (on ? 'rgba(124,58,237,0.15)' : 'transparent') +
+              ';color:' + (on ? '#a78bfa' : 'var(--text-secondary)') + ';font-size:11px;font-weight:600;cursor:pointer">' + o[1] + '</button>';
+          }).join('');
+          var groupChips = [['ALL', '전체 분류', 'ph-squares-four']].concat(groups.map(function(g) {
+            var gm = GROUP_META[g.key] || { icon: 'ph-package' };
+            return [g.key, g.label + ' ' + g.count, gm.icon];
+          })).map(function(o) {
+            var on = f.group === o[0];
+            return '<button onclick="window.setInvFilter(\'group\',\'' + o[0] + '\')" style="padding:5px 10px;border-radius:6px;border:1px solid ' +
+              (on ? 'var(--brand-primary)' : 'var(--border-default)') + ';background:' + (on ? 'rgba(124,58,237,0.15)' : 'transparent') +
+              ';color:' + (on ? '#a78bfa' : 'var(--text-secondary)') + ';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">' +
+              '<i class="ph ' + o[2] + '" style="margin-right:4px"></i>' + o[1] + '</button>';
+          }).join('');
+          var filterHtml =
+            '<div class="panel" style="margin-bottom:14px"><div class="panel-body" style="padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">' +
+              '<div style="display:flex;gap:6px">' + ownSeg + '</div>' +
+              '<div style="width:1px;height:20px;background:var(--border-default)"></div>' +
+              '<div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">' + groupChips + '</div>' +
+              '<div style="position:relative"><i class="ph ph-magnifying-glass" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px"></i>' +
+              '<input id="inv-search" type="text" value="' + (f.q || '') + '" placeholder="모델/자산ID/현장 검색" oninput="window.setInvFilter(\'q\', this.value)" ' +
+              'style="padding:6px 10px 6px 28px;border-radius:6px;border:1px solid var(--border-default);background:var(--bg-body);color:var(--text-primary);font-size:11px;width:190px;outline:none"></div>' +
+            '</div></div>';
+
+          // ── 4. 기능 분류 × 현 위치 매트릭스 (대분류로 묶음) ──
           var matrixHtml = '';
           if (matrix.sites.length > 0) {
             var thSites = matrix.sites.map(function(s) {
-              var icon = s === 'ì°½ê³ ' ? 'ph-package' : (s === 'ë³´ìœ ìž' ? 'ph-user' : 'ph-buildings');
-              return '<th style="padding:10px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-primary);font-size:11px;font-weight:700;letter-spacing:0.3px;text-align:center;text-transform:uppercase">' +
+              var icon = s === '창고' ? 'ph-package' : 'ph-buildings';
+              return '<th style="padding:10px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-primary);font-size:11px;font-weight:700;text-align:center">' +
                 '<i class="ph ' + icon + '" style="font-size:13px;margin-right:4px;color:#a78bfa"></i>' + s + '</th>';
             }).join('');
 
-            var rowsHtml = matrix.categories.map(function(cat) {
-              var meta = window.getInvCatMeta(cat);
-              var cells = matrix.sites.map(function(site) {
-                var v = (matrix.cells[cat] && matrix.cells[cat][site]) || 0;
-                var emptyClass = v === 0 ? 'opacity:0.25' : '';
-                return '<td style="padding:0;border-bottom:1px solid var(--border-subtle);text-align:center;position:relative;height:42px;cursor:pointer;' + emptyClass + '" ' +
-                  'onclick="window.filterInventory(\'' + cat + '\', \'' + site + '\')">' +
-                  '<span class="cell-mono" style="font-size:15px;font-weight:700;color:' + (v > 0 ? meta.color : 'var(--text-tertiary)') + '">' + v + '</span></td>';
-              }).join('');
-              return '<tr>' +
-                '<td style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);background:var(--bg-base);text-align:left;font-weight:600;font-size:12px;white-space:nowrap">' +
-                '<i class="ph ' + meta.icon + '" style="color:' + meta.color + ';margin-right:8px;font-size:14px"></i>' + cat + '</td>' +
-                cells + '</tr>';
-            }).join('');
+            var byGroup = {};
+            matrix.categories.forEach(function(cat) {
+              var gk = (catMeta[cat] && catMeta[cat].group) || 'material';
+              (byGroup[gk] = byGroup[gk] || []).push(cat);
+            });
+
+            var bodyRows = '';
+            GROUP_ORDER.forEach(function(gk) {
+              var cats = byGroup[gk];
+              if (!cats || !cats.length) return;
+              var gm = GROUP_META[gk] || { label: gk, icon: 'ph-package', color: '#94a3b8' };
+              bodyRows += '<tr><td colspan="' + (matrix.sites.length + 1) + '" style="padding:8px 14px;background:var(--bg-base);border-top:1px solid var(--border-default);border-bottom:1px solid var(--border-subtle)">' +
+                '<span style="font-size:11px;font-weight:700;color:' + gm.color + ';letter-spacing:0.4px"><i class="ph ' + gm.icon + '" style="margin-right:6px"></i>' + gm.label + '</span></td></tr>';
+              cats.forEach(function(cat) {
+                var meta = window.getInvCatMeta(cat);
+                var tradeLabel = (catMeta[cat] && catMeta[cat].tradeLabel) || '';
+                var cells = matrix.sites.map(function(site) {
+                  var v = (matrix.cells[cat] && matrix.cells[cat][site]) || 0;
+                  var dim = v === 0 ? 'opacity:0.25' : '';
+                  return '<td style="padding:0;border-bottom:1px solid var(--border-subtle);text-align:center;height:40px;cursor:pointer;' + dim + '" ' +
+                    'onclick="window.filterInventory(\'' + cat.replace(/'/g, "\\'") + '\',\'' + site + '\')">' +
+                    '<span class="cell-mono" style="font-size:15px;font-weight:700;color:' + (v > 0 ? meta.color : 'var(--text-tertiary)') + '">' + v + '</span></td>';
+                }).join('');
+                bodyRows += '<tr>' +
+                  '<td style="padding:9px 14px 9px 28px;border-bottom:1px solid var(--border-subtle);text-align:left;font-weight:600;font-size:12px;white-space:nowrap">' +
+                  '<i class="ph ' + meta.icon + '" style="color:' + meta.color + ';margin-right:8px;font-size:14px"></i>' + cat +
+                  (tradeLabel ? '<span style="color:var(--text-tertiary);font-size:10px;margin-left:6px">' + tradeLabel + '</span>' : '') + '</td>' +
+                  cells + '</tr>';
+              });
+            });
 
             var subtotalCells = matrix.sites.map(function(site) {
               var sum = 0;
-              matrix.categories.forEach(function(cat) {
-                sum += (matrix.cells[cat] && matrix.cells[cat][site]) || 0;
-              });
+              matrix.categories.forEach(function(cat) { sum += (matrix.cells[cat] && matrix.cells[cat][site]) || 0; });
               return '<td style="padding:12px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),transparent);text-align:center">' +
                 '<span class="cell-mono" style="font-size:16px;font-weight:800;color:#a78bfa">' + sum + '</span></td>';
             }).join('');
@@ -4140,58 +5109,41 @@
                 '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px">' +
                   '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
                     '<i class="ph ph-chart-bar" style="font-size:18px;color:#a78bfa"></i>' +
-                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">ì¹´í…Œê³ ë¦¬ Ã— ìœ„ì¹˜ ë§¤íŠ¸ë¦­ìŠ¤</span>' +
-                    '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:#a78bfa;border-radius:4px;font-weight:600">ì…€ í´ë¦­ ì‹œ í•„í„°</span>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">기능 분류 × 현 위치 매트릭스</span>' +
+                    '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:#a78bfa;border-radius:4px;font-weight:600">셀 클릭 시 필터</span>' +
                   '</div></div>' +
                 '<div class="panel-body" style="padding:0"><div style="overflow-x:auto">' +
                   '<table style="width:100%;border-collapse:collapse"><thead>' +
-                    '<tr><th style="padding:10px 14px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:10px;font-weight:700;letter-spacing:1px;text-align:left;text-transform:uppercase">ì¹´í…Œê³ ë¦¬</th>' +
+                    '<tr><th style="padding:10px 14px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.05));border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:10px;font-weight:700;letter-spacing:1px;text-align:left">카테고리</th>' +
                     thSites + '</tr>' +
-                  '</thead><tbody>' + rowsHtml +
-                    '<tr style="border-top:2px solid var(--border-default)"><td style="padding:12px 14px;background:linear-gradient(90deg,rgba(167,139,250,0.18),rgba(167,139,250,0.08));text-align:left;font-weight:700;font-size:13px"><i class="ph ph-equals" style="color:#a78bfa;margin-right:8px"></i>ì†Œ ê³„</td>' +
+                  '</thead><tbody>' + bodyRows +
+                    '<tr style="border-top:2px solid var(--border-default)"><td style="padding:12px 14px;background:linear-gradient(90deg,rgba(167,139,250,0.18),rgba(167,139,250,0.08));text-align:left;font-weight:700;font-size:13px"><i class="ph ph-equals" style="color:#a78bfa;margin-right:8px"></i>소 계</td>' +
                     subtotalCells + '</tr>' +
                   '</tbody></table>' +
                 '</div></div></div>';
           }
 
-          // â”€â”€ 4. ìµœê·¼ ë“±ë¡ ì‚¬ì§„ ê°¤ëŸ¬ë¦¬ â”€â”€
-          var recentHtml = '';
-          if (recent.length > 0) {
-            var photoCards = recent.map(function(r) {
-              var meta = window.getInvCatMeta(r.category);
-              var hasPhoto = r.photoUrl && /^https?:\/\//.test(r.photoUrl);
-              return '<div style="cursor:pointer;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;overflow:hidden;transition:transform 0.15s" ' +
-                'onclick="window.openInventoryAssetModal(\'' + r.assetId + '\')" ' +
-                'onmouseover="this.style.transform=\'translateY(-2px)\';this.style.borderColor=\'' + meta.color + '\'" ' +
-                'onmouseout="this.style.transform=\'\';this.style.borderColor=\'var(--border-subtle)\'">' +
-                '<div style="height:120px;background:' + meta.color + '22;display:flex;align-items:center;justify-content:center">' +
-                  (hasPhoto ? '<img src="' + r.photoUrl + '" style="width:100%;height:100%;object-fit:cover">' :
-                    '<i class="ph ' + meta.icon + '" style="font-size:42px;color:' + meta.color + '"></i>') +
-                '</div>' +
-                '<div style="padding:8px 10px">' +
-                  '<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:' + meta.color + ';font-weight:700;text-transform:uppercase">' +
-                    '<i class="ph ' + meta.icon + '"></i> ' + r.category + '</div>' +
-                  '<div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.name || '-') + '</div>' +
-                  '<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px">' + (r.brand || '-') + '</div>' +
-                  '<div class="cell-mono" style="font-size:10px;color:var(--text-tertiary);margin-top:2px">' + r.assetId + '</div>' +
-                '</div></div>';
-            }).join('');
-            recentHtml =
-              '<div class="panel" style="margin-bottom:14px">' +
-                '<div class="panel-header"><div class="panel-title"><i class="ph ph-image"></i> ìµœê·¼ ë“±ë¡ ìžì‚°</div></div>' +
-                '<div class="panel-body" style="padding:14px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">' +
-                  photoCards +
-                '</div></div></div>';
-          }
+          // ── 5. 자산 추적 테이블 (취득 목적 + 현 위치/담당자 + 구매·임대) ──
+          window._invAssets = assets;
+          var assetPanel =
+            '<div class="panel" style="margin-bottom:14px">' +
+              '<div class="panel-header"><div class="panel-title" style="display:flex;align-items:center;gap:8px">' +
+                '<i class="ph ph-list-magnifying-glass" style="color:#a78bfa"></i> 자산 추적 ' +
+                '<span id="inv-asset-count" style="font-size:11px;color:var(--text-tertiary);font-weight:500"></span></div></div>' +
+              '<div class="panel-body" style="padding:0"><div style="overflow-x:auto">' +
+              '<table class="data-table" style="width:100%"><thead><tr>' +
+                '<th>자산ID</th><th>분류</th><th>모델</th><th>구분</th><th>취득 목적 (프로젝트·현장)</th><th>현 위치</th><th>현 담당자</th><th>상태</th>' +
+              '</tr></thead><tbody id="inv-asset-tbody"></tbody></table>' +
+              '</div></div></div>';
 
-          // â”€â”€ 5. ì ê²€ ìž„ë°• â”€â”€
+          // ── 6. 점검 임박 ──
           var inspHtml = '';
           if (inspections.length > 0) {
             inspHtml =
               '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-warning)">' +
-                '<div class="panel-header"><div class="panel-title" style="color:var(--status-warning)"><i class="ph ph-clock-countdown"></i> ì ê²€/ìº˜ë¦¬ë¸Œë ˆì´ì…˜ ìž„ë°• (' + inspections.length + ')</div></div>' +
+                '<div class="panel-header"><div class="panel-title" style="color:var(--status-warning)"><i class="ph ph-clock-countdown"></i> 점검/캘리브레이션 임박 (' + inspections.length + ')</div></div>' +
                 '<div class="panel-body" style="padding:0">' +
-                '<table class="data-table"><thead><tr><th>AssetID</th><th>ì¹´í…Œê³ ë¦¬</th><th>ì´ë¦„</th><th>ì ê²€ì¼</th><th>D-day</th></tr></thead><tbody>' +
+                '<table class="data-table"><thead><tr><th>자산ID</th><th>카테고리</th><th>이름</th><th>점검일</th><th>D-day</th></tr></thead><tbody>' +
                   inspections.map(function(i) {
                     var meta = window.getInvCatMeta(i.category);
                     var dColor = i.dDay < 0 ? 'var(--status-danger)' : (i.dDay <= 7 ? 'var(--status-warning)' : 'var(--text-secondary)');
@@ -4206,23 +5158,133 @@
                 '</tbody></table></div></div>';
           }
 
-          // ë¹ˆ ìƒíƒœ
           var emptyHtml = totals.count === 0
             ? '<div class="panel"><div class="panel-body padded"><div style="text-align:center;padding:48px;color:var(--text-tertiary)">' +
-              '<i class="ph ph-image-square" style="font-size:48px;display:block;margin-bottom:12px;opacity:0.5"></i>' +
-              'ì•„ì§ ë“±ë¡ëœ ìžì‚°ì´ ì—†ìŠµë‹ˆë‹¤.<br>' +
-              '<small>Drive [INVENTORY_PHOTOS/PENDING] í´ë”ì— ì‚¬ì§„ì„ ë„£ê³ <br>ìœ„ [ðŸ¤– AI ì‚¬ì§„ ë“±ë¡] ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”.</small>' +
+              '<i class="ph ph-package" style="font-size:48px;display:block;margin-bottom:12px;opacity:0.5"></i>' +
+              '아직 등록된 자산이 없습니다.<br><small>상단 [AI 사진 등록] 버튼으로 자재/장비를 등록하세요.</small>' +
               '</div></div></div>'
             : '';
 
-          pageContainer.innerHTML = headerHtml + kpiHtml + matrixHtml + recentHtml + inspHtml + emptyHtml;
+          pageContainer.innerHTML = headerHtml + kpiHtml + filterHtml + matrixHtml + assetPanel + inspHtml + emptyHtml;
+          window.renderInvAssets();
         } catch (err) {
-          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">ìžìž¬/ìž¥ë¹„ ë¡œë”© ì‹¤íŒ¨: ' + err.message + '</div></div></div>';
+          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">자재/장비 로딩 실패: ' + err.message + '</div></div></div>';
         }
       }
 
+      // 필터 변경 — own/group은 칩 스타일 갱신 위해 전체 재렌더, 검색어는 테이블만 갱신
+      window.setInvFilter = function(key, val) {
+        window._invFilter = window._invFilter || { own: 'ALL', group: 'ALL', q: '' };
+        window._invFilter[key] = val;
+        if (key === 'q') { window.renderInvAssets(); }
+        else { renderInventory(); }
+      };
+
+      // 자산 추적 테이블 본문 렌더 (클라이언트 필터)
+      window.renderInvAssets = function() {
+        var tbody = document.getElementById('inv-asset-tbody');
+        if (!tbody) return;
+        var f = window._invFilter || { own: 'ALL', group: 'ALL', q: '' };
+        var q = (f.q || '').trim().toLowerCase();
+        var GM = window._invGroupMeta || {};
+        var rows = (window._invAssets || []).filter(function(a) {
+          if (f.own !== 'ALL' && a.acquisitionType !== f.own) return false;
+          if (f.group !== 'ALL' && a.group !== f.group) return false;
+          if (q) {
+            var hay = (a.assetId + ' ' + a.name + ' ' + a.currentSite + ' ' + a.holder + ' ' + a.purposeProject + ' ' + a.purposeSite + ' ' + a.tradeLabel).toLowerCase();
+            if (hay.indexOf(q) < 0) return false;
+          }
+          return true;
+        });
+        var cnt = document.getElementById('inv-asset-count');
+        if (cnt) cnt.textContent = '(' + rows.length + '건)';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-tertiary);padding:28px">조건에 맞는 자산이 없습니다.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function(a) {
+          var gm = GM[a.group] || { color: '#94a3b8', icon: 'ph-package' };
+          var ownPill = a.acquisitionType === '소유'
+            ? '<span style="font-size:10px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 8px;border-radius:10px">구매</span>'
+            : '<span style="font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px">임대</span>';
+          var purpose = (a.purposeProject && a.purposeProject !== '-')
+            ? '<span class="cell-mono" style="font-size:11px">' + a.purposeProject + '</span>'
+            : '<span style="color:var(--text-tertiary)">미지정</span>';
+          if (a.purposeSite && a.purposeSite !== '-') purpose += ' <span style="color:var(--text-secondary);font-size:11px">· ' + a.purposeSite + '</span>';
+          var holder = (a.holder && a.holder !== '미배정') ? a.holder : '<span style="color:var(--text-tertiary)">미배정</span>';
+          return '<tr style="cursor:pointer" onclick="window.openInventoryAssetModal(\'' + a.assetId + '\')">' +
+            '<td class="cell-mono">' + a.assetId + '</td>' +
+            '<td><i class="ph ' + gm.icon + '" style="color:' + gm.color + ';margin-right:5px"></i>' + a.tradeLabel + '</td>' +
+            '<td class="cell-primary">' + a.name + '</td>' +
+            '<td>' + ownPill + '</td>' +
+            '<td>' + purpose + '</td>' +
+            '<td>' + (a.currentSite || '창고') + '</td>' +
+            '<td>' + holder + '</td>' +
+            '<td>' + statusPill(a.status) + '</td>' +
+          '</tr>';
+        }).join('');
+      };
+
       // ìƒˆë¡œê³ ì¹¨
       window.refreshInventory = function() { renderInventory(); };
+
+      // 현재 활성화된 뷰(렌탈 or 인벤토리) 리프레시
+      window.refreshCurrentEquipmentView = function() {
+        if (window._currentView === 'inventory') {
+          window.refreshInventory();
+        } else if (typeof window.renderRental === 'function') {
+          window.refreshCurrentEquipmentView();
+        }
+      };
+
+      // 엑셀 다운로드
+      window.downloadInventoryExcel = async function() {
+        try {
+          var items = await window.API.getRentalList() || [];
+          if (items.length === 0) {
+            alert('다운로드할 데이터가 없습니다.');
+            return;
+          }
+
+          var headers = ['자산ID', '장비종류', '모델명', '제조사/브랜드', '소속현장', '구매/대여시작일', '대여종료일', '배정회사', '배정팀', '담당자', '운영/보관상태'];
+          var rows = items.map(function(item) {
+            return [
+              item.id || '',
+              item.equipType || '',
+              item.model || '',
+              item.vendor || '-',
+              item.siteCode || '창고',
+              item.startDate || '-',
+              item.endDate || '-',
+              item.company || '-',
+              item.team || '-',
+              item.operator || '',
+              item.status || '대기중'
+            ];
+          });
+
+          var csvContent = '\uFEFF'; // UTF-8 BOM
+          csvContent += headers.map(function(h) { return '"' + h.replace(/"/g, '""') + '"'; }).join(',') + '\r\n';
+          rows.forEach(function(row) {
+            csvContent += row.map(function(v) { 
+              var strVal = (v === null || v === undefined) ? '' : String(v);
+              return '"' + strVal.replace(/"/g, '""') + '"'; 
+            }).join(',') + '\r\n';
+          });
+
+          var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          var url = URL.createObjectURL(blob);
+          var link = document.createElement('a');
+          link.setAttribute('href', url);
+          link.setAttribute('download', '자재_장비_인벤토리_현황_' + new Date().toISOString().slice(0, 10) + '.csv');
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch (err) {
+          alert('엑셀 다운로드 실패: ' + err.message);
+        }
+      };
 
       // ìžë™ ì…‹ì—… â€” ì‹œíŠ¸ + í´ë” í•œë²ˆì—
       window.bootstrapInventory = async function() {
@@ -4238,135 +5300,2081 @@
       };
 
       // AI ì‚¬ì§„ ë“±ë¡ ì‹¤í–‰
-      window.runAIInventoryRegister = async function() {
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ¤– Gemini AI ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:12px">INVENTORY_PHOTOS/PENDING í´ë” ìŠ¤ìº” + ìžë™ ë“±ë¡</div>' +
-          '<div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:8px">í´ë¦­/ESCë¡œ ë‹«ê¸° (ë°±ê·¸ë¼ìš´ë“œ ê³„ì†)</div>';
-        document.body.appendChild(overlay);
-        var dismiss = function() { try { overlay.remove(); } catch(e) {} };
-        overlay.addEventListener('click', dismiss);
-        var esc = function(e) { if (e.key === 'Escape') dismiss(); };
-        document.addEventListener('keydown', esc);
-        var to = setTimeout(dismiss, 90000);
+      window.runAIInventoryRegister = function() {
+  var modal = document.createElement('div');
+  modal.id = 'ai-inventory-reg-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  
+  modal.innerHTML =
+    '<style>' +
+      '#ai-inventory-reg-modal * { box-sizing: border-box; }' +
+      '#ai-inventory-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
+      '#ai-inventory-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
+      '#ai-inventory-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+      '#ai-inventory-reg-modal input[type="text"],' +
+      '#ai-inventory-reg-modal input[type="number"],' +
+      '#ai-inventory-reg-modal select,' +
+      '#ai-inventory-reg-modal input[type="date"] {' +
+      '  width: 100%;' +
+      '  background: var(--bg-base);' +
+      '  border: 1px solid var(--border-strong);' +
+      '  border-radius: 8px;' +
+      '  padding: 10px 12px;' +
+      '  color: var(--text-primary);' +
+      '  font-size: 13px;' +
+      '  outline: none;' +
+      '  transition: border-color 0.2s, box-shadow 0.2s;' +
+      '}' +
+      '#ai-inventory-reg-modal input[type="text"]:focus,' +
+      '#ai-inventory-reg-modal input[type="number"]:focus,' +
+      '#ai-inventory-reg-modal select:focus,' +
+      '#ai-inventory-reg-modal input[type="date"]:focus {' +
+      '  border-color: #7c3aed;' +
+      '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
+      '}' +
+      '#ai-inventory-reg-modal label {' +
+      '  display: block;' +
+      '  font-size: 12px;' +
+      '  font-weight: 600;' +
+      '  color: var(--text-secondary);' +
+      '  margin-bottom: 6px;' +
+      '}' +
+      '#ai-inventory-reg-modal .btn-primary {' +
+      '  background: linear-gradient(135deg, #7c3aed, #2563eb);' +
+      '  border: none;' +
+      '  color: #fff;' +
+      '  font-weight: 600;' +
+      '  border-radius: 8px;' +
+      '  height: 38px;' +
+      '  transition: opacity 0.2s, transform 0.1s;' +
+      '}' +
+      '#ai-inventory-reg-modal .btn-primary:hover {' +
+      '  opacity: 0.9;' +
+      '}' +
+      '#ai-inventory-reg-modal .btn-primary:active {' +
+      '  transform: scale(0.98);' +
+      '}' +
+      '#ai-inventory-reg-modal .btn-secondary {' +
+      '  background: var(--bg-base);' +
+      '  border: 1px solid var(--border-strong);' +
+      '  color: var(--text-primary);' +
+      '  font-weight: 600;' +
+      '  border-radius: 8px;' +
+      '  height: 38px;' +
+      '  transition: background 0.2s, transform 0.1s;' +
+      '}' +
+      '#ai-inventory-reg-modal .btn-secondary:hover {' +
+      '  background: var(--bg-body);' +
+      '}' +
+      '#ai-inventory-reg-modal .btn-secondary:active {' +
+      '  transform: scale(0.98);' +
+      '}' +
+      '#inventory-modal-close-btn {' +
+      '  transition: color 0.2s, transform 0.2s;' +
+      '}' +
+      '#inventory-modal-close-btn:hover {' +
+      '  color: var(--text-primary);' +
+      '  transform: rotate(90deg);' +
+      '}' +
+      '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
+      '@media (max-width: 640px) { #inventory-camera-area { grid-template-columns: 1fr !important; } }' +
+    '</style>' +
+    '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:20px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;box-sizing:border-box;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+        '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:22px;"></i> AI 자재/장비 자동 등록</h2>' +
+        '<button type="button" id="inventory-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+      '</div>' +
+      '<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height:1.5;">' +
+        '구매 계약서나 구매 영수증 및 장비 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 문서와 사진 정보를 자동으로 판독하여 자재 대장에 등록합니다.' +
+      '</div>' +
+      '<input type="file" id="inventory-file-contract" style="display:none" accept="application/pdf,image/*">' +
+      '<input type="file" id="inventory-file-photo_front" style="display:none" accept="image/*">' +
+      '<input type="file" id="inventory-file-photo_rear" style="display:none" accept="image/*">' +
+      '<input type="file" id="inventory-file-photo_left" style="display:none" accept="image/*">' +
+      '<input type="file" id="inventory-file-photo_right" style="display:none" accept="image/*">' +
+      '<div style="display: flex; gap: 8px; margin-bottom: 16px;">' +
+        '<button type="button" id="inventory-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+          '<i class="ph ph-upload-simple"></i> 파일 업로드' +
+        '</button>' +
+        '<button type="button" id="inventory-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+          '<i class="ph ph-camera"></i> 실시간 카메라' +
+        '</button>' +
+      '</div>' +
+      '<div id="inventory-upload-area" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 16px;">' +
+        '<div id="inventory-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 75px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+          '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:6px;">' +
+            '<i class="ph ph-file-text" style="font-size: 24px; color: var(--text-tertiary);"></i>' +
+            '<div style="font-weight: 600; font-size:13px; color:var(--text-primary);">구매 영수증 / 계약서 파일 (PDF/이미지) <span style="color:var(--status-danger)">*</span></div>' +
+            '<div style="font-size: 11px; color: var(--text-tertiary);">클릭하여 파일 업로드</div>' +
+          '</div>' +
+          '<div class="preview-state" style="display: none; width:100%; text-align:center; position:relative;">' +
+            '<div class="preview-icon-wrapper" style="font-size: 24px; color: var(--brand-primary); margin-bottom: 4px;"><i class="ph ph-file-pdf"></i></div>' +
+            '<img class="preview-img" style="max-height: 50px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 4px;">' +
+            '<div class="file-name" style="font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>' +
+            '<button type="button" class="trash-btn" style="position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,0.6); color: #fff; width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-trash"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
+          '<div id="inventory-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+            '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+              '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+              '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
+            '</div>' +
+            '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+              '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+              '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="inventory-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+            '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+              '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+              '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
+            '</div>' +
+            '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+              '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+              '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="inventory-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--brand-primary)\'">' +
+            '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+              '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+              '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
+            '</div>' +
+            '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+              '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+              '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="inventory-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--strong)\'">' +
+            '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+              '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+              '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
+            '</div>' +
+            '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+              '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+              '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="inventory-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin-bottom: 16px;">' +
+        '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+          '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
+            '<video id="inventory-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
+            '<div id="inventory-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 11px; padding: 4px 6px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+              '촬영 대상: 구매 영수증 / 계약서' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+            '<button type="button" id="inventory-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 34px; font-size: 12px; font-weight: 600; cursor:pointer;">' +
+              '<i class="ph ph-camera"></i> 사진 촬영' +
+            '</button>' +
+          '</div>' +
+          '<div id="inventory-camera-select-container" style="margin-top: 8px; display: none; align-items:center; gap:6px;">' +
+            '<span style="font-size:10px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라:</span>' +
+            '<select id="inventory-camera-device-select" style="flex:1; padding: 4px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 10px; outline: none;"></select>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+          '<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:2px; padding-bottom:4px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+          '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+            '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+              '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                '<i class="ph ph-file-text" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+              '</div>' +
+              '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">계약서/영수증 <span style="color:var(--status-danger)">*</span></div>' +
+                '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+              '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+            '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+              '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+              '</div>' +
+              '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+              '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+            '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+              '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+              '</div>' +
+              '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+              '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+            '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+              '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+              '</div>' +
+              '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+              '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+            '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+              '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+              '</div>' +
+              '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+              '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="inventory-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
+        '<button type="button" id="inventory-upload-cancel-btn" class="btn-secondary" style="padding:0 20px; cursor:pointer;">취소</button>' +
+        '<button type="button" id="inventory-upload-submit-btn" class="btn-primary" style="padding:0 24px; cursor:pointer;">AI 분석 실행</button>' +
+      '</div>' +
+      '<div id="inventory-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px 0; gap:12px;">' +
+        '<div style="width:40px; height:40px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+        '<div style="color:var(--text-primary); font-size:14px; font-weight:700;">Gemini AI가 분석하는 중...</div>' +
+        '<div style="color:var(--text-secondary); font-size:12px; text-align:center; max-width:320px; line-height:1.4;">영수증 및 자재 정보를 추출하여 자동 매핑하고 있습니다. 잠시만 기다려주세요.</div>' +
+      '</div>' +
+      '<div id="inventory-analysis-result-container" style="display:none; flex-direction:column; gap:12px; margin-top:12px;">' +
+        '<h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+        '<div style="font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.4;">AI가 추출한 정보입니다. 실제 영수증 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+        '<form id="ai-inventory-save-form" style="display:flex; flex-direction:column; gap:12px;">' +
+          '<input type="hidden" name="contract_path">' +
+          '<input type="hidden" name="photo_front">' +
+          '<input type="hidden" name="photo_rear">' +
+          '<input type="hidden" name="photo_left">' +
+          '<input type="hidden" name="photo_right">' +
+          '<input type="hidden" name="details">' +
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+            '<div>' +
+              '<label>자재/장비 종류 (Category)</label>' +
+              '<input type="text" name="equipment_type" required placeholder="예: Power Tool (전동공구)">' +
+            '</div>' +
+            '<div>' +
+              '<label>자재/장비 모델명</label>' +
+              '<input type="text" name="model" required>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">' +
+            '<div>' +
+              '<label>구매처/브랜드 (Vendor)</label>' +
+              '<input type="text" name="vendor">' +
+            '</div>' +
+            '<div>' +
+              '<label>수량 (Qty)</label>' +
+              '<input type="number" name="quantity" min="1" value="1">' +
+            '</div>' +
+          '</div>' +
+          // 구분(구매/임대) + 취득 목적(어느 프로젝트/현장 쓰려고) — "왜 샀나" 기록.
+          '<div style="display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:10px;">' +
+            '<div>' +
+              '<label>구분 (구매/임대)</label>' +
+              '<select name="acquisition_type"><option value="소유">구매 (보유)</option><option value="임대">임대 (렌탈)</option><option value="리스">리스</option></select>' +
+            '</div>' +
+            '<div>' +
+              '<label>취득 목적 프로젝트</label>' +
+              '<select name="project_id"><option value="">미지정</option></select>' +
+            '</div>' +
+            '<div>' +
+              '<label>취득 목적 현장</label>' +
+              '<select name="purchased_for_site_id"><option value="">미지정</option></select>' +
+            '</div>' +
+          '</div>' +
+          '<div id="inventory-ai-extracted-summary" style="display:none; font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.6;"></div>' +
+          '<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">' +
+            '<div style="grid-column:span 4;">' +
+              '<label>구매 일자 (Purchase Date)</label>' +
+              '<input type="date" name="rent_start">' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+            '<div>' +
+              '<label>취득 가치/단가 ($)</label>' +
+              '<input type="number" name="daily_rate" min="0">' +
+            '</div>' +
+            '<div>' +
+              '<label>배송비 ($)</label>' +
+              '<input type="number" name="delivery_fee" min="0">' +
+            '</div>' +
+          '</div>' +
+          '<div id="inventory-ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px;"></div>' +
+          '<div style="margin-top:8px; display:flex; justify-content:flex-end; gap:12px;">' +
+            '<button type="button" id="inventory-save-cancel-btn" class="btn-secondary" style="padding:0 20px;">취소</button>' +
+            '<button type="submit" class="btn-primary" style="background:var(--status-success) !important; padding:0 24px; border:none; cursor:pointer;">자산 등록 및 저장</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>' +
+    '</div>';
 
-        try {
-          var res = await window.API.processInventoryPhotos();
-          clearTimeout(to);
-          document.removeEventListener('keydown', esc);
-          dismiss();
+  document.body.appendChild(modal);
 
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
-          var icon = res.success ? (res.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var detail = (res.results || []).map(function(r) {
-            var ic = r.status === 'success' ? 'âœ…' : r.status === 'error' ? 'âŒ' : 'â­ï¸';
-            var txt = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.category + ' Â· ' + (r.brand || '') + ' ' + (r.model || '') + ' [' + r.assetId + ']</span>'
-              : '<span style="color:var(--status-danger)">' + (r.reason || '') + '</span>';
-            return '<div style="padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:11px">' + ic + ' <strong>' + r.file + '</strong><br>' + txt + '</div>';
-          }).join('');
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:560px;max-height:80vh;overflow-y:auto">' +
-              '<div style="font-size:32px;text-align:center;margin-bottom:8px">' + icon + '</div>' +
-              '<h2 style="text-align:center;font-size:18px;margin-bottom:8px">AI ìžì‚° ë“±ë¡ ê²°ê³¼</h2>' +
-              (res.success ? (res.processed === 0 ? '<div style="text-align:center;color:var(--text-secondary);font-size:13px;margin-top:8px">' + (res.message || 'ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.') + '</div>' :
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;text-align:center">' +
-                  '<div style="background:var(--bg-base);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700">' + (res.processed||0) + '</div><div style="font-size:10px;color:var(--text-secondary)">ì´ ì²˜ë¦¬</div></div>' +
-                  '<div style="background:var(--bg-base);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:var(--status-success)">' + (res.saved||0) + '</div><div style="font-size:10px;color:var(--text-secondary)">ì €ìž¥ ì™„ë£Œ</div></div>' +
-                  '<div style="background:var(--bg-base);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:var(--status-danger)">' + (res.errors||0) + '</div><div style="font-size:10px;color:var(--text-secondary)">ì˜¤ë¥˜</div></div>' +
-                '</div>' +
-                '<div style="max-height:300px;overflow-y:auto;margin-bottom:14px">' + detail + '</div>'
-              ) : '<div style="color:var(--status-danger);text-align:center;margin-top:8px">' + (res.error || 'ì‹¤íŒ¨') + '</div>') +
-              '<button onclick="this.closest(\'div[style*=z-index]\').parentElement.remove();window.refreshInventory()" style="width:100%;background:var(--brand-primary);color:white;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-        } catch(err) {
-          clearTimeout(to);
-          dismiss();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜: ' + err.message);
+  var inventoryFiles = {
+    contract: null,
+    photo_front: null,
+    photo_rear: null,
+    photo_left: null,
+    photo_right: null
+  };
+
+  var currentActiveSlot = 'contract';
+  var currentCameraMode = 'upload';
+  var localVideoStream = null;
+  var availableCameraDevices = [];
+
+  var btnToggleUpload = modal.querySelector('#inventory-btn-toggle-upload');
+  var btnToggleCamera = modal.querySelector('#inventory-btn-toggle-camera');
+  var uploadArea = modal.querySelector('#inventory-upload-area');
+  var cameraArea = modal.querySelector('#inventory-camera-area');
+  var initialControls = modal.querySelector('#inventory-initial-controls');
+  var loadingDiv = modal.querySelector('#inventory-analysis-loading');
+  var resultDiv = modal.querySelector('#inventory-analysis-result-container');
+  var saveForm = modal.querySelector('#ai-inventory-save-form');
+  var deviceSelect = modal.querySelector('#inventory-camera-device-select');
+  var deviceSelectContainer = modal.querySelector('#inventory-camera-select-container');
+
+  // 취득 목적 드롭다운(프로젝트/현장) 채우기 — 등록 시 "어느 프로젝트/현장용"을 한 번에 지정.
+  (async function populateInventoryPurposeOptions() {
+    try {
+      var projSel = saveForm.querySelector('[name="project_id"]');
+      var siteSel = saveForm.querySelector('[name="purchased_for_site_id"]');
+      var results = await Promise.allSettled([window.API.getProjectList(), window.API.getSiteList()]);
+      var projects = results[0].status === 'fulfilled' ? (results[0].value || []) : [];
+      var sites = results[1].status === 'fulfilled' ? (results[1].value || []) : [];
+      if (projSel) {
+        projects.forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = (p.code ? p.code + ' · ' : '') + (p.name || '');
+          projSel.appendChild(o);
+        });
+      }
+      if (siteSel) {
+        sites.forEach(function(s) {
+          var o = document.createElement('option');
+          o.value = s.id;
+          o.textContent = (s.code || '') + (s.name ? ' (' + s.name + ')' : '');
+          siteSel.appendChild(o);
+        });
+      }
+    } catch (e) { console.error('취득 목적 옵션 로딩 실패', e); }
+  })();
+
+  function showUploadMode() {
+    currentCameraMode = 'upload';
+    btnToggleUpload.className = 'btn-primary';
+    btnToggleCamera.className = 'btn-secondary';
+    uploadArea.style.display = 'flex';
+    cameraArea.style.display = 'none';
+    stopCamera();
+  }
+
+  async function showCameraMode() {
+    currentCameraMode = 'camera';
+    btnToggleUpload.className = 'btn-secondary';
+    btnToggleCamera.className = 'btn-primary';
+    uploadArea.style.display = 'none';
+    cameraArea.style.display = 'grid';
+    await startCamera();
+  }
+
+  btnToggleUpload.onclick = showUploadMode;
+  btnToggleCamera.onclick = showCameraMode;
+
+  var cards = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+  cards.forEach(function(slot) {
+    var card = modal.querySelector('#inventory-card-' + slot);
+    if (card) {
+      card.onclick = function(e) {
+        if (e.target.closest('.trash-btn')) return;
+        modal.querySelector('#inventory-file-' + slot).click();
+      };
+    }
+
+    var fileInput = modal.querySelector('#inventory-file-' + slot);
+    if (fileInput) {
+      fileInput.onchange = function(e) {
+        var file = e.target.files[0];
+        if (file) {
+          setFileSlot(slot, file);
         }
       };
+    }
+  });
+
+  function setFileSlot(slot, file) {
+    inventoryFiles[slot] = file;
+    var url = URL.createObjectURL(file);
+
+    var card = modal.querySelector('#inventory-card-' + slot);
+    if (card) {
+      card.dataset.hasFile = 'true';
+      card.style.borderColor = 'var(--border-default)';
+      var emptyState = card.querySelector('.empty-state');
+      var previewState = card.querySelector('.preview-state');
+      emptyState.style.display = 'none';
+      previewState.style.display = 'block';
+
+      if (slot === 'contract') {
+        var isImg = file.type.startsWith('image/');
+        var previewImg = previewState.querySelector('.preview-img');
+        var iconWrapper = previewState.querySelector('.preview-icon-wrapper');
+        if (isImg) {
+          previewImg.src = url;
+          previewImg.style.display = 'block';
+          iconWrapper.style.display = 'none';
+        } else {
+          previewImg.style.display = 'none';
+          iconWrapper.style.display = 'block';
+        }
+        previewState.querySelector('.file-name').innerText = file.name;
+      } else {
+        var img = previewState.querySelector('.preview-img');
+        img.src = url;
+      }
+    }
+
+    var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+    if (slotRow) {
+      slotRow.querySelector('.slot-status').innerText = '완료';
+      slotRow.querySelector('.slot-status').style.color = 'var(--status-success)';
+      slotRow.querySelector('.slot-delete-btn').style.display = 'inline-block';
+      
+      var thumb = slotRow.querySelector('.slot-thumbnail');
+      var isImg = file.type.startsWith('image/');
+      if (isImg || slot !== 'contract') {
+        thumb.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+      } else {
+        thumb.innerHTML = '<i class="ph ph-file-pdf" style="color:var(--brand-primary); font-size:18px;"></i>';
+      }
+    }
+  }
+
+  function clearFileSlot(slot) {
+    inventoryFiles[slot] = null;
+    var fileInput = modal.querySelector('#inventory-file-' + slot);
+    if (fileInput) fileInput.value = '';
+
+    var card = modal.querySelector('#inventory-card-' + slot);
+    if (card) {
+      delete card.dataset.hasFile;
+      card.style.borderColor = 'var(--border-strong)';
+      var emptyState = card.querySelector('.empty-state');
+      var previewState = card.querySelector('.preview-state');
+      emptyState.style.display = 'flex';
+      previewState.style.display = 'none';
+    }
+
+    var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+    if (slotRow) {
+      var iconName = (slot === 'contract') ? 'ph-file-text' : 'ph-camera';
+      slotRow.querySelector('.slot-thumbnail').innerHTML = '<i class="ph ' + iconName + '" style="color:var(--text-tertiary);"></i>';
+      slotRow.querySelector('.slot-status').innerText = (slot === 'contract') ? '선택된 파일 없음' : '선택된 사진 없음';
+      slotRow.querySelector('.slot-status').style.color = 'var(--text-tertiary)';
+      slotRow.querySelector('.slot-delete-btn').style.display = 'none';
+    }
+  }
+
+  cards.forEach(function(slot) {
+    var card = modal.querySelector('#inventory-card-' + slot);
+    if (card) {
+      var trashBtn = card.querySelector('.trash-btn');
+      if (trashBtn) {
+        trashBtn.onclick = function(e) {
+          e.stopPropagation();
+          clearFileSlot(slot);
+        };
+      }
+    }
+
+    var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+    if (slotRow) {
+      var delBtn = slotRow.querySelector('.slot-delete-btn');
+      delBtn.onclick = function(e) {
+        e.stopPropagation();
+        clearFileSlot(slot);
+      };
+    }
+  });
+
+  var slotRows = modal.querySelectorAll('.webcam-slot-card');
+  slotRows.forEach(function(row) {
+    row.onclick = function() {
+      var slot = row.dataset.slot;
+      setActiveTargetSlot(slot);
+    };
+  });
+
+  function setActiveTargetSlot(slot) {
+    currentActiveSlot = slot;
+    
+    slotRows.forEach(function(row) {
+      if (row.dataset.slot === slot) {
+        row.classList.add('active-target');
+        row.style.background = 'rgba(124, 58, 237, 0.1)';
+        row.style.borderColor = 'var(--brand-primary)';
+        row.querySelector('.target-badge').style.display = 'inline-block';
+      } else {
+        row.classList.remove('active-target');
+        row.style.background = 'var(--bg-base)';
+        row.style.borderColor = 'var(--border-strong)';
+        row.querySelector('.target-badge').style.display = 'none';
+      }
+    });
+
+    var labelMap = {
+      contract: '구매 영수증 / 계약서',
+      photo_front: '장비 전면 사진',
+      photo_rear: '장비 후면 사진',
+      photo_left: '장비 좌측 사진',
+      photo_right: '장비 우측 사진'
+    };
+    modal.querySelector('#inventory-camera-overlay-label').innerText = '촬영 대상: ' + (labelMap[slot] || slot);
+  }
+
+  async function startCamera(preferredDeviceId) {
+    stopCamera();
+    var video = modal.querySelector('#inventory-video-stream');
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      var constraints = {
+        video: { facingMode: 'environment' }
+      };
+      if (preferredDeviceId) {
+        constraints.video = { deviceId: { exact: preferredDeviceId } };
+      }
+      try {
+        var stream = await navigator.mediaDevices.getUserMedia(constraints);
+        localVideoStream = stream;
+        video.srcObject = stream;
+        
+        if (availableCameraDevices.length === 0) {
+          var devices = await navigator.mediaDevices.enumerateDevices();
+          availableCameraDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+          if (availableCameraDevices.length > 1) {
+            deviceSelectContainer.style.display = 'flex';
+            deviceSelect.innerHTML = '';
+            availableCameraDevices.forEach(function(d, idx) {
+              var opt = document.createElement('option');
+              opt.value = d.deviceId;
+              opt.text = d.label || ('Camera ' + (idx + 1));
+              if (preferredDeviceId && d.deviceId === preferredDeviceId) {
+                opt.selected = true;
+              }
+              deviceSelect.appendChild(opt);
+            });
+            deviceSelect.onchange = function() {
+              startCamera(deviceSelect.value);
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Camera stream error:', err);
+        alert('카메라를 활성화할 수 없습니다: ' + err.message);
+        showUploadMode();
+      }
+    } else {
+      alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+      showUploadMode();
+    }
+  }
+
+  function stopCamera() {
+    var video = modal.querySelector('#inventory-video-stream');
+    if (video && video.srcObject) {
+      var stream = video.srcObject;
+      var tracks = stream.getTracks();
+      tracks.forEach(function(track) { track.stop(); });
+      video.srcObject = null;
+    }
+    localVideoStream = null;
+  }
+
+  modal.querySelector('#inventory-btn-capture').onclick = function() {
+    var video = modal.querySelector('#inventory-video-stream');
+    if (!video || !video.srcObject) return;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    var dataUrl = canvas.toDataURL('image/jpeg');
+    var fileName = 'webcam_' + currentActiveSlot + '.jpg';
+    var file = dataURLtoFile(dataUrl, fileName);
+
+    setFileSlot(currentActiveSlot, file);
+
+    var sequence = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+    var nextSlotIdx = sequence.indexOf(currentActiveSlot) + 1;
+    
+    var foundNext = false;
+    for (var i = 0; i < sequence.length; i++) {
+      var s = sequence[(nextSlotIdx + i) % sequence.length];
+      if (!inventoryFiles[s]) {
+        setActiveTargetSlot(s);
+        foundNext = true;
+        break;
+      }
+    }
+    if (!foundNext) {
+      showToast('모든 슬롯이 촬영되었습니다.');
+    }
+  };
+
+  function dataURLtoFile(dataurl, filename) {
+    var arr = dataurl.split(','),
+        mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]),
+        n = bstr.length,
+        u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  }
+
+  function cleanUpAndClose() {
+    stopCamera();
+    modal.remove();
+  }
+
+  modal.querySelector('#inventory-modal-close-btn').onclick = cleanUpAndClose;
+  modal.querySelector('#inventory-upload-cancel-btn').onclick = cleanUpAndClose;
+  modal.querySelector('#inventory-save-cancel-btn').onclick = cleanUpAndClose;
+
+  modal.querySelector('#inventory-upload-submit-btn').onclick = async function(e) {
+    e.preventDefault();
+
+    if (!inventoryFiles.contract) {
+      alert('구매 영수증 / 계약서는 필수 등록 항목입니다.');
+      return;
+    }
+
+    uploadArea.style.display = 'none';
+    cameraArea.style.display = 'none';
+    btnToggleUpload.parentElement.style.display = 'none';
+    initialControls.style.display = 'none';
+    loadingDiv.style.display = 'flex';
+    stopCamera();
+
+    var formData = new FormData();
+    formData.append('contract', inventoryFiles.contract);
+    if (inventoryFiles.photo_front) formData.append('photo_front', inventoryFiles.photo_front);
+    if (inventoryFiles.photo_rear) formData.append('photo_rear', inventoryFiles.photo_rear);
+    if (inventoryFiles.photo_left) formData.append('photo_left', inventoryFiles.photo_left);
+    if (inventoryFiles.photo_right) formData.append('photo_right', inventoryFiles.photo_right);
+
+    try {
+      var tokenEl = document.querySelector('meta[name="csrf-token"]');
+      var response = await fetch('/equipment-api/scan-inventory', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        var errData = await response.json();
+        throw new Error(errData.error || 'AI 분석 중 오류가 발생했습니다.');
+      }
+
+      var res = await response.json();
+      loadingDiv.style.display = 'none';
+      resultDiv.style.display = 'flex';
+
+      var data = res.data || {};
+      var files = res.files || {};
+
+      saveForm.querySelector('[name="equipment_type"]').value = data.equipment_type || '';
+      saveForm.querySelector('[name="model"]').value = data.model || '';
+      saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+      saveForm.querySelector('[name="quantity"]').value = data.quantity || 1;
+      saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
+      saveForm.querySelector('[name="daily_rate"]').value = data.daily_rate || 0;
+      saveForm.querySelector('[name="delivery_fee"]').value = data.delivery_fee || 0;
+      saveForm.querySelector('[name="details"]').value = data.details ? JSON.stringify(data.details) : '';
+
+      var d = data.details || {};
+      var sumRows = [];
+      if (data.rate_amount) sumRows.push('<b>총 가격/단가</b> $' + data.rate_amount);
+      if (d.quote_no) sumRows.push('<b>영수증 번호</b> ' + d.quote_no);
+      if (d.ship_to_address) sumRows.push('<b>주소</b> ' + d.ship_to_address);
+      if (d.lessor && d.lessor.name) sumRows.push('<b>판매사(Lessor/Seller)</b> ' + d.lessor.name);
+      if (d.pricing && d.pricing.total_with_tax) sumRows.push('<b>총 세금포함</b> $' + d.pricing.total_with_tax);
+      if (d.terms && d.terms.payment_terms) sumRows.push('<b>지급 조건</b> ' + d.terms.payment_terms);
+      if (d.specs) sumRows.push('<b>장비 스펙/시리얼</b> ' + d.specs);
+      
+      var sumDiv = saveForm.querySelector('#inventory-ai-extracted-summary');
+      if (sumRows.length && sumDiv) {
+        sumDiv.innerHTML = '<div style="font-weight:700;color:var(--text-primary);margin-bottom:4px">📋 AI 추출 추가 정보 (저장됨)</div>' + sumRows.join(' &nbsp;·&nbsp; ');
+        sumDiv.style.display = 'block';
+      }
+
+      saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
+      saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
+      saveForm.querySelector('[name="photo_rear"]').value = files.photo_rear || '';
+      saveForm.querySelector('[name="photo_left"]').value = files.photo_left || '';
+      saveForm.querySelector('[name="photo_right"]').value = files.photo_right || '';
+
+      var previewsDiv = saveForm.querySelector('#inventory-ai-uploaded-previews');
+      previewsDiv.innerHTML = '';
+      var directions = [
+        { key: 'photo_front', label: '전면' },
+        { key: 'photo_rear', label: '후면' },
+        { key: 'photo_left', label: '좌측' },
+        { key: 'photo_right', label: '우측' }
+      ];
+      directions.forEach(function(d) {
+        var src = '';
+        if (inventoryFiles[d.key]) {
+          src = URL.createObjectURL(inventoryFiles[d.key]);
+        } else if (files[d.key]) {
+          src = files[d.key];
+        }
+
+        if (src) {
+          var previewCard = document.createElement('div');
+          previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
+          previewCard.innerHTML = 
+            '<img src="' + src + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+            '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
+          previewsDiv.appendChild(previewCard);
+        }
+      });
+
+    } catch (err) {
+      loadingDiv.style.display = 'none';
+      btnToggleUpload.parentElement.style.display = 'flex';
+      initialControls.style.display = 'flex';
+      if (currentCameraMode === 'camera') {
+        cameraArea.style.display = 'grid';
+        startCamera();
+      } else {
+        uploadArea.style.display = 'flex';
+      }
+      alert('오류: ' + err.message);
+    }
+  };
+
+  saveForm.onsubmit = async function(e) {
+    e.preventDefault();
+    var detailsRaw = saveForm.querySelector('[name="details"]').value;
+    var detailsObj = null;
+    if (detailsRaw) { try { detailsObj = JSON.parse(detailsRaw); } catch (e) { detailsObj = null; } }
+
+    var payload = {
+      equipment_type: saveForm.querySelector('[name="equipment_type"]').value,
+      model: saveForm.querySelector('[name="model"]').value,
+      vendor: saveForm.querySelector('[name="vendor"]').value,
+      quantity: parseInt(saveForm.querySelector('[name="quantity"]').value, 10) || 1,
+      acquisition_type: saveForm.querySelector('[name="acquisition_type"]').value || '소유',
+      project_id: parseInt(saveForm.querySelector('[name="project_id"]').value, 10) || null,
+      purchased_for_site_id: parseInt(saveForm.querySelector('[name="purchased_for_site_id"]').value, 10) || null,
+      rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
+      daily_rate: parseInt(saveForm.querySelector('[name="daily_rate"]').value, 10) || 0,
+      delivery_fee: parseInt(saveForm.querySelector('[name="delivery_fee"]').value, 10) || 0,
+      details: detailsObj,
+      contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
+      photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
+      photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
+      photo_left: saveForm.querySelector('[name="photo_left"]').value || null,
+      photo_right: saveForm.querySelector('[name="photo_right"]').value || null
+    };
+
+    try {
+      var tokenEl = document.querySelector('meta[name="csrf-token"]');
+      var response = await fetch('/equipment-api/save-inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        var errData = await response.json();
+        throw new Error(errData.error || '자재 정보를 저장하는 중 오류가 발생했습니다.');
+      }
+
+      modal.remove();
+      showToast('자재가 정상적으로 등록되었습니다.');
+      window.refreshInventory();
+    } catch(err) {
+      alert('저장 실패: ' + err.message);
+    }
+  };
+};
+
 
       // ìžì‚° ìƒì„¸ ëª¨ë‹¬
       window.openInventoryAssetModal = async function(assetId) {
+        if (!window.currentRentals || window.currentRentals.length === 0) {
+          try {
+            window.currentRentals = await window.API.getRentalList() || [];
+          } catch(e) {
+            console.error(e);
+          }
+        }
+        var r = (window.currentRentals || []).find(x => x.id === assetId);
+        if (!r) {
+          try {
+            window.currentRentals = await window.API.getRentalList() || [];
+            r = (window.currentRentals || []).find(x => x.id === assetId);
+          } catch(e) {
+            console.error(e);
+          }
+        }
+        if (r) {
+          window.openEquipmentDetailModal(r.realId);
+        } else {
+          alert('자산을 찾을 수 없습니다: ' + assetId);
+        }
+      };
+
+      // 매트릭스 셀 클릭 -> 필터링 목록 표시
+      window.filterInventory = async function(cat, site) {
         var modal = document.createElement('div');
-        modal.id = 'inv-asset-modal';
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+        modal.id = 'inventory-filter-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
         modal.innerHTML = '<div style="color:white"><i class="ph ph-spinner ph-spin" style="font-size:32px"></i></div>';
         document.body.appendChild(modal);
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
 
         try {
-          var res = await window.API.getInventoryAssetDetail(assetId);
-          if (!res || !res.success) {
-            modal.innerHTML = '<div style="background:var(--bg-panel);padding:24px;border-radius:12px;color:var(--status-danger)">ìžì‚° ì •ë³´ ì—†ìŒ: ' + (res && res.error || assetId) + '<br><br><button onclick="document.getElementById(\'inv-asset-modal\').remove()" class="btn-secondary">ë‹«ê¸°</button></div>';
-            return;
-          }
-          var a = res.asset;
-          var meta = window.getInvCatMeta(a['ì¹´í…Œê³ ë¦¬']);
-          var photo = a['ì‚¬ì§„URLs'] || '';
-          var hasPhoto = photo && /^https?:\/\//.test(photo);
+          var items = await window.API.getRentalList() || [];
+          window.currentRentals = items; // cache for detail modal lookup
+          
+          var filtered = items.filter(function(item) {
+            var itemCat = item.equipType || '기타';
+            var itemLoc = item.siteCode || '창고';
+            return itemCat === cat && itemLoc === site;
+          });
 
-          function row(label, val) {
-            if (val === undefined || val === null || val === '') val = '<span style="color:var(--text-tertiary)">â€”</span>';
-            return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-subtle)">' +
-              '<span style="font-size:11px;color:var(--text-tertiary);font-weight:600;letter-spacing:0.3px;text-transform:uppercase">' + label + '</span>' +
-              '<span style="font-size:12px;color:var(--text-primary);font-weight:600;text-align:right;max-width:60%">' + val + '</span></div>';
+          var meta = window.getInvCatMeta(cat);
+          
+          var rowsHtml = filtered.map(function(item) {
+            var operator = item.operator || '<span style="color:var(--text-tertiary)">미배정</span>';
+            var valueText = item.dailyRate ? '$' + Number(item.dailyRate).toLocaleString() : '-';
+            if (item.payload && item.payload.details && item.payload.details.pricing && item.payload.details.pricing.total) {
+              valueText = '$' + Number(item.payload.details.pricing.total).toLocaleString();
+            }
+            return '<tr style="cursor:pointer;" onclick="window.openInventoryFromFilter(' + item.realId + ')">' +
+              '<td class="cell-mono">' + (item.id || '') + '</td>' +
+              '<td class="cell-primary">' + (item.model || '') + '</td>' +
+              '<td>' + (item.vendor || '-') + '</td>' +
+              '<td class="cell-mono">' + (item.startDate || '-') + '</td>' +
+              '<td class="cell-mono">' + valueText + '</td>' +
+              '<td>' + operator + '</td>' +
+              '<td>' + statusPill(item.status) + '</td>' +
+            '</tr>';
+          }).join('');
+
+          if (filtered.length === 0) {
+            rowsHtml = '<tr><td colspan="7" style="text-align:center;color:var(--text-tertiary);padding:32px;">등록된 자산이 없습니다.</td></tr>';
           }
 
           modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;width:720px;max-width:100%;max-height:90vh;overflow-y:auto">' +
-              '<div style="padding:16px 20px;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,' + meta.color + '22,transparent)">' +
-                '<div style="display:flex;align-items:center;gap:10px">' +
-                  '<i class="ph ' + meta.icon + '" style="font-size:20px;color:' + meta.color + '"></i>' +
-                  '<span style="font-size:14px;font-weight:700">ìžì‚° ìƒì„¸</span>' +
-                  '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary);background:var(--bg-base);padding:3px 8px;border-radius:4px">' + (a['AssetID'] || '-') + '</span>' +
-                '</div>' +
-                '<button onclick="document.getElementById(\'inv-asset-modal\').remove()" style="background:var(--bg-base);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-secondary);font-size:18px">Ã—</button>' +
+            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:800px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+                '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;">' +
+                  '<i class="ph ' + meta.icon + '" style="color:' + meta.color + ';font-size:22px;"></i> ' + cat + ' &middot; ' + site + ' 자산 목록' +
+                '</h2>' +
+                '<button onclick="this.closest(\'#inventory-filter-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
               '</div>' +
-              '<div style="padding:20px;display:grid;grid-template-columns:240px 1fr;gap:20px">' +
-                '<div>' +
-                  (hasPhoto ? '<img src="' + photo + '" style="width:100%;border-radius:10px;border:2px solid ' + meta.color + '">' :
-                    '<div style="width:100%;aspect-ratio:1;background:' + meta.color + '22;display:flex;align-items:center;justify-content:center;border-radius:10px"><i class="ph ' + meta.icon + '" style="font-size:64px;color:' + meta.color + '"></i></div>') +
-                  '<div style="text-align:center;margin-top:10px">' +
-                    '<div style="font-size:11px;font-weight:700;color:' + meta.color + ';text-transform:uppercase">' + (a['ì¹´í…Œê³ ë¦¬'] || '-') + '</div>' +
-                    '<div style="font-size:9px;color:var(--text-tertiary);margin-top:2px">ë“±ë¡: ' + (a['ë“±ë¡ì¼'] ? new Date(a['ë“±ë¡ì¼']).toLocaleDateString('ko-KR') : '-') + '</div>' +
-                  '</div>' +
-                '</div>' +
-                '<div>' +
-                  '<div style="font-size:20px;font-weight:800;line-height:1.2;margin-bottom:4px">' + (a['ì´ë¦„'] || '-') + '</div>' +
-                  '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px"><strong>' + (a['ë¸Œëžœë“œ'] || '-') + '</strong>' + (a['ëª¨ë¸'] ? ' Â· ' + a['ëª¨ë¸'] : '') + '</div>' +
-                  row('ì‹œë¦¬ì–¼', a['ì‹œë¦¬ì–¼']) +
-                  row('ìŠ¤íŽ™', a['ìŠ¤íŽ™']) +
-                  row('í˜„ìž¬ê°€ì¹˜', a['í˜„ìž¬ê°€ì¹˜'] ? '$' + Number(a['í˜„ìž¬ê°€ì¹˜']).toLocaleString() : '-') +
-                  row('ìƒíƒœ', a['ìƒíƒœ']) +
-                  row('í˜„ìž¥', a['í˜„ìž¬SiteID']) +
-                  row('ë³´ê´€ìœ„ì¹˜', a['ë³´ê´€ìœ„ì¹˜']) +
-                  row('ë³´ìœ ìž', a['ë³´ìœ ìž_BadgeID']) +
-                  row('ë‹¤ìŒì ê²€', a['ë‹¤ìŒì ê²€ì¼']) +
-                  row('ì ê²€ì£¼ê¸°', a['ì ê²€ì£¼ê¸°ê°œì›”'] ? a['ì ê²€ì£¼ê¸°ê°œì›”'] + 'ê°œì›”' : '-') +
-                  row('ë¹„ê³ ', a['ë¹„ê³ ']) +
-                '</div>' +
+              '<div style="overflow-x:auto;">' +
+                '<table class="data-table" style="width:100%;">' +
+                  '<thead>' +
+                    '<tr>' +
+                      '<th>자산ID</th>' +
+                      '<th>모델명</th>' +
+                      '<th>제조사/브랜드</th>' +
+                      '<th>구매/대여일</th>' +
+                      '<th>취득가치/단가</th>' +
+                      '<th>운영/담당자</th>' +
+                      '<th>상태</th>' +
+                    '</tr>' +
+                  '</thead>' +
+                  '<tbody>' + rowsHtml + '</tbody>' +
+                '</table>' +
               '</div>' +
-              '<div style="padding:14px 20px;border-top:1px solid var(--border-default);display:flex;gap:8px;justify-content:flex-end;background:var(--bg-base)">' +
-                '<button class="btn-secondary" disabled style="opacity:0.5"><i class="ph ph-arrow-square-out"></i> ì´ë™ (Phase 2)</button>' +
-                '<button class="btn-secondary" disabled style="opacity:0.5"><i class="ph ph-wrench"></i> ì ê²€ (Phase 3)</button>' +
-                '<button onclick="document.getElementById(\'inv-asset-modal\').remove()" class="btn-primary">ë‹«ê¸°</button>' +
+              '<div style="margin-top:16px;display:flex;justify-content:flex-end;">' +
+                '<button onclick="this.closest(\'#inventory-filter-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">닫기</button>' +
               '</div>' +
             '</div>';
-        } catch(err) {
-          modal.innerHTML = '<div style="background:var(--bg-panel);padding:24px;border-radius:12px;color:var(--status-danger)">ë¡œë”© ì‹¤íŒ¨: ' + err.message + '<br><br><button onclick="document.getElementById(\'inv-asset-modal\').remove()" class="btn-secondary">ë‹«ê¸°</button></div>';
+
+          window.openInventoryFromFilter = function(realId) {
+            modal.remove();
+            window.openEquipmentDetailModal(realId);
+          };
+        } catch (err) {
+          modal.innerHTML = '<div style="background:var(--bg-panel);padding:24px;border-radius:12px;color:var(--status-danger)">로딩 실패: ' + err.message + '<br><br><button onclick="document.getElementById(\'inventory-filter-modal\').remove()" class="btn-secondary">닫기</button></div>';
         }
       };
 
-      // ë§¤íŠ¸ë¦­ìŠ¤ ì…€ í´ë¦­ â†’ í•„í„° (Phase 2 ì˜ˆì•½)
-      window.filterInventory = function(cat, site) {
-        console.log('Filter:', cat, '/', site);
-        // Phase 2: í•„í„° + ëª©ë¡ í‘œì‹œ
+      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      async function renderVehicle() {
+        pageContainer.innerHTML = skeleton();
+        try {
+          const [stats, vehicles] = await Promise.all([
+            window.API.getVehicleStats(),
+            window.API.getVehicleList()
+          ]);
+          var vehiclesListHtml = vehicles.map(function (v) {
+            var rentClass = v.rentEnd < '2026-05-30' ? ' text-warning' : '';
+            var insClass = v.insuranceExp < '2026-06-30' ? ' text-warning' : '';
+            var oilClass = (v.nextOil - v.mileage) < 1000 ? ' text-warning' : '';
+            var assignee = v.assignee || '<span style="color:var(--text-tertiary)">미배정</span>';
+            var aiTag = '';
+            
+            // Render table row
+            return '<tr style="cursor:pointer" onclick=\'openVehicleDetailModal(' + JSON.stringify(v).replace(/'/g, "&#39;").replace(/"/g, "&quot;") + ')\'>' +
+              '<td class="cell-mono">' + v.id + aiTag + '</td>' +
+              '<td class="cell-primary cell-mono">' + v.plate + '</td>' +
+              '<td>' + v.type + ' ' + v.model + '</td>' +
+              '<td>' + assignee + '</td>' +
+              '<td class="cell-mono' + rentClass + '">' + v.rentEnd + '</td>' +
+              '<td class="cell-mono' + insClass + '">' + v.insuranceExp + '</td>' +
+              '<td class="cell-mono">' + (v.mileage||0).toLocaleString() + '</td>' +
+              '<td class="cell-mono' + oilClass + '">' + (v.nextOil||0).toLocaleString() + '</td>' +
+              '<td>' + statusPill(v.status) + '</td>' +
+              '</tr>';
+          }).join('');
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">차량 관리</h1><p class="page-subtitle">렌트 차량 현황 · 보험/등록 만료 추적 · AI 계약서 자동 등록</p></div>' +
+            '<div class="action-row">' +
+            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> 목록 출력</button>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;" onclick="openAiVehicleRegModal()">' +
+            '<i class="ph ph-robot"></i> 🤖 AI 렌트카 등록</button>' +
+            '<button class="btn-primary" style="background:var(--status-warning);color:#000;" onclick="openNfcAssignModal(\'VEHICLE\')"><i class="ph ph-identification-card"></i> NFC 배정</button>' +
+            '</div></div>' +
+            '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
+            '<div class="kpi-card"><div class="kpi-label">전체 차량</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 차량</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">운행중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">정상 배정</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">정비중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.maintenance + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">서비스 센터</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">렌트만료임박</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.rentExpiringSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">60일 이내</span></div></div>' +
+            '</div>' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-car"></i> 차량 목록</div></div>' +
+            '<div class="panel-body"><table class="data-table"><thead><tr><th>차량ID</th><th>번호판</th><th>모델</th><th>배정자</th><th>렌트만료</th><th>보험만료</th><th>현재마일</th><th>다음오일</th><th>상태</th></tr></thead><tbody>' + (vehiclesListHtml || '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 차량 없음</td></tr>') + '</tbody></table></div></div>';
+
+        } catch (err) { renderError('차량 데이터 로딩 실패'); console.error(err); }
+      }
+
+      // AI Rent Car Auto Registration Modal
+      window.openAiVehicleRegModal = function() {
+        var modal = document.createElement('div');
+        modal.id = 'ai-vehicle-reg-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<style>' +
+            '#ai-vehicle-reg-modal * { box-sizing: border-box; }' +
+            '#ai-vehicle-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
+            '#ai-vehicle-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
+            '#ai-vehicle-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+            '#ai-vehicle-reg-modal input[type="text"],' +
+            '#ai-vehicle-reg-modal input[type="number"],' +
+            '#ai-vehicle-reg-modal input[type="date"] {' +
+            '  width: 100%;' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  border-radius: 8px;' +
+            '  padding: 10px 12px;' +
+            '  color: var(--text-primary);' +
+            '  font-size: 13px;' +
+            '  outline: none;' +
+            '  transition: border-color 0.2s, box-shadow 0.2s;' +
+            '}' +
+            '#ai-vehicle-reg-modal input[type="text"]:focus,' +
+            '#ai-vehicle-reg-modal input[type="number"]:focus,' +
+            '#ai-vehicle-reg-modal input[type="date"]:focus {' +
+            '  border-color: #7c3aed;' +
+            '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
+            '}' +
+            '#ai-vehicle-reg-modal label {' +
+            '  display: block;' +
+            '  font-size: 12px;' +
+            '  font-weight: 600;' +
+            '  color: var(--text-secondary);' +
+            '  margin-bottom: 6px;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-primary {' +
+            '  background: linear-gradient(135deg, #7c3aed, #2563eb);' +
+            '  border: none;' +
+            '  color: #fff;' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: opacity 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-primary:hover {' +
+            '  opacity: 0.9;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-primary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-secondary {' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  color: var(--text-primary);' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: background 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-secondary:hover {' +
+            '  background: var(--bg-body);' +
+            '}' +
+            '#ai-vehicle-reg-modal .btn-secondary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#vehicle-modal-close-btn {' +
+            '  transition: color 0.2s, transform 0.2s;' +
+            '}' +
+            '#vehicle-modal-close-btn:hover {' +
+            '  color: var(--text-primary);' +
+            '  transform: rotate(90deg);' +
+            '}' +
+            '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
+            '@media (max-width: 640px) { #vehicle-camera-area { grid-template-columns: 1fr !important; } }' +
+          '</style>' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:20px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;box-sizing:border-box;">' +
+            // Header
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:22px;"></i> AI 렌트카 자동 등록</h2>' +
+              '<button type="button" id="vehicle-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            
+            // Description
+            '<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height:1.5;">' +
+              '렌트 계약서와 차량 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 사진을 자동으로 판독하여 장부에 즉시 등록합니다.' +
+            '</div>' +
+
+            // Hidden file inputs
+            '<input type="file" id="vehicle-file-contract" style="display:none" accept="application/pdf,image/*">' +
+            '<input type="file" id="vehicle-file-photo_front" style="display:none" accept="image/*">' +
+            '<input type="file" id="vehicle-file-photo_rear" style="display:none" accept="image/*">' +
+            '<input type="file" id="vehicle-file-photo_left" style="display:none" accept="image/*">' +
+            '<input type="file" id="vehicle-file-photo_right" style="display:none" accept="image/*">' +
+
+            // Upload / Camera Toggle
+            '<div style="display: flex; gap: 8px; margin-bottom: 16px;">' +
+              '<button type="button" id="vehicle-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-upload-simple"></i> 파일 업로드' +
+              '</button>' +
+              '<button type="button" id="vehicle-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-camera"></i> 실시간 카메라' +
+              '</button>' +
+            '</div>' +
+
+            // Upload Mode Area (Grid of Cards)
+            '<div id="vehicle-upload-area" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 16px;">' +
+              // Contract (Full width card)
+              '<div id="vehicle-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 75px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:6px;">' +
+                  '<i class="ph ph-file-text" style="font-size: 24px; color: var(--text-tertiary);"></i>' +
+                  '<div style="font-weight: 600; font-size:13px; color:var(--text-primary);">렌트 계약서 파일 (PDF/이미지) <span style="color:var(--status-danger)">*</span></div>' +
+                  '<div style="font-size: 11px; color: var(--text-tertiary);">클릭하여 파일 업로드</div>' +
+                '</div>' +
+                '<div class="preview-state" style="display: none; width:100%; text-align:center; position:relative;">' +
+                  '<div class="preview-icon-wrapper" style="font-size: 24px; color: var(--brand-primary); margin-bottom: 4px;"><i class="ph ph-file-pdf"></i></div>' +
+                  '<img class="preview-img" style="max-height: 50px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 4px;">' +
+                  '<div class="file-name" style="font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>' +
+                  '<button type="button" class="trash-btn" style="position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,0.6); color: #fff; width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-trash"></i></button>' +
+                '</div>' +
+              '</div>' +
+              
+              // Directional photos (2x2 grid)
+              '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
+                // Front
+                '<div id="vehicle-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                // Rear
+                '<div id="vehicle-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                // Left
+                '<div id="vehicle-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                // Right
+                '<div id="vehicle-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+
+            // Camera Mode Area (Side-by-side)
+            '<div id="vehicle-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin-bottom: 16px;">' +
+              // Left: Video feed
+              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
+                  '<video id="vehicle-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
+                  '<div id="vehicle-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 11px; padding: 4px 6px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+                    '촬영 대상: 계약서' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+                  '<button type="button" id="vehicle-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 34px; font-size: 12px; font-weight: 600; cursor:pointer;">' +
+                    '<i class="ph ph-camera"></i> 사진 촬영' +
+                  '</button>' +
+                '</div>' +
+                '<div id="vehicle-camera-select-container" style="margin-top: 8px; display: none; align-items:center; gap:6px;">' +
+                  '<span style="font-size:10px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라:</span>' +
+                  '<select id="vehicle-camera-device-select" style="flex:1; padding: 4px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 10px; outline: none;"></select>' +
+                '</div>' +
+              '</div>' +
+              
+              // Right: Slots selector
+              '<div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:2px; padding-bottom:4px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+                
+                // Contract slot
+                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-file-text" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">계약서 <span style="color:var(--status-danger)">*</span></div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Front slot
+                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Rear slot
+                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Left slot
+                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+
+                // Right slot
+                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+
+            // Submit Buttons / Controls for Initial Upload Mode
+            '<div id="vehicle-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
+              '<button type="button" id="vehicle-upload-cancel-btn" class="btn-secondary" style="padding:0 20px; cursor:pointer;">취소</button>' +
+              '<button type="button" id="vehicle-upload-submit-btn" class="btn-primary" style="padding:0 24px; cursor:pointer;">AI 분석 실행</button>' +
+            '</div>' +
+
+            // Loading / Analysis Spinner
+            '<div id="ai-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px 0; gap:12px;">' +
+              '<div style="width:40px; height:40px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary); font-size:14px; font-weight:700;">Gemini AI가 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary); font-size:12px; text-align:center; max-width:320px; line-height:1.4;">계약서 및 차량 사진 정보를 추출하여 자동 매핑하고 있습니다. 잠시만 기다려주세요.</div>' +
+            '</div>' +
+
+            // Verification and save form
+            '<div id="ai-analysis-result-container" style="display:none; flex-direction:column; gap:12px; margin-top:12px;">' +
+              '<h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+              '<div style="font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.4;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-vehicle-save-form" style="display:flex; flex-direction:column; gap:12px;">' +
+                '<input type="hidden" name="contract_path">' +
+                '<input type="hidden" name="photo_front">' +
+                '<input type="hidden" name="photo_rear">' +
+                '<input type="hidden" name="photo_left">' +
+                '<input type="hidden" name="photo_right">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>차량 번호판</label>' +
+                    '<input type="text" name="plate_number" required>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>차량 모델명</label>' +
+                    '<input type="text" name="model" required>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>렌트사 (Vendor)</label>' +
+                    '<input type="text" name="vendor">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>현재 마일리지 (Odometer)</label>' +
+                    '<input type="number" name="current_mileage" min="0">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">' +
+                  '<div>' +
+                    '<label>렌트 시작일</label>' +
+                    '<input type="date" name="rent_start">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>렌트 종료일</label>' +
+                    '<input type="date" name="rent_end">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>보험 만료일</label>' +
+                    '<input type="date" name="insurance_expiry">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px;"></div>' +
+                '<div style="margin-top:8px; display:flex; justify-content:flex-end; gap:12px;">' +
+                  '<button type="button" id="vehicle-save-cancel-btn" class="btn-secondary" style="padding:0 20px;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success) !important; padding:0 24px; border:none;">차량 등록 및 저장</button>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var vehicleFiles = {
+          contract: null,
+          photo_front: null,
+          photo_rear: null,
+          photo_left: null,
+          photo_right: null
+        };
+
+        var currentActiveSlot = 'contract';
+        var currentCameraMode = 'upload';
+        var localVideoStream = null;
+        var availableCameraDevices = [];
+
+        // Elements
+        var btnToggleUpload = modal.querySelector('#vehicle-btn-toggle-upload');
+        var btnToggleCamera = modal.querySelector('#vehicle-btn-toggle-camera');
+        var uploadArea = modal.querySelector('#vehicle-upload-area');
+        var cameraArea = modal.querySelector('#vehicle-camera-area');
+        var initialControls = modal.querySelector('#vehicle-initial-controls');
+        var loadingDiv = modal.querySelector('#ai-analysis-loading');
+        var resultDiv = modal.querySelector('#ai-analysis-result-container');
+        var saveForm = modal.querySelector('#ai-vehicle-save-form');
+        var deviceSelect = modal.querySelector('#vehicle-camera-device-select');
+        var deviceSelectContainer = modal.querySelector('#vehicle-camera-select-container');
+
+        // Helpers
+        function showUploadMode() {
+          currentCameraMode = 'upload';
+          btnToggleUpload.className = 'btn-primary';
+          btnToggleCamera.className = 'btn-secondary';
+          uploadArea.style.display = 'flex';
+          cameraArea.style.display = 'none';
+          stopCamera();
+        }
+
+        async function showCameraMode() {
+          currentCameraMode = 'camera';
+          btnToggleUpload.className = 'btn-secondary';
+          btnToggleCamera.className = 'btn-primary';
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'grid';
+          await startCamera();
+        }
+
+        btnToggleUpload.onclick = showUploadMode;
+        btnToggleCamera.onclick = showCameraMode;
+
+        var cards = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            card.onclick = function(e) {
+              if (e.target.closest('.trash-btn')) return;
+              modal.querySelector('#vehicle-file-' + slot).click();
+            };
+          }
+
+          var fileInput = modal.querySelector('#vehicle-file-' + slot);
+          if (fileInput) {
+            fileInput.onchange = function(e) {
+              var file = e.target.files[0];
+              if (file) {
+                setFileSlot(slot, file);
+              }
+            };
+          }
+        });
+
+        // Set file into slot and update UI
+        function setFileSlot(slot, file) {
+          vehicleFiles[slot] = file;
+          var url = URL.createObjectURL(file);
+
+          // Update upload cards
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            card.dataset.hasFile = 'true';
+            card.style.borderColor = 'var(--border-default)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'none';
+            previewState.style.display = 'block';
+
+            if (slot === 'contract') {
+              var isImg = file.type.startsWith('image/');
+              var previewImg = previewState.querySelector('.preview-img');
+              var iconWrapper = previewState.querySelector('.preview-icon-wrapper');
+              if (isImg) {
+                previewImg.src = url;
+                previewImg.style.display = 'block';
+                iconWrapper.style.display = 'none';
+              } else {
+                previewImg.style.display = 'none';
+                iconWrapper.style.display = 'block';
+              }
+              previewState.querySelector('.file-name').innerText = file.name;
+            } else {
+              var img = previewState.querySelector('.preview-img');
+              img.src = url;
+            }
+          }
+
+          // Update webcam list rows
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            slotRow.querySelector('.slot-status').innerText = '완료';
+            slotRow.querySelector('.slot-status').style.color = 'var(--status-success)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'inline-block';
+            
+            var thumb = slotRow.querySelector('.slot-thumbnail');
+            var isImg = file.type.startsWith('image/');
+            if (isImg || slot !== 'contract') {
+              thumb.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+            } else {
+              thumb.innerHTML = '<i class="ph ph-file-pdf" style="color:var(--brand-primary); font-size:18px;"></i>';
+            }
+          }
+        }
+
+        // Remove file from slot and update UI
+        function clearFileSlot(slot) {
+          vehicleFiles[slot] = null;
+          var fileInput = modal.querySelector('#vehicle-file-' + slot);
+          if (fileInput) fileInput.value = '';
+
+          // Update upload cards
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            delete card.dataset.hasFile;
+            card.style.borderColor = 'var(--border-strong)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'flex';
+            previewState.style.display = 'none';
+          }
+
+          // Update webcam list rows
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var iconName = (slot === 'contract') ? 'ph-file-text' : 'ph-camera';
+            slotRow.querySelector('.slot-thumbnail').innerHTML = '<i class="ph ' + iconName + '" style="color:var(--text-tertiary);"></i>';
+            slotRow.querySelector('.slot-status').innerText = (slot === 'contract') ? '선택된 파일 없음' : '선택된 사진 없음';
+            slotRow.querySelector('.slot-status').style.color = 'var(--text-tertiary)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'none';
+          }
+        }
+
+        // Trash button click listeners
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#vehicle-card-' + slot);
+          if (card) {
+            var trashBtn = card.querySelector('.trash-btn');
+            if (trashBtn) {
+              trashBtn.onclick = function(e) {
+                e.stopPropagation();
+                clearFileSlot(slot);
+              };
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var delBtn = slotRow.querySelector('.slot-delete-btn');
+            delBtn.onclick = function(e) {
+              e.stopPropagation();
+              clearFileSlot(slot);
+            };
+          }
+        });
+
+        // Webcam slot row clicks (setting active target)
+        var slotRows = modal.querySelectorAll('.webcam-slot-card');
+        slotRows.forEach(function(row) {
+          row.onclick = function() {
+            var slot = row.dataset.slot;
+            setActiveTargetSlot(slot);
+          };
+        });
+
+        function setActiveTargetSlot(slot) {
+          currentActiveSlot = slot;
+          
+          slotRows.forEach(function(row) {
+            if (row.dataset.slot === slot) {
+              row.classList.add('active-target');
+              row.style.background = 'rgba(124,58,237,0.1)';
+              row.style.borderColor = 'var(--brand-primary)';
+              row.querySelector('.target-badge').style.display = 'inline-block';
+            } else {
+              row.classList.remove('active-target');
+              row.style.background = 'var(--bg-base)';
+              row.style.borderColor = 'var(--border-strong)';
+              row.querySelector('.target-badge').style.display = 'none';
+            }
+          });
+
+          var labelMap = {
+            contract: '렌트 계약서',
+            photo_front: '차량 전면 사진',
+            photo_rear: '차량 후면 사진',
+            photo_left: '차량 좌측 사진',
+            photo_right: '차량 우측 사진'
+          };
+          modal.querySelector('#vehicle-camera-overlay-label').innerText = '촬영 대상: ' + (labelMap[slot] || slot);
+        }
+
+        // Camera functions
+        async function startCamera(preferredDeviceId) {
+          stopCamera();
+          var video = modal.querySelector('#vehicle-video-stream');
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            var constraints = {
+              video: { facingMode: 'environment' }
+            };
+            if (preferredDeviceId) {
+              constraints.video = { deviceId: { exact: preferredDeviceId } };
+            }
+            try {
+              var stream = await navigator.mediaDevices.getUserMedia(constraints);
+              localVideoStream = stream;
+              video.srcObject = stream;
+              
+              if (availableCameraDevices.length === 0) {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameraDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                if (availableCameraDevices.length > 1) {
+                  deviceSelectContainer.style.display = 'flex';
+                  deviceSelect.innerHTML = '';
+                  availableCameraDevices.forEach(function(d, idx) {
+                    var opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || ('Camera ' + (idx + 1));
+                    if (preferredDeviceId && d.deviceId === preferredDeviceId) {
+                      opt.selected = true;
+                    }
+                    deviceSelect.appendChild(opt);
+                  });
+                  deviceSelect.onchange = function() {
+                    startCamera(deviceSelect.value);
+                  };
+                }
+              }
+            } catch (err) {
+              console.error('Camera stream error:', err);
+              alert('카메라를 활성화할 수 없습니다: ' + err.message);
+              showUploadMode();
+            }
+          } else {
+            alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+            showUploadMode();
+          }
+        }
+
+        function stopCamera() {
+          var video = modal.querySelector('#vehicle-video-stream');
+          if (video && video.srcObject) {
+            var stream = video.srcObject;
+            var tracks = stream.getTracks();
+            tracks.forEach(function(track) { track.stop(); });
+            video.srcObject = null;
+          }
+          localVideoStream = null;
+        }
+
+        // Snap and capture
+        modal.querySelector('#vehicle-btn-capture').onclick = function() {
+          var video = modal.querySelector('#vehicle-video-stream');
+          if (!video || !video.srcObject) return;
+
+          var canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          var dataUrl = canvas.toDataURL('image/jpeg');
+          var fileName = 'webcam_' + currentActiveSlot + '.jpg';
+          var file = dataURLtoFile(dataUrl, fileName);
+
+          setFileSlot(currentActiveSlot, file);
+
+          var sequence = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+          var nextSlotIdx = sequence.indexOf(currentActiveSlot) + 1;
+          
+          var foundNext = false;
+          for (var i = 0; i < sequence.length; i++) {
+            var s = sequence[(nextSlotIdx + i) % sequence.length];
+            if (!vehicleFiles[s]) {
+              setActiveTargetSlot(s);
+              foundNext = true;
+              break;
+            }
+          }
+          if (!foundNext) {
+            showToast('모든 슬롯이 촬영되었습니다.');
+          }
+        };
+
+        function dataURLtoFile(dataurl, filename) {
+          var arr = dataurl.split(','),
+              mime = arr[0].match(/:(.*?);/)[1],
+              bstr = atob(arr[1]),
+              n = bstr.length,
+              u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new File([u8arr], filename, { type: mime });
+        }
+
+        function cleanUpAndClose() {
+          stopCamera();
+          modal.remove();
+        }
+
+        modal.querySelector('#vehicle-modal-close-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#vehicle-upload-cancel-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#vehicle-save-cancel-btn').onclick = cleanUpAndClose;
+
+        // Submit form (Trigger AI Analysis)
+        modal.querySelector('#vehicle-upload-submit-btn').onclick = async function(e) {
+          e.preventDefault();
+
+          if (!vehicleFiles.contract) {
+            alert('렌트 계약서는 필수 등록 항목입니다.');
+            return;
+          }
+
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'none';
+          btnToggleUpload.parentElement.style.display = 'none';
+          initialControls.style.display = 'none';
+          loadingDiv.style.display = 'flex';
+          stopCamera();
+
+          var formData = new FormData();
+          formData.append('contract', vehicleFiles.contract);
+          if (vehicleFiles.photo_front) formData.append('photo_front', vehicleFiles.photo_front);
+          if (vehicleFiles.photo_rear) formData.append('photo_rear', vehicleFiles.photo_rear);
+          if (vehicleFiles.photo_left) formData.append('photo_left', vehicleFiles.photo_left);
+          if (vehicleFiles.photo_right) formData.append('photo_right', vehicleFiles.photo_right);
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/scan-rental', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || 'AI 분석 중 오류가 발생했습니다.');
+            }
+
+            var res = await response.json();
+            loadingDiv.style.display = 'none';
+            resultDiv.style.display = 'flex';
+
+            var data = res.data || {};
+            var files = res.files || {};
+
+            saveForm.querySelector('[name="plate_number"]').value = data.plate_number || '';
+            saveForm.querySelector('[name="model"]').value = data.model || '';
+            saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+            saveForm.querySelector('[name="current_mileage"]').value = data.current_mileage || 0;
+            saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
+            saveForm.querySelector('[name="rent_end"]').value = data.rent_end || '';
+            saveForm.querySelector('[name="insurance_expiry"]').value = data.insurance_expiry || '';
+
+            saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
+            saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
+            saveForm.querySelector('[name="photo_rear"]').value = files.photo_rear || '';
+            saveForm.querySelector('[name="photo_left"]').value = files.photo_left || '';
+            saveForm.querySelector('[name="photo_right"]').value = files.photo_right || '';
+
+            var previewsDiv = saveForm.querySelector('#ai-uploaded-previews');
+            previewsDiv.innerHTML = '';
+            var directions = [
+              { key: 'photo_front', label: '전면' },
+              { key: 'photo_rear', label: '후면' },
+              { key: 'photo_left', label: '좌측' },
+              { key: 'photo_right', label: '우측' }
+            ];
+            directions.forEach(function(d) {
+              var src = '';
+              if (vehicleFiles[d.key]) {
+                src = URL.createObjectURL(vehicleFiles[d.key]);
+              } else if (files[d.key]) {
+                src = files[d.key];
+              }
+
+              if (src) {
+                var previewCard = document.createElement('div');
+                previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
+                previewCard.innerHTML = 
+                  '<img src="' + src + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+                  '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
+                previewsDiv.appendChild(previewCard);
+              }
+            });
+
+          } catch (err) {
+            loadingDiv.style.display = 'none';
+            btnToggleUpload.parentElement.style.display = 'flex';
+            initialControls.style.display = 'flex';
+            if (currentCameraMode === 'camera') {
+              cameraArea.style.display = 'grid';
+              startCamera();
+            } else {
+              uploadArea.style.display = 'flex';
+            }
+            alert('오류: ' + err.message);
+          }
+        };
+
+        saveForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            plate_number: saveForm.querySelector('[name="plate_number"]').value,
+            model: saveForm.querySelector('[name="model"]').value,
+            vendor: saveForm.querySelector('[name="vendor"]').value,
+            current_mileage: parseInt(saveForm.querySelector('[name="current_mileage"]').value, 10) || 0,
+            rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
+            rent_end: saveForm.querySelector('[name="rent_end"]').value || null,
+            insurance_expiry: saveForm.querySelector('[name="insurance_expiry"]').value || null,
+            contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
+            photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
+            photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
+            photo_left: saveForm.querySelector('[name="photo_left"]').value || null,
+            photo_right: saveForm.querySelector('[name="photo_right"]').value || null
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/save', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '차량 정보를 저장하는 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('차량이 성공적으로 등록되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Detailed Vehicle Info & Chronological Rental History modal
+      window.openVehicleDetailModal = async function(v) {
+        function getSecureFileUrl(path) {
+          if (!path) return '';
+          if (path.indexOf('/storage/') === 0) {
+            return '/vehicle-api/file?path=' + encodeURIComponent(path.replace('/storage/', ''));
+          }
+          return path;
+        }
+
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-detail-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        var photosHtml = '';
+        var directions = [
+          { path: v.photo_front, label: '전면 사진' },
+          { path: v.photo_rear, label: '후면 사진' },
+          { path: v.photo_left, label: '좌측 사진' },
+          { path: v.photo_right, label: '우측 사진' }
+        ];
+        directions.forEach(function(d) {
+          if (d.path) {
+            var secureUrl = getSecureFileUrl(d.path);
+            photosHtml += '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:6px;text-align:center;">' +
+              '<a href="' + secureUrl + '" target="_blank">' +
+                '<img src="' + secureUrl + '" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px;border:1px solid var(--border-subtle);">' +
+              '</a>' +
+              '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + d.label + '</span>' +
+            '</div>';
+          }
+        });
+
+        if (photosHtml) {
+          photosHtml = '<div style="margin-top:16px;">' +
+            '<h4 style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">차량 사진 (4방향)</h4>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' + photosHtml + '</div>' +
+          '</div>';
+        }
+
+        var contractHtml = v.contract_path 
+          ? '<div style="margin-top:12px;"><a href="' + getSecureFileUrl(v.contract_path) + '" target="_blank" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;"><i class="ph ph-file-pdf"></i> 렌트 계약서 파일 보기</a></div>'
+          : '';
+
+        var actionButton = '';
+        if (v.status === '운행중') {
+          actionButton = '<button onclick="openReturnVehicleModal(' + v.realId + ', \'' + v.model + '\', ' + v.mileage + ')" class="btn-primary" style="background:var(--status-danger);border:none;padding:10px 20px;font-weight:700;">차량 반납 처리</button>';
+        } else {
+          actionButton = '<button onclick="openAssignVehicleModal(' + v.realId + ', \'' + v.model + '\')" class="btn-primary" style="background:var(--status-success);border:none;padding:10px 20px;font-weight:700;">차량 운전자 배정</button>';
+        }
+
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:700px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-car" style="color:var(--brand-primary);"></i> 차량 상세 정보</h2>' +
+              '<button onclick="this.closest(\'#vehicle-detail-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--bg-base);border-radius:10px;padding:16px;border:1px solid var(--border-subtle);">' +
+              '<div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">차량 ID / 모델</span><strong style="font-size:15px;color:var(--text-primary);">' + v.id + ' / ' + v.model + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">번호판 / 제조사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + v.plate + ' / ' + v.company + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 마일리지 / 다음 오일 교환</span><strong style="font-size:15px;color:var(--text-primary);">' + v.mileage.toLocaleString() + ' mi / ' + v.nextOil.toLocaleString() + ' mi</strong></div>' +
+              '</div>' +
+              '<div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정자</span><strong style="font-size:15px;color:var(--text-primary);">' + (v.assignee || '미배정') + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">렌트 만료일 / 보험 만료일</span><strong style="font-size:15px;color:var(--text-primary);">' + v.rentEnd + ' / ' + v.insuranceExp + '</strong></div>' +
+                '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">차량 상태</span><div>' + statusPill(v.status) + '</div></div>' +
+              '</div>' +
+            '</div>' +
+            photosHtml +
+            contractHtml +
+            '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+              '<div>' + actionButton + '</div>' +
+              '<button type="button" onclick="this.closest(\'#vehicle-detail-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">닫기</button>' +
+            '</div>' +
+            '<div style="margin-top:28px;">' +
+              '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;"><i class="ph ph-clock-counter-clockwise"></i> 대여 및 배정 이력 (Rental History)</h3>' +
+              '<div id="vehicle-history-timeline" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-base);padding:14px;">' +
+                '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">이력을 불러오는 중...</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        try {
+          var response = await fetch('/vehicle-api/' + v.realId + '/history');
+          if (!response.ok) throw new Error('이력 로딩 실패');
+          var res = await response.json();
+          var history = res.history || [];
+          var timelineHtml = '';
+
+          if (history.length === 0) {
+            timelineHtml = '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">배정 이력이 없습니다.</div>';
+          } else {
+            timelineHtml = history.map(function(h) {
+              var period = h.returned_at ? h.rented_at + ' ~ ' + h.returned_at : h.rented_at + ' ~ <span style="color:var(--status-success);font-weight:700;">사용 중</span>';
+              var mileageInfo = h.end_mileage ? h.start_mileage.toLocaleString() + ' mi → ' + h.end_mileage.toLocaleString() + ' mi' : h.start_mileage.toLocaleString() + ' mi ~';
+              var notesText = h.notes ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:4px;">' + h.notes.replace(/\n/g, '<br>') + '</div>' : '';
+              return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px;display:flex;flex-direction:column;gap:4px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                  '<span style="font-weight:700;color:var(--text-primary);">' + h.driver + '</span>' +
+                  '<span style="font-size:11px;color:var(--text-secondary);">' + period + '</span>' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);">' +
+                  '<span>마일리지: ' + mileageInfo + '</span>' +
+                  '<span style="font-weight:600;color:' + (h.status === '대여중' ? 'var(--status-success)' : 'var(--text-tertiary)') + ';">' + h.status + '</span>' +
+                '</div>' +
+                notesText +
+              '</div>';
+            }).join('');
+          }
+          modal.querySelector('#vehicle-history-timeline').innerHTML = timelineHtml;
+        } catch (err) {
+          modal.querySelector('#vehicle-history-timeline').innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:12px;">이력을 불러오지 못했습니다.</div>';
+        }
+      };
+
+      // Manual Assignment Modal
+      window.openAssignVehicleModal = async function(vehicleId, modelName) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-assign-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:450px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">운전자 배정: ' + modelName + '</h3>' +
+            '<form id="vehicle-assign-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">운전자 선택 <span style="color:var(--status-danger)">*</span></label>' +
+                '<select name="employee_id" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">불러오는 중...</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">메모</label>' +
+                '<textarea name="notes" placeholder="배정 사유 또는 메모를 입력하세요" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'vehicle-assign-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-success);border:none;padding:8px 20px;font-weight:700;">배정 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var selectEl = modal.querySelector('[name="employee_id"]');
+
+        try {
+          var employees = await window.API.getPersonnelList();
+          var activeEmp = employees.filter(function(e) { return e.workerStatus === 'active'; });
+          if (activeEmp.length === 0) {
+            selectEl.innerHTML = '<option value="">선택 가능한 활성 직원이 없습니다.</option>';
+          } else {
+            selectEl.innerHTML = '<option value="">-- 운전자 선택 --</option>' + activeEmp.map(function(e) {
+              var name = e.nameKr ? e.nameKr + ' (' + e.nameEn + ')' : e.nameEn;
+              var comp = e.company ? ' [' + e.company + ']' : '';
+              return '<option value="' + e.employeeDbId + '">' + name + comp + '</option>';
+            }).join('');
+          }
+        } catch (err) {
+          selectEl.innerHTML = '<option value="">직원 목록을 불러오지 못했습니다.</option>';
+        }
+
+        modal.querySelector('#vehicle-assign-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            vehicle_id: vehicleId,
+            employee_id: selectEl.value,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/assign', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '배정 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('vehicle-detail-modal');
+            if (detailModal) detailModal.remove();
+            
+            showToast('운전자가 배정되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Manual Return Modal
+      window.openReturnVehicleModal = function(vehicleId, modelName, currentMileage) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-return-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:400px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">차량 반납: ' + modelName + '</h3>' +
+            '<form id="vehicle-return-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">현재 마일리지 (최소 ' + currentMileage.toLocaleString() + ' mi) <span style="color:var(--status-danger)">*</span></label>' +
+                '<input type="number" name="current_mileage" required min="' + currentMileage + '" value="' + currentMileage + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">반납 메모</label>' +
+                '<textarea name="notes" placeholder="차량 상태(청결도, 파손 여부 등) 또는 특이사항 입력" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'vehicle-return-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-danger);border:none;padding:8px 20px;font-weight:700;">반납 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#vehicle-return-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var inputMileage = parseInt(modal.querySelector('[name="current_mileage"]').value, 10);
+          if (inputMileage < currentMileage) {
+            alert('반납 마일리지는 이전 마일리지보다 작을 수 없습니다.');
+            return;
+          }
+
+          var payload = {
+            vehicle_id: vehicleId,
+            current_mileage: inputMileage,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/return', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '반납 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('vehicle-detail-modal');
+            if (detailModal) detailModal.remove();
+
+            showToast('차량이 반납 완료 처리되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
       };
 
       // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4376,7 +7384,7 @@
           var res = await window.API.getPayrollDashboard(periodStart);
           if (!res || !res.success) {
             pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded">' +
-              '<div style="color:var(--status-danger);text-align:center;padding:32px">ê¸‰ì—¬ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨<br>' + (res && res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div></div></div>';
+              '<div style="color:var(--status-danger);text-align:center;padding:32px">급여 ë °ì ´í„° 로딩 실패<br>' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
             return;
           }
 
@@ -4388,84 +7396,86 @@
 
           var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
 
-          // â”€â”€ 1. Pay Period í—¤ë” â”€â”€
+          // ── 1. Pay Period í—¤ë ” ──
           var periodHtml =
             '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
               '<div style="display:flex;align-items:center;gap:12px">' +
-                '<button onclick="window.shiftPayPeriod(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">â€¹</button>' +
+                '<button onclick="window.shiftPayPeriod(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">‹</button>' +
                 '<div style="text-align:center;min-width:280px">' +
                   '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:2px">PAY PERIOD (Bi-weekly)</div>' +
                   '<div class="cell-mono" style="font-size:16px;font-weight:800;color:var(--text-primary)">' + period.start + ' ~ ' + period.end + '</div>' +
                   '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Day ' + (period.currentDay || 0) + ' / ' + (period.totalDays || 14) +
-                    (period.isComplete ? ' Â· <span style="color:var(--status-success)">ì™„ë£Œ</span>' : ' Â· <span style="color:var(--status-warning)">ì§„í–‰ì¤‘</span>') + '</div>' +
+                    (period.isComplete ? ' · <span style="color:var(--status-success)">완료</span>' : ' · <span style="color:var(--status-warning)">진행중</span>') + '</div>' +
                 '</div>' +
-                '<button onclick="window.shiftPayPeriod(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">â€º</button>' +
+                '<button onclick="window.shiftPayPeriod(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">›</button>' +
               '</div>' +
               '<div style="display:flex;gap:8px">' +
-                '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> í˜„ìž¬ ì£¼ê¸°</button>' +
-                '<button class="btn-primary" disabled style="opacity:0.5"><i class="ph ph-file-pdf"></i> ëª…ì„¸ì„œ (Phase B)</button>' +
+                '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> 현재 주기</button>' +
+                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>명세서 (Phase B)</button>' +
               '</div>' +
             '</div></div>';
 
-          // â”€â”€ 2. KPI 5ì¢… (60% ì••ì¶•) â”€â”€
+          // ——— 2. KPI 5종 (60% 압축) ———
           var kpiHtml =
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì˜ˆìƒ ì¸ê±´ë¹„<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + totals.gross.toLocaleString() + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period ëˆ„ì </span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">í™œì„± ì¸ì›<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">예상 인건비<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + (totals.gross||0).toLocaleString() + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period 누적</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">활성 인원<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + 'ê°œ íšŒì‚¬</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular ê³µìˆ˜<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + totals.regHours.toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì •ê·œ ê·¼ë¬´</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT ê³µìˆ˜<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
-                '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + totals.otHours.toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì´ˆê³¼ (1.5Ã—)</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ìƒ íƒì§€<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + '개 회사</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular 공수<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.regHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">정규 근무</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT 공수<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.otHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">초과 (1.5×)</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">이상 타지<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:' + (anomalies.length > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + anomalies.length + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? 'ê²€í†  í•„ìš”' : 'ì •ìƒ') + '</span></div></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? '검토 필요' : '정상') + '</span></div></div>' +
             '</div>';
 
-          // â”€â”€ 3. íšŒì‚¬ë³„ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
+          // ——— 3. 회사별 매트릭스 ———
           var companyHtml = companies.length === 0
-            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">ì´ë²ˆ Pay Periodì— ë°ì´í„° ì—†ìŒ</div></div>'
+            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">이번 Pay Period에 데이터 없음</div></div>'
             : '<div class="panel" style="margin-bottom:14px;overflow:hidden">' +
                 '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
                   '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
                     '<i class="ph ph-chart-bar" style="font-size:18px;color:' + COLOR_TOTAL + '"></i>' +
-                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">íšŒì‚¬Â·ì§ì±…ë³„ ì¸ê±´ë¹„</span>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">회사·직책별 인건비</span>' +
                     '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:' + COLOR_TOTAL + ';border-radius:4px;font-weight:600">' + period.start + ' ~ ' + period.end + '</span>' +
                   '</div>' +
                 '</div>' +
                 '<div class="panel-body" style="padding:14px;display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px">' +
                   companies.map(function(c) {
                     var compColor = window.getCompanyColor ? window.getCompanyColor(c.name) : COLOR_TOTAL;
-                    var div = c.divides;
+                    var ct = c.totals || { gross:0, count:0, regHours:0, otHours:0 };
+                    var div = c.divides || {};
+                    ['관리자','한국인','외국인'].forEach(function(k){ if(!div[k]) div[k] = { count:0, hours:0, gross:0 }; });
                     return '<div style="background:var(--bg-panel);border:1px solid ' + compColor + '33;border-radius:10px;overflow:hidden">' +
                         '<div style="padding:12px 16px;background:linear-gradient(90deg,' + compColor + '22,transparent);border-bottom:1px solid ' + compColor + '44;display:flex;align-items:center;justify-content:space-between">' +
                           '<div style="display:flex;align-items:center;gap:8px"><i class="ph ph-buildings" style="font-size:16px;color:' + compColor + '"></i>' +
                           '<span style="font-size:14px;font-weight:800;color:var(--text-primary)">' + c.name + '</span></div>' +
-                          '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + c.totals.gross.toLocaleString() + '</div>' +
-                          '<div style="font-size:10px;color:var(--text-tertiary)">' + c.totals.count + 'ëª… Â· ' + (c.totals.regHours + c.totals.otHours).toFixed(1) + 'h</div></div>' +
+                          '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + ct.gross.toLocaleString() + '</div>' +
+                          '<div style="font-size:10px;color:var(--text-tertiary)">' + ct.count + '명 · ' + (ct.regHours + ct.otHours).toFixed(1) + 'h</div></div>' +
                         '</div>' +
                         '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
-                          (div['ê´€ë¦¬ìž'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ê´€ë¦¬ìž ' + div['ê´€ë¦¬ìž'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ê´€ë¦¬ìž'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['ê´€ë¦¬ìž'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['í•œêµ­ì¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">í•œêµ­ì¸ ' + div['í•œêµ­ì¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['í•œêµ­ì¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['í•œêµ­ì¸'].gross.toLocaleString() + '</span></div>' : '') +
-                          (div['ì™¸êµ­ì¸'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">ì™¸êµ­ì¸ ' + div['ì™¸êµ­ì¸'].count + 'ëª…</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['ì™¸êµ­ì¸'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['ì™¸êµ­ì¸'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['관리자'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">관리자 ' + div['관리자'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['관리자'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['관리자'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['한국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">한국인 ' + div['한국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['한국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['한국인'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['외국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">외국인 ' + div['외국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['외국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['외국인'].gross.toLocaleString() + '</span></div>' : '')
                         '</div>' +
                       '</div>';
                   }).join('') +
                 '</div>' +
               '</div>';
 
-          // â”€â”€ 4. ì´ìƒ íƒì§€ â”€â”€
+          // ── 4. 이상 탐지 ──
           var anomalyHtml = anomalies.length === 0
             ? ''
             : '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-danger)">' +
-                '<div class="panel-header"><div class="panel-title" style="color:var(--status-danger);display:flex;align-items:center;gap:8px"><i class="ph ph-warning"></i> ì´ìƒ íƒì§€ (' + anomalies.length + 'ê±´)</div></div>' +
+                '<div class="panel-header"><div class="panel-title" style="color:var(--status-danger);display:flex;align-items:center;gap:8px"><i class="ph ph-warning"></i> 이상 탐지 (' + anomalies.length + '건)</div></div>' +
                 '<div class="panel-body" style="padding:0">' +
-                  '<table class="data-table"><thead><tr><th>Badge</th><th>ì´ë¦„</th><th>íšŒì‚¬</th><th>ìœ í˜•</th><th>ì‚¬ìœ </th></tr></thead><tbody>' +
+                  '<table class="data-table"><thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>유형</th><th>사유</th></tr></thead><tbody>' +
                   anomalies.map(function(a) {
                     var sevColor = a.severity === 'high' ? 'var(--status-danger)' : 'var(--status-warning)';
                     return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + a.badgeId + '\')">' +
@@ -4480,42 +7490,42 @@
                 '</div>' +
               '</div>';
 
-          // â”€â”€ 5. ì§ì›ë³„ ì •ì‚° í…Œì´ë¸” â”€â”€
+          // ── 5. 직원별 정산 테이블 ──
           var empHtml =
             '<div class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
-              '<div class="panel-title"><i class="ph ph-list"></i> ì§ì›ë³„ ì •ì‚° (' + employees.length + 'ëª…)</div>' +
-              '<input type="text" class="search-inline" id="payroll-search" placeholder="ì´ë¦„, Badge ID ê²€ìƒ‰...">' +
+              '<div class="panel-title"><i class="ph ph-list"></i> 직원별 정산 (' + employees.length + '명)</div>' +
+              '<input type="text" class="search-inline" id="payroll-search" placeholder="이름, Badge ID 검색...">' +
             '</div>' +
             '<div class="panel-body" style="padding:0">' +
               '<table class="data-table" id="payroll-table">' +
-                '<thead><tr><th>Badge</th><th>ì´ë¦„</th><th>íšŒì‚¬</th><th>ì§ì±…</th><th>Reg</th><th>OT</th><th>ë‹¨ê°€</th><th>Gross</th><th>ë¯¸ë§ˆê°</th></tr></thead>' +
+                '<thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>직책</th><th>Reg</th><th>OT</th><th>단가</th><th>Gross</th><th>미마감</th></tr></thead>' +
                 '<tbody>' +
                   employees.map(function(e) {
-                    var dColor = e.divide === 'ê´€ë¦¬ìž' ? COLOR_MGR : e.divide === 'í•œêµ­ì¸' ? COLOR_KOR : e.divide === 'ì™¸êµ­ì¸' ? COLOR_LOC : 'var(--text-tertiary)';
-                    var basisLabel = e.basis === 'salary' ? 'ì›”ê¸‰' : 'ì‹œê¸‰';
+                    var dColor = e.divide === '관리자' ? COLOR_MGR : e.divide === '한국인' ? COLOR_KOR : e.divide === '외국인' ? COLOR_LOC : 'var(--text-tertiary)';
+                    var basisLabel = e.basis === 'salary' ? '월급' : '시급';
                     return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + e.badgeId + '\')">' +
                       '<td class="cell-mono">' + e.badgeId + '</td>' +
                       '<td class="cell-primary">' + e.name + '</td>' +
                       '<td><span class="tag">' + e.company + '</span></td>' +
                       '<td><span style="color:' + dColor + ';font-size:11px;font-weight:600">' + (e.divide || '-') + '</span></td>' +
-                      '<td class="cell-mono">' + e.regHours.toFixed(1) + 'h</td>' +
-                      '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + e.otHours.toFixed(1) + 'h</td>' +
-                      '<td class="cell-mono">$' + e.rate.toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
-                      '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + e.gross.toLocaleString() + '</td>' +
-                      '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + 'ì¼</span>' : '-') + '</td>' +
+                      '<td class="cell-mono">' + (e.regHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + (e.otHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono">$' + (e.rate||0).toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
+                      '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + (e.gross||0).toLocaleString() + '</td>' +
+                      '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + '일</span>' : '-') + '</td>' +
                     '</tr>';
                   }).join('') +
                 '</tbody></table>' +
             '</div></div>';
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ê¸‰ì—¬ / ì •ì‚°</h1>' +
-              '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' Â· Bi-weekly Pay Period ê¸°ì¤€</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ì‹œíŠ¸ ë§ˆìŠ¤í„°</button></div>' +
+            '<div class="header-section"><div><h1 class="page-title">급여 / 정산</h1>' +
+              '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' · Bi-weekly Pay Period 기준</p></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 시트 마스터</button></div>' +
             '</div>' +
             periodHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
 
-          // ê²€ìƒ‰ í•¸ë“¤ëŸ¬
+          // 검색 핸들러
           var srch = document.getElementById('payroll-search');
           if (srch) srch.addEventListener('input', function() {
             var q = this.value.toLowerCase();
@@ -4524,11 +7534,11 @@
             });
           });
         } catch (e) {
-          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">ê¸‰ì—¬ í˜„í™© ë¡œë”© ì¤‘ ì˜¤ë¥˜<br>' + e.message + '</div></div></div>';
+          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">급여 현황 로딩 중 오류<br>' + e.message + '</div></div></div>';
         }
       }
 
-      // Pay Period ì¢Œìš° ì´ë™
+      // Pay Period 좌우 이동
       window._payrollPeriodStart = null;
       window.shiftPayPeriod = function(delta) {
         if (delta === 0) {
@@ -4543,179 +7553,978 @@
         renderPayroll(ds);
       };
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-      // WBS â€” ì‹¤ì‹œê°„ ê³µì • ê´€ë¦¬ (AI ë©”ë‰´ì–¼ ë¶„ì„ ê¸°ë°˜)
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-      window.WBS_PROJECTS = [
-        { id: 'HFF-02',  name: 'Hoffman Logistics Hub' },
-        { id: 'LGES-AZ', name: 'LGES Battery Plant AZ' },
-        { id: 'NV-05',   name: 'Nevada EV Plant' },
-        { id: 'SST-03',  name: 'Samsung Taylor Fab' },
-        { id: 'HWH-04',  name: 'Hanwha Solar Site' }
-      ];
-      window.WBS_CURRENT_PROJECT = 'HFF-02';
+      // Run payroll for the current pay period, then open the WH-347 certified payroll doc.
+      window.openPayrollDocs = function(btn) {
+        var label = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner"></i> 정산 중...'; }
+        gsRun('api_runPayroll', [_siteId(), window._payrollPeriodStart || null], null).then(function(res) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          if (res && res.success && res.certifiedUrl) {
+            window.open(res.certifiedUrl, '_blank');
+          } else {
+            alert((res && res.error) || '급여 정산 문서를 생성할 수 없습니다.');
+          }
+        }).catch(function(e) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          alert('급여 정산 실행 실패: ' + e.message);
+        });
+      };
 
-      async function renderWbs() {
+      // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+
+      async function renderRental() {
         pageContainer.innerHTML = skeleton();
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
         try {
-          var [treeRes, sumRes] = await Promise.all([
-            window.API.getProjectWbsTree(projectId),
-            window.API.getProjectProgressSummary(projectId)
+          const [stats, rentals] = await Promise.all([
+            window.API.getRentalStats(),
+            window.API.getRentalList()
           ]);
 
-          var tree = treeRes && treeRes.success ? (treeRes.stages || []) : [];
-          var sum  = sumRes  && sumRes.success  ? sumRes : { totalWbsCount: 0, progress: 0 };
+          window.currentRentals = rentals; // Cache globally for detail modal lookup
 
-          // Stageë³„ ì§„ì²™ë¥  ë§µ (ì„œë²„ì—ì„œ ë°›ì€ ë°ì´í„°)
-          var stageProgressMap = {};
-          (sum.stages || []).forEach(function(s){ stageProgressMap[String(s.stage_no)] = s.progress; });
+          var rowsHtml = rentals.map(function(r) {
+            var actionBtn = '';
+            if (r.status === '대기중') {
+              actionBtn = '<button class="btn-primary" style="background:var(--status-success);border:none;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openAssignEquipmentModal(' + r.realId + ', \'' + r.model + '\')">배정</button>';
+            } else if (r.status === '사용중') {
+              actionBtn = '<button class="btn-secondary" style="background:var(--status-danger);border:none;color:#fff;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openReturnEquipmentModal(' + r.realId + ', \'' + r.model + '\')">반납</button>';
+            } else {
+              actionBtn = '<span style="color:var(--text-tertiary)">-</span>';
+            }
 
-          // í†µê³„ ê³„ì‚°
-          var totalSubTasks = 0;
-          var totalManhours = 0;
-          var byCompany = { NAHSHON: 0, AUTORICA: 0, 'AI-KOREA': 0, 'M-SOL': 0 };
-          var ehsHigh = 0;
-          tree.forEach(function(stage){
-            (stage.tasks||[]).forEach(function(task){
-              (task.sub_tasks||[]).forEach(function(sub){
-                totalSubTasks++;
-                totalManhours += parseFloat(sub.manhours)||0;
-                if (byCompany[sub.company] !== undefined) byCompany[sub.company] += parseFloat(sub.manhours)||0;
-                if (sub.ehs === 'high') ehsHigh++;
-              });
-            });
-          });
+            var operator = r.operator || '<span style="color:var(--text-tertiary)">미배정</span>';
 
-          var projOptions = window.WBS_PROJECTS.map(function(p){
-            return '<option value="' + p.id + '"' + (p.id === projectId ? ' selected' : '') + '>' + p.id + ' â€” ' + p.name + '</option>';
+            return '<tr style="cursor:pointer;" onclick="window.openEquipmentDetailModal(' + r.realId + ')">'
+              + '<td class="cell-mono">' + r.id + '</td>'
+              + '<td class="cell-primary">' + r.equipType + '</td>'
+              + '<td>' + r.model + '</td>'
+              + '<td>' + r.vendor + '</td>'
+              + '<td class="cell-mono">' + r.startDate + ' ~ ' + r.endDate + '</td>'
+              + '<td>' + (r.company || '-') + '</td>'
+              + '<td>' + (r.team || '-') + '</td>'
+              + '<td>' + operator + '</td>'
+              + '<td>' + statusPill(r.status) + '</td>'
+              + '<td>' + actionBtn + '</td>'
+              + '</tr>';
           }).join('');
 
-          // í˜‘ë ¥ì‚¬ ë§‰ëŒ€
-          var companyBars = Object.keys(byCompany).map(function(c){
-            var mh = byCompany[c];
-            var pct = totalManhours > 0 ? (mh / totalManhours * 100) : 0;
-            var color = c === 'NAHSHON' ? '#2563eb' : c === 'AUTORICA' ? '#f59e0b' : c === 'AI-KOREA' ? '#10b981' : '#8b5cf6';
-            return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:3px"><span>' + c + '</span><span class="cell-mono">' + mh.toLocaleString() + ' MH (' + pct.toFixed(0) + '%)</span></div>' +
-              '<div style="height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + '"></div></div></div>';
-          }).join('');
-
-          // WBS íŠ¸ë¦¬
-          var treeHtml;
-          if (tree.length === 0) {
-            treeHtml = '<div style="text-align:center;padding:48px;color:var(--text-tertiary)">' +
-              '<i class="ph ph-tree-structure" style="font-size:48px;color:#7c3aed;margin-bottom:12px"></i>' +
-              '<div style="font-size:16px;color:white;margin-bottom:8px">ì•„ì§ WBSê°€ ìƒì„±ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤</div>' +
-              '<div style="font-size:13px">ë§¤ë‰´ì–¼ PDFë¥¼ <strong style="color:#7c3aed">WBS_MANUAL/01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„<br>ì•„ëž˜ <strong>AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”.</div>' +
-              '</div>';
+          var byCompanyHtml = '';
+          if (!stats.byCompany || stats.byCompany.length === 0) {
+            byCompanyHtml = '<div style="color:var(--text-tertiary); text-align:center; padding:12px; font-size:12px;">사용중인 계약회사가 없습니다.</div>';
           } else {
-            treeHtml = tree.map(function(stage, sIdx){
-              var stageMh = 0, subCount = 0, stageCompleted = 0;
-              (stage.tasks||[]).forEach(function(t){ (t.sub_tasks||[]).forEach(function(s){
-                stageMh += parseFloat(s.manhours)||0;
-                subCount++;
-                if (s.status === 'ì™„ë£Œ') stageCompleted++;
-              }); });
-              var stagePct = stageProgressMap[String(stage.stage_no)] || 0;
-              var stageColor = stagePct >= 100 ? '#10b981' : stagePct >= 50 ? '#f59e0b' : '#7c3aed';
-
-              var tasksHtml = (stage.tasks||[]).map(function(task, tIdx){
-                // Taskë³„ ì§„ì²™ë¥  (sub_tasks í‰ê· )
-                var taskCompleted = 0, taskTotal = (task.sub_tasks||[]).length;
-                (task.sub_tasks||[]).forEach(function(s){ if (s.status === 'ì™„ë£Œ') taskCompleted++; });
-                var taskPct = taskTotal > 0 ? (taskCompleted / taskTotal * 100) : 0;
-
-                var subHtml = (task.sub_tasks||[]).map(function(sub){
-                  var status = sub.status || 'AIìƒì„±';
-                  var isDone = status === 'ì™„ë£Œ';
-                  var isProg = status === 'ì§„í–‰ì¤‘';
-                  var ehsBadge = sub.ehs === 'high' ? '<span style="background:#ef4444;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">ðŸ”´ ìœ„í—˜</span>' : sub.ehs === 'medium' ? '<span style="background:#f59e0b;color:white;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:6px">âš ï¸ ì£¼ì˜</span>' : '';
-                  var companyColor = sub.company === 'NAHSHON' ? '#2563eb' : sub.company === 'AUTORICA' ? '#f59e0b' : sub.company === 'AI-KOREA' ? '#10b981' : sub.company === 'M-SOL' ? '#8b5cf6' : '#64748b';
-                  var rowBg = isDone ? 'rgba(16,185,129,0.08)' : isProg ? 'rgba(245,158,11,0.08)' : 'var(--bg-base)';
-                  var rowBorder = isDone ? '#10b981' : isProg ? '#f59e0b' : 'transparent';
-                  var nameStyle = isDone ? 'text-decoration:line-through;color:#10b981;opacity:0.85' : 'color:white';
-                  var statusIcon = isDone ? '<i class="ph ph-check-circle" style="color:#10b981;font-size:18px"></i>'
-                    : isProg ? '<i class="ph ph-spinner" style="color:#f59e0b;font-size:18px"></i>'
-                    : '<i class="ph ph-circle" style="color:var(--text-tertiary);font-size:18px"></i>';
-                  // ë¹ ë¥¸ í† ê¸€ ë²„íŠ¼ (ì™„ë£Œ â†” AIìƒì„±)
-                  var toggleAction = isDone ? 'AIìƒì„±' : 'ì™„ë£Œ';
-                  var toggleLabel = isDone ? 'â†» ë¯¸ì™„ë£Œë¡œ' : 'âœ“ ì™„ë£Œ';
-                  var toggleBg = isDone ? '#64748b' : '#10b981';
-
-                  return '<div class="wbs-subtask" data-wbsid="' + sub.wbs_id + '" data-status="' + status + '" style="display:grid;grid-template-columns:auto auto 1fr auto auto auto auto;gap:10px;align-items:center;padding:8px 12px;border-radius:6px;background:' + rowBg + ';margin-bottom:4px;border:1px solid ' + rowBorder + ';transition:all 0.15s">' +
-                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center" title="' + toggleLabel + '">' + statusIcon + '</button>' +
-                    '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:60px">' + (sub.sub_no || '') + '</span>' +
-                    '<span style="font-size:13px;' + nameStyle + ';cursor:pointer" onclick="openWbsEditModal(\'' + sub.wbs_id + '\')">' + (sub.sub_name || '') + ehsBadge + '</span>' +
-                    '<span style="font-size:11px;color:' + companyColor + ';font-weight:700;min-width:80px;text-align:right">' + (sub.company || '-') + '</span>' +
-                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:60px;text-align:right">' + (sub.manhours || 0) + 'MH</span>' +
-                    '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:50px;text-align:right">' + (sub.days || 0) + 'ì¼</span>' +
-                    '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + sub.wbs_id + '\',\'' + toggleAction + '\')" style="background:' + toggleBg + ';color:white;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">' + toggleLabel + '</button>' +
-                    '</div>';
-                }).join('');
-
-                return '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:6px 10px;background:rgba(124,58,237,0.08);border-left:3px solid #7c3aed;border-radius:4px">' +
-                  '<span class="cell-mono" style="font-size:11px;color:#7c3aed;font-weight:700">Task ' + (task.task_no||'') + '</span>' +
-                  '<span style="font-size:14px;color:white;font-weight:600">' + (task.task_name||'') + '</span>' +
-                  '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
-                  '<span>' + taskCompleted + '/' + taskTotal + ' ì™„ë£Œ</span>' +
-                  '<div style="width:80px;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
-                  '<span class="cell-mono" style="color:white;font-weight:700;min-width:32px;text-align:right">' + taskPct.toFixed(0) + '%</span>' +
-                  '</span></div>' + subHtml + '</div>';
-              }).join('');
-
-              return '<details ' + (sIdx === 0 ? 'open' : '') + ' style="margin-bottom:18px;border:1px solid var(--border-default);border-radius:10px;overflow:hidden">' +
-                '<summary style="padding:14px 18px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
-                '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
-                '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700">STAGE ' + (stage.stage_no || sIdx + 1) + '</span>' +
-                '<span style="font-size:16px;font-weight:700;color:white">' + (stage.stage_name || '') + '</span>' +
-                '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
-                '<span><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
-                '<span><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
-                '<div style="display:flex;align-items:center;gap:8px"><div style="width:120px;height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + stagePct + '%;background:' + stageColor + '"></div></div>' +
-                '<span class="cell-mono" style="color:' + stageColor + ';font-weight:700;min-width:44px;text-align:right">' + stagePct.toFixed(1) + '%</span></div>' +
-                '</div></summary>' +
-                '<div style="padding:14px 18px">' + tasksHtml + '</div></details>';
+            byCompanyHtml = stats.byCompany.map(function(c) {
+              var pct = stats.active > 0 ? (c.count / stats.active * 100) : 0;
+              return '<div style="margin-bottom:12px;">' +
+                     '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+                     '    <span style="font-size:12px; font-weight:600; color:var(--text-primary);">' + c.name + '</span>' +
+                     '    <span style="font-size:12px; font-weight:700; color:#7c3aed;">' + c.count + '대 사용중</span>' +
+                     '  </div>' +
+                     '  <div style="height:6px; background:var(--bg-base); border-radius:3px; overflow:hidden;">' +
+                     '    <div style="width:' + pct + '%; height:100%; background:linear-gradient(90deg, #7c3aed, #2563eb); border-radius:3px;"></div>' +
+                     '  </div>' +
+                     '</div>';
             }).join('');
           }
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div>' +
-            '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> ê³µì • ê´€ë¦¬ (WBS)</h1>' +
-            '<p class="page-subtitle">AI ë©”ë‰´ì–¼ ë¶„ì„ ê¸°ë°˜ ì‹¤ì‹œê°„ ê³µì • ì¶”ì  Â· Stage â†’ Task â†’ SubTask ê³„ì¸µ êµ¬ì¡°</p>' +
-            '</div>' +
-            '<div class="action-row" style="gap:8px">' +
-            '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">' + projOptions + '</select>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
-            '<i class="ph ph-robot"></i> ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„</button>' +
-            '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> ë©”ë‰´ì–¼ í´ë”</button>' +
+            '<div class="header-section"><div><h1 class="page-title">장비 렌탈 관리</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
+            '<div class="action-row">' +
+            '<button class="btn-secondary" onclick="window.downloadRentalExcel()"><i class="ph ph-file-xls"></i> 엑셀 다운로드</button>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.openAiEquipmentRegModal()"><i class="ph ph-robot"></i> 🤖 AI 계약서 등록</button>' +
             '</div></div>' +
-            // KPI Row (6ê°œ)
-            '<div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ SubTask</div><div class="kpi-value">' + totalSubTasks + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
-            '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">ì „ì²´ ì§„ì²™ë¥ </div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
-            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:4px"><div style="height:100%;width:' + (sum.progress||0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">âœ… ì™„ë£Œ</div><div class="kpi-value" style="color:#10b981">' + (sum.completedCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (totalSubTasks > 0 ? ((sum.completedCount||0)/totalSubTasks*100).toFixed(0) : 0) + '% of all</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">â³ ì§„í–‰ì¤‘</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì˜ˆìƒ ì´ê³µìˆ˜</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">EHS ê³ ìœ„í—˜</div><div class="kpi-value" style="color:#ef4444">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ìœ„í—˜ìž‘ì—…</span></div></div>' +
+            
+            '<div style="display:grid; grid-template-columns: 7.2fr 2.8fr; gap:20px; align-items:start;">' +
+            '  <div style="display:flex; flex-direction:column; gap:20px;">' +
+            '    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr); gap:12px;">' +
+            '      <div class="kpi-card"><div class="kpi-label">전체 장비</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 장비</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">사용중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">현장 가동</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">대기중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.available + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">배정 대기</span></div></div>' +
+            '    </div>' +
+            '    <div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bulldozer"></i> 렌탈 목록</div></div>' +
+            '    <div class="panel-body" style="overflow-x:auto;"><table class="data-table"><thead><tr>' +
+            '    <th>렌탈ID</th><th>장비종류</th><th>모델</th><th>벤더</th><th>기간</th>' +
+            '    <th>배정회사</th><th>배정팀</th><th>운영자</th><th>상태</th><th>액션</th>' +
+            '    </tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 렌탈 없음</td></tr>') + '</tbody></table></div></div>' +
+            '  </div>' +
+            '  <div class="panel" style="position:sticky; top:20px;">' +
+            '    <div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 계약회사별 사용중인 장비 현황</div></div>' +
+            '    <div class="panel-body padded" style="display:flex; flex-direction:column; gap:16px;">' +
+                   byCompanyHtml +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+
+        } catch (err) { renderError('렌탈 데이터 로딩 실패'); console.error(err); }
+      }
+
+      // Manual Return Modal
+      window.openReturnVehicleModal = function(vehicleId, modelName, currentMileage) {
+        var modal = document.createElement('div');
+        modal.id = 'vehicle-return-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:400px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">차량 반납: ' + modelName + '</h3>' +
+            '<form id="vehicle-return-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">현재 마일리지 (최소 ' + currentMileage.toLocaleString() + ' mi) <span style="color:var(--status-danger)">*</span></label>' +
+                '<input type="number" name="current_mileage" required min="' + currentMileage + '" value="' + currentMileage + '" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">반납 메모</label>' +
+                '<textarea name="notes" placeholder="차량 상태(청결도, 파손 여부 등) 또는 특이사항 입력" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'vehicle-return-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-danger);border:none;padding:8px 20px;font-weight:700;">반납 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#vehicle-return-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var inputMileage = parseInt(modal.querySelector('[name="current_mileage"]').value, 10);
+          if (inputMileage < currentMileage) {
+            alert('반납 마일리지는 이전 마일리지보다 작을 수 없습니다.');
+            return;
+          }
+
+          var payload = {
+            vehicle_id: vehicleId,
+            current_mileage: inputMileage,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/vehicle-api/return', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '반납 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('vehicle-detail-modal');
+            if (detailModal) detailModal.remove();
+
+            showToast('차량이 반납 완료 처리되었습니다.');
+            window.renderVehicle();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      async function renderPayroll(periodStart) {
+        pageContainer.innerHTML = skeleton();
+        try {
+          var res = await window.API.getPayrollDashboard(periodStart);
+          if (!res || !res.success) {
+            pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded">' +
+              '<div style="color:var(--status-danger);text-align:center;padding:32px">급여 ë °ì ´í„° 로딩 실패<br>' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
+            return;
+          }
+
+          var period = res.period || {};
+          var totals = res.totals || { headcount: 0, regHours: 0, otHours: 0, gross: 0 };
+          var companies = res.companies || [];
+          var anomalies = res.anomalies || [];
+          var employees = res.employees || [];
+
+          var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
+
+          // ── 1. Pay Period í—¤ë ” ──
+          var periodHtml =
+            '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">' +
+              '<div style="display:flex;align-items:center;gap:12px">' +
+                '<button onclick="window.shiftPayPeriod(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">‹</button>' +
+                '<div style="text-align:center;min-width:280px">' +
+                  '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:2px">PAY PERIOD (Bi-weekly)</div>' +
+                  '<div class="cell-mono" style="font-size:16px;font-weight:800;color:var(--text-primary)">' + period.start + ' ~ ' + period.end + '</div>' +
+                  '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Day ' + (period.currentDay || 0) + ' / ' + (period.totalDays || 14) +
+                    (period.isComplete ? ' · <span style="color:var(--status-success)">완료</span>' : ' · <span style="color:var(--status-warning)">진행중</span>') + '</div>' +
+                '</div>' +
+                '<button onclick="window.shiftPayPeriod(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:16px">›</button>' +
+              '</div>' +
+              '<div style="display:flex;gap:8px">' +
+                '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> 현재 주기</button>' +
+                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>명세서 (Phase B)</button>' +
+              '</div>' +
+            '</div></div>';
+
+          // ——— 2. KPI 5종 (60% 압축) ———
+          var kpiHtml =
+            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">예상 인건비<i class="ph ph-currency-dollar" style="font-size:12px;color:' + COLOR_TOTAL + '"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:' + COLOR_TOTAL + ';line-height:1.1">$' + (totals.gross||0).toLocaleString() + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Pay Period 누적</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">활성 인원<i class="ph ph-users" style="font-size:12px;color:#a78bfa"></i></div>' +
+                '<div class="kpi-value" style="font-size:22px;line-height:1.1">' + totals.headcount + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + companies.length + '개 회사</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">Regular 공수<i class="ph ph-clock" style="font-size:12px;color:#3b82f6"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.regHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">정규 근무</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">OT 공수<i class="ph ph-lightning" style="font-size:12px;color:#f59e0b"></i></div>' +
+                '<div class="kpi-value cell-mono" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (totals.otHours||0).toLocaleString() + '<span style="font-size:11px"> hr</span></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">초과 (1.5×)</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">이상 타지<i class="ph ph-warning-circle" style="font-size:12px;color:var(--status-danger)"></i></div>' +
+                '<div class="kpi-value" style="font-size:22px;color:' + (anomalies.length > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + anomalies.length + '</div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (anomalies.length > 0 ? '검토 필요' : '정상') + '</span></div></div>' +
+            '</div>';
+
+          // ——— 3. 회사별 매트릭스 ———
+          var companyHtml = companies.length === 0
+            ? '<div class="panel" style="margin-bottom:14px"><div class="panel-body padded" style="text-align:center;color:var(--text-tertiary);padding:32px">이번 Pay Period에 데이터 없음</div></div>'
+            : '<div class="panel" style="margin-bottom:14px;overflow:hidden">' +
+                '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
+                  '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
+                    '<i class="ph ph-chart-bar" style="font-size:18px;color:' + COLOR_TOTAL + '"></i>' +
+                    '<span style="color:var(--text-primary);font-weight:700;font-size:14px">회사·직책별 인건비</span>' +
+                    '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:' + COLOR_TOTAL + ';border-radius:4px;font-weight:600">' + period.start + ' ~ ' + period.end + '</span>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="panel-body" style="padding:14px;display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px">' +
+                  companies.map(function(c) {
+                    var compColor = window.getCompanyColor ? window.getCompanyColor(c.name) : COLOR_TOTAL;
+                    var ct = c.totals || { gross:0, count:0, regHours:0, otHours:0 };
+                    var div = c.divides || {};
+                    ['관리자','한국인','외국인'].forEach(function(k){ if(!div[k]) div[k] = { count:0, hours:0, gross:0 }; });
+                    return '<div style="background:var(--bg-panel);border:1px solid ' + compColor + '33;border-radius:10px;overflow:hidden">' +
+                        '<div style="padding:12px 16px;background:linear-gradient(90deg,' + compColor + '22,transparent);border-bottom:1px solid ' + compColor + '44;display:flex;align-items:center;justify-content:space-between">' +
+                          '<div style="display:flex;align-items:center;gap:8px"><i class="ph ph-buildings" style="font-size:16px;color:' + compColor + '"></i>' +
+                          '<span style="font-size:14px;font-weight:800;color:var(--text-primary)">' + c.name + '</span></div>' +
+                          '<div style="text-align:right"><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + compColor + '">$' + ct.gross.toLocaleString() + '</div>' +
+                          '<div style="font-size:10px;color:var(--text-tertiary)">' + ct.count + '명 · ' + (ct.regHours + ct.otHours).toFixed(1) + 'h</div></div>' +
+                        '</div>' +
+                        '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
+                          (div['관리자'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">관리자 ' + div['관리자'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['관리자'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_MGR + ';width:90px;text-align:right">$' + div['관리자'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['한국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">한국인 ' + div['한국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['한국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_KOR + ';width:90px;text-align:right">$' + div['한국인'].gross.toLocaleString() + '</span></div>' : '') +
+                          (div['외국인'].count > 0 ? '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="flex:1;font-size:12px;color:var(--text-secondary)">외국인 ' + div['외국인'].count + '명</span><span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + div['외국인'].hours.toFixed(1) + 'h</span><span class="cell-mono" style="font-size:13px;font-weight:700;color:' + COLOR_LOC + ';width:90px;text-align:right">$' + div['외국인'].gross.toLocaleString() + '</span></div>' : '')
+                        '</div>' +
+                      '</div>';
+                  }).join('') +
+                '</div>' +
+              '</div>';
+
+          // ── 4. 이상 탐지 ──
+          var anomalyHtml = anomalies.length === 0
+            ? ''
+            : '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-danger)">' +
+                '<div class="panel-header"><div class="panel-title" style="color:var(--status-danger);display:flex;align-items:center;gap:8px"><i class="ph ph-warning"></i> 이상 탐지 (' + anomalies.length + '건)</div></div>' +
+                '<div class="panel-body" style="padding:0">' +
+                  '<table class="data-table"><thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>유형</th><th>사유</th></tr></thead><tbody>' +
+                  anomalies.map(function(a) {
+                    var sevColor = a.severity === 'high' ? 'var(--status-danger)' : 'var(--status-warning)';
+                    return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + a.badgeId + '\')">' +
+                      '<td class="cell-mono">' + a.badgeId + '</td>' +
+                      '<td class="cell-primary">' + a.name + '</td>' +
+                      '<td><span class="tag">' + a.company + '</span></td>' +
+                      '<td><span style="color:' + sevColor + ';font-weight:600;font-size:11px">' + a.type + '</span></td>' +
+                      '<td style="font-size:12px">' + a.reason + (a.detail ? ' <span style="color:var(--text-tertiary);font-size:10px">(' + a.detail + ')</span>' : '') + '</td>' +
+                    '</tr>';
+                  }).join('') +
+                  '</tbody></table>' +
+                '</div>' +
+              '</div>';
+
+          // ── 5. 직원별 정산 테이블 ──
+          var empHtml =
+            '<div class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
+              '<div class="panel-title"><i class="ph ph-list"></i> 직원별 정산 (' + employees.length + '명)</div>' +
+              '<input type="text" class="search-inline" id="payroll-search" placeholder="이름, Badge ID 검색...">' +
             '</div>' +
-            // í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜ + AI ì•ˆë‚´
-            '<div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:18px">' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> í˜‘ë ¥ì‚¬ ìž‘ì—… ë¶€í•˜</div></div>' +
-            '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px">WBS ë°ì´í„° ì—†ìŒ</div>') + '</div></div>' +
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:18px;display:flex;align-items:center;gap:18px">' +
-            '<i class="ph ph-robot" style="font-size:42px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div style="flex:1">' +
-            '<div style="font-size:14px;font-weight:700;color:#c4b5fd;margin-bottom:6px">ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ ì‹œìŠ¤í…œ</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">ì„¤ì¹˜ ë§¤ë‰´ì–¼/ì‹œë°©ì„œ PDFë¥¼ <strong style="color:white">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ì—…ë¡œë“œ í›„ <strong style="color:#c4b5fd">AI ë©”ë‰´ì–¼ ë¶„ì„</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ë©´, Gemini 2.5 Proê°€ ìžë™ìœ¼ë¡œ ìž‘ì—…ì„ ìž˜ê²Œ ìª¼ê°œ WBSë¥¼ ìƒì„±í•©ë‹ˆë‹¤. Stage / Task / SubTask 3ë‹¨ê³„ ê³„ì¸µ êµ¬ì¡°ë¡œ í˜‘ë ¥ì‚¬/EHS/ê³µìˆ˜ê¹Œì§€ ìžë™ ë¶„ë¥˜.</div>' +
-            '</div></div></div>' +
-            // WBS íŠ¸ë¦¬
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> WBS êµ¬ì¡° â€” ' + projectId + '</div>' +
-            '<div style="font-size:11px;color:var(--text-tertiary)">í´ë¦­í•˜ì—¬ ìƒì„¸ íŽ¸ì§‘</div></div>' +
+            '<div class="panel-body" style="padding:0">' +
+              '<table class="data-table" id="payroll-table">' +
+                '<thead><tr><th>Badge</th><th>이름</th><th>회사</th><th>직책</th><th>Reg</th><th>OT</th><th>단가</th><th>Gross</th><th>미마감</th></tr></thead>' +
+                '<tbody>' +
+                  employees.map(function(e) {
+                    var dColor = e.divide === '관리자' ? COLOR_MGR : e.divide === '한국인' ? COLOR_KOR : e.divide === '외국인' ? COLOR_LOC : 'var(--text-tertiary)';
+                    var basisLabel = e.basis === 'salary' ? '월급' : '시급';
+                    return '<tr style="cursor:pointer" onclick="window.openEmpInfoModal(\'' + e.badgeId + '\')">' +
+                      '<td class="cell-mono">' + e.badgeId + '</td>' +
+                      '<td class="cell-primary">' + e.name + '</td>' +
+                      '<td><span class="tag">' + e.company + '</span></td>' +
+                      '<td><span style="color:' + dColor + ';font-size:11px;font-weight:600">' + (e.divide || '-') + '</span></td>' +
+                      '<td class="cell-mono">' + (e.regHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono" style="color:' + (e.otHours > 0 ? COLOR_MGR : 'var(--text-tertiary)') + '">' + (e.otHours||0).toFixed(1) + 'h</td>' +
+                      '<td class="cell-mono">$' + (e.rate||0).toFixed(2) + '<span style="font-size:9px;color:var(--text-tertiary)">/' + (e.basis === 'salary' ? 'h*' : 'h') + '</span></td>' +
+                      '<td class="cell-mono" style="color:' + COLOR_TOTAL + ';font-weight:700">$' + (e.gross||0).toLocaleString() + '</td>' +
+                      '<td>' + (e.openDays > 0 ? '<span style="color:var(--status-danger);font-size:11px;font-weight:600">' + e.openDays + '일</span>' : '-') + '</td>' +
+                    '</tr>';
+                  }).join('') +
+                '</tbody></table>' +
+            '</div></div>';
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">급여 / 정산</h1>' +
+              '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' · Bi-weekly Pay Period 기준</p></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 시트 마스터</button></div>' +
+            '</div>' +
+            periodHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
+
+          // 검색 핸들러
+          var srch = document.getElementById('payroll-search');
+          if (srch) srch.addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            document.querySelectorAll('#payroll-table tbody tr').forEach(function(row) {
+              row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+          });
+        } catch (e) {
+          pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded"><div style="color:var(--status-danger);text-align:center;padding:32px">급여 현황 로딩 중 오류<br>' + e.message + '</div></div></div>';
+        }
+      }
+
+      // Pay Period 좌우 이동
+      window._payrollPeriodStart = null;
+      window.shiftPayPeriod = function(delta) {
+        if (delta === 0) {
+          window._payrollPeriodStart = null;
+          renderPayroll();
+          return;
+        }
+        var current = window._payrollPeriodStart ? new Date(window._payrollPeriodStart) : new Date();
+        current.setDate(current.getDate() + (delta * 14));
+        var ds = current.toISOString().slice(0, 10);
+        window._payrollPeriodStart = ds;
+        renderPayroll(ds);
+      };
+
+      // Run payroll for the current pay period, then open the WH-347 certified payroll doc.
+      window.openPayrollDocs = function(btn) {
+        var label = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner"></i> 정산 중...'; }
+        gsRun('api_runPayroll', [_siteId(), window._payrollPeriodStart || null], null).then(function(res) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          if (res && res.success && res.certifiedUrl) {
+            window.open(res.certifiedUrl, '_blank');
+          } else {
+            alert((res && res.error) || '급여 정산 문서를 생성할 수 없습니다.');
+          }
+        }).catch(function(e) {
+          if (btn) { btn.disabled = false; btn.innerHTML = label; }
+          alert('급여 정산 실행 실패: ' + e.message);
+        });
+      };
+
+      // ══════════════════════════════════════════════════════
+      // WBS — 실시간 공정 관리 (AI 메뉴얼 분석 기반)
+      // 프로젝트 목록/공정 트리는 전부 DB(projects, wbs_items)에서 로드한다.
+      // 안전 작업카드와 연결된 SubTask 는 TBM 게이트("안전 없이 공정 없다")가 적용된다.
+      // ══════════════════════════════════════════════════════
+      window.WBS_CURRENT_PROJECT = null;
+
+      var WBS_STATUS_META = {
+        'AI생성':   { color: '#8b5cf6', bg: 'rgba(139,92,246,0.13)',  icon: 'ph-sparkle' },
+        '검수완료': { color: '#3b82f6', bg: 'rgba(59,130,246,0.13)',  icon: 'ph-clipboard-text' },
+        '진행중':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.13)',  icon: 'ph-arrows-clockwise' },
+        '완료':     { color: '#10b981', bg: 'rgba(16,185,129,0.13)',  icon: 'ph-check-circle' },
+        '보류':     { color: '#64748b', bg: 'rgba(100,116,139,0.13)', icon: 'ph-pause-circle' }
+      };
+      var WBS_COMPANY_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
+      var WBS_GRID_COLS = '92px 58px minmax(220px,1fr) 100px 62px 60px 48px 132px 132px';
+
+      function wbsEsc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function(ch) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+        });
+      }
+      function wbsJsArg(v) {
+        return wbsEsc(String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+      }
+      function wbsStatusMeta(status) {
+        return WBS_STATUS_META[status] || { color: 'var(--text-tertiary)', bg: 'var(--bg-base)', icon: 'ph-circle' };
+      }
+      function wbsStatusPill(status) {
+        var m = wbsStatusMeta(status);
+        return '<span style="display:inline-flex;align-items:center;gap:5px;background:' + m.bg + ';color:' + m.color + ';font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap">' +
+          '<i class="ph ' + m.icon + '"></i>' + wbsEsc(status || '-') + '</span>';
+      }
+      function wbsCompanyColor(name, companies) {
+        var idx = companies.indexOf(name);
+        return idx >= 0 ? WBS_COMPANY_COLORS[idx % WBS_COMPANY_COLORS.length] : '#64748b';
+      }
+      // 임계경로 — 여기가 밀리면 준공이 밀린다.
+      function wbsCpBadge(sub) {
+        if (!sub.isCritical) return '';
+        return '<span title="임계경로 — 이 작업이 지연되면 준공일이 그대로 밀립니다" style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap">★ 임계</span>';
+      }
+
+      // 여유(float)가 적은 작업은 곧 임계경로가 된다.
+      function wbsPredsChip(sub) {
+        var out = '';
+        if (sub.preds && sub.preds.length) {
+          out += '<span title="선행작업: ' + wbsEsc(sub.preds.join(', ')) + '" style="color:var(--text-tertiary);font-size:10px;margin-left:8px;white-space:nowrap"><i class="ph ph-arrow-elbow-down-right"></i> ' + sub.preds.length + '</span>';
+        }
+        if (!sub.isCritical && sub.floatDays !== null && sub.floatDays !== undefined && sub.floatDays <= 5) {
+          out += '<span title="총 여유 ' + sub.floatDays + '일 — 임계경로에 근접" style="color:#f59e0b;font-size:10px;margin-left:6px;white-space:nowrap">여유 ' + sub.floatDays + 'd</span>';
+        }
+        return out;
+      }
+
+      // 인원 · 장비 — 안전계획의 입력값. 계획 대비 실제 서명 인원을 같이 보여준다.
+      function wbsCrewLabel(sub) {
+        if (!sub.crewSize) return '<span style="color:var(--text-tertiary)">-</span>';
+        var eq = (sub.equipment && sub.equipment.length)
+          ? ' <i class="ph ph-crane-tower" style="color:#f59e0b" title="장비: ' + wbsEsc(sub.equipment.join(', ')) + '"></i>' : '';
+        var actual = sub.actualCrew > 0 ? '<span style="color:#10b981">' + sub.actualCrew + '</span>/' : '';
+        return actual + sub.crewSize + '명' + eq;
+      }
+
+      function wbsSafetyChip(sub) {
+        if (sub.tbmGated) {
+          return '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="오늘 안전카드(' + wbsEsc(sub.safetyWorkCode || '') + ')의 TBM/서명이 완료되어야 공정을 진행할 수 있습니다" style="cursor:pointer;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-lock-key"></i> TBM 대기</span>';
+        }
+        if (sub.hasCardToday) {
+          return '<span onclick="event.stopPropagation();window.goToView(\'safety\')" title="오늘 안전카드 ' + wbsEsc(sub.safetyWorkCode || '') + ' — TBM 완료" style="cursor:pointer;background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-shield-check"></i> 안전완료</span>';
+        }
+        if (sub.safetyCardCount > 0) {
+          return '<span title="지난 안전카드 ' + sub.safetyCardCount + '장 (오늘자는 없음)" style="color:var(--text-tertiary);font-size:10px;margin-left:8px;white-space:nowrap"><i class="ph ph-shield"></i> ' + sub.safetyCardCount + '</span>';
+        }
+        return '';
+      }
+
+      // 오늘 할 일 — 현장이 매일 보는 목록. 임계경로 먼저, 다음 행동이 버튼으로 바로 보인다.
+      function wbsTodayPanel(today) {
+        if (!today || !today.success) return '';
+
+        var rows = (today.items || []).map(function(it) {
+          var act = it.nextAction;
+          var actColor = act === '안전계획' ? '#3b82f6' : act === 'TBM' ? '#f59e0b' : act === '시작' ? '#10b981' : 'var(--text-tertiary)';
+          var actIcon = act === '안전계획' ? 'ph-shield-plus' : act === 'TBM' ? 'ph-signature' : act === '시작' ? 'ph-play' : 'ph-arrows-clockwise';
+          var onClick = act === '안전계획'
+            ? 'window.createWbsSafetyCard(\'' + wbsJsArg(it.wbs_id) + '\')'
+            : act === 'TBM'
+              ? 'window.goToView(\'safety\')'
+              : act === '시작'
+                ? 'window.toggleWbsComplete(\'' + wbsJsArg(it.wbs_id) + '\',\'진행중\')'
+                : 'window.openWbsLaborModal(\'' + wbsJsArg(it.wbs_id) + '\')';
+
+          return '<div style="display:grid;grid-template-columns:auto minmax(200px,1fr) 150px 110px 96px;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-subtle);' +
+            (it.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;') + '">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);min-width:44px">' + wbsEsc(it.activity_id || '') + '</span>' +
+            '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary)">' + wbsEsc(it.sub_name) + '</span>' +
+            (it.isCritical ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">★</span>' : '') +
+            (it.ehs === 'high' ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">고위험</span>' : '') +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.stagePath || '') + '</div></span>' +
+            '<span style="font-size:11px;color:var(--text-secondary);cursor:pointer" onclick="window.openWbsLaborModal(\'' + wbsJsArg(it.wbs_id) + '\')" title="' + wbsEsc(it.crewText || '') + ' — 클릭하면 실투입 확인">' +
+            (it.crewSize ? '<i class="ph ph-users"></i> ' + it.crewSize + '명' : '<span style="color:var(--text-tertiary)">인원 없음</span>') +
+            ((it.equipment && it.equipment.length) ? ' <i class="ph ph-crane-tower" style="color:#f59e0b" title="' + wbsEsc(it.equipment.join(', ')) + '"></i>' : '') + '</span>' +
+            '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(it.plannedStart || '') + '~</span>' +
+            '<button onclick="' + onClick + '" style="background:none;border:1px solid ' + actColor + ';color:' + actColor + ';border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + actIcon + '"></i> ' + act + '</button>' +
+            '</div>';
+        }).join('');
+
+        var body = today.total === 0
+          ? '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">오늘(' + wbsEsc(today.date) + ') 예정된 작업이 없습니다.</div>'
+          : rows;
+
+        return '<div class="panel" style="margin-bottom:18px;border:1px solid rgba(59,130,246,0.35)">' +
+          '<div class="panel-header" style="background:rgba(59,130,246,0.06)">' +
+          '<div class="panel-title"><i class="ph ph-calendar-check" style="color:#3b82f6"></i> 오늘 할 일 — ' + wbsEsc(today.date) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:14px;font-size:11px">' +
+          '<span style="color:var(--text-secondary)">작업 <strong style="color:var(--text-primary)">' + today.total + '</strong></span>' +
+          (today.criticalCount > 0 ? '<span style="color:#ef4444">★ 임계 ' + today.criticalCount + '</span>' : '') +
+          (today.needsPlanCount > 0 ? '<span style="color:#3b82f6">안전계획 필요 ' + today.needsPlanCount + '</span>' : '') +
+          (today.tbmWaitCount > 0 ? '<span style="color:#f59e0b">TBM 대기 ' + today.tbmWaitCount + '</span>' : '') +
+          (today.plannedCrew > 0 ? '<span style="color:var(--text-secondary)">계획 인원 <strong style="color:var(--text-primary)">' + today.plannedCrew + '명</strong></span>' : '') +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:720px">' + body + '</div></div></div>';
+      }
+
+      function wbsProgressBar(pct, color, width) {
+        var p = Math.max(0, Math.min(100, Number(pct) || 0));
+        return '<div style="display:flex;align-items:center;gap:8px;min-width:' + (width || 110) + 'px">' +
+          '<div style="flex:1;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + p + '%;background:' + color + ';border-radius:3px"></div></div>' +
+          '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);min-width:34px;text-align:right">' + p + '%</span></div>';
+      }
+
+      function wbsHeaderHtml(projOptions) {
+        return '<div class="header-section"><div>' +
+          '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> 공정 관리 (WBS)</h1>' +
+          '<p class="page-subtitle">AI 메뉴얼 분석 기반 실시간 공정 추적 · Stage → Task → SubTask 계층 구조</p>' +
+          '</div>' +
+          '<div class="action-row" style="gap:8px">' +
+          (projOptions
+            ? '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;max-width:280px">' + projOptions + '</select>'
+            : '') +
+          '<button class="btn-secondary" onclick="window.refreshWbs()" title="프로젝트 목록/공정 데이터 새로고침"><i class="ph ph-arrows-clockwise"></i></button>' +
+          '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
+          '<i class="ph ph-robot"></i> AI 메뉴얼 분석</button>' +
+          '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>' +
+          '</div></div>';
+      }
+
+      // 프로젝트가 하나도 없을 때 — 새 프로젝트 시작 온보딩.
+      function wbsNoProjectsHtml() {
+        return '<div class="panel"><div class="panel-body" style="padding:56px 24px;text-align:center">' +
+          '<i class="ph ph-buildings" style="font-size:52px;color:var(--text-tertiary)"></i>' +
+          '<div style="font-size:18px;font-weight:700;color:var(--text-primary);margin:14px 0 6px">등록된 프로젝트가 없습니다</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:28px">새 프로젝트를 시작하려면 아래 순서대로 진행하세요.</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;max-width:860px;margin:0 auto;text-align:left">' +
+          wbsOnboardStep(1, 'ph-buildings', '프로젝트 등록', '관리자 → 현장 / PROJECT 관리에서 프로젝트를 등록하면 이 화면의 드롭다운에 나타납니다.', '<button class="btn-secondary" style="margin-top:10px" onclick="window.open(\'/admin\',\'_blank\')"><i class="ph ph-arrow-square-out"></i> 관리자 열기</button>') +
+          wbsOnboardStep(2, 'ph-file-pdf', '매뉴얼 업로드', '설치 매뉴얼/시방서 PDF 를 WBS_MANUAL / 01_처리대기 폴더에 업로드합니다.', '<button class="btn-secondary" style="margin-top:10px" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>') +
+          wbsOnboardStep(3, 'ph-robot', 'AI 메뉴얼 분석', 'AI 가 매뉴얼을 분석해 Stage / Task / SubTask 공정 트리를 자동 생성합니다.', '') +
+          '</div></div></div>';
+      }
+
+      // WBS 는 존재하지만 현재 선택된 현장(site) 스코프 밖에 있을 때 — 파괴적 재생성 유도 금지.
+      function wbsSiteScopedHtml(projectId, total) {
+        return '<div class="panel"><div class="panel-body" style="padding:48px 24px;text-align:center">' +
+          '<i class="ph ph-map-pin-line" style="font-size:48px;color:#f59e0b"></i>' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin:12px 0 6px">' + wbsEsc(projectId) + ' — 현재 현장 범위에 표시할 공정이 없습니다</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7">이 프로젝트에는 SubTask ' + total + '건의 WBS 가 있지만, 상단에서 선택한 현장 범위 밖에 있습니다.<br>' +
+          '상단 <strong>현장 선택을 Global</strong> 로 바꾸거나, 해당 WBS 가 속한 현장을 선택하세요.</div>' +
+          '</div></div>';
+      }
+
+      // 프로젝트는 있으나 WBS 가 아직 없을 때.
+      function wbsEmptyTreeHtml(projectId) {
+        return '<div class="panel"><div class="panel-body" style="padding:56px 24px;text-align:center">' +
+          '<i class="ph ph-tree-structure" style="font-size:52px;color:#7c3aed"></i>' +
+          '<div style="font-size:18px;font-weight:700;color:var(--text-primary);margin:14px 0 6px">' + wbsEsc(projectId) + ' — 아직 생성된 공정(WBS)이 없습니다</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:28px">매뉴얼을 업로드하고 AI 분석을 실행하면 공정 트리가 자동으로 만들어집니다.</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;max-width:640px;margin:0 auto;text-align:left">' +
+          wbsOnboardStep(1, 'ph-file-pdf', '매뉴얼 업로드', 'WBS_MANUAL / 01_처리대기 폴더에 설치 매뉴얼/시방서 PDF 를 업로드합니다.', '<button class="btn-secondary" style="margin-top:10px" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>') +
+          wbsOnboardStep(2, 'ph-robot', 'AI 메뉴얼 분석 실행', 'Stage / Task / SubTask 3단계 계층과 협력사 · EHS · 공수가 자동 분류됩니다.', '<button class="btn-primary" style="margin-top:10px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()"><i class="ph ph-robot"></i> AI 메뉴얼 분석</button>') +
+          '</div></div></div>';
+      }
+
+      function wbsOnboardStep(no, icon, title, desc, actionHtml) {
+        return '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:10px;padding:16px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+          '<span style="width:22px;height:22px;border-radius:50%;background:rgba(124,58,237,0.18);color:#a78bfa;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">' + no + '</span>' +
+          '<i class="ph ' + icon + '" style="font-size:18px;color:#a78bfa"></i>' +
+          '<span style="font-size:13px;font-weight:700;color:var(--text-primary)">' + title + '</span></div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">' + desc + '</div>' + actionHtml +
+          '</div>';
+      }
+
+      // 렌더 세대 토큰 — 프로젝트/현장을 빠르게 전환할 때 늦게 도착한 응답이 화면을 덮어쓰지 않게 한다.
+      var _wbsRenderGen = 0;
+
+      // ===== 공정표(간트) — 날짜 축 위에 모든 액티비티를 ES~EF 막대로, 날짜 클릭 시 그날 작업 =====
+      var WBS_DAY_PX = 26;              // 하루 폭(px)
+      var WBS_GANTT_LABEL_W = 300;      // 좌측 고정 라벨 폭(px)
+      var WBS_WD = ['일', '월', '화', '수', '목', '금', '토'];
+      var WBS_TRADE_COLORS = { GC: '#64748b', ELEC: '#f59e0b', PLUMB: '#3b82f6', MECH: '#06b6d4', FIRE: '#ef4444', FRAME: '#8b5cf6', DEMO: '#a16207', DOOR: '#0ea5e9', PAINT: '#ec4899', CEIL: '#14b8a6', TILE: '#10b981', MILL: '#d97706', FLOOR: '#84cc16', SPEC: '#6366f1', INSP: '#94a3b8', LV: '#22d3ee', DRY: '#0891b2', PE: '#64748b' };
+      function wbsTradeColor(t) { if (!t) return '#7c3aed'; var k = String(t).toUpperCase().trim(); return WBS_TRADE_COLORS[k] || '#7c3aed'; }
+      function wbsPD(s) { if (!s) return null; var p = String(s).split('-'); if (p.length !== 3) return null; var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); return isNaN(d.getTime()) ? null : d; }
+      function wbsDaysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+      function wbsAddDays(d, n) { return new Date(d.getTime() + n * 86400000); }
+      function wbsISOdate(d) { return d.toISOString().slice(0, 10); }
+      function wbsWeekdayNum(d) { return d.getUTCDay(); }
+      function wbsTodayISO() { return new Date().toISOString().slice(0, 10); }
+
+      // tree(stages > tasks > sub_tasks) → 간트 공정표 HTML.
+      function wbsGanttPanel(tree, projectId) {
+        var acts = [];
+        (tree || []).forEach(function(stage) {
+          (stage.tasks || []).forEach(function(task) {
+            (task.sub_tasks || []).forEach(function(sub) { acts.push(sub); });
+          });
+        });
+        var minD = null, maxD = null;
+        acts.forEach(function(sub) {
+          var s = wbsPD(sub.plannedStart), e = wbsPD(sub.plannedEnd) || s;
+          if (s) { if (!minD || s < minD) minD = s; if (!maxD || s > maxD) maxD = s; }
+          if (e) { if (!maxD || e > maxD) maxD = e; }
+        });
+        if (!minD || !maxD) {
+          return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-calendar-blank"></i> 공정표 (간트)</div></div>' +
+            '<div class="panel-body" style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">시작·종료 예정일이 있는 작업이 없어 공정표를 그릴 수 없습니다.<br>CPM을 다시 임포트하거나 작업 편집에서 예정일을 입력하세요.</div></div>';
+        }
+        var totalDays = wbsDaysBetween(minD, maxD) + 1;
+        var trackW = totalDays * WBS_DAY_PX;
+        var todayISO = wbsTodayISO(), todayD = wbsPD(todayISO);
+        var todayOff = (todayD && todayD >= minD && todayD <= maxD) ? wbsDaysBetween(minD, todayD) : null;
+
+        // 헤더: 월 구간 + 일자(클릭 가능, 일요일/오늘 강조).
+        var months = [], dayCells = '';
+        for (var i = 0; i < totalDays; i++) {
+          var d = wbsAddDays(minD, i);
+          var iso = wbsISOdate(d), wd = wbsWeekdayNum(d), dn = d.getUTCDate();
+          var isSun = (wd === 0), isSat = (wd === 6), isToday = (iso === todayISO);
+          var mkey = d.getUTCFullYear() + '.' + (d.getUTCMonth() + 1);
+          if (months.length === 0 || months[months.length - 1].key !== mkey) months.push({ key: mkey, count: 1 });
+          else months[months.length - 1].count++;
+          var cellBg = isToday ? 'background:rgba(124,58,237,0.28);color:#a78bfa;font-weight:700;' : isSun ? 'background:rgba(239,68,68,0.10);color:#ef8a8a;' : isSat ? 'background:rgba(148,163,184,0.10);color:var(--text-tertiary);' : 'color:var(--text-tertiary);';
+          dayCells += '<div onclick="window.showWbsDayWork(\'' + iso + '\')" title="' + iso + ' (' + WBS_WD[wd] + ') — 클릭: 그날 작업" style="width:' + WBS_DAY_PX + 'px;flex:none;box-sizing:border-box;text-align:center;font-size:9px;line-height:1.15;padding:3px 0;cursor:pointer;border-left:1px solid var(--border-subtle);' + cellBg + '">' + dn + '</div>';
+        }
+        var monthsHtml = months.map(function(m) { return '<div style="width:' + (m.count * WBS_DAY_PX) + 'px;flex:none;box-sizing:border-box;text-align:center;font-size:10px;font-weight:700;color:var(--text-secondary);border-left:1px solid var(--border-default);padding:3px 0">' + m.key + '</div>'; }).join('');
+
+        // 행: Stage 구분 + 액티비티(시작일 정렬) 막대.
+        var rowsHtml = '';
+        (tree || []).forEach(function(stage, sIdx) {
+          var subs = [];
+          (stage.tasks || []).forEach(function(task) { (task.sub_tasks || []).forEach(function(sub) { subs.push(sub); }); });
+          if (subs.length === 0) return;
+          subs.sort(function(a, b) { return String(a.plannedStart || '9999').localeCompare(String(b.plannedStart || '9999')) || String(a.activity_id || '').localeCompare(String(b.activity_id || '')); });
+          rowsHtml += '<div style="display:flex;align-items:stretch;background:var(--bg-surface-elevated);border-top:1px solid var(--border-default)">' +
+            '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:3;background:var(--bg-surface-elevated);padding:6px 12px;font-size:12px;font-weight:700;color:#a78bfa;border-right:1px solid var(--border-default);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">STAGE ' + wbsEsc(stage.stage_no || sIdx + 1) + ' · ' + wbsEsc(stage.stage_name || '') + '</div>' +
+            '<div style="width:' + trackW + 'px;flex:none"></div></div>';
+          subs.forEach(function(sub) {
+            var s = wbsPD(sub.plannedStart), e = wbsPD(sub.plannedEnd) || s;
+            var barHtml = '';
+            if (s) {
+              var off = wbsDaysBetween(minD, s), dur = wbsDaysBetween(s, e) + 1;
+              var left = off * WBS_DAY_PX, w = Math.max(dur * WBS_DAY_PX, 6);
+              var color = sub.isCritical ? '#ef4444' : wbsTradeColor(sub.trade);
+              var done = sub.status === '완료';
+              var prog = Math.max(0, Math.min(100, parseInt(sub.progress, 10) || 0));
+              var label = (w > 54 ? wbsEsc(sub.sub_name || '') : '');
+              barHtml = '<div onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" title="' + wbsEsc((sub.activity_id ? sub.activity_id + ' · ' : '') + (sub.sub_name || '')) + ' (' + wbsEsc(sub.plannedStart || '') + '~' + wbsEsc(sub.plannedEnd || '') + ')' + (sub.crewText ? ' · ' + wbsEsc(sub.crewText) : '') + (sub.isCritical ? ' · 임계경로' : (sub.floatDays != null ? ' · 여유 ' + sub.floatDays + 'd' : '')) + '" ' +
+                'style="position:absolute;left:' + left + 'px;top:4px;height:18px;width:' + w + 'px;background:' + color + ';opacity:' + (done ? '0.55' : '0.92') + ';border-radius:4px;cursor:pointer;overflow:hidden;display:flex;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.25)">' +
+                (prog > 0 && !done ? '<div style="position:absolute;left:0;top:0;bottom:0;width:' + prog + '%;background:rgba(255,255,255,0.25)"></div>' : '') +
+                (done ? '<i class="ph ph-check" style="color:#fff;font-size:11px;margin:0 3px;position:relative"></i>' : '') +
+                (label ? '<span style="position:relative;color:#fff;font-size:10px;font-weight:600;white-space:nowrap;padding:0 5px;text-shadow:0 1px 1px rgba(0,0,0,0.4)">' + label + '</span>' : '') +
+                '</div>';
+            }
+            var critDot = sub.isCritical ? '<span style="color:#ef4444;margin-right:3px">★</span>' : '';
+            rowsHtml += '<div style="display:flex;align-items:stretch;border-top:1px solid var(--border-subtle)">' +
+              '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:2;background:var(--bg-panel);padding:4px 12px;border-right:1px solid var(--border-default);display:flex;align-items:center;gap:6px;overflow:hidden">' +
+                '<span class="cell-mono" style="font-size:9px;color:var(--text-tertiary);flex:none;width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + wbsEsc(sub.activity_id || '') + '">' + wbsEsc(sub.activity_id || '') + '</span>' +
+                '<span onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" style="font-size:12px;color:var(--text-primary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0" title="' + wbsEsc(sub.sub_name || '') + '">' + critDot + wbsEsc(sub.sub_name || '') + '</span>' +
+                '<span style="font-size:9px;font-weight:700;color:' + wbsTradeColor(sub.trade) + ';flex:none">' + wbsEsc(sub.trade || '') + '</span>' +
+              '</div>' +
+              '<div style="width:' + trackW + 'px;flex:none;position:relative;height:26px">' + barHtml + '</div>' +
+            '</div>';
+          });
+        });
+
+        var todayLine = todayOff !== null ? '<div style="position:absolute;top:0;bottom:0;left:' + (WBS_GANTT_LABEL_W + todayOff * WBS_DAY_PX) + 'px;width:2px;background:#7c3aed;opacity:0.7;z-index:4;pointer-events:none"></div>' : '';
+
+        return '<div class="panel">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar-horizontal"></i> 공정표 (간트) — ' + wbsEsc(projectId) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-tertiary);flex-wrap:wrap">' +
+            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:#ef4444;border-radius:2px"></span>임계경로</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:#3b82f6;border-radius:2px"></span>공종색</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:12px;background:#7c3aed"></span>오늘</span>' +
+            '<span><i class="ph ph-cursor-click"></i> 날짜 클릭 = 그날 작업</span>' +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto;overflow-y:hidden">' +
+            '<div style="position:relative;width:' + (WBS_GANTT_LABEL_W + trackW) + 'px">' +
+              '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg-panel);border-bottom:1px solid var(--border-default)">' +
+                '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:6;background:var(--bg-panel);border-right:1px solid var(--border-default)"></div>' +
+                '<div style="display:flex">' + monthsHtml + '</div>' +
+              '</div>' +
+              '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg-panel);border-bottom:1px solid var(--border-default)">' +
+                '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:6;background:var(--bg-panel);border-right:1px solid var(--border-default);font-size:10px;color:var(--text-tertiary);display:flex;align-items:center;padding:0 12px">작업 ' + acts.length + '개</div>' +
+                '<div style="display:flex">' + dayCells + '</div>' +
+              '</div>' +
+              rowsHtml + todayLine +
+            '</div>' +
+          '</div></div>';
+      }
+
+      // 특정 날짜에 진행 중인 작업 목록 + 계획 인원 합계 (간트 날짜 클릭 시).
+      window.showWbsDayWork = function(iso) {
+        var idx = window._wbsSubIndex || {};
+        var items = Object.keys(idx).map(function(k) { return idx[k]; }).filter(function(s) {
+          if (!s.plannedStart) return false;
+          var e = s.plannedEnd || s.plannedStart;
+          return s.plannedStart <= iso && iso <= e;
+        });
+        items.sort(function(a, b) { return (b.isCritical ? 1 : 0) - (a.isCritical ? 1 : 0) || String(a.trade || '').localeCompare(String(b.trade || '')) || String(a.activity_id || '').localeCompare(String(b.activity_id || '')); });
+        var crewSum = 0, critN = 0;
+        items.forEach(function(s) { crewSum += parseFloat(s.crewSize) || 0; if (s.isCritical) critN++; });
+        var d = wbsPD(iso), wd = d ? WBS_WD[wbsWeekdayNum(d)] : '';
+        var rows = items.length ? items.map(function(s) {
+          var color = s.isCritical ? '#ef4444' : wbsTradeColor(s.trade);
+          return '<div onclick="window.openWbsEditModal(\'' + wbsJsArg(s.wbs_id) + '\')" style="display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:6px;border-left:3px solid ' + color + ';background:var(--bg-base);margin-bottom:6px;cursor:pointer">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(s.activity_id || '') + '</span>' +
+            '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.isCritical ? '<span style="color:#ef4444">★ </span>' : '') + wbsEsc(s.sub_name || '') + '</span>' +
+              '<span style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(s.trade || '') + (s.company ? ' · ' + wbsEsc(s.company) : ' · 미배정') + (s.crewText ? ' · ' + wbsEsc(s.crewText) : '') + '</span></span>' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-secondary);text-align:right;white-space:nowrap">' + wbsEsc(s.plannedStart || '') + '<br>~ ' + wbsEsc(s.plannedEnd || '') + '</span>' +
+          '</div>';
+        }).join('') : '<div style="text-align:center;color:var(--text-tertiary);padding:28px;font-size:13px">이 날짜에 예정된 작업이 없습니다.</div>';
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:22px;width:560px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+            '<h3 style="margin:0;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--text-primary)"><i class="ph ph-calendar-check" style="color:#7c3aed"></i> ' + wbsEsc(iso) + ' (' + wd + ')</h3>' +
+            '<button id="wbs-day-close" style="background:none;border:none;color:var(--text-tertiary);font-size:22px;cursor:pointer;line-height:1">&times;</button></div>' +
+          '<div style="display:flex;gap:18px;font-size:12px;color:var(--text-secondary);margin-bottom:14px">' +
+            '<span>진행 작업 <b style="color:var(--text-primary);font-size:15px">' + items.length + '</b> 개</span>' +
+            '<span>계획 인원 <b style="color:#7c3aed;font-size:15px">' + crewSum + '</b> 명</span>' +
+            '<span>임계 <b style="color:#ef4444;font-size:15px">' + critN + '</b> 건</span></div>' +
+          '<div style="overflow-y:auto;flex:1">' + rows + '</div></div>';
+        document.body.appendChild(modal);
+        var close = function() { modal.remove(); };
+        modal.querySelector('#wbs-day-close').addEventListener('click', close);
+        modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+      };
+
+      // 공정표(간트) / 상세(트리) 뷰 전환 — 재조회 없이 표시만 토글.
+      window.setWbsView = function(mode) {
+        window._wbsViewMode = mode;
+        var g = document.getElementById('wbs-view-gantt'), t = document.getElementById('wbs-view-tree');
+        if (g) g.style.display = (mode === 'gantt' ? '' : 'none');
+        if (t) t.style.display = (mode === 'tree' ? '' : 'none');
+        [['wbs-view-gantt-btn', 'gantt'], ['wbs-view-tree-btn', 'tree']].forEach(function(p) {
+          var btn = document.getElementById(p[0]); if (!btn) return;
+          var active = (p[1] === mode);
+          btn.style.background = active ? '#7c3aed' : 'transparent';
+          btn.style.color = active ? '#fff' : 'var(--text-secondary)';
+        });
+      };
+
+      async function renderWbs() {
+        var gen = ++_wbsRenderGen;
+        pageContainer.innerHTML = skeleton();
+        try {
+          var projects = await window.API.getProjectList();
+          if (gen !== _wbsRenderGen) return;
+          projects = (Array.isArray(projects) ? projects : []).filter(function(p) { return p && p.code; });
+
+          if (projects.length === 0) {
+            pageContainer.innerHTML = wbsHeaderHtml('') + wbsNoProjectsHtml();
+            return;
+          }
+
+          var codes = projects.map(function(p) { return p.code; });
+          if (!window.WBS_CURRENT_PROJECT || codes.indexOf(window.WBS_CURRENT_PROJECT) < 0) {
+            window.WBS_CURRENT_PROJECT = codes[0];
+          }
+          var projectId = window.WBS_CURRENT_PROJECT;
+          var projOptions = projects.map(function(p) {
+            return '<option value="' + wbsEsc(p.code) + '"' + (p.code === projectId ? ' selected' : '') + '>' + wbsEsc(p.code) + ' — ' + wbsEsc(p.name) + '</option>';
+          }).join('');
+          var headerHtml = wbsHeaderHtml(projOptions);
+
+          var results = await Promise.all([
+            window.API.getProjectWbsTree(projectId),
+            window.API.getProjectProgressSummary(projectId),
+            window.API.getTodayWbsWork(projectId)
+          ]);
+          if (gen !== _wbsRenderGen) return;
+          var treeRes = results[0], sumRes = results[1], todayRes = results[2];
+
+          // 서버 오류를 "WBS 없음"으로 위장하지 않는다 — 오류는 오류로 표시.
+          if (!treeRes || treeRes.success !== true) {
+            pageContainer.innerHTML = headerHtml +
+              '<div class="panel"><div class="panel-body" style="padding:40px 24px;text-align:center">' +
+              '<i class="ph ph-warning-circle" style="font-size:40px;color:#ef4444"></i>' +
+              '<div style="font-size:15px;font-weight:700;color:var(--text-primary);margin:10px 0 6px">WBS 데이터를 불러오지 못했습니다</div>' +
+              '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">' + wbsEsc((treeRes && treeRes.error) || '알 수 없는 오류') + '</div>' +
+              '<button class="btn-secondary" onclick="window.refreshWbs()"><i class="ph ph-arrows-clockwise"></i> 다시 시도</button>' +
+              '</div></div>';
+            return;
+          }
+
+          var tree = treeRes.stages || [];
+          var sumOk = !!(sumRes && sumRes.success);
+          var sum = sumOk ? sumRes : { totalWbsCount: 0, progress: 0, completedCount: 0, inProgressCount: 0, stages: [] };
+          var sumWarnHtml = sumOk ? '' :
+            '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#f59e0b">' +
+            '<i class="ph ph-warning"></i> 진척률 요약을 불러오지 못했습니다' + ((sumRes && sumRes.error) ? ': ' + wbsEsc(sumRes.error) : '') + ' — 아래 진척률/KPI 수치는 실제와 다를 수 있습니다.</div>';
+
+          if (tree.length === 0) {
+            // 현장(site) 스코프 때문에 비어 보이는 경우와 진짜 WBS 가 없는 경우를 구분.
+            var unscopedTotal = Number(treeRes.unscopedTotal) || 0;
+            pageContainer.innerHTML = headerHtml + (unscopedTotal > 0 ? wbsSiteScopedHtml(projectId, unscopedTotal) : wbsEmptyTreeHtml(projectId));
+            return;
+          }
+
+          // Stage별 진척률 맵 (서버 공수 가중 집계).
+          var stageProgressMap = {};
+          (sum.stages || []).forEach(function(s) { stageProgressMap[String(s.stage_no)] = s.progress; });
+
+          // 통계 집계 + 편집 모달용 SubTask 인덱스.
+          var totalSubTasks = 0, totalManhours = 0, ehsHigh = 0, tbmGatedCount = 0;
+          var criticalCount = 0, criticalDone = 0, cardsToday = 0, plannedCost = 0;
+          var byCompany = {};
+          window._wbsSubIndex = {};
+          tree.forEach(function(stage) {
+            (stage.tasks || []).forEach(function(task) {
+              (task.sub_tasks || []).forEach(function(sub) {
+                totalSubTasks++;
+                var mh = parseFloat(sub.manhours) || 0;
+                totalManhours += mh;
+                plannedCost += parseFloat(sub.plannedCost) || 0;
+                var comp = sub.company || '';
+                if (comp) {
+                  if (!byCompany[comp]) byCompany[comp] = { mh: 0, doneMh: 0 };
+                  byCompany[comp].mh += mh;
+                  if (sub.status === '완료') byCompany[comp].doneMh += mh;
+                }
+                if (sub.ehs === 'high') ehsHigh++;
+                if (sub.isCritical) { criticalCount++; if (sub.status === '완료') criticalDone++; }
+                if (sub.hasCardToday) cardsToday++;
+                if (sub.tbmGated) tbmGatedCount++;
+                window._wbsSubIndex[sub.wbs_id] = sub;
+              });
+            });
+          });
+          var companies = Object.keys(byCompany).sort(function(a, b) { return byCompany[b].mh - byCompany[a].mh; });
+
+          // KPI (6개)
+          var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(7,1fr)">' +
+            '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">전체 진척률</div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
+            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">SubTask 완료</div><div class="kpi-value"><span style="color:#10b981">' + (sum.completedCount || 0) + '</span><span style="font-size:15px;color:var(--text-tertiary)"> / ' + totalSubTasks + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">진행중</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">예상 총공수</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">임계경로</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">지연 시 준공 밀림</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">EHS 고위험</div><div class="kpi-value" style="color:' + (ehsHigh > 0 ? '#ef4444' : 'var(--text-tertiary)') + '">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">위험작업</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건' : '오늘 계획됨') + '</span></div></div>' +
+            '</div>';
+
+          // 협력사 작업 부하 (DB 데이터 기반 동적 목록).
+          var companyBars = companies.map(function(c) {
+            var mh = byCompany[c].mh;
+            var pct = totalManhours > 0 ? (mh / totalManhours * 100) : 0;
+            var donePct = mh > 0 ? Math.round(byCompany[c].doneMh / mh * 100) : 0;
+            var color = wbsCompanyColor(c, companies);
+            return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">' +
+              '<span style="color:var(--text-secondary);font-weight:600">' + wbsEsc(c) + '</span>' +
+              '<span class="cell-mono" style="color:var(--text-tertiary)">' + mh.toLocaleString() + ' MH · ' + pct.toFixed(0) + '% <span style="color:' + color + '">(완료 ' + donePct + '%)</span></span></div>' +
+              '<div style="height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + ';opacity:0.9"></div></div></div>';
+          }).join('');
+
+          // Stage별 진척 요약.
+          var stageBars = tree.map(function(stage, sIdx) {
+            var pct = Number(stageProgressMap[String(stage.stage_no)]) || 0;
+            var count = 0;
+            (stage.tasks || []).forEach(function(t) { count += (t.sub_tasks || []).length; });
+            var color = pct >= 100 ? '#10b981' : pct > 0 ? '#f59e0b' : 'var(--text-tertiary)';
+            return '<div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;margin-bottom:10px">' +
+              '<span class="cell-mono" style="font-size:11px;font-weight:700;color:#a78bfa;min-width:70px">S' + wbsEsc(stage.stage_no || sIdx + 1) + ' · ' + count + '개</span>' +
+              '<div><div style="font-size:12px;color:var(--text-secondary);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">' + wbsEsc(stage.stage_name || '') + '</div>' +
+              '<div style="height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + '"></div></div></div>' +
+              '<span class="cell-mono" style="font-size:12px;font-weight:700;color:' + color + ';min-width:40px;text-align:right">' + pct + '%</span></div>';
+          }).join('');
+
+          var panelsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 협력사 작업 부하</div></div>' +
+            '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px;font-size:12px">협력사 배정 데이터가 없습니다</div>') + '</div></div>' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-steps"></i> Stage별 진척</div></div>' +
+            '<div class="panel-body">' + stageBars + '</div></div></div>';
+
+          // WBS 트리 — 컬럼 헤더 + Stage(접기) > Task > SubTask 행.
+          var colHeader = '<div style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:6px 12px;font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em">' +
+            '<span>상태</span><span>ID</span><span>작업명</span><span>공종</span><span style="text-align:right">인원·장비</span><span style="text-align:right">공수</span><span style="text-align:right">일수</span><span>진척</span><span style="text-align:right">액션</span></div>';
+
+          var openAll = tree.length <= 4;
+          var treeHtml = tree.map(function(stage, sIdx) {
+            var stageMh = 0, subCount = 0, stageCompleted = 0;
+            (stage.tasks || []).forEach(function(t) { (t.sub_tasks || []).forEach(function(s) {
+              stageMh += parseFloat(s.manhours) || 0;
+              subCount++;
+              if (s.status === '완료') stageCompleted++;
+            }); });
+            var stagePct = Number(stageProgressMap[String(stage.stage_no)]) || 0;
+            var stageColor = stagePct >= 100 ? '#10b981' : stagePct > 0 ? '#f59e0b' : '#7c3aed';
+
+            var tasksHtml = (stage.tasks || []).map(function(task) {
+              var taskTotal = (task.sub_tasks || []).length, taskCompleted = 0;
+              (task.sub_tasks || []).forEach(function(s) { if (s.status === '완료') taskCompleted++; });
+              var taskPct = taskTotal > 0 ? Math.round(taskCompleted / taskTotal * 100) : 0;
+
+              var subHtml = (task.sub_tasks || []).map(function(sub) {
+                var status = sub.status || '검수완료';
+                var isDone = status === '완료';
+                var isProg = status === '진행중';
+                var ehsBadge = sub.ehs === 'high'
+                  ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap"><i class="ph ph-warning"></i> 고위험</span>'
+                  : sub.ehs === 'medium'
+                    ? '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;white-space:nowrap">주의</span>' : '';
+                var safetyChip = wbsSafetyChip(sub);
+                var compColor = wbsCompanyColor(sub.company, companies);
+                var progColor = isDone ? '#10b981' : isProg ? '#f59e0b' : 'var(--text-tertiary)';
+                var nameStyle = isDone ? 'color:var(--text-secondary);text-decoration:line-through;opacity:0.8' : 'color:var(--text-primary)';
+                // 상태 워크플로: 검수완료/보류 → [시작] · 진행중 → [완료] · 완료 → [되돌리기]
+                var actionBtn;
+                if (isDone) {
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'검수완료\')" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-arrow-counter-clockwise"></i> 되돌리기</button>';
+                } else if (isProg) {
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'완료\')" style="background:#10b981;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-check"></i> 완료</button>';
+                } else if (!sub.hasCardToday) {
+                  // 안전 없이 공정 없다 — 카드가 없으면 시작이 아니라 "안전계획"이 먼저다.
+                  actionBtn = '<button onclick="event.stopPropagation();window.createWbsSafetyCard(\'' + wbsJsArg(sub.wbs_id) + '\')" title="오늘자 안전 작업카드를 만들고 인원·장비를 배정합니다" style="background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ph-shield-plus"></i> 안전계획</button>';
+                } else {
+                  actionBtn = '<button onclick="event.stopPropagation();window.toggleWbsComplete(\'' + wbsJsArg(sub.wbs_id) + '\',\'진행중\')" ' + (sub.tbmGated ? 'title="TBM 미완료 — 오늘 안전카드의 TBM/서명 완료 후 시작할 수 있습니다" ' : '') + 'style="background:' + (sub.tbmGated ? 'var(--bg-base)' : 'rgba(245,158,11,0.15)') + ';color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="ph ' + (sub.tbmGated ? 'ph-lock-key' : 'ph-play') + '"></i> 시작</button>';
+                }
+                actionBtn += '<button onclick="event.stopPropagation();window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" title="상세 편집" style="background:none;border:none;color:var(--text-tertiary);cursor:pointer;padding:4px;font-size:14px"><i class="ph ph-pencil-simple"></i></button>';
+
+                var rowBorder = sub.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;';
+
+                return '<div class="wbs-subtask" data-wbsid="' + wbsEsc(sub.wbs_id) + '" style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:7px 12px;border-radius:6px;' + rowBorder + 'background:' + (isDone ? 'rgba(16,185,129,0.05)' : 'transparent') + ';border-bottom:1px solid var(--border-subtle)">' +
+                  '<span>' + wbsStatusPill(status) + '</span>' +
+                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(sub.activity_id || sub.sub_no || '') + '</span>' +
+                  '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + wbsCpBadge(sub) + ehsBadge + safetyChip + wbsPredsChip(sub) + '</span>' +
+                  '<span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="공종: ' + wbsEsc(sub.trade || '-') + (sub.company ? ' / 협력사: ' + wbsEsc(sub.company) : ' / 협력사 미배정') + '"><span style="color:var(--text-secondary)">' + wbsEsc(sub.trade || '-') + '</span>' + (sub.company ? ' <span style="color:' + compColor + ';font-weight:700">· ' + wbsEsc(sub.company) + '</span>' : ' <span style="color:var(--text-tertiary);font-weight:400">· 미배정</span>') + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right" title="' + wbsEsc(sub.crewText || '') + '">' + wbsCrewLabel(sub) + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (parseFloat(sub.manhours) || 0) + '</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (sub.days || 0) + '</span>' +
+                  wbsProgressBar(sub.progress, progColor, 100) +
+                  '<span style="display:flex;align-items:center;justify-content:flex-end;gap:2px">' + actionBtn + '</span>' +
+                  '</div>';
+              }).join('');
+
+              return '<div style="margin-bottom:14px">' +
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;padding:7px 12px;background:rgba(124,58,237,0.07);border-left:3px solid #7c3aed;border-radius:4px">' +
+                '<span class="cell-mono" style="font-size:11px;color:#a78bfa;font-weight:700">Task ' + wbsEsc(task.task_no || '') + '</span>' +
+                '<span style="font-size:13px;color:var(--text-primary);font-weight:600">' + wbsEsc(task.task_name || '') + '</span>' +
+                '<span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
+                '<span class="cell-mono">' + taskCompleted + '/' + taskTotal + '</span>' +
+                '<div style="width:70px;height:5px;background:var(--bg-base);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + taskPct + '%;background:#10b981"></div></div>' +
+                '<span class="cell-mono" style="color:var(--text-secondary);font-weight:700;min-width:32px;text-align:right">' + taskPct + '%</span>' +
+                '</span></div>' + colHeader + subHtml + '</div>';
+            }).join('');
+
+            return '<details ' + (openAll || sIdx === 0 ? 'open' : '') + ' style="margin-bottom:14px;border:1px solid var(--border-default);border-radius:10px;overflow:hidden">' +
+              '<summary style="padding:13px 16px;background:var(--bg-surface-elevated);cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none">' +
+              '<i class="ph ph-caret-right" style="transition:transform 0.2s"></i>' +
+              '<span style="background:' + stageColor + ';color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap">STAGE ' + wbsEsc(stage.stage_no || sIdx + 1) + '</span>' +
+              '<span style="font-size:15px;font-weight:700;color:var(--text-primary)">' + wbsEsc(stage.stage_name || '') + '</span>' +
+              '<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-secondary)">' +
+              '<span class="cell-mono"><i class="ph ph-check-circle" style="color:#10b981"></i> ' + stageCompleted + '/' + subCount + '</span>' +
+              '<span class="cell-mono"><i class="ph ph-clock"></i> ' + stageMh.toLocaleString() + ' MH</span>' +
+              '<div style="display:flex;align-items:center;gap:8px"><div style="width:110px;height:7px;background:var(--bg-base);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + stagePct + '%;background:' + stageColor + '"></div></div>' +
+              '<span class="cell-mono" style="color:' + stageColor + ';font-weight:700;min-width:40px;text-align:right">' + stagePct + '%</span></div>' +
+              '</div></summary>' +
+              '<div style="padding:12px 16px;overflow-x:auto"><div style="min-width:900px">' + tasksHtml + '</div></div></details>';
+          }).join('');
+
+          var treePanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> WBS 구조 — ' + wbsEsc(projectId) + '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-tertiary)">' +
+            Object.keys(WBS_STATUS_META).map(function(s) {
+              return '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:' + WBS_STATUS_META[s].color + '"></span>' + s + '</span>';
+            }).join('') +
+            '</div></div>' +
             '<div class="panel-body">' + treeHtml + '</div></div>';
 
+          // 뷰 전환: 공정표(간트) ↔ 상세(트리). 기본은 공정표.
+          var vm = window._wbsViewMode || 'gantt';
+          var viewToggle = '<div style="display:inline-flex;gap:2px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:9px;padding:3px;margin-bottom:14px">' +
+            '<button id="wbs-view-gantt-btn" onclick="window.setWbsView(\'gantt\')" style="border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:' + (vm === 'gantt' ? '#7c3aed' : 'transparent') + ';color:' + (vm === 'gantt' ? '#fff' : 'var(--text-secondary)') + '"><i class="ph ph-chart-bar-horizontal"></i> 공정표</button>' +
+            '<button id="wbs-view-tree-btn" onclick="window.setWbsView(\'tree\')" style="border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:' + (vm === 'tree' ? '#7c3aed' : 'transparent') + ';color:' + (vm === 'tree' ? '#fff' : 'var(--text-secondary)') + '"><i class="ph ph-list-checks"></i> 상세</button>' +
+            '</div>';
+          var ganttHtml = wbsGanttPanel(tree, projectId);
+
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + viewToggle +
+            '<div id="wbs-view-gantt"' + (vm === 'gantt' ? '' : ' style="display:none"') + '>' + ganttHtml + '</div>' +
+            '<div id="wbs-view-tree"' + (vm === 'tree' ? '' : ' style="display:none"') + '>' + panelsHtml + treePanel + '</div>';
+
         } catch (err) {
-          renderError('WBS ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message);
+          if (gen !== _wbsRenderGen) return;
+          renderError('WBS 데이터 로딩 실패: ' + err.message);
           console.error(err);
         }
       }
@@ -4725,22 +8534,32 @@
         renderWbs();
       };
 
+      window.refreshWbs = function() {
+        if (window.apiCache) {
+          Object.keys(window.apiCache).forEach(function(k) {
+            if (k.indexOf('api_getProjectList') >= 0 || k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0 || k.indexOf('api_getSafetyWorkItems') >= 0 || k.indexOf('api_getTodayWbsWork') >= 0 || k.indexOf('api_getWbsLabor') >= 0) {
+              delete window.apiCache[k];
+            }
+          });
+        }
+        renderWbs();
+      };
+
       window.openWbsManualFolder = function() {
         window.open('https://drive.google.com/drive/folders/1rC8RSb966nL3H_vaqKD-LkDLWsNdfnl3', '_blank');
       };
 
-      // ë¹ ë¥¸ ì™„ë£Œ í† ê¸€ â€” KPI/Stage/Task ì§„ì²™ë¥  ì¦‰ì‹œ ê°±ì‹ 
+      // 빠른 상태 전환 (시작/완료/되돌리기) — TBM 게이트는 서버가 판정.
       window.toggleWbsComplete = async function(wbsId, newStatus) {
-        // ìºì‹œ ë¬´íš¨í™” (ì§„ì²™ë¥  ì¦‰ì‹œ ë°˜ì˜)
         if (window.apiCache) {
-          Object.keys(window.apiCache).forEach(function(k){
+          Object.keys(window.apiCache).forEach(function(k) {
             if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) {
               delete window.apiCache[k];
             }
           });
         }
-        // ë‚™ê´€ì  UI: í´ë¦­ ì¦‰ì‹œ í–‰ ìƒ‰ìƒ ë³€ê²½
-        var row = document.querySelector('.wbs-subtask[data-wbsid="' + wbsId + '"]');
+        var safeId = (window.CSS && CSS.escape) ? CSS.escape(wbsId) : String(wbsId).replace(/["\\]/g, '\\$&');
+        var row = document.querySelector('.wbs-subtask[data-wbsid="' + safeId + '"]');
         if (row) {
           row.style.opacity = '0.5';
           row.style.pointerEvents = 'none';
@@ -4748,325 +8567,557 @@
         try {
           var res = await window.API.markWbsStatus(wbsId, newStatus);
           if (res && res.success) {
-            // ì „ì²´ ë¦¬ë Œë” (KPI + Stage ì§„ì²™ë¥  ëª¨ë‘ ê°±ì‹ )
             renderWbs();
           } else {
-            alert('ìƒíƒœ ë³€ê²½ ì‹¤íŒ¨: ' + (res && res.error ? res.error : 'unknown'));
+            alert((res && res.error) || '상태 변경에 실패했습니다.');
             if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
           }
-        } catch(e) {
-          alert('ì˜¤ë¥˜: ' + e.message);
+        } catch (e) {
+          alert('오류: ' + e.message);
           if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
         }
       };
 
-      window.runWbsAiAnalysis = async function() {
-        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
-        var ok = confirm('ðŸ¤– AI ë©”ë‰´ì–¼ ë¶„ì„ì„ ì‹¤í–‰í•˜ì‹œê² ìŠµë‹ˆê¹Œ?\n\ní˜„ìž¥: ' + projectId + '\ní´ë”: WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸°\n\nGemini 2.5 Proê°€ í´ë” ë‚´ ëª¨ë“  ë§¤ë‰´ì–¼ì„ ë¶„ì„í•˜ì—¬\nWBSë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤. (ìˆ˜ ë¶„ ì†Œìš” ê°€ëŠ¥)');
-        if (!ok) return;
+      // 공정 → 안전. "작업을 시작한다"는 곧 "오늘 이 작업의 안전계획을 세운다"는 뜻이다.
+      //
+      // 날짜는 반드시 서버가 정한다. 브라우저에서 계산하면(특히 toISOString 은 UTC) 현장 시간대와
+      // 어긋나 "내일자" 카드가 만들어지고, 게이트가 오늘 카드를 못 찾아 안전 확인 없이 공정이 시작된다.
+      window.createWbsSafetyCard = async function(wbsId) {
+        var sub = (window._wbsSubIndex || {})[wbsId] || {};
 
-        var overlay = document.createElement('div');
-        overlay.id = 'wbs-ai-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px';
-        overlay.innerHTML =
-          '<div style="width:80px;height:80px;border:5px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:18px;font-weight:700">ðŸ¤– Gemini 2.5 Pro ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.7);font-size:13px">WBS_MANUAL / 01_ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” â†’ AI ë¶„ì„ â†’ WBS ìƒì„±</div>' +
-          '<div style="color:rgba(255,255,255,0.5);font-size:11px">ëŒ€ìš©ëŸ‰ PDFì˜ ê²½ìš° 2~5ë¶„ ì†Œìš”ë©ë‹ˆë‹¤. íŽ˜ì´ì§€ ë‹«ì§€ ë§ˆì„¸ìš”.</div>';
-        document.body.appendChild(overlay);
+        var lines = ['오늘자 안전 작업카드를 만들까요?', '', '작업: ' + (sub.sub_name || wbsId)];
+        if (sub.crewText) lines.push('투입: ' + sub.crewText + (sub.crewSize ? ' (약 ' + sub.crewSize + '명)' : ''));
+        if (sub.equipment && sub.equipment.length) lines.push('장비: ' + sub.equipment.join(', '));
+        if (sub.ehs === 'high') lines.push('⚠ 고위험 작업입니다.');
+        lines.push('', '카드 생성 후 안전관리 화면에서 계획서 → TBM/서명을 진행하세요.');
+        lines.push('TBM 이 완료되어야 이 공정을 시작할 수 있습니다.');
+
+        if (!confirm(lines.join('\n'))) return;
 
         try {
-          var result = await window.API.processWbsManual(projectId);
-          overlay.remove();
-
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
-          var icon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var detailRows = (result.results || []).map(function(r) {
-            var sIcon = r.status === 'success' ? 'âœ…' : 'âŒ';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.stages + ' Stages Â· ' + r.tasks + ' Tasks Â· ' + r.subTasks + ' SubTasks</span>'
-              : '<span style="color:var(--status-danger)">' + (r.error || '') + '</span>';
-            return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-              sIcon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
-          }).join('');
-
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:560px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:42px;text-align:center;margin-bottom:12px">' + icon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:12px">AI ë©”ë‰´ì–¼ ë¶„ì„ ê²°ê³¼</h2>' +
-            (result.processed === 0 && result.success
-              ? '<div style="text-align:center;color:var(--text-secondary);padding:20px">ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.<br><span style="font-size:11px;color:var(--text-tertiary)">01_ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ë§¤ë‰´ì–¼ì„ ì—…ë¡œë“œí•˜ì„¸ìš”.</span></div>'
-              : !result.success
-                ? '<div style="text-align:center;color:var(--status-danger);padding:20px">' + (result.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜') + '</div>'
-                : '<div style="max-height:320px;overflow-y:auto;margin-bottom:18px">' + detailRows + '</div>') +
-            '<button id="wbs-result-close" style="width:100%;background:#7c3aed;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-          modal.querySelector('#wbs-result-close').addEventListener('click', function() {
-            modal.remove();
-            renderWbs();
-          });
-        } catch(err) {
-          if (document.getElementById('wbs-ai-overlay')) document.getElementById('wbs-ai-overlay').remove();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜:\n' + err.message);
+          var res = await window.API.createSafetyCardForWbs(wbsId, null); // null = 서버가 오늘을 정함
+          if (res && res.success) {
+            showToast(res.created
+              ? res.date + ' 안전 작업카드 ' + res.work_code + ' 생성됨 — 안전관리에서 TBM 을 진행하세요.'
+              : '이미 ' + res.date + ' 카드(' + res.work_code + ')가 있습니다.');
+            window.refreshWbs();
+          } else {
+            alert((res && res.error) || '안전카드 생성에 실패했습니다.');
+          }
+        } catch (e) {
+          alert('오류: ' + e.message);
         }
       };
 
-      window.openWbsEditModal = function(wbsId) {
+      // 인원 모달 — 계획(공정표) 대비 실투입(안전카드 서명 → 출퇴근 → 급여)을 한 화면에서 본다.
+      // 여기서 서명란에 실제 직원을 배정하면 그 사람의 그날 근무시간이 이 공정에 귀속된다.
+      window.openWbsLaborModal = async function(wbsId) {
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:680px;max-height:82vh;overflow-y:auto"><div style="text-align:center;padding:30px;color:var(--text-tertiary)">불러오는 중...</div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+        var box = modal.firstChild;
+        try {
+          var results = await Promise.all([window.API.getWbsLabor(wbsId), window.API.getAssignableEmployees()]);
+          var labor = results[0];
+          window._assignableEmployees = Array.isArray(results[1]) ? results[1] : [];
+
+          if (!labor || !labor.success) {
+            box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--status-danger)">' + wbsEsc((labor && labor.error) || '불러오지 못했습니다.') + '</div>';
+            return;
+          }
+
+          var pct = labor.consumedPct;
+          var pctColor = pct === null ? 'var(--text-tertiary)' : pct > 100 ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
+
+          var daysHtml = (labor.days || []).length === 0
+            ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:12px">아직 안전 작업카드가 없습니다.<br>공정 행의 <strong>안전계획</strong> 버튼으로 오늘자 카드를 만드세요.</div>'
+            : labor.days.map(function(d) {
+                var people = (d.people || []).map(function(p) {
+                  var hrs = p.hours === null
+                    ? '<span style="color:var(--text-tertiary)" title="출퇴근 기록이 아직 없습니다">기록 대기</span>'
+                    : '<span class="cell-mono" style="color:#10b981">' + p.hours + 'h</span>';
+                  return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0">' +
+                    '<i class="ph ph-user-circle" style="color:var(--text-tertiary)"></i>' +
+                    '<span style="color:var(--text-primary)">' + wbsEsc(p.name) + '</span>' +
+                    '<span style="color:var(--text-tertiary);font-size:10px">' + wbsEsc(p.role || '') + '</span>' +
+                    '<span style="margin-left:auto">' + hrs + '</span></div>';
+                }).join('') || '<div style="font-size:11px;color:var(--text-tertiary);padding:3px 0">서명한 인원이 없습니다.</div>';
+
+                return '<div style="border:1px solid var(--border-default);border-radius:8px;padding:12px;margin-bottom:8px">' +
+                  '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+                  '<span class="cell-mono" style="font-size:12px;font-weight:700;color:var(--text-primary)">' + wbsEsc(d.date) + '</span>' +
+                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(d.workCode) + '</span>' +
+                  (d.tbmCleared
+                    ? '<span style="background:rgba(16,185,129,0.15);color:#10b981;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 완료</span>'
+                    : '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700">TBM 대기</span>') +
+                  '<span style="margin-left:auto;font-size:11px;color:var(--text-secondary)">서명 ' + d.signedCount + '/' + d.slotCount + ' · 실근무 <strong class="cell-mono" style="color:var(--text-primary)">' + d.hours + 'h</strong></span>' +
+                  '<button class="btn-secondary" style="padding:3px 9px;font-size:11px" onclick="window.openSignerAssign(\'' + wbsJsArg(d.workCode) + '\',\'' + wbsJsArg(d.date) + '\')"><i class="ph ph-user-plus"></i> 인원 배정</button>' +
+                  '</div>' + people + '</div>';
+              }).join('');
+
+          box.innerHTML =
+            '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-users-three" style="color:#3b82f6"></i> 인원 · 실투입</h3>' +
+            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">' + wbsEsc(labor.name) + ' <span style="font-family:monospace">· ' + wbsEsc(wbsId) + '</span></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">계획 인원</div><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + (labor.plannedCrew !== null ? labor.plannedCrew + '명' : '-') + '</div></div>' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">계획 공수</div><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + labor.plannedHours + ' MH</div></div>' +
+            '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text-tertiary)">실투입 (출퇴근 기준)</div><div style="font-size:18px;font-weight:700;color:' + pctColor + '">' + labor.actualHours + 'h' + (pct !== null ? ' <span style="font-size:12px">(' + pct + '%)</span>' : '') + '</div></div>' +
+            '</div>' +
+            '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px">일자별 투입</div>' +
+            daysHtml +
+            '<button class="btn-secondary" style="width:100%;margin-top:10px" onclick="this.closest(\'div[style*=fixed]\').remove()">닫기</button>';
+        } catch (e) {
+          box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--status-danger)">오류: ' + wbsEsc(e.message) + '</div>';
+        }
+      };
+
+      // 서명란에 실제 직원 배정 — 여기가 "인원 몇 명"이 실제 사람이 되는 지점이다.
+      window.openSignerAssign = async function(workCode, date) {
+        var res = await gsRun('api_getSafetyWorkItems', [], null);
+        var card = (res && res.items || []).filter(function(c) { return c.id === workCode; })[0];
+        if (!card) { alert('안전카드를 찾을 수 없습니다: ' + workCode); return; }
+
+        // 그날 출근한 사람(출근 기록 기준)을 우선 배정 — "실제로 누가 일했나"를 확정한다.
+        var employees = await window.API.getAssignableEmployees(date || card.date || null);
+        employees = Array.isArray(employees) ? employees : [];
+        if (employees.length === 0) {
+          alert('배정할 직원이 없습니다.\n관리자 → 인원관리에서 직원을 먼저 등록하세요.');
+          return;
+        }
+        var present = employees.filter(function(e) { return e.present; });
+        var absent = employees.filter(function(e) { return !e.present; });
+        function signerOpt(e, showClock) { return '<option value="' + e.id + '">' + wbsEsc(e.name) + (showClock && e.clockIn ? ' · 출근 ' + wbsEsc(e.clockIn) : '') + (e.number ? ' (' + wbsEsc(e.number) + ')' : '') + '</option>'; }
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+        var opts = '<option value="">— 미배정 —</option>' +
+          (present.length ? '<optgroup label="오늘 출근 (' + present.length + '명)">' + present.map(function(e) { return signerOpt(e, true); }).join('') + '</optgroup>' : '') +
+          (absent.length ? '<optgroup label="미출근 / 기타">' + absent.map(function(e) { return signerOpt(e, false); }).join('') + '</optgroup>' : '');
+
+        var rows = (card.signatures || []).map(function(s, i) {
+          var locked = s.signed;
+          return '<div style="display:grid;grid-template-columns:88px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(s.role || ('인원 ' + (i + 1))) + '</span>' +
+            (locked
+              ? '<span style="font-size:12px;color:var(--text-primary)">' + wbsEsc(s.name) + '</span><span style="font-size:10px;color:#10b981;white-space:nowrap"><i class="ph ph-check-circle"></i> 서명완료 ' + wbsEsc(s.time) + '</span>'
+              : '<select data-sigid="' + s.id + '" class="signer-select" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:6px;border-radius:6px;font-size:12px">' + opts + '</select>' +
+                '<span style="font-size:10px;color:var(--text-tertiary);white-space:nowrap">미서명</span>') +
+            '</div>';
+        }).join('');
+
+        modal.innerHTML = '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:22px;width:480px;max-height:78vh;overflow-y:auto">' +
+          '<h3 style="margin:0 0 4px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-user-plus" style="color:#3b82f6"></i> 인원 배정</h3>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px">' + wbsEsc(workCode) + ' · 배정하면 이 사람의 출퇴근 시간이 이 공정에 귀속됩니다.</div>' +
+          (present.length
+            ? '<div style="font-size:11px;color:#10b981;margin-bottom:14px"><i class="ph ph-check-circle"></i> 오늘 출근 ' + present.length + '명 — 목록 상단에 표시됩니다.</div>'
+            : '<div style="font-size:11px;color:#f59e0b;margin-bottom:14px"><i class="ph ph-warning"></i> 오늘 출근 기록이 없습니다 — 출퇴근이 등록되면 상단에 뜹니다.</div>') +
+          (rows || '<div style="color:var(--text-tertiary);font-size:12px;padding:14px 0">서명란이 없습니다.</div>') +
+          '<div style="display:flex;gap:8px;margin-top:16px"><button id="signer-close" class="btn-secondary" style="flex:1">닫기</button></div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+        modal.querySelector('#signer-close').addEventListener('click', function() { modal.remove(); });
+
+        // 기존 배정 반영
+        modal.querySelectorAll('.signer-select').forEach(function(sel, i) {
+          var sig = (card.signatures || []).filter(function(s) { return !s.signed; })[i];
+          if (sig && sig.employeeId) sel.value = String(sig.employeeId);
+          sel.addEventListener('change', async function() {
+            var sigId = parseInt(sel.getAttribute('data-sigid'), 10);
+            var empId = sel.value ? parseInt(sel.value, 10) : null;
+            try {
+              var r = await window.API.assignSafetySigner(sigId, empId);
+              if (r && r.success) { showToast(empId ? (r.name + ' 배정됨') : '배정 해제됨'); }
+              else { alert((r && r.error) || '배정 실패'); }
+            } catch (e) { alert('오류: ' + e.message); }
+          });
+        });
+      };
+
+      window.__wbsManualModal = async function() {
+        var projectId = window.WBS_CURRENT_PROJECT || 'HFF-02';
+        var siteId = window.currentSiteId || 'ALL';
+        var tokenEl = document.querySelector('meta[name="csrf-token"]');
+        var csrf = tokenEl ? tokenEl.getAttribute('content') : '';
+
+        function clearWbsCache() {
+          if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) {
+            if (k.indexOf('api_getProjectWbsTree') >= 0 || k.indexOf('api_getProjectProgressSummary') >= 0) delete window.apiCache[k];
+          });
+        }
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
         modal.innerHTML =
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:14px;padding:24px;width:480px">' +
-          '<h3 style="margin:0 0 14px 0;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS íŽ¸ì§‘</h3>' +
-          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px;font-family:monospace">' + wbsId + '</div>' +
-          '<div style="display:grid;gap:12px">' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ìƒíƒœ</label>' +
-          '<select id="wbs-edit-status" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
-          '<option value="AIìƒì„±">ðŸ“ AIìƒì„± (ëŒ€ê¸°)</option><option value="ê²€ìˆ˜ì™„ë£Œ">âœ… ê²€ìˆ˜ì™„ë£Œ</option><option value="ì§„í–‰ì¤‘">â³ ì§„í–‰ì¤‘</option><option value="ì™„ë£Œ">ðŸŽ¯ ì™„ë£Œ</option><option value="ë³´ë¥˜">â¸ï¸ ë³´ë¥˜</option></select></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ë‹´ë‹¹ì‚¬</label>' +
-          '<select id="wbs-edit-company" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px">' +
-          '<option value="NAHSHON">NAHSHON</option><option value="AUTORICA">AUTORICA</option><option value="AI-KOREA">AI-KOREA</option><option value="M-SOL">M-SOL</option></select></div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì‹œìž‘ì˜ˆì •</label>' +
-          '<input type="date" id="wbs-edit-start" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
-          '<div><label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">ì¢…ë£Œì˜ˆì •</label>' +
-          '<input type="date" id="wbs-edit-end" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);color:white;padding:8px;border-radius:6px"></div>' +
-          '</div></div>' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:640px;max-width:100%;max-height:88vh;overflow-y:auto">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<h2 style="font-size:18px;margin:0;display:flex;align-items:center;gap:8px"><i class="ph ph-robot" style="color:#7c3aed"></i> AI 메뉴얼 분석</h2>' +
+              '<button id="wbsm-close" style="background:none;border:none;color:var(--text-tertiary);font-size:24px;line-height:1;cursor:pointer">&times;</button>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px">현장/프로젝트: <b>' + projectId + '</b></div>' +
+            '<div style="border:1px dashed var(--border-default);border-radius:12px;padding:16px;margin-bottom:18px">' +
+              '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-upload-simple"></i> 새 매뉴얼 업로드 → 분석</div>' +
+              '<input type="file" id="wbsm-file" accept=".pdf,image/*" style="width:100%;color:var(--text-secondary);font-size:12px;margin-bottom:10px">' +
+              '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">PDF 또는 이미지(최대 32MB). 선택된 AI 엔진이 매뉴얼 본문을 직접 읽어 WBS를 생성합니다. (수 분 소요 가능)</div>' +
+              '<button id="wbsm-analyze" style="width:100%;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">📄 업로드 &amp; 분석 실행</button>' +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:700;margin-bottom:8px"><i class="ph ph-list-checks"></i> 분석된 매뉴얼</div>' +
+            '<div id="wbsm-list" style="font-size:12px;color:var(--text-tertiary)">불러오는 중...</div>' +
+          '</div>';
+        document.body.appendChild(modal);
+
+        function close() { modal.remove(); }
+        modal.querySelector('#wbsm-close').addEventListener('click', close);
+        modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+
+        function statusPill(s) {
+          var c = s === 'completed' ? 'var(--status-success)' : (s === 'failed' ? 'var(--status-danger)' : 'var(--status-warning)');
+          var t = s === 'completed' ? '완료' : (s === 'failed' ? '실패' : '분석중');
+          return '<span style="color:' + c + ';font-weight:700">' + t + '</span>';
+        }
+
+        async function loadList() {
+          var box = modal.querySelector('#wbsm-list');
+          try {
+            var res = await fetch('/wbs-api/manuals?project=' + encodeURIComponent(projectId), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            var json = await res.json();
+            var items = (json && json.manuals) || [];
+            if (!items.length) { box.innerHTML = '<div style="padding:12px 0;color:var(--text-tertiary)">아직 분석된 매뉴얼이 없습니다. 위에서 파일을 업로드하세요.</div>'; return; }
+            box.innerHTML = items.map(function (m) {
+              return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-subtle)">' +
+                '<div style="min-width:0">' +
+                  '<div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="ph ph-file-text"></i> ' + (m.original_name || '-') + '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + (m.engine ? (m.engine === 'claude' ? 'Claude' : 'Gemini') : '-') + ' · ' + (m.stages || 0) + ' Stages / ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' Sub · ' + (m.analyzed_at || m.created_at || '') + ' · ' + statusPill(m.status) + '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-shrink:0">' +
+                  '<a href="' + m.url + '" target="_blank" style="padding:6px 10px;font-size:11px;text-decoration:none;border:1px solid var(--border-default);border-radius:6px;color:var(--text-secondary)">보기</a>' +
+                  '<button class="wbsm-apply" data-project="' + m.project_code + '" style="padding:6px 10px;font-size:11px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer">적용</button>' +
+                '</div>' +
+              '</div>';
+            }).join('');
+            box.querySelectorAll('.wbsm-apply').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                window.WBS_CURRENT_PROJECT = btn.getAttribute('data-project');
+                clearWbsCache();
+                close();
+                renderWbs();
+              });
+            });
+          } catch (e) { box.innerHTML = '<div style="color:var(--status-danger)">리스트 로드 실패: ' + e.message + '</div>'; }
+        }
+
+        modal.querySelector('#wbsm-analyze').addEventListener('click', async function () {
+          var input = modal.querySelector('#wbsm-file');
+          if (!input.files || !input.files[0]) { alert('분석할 매뉴얼 파일을 선택하세요.'); return; }
+          var btn = this; btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = '⬆️ 업로드 중...';
+          var fd = new FormData();
+          fd.append('manual', input.files[0]);
+          fd.append('project_code', projectId);
+          fd.append('site_id', siteId);
+          try {
+            var res = await fetch('/wbs-api/upload-manual', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, credentials: 'same-origin', body: fd });
+            var json = await res.json();
+            if (!json || !json.success || !json.manual) {
+              alert('❌ 업로드 실패: ' + (json && json.error ? json.error : ('HTTP ' + res.status)));
+              btn.disabled = false; btn.textContent = oldLabel; return;
+            }
+            // 분석은 응답 후 백그라운드로 진행된다(504 방지) — 상태를 폴링한다.
+            var manualId = json.manual.id;
+            loadList();
+            btn.textContent = '🤖 분석 중... (백그라운드)';
+            var done = false, tries = 0, maxTries = 150; // 약 10분 (4초 간격)
+            while (!done && tries < maxTries) {
+              await new Promise(function (r) { setTimeout(r, 4000); });
+              tries++;
+              var m = null;
+              try {
+                var lr = await fetch('/wbs-api/manuals?project=' + encodeURIComponent(projectId), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                var lj = await lr.json();
+                (lj.manuals || []).forEach(function (x) { if (x.id === manualId) m = x; });
+              } catch (e) { /* 일시 오류는 무시하고 다음 폴링 */ }
+              if (!m) continue;
+              if (m.status === 'completed') {
+                done = true;
+                alert('✅ 분석 완료: ' + (m.stages || 0) + ' Stages · ' + (m.tasks || 0) + ' Tasks / ' + (m.subtasks || 0) + ' 작업');
+                clearWbsCache(); loadList(); renderWbs();
+              } else if (m.status === 'failed') {
+                done = true;
+                alert('❌ 분석 실패: ' + (m.error || '알 수 없는 오류'));
+                loadList();
+              } else {
+                btn.textContent = '🤖 분석 중... (' + (tries * 4) + '초)';
+              }
+            }
+            if (!done) {
+              alert('⏳ 분석이 예상보다 오래 걸립니다. 잠시 후 "분석된 매뉴얼" 목록에서 완료 여부를 확인하세요.');
+              loadList();
+            }
+          } catch (e) { alert('❌ 오류: ' + e.message); }
+          btn.disabled = false; btn.textContent = oldLabel;
+        });
+
+        loadList();
+      };
+      window.runWbsAiAnalysis = function () { return window.__wbsManualModal(); };
+
+      // 상세 편집 모달 — 현재 행 데이터를 프리필하고, 담당사는 현 트리의 협력사 목록을 제안.
+      window.openWbsEditModal = function(wbsId) {
+        var sub = (window._wbsSubIndex || {})[wbsId] || {};
+        var statuses = ['AI생성', '검수완료', '진행중', '완료', '보류'];
+        var statusOptions = statuses.map(function(s) {
+          return '<option value="' + s + '"' + (s === sub.status ? ' selected' : '') + '>' + s + '</option>';
+        }).join('');
+        var companySet = {};
+        Object.keys(window._wbsSubIndex || {}).forEach(function(k) {
+          var c = window._wbsSubIndex[k].company;
+          if (c) companySet[c] = true;
+        });
+        var companyOptions = Object.keys(companySet).sort().map(function(c) {
+          return '<option value="' + wbsEsc(c) + '"></option>';
+        }).join('');
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+        var ehsVal = sub.ehs || '';
+        var ehsOpts = [['', '— 없음 —'], ['high', '고위험'], ['medium', '주의'], ['low', '낮음']].map(function(o) {
+          return '<option value="' + o[0] + '"' + (o[0] === ehsVal ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('');
+        var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:5px';
+        var HINT = 'color:var(--text-tertiary);font-weight:400';
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-strong);border-radius:14px;padding:22px;width:560px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-pop)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<h3 style="margin:0;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--text-primary)"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS 상세 편집</h3>' +
+            '<button id="wbs-edit-cancel-x" style="background:none;border:none;color:var(--text-tertiary);font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;font-family:var(--font-mono)">' + wbsEsc(wbsId) + (sub.activity_id ? ' · ' + wbsEsc(sub.activity_id) : '') + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check" style="color:#10b981"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
+          '<div class="wbs-edit-section" style="display:grid;gap:13px">' +
+          '<div><label style="' + LBL + '">작업명</label>' +
+          '<input type="text" id="wbs-edit-name" class="wbs-edit-field" value="' + wbsEsc(sub.sub_name || '') + '"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">상태</label>' +
+          '<select id="wbs-edit-status" class="wbs-edit-field">' + statusOptions + '</select></div>' +
+          '<div><label style="' + LBL + '">담당사 <span style="' + HINT + '">(실제 계약사)</span></label>' +
+          '<input type="text" id="wbs-edit-company" class="wbs-edit-field" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="계약 협력사 선택/입력">' +
+          '<datalist id="wbs-company-options">' + companyOptions + '</datalist></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">공종 <span style="' + HINT + '">(AI 분류)</span></label>' +
+          '<input type="text" id="wbs-edit-trade" class="wbs-edit-field" value="' + wbsEsc(sub.trade || '') + '" placeholder="예: ELEC / PLUMB / GC"></div>' +
+          '<div><label style="' + LBL + '">안전 위험도 <span style="' + HINT + '">(EHS)</span></label>' +
+          '<select id="wbs-edit-ehs" class="wbs-edit-field">' + ehsOpts + '</select></div>' +
+          '</div>' +
+          '<div><label style="' + LBL + '">투입조 / 인원 <span style="' + HINT + '">(안전카드 서명란 기준)</span></label>' +
+          '<input type="text" id="wbs-edit-crew" class="wbs-edit-field" value="' + wbsEsc(sub.crewText || '') + '" placeholder="예: 2 electricians + 1 helper"></div>' +
+          '<div><label style="' + LBL + '">장비 <span style="' + HINT + '">(쉼표로 구분)</span></label>' +
+          '<input type="text" id="wbs-edit-equip" class="wbs-edit-field" value="' + wbsEsc((sub.equipment || []).join(', ')) + '" placeholder="예: 시저리프트, 용접기"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">공수 (MH)</label>' +
+          '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" class="wbs-edit-field" value="' + (parseFloat(sub.manhours) || 0) + '"></div>' +
+          '<div><label style="' + LBL + '">일수</label>' +
+          '<input type="number" step="1" min="0" id="wbs-edit-days" class="wbs-edit-field" value="' + (parseInt(sub.days, 10) || 0) + '"></div>' +
+          '<div><label style="' + LBL + '">진척률 (%)</label>' +
+          '<input type="number" step="5" min="0" max="100" id="wbs-edit-progress" class="wbs-edit-field" value="' + (parseInt(sub.progress, 10) || 0) + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">시작예정</label>' +
+          '<input type="date" id="wbs-edit-start" class="wbs-edit-field" value="' + wbsEsc(sub.plannedStart || '') + '"></div>' +
+          '<div><label style="' + LBL + '">종료예정</label>' +
+          '<input type="date" id="wbs-edit-end" class="wbs-edit-field" value="' + wbsEsc(sub.plannedEnd || '') + '"></div>' +
+          '</div>' +
+          '</div>' +
           '<div style="display:flex;gap:10px;margin-top:18px">' +
-          '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">ì·¨ì†Œ</button>' +
-          '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">ì €ìž¥</button>' +
+          '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">저장</button>' +
           '</div></div>';
         document.body.appendChild(modal);
 
+        // 담당사 후보를 "실제 계약사"(현장 계약사 + 등록 회사)로 채운다 — AI 임의 배정이 아니라 사람이 선택.
+        gsRun('api_getWbsCompanyOptions', [window.currentSiteId || 'ALL'], []).then(function(opts) {
+          var dl = modal.querySelector('#wbs-company-options');
+          if (dl && Array.isArray(opts) && opts.length) {
+            dl.innerHTML = opts.map(function(n) { return '<option value="' + wbsEsc(n) + '"></option>'; }).join('');
+          }
+        }).catch(function() {});
+
         modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
+        modal.querySelector('#wbs-edit-cancel-x').addEventListener('click', function() { modal.remove(); });
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
         modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
-          var updates = {
-            'ìƒíƒœ': document.getElementById('wbs-edit-status').value,
-            'ë‹´ë‹¹ì‚¬': document.getElementById('wbs-edit-company').value,
-            'ì‹œìž‘ì˜ˆì •': document.getElementById('wbs-edit-start').value,
-            'ì¢…ë£Œì˜ˆì •': document.getElementById('wbs-edit-end').value
+          var name = document.getElementById('wbs-edit-name').value.trim();
+          if (!name) { alert('작업명은 비울 수 없습니다.'); return; }
+
+          // 변경된 필드만 전송 — 담당사/시작예정/종료예정은 빈 값('')으로 배정 해제 가능.
+          var current = {
+            '작업명': name,
+            '상태': document.getElementById('wbs-edit-status').value,
+            '담당사': document.getElementById('wbs-edit-company').value.trim(),
+            '공종': document.getElementById('wbs-edit-trade').value.trim(),
+            'EHS': document.getElementById('wbs-edit-ehs').value,
+            '투입조': document.getElementById('wbs-edit-crew').value.trim(),
+            '장비': document.getElementById('wbs-edit-equip').value.trim(),
+            '공수': document.getElementById('wbs-edit-manhours').value,
+            '일수': document.getElementById('wbs-edit-days').value,
+            '진척률': document.getElementById('wbs-edit-progress').value,
+            '시작예정': document.getElementById('wbs-edit-start').value,
+            '종료예정': document.getElementById('wbs-edit-end').value
           };
+          var original = {
+            '작업명': sub.sub_name || '',
+            '상태': sub.status || '',
+            '담당사': sub.company || '',
+            '공종': sub.trade || '',
+            'EHS': sub.ehs || '',
+            '투입조': sub.crewText || '',
+            '장비': (sub.equipment || []).join(', '),
+            '공수': String(parseFloat(sub.manhours) || 0),
+            '일수': String(parseInt(sub.days, 10) || 0),
+            '진척률': String(parseInt(sub.progress, 10) || 0),
+            '시작예정': sub.plannedStart || '',
+            '종료예정': sub.plannedEnd || ''
+          };
+          var updates = {};
+          Object.keys(current).forEach(function(k) {
+            if (String(current[k]) !== String(original[k])) updates[k] = current[k];
+          });
+          // 숫자 입력이 비어 있으면(잘못된 입력) 조용히 되돌리지 말고 무시.
+          if (updates['공수'] === '') delete updates['공수'];
+          if (updates['일수'] === '') delete updates['일수'];
+          if (Object.keys(updates).length === 0) { modal.remove(); return; }
           try {
             var res = await window.API.updateWbsRow(wbsId, updates);
             if (res.success) {
               modal.remove();
-              renderWbs();
+              window.refreshWbs();
             } else {
-              alert('ì €ìž¥ ì‹¤íŒ¨: ' + (res.error || 'unknown'));
+              alert((res && res.error) || '저장에 실패했습니다.');
             }
-          } catch(e) {
-            alert('ì €ìž¥ ì˜¤ë¥˜: ' + e.message);
+          } catch (e) {
+            alert('저장 오류: ' + e.message);
           }
         });
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
       };
 
       // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      async function renderVehicle() {
-        pageContainer.innerHTML = skeleton();
-        try {
-          const [stats, vehicles] = await Promise.all([
-            window.API.getVehicleStats(),
-            window.API.getVehicleList()
-          ]);
-          var vehiclesListHtml = vehicles.map(function (v) {
-            var rentClass = v.rentEnd < '2026-05-30' ? ' text-warning' : '';
-            var insClass = v.insuranceExp < '2026-06-30' ? ' text-warning' : '';
-            var oilClass = (v.nextOil - v.mileage) < 1000 ? ' text-warning' : '';
-            var assignee = v.assignee || '<span style="color:var(--text-tertiary)">ë¯¸ë°°ì •</span>';
-            var aiTag = v.registrationMethod === 'AIìžë™ë¶„ì„' ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;color:white;background:#7c3aed;margin-left:4px">AI</span>' : '';
-            return '<tr><td class="cell-mono">' + v.id + aiTag + '</td><td class="cell-primary cell-mono">' + v.plate + '</td><td>' + v.type + ' ' + v.model + '</td><td>' + assignee + '</td><td class="cell-mono' + rentClass + '">' + v.rentEnd + '</td><td class="cell-mono' + insClass + '">' + v.insuranceExp + '</td><td class="cell-mono">' + (v.mileage||0).toLocaleString() + '</td><td class="cell-mono' + oilClass + '">' + (v.nextOil||0).toLocaleString() + '</td><td>' + statusPill(v.status) + '</td></tr>';
-          }).join('');
+      
 
-          pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ì°¨ëŸ‰ ê´€ë¦¬</h1><p class="page-subtitle">ë ŒíŠ¸ ì°¨ëŸ‰ í˜„í™© Â· ë³´í—˜/ë“±ë¡ ë§Œë£Œ ì¶”ì  Â· AI ê³„ì•½ì„œ ìžë™ ë“±ë¡</p></div>' +
-            '<div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> ëª©ë¡ ì¶œë ¥</button>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;" onclick="window.runAiRentalScan()">' +
-            '<i class="ph ph-robot"></i> ðŸ¤– AI ë Œíƒˆì¹´ ë“±ë¡</button>' +
-            '<button class="btn-primary" style="background:var(--status-warning);color:#000;" onclick="openNfcAssignModal(\'VEHICLE\')"><i class="ph ph-identification-card"></i> NFC ë°°ì •</button>' +
-            '</div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì°¨ëŸ‰</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ë“±ë¡ ì°¨ëŸ‰</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ìš´í–‰ì¤‘</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì •ìƒ ë°°ì •</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì •ë¹„ì¤‘</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.maintenance + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì„œë¹„ìŠ¤ ì„¼í„°</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ë ŒíŠ¸ë§Œë£Œìž„ë°•</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.rentExpiringSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">60ì¼ ì´ë‚´</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">AI ë“±ë¡ ì°¨ëŸ‰</div><div class="kpi-value" style="color:#7c3aed">' + vehicles.filter(function(v){return v.registrationMethod==='AIìžë™ë¶„ì„';}).length + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Gemini ë¶„ì„</span></div></div>' +
-            '</div>' +
-            // AI ì•ˆë‚´ ë°°ë„ˆ
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px">' +
-            '<i class="ph ph-robot" style="font-size:28px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div>' +
-            '<div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:3px">ðŸ¤– AI ë Œíƒˆì¹´ ìžë™ ë“±ë¡ ì‹œìŠ¤í…œ</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary)">êµ¬ê¸€ ë“œë¼ì´ë¸Œ â†’ <strong style="color:white">NAHSHON / RENT CAR / ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ê³„ì•½ì„œ PDF/ì‚¬ì§„ì„ ë„£ê³  <strong style="color:#c4b5fd">AI ë Œíƒˆì¹´ ë“±ë¡</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”. Gemini AIê°€ ìžë™ìœ¼ë¡œ ë¶„ì„í•˜ì—¬ ì°¨ëŸ‰ ëª©ë¡ì— ë“±ë¡í•©ë‹ˆë‹¤.</div>' +
-            '</div>' +
-            '<button onclick="window.runAiRentalScan()" style="flex-shrink:0;background:linear-gradient(135deg,#7c3aed,#2563eb);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">ì‹¤í–‰</button>' +
-            '</div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-car"></i> ì°¨ëŸ‰ ëª©ë¡</div></div>' +
-            '<div class="panel-body"><table class="data-table"><thead><tr><th>ì°¨ëŸ‰ID</th><th>ë²ˆí˜¸íŒ</th><th>ëª¨ë¸</th><th>ë°°ì •ìž</th><th>ë ŒíŠ¸ë§Œë£Œ</th><th>ë³´í—˜ë§Œë£Œ</th><th>í˜„ìž¬ë§ˆì¼</th><th>ë‹¤ìŒì˜¤ì¼</th><th>ìƒíƒœ</th></tr></thead><tbody>' + (vehiclesListHtml || '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:32px">ë“±ë¡ëœ ì°¨ëŸ‰ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>';
-
-        } catch (err) { renderError('ì°¨ëŸ‰ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
-      }
-
-      // ðŸ¤– AI ë Œíƒˆì¹´ ìŠ¤ìº” ì‹¤í–‰
-      window.runAiRentalScan = async function() {
-        // ì§„í–‰ ì¤‘ ì˜¤ë²„ë ˆì´ í‘œì‹œ
-        var overlay = document.createElement('div');
-        overlay.id = 'ai-scan-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ¤– Gemini AI ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:13px">RENT CAR / ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” ì¤‘</div>';
-        document.body.appendChild(overlay);
-
-        try {
-          var result = await window.API.processRentalContracts();
-          overlay.remove();
-
-          // ê²°ê³¼ ëª¨ë‹¬ í‘œì‹œ
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
-
-          var statusIcon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var statusMsg  = !result.success
-            ? '<div style="color:var(--status-danger);font-size:13px;margin-top:8px">' + result.error + '</div>'
-            : result.processed === 0
-              ? '<div style="color:var(--text-secondary);font-size:13px;margin-top:8px">' + (result.message || 'ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.') + '</div>'
-              : '';
-
-          var detailRows = (result.results || []).map(function(r) {
-            var icon   = r.status === 'success' ? 'âœ…' : r.status === 'error' ? 'âŒ' : 'â­ï¸';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + r.plate + ' Â· ' + (r.type||'') + ' [' + r.vehicleId + ']</span>'
-              : '<span style="color:var(--status-danger)">' + (r.reason||'') + '</span>';
-            return '<div style="padding:8px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-              icon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
-          }).join('');
-
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:520px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:32px;text-align:center;margin-bottom:12px">' + statusIcon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:8px">AI ë Œíƒˆì¹´ ë“±ë¡ ê²°ê³¼</h2>' +
-            statusMsg +
-            (result.processed > 0 ?
-              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0;text-align:center">' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:white">' + (result.processed||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì´ ì²˜ë¦¬</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-success)">' + (result.saved||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì €ìž¥ ì™„ë£Œ</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-danger)">' + (result.errors||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì˜¤ë¥˜</div></div>' +
-              '</div>' +
-              '<div style="max-height:260px;overflow-y:auto;margin-bottom:16px">' + detailRows + '</div>'
-            : '') +
-            '<button id="vehicle-modal-close" style="width:100%;background:var(--brand-primary);color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ëª©ë¡ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-
-          document.body.appendChild(modal);
-          var vCloseBtn = modal.querySelector('#vehicle-modal-close');
-          if (vCloseBtn) vCloseBtn.addEventListener('click', function() {
-            modal.remove();
-            window.loadView('vehicle');
+      async function renderRental(force) {
+        if (force && window.apiCache) {
+          Object.keys(window.apiCache).forEach(function(k) {
+            if (k.indexOf('api_getRentalList') >= 0 || k.indexOf('api_getRentalStats') >= 0) {
+              delete window.apiCache[k];
+            }
           });
-          modal.addEventListener('click', function(e) {
-            if (e.target === modal) { modal.remove(); window.loadView('vehicle'); }
-          });
-
-        } catch(err) {
-          overlay.remove();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤:\n' + err.message);
         }
-      };
-
-
-      // â”€â”€ EQUIPMENT RENTAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      async function renderRental() {
         pageContainer.innerHTML = skeleton();
         try {
           const [stats, rentals] = await Promise.all([
             window.API.getRentalStats(),
             window.API.getRentalList()
           ]);
+
+          window.currentRentals = rentals; // Cache globally for detail modal lookup
+
           var rowsHtml = rentals.map(function(r) {
-            var statusClass = r.status === 'ì—°ì²´' ? 'text-danger'
-                            : r.status === 'ë°˜ë‚©ì™„ë£Œ' ? 'text-tertiary'
-                            : (r.daysRemaining >= 0 && r.daysRemaining <= 3) ? 'text-warning'
-                            : 'text-success';
-            var dRem = r.status === 'ë°˜ë‚©ì™„ë£Œ' ? 'â€”'
-                     : r.daysRemaining < 0 ? ('D+' + Math.abs(r.daysRemaining))
-                     : ('D-' + r.daysRemaining);
-            var operator = r.operator || '<span style="color:var(--text-tertiary)">ë¯¸ë°°ì •</span>';
-            var actionBtn = r.status === 'ë°˜ë‚©ì™„ë£Œ'
-              ? '<span style="color:var(--text-tertiary)">ì™„ë£Œ</span>'
-              : '<button class="btn-secondary" style="padding:4px 10px;font-size:11px" onclick="window.returnRentalPrompt(\'' + r.id + '\')">ë°˜ë‚©</button>';
-            return '<tr>'
+            var actionBtn = '';
+            if (r.status === '대기중') {
+              actionBtn = '<button class="btn-primary" style="background:var(--status-success);border:none;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openAssignEquipmentModal(' + r.realId + ', \'' + r.model + '\')">배정</button>';
+            } else if (r.status === '사용중') {
+              actionBtn = '<button class="btn-secondary" style="background:var(--status-danger);border:none;color:#fff;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); window.openReturnEquipmentModal(' + r.realId + ', \'' + r.model + '\')">반납</button>';
+            } else {
+              actionBtn = '<span style="color:var(--text-tertiary)">-</span>';
+            }
+
+            var operator = r.operator || '<span style="color:var(--text-tertiary)">미배정</span>';
+
+            return '<tr style="cursor:pointer;" onclick="window.openEquipmentDetailModal(' + r.realId + ')">'
               + '<td class="cell-mono">' + r.id + '</td>'
               + '<td class="cell-primary">' + r.equipType + '</td>'
               + '<td>' + r.model + '</td>'
               + '<td>' + r.vendor + '</td>'
               + '<td class="cell-mono">' + r.startDate + ' ~ ' + r.endDate + '</td>'
-              + '<td class="cell-mono ' + statusClass + '">' + dRem + '</td>'
-              + '<td class="cell-mono">$' + (r.dailyRate||0).toLocaleString() + '/ì¼</td>'
-              + '<td class="cell-mono">$' + (r.totalCost||0).toLocaleString() + '</td>'
+              + '<td>' + (r.company || '-') + '</td>'
+              + '<td>' + (r.team || '-') + '</td>'
               + '<td>' + operator + '</td>'
-              + '<td>' + r.task + '</td>'
               + '<td>' + statusPill(r.status) + '</td>'
               + '<td>' + actionBtn + '</td>'
               + '</tr>';
           }).join('');
 
-          pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬</h1><p class="page-subtitle">ì¤‘ìž¥ë¹„ ë‹¨ê¸° ë Œíƒˆ í˜„í™© Â· ë°˜ë‚©ì¼/ë¹„ìš© ì¶”ì  Â· AI ê³„ì•½ì„œ ìžë™ ë“±ë¡</p></div>' +
-            '<div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.print()"><i class="ph ph-file-csv"></i> ëª©ë¡ ì¶œë ¥</button>' +
-            '<button class="btn-secondary" onclick="window.setupRentalSheetHeaders()"><i class="ph ph-table"></i> ì‹œíŠ¸ í—¤ë” ìƒì„±</button>' +
-            '<button class="btn-secondary" onclick="window.generateSampleContracts()"><i class="ph ph-file-pdf"></i> ìƒ˜í”Œ ê³„ì•½ì„œ ìƒì„±</button>' +
-            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAiRentalEquipScan()"><i class="ph ph-robot"></i> ðŸ¤– AI ê³„ì•½ì„œ ë“±ë¡</button>' +
-            '<button class="btn-primary" onclick="window.openRentalCreateModal()"><i class="ph ph-plus"></i> ì‹ ê·œ ë Œíƒˆ</button>' +
-            '</div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ë Œíƒˆ</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ë“±ë¡ ìž¥ë¹„</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì‚¬ìš©ì¤‘</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">í˜„ìž¥ ê°€ë™</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ë°˜ë‚© ìž„ë°•</div><div class="kpi-value" style="color:var(--status-warning)">' + (stats.returningSoon||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">D-3 ì´ë‚´</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì—°ì²´</div><div class="kpi-value" style="color:var(--status-danger)">' + (stats.overdue||0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ê¸°í•œ ì´ˆê³¼</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">MTD ë¹„ìš©</div><div class="kpi-value cell-mono">$' + (stats.mtdCost||0).toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì›” ëˆ„ì </span></div></div>' +
-            '</div>' +
-            '<div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(37,99,235,0.1));border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px">' +
-            '<i class="ph ph-robot" style="font-size:28px;color:#7c3aed;flex-shrink:0"></i>' +
-            '<div><div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:3px">ðŸ¤– AI ìž¥ë¹„ ë Œíƒˆ ê³„ì•½ì„œ ìžë™ ë“±ë¡</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary)">êµ¬ê¸€ ë“œë¼ì´ë¸Œ â†’ <strong style="color:white">EQUIPMENT RENTAL / ì²˜ë¦¬ëŒ€ê¸°</strong> í´ë”ì— ê³„ì•½ì„œ PDF/ì‚¬ì§„ì„ ë„£ê³  <strong style="color:#c4b5fd">AI ê³„ì•½ì„œ ë“±ë¡</strong> ë²„íŠ¼ì„ í´ë¦­í•˜ì„¸ìš”. Geminiê°€ ìž¥ë¹„ì¢…ë¥˜Â·ëª¨ë¸Â·ë²¤ë”Â·ì¼ë‹¨ê°€Â·ê¸°ê°„ì„ ìžë™ ì¶”ì¶œí•©ë‹ˆë‹¤.</div></div>' +
-            '<button onclick="window.runAiRentalEquipScan()" style="flex-shrink:0;background:linear-gradient(135deg,#7c3aed,#2563eb);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">ì‹¤í–‰</button>' +
-            '</div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bulldozer"></i> ë Œíƒˆ ëª©ë¡</div></div>' +
-            '<div class="panel-body"><table class="data-table"><thead><tr>' +
-            '<th>ë ŒíƒˆID</th><th>ìž¥ë¹„ì¢…ë¥˜</th><th>ëª¨ë¸</th><th>ë²¤ë”</th><th>ê¸°ê°„</th><th>D-day</th>' +
-            '<th>ì¼ë‹¨ê°€</th><th>ëˆ„ì ë¹„ìš©</th><th>ìš´ì˜ìž</th><th>ìž‘ì—…</th><th>ìƒíƒœ</th><th>ì•¡ì…˜</th>' +
-            '</tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:32px">ë“±ë¡ëœ ë Œíƒˆ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>';
+          var byCompanyHtml = '';
+          if (!stats.byCompany || stats.byCompany.length === 0) {
+            byCompanyHtml = '<div style="color:var(--text-tertiary); text-align:center; padding:12px; font-size:12px;">사용중인 계약회사가 없습니다.</div>';
+          } else {
+            byCompanyHtml = stats.byCompany.map(function(c) {
+              var pct = stats.active > 0 ? (c.count / stats.active * 100) : 0;
+              return '<div style="margin-bottom:12px;">' +
+                     '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+                     '    <span style="font-size:12px; font-weight:600; color:var(--text-primary);">' + c.name + '</span>' +
+                     '    <span style="font-size:12px; font-weight:700; color:#7c3aed;">' + c.count + '대 사용중</span>' +
+                     '  </div>' +
+                     '  <div style="height:6px; background:var(--bg-base); border-radius:3px; overflow:hidden;">' +
+                     '    <div style="width:' + pct + '%; height:100%; background:linear-gradient(90deg, #7c3aed, #2563eb); border-radius:3px;"></div>' +
+                     '  </div>' +
+                     '</div>';
+            }).join('');
+          }
 
-        } catch (err) { renderError('ë Œíƒˆ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
+          pageContainer.innerHTML =
+            '<div class="header-section"><div><h1 class="page-title">장비 렌탈 관리</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
+            '<div class="action-row">' +
+            '<button class="btn-secondary" onclick="window.downloadRentalExcel()"><i class="ph ph-file-xls"></i> 엑셀 다운로드</button>' +
+            '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.openAiEquipmentRegModal()"><i class="ph ph-robot"></i> 🤖 AI 계약서 등록</button>' +
+            '</div></div>' +
+            
+            '<div style="display:grid; grid-template-columns: 7.2fr 2.8fr; gap:20px; align-items:start;">' +
+            '  <div style="display:flex; flex-direction:column; gap:20px;">' +
+            '    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr); gap:12px;">' +
+            '      <div class="kpi-card"><div class="kpi-label">전체 장비</div><div class="kpi-value">' + stats.total + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">등록 장비</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">사용중</div><div class="kpi-value" style="color:var(--status-success)">' + stats.active + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">현장 가동</span></div></div>' +
+            '      <div class="kpi-card"><div class="kpi-label">대기중</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.available + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">배정 대기</span></div></div>' +
+            '    </div>' +
+            '    <div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bulldozer"></i> 렌탈 목록</div></div>' +
+            '    <div class="panel-body" style="overflow-x:auto;"><table class="data-table"><thead><tr>' +
+            '    <th>렌탈ID</th><th>장비종류</th><th>모델</th><th>벤더</th><th>기간</th>' +
+            '    <th>배정회사</th><th>배정팀</th><th>운영자</th><th>상태</th><th>액션</th>' +
+            '    </tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);padding:32px">등록된 렌탈 없음</td></tr>') + '</tbody></table></div></div>' +
+            '  </div>' +
+            '  <div class="panel" style="position:sticky; top:20px;">' +
+            '    <div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 계약회사별 사용중인 장비 현황</div></div>' +
+            '    <div class="panel-body padded" style="display:flex; flex-direction:column; gap:16px;">' +
+                   byCompanyHtml +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+
+        } catch (err) { renderError('렌탈 데이터 로딩 실패'); console.error(err); }
       }
 
-      // ì‹ ê·œ ë Œíƒˆ ë“±ë¡ ëª¨ë‹¬
+      // 신규 렌탈 등록 모달
       window.openRentalCreateModal = function() {
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
         modal.innerHTML =
           '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:480px;max-height:90vh;overflow-y:auto">' +
-          '<h2 style="margin-bottom:16px;font-size:18px">ðŸ—ï¸ ì‹ ê·œ ìž¥ë¹„ ë Œíƒˆ ë“±ë¡</h2>' +
+          '<h2 style="margin-bottom:16px;font-size:18px">🚧 신규 장비 렌탈 등록</h2>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<label style="grid-column:span 2;font-size:12px">ìž¥ë¹„ì¢…ë¥˜<select id="r-type" class="form-input" style="width:100%;margin-top:4px"><option>Excavator</option><option>Forklift</option><option>Boom Lift</option><option>Skid Steer</option><option>Generator</option><option>Compressor</option><option>Crane</option><option>Other</option></select></label>' +
-          '<label style="font-size:12px">ëª¨ë¸<input id="r-model" class="form-input" placeholder="CAT 320GC" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ë²¤ë”<input id="r-vendor" class="form-input" placeholder="United Rentals" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ì‹œìž‘ì¼<input id="r-start" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ë°˜ë‚©ì˜ˆì •ì¼<input id="r-end" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ì¼ë‹¨ê°€ ($)<input id="r-rate" type="number" class="form-input" placeholder="850" style="width:100%;margin-top:4px"></label>' +
-          '<label style="font-size:12px">ë°°ì†¡ë¹„ ($)<input id="r-delivery" type="number" class="form-input" placeholder="450" style="width:100%;margin-top:4px"></label>' +
-          '<label style="grid-column:span 2;font-size:12px">ìš´ì˜ìž<input id="r-operator" class="form-input" style="width:100%;margin-top:4px"></label>' +
-          '<label style="grid-column:span 2;font-size:12px">ìž‘ì—…ë‚´ìš©<input id="r-task" class="form-input" placeholder="ê¸°ì´ˆê³µì‚¬ êµ´ì°©" style="width:100%;margin-top:4px"></label>' +
-          '<label style="grid-column:span 2;font-size:12px">ë¹„ê³ <input id="r-notes" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">장비종류<select id="r-type" class="form-input" style="width:100%;margin-top:4px"><option>Excavator</option><option>Forklift</option><option>Boom Lift</option><option>Skid Steer</option><option>Generator</option><option>Compressor</option><option>Crane</option><option>Other</option></select></label>' +
+          '<label style="font-size:12px">모델<input id="r-model" class="form-input" placeholder="CAT 320GC" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">벤더<input id="r-vendor" class="form-input" placeholder="United Rentals" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">시작일<input id="r-start" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">반납예정일<input id="r-end" type="date" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">일단가 ($)<input id="r-rate" type="number" class="form-input" placeholder="850" style="width:100%;margin-top:4px"></label>' +
+          '<label style="font-size:12px">배송비 ($)<input id="r-delivery" type="number" class="form-input" placeholder="450" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">운영자<input id="r-operator" class="form-input" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">작업내용<input id="r-task" class="form-input" placeholder="기초공사 굴착" style="width:100%;margin-top:4px"></label>' +
+          '<label style="grid-column:span 2;font-size:12px">비고<input id="r-notes" class="form-input" style="width:100%;margin-top:4px"></label>' +
           '</div>' +
           '<div style="display:flex;gap:8px;margin-top:20px">' +
-          '<button onclick="this.closest(\'div[style]\').parentElement.remove()" class="btn-secondary" style="flex:1">ì·¨ì†Œ</button>' +
-          '<button onclick="window.submitRental()" class="btn-primary" style="flex:1">ë“±ë¡</button>' +
+          '<button onclick="this.closest(\'div[style]\').parentElement.remove()" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button onclick="window.submitRental()" class="btn-primary" style="flex:1">등록</button>' +
           '</div></div>';
         document.body.appendChild(modal);
       };
@@ -5086,167 +9137,1680 @@
           notes: document.getElementById('r-notes').value
         };
         if (!payload.model || !payload.vendor || !payload.startDate || !payload.endDate) {
-          alert('ëª¨ë¸Â·ë²¤ë”Â·ì‹œìž‘ì¼Â·ë°˜ë‚©ì˜ˆì •ì¼ì€ í•„ìˆ˜ìž…ë‹ˆë‹¤.');
+          alert('모델·벤더·시작일·반납예정일은 필수입니다.');
           return;
         }
         var res = await window.API.createRental(payload);
         if (res.success) {
-          alert('ë“±ë¡ ì™„ë£Œ: ' + res.id);
+          alert('등록 완료: ' + res.id);
+          if (window.apiCache) {
+            Object.keys(window.apiCache).forEach(function(k) {
+              if (k.indexOf('api_getRentalList') >= 0 || k.indexOf('api_getRentalStats') >= 0) {
+                delete window.apiCache[k];
+              }
+            });
+          }
           document.querySelectorAll('div[style*="z-index:9999"]').forEach(function(el){ el.remove(); });
           window.loadView('rental');
         } else {
-          alert('ë“±ë¡ ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
+          alert('등록 실패: ' + (res.error || '알 수 없는 오류'));
         }
       };
 
-      window.returnRentalPrompt = async function(rentalId) {
-        var date = prompt('ë°˜ë‚©ì¼ ìž…ë ¥ (YYYY-MM-DD)\në¹ˆê°’ = ì˜¤ëŠ˜', new Date().toISOString().slice(0,10));
-        if (date === null) return;
-        var res = await window.API.returnRental(rentalId, date);
-        if (res.success) {
-          alert('ë°˜ë‚© ì²˜ë¦¬ ì™„ë£Œ');
-          window.loadView('rental');
-        } else {
-          alert('ë°˜ë‚© ì²˜ë¦¬ ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
-        }
-      };
+      // Manual Return Modal
+      window.openReturnEquipmentModal = function(equipmentId, modelName) {
+        var modal = document.createElement('div');
+        modal.id = 'equipment-return-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:400px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">장비 반납: ' + modelName + '</h3>' +
+            '<form id="equipment-return-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">반납 메모</label>' +
+                '<textarea name="notes" placeholder="장비 반납 상태 또는 특이사항 입력" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'equipment-return-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-danger);border:none;padding:8px 20px;font-weight:700;cursor:pointer;">반납 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
 
-      // ðŸ“„ ìƒ˜í”Œ ê³„ì•½ì„œ 3ì¢… PDF ìžë™ ìƒì„± + ì²˜ë¦¬ëŒ€ê¸° í´ë” ì—…ë¡œë“œ
-      window.generateSampleContracts = async function() {
-        if (!confirm('ìƒ˜í”Œ ë Œíƒˆ ê³„ì•½ì„œ 3ì¢…ì„ PDFë¡œ ìƒì„±í•˜ì—¬\nDriveì˜ EQUIPMENT RENTAL / ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ì—…ë¡œë“œí•©ë‹ˆë‹¤.\n\nì²« ì‹¤í–‰ ì‹œ ê¶Œí•œ ìŠ¹ì¸ íŒì—…ì´ ëœ° ìˆ˜ ìžˆìŠµë‹ˆë‹¤.\nê³„ì†í•˜ì‹œê² ìŠµë‹ˆê¹Œ?')) return;
+        document.body.appendChild(modal);
 
-        var overlay = document.createElement('div');
-        overlay.id = 'sample-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer';
-        overlay.title = 'í´ë¦­í•˜ë©´ ë‹«íž˜';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ“„ ìƒ˜í”Œ PDF 3ì¢… ìƒì„± ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:13px">United Rentals Â· Sunbelt Â· Herc</div>' +
-          '<div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:12px">í™”ë©´ì„ í´ë¦­í•˜ê±°ë‚˜ ESCë¥¼ ëˆ„ë¥´ë©´ ì˜¤ë²„ë ˆì´ê°€ ë‹«íž™ë‹ˆë‹¤ (ìž‘ì—…ì€ ë°±ê·¸ë¼ìš´ë“œ ê³„ì†)</div>';
-        document.body.appendChild(overlay);
+        modal.querySelector('#equipment-return-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            equipment_id: equipmentId,
+            notes: modal.querySelector('[name="notes"]').value
+          };
 
-        // í´ë¦­/ESCë¡œ ë‹«ê¸° + 30ì´ˆ ìžë™ íƒ€ìž„ì•„ì›ƒ
-        var dismiss = function() {
-          var ov = document.getElementById('sample-overlay');
-          if (ov) ov.remove();
-        };
-        overlay.addEventListener('click', dismiss);
-        var keyHandler = function(e) { if (e.key === 'Escape') dismiss(); };
-        document.addEventListener('keydown', keyHandler);
-        var timeoutId = setTimeout(function() {
-          dismiss();
-          console.warn('[ìƒ˜í”Œìƒì„±] 30ì´ˆ íƒ€ìž„ì•„ì›ƒ â€” ë°±ê·¸ë¼ìš´ë“œì—ì„œ ê³„ì† ì§„í–‰ ì¤‘ì¼ ìˆ˜ ìžˆìŠµë‹ˆë‹¤.');
-        }, 30000);
-
-        try {
-          var res = await window.API.generateSampleRentalContracts();
-          clearTimeout(timeoutId);
-          document.removeEventListener('keydown', keyHandler);
-          dismiss();
-          if (res.success) {
-            var msg = 'âœ… ' + res.count + 'ê°œ PDFê°€ ì²˜ë¦¬ëŒ€ê¸° í´ë”ì— ì—…ë¡œë“œë˜ì—ˆìŠµë‹ˆë‹¤.\n\n';
-            (res.results || []).forEach(function(r, i) {
-              msg += (i + 1) + '. ' + r.title + '\n';
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/return', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
             });
-            msg += '\nì´ì œ [ðŸ¤– AI ê³„ì•½ì„œ ë“±ë¡] ë²„íŠ¼ì„ í´ë¦­í•˜ì—¬ ë¶„ì„ì„ í…ŒìŠ¤íŠ¸í•˜ì„¸ìš”.';
-            alert(msg);
-          } else {
-            alert('âŒ ìƒì„± ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '반납 처리 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            var detailModal = document.getElementById('equipment-detail-modal');
+            if (detailModal) detailModal.remove();
+            
+            showToast('장비가 반납되었습니다.');
+            window.refreshCurrentEquipmentView();
+          } catch (err) {
+            alert('오류: ' + err.message);
           }
-        } catch(err) {
-          clearTimeout(timeoutId);
-          document.removeEventListener('keydown', keyHandler);
-          dismiss();
-          alert('ìƒì„± ì¤‘ ì˜¤ë¥˜: ' + (err && err.message ? err.message : err));
-        }
+        };
       };
 
-      // ðŸ› ï¸ ì‹œíŠ¸ í—¤ë” ë¯¸ë¦¬ ìƒì„±
-      window.setupRentalSheetHeaders = async function() {
-        if (!confirm('ìž¥ë¹„ë Œíƒˆ_ë§ˆìŠ¤í„° ì‹œíŠ¸ì˜ í—¤ë”ë¥¼ ìƒì„±/ê²€ì¦í•©ë‹ˆë‹¤.\nê³„ì†í•˜ì‹œê² ìŠµë‹ˆê¹Œ?')) return;
-        var res = await window.API.setupRentalSheet();
-        if (res.success) {
-          alert('âœ… ' + (res.message || 'ì™„ë£Œ') + (res.created ? '\nì‹ ê·œ ì‹œíŠ¸ê°€ ìƒì„±ë˜ì—ˆìŠµë‹ˆë‹¤.' : '\nê¸°ì¡´ ì‹œíŠ¸ì˜ í—¤ë”ë¥¼ ê²€ì¦í–ˆìŠµë‹ˆë‹¤.'));
-        } else {
-          alert('âŒ ì‹¤íŒ¨: ' + (res.error || 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
-        }
-      };
+      // Manual Assignment Modal
+      window.openAssignEquipmentModal = async function(equipmentId, modelName) {
+        var modal = document.createElement('div');
+        modal.id = 'equipment-assign-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:450px;max-width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<h3 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px;">장비 배정: ' + modelName + '</h3>' +
+            '<form id="equipment-assign-form" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">배정 회사 <span style="color:var(--status-danger)">*</span></label>' +
+                '<select name="company_id" required style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">불러오는 중...</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">배정 팀 (선택)</label>' +
+                '<select name="team_id" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">회사 먼저 선택하세요</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">운영자 / 담당 직원 (선택)</label>' +
+                '<select name="employee_id" style="width:100%;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);">' +
+                  '<option value="">회사 먼저 선택하세요</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">메모</label>' +
+                '<textarea name="notes" placeholder="배정 메모를 입력하세요" style="width:100%;height:80px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:10px;color:var(--text-primary);resize:none;"></textarea>' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">' +
+                '<button type="button" onclick="document.getElementById(\'equipment-assign-modal\').remove()" class="btn-secondary" style="padding:8px 16px;">취소</button>' +
+                '<button type="submit" class="btn-primary" style="background:var(--status-success);border:none;padding:8px 20px;font-weight:700;cursor:pointer;">배정 완료</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>';
 
-      // ðŸ¤– AI ìž¥ë¹„ë Œíƒˆ ê³„ì•½ì„œ ìŠ¤ìº”
-      window.runAiRentalEquipScan = async function() {
-        var overlay = document.createElement('div');
-        overlay.id = 'ai-rental-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer';
-        overlay.innerHTML =
-          '<div style="width:64px;height:64px;border:4px solid rgba(124,58,237,0.3);border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite"></div>' +
-          '<div style="color:white;font-size:16px;font-weight:700">ðŸ¤– Gemini AI ë¶„ì„ ì¤‘...</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:13px">EQUIPMENT RENTAL / ì²˜ë¦¬ëŒ€ê¸° í´ë” ìŠ¤ìº” ì¤‘</div>' +
-          '<div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:12px">í´ë¦­/ESCë¡œ ì˜¤ë²„ë ˆì´ ë‹«ê¸° (ìž‘ì—…ì€ ë°±ê·¸ë¼ìš´ë“œ ê³„ì†)</div>';
-        document.body.appendChild(overlay);
-        var dismissAi = function() { var ov = document.getElementById('ai-rental-overlay'); if (ov) ov.remove(); };
-        overlay.addEventListener('click', dismissAi);
-        var aiKey = function(e) { if (e.key === 'Escape') dismissAi(); };
-        document.addEventListener('keydown', aiKey);
-        var aiTimeout = setTimeout(dismissAi, 60000);
+        document.body.appendChild(modal);
+
+        var companySelect = modal.querySelector('[name="company_id"]');
+        var teamSelect = modal.querySelector('[name="team_id"]');
+        var employeeSelect = modal.querySelector('[name="employee_id"]');
+
+        var companyList = [];
+        var teamList = [];
+        var employeeList = [];
 
         try {
-          var result = await window.API.processEquipmentRentalContracts();
-          clearTimeout(aiTimeout);
-          document.removeEventListener('keydown', aiKey);
-          dismissAi();
+          const [companies, teams, employees] = await Promise.all([
+            window.API.getCompanyList(),
+            window.API.getTeamList(),
+            window.API.getEmployeeList()
+          ]);
+          companyList = companies;
+          teamList = teams;
+          employeeList = employees;
 
-          var modal = document.createElement('div');
-          modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
-          var statusIcon = result.success ? (result.processed === 0 ? 'ðŸ“‚' : 'âœ…') : 'âŒ';
-          var statusMsg = !result.success
-            ? '<div style="color:var(--status-danger);font-size:13px;margin-top:8px">' + result.error + '</div>'
-            : result.processed === 0
-              ? '<div style="color:var(--text-secondary);font-size:13px;margin-top:8px">' + (result.message || 'ì²˜ë¦¬í•  íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.') + '</div>'
-              : '';
-          var detailRows = (result.results || []).map(function(r) {
-            var icon = r.status === 'success' ? 'âœ…' : r.status === 'error' ? 'âŒ' : 'â­ï¸';
-            var detail = r.status === 'success'
-              ? '<span style="color:var(--status-success)">' + (r.equipType||'') + ' Â· ' + (r.model||'') + ' Â· ' + (r.vendor||'') + ' [' + r.rentalId + ']</span>'
-              : '<span style="color:var(--status-danger)">' + (r.reason||'') + '</span>';
-            return '<div style="padding:8px 0;border-bottom:1px solid var(--border-subtle);font-size:12px">' +
-                   icon + ' <strong>' + r.file + '</strong><br>' + detail + '</div>';
+          companySelect.innerHTML = '<option value="">-- 회사 선택 --</option>' + companyList.map(function(c) {
+            return '<option value="' + c.id + '">' + c.name + '</option>';
+          }).join('');
+        } catch (err) {
+          companySelect.innerHTML = '<option value="">회사 목록 불러오기 실패</option>';
+        }
+
+        companySelect.onchange = function() {
+          var cid = companySelect.value;
+          if (!cid) {
+            teamSelect.innerHTML = '<option value="">회사 먼저 선택하세요</option>';
+            employeeSelect.innerHTML = '<option value="">회사 먼저 선택하세요</option>';
+            return;
+          }
+
+          teamSelect.innerHTML = '<option value="">-- 배정 팀 선택 --</option>' + teamList.map(function(t) {
+            return '<option value="' + t.id + '">' + t.name + '</option>';
           }).join('');
 
-          modal.innerHTML =
-            '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:520px;max-height:80vh;overflow-y:auto">' +
-            '<div style="font-size:32px;text-align:center;margin-bottom:12px">' + statusIcon + '</div>' +
-            '<h2 style="text-align:center;font-size:18px;margin-bottom:8px">AI ìž¥ë¹„ë Œíƒˆ ë“±ë¡ ê²°ê³¼</h2>' +
-            statusMsg +
-            (result.processed > 0 ?
-              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0;text-align:center">' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:white">' + (result.processed||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì´ ì²˜ë¦¬</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-success)">' + (result.saved||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì €ìž¥ ì™„ë£Œ</div></div>' +
-              '<div style="background:var(--bg-base);border-radius:8px;padding:12px"><div style="font-size:22px;font-weight:700;color:var(--status-danger)">' + (result.errors||0) + '</div><div style="font-size:11px;color:var(--text-secondary)">ì˜¤ë¥˜</div></div>' +
-              '</div>' +
-              '<div style="max-height:260px;overflow-y:auto;margin-bottom:16px">' + detailRows + '</div>'
-            : '') +
-            '<button id="rental-modal-close" style="width:100%;background:var(--brand-primary);color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">í™•ì¸ í›„ ëª©ë¡ ìƒˆë¡œê³ ì¹¨</button>' +
-            '</div>';
-          document.body.appendChild(modal);
-          // ë°”ê¹¥ ì˜¤ë²„ë ˆì´ ìžì²´ë¥¼ ì œê±° (ëª¨ë‹¬ ë³€ìˆ˜ ì§ì ‘ ì°¸ì¡°)
-          var closeBtn = modal.querySelector('#rental-modal-close');
-          if (closeBtn) closeBtn.addEventListener('click', function() {
+          var filteredEmployees = employeeList.filter(function(e) {
+            return e.company_id == cid;
+          });
+
+          if (filteredEmployees.length === 0) {
+            employeeSelect.innerHTML = '<option value="">해당 회사의 직원이 없습니다.</option>';
+          } else {
+            employeeSelect.innerHTML = '<option value="">-- 운영자 선택 --</option>' + filteredEmployees.map(function(e) {
+              return '<option value="' + e.id + '">' + e.name + '</option>';
+            }).join('');
+          }
+        };
+
+        modal.querySelector('#equipment-assign-form').onsubmit = async function(e) {
+          e.preventDefault();
+          var payload = {
+            equipment_id: equipmentId,
+            company_id: companySelect.value,
+            team_id: teamSelect.value || null,
+            employee_id: employeeSelect.value || null,
+            notes: modal.querySelector('[name="notes"]').value
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/assign', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '배정 처리 중 오류가 발생했습니다.');
+            }
+
             modal.remove();
-            window.loadView('rental');
+            var detailModal = document.getElementById('equipment-detail-modal');
+            if (detailModal) detailModal.remove();
+            
+            showToast('장비가 배정되었습니다.');
+            window.refreshCurrentEquipmentView();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Detailed Equipment Info & Chronological Rental History modal
+      window.openEquipmentDetailModal = async function(equipmentId) {
+        if (!window.currentRentals || window.currentRentals.length === 0) {
+          try {
+            window.currentRentals = await window.API.getRentalList() || [];
+          } catch(e) {
+            console.error(e);
+          }
+        }
+        var r = (window.currentRentals || []).find(x => x.realId === equipmentId);
+        if (!r) {
+          try {
+            window.currentRentals = await window.API.getRentalList() || [];
+            r = (window.currentRentals || []).find(x => x.realId === equipmentId);
+          } catch(e) {
+            console.error(e);
+          }
+        }
+        if (!r) return;
+
+        function getSecureFileUrl(path) {
+          if (!path) return '';
+          if (path.indexOf('/storage/') === 0) {
+            return '/equipment-api/file?path=' + encodeURIComponent(path.replace('/storage/', ''));
+          }
+          return path;
+        }
+
+        var modal = document.createElement('div');
+        modal.id = 'equipment-detail-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        var photosHtml = '';
+        var directions = [
+          { path: r.photo_front, label: '전면 사진' },
+          { path: r.photo_rear, label: '후면 사진' },
+          { path: r.photo_left, label: '좌측 사진' },
+          { path: r.photo_right, label: '우측 사진' }
+        ];
+        directions.forEach(function(d) {
+          if (d.path) {
+            var secureUrl = getSecureFileUrl(d.path);
+            photosHtml += '<div style="background:var(--bg-base);border:1px solid var(--border-default);border-radius:8px;padding:6px;text-align:center;">' +
+              '<a href="' + secureUrl + '" target="_blank">' +
+                '<img src="' + secureUrl + '" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px;border:1px solid var(--border-subtle);">' +
+              '</a>' +
+              '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + d.label + '</span>' +
+            '</div>';
+          }
+        });
+
+        if (photosHtml) {
+          photosHtml = '<div style="margin-top:16px;">' +
+            '<h4 style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">장비 사진 (4방향)</h4>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' + photosHtml + '</div>' +
+          '</div>';
+        }
+
+        var contractHtml = r.contract_path 
+          ? '<div style="margin-top:12px;"><a href="' + getSecureFileUrl(r.contract_path) + '" target="_blank" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;"><i class="ph ph-file-pdf"></i> 렌트 계약서 파일 보기</a></div>'
+          : '';
+
+        var actionButton = '';
+        if (r.status === '사용중') {
+          actionButton = '<button onclick="window.openReturnEquipmentModal(' + r.realId + ', \'' + r.model + '\')" class="btn-primary" style="background:var(--status-danger);border:none;padding:10px 20px;font-weight:700;cursor:pointer;">장비 반납 처리</button>';
+        } else {
+          actionButton = '<button onclick="window.openAssignEquipmentModal(' + r.realId + ', \'' + r.model + '\')" class="btn-primary" style="background:var(--status-success);border:none;padding:10px 20px;font-weight:700;cursor:pointer;">장비 배정</button>';
+        }
+
+        // Calculate lease duration cost
+        var leaseDays = 0;
+        var totalLeaseCost = 0;
+        if (r.startDate && r.endDate && r.startDate !== '-' && r.endDate !== '-') {
+          var startD = new Date(r.startDate);
+          var endD = new Date(r.endDate);
+          var diffTime = Math.max(0, endD - startD);
+          leaseDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          totalLeaseCost = (r.dailyRate || 0) * leaseDays + (r.deliveryFee || 0);
+        }
+
+        var payload = r.payload || {};
+        if (typeof payload === 'string') {
+          try { payload = JSON.parse(payload); } catch(e) { payload = {}; }
+        }
+        var details = payload.details || {};
+        
+        var ratePeriodText = payload.rate_period ? ' (' + payload.rate_period + ')' : '';
+        var returnFeeText = payload.return_fee ? ' (반납비: $' + parseInt(payload.return_fee).toLocaleString() + ')' : '';
+        var rateAmountText = '$' + (r.dailyRate || 0).toLocaleString() + ratePeriodText;
+        var deliveryFeeText = '$' + (r.deliveryFee || 0).toLocaleString() + returnFeeText;
+
+        var aiDetailsHtml = '';
+        if (details && typeof details === 'object' && Object.keys(details).length > 0) {
+          aiDetailsHtml += '<div style="margin-top:16px;border:1px solid var(--border-subtle);border-radius:10px;overflow:hidden;background:var(--bg-base);">';
+          aiDetailsHtml += '  <div style="background:rgba(255,255,255,0.02);padding:10px 16px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:6px;font-weight:700;color:#7c3aed;font-size:13px;">';
+          aiDetailsHtml += '    <i class="ph ph-robot" style="font-size:16px;"></i> AI 계약 추출 추가 정보 (Contract Details)';
+          aiDetailsHtml += '  </div>';
+          aiDetailsHtml += '  <div style="padding:16px;display:flex;flex-direction:column;gap:12px;font-size:12px;color:var(--text-secondary);">';
+          
+          // Row 1: Document info
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">Quote / 계약번호</span><strong>' + (details.quote_no || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">PO 번호</span><strong>' + (details.po_number || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">고객 계정번호</span><strong>' + (details.account_no || '-') + '</strong></div>';
+          aiDetailsHtml += '    </div>';
+
+          // Row 2: Dates and doc type
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">계약일자</span><strong>' + (details.quote_date || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">만료일자</span><strong>' + (details.expiration_date || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">배송희망일</span><strong>' + (details.delivery_date || '-') + '</strong></div>';
+          aiDetailsHtml += '    </div>';
+
+          // Lessor and Lessee Details
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          
+          // Lessor
+          var lessor = details.lessor || {};
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">임대 회사 (Lessor)</span>';
+          aiDetailsHtml += '        <div style="display:flex;flex-direction:column;gap:2px;">';
+          aiDetailsHtml += '          <div><strong>' + (lessor.name || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>연락처: ' + (lessor.phone || '-') + '</div>';
+          aiDetailsHtml += '          <div>주소: ' + (lessor.address || '-') + '</div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          // Lessee
+          var lessee = details.lessee || {};
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">임차 회사 (Lessee)</span>';
+          aiDetailsHtml += '        <div style="display:flex;flex-direction:column;gap:2px;">';
+          aiDetailsHtml += '          <div><strong>' + (lessee.name || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>담당자: ' + (lessee.contact_name || '-') + ' (' + (lessee.contact_phone || '-') + ')</div>';
+          aiDetailsHtml += '          <div>이메일: ' + (lessee.contact_email || '-') + '</div>';
+          aiDetailsHtml += '          <div>주소: ' + (lessee.address || '-') + '</div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          aiDetailsHtml += '    </div>';
+
+          // Addresses and sales rep
+          var salesRep = details.sales_rep || {};
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:20px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+          aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">배송지 주소 (Ship-To)</span><strong>' + (details.ship_to_address || '-') + '</strong></div>';
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">영업 담당자 (Sales Rep)</span>';
+          aiDetailsHtml += '        <strong>' + (salesRep.name || '-') + '</strong>';
+          if (salesRep.phone || salesRep.email) {
+            aiDetailsHtml += '      <div style="font-size:11px;margin-top:2px;">' + (salesRep.phone || '') + ' ' + (salesRep.email || '') + '</div>';
+          }
+          aiDetailsHtml += '      </div>';
+          aiDetailsHtml += '    </div>';
+
+          // Specs and Scope of Work
+          if (details.specs || details.scope_of_work) {
+            aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-bottom:10px;border-bottom:1px dashed var(--border-subtle);">';
+            aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">상세 규격 (Specs)</span><strong>' + (details.specs || '-') + '</strong></div>';
+            aiDetailsHtml += '      <div><span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:2px;">작업 범위 (Scope of Work)</span><strong>' + (details.scope_of_work || '-') + '</strong></div>';
+            aiDetailsHtml += '    </div>';
+          }
+
+          // Terms and Pricing
+          var pricing = details.pricing || {};
+          var terms = details.terms || {};
+          aiDetailsHtml += '    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:20px;">';
+          
+          // Pricing Breakdown
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">세부 금액표 (Pricing Breakdown)</span>';
+          aiDetailsHtml += '        <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:6px 12px;background:rgba(255,255,255,0.02);padding:10px;border-radius:6px;border:1px solid var(--border-subtle);">';
+          aiDetailsHtml += '          <div>주기별 렌트비:</div><div style="text-align:right;"><strong>$' + (pricing.recurring_per_cycle || 0).toLocaleString() + '</strong> <span style="font-size:10px;color:var(--text-tertiary);">(세후 $' + (pricing.recurring_with_tax || 0).toLocaleString() + ')</span></div>';
+          aiDetailsHtml += '          <div>배송 요금:</div><div style="text-align:right;"><strong>$' + (pricing.delivery || 0).toLocaleString() + '</strong></div>';
+          aiDetailsHtml += '          <div>반납 요금:</div><div style="text-align:right;"><strong>$' + (pricing.return || 0).toLocaleString() + '</strong></div>';
+          aiDetailsHtml += '          <div style="border-top:1px solid var(--border-subtle);padding-top:4px;font-weight:700;color:var(--text-primary);">총 합계액:</div><div style="border-top:1px solid var(--border-subtle);padding-top:4px;text-align:right;font-weight:700;color:#7c3aed;">$' + (pricing.total || 0).toLocaleString() + ' <span style="font-size:10px;font-weight:normal;color:var(--text-tertiary);">(세후 $' + (pricing.total_with_tax || 0).toLocaleString() + ')</span></div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          // Contract Terms
+          aiDetailsHtml += '      <div>';
+          aiDetailsHtml += '        <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:4px;font-weight:700;">계약 조건 (Lease Terms)</span>';
+          aiDetailsHtml += '        <div style="display:flex;flex-direction:column;gap:4px;">';
+          aiDetailsHtml += '          <div>청구 주기: <strong>' + (terms.billing_cycle || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>지불 조건: <strong>' + (terms.payment_terms || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>최소 임대기간: <strong>' + (terms.min_lease_term || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>지연 이자율: <strong>' + (terms.late_interest || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>계약 유형: <strong>' + (terms.lease_type || '-') + '</strong></div>';
+          aiDetailsHtml += '          <div>세금 부담 주체: <strong>' + (terms.taxes_responsibility || '-') + '</strong></div>';
+          aiDetailsHtml += '        </div>';
+          aiDetailsHtml += '      </div>';
+          
+          aiDetailsHtml += '    </div>';
+
+          // Addons
+          if (details.addons && details.addons.length > 0) {
+            aiDetailsHtml += '    <div style="margin-top:8px;border-top:1px dashed var(--border-subtle);padding-top:10px;">';
+            aiDetailsHtml += '      <span style="color:var(--text-tertiary);display:block;font-size:10px;margin-bottom:6px;font-weight:700;">추가 옵션/액세서리 (Add-ons)</span>';
+            aiDetailsHtml += '      <div style="display:flex;flex-wrap:wrap;gap:8px;">';
+            details.addons.forEach(function(addon) {
+              aiDetailsHtml += '        <span style="background:var(--bg-body);border:1px solid var(--border-subtle);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text-primary);font-weight:600;">' + addon.name + ' (x' + addon.quantity + ') - $' + (addon.price || 0).toLocaleString() + '</span>';
+            });
+            aiDetailsHtml += '      </div>';
+            aiDetailsHtml += '    </div>';
+          }
+          
+          aiDetailsHtml += '  </div>';
+          aiDetailsHtml += '</div>';
+        }
+
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:700px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-bulldozer" style="color:var(--brand-primary);"></i> 장비 상세 정보</h2>' +
+              '<button onclick="this.closest(\'#equipment-detail-modal\').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            
+            // Detail View Container
+            '<div id="eq-detail-view" style="display:flex;flex-direction:column;gap:16px;">' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--bg-base);border-radius:10px;padding:16px;border:1px solid var(--border-subtle);">' +
+                '<div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 코드 / 종류</span><strong style="font-size:15px;color:var(--text-primary);">' + r.id + ' / ' + r.equipType + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">모델명 / 렌트사 (Vendor)</span><strong style="font-size:15px;color:var(--text-primary);">' + r.model + ' / ' + r.vendor + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">단가 / 배송 비용 (Rate & Delivery)</span><strong style="font-size:15px;color:var(--text-primary);">' + rateAmountText + ' / ' + deliveryFeeText + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">계약 총 비용</span><strong style="font-size:15px;color:#7c3aed;">$' + totalLeaseCost.toLocaleString() + ' (' + leaseDays + '일 기준)</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">Quote / 계약번호</span><strong style="font-size:15px;color:var(--text-primary);">' + (details.quote_no || '-') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">PO 번호</span><strong style="font-size:15px;color:var(--text-primary);">' + (details.po_number || '-') + '</strong></div>' +
+                '</div>' +
+                '<div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 배정회사 / 팀</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.company || '-') + ' / ' + (r.team || '-') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">현재 운영자 / 담당자</span><strong style="font-size:15px;color:var(--text-primary);">' + (r.operator || '미배정') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">대여 기간</span><strong style="font-size:15px;color:var(--text-primary);">' + r.startDate + ' ~ ' + r.endDate + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">장비 상태</span><div>' + statusPill(r.status) + '</div></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">상세 규격 (Specs)</span><strong style="font-size:15px;color:var(--text-primary);">' + (details.specs || '-') + '</strong></div>' +
+                  '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-tertiary);display:block;">반납 요금 (Return Fee)</span><strong style="font-size:15px;color:var(--text-primary);">' + (payload.return_fee ? '$' + parseInt(payload.return_fee).toLocaleString() : '-') + '</strong></div>' +
+                '</div>' +
+              '</div>' +
+              photosHtml +
+              contractHtml +
+              aiDetailsHtml +
+              '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+                '<div style="display:flex;gap:10px;">' + 
+                  actionButton + 
+                  '<button type="button" class="btn-secondary btn-eq-edit-trigger" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;font-weight:700;cursor:pointer;"><i class="ph ph-pencil"></i> 수정</button>' +
+                  '<button type="button" class="btn-secondary btn-eq-delete-trigger" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;font-weight:700;color:var(--status-danger);border-color:rgba(239,68,68,0.2);cursor:pointer;"><i class="ph ph-trash"></i> 삭제</button>' +
+                '</div>' +
+                '<button type="button" onclick="this.closest(\'#equipment-detail-modal\').remove()" class="btn-secondary" style="padding:10px 20px;">닫기</button>' +
+              '</div>' +
+              '<div style="margin-top:28px;">' +
+                '<h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;"><i class="ph ph-clock-counter-clockwise"></i> 대여 및 배정 이력 (Rental History)</h3>' +
+                '<div id="equipment-history-timeline" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-base);padding:14px;">' +
+                  '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">이력을 불러오는 중...</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            
+            // Edit View Container
+            '<div id="eq-edit-view" style="display:none;">' +
+              '<form id="eq-edit-form" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:16px;">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">장비 종류 (Type) *</label>' +
+                    '<select name="equipment_type" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" required>' +
+                      '<option value="Power Tool (전동공구)">Power Tool (전동공구)</option>' +
+                      '<option value="Hand Tool (수공구)">Hand Tool (수공구)</option>' +
+                      '<option value="Pipes & Fittings (배관 자재)">Pipes & Fittings (배관 자재)</option>' +
+                      '<option value="Conduit & Electrical (전선관/전기 자재)">Conduit & Electrical (전선관/전기 자재)</option>' +
+                      '<option value="Wires & Cables (전선/케이블)">Wires & Cables (전선/케이블)</option>' +
+                      '<option value="Valves & Controls (밸브/계측기)">Valves & Controls (밸브/계측기)</option>' +
+                      '<option value="Fasteners & Anchors (체결류/피스)">Fasteners & Anchors (체결류/피스)</option>' +
+                      '<option value="Generator & Power (발전기/동력원)">Generator & Power (발전기/동력원)</option>' +
+                      '<option value="Welding Machine (용접기)">Welding Machine (용접기)</option>' +
+                      '<option value="Heavy Equipment (중장비)">Heavy Equipment (중장비)</option>' +
+                      '<option value="Safety & PPE (안전 용품)">Safety & PPE (안전 용품)</option>' +
+                      '<option value="Other Materials (기타 자재/공구)">Other Materials (기타 자재/공구)</option>' +
+                    '</select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">모델명 (Model) *</label>' +
+                    '<input type="text" name="model" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" required>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">렌트사 / 제조사 (Vendor)</label>' +
+                    '<input type="text" name="vendor" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">장비 상태 (Status) *</label>' +
+                    '<select name="status" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" required>' +
+                      '<option value="대기중">대기중</option>' +
+                      '<option value="사용중">사용중</option>' +
+                      '<option value="정비중">정비중</option>' +
+                    '</select>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">일단가 (Daily Rate)</label>' +
+                    '<input type="number" name="daily_rate" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" min="0">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">배송비 (Delivery Fee)</label>' +
+                    '<input type="number" name="delivery_fee" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" min="0">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">대여 시작일 (Start Date)</label>' +
+                    '<input type="date" name="rent_start" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">대여 종료일 (End Date)</label>' +
+                    '<input type="date" name="rent_end" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                  '</div>' +
+                '</div>' +
+                
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 배정회사 (Assigned Company)</label>' +
+                    '<select name="company_id" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;"></select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 배정팀 (Assigned Team)</label>' +
+                    '<select name="team_id" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;"></select>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 운영자 (Operator Select)</label>' +
+                    '<select name="employee_id" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;"></select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">현재 운영자 직접 입력 (Manual Operator Entry)</label>' +
+                    '<input type="text" name="custom_operator" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;" placeholder="직접 입력 시 선택이 해제됩니다.">' +
+                  '</div>' +
+                '</div>' +
+                
+                '<div>' +
+                  '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">장비 사진 변경 (4방향)</label>' +
+                  '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-front\').click()">' +
+                      '<img id="eq-edit-preview-front" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>전면</span>' +
+                      '<input type="file" id="eq-edit-photo-front" name="photo_front_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-front\')">' +
+                    '</div>' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-rear\').click()">' +
+                      '<img id="eq-edit-preview-rear" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>후면</span>' +
+                      '<input type="file" id="eq-edit-photo-rear" name="photo_rear_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-rear\')">' +
+                    '</div>' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-left\').click()">' +
+                      '<img id="eq-edit-preview-left" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>좌측</span>' +
+                      '<input type="file" id="eq-edit-photo-left" name="photo_left_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-left\')">' +
+                    '</div>' +
+                    '<div class="photo-edit-box" style="position:relative;background:var(--bg-base);border:1px dashed var(--border-strong);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;" onclick="document.getElementById(\'eq-edit-photo-right\').click()">' +
+                      '<img id="eq-edit-preview-right" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;display:none;">' +
+                      '<span style="font-size:10px;color:var(--text-tertiary);text-align:center;"><i class="ph ph-camera" style="font-size:18px;"></i><br>우측</span>' +
+                      '<input type="file" id="eq-edit-photo-right" name="photo_right_file" accept="image/*" style="display:none;" onchange="window.previewFile(this, \'eq-edit-preview-right\')">' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                
+                '<div>' +
+                  '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">렌트 계약서 파일 변경 (PDF/Image)</label>' +
+                  '<input type="file" name="contract_file" accept=".pdf,image/*" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);height:38px;">' +
+                '</div>' +
+
+                '<div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+                  '<button type="button" class="btn-secondary btn-eq-edit-cancel" style="padding:10px 20px;cursor:pointer;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="padding:10px 20px;cursor:pointer;">저장하기</button>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var detailView = modal.querySelector('#eq-detail-view');
+        var editView = modal.querySelector('#eq-edit-view');
+        var editForm = modal.querySelector('#eq-edit-form');
+
+        // Preview helper
+        window.previewFile = function(input, imgId) {
+          var file = input.files[0];
+          var preview = modal.querySelector('#' + imgId);
+          if (file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+              preview.src = e.target.result;
+              preview.style.display = 'block';
+            }
+            reader.readAsDataURL(file);
+          }
+        };
+
+        // Switch to Edit
+        modal.querySelector('.btn-eq-edit-trigger').onclick = async function() {
+          var eqTypeSelect = editForm.querySelector('[name="equipment_type"]');
+          var optionExists = Array.from(eqTypeSelect.options).some(function(opt) { return opt.value === r.equipType; });
+          if (r.equipType && !optionExists) {
+            var newOpt = document.createElement('option');
+            newOpt.value = r.equipType;
+            newOpt.textContent = r.equipType;
+            eqTypeSelect.appendChild(newOpt);
+          }
+          eqTypeSelect.value = r.equipType || '';
+          
+          editForm.querySelector('[name="model"]').value = r.model || '';
+          editForm.querySelector('[name="vendor"]').value = r.vendor === '-' ? '' : r.vendor;
+          editForm.querySelector('[name="status"]').value = r.status || '대기중';
+          editForm.querySelector('[name="daily_rate"]').value = r.dailyRate || 0;
+          editForm.querySelector('[name="delivery_fee"]').value = r.deliveryFee || 0;
+          editForm.querySelector('[name="rent_start"]').value = r.startDate === '-' ? '' : r.startDate;
+          editForm.querySelector('[name="rent_end"]').value = r.endDate === '-' ? '' : r.endDate;
+
+          // Fetch company, team, and employee lists
+          var companies = [];
+          var teams = [];
+          var employees = [];
+          try {
+            var res = await Promise.all([
+              gsRun('api_getCompanyList', [], []),
+              gsRun('api_getTeamList', [], []),
+              gsRun('api_getEmployeeList', [], [])
+            ]);
+            companies = res[0] || [];
+            teams = res[1] || [];
+            employees = res[2] || [];
+          } catch(err) {
+            console.error('Failed to load companies/teams/employees:', err);
+          }
+
+          // Populate selects
+          var companySelect = editForm.querySelector('[name="company_id"]');
+          companySelect.innerHTML = '<option value="">미배정 (Unassigned)</option>';
+          companies.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            companySelect.appendChild(opt);
           });
-          // ëª¨ë‹¬ ë°”ê¹¥ ì–´ë‘ìš´ ì˜ì—­ í´ë¦­ìœ¼ë¡œë„ ë‹«ê¸°
-          modal.addEventListener('click', function(e) {
-            if (e.target === modal) { modal.remove(); window.loadView('rental'); }
+          companySelect.value = r.companyId || '';
+
+          var teamSelect = editForm.querySelector('[name="team_id"]');
+          teamSelect.innerHTML = '<option value="">미배정 (Unassigned)</option>';
+          teams.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            teamSelect.appendChild(opt);
           });
-        } catch(err) {
-          clearTimeout(aiTimeout);
-          document.removeEventListener('keydown', aiKey);
-          dismissAi();
-          alert('AI ë¶„ì„ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤:\n' + (err && err.message ? err.message : err));
+          teamSelect.value = r.teamId || '';
+
+          var employeeSelect = editForm.querySelector('[name="employee_id"]');
+          var customOperatorInput = editForm.querySelector('[name="custom_operator"]');
+
+          var updateEmployees = function() {
+            var selectedCompanyId = companySelect.value;
+            employeeSelect.innerHTML = '<option value="">미배정 (Unassigned)</option>';
+            employees.forEach(function(e) {
+              if (!selectedCompanyId || String(e.company_id) === String(selectedCompanyId)) {
+                var opt = document.createElement('option');
+                opt.value = e.id;
+                opt.textContent = e.name;
+                employeeSelect.appendChild(opt);
+              }
+            });
+          };
+
+          updateEmployees();
+          employeeSelect.value = r.operatorId || '';
+          customOperatorInput.value = (payload && payload.custom_operator) || '';
+
+          companySelect.onchange = function() {
+            updateEmployees();
+            employeeSelect.value = '';
+          };
+
+          employeeSelect.onchange = function() {
+            if (employeeSelect.value) {
+              customOperatorInput.value = '';
+            }
+          };
+
+          customOperatorInput.oninput = function() {
+            if (customOperatorInput.value.trim()) {
+              employeeSelect.value = '';
+            }
+          };
+
+          var setPreview = function(path, imgId) {
+            var img = editForm.querySelector('#' + imgId);
+            if (path) {
+              img.src = getSecureFileUrl(path);
+              img.style.display = 'block';
+            } else {
+              img.style.display = 'none';
+            }
+          };
+          setPreview(r.photo_front, 'eq-edit-preview-front');
+          setPreview(r.photo_rear, 'eq-edit-preview-rear');
+          setPreview(r.photo_left, 'eq-edit-preview-left');
+          setPreview(r.photo_right, 'eq-edit-preview-right');
+
+          detailView.style.display = 'none';
+          editView.style.display = 'block';
+        };
+
+        // Switch back to Detail
+        modal.querySelector('.btn-eq-edit-cancel').onclick = function() {
+          editView.style.display = 'none';
+          detailView.style.display = 'flex';
+        };
+
+        // Submit Form
+        editForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var formData = new FormData(editForm);
+          var saveBtn = editForm.querySelector('button[type="submit"]');
+          var originalBtnText = saveBtn.textContent;
+          saveBtn.disabled = true;
+          saveBtn.textContent = '저장 중...';
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/' + r.realId + '/update', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '저장 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('장비 정보가 수정되었습니다.');
+            window.refreshCurrentEquipmentView();
+          } catch(err) {
+            alert('오류: ' + err.message);
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
+          }
+        };
+
+        // Delete Equipment
+        modal.querySelector('.btn-eq-delete-trigger').onclick = async function() {
+          if (!confirm('정말로 이 장비/자재를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+            return;
+          }
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/' + r.realId + '/delete', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              }
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '삭제 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('장비가 삭제되었습니다.');
+            window.refreshCurrentEquipmentView();
+          } catch(err) {
+            alert('오류: ' + err.message);
+          }
+        };
+
+        try {
+          var response = await fetch('/equipment-api/' + r.realId + '/history');
+          if (!response.ok) throw new Error('이력 로딩 실패');
+          var res = await response.json();
+          var history = res.history || [];
+          var timelineHtml = '';
+
+          if (history.length === 0) {
+            timelineHtml = '<div style="color:var(--text-tertiary);text-align:center;padding:12px;">배정 이력이 없습니다.</div>';
+          } else {
+            timelineHtml = history.map(function(h) {
+              var period = h.returned_at ? h.rented_at + ' ~ ' + h.returned_at : h.rented_at + ' ~ <span style="color:var(--status-success);font-weight:700;">사용 중</span>';
+              var notesText = h.notes ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:4px;">' + h.notes.replace(/\\n/g, '<br>') + '</div>' : '';
+              return '<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px;display:flex;flex-direction:column;gap:4px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                  '<span style="font-weight:700;color:var(--text-primary);">' + h.company + ' - ' + h.team + ' (' + h.operator + ')</span>' +
+                  '<span style="font-size:11px;color:var(--text-secondary);">' + period + '</span>' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);">' +
+                  '<span style="font-weight:600;color:' + (h.status === '대여중' ? 'var(--status-success)' : 'var(--text-tertiary)') + ';">' + h.status + '</span>' +
+
+                '</div>' +
+                notesText +
+              '</div>';
+            }).join('');
+          }
+          modal.querySelector('#equipment-history-timeline').innerHTML = timelineHtml;
+        } catch (err) {
+          modal.querySelector('#equipment-history-timeline').innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:12px;">이력을 불러오지 못했습니다.</div>';
         }
       };
 
+
+      // 🤖 AI Equipment Scanner Modal
+      window.openAiEquipmentRegModal = function() {
+        var modal = document.createElement('div');
+        modal.id = 'ai-equipment-reg-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        
+        modal.innerHTML =
+          '<style>' +
+            '#ai-equipment-reg-modal * { box-sizing: border-box; }' +
+            '#ai-equipment-reg-modal .webcam-slot-card { transition: all 0.2s; }' +
+            '#ai-equipment-reg-modal .webcam-slot-card:hover { background: rgba(124, 58, 237, 0.05) !important; border-color: var(--brand-primary) !important; }' +
+            '#ai-equipment-reg-modal .active-target { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); animation: target-pulse 2s infinite ease-in-out; }' +
+            '#ai-equipment-reg-modal input[type="text"],' +
+            '#ai-equipment-reg-modal input[type="number"],' +
+            '#ai-equipment-reg-modal input[type="date"] {' +
+            '  width: 100%;' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  border-radius: 8px;' +
+            '  padding: 10px 12px;' +
+            '  color: var(--text-primary);' +
+            '  font-size: 13px;' +
+            '  outline: none;' +
+            '  transition: border-color 0.2s, box-shadow 0.2s;' +
+            '}' +
+            '#ai-equipment-reg-modal input[type="text"]:focus,' +
+            '#ai-equipment-reg-modal input[type="number"]:focus,' +
+            '#ai-equipment-reg-modal input[type="date"]:focus {' +
+            '  border-color: #7c3aed;' +
+            '  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);' +
+            '}' +
+            '#ai-equipment-reg-modal label {' +
+            '  display: block;' +
+            '  font-size: 12px;' +
+            '  font-weight: 600;' +
+            '  color: var(--text-secondary);' +
+            '  margin-bottom: 6px;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-primary {' +
+            '  background: linear-gradient(135deg, #7c3aed, #2563eb);' +
+            '  border: none;' +
+            '  color: #fff;' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: opacity 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-primary:hover {' +
+            '  opacity: 0.9;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-primary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-secondary {' +
+            '  background: var(--bg-base);' +
+            '  border: 1px solid var(--border-strong);' +
+            '  color: var(--text-primary);' +
+            '  font-weight: 600;' +
+            '  border-radius: 8px;' +
+            '  height: 38px;' +
+            '  transition: background 0.2s, transform 0.1s;' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-secondary:hover {' +
+            '  background: var(--bg-body);' +
+            '}' +
+            '#ai-equipment-reg-modal .btn-secondary:active {' +
+            '  transform: scale(0.98);' +
+            '}' +
+            '#equipment-modal-close-btn {' +
+            '  transition: color 0.2s, transform 0.2s;' +
+            '}' +
+            '#equipment-modal-close-btn:hover {' +
+            '  color: var(--text-primary);' +
+            '  transform: rotate(90deg);' +
+            '}' +
+            '@keyframes target-pulse { 0%, 100% { border-color: var(--brand-primary); } 50% { border-color: var(--border-strong); } }' +
+            '@media (max-width: 640px) { #equipment-camera-area { grid-template-columns: 1fr !important; } }' +
+          '</style>' +
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-default);border-radius:16px;padding:20px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;box-sizing:border-box;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;">' +
+              '<h2 style="font-size:16px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;"><i class="ph ph-robot" style="color:#7c3aed;font-size:22px;"></i> AI 장비렌탈 자동 등록</h2>' +
+              '<button type="button" id="equipment-modal-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:0;"><i class="ph ph-x"></i></button>' +
+            '</div>' +
+            '<div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height:1.5;">' +
+              '렌트 계약서와 장비 사진들을 업로드하거나 실시간 카메라로 촬영하세요.<br>Gemini AI 엔진이 문서와 사진 정보를 자동으로 판독하여 장부에 등록합니다.' +
+            '</div>' +
+            '<input type="file" id="equipment-file-contract" style="display:none" accept="application/pdf,image/*">' +
+            '<input type="file" id="equipment-file-photo_front" style="display:none" accept="image/*">' +
+            '<input type="file" id="equipment-file-photo_rear" style="display:none" accept="image/*">' +
+            '<input type="file" id="equipment-file-photo_left" style="display:none" accept="image/*">' +
+            '<input type="file" id="equipment-file-photo_right" style="display:none" accept="image/*">' +
+            '<div style="display: flex; gap: 8px; margin-bottom: 16px;">' +
+              '<button type="button" id="equipment-btn-toggle-upload" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-upload-simple"></i> 파일 업로드' +
+              '</button>' +
+              '<button type="button" id="equipment-btn-toggle-camera" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; border-radius: 8px; cursor:pointer;">' +
+                '<i class="ph ph-camera"></i> 실시간 카메라' +
+              '</button>' +
+            '</div>' +
+            '<div id="equipment-upload-area" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 16px;">' +
+              '<div id="equipment-card-contract" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); min-height: 75px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:6px;">' +
+                  '<i class="ph ph-file-text" style="font-size: 24px; color: var(--text-tertiary);"></i>' +
+                  '<div style="font-weight: 600; font-size:13px; color:var(--text-primary);">렌트 계약서 파일 (PDF/이미지) <span style="color:var(--status-danger)">*</span></div>' +
+                  '<div style="font-size: 11px; color: var(--text-tertiary);">클릭하여 파일 업로드</div>' +
+                '</div>' +
+                '<div class="preview-state" style="display: none; width:100%; text-align:center; position:relative;">' +
+                  '<div class="preview-icon-wrapper" style="font-size: 24px; color: var(--brand-primary); margin-bottom: 4px;"><i class="ph ph-file-pdf"></i></div>' +
+                  '<img class="preview-img" style="max-height: 50px; max-width: 100%; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 4px;">' +
+                  '<div class="file-name" style="font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; padding: 0 32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>' +
+                  '<button type="button" class="trash-btn" style="position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,0.6); color: #fff; width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-trash"></i></button>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
+                '<div id="equipment-card-photo_front" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">전면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="equipment-card-photo_rear" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">후면 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="equipment-card-photo_left" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">좌측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="equipment-card-photo_right" style="border: 2px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; cursor: pointer; transition: 0.2s; position: relative; background: var(--bg-body); height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column;" onmouseover="this.style.borderColor=\'var(--brand-primary)\'" onmouseout="if(!this.dataset.hasFile) this.style.borderColor=\'var(--border-strong)\'">' +
+                  '<div class="empty-state" style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
+                    '<i class="ph ph-camera" style="font-size: 20px; color: var(--text-tertiary);"></i>' +
+                    '<div style="font-weight: 600; font-size:12px; color:var(--text-primary);">우측 사진</div>' +
+                  '</div>' +
+                  '<div class="preview-state" style="display: none; width: 100%; height: 100%;">' +
+                    '<img class="preview-img" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">' +
+                    '<button type="button" class="trash-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 11px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div id="equipment-camera-area" style="display: none; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin-bottom: 16px;">' +
+              '<div style="background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #000; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">' +
+                  '<video id="equipment-video-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>' +
+                  '<div id="equipment-camera-overlay-label" style="position: absolute; bottom: 8px; left: 8px; right: 8px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 11px; padding: 4px 6px; border-radius: 4px; text-align: center; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">' +
+                    '촬영 대상: 계약서' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+                  '<button type="button" id="equipment-btn-capture" class="btn-primary" style="flex: 1; justify-content: center; height: 34px; font-size: 12px; font-weight: 600; cursor:pointer;">' +
+                    '<i class="ph ph-camera"></i> 사진 촬영' +
+                  '</button>' +
+                '</div>' +
+                '<div id="equipment-camera-select-container" style="margin-top: 8px; display: none; align-items:center; gap:6px;">' +
+                  '<span style="font-size:10px; color:var(--text-secondary); font-weight:600; white-space:nowrap;">카메라:</span>' +
+                  '<select id="equipment-camera-device-select" style="flex:1; padding: 4px; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); font-size: 10px; outline: none;"></select>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); border-radius: var(--radius-md); padding: 8px; border: 1px solid var(--border-strong);">' +
+                '<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:2px; padding-bottom:4px; border-bottom:1px solid var(--border-subtle)">촬영 슬롯 선택</div>' +
+                '<div class="webcam-slot-card active-target" data-slot="contract" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-file-text" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">계약서 <span style="color:var(--status-danger)">*</span></div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 파일 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: inline-block;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_front" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">전면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_rear" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">후면 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_left" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">좌측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="webcam-slot-card" data-slot="photo_right" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 10px; cursor: pointer; transition: 0.2s; background: var(--bg-base);">' +
+                  '<div style="display: flex; align-items: center; gap: 8px; overflow: hidden; width: 80%;">' +
+                    '<div class="slot-thumbnail" style="width: 28px; height: 28px; border-radius: 4px; background: var(--bg-body); display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-subtle); overflow: hidden; flex-shrink: 0;">' +
+                      '<i class="ph ph-camera" style="color: var(--text-tertiary); font-size: 14px;"></i>' +
+                    '</div>' +
+                    '<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                      '<div style="font-size: 11px; font-weight: 600; color: var(--text-primary);">우측 사진</div>' +
+                      '<div class="slot-status" style="font-size: 9px; color: var(--text-tertiary);">선택된 사진 없음</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="display: flex; align-items: center; gap: 6px;">' +
+                    '<span class="target-badge" style="font-size: 8px; padding: 1px 4px; border-radius: 8px; background: var(--brand-primary); color: #fff; font-weight: 700; display: none;">TARGET</span>' +
+                    '<button type="button" class="slot-delete-btn" style="background: none; border: none; color: var(--status-danger); cursor: pointer; display: none; font-size: 12px; padding: 2px;"><i class="ph ph-trash"></i></button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div id="equipment-initial-controls" style="margin-top: 12px; display:flex; justify-content:flex-end; gap:12px;">' +
+              '<button type="button" id="equipment-upload-cancel-btn" class="btn-secondary" style="padding:0 20px; cursor:pointer;">취소</button>' +
+              '<button type="button" id="equipment-upload-submit-btn" class="btn-primary" style="padding:0 24px; cursor:pointer;">AI 분석 실행</button>' +
+            '</div>' +
+            '<div id="equipment-analysis-loading" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding:30px 0; gap:12px;">' +
+              '<div style="width:40px; height:40px; border:4px solid rgba(124,58,237,0.2); border-top-color:#7c3aed; border-radius:50%; animation:spin 1s linear infinite"></div>' +
+              '<div style="color:var(--text-primary); font-size:14px; font-weight:700;">Gemini AI가 분석하는 중...</div>' +
+              '<div style="color:var(--text-secondary); font-size:12px; text-align:center; max-width:320px; line-height:1.4;">계약서 및 장비 사진 정보를 추출하여 자동 매핑하고 있습니다. 잠시만 기다려주세요.</div>' +
+            '</div>' +
+            '<div id="equipment-analysis-result-container" style="display:none; flex-direction:column; gap:12px; margin-top:12px;">' +
+              '<h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0; padding-top:12px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:6px;"><i class="ph ph-check-square" style="color:var(--status-success)"></i> AI 분석 결과 검증</h3>' +
+              '<div style="font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.4;">AI가 추출한 정보입니다. 실제 계약서 내용과 대조 후 수정이 필요한 부분은 직접 변경하고 저장하세요.</div>' +
+              '<form id="ai-equipment-save-form" style="display:flex; flex-direction:column; gap:12px;">' +
+                '<input type="hidden" name="contract_path">' +
+                '<input type="hidden" name="photo_front">' +
+                '<input type="hidden" name="photo_rear">' +
+                '<input type="hidden" name="photo_left">' +
+                '<input type="hidden" name="photo_right">' +
+                '<input type="hidden" name="details">' +
+                '<input type="hidden" name="rate_period">' +
+                '<input type="hidden" name="return_fee">' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>장비 종류 (Type)</label>' +
+                    '<input type="text" name="equipment_type" required>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>장비 모델명</label>' +
+                    '<input type="text" name="model" required>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>렌트사 (Vendor)</label>' +
+                    '<input type="text" name="vendor">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>수량 (Qty)</label>' +
+                    '<input type="number" name="quantity" min="1" value="1">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-extracted-summary" style="display:none; font-size:11px; color:var(--text-secondary); background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.15); border-radius:6px; padding:8px 10px; line-height:1.6;"></div>' +
+                '<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">' +
+                  '<div style="grid-column:span 2;">' +
+                    '<label>렌트 시작일</label>' +
+                    '<input type="date" name="rent_start">' +
+                  '</div>' +
+                  '<div style="grid-column:span 2;">' +
+                    '<label>렌트 종료일</label>' +
+                    '<input type="date" name="rent_end">' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                  '<div>' +
+                    '<label>일단가 ($)</label>' +
+                    '<input type="number" name="daily_rate" min="0">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label>배송비 ($)</label>' +
+                    '<input type="number" name="delivery_fee" min="0">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="ai-uploaded-previews" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:4px;"></div>' +
+                '<div style="margin-top:8px; display:flex; justify-content:flex-end; gap:12px;">' +
+                  '<button type="button" id="equipment-save-cancel-btn" class="btn-secondary" style="padding:0 20px;">취소</button>' +
+                  '<button type="submit" class="btn-primary" style="background:var(--status-success) !important; padding:0 24px; border:none; cursor:pointer;">장비 등록 및 저장</button>' +
+                '</div>' +
+              '</form>' +
+            '</div>' +
+          '</div>';
+
+        document.body.appendChild(modal);
+
+        var equipmentFiles = {
+          contract: null,
+          photo_front: null,
+          photo_rear: null,
+          photo_left: null,
+          photo_right: null
+        };
+
+        var currentActiveSlot = 'contract';
+        var currentCameraMode = 'upload';
+        var localVideoStream = null;
+        var availableCameraDevices = [];
+
+        var btnToggleUpload = modal.querySelector('#equipment-btn-toggle-upload');
+        var btnToggleCamera = modal.querySelector('#equipment-btn-toggle-camera');
+        var uploadArea = modal.querySelector('#equipment-upload-area');
+        var cameraArea = modal.querySelector('#equipment-camera-area');
+        var initialControls = modal.querySelector('#equipment-initial-controls');
+        var loadingDiv = modal.querySelector('#equipment-analysis-loading');
+        var resultDiv = modal.querySelector('#equipment-analysis-result-container');
+        var saveForm = modal.querySelector('#ai-equipment-save-form');
+        var deviceSelect = modal.querySelector('#equipment-camera-device-select');
+        var deviceSelectContainer = modal.querySelector('#equipment-camera-select-container');
+
+        function showUploadMode() {
+          currentCameraMode = 'upload';
+          btnToggleUpload.className = 'btn-primary';
+          btnToggleCamera.className = 'btn-secondary';
+          uploadArea.style.display = 'flex';
+          cameraArea.style.display = 'none';
+          stopCamera();
+        }
+
+        async function showCameraMode() {
+          currentCameraMode = 'camera';
+          btnToggleUpload.className = 'btn-secondary';
+          btnToggleCamera.className = 'btn-primary';
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'grid';
+          await startCamera();
+        }
+
+        btnToggleUpload.onclick = showUploadMode;
+        btnToggleCamera.onclick = showCameraMode;
+
+        var cards = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            card.onclick = function(e) {
+              if (e.target.closest('.trash-btn')) return;
+              modal.querySelector('#equipment-file-' + slot).click();
+            };
+          }
+
+          var fileInput = modal.querySelector('#equipment-file-' + slot);
+          if (fileInput) {
+            fileInput.onchange = function(e) {
+              var file = e.target.files[0];
+              if (file) {
+                setFileSlot(slot, file);
+              }
+            };
+          }
+        });
+
+        function setFileSlot(slot, file) {
+          equipmentFiles[slot] = file;
+          var url = URL.createObjectURL(file);
+
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            card.dataset.hasFile = 'true';
+            card.style.borderColor = 'var(--border-default)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'none';
+            previewState.style.display = 'block';
+
+            if (slot === 'contract') {
+              var isImg = file.type.startsWith('image/');
+              var previewImg = previewState.querySelector('.preview-img');
+              var iconWrapper = previewState.querySelector('.preview-icon-wrapper');
+              if (isImg) {
+                previewImg.src = url;
+                previewImg.style.display = 'block';
+                iconWrapper.style.display = 'none';
+              } else {
+                previewImg.style.display = 'none';
+                iconWrapper.style.display = 'block';
+              }
+              previewState.querySelector('.file-name').innerText = file.name;
+            } else {
+              var img = previewState.querySelector('.preview-img');
+              img.src = url;
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            slotRow.querySelector('.slot-status').innerText = '완료';
+            slotRow.querySelector('.slot-status').style.color = 'var(--status-success)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'inline-block';
+            
+            var thumb = slotRow.querySelector('.slot-thumbnail');
+            var isImg = file.type.startsWith('image/');
+            if (isImg || slot !== 'contract') {
+              thumb.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+            } else {
+              thumb.innerHTML = '<i class="ph ph-file-pdf" style="color:var(--brand-primary); font-size:18px;"></i>';
+            }
+          }
+        }
+
+        function clearFileSlot(slot) {
+          equipmentFiles[slot] = null;
+          var fileInput = modal.querySelector('#equipment-file-' + slot);
+          if (fileInput) fileInput.value = '';
+
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            delete card.dataset.hasFile;
+            card.style.borderColor = 'var(--border-strong)';
+            var emptyState = card.querySelector('.empty-state');
+            var previewState = card.querySelector('.preview-state');
+            emptyState.style.display = 'flex';
+            previewState.style.display = 'none';
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var iconName = (slot === 'contract') ? 'ph-file-text' : 'ph-camera';
+            slotRow.querySelector('.slot-thumbnail').innerHTML = '<i class="ph ' + iconName + '" style="color:var(--text-tertiary);"></i>';
+            slotRow.querySelector('.slot-status').innerText = (slot === 'contract') ? '선택된 파일 없음' : '선택된 사진 없음';
+            slotRow.querySelector('.slot-status').style.color = 'var(--text-tertiary)';
+            slotRow.querySelector('.slot-delete-btn').style.display = 'none';
+          }
+        }
+
+        cards.forEach(function(slot) {
+          var card = modal.querySelector('#equipment-card-' + slot);
+          if (card) {
+            var trashBtn = card.querySelector('.trash-btn');
+            if (trashBtn) {
+              trashBtn.onclick = function(e) {
+                e.stopPropagation();
+                clearFileSlot(slot);
+              };
+            }
+          }
+
+          var slotRow = modal.querySelector('.webcam-slot-card[data-slot="' + slot + '"]');
+          if (slotRow) {
+            var delBtn = slotRow.querySelector('.slot-delete-btn');
+            delBtn.onclick = function(e) {
+              e.stopPropagation();
+              clearFileSlot(slot);
+            };
+          }
+        });
+
+        var slotRows = modal.querySelectorAll('.webcam-slot-card');
+        slotRows.forEach(function(row) {
+          row.onclick = function() {
+            var slot = row.dataset.slot;
+            setActiveTargetSlot(slot);
+          };
+        });
+
+        function setActiveTargetSlot(slot) {
+          currentActiveSlot = slot;
+          
+          slotRows.forEach(function(row) {
+            if (row.dataset.slot === slot) {
+              row.classList.add('active-target');
+              row.style.background = 'rgba(124,58,237,0.1)';
+              row.style.borderColor = 'var(--brand-primary)';
+              row.querySelector('.target-badge').style.display = 'inline-block';
+            } else {
+              row.classList.remove('active-target');
+              row.style.background = 'var(--bg-base)';
+              row.style.borderColor = 'var(--border-strong)';
+              row.querySelector('.target-badge').style.display = 'none';
+            }
+          });
+
+          var labelMap = {
+            contract: '렌트 계약서',
+            photo_front: '장비 전면 사진',
+            photo_rear: '장비 후면 사진',
+            photo_left: '장비 좌측 사진',
+            photo_right: '장비 우측 사진'
+          };
+          modal.querySelector('#equipment-camera-overlay-label').innerText = '촬영 대상: ' + (labelMap[slot] || slot);
+        }
+
+        async function startCamera(preferredDeviceId) {
+          stopCamera();
+          var video = modal.querySelector('#equipment-video-stream');
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            var constraints = {
+              video: { facingMode: 'environment' }
+            };
+            if (preferredDeviceId) {
+              constraints.video = { deviceId: { exact: preferredDeviceId } };
+            }
+            try {
+              var stream = await navigator.mediaDevices.getUserMedia(constraints);
+              localVideoStream = stream;
+              video.srcObject = stream;
+              
+              if (availableCameraDevices.length === 0) {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameraDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                if (availableCameraDevices.length > 1) {
+                  deviceSelectContainer.style.display = 'flex';
+                  deviceSelect.innerHTML = '';
+                  availableCameraDevices.forEach(function(d, idx) {
+                    var opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || ('Camera ' + (idx + 1));
+                    if (preferredDeviceId && d.deviceId === preferredDeviceId) {
+                      opt.selected = true;
+                    }
+                    deviceSelect.appendChild(opt);
+                  });
+                  deviceSelect.onchange = function() {
+                    startCamera(deviceSelect.value);
+                  };
+                }
+              }
+            } catch (err) {
+              console.error('Camera stream error:', err);
+              alert('카메라를 활성화할 수 없습니다: ' + err.message);
+              showUploadMode();
+            }
+          } else {
+            alert('이 브라우저에서는 카메라 스트리밍을 지원하지 않습니다. 파일 업로드 모드를 사용해 주세요.');
+            showUploadMode();
+          }
+        }
+
+        function stopCamera() {
+          var video = modal.querySelector('#equipment-video-stream');
+          if (video && video.srcObject) {
+            var stream = video.srcObject;
+            var tracks = stream.getTracks();
+            tracks.forEach(function(track) { track.stop(); });
+            video.srcObject = null;
+          }
+          localVideoStream = null;
+        }
+
+        modal.querySelector('#equipment-btn-capture').onclick = function() {
+          var video = modal.querySelector('#equipment-video-stream');
+          if (!video || !video.srcObject) return;
+
+          var canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          var dataUrl = canvas.toDataURL('image/jpeg');
+          var fileName = 'webcam_' + currentActiveSlot + '.jpg';
+          var file = dataURLtoFile(dataUrl, fileName);
+
+          setFileSlot(currentActiveSlot, file);
+
+          var sequence = ['contract', 'photo_front', 'photo_rear', 'photo_left', 'photo_right'];
+          var nextSlotIdx = sequence.indexOf(currentActiveSlot) + 1;
+          
+          var foundNext = false;
+          for (var i = 0; i < sequence.length; i++) {
+            var s = sequence[(nextSlotIdx + i) % sequence.length];
+            if (!equipmentFiles[s]) {
+              setActiveTargetSlot(s);
+              foundNext = true;
+              break;
+            }
+          }
+          if (!foundNext) {
+            showToast('모든 슬롯이 촬영되었습니다.');
+          }
+        };
+
+        function dataURLtoFile(dataurl, filename) {
+          var arr = dataurl.split(','),
+              mime = arr[0].match(/:(.*?);/)[1],
+              bstr = atob(arr[1]),
+              n = bstr.length,
+              u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new File([u8arr], filename, { type: mime });
+        }
+
+        function cleanUpAndClose() {
+          stopCamera();
+          modal.remove();
+        }
+
+        modal.querySelector('#equipment-modal-close-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#equipment-upload-cancel-btn').onclick = cleanUpAndClose;
+        modal.querySelector('#equipment-save-cancel-btn').onclick = cleanUpAndClose;
+
+        modal.querySelector('#equipment-upload-submit-btn').onclick = async function(e) {
+          e.preventDefault();
+
+          if (!equipmentFiles.contract) {
+            alert('렌트 계약서는 필수 등록 항목입니다.');
+            return;
+          }
+
+          uploadArea.style.display = 'none';
+          cameraArea.style.display = 'none';
+          btnToggleUpload.parentElement.style.display = 'none';
+          initialControls.style.display = 'none';
+          loadingDiv.style.display = 'flex';
+          stopCamera();
+
+          var formData = new FormData();
+          formData.append('contract', equipmentFiles.contract);
+          if (equipmentFiles.photo_front) formData.append('photo_front', equipmentFiles.photo_front);
+          if (equipmentFiles.photo_rear) formData.append('photo_rear', equipmentFiles.photo_rear);
+          if (equipmentFiles.photo_left) formData.append('photo_left', equipmentFiles.photo_left);
+          if (equipmentFiles.photo_right) formData.append('photo_right', equipmentFiles.photo_right);
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/scan-rental', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: formData
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || 'AI 분석 중 오류가 발생했습니다.');
+            }
+
+            var res = await response.json();
+            loadingDiv.style.display = 'none';
+            resultDiv.style.display = 'flex';
+
+            var data = res.data || {};
+            var files = res.files || {};
+
+            saveForm.querySelector('[name="equipment_type"]').value = data.equipment_type || '';
+            saveForm.querySelector('[name="model"]').value = data.model || '';
+            saveForm.querySelector('[name="vendor"]').value = data.vendor || '';
+            saveForm.querySelector('[name="quantity"]').value = data.quantity || 1;
+            saveForm.querySelector('[name="rent_start"]').value = data.rent_start || '';
+            saveForm.querySelector('[name="rent_end"]').value = data.rent_end || '';
+            saveForm.querySelector('[name="daily_rate"]').value = data.daily_rate || 0;
+            saveForm.querySelector('[name="delivery_fee"]').value = data.delivery_fee || 0;
+            saveForm.querySelector('[name="rate_period"]').value = data.rate_period || '';
+            saveForm.querySelector('[name="return_fee"]').value = data.return_fee || 0;
+            saveForm.querySelector('[name="details"]').value = data.details ? JSON.stringify(data.details) : '';
+
+            // Surface the rich extracted contract metadata (kept on save even if not editable here).
+            var d = data.details || {};
+            var sumRows = [];
+            if (data.rate_amount) sumRows.push('<b>요금</b> $' + data.rate_amount + (data.rate_period ? ' / ' + data.rate_period : ''));
+            if (d.quote_no) sumRows.push('<b>견적번호</b> ' + d.quote_no);
+            if (d.ship_to_address) sumRows.push('<b>배송지</b> ' + d.ship_to_address);
+            if (d.lessee && d.lessee.name) sumRows.push('<b>임차인</b> ' + d.lessee.name + (d.account_no ? ' (계정 ' + d.account_no + ')' : ''));
+            if (d.sales_rep && d.sales_rep.name) sumRows.push('<b>영업담당</b> ' + d.sales_rep.name + (d.sales_rep.phone ? ' / ' + d.sales_rep.phone : ''));
+            if (d.pricing && d.pricing.total_with_tax) sumRows.push('<b>총액(세포함)</b> $' + d.pricing.total_with_tax);
+            if (d.terms && d.terms.payment_terms) sumRows.push('<b>지급조건</b> ' + d.terms.payment_terms);
+            if (d.terms && d.terms.min_lease_term) sumRows.push('<b>최소임대</b> ' + d.terms.min_lease_term);
+            if (d.scope_of_work) sumRows.push('<b>포함</b> ' + d.scope_of_work);
+            var sumDiv = saveForm.querySelector('#ai-extracted-summary');
+            if (sumRows.length && sumDiv) {
+              sumDiv.innerHTML = '<div style="font-weight:700;color:var(--text-primary);margin-bottom:4px">📋 AI 추출 추가 정보 (저장됨)</div>' + sumRows.join(' &nbsp;·&nbsp; ');
+              sumDiv.style.display = 'block';
+            }
+
+            saveForm.querySelector('[name="contract_path"]').value = files.contract || '';
+            saveForm.querySelector('[name="photo_front"]').value = files.photo_front || '';
+            saveForm.querySelector('[name="photo_rear"]').value = files.photo_rear || '';
+            saveForm.querySelector('[name="photo_left"]').value = files.photo_left || '';
+            saveForm.querySelector('[name="photo_right"]').value = files.photo_right || '';
+
+            var previewsDiv = saveForm.querySelector('#ai-uploaded-previews');
+            previewsDiv.innerHTML = '';
+            var directions = [
+              { key: 'photo_front', label: '전면' },
+              { key: 'photo_rear', label: '후면' },
+              { key: 'photo_left', label: '좌측' },
+              { key: 'photo_right', label: '우측' }
+            ];
+            directions.forEach(function(d) {
+              var src = '';
+              if (equipmentFiles[d.key]) {
+                src = URL.createObjectURL(equipmentFiles[d.key]);
+              } else if (files[d.key]) {
+                src = files[d.key];
+              }
+
+              if (src) {
+                var previewCard = document.createElement('div');
+                previewCard.style.cssText = 'text-align:center;background:var(--bg-base);border:1px solid var(--border-default);border-radius:6px;padding:4px;';
+                previewCard.innerHTML = 
+                  '<img src="' + src + '" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:4px;">' +
+                  '<span style="font-size:10px;color:var(--text-secondary);">' + d.label + '</span>';
+                previewsDiv.appendChild(previewCard);
+              }
+            });
+
+          } catch (err) {
+            loadingDiv.style.display = 'none';
+            btnToggleUpload.parentElement.style.display = 'flex';
+            initialControls.style.display = 'flex';
+            if (currentCameraMode === 'camera') {
+              cameraArea.style.display = 'grid';
+              startCamera();
+            } else {
+              uploadArea.style.display = 'flex';
+            }
+            alert('오류: ' + err.message);
+          }
+        };
+
+        saveForm.onsubmit = async function(e) {
+          e.preventDefault();
+          var detailsRaw = saveForm.querySelector('[name="details"]').value;
+          var detailsObj = null;
+          if (detailsRaw) { try { detailsObj = JSON.parse(detailsRaw); } catch (e) { detailsObj = null; } }
+
+          var payload = {
+            equipment_type: saveForm.querySelector('[name="equipment_type"]').value,
+            model: saveForm.querySelector('[name="model"]').value,
+            vendor: saveForm.querySelector('[name="vendor"]').value,
+            quantity: parseInt(saveForm.querySelector('[name="quantity"]').value, 10) || 1,
+            rent_start: saveForm.querySelector('[name="rent_start"]').value || null,
+            rent_end: saveForm.querySelector('[name="rent_end"]').value || null,
+            daily_rate: parseInt(saveForm.querySelector('[name="daily_rate"]').value, 10) || 0,
+            delivery_fee: parseInt(saveForm.querySelector('[name="delivery_fee"]').value, 10) || 0,
+            return_fee: parseInt(saveForm.querySelector('[name="return_fee"]').value, 10) || 0,
+            rate_period: saveForm.querySelector('[name="rate_period"]').value || null,
+            details: detailsObj,
+            contract_path: saveForm.querySelector('[name="contract_path"]').value || null,
+            photo_front: saveForm.querySelector('[name="photo_front"]').value || null,
+            photo_rear: saveForm.querySelector('[name="photo_rear"]').value || null,
+            photo_left: saveForm.querySelector('[name="photo_left"]').value || null,
+            photo_right: saveForm.querySelector('[name="photo_right"]').value || null
+          };
+
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var response = await fetch('/equipment-api/save', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : ''
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              var errData = await response.json();
+              throw new Error(errData.error || '장비 정보를 저장하는 중 오류가 발생했습니다.');
+            }
+
+            modal.remove();
+            showToast('장비가 성공적으로 등록되었습니다.');
+            window.refreshCurrentEquipmentView();
+          } catch (err) {
+            alert('오류: ' + err.message);
+          }
+        };
+      };
+
+      // Expose renderRental on window so post-save/return/assign handlers can refresh the list
+      // (these call window.renderRental(); the function declaration alone isn't attached to window).
+      window.renderRental = renderRental;
+
+            // 엑셀 다운로드
+      window.downloadRentalExcel = function() {
+        var rentals = window.currentRentals || [];
+        if (rentals.length === 0) {
+          alert('다운로드할 데이터가 없습니다.');
+          return;
+        }
+
+        var headers = ['렌탈ID', '장비종류', '모델', '벤더', '시작일', '종료일', '일단가', '배송비', '배정회사', '배정팀', '운영자', '상태'];
+        var rows = rentals.map(function(r) {
+          return [
+            r.id,
+            r.equipType,
+            r.model,
+            r.vendor,
+            r.startDate,
+            r.endDate,
+            r.dailyRate || 0,
+            r.deliveryFee || 0,
+            r.company || '-',
+            r.team || '-',
+            r.operator || '미배정',
+            r.status
+          ];
+        });
+
+        var csvContent = '\uFEFF'; // UTF-8 BOM
+        csvContent += headers.map(function(h) { return '"' + h.replace(/"/g, '""') + '"'; }).join(',') + '\r\n';
+        rows.forEach(function(row) {
+          csvContent += row.map(function(v) { 
+            var strVal = (v === null || v === undefined) ? '' : String(v);
+            return '"' + strVal.replace(/"/g, '""') + '"'; 
+          }).join(',') + '\r\n';
+        });
+
+        var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', '장비_렌탈_현황_' + new Date().toISOString().slice(0, 10) + '.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
 
       // â”€â”€ HOUSING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       async function renderHousing() {
@@ -5364,7 +10928,25 @@
 
       // â”€â”€ ì´ˆê¸°í™” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       pageContainer.style.transition = 'opacity 0.15s';
-      loadView('dashboard');
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedView = urlParams.get('view');
+      const initialView = requestedView && routes[requestedView] ? requestedView : 'dashboard';
+      navItems.forEach(function (item) {
+        item.classList.toggle('active', item.getAttribute('data-view') === initialView);
+      });
+      loadView(initialView);
+
+      // URL team_code 파라미터 체크 및 QR 출퇴근 자동 진입
+      const teamCodeParam = urlParams.get('team_code');
+      if (teamCodeParam) {
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+        setTimeout(function() {
+          if (typeof window.openMyCommuteModal === 'function') {
+            window.openMyCommuteModal(teamCodeParam);
+          }
+        }, 500);
+      }
     });
 
     // â”€â”€ ë¬¸ì„œ ëª¨ë‹¬ ì œì–´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -6215,8 +11797,6 @@ window.submitVendorCreate = function() {
   </script>
 
   <!-- NFC ì°¨ëŸ‰ ë°°ì • ëª¨ë‹¬ -->
-  <div id="nfcAssignModal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6);"
-    class="flex-center">
     <!-- NFC ê³µìš© ë°°ì • ëª¨ë‹¬ -->
     <div id="nfcAssignModal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6);"
       class="flex-center">
@@ -6469,7 +12049,572 @@ async function renderVendors() {
     document.getElementById('page-container').innerHTML = '<div style="padding:40px;">ì˜¤ë¥˜: ' + e.message + '</div>';
   }
 }
+
+    // ============================================================
+    // TEAM QR COMMUTE / ATTENDANCE logic
+    // ============================================================
+    window._scannedTeamCode = null;
+
+    // ── 내 출퇴근 기록 전용 페이지 ───────────────────────────────
+    window.renderMyAttendance = function() {
+      const pc = document.getElementById('page-container');
+      if (!pc) return;
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const fmt = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      const monthStart = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+      // 기본 종료일은 당월 말일 — 브라우저/서버 타임존 차이로 오늘 기록이 누락되지 않도록.
+      const today = fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+      pc.innerHTML =
+        '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-clock" style="color:var(--brand-primary);"></i> 내 출퇴근 기록</h1>' +
+        '<p class="page-subtitle">기간별 출퇴근 이력과 근태 요약을 확인합니다.</p></div>' +
+        '<div class="action-row"><button class="btn-primary" style="padding:8px 16px; border-radius:8px; border:none; background:var(--brand-primary); color:white; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="window.openMyCommuteModal()"><i class="ph ph-plus"></i> 출퇴근 등록</button></div></div>' +
+        '<div class="panel" style="margin-bottom:16px; border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">' +
+        '<span style="font-size:12px; color:var(--text-tertiary); font-weight:600;">조회 기간</span>' +
+        '<input type="date" id="my-att-start" value="' + monthStart + '" style="padding:8px 10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-base); color:var(--text-primary); font-size:13px;">' +
+        '<span style="color:var(--text-tertiary);">~</span>' +
+        '<input type="date" id="my-att-end" value="' + today + '" style="padding:8px 10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-base); color:var(--text-primary); font-size:13px;">' +
+        '<button class="btn-secondary" style="padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;" onclick="window.loadMyAttendance()"><i class="ph ph-magnifying-glass"></i> 조회</button>' +
+        '</div>' +
+        '<div id="my-att-kpis" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px;"></div>' +
+        '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
+        '<div class="panel-header" style="padding:14px 20px; border-bottom:1px solid var(--border-subtle);"><div class="panel-title" style="font-size:13px; font-weight:700;"><i class="ph ph-list-bullets"></i> 일자별 기록</div></div>' +
+        '<div class="panel-body" style="padding:0; overflow-x:auto;">' +
+        '<table class="data-table" style="width:100%; border-collapse:collapse;">' +
+        '<thead><tr>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">날짜</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">출근</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">퇴근</th>' +
+        '<th style="text-align:left; padding:10px 16px; font-size:11px; color:var(--text-tertiary);">근무시간</th>' +
+        '</tr></thead>' +
+        '<tbody id="my-att-body"><tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr></tbody>' +
+        '</table></div></div>';
+
+      window.loadMyAttendance();
+    };
+
+    window.loadMyAttendance = async function() {
+      const kpiEl = document.getElementById('my-att-kpis');
+      const body = document.getElementById('my-att-body');
+      if (!body) return;
+      const start = (document.getElementById('my-att-start') || {}).value || null;
+      const end = (document.getElementById('my-att-end') || {}).value || null;
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">조회 중...</td></tr>';
+
+      const kpiCard = (label, value, color) =>
+        '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 18px;">' +
+        '<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:6px;">' + label + '</div>' +
+        '<div style="font-size:24px; font-weight:700; color:' + (color || 'var(--text-primary)') + ';">' + value + '</div></div>';
+
+      try {
+        // 일자별 집계(출근·퇴근·근무시간을 하루 한 줄로) 조회 — KPI도 동일 응답에 포함된다.
+        const summary = await window.API.getHrAttendanceSummary(start, end);
+
+        if (!summary || !summary.success) {
+          if (kpiEl) kpiEl.innerHTML = '';
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--status-warning);">' +
+            ((summary && summary.message) || '출퇴근 기록을 불러올 수 없습니다.') +
+            '<br><span style="font-size:11px; color:var(--text-tertiary);">계정에 연결된 직원 정보가 없으면 관리자에게 직원 연동을 요청하세요.</span></td></tr>';
+          return;
+        }
+
+        const k = summary.kpis || {};
+        if (kpiEl) {
+          kpiEl.innerHTML =
+            kpiCard('총 근무시간', (k.work_hours || 0) + ' h', 'var(--brand-primary)') +
+            kpiCard('지각', (k.lates || 0) + ' 회', (k.lates ? 'var(--status-warning)' : 'var(--text-primary)')) +
+            kpiCard('조기퇴근', (k.early_outs || 0) + ' 회', (k.early_outs ? 'var(--status-warning)' : 'var(--text-primary)')) +
+            kpiCard('결근(평일)', (k.absences || 0) + ' 일', (k.absences ? 'var(--status-danger)' : 'var(--text-primary)'));
+        }
+
+        const records = summary.records || [];
+        if (records.length === 0) {
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">해당 기간의 출퇴근 기록이 없습니다.</td></tr>';
+          return;
+        }
+        body.innerHTML = records.map(r => {
+          const hasIn = r.clock_in && r.clock_in !== '-';
+          const hasOut = r.clock_out && r.clock_out !== '-';
+          const cin = hasIn ? '<span style="color:var(--status-success); font-weight:700;">' + r.clock_in + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+          const cout = hasOut ? '<span style="color:var(--status-warning); font-weight:700;">' + r.clock_out + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+          const hours = r.work_hours && r.work_hours !== '-' ? r.work_hours : '-';
+          return '<tr style="border-bottom:1px solid var(--border-subtle);">' +
+            '<td style="padding:12px 16px; font-weight:600;">' + (r.date || '-') + '</td>' +
+            '<td class="cell-mono" style="padding:12px 16px;">' + cin + '</td>' +
+            '<td class="cell-mono" style="padding:12px 16px;">' + cout + '</td>' +
+            '<td style="padding:12px 16px; font-weight:600;">' + hours + '</td></tr>';
+        }).join('');
+      } catch (err) {
+        if (kpiEl) kpiEl.innerHTML = '';
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--status-danger);">조회 실패: ' + err.message + '</td></tr>';
+      }
+    };
+
+    window._myCommuteHtmlTemplate = function(scannedCode) {
+      const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+      const isQr = !!scannedCode;
+
+      // 상단 "내 출퇴근" 버튼으로 진입하면 QR 없이 웹 포탈로 직접 출퇴근, QR 스캔으로 진입하면 팀 QR 검증 방식.
+      const panelTitle = isQr
+        ? '<i class="ph ph-qr-code" style="color:var(--brand-primary);"></i> QR 팀별 출퇴근'
+        : '<i class="ph ph-desktop" style="color:var(--brand-primary);"></i> 웹 포탈 출퇴근';
+
+      let validationHtml = '';
+      if (isQr) {
+        validationHtml = '<div style="background:rgba(37,99,235,0.08); border:1px dashed var(--brand-primary); padding:10px 14px; border-radius:8px; font-size:12px; margin-bottom:12px; text-align:center;">' +
+          '<span style="color:var(--text-secondary);">스캔한 팀 코드:</span> ' +
+          '<strong style="color:var(--brand-primary); font-size:13px;">' + scannedCode + '</strong>' +
+          '</div>';
+      }
+
+      const statusRow = isQr
+        ? '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">스캔 검증 상태</span><span id="commute-validation-status" style="font-weight:700; color:var(--status-warning);">스캔 대기 중</span></div>'
+        : '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">기록 방식</span><span style="font-weight:700; color:var(--brand-primary);">웹 포탈</span></div>';
+
+      // QR 모드는 스캔 검증 후 활성화되므로 disabled, 웹 포탈 모드는 즉시 활성화.
+      const onIn = isQr ? "window.submitCommuteQr('clock_in')" : "window.submitMyCommute('clock_in')";
+      const onOut = isQr ? "window.submitCommuteQr('clock_out')" : "window.submitMyCommute('clock_out')";
+      const disabledAttr = isQr ? ' disabled' : '';
+      const footerMsg = isQr
+        ? '현장의 팀 QR 코드를 카메라로 정확히 스캔해 주세요.'
+        : '버튼을 눌러 지금 시각으로 출근 또는 퇴근을 기록합니다.';
+
+      return '<div class="panel" style="margin-bottom:16px; border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
+        '<div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--border-subtle);">' +
+        '<div class="panel-title" style="font-size:13px; font-weight:700;">' + panelTitle + '</div>' +
+        '<span style="font-size:11px; font-weight:600; color:var(--brand-primary);">' + today + '</span>' +
+        '</div>' +
+        '<div class="panel-body padded" style="padding:20px; display:flex; flex-direction:column; gap:16px;">' +
+        validationHtml +
+        '<div style="background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:8px; padding:14px; font-size:12px; display:flex; flex-direction:column; gap:10px;">' +
+        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 성명</span><span style="font-weight:700; color:var(--text-primary);">' + (authenticatedAccount.employee_name || authenticatedAccount.name) + '</span></div>' +
+        '<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-tertiary);">내 권한</span><span style="font-weight:700; color:var(--text-primary);">' + authenticatedAccount.role + '</span></div>' +
+        statusRow +
+        '</div>' +
+        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
+        '<button id="btn-clock-in" onclick="' + onIn + '" class="btn-primary" style="padding:14px; font-size:14px; font-weight:700; border-radius:8px; display:flex; flex-direction:column; align-items:center; gap:6px;"' + disabledAttr + '>' +
+        '<i class="ph ph-sign-in" style="font-size:20px;"></i><span>출근 등록</span></button>' +
+        '<button id="btn-clock-out" onclick="' + onOut + '" class="btn-secondary" style="padding:14px; font-size:14px; font-weight:700; border-radius:8px; display:flex; flex-direction:column; align-items:center; gap:6px;"' + disabledAttr + '>' +
+        '<i class="ph ph-sign-out" style="font-size:20px;"></i><span>퇴근 등록</span></button>' +
+        '</div>' +
+        '<div id="commute-message" style="font-size:11px; text-align:center; color:var(--text-tertiary);">' + footerMsg + '</div>' +
+        '</div></div>' +
+        '<div class="panel" style="border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; overflow:hidden;">' +
+        '<div class="panel-header" style="padding:14px 20px; border-bottom:1px solid var(--border-subtle);"><div class="panel-title" style="font-size:13px;"><i class="ph ph-list-bullets"></i> 내 출퇴근 기록 (최근 90일)</div></div>' +
+        '<div class="panel-body" style="padding:0; overflow-x:auto;">' +
+        '<table class="data-table" id="my-attendance-table" style="width:100%; border-collapse:collapse;">' +
+        '<thead><tr><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">날짜</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">출근</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">퇴근</th><th style="text-align:left; padding:10px 14px; font-size:11px; color:var(--text-tertiary);">근무시간</th></tr></thead>' +
+        '<tbody id="my-attendance-logs-body"><tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">기록 조회 중...</td></tr></tbody>' +
+        '</table></div></div>';
+    };
+
+    window.getUserGpsLocation = function() {
+      return new Promise(function(resolve, reject) {
+        if (!navigator.geolocation) {
+          reject(new Error('이 브라우저는 GPS 위치 정보(Geolocation)를 지원하지 않습니다.'));
+          return;
+        }
+
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        };
+
+        navigator.geolocation.getCurrentPosition(
+          function(position) {
+            let isMocked = false;
+            if (position.mocked === true || (position.coords && position.coords.mocked)) {
+              isMocked = true;
+            }
+            if (position.coords.accuracy === 0) {
+              isMocked = true;
+            }
+            resolve({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              isMocked: isMocked,
+              timestamp: Math.floor(Date.now() / 1000)
+            });
+          },
+          function(error) {
+            let msg = 'GPS 위치 정보를 가져오는데 실패했습니다.';
+            if (error.code === error.PERMISSION_DENIED) {
+              msg = '위치 정보 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해 주세요.';
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+              msg = '위치 정보를 사용할 수 없습니다. GPS 신호 수신이 원활한 실외에서 시도해 주세요.';
+            } else if (error.code === error.TIMEOUT) {
+              msg = '위치 정보 수신 시간이 초과되었습니다. 다시 시도해 주세요.';
+            }
+            reject(new Error(msg));
+          },
+          options
+        );
+      });
+    };
+
+    window.saveOfflineCommute = async function(eventType, lat, lng, accuracy) {
+      const now = new Date();
+      const localTimeStr = now.getFullYear() + '-' + 
+        String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(now.getDate()).padStart(2, '0') + ' ' + 
+        String(now.getHours()).padStart(2, '0') + ':' + 
+        String(now.getMinutes()).padStart(2, '0') + ':' + 
+        String(now.getSeconds()).padStart(2, '0');
+
+      const empId = (window.authenticatedAccount || {}).employee_id || null;
+      if (!empId) {
+        throw new Error('인증 계정에 연동된 직원 정보가 없어 오프라인 기록을 할 수 없습니다.');
+      }
+      
+      const secret = '{{ config('app.key') ?: 'base64:nahshonsmarterpdefaultkey' }}';
+      const message = empId + '_' + eventType + '_' + localTimeStr + '_' + lat + '_' + lng;
+      let token = '';
+      try {
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(secret);
+        const messageData = encoder.encode(message);
+        const cryptoKey = await window.crypto.subtle.importKey(
+          'raw', 
+          keyData, 
+          { name: 'HMAC', hash: 'SHA-256' }, 
+          false, 
+          ['sign']
+        );
+        const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, messageData);
+        const hashArray = Array.from(new Uint8Array(signature));
+        token = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      } catch (e) {
+        token = 'fallback_token';
+      }
+
+      const logItem = {
+        employee_id: empId,
+        event_type: eventType,
+        event_at: localTimeStr,
+        latitude: lat,
+        longitude: lng,
+        accuracy: accuracy,
+        token: token
+      };
+
+      let queue = [];
+      try {
+        queue = JSON.parse(localStorage.getItem('smart_attendance_offline_queue') || '[]');
+      } catch (err) {
+        queue = [];
+      }
+      
+      const isDup = queue.some(item => item.event_type === eventType && item.event_at.slice(0, 10) === localTimeStr.slice(0, 10));
+      if (!isDup) {
+        queue.push(logItem);
+        localStorage.setItem('smart_attendance_offline_queue', JSON.stringify(queue));
+      }
+
+      return {
+        success: true,
+        message: '인터넷 오프라인 상태입니다. 출퇴근 기록이 기기에 안전하게 저장되었으며, 네트워크 복구 시 자동 전송됩니다.'
+      };
+    };
+
+    window.syncOfflineCommutes = async function() {
+      if (!navigator.onLine) return;
+      
+      let queue = [];
+      try {
+        queue = JSON.parse(localStorage.getItem('smart_attendance_offline_queue') || '[]');
+      } catch (err) {
+        return;
+      }
+      
+      if (queue.length === 0) return;
+      
+      console.log('오프라인 출퇴근 대기록 감지: ' + queue.length + '건 동기화 실행');
+      
+      try {
+        const res = await gsRun('api_syncOfflineAttendance', [queue], { success: false });
+        if (res && res.success) {
+          localStorage.removeItem('smart_attendance_offline_queue');
+          showToast('⚡ 오프라인 상태에서 기록된 출퇴근 내역이 서버에 동기화 완료되었습니다!');
+          if (typeof window.loadMyCommuteLogs === 'function') {
+            window.loadMyCommuteLogs();
+          }
+        } else {
+          console.warn('동기화 실패:', res.message);
+        }
+      } catch (err) {
+        console.error('동기화 처리 실패:', err);
+      }
+    };
+
+    window.addEventListener('online', window.syncOfflineCommutes);
+    setTimeout(window.syncOfflineCommutes, 3000);
+
+    window.openMyCommuteModal = function(teamCode) {
+      window._scannedTeamCode = teamCode || null;
+      const modal = document.getElementById('myCommuteModalOverlay');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('my-commute-modal-body').innerHTML = window._myCommuteHtmlTemplate(teamCode);
+        window.loadMyCommuteLogs();
+        // QR 스캔으로 진입한 경우에만 코드 검증으로 버튼을 활성화한다. 웹 포탈 모드는 이미 활성 상태.
+        if (teamCode) window.validateScannedTeamCode(teamCode);
+      }
+    };
+
+    window.closeMyCommuteModal = function() {
+      const modal = document.getElementById('myCommuteModalOverlay');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    };
+
+    window.loadMyCommuteLogs = async function() {
+      const body = document.getElementById('my-attendance-logs-body');
+      if (!body) return;
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        // 오늘뿐 아니라 지난 기록도 함께 — 최근 90일 범위 조회.
+        const fromDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const args = [authenticatedAccount.employee_id, fromDate, today];
+        // 방금 기록한 출퇴근이 즉시 반영되도록 캐시를 무효화하고 항상 최신 기록을 조회한다.
+        delete window.apiCache['api_getHrAttendanceRecords' + JSON.stringify(args)];
+        const res = await gsRun('api_getHrAttendanceRecords', args, { success: false, records: [] });
+        if (res && res.success && res.records && res.records.length > 0) {
+          // 최신 날짜가 위로 오도록 정렬.
+          const sorted = res.records.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+          body.innerHTML = sorted.map(r => {
+            const hasIn = r.clock_in && r.clock_in !== '-';
+            const hasOut = r.clock_out && r.clock_out !== '-';
+            const clockIn = hasIn ? '<span style="color:var(--status-success); font-weight:700;">' + r.clock_in + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+            const clockOut = hasOut ? '<span style="color:var(--status-warning); font-weight:700;">' + r.clock_out + '</span>' : '<span style="color:var(--text-tertiary);">미기록</span>';
+            const hours = r.work_hours && r.work_hours !== '-' ? r.work_hours : '-';
+            return '<tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px 14px; font-weight:600;">' + (r.date || '-') + '</td><td class="cell-mono" style="padding:10px 14px;">' + clockIn + '</td><td class="cell-mono" style="padding:10px 14px;">' + clockOut + '</td><td style="padding:10px 14px;">' + hours + '</td></tr>';
+          }).join('');
+        } else {
+          body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-tertiary);">최근 출퇴근 기록이 존재하지 않습니다.</td></tr>';
+        }
+      } catch (err) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--status-danger);">이력 조회 실패: ' + err.message + '</td></tr>';
+      }
+    };
+
+    window.validateScannedTeamCode = function(teamCode) {
+      const statusEl = document.getElementById('commute-validation-status');
+      const msgEl = document.getElementById('commute-message');
+      const btnIn = document.getElementById('btn-clock-in');
+      const btnOut = document.getElementById('btn-clock-out');
+
+      if (!teamCode) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--status-danger);">스캔 실패 (코드 없음)</span>';
+        if (msgEl) msgEl.innerText = '올바른 QR 코드를 스캔해 주세요.';
+        return;
+      }
+
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--status-success);"><i class="ph ph-check-circle"></i> 스캔 확인 완료</span>';
+      }
+      if (msgEl) {
+        msgEl.innerHTML = '<span style="color:var(--brand-primary); font-weight:700;">본인 인증이 활성화되었습니다. 출퇴근을 선택해주세요.</span>';
+      }
+      if (btnIn) btnIn.disabled = false;
+      if (btnOut) btnOut.disabled = false;
+    };
+
+    window.submitMyCommute = async function(eventType) {
+      const btnIn = document.getElementById('btn-clock-in');
+      const btnOut = document.getElementById('btn-clock-out');
+      const msgEl = document.getElementById('commute-message');
+      if (btnIn) btnIn.disabled = true;
+      if (btnOut) btnOut.disabled = true;
+
+      showToast('GPS 위치 정보 수집 중...');
+      let gpsData = null;
+      try {
+        gpsData = await window.getUserGpsLocation();
+      } catch (gpsErr) {
+        alert(gpsErr.message);
+        if (msgEl) {
+          msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-warning"></i> GPS 수집 실패</span>';
+        }
+        if (btnIn) btnIn.disabled = false;
+        if (btnOut) btnOut.disabled = false;
+        return;
+      }
+
+      if (!navigator.onLine) {
+        showToast('오프라인 감지: 로컬 백업 중...');
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, null);
+          if (offlineRes.success) {
+            showToast(offlineRes.message);
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> 오프라인 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (err) {
+          alert('오프라인 저장 실패: ' + err.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+        return;
+      }
+
+      showToast(eventType === 'clock_in' ? '출근 기록 중...' : '퇴근 기록 중...');
+      try {
+        const res = await gsRun('api_clockInWithGps', [
+          eventType,
+          gpsData.lat,
+          gpsData.lng,
+          gpsData.accuracy,
+          gpsData.isMocked,
+          gpsData.timestamp
+        ], { success: false });
+
+        if (res && res.success) {
+          showToast(res.message);
+          window.loadMyCommuteLogs();
+          if (msgEl) {
+            msgEl.innerHTML = '<span style="color:var(--status-success); font-weight:700;"><i class="ph ph-check-circle"></i> ' + res.message + '</span>';
+          }
+          setTimeout(function() {
+            window.closeMyCommuteModal();
+          }, 2000);
+        } else {
+          if (msgEl) {
+            msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-x-circle"></i> ' + (res.message || '기록 실패') + '</span>';
+          }
+          alert(res.message || '출퇴근 기록에 실패했습니다.');
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+      } catch (err) {
+        console.warn('서버 전송 오류, 오프라인 임시 저장으로 전환합니다.', err);
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, null);
+          if (offlineRes.success) {
+            showToast('네트워크 오류로 오프라인 저장 완료');
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> 오프라인 임시 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (backupErr) {
+          alert('서버 전송 오류 및 오프라인 백업 실패: ' + backupErr.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+      }
+    };
+
+    window.submitCommuteQr = async function(eventType) {
+      if (!window._scannedTeamCode) {
+        alert('스캔된 팀 코드가 없습니다. 다시 QR 코드를 스캔해 주세요.');
+        return;
+      }
+      const btnIn = document.getElementById('btn-clock-in');
+      const btnOut = document.getElementById('btn-clock-out');
+      const msgEl = document.getElementById('commute-message');
+      if (btnIn) btnIn.disabled = true;
+      if (btnOut) btnOut.disabled = true;
+
+      showToast('GPS 위치 정보 수집 중...');
+      let gpsData = null;
+      try {
+        gpsData = await window.getUserGpsLocation();
+      } catch (gpsErr) {
+        alert(gpsErr.message);
+        if (msgEl) {
+          msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-warning"></i> GPS 수집 실패</span>';
+        }
+        if (btnIn) btnIn.disabled = false;
+        if (btnOut) btnOut.disabled = false;
+        return;
+      }
+
+      if (!navigator.onLine) {
+        showToast('오프라인 감지: QR 스캔 정보 오프라인 저장 중...');
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, window._scannedTeamCode);
+          if (offlineRes.success) {
+            showToast('QR 오프라인 저장 완료');
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> QR 오프라인 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (err) {
+          alert('오프라인 저장 실패: ' + err.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+        return;
+      }
+
+      showToast('스캔 정보 전송 및 소속 팀 검증 중...');
+      try {
+        const res = await window.API.clockInWithTeamQr(window._scannedTeamCode, eventType);
+        if (res && res.success) {
+          showToast(res.message);
+          window.loadMyCommuteLogs();
+          if (msgEl) {
+            msgEl.innerHTML = '<span style="color:var(--status-success); font-weight:700;"><i class="ph ph-check-circle"></i> ' + res.message + '</span>';
+          }
+          setTimeout(function() {
+            window.closeMyCommuteModal();
+          }, 2000);
+        } else {
+          if (msgEl) {
+            msgEl.innerHTML = '<span style="color:var(--status-danger); font-weight:700;"><i class="ph ph-x-circle"></i> ' + (res.message || '인증 오류') + '</span>';
+          }
+          alert('인증 반려: ' + (res.message || '소속 팀이 일치하지 않습니다.'));
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+      } catch (err) {
+        console.warn('QR 서버 검증 실패, 오프라인 임시 저장으로 전환합니다.', err);
+        try {
+          const offlineRes = await window.saveOfflineCommute(eventType, gpsData.lat, gpsData.lng, gpsData.accuracy, window._scannedTeamCode);
+          if (offlineRes.success) {
+            showToast('네트워크 오류로 QR 오프라인 저장 완료');
+            if (msgEl) {
+              msgEl.innerHTML = '<span style="color:var(--status-warning); font-weight:700;"><i class="ph ph-floppy-disk"></i> QR 오프라인 임시 저장 완료</span>';
+            }
+            setTimeout(function() {
+              window.closeMyCommuteModal();
+            }, 2500);
+          }
+        } catch (backupErr) {
+          alert('서버 전송 오류 및 QR 오프라인 백업 실패: ' + backupErr.message);
+          if (btnIn) btnIn.disabled = false;
+          if (btnOut) btnOut.disabled = false;
+        }
+      }
+    };
 </script>
+
+<div id="myCommuteModalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.65); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:var(--bg-surface-elevated); width:90%; max-width:550px; border-radius:16px; box-shadow:0 24px 48px rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); overflow:hidden; display:flex; flex-direction:column; max-height:90vh;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:20px 24px; background:linear-gradient(135deg, rgba(37,99,235,0.1), transparent); border-bottom:1px solid var(--border-color);">
+      <h2 style="margin:0; font-size:18px; color:var(--text-primary); font-weight:700; display:flex; align-items:center; gap:8px;">
+        <i class="ph ph-clock" style="color:var(--brand-primary); font-size:22px;"></i>
+        내 출퇴근 등록
+      </h2>
+      <button onclick="window.closeMyCommuteModal()" style="background:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-secondary); font-size:18px; cursor:pointer; width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;">&times;</button>
+    </div>
+    <div style="padding:24px; overflow-y:auto; flex:1;" id="my-commute-modal-body">
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

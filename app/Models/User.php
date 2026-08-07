@@ -8,6 +8,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -82,6 +83,16 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(Employee::class);
     }
 
+    public function communicationRoomMemberships(): HasMany
+    {
+        return $this->hasMany(CommunicationRoomMember::class);
+    }
+
+    public function communicationMessages(): HasMany
+    {
+        return $this->hasMany(CommunicationMessage::class, 'sender_user_id');
+    }
+
     public function allowedCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'allowed_company_id');
@@ -105,6 +116,7 @@ class User extends Authenticatable implements FilamentUser
             'site_manager' => '/admin',
             'safety_manager' => '/admin/member-documents',
             'payroll' => '/admin',
+            'foreman', 'worker' => '/attendance-app',
             default => '/',
         };
     }

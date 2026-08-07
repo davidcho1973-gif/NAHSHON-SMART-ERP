@@ -2,12 +2,16 @@
 
 namespace App\Filament\Resources\Employees;
 
+use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\Employees\Pages\ManageEmployees;
+use App\Filament\Resources\UserAccesses\UserAccessResource;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
+use App\Models\User;
 use App\Services\GeminiBadgeAnalyzer;
+use App\Services\Hr\AccessAccountProvisioner;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -38,6 +42,23 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class EmployeeResource extends Resource
 {
+    use AuthorizesResourceAccess;
+
+    protected static function accessViewRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager', 'site_manager', 'payroll'];
+    }
+
+    protected static function accessManageRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager'];
+    }
+
+    protected static function accessScopeColumns(): array
+    {
+        return ['company' => 'company_id', 'site' => 'site_id', 'team' => 'team_id', 'self' => 'id'];
+    }
+
     protected static ?string $model = Employee::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-identification';
@@ -63,7 +84,8 @@ class EmployeeResource extends Resource
                 ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
             TextInput::make('badge_number')
-                ->label('Badge / NFC ID')
+                ->label('NFC ID')
+                ->helperText('Use the ERP NFC ID format, such as N-842853E04. AI OCR does not fill this field.')
                 ->unique(ignoreRecord: true)
                 ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
                 ->maxLength(80),
@@ -94,6 +116,11 @@ class EmployeeResource extends Resource
                     ->color('info')
                     ->action(fn (Set $set, Get $get): null => self::analyzeBadgePhoto($get('badge_photo_path'), $set, $get)),
             ])->columnSpanFull(),
+            TextInput::make('badge_printed_number')
+                ->label('Badge printed number')
+                ->helperText('OCR reference only. This is not used as the NFC ID.')
+                ->dehydrateStateUsing(fn (mixed $state): ?string => self::nullableText($state))
+                ->maxLength(120),
             TextInput::make('first_name')
                 ->label('First name')
                 ->maxLength(120)
@@ -154,6 +181,26 @@ class EmployeeResource extends Resource
                 ])
                 ->default('active')
                 ->required(),
+            Select::make('attendance_app_role')
+                ->label('QR attendance role')
+                ->options([
+                    'worker' => 'Worker - self attendance only',
+                    'foreman' => 'Foreman / Team lead',
+                    'safety_manager' => 'Safety manager',
+                    'attendance_admin' => 'Attendance admin',
+                ])
+                ->default('worker')
+                ->required(),
+            Select::make('attendance_app_scope')
+                ->label('QR attendance scope')
+                ->options([
+                    'self' => 'Self only',
+                    'team' => 'Assigned team',
+                    'site' => 'Assigned site',
+                    'all_sites' => 'All sites',
+                ])
+                ->default('self')
+                ->required(),
             DatePicker::make('visa_expires_on')
                 ->label('Visa expires'),
             DatePicker::make('safety_training_expires_on')
@@ -196,9 +243,20 @@ class EmployeeResource extends Resource
                 TextColumn::make('site.code')->label('Site')->badge()->sortable(),
                 TextColumn::make('team.name')->label('Team')->searchable()->toggleable(),
                 TextColumn::make('role')->label('Role')->searchable()->toggleable(),
+                TextColumn::make('attendance_app_role')->label('QR role')->badge()->sortable()->toggleable(),
                 TextColumn::make('start_date')->label('Hire date')->date()->sortable()->toggleable(),
                 TextColumn::make('employment_status')->label('Status')->badge()->sortable(),
-                TextColumn::make('badge_number')->label('Badge')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('user.access_role')
+                    ->label('로그인 권한')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state ? (User::ROLE_OPTIONS[$state] ?? $state) : '계정 없음')
+                    ->color(fn (?string $state): string => $state === null
+                        ? 'gray'
+                        : (in_array($state, User::ADMIN_PANEL_ROLES, true) ? 'success' : 'info'))
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('badge_number')->label('NFC ID')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('badge_printed_number')->label('Badge printed')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_company_name')->label('Badge company')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('badge_issued_on')->label('Badge issued')->date()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('visa_expires_on')->date()->sortable()->toggleable(isToggledHiddenByDefault: true),
@@ -222,6 +280,72 @@ class EmployeeResource extends Resource
                     ->options(fn (): array => Site::query()->orderBy('code')->pluck('code', 'id')->all()),
             ])
             ->recordActions([
+                Action::make('grantAccount')
+                    ->label('로그인 계정')
+                    ->icon('heroicon-o-key')
+                    ->color('warning')
+                    ->modalHeading('로그인 계정 부여 / 권한 설정')
+                    ->modalDescription(fn (Employee $record): string => $record->email
+                        ? '로그인 이메일: ' . $record->email . ' — 이 구글 계정으로 로그인합니다. (틀리면 먼저 [수정]에서 이메일을 고치세요)'
+                        : '⚠ 이 직원은 이메일이 없습니다. 먼저 [수정]에서 구글 이메일을 입력하세요.')
+                    ->modalSubmitActionLabel('계정 부여')
+                    ->visible(fn (): bool => in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager'], true))
+                    ->fillForm(fn (Employee $record): array => [
+                        'account_type' => ($record->user && ! in_array($record->user->access_role, ['worker', null], true)) ? 'admin' : 'worker',
+                        'admin_role' => ($record->user && $record->user->access_role !== 'worker') ? $record->user->access_role : null,
+                        'access_scope' => $record->user?->access_scope ?? 'self',
+                    ])
+                    ->form([
+                        Select::make('account_type')
+                            ->label('계정 유형')
+                            ->options([
+                                'worker' => '작업자 — 현장 출퇴근 앱 (/attendance-app)',
+                                'admin' => '관리자 — 관리 패널 (/admin)',
+                            ])
+                            ->default('worker')
+                            ->required()
+                            ->live(),
+                        Select::make('admin_role')
+                            ->label('관리자 역할')
+                            ->options(fn (): array => array_diff_key(UserAccessResource::assignableRoles(), ['worker' => '']))
+                            ->visible(fn (Get $get): bool => $get('account_type') === 'admin')
+                            ->required(fn (Get $get): bool => $get('account_type') === 'admin')
+                            ->helperText('관리자(admin) 이상 권한은 슈퍼관리자만 부여할 수 있습니다.'),
+                        Select::make('access_scope')
+                            ->label('데이터 범위 (Scope)')
+                            ->options(User::SCOPE_OPTIONS)
+                            ->default('self')
+                            ->required()
+                            ->helperText('작업자는 보통 Self, 관리자는 담당 현장/회사/전체 범위를 선택하세요.'),
+                    ])
+                    ->action(function (Employee $record, array $data): void {
+                        $role = $data['account_type'] === 'admin' ? ($data['admin_role'] ?? null) : 'worker';
+
+                        if (! $role || ! array_key_exists($role, UserAccessResource::assignableRoles())) {
+                            Notification::make()->danger()->title('권한 부족')
+                                ->body('해당 역할을 부여할 권한이 없습니다.')->send();
+
+                            return;
+                        }
+
+                        try {
+                            app(AccessAccountProvisioner::class)->grant($record, $role, $data['access_scope'] ?? 'self');
+                        } catch (\Throwable $e) {
+                            Notification::make()->danger()->title('계정 생성 실패')->body($e->getMessage())->send();
+
+                            return;
+                        }
+
+                        Notification::make()->success()->persistent()->title('로그인 계정 부여 완료')
+                            ->body('안내: ' . $record->email . ' 구글 계정으로 ' . route('login')
+                                . ' 에서 로그인하면 됩니다. (권한: ' . (User::ROLE_OPTIONS[$role] ?? $role) . ')')
+                            ->send();
+                    }),
+                Action::make('badgeQr')
+                    ->label('Badge QR')
+                    ->icon('heroicon-o-qr-code')
+                    ->url(fn (Employee $record): string => route('attendance-app.employee.badge-qr', ['employee' => $record]))
+                    ->openUrlInNewTab(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -312,10 +436,7 @@ class EmployeeResource extends Resource
         self::setIfFilled($set, 'role', $analysis['role'] ?? null);
         self::setIfFilled($set, 'badge_company_name', $analysis['company_name'] ?? null);
         self::setIfFilled($set, 'badge_issued_on', $analysis['issued_on'] ?? null);
-
-        if (blank($get('badge_number'))) {
-            self::setIfFilled($set, 'badge_number', $analysis['badge_number'] ?? null);
-        }
+        self::setIfFilled($set, 'badge_printed_number', $analysis['printed_badge_number'] ?? null);
 
         if ($companyId = self::findCompanyId($analysis['company_name'] ?? null)) {
             $set('company_id', $companyId);

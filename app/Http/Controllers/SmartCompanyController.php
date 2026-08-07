@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Models\AttendanceQrCode;
+use App\Models\Team;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -13,16 +16,25 @@ class SmartCompanyController extends Controller
     public function index(): View
     {
         $siteOptions = [];
+        $user = auth()->user();
 
         try {
             if (Schema::hasTable('sites')) {
-                $siteOptions = Site::query()
-                    ->whereHas('employees', fn ($query) => $query->where('employment_status', 'active'))
-                    ->orderBy('code')
+                $query = Site::query()->where('status', 'active');
+
+                // Role-based filtering for site visibility
+                if ($user && ! in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
+                    if ($user->allowed_site_id) {
+                        $query->where('id', $user->allowed_site_id);
+                    }
+                }
+
+                $siteOptions = $query->orderBy('code')
                     ->get()
                     ->map(fn (Site $site): array => [
                         'code' => $site->code,
                         'label' => trim($site->code . ' - ' . $site->name),
+                        'setup_pending' => is_null($site->setup_completed_at),
                     ])
                     ->values()
                     ->all();
@@ -36,8 +48,6 @@ class SmartCompanyController extends Controller
             $siteNames[$site['code']] = $site['label'];
         }
 
-        $user = auth()->user();
-
         return view('smart-company.index', [
             'siteOptions' => $siteOptions,
             'siteNames' => $siteNames,
@@ -46,7 +56,7 @@ class SmartCompanyController extends Controller
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, bool|int|string|null>
      */
     private function authUserViewData(User $user): array
     {
@@ -54,11 +64,16 @@ class SmartCompanyController extends Controller
 
         return [
             'name' => $name,
+            // 등록(직원) 이름 — 출퇴근 등 본인 확인 화면에서 계정명 대신 실제 등록명을 표시.
+            'employee_name' => $user->employee?->name ?: $name,
             'email' => $user->email,
             'role' => User::ROLE_OPTIONS[$user->access_role] ?? Str::headline($user->access_role ?: 'user'),
             'initials' => $this->initials($name),
             'employee_id' => $user->employee_id,
             'raw_role' => $user->access_role,
+            'site_code' => $user->employee?->site?->code,
+            'can_access_admin' => $user->account_status === 'active'
+                && in_array($user->access_role, User::ADMIN_PANEL_ROLES, true),
         ];
     }
 
@@ -71,5 +86,18 @@ class SmartCompanyController extends Controller
             ->implode('');
 
         return $parts !== '' ? $parts : 'ER';
+    }
+
+    public function teamQr(Request $request, Team $team): View
+    {
+        $team->loadMissing(['site', 'company']);
+        $qrCode = AttendanceQrCode::forTeam($team, $request->user()?->id);
+        $intakeUrl = route('attendance-app.team', ['token' => $qrCode->token]);
+
+        return view('smart-company.team-qr', [
+            'team' => $team,
+            'qrCode' => $qrCode,
+            'intakeUrl' => $intakeUrl,
+        ]);
     }
 }

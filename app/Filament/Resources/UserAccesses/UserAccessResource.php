@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\UserAccesses;
 
+use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\UserAccesses\Pages\ManageUserAccesses;
 use App\Models\Company;
 use App\Models\Employee;
@@ -24,7 +25,47 @@ use Filament\Tables\Table;
 
 class UserAccessResource extends Resource
 {
+    use AuthorizesResourceAccess;
+
+    // Login accounts are managed by admins and HR; only admins delete.
+    protected static function accessViewRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager'];
+    }
+
+    protected static function accessManageRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager'];
+    }
+
+    protected static function accessRowScoped(): bool
+    {
+        return false;
+    }
+
     protected static ?string $model = User::class;
+
+    /**
+     * Roles the current user is allowed to grant — prevents privilege escalation
+     * (e.g. an HR manager making someone a super_admin).
+     *
+     * @return array<string, string>
+     */
+    public static function assignableRoles(): array
+    {
+        $role = auth()->user()?->access_role;
+
+        if ($role === 'super_admin') {
+            return User::ROLE_OPTIONS;
+        }
+
+        if ($role === 'admin') {
+            return array_diff_key(User::ROLE_OPTIONS, ['super_admin' => '']);
+        }
+
+        // hr_manager and everyone else cannot grant admin-level roles.
+        return array_diff_key(User::ROLE_OPTIONS, ['super_admin' => '', 'admin' => '']);
+    }
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shield-check';
 
@@ -63,9 +104,10 @@ class UserAccessResource extends Resource
                 ->maxLength(255),
             Select::make('access_role')
                 ->label('Role')
-                ->options(User::ROLE_OPTIONS)
+                ->options(fn (): array => self::assignableRoles())
                 ->default('worker')
-                ->required(),
+                ->required()
+                ->helperText('관리자(admin) 이상 권한은 슈퍼관리자만 부여할 수 있습니다.'),
             Select::make('access_scope')
                 ->label('Scope')
                 ->options(User::SCOPE_OPTIONS)

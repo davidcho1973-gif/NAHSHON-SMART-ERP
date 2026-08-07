@@ -35,4 +35,44 @@ class Company extends Model
     {
         return $this->hasMany(Employee::class);
     }
+
+    public function siteContractors(): HasMany
+    {
+        return $this->hasMany(SiteContractor::class);
+    }
+
+    public function dailyCrewReports(): HasMany
+    {
+        return $this->hasMany(DailyCrewReport::class);
+    }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    public function endClientProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'end_client_company_id');
+    }
+
+    public function upperContractorProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'upper_contractor_company_id');
+    }
+
+    public function epcProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'epc_company_id');
+    }
+
+    public function projectContracts(): HasMany
+    {
+        return $this->hasMany(ProjectContract::class);
+    }
+
+    public function counterpartyProjectContracts(): HasMany
+    {
+        return $this->hasMany(ProjectContract::class, 'counterparty_company_id');
+    }
 }

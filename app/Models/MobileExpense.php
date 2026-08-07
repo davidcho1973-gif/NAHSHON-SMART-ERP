@@ -34,6 +34,7 @@ class MobileExpense extends Model
         'paid_at',
         'paid_by_user_id',
         'payment_reference',
+        'payroll_run_id',
     ];
 
     protected $hidden = [

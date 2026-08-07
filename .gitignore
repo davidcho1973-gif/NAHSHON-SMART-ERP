@@ -32,3 +32,5 @@ Thumbs.db
 /tools
 /database/database.sqlite
 /database/*.sqlite
+# Agent scratch worktrees (local copies, never part of the repo)
+/.claude/worktrees

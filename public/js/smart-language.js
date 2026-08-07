@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   'use strict';
 
   const STORAGE_KEY = 'smartCompanyLanguage';
@@ -60,7 +60,9 @@
     'ë‹«ê¸°': 'Close',
     'ì €ìž¥ì¤‘...': 'Saving...',
     'ë¡œë”©ì¤‘...': 'Loading...',
-    'ìƒˆë¡œê³ ì¹¨': 'Refresh'
+    'ìƒˆë¡œê³ ì¹¨': 'Refresh',
+    '엑셀 다운로드': 'Excel Download',
+    'AI 사진 등록': 'AI Photo Registration'
   }));
 
   const replacementsEn = [
@@ -272,6 +274,8 @@
     'Saving...': 'Guardando...',
     'Loading...': 'Cargando...',
     'Refresh': 'Actualizar',
+    'Excel Download': 'Descargar Excel',
+    'AI Photo Registration': 'Registro de fotos IA',
     'Language': 'Idioma',
     'Search...': 'Buscar...',
     'Search people, equipment, transaction ID...': 'Buscar personal, equipo, ID de transacción...',
@@ -582,7 +586,10 @@
   }
 
     window.smartCompanySetLanguage = function (lang) {
-    localStorage.setItem(STORAGE_KEY, ['ko', 'en', 'es'].includes(lang) ? lang : 'ko');
+    var safe = ['ko', 'en', 'es'].includes(lang) ? lang : 'ko';
+    localStorage.setItem(STORAGE_KEY, safe);
+    // 서버 로케일(관리자/Filament)도 같이 따라오도록 평문 쿠키로 공유.
+    document.cookie = 'app_locale=' + safe + ';path=/;max-age=31536000;samesite=lax';
     window.location.reload();
   };
 

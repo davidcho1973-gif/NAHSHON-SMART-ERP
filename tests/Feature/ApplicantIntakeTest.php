@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
+use App\Models\Site;
 use App\Services\ApplicantInvitationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -74,6 +76,69 @@ class ApplicantIntakeTest extends TestCase
         $this->assertNull($registration->employee_id);
         $this->assertSame('admin-link', data_get($registration->payload, 'invite.source'));
         $this->assertSame(0, Employee::query()->count());
+    }
+
+    public function test_site_qr_allows_walk_in_applicant_to_submit_without_precreated_invitation(): void
+    {
+        Storage::fake('public');
+
+        $company = Company::query()->create([
+            'code' => 'NAHSHON',
+            'name' => 'NAHSHON MEP',
+            'status' => 'active',
+        ]);
+        $site = Site::query()->create([
+            'company_id' => $company->id,
+            'code' => 'LGES-AZ',
+            'name' => 'LGES Arizona Plant',
+            'address' => 'Queen Creek, AZ',
+            'timezone' => 'America/Phoenix',
+            'status' => 'active',
+        ]);
+
+        $this->get(route('member-registration.site.qr', ['site' => $site, 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee('현장 공용 입사지원 QR')
+            ->assertSee('Queen Creek, AZ')
+            ->assertSee('사용 방법')
+            ->assertSee('개인정보 수집 안내')
+            ->assertSee('휴대폰 카메라로 QR 코드를 스캔합니다.')
+            ->assertSee('채용 검토, 현장 출입, 인사 등록 목적에만 사용됩니다.')
+            ->assertSee(route('member-registration.site.show', ['site' => $site, 'lang' => 'en']));
+
+        $this->assertSame(0, MemberRegistration::query()->count());
+
+        $response = $this->post(route('member-registration.site.store', $site), [
+            'preferred_language' => 'en',
+            'first_name' => 'Walk',
+            'last_name' => 'Applicant',
+            'nationality' => 'Korea',
+            'phone' => '555-9191',
+            'email' => 'walkin@example.com',
+            'emergency_contact_name' => 'Office Contact',
+            'emergency_contact_phone' => '555-9292',
+            'available_languages' => ['English'],
+            'role' => 'General Labor',
+            'hoffman_experience' => 'no',
+            'identity_document_type' => 'driver_license',
+            'identity_front' => UploadedFile::fake()->create('walkin-license.jpg', 64, 'image/jpeg'),
+            'privacy_consent' => '1',
+            'applicant_signature' => 'Walk Applicant',
+            'signed_on' => '2026-06-24',
+        ]);
+
+        $response->assertOk();
+
+        $registration = MemberRegistration::query()->firstOrFail();
+
+        $this->assertSame('submitted', $registration->onboarding_status);
+        $this->assertSame($company->id, $registration->company_id);
+        $this->assertSame($site->id, $registration->site_id);
+        $this->assertSame('site-qr', data_get($registration->payload, 'invite.source'));
+        $this->assertSame('LGES-AZ', data_get($registration->payload, 'invite.site_code'));
+        $this->assertStringContainsString('LGES-AZ', data_get($registration->payload, 'application.desired_site'));
+        $this->assertNotNull($registration->applicant_code);
+        $this->assertSame(1, $registration->documents()->where('document_type', 'id')->count());
     }
 
     public function test_applicant_can_submit_multilingual_intake_with_id_and_certifications(): void
