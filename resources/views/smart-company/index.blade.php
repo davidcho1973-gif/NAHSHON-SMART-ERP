@@ -1187,7 +1187,15 @@
       getAssignableEmployees: (date) => gsRun('api_getAssignableEmployees', [date || null], []),
       getToolTransactions: () => gsRun('api_getToolTransactions', [], []),
       getVendorList:      () => gsRun('api_getVendorList',     [], []),
-      createVendor:       (data) => gsRun('api_createVendor',  [data], {success:false}),
+      createVendor:       (data) => gsRun('api_createVendor',  [data], {success:false}).then(function(res) {
+        if (res && res.success) {
+          // Invalidate stale caches so the new vendor appears immediately and an
+          // identical re-registration is not skipped by the 60s response cache.
+          delete window.apiCache['api_createVendor' + JSON.stringify([data])];
+          delete window.apiCache['api_getVendorList[]'];
+        }
+        return res;
+      }),
       generateVendorEmailPrompt: (prompt, email, name) => gsRun('api_generateVendorEmailPrompt', [prompt, email, name], {success:false}),
       translateToEnglish: (draft) => gsRun('api_translateToEnglish', [draft], {success:false}),
       sendVendorEmail:    (email, subject, body, name) => gsRun('api_sendVendorEmail', [email, subject, body, name], {success:false}),
@@ -1753,7 +1761,7 @@
         return '<span class="command-chip ' + levelClass(level) + '">' + safeHtml(label) + '</span>';
       }
 
-      async function buildCommandCenterSnapshot() {
+      async function buildCommandCenterSnapshotLegacy() {
         var results = await Promise.allSettled([
           window.API.getPersonnelStats(),
           window.API.getAttendanceLive(),
@@ -1875,12 +1883,12 @@
           '</tr>';
       }
 
-      async function renderCommandCenter() {
+      async function renderCommandCenterLegacy() {
         pageContainer.innerHTML = skeleton();
         try {
           var snapshot = null;
           if (window.API.getCommandCenter) snapshot = await window.API.getCommandCenter(window.currentSiteId || 'ALL');
-          if (!snapshot || !snapshot.success) snapshot = await buildCommandCenterSnapshot();
+          if (!snapshot || !snapshot.success) snapshot = await buildCommandCenterSnapshotLegacy();
 
           var health = snapshot.health || {};
           var decisions = snapshot.decisions || [];
@@ -1888,18 +1896,12 @@
           var billing = snapshot.billing || [];
           var brief = snapshot.brief || [];
 
-          var projectOptions = projects.map(function(p) {
-            return '<option value="' + safeHtml(p.code || p.name) + '">' + safeHtml((p.code || '-') + ' - ' + (p.name || 'Project')) + '</option>';
-          }).join('');
-          if (!projectOptions) projectOptions = '<option value="' + safeHtml(window.currentSiteId || 'ALL') + '">' + safeHtml(currentSiteLabel()) + '</option>';
-
           pageContainer.innerHTML =
             '<div class="header-section"><div>' +
             '<h1 class="page-title">AI í˜„ìž¥ ì§€íœ˜ì‹¤</h1>' +
             '<p class="page-subtitle">' + safeHtml(currentSiteLabel()) + ' Â· ì˜¤ëŠ˜ ê²°ì •í•  ì¼, ê³µì§œ ìž‘ì—… ë°©ì§€, í˜„ìž¥ ë©”ëª¨ ì´ˆì•ˆí™” Â· ' + safeHtml(snapshot.generatedAt || '') + '</p>' +
             '</div><div class="action-row">' +
             '<button class="btn-secondary" onclick="openUniversalScanner()"><i class="ph ph-scan"></i> ë¬¸ì„œ ìŠ¤ìº”</button>' +
-            '<button class="btn-primary" onclick="var el=document.getElementById(\'command-capture-text\');if(el)el.focus()"><i class="ph ph-magic-wand"></i> 1ë¶„ í˜„ìž¥ ìž…ë ¥</button>' +
             '</div></div>' +
             '<div class="command-radar">' +
             metricCard('ê²°ì • ëŒ€ê¸°', String(health.decisionQueue || decisions.length || 0), 'ì˜¤ëŠ˜ PM/Ownerê°€ í™•ì¸í•  í•­ëª©', 'ph-list-checks', health.decisionQueue > 3 ? 'warning' : '') +
@@ -1917,14 +1919,6 @@
             '</tbody></table></div></div>' +
             '</div>' +
             '<div class="command-stack">' +
-            '<div class="panel quick-capture"><div class="panel-header"><div class="panel-title"><i class="ph ph-note-pencil"></i> 1ë¶„ í˜„ìž¥ ìž…ë ¥</div></div>' +
-            '<div class="panel-body padded">' +
-            '<select id="command-capture-project" class="context-switcher" style="width:100%;margin-bottom:10px">' + projectOptions + '</select>' +
-            '<textarea id="command-capture-text" placeholder="ì˜ˆ: Owner asked to add 12 recessed lights in living room. Material needed by Friday. Photos attached."></textarea>' +
-            '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">' +
-            '<button class="btn-secondary" onclick="document.getElementById(\'command-capture-text\').value=\'\'"><i class="ph ph-eraser"></i> ì§€ìš°ê¸°</button>' +
-            '<button class="btn-primary" onclick="window.generateCommandDraft()"><i class="ph ph-sparkle"></i> ì´ˆì•ˆ ë§Œë“¤ê¸°</button>' +
-            '</div><div id="command-draft-output"></div></div></div>' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-invoice"></i> ë¯¸ì²­êµ¬ ë°©ì§€ ì²´í¬</div></div>' +
             '<div class="panel-body"><table class="data-table"><tbody>' + billing.map(function(b) {
               return '<tr><td class="cell-primary">' + safeHtml(b.label) + '</td><td class="cell-mono" style="text-align:right">' + fmtUSD(b.amount || 0) + '</td><td>' + statusPill(b.status || 'ì •ìƒ') + '</td><td>' + safeHtml(b.action || '-') + '</td></tr>';
@@ -1937,42 +1931,278 @@
         } catch (err) { renderError('AI í˜„ìž¥ ì§€íœ˜ì‹¤ ë¡œë”© ì‹¤íŒ¨: ' + err.message); console.error(err); }
       }
 
-      window.generateCommandDraft = function() {
-        var input = document.getElementById('command-capture-text');
-        var out = document.getElementById('command-draft-output');
-        var project = document.getElementById('command-capture-project');
-        if (!input || !out) return;
-        var text = input.value.trim();
-        if (!text) {
-          out.innerHTML = '<div class="ai-draft-list"><div class="ai-draft-item"><strong>ìž…ë ¥ì´ í•„ìš”í•©ë‹ˆë‹¤</strong><span>í˜„ìž¥ ë©”ëª¨, ê³ ê° ìš”ì²­, ì§€ì—° ì‚¬ìœ , ì‚¬ì§„ ì„¤ëª… ì¤‘ í•˜ë‚˜ë§Œ ì ì–´ë„ ì´ˆì•ˆì„ ë§Œë“¤ ìˆ˜ ìžˆìŠµë‹ˆë‹¤.</span></div></div>';
+      // ── AI 현장 지휘실 v2: access-scoped live ERP snapshot + three UI modes ──
+      window._commandCenterMode = window._commandCenterMode || localStorage.getItem('smartCommandCenterMode') || 'pulse';
+      window._commandCenterSnapshot = window._commandCenterSnapshot || null;
+
+      function commandDateTime(value) {
+        if (!value) return '기록 없음';
+        var date = new Date(value);
+        if (isNaN(date.getTime())) return safeHtml(value);
+        return date.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      }
+
+      function commandEmpty(icon, title, detail) {
+        return '<div class="command-empty"><div><i class="ph ' + icon + '"></i><strong style="display:block;color:var(--text-primary);margin-bottom:5px">' +
+          safeHtml(title) + '</strong><span>' + safeHtml(detail) + '</span></div></div>';
+      }
+
+      function commandModeButton(mode, icon, title, detail) {
+        var active = window._commandCenterMode === mode ? ' active' : '';
+        return '<button type="button" class="command-view-button' + active + '" onclick="window.switchCommandCenterMode(\'' + mode + '\')">' +
+          '<i class="ph ' + icon + '"></i><span><strong>' + safeHtml(title) + '</strong><span>' + safeHtml(detail) + '</span></span></button>';
+      }
+
+      function commandDecisionCard(decision) {
+        var priority = levelClass(decision.priority);
+        var url = decision.url || '';
+        return '<div class="decision-card">' +
+          '<div class="decision-icon"><i class="ph ' + (priority === 'critical' ? 'ph-warning-octagon' : priority === 'warning' ? 'ph-warning-circle' : 'ph-check-circle') + '"></i></div>' +
+          '<div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">' +
+          commandChip(decision.type || '결정', priority) +
+          '<div class="decision-title">' + safeHtml(decision.title || '-') + '</div></div>' +
+          '<div class="decision-detail">' + safeHtml(decision.detail || '') + '</div>' +
+          '<div class="decision-why">' + safeHtml(decision.why || '') + '</div>' +
+          '<span class="command-owner"><i class="ph ph-user-circle" style="margin-right:4px"></i>' + safeHtml(decision.owner || '담당자 미지정') +
+          ' · ' + safeHtml(decision.source || '') + '</span></div>' +
+          '<button type="button" class="btn-secondary" data-view="' + safeHtml(decision.view || 'alerts') + '" data-url="' + safeHtml(url) +
+          '" onclick="window.openCommandAction(this.dataset.view,this.dataset.url)"><i class="ph ph-arrow-right"></i>' +
+          safeHtml(decision.nextAction || '열기') + '</button></div>';
+      }
+
+      function commandProjectRow(project) {
+        var endMeta = project.endDate ? project.endDate + (project.daysLeft == null ? '' : ' · D' + (project.daysLeft >= 0 ? '-' : '+') + Math.abs(project.daysLeft)) : '종료일 미등록';
+        return '<tr><td><span class="cell-mono">' + safeHtml(project.code || '-') + '</span><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">' +
+          safeHtml(project.site || '-') + '</div></td>' +
+          '<td class="cell-primary">' + safeHtml(project.name || '-') + '<div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">PM ' +
+          safeHtml(project.manager || '미지정') + ' · WBS ' + toNumber(project.wbsCount) + '개</div></td>' +
+          '<td>' + commandChip(project.signal || '정상', project.risk) + '<div style="font-size:10px;color:var(--text-tertiary);margin-top:4px">' + safeHtml(endMeta) + '</div></td>' +
+          '<td><div class="progress-wrapper"><div class="progress-bar"><div class="progress-fill" style="width:' + Math.min(100, toNumber(project.progress)) +
+          '%;background:' + safeHtml(project.color || '#2563eb') + '"></div></div><div class="progress-text">' + toNumber(project.progress) + '%</div></div></td>' +
+          '<td>' + safeHtml(project.nextAction || '-') + '</td></tr>';
+      }
+
+      function commandBriefPanel(snapshot) {
+        var brief = snapshot.brief || [];
+        return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-brain"></i> 실데이터 운영 브리핑</div>' +
+          '<span class="command-chip ok">DB LIVE</span></div><div class="panel-body padded"><div class="brief-list">' +
+          brief.map(function(line) {
+            return '<div class="brief-row"><i class="ph ph-check-circle"></i><div>' + safeHtml(line) + '</div></div>';
+          }).join('') + '</div></div></div>';
+      }
+
+      function renderCommandPulse(snapshot) {
+        var decisions = snapshot.decisions || [];
+        var projects = snapshot.projects || [];
+        var workforce = snapshot.workforce || {};
+        var billing = snapshot.billing || [];
+
+        return '<div class="command-grid"><div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-lightning"></i> 오늘의 의사결정 큐</div>' +
+          '<span class="command-chip ' + (decisions.length ? 'warning' : 'ok') + '">' + decisions.length + '건 · 실제 상태</span></div>' +
+          '<div class="panel-body">' + (decisions.length ? decisions.map(commandDecisionCard).join('') :
+            commandEmpty('ph-check-circle', '즉시 결정할 운영 항목이 없습니다.', '현재 접근 범위의 미해결 알림·안전·비용·장비·일정 데이터를 확인했습니다.')) +
+          '</div></div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-radar"></i> PROJECT Risk Radar</div>' +
+          '<button class="btn-secondary" onclick="window.goToView(\'wbs\')"><i class="ph ph-tree-structure"></i> WBS 열기</button></div>' +
+          '<div class="panel-body">' + (projects.length ?
+            '<table class="data-table"><thead><tr><th>PROJECT</th><th>현장 / 담당</th><th>실제 신호</th><th>진척</th><th>다음 조치</th></tr></thead><tbody>' +
+            projects.map(commandProjectRow).join('') + '</tbody></table>' :
+            commandEmpty('ph-kanban', '진행 중인 PROJECT가 없습니다.', '현장 / PROJECT 관리에서 수주·착공·진행 프로젝트를 등록하세요.')) +
+          '</div></div></div>' +
+          '<div class="command-stack">' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-users-three"></i> 오늘 인원</div><span class="command-chip ok">attendance + close</span></div>' +
+          '<div class="panel-body padded"><div class="command-risk-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:0">' +
+          '<div class="command-risk-card"><div class="risk-label">등록 출근<i class="ph ph-identification-card"></i></div><div class="risk-value">' + toNumber(workforce.checkedIn) +
+          '명</div><div class="risk-detail">활성 직원 ' + toNumber(workforce.activeEmployees) + '명 · 출근율 ' + toNumber(workforce.attendanceRate) + '%</div></div>' +
+          '<div class="command-risk-card ' + (toNumber(workforce.teamsOpen) ? 'warning' : '') + '"><div class="risk-label">최종 현장 인원<i class="ph ph-hard-hat"></i></div><div class="risk-value">' +
+          toNumber(workforce.finalHeadcount) + '명</div><div class="risk-detail">외부 ' + toNumber(workforce.externalHeadcount) + '명 · 미마감 팀 ' + toNumber(workforce.teamsOpen) + '개</div></div>' +
+          '</div></div></div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-receipt"></i> 비용 승인·정산</div><button class="btn-secondary" onclick="window.goToView(\'finance\')">재무</button></div>' +
+          '<div class="panel-body">' + (billing.length ? '<table class="data-table"><tbody>' + billing.map(function(row) {
+            return '<tr><td class="cell-primary">' + safeHtml(row.label) + '<div style="font-size:9px;color:var(--text-tertiary)">' + safeHtml(row.source) + '</div></td>' +
+              '<td class="cell-mono" style="text-align:right">' + fmtUSD(row.amount || 0) + '</td><td>' + commandChip(row.status, row.count > 0 ? 'warning' : 'ok') + '</td></tr>';
+          }).join('') + '</tbody></table>' : commandEmpty('ph-receipt', '비용 데이터가 없습니다.', '영수증 또는 사전승인을 등록하면 이곳에 집계됩니다.')) + '</div></div>' +
+          commandBriefPanel(snapshot) + '</div></div>';
+      }
+
+      function renderCommandField(snapshot) {
+        var workforce = snapshot.workforce || {};
+        var teams = workforce.teams || [];
+        var work = snapshot.todayWork || [];
+        var equipment = snapshot.equipment || {};
+        var assetRisks = equipment.riskItems || [];
+        var closeRate = teams.length ? Math.round(toNumber(workforce.teamsClosed) / teams.length * 100) : 0;
+
+        var hero = '<div class="field-command-hero"><div class="field-hero-lead"><div class="eyebrow">TODAY · FIELD HEADCOUNT</div>' +
+          '<div><div class="field-hero-value">' + toNumber(workforce.finalHeadcount) + '<span style="font-size:15px;margin-left:4px">명</span></div>' +
+          '<p>등록 출근 + 팀장이 마감한 외부 인원 기준</p></div></div>' +
+          '<div class="field-hero-stat"><div class="eyebrow">등록 출근</div><strong>' + toNumber(workforce.checkedIn) + '명</strong><span>활성 직원 ' +
+          toNumber(workforce.activeEmployees) + '명 중 ' + toNumber(workforce.attendanceRate) + '%</span></div>' +
+          '<div class="field-hero-stat"><div class="eyebrow">외부 인원</div><strong>' + toNumber(workforce.externalHeadcount) + '명</strong><span>급여 직원과 분리된 일일 마감 인원</span></div>' +
+          '<div class="field-hero-stat"><div class="eyebrow">팀 마감률</div><strong>' + closeRate + '%</strong><span>마감 ' + toNumber(workforce.teamsClosed) +
+          ' · 미마감 ' + toNumber(workforce.teamsOpen) + '</span></div></div>';
+
+        var teamPanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-hard-hat"></i> 팀별 오늘 운영판</div>' +
+          '<span class="command-chip ' + (toNumber(workforce.teamsOpen) ? 'warning' : 'ok') + '">미마감 ' + toNumber(workforce.teamsOpen) + '</span></div><div class="panel-body">' +
+          (teams.length ? '<table class="data-table"><thead><tr><th>팀 / 회사</th><th>공종 / 반장</th><th>계획</th><th>등록</th><th>외부</th><th>최종</th><th>마감</th></tr></thead><tbody>' +
+            teams.map(function(team) {
+              return '<tr><td class="cell-primary">' + safeHtml(team.name || team.code) + '<div style="font-size:10px;color:var(--text-tertiary)">' + safeHtml(team.company) + '</div></td>' +
+                '<td>' + safeHtml(team.trade) + '<div style="font-size:10px;color:var(--text-tertiary)">' + safeHtml(team.foreman) + '</div></td>' +
+                '<td class="cell-mono">' + toNumber(team.planned) + '</td><td class="cell-mono">' + toNumber(team.registeredPresent) + '</td>' +
+                '<td class="cell-mono">' + toNumber(team.external) + '</td><td class="cell-mono cell-primary">' + toNumber(team.actual) + '</td>' +
+                '<td>' + commandChip(team.closed ? '마감' : '미마감', team.closed ? 'ok' : 'warning') + '</td></tr>';
+            }).join('') + '</tbody></table>' :
+            commandEmpty('ph-users-three', '활성 팀이 없습니다.', '현장 관리에서 계약사와 팀 조직을 등록하세요.')) + '</div></div>';
+
+        var workPanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> 오늘 WBS 작업 · TBM Gate</div>' +
+          '<button class="btn-secondary" onclick="window.goToView(\'wbs\')">WBS</button></div><div class="panel-body">' +
+          (work.length ? '<table class="data-table"><thead><tr><th>WBS / 작업</th><th>담당 / 공종</th><th>인원</th><th>진척</th><th>안전 게이트</th></tr></thead><tbody>' +
+            work.map(function(item) {
+              return '<tr><td class="cell-primary">' + safeHtml(item.name) + '<div class="cell-mono" style="font-size:9px!important;color:var(--text-tertiary)">' +
+                safeHtml(item.id) + '</div></td><td>' + safeHtml(item.company) + '<div style="font-size:10px;color:var(--text-tertiary)">' + safeHtml(item.trade) + '</div></td>' +
+                '<td class="cell-mono">' + toNumber(item.actualCrew) + ' / ' + toNumber(item.plannedCrew) + '</td>' +
+                '<td><div class="progress-wrapper"><div class="progress-bar"><div class="progress-fill" style="width:' + Math.min(100, toNumber(item.progress)) +
+                '%;background:' + (item.tbmGated ? '#ef4444' : '#10b981') + '"></div></div><div class="progress-text">' + toNumber(item.progress) + '%</div></div></td>' +
+                '<td>' + commandChip(item.safetyStatus, item.tbmGated ? 'critical' : 'ok') + '</td></tr>';
+            }).join('') + '</tbody></table>' :
+            commandEmpty('ph-calendar-check', '오늘 일정에 걸린 WBS 작업이 없습니다.', '진행중 또는 오늘 계획 구간의 작업만 표시합니다.')) + '</div></div>';
+
+        var assetPanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-forklift"></i> 장비 반납·검사</div>' +
+          '<button class="btn-secondary" onclick="window.goToView(\'inventory\')">장비</button></div><div class="panel-body">' +
+          (assetRisks.length ? '<div class="command-feed-list">' + assetRisks.map(function(asset) {
+            return '<div class="command-feed-row"><span class="command-feed-dot ' + (asset.status === '반납지연' ? 'critical' : 'warning') + '"></span><div><strong>' +
+              safeHtml(asset.name) + '</strong><span>' + safeHtml(asset.id) + ' · ' + safeHtml(asset.site || 'Global') + '</span></div>' +
+              commandChip(asset.status + ' ' + (asset.dueDate || ''), asset.status === '반납지연' ? 'critical' : 'warning') + '</div>';
+          }).join('') + '</div>' :
+            commandEmpty('ph-check-circle', '반납·검사 임박 장비가 없습니다.', '장비의 실제 rent_end와 inspection_due_on을 확인했습니다.')) + '</div></div>';
+
+        return hero + '<div class="command-two-column"><div>' + teamPanel + workPanel + '</div><div>' + assetPanel + '</div></div>';
+      }
+
+      function commandRiskCard(label, value, detail, icon, level) {
+        return '<div class="command-risk-card ' + (level || '') + '"><div class="risk-label">' + safeHtml(label) + '<i class="ph ' + icon + '"></i></div>' +
+          '<div class="risk-value">' + value + '</div><div class="risk-detail">' + safeHtml(detail) + '</div></div>';
+      }
+
+      function renderCommandRisk(snapshot) {
+        var health = snapshot.health || {};
+        var finance = snapshot.finance || {};
+        var docs = snapshot.documents || {};
+        var equipment = snapshot.equipment || {};
+        var alerts = (snapshot.alerts || {}).items || [];
+        var actions = docs.actions || [];
+        var sources = snapshot.sources || [];
+        var assetRisk = toNumber(equipment.rentalOverdue) + toNumber(equipment.rentalDueSoon) + toNumber(equipment.inspectionDue);
+
+        var cards = '<div class="command-risk-grid">' +
+          commandRiskCard('안전·TBM 블로커', toNumber(health.safetyBlockers) + '건', '안전 이슈와 오늘 작업 게이트', 'ph-shield-warning', toNumber(health.safetyBlockers) ? 'critical' : '') +
+          commandRiskCard('일정 위험 PROJECT', toNumber(health.scheduleRisk) + '개', 'WBS 지연·Critical Path·마감 임박', 'ph-calendar-warning', toNumber(health.scheduleRisk) ? 'warning' : '') +
+          commandRiskCard('승인 대기 비용', fmtUSD(finance.pendingAmount || 0), toNumber(finance.pendingCount) + '건 · 영수증 + 사전승인', 'ph-currency-dollar', toNumber(finance.pendingCount) ? 'warning' : '') +
+          commandRiskCard('문서 후속조치', toNumber(docs.openActions) + '건', '기한초과 ' + toNumber(docs.overdueActions) + ' · 7일 내 ' + toNumber(docs.dueSoonActions), 'ph-files', toNumber(docs.overdueActions) ? 'critical' : '') +
+          commandRiskCard('장비 반납·검사', assetRisk + '건', '지연 ' + toNumber(equipment.rentalOverdue) + ' · 검사 ' + toNumber(equipment.inspectionDue), 'ph-forklift', assetRisk ? 'warning' : '') +
+          commandRiskCard('통합 미해결 알림', toNumber((snapshot.alerts || {}).open) + '건', 'Critical ' + toNumber((snapshot.alerts || {}).critical) + '건', 'ph-bell-ringing', toNumber((snapshot.alerts || {}).critical) ? 'critical' : '') +
+          '</div>';
+
+        var documentPanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> 문서 기한·후속조치</div>' +
+          '<button class="btn-secondary" onclick="window.goToView(\'document-hub\')">AI 문서함</button></div><div class="panel-body">' +
+          (actions.length ? '<table class="data-table"><thead><tr><th>조치</th><th>모듈</th><th>기한</th><th>우선순위</th></tr></thead><tbody>' +
+            actions.map(function(action) {
+              return '<tr><td class="cell-primary">' + safeHtml(action.title) + '<div style="font-size:10px;color:var(--text-tertiary)">' +
+                safeHtml(action.recommendedAction || '후속조치 미등록') + '</div></td><td>' + safeHtml(action.module || '-') + '</td>' +
+                '<td class="cell-mono">' + safeHtml(action.dueAt ? commandDateTime(action.dueAt) : '기한 없음') + '</td><td>' +
+                commandChip(action.severity, action.severity) + '</td></tr>';
+            }).join('') + '</tbody></table>' :
+            commandEmpty('ph-file-check', '미완료 문서 액션이 없습니다.', 'AI 통합 문서함의 실제 후속조치 상태를 확인했습니다.')) + '</div></div>';
+
+        var alertPanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-bell-ringing"></i> 통합 알림 피드</div>' +
+          '<button class="btn-secondary" onclick="window.goToView(\'alerts\')">전체 알림</button></div><div class="panel-body">' +
+          (alerts.length ? '<div class="command-feed-list">' + alerts.map(function(alert) {
+            return '<div class="command-feed-row"><span class="command-feed-dot ' + levelClass(alert.severity) + '"></span><div><strong>' +
+              safeHtml(alert.title) + '</strong><span>' + safeHtml(alert.module || '-') + ' · ' + commandDateTime(alert.occurredAt) + '</span></div>' +
+              commandChip(alert.severity, alert.severity) + '</div>';
+          }).join('') + '</div>' :
+            commandEmpty('ph-bell-slash', '미해결 통합 알림이 없습니다.', '현재 사용자와 현장 범위의 unified_alerts를 확인했습니다.')) + '</div></div>';
+
+        var sourcePanel = '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-database"></i> 데이터 출처·최신성</div>' +
+          '<span class="command-chip ok">샘플 0건</span></div><div class="panel-body"><table class="data-table command-source-table"><thead><tr><th>영역</th><th>실제 테이블</th><th>레코드</th><th>최종 변경</th></tr></thead><tbody>' +
+          sources.map(function(source) {
+            return '<tr><td>' + safeHtml(source.label) + '</td><td><code>' + safeHtml(source.tables) + '</code></td><td class="cell-mono">' +
+              toNumber(source.records) + '</td><td class="cell-mono">' + (source.latestAt ? commandDateTime(source.latestAt) : '데이터 없음') + '</td></tr>';
+          }).join('') + '</tbody></table></div></div>';
+
+        return cards + '<div class="command-two-column"><div>' + documentPanel + sourcePanel + '</div><div>' + alertPanel +
+          commandBriefPanel(snapshot) + '</div></div>';
+      }
+
+      function renderCommandCenterSnapshot(snapshot) {
+        var health = snapshot.health || {};
+        var quality = snapshot.dataQuality || {};
+        var modeBody = window._commandCenterMode === 'field'
+          ? renderCommandField(snapshot)
+          : window._commandCenterMode === 'risk'
+            ? renderCommandRisk(snapshot)
+            : renderCommandPulse(snapshot);
+
+        pageContainer.innerHTML =
+          '<div class="command-console-header"><div><div class="command-console-title-row"><h1 class="page-title">AI 현장 지휘실</h1>' +
+          '<span class="live-source-badge">LIVE ERP DATA</span></div><p class="page-subtitle">' +
+          safeHtml((snapshot.scope || {}).label || currentSiteLabel()) + ' · 현재 개발된 ERP 운영 데이터를 한 번만 집계한 스냅샷</p></div>' +
+          '<div class="action-row"><button class="btn-secondary" onclick="window.refreshCommandCenter()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button></div></div>' +
+          '<div class="command-view-switcher">' +
+          commandModeButton('pulse', 'ph-gauge', 'UI 1 · 경영 브리핑', '결정·공정·비용 중심') +
+          commandModeButton('field', 'ph-hard-hat', 'UI 2 · 현장 운영판', '인원·팀·오늘 작업 중심') +
+          commandModeButton('risk', 'ph-shield-warning', 'UI 3 · 리스크 관제', '안전·문서·현금·장비 중심') +
+          '</div>' +
+          '<div class="command-source-strip"><i class="ph ph-database"></i><span><strong>샘플 데이터 없음.</strong> ' +
+          safeHtml(quality.message || '연결된 운영 테이블에서 집계했습니다.') + '</span><span class="source-time">기준 ' +
+          safeHtml(snapshot.generatedLabel || commandDateTime(snapshot.generatedAt)) + '</span></div>' +
+          '<div class="command-radar">' +
+          metricCard('결정 대기', String(toNumber(health.decisionQueue)), 'unified_alerts + 운영 게이트', 'ph-list-checks', toNumber(health.decisionQueue) ? 'warning' : '') +
+          metricCard('승인 대기 비용', fmtUSD(health.pendingCost || 0), '영수증 비용 + 사전승인', 'ph-currency-dollar', toNumber(health.pendingCost) ? 'warning' : '') +
+          metricCard('안전 블로커', String(toNumber(health.safetyBlockers)), '안전 미조치 + TBM Gate', 'ph-shield-warning', toNumber(health.safetyBlockers) ? 'critical' : '') +
+          metricCard('일정 위험 PROJECT', String(toNumber(health.scheduleRisk)), '지연 + Critical Path', 'ph-calendar-warning', toNumber(health.scheduleRisk) ? 'warning' : '') +
+          '</div>' + modeBody;
+      }
+
+      async function renderCommandCenter() {
+        pageContainer.innerHTML = skeleton();
+        try {
+          var snapshot = await window.API.getCommandCenter(window.currentSiteId || 'ALL');
+          if (!snapshot || !snapshot.success || !snapshot.isLive) {
+            throw new Error(snapshot && snapshot.error ? snapshot.error : '실제 ERP 스냅샷을 불러오지 못했습니다.');
+          }
+          window._commandCenterSnapshot = snapshot;
+          renderCommandCenterSnapshot(snapshot);
+        } catch (error) {
+          window._commandCenterSnapshot = null;
+          renderError('AI 현장 지휘실 실데이터 로딩 실패: ' + error.message);
+          console.error(error);
+        }
+      }
+
+      window.switchCommandCenterMode = function(mode) {
+        if (['pulse', 'field', 'risk'].indexOf(mode) === -1) return;
+        window._commandCenterMode = mode;
+        localStorage.setItem('smartCommandCenterMode', mode);
+        if (window._commandCenterSnapshot) renderCommandCenterSnapshot(window._commandCenterSnapshot);
+      };
+
+      window.refreshCommandCenter = function() {
+        if (window.apiCache) {
+          Object.keys(window.apiCache).forEach(function(key) {
+            if (key.indexOf('api_getConstructionCommandCenter') === 0) delete window.apiCache[key];
+          });
+        }
+        renderCommandCenter();
+      };
+
+      window.openCommandAction = function(view, url) {
+        if (url && url.charAt(0) === '/') {
+          window.location.assign(url);
           return;
         }
-        var lower = text.toLowerCase();
-        var kind = 'Daily Log';
-        var next = 'ì˜¤ëŠ˜ ìž‘ì—…ëŸ‰, íˆ¬ìž… ì¸ì›, ì‚¬ì§„, ë¯¸ì™„ë£Œ í•­ëª©ìœ¼ë¡œ Daily Reportì— ë¶™ìž…ë‹ˆë‹¤.';
-        var checklist = ['ìž‘ì—… ìœ„ì¹˜ì™€ ìˆ˜ëŸ‰ í™•ì¸', 'í˜„ìž¥ ì‚¬ì§„/ë‹´ë‹¹ìž ì—°ê²°', 'íŒ€ìž¥ ì„œëª… ë˜ëŠ” PM í™•ì¸'];
-        if (/change|extra|add|added|owner|client|customer|ì¶”ê°€|ë³€ê²½|ê³ ê°/.test(lower)) {
-          kind = 'Change Order';
-          next = 'ì¶”ê°€ ìž‘ì—… ë²”ìœ„, ìžìž¬, ì¸ê±´ë¹„, ì¼ì • ì˜í–¥ì„ ì •ë¦¬í•˜ê³  ìŠ¹ì¸ ì „ ìž‘ì—… ê²½ê³ ë¥¼ ë„ì›ë‹ˆë‹¤.';
-          checklist = ['ì› ìš”ì²­ìžì™€ ìŠ¹ì¸ê¶Œìž í™•ì¸', 'ìžìž¬/ì¸ê±´ë¹„/ìž¥ë¹„ ë¹„ìš© ì‚°ì¶œ', 'ìŠ¹ì¸ ì „ ì„ ìž‘ì—… ì—¬ë¶€ í‘œì‹œ'];
-        } else if (/rfi|question|clarif|drawing|spec|ë„ë©´|ì§ˆë¬¸|í™•ì¸/.test(lower)) {
-          kind = 'RFI';
-          next = 'ë„ë©´/ìŠ¤íŽ™ ë¶ˆëª…í™• í•­ëª©ì„ ì§ˆë¬¸ í˜•ì‹ìœ¼ë¡œ ë°”ê¾¸ê³ , ë‹µë³€ ì „ hold ì§€ì ì„ í‘œì‹œí•©ë‹ˆë‹¤.';
-          checklist = ['ê´€ë ¨ ë„ë©´ ë²ˆí˜¸ ìž…ë ¥', 'ê²°ì • í•„ìš”í•œ ë‚ ì§œ ì§€ì •', 'ìž‘ì—… ì˜í–¥ ë²”ìœ„ ì„ íƒ'];
-        } else if (/delay|late|blocked|ë‚©ê¸°|ì§€ì—°|ë§‰íž˜|ëŒ€ê¸°/.test(lower)) {
-          kind = 'Delay Notice';
-          next = 'ì§€ì—° ì›ì¸, ì±…ìž„ ì£¼ì²´, schedule impact, íšŒë³µì•ˆì„ PMì—ê²Œ ë³´ëƒ…ë‹ˆë‹¤.';
-          checklist = ['ì§€ì—° ì‹œìž‘ì¼ ê¸°ë¡', 'critical path ì˜í–¥ í™•ì¸', 'ëŒ€ì²´ ìž‘ì—… ë˜ëŠ” ì—°ìž¥ ìš”ì²­'];
-        } else if (/safe|incident|osha|hazard|ì•ˆì „|ì‚¬ê³ |ìœ„í—˜/.test(lower)) {
-          kind = 'Safety Issue';
-          next = 'ìž‘ì—… ì¤‘ì§€ í•„ìš” ì—¬ë¶€, OSHA/í˜„ìž¥ ê·œì •, corrective actionì„ ì•ˆì „ ëª¨ë“ˆë¡œ ë„˜ê¹ë‹ˆë‹¤.';
-          checklist = ['ìœ„í—˜ êµ¬ì—­ ê²©ë¦¬', 'ì‚¬ì§„ê³¼ ë°œê²¬ìž ê¸°ë¡', 'ì‹œì •ì¡°ì¹˜ ë‹´ë‹¹ìž ì§€ì •'];
-        }
-        out.innerHTML = '<div class="ai-draft-list">' +
-          '<div class="ai-draft-item"><strong>' + safeHtml(kind) + ' ì´ˆì•ˆ</strong><span>Project: ' + safeHtml(project ? project.value : currentSiteLabel()) + '<br>' + safeHtml(next) + '</span></div>' +
-          '<div class="ai-draft-item"><strong>ìš”ì•½</strong><span>' + safeHtml(text.length > 220 ? text.substring(0, 220) + '...' : text) + '</span></div>' +
-          '<div class="ai-draft-item"><strong>ë‹¤ìŒ í™•ì¸</strong><span>' + checklist.map(safeHtml).join(' Â· ') + '</span></div>' +
-          '</div>';
+        window.goToView(view || 'alerts');
       };
 
       // â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -14193,13 +14423,17 @@ async function renderVendors() {
     if (!vendors || vendors.length === 0) {
       h += '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-secondary);">ë“±ë¡ëœ ê±°ëž˜ì²˜ê°€ ì—†ìŠµë‹ˆë‹¤. ìƒë‹¨ ë²„íŠ¼ì„ ëˆŒëŸ¬ ì¶”ê°€í•˜ì„¸ìš”.</div>';
     } else {
+      var escVendorText = function(s) {
+        return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      };
       vendors.forEach(function(v) {
-        var enc = encodeURIComponent(JSON.stringify(v));
+        // encodeURIComponent ëŠ” ìž‘ì€ë”°ì˜´í‘œë¥¼ ì¸ì½”ë”©í•˜ì§€ ì•Šì•„ inline onclick ì´ ê¹¨ì§ â€” %27 ë¡œ ì¹˜í™˜ (ì˜ˆ: O'Reilly)
+        var enc = encodeURIComponent(JSON.stringify(v)).replace(/'/g, '%27');
         h += '<div class="vendor-card" onclick="openVendorModal(\'' + enc + '\')">' +
-             '<div style="display:flex;justify-content:space-between;"><span class="v-cat">' + (v.category||'') + '</span><span class="v-tag">' + (v.contractStatus||'ì§„í–‰ì¤‘') + '</span></div>' +
-             '<h3 class="v-name">' + (v.name||'') + '</h3>' +
-             '<div class="v-contact"><i class="ph ph-user"></i> ' + (v.manager||'-') + '</div>' +
-             '<div class="v-contact"><i class="ph ph-phone"></i> ' + (v.phone||'-') + '</div>' +
+             '<div style="display:flex;justify-content:space-between;"><span class="v-cat">' + escVendorText(v.category||'') + '</span><span class="v-tag">' + escVendorText(v.contractStatus||'ì§„í–‰ì¤‘') + '</span></div>' +
+             '<h3 class="v-name">' + escVendorText(v.name||'') + '</h3>' +
+             '<div class="v-contact"><i class="ph ph-user"></i> ' + escVendorText(v.manager||'-') + '</div>' +
+             '<div class="v-contact"><i class="ph ph-phone"></i> ' + escVendorText(v.phone||'-') + '</div>' +
              '</div>';
       });
     }
