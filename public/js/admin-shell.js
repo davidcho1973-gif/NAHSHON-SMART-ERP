@@ -235,6 +235,19 @@
             '<input type="checkbox" id="af-' + esc(f.name) + '" name="' + esc(f.name) + '"' + (v ? ' checked' : '') +
             ' style="width:16px;height:16px;cursor:pointer">' + esc(f.checkboxLabel || '예') + '</label>';
         }
+        if (f.type === 'file') {
+          // 이미 올라간 파일이 있으면 이름을 보여준다. 안 그러면 수정할 때마다
+          // 파일이 비어 보여서 매번 다시 올리게 된다.
+          return '<input type="file" id="af-' + esc(f.name) + '" name="' + esc(f.name) + '"' +
+            (f.accept ? ' accept="' + esc(f.accept) + '"' : '') +
+            ' style="width:100%;padding:8px;border-radius:8px;border:1px dashed ' + TOKENS.line +
+            ';background:' + TOKENS.base + ';color:' + TOKENS.text + ';font-size:13px">' +
+            (f.currentName
+              ? '<div style="font-size:11px;color:' + TOKENS.dim + ';margin-top:4px">현재 파일: ' + esc(f.currentName) +
+                (f.currentUrl ? ' <a href="' + esc(f.currentUrl) + '" target="_blank" rel="noopener" style="color:' + TOKENS.brand + '">열기</a>' : '') +
+                '</div>'
+              : '');
+        }
         return '<input type="' + esc(f.type || 'text') + '" ' + common + ' value="' + esc(v) + '">';
       }
 
@@ -281,7 +294,15 @@
         fields.forEach(function (f) {
           var el = wrap.querySelector('#af-' + CSS.escape(f.name));
           if (!el) return;
-          out[f.name] = f.type === 'checkbox' ? el.checked : el.value;
+          if (f.type === 'checkbox') {
+            out[f.name] = el.checked;
+          } else if (f.type === 'file') {
+            // 파일은 JSON 으로 못 보내므로 File 객체 그대로 넘긴다.
+            // onSave 가 uploadFile() 로 따로 올린 뒤 경로만 저장한다.
+            out[f.name] = el.files && el.files.length ? el.files[0] : null;
+          } else {
+            out[f.name] = el.value;
+          }
         });
         return out;
       }
@@ -312,8 +333,13 @@
         // 어느 칸이 비었는지 그 자리에서 보여준다.
         var errs = {};
         fields.forEach(function (f) {
-          if (f.required && f.type !== 'checkbox' && String(values[f.name] || '').trim() === '') {
-            var verb = f.type === 'select' ? '선택하세요.' : '입력하세요.';
+          if (! f.required || f.type === 'checkbox') return;
+          var empty = f.type === 'file'
+            // 이미 올라간 파일이 있으면 다시 고를 필요는 없다.
+            ? (! values[f.name] && ! f.currentName)
+            : String(values[f.name] || '').trim() === '';
+          if (empty) {
+            var verb = f.type === 'select' ? '선택하세요.' : f.type === 'file' ? '올리세요.' : '입력하세요.';
             errs[f.name] = f.label + particle(f.label, '을 ', '를 ') + verb;
           }
         });
@@ -348,6 +374,44 @@
     });
   }
 
+  /**
+   * 파일 업로드 — gsRun 은 JSON 이라 파일을 못 보낸다. multipart 로 따로 올리고
+   * 돌려받은 경로만 본문 저장에 실어 보낸다.
+   *
+   * 두 단계로 나눈 이유: 큰 파일을 본문 저장과 같이 보내면 저장 자체가 느려지고,
+   * 검증에 걸려 되돌아올 때 파일을 다시 고르게 된다.
+   *
+   * @returns {Promise<{success:boolean, path?:string, name?:string, error?:string}>}
+   */
+  function uploadFile(endpoint, file, extra) {
+    var fd = new FormData();
+    fd.append('file', file);
+    Object.keys(extra || {}).forEach(function (k) {
+      if (extra[k] !== null && extra[k] !== undefined) fd.append(k, extra[k]);
+    });
+
+    var tokenEl = document.querySelector('meta[name="csrf-token"]');
+    return fetch(endpoint, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : '',
+      },
+      body: fd,
+    }).then(function (r) {
+      // 413 은 서버가 본문을 통째로 버린 것이라 JSON 이 안 온다.
+      if (r.status === 413) {
+        return { success: false, error: '파일이 너무 큽니다. 더 작은 파일로 올려 주세요.' };
+      }
+      return r.json().catch(function () {
+        return { success: false, error: '업로드 응답을 읽지 못했습니다. (HTTP ' + r.status + ')' };
+      });
+    }).catch(function (e) {
+      return { success: false, error: e.message || '업로드에 실패했습니다.' };
+    });
+  }
+
   /** 화면 상단 제목 + 우측 버튼 한 줄. 여섯 화면이 같은 모양을 갖도록. */
   function pageHeader(title, description, actionsHtml) {
     return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap">' +
@@ -378,6 +442,7 @@
   global.AdminUI = {
     esc: esc,
     particle: particle,
+    uploadFile: uploadFile,
     toast: toast,
     confirmDanger: confirmDanger,
     table: table,

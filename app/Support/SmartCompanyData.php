@@ -134,6 +134,15 @@ class SmartCompanyData
             'api_saveEmployeeAdmin' => app(\App\Services\Admin\EmployeeAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteEmployeeAdmin' => app(\App\Services\Admin\EmployeeAdminService::class)->delete((int) ($args[0] ?? 0)),
 
+            // 원청 계약 · 서류 (Filament ProjectContractResource 를 SPA 로 옮긴 것).
+            // 서류 업로드만 multipart 라 별도 라우트(admin.contract-document.upload)를 쓴다.
+            'api_getContracts' => app(\App\Services\Admin\ContractAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getContractOptions' => app(\App\Services\Admin\ContractAdminService::class)->options(),
+            'api_getContractDocuments' => app(\App\Services\Admin\ContractAdminService::class)->documents((int) ($args[0] ?? 0)),
+            'api_saveContract' => app(\App\Services\Admin\ContractAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteContract' => app(\App\Services\Admin\ContractAdminService::class)->delete((int) ($args[0] ?? 0)),
+            'api_deleteContractDocument' => app(\App\Services\Admin\ContractAdminService::class)->deleteDocument((int) ($args[0] ?? 0)),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),
