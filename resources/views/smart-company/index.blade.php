@@ -159,7 +159,7 @@
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-section-title">NASON í†µí•©ê´€ë¦¬</div>
+            <div class="nav-section-title">DASOL PRISM í†µí•©ê´€ë¦¬</div>
             <ul class="nav-list">
               <li class="nav-item" data-view="vehicle" id="nav-vehicle">
                 <i class="ph ph-car"></i><span>ì°¨ëŸ‰ ê´€ë¦¬</span>
