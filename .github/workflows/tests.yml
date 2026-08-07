@@ -77,7 +77,11 @@ jobs:
   deploy-staging:
     name: Deploy staging
     needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    # 브랜치는 staging 으로 못 박되, 푸시 말고 수동 실행(Run workflow)으로도 돌 수 있게 한다.
+    # 배포만 다시 밀어야 하는 상황(설정 변경, 배포 유실)에 빈 커밋을 만들 이유가 없다.
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
 
     steps:
