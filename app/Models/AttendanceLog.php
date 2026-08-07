@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\Communication\CommunicationService;
+use App\Services\Payroll\AttendanceTimesheetSync;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +37,7 @@ class AttendanceLog extends Model
         }
 
         try {
-            app(\App\Services\Payroll\AttendanceTimesheetSync::class)
+            app(AttendanceTimesheetSync::class)
                 ->syncDay((int) $log->employee_id, Carbon::parse($log->attendance_date)->toDateString());
         } catch (\Throwable $e) {
             // 급여 동기화 실패가 출퇴근 기록 자체를 막지 않도록 격리한다.
@@ -46,7 +48,7 @@ class AttendanceLog extends Model
     private static function publishCommunicationAlert(self $log): void
     {
         try {
-            app(\App\Services\Communication\CommunicationService::class)->publishAttendanceAlert($log);
+            app(CommunicationService::class)->publishAttendanceAlert($log);
         } catch (\Throwable $e) {
             report($e);
         }
@@ -128,6 +130,12 @@ class AttendanceLog extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /** 승인·반려를 누른 사람. 급여 근거라 누가 손댔는지 남아야 한다. */
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by_id');
     }
 
     public function recordedBy(): BelongsTo

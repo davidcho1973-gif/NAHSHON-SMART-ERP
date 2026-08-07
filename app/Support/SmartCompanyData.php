@@ -112,6 +112,14 @@ class SmartCompanyData
             'api_setUserAccessStatus' => app(\App\Services\Admin\UserAccessService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_deleteUserAccess' => app(\App\Services\Admin\UserAccessService::class)->delete((int) ($args[0] ?? 0)),
 
+            // 출퇴근 기록 수정 (Filament AttendanceLogResource 를 SPA 로 옮긴 것).
+            'api_getAttendanceLogs' => app(\App\Services\Admin\AttendanceLogAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getAttendanceLogOptions' => app(\App\Services\Admin\AttendanceLogAdminService::class)->options(),
+            'api_getAttendanceLogHistory' => app(\App\Services\Admin\AttendanceLogAdminService::class)->history((int) ($args[0] ?? 0)),
+            'api_saveAttendanceLog' => app(\App\Services\Admin\AttendanceLogAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setAttendanceLogStatus' => app(\App\Services\Admin\AttendanceLogAdminService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
+            'api_deleteAttendanceLog' => app(\App\Services\Admin\AttendanceLogAdminService::class)->delete((int) ($args[0] ?? 0)),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),
