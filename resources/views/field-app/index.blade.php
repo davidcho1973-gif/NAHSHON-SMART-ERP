@@ -19,7 +19,7 @@
 </head>
 <body class="h-full antialiased bg-slate-950">
     
-    @livewire('field-app.field-command-app')
+    @livewire(\App\Livewire\FieldApp\FieldCommandApp::class)
 
     @livewireScripts
 </body>

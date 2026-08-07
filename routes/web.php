@@ -23,7 +23,12 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 // Construction Field Apps (Accessible directly on mobile at construction sites)
 Route::get('/daily-work-report', [\App\Http\Controllers\DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
 Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
-Route::get('/field-app', [\App\Http\Controllers\FieldApp\FieldAppController::class, 'index'])->name('field-app.index');
+Route::get('/field-app', function () {
+    return view('field-app.index');
+})->name('field-app.index');
+Route::get('/field-app/{any}', function () {
+    return view('field-app.index');
+})->where('any', '.*');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
