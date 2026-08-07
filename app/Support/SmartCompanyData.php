@@ -120,6 +120,14 @@ class SmartCompanyData
             'api_setAttendanceLogStatus' => app(\App\Services\Admin\AttendanceLogAdminService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_deleteAttendanceLog' => app(\App\Services\Admin\AttendanceLogAdminService::class)->delete((int) ($args[0] ?? 0)),
 
+            // 품목 · 분류 마스터 (Filament Item/ItemCategory 를 SPA 로 옮긴 것).
+            'api_getItemMaster' => app(\App\Services\Admin\ItemMasterService::class)->list(),
+            'api_getItemMasterOptions' => app(\App\Services\Admin\ItemMasterService::class)->options(),
+            'api_saveItem' => app(\App\Services\Admin\ItemMasterService::class)->saveItem(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_saveItemCategory' => app(\App\Services\Admin\ItemMasterService::class)->saveCategory(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteItem' => app(\App\Services\Admin\ItemMasterService::class)->deleteItem((int) ($args[0] ?? 0)),
+            'api_deleteItemCategory' => app(\App\Services\Admin\ItemMasterService::class)->deleteCategory((int) ($args[0] ?? 0)),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),

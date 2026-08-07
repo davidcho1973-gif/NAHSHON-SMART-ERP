@@ -16,6 +16,7 @@
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   <style>
@@ -188,6 +189,9 @@
               </li>
               <li class="nav-item" data-view="attendance-logs" id="nav-attendance-logs">
                 <i class="ph ph-clock-counter-clockwise" style="color:#0ea5e9"></i><span>출퇴근 기록</span>
+              </li>
+              <li class="nav-item" data-view="item-master" id="nav-item-master">
+                <i class="ph ph-package" style="color:#0ea5e9"></i><span>품목 · 분류</span>
               </li>
               <li class="nav-item" style="border-top: 1px solid var(--border-color); margin-top: 5px; padding-top: 5px;"
                 onclick="openUniversalScanner()">
@@ -1331,6 +1335,7 @@
         'opsroom': { title: '현장 상황실', render: renderOpsRoom },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
+        'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
