@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MemberDocuments;
 
+use App\Filament\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\MemberDocuments\Pages\ManageMemberDocuments;
 use App\Filament\Resources\MemberDocuments\Pages\ManageMemberUploadedDocuments;
 use App\Models\MemberRegistration;
@@ -21,6 +22,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 class MemberDocumentResource extends Resource
 {
+    // Aliased so the eager-loading query below can build on the scoped base query.
+    use AuthorizesResourceAccess {
+        getEloquentQuery as scopedEloquentQuery;
+    }
+
     protected static ?string $model = MemberRegistration::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-check';
@@ -32,6 +38,24 @@ class MemberDocumentResource extends Resource
     protected static ?string $pluralModelLabel = 'HR Documents';
 
     protected static string | \UnitEnum | null $navigationGroup = 'HUMAN RESOURCE';
+
+    // Visas, IDs and certificates are personal records, so this stays narrower than
+    // the employee list. Safety managers are included because expiring safety
+    // certificates live here — it is also their landing page after login.
+    protected static function accessViewRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager', 'safety_manager'];
+    }
+
+    protected static function accessManageRoles(): array
+    {
+        return ['super_admin', 'admin', 'hr_manager'];
+    }
+
+    protected static function accessScopeColumns(): array
+    {
+        return ['company' => 'company_id', 'site' => 'site_id', 'team' => 'team_id', 'self' => 'employee_id'];
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -133,7 +157,7 @@ class MemberDocumentResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        return static::scopedEloquentQuery()
             ->with(['employee', 'company', 'site'])
             ->withCount([
                 'documents',

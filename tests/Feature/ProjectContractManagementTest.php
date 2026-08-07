@@ -66,8 +66,9 @@ class ProjectContractManagementTest extends TestCase
     public function test_private_contract_document_can_be_reviewed_and_downloaded_by_authorized_user(): void
     {
         Storage::fake('local');
-        [, , , $project] = $this->projectFixture();
+        [$company, , , $project] = $this->projectFixture();
         $admin = $this->user('admin');
+        session(['current_company_id' => $company->id]);
         $this->actingAs($admin);
 
         $contract = $this->contractFor($project);
@@ -90,9 +91,9 @@ class ProjectContractManagementTest extends TestCase
         $this->assertSame(strlen('%PDF private contract'), $document->file_size);
         $this->assertSame('PrimeContract-v1.pdf', $document->original_file_name);
 
-        Livewire::test(ManageProjectContractDocuments::class, ['record' => $contract->id])
+        Livewire::test(ManageProjectContractDocuments::class, ['record' => (string) $contract->getKey()])
             ->assertOk()
-            ->mountTableAction('approve', $document)
+            ->mountTableAction('approve', (string) $document->getKey())
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 
