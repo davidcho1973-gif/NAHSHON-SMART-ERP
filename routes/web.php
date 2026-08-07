@@ -3,6 +3,8 @@
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\CommunicationController;
+use App\Http\Controllers\CompanySwitchController;
+use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileExpenseController;
@@ -18,10 +20,34 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 
 
 
+Route::get('/debug-routes-sec', function () {
+    $routes = collect(Route::getRoutes())->map(fn ($r) => [
+        'uri' => $r->uri(),
+        'methods' => $r->methods(),
+        'name' => $r->getName(),
+    ]);
+    return response()->json([
+        'total' => $routes->count(),
+        'has_field_app' => $routes->pluck('uri')->contains('field-app'),
+        'field_app_routes' => $routes->filter(fn ($r) => str_contains($r['uri'], 'field-app'))->values(),
+        'sample_routes' => $routes->pluck('uri')->take(30),
+    ]);
+});
+Route::get('/daily-work-report', [\App\Http\Controllers\DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
+Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
+Route::get('/field-app', function () {
+    return view('field-app.index');
+})->name('field-app.index');
+Route::get('/field-app/{any}', function () {
+    return view('field-app.index');
+})->where('any', '.*');
+
 Route::middleware('auth')->group(function (): void {
     Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
     Route::redirect('/erp', '/');
     Route::redirect('/dashboard', '/');
+
+    Route::post('/company/switch', [CompanySwitchController::class, '__invoke'])->name('company.switch');
 
     // Mobile Expense Routes
     Route::get('/mobile-expense/index', [MobileExpenseController::class, 'index'])->name('mobile-expense.index');
@@ -98,6 +124,18 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/contracts/documents/{document}/download', [ProjectContractDocumentController::class, 'download'])
         ->name('project-contract-document.download');
 
+    // AI construction document intelligence hub — private originals, search index and preventive actions.
+    Route::get('/document-hub', [DocumentIntelligenceController::class, 'index'])->name('document-intelligence.index');
+    Route::get('/document-hub/api/documents', [DocumentIntelligenceController::class, 'documents'])->name('document-intelligence.documents');
+    Route::post('/document-hub/api/upload', [DocumentIntelligenceController::class, 'upload'])->name('document-intelligence.upload');
+    Route::get('/document-hub/api/index.csv', [DocumentIntelligenceController::class, 'exportIndex'])->name('document-intelligence.export-index');
+    Route::get('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'show'])->name('document-intelligence.show');
+    Route::post('/document-hub/api/documents/{document}/reanalyze', [DocumentIntelligenceController::class, 'reanalyze'])->name('document-intelligence.reanalyze');
+    Route::patch('/document-hub/api/documents/{document}/review', [DocumentIntelligenceController::class, 'review'])->name('document-intelligence.review');
+    Route::patch('/document-hub/api/actions/{action}', [DocumentIntelligenceController::class, 'updateAction'])->name('document-intelligence.action.update');
+    Route::get('/document-hub/documents/{document}/download', [DocumentIntelligenceController::class, 'download'])->name('document-intelligence.download');
+    Route::get('/document-hub/documents/{document}/preview', [DocumentIntelligenceController::class, 'preview'])->name('document-intelligence.preview');
+
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
@@ -114,6 +152,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/attendance-app/team/{token}', [AttendanceAppController::class, 'recordTeam'])->name('attendance-app.team.record');
     Route::get('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'crew'])->name('attendance-app.crew');
     Route::post('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'recordCrew'])->name('attendance-app.crew.record');
+    Route::post('/attendance-app/team/{token}/crew/daily-close', [AttendanceAppController::class, 'closeCrewDay'])->name('attendance-app.crew.daily-close');
     Route::get('/attendance-app/badge/{token}', [AttendanceAppController::class, 'badge'])->name('attendance-app.badge');
     Route::get('/attendance-app/employee/{employee}/badge-qr', [AttendanceAppController::class, 'employeeBadgeQr'])->name('attendance-app.employee.badge-qr');
 

@@ -25,7 +25,7 @@ class ProjectContractDocumentController extends Controller
         );
 
         /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk($document->disk ?: 'local');
+        $disk = Storage::disk($document->disk ?: (string) config('document-intelligence.disk', 'local'));
 
         abort_unless(filled($document->file_path) && $disk->exists($document->file_path), 404);
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Support\CurrentCompany;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -50,6 +51,25 @@ trait AuthorizesResourceAccess
     protected static function accessRowScoped(): bool
     {
         return true;
+    }
+
+    /**
+     * When true, rows whose company column is NULL are company-shared reference
+     * rows and stay visible alongside the active company's rows.
+     */
+    protected static function accessIncludesSharedCompanyRows(): bool
+    {
+        return false;
+    }
+
+    /**
+     * When true, every permitted role sees the whole active company — for
+     * company-level reference data (vendors, items) where site/team/self
+     * scopes would otherwise always produce an empty list.
+     */
+    protected static function accessCompanyWideVisibility(): bool
+    {
+        return false;
     }
 
     public static function currentUserHasRole(array $roles): bool
@@ -102,14 +122,40 @@ trait AuthorizesResourceAccess
             return $query;
         }
 
+        $columns = static::accessScopeColumns();
+        $companyColumn = $columns['company'] ?? null;
+        $companyId = CurrentCompany::id();
+        $partitioned = $companyColumn !== null && $companyId !== null;
+
+        // The company switcher applies to everyone, admins included, so the panel
+        // always shows one company at a time. A null id (no companies yet, or a
+        // user with no membership) leaves the query unpartitioned as before.
+        if ($partitioned) {
+            static::accessIncludesSharedCompanyRows()
+                ? $query->where(fn (Builder $inner) => $inner
+                    ->where($companyColumn, $companyId)
+                    ->orWhereNull($companyColumn))
+                : $query->where($companyColumn, $companyId);
+        }
+
         if (in_array($user->access_role, ['super_admin', 'admin'], true) || $user->access_scope === 'all_sites') {
             return $query;
         }
 
-        $columns = static::accessScopeColumns();
+        if (static::accessCompanyWideVisibility()) {
+            // Reference data: permitted roles see the active company regardless of
+            // their narrower site/team/self scope.
+            return $partitioned
+                ? $query
+                : static::scopeByColumn($query, $companyColumn, $user->allowed_company_id);
+        }
 
         return match ($user->access_scope) {
-            'company' => static::scopeByColumn($query, $columns['company'] ?? null, $user->allowed_company_id),
+            // Already narrowed to the active company above; falling back to the
+            // legacy column keeps users who predate the pivot working.
+            'company' => $partitioned
+                ? $query
+                : static::scopeByColumn($query, $companyColumn, $user->allowed_company_id),
             'site' => static::scopeByColumn($query, $columns['site'] ?? null, $user->allowed_site_id),
             'team' => static::scopeByColumn($query, $columns['team'] ?? null, $user->allowed_team_id),
             'self' => static::scopeByColumn($query, $columns['self'] ?? null, $user->employee_id),
