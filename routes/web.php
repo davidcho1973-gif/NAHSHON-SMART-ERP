@@ -210,6 +210,44 @@ Route::get('/debug-logs-sec-53298bfd9a', function() {
     return 'Log file not found';
 });
 
+/**
+ * 배포 확인 — 지금 이 서버가 어느 커밋을 돌리고 있나.
+ *
+ * 빌드(`npm run build`)가 public/build/version.json 에 커밋을 새겨 두고 여기서 읽는다.
+ * 배포 서버에는 .git 이 없을 수 있고 shell_exec 가 막혀 있을 수도 있어, 런타임에
+ * 알아내려는 시도는 조용히 빈 값이 된다.
+ *
+ * 로그인 없이 열리지만 커밋 해시와 기능 유무만 보여준다 — 배포가 됐는지 확인하는 데
+ * 로그인을 요구하면, 정작 배포가 깨져 로그인이 안 될 때 쓸 수 없다.
+ */
+Route::get('/build-version', function () {
+    $path = public_path('build/version.json');
+    $version = is_readable($path)
+        ? (json_decode((string) file_get_contents($path), true) ?: [])
+        : [];
+
+    $spa = resource_path('views/smart-company/index.blade.php');
+    $spaSource = is_readable($spa) ? (string) file_get_contents($spa) : '';
+
+    return response()->json([
+        'commit' => $version['commit'] ?? null,
+        'commit_short' => isset($version['commit']) ? substr((string) $version['commit'], 0, 7) : null,
+        'branch' => $version['branch'] ?? null,
+        'subject' => $version['subject'] ?? null,
+        'committed_at' => $version['committed_at'] ?? null,
+        'built_at' => $version['built_at'] ?? null,
+        'checked_at' => now()->toIso8601String(),
+        'env' => app()->environment(),
+        // 배포가 실제로 반영됐는지는 해시보다 "이 기능이 있나" 로 확인하는 편이 빠르다.
+        'has' => [
+            'admin_shell' => is_readable(public_path('js/admin-shell.js')),
+            'admin_screens' => str_contains($spaSource, 'nav-applicant-admin'),
+            'ops_room' => str_contains($spaSource, 'data-view="opsroom"'),
+            'old_company_name' => str_contains($spaSource, 'NASON'),
+        ],
+    ]);
+});
+
 Route::get('/debug-build-sec-53298bfd9a', function () {
     $resourcePath = app_path('Filament/Resources/MemberRegistrations/MemberRegistrationResource.php');
     $resource = is_readable($resourcePath) ? (string) file_get_contents($resourcePath) : '';
