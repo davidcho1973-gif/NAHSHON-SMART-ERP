@@ -120,6 +120,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
+    // 관리자 화면의 파일 업로드(multipart) — SPA 의 JSON API 로는 파일을 실을 수 없다.
+    Route::post('/admin-api/contracts/{contract}/documents', [App\Http\Controllers\AdminUploadController::class, 'contractDocument'])
+        ->name('admin.contract-document.upload');
+    Route::post('/admin-api/applicants/{applicant}/badge-photo', [App\Http\Controllers\AdminUploadController::class, 'applicantBadgePhoto'])
+        ->name('admin.applicant-badge-photo.upload');
+
     // Private contract files — authenticated and access-scope checked before download.
     Route::get('/contracts/documents/{document}/download', [ProjectContractDocumentController::class, 'download'])
         ->name('project-contract-document.download');

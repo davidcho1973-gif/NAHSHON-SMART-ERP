@@ -112,6 +112,49 @@ class SmartCompanyData
             'api_setUserAccessStatus' => app(\App\Services\Admin\UserAccessService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_deleteUserAccess' => app(\App\Services\Admin\UserAccessService::class)->delete((int) ($args[0] ?? 0)),
 
+            // 출퇴근 기록 수정 (Filament AttendanceLogResource 를 SPA 로 옮긴 것).
+            'api_getAttendanceLogs' => app(\App\Services\Admin\AttendanceLogAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getAttendanceLogOptions' => app(\App\Services\Admin\AttendanceLogAdminService::class)->options(),
+            'api_getAttendanceLogHistory' => app(\App\Services\Admin\AttendanceLogAdminService::class)->history((int) ($args[0] ?? 0)),
+            'api_saveAttendanceLog' => app(\App\Services\Admin\AttendanceLogAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setAttendanceLogStatus' => app(\App\Services\Admin\AttendanceLogAdminService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
+            'api_deleteAttendanceLog' => app(\App\Services\Admin\AttendanceLogAdminService::class)->delete((int) ($args[0] ?? 0)),
+
+            // 품목 · 분류 마스터 (Filament Item/ItemCategory 를 SPA 로 옮긴 것).
+            'api_getItemMaster' => app(\App\Services\Admin\ItemMasterService::class)->list(),
+            'api_getItemMasterOptions' => app(\App\Services\Admin\ItemMasterService::class)->options(),
+            'api_saveItem' => app(\App\Services\Admin\ItemMasterService::class)->saveItem(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_saveItemCategory' => app(\App\Services\Admin\ItemMasterService::class)->saveCategory(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteItem' => app(\App\Services\Admin\ItemMasterService::class)->deleteItem((int) ($args[0] ?? 0)),
+            'api_deleteItemCategory' => app(\App\Services\Admin\ItemMasterService::class)->deleteCategory((int) ($args[0] ?? 0)),
+
+            // 직원 등록 · 수정 (Filament EmployeeResource 를 SPA 로 옮긴 것).
+            'api_getEmployeeAdminList' => app(\App\Services\Admin\EmployeeAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getEmployeeAdminOptions' => app(\App\Services\Admin\EmployeeAdminService::class)->options(),
+            'api_saveEmployeeAdmin' => app(\App\Services\Admin\EmployeeAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteEmployeeAdmin' => app(\App\Services\Admin\EmployeeAdminService::class)->delete((int) ($args[0] ?? 0)),
+
+            // 원청 계약 · 서류 (Filament ProjectContractResource 를 SPA 로 옮긴 것).
+            // 서류 업로드만 multipart 라 별도 라우트(admin.contract-document.upload)를 쓴다.
+            'api_getContracts' => app(\App\Services\Admin\ContractAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getContractOptions' => app(\App\Services\Admin\ContractAdminService::class)->options(),
+            'api_getContractDocuments' => app(\App\Services\Admin\ContractAdminService::class)->documents((int) ($args[0] ?? 0)),
+            'api_saveContract' => app(\App\Services\Admin\ContractAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteContract' => app(\App\Services\Admin\ContractAdminService::class)->delete((int) ($args[0] ?? 0)),
+            'api_deleteContractDocument' => app(\App\Services\Admin\ContractAdminService::class)->deleteDocument((int) ($args[0] ?? 0)),
+
+            // 입사지원 → 면접 → 안전교육 → 배지 → 활성화 (Filament MemberRegistrationResource).
+            // 배지 사진 업로드만 multipart 라 별도 라우트를 쓴다.
+            'api_getApplicants' => app(\App\Services\Admin\ApplicantAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getApplicantOptions' => app(\App\Services\Admin\ApplicantAdminService::class)->options(),
+            'api_inviteApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->invite(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setApplicantInterview' => app(\App\Services\Admin\ApplicantAdminService::class)->setInterview((int) ($args[0] ?? 0), (string) ($args[1] ?? ''), $args[2] ?? null),
+            'api_setApplicantSafety' => app(\App\Services\Admin\ApplicantAdminService::class)->setSafetyTraining((int) ($args[0] ?? 0), $args[1] ?? null, $args[2] ?? null),
+            'api_registerApplicantBadge' => app(\App\Services\Admin\ApplicantAdminService::class)->registerBadge((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_activateApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->activate((int) ($args[0] ?? 0)),
+            'api_rejectApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->reject((int) ($args[0] ?? 0), $args[1] ?? null),
+            'api_resyncApplicant' => app(\App\Services\Admin\ApplicantAdminService::class)->resync((int) ($args[0] ?? 0)),
+
             // 오늘 출역 현황 — 직접고용은 시간, 협력사는 인원 관점으로 나눠 본다.
             'api_getDailyHeadcount' => app(\App\Services\Attendance\DailyHeadcountService::class)->today(
                 self::resolveSiteId(($args[0] ?? null) !== null && $args[0] !== '' ? (string) $args[0] : $siteId),
