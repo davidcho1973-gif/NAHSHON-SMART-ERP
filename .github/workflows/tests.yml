@@ -101,25 +101,59 @@ jobs:
           # 테스트가 도는 동안 푸시가 하나 더 들어오면 검증 안 된 커밋이 나간다.
           sep='?'
           case "$HOOK" in *\?*) sep='&' ;; esac
-          target="${HOOK}${sep}commit_hash=${GITHUB_SHA}"
+          with_hash="${HOOK}${sep}commit_hash=${GITHUB_SHA}"
 
-          # -sS 로 진행률은 숨기되 오류는 보이게. URL 자체는 절대 출력하지 않는다.
-          code=$(curl -sS -o /tmp/hook.out -w '%{http_code}' -X POST "$target" --max-time 60 || echo 000)
-          echo "deploy hook 응답: HTTP $code"
+          # 훅의 호출 규약(메서드·파라미터 허용 여부)은 대시보드에 적혀 있지 않고
+          # 여기서 문서를 열 수도 없다. 그래서 좁은 것부터 넓은 것 순으로 시도하고
+          # 처음 2xx 가 나오는 조합에서 멈춘다. 로그에는 조합 이름과 응답 코드만 남는다.
+          #
+          # 순서가 곧 우선순위다. commit_hash 가 붙은 쪽이 배포 대상이 정확하므로 먼저 본다.
+          try() {
+            curl -sS -o /tmp/hook.out -w '%{http_code}' -X "$1" "$2" --max-time 60 || echo 000
+          }
+
+          code=''
+          chosen=''
+          for combo in \
+            "POST|$with_hash|POST + commit_hash" \
+            "POST|$HOOK|POST (파라미터 없이)" \
+            "GET|$with_hash|GET + commit_hash" \
+            "GET|$HOOK|GET (파라미터 없이)"
+          do
+            method=${combo%%|*}
+            rest=${combo#*|}
+            url=${rest%%|*}
+            label=${rest#*|}
+
+            c=$(try "$method" "$url")
+            echo "  $label → HTTP $c"
+            case "$c" in
+              2*) code=$c; chosen=$label; break ;;
+            esac
+            last=$c
+          done
+
+          if [ -n "$code" ]; then
+            echo "::notice title=배포 시작됨::$chosen 으로 ${GITHUB_SHA:0:7} 배포를 요청했습니다 (HTTP $code)."
+            head -c 300 /tmp/hook.out || true
+            echo
+            exit 0
+          fi
+
+          echo "마지막 응답 본문:"
           head -c 500 /tmp/hook.out || true
           echo
 
-          case "$code" in
-            2*) echo "::notice title=배포 시작됨::Laravel Cloud 가 ${GITHUB_SHA:0:7} 배포를 시작했습니다." ;;
-            000) echo "::error title=배포 요청 실패::Deploy Hook 에 연결하지 못했습니다."; exit 1 ;;
-            # 3xx 는 대시보드 "페이지" 주소를 넣었을 때 나온다. 로그인 안 된 상태로 화면을
-            # 여니 Laravel 이 첫 화면으로 되돌려보내는 것이다. 훅은 리다이렉트하지 않는다.
-            # 여기서 -L 로 따라가면 첫 화면 HTML 을 200 으로 받아 "성공" 으로 오인하게 된다.
-            3*) echo "::error title=훅이 아니라 페이지 주소입니다::HTTP $code — 브라우저 주소창의 대시보드 URL 로 보입니다. Settings → Deployments → Deploy hook 토글을 켠 뒤 거기 표시되는 전용 주소를 넣으세요."; exit 1 ;;
-            401|403) echo "::error title=훅이 거부됨::HTTP $code — 주소는 맞지만 토큰이 만료됐거나 재발급된 것 같습니다. Deploy hook 을 재발급해 시크릿을 갱신하세요."; exit 1 ;;
-            404) echo "::error title=훅을 찾을 수 없음::HTTP $code — 주소 일부만 복사됐거나 훅이 삭제된 것 같습니다. 전체 주소를 다시 복사하세요."; exit 1 ;;
-            *)   echo "::error title=배포 요청 거부됨::HTTP $code — Hook URL 이 유효한지 확인하세요."; exit 1 ;;
+          case "$last" in
+            000) echo "::error title=배포 요청 실패::Deploy Hook 에 연결하지 못했습니다." ;;
+            # 리다이렉트를 -L 로 따라가지 않는 이유: 따라가면 첫 화면 HTML 을 200 으로
+            # 받아 배포가 성공한 것으로 오인하게 된다. 실패로 남기는 편이 정직하다.
+            3*) echo "::error title=훅이 응답하지 않음::네 조합 모두 리다이렉트됐습니다. 주소 형태는 훅이 맞으니, 대시보드에서 Deploy hook 이 켜져 있는지와 훅이 재발급되지 않았는지 확인하세요." ;;
+            401|403) echo "::error title=훅이 거부됨::HTTP $last — 토큰이 만료됐거나 재발급된 것 같습니다. 재발급 후 시크릿을 갱신하세요." ;;
+            404) echo "::error title=훅을 찾을 수 없음::HTTP $last — 주소 일부만 복사됐거나 훅이 삭제된 것 같습니다." ;;
+            *)   echo "::error title=배포 요청 거부됨::HTTP $last — 어느 조합도 통하지 않았습니다." ;;
           esac
+          exit 1
 
       # 훅 호출이 실패했을 때 "무엇을 넣으셨는지" 를 값 노출 없이 되짚어 준다.
       # 응답 코드만으로는 추측이 반복된다. 호스트·경로 모양·길이면 대시보드 주소인지
