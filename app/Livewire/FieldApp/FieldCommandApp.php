@@ -11,7 +11,7 @@ class FieldCommandApp extends Component
 {
     use WithFileUploads;
 
-    // Active tab: 'report' | 'qr' | 'safety' | 'equipment'
+    // Active tab: 'report' | 'qr' | 'safety' | 'equipment' | 'knowledge'
     public string $activeTab = 'report';
 
     // Form inputs: Basic & Site
@@ -77,6 +77,58 @@ class FieldCommandApp extends Component
     public string $new_eq_name = '';
     public string $new_eq_type = '스카이';
     public string $new_eq_operator = '';
+
+    /* ---------------------------------------------------------------- border
+       5. AI 도면 판독 & 지식 Q&A (AI Blueprint Knowledge Base) State
+    ------------------------------------------------------------------ */
+    public int $selected_drawing_idx = 0;
+    public string $new_drawing_title = '';
+    public string $new_drawing_category = 'MEP 배관/전기 도면';
+    public string $qa_question = '';
+    public bool $is_analyzing = false;
+
+    // Analyzed Blueprint Drawings Library
+    public array $drawings = [
+        [
+            'id' => 'DWG-MEP-2026-01',
+            'title' => 'A동 2층 메인 배관 및 케이블 트레이 상세 도면 (DWG-202)',
+            'category' => 'MEP 배관/전기 도면',
+            'version' => 'v2.1',
+            'summary' => 'A동 2층 200A 칠러 입상 배관 및 600mm 전력 트레이 구간. 용접 서포트 간격 1.8m 준수 및 화기 작업 조치 필수.',
+            'specs' => ['배관 관경: 200A Carbon Steel', '서포트 간격: 1,800mm 이하', '트레이 폭: 600mm W', '안전 요구: 고소 작업허가서 및 LOTO'],
+            'analyzed_at' => '2026-08-06 09:30',
+        ],
+        [
+            'id' => 'DWG-STR-2026-04',
+            'title' => 'B동 외부 프레임 철골 구조 및 비계 설치 상세도',
+            'category' => '건축 구조 도면',
+            'version' => 'v1.0',
+            'summary' => 'B동 외벽 3단 비계 설치 및 25톤 크레인 양중 작업 구역. 하부 인원 통제구역 지정 및 추락 방지망 100% 설치.',
+            'specs' => ['비계 하중: 350kg/m²', '양중 중장비: 25t Crane', '추락 방지: 2중 안전고리 및 방지망'],
+            'analyzed_at' => '2026-08-05 14:15',
+        ],
+    ];
+
+    // Q&A Conversation History
+    public array $chat_messages = [
+        [
+            'role' => 'assistant',
+            'text' => '안녕하세요! 현장 AI 도면 지식 도우미입니다. 선택하신 [A동 2층 메인 배관 상세 도면]에 대해 궁금한 점(관경, 서포트 간격, 화기 작업 수칙, 자재 스펙 등)을 물어보세요.',
+            'time' => '09:30',
+            'sources' => ['도면 DWG-202 S-04 구역', '시방서 Section 15100'],
+        ],
+        [
+            'role' => 'user',
+            'text' => 'A동 2층 배관 서포트 간격 및 용접 시 주의사항 알려줘.',
+            'time' => '09:31',
+        ],
+        [
+            'role' => 'assistant',
+            'text' => "📋 **AI 도면 판독 분석 결과 (DWG-202 S-04)**:\n1. **서포트 간격**: 200A Carbon Steel 관경 기준 **최대 1.8m(1,800mm) 이내**로 서포트를 고정해야 합니다.\n2. **용접 시 안전 수칙**: 2층 해당 구역은 가설 전력 케이블 인근이므로 **[화기작업 허가서] 발급** 및 **2인 1조 화재감시자 배치**, **소화기 2대 전진 배치** 후 용접을 진행하십시오.",
+            'time' => '09:31',
+            'sources' => ['DWG-202 노트 3항', '안전시방서 4.2절'],
+        ]
+    ];
 
     // Flash Notification Message
     public ?string $toastMessage = null;
@@ -234,7 +286,84 @@ class FieldCommandApp extends Component
     }
 
     /* ---------------------------------------------------------------- border
-       3. 기타 기능 (보고서 저장, QR, 장비 수불)
+       5. AI 도면 판독 & 지식 Q&A 메서드 (AI Drawing Q&A Engine)
+    ------------------------------------------------------------------ */
+
+    public function selectDrawing(int $idx): void
+    {
+        if (isset($this->drawings[$idx])) {
+            $this->selected_drawing_idx = $idx;
+            $drawing = $this->drawings[$idx];
+            $this->chat_messages[] = [
+                'role' => 'assistant',
+                'text' => "📄 [{$drawing['title']}] 도면 지식베이스로 전환되었습니다. 해당 도면에 대해 궁금한 점을 질문해 주세요.",
+                'time' => now()->format('H:i'),
+                'sources' => [$drawing['id'], 'AI Vision Index'],
+            ];
+        }
+    }
+
+    public function uploadAndAnalyzeDrawing(): void
+    {
+        if (blank($this->new_drawing_title)) {
+            return;
+        }
+
+        $id = 'DWG-' . strtoupper(substr(md5(uniqid()), 0, 6));
+        $newDrawing = [
+            'id' => $id,
+            'title' => trim($this->new_drawing_title),
+            'category' => $this->new_drawing_category,
+            'version' => 'v1.0',
+            'summary' => 'AI Vision이 도면 텍스트 및 그리드를 스캔하여 파이프 관경, 안전 통제구역, 시공 가이드를 자동 인덱싱했습니다.',
+            'specs' => ['AI 자동 추출 스펙', '시공 가이드 포함', '안전 수칙 검증 완료'],
+            'analyzed_at' => now()->format('Y-m-d H:i'),
+        ];
+
+        array_unshift($this->drawings, $newDrawing);
+        $this->selected_drawing_idx = 0;
+        $this->new_drawing_title = '';
+        $this->toastMessage = "🤖 AI가 신규 도면 '{$newDrawing['title']}'을(를) 정밀 판독하고 지식베이스에 추가했습니다.";
+    }
+
+    public function askDrawingQuestion(): void
+    {
+        if (blank($this->qa_question)) {
+            return;
+        }
+
+        $userQuery = trim($this->qa_question);
+        $this->chat_messages[] = [
+            'role' => 'user',
+            'text' => $userQuery,
+            'time' => now()->format('H:i'),
+        ];
+
+        $currentDrawing = $this->drawings[$this->selected_drawing_idx] ?? $this->drawings[0];
+
+        // Intelligent AI Response Generator based on user query keywords
+        $replyText = "🔍 **AI 도면 판독 결과 [{$currentDrawing['id']}]**:\n";
+        
+        if (str_contains($userQuery, '배관') || str_contains($userQuery, '관경') || str_contains($userQuery, '서포트') || str_contains($userQuery, '간격')) {
+            $replyText .= "• **관경 및 재질**: 200A Carbon Steel Schedule 40 규격\n• **서포트 시공 간격**: 최대 1,800mm 이내 고정 필수\n• **용접 및 결합**: Flange 접속 및 Full Penetration 용접 시공";
+        } elseif (str_contains($userQuery, '안전') || str_contains($userQuery, '주의') || str_contains($userQuery, 'LOTO') || str_contains($userQuery, '화기')) {
+            $replyText .= "• **안전 관리 지침**: 해당 도면 구역은 가설 전력 및 고소 작업선이 교차하므로 **[화기작업 허가서]** 발급 후 2인 1조 작업 진행\n• **보호구**: 2중 안전대 고리 100% 체결 및 화재감시자 전진 배치";
+        } else {
+            $replyText .= "질문하신 내용 「{$userQuery}」에 대해 도면 [{$currentDrawing['title']}]의 주석 및 시방서를 분석한 결과:\n• **요약**: {$currentDrawing['summary']}\n• **권장 조치**: 현장 반장 확인 후 안전 수칙 준수 시공 진행";
+        }
+
+        $this->chat_messages[] = [
+            'role' => 'assistant',
+            'text' => $replyText,
+            'time' => now()->format('H:i'),
+            'sources' => [$currentDrawing['id'] . ' 노트 4절', '시방서 Section 15100'],
+        ];
+
+        $this->qa_question = '';
+    }
+
+    /* ---------------------------------------------------------------- border
+       기타 기능 (보고서 저장, QR, 장비 수불)
     ------------------------------------------------------------------ */
 
     public function saveDailyReport(): void

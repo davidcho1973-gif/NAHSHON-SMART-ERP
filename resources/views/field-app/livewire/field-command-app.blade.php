@@ -8,10 +8,10 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-base sm:text-lg text-slate-100 tracking-tight flex items-center gap-2">
-                        건설현장 일일 현장 관리 보고서
-                        <span class="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Official Field Report</span>
+                        건설현장 일일 현장 관리 보고서 & AI 도면 지식
+                        <span class="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Official Field & Knowledge App</span>
                     </h1>
-                    <p class="text-xs text-slate-400">NAHSHON SMART ERP · Daily Field Construction & Operations Command System</p>
+                    <p class="text-xs text-slate-400">NAHSHON SMART ERP · Daily Field Construction, Daily Closing & AI Blueprint Q&A Hub</p>
                 </div>
             </div>
 
@@ -23,26 +23,31 @@
             </div>
         </div>
 
-        <!-- Professional Tab Bar -->
-        <nav class="max-w-7xl mx-auto grid grid-cols-4 gap-1.5 sm:gap-2 mt-3 pt-2 border-t border-slate-800">
-            <button wire:click="setTab('report')" class="py-2 px-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center space-x-1.5 transition-all {{ $activeTab === 'report' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
+        <!-- 5-Tab Navigation Bar -->
+        <nav class="max-w-7xl mx-auto grid grid-cols-5 gap-1 sm:gap-1.5 mt-3 pt-2 border-t border-slate-800">
+            <button wire:click="setTab('report')" class="py-2 px-1 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all {{ $activeTab === 'report' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
                 <i class="fa-regular fa-file-lines text-slate-400"></i>
-                <span class="truncate">1. 일일 작업 보고서</span>
+                <span class="truncate">1. 일일 보고서</span>
             </button>
 
-            <button wire:click="setTab('qr')" class="py-2 px-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center space-x-1.5 transition-all {{ $activeTab === 'qr' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
+            <button wire:click="setTab('qr')" class="py-2 px-1 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all {{ $activeTab === 'qr' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
                 <i class="fa-solid fa-qrcode text-slate-400"></i>
                 <span class="truncate">2. QR 출퇴근</span>
             </button>
 
-            <button wire:click="setTab('safety')" class="py-2 px-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center space-x-1.5 transition-all {{ $activeTab === 'safety' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
+            <button wire:click="setTab('safety')" class="py-2 px-1 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all {{ $activeTab === 'safety' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
                 <i class="fa-solid fa-shield-halved text-slate-400"></i>
                 <span class="truncate">3. 안전 점검 TBM</span>
             </button>
 
-            <button wire:click="setTab('equipment')" class="py-2 px-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center space-x-1.5 transition-all {{ $activeTab === 'equipment' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
+            <button wire:click="setTab('equipment')" class="py-2 px-1 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all {{ $activeTab === 'equipment' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
                 <i class="fa-solid fa-truck-ramp-box text-slate-400"></i>
                 <span class="truncate">4. 장비 수불</span>
+            </button>
+
+            <button wire:click="setTab('knowledge')" class="py-2 px-1 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all {{ $activeTab === 'knowledge' ? 'bg-slate-800 text-white border border-slate-700 shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200' }}">
+                <i class="fa-solid fa-brain text-slate-400"></i>
+                <span class="truncate">5. 도면 판독 & Q&A</span>
             </button>
         </nav>
     </header>
@@ -66,7 +71,6 @@
         <!-- TAB 1: 일일 작업 보고서 (Professional Report Style) -->
         @if($activeTab === 'report')
             <div class="space-y-6">
-                <!-- Section 1: Site & Weather Summary Sheet -->
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
                     <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                         <h2 class="text-sm font-bold text-slate-100 flex items-center gap-2">
@@ -77,7 +81,6 @@
                         </button>
                     </div>
 
-                    <!-- Site Management Drawer -->
                     @if($showSiteModal)
                         <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 mb-4 space-y-3">
                             <h3 class="text-xs font-bold text-slate-200">현장 신규 등록 및 수정</h3>
@@ -139,7 +142,6 @@
                     </div>
                 </div>
 
-                <!-- Section 2: Trade Labor Table -->
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
                     <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                         <h2 class="text-sm font-bold text-slate-100 flex items-center gap-2">
@@ -155,7 +157,6 @@
                         </div>
                     </div>
 
-                    <!-- Dynamic Trade Modal -->
                     @if($showTradeModal)
                         <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 mb-4 space-y-3">
                             <h3 class="text-xs font-bold text-slate-200">공종 항목 신규 추가 및 수정</h3>
@@ -178,7 +179,6 @@
                         </div>
                     @endif
 
-                    <!-- Professional Trade Table Grid -->
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         @foreach($trades as $t)
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-center relative group">
@@ -198,7 +198,6 @@
                     </div>
                 </div>
 
-                <!-- Section 3: Work Log & Schedule Sheet -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
                         <h2 class="text-sm font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center gap-2">
@@ -238,19 +237,17 @@
             </div>
         @endif
 
-        <!-- TAB 2: QR 출퇴근 (Clean Corporate QR Sheet) -->
+        <!-- TAB 2: QR 출퇴근 -->
         @if($activeTab === 'qr')
             <div class="max-w-2xl mx-auto space-y-6">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm text-center space-y-6">
                     <h2 class="text-sm font-bold text-slate-100 border-b border-slate-800 pb-3">현장 출퇴근 전자 태깅</h2>
-                    
                     <div class="inline-block p-4 rounded-xl bg-white shadow-md">
                         <div class="w-44 h-44 bg-slate-950 rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
                             <i class="fa-solid fa-qrcode text-5xl text-slate-200"></i>
                             <span class="text-[10px] font-mono text-slate-400 tracking-wider">{{ $qr_code_token }}</span>
                         </div>
                     </div>
-
                     <div class="grid grid-cols-2 gap-3 max-w-sm mx-auto">
                         <button wire:click="recordCommute('in')" class="py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs transition-all">
                             <i class="fa-solid fa-right-to-bracket mr-1.5 text-slate-400"></i>출근 기록
@@ -259,7 +256,6 @@
                             <i class="fa-solid fa-right-from-bracket mr-1.5 text-slate-400"></i>퇴근 기록
                         </button>
                     </div>
-
                     <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between text-xs max-w-sm mx-auto">
                         <span class="text-slate-400">최근 스캔 기록:</span>
                         <span class="font-semibold text-slate-200">{{ $last_scan_status }} {{ $last_scan_time ? '('.$last_scan_time.')' : '' }}</span>
@@ -268,7 +264,7 @@
             </div>
         @endif
 
-        <!-- TAB 3: 안전 점검 TBM (Official Safety Inspection Sheet) -->
+        <!-- TAB 3: 안전 점검 TBM -->
         @if($activeTab === 'safety')
             <div class="space-y-6">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-6">
@@ -281,7 +277,6 @@
                             <span class="font-semibold text-slate-300">TBM 실시 확인</span>
                         </label>
                     </div>
-
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                         <label class="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800 cursor-pointer">
                             <span class="text-slate-300 font-medium">1. 개인 보호구 착용 점검</span>
@@ -300,7 +295,6 @@
                             <input type="checkbox" wire:model.live="safety_checks.fire_permit" class="rounded border-slate-700 text-slate-400">
                         </label>
                     </div>
-
                     <div>
                         <label class="block text-xs font-semibold text-slate-400 mb-1">안전 지시사항</label>
                         <textarea wire:model.live="safety_notes" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 font-mono"></textarea>
@@ -309,7 +303,7 @@
             </div>
         @endif
 
-        <!-- TAB 4: 장비 수불 (Equipment Log Table) -->
+        <!-- TAB 4: 장비 수불 -->
         @if($activeTab === 'equipment')
             <div class="space-y-6">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
@@ -343,6 +337,140 @@
                                 </button>
                             </div>
                         @endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <!-- TAB 5: AI 도면 판독 & 지식 Q&A (AI Drawing Knowledge Hub) -->
+        @if($activeTab === 'knowledge')
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Column: Blueprint Library & Upload -->
+                <div class="space-y-6">
+                    <!-- Upload Blueprint Box -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                        <h2 class="text-sm font-bold text-slate-100 mb-3 border-b border-slate-800 pb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up text-slate-400"></i> 신규 도면 업로드 & AI 스캔
+                        </h2>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 mb-1">도면/도서 명칭</label>
+                                <input type="text" wire:model.live="new_drawing_title" placeholder="예: C동 3층 기계실 주배관 평면도" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 mb-1">도면 분류</label>
+                                <select wire:model.live="new_drawing_category" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
+                                    <option value="MEP 배관/전기 도면">MEP 배관/전기 도면</option>
+                                    <option value="건축 구조 도면">건축 구조 도면</option>
+                                    <option value="안전 시방서">안전 시방서 및 공정도</option>
+                                </select>
+                            </div>
+                            <button wire:click="uploadAndAnalyzeDrawing" class="w-full py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-lg transition-all flex items-center justify-center space-x-1.5">
+                                <i class="fa-solid fa-brain text-slate-300"></i>
+                                <span>AI Vision 도면 판독 및 지식등록</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Analyzed Drawing Library List -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+                        <h2 class="text-sm font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center justify-between">
+                            <span>등록된 도면 지식베이스 ({{ count($drawings) }})</span>
+                            <span class="text-[10px] text-slate-400">AI Vision Indexed</span>
+                        </h2>
+
+                        <div class="space-y-2">
+                            @foreach($drawings as $idx => $dwg)
+                                <div wire:click="selectDrawing({{ $idx }})" class="p-3 rounded-lg border transition-all cursor-pointer {{ $selected_drawing_idx === $idx ? 'bg-slate-800 border-slate-600' : 'bg-slate-950 border-slate-800 hover:border-slate-700' }}">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-bold text-slate-100 truncate max-w-[200px]">{{ $dwg['title'] }}</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">{{ $dwg['version'] }}</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 mt-1 line-clamp-2">{{ $dwg['summary'] }}</p>
+                                    <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500">
+                                        <span>{{ $dwg['category'] }}</span>
+                                        <span>{{ $dwg['analyzed_at'] }}</span>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Interactive AI Drawing Q&A Panel -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                        <!-- Drawing Specs Summary Header -->
+                        @php $currentDwg = $drawings[$selected_drawing_idx] ?? $drawings[0]; @endphp
+                        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-2">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-file-pdf text-slate-400"></i> {{ $currentDwg['title'] }}
+                                </span>
+                                <span class="text-[10px] text-slate-400 font-mono">{{ $currentDwg['id'] }}</span>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                                @foreach($currentDwg['specs'] as $spec)
+                                    <div class="bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 text-slate-300 font-medium truncate">
+                                        ✓ {{ $spec }}
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Container -->
+                        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 h-96 overflow-y-auto space-y-4">
+                            @foreach($chat_messages as $msg)
+                                @if($msg['role'] === 'assistant')
+                                    <div class="flex space-x-3">
+                                        <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
+                                            <i class="fa-solid fa-robot"></i>
+                                        </div>
+                                        <div class="space-y-1 max-w-xl">
+                                            <div class="bg-slate-900 border border-slate-800 text-xs text-slate-200 p-3 rounded-lg leading-relaxed whitespace-pre-line font-mono">
+                                                {!! nl2br(e($msg['text'])) !!}
+                                            </div>
+                                            @if(isset($msg['sources']))
+                                                <div class="flex items-center space-x-2 text-[10px] text-slate-500">
+                                                    <span>판독 근거:</span>
+                                                    @foreach($msg['sources'] as $src)
+                                                        <span class="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{{ $src }}</span>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="flex justify-end space-x-3">
+                                        <div class="bg-slate-800 text-xs text-white p-3 rounded-lg max-w-lg font-medium border border-slate-700">
+                                            {{ $msg['text'] }}
+                                        </div>
+                                        <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
+                                            <i class="fa-solid fa-user"></i>
+                                        </div>
+                                    </div>
+                                @endif
+                            @endforeach
+                        </div>
+
+                        <!-- Quick Recommended Prompts -->
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            <span class="text-slate-400 text-[11px] self-center">추천 질문:</span>
+                            <button wire:click="$set('qa_question', 'A동 2층 배관 서포트 간격 및 용접 주의사항 알려줘.')" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
+                                💡 배관 서포트 간격 & 용접 규격
+                            </button>
+                            <button wire:click="$set('qa_question', '이 도면에서 고소작업 시 필수 안전 지침은?')" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
+                                💡 고소작업 안전 지침 & LOTO
+                            </button>
+                        </div>
+
+                        <!-- Q&A Question Input Box -->
+                        <div class="flex space-x-2">
+                            <input type="text" wire:model.live="qa_question" wire:keydown.enter="askDrawingQuestion" placeholder="도면에 대해 궁금한 점을 질문하세요 (예: 관경 규격, 용접 수칙, 자재 요구사항)..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 focus:border-slate-600 focus:outline-none">
+                            <button wire:click="askDrawingQuestion" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg border border-slate-700 transition-all">
+                                <i class="fa-solid fa-paper-plane mr-1 text-slate-300"></i>질문 전송
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -68,4 +68,21 @@ class LivewireFieldCommandAppTest extends TestCase
             ->call('deleteSite', $site->id)
             ->assertHasNoErrors();
     }
+
+    public function test_ai_drawing_analysis_and_blueprint_knowledge_qa(): void
+    {
+        $user = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites']);
+        $this->actingAs($user);
+
+        Livewire::test(FieldCommandApp::class)
+            ->call('setTab', 'knowledge')
+            ->assertSet('activeTab', 'knowledge')
+            ->set('new_drawing_title', 'C동 3층 기계실 주배관 평면도')
+            ->set('new_drawing_category', 'MEP 배관/전기 도면')
+            ->call('uploadAndAnalyzeDrawing')
+            ->call('selectDrawing', 0)
+            ->set('qa_question', 'A동 2층 배관 서포트 간격 및 용접 주의사항 알려줘.')
+            ->call('askDrawingQuestion')
+            ->assertHasNoErrors();
+    }
 }
