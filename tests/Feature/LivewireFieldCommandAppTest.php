@@ -13,6 +13,12 @@ class LivewireFieldCommandAppTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_field_command_app_can_be_accessed_by_guest_without_auth_wall(): void
+    {
+        $response = $this->get('/field-app');
+        $response->assertOk();
+    }
+
     public function test_field_command_app_can_be_rendered(): void
     {
         $user = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites']);
