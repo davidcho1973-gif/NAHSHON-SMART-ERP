@@ -119,6 +119,10 @@
                 <i class="ph ph-bell-ringing" style="color:#f97316"></i><span>ðŸ”” í†µí•© ì•Œë¦¼ ì„¼í„°</span>
                 <span class="nav-badge alert" id="alert-unread-badge" style="background:#ef4444">0</span>
               </li>
+              <li class="nav-item" data-view="document-hub" id="nav-document-hub">
+                <i class="ph ph-files" style="color:#2563eb"></i><span>AI 통합 문서함</span>
+                <span class="nav-badge" style="background:rgba(37,99,235,.12);color:#2563eb">NEW</span>
+              </li>
             </ul>
           </div>
           <div class="nav-section">
@@ -1284,7 +1288,7 @@
         'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
         'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '영수증처리', render: renderFinance },
-        'messages': { title: '메세지', render: renderAlerts },
+        'messages': { title: '메세지', render: renderUnifiedAlerts },
         'schedule': { title: '일정관리', render: renderWbs },
         'personnel': { title: '인원관리', render: function () { window._pendingHrTab = 'personnel'; return renderHR(); } },
         'profile': { title: 'My Profile', render: renderAccountProfile },
@@ -1293,7 +1297,8 @@
         'password': { title: 'Change Password', render: renderAccountPassword },
         'command': { title: 'AI í˜„ìž¥ ì§€íœ˜ì‹¤', render: renderCommandCenter },
         'analytics': { title: 'ë¶„ì„ ë°ì´í„°', render: renderAnalytics },
-        'alerts': { title: 'í†µí•© ì•Œë¦¼ ì„¼í„°', render: renderAlerts },
+        'alerts': { title: '통합 알림 센터', render: renderUnifiedAlerts },
+        'document-hub': { title: 'AI 통합 문서함', render: function () { window.location.assign('/document-hub'); } },
         'safety': { title: 'AI ìž‘ì—…ì•ˆì „ê´€ë¦¬', render: renderSafety },
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
@@ -2600,6 +2605,180 @@
           };
 
         } catch(err) { renderError('ì•Œë¦¼ ì„¼í„° ë¡œë”© ì‹¤íŒ¨: '+err.message); console.error(err); }
+      }
+
+      // 실제 통합 알림 데이터베이스를 사용하는 새 알림 센터.
+      async function renderUnifiedAlerts() {
+        pageContainer.innerHTML = skeleton();
+
+        try {
+          var alerts = await window.API.getAlerts('all');
+          alerts = Array.isArray(alerts) ? alerts : [];
+
+          var moduleMeta = {
+            DOC:      { label: 'AI 문서', icon: 'ph-files', color: '#2563eb', bg: 'rgba(37,99,235,.10)' },
+            CONTRACT: { label: '계약', icon: 'ph-file-text', color: '#7c3aed', bg: 'rgba(124,58,237,.10)' },
+            WBS:      { label: '공정/프로젝트', icon: 'ph-tree-structure', color: '#0891b2', bg: 'rgba(8,145,178,.10)' },
+            SAFETY:   { label: '안전', icon: 'ph-shield-warning', color: '#dc2626', bg: 'rgba(220,38,38,.10)' },
+            HR:       { label: '인원', icon: 'ph-users', color: '#475569', bg: 'rgba(71,85,105,.10)' },
+            INV:      { label: '자재/장비', icon: 'ph-package', color: '#d97706', bg: 'rgba(217,119,6,.10)' },
+            VEH:      { label: '차량', icon: 'ph-car', color: '#2563eb', bg: 'rgba(37,99,235,.10)' },
+            HSG:      { label: '숙소', icon: 'ph-house', color: '#059669', bg: 'rgba(5,150,105,.10)' }
+          };
+          var severityMeta = {
+            '긴급': { dot: '#ef4444', color: '#b91c1c', bg: 'rgba(239,68,68,.08)', border: 'rgba(239,68,68,.24)' },
+            '주의': { dot: '#f59e0b', color: '#b45309', bg: 'rgba(245,158,11,.07)', border: 'rgba(245,158,11,.22)' },
+            '일반': { dot: '#3b82f6', color: '#1d4ed8', bg: 'rgba(59,130,246,.06)', border: 'rgba(59,130,246,.18)' }
+          };
+          var statusMeta = {
+            '미처리': { color: '#dc2626', bg: 'rgba(239,68,68,.10)' },
+            '처리중': { color: '#d97706', bg: 'rgba(245,158,11,.10)' },
+            '완료': { color: '#059669', bg: 'rgba(16,185,129,.10)' },
+            '무시': { color: '#64748b', bg: 'rgba(100,116,139,.10)' }
+          };
+          var state = window._unifiedAlertState || { severity: 'all', module: 'all', pending: false };
+          window._unifiedAlertState = state;
+          var today = new Date().toISOString().slice(0, 10);
+          var urgent = alerts.filter(function (a) { return a.severity === '긴급' && a.status !== '완료' && a.status !== '무시'; }).length;
+          var caution = alerts.filter(function (a) { return a.severity === '주의' && a.status !== '완료' && a.status !== '무시'; }).length;
+          var todayNew = alerts.filter(function (a) { return String(a.ts || '').slice(0, 10) === today; }).length;
+          var done = alerts.filter(function (a) { return a.status === '완료'; }).length;
+
+          var badge = document.getElementById('alert-unread-badge');
+          if (badge) badge.textContent = urgent + caution;
+
+          function elapsed(value) {
+            if (!value) return '';
+            var date = new Date(String(value).replace(' ', 'T'));
+            if (Number.isNaN(date.getTime())) return String(value);
+            var minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+            if (minutes < 60) return minutes + '분 전';
+            if (minutes < 1440) return Math.floor(minutes / 60) + '시간 전';
+            return Math.floor(minutes / 1440) + '일 전';
+          }
+
+          var modulesInUse = Array.from(new Set(alerts.map(function (a) { return a.module; }).filter(Boolean)));
+          var moduleOptions = modulesInUse.map(function (key) {
+            var meta = moduleMeta[key] || { label: key };
+            return '<option value="' + safeHtml(key) + '">' + safeHtml(meta.label) + '</option>';
+          }).join('');
+
+          pageContainer.innerHTML =
+            '<div class="header-section"><div>'
+              + '<h1 class="page-title"><i class="ph ph-bell-ringing" style="color:#f97316"></i> 통합 알림 센터</h1>'
+              + '<p class="page-subtitle">문서·계약·공정·안전·인원·장비의 기한과 위험 신호를 한곳에서 확인하고 조치합니다.</p>'
+            + '</div><div class="action-row">'
+              + '<a href="/document-hub" class="btn-secondary" style="text-decoration:none"><i class="ph ph-files"></i> AI 문서함</a>'
+              + '<button class="btn-primary" id="unified-alert-refresh"><i class="ph ph-arrows-clockwise"></i> 새로고침</button>'
+            + '</div></div>'
+            + '<div class="kpi-row" style="grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:16px">'
+              + '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">미처리 긴급</div><div class="kpi-value" style="color:#dc2626">' + urgent + '</div><div class="kpi-meta">즉시 조치 필요</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #f59e0b"><div class="kpi-label">미처리 주의</div><div class="kpi-value" style="color:#d97706">' + caution + '</div><div class="kpi-meta">기한 내 검토 필요</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #3b82f6"><div class="kpi-label">오늘 신규</div><div class="kpi-value" style="color:#2563eb">' + todayNew + '</div><div class="kpi-meta">오늘 발생</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #10b981"><div class="kpi-label">처리 완료</div><div class="kpi-value" style="color:#059669">' + done + '</div><div class="kpi-meta">조치 기록 보존</div></div>'
+              + '<div class="kpi-card" style="border-left:3px solid #64748b"><div class="kpi-label">전체 알림</div><div class="kpi-value">' + alerts.length + '</div><div class="kpi-meta">권한 범위 내 누적</div></div>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:12px 14px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:10px">'
+              + '<span style="font-size:11px;font-weight:800;color:var(--text-tertiary)">긴급도</span>'
+              + '<button class="unified-severity btn-secondary" data-severity="all">전체</button>'
+              + '<button class="unified-severity btn-secondary" data-severity="긴급">긴급</button>'
+              + '<button class="unified-severity btn-secondary" data-severity="주의">주의</button>'
+              + '<button class="unified-severity btn-secondary" data-severity="일반">일반</button>'
+              + '<select id="unified-module" style="margin-left:8px;background:var(--bg-subtle);border:1px solid var(--border-color);color:var(--text-primary);padding:7px 10px;border-radius:7px;font-size:11px"><option value="all">전체 모듈</option>' + moduleOptions + '</select>'
+              + '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text-secondary);cursor:pointer"><input id="unified-pending" type="checkbox"> 미처리만 보기</label>'
+            + '</div>'
+            + '<div id="unified-alert-list"></div>';
+
+          var moduleSelect = document.getElementById('unified-module');
+          var pendingCheck = document.getElementById('unified-pending');
+          moduleSelect.value = state.module;
+          pendingCheck.checked = state.pending;
+
+          function renderList() {
+            var list = alerts.filter(function (alertItem) {
+              if (state.severity !== 'all' && alertItem.severity !== state.severity) return false;
+              if (state.module !== 'all' && alertItem.module !== state.module) return false;
+              if (state.pending && (alertItem.status === '완료' || alertItem.status === '무시')) return false;
+              return true;
+            });
+            var target = document.getElementById('unified-alert-list');
+            if (!list.length) {
+              target.innerHTML = '<div class="panel"><div class="panel-body" style="padding:42px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-bell-slash" style="font-size:38px;display:block;margin-bottom:10px"></i>조건에 맞는 알림이 없습니다.</div></div>';
+              return;
+            }
+
+            target.innerHTML = list.map(function (alertItem) {
+              var severity = severityMeta[alertItem.severity] || severityMeta['일반'];
+              var module = moduleMeta[alertItem.module] || { label: alertItem.module || '기타', icon: 'ph-bell', color: '#64748b', bg: 'rgba(100,116,139,.10)' };
+              var status = statusMeta[alertItem.status] || statusMeta['미처리'];
+              var closed = alertItem.status === '완료' || alertItem.status === '무시';
+              var detailButton = alertItem.actionUrl
+                ? '<button class="btn-secondary unified-action" data-action="open" data-id="' + safeHtml(alertItem.id) + '"><i class="ph ph-arrow-square-out"></i> 관련 화면</button>'
+                : '';
+              var actionButtons = closed ? '' : '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">'
+                + detailButton
+                + '<button class="btn-secondary unified-action" data-action="complete" data-id="' + safeHtml(alertItem.id) + '" style="color:#059669"><i class="ph ph-check"></i> 처리 완료</button>'
+                + '<button class="btn-secondary unified-action" data-action="ignore" data-id="' + safeHtml(alertItem.id) + '"><i class="ph ph-x"></i> 무시</button>'
+                + '</div>';
+              return '<article style="border:1px solid ' + severity.border + ';background:' + severity.bg + ';border-radius:12px;padding:16px 18px;margin-bottom:10px;' + (closed ? 'opacity:.62;' : '') + '">'
+                + '<div style="display:flex;align-items:flex-start;gap:12px">'
+                  + '<span style="width:10px;height:10px;border-radius:50%;margin-top:6px;background:' + severity.dot + ';box-shadow:0 0 0 4px ' + severity.bg + '"></span>'
+                  + '<div style="flex:1;min-width:0">'
+                    + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:6px">'
+                      + '<span style="font-family:monospace;font-size:10px;font-weight:800;color:var(--text-tertiary)">' + safeHtml(alertItem.id) + '</span>'
+                      + '<span style="padding:3px 8px;border-radius:999px;background:' + module.bg + ';color:' + module.color + ';font-size:10px;font-weight:800"><i class="ph ' + module.icon + '"></i> ' + safeHtml(module.label) + '</span>'
+                      + '<span style="padding:3px 8px;border-radius:999px;background:' + status.bg + ';color:' + status.color + ';font-size:10px;font-weight:800">' + safeHtml(alertItem.status || '미처리') + '</span>'
+                      + '<span style="margin-left:auto;font-size:10px;color:var(--text-tertiary)">' + safeHtml(elapsed(alertItem.ts)) + '</span>'
+                    + '</div>'
+                    + '<div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:4px">' + safeHtml(alertItem.title || '알림') + '</div>'
+                    + '<div style="font-size:12px;line-height:1.6;color:var(--text-secondary)">' + safeHtml(alertItem.content || '') + '</div>'
+                    + (alertItem.dueAt ? '<div style="margin-top:7px;font-size:11px;font-weight:700;color:' + severity.color + '"><i class="ph ph-calendar-blank"></i> 기한 ' + safeHtml(alertItem.dueAt) + '</div>' : '')
+                    + actionButtons
+                  + '</div>'
+                + '</div>'
+              + '</article>';
+            }).join('');
+
+            document.querySelectorAll('.unified-action').forEach(function (button) {
+              button.addEventListener('click', async function () {
+                var alertItem = alerts.find(function (item) { return item.id === button.dataset.id; });
+                if (!alertItem) return;
+                if (button.dataset.action === 'open') {
+                  window.location.assign(alertItem.actionUrl);
+                  return;
+                }
+                button.disabled = true;
+                var nextStatus = button.dataset.action === 'complete' ? '완료' : '무시';
+                try {
+                  var result = await window.API.updateAlertStatus(alertItem.id, nextStatus);
+                  if (result && result.success === false) throw new Error(result.error || '알림 상태 변경 실패');
+                  alertItem.status = nextStatus;
+                  renderList();
+                } catch (error) {
+                  button.disabled = false;
+                  window.showToast(error.message || '알림 상태를 변경하지 못했습니다.', true);
+                }
+              });
+            });
+          }
+
+          document.querySelectorAll('.unified-severity').forEach(function (button) {
+            if (button.dataset.severity === state.severity) button.classList.add('btn-primary');
+            button.addEventListener('click', function () {
+              state.severity = button.dataset.severity;
+              document.querySelectorAll('.unified-severity').forEach(function (item) { item.classList.remove('btn-primary'); });
+              button.classList.add('btn-primary');
+              renderList();
+            });
+          });
+          moduleSelect.addEventListener('change', function () { state.module = moduleSelect.value; renderList(); });
+          pendingCheck.addEventListener('change', function () { state.pending = pendingCheck.checked; renderList(); });
+          document.getElementById('unified-alert-refresh').addEventListener('click', renderUnifiedAlerts);
+          renderList();
+        } catch (error) {
+          renderError('통합 알림 센터를 불러오지 못했습니다: ' + error.message);
+          console.error('[renderUnifiedAlerts]', error);
+        }
       }
 
       // â”€â”€ SAFETY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -12944,10 +13123,15 @@
 
       // â”€â”€ ì´ˆê¸°í™” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       pageContainer.style.transition = 'opacity 0.15s';
-      loadView('dashboard');
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedView = urlParams.get('view');
+      const initialView = requestedView && routes[requestedView] ? requestedView : 'dashboard';
+      navItems.forEach(function (item) {
+        item.classList.toggle('active', item.getAttribute('data-view') === initialView);
+      });
+      loadView(initialView);
 
       // URL team_code 파라미터 체크 및 QR 출퇴근 자동 진입
-      const urlParams = new URLSearchParams(window.location.search);
       const teamCodeParam = urlParams.get('team_code');
       if (teamCodeParam) {
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;

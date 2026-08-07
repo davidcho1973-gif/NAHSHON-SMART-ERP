@@ -65,8 +65,8 @@ class SmartCompanyData
             'api_getInventoryAssetDetail' => self::inventoryAssetDetail((string) ($args[0] ?? '')),
             'api_processInventoryPhotos', 'setupInventorySheets', 'setupInventoryFolders' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
 
-            'api_getAlerts' => self::alerts($args[0] ?? 'all'),
-            'api_updateAlertStatus' => ['success' => true],
+            'api_getAlerts' => self::alerts($args[0] ?? 'all', $siteId),
+            'api_updateAlertStatus' => self::updateAlertStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
             'api_getSafetyStats' => self::safetyStats(),
             'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
@@ -1142,14 +1142,22 @@ class SmartCompanyData
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
-    public static function alerts(mixed $filter = 'all'): array
+    public static function alerts(mixed $filter = 'all', string $siteId = 'ALL'): array
     {
-        $fromDb = self::smartRecords('safety');
-        return $fromDb ?: [
-            ['id' => 'ALT-100', 'title' => 'Open edge protection missing', 'type' => 'Safety', 'site' => 'HFF-02', 'level' => 'critical', 'status' => '미처리', 'date' => '2026-06-19'],
-            ['id' => 'ALT-101', 'title' => 'Visa expiry review', 'type' => 'HR', 'site' => 'LGES-AZ', 'level' => 'warning', 'status' => '처리중', 'date' => '2026-06-18'],
-            ['id' => 'ALT-102', 'title' => 'Rental return due in 2 days', 'type' => 'Rental', 'site' => 'NV-05', 'level' => 'normal', 'status' => '미처리', 'date' => '2026-06-17'],
-        ];
+        $user = auth()->user();
+
+        return $user
+            ? app(\App\Services\Alerts\UnifiedAlertService::class)->forUser($user, $siteId, is_scalar($filter) ? (string) $filter : 'all')
+            : [];
+    }
+
+    public static function updateAlertStatus(string $identifier, string $status): array
+    {
+        $user = auth()->user();
+
+        return $user
+            ? app(\App\Services\Alerts\UnifiedAlertService::class)->updateStatus($user, $identifier, $status)
+            : ['success' => false, 'error' => '로그인이 필요합니다.'];
     }
     public static function ptwList(): array { return [['id' => 'PTW-01', 'job' => 'Hot work Area B', 'status' => '승인대기', 'owner' => 'Safety'], ['id' => 'PTW-02', 'job' => 'Lift work Level 3', 'status' => '완료', 'owner' => 'PM']]; }
     public static function inspections(): array { return [['id' => 'INS-01', 'area' => 'Area A', 'result' => 'Pass', 'inspector' => 'Carlos'], ['id' => 'INS-02', 'area' => 'Area C', 'result' => 'Fail', 'inspector' => 'Daniel']]; }

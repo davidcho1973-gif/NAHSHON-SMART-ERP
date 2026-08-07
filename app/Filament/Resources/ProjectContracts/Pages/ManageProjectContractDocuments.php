@@ -198,7 +198,7 @@ class ManageProjectContractDocuments extends ManageRelatedRecords
                 ->modalWidth('4xl')
                 ->mutateDataUsing(function (array $data): array {
                     $data['uploaded_by'] = auth()->id();
-                    $data['disk'] = 'local';
+                    $data['disk'] = (string) config('document-intelligence.disk', 'local');
 
                     return $data;
                 })
