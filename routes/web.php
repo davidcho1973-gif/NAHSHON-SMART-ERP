@@ -47,7 +47,7 @@ Route::middleware('auth')->group(function (): void {
     Route::redirect('/erp', '/');
     Route::redirect('/dashboard', '/');
 
-    Route::post('/company/switch', CompanySwitchController::class)->name('company.switch');
+    Route::post('/company/switch', [CompanySwitchController::class, '__invoke'])->name('company.switch');
 
     // Mobile Expense Routes
     Route::get('/mobile-expense/index', [MobileExpenseController::class, 'index'])->name('mobile-expense.index');
