@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\DailyCrewReport;
 use App\Models\User;
+use App\Services\Attendance\DailyHeadcountService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -14,8 +14,8 @@ class DailyCrewReportService
 {
     public function __construct(
         private readonly AttendanceQrService $attendanceQrService,
-    ) {
-    }
+        private readonly DailyHeadcountService $headcount,
+    ) {}
 
     /**
      * @return array{
@@ -112,20 +112,20 @@ class DailyCrewReportService
         });
     }
 
+    /**
+     * 인원은 직접 세지 않고 DailyHeadcountService 에 묻는다.
+     *
+     * 예전에는 여기에 집계 쿼리가 따로 있었다. 같은 attendance_logs 를 보면서도
+     * 규칙이 두 벌이라, 모바일앱에서 본 인원과 상황실에서 본 인원이 어긋날 수 있었다.
+     * 세는 규칙은 한 곳에만 있어야 한다.
+     */
     public function scannedHeadcount(AttendanceQrCode $qrCode, string $workDate): int
     {
         if (! $qrCode->team_id) {
             return 0;
         }
 
-        return AttendanceLog::query()
-            ->where('site_id', $qrCode->site_id)
-            ->where('team_id', $qrCode->team_id)
-            ->whereDate('attendance_date', $workDate)
-            ->where('event_type', 'clock_in')
-            ->where('status', '!=', 'rejected')
-            ->distinct()
-            ->count('employee_id');
+        return $this->headcount->presentCount($qrCode->site_id, $workDate, $qrCode->team_id);
     }
 
     public function todayFor(AttendanceQrCode $qrCode): string
