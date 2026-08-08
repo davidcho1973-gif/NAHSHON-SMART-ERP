@@ -8360,6 +8360,29 @@
           var anomalies = res.anomalies || [];
           var employees = res.employees || [];
 
+          var certified = res.certifiedPayroll || { required: false, headcount: 0, sources: [] };
+
+          // 계약이 인증임금(WH-347)을 요구하면 급여를 돌리기 전에 알린다.
+          // 다 돌리고 나서 "이 현장 대상이었네" 를 알게 되면 이미 늦다.
+          var certifiedHtml = '';
+          if (certified.required) {
+            var names = (certified.sources || []).map(function (s) { return s.label; }).filter(Boolean);
+            names = names.filter(function (v, i) { return names.indexOf(v) === i; });
+            var why = names.slice(0, 2).join(' \u00b7 ');
+            if (names.length > 2) why += ' 외 ' + (names.length - 2) + '건';
+            certifiedHtml =
+              '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-warning)">' +
+                '<div class="panel-body padded" style="display:flex;align-items:flex-start;gap:12px">' +
+                  '<i class="ph ph-seal-warning" style="font-size:20px;color:var(--status-warning);flex:none;margin-top:1px"></i>' +
+                  '<div>' +
+                    '<div style="font-weight:600">이번 기간 인증임금 대상 ' + certified.headcount + '명 \u2014 WH-347 제출 필요</div>' +
+                    '<div style="font-size:12px;color:var(--text-secondary);margin-top:3px">' +
+                      (why || '계약 요건') + ' \u00b7 급여 확정 후 대장을 내려받을 수 있습니다</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+          }
+
           var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
 
           // ── 1. Pay Period í—¤ë ” ──
@@ -8489,7 +8512,7 @@
               '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' · Bi-weekly Pay Period 기준</p></div>' +
               '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 시트 마스터</button></div>' +
             '</div>' +
-            periodHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
+            periodHtml + certifiedHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
 
           // 검색 핸들러
           var srch = document.getElementById('payroll-search');
@@ -8711,6 +8734,29 @@
           var anomalies = res.anomalies || [];
           var employees = res.employees || [];
 
+          var certified = res.certifiedPayroll || { required: false, headcount: 0, sources: [] };
+
+          // 계약이 인증임금(WH-347)을 요구하면 급여를 돌리기 전에 알린다.
+          // 다 돌리고 나서 "이 현장 대상이었네" 를 알게 되면 이미 늦다.
+          var certifiedHtml = '';
+          if (certified.required) {
+            var names = (certified.sources || []).map(function (s) { return s.label; }).filter(Boolean);
+            names = names.filter(function (v, i) { return names.indexOf(v) === i; });
+            var why = names.slice(0, 2).join(' \u00b7 ');
+            if (names.length > 2) why += ' 외 ' + (names.length - 2) + '건';
+            certifiedHtml =
+              '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-warning)">' +
+                '<div class="panel-body padded" style="display:flex;align-items:flex-start;gap:12px">' +
+                  '<i class="ph ph-seal-warning" style="font-size:20px;color:var(--status-warning);flex:none;margin-top:1px"></i>' +
+                  '<div>' +
+                    '<div style="font-weight:600">이번 기간 인증임금 대상 ' + certified.headcount + '명 \u2014 WH-347 제출 필요</div>' +
+                    '<div style="font-size:12px;color:var(--text-secondary);margin-top:3px">' +
+                      (why || '계약 요건') + ' \u00b7 급여 확정 후 대장을 내려받을 수 있습니다</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+          }
+
           var COLOR_MGR = '#f59e0b', COLOR_KOR = '#3b82f6', COLOR_LOC = '#10b981', COLOR_TOTAL = '#a78bfa';
 
           // ── 1. Pay Period í—¤ë ” ──
@@ -8840,7 +8886,7 @@
               '<p class="page-subtitle">' + (window.SITE_NAMES && window.SITE_NAMES[_siteId()] || _siteId()) + ' · Bi-weekly Pay Period 기준</p></div>' +
               '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 시트 마스터</button></div>' +
             '</div>' +
-            periodHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
+            periodHtml + certifiedHtml + kpiHtml + companyHtml + anomalyHtml + empHtml;
 
           // 검색 핸들러
           var srch = document.getElementById('payroll-search');

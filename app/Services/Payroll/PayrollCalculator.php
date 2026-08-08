@@ -7,7 +7,6 @@ use App\Models\EmployeePayrollProfile;
 use App\Models\PayrollRun;
 use App\Models\PayrollTimesheet;
 use App\Models\Payslip;
-use App\Models\PayslipLine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -27,20 +26,31 @@ use Illuminate\Support\Facades\Schema;
  */
 class PayrollCalculator
 {
+    public function __construct(
+        private readonly CertifiedPayrollRequirement $certified = new CertifiedPayrollRequirement,
+    ) {}
+
     /** Standard full-time hours used to derive an hourly-equivalent rate for salaried staff. */
     public const STANDARD_HOURS_PER_WEEK = 40;
+
     public const BIWEEKLY_PERIODS_PER_YEAR = 26;
+
     public const ANNUAL_WORK_HOURS = 2080; // 40h × 52w
 
     /** US payroll tax constants (2026 figures; adjust yearly). */
     public const FICA_RATE = 0.062;
+
     public const FICA_WAGE_BASE = 176100.0;
+
     public const MEDICARE_RATE = 0.0145;
+
     public const MEDICARE_ADDL_RATE = 0.009;
+
     public const MEDICARE_ADDL_THRESHOLD = 200000.0;
 
     /** Pay-period length. Anchored to a known Monday so every period is deterministic. */
     public const PERIOD_DAYS = 14;
+
     private const PERIOD_ANCHOR = '2026-01-05'; // a Monday
 
     /** Per-state flat withholding approximation. Default applies when a state is absent. */
@@ -48,6 +58,7 @@ class PayrollCalculator
         'TX' => 0.0, 'TN' => 0.0, 'NV' => 0.0, 'FL' => 0.0, 'WA' => 0.0, 'SD' => 0.0, 'WY' => 0.0,
         'AZ' => 0.025, 'GA' => 0.0539, 'CA' => 0.06, 'NY' => 0.0685, 'OH' => 0.035, 'IN' => 0.0305,
     ];
+
     private const STATE_RATE_DEFAULT = 0.05;
 
     private const DIVISIONS = ['관리자', '한국인', '외국인'];
@@ -78,6 +89,9 @@ class PayrollCalculator
                 'isComplete' => $period['isComplete'],
             ],
             'totals' => $totals,
+            // 계약이 인증임금을 요구하면 여기서 먼저 알린다. 급여를 다 돌리고 나서
+            // "이 현장 WH-347 이었네" 를 알게 되면 이미 늦다.
+            'certifiedPayroll' => $this->certified->forPeriod($siteId, $period['start'], $period['end']),
             'companies' => $this->companyMatrix($rows),
             'anomalies' => $this->anomalies($rows),
             'employees' => $rows->map(fn (array $r): array => [
@@ -174,8 +188,8 @@ class PayrollCalculator
                 'gross' => $earn['gross'],
             ];
         })->filter(fn (array $r) => $r['regHours'] > 0 || $r['otHours'] > 0 || $r['gross'] > 0 || $r['openDays'] > 0)
-          ->sortByDesc('gross')
-          ->values();
+            ->sortByDesc('gross')
+            ->values();
     }
 
     /**
@@ -185,7 +199,6 @@ class PayrollCalculator
      * salary: fixed bi-weekly slice (annual ÷ 26); rate shown = annual ÷ 2080
      * daily : reg-hours treated as (hours ÷ 8) days × daily rate
      *
-     * @param  EmployeePayrollProfile|null  $profile
      * @return array{gross: float, appliedRate: float, displayRate: float, basis: string}
      */
     public function grossForEmployee(?EmployeePayrollProfile $profile, float $regHours, float $otHours, float $dtHours = 0.0): array
@@ -219,7 +232,6 @@ class PayrollCalculator
     /**
      * Statutory + elective deductions on a period's gross.
      *
-     * @param  EmployeePayrollProfile|null  $profile
      * @return array{fica: float, medicare: float, fedTax: float, stateTax: float, retirement: float, net: float}
      */
     public function deductionsFor(float $gross, float $ytdGrossBefore, ?EmployeePayrollProfile $profile): array
@@ -320,10 +332,16 @@ class PayrollCalculator
                 $totalNet += $ded['net'];
             }
 
+            // 이 배치가 인증임금 대상이었는지를 배치 자체에 새긴다.
+            // 계약은 나중에 바뀔 수 있으니, 돌린 시점의 판단을 남겨야 나중에 감사 때
+            // "왜 이때 WH-347 을 냈나/안 냈나" 에 답할 수 있다.
+            $certified = $this->certified->forPeriod($siteId, $period['start'], $period['end']);
+
             $run->update([
                 'total_gross' => round($totalGross, 2),
                 'total_net' => round($totalNet, 2),
                 'headcount' => $rows->count(),
+                'payload' => array_merge((array) ($run->payload ?? []), ['certifiedPayroll' => $certified]),
             ]);
 
             return $run->fresh('payslips');
@@ -509,7 +527,7 @@ class PayrollCalculator
                 'type' => '미체크아웃',
                 'severity' => 'high',
                 'reason' => 'Check-out 누락',
-                'detail' => $r['openDays'] . '일',
+                'detail' => $r['openDays'].'일',
             ])->values()->all();
     }
 
