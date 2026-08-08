@@ -20,7 +20,7 @@ class AccessAccountProvisionerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'NH', 'name' => 'NAHSHON', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'NH', 'name' => 'DASOL PRISM', 'status' => 'active']);
         $this->site = Site::create(['company_id' => $this->company->id, 'code' => 'LGES-AZ', 'name' => 'LG AZ', 'status' => 'active']);
     }
 

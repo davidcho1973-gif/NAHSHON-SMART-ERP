@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('name', 255);
 
             // SubTask 속성
-            $table->string('company', 40)->nullable();        // NAHSHON / AUTORICA / AI-KOREA / M-SOL
+            $table->string('company', 40)->nullable();        // DASOL PRISM / AUTORICA / AI-KOREA / M-SOL
             $table->string('status', 20)->default('AI생성');  // AI생성 / 검수완료 / 진행중 / 완료 / 보류
             $table->string('ehs', 12)->nullable();            // high / medium / low
             $table->decimal('manhours', 10, 1)->nullable();

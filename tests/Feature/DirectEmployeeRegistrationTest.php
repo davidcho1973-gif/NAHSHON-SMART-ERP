@@ -79,7 +79,7 @@ class DirectEmployeeRegistrationTest extends TestCase
     {
         $this->actingAs($this->admin());
 
-        $company = Company::create(['code' => 'NH', 'name' => 'NAHSHON', 'status' => 'active']);
+        $company = Company::create(['code' => 'NH', 'name' => 'DASOL PRISM', 'status' => 'active']);
         $site = Site::create(['company_id' => $company->id, 'code' => 'LGES-AZ', 'name' => 'LG AZ', 'status' => 'active']);
         $emp = Employee::create([
             'company_id' => $company->id, 'site_id' => $site->id,

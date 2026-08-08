@@ -120,6 +120,32 @@ class WbsItem extends Model
     }
 
     /**
+     * 조달성 공정인가 — 발주·조달·구매·제작처럼 "사람이 몸으로 하는 현장 작업"이 아니라
+     * 물건을 사서 납기를 기다리는 공정. (인원이 배정된 작업은 조달로 보지 않는다.)
+     *
+     * 이런 공정은 '오늘 할 일'(현장 노무) 대신 '조달 관리'(자재 납기)에서 다룬다.
+     */
+    public function looksLikeProcurement(): bool
+    {
+        if ($this->crew_size !== null && (float) $this->crew_size > 0) {
+            return false;
+        }
+
+        $hay = mb_strtolower(trim(($this->name ?? '').' '.($this->trade ?? '')));
+        if ($hay === '') {
+            return false;
+        }
+
+        foreach (['조달', '발주', '구매', '납품', '제작', '조립생산', 'procure', 'purchase', 'lead time', '리드타임'] as $kw) {
+            if (str_contains($hay, mb_strtolower($kw))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * 이 공정에 실제로 투입된 인원 수 (안전카드 서명 기준). 계획(crew_size)과 대비된다.
      */
     public function actualCrewCount(): int

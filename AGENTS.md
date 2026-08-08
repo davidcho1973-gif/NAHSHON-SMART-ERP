@@ -1,4 +1,4 @@
-# AGENTS.md — NAHSHON SMART ERP 멀티 에이전트 협업 가이드
+# AGENTS.md — DASOL PRISM SMART ERP 멀티 에이전트 협업 가이드
 
 > 이 문서는 **CODEX · Antigravity · Cowork(Claude)** 세 AI 에이전트가 같은 저장소에서
 > 동시에 작업할 때 충돌 없이 협업하기 위한 단일 조율 문서입니다.

@@ -18,8 +18,8 @@ class ProjectManagementTest extends TestCase
     public function test_project_create_form_stores_installation_project_metadata(): void
     {
         $company = Company::query()->create([
-            'code' => 'NAHSHON',
-            'name' => 'NAHSHON MEP',
+            'code' => 'DASOL PRISM',
+            'name' => 'DASOL PRISM',
             'status' => 'active',
         ]);
 

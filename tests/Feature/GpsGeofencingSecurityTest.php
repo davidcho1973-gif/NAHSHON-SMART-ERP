@@ -24,8 +24,8 @@ class GpsGeofencingSecurityTest extends TestCase
         parent::setUp();
 
         $this->company = Company::create([
-            'code' => 'NAHSHON',
-            'name' => 'NAHSHON MEP',
+            'code' => 'DASOL PRISM',
+            'name' => 'DASOL PRISM',
             'status' => 'active',
         ]);
 
@@ -179,7 +179,7 @@ class GpsGeofencingSecurityTest extends TestCase
         $eventTime = Carbon::now()->subMinutes(10); // 10 minutes ago (offline event)
         $eventAtStr = $eventTime->toDateTimeString();
         
-        $secretKey = config('app.key') ?: 'base64:nahshonsmarterpdefaultkey';
+        $secretKey = config('app.key') ?: 'base64:dasol-prismsmarterpdefaultkey';
         $validToken = hash_hmac(
             'sha256',
             $this->employee->id . '_clock_in_' . $eventAtStr . '_33.4255_-111.94_', // empty team code suffix

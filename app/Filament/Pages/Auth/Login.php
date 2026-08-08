@@ -55,7 +55,7 @@ class Login extends BaseLogin
 
     public function getSubheading(): string | Htmlable | null
     {
-        return 'NAHSHON MEP ERP staging environment';
+        return 'DASOL PRISM ERP staging environment';
     }
 
     public function hasLogo(): bool

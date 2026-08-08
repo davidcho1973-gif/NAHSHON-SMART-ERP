@@ -5,15 +5,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>SMART COMPANY ERP | NAHSHON MEP</title>
-  <meta name="description" content="NAHSHON MEP í˜„ìž¥ í†µí•© ê´€ë¦¬ ì‹œìŠ¤í…œ">
+  <title>SMART COMPANY ERP | DASOL PRISM</title>
+  <meta name="description" content="DASOL PRISM í˜„ìž¥ í†µí•© ê´€ë¦¬ ì‹œìŠ¤í…œ">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
+  <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-applicants.js') }}?v={{ filemtime(public_path('js/admin-applicants.js')) }}" defer></script>
+    <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   <style>
 
@@ -142,6 +149,14 @@
                 <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>ê³µì • ê´€ë¦¬ (WBS)</span>
                 <span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
+              <li class="nav-item" data-view="opsroom" id="nav-opsroom" style="padding-left:26px">
+                <i class="ph ph-broadcast" style="color:#22c55e"></i><span>현장 상황실</span>
+                <span class="nav-badge" style="background:rgba(34,197,94,.16);color:#22c55e">AI</span>
+              </li>
+              <li class="nav-item" data-view="docs" id="nav-docs" style="padding-left:26px">
+                <i class="ph ph-folders" style="color:#818cf8"></i><span>문서통합관리</span>
+                <span class="nav-badge" style="background:rgba(129,140,248,.16);color:#818cf8">AI</span>
+              </li>
               <li class="nav-item" data-view="finance" id="nav-finance">
                 <i class="ph ph-currency-dollar"></i><span>ìž¬ë¬´ (Finance)</span>
               </li>
@@ -151,7 +166,7 @@
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-section-title">NASON í†µí•©ê´€ë¦¬</div>
+            <div class="nav-section-title">DASOL PRISM í†µí•©ê´€ë¦¬</div>
             <ul class="nav-list">
               <li class="nav-item" data-view="vehicle" id="nav-vehicle">
                 <i class="ph ph-car"></i><span>ì°¨ëŸ‰ ê´€ë¦¬</span>
@@ -171,6 +186,24 @@
               </li>
               <li class="nav-item" data-view="office" id="nav-office">
                 <i class="ph ph-archive"></i><span>í˜„ìž¥ì‚¬ë¬´ì‹¤ ë¹„í’ˆ</span>
+              </li>
+              <li class="nav-item" data-view="access-control" id="nav-access-control">
+                <i class="ph ph-shield-check" style="color:#0ea5e9"></i><span>계정 · 권한 관리</span>
+              </li>
+              <li class="nav-item" data-view="attendance-logs" id="nav-attendance-logs">
+                <i class="ph ph-clock-counter-clockwise" style="color:#0ea5e9"></i><span>출퇴근 기록</span>
+              </li>
+              <li class="nav-item" data-view="applicant-admin" id="nav-applicant-admin">
+                <i class="ph ph-identification-card" style="color:#0ea5e9"></i><span>입사지원 · 온보딩</span>
+              </li>
+              <li class="nav-item" data-view="employee-admin" id="nav-employee-admin">
+                <i class="ph ph-user-plus" style="color:#0ea5e9"></i><span>직원 등록 · 관리</span>
+              </li>
+              <li class="nav-item" data-view="item-master" id="nav-item-master">
+                <i class="ph ph-package" style="color:#0ea5e9"></i><span>품목 · 분류</span>
+              </li>
+              <li class="nav-item" data-view="contract-admin" id="nav-contract-admin">
+                <i class="ph ph-file-text" style="color:#0ea5e9"></i><span>원청 계약 · 서류</span>
               </li>
               <li class="nav-item" style="border-top: 1px solid var(--border-color); margin-top: 5px; padding-top: 5px;"
                 onclick="openUniversalScanner()">
@@ -262,7 +295,7 @@
             </select>
           </div>
           <div class="breadcrumbs" style="margin-left: 14px; border-left: 1px solid var(--border-color); padding-left: 14px;">
-            <span>NAHSHON MEP</span>
+            <span>DASOL PRISM</span>
             <i class="ph ph-caret-right"></i>
             <span class="active-crumb" id="breadcrumb-current">Overview</span>
           </div>
@@ -312,7 +345,7 @@
                 <div class="account-company">
                   <span class="account-company-icon"><i class="ph ph-buildings"></i></span>
                   <div>
-                    <div class="account-company-name">NAHSHON MEP</div>
+                    <div class="account-company-name">DASOL PRISM</div>
                     <div class="account-company-sub">Your Company</div>
                   </div>
                 </div>
@@ -615,16 +648,16 @@
         { time: '08:51', action: 'ë¶ˆì¶œ', toolId: 'TL-001', toolName: 'ì „ë™ë“œë¦´ Makita', userId: 'ì´ë¯¼ì¤€', condition: 'ì •ìƒ' },
       ],
       getPersonnelList: async () => [
-        { id: 'P-2604-0001', nameKr: 'ê¹€ì² ìˆ˜', nameEn: 'Chulsoo Kim', company: 'NAHSHON', role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-10-15', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0002', nameKr: 'ì´ë¯¼ì¤€', nameEn: 'Minjun Lee', company: 'NAHSHON', role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-09-30', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
+        { id: 'P-2604-0001', nameKr: 'ê¹€ì² ìˆ˜', nameEn: 'Chulsoo Kim', company: 'DASOL PRISM', role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-10-15', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
+        { id: 'P-2604-0002', nameKr: 'ì´ë¯¼ì¤€', nameEn: 'Minjun Lee', company: 'DASOL PRISM', role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-09-30', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
         { id: 'P-2604-0003', nameKr: 'ë°•ì§€í˜¸', nameEn: 'Jiho Park', company: 'SUBO', role: 'ìš©ì ‘ê³µ', visa: 'H-2B', visaExpiry: '2026-08-20', site: 'HFF-02', safety: 'ì™„ë£Œ' },
         { id: 'P-2604-0004', nameKr: 'ìµœë™í˜', nameEn: 'Donghyuk Choi', company: 'SUBO', role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-07-11', site: 'HFF-02', safety: 'ë§Œë£Œìž„ë°•' },
         { id: 'P-2604-0005', nameKr: 'ê°•ìŠ¹ìš°', nameEn: 'Seungwoo Kang', company: 'ETC', role: 'ì¤‘ìž¥ë¹„ê¸°ì‚¬', visa: 'H-2B', visaExpiry: '2026-12-01', site: 'SST-03', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0007', nameKr: 'ìž„ì„±í›ˆ', nameEn: 'Sunghoon Lim', company: 'NAHSHON', role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-10-22', site: 'HWH-04', safety: 'ë¯¸ì´ìˆ˜' },
+        { id: 'P-2604-0007', nameKr: 'ìž„ì„±í›ˆ', nameEn: 'Sunghoon Lim', company: 'DASOL PRISM', role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-10-22', site: 'HWH-04', safety: 'ë¯¸ì´ìˆ˜' },
       ],
       getPersonnelStats: async () => ({
         total: 142, active: 138, onLeave: 4, visaExpiringSoon: 3, safetyExpiring: 2,
-        byCompany: [{ name: 'NAHSHON', count: 68 }, { name: 'SUBO', count: 44 }, { name: 'ETC', count: 30 }],
+        byCompany: [{ name: 'DASOL PRISM', count: 68 }, { name: 'SUBO', count: 44 }, { name: 'ETC', count: 30 }],
       }),
       getFinanceStats: async () => ({
         mtdTotal: 452400, mtdBudget: 460000, pendingApproval: 3, pendingAmount: 17140, claimable: 38200,
@@ -659,10 +692,10 @@
         trainingExpiringSoon: 2
       }),
       getPtwList: async () => [
-        { id: 'PTW-2604-001', type: 'ê³ ì†Œìž‘ì—…', typeColor: '#f97316', title: 'Aêµ¬ì—­ ì§€ë¶• íŒ¨ë„ ì„¤ì¹˜', zone: 'Aêµ¬ì—­', date: '2026-04-13', timeStart: '07:00', timeEnd: '17:00', applicant: 'ê¹€ì² ìˆ˜', company: 'NAHSHON', workers: 4, risks: 'ì¶”ë½, ë‚™í•˜ë¬¼', measures: 'ì•ˆì „ë‚œê°„ ì„¤ì¹˜, ì•ˆì „ë§ ì„¤ì¹˜, ì•ˆì „ë²¨íŠ¸ ì°©ìš©', tbmDone: true, status: 'ì§„í–‰ì¤‘' },
+        { id: 'PTW-2604-001', type: 'ê³ ì†Œìž‘ì—…', typeColor: '#f97316', title: 'Aêµ¬ì—­ ì§€ë¶• íŒ¨ë„ ì„¤ì¹˜', zone: 'Aêµ¬ì—­', date: '2026-04-13', timeStart: '07:00', timeEnd: '17:00', applicant: 'ê¹€ì² ìˆ˜', company: 'DASOL PRISM', workers: 4, risks: 'ì¶”ë½, ë‚™í•˜ë¬¼', measures: 'ì•ˆì „ë‚œê°„ ì„¤ì¹˜, ì•ˆì „ë§ ì„¤ì¹˜, ì•ˆì „ë²¨íŠ¸ ì°©ìš©', tbmDone: true, status: 'ì§„í–‰ì¤‘' },
         { id: 'PTW-2604-002', type: 'í™”ê¸°ìž‘ì—…', typeColor: '#ef4444', title: 'Bêµ¬ì—­ ë°°ê´€ ìš©ì ‘', zone: 'Bêµ¬ì—­', date: '2026-04-13', timeStart: '09:00', timeEnd: '15:00', applicant: 'ì´ë¯¼ì¤€', company: 'SUBO', workers: 2, risks: 'í™”ìž¬, í™”ìƒ, ìœ í•´ê°€ìŠ¤', measures: 'ì†Œí™”ê¸° ë¹„ì¹˜, í™”ê¸°ê°ì‹œìž ë°°ì¹˜, ë°©ì—´ë³µ ì°©ìš©', tbmDone: false, status: 'ìŠ¹ì¸ëŒ€ê¸°' },
         { id: 'PTW-2604-003', type: 'ë°€íê³µê°„', typeColor: '#8b5cf6', title: 'Cêµ¬ì—­ ì§€í•˜ íƒ±í¬ ì²­ì†Œ', zone: 'Cêµ¬ì—­', date: '2026-04-14', timeStart: '08:00', timeEnd: '12:00', applicant: 'ë°•ì§€í˜¸', company: 'ETC', workers: 3, risks: 'ì‚°ì†Œê²°í•, ìœ í•´ê°€ìŠ¤ ì¤‘ë…', measures: 'í™˜ê¸°ìž¥ì¹˜ ê°€ë™, ì‚°ì†Œë†ë„ ì¸¡ì •, êµ¬ì¡°ì› ëŒ€ê¸°', tbmDone: false, status: 'ìŠ¹ì¸ëŒ€ê¸°' },
-        { id: 'PTW-2604-004', type: 'ì¤‘ëŸ‰ë¬¼', typeColor: '#eab308', title: 'Dêµ¬ì—­ ì¹ ëŸ¬ ì–‘ì¤‘', zone: 'Dêµ¬ì—­', date: '2026-04-12', timeStart: '06:00', timeEnd: '10:00', applicant: 'ìµœë™í˜', company: 'NAHSHON', workers: 6, risks: 'ë‚™í•˜, ì „ë„, ì¶©ëŒ', measures: 'í¬ë ˆì¸ ìž‘ë™ë°˜ê²½ í†µì œ, ì‹ í˜¸ìˆ˜ ë°°ì¹˜', tbmDone: true, status: 'ì™„ë£Œ' },
+        { id: 'PTW-2604-004', type: 'ì¤‘ëŸ‰ë¬¼', typeColor: '#eab308', title: 'Dêµ¬ì—­ ì¹ ëŸ¬ ì–‘ì¤‘', zone: 'Dêµ¬ì—­', date: '2026-04-12', timeStart: '06:00', timeEnd: '10:00', applicant: 'ìµœë™í˜', company: 'DASOL PRISM', workers: 6, risks: 'ë‚™í•˜, ì „ë„, ì¶©ëŒ', measures: 'í¬ë ˆì¸ ìž‘ë™ë°˜ê²½ í†µì œ, ì‹ í˜¸ìˆ˜ ë°°ì¹˜', tbmDone: true, status: 'ì™„ë£Œ' },
         { id: 'PTW-2604-005', type: 'êµ´ì°©ìž‘ì—…', typeColor: '#3b82f6', title: 'Eêµ¬ì—­ ì§€ì¤‘ë°°ê´€ íŠ¸ë Œì¹˜', zone: 'Eêµ¬ì—­', date: '2026-04-11', timeStart: '07:00', timeEnd: '16:00', applicant: 'ê°•ìŠ¹ìš°', company: 'ETC', workers: 5, risks: 'ë§¤ëª°, ì§€ì¤‘ë§¤ì„¤ë¬¼ ì†ìƒ', measures: 'ì§€í•˜ë§¤ì„¤ë¬¼ í™•ì¸, ê²½ì‚¬ë©´ ë³´ê°•, ì¶œìž…í†µì œ', tbmDone: true, status: 'ì™„ë£Œ' }
       ],
       getPtwStats: async () => ({ todayActive: 2, pending: 1, completed: 2, rejected: 0 }),
@@ -694,14 +727,14 @@
       ],
       getInspectionStats: async () => ({ totalItems: 12, passed: 9, failed: 3, completionRate: 78 }),
       getTrainingRecords: async () => [
-        { id: 'P-2604-0001', name: 'ê¹€ì² ìˆ˜', role: 'ë°°ê´€ê³µ', company: 'NAHSHON',
+        { id: 'P-2604-0001', name: 'ê¹€ì² ìˆ˜', role: 'ë°°ê´€ê³µ', company: 'DASOL PRISM',
           trainings: [
             { name: 'OSHA 30-Hour', completedDate: '2024-10-15', expiryDate: '2026-10-15', status: 'ìœ íš¨' },
             { name: 'ê³ ì†Œìž‘ì—… ì•ˆì „êµìœ¡', completedDate: '2025-04-01', expiryDate: '2026-04-01', status: 'ë§Œë£Œ' },
             { name: 'ì•ˆì „ë³´ê±´êµìœ¡ (ê¸°ë³¸)', completedDate: '2025-01-10', expiryDate: '2027-01-10', status: 'ìœ íš¨' }
           ]
         },
-        { id: 'P-2604-0002', name: 'ì´ë¯¼ì¤€', role: 'ì „ê¸°ê³µ', company: 'NAHSHON',
+        { id: 'P-2604-0002', name: 'ì´ë¯¼ì¤€', role: 'ì „ê¸°ê³µ', company: 'DASOL PRISM',
           trainings: [
             { name: 'OSHA 10-Hour', completedDate: '2025-03-20', expiryDate: '2027-03-20', status: 'ìœ íš¨' },
             { name: 'í™”ê¸°ìž‘ì—… ì•ˆì „êµìœ¡', completedDate: '2025-02-14', expiryDate: '2026-05-14', status: 'ë§Œë£Œìž„ë°•' },
@@ -751,14 +784,14 @@
         postingRequired: true, postingStart: '2026-02-01', postingEnd: '2026-04-30'
       }),
       getCertMatrix: async () => [
-        { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: 'ê¹€ì² ìˆ˜', role: 'Pipefitter', company: 'NAHSHON',
+        { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: 'ê¹€ì² ìˆ˜', role: 'Pipefitter', company: 'DASOL PRISM',
           certs: [
             { type: 'OSHA 30-Hour', issued: '2024-10-15', expiry: '2029-10-15', status: 'ìœ íš¨', hoffmanReq: true },
             { type: 'Fall Protection', issued: '2025-04-01', expiry: '2026-04-01', status: 'ë§Œë£Œ', hoffmanReq: true },
             { type: 'First Aid/CPR', issued: '2025-01-10', expiry: '2027-01-10', status: 'ìœ íš¨', hoffmanReq: true }
           ]
         },
-        { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: 'ì´ë¯¼ì¤€', role: 'Electrician', company: 'NAHSHON',
+        { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: 'ì´ë¯¼ì¤€', role: 'Electrician', company: 'DASOL PRISM',
           certs: [
             { type: 'OSHA 10-Hour', issued: '2025-03-20', expiry: '2030-03-20', status: 'ìœ íš¨', hoffmanReq: true },
             { type: 'LOTO', issued: '2025-02-14', expiry: '2026-05-14', status: 'ë§Œë£Œìž„ë°•', hoffmanReq: true },
@@ -820,17 +853,17 @@
         date: new Date().toISOString().substring(0, 10),
         presentCount: 38, totalActive: 42, absentCount: 4,
         checkedIn: [
-          { name: 'Kim Chulsoo', company: 'NAHSHON', team: 'Plumbing A', checkIn: '06:32', checkOut: '' },
-          { name: 'Lee Minjun', company: 'NAHSHON', team: 'Electrical', checkIn: '06:35', checkOut: '' },
-          { name: 'Park Jiho', company: 'NAHSHON', team: 'Plumbing B', checkIn: '06:40', checkOut: '' },
-          { name: 'Choi Donghyuk', company: 'NAHSHON', team: 'HVAC', checkIn: '06:41', checkOut: '' },
+          { name: 'Kim Chulsoo', company: 'DASOL PRISM', team: 'Plumbing A', checkIn: '06:32', checkOut: '' },
+          { name: 'Lee Minjun', company: 'DASOL PRISM', team: 'Electrical', checkIn: '06:35', checkOut: '' },
+          { name: 'Park Jiho', company: 'DASOL PRISM', team: 'Plumbing B', checkIn: '06:40', checkOut: '' },
+          { name: 'Choi Donghyuk', company: 'DASOL PRISM', team: 'HVAC', checkIn: '06:41', checkOut: '' },
           { name: 'Kang Seungwoo', company: 'KOREA', team: 'Welding', checkIn: '06:45', checkOut: '' },
         ],
         notCheckedIn: [
-          { name: 'Choi Dongsoo', company: 'NAHSHON', nfcUid: '04AA1B2C3D' },
+          { name: 'Choi Dongsoo', company: 'DASOL PRISM', nfcUid: '04AA1B2C3D' },
           { name: 'Kim Youngsik', company: 'KOREA', nfcUid: '04BB2C3D4E' },
-          { name: 'Park Hyunwoo', company: 'NAHSHON', nfcUid: '04CC3D4E5F' },
-          { name: 'Lee Jihoon', company: 'NAHSHON', nfcUid: '04DD4E5F6G' },
+          { name: 'Park Hyunwoo', company: 'DASOL PRISM', nfcUid: '04CC3D4E5F' },
+          { name: 'Lee Jihoon', company: 'DASOL PRISM', nfcUid: '04DD4E5F6G' },
         ],
         noCheckout: [{ name: 'Kim Chulsoo' }, { name: 'Lee Minjun' }],
         teamSummary: [
@@ -900,8 +933,11 @@
       return new Promise(async function (resolve, reject) {
         const cacheKey = fnName + JSON.stringify(args || []);
         const now = Date.now();
+        // 조회만 캐시한다. 저장·삭제까지 캐시하면 같은 값으로 두 번째 누를 때
+        // 서버에 가지 않고 "성공" 만 돌아온다(활성 → 정지 → 활성 이 대표적).
+        const isRead = fnName.indexOf('api_get') === 0;
 
-        if (window.apiCache[cacheKey] && (now - window.apiCache[cacheKey].timestamp < CACHE_TTL)) {
+        if (isRead && window.apiCache[cacheKey] && (now - window.apiCache[cacheKey].timestamp < CACHE_TTL)) {
           console.log('[Cache Hit]', fnName);
           resolve(JSON.parse(JSON.stringify(window.apiCache[cacheKey].data)));
           return;
@@ -928,9 +964,11 @@
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const res = await response.json();
           const isFailed = (res && (res.success === false || res.error));
-          if (!isFailed) {
+          if (isRead && !isFailed) {
             window.apiCache[cacheKey] = { data: JSON.parse(JSON.stringify(res)), timestamp: Date.now() };
           }
+          // 무언가 바뀌었으면 조회 캐시는 더 이상 믿을 수 없다.
+          if (!isRead && !isFailed) window.apiCache = {};
           resolve(res != null ? res : defaultVal);
         } catch (e) {
           console.warn('[API] ' + fnName + ':', e);
@@ -939,6 +977,9 @@
       });
     }
 
+
+    // 관리자 화면(public/js/admin-*.js)이 같은 호출기를 쓰도록 전역에 노출한다.
+    window.gsRun = gsRun;
 
     // Laravel compatibility shim for legacy google.script.run calls.
     // It keeps the converted SPA stable while the backend moves from GAS to Laravel.
@@ -1162,6 +1203,8 @@
       },
       getProjectStatus: () => gsRun('api_getProjectStatus', [], []),
       getActionItems: () => gsRun('api_getActionItems', [], []),
+      getOpsDashboard: () => gsRun('api_getOpsDashboard', [], { success: false }),
+      getLaborAllocation: () => gsRun('api_getLaborAllocation', [_siteId()], { success: false, items: [], kpi: {} }),
       // WBS ê³µì •ê´€ë¦¬ APIs
       getProjectWbsTree: (projectId) => gsRun('api_getProjectWbsTree', [projectId], { success: false, stages: [] }),
       updateWbsRow: (wbsId, updates) => gsRun('api_updateWbsRow', [wbsId, updates], { success: false }),
@@ -1170,6 +1213,8 @@
       markWbsStatus: (wbsId, status) => gsRun('api_markWbsStatus', [wbsId, status], { success: false }),
       createSafetyCardForWbs: (wbsId, date) => gsRun('api_createSafetyCardForWbs', [wbsId, date || null], { success: false }),
       getTodayWbsWork: (projectId) => gsRun('api_getTodayWbsWork', [projectId], { success: false, items: [] }),
+      getProcurement: (projectId) => gsRun('api_getProcurement', [projectId], { success: false, items: [] }),
+      updateProcurement: (projectId, wbsCode, patch) => gsRun('api_updateProcurement', [projectId, wbsCode, patch || {}], { success: false }),
       getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
       assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
       getAssignableEmployees: (date) => gsRun('api_getAssignableEmployees', [date || null], []),
@@ -1226,12 +1271,12 @@
       const pageContainer = document.getElementById('page-container');
       const breadcrumbCurrent = document.getElementById('breadcrumb-current');
       const alertBadge = document.getElementById('alert-badge');
-      const accountStorageKey = 'nahshonAccountProfile';
+      const accountStorageKey = 'dasol-prismAccountProfile';
       const authenticatedAccount = @json($authUser);
       // 별도 스크립트 블록(출퇴근 모달 등)에서도 참조할 수 있도록 전역 노출.
       window.authenticatedAccount = authenticatedAccount;
       const accountDefaults = {
-        company: 'NAHSHON MEP',
+        company: 'DASOL PRISM',
         name: authenticatedAccount.name || 'ERP User',
         firstName: (authenticatedAccount.name || 'ERP').split(' ')[0] || 'ERP',
         lastName: (authenticatedAccount.name || 'User').split(' ').slice(1).join(' ') || 'User',
@@ -1240,7 +1285,7 @@
         jobTitle: authenticatedAccount.role || 'ERP User',
         department: 'Operations',
         location: 'HFF-02',
-        manager: 'NAHSHON MEP',
+        manager: 'DASOL PRISM',
         email: authenticatedAccount.email || '',
         personalEmail: authenticatedAccount.email || '',
         mobile: '+1 (602) 435-6787',
@@ -1299,6 +1344,14 @@
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
+        'opsroom': { title: '현장 상황실', render: renderOpsRoom },
+        'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
+        'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
+        'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
+        'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
+        'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
+        'applicant-admin': { title: '입사지원 · 온보딩', render: function () { return window.AdminApplicants.render(); } },
+        'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
         'vehicle': { title: 'ì°¨ëŸ‰ ê´€ë¦¬', render: renderVehicle },
@@ -2394,79 +2447,144 @@
         } catch (e) { alert('오류: ' + e.message); }
       };
 
+      // 현장 운영 대시보드 — 리스크·예외(③) 트리아지 상단 + 현장 일일 운영(②) 하단. 전부 실데이터.
       async function renderDashboard() {
         pageContainer.innerHTML = skeleton();
         try {
-          var [kpis, actionItems, projects] = await Promise.all([
-            window.API.getKPIs(),
-            window.API.getActionItems(),
-            window.API.getProjectStatus()
-          ]);
-
-          var kpisHtml = kpis.map(function (k) {
-            var trendIcon = k.trendType === 'up' ? 'ph-arrow-up-right' : k.trendType === 'down' ? 'ph-arrow-down-right' : 'ph-arrows-left-right';
-            return '<div class="kpi-card">' +
-              '<div class="kpi-label">' + k.label + '<i class="ph ' + k.icon + '" style="font-size:15px;color:var(--text-tertiary)"></i></div>' +
-              '<div class="kpi-value">' + k.value + '<span style="font-size:11px;color:var(--text-tertiary);font-weight:500"> ' + k.unit + '</span></div>' +
-              '<div class="kpi-meta"><span class="trend-' + k.trendType + '"><i class="ph ' + trendIcon + '"></i></span><span style="color:var(--text-secondary)">' + k.trend + '</span></div>' +
-              '</div>';
-          }).join('');
-
-          var actionItemsHtml = actionItems.map(function (a) {
-            var statusText = a.status === 'critical' ? 'ê¸´ê¸‰' : a.status === 'warning' ? 'ì£¼ì˜' : a.status === 'pending' ? 'ë¯¸ì²˜ë¦¬' : 'ì™„ë£Œ';
-            return '<tr><td class="cell-mono">' + a.id + '</td><td>' + a.type + '</td><td class="cell-primary">' + a.summary + '</td><td>' + a.assignee + '</td><td>' + statusPill(statusText) + '</td><td class="cell-mono" style="text-align:right">' + a.date + '</td></tr>';
-          }).join('');
-
-          var projectsHtml = projects.map(function (p) {
-            return '<div><div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
-              '<div><div style="font-weight:600;font-size:13px;color:var(--text-primary)">' + p.name + '</div>' +
-              '<div class="cell-mono" style="color:var(--text-tertiary);margin-top:2px">' + p.code + ' | PM: ' + p.manager + '</div></div></div>' +
-              '<div class="progress-wrapper"><div class="progress-bar"><div class="progress-fill" style="width:' + p.progress + '%;background:' + p.color + '"></div></div>' +
-              '<div class="progress-text cell-primary">' + p.progress + '%</div></div>' +
-              '<div style="font-size:11px;color:var(--text-tertiary);margin-top:5px;text-align:right">ì™„ë£Œ ì˜ˆì •: ' + p.endDate + '</div></div>';
-          }).join('');
+          var d = await window.API.getOpsDashboard();
+          if (!d || !d.success) { renderError('대시보드 데이터를 불러오지 못했습니다'); return; }
 
           var selectedOpt = document.querySelector('#project-context-switcher option:checked');
           var isSetupPending = selectedOpt ? selectedOpt.getAttribute('data-setup-pending') === 'true' : false;
           var setupBannerHtml = '';
           if (isSetupPending) {
-            setupBannerHtml = 
-              '<div class="setup-wizard-banner" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.04) 100%); border: 1px solid rgba(37, 99, 235, 0.35); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); backdrop-filter: blur(8px);">' +
+            setupBannerHtml =
+              '<div class="setup-wizard-banner" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.04) 100%); border: 1px solid rgba(37, 99, 235, 0.35); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">' +
               '<div style="display:flex; align-items:center; gap:16px;">' +
-              '<div style="background: rgba(37, 99, 235, 0.2); width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;">' +
-              '<i class="ph ph-magic-wand" style="font-size:22px;"></i>' +
-              '</div>' +
-              '<div>' +
-              '<h3 style="font-size:14px; font-weight:700; color:#fff; margin:0 0 4px 0;">⚡ 신설 현장 초기 셋업 마법사 (Setup Wizard Required)</h3>' +
-              '<p style="font-size:12px; color:var(--text-secondary); margin:0;">이 프로젝트는 새롭게 생성되어 아직 초기 셋업이 완료되지 않았습니다. 셋업을 마쳐야 모듈 연동이 활성화됩니다.</p>' +
-              '</div>' +
-              '</div>' +
-              '<button class="btn-primary" onclick="window.openSetupWizard()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:#2563eb; color:white; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">' +
-              '<i class="ph ph-rocket"></i>' +
-              '<span>셋업 시작하기</span>' +
-              '</button>' +
-              '</div>';
+              '<div style="background: rgba(37, 99, 235, 0.2); width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;"><i class="ph ph-magic-wand" style="font-size:22px;"></i></div>' +
+              '<div><h3 style="font-size:14px; font-weight:700; color:var(--text-primary); margin:0 0 4px 0;">⚡ 신설 현장 초기 셋업 마법사</h3>' +
+              '<p style="font-size:12px; color:var(--text-secondary); margin:0;">이 프로젝트는 아직 초기 셋업이 완료되지 않았습니다. 셋업을 마쳐야 모듈 연동이 활성화됩니다.</p></div></div>' +
+              '<button class="btn-primary" onclick="window.openSetupWizard()" style="padding:8px 16px; font-size:12px; font-weight:600;"><i class="ph ph-rocket"></i> 셋업 시작하기</button></div>';
           }
 
           pageContainer.innerHTML =
             setupBannerHtml +
             '<div class="header-section"><div>' +
-            '<h1 class="page-title">Executive Dashboard</h1>' +
-            '<p class="page-subtitle">NAHSHON MEP Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™© Â· ' + new Date().toLocaleDateString('ko-KR') + '</p>' +
+            '<h1 class="page-title"><i class="ph ph-squares-four" style="color:var(--brand-primary)"></i> 현장 운영 대시보드</h1>' +
+            '<p class="page-subtitle">' + dashEsc(d.scope.label) + ' · 실시간 운영 현황 · ' + dashEsc(d.date) + '</p>' +
             '</div><div class="action-row">' +
-            '<button class="btn-secondary" onclick="window.goToView(\'command\')"><i class="ph ph-command"></i> AI í˜„ìž¥ ì§€íœ˜ì‹¤</button>' +
-            '<button class="btn-primary" onclick="openQuickActions()"><i class="ph ph-lightning"></i> í€µ ì•¡ì…˜ ì„¼í„°</button>' +
+            '<button class="btn-secondary" onclick="window.goToView(\'command\')"><i class="ph ph-command"></i> AI 현장 지휘실</button>' +
+            '<button class="btn-primary" onclick="openQuickActions()"><i class="ph ph-lightning"></i> 퀵 액션</button>' +
             '</div></div>' +
-            '<div class="kpi-row">' + kpisHtml + '</div>' +
-            '<div class="dashboard-grid-main">' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> ê¸´ê¸‰ ì²˜ë¦¬ í•„ìš”</div></div>' +
-            '<div class="panel-body"><table class="data-table"><thead><tr>' +
-            '<th style="width:100px">ID</th><th style="width:70px">êµ¬ë¶„</th><th>ë‚´ìš©</th><th style="width:90px">ë‹´ë‹¹</th><th style="width:80px">ìƒíƒœ</th><th style="width:90px;text-align:right">ë‚ ì§œ</th>' +
-            '</tr></thead><tbody>' + actionItemsHtml + '</tbody></table></div></div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-kanban"></i> í”„ë¡œì íŠ¸ í˜„í™©</div></div>' +
-            '<div class="panel-body padded" style="display:flex;flex-direction:column;gap:20px">' + projectsHtml + '</div></div>' +
-            '</div>';
-        } catch (err) { renderError('ëŒ€ì‹œë³´ë“œ ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
+            dashRiskBlock(d.risk) +
+            dashAiBrief(d.aiBrief, d.risk.counts) +
+            dashOpsBlock(d.ops);
+        } catch (err) { renderError('대시보드 로딩 실패'); console.error(err); }
+      }
+
+      function dashEsc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+      }
+
+      // ③ 리스크·예외 — 즉시조치 / 주의 / 정상 3단 트리아지
+      function dashRiskBlock(risk) {
+        function col(title, emoji, color, count, items, isNormal) {
+          var body = (items && items.length) ? items.map(function (it) {
+            if (isNormal) {
+              return '<div style="padding:10px 13px;border-top:1px solid var(--border-subtle);display:flex;gap:9px">' +
+                '<div style="width:3px;border-radius:2px;background:' + color + '"></div>' +
+                '<div><div style="font-size:12.5px;font-weight:600;color:var(--text-primary)">' + dashEsc(it.label) + '</div>' +
+                '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(it.detail) + '</div></div></div>';
+            }
+            return '<div style="padding:10px 13px;border-top:1px solid var(--border-subtle);display:flex;gap:9px">' +
+              '<div style="width:3px;border-radius:2px;background:' + color + '"></div>' +
+              '<div style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text-primary);display:flex;gap:6px;align-items:center">' +
+              '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:5px;background:' + color + '22;color:' + color + '">' + dashEsc(it.module) + '</span>' + dashEsc(it.title) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">' + dashEsc(it.detail) + '</div></div></div>';
+          }).join('') : '<div style="padding:16px 13px;border-top:1px solid var(--border-subtle);font-size:11.5px;color:var(--text-tertiary);text-align:center">해당 항목 없음</div>';
+          return '<div style="border:1px solid ' + color + '55;border-radius:12px;overflow:hidden">' +
+            '<div style="padding:10px 13px;background:' + color + '18;color:' + color + ';display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:800">' +
+            '<span>' + emoji + ' ' + title + '</span><span style="font-size:15px">' + count + '</span></div>' + body + '</div>';
+        }
+        return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px" class="dash-triage">' +
+          col('즉시조치', '🔴', '#ef4444', risk.counts.critical, risk.critical, false) +
+          col('주의', '🟠', '#f59e0b', risk.counts.warning, risk.warning, false) +
+          col('정상', '🟢', '#10b981', '양호', risk.normal, true) +
+          '</div>';
+      }
+
+      function dashAiBrief(brief, counts) {
+        if (!brief) return '';
+        return '<div style="background:linear-gradient(100deg,#1e1b4b,#312e81);border-radius:13px;padding:15px 18px;color:#e0e7ff;display:flex;align-items:center;gap:15px;margin-bottom:18px">' +
+          '<div style="width:36px;height:36px;border-radius:10px;background:rgba(129,140,248,.22);display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 auto">✦</div>' +
+          '<div style="flex:1"><div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:#a5b4fc">AI 브리핑</div>' +
+          '<div style="font-size:13px;font-weight:500;margin-top:3px;color:#fff;line-height:1.5">' + dashEsc(brief) + '</div></div></div>';
+      }
+
+      // ② 현장 일일 운영 — KPI + 오늘 할 일 / 인원 / 자재 / 이슈
+      function dashOpsBlock(ops) {
+        var att = ops.attendance, tasks = ops.tasks, tbm = ops.tbm, arr = ops.arrivals;
+        var kpis =
+          dashKpi('#3b82f6', 'ph-users', '오늘 출역', att.present + '<small>/' + att.planned + '명</small>', att.rate + '% 출역', (att.byCompany || []).map(function (c) { return dashEsc(c.name) + ' ' + c.count; }).join(' · ') || '출근 데이터 없음') +
+          dashKpi('#8b5cf6', 'ph-list-checks', '오늘 작업', tasks.total + '<small>건</small>', (tasks.critical ? '★임계 ' + tasks.critical : '') + (tasks.highRisk ? ' · 고위험 ' + tasks.highRisk : '') || '진행 작업', '현장 노무 기준') +
+          dashKpi('#10b981', 'ph-signature', 'TBM / 안전카드', tbm.done + '<small>/' + tbm.cards + '</small>', (tbm.waiting ? '서명 대기 ' + tbm.waiting + '건' : '완료'), '오늘 생성 카드') +
+          dashKpi('#06b6d4', 'ph-package', '오늘 자재 입고', arr.total + '<small>건</small>', (arr.inTransit ? '배송중 ' + arr.inTransit : '도착 예정'), 'ETA 오늘');
+
+        // 오늘 할 일 리스트
+        var taskRows = (tasks.list || []).length ? tasks.list.map(function (t) {
+          var ac = t.nextAction === '안전계획' ? '#3b82f6' : t.nextAction === 'TBM' ? '#f59e0b' : t.nextAction === '시작' ? '#10b981' : 'var(--text-tertiary)';
+          return '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary);width:46px">' + dashEsc(t.activityId || '') + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(t.name) +
+            (t.isCritical ? ' <span style="background:rgba(239,68,68,.15);color:#ef4444;font-size:9.5px;padding:1px 5px;border-radius:4px;font-weight:700">★</span>' : '') +
+            (t.ehsHigh ? ' <span style="background:rgba(239,68,68,.15);color:#ef4444;font-size:9.5px;padding:1px 5px;border-radius:4px;font-weight:700">고위험</span>' : '') + '</div>' +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(t.trade || '') + (t.crewSize ? ' · ' + t.crewSize + '명' : ' · 인원 없음') + '</div></div>' +
+            '<span style="font-size:10.5px;font-weight:700;color:' + ac + ';border:1px solid ' + ac + ';border-radius:6px;padding:2px 8px">' + dashEsc(t.nextAction) + '</span></div>';
+        }).join('') : '<div style="padding:22px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 예정된 현장 작업이 없습니다.</div>';
+
+        // 인원 회사별 바
+        var compBars = (att.byCompany || []).length ? att.byCompany.map(function (c) {
+          var pct = att.present > 0 ? Math.round(c.count / att.present * 100) : 0;
+          return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--text-secondary)">' + dashEsc(c.name) + '</span><span class="cell-mono" style="color:var(--text-primary)">' + c.count + '명</span></div>' +
+            '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:var(--brand-primary)"></div></div></div>';
+        }).join('') : '<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:12px">오늘 출근 기록이 없습니다.</div>';
+
+        // 오늘 도착 자재
+        var arrRows = (arr.list || []).length ? arr.list.map(function (a) {
+          var c = a.delay === 'late' ? '#ef4444' : a.delay === 'risk' ? '#f59e0b' : '#10b981';
+          var s = a.delay === 'late' ? '지연' : a.delay === 'risk' ? '임박' : '정시';
+          return '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:9.5px;font-weight:800;padding:3px 6px;border-radius:5px;background:rgba(6,182,212,.16);color:#06b6d4">' + dashEsc(a.status) + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(a.name) + '</div>' +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(a.vendor || '') + '</div></div>' +
+            '<span style="font-size:10.5px;font-weight:700;color:' + c + '">' + s + '</span></div>';
+        }).join('') : '<div style="padding:18px;text-align:center;color:var(--text-tertiary);font-size:12px">오늘 도착 예정 자재가 없습니다.</div>';
+
+        // 오늘 안전 이슈
+        var issueRows = (ops.issues || []).length ? ops.issues.map(function (i) {
+          return '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<span style="font-size:9.5px;font-weight:800;padding:3px 6px;border-radius:5px;background:rgba(245,158,11,.16);color:#f59e0b">' + dashEsc(i.kind) + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(i.title) + '</div></div>' +
+            '<span style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc(i.detail) + '</span></div>';
+        }).join('') : '<div style="padding:18px;text-align:center;color:var(--text-tertiary);font-size:12px">미조치 안전 이슈가 없습니다.</div>';
+
+        return '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' + kpis + '</div>' +
+          '<div class="dashboard-grid-main dash-ops2" style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px">' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-calendar-check"></i> 오늘 할 일 · 공정</div><span style="font-size:11px;color:var(--brand-primary);cursor:pointer" onclick="window.goToView(\'wbs\')">공정관리 →</span></div><div class="panel-body padded" style="padding-top:4px">' + taskRows + '</div></div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-users-three"></i> 인원 실시간</div><span style="font-size:11px;color:var(--text-tertiary)">출역 ' + att.rate + '%</span></div><div class="panel-body padded">' + compBars + '</div></div>' +
+          '</div>' +
+          '<div class="dash-ops2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-truck"></i> 오늘 도착 예정 자재</div><span style="font-size:11px;color:var(--brand-primary);cursor:pointer" onclick="window.goToView(\'wbs\')">조달 →</span></div><div class="panel-body padded" style="padding-top:4px">' + arrRows + '</div></div>' +
+          '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-warning-circle"></i> 오늘 안전 이슈</div><span style="font-size:11px;color:var(--brand-primary);cursor:pointer" onclick="window.goToView(\'safety\')">안전관리 →</span></div><div class="panel-body padded" style="padding-top:4px">' + issueRows + '</div></div>' +
+          '</div>';
+      }
+
+      function dashKpi(color, icon, label, value, meta, sub) {
+        return '<div class="kpi-card" style="border-left:3px solid ' + color + '">' +
+          '<div class="kpi-label">' + dashEsc(label) + ' <i class="ph ' + icon + '" style="font-size:15px;color:' + color + '"></i></div>' +
+          '<div class="kpi-value">' + value + '</div>' +
+          '<div class="kpi-meta" style="color:var(--text-secondary)">' + meta + '</div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' + dashEsc(sub) + '</div></div>';
       }
 
       // â”€â”€ ANALYTICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3183,7 +3301,12 @@
                 +'<td class="cell-mono">'+esc(w.id)+'</td>'
                 +'<td><div class="cell-primary">'+esc(w.title)+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+esc(w.project)+' · '+esc(w.site)+'</div></td>'
                 +'<td style="text-align:center">'+esc(w.crew)+'명</td><td>'+badge(w.planStatus)+'</td><td>'+badge(w.tbmStatus)+'</td><td>'+badge(w.closeStatus)+'</td>'
-                +'<td style="min-width:150px">'+bar(w.progress)+'</td><td class="cell-mono">'+esc(w.due)+'</td><td><button class="btn-secondary safety-next-btn" data-id="'+esc(w.id)+'" style="padding:4px 8px;font-size:11px">'+esc(nextAction(w))+'</button></td></tr>';
+                +'<td style="min-width:150px">'+bar(w.progress)+'</td><td class="cell-mono">'+esc(w.due)+'</td>'
+                +'<td><div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">'
+                +'<button class="btn-secondary safety-next-btn" data-id="'+esc(w.id)+'" style="padding:4px 8px;font-size:11px">'+esc(nextAction(w))+'</button>'
+                +'<button class="icon-btn" title="작업 수정" onclick="event.stopPropagation(); window._safetyEditWork(\''+esc(w.id)+'\')" style="padding:4px 6px"><i class="ph ph-pencil-simple"></i></button>'
+                +'<button class="icon-btn" title="작업 삭제" onclick="event.stopPropagation(); window._safetyDeleteWork(\''+esc(w.id)+'\')" style="padding:4px 6px;color:var(--status-danger)"><i class="ph ph-trash"></i></button>'
+                +'</div></td></tr>';
             }).join('');
             document.getElementById('s-today').innerHTML =
               '<div style="display:grid;grid-template-columns:1.45fr .9fr;gap:16px">'
@@ -3249,11 +3372,147 @@
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.title)+'</div></div><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+esc(w.qty)+' '+esc(w.unit)+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">'+esc(w.planStatus)+'</div></div></div>'
               + safetyPlanBody(w)
-              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+              +'<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-secondary" id="edit-plan-btn" '+(w.aiPlan ? '' : 'disabled')+' title="AI 추천을 현장에 맞게 수정"><i class="ph ph-pencil-simple"></i> 계획 편집</button><button class="btn-secondary" id="ptw-btn" title="화기·고소·밀폐·전기 LOTO 등 작업허가서 발행·서명"><i class="ph ph-shield-check"></i> 작업허가서</button><button class="btn-primary" id="approve-plan-btn" '+(w.planStatus === '승인완료' ? 'disabled' : '')+'><i class="ph ph-check-circle"></i> 승인</button><button class="btn-secondary" id="reject-plan-btn"><i class="ph ph-x-circle"></i> 반려</button><button class="btn-secondary" id="save-plan-draft-btn"><i class="ph ph-floppy-disk"></i> 초안 저장</button></div>';
+            document.getElementById('edit-plan-btn').addEventListener('click', function(){ if (w.aiPlan) window.openSafetyPlanEdit(w.id); });
+            document.getElementById('ptw-btn').addEventListener('click', function(){ window.openPtwModal(w.id); });
             document.getElementById('approve-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'승인완료', tbmStatus: w.tbmStatus === '대기' ? '대기' : w.tbmStatus}); switchTab('s-tbm'); });
             document.getElementById('reject-plan-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'수정필요'}); });
             document.getElementById('save-plan-draft-btn').addEventListener('click', function(){ updateWork(w.id, {planStatus:'초안'}); });
           }
+
+          window.openSafetyPlanEdit = function(workCode) {
+            var item = (safetyItems || []).filter(function(c){ return c.id === workCode; })[0];
+            var p = (item && item.aiPlan) || {};
+            var root = document.getElementById('safety-modal-root');
+            function lines(arr){ return (arr || []).join('\n'); }
+            function hazRow(h){ h = h || {}; return '<div class="sp-haz-row" style="display:grid;grid-template-columns:1fr 64px 1fr 28px;gap:6px;margin-bottom:6px;align-items:center">' +
+              '<input class="wbs-edit-field sp-haz" placeholder="위험요인" value="' + esc(h.hazard || '') + '">' +
+              '<select class="wbs-edit-field sp-risk">' + ['상','중','하'].map(function(r){ return '<option' + (h.risk_level === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select>' +
+              '<input class="wbs-edit-field sp-ctrl" placeholder="대책" value="' + esc(h.control || '') + '">' +
+              '<button type="button" class="sp-haz-del" style="background:none;border:none;color:var(--status-danger);cursor:pointer;font-size:18px;line-height:1">&times;</button></div>'; }
+            var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin:12px 0 5px';
+
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+              '<div class="panel" style="width:720px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple"></i> AI 안전계획 편집</div><button id="sp-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto">' +
+                '<div style="font-size:11px;color:var(--text-tertiary)">AI 추천을 현장 상황에 맞게 수정하세요. 위험요인은 행 추가/삭제, 목록은 한 줄에 하나씩.</div>' +
+                '<label style="' + LBL + '">요약</label>' +
+                '<input id="sp-summary" class="wbs-edit-field" value="' + esc(p.summary || '') + '">' +
+                '<label style="' + LBL + '">위험요인 · 위험도 · 대책 (PHA)</label>' +
+                '<div id="sp-haz-list">' + ((p.hazards && p.hazards.length ? p.hazards : [{}]).map(hazRow).join('')) + '</div>' +
+                '<button type="button" id="sp-haz-add" class="btn-secondary" style="padding:5px 10px;font-size:12px"><i class="ph ph-plus"></i> 위험 추가</button>' +
+                '<label style="' + LBL + '">필수 PPE (한 줄에 하나)</label><textarea id="sp-ppe" class="wbs-edit-field" style="height:70px;resize:vertical">' + esc(lines(p.required_ppe)) + '</textarea>' +
+                '<label style="' + LBL + '">작업허가 PTW (한 줄에 하나)</label><textarea id="sp-permits" class="wbs-edit-field" style="height:58px;resize:vertical">' + esc(lines(p.permits)) + '</textarea>' +
+                '<label style="' + LBL + '">폭염 · 환경 대책 (한 줄에 하나)</label><textarea id="sp-heat" class="wbs-edit-field" style="height:58px;resize:vertical">' + esc(lines(p.heat_environment)) + '</textarea>' +
+                '<label style="' + LBL + '">PTP 작업 전 단계 (한 줄에 하나)</label><textarea id="sp-ptp" class="wbs-edit-field" style="height:70px;resize:vertical">' + esc(lines(p.ptp_steps)) + '</textarea>' +
+                '<label style="' + LBL + '">TBM 주제 (한 줄에 하나)</label><textarea id="sp-tbm" class="wbs-edit-field" style="height:58px;resize:vertical">' + esc(lines(p.tbm_topics)) + '</textarea>' +
+                '<label style="' + LBL + '">핵심 위험</label><input id="sp-keyrisk" class="wbs-edit-field" value="' + esc(p.key_risk || '') + '">' +
+              '</div>' +
+              '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+                '<button id="sp-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+                '<button id="sp-save" class="btn-secondary" style="flex:1"><i class="ph ph-floppy-disk"></i> 저장</button>' +
+                '<button id="sp-save-approve" class="btn-primary" style="flex:1;background:#7c3aed"><i class="ph ph-check-circle"></i> 저장 후 승인</button>' +
+              '</div></div></div>';
+
+            function close(){ root.innerHTML = ''; }
+            root.querySelector('#sp-close').addEventListener('click', close);
+            root.querySelector('#sp-cancel').addEventListener('click', close);
+            root.querySelector('#sp-haz-add').addEventListener('click', function(){
+              var d = document.createElement('div'); d.innerHTML = hazRow({}); root.querySelector('#sp-haz-list').appendChild(d.firstChild);
+            });
+            root.querySelector('#sp-haz-list').addEventListener('click', function(e){
+              var b = e.target.closest ? e.target.closest('.sp-haz-del') : null;
+              if (b) b.parentNode.remove();
+            });
+
+            function collect(){
+              function txtLines(id){ return root.querySelector(id).value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean); }
+              var hazards = Array.prototype.slice.call(root.querySelectorAll('.sp-haz-row')).map(function(row){
+                return { hazard: row.querySelector('.sp-haz').value.trim(), risk_level: row.querySelector('.sp-risk').value, control: row.querySelector('.sp-ctrl').value.trim() };
+              }).filter(function(h){ return h.hazard || h.control; });
+              return {
+                summary: root.querySelector('#sp-summary').value.trim(), hazards: hazards,
+                required_ppe: txtLines('#sp-ppe'), permits: txtLines('#sp-permits'), heat_environment: txtLines('#sp-heat'),
+                ptp_steps: txtLines('#sp-ptp'), tbm_topics: txtLines('#sp-tbm'), key_risk: root.querySelector('#sp-keyrisk').value.trim()
+              };
+            }
+            async function persist(approve){
+              var btns = root.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
+              try {
+                var res = await gsRun('api_saveSafetyPlan', [workCode, collect(), !!approve], {});
+                if (!res || !res.success){ alert('저장 실패: ' + (res && res.error || '오류')); btns.forEach(function(b){ b.disabled = false; }); return; }
+                safetyItems = await loadSafetyItems();
+                renderAllSafetyTabs();
+                close();
+                if (approve) switchTab('s-tbm');
+              } catch(e){ alert('오류: ' + (e && e.message || e)); btns.forEach(function(b){ b.disabled = false; }); }
+            }
+            root.querySelector('#sp-save').addEventListener('click', function(){ persist(false); });
+            root.querySelector('#sp-save-approve').addEventListener('click', function(){ persist(true); });
+          };
+
+          window.openPtwModal = async function(workCode) {
+            var root = document.getElementById('safety-modal-root');
+            function statusColor(s){ return s === '서명완료' ? '#10b981' : s === '승인' ? '#3b82f6' : s === '취소' ? '#ef4444' : s === '만료' ? '#94a3b8' : '#f59e0b'; }
+            async function reload(){
+              var res = await gsRun('api_getCardPermits', [workCode], { permits: [] });
+              var permits = (res && res.permits) || [];
+              var body = root.querySelector('#ptw-body');
+              if (!body) return;
+              if (!permits.length){ body.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-tertiary);font-size:13px">발행된 작업허가서가 없습니다.<br>아래 <b>"AI 계획서에서 발행"</b>을 누르면 계획서의 필요 허가(화기·고소·밀폐·전기 LOTO)가 발행됩니다.</div>'; return; }
+              body.innerHTML = permits.map(function(p){
+                var acts = '';
+                if (p.status === '발행') acts += '<button class="ptw-act btn-secondary" data-id="' + p.id + '" data-action="approve" style="padding:4px 10px;font-size:11px">승인</button>';
+                if (p.status === '승인') acts += '<button class="ptw-act btn-primary" data-id="' + p.id + '" data-action="sign" style="padding:4px 10px;font-size:11px;background:#10b981">서명</button>';
+                if (p.status !== '서명완료' && p.status !== '취소') acts += '<button class="ptw-act btn-secondary" data-id="' + p.id + '" data-action="cancel" style="padding:4px 10px;font-size:11px;color:#ef4444;border-color:rgba(239,68,68,.4)">취소</button>';
+                var prec = (p.precautions || []).slice(0, 4).map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('');
+                return '<div style="border:1px solid var(--border-default);border-radius:10px;padding:12px;margin-bottom:10px">' +
+                  '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
+                    '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + esc(p.permitNo) + '</span>' +
+                    '<span style="font-weight:700;font-size:13px;color:var(--text-primary)">' + esc(p.title) + '</span>' +
+                    '<span style="margin-left:auto;background:' + statusColor(p.status) + '22;color:' + statusColor(p.status) + ';font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px">' + esc(p.status) + '</span>' +
+                  '</div>' +
+                  '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px">유효 ' + esc(p.validFrom || '') + (p.validTo && p.validTo !== p.validFrom ? ' ~ ' + esc(p.validTo) : '') + (p.signedBy ? ' · 서명 ' + esc(p.signedBy) : '') + '</div>' +
+                  (prec ? '<div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:2px">안전 조치</div><ul style="margin:0 0 8px;padding-left:18px;font-size:11px;color:var(--text-secondary);line-height:1.7">' + prec + '</ul>' : '') +
+                  '<div style="display:flex;gap:6px">' + acts + '</div>' +
+                '</div>';
+              }).join('');
+              body.querySelectorAll('.ptw-act').forEach(function(btn){
+                btn.addEventListener('click', async function(){
+                  var action = btn.getAttribute('data-action'); var id = btn.getAttribute('data-id');
+                  var signedBy = null;
+                  if (action === 'sign'){ signedBy = prompt('서명자(작업 책임자) 이름'); if (signedBy === null) return; }
+                  if (action === 'cancel' && !confirm('이 작업허가서를 취소할까요?')) return;
+                  btn.disabled = true;
+                  var r = await gsRun('api_actPermit', [Number(id), action, signedBy], {});
+                  if (!r || !r.success){ alert(r && r.error || '처리 실패'); btn.disabled = false; return; }
+                  reload();
+                });
+              });
+            }
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+              '<div class="panel" style="width:620px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-shield-check"></i> 작업허가서 (PTW)</div><button id="ptw-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto"><div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">발행 → 승인 → 서명완료. 고위험 작업은 서명완료된 허가서가 있어야 착수할 수 있습니다.</div><div id="ptw-body">불러오는 중...</div></div>' +
+              '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+                '<button id="ptw-close2" class="btn-secondary" style="flex:1">닫기</button>' +
+                '<button id="ptw-issue" class="btn-primary" style="flex:1;background:#7c3aed"><i class="ph ph-plus"></i> AI 계획서에서 발행</button>' +
+              '</div></div></div>';
+            root.querySelector('#ptw-close').addEventListener('click', function(){ root.innerHTML = ''; });
+            root.querySelector('#ptw-close2').addEventListener('click', function(){ root.innerHTML = ''; });
+            root.querySelector('#ptw-issue').addEventListener('click', async function(){
+              var b = this; b.disabled = true;
+              var r = await gsRun('api_issuePermitsForCard', [workCode], {});
+              b.disabled = false;
+              if (!r || !r.success){ alert(r && r.error || '발행 실패'); return; }
+              if (r.issued === 0) alert('새로 발행할 허가가 없습니다(이미 발행됨).');
+              reload();
+            });
+            reload();
+          };
 
           function renderTbmTab() {
             var w = selectedItem();
@@ -3273,11 +3532,55 @@
           function renderCloseTab() {
             var w = selectedItem();
             var canClose = w.tbmStatus === '완료';
+            window._closePhotos = [];
             document.getElementById('s-close').innerHTML =
-              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>마감 저장</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI 공정율 분석</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
+              '<div style="display:grid;grid-template-columns:420px 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div>'+badge(w.closeStatus)+'</div><div class="panel-body padded"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">'+esc(w.closeText)+'</textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="'+esc(w.doneQty || 0)+'"><input id="total-qty-input" class="search-inline" style="width:100%" value="'+esc(w.totalQty || w.qty || 0)+'"></div><select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select><div style="margin-top:12px"><label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px"><i class="ph ph-camera"></i> 현장 사진 첨부 <span style="color:var(--brand-primary)">(AI 종합분석)</span></label><input id="close-photo-input" type="file" accept="image/*" multiple capture="environment" style="font-size:12px;color:var(--text-secondary);max-width:100%"><div id="close-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div><div style="font-size:10px;color:var(--text-tertiary);margin-top:4px">사진을 첨부하고 <b>AI 공정율 분석</b>을 누르면 시공 상태·품질·안전을 함께 분석합니다. (최대 6장)</div></div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn-secondary" id="save-close-btn" '+(!canClose ? 'disabled' : '')+'>마감 저장</button><button class="btn-primary" id="ai-progress-btn" '+(!canClose ? 'disabled' : '')+'>AI 공정율 분석</button></div></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div>'+badge(w.progressStatus)+'</div><div class="panel-body padded" id="progress-result"></div></div></div>';
             document.getElementById('save-close-btn').addEventListener('click', function(){ saveClose(w.id, false); });
             document.getElementById('ai-progress-btn').addEventListener('click', function(){ saveClose(w.id, true); });
+            var photoInput = document.getElementById('close-photo-input');
+            if (photoInput) photoInput.addEventListener('change', function(){ handleClosePhotos(this.files); });
             renderProgressResult(w);
+          }
+
+          // 첨부 사진을 캔버스로 다운스케일(최대 1600px, JPEG 0.8)해 base64 로 보관 — 전송량 절감.
+          function handleClosePhotos(fileList) {
+            var files = Array.prototype.slice.call(fileList || []);
+            window._closePhotos = window._closePhotos || [];
+            files.forEach(function(file){
+              if (window._closePhotos.length >= 6) return;
+              if (!/^image\//.test(file.type)) return;
+              var reader = new FileReader();
+              reader.onload = function(e){
+                var img = new Image();
+                img.onload = function(){
+                  var max = 1600, w2 = img.width, h2 = img.height;
+                  if (w2 > max || h2 > max) { var r = Math.min(max / w2, max / h2); w2 = Math.round(w2 * r); h2 = Math.round(h2 * r); }
+                  var cv = document.createElement('canvas'); cv.width = w2; cv.height = h2;
+                  cv.getContext('2d').drawImage(img, 0, 0, w2, h2);
+                  var dataUrl = cv.toDataURL('image/jpeg', 0.8);
+                  window._closePhotos.push({ data: dataUrl.split(',')[1], mime_type: 'image/jpeg', name: file.name || ('photo' + (window._closePhotos.length + 1)) });
+                  renderClosePhotoStrip();
+                };
+                img.src = e.target.result;
+              };
+              reader.readAsDataURL(file);
+            });
+          }
+
+          function renderClosePhotoStrip() {
+            var strip = document.getElementById('close-photo-strip');
+            if (!strip) return;
+            strip.innerHTML = (window._closePhotos || []).map(function(p, i){
+              return '<div style="position:relative;width:56px;height:56px;border-radius:6px;overflow:hidden;border:1px solid var(--border-subtle)">'
+                + '<img src="data:' + p.mime_type + ';base64,' + p.data + '" style="width:100%;height:100%;object-fit:cover">'
+                + '<button onclick="window.removeClosePhoto(' + i + ')" title="삭제" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.6);color:#fff;border:none;width:16px;height:16px;line-height:16px;font-size:11px;cursor:pointer;padding:0">×</button></div>';
+            }).join('');
+          }
+          window.removeClosePhoto = function(i){ (window._closePhotos || []).splice(i, 1); renderClosePhotoStrip(); };
+
+          function aiFlags(title, arr, color) {
+            if (!arr || !arr.length) return '';
+            return '<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:'+color+'">'+title+'</div><ul style="margin:4px 0 0;padding-left:16px">'+arr.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('')+'</ul></div>';
           }
 
           function renderProgressResult(w) {
@@ -3291,8 +3594,17 @@
             el.innerHTML =
               '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정</div><div style="font-size:20px;font-weight:700">'+total+'</div></div><div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">완료</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div><div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">잔여</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div><div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI 추천</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div></div>'+bar(rate)
               + (ai
-                  ? '<div style="margin-top:14px;padding:12px;background:rgba(37,99,235,.06);border-left:3px solid var(--brand-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--brand-primary)">AI 추천 ('+esc(ai.status || '')+')</b><br>'+esc(ai.rationale || '')+(ai.follow_up ? '<br><span style="color:var(--text-tertiary)">후속: '+esc(ai.follow_up)+'</span>' : '')+'</div>'
-                  : '<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">「AI 공정율 분석」을 누르면 마감 보고를 바탕으로 AI가 공정율을 추천합니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>')
+                  ? '<div style="margin-top:14px;padding:12px;background:rgba(37,99,235,.06);border-left:3px solid var(--brand-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.7">'
+                    + '<b style="color:var(--brand-primary)">AI 추천 ('+esc(ai.status || '')+')</b>'
+                    + (ai.photo_count ? ' <span style="font-size:10px;color:var(--text-tertiary)">· 📸 사진 '+ai.photo_count+'장 종합분석</span>' : '')
+                    + '<br>'+esc(ai.summary || ai.rationale || '')
+                    + (ai.summary && ai.rationale ? '<br><span style="color:var(--text-tertiary)">근거: '+esc(ai.rationale)+'</span>' : '')
+                    + aiFlags('📸 사진 소견', ai.photo_findings, 'var(--text-secondary)')
+                    + aiFlags('⚠ 품질 지적', ai.quality_flags, 'var(--status-warning)')
+                    + aiFlags('🦺 안전 지적', ai.safety_flags, 'var(--status-danger)')
+                    + (ai.follow_up ? '<div style="margin-top:6px;color:var(--text-tertiary)">후속: '+esc(ai.follow_up)+'</div>' : '')
+                    + '</div>'
+                  : '<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">「AI 공정율 분석」을 누르면 마감 보고(첨부 사진 포함)를 바탕으로 AI가 공정율·품질·안전을 종합 분석합니다. 관리자가 확정하면 프로젝트 기록에 반영됩니다.</div>')
               +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input id="confirm-progress-input" class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary" id="confirm-progress-btn" '+(w.progressStatus !== '추천완료' ? 'disabled' : '')+'>공정율 확정 반영</button><button class="btn-secondary" id="next-work-btn">다음 작업 생성</button></div>';
             document.getElementById('confirm-progress-btn').addEventListener('click', function(){ var v = parseInt(document.getElementById('confirm-progress-input').value, 10); updateWork(w.id, {progress:isNaN(v)?rate:v, progressStatus:'확정완료', closeStatus:'완료'}); switchTab('s-records'); });
             document.getElementById('next-work-btn').addEventListener('click', function(){ createNextWork(w); });
@@ -3379,10 +3691,12 @@
             w.totalQty = Number(document.getElementById('total-qty-input').value || w.qty || 0);
             w.closeStatus = '저장완료';
             if (!analyze) { saveSafetyItems(); renderAllSafetyTabs(); return; }
+            var photos = (window._closePhotos || []).map(function(p){ return { data: p.data, mime_type: p.mime_type }; });
             var btn = document.getElementById('ai-progress-btn');
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 공정율 분석 중...'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner-gap"></i> ' + (photos.length ? '사진 종합분석 중...' : 'AI 공정율 분석 중...'); }
             try {
-              var res = await gsRun('api_recommendSafetyProgress', [w], null);
+              var payload = Object.assign({}, w, { photos: photos });
+              var res = await gsRun('api_recommendSafetyProgress', [payload], null);
               if (res && res.success && res.item) { applyServerItem(id, res.item); return; }
               alert((res && res.error) || 'AI 공정율 분석에 실패했습니다. (GEMINI_API_KEY 설정 확인)');
             } catch (e) { alert('AI 공정율 분석 오류: ' + e.message); }
@@ -3546,6 +3860,74 @@
             selectedWorkId = id;
             window._safetySelectedWorkId = id;
             goNextStep(selectedItem());
+          };
+
+          // 잘못 등록된 작업 수정 — 핵심 필드를 고쳐 기존 업서트 경로로 저장한다.
+          window._safetyEditWork = function(id) {
+            var w = safetyItems.find(function(x){ return x.id === id; });
+            if (!w) return;
+            var root = document.getElementById('safety-modal-root');
+            var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin:12px 0 5px';
+            var units = ['m','ea','%','단계'];
+            root.innerHTML =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+              '<div class="panel" style="width:560px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+              '<div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple"></i> 작업 수정</div><button id="swe-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+              '<div class="panel-body padded" style="overflow-y:auto">' +
+                '<div style="font-size:11px;color:var(--text-tertiary)">잘못 등록된 작업을 현장에 맞게 수정하세요. 작업코드 ' + esc(w.id) + '</div>' +
+                '<label style="' + LBL + '">작업내용(제목)</label><input id="swe-title" class="wbs-edit-field" value="' + esc(w.title || '') + '">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                  '<div><label style="' + LBL + '">프로젝트</label><input id="swe-project" class="wbs-edit-field" value="' + esc(w.project || '') + '"></div>' +
+                  '<div><label style="' + LBL + '">현장 / 장소</label><input id="swe-site" class="wbs-edit-field" value="' + esc(w.site || '') + '"></div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
+                  '<div><label style="' + LBL + '">인원(명)</label><input id="swe-crew" type="number" min="0" class="wbs-edit-field" value="' + esc(w.crew || 0) + '"></div>' +
+                  '<div><label style="' + LBL + '">예정 작업량</label><input id="swe-qty" type="number" min="0" step="any" class="wbs-edit-field" value="' + esc(w.qty || 0) + '"></div>' +
+                  '<div><label style="' + LBL + '">단위</label><select id="swe-unit" class="wbs-edit-field">' + units.map(function(u){ return '<option' + (w.unit === u ? ' selected' : '') + '>' + u + '</option>'; }).join('') + '</select></div>' +
+                '</div>' +
+                '<label style="' + LBL + '">기한</label><input id="swe-due" class="wbs-edit-field" value="' + esc(w.due || '') + '">' +
+                '<label style="' + LBL + '">상세 작업내용</label><textarea id="swe-worktext" class="wbs-edit-field" style="height:80px;resize:vertical">' + esc(w.workText || '') + '</textarea>' +
+              '</div>' +
+              '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+                '<button id="swe-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+                '<button id="swe-save" class="btn-primary" style="flex:1"><i class="ph ph-floppy-disk"></i> 저장</button>' +
+              '</div></div></div>';
+            function close(){ root.innerHTML = ''; }
+            root.querySelector('#swe-close').addEventListener('click', close);
+            root.querySelector('#swe-cancel').addEventListener('click', close);
+            root.querySelector('#swe-save').addEventListener('click', function(){
+              var patch = {
+                title: root.querySelector('#swe-title').value.trim() || w.title,
+                project: root.querySelector('#swe-project').value.trim(),
+                site: root.querySelector('#swe-site').value.trim(),
+                crew: Number(root.querySelector('#swe-crew').value || 0),
+                qty: Number(root.querySelector('#swe-qty').value || 0),
+                unit: root.querySelector('#swe-unit').value,
+                due: root.querySelector('#swe-due').value.trim(),
+                workText: root.querySelector('#swe-worktext').value
+              };
+              patch.totalQty = patch.qty;
+              updateWork(id, patch);
+              close();
+              if (window.showToast) window.showToast('작업을 수정했습니다.', 'success');
+            });
+          };
+
+          // 잘못 등록된 작업 삭제 — 서버에서 카드·서명·이슈·PTW 를 함께 제거한다.
+          window._safetyDeleteWork = async function(id) {
+            var w = safetyItems.find(function(x){ return x.id === id; });
+            if (!w) return;
+            if (!confirm('작업 "' + (w.title || id) + '" 을(를) 삭제할까요?\n\nTBM 서명·이슈·작업허가서(PTW)도 함께 삭제되며 되돌릴 수 없습니다.\n(공정관리의 연결된 공정 활동은 그대로 유지됩니다.)')) return;
+            safetyItems = safetyItems.filter(function(x){ return x.id !== id; });
+            if (selectedWorkId === id) { selectedWorkId = null; window._safetySelectedWorkId = null; }
+            localStorage.setItem(safetyStorageKey, JSON.stringify(safetyItems));
+            if (window.apiCache) { delete window.apiCache['api_getSafetyWorkItems[]']; }
+            renderAllSafetyTabs();
+            try {
+              var r = await gsRun('api_deleteSafetyWork', [id], { success: false });
+              if (!r || !r.success) { alert('서버 삭제 실패: ' + ((r && r.error) || '알 수 없는 오류') + '\n화면을 새로고침하면 실제 상태를 확인할 수 있습니다.'); }
+              else if (window.showToast) { window.showToast('작업을 삭제했습니다.', 'success'); }
+            } catch (e) { alert('서버 삭제 중 오류가 발생했습니다.'); }
           };
 
           renderSafetyShell();
@@ -4068,6 +4450,280 @@
       }
 
       // â”€â”€ HR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // 작업자 QR 셀프 등록 — 현장을 고르면 인쇄용 QR 포스터를 열고, 작업자가 스캔해 직접 입사지원.
+      window.openWorkerJoinModal = async function () {
+        var host = document.getElementById('worker-join-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'worker-join-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:580px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-qr-code"></i> 작업자 QR 셀프 등록</div><button id="wj-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" id="wj-body" style="overflow-y:auto"><div style="color:var(--text-tertiary);font-size:13px">현장 목록을 불러오는 중…</div></div></div></div>';
+        host.querySelector('#wj-close').addEventListener('click', function () { host.innerHTML = ''; });
+
+        var sites = [];
+        try { sites = await gsRun('api_getSiteList', [], []); } catch (e) { /* ignore */ }
+        var body = host.querySelector('#wj-body');
+        if (!body) return;
+        if (!sites || !sites.length) {
+          body.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);padding:24px;font-size:13px">등록된 현장이 없습니다. 관리자 → 현장(PROJECT) 관리에서 현장을 먼저 등록하세요.</div>';
+          return;
+        }
+        body.innerHTML =
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. QR은 <b>현장당 한 장</b>이고, 작업자가 고른 <b>소속회사</b>로 직접고용/협력사가 자동 지정됩니다(<b>회사 구분</b> 버튼에서 설정). <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
+          '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.openCompanyTypeModal()"><i class="ph ph-buildings"></i> 회사 구분 설정 (자사 / 협력사)</button></div>' +
+          sites.map(function (s) {
+            var quickPoster = '/join/w/' + s.id + '/qr';
+            var quickForm = window.location.origin + '/join/w/' + s.id;
+            var fullPoster = '/member/site/' + s.id + '/apply/qr';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
+              '<div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dashEsc(quickForm) + '</div></div>' +
+              '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
+              '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'/print/qr/' + s.id + '\',\'_blank\')" title="게이트·간편등록·지원서 QR을 한 번에 인쇄"><i class="ph ph-printer"></i> 모아 인쇄</button>' +
+              '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickPoster + '\',\'_blank\')" title="자사·협력사 공용 등록 QR"><i class="ph ph-qr-code"></i> 간편등록 QR</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#059669;border-color:#059669" onclick="window.open(\'/gate/' + s.id + '/qr\',\'_blank\')" title="출입구 부착용 출퇴근 QR(앱 불필요)"><i class="ph ph-sign-in"></i> 게이트 출퇴근 QR</button>' +
+              '</div>';
+          }).join('');
+      };
+      window.wjCopyLink = function (url, btn) {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url).then(function () {
+            if (btn) { var o = btn.innerHTML; btn.innerHTML = '<i class="ph ph-check"></i> 복사됨'; setTimeout(function () { btn.innerHTML = o; }, 1500); }
+          });
+        }
+      };
+
+      // 회사 구분(자사/협력사) — 간편 등록 QR 한 장으로 고용 형태를 자동 판정하는 근거 데이터.
+      window.openCompanyTypeModal = async function () {
+        var host = document.getElementById('company-type-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'company-type-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10003;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:620px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 회사 구분 설정</div><button id="ct-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" id="ct-body" style="overflow-y:auto"><div style="color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div></div>';
+        host.querySelector('#ct-close').addEventListener('click', function () { host.innerHTML = ''; });
+        window.ctLoad();
+      };
+
+      window.ctLoad = async function () {
+        var host = document.getElementById('company-type-modal-root');
+        if (!host) return;
+        var body = host.querySelector('#ct-body');
+        if (!body) return;
+        if (window.apiCache) delete window.apiCache['api_getCompanyTypes[]'];
+        var d = null;
+        try { d = await gsRun('api_getCompanyTypes', [], null); } catch (e) { /* ignore */ }
+        if (!d || !d.companies) { body.innerHTML = '<div style="color:var(--status-danger);font-size:13px">회사 목록을 불러오지 못했습니다.</div>'; return; }
+
+        var warn = d.unclassified > 0
+          ? '<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px"><b>미지정 ' + d.unclassified + '개</b> — 미지정 회사로 등록하는 작업자에게는 등록 폼이 소속 구분을 직접 묻습니다. 지금 지정해 두면 작업자는 회사만 고르면 됩니다.</div>'
+          : '<div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px">모든 회사가 분류되어 있습니다. 작업자는 소속회사만 고르면 고용 형태가 자동 지정됩니다.</div>';
+
+        var opts = Object.keys(d.options || {});
+        var rows = d.companies.map(function (c) {
+          var sel = '<select class="wbs-edit-field" style="width:170px;padding:6px 8px;font-size:12px" onchange="window.ctSave(' + c.id + ', this.value, this)">' +
+            opts.map(function (k) {
+              return '<option value="' + k + '"' + (c.type === k ? ' selected' : '') + '>' + dashEsc(d.options[k]) + '</option>';
+            }).join('') + '</select>';
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:8px 0"><div style="font-size:13px;font-weight:600">' + dashEsc(c.name) + '</div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc(c.code) + ' · 등록 인원 ' + c.workers + '명</div></td>' +
+            '<td style="padding:8px 0;text-align:right">' + sel + '</td></tr>';
+        }).join('');
+
+        body.innerHTML = warn +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px"><b>자사</b> 소속 → 직접고용(시급 관리). <b>협력사</b> 소속 → 간접고용(출역 인원 관리, 퇴근 미기록 시 16:00 자동 마감).</div>' +
+          (rows ? '<table style="width:100%;border-collapse:collapse">' + rows + '</table>'
+                : '<div style="color:var(--text-tertiary);font-size:12px">등록된 회사가 없습니다.</div>');
+      };
+
+      window.ctSave = async function (id, type, el) {
+        if (el) el.disabled = true;
+        var res = null;
+        try { res = await gsRun('api_setCompanyType', [id, type], null); } catch (e) { /* ignore */ }
+        if (el) el.disabled = false;
+        if (!res || !res.success) { alert((res && res.error) || '회사 구분 저장에 실패했습니다.'); return; }
+        window.ctLoad();
+      };
+
+      // 오늘 출역 현황 — 직접고용은 '몇 시간', 협력사는 '몇 명' 관점으로 나눠 본다.
+      window.openDailyHeadcountModal = async function () {
+        var host = document.getElementById('headcount-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'headcount-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:760px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-users-three"></i> 오늘 출역 현황</div><button id="hc-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" style="overflow-y:auto">' +
+          '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">' +
+          '<select id="hc-site" class="wbs-edit-field" style="max-width:260px"><option value="">전체 현장</option></select>' +
+          '<input id="hc-date" type="date" class="wbs-edit-field" style="max-width:170px">' +
+          '<button class="btn-secondary" style="padding:6px 12px;font-size:12px" id="hc-reload"><i class="ph ph-arrow-clockwise"></i> 새로고침</button>' +
+          '</div><div id="hc-body"><div style="color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div>' +
+          '</div></div></div>';
+        host.querySelector('#hc-close').addEventListener('click', function () { host.innerHTML = ''; });
+
+        var sel = host.querySelector('#hc-site');
+        var sites = [];
+        try { sites = await gsRun('api_getSiteList', [], []); } catch (e) { /* ignore */ }
+        (sites || []).forEach(function (s) {
+          var o = document.createElement('option'); o.value = s.id; o.textContent = s.code + ' · ' + s.name; sel.appendChild(o);
+        });
+        sel.addEventListener('change', function () { window.hcLoad(); });
+        host.querySelector('#hc-date').addEventListener('change', function () { window.hcLoad(); });
+        host.querySelector('#hc-reload').addEventListener('click', function () { window.hcLoad(true); });
+        window.hcLoad();
+      };
+
+      window.hcLoad = async function (fresh) {
+        var host = document.getElementById('headcount-modal-root');
+        if (!host) return;
+        var body = host.querySelector('#hc-body');
+        var siteId = host.querySelector('#hc-site').value || '';
+        var date = host.querySelector('#hc-date').value || '';
+        if (!body) return;
+        if (fresh && window.apiCache) { delete window.apiCache['api_getDailyHeadcount'+ JSON.stringify([siteId, date])]; }
+        body.innerHTML = '<div style="color:var(--text-tertiary);font-size:13px">불러오는 중…</div>';
+        var d = null;
+        try { d = await gsRun('api_getDailyHeadcount', [siteId, date], null); } catch (e) { /* ignore */ }
+        if (!d) { body.innerHTML = '<div style="color:var(--status-danger);font-size:13px">출역 현황을 불러오지 못했습니다.</div>'; return; }
+        host.querySelector('#hc-date').value = d.date || '';
+
+        var kpi =
+          '<div class="kpi-row" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">' +
+          '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">직접고용 (시급)</div>' +
+            '<div class="kpi-value" style="font-size:22px;color:#4338ca;line-height:1.1">' + (d.direct.count || 0) + '명</div>' +
+            '<div class="kpi-meta" style="font-size:9.5px;color:var(--text-secondary)">총 ' + (d.direct.workedHours || 0) + 'h · 평균 ' + (d.direct.avgHours || 0) + 'h</div></div>' +
+          '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">협력사 (간접고용)</div>' +
+            '<div class="kpi-value" style="font-size:22px;color:#047857;line-height:1.1">' + (d.indirect.count || 0) + '명</div>' +
+            '<div class="kpi-meta" style="font-size:9.5px;color:var(--text-secondary)">퇴근 미기록 ' + (d.indirect.open || 0) + '명 · 16:00 자동마감</div></div>' +
+          '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">퇴근 미기록 (직접고용)</div>' +
+            '<div class="kpi-value" style="font-size:22px;color:' + ((d.direct.open || 0) > 0 ? 'var(--status-danger)' : 'var(--status-success)') + ';line-height:1.1">' + (d.direct.open || 0) + '명</div>' +
+            '<div class="kpi-meta" style="font-size:9.5px;color:var(--text-secondary)">자동마감 안 함 — 확인 필요</div></div>' +
+          '</div>';
+
+        var comp = (d.companies || []).map(function (c) {
+          var color = c.type === 'indirect' ? '#047857' : '#4338ca';
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:7px 0;font-size:12px">' + dashEsc(c.company) + '</td>' +
+            '<td style="padding:7px 0"><span style="color:' + color + ';font-size:11px;font-weight:700">' + dashEsc(c.typeLabel) + '</span></td>' +
+            '<td style="padding:7px 0;text-align:right;font-size:13px;font-weight:700">' + c.count + '명</td>' +
+            '<td style="padding:7px 0;text-align:right;font-size:12px;color:var(--text-secondary)">' + (c.type === 'indirect' ? '—' : c.hours + 'h') + '</td>' +
+            '<td style="padding:7px 0;text-align:right;font-size:12px;color:' + (c.open > 0 ? 'var(--status-danger)' : 'var(--text-tertiary)') + '">' + c.open + '</td>' +
+            '</tr>';
+        }).join('');
+
+        var rows = (d.workers || []).map(function (w) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:6px 0;font-size:12px">' + dashEsc(w.name) + '</td>' +
+            '<td style="padding:6px 0;font-size:11.5px;color:var(--text-secondary)">' + dashEsc(w.company) + '</td>' +
+            '<td style="padding:6px 0;font-size:11.5px;color:var(--text-secondary)">' + dashEsc(w.trade || '') + '</td>' +
+            '<td style="padding:6px 0;font-size:11.5px;color:' + (w.type === 'indirect' ? '#047857' : '#4338ca') + ';font-weight:700">' + dashEsc(w.typeLabel) + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12px">' + (w.in || '—') + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12px">' + (w.out || (w.open ? '재실' : '—')) + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700">' + (w.type === 'indirect' ? '—' : w.hours + 'h') + '</td>' +
+            '</tr>';
+        }).join('');
+
+        body.innerHTML = kpi +
+          '<div style="font-size:12.5px;font-weight:700;margin:4px 0 6px">업체별 출역</div>' +
+          (comp ? '<table style="width:100%;border-collapse:collapse;margin-bottom:16px"><thead><tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary);padding-bottom:5px">업체</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">고용형태</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">인원</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">근무시간</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">미퇴근</th>' +
+            '</tr></thead><tbody>' + comp + '</tbody></table>'
+            : '<div style="color:var(--text-tertiary);font-size:12px;margin-bottom:16px">오늘 출근 기록이 없습니다.</div>') +
+          '<div style="font-size:12.5px;font-weight:700;margin:4px 0 6px">인원 상세</div>' +
+          (rows ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary);padding-bottom:5px">이름</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">소속</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">공정</th>' +
+            '<th style="text-align:left;font-size:10.5px;color:var(--text-tertiary)">형태</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">출근</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">퇴근</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">시간</th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table>' : '');
+      };
+
+      // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반.
+      window.openSiteWifiModal = async function () {
+        var host = document.getElementById('site-wifi-modal-root');
+        if (!host) { host = document.createElement('div'); host.id = 'site-wifi-modal-root'; document.body.appendChild(host); }
+        host.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:640px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록 (자동 출퇴근용)</div><button id="sw-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" style="overflow-y:auto">' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">현장 WiFi 공유기(AP)의 <b>BSSID(MAC 주소)</b>를 등록하면, 작업자가 그 AP에 연결됐을 때 <b>실내에서도 현장에 있음</b>이 확인됩니다(GPS 안 잡히는 철골 안 보완). 이름(SSID)이 아닌 BSSID로 검증해 가짜 WiFi를 막습니다.</div>' +
+          '<label style="font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:6px">현장 선택</label>' +
+          '<select id="sw-site" class="wbs-edit-field"><option value="">현장을 선택하세요</option></select>' +
+          '<div id="sw-body" style="margin-top:14px"></div>' +
+          '</div></div></div>';
+        host.querySelector('#sw-close').addEventListener('click', function () { host.innerHTML = ''; });
+
+        var sel = host.querySelector('#sw-site');
+        var sites = [];
+        try { sites = await gsRun('api_getSiteList', [], []); } catch (e) { /* ignore */ }
+        (sites || []).forEach(function (s) {
+          var o = document.createElement('option'); o.value = s.id; o.textContent = s.code + ' · ' + s.name; sel.appendChild(o);
+        });
+        sel.addEventListener('change', function () { window.swLoad(sel.value); });
+      };
+
+      window.swLoad = async function (siteId) {
+        var body = document.getElementById('sw-body');
+        if (!body) return;
+        if (!siteId) { body.innerHTML = ''; return; }
+        body.innerHTML = '<div style="color:var(--text-tertiary);font-size:13px;padding:12px">불러오는 중…</div>';
+        var d = await gsRun('api_getSiteWifi', [siteId], { success: false, aps: [] });
+        if (!d || !d.success) { body.innerHTML = '<div style="color:var(--status-danger);font-size:13px;padding:12px">' + dashEsc((d && d.error) || '불러오기 실패') + '</div>'; return; }
+
+        var geo = d.geofence || {};
+        var geoWarn = (geo.lat == null || geo.lng == null || !geo.radius)
+          ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:9px 12px;font-size:11.5px;color:#f59e0b;margin-bottom:12px"><i class="ph ph-warning"></i> 이 현장은 GPS 지오펜스(위도·경도·반경)가 설정되지 않았습니다. 관리자 → 현장 관리에서 위치·반경을 입력하면 실외 자동 출퇴근이 활성화됩니다.</div>'
+          : '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:12px">GPS 지오펜스: 반경 <b style="color:var(--text-secondary)">' + geo.radius + 'm</b> (실외 경계). WiFi는 실내 보완.</div>';
+
+        var rows = (d.aps || []).length ? (d.aps || []).map(function (a) {
+          return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
+            '<i class="ph ph-wifi-high" style="color:' + (a.active ? 'var(--status-success)' : 'var(--text-tertiary)') + '"></i>' +
+            '<div style="flex:1;min-width:0"><div class="cell-mono" style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(a.bssid) + '</div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc([a.ssid, a.label].filter(Boolean).join(' · ') || '—') + '</div></div>' +
+            '<button class="icon-btn" title="삭제" style="color:var(--status-danger)" onclick="window.swDelete(' + a.id + ',\'' + siteId + '\')"><i class="ph ph-trash"></i></button></div>';
+        }).join('') : '<div style="padding:14px;text-align:center;color:var(--text-tertiary);font-size:12.5px">등록된 AP가 없습니다. 아래에서 추가하세요.</div>';
+
+        body.innerHTML = geoWarn +
+          '<div class="docs-card" style="border:1px solid var(--border-subtle);border-radius:10px;padding:6px 14px;margin-bottom:14px">' + rows + '</div>' +
+          '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:8px;align-items:end">' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">BSSID (MAC) *</label><input id="sw-bssid" class="wbs-edit-field" placeholder="a4:5e:60:11:22:33"></div>' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">WiFi 이름(SSID)</label><input id="sw-ssid" class="wbs-edit-field" placeholder="DASOL-PRISM-SITE"></div>' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">위치 메모</label><input id="sw-label" class="wbs-edit-field" placeholder="정문 / B동 2층"></div>' +
+          '<button class="btn-primary" style="height:38px" onclick="window.swSave(\'' + siteId + '\')"><i class="ph ph-plus"></i> 추가</button>' +
+          '</div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:8px">BSSID 확인: 폰에서 그 WiFi에 연결 → 상세정보, 또는 안드로이드 "WiFi Analyzer" 앱. 한 공유기가 2.4/5GHz로 BSSID가 다르면 둘 다 등록하세요.</div>';
+      };
+
+      window.swSave = async function (siteId) {
+        var bssid = (document.getElementById('sw-bssid') || {}).value || '';
+        if (!bssid.trim()) { alert('BSSID를 입력하세요.'); return; }
+        var payload = { bssid: bssid.trim(), ssid: (document.getElementById('sw-ssid') || {}).value || '', label: (document.getElementById('sw-label') || {}).value || '' };
+        var r = await gsRun('api_saveSiteWifi', [siteId, payload], { success: false });
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getSiteWifi') >= 0) delete window.apiCache[k]; });
+        if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); return; }
+        window.swLoad(siteId);
+      };
+
+      window.swDelete = async function (id, siteId) {
+        if (!confirm('이 AP를 삭제할까요?')) return;
+        await gsRun('api_deleteSiteWifi', [id], { success: false });
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getSiteWifi') >= 0) delete window.apiCache[k]; });
+        window.swLoad(siteId);
+      };
+
       async function renderHR() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -4167,7 +4823,7 @@
               '<div class="header-section"><div>' +
               '<h1 class="page-title">ðŸŒ í†µí•© í˜„í™© â€” ì „ì²´ í˜„ìž¥</h1>' +
               '<p class="page-subtitle">ëª¨ë“  ì—°ë™ í˜„ìž¥ì˜ ì¶œí‡´ê·¼ ë°ì´í„°ë¥¼ í†µí•© ì§‘ê³„í•©ë‹ˆë‹¤ (' + attendance.date + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
               // ì „ì²´ KPI
               '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
               '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì¶œê·¼ ì¸ì› <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
@@ -4476,7 +5132,7 @@
                 '</div>';
             }
 
-            // KPI ì‹ ê·œ ì˜ë¯¸: NAHSHON ë³¸ì‚¬ í†µí•© ì¸ì›í˜„í™©
+            // KPI ì‹ ê·œ ì˜ë¯¸: DASOL PRISM ë³¸ì‚¬ í†µí•© ì¸ì›í˜„í™©
             var regInfo = (teamMatrix && teamMatrix.registered) || { total: stats.total || 0, managerTotal: 0, managerByCompany: {} };
             var totals = (teamMatrix && teamMatrix.totals) || { manager: 0, korean: 0, local: 0, grandTotal: 0 };
             var totalAttended = totals.grandTotal || 0;
@@ -4488,8 +5144,8 @@
 
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
-              '<p class="page-subtitle">NAHSHON MEP ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
+              '<p class="page-subtitle">DASOL PRISM ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
@@ -4508,8 +5164,9 @@
                 '<div class="kpi-value" style="font-size:22px;color:var(--status-success);line-height:1.1">' + totalAttended + '</div>' +
                 '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--status-warning)">ë¯¸ì¶œì„ ' + totalAbsent + 'ëª…</span></div></div>' +
               '</div>' +
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸ”– ì¶œí‡´ê·¼ í˜„í™©</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
-              '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="labor">🔗 공정 배치</button><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn" data-tab="attendance">🔖 출퇴근 현황</button><button class="tab-btn" data-tab="personnel">👤 인원 마스터</button></div>' +
+              '<div id="tab-labor"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 공정 배치 현황 로딩 중...</div></div>' +
+              '<div id="tab-global" style="display:none"></div><div id="tab-attendance" style="display:none">' +
               matrixHtml +
               // â”€â”€ ì¶œê·¼ ìƒì„¸ ë³´ê³  (ì¢Œ) + íšŒì‚¬ë³„ í†µê³„ ë„í‘œ (ìš°) â€” ì»¨í…Œì´ë„ˆë§Œ â”€â”€
               '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px" class="hr-detail-grid">' +
@@ -4538,17 +5195,25 @@
             var gt = document.getElementById('tab-global');
             if (gt && !gt.getAttribute('data-loaded')) { gt.setAttribute('data-loaded', '1'); window.renderGlobalHrInto(gt, true); }
           }
+          function ensureLaborTab() {
+            var lt = document.getElementById('tab-labor');
+            if (lt && !lt.getAttribute('data-loaded')) { lt.setAttribute('data-loaded', '1'); window.renderLaborAllocation(lt); }
+          }
           document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
               document.querySelectorAll('#hr-tabs .tab-btn').forEach(function (b) { b.classList.remove('active'); });
               btn.classList.add('active');
               var tab = btn.dataset.tab;
+              var lb = document.getElementById('tab-labor'); if (lb) lb.style.display = tab === 'labor' ? '' : 'none';
               var g = document.getElementById('tab-global'); if (g) g.style.display = tab === 'global' ? '' : 'none';
               document.getElementById('tab-attendance').style.display = tab === 'attendance' ? '' : 'none';
               document.getElementById('tab-personnel').style.display = tab === 'personnel' ? '' : 'none';
               if (tab === 'global') ensureGlobalTab();
+              if (tab === 'labor') ensureLaborTab();
             });
           });
+          // 기본 진입 탭이 공정 배치이므로 즉시 로드
+          ensureLaborTab();
           if (window._pendingHrTab) {
             var pendingHrTab = window._pendingHrTab;
             window._pendingHrTab = null;
@@ -4573,6 +5238,77 @@
         } catch (err) { renderError('ì¸ì› ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message); console.error(err); }
       }
 
+      // ─────────────────────────────────────────────
+      // 🔗 공정 배치 현황 — 오늘 WBS 작업 계획인원 vs 실투입(안전카드 서명)
+      // ─────────────────────────────────────────────
+      window.renderLaborAllocation = async function (host) {
+        var el = (typeof host === 'string') ? document.getElementById(host) : host;
+        if (!el) return;
+        el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 공정 배치 현황 로딩 중...</div>';
+        try {
+          var d = await window.API.getLaborAllocation();
+          if (!d || d.success === false) { el.innerHTML = '<div class="panel"><div class="panel-body" style="padding:24px;color:var(--status-warning)">공정 배치 데이터를 불러오지 못했습니다.</div></div>'; return; }
+          var items = d.items || [];
+          var k = d.kpi || {};
+          var fillRate = (k.demand > 0) ? Math.round((k.assigned || 0) / k.demand * 100) : 0;
+          var mhRate = (k.plannedMH > 0) ? Math.round((k.actualMH || 0) / k.plannedMH * 100) : 0;
+
+          var STATUS = {
+            na:             { label: '인원계획없음', color: 'var(--text-tertiary)', bg: 'transparent' },
+            surplus:        { label: '초과 투입',    color: '#3b82f6', bg: 'rgba(59,130,246,.08)' },
+            ok:             { label: '충족',         color: '#10b981', bg: 'rgba(16,185,129,.08)' },
+            short:          { label: '인력 부족',    color: '#f59e0b', bg: 'rgba(245,158,11,.10)' },
+            critical_short: { label: '임계 부족',    color: '#ef4444', bg: 'rgba(239,68,68,.12)' }
+          };
+
+          var kpi =
+            '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">' +
+              '<div class="kpi-card"><div class="kpi-label">오늘 출역 / 필요</div>' +
+                '<div class="kpi-value" style="color:var(--brand-primary)">' + (k.present || 0) + ' <span style="font-size:14px;color:var(--text-tertiary)">/ ' + (k.demand || 0) + '명</span></div>' +
+                '<div class="kpi-meta"><span style="color:var(--text-secondary)">미배치 ' + (k.unassigned || 0) + '명</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">공정 배치율</div>' +
+                '<div class="kpi-value" style="color:' + (fillRate >= 90 ? '#10b981' : (fillRate >= 60 ? '#f59e0b' : '#ef4444')) + '">' + fillRate + '%</div>' +
+                '<div class="kpi-meta"><span style="color:var(--text-secondary)">실투입 ' + (k.assigned || 0) + ' / 계획 ' + (k.demand || 0) + '</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">임계작업 인력부족</div>' +
+                '<div class="kpi-value" style="color:' + ((k.criticalShort || 0) > 0 ? '#ef4444' : '#10b981') + '">' + (k.criticalShort || 0) + '<span style="font-size:14px;color:var(--text-tertiary)"> 건</span></div>' +
+                '<div class="kpi-meta"><span style="color:' + ((k.criticalShort || 0) > 0 ? 'var(--status-danger)' : 'var(--text-secondary)') + '">' + ((k.criticalShort || 0) > 0 ? '즉시 인원 보강 필요' : '임계경로 정상') + '</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">공수 (MH)</div>' +
+                '<div class="kpi-value" style="color:var(--brand-primary)">' + (k.actualMH || 0) + '<span style="font-size:14px;color:var(--text-tertiary)"> / ' + (k.plannedMH || 0) + '</span></div>' +
+                '<div class="kpi-meta"><span style="color:var(--text-secondary)">달성 ' + mhRate + '%</span></div></div>' +
+            '</div>';
+
+          var rows = items.map(function (r) {
+            var st = STATUS[r.status] || STATUS.na;
+            var pct = r.fillPct || 0;
+            var tradeTxt = r.tradeLabel ? (r.tradeLabel + (r.trade ? ' (' + r.trade + ')' : '')) : (r.trade || '-');
+            var critBadge = r.isCritical ? '<span title="임계경로" style="display:inline-block;margin-left:6px;font-size:9px;font-weight:700;color:#ef4444;border:1px solid #ef4444;border-radius:4px;padding:0 4px">CP</span>' : '';
+            var ehsBadge = r.ehsHigh ? '<span title="고위험 작업" style="display:inline-block;margin-left:4px;font-size:9px;font-weight:700;color:#f59e0b;border:1px solid #f59e0b;border-radius:4px;padding:0 4px">EHS</span>' : '';
+            return '<tr style="background:' + st.bg + '">' +
+              '<td><div style="font-weight:600">' + (r.name || '-') + critBadge + ehsBadge + '</div><div style="font-size:10px;color:var(--text-tertiary)">' + (r.wbsId || r.activityId || '') + '</div></td>' +
+              '<td>' + tradeTxt + '</td>' +
+              '<td class="tac" style="font-weight:600">' + r.planned + '</td>' +
+              '<td class="tac" style="font-weight:700;color:' + st.color + '">' + r.actual + (r.shortBy > 0 ? ' <span style="font-size:10px;color:#ef4444">(-' + r.shortBy + ')</span>' : '') + '</td>' +
+              '<td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:7px;border-radius:4px;background:var(--bg-base);overflow:hidden"><div style="height:100%;width:' + Math.min(100, pct) + '%;background:' + st.color + '"></div></div><span style="font-size:11px;color:var(--text-secondary);min-width:34px;text-align:right">' + pct + '%</span></div></td>' +
+              '<td class="tac"><span style="font-size:11px;font-weight:600;color:' + st.color + '">' + st.label + '</span></td>' +
+            '</tr>';
+          }).join('');
+
+          var emptyRow = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--text-tertiary)">오늘 진행 중인 공정 작업이 없습니다.</td></tr>';
+
+          el.innerHTML = kpi +
+            '<div class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
+              '<div class="panel-title" style="color:var(--brand-primary)"><i class="ph ph-users-three"></i> 공정별 인력 배치 현황 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">· ' + (d.site || '') + ' · ' + (d.date || '') + '</span></div>' +
+              '<span style="font-size:11px;color:var(--text-tertiary)">계획인원 ↔ 실투입(안전카드 서명)</span>' +
+            '</div>' +
+            '<div class="panel-body" style="padding:0;overflow-x:auto"><table class="data-table"><thead><tr>' +
+              '<th>공정 (작업)</th><th>공종</th><th class="tac">계획</th><th class="tac">실투입</th><th>충족률</th><th class="tac">상태</th>' +
+            '</tr></thead><tbody>' + (rows || emptyRow) + '</tbody></table></div></div>';
+        } catch (err) {
+          el.innerHTML = '<div class="panel"><div class="panel-body" style="padding:24px;color:var(--status-danger)">공정 배치 로딩 실패: ' + (err && err.message ? err.message : err) + '</div></div>';
+          console.error(err);
+        }
+      };
+
       // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // ðŸ‘¥ ì¶œê·¼ ìƒì„¸ ë³´ê³  â€” íšŒì‚¬ë³„ â†’ íŒ€ë³„ ê·¸ë£¹í•‘ ë Œë”
       // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4583,7 +5319,7 @@
         'AI KOREA': '#3b82f6',
         'M-SOL': '#10b981',
         'MSOL': '#10b981',
-        'NAHSHON': '#a78bfa'
+        'DASOL PRISM': '#a78bfa'
       };
       window.getCompanyColor = function(name) {
         var k = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -8276,6 +9012,201 @@
           '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:720px">' + body + '</div></div></div>';
       }
 
+
+      // ===== 오늘 할 일(현장 노무) ↔ 조달 관리(자재 납기) 구분 토글 =====
+      function wbsOpsBlock(today, procure) {
+        var view = window._wbsOpsView || 'today';
+        var todayN = (today && today.total) || 0;
+        var procN = (procure && procure.total) || 0;
+        var atRisk = (procure && procure.atRisk) || 0;
+        function tab(key, icon, label, count, badge) {
+          var on = view === key;
+          return '<button onclick="window.wbsSetOpsView(\'' + key + '\')" style="border:none;border-radius:8px 8px 0 0;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;background:' + (on ? 'var(--bg-panel)' : 'transparent') + ';color:' + (on ? 'var(--text-primary)' : 'var(--text-tertiary)') + ';border-bottom:2px solid ' + (on ? '#7c3aed' : 'transparent') + '">' +
+            '<i class="ph ' + icon + '"></i> ' + label + ' <span style="opacity:.6">' + count + '</span>' +
+            (badge > 0 ? ' <span style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:2px">' + badge + '</span>' : '') + '</button>';
+        }
+        return '<div id="wbs-ops-block" style="margin-bottom:18px">' +
+          '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border-subtle)">' +
+          tab('today', 'ph-calendar-check', '오늘 할 일', todayN, 0) +
+          tab('procure', 'ph-package', '조달 관리', procN, atRisk) +
+          '</div>' +
+          '<div id="wbs-ops-today"' + (view === 'today' ? '' : ' style="display:none"') + '>' + wbsTodayPanel(today) + '</div>' +
+          '<div id="wbs-ops-procure"' + (view === 'procure' ? '' : ' style="display:none"') + '>' + wbsProcurementPanel(procure) + '</div>' +
+          '</div>';
+      }
+
+      window.wbsSetOpsView = function(v) {
+        window._wbsOpsView = v;
+        var el = document.getElementById('wbs-ops-block');
+        if (el) el.outerHTML = wbsOpsBlock(window._wbsToday, window._wbsProcure);
+      };
+
+      async function wbsReloadProcurement(keepView) {
+        var pid = window.WBS_CURRENT_PROJECT;
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function(k){ if (k.indexOf('api_getProcurement') >= 0) delete window.apiCache[k]; });
+        var pr = await window.API.getProcurement(pid);
+        window._wbsProcure = pr;
+        if (keepView !== false) window._wbsOpsView = 'procure';
+        var el = document.getElementById('wbs-ops-block');
+        if (el) el.outerHTML = wbsOpsBlock(window._wbsToday, pr);
+      }
+
+      function wbsProcurementPanel(p) {
+        if (!p || !p.success) return '<div class="panel" style="margin:0"><div class="panel-body" style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">조달 데이터를 불러오지 못했습니다.</div></div>';
+        var STAGES = p.statuses || ['발주대기','발주완료','생산중','선적중','통관중','입고완료'];
+        var rows = (p.items || []).map(function(it){ return wbsProcureRow(it, STAGES); }).join('');
+        var body = (p.total === 0)
+          ? '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">조달·발주 공정이 없습니다.<br><span style="font-size:11px">WBS 작업 이름에 <b>조달·발주·구매·제작</b>이 있고 인원이 없는 공정이 자동으로 여기에 모입니다.</span></div>'
+          : rows;
+        return '<div class="panel" style="margin:0;border:1px solid rgba(234,88,12,0.3)">' +
+          '<div class="panel-header" style="background:rgba(234,88,12,0.06)">' +
+          '<div class="panel-title"><i class="ph ph-package" style="color:#ea580c"></i> 조달 관리 — 자재 납기</div>' +
+          '<div style="display:flex;align-items:center;gap:14px;font-size:11px">' +
+          '<span style="color:var(--text-secondary)">품목 <strong style="color:var(--text-primary)">' + p.total + '</strong></span>' +
+          (p.inTransit > 0 ? '<span style="color:#3b82f6">배송중 ' + p.inTransit + '</span>' : '') +
+          (p.delivered > 0 ? '<span style="color:#10b981">입고 ' + p.delivered + '</span>' : '') +
+          (p.atRisk > 0 ? '<span style="color:#ef4444;font-weight:700">⚠ 지연위험 ' + p.atRisk + '</span>' : '') +
+          '</div></div>' +
+          '<div class="panel-body" style="padding:0;overflow-x:auto"><div style="min-width:900px">' +
+          '<div style="display:grid;grid-template-columns:54px minmax(170px,1fr) 116px 158px 92px 92px 96px 96px;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border-default);font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:.3px">' +
+          '<span>코드</span><span>품목 · 공종</span><span>협력사</span><span>상태</span><span>ETA</span><span>납기</span><span>여유</span><span style="text-align:right">관리</span></div>' +
+          body + '</div></div></div>';
+      }
+
+      function wbsProcureRow(it, STAGES) {
+        var alertBorder = it.alert === 'critical' ? '#ef4444' : it.alert === 'warning' ? '#f59e0b' : it.alert === 'watch' ? '#eab308' : 'transparent';
+        var stageColor = it.status === '입고완료' ? '#10b981' : it.status === '통관중' || it.status === '선적중' ? '#3b82f6' : it.status === '생산중' ? '#8b5cf6' : it.status === '발주완료' ? '#0ea5e9' : 'var(--text-tertiary)';
+
+        // 여유(slack) 라벨.
+        var slackHtml;
+        if (it.delay === 'done') slackHtml = '<span style="color:#10b981;font-size:11px;font-weight:700">입고완료</span>';
+        else if (it.delay === 'unknown') slackHtml = '<span style="color:var(--text-tertiary);font-size:11px">ETA 미정</span>';
+        else if (it.slack < 0) slackHtml = '<span style="color:#ef4444;font-size:11px;font-weight:800">지연 ' + (-it.slack) + '일</span>';
+        else if (it.slack <= 7) slackHtml = '<span style="color:#f59e0b;font-size:11px;font-weight:700">여유 ' + it.slack + '일</span>';
+        else slackHtml = '<span style="color:#10b981;font-size:11px;font-weight:600">여유 ' + it.slack + '일</span>';
+
+        var advanceBtn = it.status === '입고완료' ? '' :
+          '<button onclick="window.wbsProcAdvance(\'' + wbsJsArg(it.wbs_id) + '\')" title="다음 단계로 (' + wbsEsc(it.nextStatus) + ')" style="background:none;border:1px solid #ea580c;color:#ea580c;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer"><i class="ph ph-arrow-right"></i></button>';
+
+        return '<div style="display:grid;grid-template-columns:54px minmax(170px,1fr) 116px 158px 92px 92px 96px 96px;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-subtle);border-left:3px solid ' + alertBorder + '">' +
+          '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(it.activityId || '') + '</span>' +
+          '<span style="min-width:0"><span style="font-size:13px;color:var(--text-primary)">' + wbsEsc(it.name) + '</span>' +
+          (it.isCritical ? '<span style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">★</span>' : '') +
+          '<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.stagePath || it.trade || '') + '</div></span>' +
+          '<span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + wbsEsc(it.vendor || '—') + '</span>' +
+          '<span>' + '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:700;color:' + stageColor + '">' + wbsEsc(it.status) + '</span></div>' +
+          '<div style="height:5px;background:var(--bg-base);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:' + (it.progress || 0) + '%;background:' + stageColor + '"></div></div></span>' +
+          '<span class="cell-mono" style="font-size:11px;color:' + (it.delay === 'late' ? '#ef4444' : 'var(--text-secondary)') + '">' + wbsEsc(it.eta || '—') + '</span>' +
+          '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(it.needBy || '—') + '</span>' +
+          '<span>' + slackHtml + '</span>' +
+          '<span style="display:flex;gap:4px;justify-content:flex-end">' + advanceBtn +
+          '<button onclick="window.wbsProcEdit(\'' + wbsJsArg(it.wbs_id) + '\')" title="조달 상세 편집" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer"><i class="ph ph-pencil-simple"></i></button>' +
+          '</span></div>';
+      }
+
+      window.wbsProcAdvance = async function(wbsCode) {
+        var it = ((window._wbsProcure && window._wbsProcure.items) || []).filter(function(x){ return x.wbs_id === wbsCode; })[0];
+        if (!it) return;
+        var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, { status: it.nextStatus });
+        if (!r || !r.success) { alert('상태 변경 실패: ' + ((r && r.error) || '오류')); return; }
+        await wbsReloadProcurement();
+      };
+
+      window.wbsProcEdit = function(wbsCode) {
+        var it = ((window._wbsProcure && window._wbsProcure.items) || []).filter(function(x){ return x.wbs_id === wbsCode; })[0];
+        if (!it) return;
+        var STAGES = (window._wbsProcure && window._wbsProcure.statuses) || ['발주대기','발주완료','생산중','선적중','통관중','입고완료'];
+        var root = document.getElementById('safety-modal-root') || (function(){ var d = document.createElement('div'); d.id = 'wbs-proc-modal-root'; document.body.appendChild(d); return d; })();
+        var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin:12px 0 5px';
+        root.innerHTML =
+          '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px">' +
+          '<div class="panel" style="width:540px;max-width:96vw;max-height:90vh;margin:0;display:flex;flex-direction:column">' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-package"></i> 조달 상세 — ' + wbsEsc(it.name) + '</div><button id="pe-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-body padded" style="overflow-y:auto">' +
+          '<div style="font-size:11px;color:var(--text-tertiary)">납기 ' + wbsEsc(it.needBy || '미정') + ' (WBS 종료일) · ' + (it.isCritical ? '<b style="color:#ef4444">임계경로</b>' : '여유 공정') + '</div>' +
+          '<div style="margin:12px 0 4px;padding:12px;border:1px dashed #ea580c;border-radius:10px;background:rgba(234,88,12,0.06)">' +
+          '<div style="font-size:12px;font-weight:700;color:#ea580c;margin-bottom:6px"><i class="ph ph-sparkle"></i> 발주서 · 서류 AI 분석</div>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px">발주서/선적서/통관/납품확인서를 올리면 벤더·PO·금액·ETA 를 자동 기입하고 <b>단계를 자동 판정</b>합니다.</div>' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+          '<input type="file" id="pe-aifile" accept=".pdf,image/*,.docx,.xlsx" style="flex:1;font-size:11px;color:var(--text-secondary)">' +
+          '<button type="button" id="pe-analyze" class="btn-secondary" style="white-space:nowrap;border-color:#ea580c;color:#ea580c"><i class="ph ph-robot"></i> 분석</button>' +
+          '</div><div id="pe-ai-result" style="font-size:11px;margin-top:8px">' + (it.documentUrl ? '<a href="' + wbsEsc(it.documentUrl) + '" target="_blank" style="color:#ea580c"><i class="ph ph-paperclip"></i> ' + wbsEsc(it.documentName || '첨부 서류') + '</a>' : '') + '</div>' +
+          '</div>' +
+          '<label style="' + LBL + '">상태</label><select id="pe-status" class="wbs-edit-field">' + STAGES.map(function(s){ return '<option' + (it.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" value="' + wbsEsc(it.vendor || '') + '"></div>' +
+          '<div><label style="' + LBL + '">발주번호(PO)</label><input id="pe-pono" class="wbs-edit-field" value="' + wbsEsc(it.poNo || '') + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div><label style="' + LBL + '">발주일</label><input id="pe-ordered" type="date" class="wbs-edit-field" value="' + wbsEsc(it.orderedOn || '') + '"></div>' +
+          '<div><label style="' + LBL + '">도착예정(ETA)</label><input id="pe-eta" type="date" class="wbs-edit-field" value="' + wbsEsc(it.eta || '') + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">' +
+          '<div><label style="' + LBL + '">금액</label><input id="pe-amount" type="number" step="any" min="0" class="wbs-edit-field" value="' + (it.amount != null ? it.amount : '') + '"></div>' +
+          '<div><label style="' + LBL + '">통화</label><input id="pe-currency" class="wbs-edit-field" value="' + wbsEsc(it.currency || 'USD') + '"></div>' +
+          '</div>' +
+          '<label style="' + LBL + '">메모</label><textarea id="pe-note" class="wbs-edit-field" style="height:60px;resize:vertical">' + wbsEsc(it.note || '') + '</textarea>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border-default)">' +
+          '<button id="pe-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button id="pe-save" class="btn-primary" style="flex:1;background:#ea580c;border:none"><i class="ph ph-floppy-disk"></i> 저장</button>' +
+          '</div></div></div>';
+        function close(){ root.innerHTML = ''; }
+        root.querySelector('#pe-close').addEventListener('click', close);
+        root.querySelector('#pe-cancel').addEventListener('click', close);
+
+        // 발주서/서류 AI 분석 — 업로드 → 추출·단계 판정 → 폼 자동 채움(사람 확인 후 저장).
+        var pendingFile = null;
+        root.querySelector('#pe-analyze').addEventListener('click', async function(){
+          var input = root.querySelector('#pe-aifile');
+          if (!input.files || !input.files[0]) { alert('분석할 서류 파일을 선택하세요.'); return; }
+          var btn = this; btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '<i class="ph ph-circle-notch"></i> 분석 중...';
+          var resEl = root.querySelector('#pe-ai-result');
+          resEl.innerHTML = '<span style="color:var(--text-tertiary)">AI가 서류를 읽는 중…</span>';
+          try {
+            var tokenEl = document.querySelector('meta[name="csrf-token"]');
+            var fd = new FormData(); fd.append('file', input.files[0]);
+            var res = await fetch('/procurement-api/analyze', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : '', 'Accept': 'application/json' }, body: fd });
+            var json = await res.json();
+            if (!json || !json.success) { resEl.innerHTML = '<span style="color:var(--status-danger)">분석 실패: ' + wbsEsc((json && (json.error || json.message)) || ('HTTP ' + res.status)) + '</span>'; btn.disabled = false; btn.innerHTML = old; return; }
+            var d = json.data || {};
+            pendingFile = json.file || null;
+            if (d.stage) root.querySelector('#pe-status').value = d.stage;
+            if (d.vendor) root.querySelector('#pe-vendor').value = d.vendor;
+            if (d.po_no) root.querySelector('#pe-pono').value = d.po_no;
+            if (d.order_date) root.querySelector('#pe-ordered').value = d.order_date;
+            if (d.eta) root.querySelector('#pe-eta').value = d.eta;
+            if (d.amount != null) root.querySelector('#pe-amount').value = d.amount;
+            if (d.currency) root.querySelector('#pe-currency').value = d.currency;
+            var noteEl = root.querySelector('#pe-note');
+            if ((d.item_summary || d.summary) && !noteEl.value.trim()) noteEl.value = (d.item_summary || d.summary);
+            var kindLabel = { purchase_order: '발주서', shipping: '선적서', customs: '통관서류', delivery: '납품확인서', production: '생산', invoice: '인보이스', quote: '견적서', other: '기타 서류' }[d.doc_kind] || d.doc_kind || '서류';
+            resEl.innerHTML = '<span style="color:#10b981"><i class="ph ph-check-circle"></i> ' + wbsEsc(kindLabel) + ' 인식' + (d.stage ? ' → 단계: <b>' + wbsEsc(d.stage) + '</b>' : ' (단계 변경 없음)') + '. 값 확인 후 저장하세요.' + (pendingFile ? ' <i class="ph ph-paperclip"></i> ' + wbsEsc(pendingFile.name) : '') + '</span>';
+          } catch (e) { resEl.innerHTML = '<span style="color:var(--status-danger)">분석 중 오류가 발생했습니다.</span>'; }
+          btn.disabled = false; btn.innerHTML = old;
+        });
+
+        root.querySelector('#pe-save').addEventListener('click', async function(){
+          var patch = {
+            status: root.querySelector('#pe-status').value,
+            vendor: root.querySelector('#pe-vendor').value.trim(),
+            po_no: root.querySelector('#pe-pono').value.trim(),
+            ordered_on: root.querySelector('#pe-ordered').value,
+            eta: root.querySelector('#pe-eta').value,
+            amount: root.querySelector('#pe-amount').value,
+            currency: root.querySelector('#pe-currency').value.trim(),
+            note: root.querySelector('#pe-note').value
+          };
+          if (pendingFile) { patch.document_disk = pendingFile.disk; patch.document_path = pendingFile.path; patch.document_name = pendingFile.name; }
+          var btn = this; btn.disabled = true;
+          var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, patch);
+          if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); btn.disabled = false; return; }
+          close();
+          await wbsReloadProcurement();
+          if (window.showToast) window.showToast('조달 정보를 저장했습니다.', 'success');
+        });
+      };
+
       function wbsProgressBar(pct, color, width) {
         var p = Math.max(0, Math.min(100, Number(pct) || 0));
         return '<div style="display:flex;align-items:center;gap:8px;min-width:' + (width || 110) + 'px">' +
@@ -8514,6 +9445,1307 @@
         });
       };
 
+      // ═══════════════════════ 현장 상황실 (Ops Room) ═══════════════════════
+      // 형식 없이 올린 글·카톡 붙여넣기를 AI 가 읽고 "공정 반영 제안"으로 바꾼다.
+      function opsEsc(v) {
+        return String(v === null || v === undefined ? '' : v)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      var OPS_CAT = {
+        progress:    { label: '작업 마감·진행', color: '#22c55e', icon: 'ph-flag-checkered' },
+        plan:        { label: '작업 계획',     color: '#3b82f6', icon: 'ph-calendar-plus' },
+        procurement: { label: '자재·조달',     color: '#ea580c', icon: 'ph-package' },
+        labor:       { label: '인력·출역',     color: '#a855f7', icon: 'ph-users-three' },
+        expense:     { label: '지출·영수증',   color: '#16a34a', icon: 'ph-receipt' },
+        issue:       { label: '이슈·안전',     color: '#ef4444', icon: 'ph-warning-circle' },
+        noise:       { label: '잡담',          color: '#94a3b8', icon: 'ph-chat-dots' }
+      };
+
+      async function renderOpsRoom() {
+        const pc = document.getElementById('page-container');
+        if (!pc) return;
+        pc.innerHTML =
+          '<div class="header-section"><div>' +
+          '<h1 class="page-title"><i class="ph ph-broadcast" style="color:#22c55e"></i> 현장 상황실</h1>' +
+          '<p class="page-subtitle">오늘 한 일 · 내일 할 일 · 자재 · 영수증 · 이슈를 그냥 올리세요. AI 가 읽고 공정 반영안을 만듭니다.</p>' +
+          '</div>' +
+          '<div class="action-row">' +
+          '<button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 기록 <span id="ops-batch-count"></span></button>' +
+          '<button class="btn-primary" style="background:#0f766e;border-color:#0f766e" onclick="window.opsCloseDay()"><i class="ph ph-clipboard-text"></i> 일일 마감</button>' +
+          '</div></div>' +
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-note-pencil"></i> 현장 이야기 붙여넣기</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">카카오톡 대화를 통째로 붙여넣어도 됩니다</span>' +
+          '</div><div class="panel-body padded">' +
+          '<textarea id="ops-input" placeholder="예)&#10;김철수: 천장 배관 20개 중 12개 했습니다&#10;이민준: 그레이바 자재 화요일 도착한대요&#10;내일 전기 3명 투입해서 트레이 작업합니다" ' +
+          'style="width:100%;height:150px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
+          '<div style="margin-top:11px">' +
+          '<label style="display:block;font-size:11.5px;color:var(--text-tertiary);margin-bottom:6px"><i class="ph ph-camera"></i> 현장 사진 첨부 <span style="color:#22c55e">(AI가 사진도 함께 읽습니다)</span></label>' +
+          '<input type="file" id="ops-photo-input" accept="image/*" multiple capture="environment" style="font-size:12px;color:var(--text-secondary);max-width:100%">' +
+          '<div id="ops-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>' +
+          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px">시공 사진·영수증·납품 사진 모두 인식합니다. 최대 20장, 크기 제한 없음(서버가 알아서 줄입니다). 글과 같이 올리면 가장 정확합니다.</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">' +
+          '<button class="btn-primary" id="ops-read-btn" style="padding:10px 18px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
+          '<span id="ops-read-msg" style="font-size:12px;color:var(--text-tertiary)">잡담은 자동으로 걸러집니다. 공정표는 확인 후 반영됩니다.</span>' +
+          '</div></div></div>' +
+          '<div id="ops-digest"></div>' +
+          '<div id="ops-result"></div>' +
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-check-square-offset"></i> 오늘 한 일 · 내일 할 일 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">지시·승인·준비물</span></div>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddAction()"><i class="ph ph-plus"></i> 직접 추가</button>' +
+          '</div><div class="panel-body" id="ops-actions" style="padding:0"></div></div>' +
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-users-three"></i> 오늘 출역 인원 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">보고 vs 게이트 QR</span></div>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddLabor()"><i class="ph ph-plus"></i> 직접 입력</button>' +
+          '</div><div class="panel-body" id="ops-labor" style="padding:0"></div></div>' +
+          '<div class="panel"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-list-checks"></i> 확인 대기 목록</div>' +
+          '<div style="display:flex;gap:7px">' +
+          '<button class="btn-primary" style="padding:5px 12px;font-size:12px;font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> 전체 반영</button>' +
+          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button></div>' +
+          '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>' +
+          '<div class="panel" id="ops-batches-panel" style="margin-top:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-scroll"></i> 원문 기록</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">붙여넣은 대화 원문이 그대로 보관됩니다 · 수정·삭제 가능</span>' +
+          '</div><div class="panel-body" id="ops-batches" style="padding:0"></div></div>';
+
+        document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
+        window._opsFiles = [];
+        var photoInput = document.getElementById('ops-photo-input');
+        if (photoInput) photoInput.addEventListener('change', function () { opsHandlePhotos(this.files); });
+        window.opsLoadPending();
+        window.opsLoadDigest();
+        window.opsLoadBatches();
+        window.opsLoadLabor();
+        window.opsLoadActions();
+      }
+
+      // 사진은 원본 파일 그대로 들고 있다가 한 장씩 업로드한다.
+      // 브라우저에서 미리 줄이지 않는 이유: 사용자가 크기 걱정 없이 올릴 수 있어야 하고,
+      // 줄이는 일은 AI 에 넘기기 직전에 서버가 한다(ImageDownscale).
+      function opsHandlePhotos(fileList) {
+        var files = Array.prototype.slice.call(fileList || []);
+        window._opsFiles = window._opsFiles || [];
+        var dropped = 0;
+        files.forEach(function (file) {
+          if (!/^image\//.test(file.type)) { return; }
+          if (window._opsFiles.length >= 20) { dropped++; return; }
+          window._opsFiles.push(file);
+        });
+        if (dropped) {
+          var m = document.getElementById('ops-read-msg');
+          if (m) m.textContent = '한 번에 20장까지 올릴 수 있어 ' + dropped + '장은 제외했습니다.';
+        }
+        opsRenderPhotoStrip();
+      }
+
+      function opsRenderPhotoStrip() {
+        var strip = document.getElementById('ops-photo-strip');
+        if (!strip) return;
+        var files = window._opsFiles || [];
+        strip.innerHTML = files.map(function (f, i) {
+          return '<div style="position:relative;width:58px;height:58px;border-radius:7px;overflow:hidden;border:1px solid var(--border-subtle)">' +
+            '<img id="ops-thumb-' + i + '" style="width:100%;height:100%;object-fit:cover">' +
+            '<button onclick="window.opsRemovePhoto(' + i + ')" title="삭제" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.6);color:#fff;border:none;width:17px;height:17px;line-height:1;cursor:pointer;font-size:11px">×</button></div>';
+        }).join('');
+        // 썸네일만 objectURL 로 띄운다 — 원본을 base64 로 복사하지 않아 메모리를 아낀다.
+        files.forEach(function (f, i) {
+          var el = document.getElementById('ops-thumb-' + i);
+          if (el) { el.src = URL.createObjectURL(f); el.onload = function () { URL.revokeObjectURL(el.src); }; }
+        });
+      }
+      window.opsRemovePhoto = function (i) { (window._opsFiles || []).splice(i, 1); opsRenderPhotoStrip(); };
+
+      // ── 오늘 한 일 · 내일 할 일
+      // 공정·자재·인원 어디에도 안 들어가는 것들(원청 지시, 승인, 의사결정, 준비물)이 여기 모인다.
+      // 이걸 버리면 다음날 준비가 무너진다 — 실제 현장 대화의 절반이 이것들이다.
+      var OPS_KIND_COLOR = { request: '#f59e0b', approval: '#22c55e', decision: '#a855f7', todo: 'var(--brand-primary)', info: 'var(--text-tertiary)' };
+
+      window.opsLoadActions = async function () {
+        var host = document.getElementById('ops-actions');
+        if (!host) return;
+        if (window.apiCache) delete window.apiCache['api_getOpsActions[]'];
+        var d = await gsRun('api_getOpsActions', [], null);
+        if (!d || !d.success) { host.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">불러오지 못했습니다.</div>'; return; }
+
+        function row(a, done) {
+          var color = OPS_KIND_COLOR[a.kind] || 'var(--text-tertiary)';
+          return '<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 18px;border-bottom:1px solid var(--border-subtle)">' +
+            '<input type="checkbox"' + (done ? ' checked' : '') + ' onchange="window.opsToggleAction(' + a.id + ')" style="width:16px;height:16px;margin-top:2px;accent-color:#22c55e;cursor:pointer">' +
+            '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12.5px;color:var(--text-primary);' + (done ? 'text-decoration:line-through;opacity:.6' : '') + '">' +
+              (a.isBlocker ? '<span style="color:var(--status-danger);font-weight:800">🔴 막힘 · </span>' : '') +
+              opsEsc(a.title) + '</div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' +
+              '<span style="color:' + color + ';font-weight:700">' + opsEsc(a.kindLabel) + '</span>' +
+              (a.requester ? ' · 요청 ' + opsEsc(a.requester) : '') +
+              (a.assignee ? ' · 담당 ' + opsEsc(a.assignee) : '') +
+              (a.dueOn ? ' · 기한 ' + opsEsc(a.dueOn) : '') +
+              (a.fromOps ? ' · 상황실' : '') + '</div></div>' +
+            '<button class="btn-secondary" style="padding:2px 7px;font-size:10.5px;flex-shrink:0" onclick="window.opsDeleteAction(' + a.id + ')">삭제</button>' +
+            '</div>';
+        }
+
+        function section(title, arr, color, done) {
+          if (!arr || !arr.length) return '';
+          return '<div style="padding:8px 18px 4px;font-size:11px;font-weight:800;color:' + color + ';background:var(--bg-base)">' +
+            title + ' <span style="color:var(--text-tertiary);font-weight:400">' + arr.length + '건</span></div>' +
+            arr.map(function (a) { return row(a, done); }).join('');
+        }
+
+        var html =
+          section('⚠ 기한 지남', d.overdue, 'var(--status-danger)', false) +
+          section('오늘 할 일', d.today, 'var(--brand-primary)', false) +
+          section('내일 할 일', d.tomorrow, '#0f766e', false) +
+          section('기한 미정', d.undated, 'var(--text-secondary)', false) +
+          section('이후', d.later, 'var(--text-tertiary)', false) +
+          section('✓ 오늘 한 일', d.doneToday, 'var(--status-success)', true);
+
+        host.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">지시·승인·준비물이 아직 없습니다.<br>상황실에 대화를 올리면 "화기작업 승인 받으세요" 같은 항목이 자동으로 잡힙니다.</div>';
+      };
+
+      window.opsToggleAction = async function (id) {
+        var r = await gsRun('api_completeOpsAction', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '처리에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadActions();
+      };
+
+      window.opsDeleteAction = async function (id) {
+        if (!confirm('이 항목을 삭제할까요?')) return;
+        var r = await gsRun('api_deleteOpsAction', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadActions();
+      };
+
+      window.opsAddAction = async function () {
+        var title = prompt('할 일을 입력하세요 (예: 화기작업 승인 신청)');
+        if (!title) return;
+        var due = prompt('기한을 입력하세요 (YYYY-MM-DD, 없으면 비워두세요)') || '';
+        var r = await gsRun('api_saveOpsAction', [{ title: title, dueOn: due, kind: 'todo' }], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '저장에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadActions();
+      };
+
+      // ── 일일 마감 — 버튼 한 번으로 그날 올라온 내용을 정리한 보고서를 만든다.
+      window.opsCloseDay = async function () {
+        if (!confirm('오늘 상황실에 올라온 내용으로 일일 마감 보고서를 만들까요?')) return;
+        var host = document.getElementById('ops-result');
+        host.innerHTML = '<div class="panel" style="margin-bottom:16px"><div class="panel-body padded" id="ops-closing-msg" style="font-size:13px;color:var(--text-secondary)">마감 보고서 작성 중…</div></div>';
+
+        var r = await gsRun('api_startDailyClosing', [], { success: false });
+        if (!r || !r.success) {
+          document.getElementById('ops-closing-msg').innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '마감을 시작하지 못했습니다.') + '</span>';
+          return;
+        }
+
+        // 작성도 응답 후에 돈다 — 짧은 폴링으로 기다린다(게이트웨이 시간 제한과 무관).
+        var started = Date.now(), delay = 1500;
+        for (;;) {
+          await new Promise(function (res) { setTimeout(res, delay); });
+          delay = Math.min(delay * 1.25, 5000);
+          var elapsed = Math.round((Date.now() - started) / 1000);
+          var d = null;
+          try {
+            if (window.apiCache) delete window.apiCache['api_getDailyClosing' + JSON.stringify([r.reportId])];
+            d = await gsRun('api_getDailyClosing', [r.reportId], null);
+          } catch (e) { /* 재시도 */ }
+
+          var msgEl = document.getElementById('ops-closing-msg');
+          if (!d || !d.success) { if (msgEl) msgEl.textContent = '마감 보고서 작성 중… ' + elapsed + '초 경과'; continue; }
+          if (d.status === 'writing') { if (msgEl) msgEl.textContent = '마감 보고서 작성 중… ' + elapsed + '초 경과'; continue; }
+          if (d.status === 'failed') {
+            if (msgEl) msgEl.innerHTML = '<span style="color:var(--status-danger)">마감 실패: ' + opsEsc(d.error || '') + '</span>';
+            return;
+          }
+          window.opsRenderClosing(d);
+          opsClearCache();
+          window.opsLoadLabor();
+          window.opsLoadActions();
+          return;
+        }
+      };
+
+      // 전문가용 일일 마감 보고서 — 숫자는 DB 집계, 문장은 AI 서술.
+      window.opsRenderClosing = function (d) {
+        var m = d.metrics || {}, n = d.narrative || {};
+        var labor = m.labor || {}, ops = m.ops || {};
+
+        function list(title, arr, color) {
+          if (!arr || !arr.length) return '';
+          return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;color:' + color + ';margin-bottom:6px">' + title + '</div>' +
+            '<ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--text-secondary);line-height:1.8">' +
+            arr.map(function (x) { return '<li>' + opsEsc(x) + '</li>'; }).join('') + '</ul></div>';
+        }
+        function stat(label, value, sub, color) {
+          return '<div style="flex:1;min-width:104px;padding:11px 13px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:10px">' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + label + '</div>' +
+            '<div style="font-size:21px;font-weight:800;color:' + color + ';line-height:1.15">' + value + '</div>' +
+            (sub ? '<div style="font-size:10px;color:var(--text-tertiary)">' + sub + '</div>' : '') + '</div>';
+        }
+
+        var byCompany = (labor.byCompany || []).map(function (c) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:6px 0;font-size:12px">' + opsEsc(c.company) + (c.trade ? ' · ' + opsEsc(c.trade) : '') + '</td>' +
+            '<td style="padding:6px 0;text-align:right;font-size:12.5px;font-weight:700">' + c.headcount + '명</td></tr>';
+        }).join('');
+
+        document.getElementById('ops-result').innerHTML =
+          '<div class="panel" style="margin-bottom:16px;border-left:3px solid #0f766e">' +
+          '<div class="panel-header"><div class="panel-title" style="color:#0f766e"><i class="ph ph-clipboard-text"></i> 일일 마감 보고서 · ' + opsEsc(d.date) + '</div>' +
+          '<div style="display:flex;gap:7px"><button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.print()"><i class="ph ph-printer"></i> 인쇄</button></div></div>' +
+          '<div class="panel-body padded">' +
+
+          (n.headline ? '<div style="font-size:15px;font-weight:800;color:var(--text-primary);margin-bottom:12px">' + opsEsc(n.headline) + '</div>' : '') +
+
+          '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">' +
+          stat('보고 인원', (labor.reported || 0) + '명', 'AI·현장 보고', 'var(--brand-primary)') +
+          stat('QR 실적', (labor.actualQr || 0) + '명', '게이트 스캔', '#22c55e') +
+          stat('차이', (labor.gap > 0 ? '+' : '') + (labor.gap || 0), labor.gap ? '확인 필요' : '일치', labor.gap ? 'var(--status-danger)' : 'var(--status-success)') +
+          stat('직접고용 근무', (labor.directHours || 0) + 'h', '평균 ' + (labor.directAvgHours || 0) + 'h', '#4338ca') +
+          stat('상황실 접수', (ops.batches || 0) + '건', '사진 ' + (ops.photos || 0) + '장', 'var(--text-primary)') +
+          '</div>' +
+
+          (n.summary ? '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-line;margin-bottom:6px">' + opsEsc(n.summary) + '</div>' : '') +
+
+          (byCompany ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:5px">업체별 출역</div>' +
+            '<table style="width:100%;border-collapse:collapse">' + byCompany + '</table></div>' : '') +
+
+          (n.laborNote ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:4px">인원</div>' +
+            '<div style="font-size:12.5px;line-height:1.75;color:var(--text-secondary)">' + opsEsc(n.laborNote) + '</div></div>' : '') +
+          (n.progressNote ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:4px">공정</div>' +
+            '<div style="font-size:12.5px;line-height:1.75;color:var(--text-secondary)">' + opsEsc(n.progressNote) + '</div></div>' : '') +
+
+          list('오늘 한 일', n.done, 'var(--status-success)') +
+          list('⚠ 오늘 확인 필요', n.attention, 'var(--status-danger)') +
+          list('이슈', n.issues, '#f59e0b') +
+          list('내일 할 일', n.tomorrow, 'var(--brand-primary)') +
+
+          '<div style="margin-top:16px;padding-top:10px;border-top:1px solid var(--border-subtle);font-size:11px;color:var(--text-tertiary)">' +
+          '판독 ' + (ops.parsed || 0) + '건 · 반영 ' + (ops.applied || 0) + '건 · 대기 ' + (ops.pending || 0) + '건' +
+          (ops.evidenceFiled ? ' · 증빙 ' + ops.evidenceFiled + '건 문서함 편철' : '') +
+          (d.closedBy ? ' · 마감 ' + opsEsc(d.closedBy) : '') + (d.closedAt ? ' ' + opsEsc(d.closedAt) : '') +
+          '</div></div></div>';
+
+        document.getElementById('ops-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+
+      // ── 오늘 출역 인원 — 상황실 보고 vs 게이트 QR 실적
+      // 두 값을 나란히 두는 게 핵심이다. 보고 3명 / QR 2명이면 그 1명이 관리 포인트다.
+      window.opsLoadLabor = async function () {
+        var host = document.getElementById('ops-labor');
+        if (!host) return;
+        if (window.apiCache) delete window.apiCache['api_getOpsLabor[]'];
+        var d = await gsRun('api_getOpsLabor', [], null);
+        if (!d || !d.success) { host.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">인원 현황을 불러오지 못했습니다.</div>'; return; }
+
+        function gapChip(gap) {
+          if (!gap) return '<span style="color:var(--status-success);font-weight:700">일치</span>';
+          if (gap > 0) return '<span style="color:var(--status-danger);font-weight:700">미확인 ' + gap + '명</span>';
+          return '<span style="color:#f59e0b;font-weight:700">보고누락 ' + Math.abs(gap) + '명</span>';
+        }
+
+        var kpi =
+          '<div style="display:flex;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">현장 보고 인원</div>' +
+            '<div style="font-size:24px;font-weight:800;color:var(--brand-primary)">' + d.reportedTotal + '명</div></div>' +
+          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">게이트 QR 실적</div>' +
+            '<div style="font-size:24px;font-weight:800;color:#22c55e">' + d.actualTotal + '명</div></div>' +
+          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">차이</div>' +
+            '<div style="font-size:24px;font-weight:800;color:' + (d.gap ? 'var(--status-danger)' : 'var(--status-success)') + '">' +
+            (d.gap > 0 ? '+' : '') + d.gap + '</div></div>' +
+          '</div>';
+
+        var rows = (d.rows || []).map(function (r) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<td style="padding:9px 18px;font-size:12.5px">' + opsEsc(r.company) +
+              (r.trade ? '<span style="font-size:10.5px;color:var(--text-tertiary)"> · ' + opsEsc(r.trade) + '</span>' : '') +
+              (r.fromOps ? '<span style="font-size:10px;color:#22c55e"> · 상황실</span>' : '') + '</td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;font-weight:700">' + r.reported + '</td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;color:var(--text-secondary)">' + r.actualQr + '</td>' +
+            '<td style="padding:9px 12px;text-align:right;font-size:11.5px">' + gapChip(r.gap) + '</td>' +
+            '<td style="padding:9px 14px 9px 0;text-align:right"><button class="btn-secondary" style="padding:3px 8px;font-size:11px" onclick="window.opsDeleteLabor(' + r.id + ')">삭제</button></td>' +
+            '</tr>';
+        }).join('');
+
+        var qrOnly = (d.qrOnly || []).map(function (q) {
+          return '<tr style="border-bottom:1px solid var(--border-subtle);background:rgba(245,158,11,.05)">' +
+            '<td style="padding:9px 18px;font-size:12.5px">' + opsEsc(q.company) + '<span style="font-size:10.5px;color:#f59e0b"> · 보고 없음</span></td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;color:var(--text-tertiary)">—</td>' +
+            '<td style="padding:9px 0;text-align:right;font-size:13px;font-weight:700">' + q.actualQr + '</td>' +
+            '<td style="padding:9px 12px;text-align:right;font-size:11.5px"><span style="color:#f59e0b;font-weight:700">보고누락</span></td>' +
+            '<td></td></tr>';
+        }).join('');
+
+        host.innerHTML = kpi + ((rows || qrOnly)
+          ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border-subtle)">' +
+            '<th style="text-align:left;padding:7px 18px;font-size:10.5px;color:var(--text-tertiary)">업체</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">보고</th>' +
+            '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">QR</th>' +
+            '<th style="text-align:right;padding-right:12px;font-size:10.5px;color:var(--text-tertiary)">확인</th><th></th>' +
+            '</tr></thead><tbody>' + rows + qrOnly + '</tbody></table>'
+          : '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 올라온 인원 보고가 없습니다.<br>상황실에 "한빛전기 3명 나왔습니다" 처럼 올리면 자동으로 잡힙니다.</div>');
+      };
+
+      window.opsAddLabor = async function () {
+        var company = prompt('업체명을 입력하세요 (예: 한빛전기)');
+        if (!company) return;
+        var n = prompt('인원수는 몇 명입니까?');
+        if (n === null) return;
+        var r = await gsRun('api_saveOpsLabor', [{ company: company, headcount: parseInt(n, 10) || 0 }], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '저장에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadLabor();
+      };
+
+      window.opsDeleteLabor = async function (id) {
+        if (!confirm('이 인원 보고를 삭제할까요?')) return;
+        var r = await gsRun('api_deleteOpsLabor', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadLabor();
+      };
+
+      // 오늘 요약 — 저녁 다이제스트와 같은 집계를 화면에서도 바로 본다.
+      window.opsLoadDigest = async function () {
+        var host = document.getElementById('ops-digest');
+        if (!host) return;
+        var d = await gsRun('api_getOpsDigest', [], { actionable: 0 });
+        if (!d || !d.actionable) { host.innerHTML = ''; return; }
+        function stat(label, value, color) {
+          return '<div style="flex:1;min-width:96px;padding:10px 12px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:10px">' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + label + '</div>' +
+            '<div style="font-size:20px;font-weight:800;color:' + color + '">' + value + '</div></div>';
+        }
+        host.innerHTML =
+          '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">' +
+          stat('오늘 인식', d.actionable, 'var(--brand-primary)') +
+          stat('반영됨', d.applied || 0, '#22c55e') +
+          stat('대기', d.pending || 0, '#f59e0b') +
+          stat('확인 필요', d.needsInput || 0, (d.needsInput ? '#ef4444' : 'var(--text-tertiary)')) +
+          stat('잡담 제외', d.noise || 0, 'var(--text-tertiary)') +
+          '</div>';
+      };
+
+      // 사진을 한 장씩 따로 올린다 — 요청 하나가 작아 크기 제한이 사실상 사라지고 진행률도 보인다.
+      window.opsUploadPhotos = async function (files, onProgress) {
+        var tokens = [];
+        for (var i = 0; i < files.length; i++) {
+          if (onProgress) onProgress(i + 1, files.length);
+          var fd = new FormData();
+          fd.append('photo', files[i]);
+          var res = await fetch(@json(route('ops.photo')), {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': (document.querySelector('meta[name=csrf-token]') || {}).content || '', 'Accept': 'application/json' },
+            body: fd
+          });
+          var d = await res.json();
+          if (!d || !d.success) { throw new Error((d && d.error) || '사진 업로드 실패'); }
+          tokens.push(d.token);
+        }
+        return tokens;
+      };
+
+      window.opsRead = async function () {
+        var box = document.getElementById('ops-input');
+        var btn = document.getElementById('ops-read-btn');
+        var msg = document.getElementById('ops-read-msg');
+        var files = window._opsFiles || [];
+        if ((!box || !box.value.trim()) && !files.length) { if (msg) msg.textContent = '내용이나 사진을 먼저 넣으세요.'; return; }
+        var original = btn.innerHTML;
+        btn.disabled = true;
+        try {
+          var tokens = [];
+          if (files.length) {
+            btn.innerHTML = '<i class="ph ph-spinner-gap"></i> 사진 올리는 중…';
+            tokens = await window.opsUploadPhotos(files, function (n, total) {
+              if (msg) msg.textContent = '사진 올리는 중 ' + n + '/' + total + '…';
+            });
+          }
+
+          btn.innerHTML = '<i class="ph ph-spinner-gap"></i> AI 판독 중…';
+          // 판독은 응답 후에 돈다 — 이 요청 자체는 즉시 끝나므로 504 가 나지 않는다.
+          var r = await gsRun('api_opsIngest', [box ? box.value : '', tokens], { success: false });
+          if (!r || !r.success) {
+            if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">' + opsEsc((r && r.error) || '판독 실패') + '</span>';
+            return;
+          }
+
+          if (box) box.value = '';
+          window._opsFiles = [];
+          opsRenderPhotoStrip();
+          var pin = document.getElementById('ops-photo-input'); if (pin) pin.value = '';
+          opsClearCache();
+          window.opsLoadBatches();
+
+          await window.opsAwaitJob(r.batchId, msg);
+        } catch (e) {
+          if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">오류: ' + opsEsc(e.message || e) + '</span>';
+        } finally {
+          btn.disabled = false; btn.innerHTML = original;
+        }
+      };
+
+      // 판독이 끝날 때까지 상태만 짧게 되묻는다. 폴링 한 번은 수십 ms 라 시간 제한에 걸리지 않는다
+      // — 이것이 "대기 시간 무제한" 의 실제 구현이다.
+      window.opsAwaitJob = async function (batchId, msg) {
+        var started = Date.now();
+        var delay = 1500;
+        for (;;) {
+          await new Promise(function (r) { setTimeout(r, delay); });
+          delay = Math.min(delay * 1.25, 5000);   // 길어질수록 간격을 늘려 서버 부담을 줄인다
+          var elapsed = Math.round((Date.now() - started) / 1000);
+
+          var j = null;
+          try {
+            if (window.apiCache) delete window.apiCache['api_getOpsJob' + JSON.stringify([batchId])];
+            j = await gsRun('api_getOpsJob', [batchId], null);
+          } catch (e) { /* 현장 네트워크가 끊겼다 붙어도 결과를 잃지 않게 계속 되묻는다 */ }
+
+          if (!j || !j.success) {
+            if (msg) msg.textContent = 'AI 판독 중… ' + elapsed + '초 경과 (연결 재시도 중)';
+            continue;
+          }
+          if (j.status === 'analyzing') {
+            if (msg) msg.textContent = 'AI 판독 중… ' + elapsed + '초 경과' + (j.imageCount ? ' · 사진 ' + j.imageCount + '장' : '');
+            continue;
+          }
+          if (j.status === 'failed') {
+            if (msg) msg.innerHTML = '<span style="color:var(--status-danger)">판독 실패: ' + opsEsc(j.error || '') + '</span>';
+            return;
+          }
+
+          if (msg) msg.textContent = '판독 완료 — ' + j.parsed + '건 중 업무 ' + j.actionable + '건, 잡담 ' + j.noise + '건 제외 (' + elapsed + '초, 원문은 아래 기록에 보관됨)';
+          document.getElementById('ops-result').innerHTML =
+            '<div class="panel" style="margin-bottom:16px;border-left:3px solid #22c55e"><div class="panel-header">' +
+            '<div class="panel-title" style="color:#22c55e"><i class="ph ph-check-circle"></i> 방금 판독한 내용</div></div>' +
+            '<div class="panel-body" style="padding:0">' + opsRows(j.items || [], true) + '</div></div>';
+          opsClearCache();
+          window.opsLoadBatches();
+          window.opsLoadPending();
+          return;
+        }
+      };
+
+      window.opsLoadPending = async function () {
+        var host = document.getElementById('ops-pending');
+        if (!host) return;
+        var d = await gsRun('api_getOpsPending', [], { count: 0, items: [] });
+        var items = (d && d.items) || [];
+        host.innerHTML = items.length
+          ? opsRows(items, false)
+          : '<div style="padding:32px;text-align:center;color:var(--text-tertiary);font-size:13px">확인 대기 중인 항목이 없습니다.</div>';
+      };
+
+      function opsRows(items, showNoise) {
+        var list = showNoise ? items : items.filter(function (i) { return i.category !== 'noise'; });
+        if (!list.length) return '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">업무로 인식된 항목이 없습니다.</div>';
+        return list.map(function (it) {
+          var c = OPS_CAT[it.category] || OPS_CAT.noise;
+          var needs = it.status === 'needs_input';
+          var faded = it.category === 'noise' ? 'opacity:.5;' : '';
+          var prev = it.previous || {};
+          var changes = Object.keys(it.proposed || {}).map(function (k) {
+            var before = (prev[k] !== undefined && prev[k] !== null && prev[k] !== '') ? opsEsc(prev[k]) + ' → ' : '';
+            return '<span style="display:inline-block;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;padding:2px 8px;font-size:11.5px;margin-right:5px">' +
+              opsEsc(OPS_FIELD[k] || k) + ': ' + before + '<b style="color:var(--text-primary)">' + opsEsc(it.proposed[k]) + '</b></span>';
+          }).join('');
+          return '<div style="padding:14px 18px;border-bottom:1px solid var(--border-subtle);' + faded + '">' +
+            '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px">' +
+            '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:' + c.color + '">' +
+            '<i class="ph ' + c.icon + '"></i>' + opsEsc(c.label) + '</span>' +
+            (it.targetName ? '<span style="font-size:12px;color:var(--text-primary);font-weight:600">' + opsEsc(it.targetName) + '</span>' : '') +
+            (it.targetCode ? '<span style="font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + opsEsc(it.targetCode) + '</span>' : '') +
+            '<span style="margin-left:auto;font-size:11px;color:var(--text-tertiary)">확신도 ' + (it.confidence || 0) + '%</span>' +
+            '</div>' +
+            '<div style="font-size:13px;color:var(--text-primary);font-weight:600;margin-bottom:4px">' + opsEsc(it.summary || '') + '</div>' +
+            (changes ? '<div style="margin:7px 0">' + changes + '</div>' : '') +
+            (needs ? '<div style="margin:7px 0;padding:8px 11px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.4);border-radius:7px;font-size:12px;color:#b45309">' +
+              '<b>확인 필요</b> · ' + opsEsc(it.question || '대상을 특정하지 못했습니다.') + '</div>' : '') +
+            '<div style="font-size:11.5px;color:var(--text-tertiary);font-style:italic;margin-top:5px">' +
+            (it.speaker ? opsEsc(it.speaker) + ': ' : '') + '"' + opsEsc(it.raw || '') + '"' +
+            (it.batchId ? ' <span style="cursor:pointer;color:var(--brand-primary);font-style:normal;font-weight:600" onclick="event.stopPropagation();window.opsShowBatch(' + it.batchId + ')">· 원문 보기</span>' : '') +
+            '</div>' +
+            (it.category !== 'noise' ? '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">' +
+              (it.status === 'applied'
+                ? '<span style="font-size:11.5px;font-weight:700;color:#22c55e;align-self:center"><i class="ph ph-check-circle"></i> 반영됨' + (it.appliedAt ? ' · ' + opsEsc(it.appliedAt) : '') + '</span>' +
+                  '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsRevert(' + it.id + ')"><i class="ph ph-arrow-counter-clockwise"></i> 되돌리기</button>'
+                : ((it.targetCode && Object.keys(it.proposed || {}).length)
+                    ? '<button class="btn-primary" style="padding:5px 13px;font-size:11.5px;font-weight:700" onclick="window.opsApply(' + it.id + ')"><i class="ph ph-check"></i> 공정표에 반영</button>'
+                    : '<span style="font-size:11px;color:var(--text-tertiary);align-self:center">대상·변경안이 없어 반영할 수 없습니다</span>') +
+                  '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsDismiss(' + it.id + ')"><i class="ph ph-x"></i> 무시</button>') +
+              '</div>' : '') +
+            '</div>';
+        }).join('');
+      }
+
+      var OPS_FIELD = {
+        progress: '진행률(%)', status: '상태', planned_start: '시작일', planned_end: '종료일',
+        crew_size: '인원', eta: '납기(ETA)', name: '작업명'
+      };
+
+      // 상황실 응답 캐시 무효화 — gsRun 이 60초 캐시하므로, 변경 후엔 반드시 비워야
+      // 화면이 예전 목록을 그대로 보여주지 않는다(무시/반영이 안 먹는 것처럼 보이던 원인).
+      function opsClearCache() {
+        Object.keys(window.apiCache || {}).forEach(function (k) {
+          if (k.indexOf('api_getOps') === 0) delete window.apiCache[k];
+        });
+      }
+
+      // 붙여넣은 원문 이력 — 대화 내용은 지워지지 않고 여기 쌓인다.
+      window._opsCanManageBatches = false;
+
+      // 헤더 버튼 → 원문 기록 패널로 스크롤. (페이지 맨 아래라 못 찾는 일이 잦았다.)
+      window.opsGoBatches = function () {
+        var panel = document.getElementById('ops-batches-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+
+      window.opsLoadBatches = async function () {
+        var host = document.getElementById('ops-batches');
+        if (!host) return;
+        var d = await gsRun('api_getOpsBatches', [], { batches: [] });
+        var list = (d && d.batches) || [];
+        window._opsCanManageBatches = !!(d && d.canManage);
+        var badge = document.getElementById('ops-batch-count');
+        if (badge) badge.textContent = list.length ? '(' + list.length + ')' : '';
+        if (!list.length) {
+          host.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:12.5px">아직 기록이 없습니다. 대화를 붙여넣으면 원문이 여기 보관됩니다.</div>';
+          return;
+        }
+        host.innerHTML = list.map(function (b) {
+          return '<div style="padding:12px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer" onclick="window.opsShowBatch(' + b.id + ')">' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">' +
+            '<span style="font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + opsEsc(b.at || '') + '</span>' +
+            (b.by ? '<span style="font-size:11px;color:var(--text-secondary)">' + opsEsc(b.by) + '</span>' : '') +
+            '<span style="font-size:10.5px;color:var(--brand-primary)">업무 ' + b.actionable + '건' + (b.noise ? ' · 잡담 ' + b.noise + '건 제외' : '') + '</span>' +
+            (b.imageCount ? '<span style="font-size:10.5px;color:#22c55e">📷 ' + b.imageCount + '</span>' : '') +
+            (b.edited ? '<span style="font-size:10.5px;color:#f59e0b">✎ 수정됨</span>' : '') +
+            (b.applied ? '<span style="font-size:10.5px;color:#22c55e">반영 ' + b.applied + '건</span>' : '') +
+            '<span style="margin-left:auto;font-size:11px;color:var(--brand-primary);font-weight:600">원문 보기 ›</span>' +
+            '</div>' +
+            '<div style="font-size:12.5px;color:var(--text-secondary)">' + opsEsc(b.preview) + '</div></div>';
+        }).join('');
+      };
+
+      // 원문 전체 + 그때 뽑힌 판독 결과를 함께 본다.
+      window.opsShowBatch = async function (id) {
+        var d = await gsRun('api_getOpsBatch', [id], { success: false });
+        if (!d || d.success === false) { alert('원문을 불러오지 못했습니다.'); return; }
+        var host = document.getElementById('ops-batches');
+        if (!host) return;
+        window._opsBatch = d;
+        var manage = window._opsCanManageBatches
+          ? '<span style="margin-left:auto;display:flex;gap:6px">' +
+            '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsEditBatch(' + d.id + ')"><i class="ph ph-pencil-simple"></i> 수정</button>' +
+            '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px;color:var(--status-danger)" onclick="window.opsDeleteBatch(' + d.id + ')"><i class="ph ph-trash"></i> 삭제</button>' +
+            '</span>'
+          : '';
+        host.innerHTML =
+          '<div style="padding:14px 18px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsLoadBatches()">← 목록</button>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">' + opsEsc(d.at || '') + (d.by ? ' · ' + opsEsc(d.by) : '') +
+          (d.imageCount ? ' · 사진 ' + d.imageCount + '장' : '') + '</span>' + manage + '</div>' +
+          (d.editedAt ? '<div style="font-size:11px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;margin-bottom:8px">' +
+            '✎ ' + opsEsc(d.editedAt) + (d.editedBy ? ' · ' + opsEsc(d.editedBy) : '') + ' 수정됨 — 처음 올라온 원문은 아래 <b>최초 원문</b>에서 볼 수 있습니다.</div>' : '') +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:5px">붙여넣은 원문</div>' +
+          '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;padding:12px;font-size:12.5px;color:var(--text-primary);font-family:inherit;margin:0 0 14px;max-height:340px;overflow:auto">' +
+          opsEsc(d.raw || '(사진만 첨부)') + '</pre>' +
+          (d.originalText ? '<details style="margin-bottom:10px"><summary style="font-size:11px;font-weight:700;color:var(--text-tertiary);cursor:pointer">최초 원문 (수정 전) 보기</summary>' +
+            '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-base);border:1px dashed var(--border-subtle);border-radius:8px;padding:10px;font-size:12px;color:var(--text-tertiary);margin-top:6px">' +
+            opsEsc(d.originalText) + '</pre></details>' : '') +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:5px">이 원문에서 뽑은 항목 (' + (d.items || []).length + '건)</div>' +
+          '</div>' + opsRows(d.items || [], true);
+      };
+
+      // 원문 수정 — 오타·사진 오인식을 고친다. (판독 결과는 그대로 두고 근거만 바로잡는다.)
+      window.opsEditBatch = function (id) {
+        var d = window._opsBatch;
+        if (!d || d.id !== id) return;
+        var host = document.getElementById('ops-batches');
+        if (!host) return;
+        host.innerHTML =
+          '<div style="padding:14px 18px">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsShowBatch(' + id + ')">← 취소</button>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">원문 수정 · ' + opsEsc(d.at || '') + '</span></div>' +
+          '<textarea id="ops-edit-text" style="width:100%;height:220px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-top:6px">고치기 전 내용은 <b>최초 원문</b>으로 보관되고, 누가 언제 고쳤는지 남습니다. 이미 반영된 공정표 값은 바뀌지 않습니다.</div>' +
+          '<div style="margin-top:10px;display:flex;gap:8px">' +
+          '<button class="btn-primary" style="padding:7px 16px;font-size:12.5px;font-weight:700" onclick="window.opsSaveBatch(' + id + ')"><i class="ph ph-check"></i> 저장</button>' +
+          '</div></div>';
+        document.getElementById('ops-edit-text').value = d.raw || '';
+      };
+
+      window.opsSaveBatch = async function (id) {
+        var el = document.getElementById('ops-edit-text');
+        if (!el) return;
+        var r = await gsRun('api_updateOpsBatch', [id, el.value], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '원문 수정에 실패했습니다.'); return; }
+        opsClearCache();
+        if (window.showToast) window.showToast('원문을 수정했습니다.', 'success');
+        window.opsShowBatch(id);
+      };
+
+      window.opsDeleteBatch = async function (id) {
+        if (!confirm('이 원문 기록을 삭제할까요?\n대화 원문과 그때 뽑힌 판독 항목이 함께 지워집니다. (되돌릴 수 없습니다)')) return;
+        var r = await gsRun('api_deleteOpsBatch', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+        opsClearCache();
+        if (window.showToast) window.showToast('원문 기록을 삭제했습니다.', 'success');
+        window.opsLoadBatches();
+        window.opsLoadPending();
+      };
+
+      window.opsDismiss = async function (id) {
+        var r = await gsRun('api_dismissOpsItem', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '무시 처리에 실패했습니다.'); return; }
+        opsClearCache();
+        window.opsLoadPending();
+        window.opsLoadDigest();
+      };
+
+      window.opsApply = async function (id) {
+        var r = await gsRun('api_applyOpsItem', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
+        if (window.showToast) window.showToast('공정표에 반영했습니다.', 'success');
+        opsClearCache();
+        window.opsLoadDigest();
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('Wbs') >= 0 || k.indexOf('Procurement') >= 0) delete window.apiCache[k]; });
+        window.opsLoadPending();
+      };
+
+      window.opsApplyAll = async function () {
+        if (!confirm('확인 대기 중인 제안을 한 번에 공정표·조달에 반영할까요?\n(확인 필요 항목은 건너뜁니다. 되돌릴 수 있습니다.)')) return;
+        var r = await gsRun('api_applyAllOpsItems', [], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
+        var msg = r.applied + '건 반영' + (r.failed ? ', ' + r.failed + '건 실패' : '');
+        if (window.showToast) window.showToast(msg, r.failed ? 'warning' : 'success'); else alert(msg);
+        if ((r.failures || []).length) {
+          console.warn('[ops] 반영 실패', r.failures);
+        }
+        opsClearCache();
+        window.opsLoadPending();
+        window.opsLoadDigest();
+      };
+
+      window.opsRevert = async function (id) {
+        if (!confirm('이 반영을 되돌릴까요? 이전 값으로 복원됩니다.')) return;
+        var r = await gsRun('api_revertOpsItem', [id], { success: false });
+        if (!r || !r.success) { alert((r && r.error) || '되돌리기에 실패했습니다.'); return; }
+        if (window.showToast) window.showToast('되돌렸습니다.', 'success');
+        opsClearCache();
+        window.opsLoadPending();
+        window.opsLoadDigest();
+      };
+
+      // ═══════════════════════ 문서통합관리 (Integrated Document Management) ═══════════════════════
+      // 공정관리 하위 SPA 페이지. 직원·협력사·현장 작업자가 올린 서류를 AI(GeminiDocumentAnalyzer)가
+      // 종류 판별·9개 폴더 자동 분류·중복 감지하여 저장한다. 백엔드: /docs-api/* + api_doc* (SmartCompanyData).
+      window._docsState = window._docsState || { view: 'dashboard', folder: '03', docId: null, query: '', queue: [], watching: {} };
+
+      function docEsc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+      function docCsrf() {
+        var el = document.querySelector('meta[name="csrf-token"]');
+        return el ? el.getAttribute('content') : '';
+      }
+      function docBadge(type) {
+        var t = docEsc(type || 'DOC');
+        return '<span class="doc-badge ' + t + '">' + t + '</span>';
+      }
+      window.docsGo = function (view, opts) {
+        opts = opts || {};
+        var st = window._docsState;
+        st.view = view;
+        if (opts.folder) st.folder = opts.folder;
+        if (opts.docId != null) st.docId = opts.docId;
+        if (typeof opts.query === 'string') st.query = opts.query;
+        renderDocs();
+      };
+
+      // 문서 보관 디스크 점검 — 임시 로컬이면 유실 위험을 화면에 드러낸다.
+      async function docsCheckStorage() {
+        var host = document.getElementById('docs-storage-banner');
+        if (!host) return;
+        var h = await gsRun('api_getDocStorageHealth', [], { level: 'ok', message: '' });
+        if (!h || h.level === 'ok') { host.innerHTML = ''; return; }
+        var crit = h.level === 'critical';
+        host.innerHTML =
+          '<div style="display:flex;align-items:flex-start;gap:11px;margin-bottom:16px;padding:13px 16px;border-radius:12px;' +
+          'background:' + (crit ? 'rgba(220,38,38,.10)' : 'rgba(245,158,11,.10)') + ';' +
+          'border:1px solid ' + (crit ? 'rgba(220,38,38,.45)' : 'rgba(245,158,11,.45)') + '">' +
+          '<span style="font-size:17px">' + (crit ? '\u26A0\uFE0F' : '\u2139\uFE0F') + '</span>' +
+          '<div style="flex:1"><div style="font-size:13px;font-weight:800;color:' + (crit ? '#dc2626' : '#b45309') + '">' +
+          (crit ? '문서 원본이 사라질 수 있습니다 (임시 저장소)' : '문서 보관 상태 주의') + '</div>' +
+          '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:3px;line-height:1.6">' + docEsc(h.message || '') +
+          (crit ? '<br>관리자: 오브젝트 스토리지(S3) 연결 후 환경변수 <b>DOCUMENT_DISK=s3</b> 를 설정하세요.' : '') +
+          '</div></div></div>';
+      }
+
+      function docsShell(bodyHtml) {
+        var st = window._docsState;
+        function tab(key, icon, label) {
+          return '<button class="docs-tab' + (st.view === key || (key === 'browse' && st.view === 'detail') ? ' active' : '') +
+            '" onclick="window.docsGo(\'' + key + '\')"><i class="ph ' + icon + '"></i>' + label + '</button>';
+        }
+        return '<div class="docs-wrap">' +
+          '<div class="docs-head">' +
+          '<div><h1><i class="ph ph-folders" style="color:#818cf8;margin-right:8px"></i>문서통합관리</h1>' +
+          '<p>직원·협력사·현장 작업자가 올린 모든 서류를 AI가 분석·분류하여 자동 정리합니다.</p></div>' +
+          '<div class="docs-live"><span class="dot"></span>AI 분석 엔진 정상 가동중</div>' +
+          '</div>' +
+          '<div id="docs-storage-banner"></div>' +
+          '<div class="docs-tabs">' +
+          tab('dashboard', 'ph-squares-four', '대시보드') +
+          tab('upload', 'ph-upload-simple', '문서 업로드') +
+          tab('browse', 'ph-folder-open', '폴더 브라우저') +
+          tab('search', 'ph-magnifying-glass', '전체 검색') +
+          '</div>' +
+          '<div id="docs-body">' + (bodyHtml || '') + '</div>' +
+          '</div>';
+      }
+
+      function docsLoading(msg) {
+        return '<div style="padding:60px 20px;text-align:center;color:var(--text-tertiary)">' +
+          '<i class="ph ph-circle-notch docs-spin" style="font-size:30px;color:var(--brand-primary)"></i>' +
+          '<div style="margin-top:12px;font-size:13px">' + docEsc(msg || '불러오는 중...') + '</div></div>';
+      }
+
+      async function renderDocs() {
+        var st = window._docsState;
+        pageContainer.innerHTML = docsShell(docsLoading());
+        docsCheckStorage();
+        try {
+          if (st.view === 'dashboard') return await docsRenderDashboard();
+          if (st.view === 'upload') return docsRenderUpload();
+          if (st.view === 'browse') return await docsRenderBrowse();
+          if (st.view === 'detail') return await docsRenderDetail();
+          if (st.view === 'search') return await docsRenderSearch();
+        } catch (e) {
+          console.warn('[docs] render error', e);
+          var body = document.getElementById('docs-body');
+          if (body) body.innerHTML = '<div class="docs-card" style="padding:30px;text-align:center;color:var(--status-danger)">문서 데이터를 불러오지 못했습니다: ' + docEsc(e.message || e) + '</div>';
+        }
+      }
+
+      // ─────────── 대시보드 ───────────
+      async function docsRenderDashboard() {
+        var d = await gsRun('api_getDocDashboard', [], { stats: [], reviewQueue: [], dist: [], duplicates: 0, insight: '' });
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+
+        var statHtml = (d.stats || []).map(function (s) {
+          return '<div class="docs-stat"><div class="label">' + docEsc(s.label) + '</div>' +
+            '<div class="value">' + docEsc(s.value) + '</div><div class="sub">' + docEsc(s.sub) + '</div></div>';
+        }).join('');
+
+        var queueHtml = (d.reviewQueue || []).length ? (d.reviewQueue || []).map(function (r) {
+          return '<div class="docs-row" onclick="window.docsGo(\'detail\',{docId:' + r.id + '})">' +
+            docBadge(r.type) +
+            '<div class="t"><div class="name">' + docEsc(r.title) + '</div><div class="meta">' + docEsc(r.sub) + ' · ' + docEsc(r.date) + '</div>' +
+            (r.snippet ? '<div style="margin-top:5px;font-size:11.5px;color:var(--text-secondary);background:var(--bg-base);border-left:2px solid var(--brand-primary);padding:5px 9px;border-radius:5px;line-height:1.55">' + docEsc(r.snippet) + '</div>' : '') +
+            '</div>' +
+            '<div style="text-align:right"><div style="font-size:11px;color:var(--text-tertiary)">제안 폴더</div>' +
+            '<div style="font-size:12px;color:var(--text-primary);font-weight:600">' + docEsc(r.suggest) +
+            ' <span class="docs-conf" style="color:' + docEsc(r.confColor) + '">' + docEsc(r.conf) + '</span></div></div>' +
+            (r.dup ? '<i class="ph ph-copy" title="중복 의심" style="color:#ea580c;font-size:15px"></i>' : '') +
+            '</div>';
+        }).join('') : '<div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">검토 대기 문서가 없습니다. 문서를 업로드하면 AI가 자동 분류합니다.</div>';
+
+        var distHtml = (d.dist || []).map(function (c) {
+          return '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px">' +
+            '<span style="color:var(--text-secondary);font-weight:600"><span style="font-family:var(--font-mono,monospace);color:var(--text-tertiary);font-size:11px">' + docEsc(c.code) + '</span> ' + docEsc(c.name) + '</span>' +
+            '<span style="color:var(--text-tertiary)">' + docEsc(c.count) + '</span></div>' +
+            '<div style="height:7px;background:var(--bg-subtle);border-radius:4px;overflow:hidden">' +
+            '<div style="height:100%;width:' + (c.pct || 0) + '%;background:' + docEsc(c.color) + ';border-radius:4px"></div></div></div>';
+        }).join('');
+
+        body.innerHTML =
+          '<div class="docs-stat-grid">' + statHtml + '</div>' +
+          '<div class="docs-two-col" style="display:grid;grid-template-columns:1.55fr 1fr;gap:18px">' +
+          '<div class="docs-card"><div class="docs-card-head"><div class="docs-card-title">AI 분류 검토 대기' +
+          (d.duplicates ? ' <span style="font-size:11px;font-weight:700;color:#ea580c;background:#fff7ed;padding:2px 8px;border-radius:8px;margin-left:6px">중복 ' + d.duplicates + '건</span>' : '') +
+          '</div><span style="font-size:12.5px;color:var(--brand-primary);cursor:pointer;font-weight:600" onclick="window.docsGo(\'browse\')">전체 보기 →</span></div>' + queueHtml + '</div>' +
+          '<div class="docs-card" style="padding:16px 18px"><div class="docs-card-title" style="margin-bottom:4px">폴더별 문서 분포</div>' +
+          '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:14px">AI 자동 분류 결과</div>' + distHtml + '</div>' +
+          '</div>' +
+          '<div id="docs-expiry-panel"></div>' +
+          '<div class="docs-ai-panel" style="margin-top:18px;display:flex;align-items:center;gap:20px">' +
+          '<div class="docs-ai-glow">✦</div>' +
+          '<div style="flex:1"><div class="kicker">AI INSIGHT</div>' +
+          '<div style="font-size:14px;font-weight:600;margin-top:4px;color:#fff">' + docEsc(d.insight || '문서함이 최신 상태입니다.') + '</div></div>' +
+          '<button onclick="window.docsGo(\'search\')" style="background:#fff;color:#312e81;border:none;border-radius:9px;padding:9px 15px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">자세히 보기</button>' +
+          '</div>';
+        docsRenderExpiry();
+      }
+
+      // 만료 임박/경과 문서 — 기한 있는 서류(COI·면허·인허가·비자)를 앞으로 끌어낸다.
+      async function docsRenderExpiry() {
+        var host = document.getElementById('docs-expiry-panel');
+        if (!host) return;
+        var d = await gsRun('api_getDocExpiring', [60], { items: [], expired: 0, critical: 0, soon: 0 });
+        var items = (d && d.items) || [];
+        if (!items.length) { host.innerHTML = ''; return; }
+        var color = { expired: '#dc2626', critical: '#ea580c', soon: '#b45309' };
+        var label = { expired: '만료됨', critical: '긴급', soon: '임박' };
+        var rows = items.slice(0, 8).map(function (it) {
+          var c = color[it.state], dl = it.daysLeft;
+          var when = dl < 0 ? (Math.abs(dl) + '일 경과') : (dl === 0 ? '오늘 만료' : 'D-' + dl);
+          return '<div class="docs-row" style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + it.id + '})">' +
+            '<span style="min-width:52px;font-size:11px;font-weight:800;color:' + c + '">' + docEsc(label[it.state]) + '</span>' +
+            '<div class="t"><div class="name">' + docEsc(it.title) + '</div>' +
+            '<div class="meta">' + docEsc(it.type) + ' · ' + docEsc(it.folder) + ' · ' + docEsc(it.issuer) + '</div></div>' +
+            '<span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + docEsc(it.expiresOn || '') + '</span>' +
+            '<span style="font-size:12.5px;font-weight:800;color:' + c + ';min-width:64px;text-align:right">' + docEsc(when) + '</span></div>';
+        }).join('');
+        host.innerHTML =
+          '<div class="docs-card" style="margin-top:18px;border-left:3px solid ' + (d.expired ? '#dc2626' : '#ea580c') + '">' +
+          '<div class="docs-card-head"><div class="docs-card-title">\u23F0 기한 관리 — 만료 임박 문서' +
+          (d.expired ? ' <span style="font-size:11px;font-weight:700;color:#dc2626;background:rgba(220,38,38,.1);padding:2px 8px;border-radius:8px;margin-left:6px">만료 ' + d.expired + '건</span>' : '') +
+          (d.critical ? ' <span style="font-size:11px;font-weight:700;color:#ea580c;background:rgba(234,88,12,.1);padding:2px 8px;border-radius:8px;margin-left:6px">14일 내 ' + d.critical + '건</span>' : '') +
+          '</div><span style="font-size:11.5px;color:var(--text-tertiary)">매일 아침 관리자 알림 발송</span></div>' + rows + '</div>';
+      }
+
+      // ─────────── 업로드 + AI 분석 ───────────
+      function docsRenderUpload() {
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        body.innerHTML =
+          '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:12px">' +
+          '<span style="font-size:12.5px;font-weight:700;color:var(--text-primary)"><i class="ph ph-folder"></i> 저장 폴더</span>' +
+          '<select id="docs-target-folder" style="height:36px;padding:0 10px;background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:9px;font-size:12.5px;font-family:inherit;min-width:180px">' +
+          '<option value="">AI 자동 분류 (권장)</option></select>' +
+          '<button class="btn-secondary" style="padding:6px 11px;font-size:12px" onclick="window.docsNewFolder()"><i class="ph ph-folder-plus"></i> 새 폴더</button>' +
+          '<span id="docs-folder-hint" style="font-size:11.5px;color:var(--text-tertiary)">폴더를 고르면 AI 분류 대신 그 폴더에 바로 저장됩니다.</span>' +
+          '</div>' +
+          '<div class="docs-dropzone" id="docs-drop">' +
+          '<div class="ic">⬆</div>' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">파일을 여기에 끌어다 놓으세요</div>' +
+          '<div style="font-size:13px;color:var(--text-tertiary);margin-top:7px">또는 클릭하여 파일 선택 · 여러 개 동시 업로드 가능</div>' +
+          '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">' +
+          ['PDF', '사진 IMG', '스캔 SCAN', 'Word DOCX', 'Excel XLSX', 'PPT', 'CAD 도면'].map(function (x) { return '<span class="docs-chip">' + x + '</span>'; }).join('') +
+          '</div>' +
+          '<input type="file" id="docs-file-input" accept=".pdf,image/*,.docx,.xlsx,.pptx,.ppt,.dwg,.dxf" multiple style="display:none">' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:11px;margin-top:16px;padding:13px 16px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:12px">' +
+          '<span style="font-size:16px;color:var(--brand-primary)">✦</span>' +
+          '<span style="font-size:12.5px;color:var(--text-secondary)">협력사·현장 작업자가 올린 문서도 AI 분석 후 <b>검토 대기</b>에 모이며, 관리자가 확인·확정합니다. PDF·사진·Office(docx·xlsx·pptx)는 AI가 본문을 분석하고, CAD 도면(dwg·dxf)은 폴더에 바로 보관 등록됩니다.</span></div>' +
+          '<div id="docs-queue" style="margin-top:16px"></div>';
+
+        var drop = document.getElementById('docs-drop');
+        var input = document.getElementById('docs-file-input');
+        drop.addEventListener('click', function () { input.click(); });
+        input.addEventListener('change', function () { docsHandleFiles(input.files); });
+        ['dragover', 'dragenter'].forEach(function (ev) {
+          drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('drag'); });
+        });
+        ['dragleave', 'drop'].forEach(function (ev) {
+          drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('drag'); });
+        });
+        drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) docsHandleFiles(e.dataTransfer.files); });
+
+        docsLoadFolderOptions();
+        if ((window._docsState.queue || []).length) docsRenderQueue();
+      }
+
+      // 업로드 폴더 선택지 로드 (기본 폴더 + 사용자 폴더)
+      async function docsLoadFolderOptions() {
+        var sel = document.getElementById('docs-target-folder');
+        if (!sel) return;
+        var folders = await gsRun('api_getDocFolders', [], []);
+        var keep = window._docsState.targetFolder || '';
+        sel.innerHTML = '<option value="">AI 자동 분류 (권장)</option>' + (folders || []).map(function (f) {
+          return '<option value="' + docEsc(f.code) + '"' + (f.code === keep ? ' selected' : '') + '>' + docEsc(f.code) + ' · ' + docEsc(f.name) + '</option>';
+        }).join('');
+        sel.addEventListener('change', function () {
+          window._docsState.targetFolder = sel.value;
+          var hint = document.getElementById('docs-folder-hint');
+          if (hint) hint.textContent = sel.value
+            ? '선택한 폴더에 바로 저장됩니다 (AI 분류 건너뜀).'
+            : '폴더를 고르면 AI 분류 대신 그 폴더에 바로 저장됩니다.';
+        });
+      }
+
+      // 새 폴더 만들기 — 문서함 어디서든 호출 가능
+      window.docsNewFolder = async function () {
+        var name = prompt('새 폴더 이름을 입력하세요 (예: 협력사 제출서류)');
+        if (!name || !name.trim()) return;
+        var res = await gsRun('api_createDocFolder', [name.trim(), ''], { success: false });
+        if (!res || !res.success) { alert((res && res.error) || '폴더 생성에 실패했습니다.'); return; }
+        clearDocCache();
+        if (window.showToast) window.showToast('폴더 "' + name.trim() + '" 를 만들었습니다.', 'success');
+        var sel = document.getElementById('docs-target-folder');
+        if (sel) { await docsLoadFolderOptions(); sel.value = res.folder.code; window._docsState.targetFolder = res.folder.code; }
+        else docsRender();
+      };
+
+      // 사용자 폴더 삭제 (기본 폴더는 서버에서 거부)
+      window.docsDeleteFolder = async function (code, name) {
+        if (!confirm('폴더 "' + name + '" 를 삭제할까요?\n(폴더 안에 문서가 있으면 삭제되지 않습니다.)')) return;
+        var res = await gsRun('api_deleteDocFolder', [code], { success: false });
+        if (!res || !res.success) { alert((res && res.error) || '폴더 삭제에 실패했습니다.'); return; }
+        clearDocCache();
+        window._docsState.folder = '03';
+        docsRender();
+      };
+
+      function docsRenderQueue() {
+        var box = document.getElementById('docs-queue');
+        if (!box) return;
+        var q = window._docsState.queue || [];
+        if (!q.length) { box.innerHTML = ''; return; }
+        var rows = q.map(function (it) {
+          var right;
+          if (it.status === 'uploading') right = '<span class="docs-conf" style="color:var(--text-tertiary)"><i class="ph ph-circle-notch docs-spin"></i> 업로드…</span>';
+          else if (it.status === 'analyzing') right = '<span class="docs-conf" style="color:var(--brand-primary)"><i class="ph ph-sparkle docs-spin"></i> AI 분석중…</span>';
+          else if (it.status === 'failed') right = '<span class="docs-conf" style="color:var(--status-danger)">실패</span>';
+          else {
+            right = '<span class="docs-conf" style="color:' + (it.dup ? '#ea580c' : 'var(--status-success)') + '">→ ' + docEsc(it.folder) + ' ' + docEsc(it.conf || '') + '</span>';
+          }
+          var sub;
+          if (it.status === 'done') sub = docEsc(it.typeLabel || '') + (it.dup ? ' · ⚠ ' + docEsc(it.dupNote || '중복 의심') : (it.summary ? ' · ' + docEsc(it.summary) : ''));
+          else if (it.status === 'failed') sub = '<span style="color:var(--status-danger)">' + docEsc(it.summary || '업로드/분석 실패') + '</span>';
+          else sub = docEsc(it.sizeLabel || '');
+          var click = it.status === 'done' && it.docId ? ' style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + it.docId + '})"' : '';
+          return '<div class="docs-row"' + click + '>' + docBadge(it.badge) +
+            '<div class="t"><div class="name">' + docEsc(it.name) + '</div><div class="meta">' + sub + '</div></div>' + right + '</div>';
+        }).join('');
+        var doneCount = q.filter(function (x) { return x.status === 'done'; }).length;
+        box.innerHTML = '<div class="docs-card' + (doneCount ? ' docs-floatup' : '') + '"><div class="docs-card-head"><div class="docs-card-title">업로드 · AI 분석 (' + q.length + '건)</div>' +
+          (doneCount === q.length ? '<span style="font-size:12.5px;color:var(--brand-primary);cursor:pointer;font-weight:600" onclick="window.docsGo(\'browse\')">폴더에서 보기 →</span>' : '') +
+          '</div>' + rows + '</div>';
+      }
+
+      function docsHandleFiles(fileList) {
+        var files = Array.prototype.slice.call(fileList || []);
+        if (!files.length) return;
+        var st = window._docsState;
+        files.forEach(function (f) {
+          var ext = (f.name.split('.').pop() || '').toLowerCase();
+          var badge = ext === 'pdf' ? 'PDF'
+            : (/(jpg|jpeg|png|webp)/.test(ext) ? 'IMG'
+              : (/(dwg|dxf)/.test(ext) ? 'CAD'
+                : (/(ppt|pptx)/.test(ext) ? 'PPT' : 'DOC')));
+          var item = { name: f.name, badge: badge, sizeLabel: docHumanSize(f.size), status: 'uploading', file: f };
+          st.queue.unshift(item);
+          docsUploadOne(item);
+        });
+        docsRenderQueue();
+      }
+
+      function docHumanSize(bytes) {
+        if (!bytes) return '';
+        var u = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0) + ' ' + u[i];
+      }
+
+      async function docsUploadOne(item) {
+        try {
+          var fd = new FormData();
+          fd.append('file', item.file);
+          fd.append('site_id', _siteId());
+          if (window.WBS_CURRENT_PROJECT) fd.append('project_code', window.WBS_CURRENT_PROJECT);
+          if (window._docsState.targetFolder) fd.append('folder_code', window._docsState.targetFolder);
+          var res = await fetch('/docs-api/upload', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRF-TOKEN': docCsrf(), 'Accept': 'application/json' }, body: fd
+          });
+          var json = await res.json();
+          if (!json || !json.success || !json.document) {
+            item.status = 'failed';
+            item.summary = (json && (json.error || json.message)) || ('HTTP ' + res.status);
+            docsRenderQueue(); return;
+          }
+          item.docId = json.document.id;
+          // 보관 등록 형식(CAD·구형 오피스)은 서버가 즉시 needs_review 로 응답 — 바로 완료 처리.
+          if (json.document.status === 'needs_review') {
+            var dd = json.document;
+            item.status = 'done';
+            item.folder = dd.folder_name;
+            item.conf = Math.min(dd.type_confidence, dd.folder_confidence) + '%';
+            item.typeLabel = dd.type_label;
+            item.dup = dd.duplicate;
+            item.summary = (dd.summary || [])[0] || '';
+            docsRenderQueue(); clearDocCache(); return;
+          }
+          item.status = 'analyzing';
+          docsRenderQueue();
+          docsWatch(item);
+        } catch (e) {
+          console.warn('[docs] upload failed', e);
+          item.status = 'failed'; docsRenderQueue();
+        }
+      }
+
+      async function docsWatch(item) {
+        var tries = 0;
+        while (tries < 80) { // 최대 ~4분 (3초 간격)
+          await new Promise(function (r) { setTimeout(r, 3000); });
+          tries++;
+          var doc = null;
+          try {
+            var lr = await fetch('/docs-api/status?ids=' + item.docId, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            var lj = await lr.json();
+            (lj.documents || []).forEach(function (x) { if (x.id === item.docId) doc = x; });
+          } catch (e) { /* 일시 오류 무시 */ }
+          if (!doc) continue;
+          if (doc.status === 'needs_review' || doc.status === 'confirmed') {
+            item.status = 'done';
+            item.folder = doc.folder_name;
+            item.conf = Math.min(doc.type_confidence, doc.folder_confidence) + '%';
+            item.typeLabel = doc.type_label;
+            item.dup = doc.duplicate;
+            item.dupNote = doc.duplicate_note;
+            item.summary = (doc.summary || [])[0] || '';
+            docsRenderQueue();
+            clearDocCache();
+            return;
+          }
+          if (doc.status === 'failed') { item.status = 'failed'; item.summary = doc.error || ''; docsRenderQueue(); return; }
+        }
+        item.status = 'failed'; item.summary = '분석 지연 — 잠시 후 폴더에서 확인하세요.'; docsRenderQueue();
+      }
+
+      function clearDocCache() {
+        Object.keys(window.apiCache || {}).forEach(function (k) {
+          if (k.indexOf('api_getDoc') === 0 || k.indexOf('api_searchDocs') === 0) delete window.apiCache[k];
+        });
+      }
+
+      // ─────────── 폴더 브라우저 ───────────
+      async function docsRenderBrowse() {
+        var st = window._docsState;
+        var results = await Promise.all([
+          gsRun('api_getDocFolders', [], []),
+          gsRun('api_getDocFolder', [st.folder], { folder: {}, docs: [] })
+        ]);
+        var folders = results[0] || [], data = results[1] || { folder: {}, docs: [] };
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+
+        var folderHtml = folders.map(function (f) {
+          return '<div class="docs-folder' + (f.code === st.folder ? ' active' : '') + '" onclick="window.docsGo(\'browse\',{folder:\'' + f.code + '\'})">' +
+            '<span class="swatch" style="background:' + docEsc(f.color) + '"></span>' +
+            '<span class="fname"><span class="fcode">' + docEsc(f.code) + '</span> ' + docEsc(f.name) + '</span>' +
+            '<span class="fcount">' + f.count + '</span></div>';
+        }).join('');
+
+        var rows = (data.docs || []).length ? (data.docs || []).map(function (dc) {
+          return '<div class="docs-row" onclick="window.docsGo(\'detail\',{docId:' + dc.id + '})">' + docBadge(dc.type) +
+            '<div class="t"><div class="name">' + docEsc(dc.title) + (dc.dup ? ' <i class="ph ph-copy" style="color:#ea580c;font-size:13px" title="중복 의심"></i>' : '') +
+            '</div><div class="meta">' + docEsc(dc.sub) + ' · ' + docEsc(dc.from) + '</div></div>' +
+            '<span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + docEsc(dc.date) + '</span>' +
+            '<span class="docs-conf" style="color:' + docEsc(dc.confColor) + ';min-width:44px;text-align:right">' + docEsc(dc.conf) + '</span>' +
+            (dc.status === 'confirmed' ? '<i class="ph ph-check-circle" style="color:var(--status-success);font-size:15px" title="확정됨"></i>' : '<span style="width:15px"></span>') +
+            '</div>';
+        }).join('') : '<div style="padding:40px;text-align:center;color:var(--text-tertiary);font-size:13px">이 폴더에 문서가 없습니다.</div>';
+
+        body.innerHTML =
+          '<div style="display:flex;gap:0;border:1px solid var(--border-subtle);border-radius:14px;overflow:hidden;background:var(--bg-panel)">' +
+          '<div class="docs-folder-list">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px 10px">' +
+          '<span style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.6px">폴더</span>' +
+          '<button onclick="window.docsNewFolder()" title="새 폴더 만들기" style="background:none;border:none;color:var(--brand-primary);cursor:pointer;font-size:11.5px;font-weight:700;padding:0;font-family:inherit"><i class="ph ph-folder-plus"></i> 새 폴더</button>' +
+          '</div>' + folderHtml + '</div>' +
+          '<div style="flex:1;min-width:0;padding:20px 22px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+          '<div><h2 style="margin:0;font-size:18px;font-weight:800;color:var(--text-primary)">' + docEsc(data.folder.name || '') + '</h2>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-top:3px">AI 자동 분류 · DB 저장됨 · 언제든 검색 가능</div></div>' +
+          (Number(st.folder) > 9 ? '<button onclick="window.docsDeleteFolder(\'' + docEsc(st.folder) + '\',\'' + docEsc(data.folder.name || '') + '\')" style="background:none;border:1px solid var(--border-subtle);color:var(--status-danger);border-radius:9px;padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit"><i class="ph ph-trash"></i> 폴더 삭제</button>' : '') +
+          '</div>' +
+          '<div class="docs-card">' + rows + '</div></div></div>';
+      }
+
+      // 연결된 업무 대상(발주·협력사·작업자·공정) 표시 — 클릭하면 그 대상의 서류 일체로 이동
+      function docsLinkHtml(doc) {
+        var links = (doc && doc.links) || [];
+        var chips = links.map(function (l) {
+          return '<span onclick="window.docsEntityDocs(\'' + docEsc(l.type) + '\',\'' + docEsc(String(l.id)) + '\',\'' + docEsc(l.name) + '\')" ' +
+            'style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:var(--brand-primary-dim);border:1px solid var(--border-subtle);' +
+            'border-radius:9px;padding:6px 11px;font-size:12px"><b style="color:var(--brand-primary)">' + docEsc(l.label) + '</b>' +
+            '<span style="color:var(--text-primary)">' + docEsc(l.name) + '</span></span>';
+        }).join('');
+        return '<div class="docs-card" style="padding:16px 20px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (links.length ? '11px' : '0') + '">' +
+          '<div style="font-size:13.5px;font-weight:700;color:var(--text-primary)">\uD83D\uDD17 업무 연결</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">' + (links.length ? '클릭하면 관련 서류 일체를 봅니다' : '연결된 업무 대상이 없습니다 (발주번호·발행처로 자동 연결)') + '</span></div>' +
+          (links.length ? '<div style="display:flex;gap:8px;flex-wrap:wrap">' + chips + '</div>' : '') + '</div>';
+      }
+
+      // 특정 업무 대상에 붙은 서류 목록 보기
+      window.docsEntityDocs = async function (type, id, name) {
+        var d = await gsRun('api_getDocsForEntity', [type, id], { success: false, docs: [] });
+        if (!d || d.success === false) { alert('관련 서류를 불러오지 못했습니다.'); return; }
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        var rows = (d.docs || []).length ? d.docs.map(function (dc) {
+          return '<div class="docs-row" style="cursor:pointer" onclick="window.docsGo(\'detail\',{docId:' + dc.id + '})">' + docBadge(dc.type) +
+            '<div class="t"><div class="name">' + docEsc(dc.title) + '</div><div class="meta">' + docEsc(dc.sub) + '</div></div>' +
+            '<span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + docEsc(dc.date) + '</span></div>';
+        }).join('') : '<div style="padding:36px;text-align:center;color:var(--text-tertiary);font-size:13px">이 대상에 연결된 서류가 없습니다.</div>';
+        body.innerHTML =
+          '<div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:12px">' +
+          '<span style="cursor:pointer;color:var(--brand-primary);font-weight:600" onclick="window.docsGo(\'browse\')">← 폴더 브라우저</span> / ' +
+          docEsc(d.label) + ' · ' + docEsc(name || '') + '</div>' +
+          '<div class="docs-card"><div class="docs-card-head"><div class="docs-card-title">' + docEsc(d.label) + ' 관련 서류 (' + d.count + '건)</div></div>' + rows + '</div>';
+      };
+
+      // ─────────── 상세 (AI 추출 매핑) ───────────
+      async function docsRenderDetail() {
+        var st = window._docsState;
+        var doc = await gsRun('api_getDocDetail', [st.docId], null);
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        if (!doc) { body.innerHTML = '<div class="docs-card" style="padding:30px;text-align:center;color:var(--text-tertiary)">문서를 찾을 수 없습니다.</div>'; return; }
+
+        var summaryHtml = (doc.summary || []).length ? (doc.summary || []).map(function (l) {
+          return '<div style="display:flex;gap:10px;font-size:13px;color:var(--text-secondary);line-height:1.55;margin-bottom:8px"><span style="color:#818cf8">•</span><span>' + docEsc(l) + '</span></div>';
+        }).join('') : '<div style="font-size:12.5px;color:var(--text-tertiary)">요약 없음</div>';
+
+        var fieldsHtml = (doc.fields || []).length ? (doc.fields || []).map(function (f) {
+          return '<div class="docs-meta-tile"><div class="k">' + docEsc(f.k) + '</div><div class="v">' + docEsc(f.v) + '</div></div>';
+        }).join('') : '<div style="font-size:12.5px;color:var(--text-tertiary)">추출된 필드 없음</div>';
+
+        var numbersHtml = (doc.numbers || []).map(function (n) {
+          return '<div style="flex:1;min-width:120px;border:1px solid var(--border-subtle);background:var(--brand-primary-dim);border-radius:11px;padding:12px 14px">' +
+            '<div style="font-size:11px;color:var(--brand-primary);font-weight:600">' + docEsc(n.label) + '</div>' +
+            '<div style="font-size:16px;font-weight:800;color:var(--text-primary);margin-top:4px;font-family:var(--font-mono,monospace)">' + docEsc(n.v) + '</div></div>';
+        }).join('');
+
+        var tagsHtml = (doc.tags || []).map(function (t) { return '<span class="docs-chip">#' + docEsc(t) + '</span>'; }).join(' ');
+        var folderOpts = (doc.folders || []).map(function (f) {
+          return '<option value="' + f.code + '"' + (f.code === doc.folderCode ? ' selected' : '') + '>' + docEsc(f.code) + ' ' + docEsc(f.name) + '</option>';
+        }).join('');
+
+        var dupHtml = doc.dup ? '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:13px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
+          '<span style="width:30px;height:30px;border-radius:8px;background:#ea580c;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 30px">⚠</span>' +
+          '<div><div style="font-size:12.5px;font-weight:700;color:#9a3412">중복 · 유사 문서 감지</div><div style="font-size:12px;color:#c2410c;margin-top:2px">' + docEsc(doc.dup.text) + '</div></div></div>' : '';
+
+        body.innerHTML =
+          '<div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:14px">' +
+          '<span style="cursor:pointer;color:var(--brand-primary);font-weight:600" onclick="window.docsGo(\'browse\',{folder:\'' + doc.folderCode + '\'})">← 폴더 브라우저</span> / ' + docEsc(doc.folderName) + '</div>' +
+          '<div class="docs-two-col" style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start">' +
+          // LEFT: 파일 정보 + 미리보기 링크
+          '<div>' +
+          '<div style="background:#334155;border-radius:14px 14px 0 0;padding:14px 18px;display:flex;align-items:center;gap:11px">' +
+          '<span style="font-size:10px;font-weight:800;color:#fff;background:rgba(255,255,255,.16);padding:5px 8px;border-radius:7px">' + docEsc(doc.type || 'DOC') + '</span>' +
+          '<span style="font-size:13px;color:#e2e8f0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + docEsc(doc.title) + '</span></div>' +
+          '<div style="background:var(--bg-subtle);padding:24px;border-radius:0 0 14px 14px;min-height:220px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">' +
+          (doc.fileUrl ? '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" style="text-decoration:none"><div style="width:130px;height:170px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--brand-primary);box-shadow:0 8px 24px rgba(15,23,42,.12)"><i class="ph ph-file-text"></i></div></a>' +
+            '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" class="docs-chip" style="text-decoration:none"><i class="ph ph-arrow-square-out"></i> 원본 열기</a>'
+            : (doc.fileMissing
+              ? '<div style="text-align:center;color:var(--status-warning);font-size:12.5px;line-height:1.6"><i class="ph ph-warning-circle" style="font-size:26px;display:block;margin-bottom:8px"></i>원본 파일이 서버에 없습니다.<br>메타데이터는 보존되어 있으니<br><b>같은 문서를 다시 업로드</b>해 주세요.</div>'
+              : '<div style="color:var(--text-tertiary);font-size:13px">원본 파일 없음</div>')) +
+          '</div>' +
+          '<div class="docs-card" style="margin-top:16px;padding:16px 18px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:.4px;margin-bottom:12px">파일 정보</div>' +
+          [['문서번호', doc.docno], ['발행처', doc.issuer || '—'], ['상대방', doc.counterparty || '—'], ['업로드', doc.by], ['용량', doc.size], ['관련 현장', doc.site], ['발행일', doc.issued_on || '—'], ['만료일', doc.expires_on || '—']].map(function (kv) {
+            return '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:8px"><span style="color:var(--text-tertiary)">' + docEsc(kv[0]) + '</span><span style="font-weight:600;color:var(--text-primary)">' + docEsc(kv[1]) + '</span></div>';
+          }).join('') + '</div></div>' +
+          // RIGHT: AI 추출
+          '<div style="display:flex;flex-direction:column;gap:16px">' +
+          '<div class="docs-ai-panel">' +
+          '<div style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span class="docs-ai-glow" style="width:30px;height:30px;font-size:16px">✦</span><span class="kicker">AI 자동 분석 결과</span></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#a5b4fc">문서 종류</div>' +
+          '<div style="font-size:16px;font-weight:700;color:#fff;margin-top:4px">' + docEsc(doc.docType) + '</div><div style="font-size:11px;color:#c7d2fe;margin-top:4px">판별 신뢰도 ' + doc.typeConf + '%</div></div>' +
+          '<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#a5b4fc">자동 분류 폴더</div>' +
+          '<div style="font-size:16px;font-weight:700;color:#fff;margin-top:4px">' + docEsc(doc.folderName) + '</div><div style="font-size:11px;color:#c7d2fe;margin-top:4px">매핑 신뢰도 ' + doc.folderConf + '%</div></div>' +
+          '</div></div>' +
+          docsLinkHtml(doc) +
+          dupHtml +
+          '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">핵심 요약 <span style="font-size:10px;font-weight:700;color:var(--brand-primary);background:var(--brand-primary-dim);padding:2px 7px;border-radius:6px">AI 생성</span></div>' + summaryHtml + '</div>' +
+          '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:14px;color:var(--text-primary)">추출된 메타데이터</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">' + fieldsHtml + '</div></div>' +
+          (numbersHtml ? '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:14px;color:var(--text-primary)">금액 · 수량 추출</div><div style="display:flex;gap:11px;flex-wrap:wrap">' + numbersHtml + '</div></div>' : '') +
+          (tagsHtml ? '<div class="docs-card" style="padding:18px 20px"><div style="font-size:13.5px;font-weight:700;margin-bottom:13px;color:var(--text-primary)">자동 생성 태그 · 키워드</div><div style="display:flex;gap:8px;flex-wrap:wrap">' + tagsHtml + '</div></div>' : '') +
+          '<div style="display:flex;gap:10px;align-items:center">' +
+          '<select id="docs-folder-sel" style="height:44px;padding:0 12px;background:var(--bg-panel);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:11px;font-size:13px;font-family:inherit">' + folderOpts + '</select>' +
+          '<button onclick="window.docsConfirm(' + doc.id + ')" style="flex:1;height:44px;background:var(--brand-primary);color:#fff;border:none;border-radius:11px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit">' +
+          (doc.status === 'confirmed' ? '폴더 변경 저장' : '분류 확정 · DB 저장') + '</button>' +
+          '<button onclick="window.docsDelete(' + doc.id + ')" title="삭제" style="height:44px;padding:0 14px;background:var(--bg-panel);color:var(--status-danger);border:1px solid var(--border-subtle);border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit"><i class="ph ph-trash"></i></button>' +
+          '</div></div></div>';
+      }
+
+      window.docsConfirm = async function (id) {
+        var sel = document.getElementById('docs-folder-sel');
+        var folder = sel ? sel.value : '';
+        var r = await gsRun('api_confirmDoc', [id, folder], { success: false });
+        clearDocCache();
+        if (r && r.success) {
+          if (window.showToast) window.showToast('문서 분류를 확정했습니다.', 'success');
+          window.docsGo('browse', { folder: r.folder_code });
+        } else {
+          alert('확정 실패: ' + ((r && r.error) || '알 수 없는 오류'));
+        }
+      };
+
+      window.docsDelete = async function (id) {
+        if (!confirm('이 문서를 삭제할까요? 원본 파일도 함께 삭제됩니다.')) return;
+        var r = await gsRun('api_deleteDoc', [id], { success: false });
+        clearDocCache();
+        if (r && r.success) { window.docsGo('browse'); } else { alert('삭제 실패'); }
+      };
+
+      // ─────────── 전체 검색 ───────────
+      async function docsRenderSearch() {
+        var body = document.getElementById('docs-body');
+        if (!body) return;
+        var st = window._docsState;
+        body.innerHTML =
+          '<div style="display:flex;align-items:center;gap:11px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:13px;padding:4px 6px 4px 16px;margin-bottom:14px">' +
+          '<i class="ph ph-magnifying-glass" style="font-size:18px;color:var(--text-tertiary)"></i>' +
+          '<input id="docs-search-input" value="' + docEsc(st.query) + '" placeholder="문서명 · 발신처 · 내용 · 태그 · 금액으로 검색" style="flex:1;border:none;outline:none;font-size:15px;padding:12px 0;font-family:inherit;color:var(--text-primary);background:transparent">' +
+          '<span class="docs-chip">DB 전체 검색</span></div>' +
+          '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;font-size:12px;color:var(--text-tertiary)"><span>추천:</span>' +
+          ['계약', '영수증', '보험', '만료', '접지'].map(function (t) { return '<span style="color:var(--brand-primary);cursor:pointer" onclick="window.docsSearchNow(\'' + t + '\')">' + t + '</span>'; }).join('<span style="color:var(--border-strong)">·</span>') +
+          '</div><div id="docs-search-results"></div>';
+
+        var input = document.getElementById('docs-search-input');
+        var timer = null;
+        input.addEventListener('input', function () {
+          clearTimeout(timer);
+          timer = setTimeout(function () { docsDoSearch(input.value); }, 350);
+        });
+        input.focus();
+        docsDoSearch(st.query);
+      }
+
+      window.docsSearchNow = function (q) {
+        var input = document.getElementById('docs-search-input');
+        if (input) input.value = q;
+        window._docsState.query = q;
+        docsDoSearch(q);
+      };
+
+      async function docsDoSearch(query) {
+        window._docsState.query = query;
+        var box = document.getElementById('docs-search-results');
+        if (!box) return;
+        box.innerHTML = docsLoading('검색 중...');
+        var r = await gsRun('api_searchDocs', [query || ''], { count: 0, hits: [] });
+        var hits = r.hits || [];
+        var head = '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px"><b style="color:var(--text-primary)">' + (r.count || 0) + '건</b>의 문서를 찾았습니다</div>';
+        if (!hits.length) { box.innerHTML = head + '<div class="docs-card" style="padding:36px;text-align:center;color:var(--text-tertiary);font-size:13px">일치하는 문서가 없습니다.</div>'; return; }
+        box.innerHTML = head + '<div style="display:flex;flex-direction:column;gap:10px">' + hits.map(function (d) {
+          var tags = (d.tags || []).map(function (t) { return '<span style="font-size:11px;color:var(--brand-primary);background:var(--brand-primary-dim);padding:3px 9px;border-radius:14px">#' + docEsc(t) + '</span>'; }).join(' ');
+          return '<div class="docs-card" style="padding:15px 17px;cursor:pointer;display:flex;gap:15px;align-items:flex-start" onclick="window.docsGo(\'detail\',{docId:' + d.id + '})">' + docBadge(d.type) +
+            '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:14.5px;font-weight:700;color:var(--text-primary)">' + docEsc(d.title) + '</span><span style="font-size:11px;color:var(--text-tertiary)">' + docEsc(d.sub) + '</span></div>' +
+            '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:6px">' + docEsc(d.docType) + ' · ' + docEsc(d.from) + ' · ' + docEsc(d.date) + '</div>' +
+            (tags ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">' + tags + '</div>' : '') + '</div>' +
+            '<span class="docs-conf" style="color:' + docEsc(d.confColor) + '">' + docEsc(d.conf) + '</span></div>';
+        }).join('') + '</div>';
+      }
+
+
       async function renderWbs() {
         var gen = ++_wbsRenderGen;
         pageContainer.innerHTML = skeleton();
@@ -8540,10 +10772,12 @@
           var results = await Promise.all([
             window.API.getProjectWbsTree(projectId),
             window.API.getProjectProgressSummary(projectId),
-            window.API.getTodayWbsWork(projectId)
+            window.API.getTodayWbsWork(projectId),
+            window.API.getProcurement(projectId)
           ]);
           if (gen !== _wbsRenderGen) return;
-          var treeRes = results[0], sumRes = results[1], todayRes = results[2];
+          var treeRes = results[0], sumRes = results[1], todayRes = results[2], procureRes = results[3];
+          window._wbsProcure = procureRes; window._wbsToday = todayRes;
 
           // 서버 오류를 "WBS 없음"으로 위장하지 않는다 — 오류는 오류로 표시.
           if (!treeRes || treeRes.success !== true) {
@@ -8748,7 +10982,7 @@
             '</div>';
           var ganttHtml = wbsGanttPanel(tree, projectId);
 
-          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) + viewToggle +
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsOpsBlock(todayRes, procureRes) + viewToggle +
             '<div id="wbs-view-gantt"' + (vm === 'gantt' ? '' : ' style="display:none"') + '>' + ganttHtml + '</div>' +
             '<div id="wbs-view-tree"' + (vm === 'tree' ? '' : ' style="display:none"') + '>' + panelsHtml + treePanel + '</div>';
 
@@ -11854,7 +14088,7 @@ window.submitVendorCreate = function() {
       if (!msg || msg.endsWith('...')) { alert('ë©”ì‹œì§€ ì™„ì„± í›„ ë°œì†¡'); return; }
       if (!email) { alert('ì´ë©”ì¼ ë¯¸ë“±ë¡'); return; }
       if (!confirm(name + 'ì—ê²Œ ë°œì†¡?')) return;
-      window.API.sendVendorEmail(email, '[NAHSHON MEP] ì—…ë¬´ì—°ë½', msg, name).then(function(res) {
+      window.API.sendVendorEmail(email, '[DASOL PRISM] ì—…ë¬´ì—°ë½', msg, name).then(function(res) {
         if (res.success) { alert('ë°œì†¡ ì™„ë£Œ! ' + res.tag); document.getElementById('vendorModalOverlay').style.display = 'none'; }
         else { alert('ì‹¤íŒ¨: ' + res.error); }
       });
@@ -12290,6 +14524,138 @@ async function renderVendors() {
     window._scannedTeamCode = null;
 
     // ── 내 출퇴근 기록 전용 페이지 ───────────────────────────────
+    // ── 자동 출퇴근(GPS 지오펜스) — 브라우저 위치를 하이브리드 판정 엔드포인트로 전송 ──
+    window._autoAtt = window._autoAtt || { watchId: null };
+    function autoAttCsrf() { var e = document.querySelector('meta[name="csrf-token"]'); return e ? e.getAttribute('content') : ''; }
+    function autoAttFmtDur(sec) { sec = Math.max(0, sec || 0); return Math.floor(sec / 3600) + '시간 ' + Math.floor((sec % 3600) / 60) + '분'; }
+    async function autoAttScApi(fn, args) {
+      var r = await fetch('/smart-company-api/' + fn, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': autoAttCsrf(), 'Accept': 'application/json' }, body: JSON.stringify({ args: args || [] }) });
+      return await r.json();
+    }
+
+    window.initAutoAttendance = function () { autoAttRefresh(); };
+
+    async function autoAttRefresh() {
+      var body = document.getElementById('auto-att-body'); var pill = document.getElementById('auto-att-state');
+      if (!body) return;
+      var st = null;
+      try { var r = await fetch('/attendance-geo/status', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }); st = await r.json(); } catch (e) { /* ignore */ }
+      if (!st || st.success === false) {
+        body.innerHTML = '<div style="color:var(--status-warning);font-size:13px">' + ((st && st.error) || '출퇴근 상태를 불러올 수 없습니다. 계정에 직원 정보가 연결되어 있어야 합니다.') + '</div>';
+        if (pill) { pill.textContent = '연결 안됨'; pill.style.color = 'var(--status-warning)'; }
+        return;
+      }
+      var stateMap = { on_site: ['근무중', 'var(--status-success)'], left: ['이탈', 'var(--status-warning)'], finalized: ['마감', 'var(--text-tertiary)'], off_site: ['현장 밖', 'var(--text-tertiary)'] };
+      var sm = stateMap[st.state] || stateMap.off_site;
+      if (pill) { pill.textContent = sm[0]; pill.style.color = sm[1]; }
+      var running = window._autoAtt.watchId != null;
+      var site = st.site; var noGeo = !site || !site.radius;
+      body.innerHTML =
+        '<div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;margin-bottom:14px">' +
+        '<div><div style="font-size:11px;color:var(--text-tertiary)">현재 상태</div><div style="font-size:19px;font-weight:800;color:' + sm[1] + '">' + sm[0] + '</div></div>' +
+        '<div><div style="font-size:11px;color:var(--text-tertiary)">오늘 근무시간</div><div style="font-size:19px;font-weight:800;color:var(--text-primary)">' + autoAttFmtDur(st.onSiteSeconds) + '</div></div>' +
+        '<div><div style="font-size:11px;color:var(--text-tertiary)">현장</div><div style="font-size:14px;font-weight:600;color:var(--text-primary)">' + (site ? (site.code + ' · 반경 ' + (site.radius || '미설정') + (site.radius ? 'm' : '')) : '미배정') + '</div></div>' +
+        (st.needsReview ? '<div style="color:var(--status-warning);font-size:12px">⚠ 어제 미마감(관리자 확인 필요)</div>' : '') +
+        '</div>' +
+        '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.autoAttShowLocation()"><i class="ph ph-crosshair"></i> 내 위치 확인</button><span id="auto-att-loc" style="font-size:12px;color:var(--text-tertiary);margin-left:10px"></span></div>' +
+        '<div id="auto-att-geo-admin"></div>' +
+        (noGeo
+          ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:12px;font-size:12.5px;color:#b45309">이 현장(' + (site ? site.code : '미배정') + ')은 GPS 지오펜스가 아직 설정되지 않아 자동 판정이 안 됩니다. 관리자는 아래 <b>현장 지오펜스 관리</b>에서 현장을 골라 <b>현장에 서서</b> 현재 위치를 중심으로 등록하세요.</div>'
+          : '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn-' + (running ? 'secondary' : 'primary') + '" onclick="window.autoAttToggle()" style="padding:10px 18px;font-weight:700">' + (running ? '<i class="ph ph-stop-circle"></i> 자동 감지 중지' : '<i class="ph ph-play-circle"></i> 자동 출퇴근 시작') + '</button><span style="font-size:11.5px;color:var(--text-tertiary);max-width:420px">' + (running ? '위치 감지 중… 이 화면을 열어두면 현장 진입=출근/근무중, 이탈이 자동 기록됩니다. 자정에 마지막 이탈이 퇴근으로 확정됩니다.' : '시작을 누르고 위치 권한을 허용하세요. 현장 반경 안=근무중, 밖 10분=이탈.') + '</span></div>');
+      autoAttLoadGeoManager();
+    }
+
+    // 관리자: 현장을 골라 그 현장의 지오펜스를 현재 위치로 등록한다.
+    async function autoAttLoadGeoManager() {
+      var host = document.getElementById('auto-att-geo-admin');
+      if (!host) return;
+      var d = null;
+      try { d = await autoAttScApi('api_getGeofenceSites', []); } catch (e) { /* ignore */ }
+      if (!d || !d.canManage || !d.sites || !d.sites.length) { host.innerHTML = ''; return; }
+      window._autoAttGeoSites = d.sites;
+      var opts = d.sites.map(function (s) {
+        var label = s.code + (s.name ? ' · ' + s.name : '') + (s.hasGeo ? ' (반경 ' + s.radius + 'm)' : ' (미설정)');
+        var sel = (d.mySiteId && s.id === d.mySiteId) ? ' selected' : '';
+        return '<option value="' + s.id + '"' + sel + '>' + label + '</option>';
+      }).join('');
+      host.innerHTML =
+        '<div style="border:1px dashed var(--brand-primary);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--brand-primary-dim)">' +
+        '<div style="font-weight:700;font-size:12.5px;margin-bottom:8px"><i class="ph ph-gear-six"></i> 현장 지오펜스 관리 (관리자)</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<span style="font-size:12px">현장</span>' +
+          '<select id="auto-att-site" onchange="window.autoAttSiteInfo()" style="padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary);max-width:280px">' + opts + '</select>' +
+          '<span style="font-size:12px">반경</span>' +
+          '<input id="auto-att-radius" type="number" value="322" style="width:82px;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary)">' +
+          '<span style="font-size:12px">m</span>' +
+          '<button class="btn-primary" style="padding:7px 12px" onclick="window.autoAttSetGeofence()"><i class="ph ph-crosshair-simple"></i> 선택 현장에 현재 위치 등록</button>' +
+        '</div>' +
+        '<div id="auto-att-site-info" style="font-size:11.5px;color:var(--text-tertiary);margin-top:8px"></div>' +
+        '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">※ 등록하려는 현장에 실제로 서 있는 상태에서(실내 진입 전, 현장 외곽 권장) 눌러야 정확합니다.</div>' +
+        '</div>';
+      window.autoAttSiteInfo();
+    }
+
+    window.autoAttSiteInfo = function () {
+      var sel = document.getElementById('auto-att-site'); var info = document.getElementById('auto-att-site-info');
+      if (!sel || !info) return;
+      var s = (window._autoAttGeoSites || []).filter(function (x) { return String(x.id) === String(sel.value); })[0];
+      if (!s) { info.textContent = ''; return; }
+      if (s.hasGeo) {
+        info.innerHTML = '현재 등록됨 — 위도 <b>' + Number(s.lat).toFixed(6) + '</b>, 경도 <b>' + Number(s.lng).toFixed(6) + '</b>, 반경 <b>' + s.radius + 'm</b>. 다시 등록하면 덮어씁니다.';
+        var rad = document.getElementById('auto-att-radius'); if (rad) rad.value = s.radius;
+      } else {
+        info.innerHTML = '<span style="color:#b45309">아직 지오펜스가 없습니다. 이 현장에 서서 등록하세요.</span>';
+      }
+    };
+
+    window.autoAttToggle = function () {
+      if (window._autoAtt.watchId != null) { navigator.geolocation.clearWatch(window._autoAtt.watchId); window._autoAtt.watchId = null; autoAttRefresh(); return; }
+      if (!navigator.geolocation) { alert('이 브라우저는 위치를 지원하지 않습니다.'); return; }
+      window._autoAtt.watchId = navigator.geolocation.watchPosition(
+        function (pos) { autoAttPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+        function (err) { alert('위치 권한이 필요합니다: ' + err.message); if (window._autoAtt.watchId != null) { navigator.geolocation.clearWatch(window._autoAtt.watchId); window._autoAtt.watchId = null; } autoAttRefresh(); },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      );
+      autoAttRefresh();
+    };
+
+    async function autoAttPing(lat, lng, acc) {
+      try {
+        var r = await fetch('/attendance-geo/ping', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': autoAttCsrf(), 'Accept': 'application/json' }, body: JSON.stringify({ lat: lat, lng: lng, accuracy: Math.round(acc || 0), clientTs: Math.floor(Date.now() / 1000) }) });
+        var j = await r.json();
+        var pill = document.getElementById('auto-att-state');
+        if (j && j.success && pill) {
+          var m = { on_site: ['근무중', 'var(--status-success)'], left: ['이탈', 'var(--status-warning)'], off_site: ['현장 밖', 'var(--text-tertiary)'] }[j.status] || ['현장 밖', 'var(--text-tertiary)'];
+          pill.textContent = m[0] + (j.kind === 'enter' ? ' (출근)' : (j.kind === 'exit' ? ' (이탈)' : ''));
+          pill.style.color = m[1];
+        }
+      } catch (e) { /* 일시 오류 무시 */ }
+    }
+
+    window.autoAttShowLocation = function () {
+      var el = document.getElementById('auto-att-loc');
+      if (!navigator.geolocation) { if (el) el.textContent = '이 브라우저는 위치를 지원하지 않습니다.'; return; }
+      if (el) el.textContent = '위치 확인 중…';
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        var la = pos.coords.latitude.toFixed(6), ln = pos.coords.longitude.toFixed(6), ac = Math.round(pos.coords.accuracy || 0);
+        if (el) el.innerHTML = '위도 <b>' + la + '</b> · 경도 <b>' + ln + '</b> · 정확도 ±' + ac + 'm · <a href="https://maps.google.com/?q=' + la + ',' + ln + '" target="_blank" style="color:var(--brand-primary)">지도에서 보기</a>';
+      }, function (err) { if (el) el.textContent = '위치 권한이 필요합니다: ' + err.message; }, { enableHighAccuracy: true, timeout: 20000 });
+    };
+
+    window.autoAttSetGeofence = function () {
+      if (!navigator.geolocation) { alert('위치 미지원'); return; }
+      var radius = (document.getElementById('auto-att-radius') || {}).value || 322;
+      var siteSel = document.getElementById('auto-att-site');
+      var siteId = siteSel ? siteSel.value : null;
+      var siteLabel = siteSel && siteSel.selectedIndex >= 0 ? siteSel.options[siteSel.selectedIndex].text : '내 현장';
+      if (!confirm('[' + siteLabel + '] 현장의 지오펜스를 지금 내 위치(반경 ' + radius + 'm)로 설정할까요?\n이 현장에 실제로 서 있어야 정확합니다.')) return;
+      navigator.geolocation.getCurrentPosition(async function (pos) {
+        var r = await autoAttScApi('api_setMySiteGeofence', [pos.coords.latitude, pos.coords.longitude, Number(radius), siteId]);
+        if (r && r.success) { if (window.showToast) window.showToast('현장 ' + r.site + ' 지오펜스를 설정했습니다(반경 ' + r.radius + 'm). 해당 현장 작업자 전원에게 적용됩니다.', 'success'); autoAttRefresh(); }
+        else alert('설정 실패: ' + ((r && r.error) || '오류'));
+      }, function (err) { alert('위치 권한이 필요합니다: ' + err.message); }, { enableHighAccuracy: true });
+    };
+
     window.renderMyAttendance = function() {
       const pc = document.getElementById('page-container');
       if (!pc) return;
@@ -12304,6 +14670,10 @@ async function renderVendors() {
         '<div class="header-section"><div><h1 class="page-title"><i class="ph ph-clock" style="color:var(--brand-primary);"></i> 내 출퇴근 기록</h1>' +
         '<p class="page-subtitle">기간별 출퇴근 이력과 근태 요약을 확인합니다.</p></div>' +
         '<div class="action-row"><button class="btn-primary" style="padding:8px 16px; border-radius:8px; border:none; background:var(--brand-primary); color:white; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="window.openMyCommuteModal()"><i class="ph ph-plus"></i> 출퇴근 등록</button></div></div>' +
+        '<div class="panel" id="auto-att-card" style="margin-bottom:16px;border:1px solid var(--brand-primary);border-radius:12px;overflow:hidden">' +
+        '<div class="panel-header" style="background:var(--brand-primary-dim);padding:14px 20px;display:flex;align-items:center;justify-content:space-between"><div class="panel-title" style="font-size:14px;font-weight:800"><i class="ph ph-map-pin-area" style="color:var(--brand-primary)"></i> 자동 출퇴근 (GPS)</div><span id="auto-att-state" style="font-size:12px;font-weight:700;color:var(--text-tertiary)">확인 중…</span></div>' +
+        '<div class="panel-body" id="auto-att-body" style="padding:16px 20px"><div style="color:var(--text-tertiary);font-size:13px">GPS 상태 확인 중…</div></div>' +
+        '</div>' +
         '<div class="panel" style="margin-bottom:16px; border:1px solid var(--border-color); background:var(--bg-surface); border-radius:12px; padding:16px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">' +
         '<span style="font-size:12px; color:var(--text-tertiary); font-weight:600;">조회 기간</span>' +
         '<input type="date" id="my-att-start" value="' + monthStart + '" style="padding:8px 10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-base); color:var(--text-primary); font-size:13px;">' +
@@ -12326,6 +14696,7 @@ async function renderVendors() {
         '</table></div></div>';
 
       window.loadMyAttendance();
+      window.initAutoAttendance();
     };
 
     window.loadMyAttendance = async function() {
@@ -12503,7 +14874,7 @@ async function renderVendors() {
         throw new Error('인증 계정에 연동된 직원 정보가 없어 오프라인 기록을 할 수 없습니다.');
       }
       
-      const secret = '{{ config('app.key') ?: 'base64:nahshonsmarterpdefaultkey' }}';
+      const secret = '{{ config('app.key') ?: 'base64:dasol-prismsmarterpdefaultkey' }}';
       const message = empId + '_' + eventType + '_' + localTimeStr + '_' + lat + '_' + lng;
       let token = '';
       try {

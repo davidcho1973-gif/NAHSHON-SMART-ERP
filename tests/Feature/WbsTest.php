@@ -40,7 +40,7 @@ class WbsTest extends TestCase
             WbsItem::create([
                 'project_code' => 'TST-01', 'parent_id' => $task->id, 'level' => 'subtask',
                 'wbs_code' => 'TST-01-W-' . $s['no'], 'node_no' => $s['no'], 'name' => $s['name'],
-                'company' => $s['company'] ?? 'NAHSHON', 'manhours' => $s['mh'], 'days' => 1,
+                'company' => $s['company'] ?? 'DASOL PRISM', 'manhours' => $s['mh'], 'days' => 1,
                 'ehs' => $s['ehs'] ?? 'medium', 'status' => $s['status'], 'progress' => $s['progress'],
                 // 기본 픽스처는 조달성 작업(현장 인원 0) — 게이트가 개입하지 않는다.
                 // 안전 게이트를 검증하는 테스트는 'crew' 를 명시해 현장작업으로 만든다.
@@ -187,7 +187,7 @@ class WbsTest extends TestCase
                 'stages' => [[
                     'stage_no' => '1', 'stage_name' => '반입', 'tasks' => [[
                         'task_no' => '1.1', 'task_name' => '하역', 'sub_tasks' => [
-                            ['sub_no' => '1.1.1', 'sub_name' => '장비 하역', 'company' => 'NAHSHON', 'manhours' => 24, 'days' => 2, 'ehs' => 'medium'],
+                            ['sub_no' => '1.1.1', 'sub_name' => '장비 하역', 'company' => 'DASOL PRISM', 'manhours' => 24, 'days' => 2, 'ehs' => 'medium'],
                         ],
                     ]],
                 ]],
@@ -210,7 +210,7 @@ class WbsTest extends TestCase
             'candidates' => [['content' => ['parts' => [['text' => json_encode([
                 'stages' => [['stage_no' => '1', 'stage_name' => '설치', 'tasks' => [[
                     'task_no' => '1.1', 'task_name' => '패널 설치', 'sub_tasks' => [
-                        ['sub_no' => '1.1.1', 'sub_name' => '앵커 설치', 'company' => 'NAHSHON', 'manhours' => 40, 'days' => 3, 'ehs' => 'high'],
+                        ['sub_no' => '1.1.1', 'sub_name' => '앵커 설치', 'company' => 'DASOL PRISM', 'manhours' => 40, 'days' => 3, 'ehs' => 'high'],
                     ],
                 ]]]],
             ])]]]]],

@@ -368,6 +368,8 @@ class HrAttendanceApiTest extends TestCase
         $authenticatedResponse->assertSee('T-ELECT-A');
         $authenticatedResponse->assertSee('Electrical Crew A');
         $authenticatedResponse->assertSee('/attendance-app/team/', false);
-        $authenticatedResponse->assertSee('https://api.qrserver.com/v1/create-qr-code/');
+        // QR 은 외부 서비스가 아닌 로컬 SVG(data URI)로 생성된다 — 폐쇄망에서도 항상 렌더.
+        $authenticatedResponse->assertSee('data:image/svg+xml;base64,');
+        $authenticatedResponse->assertDontSee('api.qrserver.com');
     }
 }

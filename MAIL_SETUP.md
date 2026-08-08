@@ -16,7 +16,7 @@ MAIL_PORT=587
 MAIL_USERNAME=your-google-email@gmail.com
 MAIL_PASSWORD=your-google-app-password
 MAIL_FROM_ADDRESS=your-google-email@gmail.com
-MAIL_FROM_NAME="NAHSHON MEP"
+MAIL_FROM_NAME="DASOL PRISM"
 ```
 
 For Gmail, `MAIL_PASSWORD` must be a Google app password, not the normal Gmail login password.

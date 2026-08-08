@@ -297,6 +297,12 @@ class MemberRegistration extends Model
             $blockers[] = 'Privacy consent is required.';
         }
 
+        // 하청업체 및 외부 인원(vendor, visitor, driver 등)의 경우
+        // 제출 및 개인정보동의 조건만 검사하고 나머지 정직원용 블로커는 생략합니다.
+        if (in_array($this->member_type, ['vendor', 'visitor', 'driver'], true)) {
+            return $blockers;
+        }
+
         if (! $this->documents()->where('document_type', 'id')->exists()) {
             $blockers[] = 'Government ID document is required.';
         }
@@ -344,8 +350,8 @@ class MemberRegistration extends Model
         }
 
         $this->forceFill([
-            'badge_registration_status' => 'registered',
-            'start_date' => $this->badge_issued_on,
+            'badge_registration_status' => $this->badge_number ? 'registered' : 'pending',
+            'start_date' => $this->badge_issued_on ?: $this->start_date ?: now()->toDateString(),
             'onboarding_status' => 'active',
             'approved_at' => now(),
             'approved_by_id' => $user?->id,

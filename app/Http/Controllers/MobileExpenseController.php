@@ -59,19 +59,8 @@ class MobileExpenseController extends Controller
         $employee = $user->employee;
         $selectedSiteId = $this->requestedSiteId($request) ?: ($employee?->site_id ?? $user->allowed_site_id);
 
-        // Fetch sites available for user's company
-        $sites = [];
-        if ($employee && $employee->company_id) {
-            $sites = Site::query()
-                ->where('company_id', $employee->company_id)
-                ->where('status', 'active')
-                ->get();
-        } else {
-            $sites = Site::query()->where('status', 'active')->get();
-        }
-
         return view('mobile-expense.wizard', [
-            'sites' => $sites,
+            'sites' => $this->siteOptions($selectedSiteId),
             'preApprovals' => $this->availablePreApprovals(),
             'selectedSiteId' => $selectedSiteId,
             'accountOptions' => FinanceChartOfAccounts::accounts(),
@@ -132,14 +121,9 @@ class MobileExpenseController extends Controller
     {
         abort_unless($this->canModifyExpense($expense), 403);
 
-        $employee = auth()->user()?->employee;
-        $sites = $employee?->company_id
-            ? Site::query()->where('company_id', $employee->company_id)->where('status', 'active')->get()
-            : Site::query()->where('status', 'active')->get();
-
         return view('mobile-expense.edit', [
             'expense' => $expense,
-            'sites' => $sites,
+            'sites' => $this->siteOptions($expense->site_id),
             'preApprovals' => $this->availablePreApprovals($expense->employee_id),
             'canManageAllExpenses' => $this->canManageAllExpenses(),
             'accountOptions' => FinanceChartOfAccounts::accounts(),
@@ -313,6 +297,28 @@ class MobileExpenseController extends Controller
         return ltrim($path, '/');
     }
 
+    /**
+     * 영수증 한 건을 즉시 승인/반려/지급완료 처리(관리자 전용). 목록에서 원클릭 승인용.
+     */
+    public function review(Request $request, MobileExpense $expense): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($this->canManageAllExpenses(), 403);
+
+        $data = $request->validate(['decision' => 'required|in:approved,rejected,paid']);
+
+        $expense->update([
+            'status' => $data['decision'],
+            'reviewed_by_user_id' => auth()->id(),
+            'reviewed_at' => now(),
+            'paid_by_user_id' => $data['decision'] === 'paid' ? auth()->id() : $expense->paid_by_user_id,
+            'paid_at' => $data['decision'] === 'paid' ? now() : $expense->paid_at,
+        ]);
+
+        $label = ['approved' => '승인', 'rejected' => '반려', 'paid' => '지급완료'][$data['decision']];
+
+        return back()->with('success', "영수증을 {$label} 처리했습니다.");
+    }
+
     private function canAccessExpense(MobileExpense $expense): bool
     {
         return $this->canManageAllExpenses()
@@ -377,6 +383,31 @@ class MobileExpenseController extends Controller
             ->orWhere('code', $siteCode)
             ->orWhere('name', $siteValue)
             ->value('id');
+    }
+
+    /**
+     * 경비 현장 선택 옵션 — 활성 현장 전체(코드순).
+     *
+     * 왜 회사(company_id)로 스코프하지 않는가: 시공 벤더 직원은 여러 발주처 현장
+     * (LGES·HFF 등, 각기 다른 company_id)에서 경비가 발생한다. 회사로 필터하면 자기
+     * 회사 현장 하나만 보여 다른 현장으로 지정할 수 없다(David 리포트). 지금 선택된
+     * 현장이 비활성화됐더라도 목록에 포함해 값이 유지되게 한다.
+     *
+     * @return \Illuminate\Support\Collection<int, Site>
+     */
+    private function siteOptions(int|string|null $currentSiteId = null): \Illuminate\Support\Collection
+    {
+        $sites = Site::query()->where('status', 'active')->orderBy('code')->get();
+
+        $currentSiteId = is_numeric($currentSiteId) ? (int) $currentSiteId : null;
+        if ($currentSiteId !== null && ! $sites->contains('id', $currentSiteId)) {
+            $current = Site::find($currentSiteId);
+            if ($current) {
+                $sites->push($current);
+            }
+        }
+
+        return $sites;
     }
 
     private function canModifyExpense(MobileExpense $expense): bool

@@ -31,11 +31,11 @@
 </head>
 <body>
     @php
-        $qrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=16&data=' . rawurlencode($badgeUrl);
+        $qrImage = \App\Support\QrSvg::dataUri($badgeUrl, 320);
     @endphp
 
     <main class="sheet">
-        <p class="brand">NAHSHON SMART ERP</p>
+        <p class="brand">DASOL PRISM SMART ERP</p>
         <h1>작업자 배지 QR</h1>
 
         <section class="info">

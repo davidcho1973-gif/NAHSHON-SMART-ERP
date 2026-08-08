@@ -222,7 +222,9 @@ class WbsService
 
                 return $start <= $date && $date <= $end;
             })
-            ->reject(fn (WbsItem $i) => $i->status === WbsItem::STATUS_DONE);
+            ->reject(fn (WbsItem $i) => $i->status === WbsItem::STATUS_DONE)
+            // 조달성 공정(발주·조달·구매)은 '조달 관리'에서 별도로 다룬다 — 현장 노무 목록에서 제외.
+            ->reject(fn (WbsItem $i) => $i->looksLikeProcurement());
 
         $rows = $items->map(function (WbsItem $i) use ($date): array {
             $card = $i->safetyCardFor($date);
