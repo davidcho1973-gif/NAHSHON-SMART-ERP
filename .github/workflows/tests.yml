@@ -64,177 +64,91 @@ jobs:
       - name: Execute tests
         run: php artisan test
 
+
   # ──────────────────────────────────────────────────────────────────────────
-  # 배포 트리거.
+  # 배포.
   #
-  # Laravel Cloud 의 자동 배포(GitHub 연동)가 멈춰도 배포가 나가게 하는 두 번째 경로다.
-  # 대시보드의 Deploy Hook URL 을 저장소 시크릿에 넣어 두면, 테스트가 통과한 뒤
-  # 그 주소를 호출한다. 어느 브랜치를 보고 있는지 같은 대시보드 설정에 의존하지 않는다.
+  # 두 갈래로 배포가 나간다.
+  #   1. Laravel Cloud 대시보드의 "Push to deploy" — 푸시를 감지해 알아서 배포
+  #   2. 여기서 부르는 Deploy Hook — 테스트가 통과한 뒤에만, 그 커밋을 콕 집어서
   #
-  # 시크릿이 없으면 조용히 건너뛴다 — 설정 전까지 저장소를 빨갛게 만들 이유가 없다.
-  #   Settings → Secrets and variables → Actions → New repository secret
-  #   이름: LARAVEL_CLOUD_DEPLOY_HOOK_STAGING
+  # 2번이 있는 이유는 1번이 검증 없이 배포하기 때문이다. 반대로 2번이 막혀도
+  # 1번으로 배포는 나간다. 그래서 훅 실패는 경고고, 성패는 "서버가 실제로 바뀌었는가"
+  # 하나로만 가른다 — verify-build.sh 가 서버에 직접 물어본다.
+  #
+  # 설정할 것 (환경별로 하나씩):
+  #   Settings → Secrets and variables → Actions
+  #     Secrets   : LARAVEL_CLOUD_DEPLOY_HOOK_STAGING / ..._PRODUCTION
+  #                 ← Laravel Cloud → Settings → Deployments → Deploy hook URL
+  #                   (입력칸에서 잘려 보이므로 반드시 복사 버튼을 쓸 것)
+  #     Variables : STAGING_URL / PRODUCTION_URL
+  #
+  # 둘 다 없으면 조용히 건너뛴다. 설정 전까지 저장소를 빨갛게 만들 이유가 없다.
   deploy-staging:
     name: Deploy staging
     needs: tests
-    # 브랜치는 staging 으로 못 박되, 푸시 말고 수동 실행(Run workflow)으로도 돌 수 있게 한다.
-    # 배포만 다시 밀어야 하는 상황(설정 변경, 배포 유실)에 빈 커밋을 만들 이유가 없다.
+    # 브랜치는 못 박되, 푸시 말고 수동 실행(Run workflow)으로도 돌 수 있게 한다.
+    # 배포만 다시 밀어야 하는 상황에 의미 없는 빈 커밋을 만들 이유가 없다.
     if: >-
       github.ref == 'refs/heads/staging' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    env:
+      ENV_LABEL: staging
 
     steps:
-      # 이 단계는 실패해도 잡을 세우지 않는다.
-      #
-      # Laravel Cloud 의 "Push to deploy" 가 켜져 있으면 푸시만으로도 배포가 나간다.
-      # 훅은 "테스트를 통과한 커밋만" 을 위한 보조 경로일 뿐, 유일한 경로가 아니다.
-      # 훅이 안 된다고 빨간불을 켜면, 정작 배포가 됐는지 안 됐는지는 아무도 안 보게 된다.
-      #
-      # 배포됐는지 아닌지는 아래 "확인" 단계가 서버에 직접 물어서 판정한다. 그게 진짜 관문이다.
+      - uses: actions/checkout@v7
+
       - name: Trigger Laravel Cloud deployment
         id: hook
         env:
           HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_STAGING }}
-        run: |
-          echo "ok=false" >> "$GITHUB_OUTPUT"
+        run: bash scripts/deploy/trigger-hook.sh
 
-          if [ -z "$HOOK" ]; then
-            echo "::notice title=훅 없음::시크릿이 없어 훅은 건너뜁니다. Push to deploy 로 배포됐는지는 아래에서 확인합니다."
-            exit 0
-          fi
-
-          # commit_hash 를 붙여 "테스트를 통과한 그 커밋" 을 콕 집어 배포한다.
-          # 안 붙이면 Laravel Cloud 가 호출 시점의 브랜치 최신 커밋을 가져가는데,
-          # 테스트가 도는 동안 푸시가 하나 더 들어오면 검증 안 된 커밋이 나간다.
-          sep='?'
-          case "$HOOK" in *\?*) sep='&' ;; esac
-          with_hash="${HOOK}${sep}commit_hash=${GITHUB_SHA}"
-
-          # 훅의 호출 규약(메서드·파라미터 허용 여부)은 대시보드에 적혀 있지 않고
-          # 여기서 문서를 열 수도 없다. 그래서 좁은 것부터 넓은 것 순으로 시도하고
-          # 처음 2xx 가 나오는 조합에서 멈춘다. 로그에는 조합 이름과 응답 코드만 남는다.
-          #
-          # 순서가 곧 우선순위다. commit_hash 가 붙은 쪽이 배포 대상이 정확하므로 먼저 본다.
-          try() {
-            curl -sS -o /tmp/hook.out -w '%{http_code}' -X "$1" "$2" --max-time 60 || echo 000
-          }
-
-          code=''
-          chosen=''
-          for combo in \
-            "POST|$with_hash|POST + commit_hash" \
-            "POST|$HOOK|POST (파라미터 없이)" \
-            "GET|$with_hash|GET + commit_hash" \
-            "GET|$HOOK|GET (파라미터 없이)"
-          do
-            method=${combo%%|*}
-            rest=${combo#*|}
-            url=${rest%%|*}
-            label=${rest#*|}
-
-            c=$(try "$method" "$url")
-            echo "  $label → HTTP $c"
-            case "$c" in
-              2*) code=$c; chosen=$label; break ;;
-            esac
-            last=$c
-          done
-
-          if [ -n "$code" ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-            echo "::notice title=배포 시작됨::$chosen 으로 ${GITHUB_SHA:0:7} 배포를 요청했습니다 (HTTP $code)."
-            head -c 300 /tmp/hook.out || true
-            echo
-            exit 0
-          fi
-
-          echo "마지막 응답 본문:"
-          head -c 500 /tmp/hook.out || true
-          echo
-
-          # 전부 경고다. 훅이 안 되는 것과 배포가 안 되는 것은 다른 이야기이고,
-          # 후자는 아래 확인 단계가 서버에 물어서 판정한다.
-          case "$last" in
-            000) echo "::warning title=훅 연결 실패::Deploy Hook 에 연결하지 못했습니다. Push to deploy 쪽을 확인합니다." ;;
-            # 리다이렉트를 -L 로 따라가지 않는 이유: 따라가면 첫 화면 HTML 을 200 으로
-            # 받아 배포가 성공한 것으로 오인하게 된다.
-            3*) echo "::warning title=훅이 로그인 화면으로 보냄::네 조합 모두 리다이렉트됐습니다. 토큰이 잘렸을 수 있습니다(복사 버튼으로 다시 복사). Push to deploy 쪽을 확인합니다." ;;
-            401|403) echo "::warning title=훅이 거부됨::HTTP $last — 토큰이 만료됐거나 재발급된 것 같습니다." ;;
-            404) echo "::warning title=훅을 찾을 수 없음::HTTP $last — 주소 일부만 복사됐거나 훅이 삭제된 것 같습니다." ;;
-            *)   echo "::warning title=훅 호출 실패::HTTP $last — 어느 조합도 통하지 않았습니다." ;;
-          esac
-
-      # 훅 호출이 실패했을 때 "무엇을 넣으셨는지" 를 값 노출 없이 되짚어 준다.
-      # 응답 코드만으로는 추측이 반복된다. 호스트·경로 모양·길이면 대시보드 주소인지
-      # 훅 주소인지 갈린다. 토큰이 들어 있는 마지막 구간은 길이만 세고 절대 찍지 않는다.
       - name: Diagnose the hook URL shape
         if: steps.hook.outputs.ok != 'true'
         env:
           HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_STAGING }}
-        run: |
-          scheme=$(printf '%s' "$HOOK" | sed -n 's#^\([a-zA-Z][a-zA-Z0-9+.-]*\)://.*#\1#p')
-          host=$(printf '%s' "$HOOK" | sed -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' -e 's#[/?].*##')
-          path=$(printf '%s' "$HOOK" | sed -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://[^/?]*##' -e 's#?.*##')
+        run: bash scripts/deploy/diagnose-hook.sh
 
-          echo "프로토콜: ${scheme:-없음(주소가 http(s):// 로 시작하지 않습니다)}"
-          echo "호스트: ${host:-읽지 못함}"
-          echo "전체 길이: ${#HOOK}자"
-          echo "경로 구간:"
-          # `|| [ -n "$seg" ]` 가 없으면 개행으로 끝나지 않는 마지막 구간을 read 가 버린다.
-          # 하필 그 마지막 구간이 토큰이라, 있는지 없는지가 진단의 핵심이다.
-          printf '%s' "$path" | tr '/' '\n' | while IFS= read -r seg || [ -n "$seg" ]; do
-            [ -z "$seg" ] && continue
-            # 순수하게 소문자와 하이픈뿐인 짧은 구간만 사람이 읽는 단어로 보고 그대로 찍는다.
-            # 숫자나 대문자가 하나라도 섞였으면 토큰일 수 있으니 길이만 남긴다.
-            rest=$(printf '%s' "$seg" | tr -d 'a-z-')
-            if [ -z "$rest" ] && [ "${#seg}" -le 20 ]; then
-              echo "  /$seg"
-            else
-              echo "  /<${#seg}자>"
-            fi
-          done
-
-          echo
-          echo "판별:"
-          case "$path" in
-            *projects*|*environments*|*settings*|*dashboard*)
-              echo "  ✗ 경로에 대시보드 화면 이름이 들어 있습니다 — 브라우저 주소창 URL 입니다." ;;
-            *hook*|*deploy*)
-              echo "  ~ 훅처럼 생겼지만 302 가 났습니다. 토글을 켜기 전 예시 주소를 넣었거나, 훅이 재발급되어 주소가 바뀐 경우입니다." ;;
-            *)
-              echo "  ? 알려진 어느 형태와도 다릅니다." ;;
-          esac
-
-      # 이 잡의 진짜 관문. 훅이 됐든 Push to deploy 가 됐든, 어느 경로로 나갔는지는
-      # 상관없고 "이 커밋이 지금 서버에서 돌고 있는가" 만 본다. 배포는 서버가 바뀌는 일이지
-      # 요청이 200 을 받는 일이 아니다.
       - name: Verify the deployed build
         if: always()
         env:
           BASE: ${{ vars.STAGING_URL }}
-        run: |
-          if [ -z "$BASE" ]; then
-            echo "::notice title=확인 건너뜀::STAGING_URL 변수가 없어 배포 결과를 확인하지 못했습니다."
-            exit 0
-          fi
+        run: bash scripts/deploy/verify-build.sh
 
-          # 배포는 비동기라 잠시 기다렸다가 /build-version 이 이번 커밋으로 바뀌는지 본다.
-          want="${GITHUB_SHA:0:7}"
-          for i in $(seq 1 20); do
-            sleep 30
-            body=$(curl -sS --max-time 20 "$BASE/build-version" || true)
-            got=$(printf '%s' "$body" | sed -n 's/.*"commit_short" *: *"\([^"]*\)".*/\1/p')
-            echo "  ${i}회차 — 서버: ${got:-응답없음} / 기대: $want"
-            if [ "$got" = "$want" ]; then
-              echo "::notice title=배포 확인됨::$want 가 staging 에서 돌고 있습니다."
-              exit 0
-            fi
-          done
+  # 운영. staging 과 같은 구조이고, 다른 것은 브랜치와 시크릿 이름뿐이다.
+  #
+  # main 에 올리는 것 자체가 이미 의도적인 행동이므로 별도 승인 단계는 두지 않았다.
+  # 사람의 확인을 한 번 더 받고 싶으면 GitHub 의 Environments 에 production 환경을
+  # 만들고 required reviewers 를 걸면 된다 — 그때는 이 잡에 environment: production 만 붙이면 된다.
+  deploy-production:
+    name: Deploy production
+    needs: tests
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      ENV_LABEL: 운영
 
-          echo "::error title=배포 안 됨::10분 안에 $want 로 바뀌지 않았습니다. 훅과 Push to deploy 둘 다 배포를 만들어내지 못했습니다."
-          echo
-          echo "확인할 곳: Laravel Cloud → Deployments 탭에 이 커밋의 배포 기록이 있는지."
-          echo "  기록이 아예 없으면 → Laravel Cloud 가 푸시를 감지하지 못하는 것 (지원 문의 사안)"
-          echo "  기록이 있는데 실패했으면 → 그 배포 로그에 원인이 있음"
-          exit 1
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Trigger Laravel Cloud deployment
+        id: hook
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION }}
+        run: bash scripts/deploy/trigger-hook.sh
+
+      - name: Diagnose the hook URL shape
+        if: steps.hook.outputs.ok != 'true'
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION }}
+        run: bash scripts/deploy/diagnose-hook.sh
+
+      - name: Verify the deployed build
+        if: always()
+        env:
+          BASE: ${{ vars.PRODUCTION_URL }}
+        run: bash scripts/deploy/verify-build.sh
