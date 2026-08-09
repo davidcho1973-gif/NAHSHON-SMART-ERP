@@ -143,8 +143,10 @@ class WbsScheduleReplaceTest extends TestCase
             'schedule' => $this->goodSheet(), 'project_code' => self::CODE,
         ])->assertOk();
 
-        $this->assertSame(5, $res->json('willDelete.wbsItems'));
-        $this->assertSame(1, $res->json('willDelete.safetyCards'), '지워질 안전카드 수를 미리 알려야 한다');
+        // 새 시트에 A010/A020 이 있으므로 A030 만 사라진다. 그 카드도 함께.
+        $this->assertSame(1, $res->json('willDelete.wbsItems'), '사라지는 것은 새 시트에 없는 작업뿐이다');
+        $this->assertSame(2, $res->json('willDelete.kept'), '액티비티 ID 가 같으면 진행률을 물려받는다');
+        $this->assertSame(0, $res->json('willDelete.safetyCards'), 'A010 의 카드는 그대로 붙어 있다');
     }
 
     public function test_a_sheet_with_wrong_headers_is_flagged_before_anything_is_deleted(): void
@@ -178,7 +180,6 @@ class WbsScheduleReplaceTest extends TestCase
             'token' => $token, 'project_code' => self::CODE, 'confirm' => true,
         ])->assertOk();
 
-        $this->assertSame(5, $res->json('removed.wbsItems'));
         $this->assertGreaterThan(0, $res->json('imported.subtasks'));
         $this->assertSame(0, WbsItem::where('wbs_code', self::CODE.'-W-A030')->count(), '옛 행은 사라져야 한다');
         $this->assertGreaterThan(0, WbsItem::where('name', 'like', '%개정%')->count(), '새 행이 들어와야 한다');
@@ -365,5 +366,173 @@ class WbsScheduleReplaceTest extends TestCase
         ])->assertStatus(403);
 
         $this->assertSame(5, WbsItem::count());
+    }
+
+    /**
+     * 현장에서 실제로 오는 간트 형식.
+     *
+     * LG ESS Ph10 공정표(Rev.2)를 그대로 쓰지 않고 구조만 옮겨 왔다 — 저장소가 공개라
+     * 고객 현장 주소·일정·공사비가 올라가면 안 된다. 아래가 그 시트에서 확인한 특징이다:
+     *
+     *   · 헤더가 첫 줄이 아니다 (제목·요약·범례가 위에 있다)
+     *   · 헤더 이름이 "공기/발주" · "시작" · "종료"
+     *   · 공기 값에 d 가 붙는다 ("17d")
+     *   · 조달 행은 같은 칸에 발주 상태를 적는다 ("미발주")
+     *   · 구간 제목 행으로 공정을 나눈다 ("천장배관 / MEP Overhead")
+     *   · ★ 는 주공정 표시
+     *   · 나중에 끼운 행은 ID 가 "추가"
+     *   · 시트 맨 아래에 개정 이력 주석이 붙는다
+     */
+    private function fieldGantt(): UploadedFile
+    {
+        return $this->xlsx([
+            ['현장 통합 공정 간트 Rev.2'],
+            ['착공 2026-07-17 → 사용승인 2026-09-29 · ★=주공정'],
+            [],
+            ['ID', '작업명', '영문명/비고', '공종', '공기/발주', '시작', '종료'],
+            ['자재 조달 / Procurement'],
+            ['M01', '도어·하드웨어 — 리드 3주', 'Doors', 'ARCH', '07-28발주', '2026-07-28', '2026-08-04'],
+            ['M02', '타일·백커보드', 'Tile', 'ARCH', '미발주', '', ''],
+            ['철거·지중 / Demo & Underground'],
+            ['A190', '슬래브 절단', 'Slab Cutting', 'DEMO', '1d', '2026-07-22', '2026-07-25'],
+            ['추가', '수밀테스트 구간 기초철근', 'Rebar', 'GC', '4d', '2026-07-24', '2026-07-28'],
+            ['추가', '폼 해체 및 면정리', 'Formwork Removal', 'GC', '2d', '2026-08-03', '2026-08-04'],
+            ['천장배관 / MEP Overhead'],
+            ['★A250', '★전기 간선(EMT) 및 분기 배관', 'Conduit', 'ELEC', '17d', '2026-07-29', '2026-08-17'],
+            ['A260', '급수/통기 배관', 'Plumbing Rough', 'PLUMB', '10d', '2026-08-03', '2026-08-12'],
+            ['◆ 마일스톤 / Milestones'],
+            ['M-1', 'Frame Inspection', '', 'MILE', '', '2026-08-17', ''],
+            ['Rev.2 변경 요지 (착공 조기화, 배관 상세화):'],
+            ['① 배관 상세화 — 언더그라운드를 오수와 급수로 분리, 만수/수압시험 순 명기.'],
+        ]);
+    }
+
+    // ── 현장 간트 형식 ───────────────────────────────────────────────────
+
+    public function test_a_field_gantt_is_read_with_its_own_header_names(): void
+    {
+        Storage::fake('local');
+        $this->seedTree();
+        $this->actingAs($this->user('admin'));
+
+        $res = $this->post('/wbs-api/schedule/preview', [
+            'schedule' => $this->fieldGantt(), 'project_code' => self::CODE,
+        ])->assertOk();
+
+        // 조달 2 + 철거 3 + 천장 2 = 7. "공기/발주" · "시작" · "종료" 를 못 읽으면 0 이 된다.
+        $this->assertSame(7, $res->json('read.activities'));
+    }
+
+    public function test_section_titles_become_the_stages(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+
+        $token = $this->post('/wbs-api/schedule/preview', [
+            'schedule' => $this->fieldGantt(), 'project_code' => self::CODE,
+        ])->json('token');
+        $this->postJson('/wbs-api/schedule/replace', [
+            'token' => $token, 'project_code' => self::CODE, 'confirm' => true,
+        ])->assertOk();
+
+        $stages = WbsItem::where('project_code', self::CODE)->where('level', 'stage')
+            ->orderBy('sort_order')->pluck('name')->all();
+
+        $this->assertSame(['자재 조달 / Procurement', '철거·지중 / Demo & Underground', '천장배관 / MEP Overhead'], $stages);
+    }
+
+    public function test_revision_notes_at_the_bottom_do_not_become_stages(): void
+    {
+        // 개정 이력도 "첫 칸만 채워진 줄" 이라 구간처럼 보인다. 아래에 작업이 없으면 구간이 아니다.
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+
+        $res = $this->post('/wbs-api/schedule/preview', [
+            'schedule' => $this->fieldGantt(), 'project_code' => self::CODE,
+        ])->assertOk();
+
+        $sections = $res->json('read.sections');
+        $this->assertCount(3, $sections);
+        foreach ($sections as $s) {
+            $this->assertStringNotContainsString('Rev.2', $s);
+            $this->assertStringNotContainsString('배관 상세화', $s);
+        }
+    }
+
+    public function test_a_duration_written_as_17d_is_read_as_17_days(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        $this->assertSame(17, (int) WbsItem::where('activity_id', 'A250')->value('days'));
+    }
+
+    public function test_an_order_status_in_the_duration_column_is_not_read_as_days(): void
+    {
+        // "07-28발주" 에서 숫자만 긁으면 728 일이 된다. 공기가 없는 것으로 봐야 한다.
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        $this->assertNull(WbsItem::where('activity_id', 'M01')->value('days'));
+        $this->assertSame('2026-07-28', WbsItem::where('activity_id', 'M01')->value('planned_start')->toDateString(),
+            '공기를 못 읽어도 날짜 칸은 살아 있어야 한다');
+    }
+
+    public function test_a_starred_row_is_marked_critical_and_the_star_is_stripped(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        $row = WbsItem::where('activity_id', 'A250')->first();
+        $this->assertNotNull($row, 'ID 에서 ★ 를 떼야 A250 으로 찾을 수 있다');
+        $this->assertTrue($row->payload['critical']);
+        $this->assertStringNotContainsString('★', $row->name);
+    }
+
+    public function test_rows_marked_only_as_추가_all_survive_with_distinct_keys(): void
+    {
+        // 여러 행이 ID 칸에 "추가" 라고만 적혀 온다. 키가 겹치면 마지막 하나만 남는다.
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        $added = WbsItem::where('project_code', self::CODE)->where('activity_id', 'like', '추가-%')->get();
+
+        $this->assertCount(2, $added);
+        $this->assertCount(2, $added->pluck('activity_id')->unique(), '키가 서로 달라야 둘 다 남는다');
+        $this->assertEqualsCanonicalizing(
+            ['수밀테스트 구간 기초철근', '폼 해체 및 면정리'],
+            $added->pluck('name')->all()
+        );
+    }
+
+    public function test_reimporting_the_same_sheet_keeps_field_progress(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        WbsItem::where('activity_id', 'A250')->update(['progress' => 60, 'status' => '진행중', 'company' => 'AUTORICA']);
+
+        $this->importFieldGantt();
+
+        $row = WbsItem::where('activity_id', 'A250')->first();
+        $this->assertSame(60, $row->progress, '다시 수입해도 현장이 올린 진행률은 지켜야 한다');
+        $this->assertSame('진행중', $row->status);
+        $this->assertSame('AUTORICA', $row->company);
+    }
+
+    private function importFieldGantt(): void
+    {
+        $token = $this->post('/wbs-api/schedule/preview', [
+            'schedule' => $this->fieldGantt(), 'project_code' => self::CODE,
+        ])->json('token');
+
+        $this->postJson('/wbs-api/schedule/replace', [
+            'token' => $token, 'project_code' => self::CODE, 'confirm' => true,
+        ])->assertOk();
     }
 }
