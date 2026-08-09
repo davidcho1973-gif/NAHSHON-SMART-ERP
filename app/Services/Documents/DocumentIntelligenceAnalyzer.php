@@ -40,7 +40,20 @@ class DocumentIntelligenceAnalyzer
         ];
 
         $prompt = $this->prompt($context, $extractedText);
-        $result = $this->engine->analyze($parts, $prompt, $this->schema());
+
+        try {
+            $result = $this->engine->analyze($parts, $prompt, $this->schema());
+        } catch (\Throwable $e) {
+            // 원본 첨부가 실패 원인일 수 있다 — 10MB대 PDF 는 base64 로 1.3배로 불어
+            // 요청 한도·타임아웃에 걸리기 쉽다. 서버가 추출한 본문이 있으면 첨부 없이
+            // 텍스트만으로 한 번 더 시도한다. (역설적으로 15MB 초과 파일은 처음부터
+            // 텍스트 경로라 성공하고, 12MB 파일이 실패하던 원인이 이것이다.)
+            if ($parts === [] || blank($extractedText)) {
+                throw $e;
+            }
+            $parts = [];
+            $result = $this->engine->analyze([], $prompt, $this->schema());
+        }
 
         return [
             'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
