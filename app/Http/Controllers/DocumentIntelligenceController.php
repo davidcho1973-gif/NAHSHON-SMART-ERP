@@ -367,6 +367,51 @@ class DocumentIntelligenceController extends Controller
         return response()->json(['success' => true, 'document' => $this->documentRow($document->fresh())]);
     }
 
+    /**
+     * 문서 삭제 — 레코드와 원본 파일을 함께 지운다.
+     *
+     * 잘못 올린 문서, 중복 스캔, 폐기된 개정본은 목록에 남아 있으면 그 자체가 오정보다.
+     * 원본 파일을 남기면 저장소만 먹으므로 같이 지운다 — 다만 파일 삭제가 실패해도
+     * (이미 없거나 저장소 오류) 레코드 삭제는 진행한다. 화면에서 지웠는데 그대로
+     * 남아 있는 것이 더 나쁘다.
+     */
+    public function destroy(Request $request, IntelligentDocument $document): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+
+        $name = $document->original_file_name;
+
+        if (filled($document->file_path)) {
+            try {
+                Storage::disk($document->disk)->delete($document->file_path);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        // 이 문서에서 나온 후속조치·알림도 함께 정리한다 — 원본이 없어진 조치는
+        // 처리할 방법이 없는데 목록에만 남아 "미처리"로 계속 센다.
+        UnifiedAlert::query()
+            ->where('source_type', IntelligentDocument::class)
+            ->where('source_id', (string) $document->id)
+            ->delete();
+        $actionIds = DocumentActionItem::query()
+            ->where('intelligent_document_id', $document->id)
+            ->pluck('id');
+        if ($actionIds->isNotEmpty()) {
+            UnifiedAlert::query()
+                ->where('source_type', DocumentActionItem::class)
+                ->whereIn('source_id', $actionIds->map(fn ($id) => (string) $id))
+                ->delete();
+            DocumentActionItem::query()->whereIn('id', $actionIds)->delete();
+        }
+
+        $document->delete();
+
+        return response()->json(['success' => true, 'message' => "'{$name}' 을(를) 삭제했습니다."]);
+    }
+
     public function updateAction(Request $request, DocumentActionItem $action): JsonResponse
     {
         $this->authorizeManage($request->user());

@@ -165,6 +165,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/document-hub/api/documents/{document}/reanalyze', [DocumentIntelligenceController::class, 'reanalyze'])->name('document-intelligence.reanalyze');
     Route::post('/document-hub/api/reanalyze-stuck', [DocumentIntelligenceController::class, 'reanalyzeStuck'])->name('document-intelligence.reanalyze-stuck');
     Route::patch('/document-hub/api/documents/{document}/review', [DocumentIntelligenceController::class, 'review'])->name('document-intelligence.review');
+    Route::delete('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'destroy'])->name('document-intelligence.destroy');
     Route::patch('/document-hub/api/actions/{action}', [DocumentIntelligenceController::class, 'updateAction'])->name('document-intelligence.action.update');
     Route::get('/document-hub/documents/{document}/download', [DocumentIntelligenceController::class, 'download'])->name('document-intelligence.download');
     Route::get('/document-hub/documents/{document}/preview', [DocumentIntelligenceController::class, 'preview'])->name('document-intelligence.preview');

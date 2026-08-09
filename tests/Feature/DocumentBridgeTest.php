@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Jobs\AnalyzeIntelligentDocumentJob;
+use App\Models\DocumentActionItem;
 use App\Models\IntegratedDocument;
 use App\Models\IntelligentDocument;
 use App\Models\Site;
+use App\Models\UnifiedAlert;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -222,5 +224,77 @@ class DocumentBridgeTest extends TestCase
         // 그래도 직접 URL 로 들어오면 404 — 파일이 없는데 있는 척하지 않는다.
         $this->get("/document-hub/documents/{$doc->id}/download")->assertNotFound();
         $this->get("/document-hub/documents/{$doc->id}/preview")->assertNotFound();
+    }
+
+    public function test_문서_정보를_수정할_수_있다(): void
+    {
+        $this->actingAs($this->admin());
+        $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('rfi.pdf', 100, 'application/pdf')],
+        ])->assertSuccessful();
+        $doc = IntelligentDocument::firstOrFail();
+
+        $this->patchJson("/document-hub/api/documents/{$doc->id}/review", [
+            'title' => 'RFI-023 케이블 트레이 간섭',
+            'category' => 'drawing_spec',
+            'document_type' => 'rfi',
+            'document_number' => 'RFI-023',
+            'revision' => 'A',
+            'response_due_on' => '2026-09-01',
+        ])->assertOk();
+
+        $doc->refresh();
+        $this->assertSame('RFI-023 케이블 트레이 간섭', $doc->title);
+        $this->assertSame('RFI-023', $doc->document_number);
+        $this->assertSame('ready', $doc->ai_status, '사람이 확정하면 검토 필요가 풀린다');
+        $this->assertNotNull($doc->reviewed_at);
+    }
+
+    public function test_문서를_삭제하면_원본과_후속조치도_함께_지워진다(): void
+    {
+        $this->actingAs($this->admin());
+        $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('버릴문서.pdf', 100, 'application/pdf')],
+        ])->assertSuccessful();
+        $doc = IntelligentDocument::firstOrFail();
+        $path = $doc->file_path;
+
+        $action = DocumentActionItem::create([
+            'intelligent_document_id' => $doc->id,
+            'action_type' => 'response_required', 'title' => '회신 필요', 'status' => 'open', 'severity' => 'warning',
+        ]);
+        UnifiedAlert::create([
+            'alert_code' => 'DOC-TEST-1', 'fingerprint' => 'doc-action:'.$action->id,
+            'source_module' => 'DOC', 'source_type' => DocumentActionItem::class,
+            'source_id' => (string) $action->id, 'event_type' => 'document_action',
+            'severity' => 'warning', 'status' => 'unresolved', 'title' => '회신 필요',
+            'occurred_at' => now(), 'last_detected_at' => now(),
+        ]);
+
+        $this->deleteJson("/document-hub/api/documents/{$doc->id}")->assertOk();
+
+        $this->assertSame(0, IntelligentDocument::count());
+        Storage::disk($doc->disk)->assertMissing($path);
+        $this->assertSame(0, DocumentActionItem::count(), '처리할 수 없는 조치가 미처리로 남으면 안 된다');
+        $this->assertSame(0, UnifiedAlert::count());
+    }
+
+    public function test_권한_없는_사용자는_수정도_삭제도_못_한다(): void
+    {
+        $this->actingAs($this->admin());
+        $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf')],
+        ])->assertSuccessful();
+        $doc = IntelligentDocument::firstOrFail();
+
+        $this->actingAs(User::factory()->create([
+            'access_role' => 'worker', 'access_scope' => 'all_sites', 'account_status' => 'active',
+        ]));
+
+        $this->patchJson("/document-hub/api/documents/{$doc->id}/review", [
+            'title' => '몰래 수정', 'category' => 'general', 'document_type' => 'other',
+        ])->assertForbidden();
+        $this->deleteJson("/document-hub/api/documents/{$doc->id}")->assertForbidden();
+        $this->assertSame(1, IntelligentDocument::count());
     }
 }
