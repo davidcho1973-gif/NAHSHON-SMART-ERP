@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Services\Documents\StuckAnalysisReaper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -308,6 +309,26 @@ class DocumentIntelligenceController extends Controller
         }
 
         return [null, $diskName, $reason];
+    }
+
+    /**
+     * "AI 분석 중"에 갇힌 문서를 한 번에 되살린다.
+     *
+     * 스케줄러가 10분마다 같은 일을 하지만, 스케줄러가 꺼진 환경도 있고 사용자는
+     * 지금 당장 풀고 싶다. 규칙은 한 곳(StuckAnalysisReaper)에 두고 둘이 공유한다.
+     */
+    public function reanalyzeStuck(Request $request, StuckAnalysisReaper $reaper): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+
+        $r = $reaper->reap((int) $request->integer('minutes', 10));
+
+        return response()->json([
+            'success' => true,
+            'message' => $r['total'] === 0
+                ? '멈춘 문서가 없습니다.'
+                : "멈춘 문서 {$r['total']}건 — 재시도 {$r['requeued']}건, 실패 표시 {$r['failed']}건.",
+        ] + $r);
     }
 
     public function reanalyze(Request $request, IntelligentDocument $document): JsonResponse
