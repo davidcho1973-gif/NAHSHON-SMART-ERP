@@ -82,7 +82,8 @@ class EmployeeAdminService
         }
 
         $query = Employee::query()
-            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,access_role,account_status'])
+            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,access_role,account_status',
+                'w9Form:id,employee_id,tin_last4,certified_at'])
             ->orderBy('name');
         $this->applyScope($query);
 
@@ -153,6 +154,10 @@ class EmployeeAdminService
                 'visaExpiresOn' => $e->visa_expires_on?->toDateString(),
                 'safetyExpiresOn' => $e->safety_training_expires_on?->toDateString(),
                 'expiring' => $expiring,
+                // W-9 제출 여부 — 1099 지급 전제조건. TIN 은 뒤 4자리만 내려간다.
+                'w9OnFile' => $e->w9Form !== null,
+                'w9TinLast4' => $e->w9Form?->tin_last4,
+                'w9CertifiedOn' => $e->w9Form?->certified_at?->toDateString(),
             ];
         })->values()->all();
 

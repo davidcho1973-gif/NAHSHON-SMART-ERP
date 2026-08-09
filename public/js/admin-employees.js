@@ -61,10 +61,12 @@
       return (r.expiring || []).some(function (x) { return x.state === 'expired'; });
     }).length;
     var noBadge = rows.filter(function (r) { return !r.badgeNumber; }).length;
+    var noW9 = rows.filter(function (r) { return !r.w9OnFile; }).length;
 
     var notes = [rows.length + '명'];
     if (expired) notes.push(expired + '명 자격 만료');
     if (noBadge) notes.push(noBadge + '명 NFC 미등록');
+    if (noW9) notes.push(noW9 + '명 W-9 미제출');
 
     return u.pageHeader(
       '직원 등록 · 관리',
@@ -100,6 +102,15 @@
             return r.badgeNumber
               ? '<span style="font-family:var(--font-mono,monospace);font-size:12px">' + u.esc(r.badgeNumber) + '</span>'
               : '<span style="font-size:11px;color:var(--status-warning)">미등록</span>';
+          },
+        },
+        {
+          key: 'w9OnFile', label: 'W-9', width: '90px',
+          render: function (r) {
+            // W-9 가 없으면 1099 지급 전 24% backup withholding 대상이 된다.
+            return r.w9OnFile
+              ? u.badge('···' + (r.w9TinLast4 || ''), 'ok')
+              : '<span style="font-size:11px;color:var(--status-warning)">미제출</span>';
           },
         },
         {
