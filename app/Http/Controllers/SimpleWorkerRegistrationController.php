@@ -12,6 +12,7 @@ use App\Support\QrPosters;
 use App\Support\WorkerLang;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -155,6 +156,8 @@ class SimpleWorkerRegistrationController extends Controller
         $deviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
 
         return view('worker-join.form', [
+            // 등록 직후 이 화면에서만 노출되는 서명 링크 — W-9(1099 지급 전제)를 바로 이어서 작성한다.
+            'w9Url' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
             'site' => $site,
             'companies' => collect(),
             'roles' => [],

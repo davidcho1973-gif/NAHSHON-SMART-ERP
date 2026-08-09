@@ -26,6 +26,7 @@ use App\Http\Controllers\SimpleWorkerRegistrationController;
 use App\Http\Controllers\SmartCompanyApiController;
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\VehicleApiController;
+use App\Http\Controllers\W9FormController;
 use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
@@ -212,6 +213,11 @@ Route::get('/print/qr/{site}', [QrPrintController::class, 'sheet'])
 Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])->name('worker-join.qr');
 Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])->name('worker-join.form');
 Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])->name('worker-join.store');
+
+// W-9 작성 — 간편 등록 완료 화면에서 서명된 링크로 진입(공개, 서명 URL 이 본인 확인을 대신).
+// 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
+Route::get('/w9/{employee}', [W9FormController::class, 'show'])->middleware('signed')->name('w9.show');
+Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('signed')->name('w9.store');
 
 // 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');

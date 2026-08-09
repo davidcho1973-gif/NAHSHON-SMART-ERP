@@ -261,6 +261,13 @@ class EmployeeResource extends Resource
                         default => 'gray',
                     })
                     ->sortable(),
+                TextColumn::make('w9Form.tin_last4')
+                    ->label('W-9')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state ? '제출 ···'.$state : '')
+                    ->placeholder('미제출')
+                    ->color('success')
+                    ->toggleable(),
                 TextColumn::make('employment_status')->label('Status')->badge()->sortable(),
                 TextColumn::make('user.access_role')
                     ->label('로그인 권한')
