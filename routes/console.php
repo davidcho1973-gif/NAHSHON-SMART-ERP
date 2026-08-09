@@ -19,3 +19,7 @@ Schedule::command('docs:alert-expiring')->dailyAt('07:00');
 
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
 Schedule::command('ops:digest')->dailyAt('18:00');
+
+// 장비 임대료·숙소 월세 → 월별 경비 자동 계상(pending, 사람이 승인).
+// 매일 새벽에 돌려도 멱등이라 안전하고, 월중에 등록된 장비도 그 달치가 잡힌다.
+Schedule::command('finance:accrue-rentals')->dailyAt('05:30');
