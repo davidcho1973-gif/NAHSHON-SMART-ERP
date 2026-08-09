@@ -159,6 +159,8 @@ const endpoints = {
     show: @json(url('/document-hub/api/documents')),
     actions: @json(url('/document-hub/api/actions')),
 };
+const CATEGORY_OPTIONS = @json(collect(\App\Models\IntelligentDocument::CATEGORY_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
+const TYPE_OPTIONS = @json(collect(\App\Models\IntelligentDocument::TYPE_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 let currentDocuments = [];
 let pollTimer = null;
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -203,7 +205,22 @@ function renderDetail(d){
     const actions=(d.actions||[]).map(a=>`<div class="action-card ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.details||'')}</p>${a.recommendedAction?`<p><b>권고:</b> ${esc(a.recommendedAction)}</p>`:''}${a.sourceExcerpt?`<div class="doc-sub">근거: “${esc(a.sourceExcerpt)}”</div>`:''}<div class="action-foot"><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'명시 기한 없음'} · 신뢰도 ${esc(a.confidence||0)}%</span>${canManage&&!['completed','ignored'].includes(a.status)?`<button class="btn small" onclick="completeAction(${a.id},${d.id})">처리완료</button>`:`<span class="badge ${a.status==='completed'?'ready':''}">${esc(a.status)}</span>`}</div></div>`).join('')||'<p>AI가 발견한 필수 후속조치가 없습니다.</p>';
     document.getElementById('drawer-body').innerHTML=`
       <div class="detail-grid"><div class="detail-chip"><span>분류</span><b>${esc(d.categoryLabel)}</b></div><div class="detail-chip"><span>문서유형</span><b>${esc(d.documentTypeLabel)}</b></div><div class="detail-chip"><span>문서번호 / Revision</span><b>${esc(d.documentNumber||'-')} / ${esc(d.revision||'-')}</b></div><div class="detail-chip"><span>AI 신뢰도</span><b>${esc(d.aiConfidence||0)}%</b></div></div>
-      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<a class="btn primary" target="_blank" href="${esc(d.previewUrl)}">바로 보기</a><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button>`:''}</div></div>
+      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<a class="btn primary" target="_blank" href="${esc(d.previewUrl)}">바로 보기</a><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
+      ${canManage?`<div class="section" id="edit-form" style="display:none"><h3>문서 정보 수정</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <div class="field" style="grid-column:1/-1"><label>제목</label><input id="ed-title" value="${esc(d.title||'')}"></div>
+          <div class="field"><label>분류</label><select id="ed-category">${CATEGORY_OPTIONS.map(o=>`<option value="${esc(o.value)}"${o.value===d.category?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="field"><label>문서유형</label><select id="ed-type">${TYPE_OPTIONS.map(o=>`<option value="${esc(o.value)}"${o.value===d.documentType?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="field"><label>공종/부문</label><input id="ed-discipline" value="${esc(d.discipline||'')}"></div>
+          <div class="field"><label>문서번호</label><input id="ed-number" value="${esc(d.documentNumber||'')}"></div>
+          <div class="field"><label>Revision</label><input id="ed-revision" value="${esc(d.revision||'')}"></div>
+          <div class="field"><label>문서일</label><input type="date" id="ed-date" value="${esc(d.documentDate||'')}"></div>
+          <div class="field"><label>회신기한</label><input type="date" id="ed-due" value="${esc(d.responseDueOn||'')}"></div>
+          <div class="field"><label>만료일</label><input type="date" id="ed-expires" value="${esc(d.expiresOn||'')}"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEdit(${d.id})">저장</button><button class="btn" onclick="document.getElementById('edit-form').style.display='none'">취소</button></div>
+        <p style="font-size:11px;color:var(--muted);margin:9px 0 0">저장하면 이 문서는 "정리 완료(사람 검수)"로 표시됩니다 — AI 추정이 아니라 사람이 확정한 값이라는 뜻입니다.</p>
+      </div>`:''}
       ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
       <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
       <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
@@ -213,6 +230,29 @@ function renderDetail(d){
 }
 async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
 async function reanalyze(id){try{await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast('AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+function openEdit(){const f=document.getElementById('edit-form');if(f)f.style.display=f.style.display==='none'?'block':'none'}
+async function saveEdit(id){
+    const v=x=>{const el=document.getElementById(x);return el?el.value.trim():''};
+    const title=v('ed-title');
+    if(!title){toast('제목은 비울 수 없습니다.',true);return}
+    try{
+        await jsonFetch(endpoints.show+'/'+id+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            title:title,category:v('ed-category'),document_type:v('ed-type'),
+            discipline:v('ed-discipline')||null,document_number:v('ed-number')||null,revision:v('ed-revision')||null,
+            document_date:v('ed-date')||null,response_due_on:v('ed-due')||null,expires_on:v('ed-expires')||null
+        })});
+        toast('문서 정보를 저장했습니다.');openDocument(id);loadDocuments()
+    }catch(e){toast(e.message,true)}
+}
+async function removeDocument(id){
+    const d=currentDocuments.find(x=>x.id===id);
+    const name=d?(d.fileName||d.title):'이 문서';
+    if(!confirm(`'${name}' 을(를) 삭제할까요?\n\n원본 파일과 이 문서에서 나온 후속조치·알림도 함께 지워집니다. 되돌릴 수 없습니다.`))return;
+    try{
+        await jsonFetch(endpoints.show+'/'+id,{method:'DELETE'});
+        toast('삭제했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()
+    }catch(e){toast(e.message,true)}
+}
 async function unstick(){
     const btn=document.getElementById('unstick-btn');if(!btn)return;
     btn.disabled=true;const old=btn.textContent;btn.textContent='확인 중...';
