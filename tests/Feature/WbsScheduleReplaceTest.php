@@ -535,4 +535,47 @@ class WbsScheduleReplaceTest extends TestCase
             'token' => $token, 'project_code' => self::CODE, 'confirm' => true,
         ])->assertOk();
     }
+
+    // ── 응답 모양 ────────────────────────────────────────────────────────
+
+    public function test_every_list_in_the_preview_is_a_json_array_not_an_object(): void
+    {
+        // 액티비티는 ID 를 키로 갖는 맵이라, 그대로 내보내면 JSON 이 배열이 아니라
+        // 객체가 된다. 화면은 배열로 받아 .map 을 돌리므로 그 자리에서 멈추고
+        // 모달이 "읽는 중..." 에 굳는다. 서버는 통과하는데 화면만 죽는 종류의 버그라
+        // 응답 모양을 여기서 못박는다.
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+
+        $res = $this->post('/wbs-api/schedule/preview', [
+            'schedule' => $this->fieldGantt(), 'project_code' => self::CODE,
+        ])->assertOk();
+
+        $decoded = json_decode($res->getContent(), true);
+
+        foreach (['sample', 'sections', 'warnings', 'milestoneNames', 'activityIds'] as $key) {
+            $this->assertArrayHasKey($key, $decoded['read'], "read.{$key} 가 없습니다");
+            $this->assertTrue(
+                array_is_list($decoded['read'][$key]),
+                "read.{$key} 가 JSON 배열이 아닙니다 — 화면에서 .map 이 터집니다"
+            );
+        }
+    }
+
+    public function test_the_preview_sample_carries_what_the_screen_shows(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+
+        $res = $this->post('/wbs-api/schedule/preview', [
+            'schedule' => $this->fieldGantt(), 'project_code' => self::CODE,
+        ])->assertOk();
+
+        $first = $res->json('read.sample.0');
+
+        $this->assertSame('M01', $first['id']);
+        $this->assertStringContainsString('도어', $first['name']);
+        $this->assertSame('ARCH', $first['trade']);
+        $this->assertSame('2026-07-28', $first['start']);
+    }
 }

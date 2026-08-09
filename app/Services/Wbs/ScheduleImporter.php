@@ -75,14 +75,17 @@ class ScheduleImporter
             'warnings' => $warnings,
             // 앞의 몇 줄을 그대로 보여 준다. 숫자만 맞고 내용이 엉뚱한 경우를 눈으로 잡으려면
             // 실제로 읽힌 행을 봐야 한다.
-            'sample' => array_map(fn (array $a): array => [
+            // array_values 가 필요하다 — $activities 는 액티비티 ID 를 키로 갖는 맵이라
+            // array_slice 가 그 키를 유지하고, JSON 으로 나가면 배열이 아니라 객체가 된다.
+            // 화면은 배열로 받아 .map 을 돌리므로 객체가 오면 그 자리에서 멈춘다.
+            'sample' => array_values(array_map(fn (array $a): array => [
                 'id' => (string) ($a['activity_id'] ?? ''),
                 'name' => (string) ($a['name'] ?? ''),
                 'trade' => isset($a['trade']) ? (string) $a['trade'] : null,
                 'start' => isset($a['es']) ? (string) $a['es'] : null,
                 'end' => isset($a['ef']) ? (string) $a['ef'] : null,
                 'section' => $a['section'] ?? null,
-            ], array_slice($activities, 0, 8)),
+            ], array_slice($activities, 0, 8))),
             'milestoneNames' => array_values(array_filter(array_map(
                 fn (array $m): string => (string) ($m['name'] ?? ''),
                 $milestones,

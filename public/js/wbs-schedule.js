@@ -146,8 +146,23 @@
         toast(res.error || '읽지 못했습니다.', 'error');
         return;
       }
-      showPreview(res, project);
+      try {
+        showPreview(res, project);
+      } catch (e) {
+        // 그리기에서 터져도 사용자는 다시 시도할 수 있어야 한다.
+        if (btn) { btn.disabled = false; btn.textContent = '읽어보기'; }
+        toast('읽기 결과를 표시하지 못했습니다: ' + (e.message || e), 'error');
+        throw e;
+      }
     });
+  }
+
+  // 서버가 예상 밖의 모양을 보내도 화면이 멈추면 안 된다.
+  // 여기서 터지면 모달이 "읽는 중..." 에 굳어 사용자는 무엇이 잘못됐는지 알 수 없다.
+  function asList(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object') return Object.keys(v).map(function (k) { return v[k]; });
+    return [];
   }
 
   function showPreview(res, project) {
@@ -155,7 +170,7 @@
     var del = res.willDelete || {};
     var blocked = res.blocked;
 
-    var sample = (read.sample || []).map(function (r) {
+    var sample = asList(read.sample).map(function (r) {
       return '<tr>' +
         '<td style="padding:4px 8px;font-family:monospace;font-size:11px">' + esc(r.id) + '</td>' +
         '<td style="padding:4px 8px">' + esc(r.name) + '</td>' +
@@ -164,7 +179,7 @@
       '</tr>';
     }).join('');
 
-    var warnings = (read.warnings || []).slice(0, 6).map(function (w) {
+    var warnings = asList(read.warnings).slice(0, 6).map(function (w) {
       return '<li style="margin-bottom:2px">' + esc(w) + '</li>';
     }).join('');
 
