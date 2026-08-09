@@ -97,6 +97,10 @@
         .link span { font-size: 12.5px; color: var(--ink-3); }
         .link .go { color: var(--ink-3); font-size: 20px; flex: none; }
 
+        .qrbox { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; text-align: center; }
+        .qrbox img { display: block; margin: 0 auto; width: 240px; height: 240px; max-width: 100%; }
+        .qrid { font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: .06em; margin-top: 10px; }
+
         .empty { color: var(--ink-3); font-size: 14px; padding: 12px 0; }
         .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 13px 20px; border-radius: 12px; font-size: 14.5px; font-weight: 600; max-width: 88vw; text-align: center; z-index: 50; }
         .fatal { background: var(--bad-bg); border: 1px solid #EFC2B8; color: #7A241A; border-radius: 14px; padding: 18px; font-size: 14.5px; line-height: 1.6; }
@@ -104,7 +108,7 @@
 </head>
 <body>
 <div class="app">
-    <div class="offline" id="offline" hidden>오프라인 · 아래 QR 을 반장에게 보여 주세요</div>
+    <div class="offline" id="offline" hidden>오프라인 · 내 QR 을 반장에게 보여 주세요</div>
 
     <div class="body">
         <div class="who">
@@ -118,6 +122,20 @@
         <div id="main">
             <div class="card idle"><div class="under">불러오는 중…</div></div>
         </div>
+
+        @if ($badgeQr)
+            {{-- 인터넷이 끊기면 서버에 QR 을 받으러 갈 수 없다. 그래서 그림째로 미리 박아 둔다. --}}
+            <section class="sect qrsect" id="myqr" hidden>
+                <div class="sect-h">내 배지 QR</div>
+                <div class="qrbox">
+                    <img src="{{ $badgeQr['uri'] }}" alt="배지 QR" width="240" height="240">
+                    @if ($badgeQr['badge'])
+                        <div class="qrid">{{ $badgeQr['badge'] }}</div>
+                    @endif
+                    <div class="hint">반장이 이 QR 을 스캔하면 기록됩니다. <b>인터넷이 끊겨도 이 화면은 보입니다.</b></div>
+                </div>
+            </section>
+        @endif
 
         <div class="sect">
             <div class="sect-h">오늘 내 기록</div>
@@ -149,6 +167,7 @@
     'use strict';
 
     var CSRF = document.querySelector('meta[name="csrf-token"]').content;
+    var HAS_QR = document.getElementById('myqr') !== null;
     var state = { data: null, coords: null, permission: 'unknown', busy: false };
     var watchId = null;
 
@@ -240,7 +259,11 @@
                     '<div class="hint">현장에 있는 것이 확인되면 바로 기록됩니다. 확인이 안 되면 <b>반장 승인</b>을 거칩니다.</div>';
             }
             if (v.tier === 'qr') {
-                html += '<a class="btn hivis" href="{{ route('attendance-app.index') }}" onclick="return false" data-act="myqr">내 QR 보여주기</a>';
+                // 서버로 이동하지 않는다 — 끊긴 것이 인터넷이라 이동하면 아무 데도 못 간다.
+                // 이미 화면에 박혀 있는 QR 을 펼치기만 한다.
+                html += HAS_QR
+                    ? '<button class="btn hivis" data-act="myqr">내 QR 보여주기</button>'
+                    : '<div class="hint">배지 QR 이 아직 발급되지 않았습니다. 반장에게 팀 QR 스캔을 요청해 주세요.</div>';
             }
         }
         html += '</div>';
@@ -329,7 +352,12 @@
         var act = el.getAttribute('data-act');
         if (act === 'in' || act === 'out') return punch(act === 'in' ? 'in' : 'out');
         if (act === 'perm') { state.permission = 'unknown'; startWatch(); return render(); }
-        if (act === 'myqr') { window.location.href = '{{ route('attendance-app.index') }}'; }
+        if (act === 'myqr') {
+            var box = document.getElementById('myqr');
+            if (!box) return;
+            box.hidden = false;
+            box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     });
 
     window.addEventListener('online', render);

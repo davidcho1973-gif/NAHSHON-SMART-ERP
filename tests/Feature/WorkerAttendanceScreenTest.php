@@ -66,6 +66,32 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk();
     }
 
+    public function test_the_badge_qr_is_baked_into_the_page(): void
+    {
+        // 3단은 인터넷이 끊겼을 때 쓰는 마지막 수단이다. 그때 QR 을 받으러 서버에 다녀올
+        // 수는 없다 — 끊긴 게 인터넷이기 때문이다. 그림째로 페이지에 들어 있어야 한다.
+        $this->actingAs($this->user)
+            ->get(route('attendance-app.index'))
+            ->assertOk()
+            ->assertSee('id="myqr"', escape: false)
+            ->assertSee('data:image/svg+xml;base64,', escape: false);
+
+        // 그리고 배지 토큰이 생겨야 반장이 스캔했을 때 누구인지 알 수 있다.
+        $this->assertDatabaseHas('employee_badge_qr_tokens', [
+            'employee_id' => $this->employee->id, 'status' => 'active',
+        ]);
+    }
+
+    public function test_the_qr_button_does_not_navigate_away(): void
+    {
+        // 예전에는 "내 QR 보여주기"가 같은 주소로 이동만 했다 — 오프라인에서는 아무 데도
+        // 못 가고, 온라인이어도 같은 화면이 다시 뜰 뿐이었다.
+        $this->actingAs($this->user)
+            ->get(route('attendance-app.index'))
+            ->assertOk()
+            ->assertDontSee("window.location.href = '".route('attendance-app.index')."'", escape: false);
+    }
+
     public function test_home_tells_the_screen_what_it_needs_to_pick_a_tier(): void
     {
         $this->actingAs($this->user)

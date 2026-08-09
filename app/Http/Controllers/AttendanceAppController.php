@@ -10,6 +10,7 @@ use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
+use App\Support\QrSvg;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -34,7 +35,31 @@ class AttendanceAppController extends Controller
             'employee' => $employee,
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
             'messageUnreadCount' => $user ? $this->communicationService->unreadCountForUser($user) : 0,
+            // 3단(QR)은 인터넷이 끊겼을 때 쓰는 마지막 수단이다. 그런데 그때 QR 을 받으러
+            // 서버에 다녀올 수는 없다 — 끊긴 게 인터넷이기 때문이다. 그래서 화면을 열 때
+            // 미리 그림째로 박아 넣는다. 한 번 연 화면은 신호가 끊겨도 QR 을 보여 준다.
+            'badgeQr' => $employee ? $this->badgeQrFor($employee, $user?->id) : null,
         ]);
+    }
+
+    /**
+     * 작업자 배지 QR 을 페이지에 박아 넣을 수 있는 형태로.
+     *
+     * @return array{uri: string, badge: string|null}|null
+     */
+    private function badgeQrFor(Employee $employee, ?int $userId): ?array
+    {
+        try {
+            $token = EmployeeBadgeQrToken::activeForEmployee($employee, $userId);
+            $uri = QrSvg::dataUri(route('attendance-app.badge', ['token' => $token->token]), 280);
+
+            return $uri === '' ? null : ['uri' => $uri, 'badge' => $employee->badge_number];
+        } catch (\Throwable $e) {
+            // QR 을 못 만들어도 출퇴근 화면 자체는 열려야 한다. 1·2단은 그대로 쓸 수 있다.
+            report($e);
+
+            return null;
+        }
     }
 
     /**
