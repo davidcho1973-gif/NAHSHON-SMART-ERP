@@ -35,7 +35,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        php: [8.4]
+        # 배포되는 곳과 같은 버전으로 시험한다. Laravel Cloud 가 PHP 8.5 로 돌고 있는데
+        # 8.4 로만 시험하면, 8.5 에서만 나는 문제를 운영에서 처음 만나게 된다.
+        php: [8.5]
 
     name: PHP ${{ matrix.php }}
 
