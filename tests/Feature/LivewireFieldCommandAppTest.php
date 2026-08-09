@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\FieldApp\FieldCommandApp;
+use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,8 +35,12 @@ class LivewireFieldCommandAppTest extends TestCase
         $user = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites']);
         $this->actingAs($user);
 
-        // 현장이 있어야 출퇴근이 기록된다 — 없으면 recordCommute 가 경고만 남기고 돌아간다.
+        // 출퇴근은 이제 정식 대장(attendance_logs)으로 간다 — 등록된 작업자를 특정해야 한다.
+        // 예전의 이름만 적는 별도 대장(field_commute_logs)은 급여·집계가 모르는 기록이었다.
         $site = Site::create(['code' => 'AZ-01', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
+        $emp = Employee::create([
+            'name' => '김반장', 'employee_number' => 'E-001', 'employment_status' => 'active', 'site_id' => $site->id,
+        ]);
 
         Livewire::test(FieldCommandApp::class)
             ->assertSet('activeTab', 'report')
@@ -43,15 +48,22 @@ class LivewireFieldCommandAppTest extends TestCase
             ->assertSet('activeTab', 'qr')
             ->call('setTab', 'report')
             ->call('incrementTrade', 'elec')
+            ->set('commute_worker_name', '김반장')
             ->call('recordCommute', 'in')
-            // 기록 결과는 toastMessage 로 알린다. 시각이 붙으므로 완전일치가 아니라 포함으로 본다.
             ->assertSet('toastMessage', fn (?string $m): bool => str_contains((string) $m, '출근 기록 완료'))
             ->call('addEquipment')
             ->assertHasNoErrors();
 
-        $this->assertDatabaseHas('field_commute_logs', [
+        $this->assertDatabaseHas('attendance_logs', [
             'site_id' => $site->id,
-            'type' => 'in',
+            'employee_id' => $emp->id,
+            'event_type' => 'clock_in',
+            'source' => 'field_app',
+        ]);
+        // 정식 대장으로 갔으므로 급여 타임시트까지 자동으로 이어진다.
+        $this->assertDatabaseHas('payroll_timesheets', [
+            'employee_id' => $emp->id,
+            'source' => 'attendance_logs',
         ]);
     }
 
