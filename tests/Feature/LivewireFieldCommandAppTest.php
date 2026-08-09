@@ -33,6 +33,8 @@ class LivewireFieldCommandAppTest extends TestCase
         $user = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites']);
         $this->actingAs($user);
 
+        $site = Site::query()->create(['name' => '테스트 현장', 'code' => 'TS-01', 'status' => 'active']);
+
         Livewire::test(FieldCommandApp::class)
             ->assertSet('activeTab', 'report')
             ->call('setTab', 'qr')
@@ -40,9 +42,13 @@ class LivewireFieldCommandAppTest extends TestCase
             ->call('setTab', 'report')
             ->call('incrementTrade', 'elec')
             ->call('recordCommute', 'in')
-            ->assertSet('last_scan_status', '출근 완료')
             ->call('addEquipment')
             ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('field_commute_logs', [
+            'site_id' => $site->id,
+            'type' => 'in',
+        ]);
     }
 
     public function test_dynamic_trade_and_site_management_edit_delete_create(): void
