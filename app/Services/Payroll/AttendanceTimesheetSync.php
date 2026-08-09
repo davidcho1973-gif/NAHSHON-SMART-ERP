@@ -37,6 +37,20 @@ class AttendanceTimesheetSync
             return null;
         }
 
+        // 시급/일급 직영만 시간 정산 대상이다. 협력사는 소속사가 임금을 지급하고(인원체크만),
+        // 월급제 관리자는 정액이라 일별 근무시간이 급여에 쓰이지 않는다 — 출퇴근 원장은
+        // 그대로 남기되 급여 타임시트는 만들지 않는다.
+        $employee = Employee::find($employeeId);
+        if ($employee && $employee->attendancePolicy() !== Employee::POLICY_HOURLY) {
+            PayrollTimesheet::query()
+                ->where('employee_id', $employeeId)
+                ->where('work_date', $date)
+                ->where('source', 'attendance_logs')
+                ->delete();
+
+            return null;
+        }
+
         $logs = AttendanceLog::query()
             ->where('employee_id', $employeeId)
             ->where('attendance_date', $date)
@@ -69,8 +83,6 @@ class AttendanceTimesheetSync
             $regular = min($payable, self::REGULAR_MINUTES_PER_DAY);
             $overtime = max(0, $payable - self::REGULAR_MINUTES_PER_DAY);
         }
-
-        $employee = Employee::find($employeeId);
 
         return PayrollTimesheet::updateOrCreate(
             ['employee_id' => $employeeId, 'work_date' => $date],

@@ -181,10 +181,15 @@ class AttendanceGeoService
                 $s->save();
                 $this->closeAttendanceLog($s);
                 $finalized++;
-            } else {
+            } elseif ($s->employee()->first()?->isHourly()) {
                 // 진입 후 재실 추적이 전혀 없음(입장 핑 1회 등) → 퇴근 시각을 알 수 없어 미마감(관리자 확인).
+                // 시급 직영만 검토 대상이다 — 퇴근 시각이 임금에 직결되기 때문.
                 $s->update(['needs_review' => true, 'status' => 'finalized', 'finalized_at' => now()]);
                 $review++;
+            } else {
+                // 협력사(인원체크만)·월급제(정액)는 출근 확인으로 충분 — 검토 없이 마감한다.
+                $s->update(['status' => 'finalized', 'finalized_at' => now()]);
+                $finalized++;
             }
         }
 

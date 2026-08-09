@@ -125,12 +125,13 @@
                 </div>
 
                 <label id="t-trade"></label>
-                <input type="text" name="role" id="f-role" list="trade-list" value="{{ old('role') }}" required autocomplete="off">
-                <datalist id="trade-list">
+                {{-- 공정은 반드시 목록에서 선택 — 자유 입력을 막아 인원체크 집계가 공정 단위로 묶이게 한다. --}}
+                <select name="role" id="f-role" required>
+                    <option value="" id="opt-trade-blank"></option>
                     @foreach ($roles as $t)
-                        <option value="{{ $t }}"></option>
+                        <option value="{{ $t }}" @selected(old('role') === $t)>{{ $t }}</option>
                     @endforeach
-                </datalist>
+                </select>
                 <div class="note" id="t-tradeHint"></div>
 
                 <label id="t-email"></label>
@@ -168,7 +169,7 @@
                         text('t-askTitle', T.askTitle);
                         text('opt-blank', T.companyPlaceholder);
                         document.getElementById('f-name').placeholder = T.namePlaceholder;
-                        document.getElementById('f-role').placeholder = T.tradePlaceholder;
+                        text('opt-trade-blank', T.tradePlaceholder);
                         document.getElementById('t-askDirect').innerHTML = '';
                         document.getElementById('t-askDirect').append(T.askDirect, Object.assign(document.createElement('small'), { textContent: T.askDirectSub }));
                         document.getElementById('t-askIndirect').innerHTML = '';

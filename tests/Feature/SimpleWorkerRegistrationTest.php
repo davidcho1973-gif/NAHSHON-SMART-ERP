@@ -40,7 +40,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         $res->assertSee('Electrician');
     }
 
-    public function test_form_reflects_wbs_trades_and_allows_manual_entry(): void
+    public function test_form_reflects_wbs_trades_and_requires_selection(): void
     {
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
@@ -52,15 +52,22 @@ class SimpleWorkerRegistrationTest extends TestCase
         $res->assertSee('공정관리(WBS)의 공종 목록');
         $res->assertSee('value="ELEC"', false);   // WBS 에서 추출
         $res->assertSee('value="MECH"', false);
-        $res->assertSee('list="trade-list"', false); // 직접 입력 가능한 datalist 입력
+        $res->assertSee('<select name="role"', false); // 목록 선택만 허용(자유 입력 금지)
 
-        // 목록에 없는 공정을 직접 입력해도 등록됨(수기).
+        // 목록에 없는 공정(자유 입력)은 거부된다 — 인원체크 집계가 공정 단위로 묶여야 하기 때문.
         $company = Company::first();
         $this->post('/join/w/'.$site->id, [
             'full_name' => 'Kim', 'company_id' => $company->id, 'role' => '특수용접(수기입력)',
             'email' => 'kim@example.com', 'phone' => '480-555-0199',
+        ])->assertSessionHasErrors(['role']);
+        $this->assertNull(Employee::where('email', 'kim@example.com')->first());
+
+        // 목록에 있는 공정은 정상 등록.
+        $this->post('/join/w/'.$site->id, [
+            'full_name' => 'Kim', 'company_id' => $company->id, 'role' => 'MECH',
+            'email' => 'kim@example.com', 'phone' => '480-555-0199',
         ])->assertStatus(200);
-        $this->assertSame('특수용접(수기입력)', Employee::where('email', 'kim@example.com')->first()->role);
+        $this->assertSame('MECH', Employee::where('email', 'kim@example.com')->first()->role);
     }
 
     public function test_submit_creates_active_worker_immediately(): void
