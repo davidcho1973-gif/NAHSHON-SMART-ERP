@@ -23,6 +23,13 @@ return [
     'documents_disk' => env('DOCUMENT_DISK', env('AWS_BUCKET') ? 's3' : 'public'),
 
     /*
+    | 공정별 현장 사진(wbs_photos)이 쓰는 디스크. 사정은 documents_disk 와 같다 —
+    | Laravel Cloud 의 로컬 디스크는 배포마다 초기화되므로 s3 가 붙으면 자동으로 그쪽을 쓴다.
+    | 공개 URL 로 서빙하지 않으므로(컨트롤러가 권한 확인 후 스트리밍) public 이 아닌 local 이 기본.
+    */
+    'wbs_photos_disk' => env('WBS_PHOTO_DISK', env('AWS_BUCKET') ? 's3' : 'local'),
+
+    /*
     | 문서통합관리 업로드 최대 용량(KB). 기본 262144KB=256MB. 시청 제출본 등 대용량 PDF 대응.
     | 실제 상한은 서버(PHP post_max_size/upload_max_filesize, nginx client_max_body_size)와
     | 이 값 중 작은 쪽이다. 더 키우려면 Laravel Cloud 의 PHP/웹서버 한도도 같이 올려야 한다.

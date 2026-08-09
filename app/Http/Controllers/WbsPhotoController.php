@@ -19,7 +19,8 @@ use Illuminate\Support\Str;
  * 사진 20장짜리 공정을 열 때마다 수 MB 를 받게 된다.
  *
  * 사진은 공개 URL 로 서빙하지 않는다 — 현장 사진에는 도면·인원·주소가 함께 찍힌다.
- * local 디스크에 두고 로그인한 사용자에게만 이 컨트롤러가 스트리밍한다.
+ * 비공개 디스크(wbs_photos_disk 설정, 기본 local / s3 있으면 s3)에 두고
+ * 로그인 + 현장 권한을 확인한 뒤에만 이 컨트롤러가 스트리밍한다.
  */
 class WbsPhotoController extends Controller
 {
@@ -87,17 +88,20 @@ class WbsPhotoController extends Controller
         $main = ImageDownscale::shrink($bytes, $mime);
         $thumb = ImageDownscale::shrink($bytes, $mime, 400, 70);
 
+        // Laravel Cloud 의 로컬 디스크는 배포마다 초기화된다 — s3 가 붙어 있으면 그쪽으로.
+        $disk = (string) config('filesystems.wbs_photos_disk', 'local');
+
         $dir = 'wbs-photos/'.Str::slug($item->wbs_code, '_');
         $name = now()->format('Ymd_His').'_'.Str::random(6);
         $ext = $main['resized'] ? 'jpg' : ($file->guessExtension() ?: 'jpg');
 
         $path = "{$dir}/{$name}.{$ext}";
-        Storage::disk('local')->put($path, $main['data']);
+        Storage::disk($disk)->put($path, $main['data']);
 
         $thumbPath = null;
         if ($thumb['resized']) {
             $thumbPath = "{$dir}/{$name}_thumb.jpg";
-            Storage::disk('local')->put($thumbPath, $thumb['data']);
+            Storage::disk($disk)->put($thumbPath, $thumb['data']);
         }
 
         $photo = WbsPhoto::query()->create([
@@ -106,7 +110,7 @@ class WbsPhotoController extends Controller
             'site_id' => $item->site_id,
             'photo_date' => (string) $request->input('photo_date'),
             'caption' => trim((string) $request->input('caption', '')) ?: null,
-            'disk' => 'local',
+            'disk' => $disk,
             'path' => $path,
             'thumb_path' => $thumbPath,
             'mime' => $main['resized'] ? 'image/jpeg' : $mime,
