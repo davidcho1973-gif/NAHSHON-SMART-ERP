@@ -7980,6 +7980,8 @@
           '</div><div id="pe-ai-result" style="font-size:11px;margin-top:8px">' + (it.documentUrl ? '<a href="' + wbsEsc(it.documentUrl) + '" target="_blank" style="color:#ea580c"><i class="ph ph-paperclip"></i> ' + wbsEsc(it.documentName || '첨부 서류') + '</a>' : '') + '</div>' +
           '</div>' +
           '<label style="' + LBL + '">상태</label><select id="pe-status" class="wbs-edit-field">' + STAGES.map(function(s){ return '<option' + (it.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+          '<div><label style="' + LBL + '">품목 <span style="color:var(--text-tertiary);font-weight:400">(품목 마스터)</span></label>' +
+          '<input id="pe-item" class="wbs-edit-field" list="pe-item-options" value="' + wbsEsc(it.itemName || '') + '" placeholder="등록된 품목 선택 (품목·분류 화면에서 관리)"><datalist id="pe-item-options"></datalist></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" list="pe-vendor-options" value="' + wbsEsc(it.vendor || '') + '" placeholder="거래처 선택/입력"><datalist id="pe-vendor-options"></datalist></div>' +
           '<div><label style="' + LBL + '">발주번호(PO)</label><input id="pe-pono" class="wbs-edit-field" value="' + wbsEsc(it.poNo || '') + '"></div>' +
@@ -8010,6 +8012,21 @@
           dl.innerHTML = vendors.map(function(v) {
             var name = v && v.name ? String(v.name) : '';
             return name ? '<option value="' + wbsEsc(name) + '">' + wbsEsc(v.category && v.category !== '-' ? v.category : '') + '</option>' : '';
+          }).join('');
+        }).catch(function() {});
+
+        // 품목 마스터 연결 — 이름을 다시 서술하는 대신 등록된 품목을 고른다.
+        // 저장 시 이름→id 로 바꿔 보내므로 표준단가 대비 실발주 비교의 근거가 된다.
+        var itemNameToId = {};
+        gsRun('api_getItemMaster', [], { items: [] }).then(function(res) {
+          var dl = root.querySelector('#pe-item-options');
+          var items = (res && Array.isArray(res.items)) ? res.items : [];
+          if (!dl || !items.length) return;
+          dl.innerHTML = items.map(function(i) {
+            if (!i || !i.name) return '';
+            itemNameToId[String(i.name)] = i.id;
+            var hint = [i.category, i.unit, (i.standardCost != null ? '$' + i.standardCost : '')].filter(Boolean).join(' · ');
+            return '<option value="' + wbsEsc(String(i.name)) + '">' + wbsEsc(hint) + '</option>';
           }).join('');
         }).catch(function() {});
 
@@ -8045,8 +8062,10 @@
         });
 
         root.querySelector('#pe-save').addEventListener('click', async function(){
+          var itemText = (root.querySelector('#pe-item') ? root.querySelector('#pe-item').value.trim() : '');
           var patch = {
             status: root.querySelector('#pe-status').value,
+            item_id: itemNameToId[itemText] || '',
             vendor: root.querySelector('#pe-vendor').value.trim(),
             po_no: root.querySelector('#pe-pono').value.trim(),
             ordered_on: root.querySelector('#pe-ordered').value,
