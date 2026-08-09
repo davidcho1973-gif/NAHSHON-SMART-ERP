@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AttendanceLog;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\EmployeePayrollProfile;
+use App\Models\PayrollTimesheet;
 use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
 use App\Models\User;
@@ -55,6 +57,94 @@ class WorkerAttendanceScreenTest extends TestCase
         ]);
     }
 
+    // ── 근무 · 급여 탭 ──────────────────────────────────────────────
+
+    public function test_the_work_tab_reads_hours_from_the_payroll_timesheet(): void
+    {
+        // 화면이 출퇴근 기록을 다시 계산하지 않는다. 급여가 보는 숫자와 작업자가 보는
+        // 숫자가 다르면 그 차이를 아무도 설명하지 못한다.
+        PayrollTimesheet::create([
+            'employee_id' => $this->employee->id,
+            'company_id' => $this->employee->company_id,
+            'site_id' => $this->site->id,
+            'work_date' => '2026-08-10',
+            'check_in_at' => Carbon::parse('2026-08-10 07:00:00'),
+            'check_out_at' => Carbon::parse('2026-08-10 17:30:00'),
+            'regular_minutes' => 480,
+            'overtime_minutes' => 90,
+            'status' => 'approved',
+        ]);
+
+        $week = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('week');
+
+        $this->assertEqualsWithDelta(8.0, $week['regularHours'], 0.01);
+        $this->assertEqualsWithDelta(1.5, $week['overtimeHours'], 0.01);
+        $this->assertCount(1, $week['days']);
+        $this->assertSame('07:00', $week['days'][0]['in']);
+        $this->assertTrue($week['days'][0]['settled']);
+    }
+
+    public function test_unsettled_days_are_flagged_so_they_do_not_look_final(): void
+    {
+        PayrollTimesheet::create([
+            'employee_id' => $this->employee->id,
+            'site_id' => $this->site->id,
+            'work_date' => '2026-08-10',
+            'regular_minutes' => 240,
+            'overtime_minutes' => 0,
+            'status' => 'draft',
+        ]);
+
+        $week = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('week');
+
+        $this->assertFalse($week['days'][0]['settled']);
+    }
+
+    public function test_pay_is_estimated_from_the_rate_and_this_weeks_hours(): void
+    {
+        EmployeePayrollProfile::where('employee_id', $this->employee->id)
+            ->update(['base_rate' => 40, 'overtime_multiplier' => 1.5, 'pay_currency' => 'USD']);
+        PayrollTimesheet::create([
+            'employee_id' => $this->employee->id,
+            'site_id' => $this->site->id,
+            'work_date' => '2026-08-10',
+            'regular_minutes' => 600,   // 10h
+            'overtime_minutes' => 120,  // 2h
+            'status' => 'approved',
+        ]);
+
+        $pay = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('pay');
+
+        $this->assertTrue($pay['hasRate']);
+        $this->assertEqualsWithDelta(400.0, $pay['regularPay'], 0.01);       // 10h × 40
+        $this->assertEqualsWithDelta(120.0, $pay['overtimePay'], 0.01);      // 2h × 60
+        $this->assertEqualsWithDelta(520.0, $pay['estimated'], 0.01);
+    }
+
+    public function test_no_rate_means_no_invented_number(): void
+    {
+        // 단가가 0 이면 금액을 지어내지 않는다. 0 원이라고 띄우면 작업자는 못 받는 줄 안다.
+        EmployeePayrollProfile::where('employee_id', $this->employee->id)->update(['base_rate' => 0]);
+
+        $pay = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('pay');
+
+        $this->assertFalse($pay['hasRate']);
+    }
+
+    public function test_elapsed_time_counts_from_the_clock_in(): void
+    {
+        // 화면이 초를 세려면 "지금까지 몇 초"가 한 숫자로 와야 한다.
+        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+            'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10 09:30:00'));   // 출근 07:00 기준 2시간 30분
+        $res = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json();
+
+        $this->assertTrue($res['clockedIn']);
+        $this->assertSame(9000, $res['elapsedSeconds']);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
@@ -73,13 +163,24 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->actingAs($this->user)
             ->get(route('attendance-app.index'))
             ->assertOk()
-            ->assertSee('id="myqr"', escape: false)
+            ->assertSee('id="qr-tpl"', escape: false)
             ->assertSee('data:image/svg+xml;base64,', escape: false);
 
         // 그리고 배지 토큰이 생겨야 반장이 스캔했을 때 누구인지 알 수 있다.
         $this->assertDatabaseHas('employee_badge_qr_tokens', [
             'employee_id' => $this->employee->id, 'status' => 'active',
         ]);
+    }
+
+    public function test_the_screen_has_four_tabs(): void
+    {
+        $this->actingAs($this->user)
+            ->get(route('attendance-app.index'))
+            ->assertOk()
+            ->assertSee('data-tab="home"', escape: false)
+            ->assertSee('data-tab="work"', escape: false)
+            ->assertSee('data-tab="pay"', escape: false)
+            ->assertSee('data-tab="me"', escape: false);
     }
 
     public function test_the_qr_button_does_not_navigate_away(): void

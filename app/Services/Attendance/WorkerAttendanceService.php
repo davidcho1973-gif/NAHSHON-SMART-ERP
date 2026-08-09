@@ -5,6 +5,9 @@ namespace App\Services\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\AttendanceSession;
 use App\Models\Employee;
+use App\Models\EmployeePayrollProfile;
+use App\Models\PayrollTimesheet;
+use App\Models\Payslip;
 use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
 use Illuminate\Support\Carbon;
@@ -66,6 +69,24 @@ class WorkerAttendanceService
         $clockedIn = collect($logs)->firstWhere('type', 'clock_in') !== null
             && collect($logs)->firstWhere('type', 'clock_out') === null;
 
+        // 화면이 초를 세려면 "지금까지 몇 초"가 한 숫자로 와야 한다. 자동은 세션이,
+        // 직접 누른 경우는 출근 기록이 기준이라 여기서 합쳐 준다 — 화면에서 두 갈래로
+        // 계산하게 두면 자동과 직접의 시간이 다르게 보인다.
+        $elapsed = 0;
+        if ($session && $session->status === 'on_site' && $session->last_enter_at) {
+            $elapsed = (int) $session->on_site_seconds + $session->last_enter_at->diffInSeconds(Carbon::now());
+        } elseif ($session) {
+            $elapsed = (int) $session->on_site_seconds;
+        } elseif ($clockedIn) {
+            $openedAt = AttendanceLog::query()
+                ->where('employee_id', $employee->id)
+                ->where('attendance_date', $today)
+                ->where('event_type', 'clock_in')
+                ->orderBy('event_at')
+                ->value('event_at');
+            $elapsed = $openedAt ? Carbon::parse($openedAt)->diffInSeconds(Carbon::now()) : 0;
+        }
+
         return [
             'success' => true,
             'employee' => [
@@ -86,9 +107,108 @@ class WorkerAttendanceService
             'today' => $today,
             'state' => $session?->status ?? 'off_site',
             'onSiteSeconds' => (int) ($session?->on_site_seconds ?? 0),
-            'firstEnterAt' => $session?->first_enter_at?->timezone($tz)->format('H:i'),
+            'elapsedSeconds' => max(0, $elapsed),
+            'firstEnterAt' => $session?->first_enter_at?->timezone($tz)->format('H:i')
+                ?? collect($logs)->firstWhere('type', 'clock_in')['at'] ?? null,
             'clockedIn' => $clockedIn,
             'logs' => $logs,
+            'week' => $this->week($employee, $tz),
+            'pay' => $this->pay($employee),
+        ];
+    }
+
+    /**
+     * 이번 주 근무 — 탭 하나를 채우는 만큼만.
+     *
+     * 시간은 급여 타임시트에서 온다. 출퇴근 기록을 화면에서 다시 계산하지 않는다 —
+     * 급여가 보는 숫자와 작업자가 보는 숫자가 다르면 그 차이를 설명할 사람이 없다.
+     *
+     * @return array<string, mixed>
+     */
+    private function week(Employee $employee, string $tz): array
+    {
+        $start = Carbon::now($tz)->startOfWeek();
+        $end = Carbon::now($tz)->endOfWeek();
+
+        $sheets = PayrollTimesheet::query()
+            ->where('employee_id', $employee->id)
+            ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('work_date')
+            ->get();
+
+        $days = $sheets->map(function (PayrollTimesheet $t) use ($tz): array {
+            $regular = (int) $t->regular_minutes;
+            $overtime = (int) $t->overtime_minutes;
+
+            return [
+                'date' => $t->work_date?->toDateString(),
+                'label' => $t->work_date?->timezone($tz)->format('m/d'),
+                'weekday' => $t->work_date ? self::WEEKDAYS[(int) $t->work_date->dayOfWeek] : null,
+                'in' => $t->check_in_at?->timezone($tz)->format('H:i'),
+                'out' => $t->check_out_at?->timezone($tz)->format('H:i'),
+                'regularHours' => round($regular / 60, 1),
+                'overtimeHours' => round($overtime / 60, 1),
+                'status' => $t->status,
+                // 아직 안 닫힌 날은 숫자가 바뀔 수 있다. 확정처럼 보이면 안 된다.
+                'settled' => in_array($t->status, ['approved', 'locked', 'paid'], true),
+            ];
+        })->values()->all();
+
+        return [
+            'from' => $start->toDateString(),
+            'to' => $end->toDateString(),
+            'regularHours' => round($sheets->sum('regular_minutes') / 60, 1),
+            'overtimeHours' => round($sheets->sum('overtime_minutes') / 60, 1),
+            'days' => $days,
+        ];
+    }
+
+    private const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+    /**
+     * 급여 — 예상액과 지난 명세.
+     *
+     * 예상액은 말 그대로 예상이다. 세금·공제 전이고 마감 전이라 바뀐다. 화면에서도
+     * 그렇게 말해야 한다 — 숫자만 크게 띄우면 작업자는 그 금액을 받는 줄 안다.
+     *
+     * @return array<string, mixed>
+     */
+    private function pay(Employee $employee): array
+    {
+        $profile = EmployeePayrollProfile::query()->where('employee_id', $employee->id)->first();
+        $rate = (float) ($profile?->base_rate ?? 0);
+        $multiplier = (float) ($profile?->overtime_multiplier ?: 1.5);
+        $currency = $profile?->pay_currency ?: 'USD';
+
+        $tz = $employee->site?->timezone ?: config('app.timezone');
+        $week = $this->week($employee, $tz);
+
+        $regularPay = $rate * $week['regularHours'];
+        $overtimePay = $rate * $multiplier * $week['overtimeHours'];
+
+        $slips = Payslip::query()
+            ->where('employee_id', $employee->id)
+            ->with('run:id,period_start,period_end')
+            ->latest('id')
+            ->limit(3)
+            ->get()
+            ->map(fn (Payslip $p): array => [
+                'net' => (float) $p->net_pay,
+                'from' => $p->run?->period_start?->toDateString(),
+                'to' => $p->run?->period_end?->toDateString(),
+                'status' => $p->status,
+            ])->values()->all();
+
+        return [
+            // 단가가 없으면 금액을 지어내지 않는다. 화면이 "아직 정해지지 않았다"고 말한다.
+            'hasRate' => $rate > 0,
+            'rate' => $rate,
+            'multiplier' => $multiplier,
+            'currency' => $currency,
+            'regularPay' => round($regularPay, 2),
+            'overtimePay' => round($overtimePay, 2),
+            'estimated' => round($regularPay + $overtimePay, 2),
+            'payslips' => $slips,
         ];
     }
 
