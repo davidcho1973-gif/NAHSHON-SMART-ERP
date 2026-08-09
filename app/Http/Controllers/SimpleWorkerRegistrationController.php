@@ -75,7 +75,8 @@ class SimpleWorkerRegistrationController extends Controller
 
     /**
      * 공정(Trade) 선택지 — 공정관리(WBS)에서 실제로 쓰이는 공종을 추출한다.
-     * 현장 WBS 우선, 없으면 전체 WBS, 그것도 없으면 기본 직군. (폼에서 직접 입력도 가능)
+     * 현장 WBS 우선, 없으면 전체 WBS, 그것도 없으면 기본 직군.
+     * 작업자는 반드시 이 목록에서 골라야 한다(자유 입력 금지) — 인원체크 집계가 공정 단위로 묶이기 때문.
      *
      * @return array<int, string>
      */
@@ -105,13 +106,14 @@ class SimpleWorkerRegistrationController extends Controller
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:120'],
             'company_id' => ['required', Rule::exists('companies', 'id')],
-            'role' => ['required', 'string', 'max:60'],
+            'role' => ['required', 'string', 'max:60', Rule::in($this->tradeOptions($site))],
             'email' => ['required', 'email', 'max:160'],
             'phone' => ['required', 'string', 'max:40'],
             'employment_type' => [$mustAsk ? 'required' : 'nullable', Rule::in(self::ASKABLE_TYPES)],
             'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
         ], [
             'employment_type.required' => '소속 구분을 선택해 주세요.',
+            'role.in' => '공정을 목록에서 선택해 주세요. / Please pick a trade from the list.',
         ]);
 
         // 회사 분류가 최우선이다 — 관리자가 유지하는 데이터라 "어느 종이를 스캔했나" 보다 믿을 만하다.

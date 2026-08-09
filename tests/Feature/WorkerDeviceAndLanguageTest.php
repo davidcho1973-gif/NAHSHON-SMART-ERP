@@ -42,7 +42,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
         $res = $this->post('/join/w/'.$this->site->id, [
             'full_name' => 'Carlos Ramirez',
             'company_id' => $this->partner->id,
-            'role' => 'Pipefitter',
+            'role' => 'Welder', // 공정은 목록 선택만 허용 — 기본 직군 목록에 있는 값이어야 한다.
             'email' => $email,
             'phone' => '480-555-0100',
             'preferred_language' => $lang,

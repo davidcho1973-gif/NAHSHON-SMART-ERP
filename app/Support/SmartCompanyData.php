@@ -2296,9 +2296,15 @@ class SmartCompanyData
         foreach ($companies as $company) {
             $teamRows = [];
             $total = 0;
+            // 고용형태별 인원 — 직영(시급 정산)과 협력사(인원체크만)를 회사 단위로 구분해 보여준다.
+            $byType = ['direct' => 0, 'indirect' => 0, 'staff' => 0, 'client' => 0, 'unknown' => 0];
             foreach ($company['teams'] as $team => $members) {
                 $count = count($members);
                 $total += $count;
+                foreach ($members as $m) {
+                    $t = $m['employmentType'] ?? null;
+                    $byType[array_key_exists((string) $t, $byType) ? $t : 'unknown']++;
+                }
                 $teamRows[] = ['team' => $team, 'members' => array_values($members), 'count' => $count];
             }
 
@@ -2306,6 +2312,7 @@ class SmartCompanyData
                 'name' => $company['name'],
                 'total' => $total,
                 'divide' => ['manager' => 0, 'korean' => 0, 'local' => $total],
+                'byType' => $byType,
                 'teams' => $teamRows,
             ];
         }
@@ -2392,6 +2399,8 @@ class SmartCompanyData
             'company' => $companyName,
             'team' => $teamName,
             'role' => $employee->role,
+            'employmentType' => $employee->employment_type,
+            'employmentTypeLabel' => $employee->employmentTypeLabel(),
             'site' => $siteCode,
             'visa' => $payload['visa'] ?? null,
             'visaExpiry' => $employee->visa_expires_on?->toDateString(),
