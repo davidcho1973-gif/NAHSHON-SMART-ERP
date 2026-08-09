@@ -23,7 +23,7 @@
     'ê³µì • ê´€ë¦¬ (WBS)': 'WBS Management',
     'ìž¬ë¬´ (Finance)': 'Finance',
     'ìžìž¬/ìž¥ë¹„ (Inventory)': 'Inventory',
-    'NASON í†µí•©ê´€ë¦¬': 'NASON Operations',
+    'DASOL PRISM í†µí•©ê´€ë¦¬': 'DASOL PRISM Operations',
     'ì°¨ëŸ‰ ê´€ë¦¬': 'Vehicle Management',
     'ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬': 'Equipment Rental',
     'ìˆ™ì†Œ ê´€ë¦¬': 'Housing Management',
@@ -66,7 +66,7 @@
   }));
 
   const replacementsEn = [
-    ['NAHSHON MEP Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™©', 'NAHSHON MEP Â· Live field operations'],
+    ['DASOL PRISM Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™©', 'DASOL PRISM Â· Live field operations'],
     ['ê¸´ê¸‰ ì²˜ë¦¬ í•„ìš”', 'Urgent Action Items'],
     ['í”„ë¡œì íŠ¸ í˜„í™©', 'Project Status'],
     ['ì˜¤ëŠ˜ì˜ ê²°ì • í', "Today's Decision Queue"],
@@ -250,7 +250,7 @@
     'WBS Management': 'Gestión WBS',
     'Finance': 'Finanzas',
     'Inventory': 'Inventario',
-    'NASON Operations': 'Operaciones NASON',
+    'DASOL PRISM Operations': 'Operaciones DASOL PRISM',
     'Vehicle Management': 'Gestión de vehículos',
     'Equipment Rental': 'Renta de equipos',
     'Housing Management': 'Gestión de alojamiento',
@@ -417,8 +417,8 @@
   }));
 
   const replacementsEs = [
-    ['NAHSHON MEP Â· Live field operations', 'NAHSHON MEP Â· Operaciones de campo en vivo'],
-    ['NAHSHON MEP · Live field operations', 'NAHSHON MEP · Operaciones de campo en vivo'],
+    ['DASOL PRISM Â· Live field operations', 'DASOL PRISM Â· Operaciones de campo en vivo'],
+    ['DASOL PRISM · Live field operations', 'DASOL PRISM · Operaciones de campo en vivo'],
     ['Urgent Action Items', 'Acciones urgentes'],
     ['Project Status', 'Estado del proyecto'],
     ["Today's Decision Queue", 'Cola de decisiones de hoy'],

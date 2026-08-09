@@ -22,7 +22,7 @@ class OnboardingPayrollLinkTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['name' => 'NAHSHON MEP', 'code' => 'NMEP']);
+        $this->company = Company::create(['name' => 'DASOL PRISM', 'code' => 'NMEP']);
         $this->site = Site::create(['name' => 'LG AZ Plant', 'code' => 'LGES-AZ']);
     }
 

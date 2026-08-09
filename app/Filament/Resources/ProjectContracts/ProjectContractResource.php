@@ -11,6 +11,11 @@ use App\Models\Project;
 use App\Models\ProjectContract;
 use App\Models\ProjectContractDocument;
 use App\Models\Site;
+use App\Services\GeminiDocumentAnalyzer;
+use Filament\Notifications\Notification;
+use Illuminate\Support\Arr;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Throwable;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -324,7 +329,9 @@ class ProjectContractResource extends Resource
                         ->storeFileNamesIn('original_file_name')
                         ->previewable(false)
                         ->required(fn (?ProjectContractDocument $record): bool => $record === null)
-                        ->helperText('PDF, Word, Excel, JPG/PNG/WebP · 최대 30MB')
+                        ->helperText('PDF·이미지는 업로드 시 AI가 문서유형·번호·발행/만료일을 자동으로 채웁니다. Word/Excel은 수동 입력.')
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set, Get $get, mixed $state) => self::autoAnalyzeDocument($state, $set, $get))
                         ->columnSpanFull(),
                     DatePicker::make('issued_on')->label('발행일'),
                     DatePicker::make('effective_on')->label('효력일'),
@@ -341,6 +348,7 @@ class ProjectContractResource extends Resource
                     Hidden::make('disk')->default(fn (): string => (string) config('document-intelligence.disk', 'local')),
                     Hidden::make('original_file_name'),
                     Hidden::make('uploaded_by')->default(fn (): ?int => auth()->id()),
+                    Hidden::make('payload'),   // AI 추출 구조화 데이터(발행처·금액·보장한도 등) 저장소
                 ]),
         ]);
     }
@@ -584,6 +592,79 @@ class ProjectContractResource extends Resource
         return $query->get()->mapWithKeys(fn (Site $site): array => [
             $site->id => $site->code.' - '.$site->name,
         ])->all();
+    }
+
+    /**
+     * 파일 업로드 시 AI 자동분석 → 폼 자동채움(비어 있는 칸만). 사람이 확인 후 저장.
+     */
+    public static function autoAnalyzeDocument(mixed $state, Set $set, Get $get): void
+    {
+        $file = self::resolveUploadedDocument($state);
+        if ($file === null) {
+            return;
+        }
+
+        try {
+            $data = app(GeminiDocumentAnalyzer::class)->analyze($file['path'], $file['mime_type']);
+        } catch (Throwable $e) {
+            Notification::make()->warning()->title('AI 문서 분석 건너뜀')->body($e->getMessage())->send();
+
+            return;
+        }
+
+        // 이미 사람이 입력한 값은 덮지 않는다 — 비어 있는 칸만 채운다.
+        $fillEmpty = static function (string $key, mixed $value) use ($set, $get): void {
+            if ($value !== null && $value !== '' && blank($get($key))) {
+                $set($key, $value);
+            }
+        };
+
+        if ($data['document_type'] !== null && array_key_exists($data['document_type'], ProjectContractDocument::TYPE_OPTIONS)) {
+            $fillEmpty('document_type', $data['document_type']);
+        }
+        $fillEmpty('title', $data['title']);
+        $fillEmpty('document_number', $data['document_number']);
+        $fillEmpty('issued_on', $data['issued_on']);
+        $fillEmpty('effective_on', $data['effective_on']);
+        $fillEmpty('expires_on', $data['expires_on']);
+        if ($data['summary'] !== null) {
+            $fillEmpty('notes', $data['summary']);
+        }
+
+        // 구조화 데이터(발행처·상대·금액·통화 + 그 밖의 필드)를 payload 에 저장.
+        $payload = $data['fields'];
+        foreach (['issuer', 'counterparty', 'amount', 'currency'] as $k) {
+            if ($data[$k] !== null) {
+                $payload[$k] = $data[$k];
+            }
+        }
+        if ($payload !== []) {
+            $set('payload', $payload);
+        }
+
+        $filled = array_values(array_filter([
+            $data['document_type'] ? '문서유형' : null,
+            $data['expires_on'] ? '만료일' : null,
+            $data['document_number'] ? '문서번호' : null,
+        ]));
+        Notification::make()->success()->title('AI 문서 분석 완료')
+            ->body('추출된 정보를 자동으로 채웠습니다' . ($filled !== [] ? '(' . implode('·', $filled) . ' 등)' : '') . '. 확인 후 저장하세요.')
+            ->send();
+    }
+
+    /**
+     * @return array{path: string, mime_type: string}|null
+     */
+    private static function resolveUploadedDocument(mixed $state): ?array
+    {
+        if (is_array($state)) {
+            $state = Arr::first($state);
+        }
+        if ($state instanceof TemporaryUploadedFile) {
+            return ['path' => $state->getRealPath(), 'mime_type' => $state->getMimeType() ?: 'application/octet-stream'];
+        }
+
+        return null;
     }
 
     private static function projectOptions(): array

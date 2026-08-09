@@ -7,10 +7,10 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
@@ -55,8 +55,77 @@ class User extends Authenticatable implements FilamentUser
         'foreman' => 'Foreman / Supervisor',
         'vendor_admin' => 'Vendor Admin',
         'worker' => 'Worker / Member',
+        'client' => 'Client / GC (원청)',
         'viewer' => 'Viewer',
     ];
+
+    /**
+     * 화면에 보여줄 한국어 이름.
+     *
+     * ROLE_OPTIONS 는 영어라 Filament 시절부터 화면에 영어가 섞여 나왔다. SPA 는 한국어가
+     * 원문이고 smart-language.js 가 영어·스페인어로 옮기므로, 여기서 한국어를 정본으로 둔다.
+     * ROLE_OPTIONS 는 남은 Filament 화면이 아직 쓰고 있어 건드리지 않는다.
+     */
+    public const ROLE_LABELS_KO = [
+        'super_admin' => '슈퍼관리자',
+        'admin' => '관리자',
+        'hr_manager' => '인사담당',
+        'site_manager' => '현장소장',
+        'safety_manager' => '안전관리자',
+        'payroll' => '급여·회계',
+        'foreman' => '작업반장',
+        'vendor_admin' => '협력사 관리자',
+        'worker' => '작업자',
+        'client' => '원청 · 발주처',
+        'viewer' => '열람 전용',
+    ];
+
+    public const SCOPE_LABELS_KO = [
+        'self' => '본인만',
+        'team' => '소속 팀',
+        'site' => '지정 현장',
+        'company' => '소속 회사',
+        'all_sites' => '전체 현장',
+    ];
+
+    public const STATUS_LABELS_KO = [
+        'active' => '활성',
+        'pending' => '대기',
+        'suspended' => '정지',
+        'disabled' => '해지',
+    ];
+
+    /**
+     * 권한 세기 — 목록에서 강한 권한이 눈에 띄게 하려고 등급을 나눈다.
+     * 계정이 수십 개가 되면 "누가 관리자인지" 를 한눈에 못 찾는 게 문제가 된다.
+     */
+    public const ROLE_TIERS = [
+        'super_admin' => 'high',
+        'admin' => 'high',
+        'hr_manager' => 'mid',
+        'payroll' => 'mid',
+        'site_manager' => 'mid',
+        'safety_manager' => 'mid',
+        'vendor_admin' => 'mid',
+        'foreman' => 'low',
+        'worker' => 'low',
+        'client' => 'external',
+        'viewer' => 'external',
+    ];
+
+    /**
+     * 열람 전용 역할 — 원청(발주처)과 뷰어. 현황은 보되 어떤 데이터도 바꿀 수 없다.
+     */
+    public const READ_ONLY_ROLES = [
+        'client',
+        'viewer',
+    ];
+
+    /** 이 계정이 데이터를 바꿀 수 있는가. */
+    public function isReadOnly(): bool
+    {
+        return in_array($this->access_role, self::READ_ONLY_ROLES, true);
+    }
 
     public const SCOPE_OPTIONS = [
         'self' => 'Self only',

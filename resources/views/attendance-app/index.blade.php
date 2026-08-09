@@ -34,7 +34,7 @@
 <body>
     <div class="app">
         <header>
-            <p class="eyebrow">NAHSHON SMART ERP</p>
+            <p class="eyebrow">DASOL PRISM SMART ERP</p>
             <h1>QR 출퇴근 관리</h1>
             <p class="sub">팀 QR 또는 작업자 배지 QR로 현장 출퇴근을 기록합니다.</p>
         </header>
@@ -53,6 +53,11 @@
                 <a class="tile primary" href="javascript:alert('현장에 부착된 팀 QR을 휴대폰 카메라로 스캔하세요.')">
                     <strong>내 출퇴근</strong>
                     <span>현장에 붙은 팀 QR을 스캔하면 본인 출퇴근 화면이 열립니다.</span>
+                </a>
+
+                <a class="tile" href="{{ route('attendance-app.ops-room') }}">
+                    <strong>현장 상황실 · 원문 기록</strong>
+                    <span>올린 대화 원문을 확인하고, 현장에서 바로 올리거나 고칩니다.</span>
                 </a>
 
                 <a class="tile" href="{{ route('communication.index') }}">

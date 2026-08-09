@@ -126,6 +126,62 @@ class MobileExpenseTest extends TestCase
         $response->assertSee('value="' . $this->site->id . '" selected', false);
     }
 
+    public function test_manager_can_approve_and_reject_expense_via_review(): void
+    {
+        $manager = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
+        $expense = MobileExpense::create([
+            'employee_id' => $this->employee->id, 'site_id' => $this->site->id,
+            'payment_type' => 'personal', 'category' => 'Materials', 'description' => 'x',
+            'amount' => 50, 'expense_date' => '2026-07-21', 'status' => 'pending',
+        ]);
+
+        $this->actingAs($manager)
+            ->patch(route('mobile-expense.review', $expense), ['decision' => 'approved'])
+            ->assertRedirect();
+
+        $expense->refresh();
+        $this->assertSame('approved', $expense->status);
+        $this->assertSame($manager->id, $expense->reviewed_by_user_id);
+        $this->assertNotNull($expense->reviewed_at);
+    }
+
+    public function test_non_manager_cannot_review_expense(): void
+    {
+        $worker = User::factory()->create(['employee_id' => $this->employee->id, 'access_role' => 'worker', 'account_status' => 'active']);
+        $expense = MobileExpense::create([
+            'employee_id' => $this->employee->id, 'site_id' => $this->site->id,
+            'payment_type' => 'personal', 'category' => 'Materials', 'description' => 'x',
+            'amount' => 50, 'expense_date' => '2026-07-21', 'status' => 'pending',
+        ]);
+
+        $this->actingAs($worker)
+            ->patch(route('mobile-expense.review', $expense), ['decision' => 'approved'])
+            ->assertForbidden();
+        $this->assertSame('pending', $expense->fresh()->status);
+    }
+
+    public function test_expense_site_dropdown_lists_sites_from_other_companies(): void
+    {
+        // 다른 발주처 회사의 현장 — 직원 회사와 무관하게 선택할 수 있어야 한다.
+        $otherCompany = Company::create(['code' => 'LGES', 'name' => 'LG Energy', 'status' => 'active']);
+        $otherSite = Site::create([
+            'company_id' => $otherCompany->id, 'code' => 'LGES-AZ', 'name' => 'LGES', 'status' => 'active',
+        ]);
+
+        // 신규 등록(wizard)과 수정(edit) 양쪽에서 노출되어야 한다.
+        $wizard = $this->actingAs($this->user)->get(route('mobile-expense.wizard'));
+        $wizard->assertStatus(200)->assertSee('LGES-AZ - LGES');
+
+        $expense = MobileExpense::create([
+            'employee_id' => $this->employee->id, 'site_id' => $this->site->id,
+            'payment_type' => 'personal', 'category' => '5201 Job Materials',
+            'accounting_account' => '5201 Job Materials', 'description' => 'Materials',
+            'amount' => 100, 'expense_date' => '2026-07-21', 'status' => 'pending',
+        ]);
+        $edit = $this->actingAs($this->user)->get(route('mobile-expense.edit', $expense));
+        $edit->assertStatus(200)->assertSee('LGES-AZ - LGES');
+    }
+
     public function test_mobile_expense_upload_receipt_runs_ocr_analyzer(): void
     {
         Storage::fake('public');

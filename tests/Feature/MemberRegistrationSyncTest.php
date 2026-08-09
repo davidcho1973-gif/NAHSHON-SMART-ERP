@@ -504,4 +504,35 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'demo@example.com']);
         $this->assertSame(0, $registration->documents()->count());
     }
+
+    public function test_subcontractor_activation_bypasses_blockers(): void
+    {
+        // member_type = vendor인 하청업체 지원자는 필수 서류나 NFC 배지가 없어도 활성화가 가능해야 합니다.
+        $registration = MemberRegistration::create([
+            'full_name' => 'Subcontractor Worker',
+            'email' => 'subcon@example.com',
+            'member_type' => 'vendor',
+            'onboarding_status' => 'submitted',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
+        ]);
+
+        $this->assertSame(0, Employee::query()->where('name', 'Subcontractor Worker')->count());
+
+        // Blocker 우회 작동 검증
+        $this->assertEmpty($registration->activationBlockers());
+        $employee = $registration->approve();
+
+        $this->assertSame('Subcontractor Worker', $employee->name);
+        $this->assertSame('subcon@example.com', $employee->email);
+        $this->assertSame('active', $registration->fresh()->onboarding_status);
+        $this->assertDatabaseHas('employees', [
+            'name' => 'Subcontractor Worker',
+            'company_id' => $registration->company_id,
+        ]);
+        $this->assertDatabaseHas('users', [
+            'email' => 'subcon@example.com',
+            'access_role' => 'worker',
+        ]);
+    }
 }

@@ -56,9 +56,25 @@ class CommunicationService
             ],
         );
 
-        $this->syncSiteRoomMembers($site, collect([$chat, $announcements]));
+        // 현장 상황실 — 형식 없이 올린 글·사진을 AI 가 읽고 공정표·조달에 반영한다.
+        $ops = CommunicationRoom::query()->firstOrCreate(
+            [
+                'site_id' => $site->id,
+                'type' => CommunicationRoom::TYPE_SITE_OPS,
+            ],
+            [
+                'company_id' => $site->company_id,
+                'scope' => 'site',
+                'name' => $this->roomName($site, '현장 상황실'),
+                'description' => '오늘 한 일 · 내일 할 일 · 자재 · 영수증 · 이슈를 그냥 올리세요. AI 가 읽고 공정표에 반영합니다.',
+                'status' => 'active',
+                'is_read_only' => false,
+            ],
+        );
 
-        return ['chat' => $chat->fresh(), 'announcements' => $announcements->fresh()];
+        $this->syncSiteRoomMembers($site, collect([$chat, $announcements, $ops]));
+
+        return ['chat' => $chat->fresh(), 'announcements' => $announcements->fresh(), 'ops' => $ops->fresh()];
     }
 
     /**

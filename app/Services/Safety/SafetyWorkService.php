@@ -57,6 +57,41 @@ class SafetyWorkService
     }
 
     /**
+     * 잘못 등록된 작업 카드 1건을 삭제한다(work_code 기준).
+     * 관련 서명(TBM)·이슈·작업허가서(PTW)도 함께 정리한다. 연결된 WBS 공정 활동은
+     * 실제 일정이므로 건드리지 않는다(공정관리에 그대로 남는다).
+     *
+     * @return array{success: bool, work_code?: string, error?: string}
+     */
+    public function deleteWork(string $workCode, string $siteId = 'ALL'): array
+    {
+        $workCode = trim($workCode);
+        if ($workCode === '') {
+            return ['success' => false, 'error' => '작업 코드가 없습니다.'];
+        }
+
+        return DB::transaction(function () use ($workCode, $siteId): array {
+            $query = SafetyWorkItem::query()->where('work_code', $workCode);
+            if ($siteId !== 'ALL') {
+                $query->where('site_id', Site::query()->where('code', $siteId)->value('id'));
+            }
+            $item = $query->first();
+            if (! $item) {
+                return ['success' => false, 'error' => '해당 작업을 찾을 수 없습니다.'];
+            }
+
+            SafetyWorkSignature::query()->where('safety_work_item_id', $item->id)->delete();
+            SafetyWorkIssue::query()->where('safety_work_item_id', $item->id)->delete();
+            if (class_exists(\App\Models\SafetyPermit::class)) {
+                \App\Models\SafetyPermit::query()->where('safety_work_item_id', $item->id)->delete();
+            }
+            $item->delete();
+
+            return ['success' => true, 'work_code' => $workCode];
+        });
+    }
+
+    /**
      * Upsert each client work card (by work_code) plus its signatures and issues.
      *
      * @param  array<int, mixed>  $items
@@ -139,6 +174,35 @@ class SafetyWorkService
     }
 
     /**
+     * 편집된 AI 안전계획을 저장한다 — AI 초안을 현장 판단으로 다듬어 확정하는 마지막 고리.
+     * approve=true 면 곧바로 승인완료 처리(편집 후 승인).
+     *
+     * @param  array<string, mixed>  $plan
+     * @return array<string, mixed>
+     */
+    public function savePlan(string $workCode, array $plan, bool $approve = false): array
+    {
+        $item = SafetyWorkItem::query()->where('work_code', $workCode)->first();
+        if (! $item) {
+            return ['success' => false, 'error' => "안전카드를 찾을 수 없습니다: {$workCode}"];
+        }
+
+        $payload = is_array($item->plan_payload) ? $item->plan_payload : [];
+        $payload['plan'] = $plan;
+        $payload['plan_edited_at'] = Carbon::now()->toIso8601String();
+        $item->plan_payload = $payload;
+
+        if ($approve) {
+            $item->plan_status = '승인완료';
+        } elseif (in_array($item->plan_status, ['미생성', '초안'], true)) {
+            $item->plan_status = '검토중';
+        }
+        $item->save();
+
+        return ['success' => true, 'item' => $item->fresh(['signatures', 'issues'])->toClientArray()];
+    }
+
+    /**
      * Persist the (edited) close report, get an AI progress recommendation, store it,
      * and return the refreshed client item plus the recommendation.
      *
@@ -147,6 +211,10 @@ class SafetyWorkService
      */
     public function recommendProgress(array $data, string $siteId = 'ALL', ?int $userId = null): array
     {
+        // 사진은 저장 대상 컬럼이 아니므로 분석용으로 분리한 뒤 마감 보고만 저장한다.
+        $photos = is_array($data['photos'] ?? null) ? $data['photos'] : [];
+        unset($data['photos']);
+
         $this->save([$data], $siteId, $userId);
         $item = SafetyWorkItem::query()->where('work_code', $data['id'])->firstOrFail();
 
@@ -156,6 +224,7 @@ class SafetyWorkService
             'doneQty' => $item->done_qty,
             'totalQty' => $item->total_qty,
             'unit' => $item->unit,
+            'photos' => $photos,
         ]);
 
         $payload = is_array($item->plan_payload) ? $item->plan_payload : [];

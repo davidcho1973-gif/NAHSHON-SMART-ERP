@@ -9,8 +9,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SMART COMPANY">
   <link rel="manifest" href="{{ asset('site.webmanifest') }}">
-  <link rel="icon" href="{{ asset('images/nahshon-app-icon.svg') }}" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="{{ asset('images/nahshon-app-icon.svg') }}">
+  <link rel="icon" href="{{ asset('images/dasol-prism-app-icon.svg') }}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{{ asset('images/dasol-prism-app-icon.svg') }}">
   <title>Sign In - SMART COMPANY ERP</title>
   <style>
     :root {
@@ -449,7 +449,7 @@
       <div class="mobile-only mobile-app-hero" aria-hidden="true">
         <div class="mobile-app-icon">NS</div>
         <div>
-          <div class="mobile-kicker">NAHSHON MEP FIELD ERP</div>
+          <div class="mobile-kicker">DASOL PRISM FIELD ERP</div>
           <h1>SMART COMPANY</h1>
           <p class="subtitle">현장, 직원, 안전, 장비 데이터를 휴대폰에서 바로 확인합니다.</p>
         </div>

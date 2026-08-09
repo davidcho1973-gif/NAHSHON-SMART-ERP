@@ -3,8 +3,12 @@ name: Tests
 on:
   push:
     branches:
+      # staging 은 실제로 배포되는 브랜치인데 여기 빠져 있어서 테스트가 한 번도 돌지
+      # 않았다. 배포되는 브랜치일수록 CI 가 먼저 봐야 한다.
       - main
+      - staging
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,7 +41,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -59,3 +63,92 @@ jobs:
 
       - name: Execute tests
         run: php artisan test
+
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 배포.
+  #
+  # 두 갈래로 배포가 나간다.
+  #   1. Laravel Cloud 대시보드의 "Push to deploy" — 푸시를 감지해 알아서 배포
+  #   2. 여기서 부르는 Deploy Hook — 테스트가 통과한 뒤에만, 그 커밋을 콕 집어서
+  #
+  # 2번이 있는 이유는 1번이 검증 없이 배포하기 때문이다. 반대로 2번이 막혀도
+  # 1번으로 배포는 나간다. 그래서 훅 실패는 경고고, 성패는 "서버가 실제로 바뀌었는가"
+  # 하나로만 가른다 — verify-build.sh 가 서버에 직접 물어본다.
+  #
+  # 설정할 것 (환경별로 하나씩):
+  #   Settings → Secrets and variables → Actions
+  #     Secrets   : LARAVEL_CLOUD_DEPLOY_HOOK_STAGING / ..._PRODUCTION
+  #                 ← Laravel Cloud → Settings → Deployments → Deploy hook URL
+  #                   (입력칸에서 잘려 보이므로 반드시 복사 버튼을 쓸 것)
+  #     Variables : STAGING_URL / PRODUCTION_URL
+  #
+  # 둘 다 없으면 조용히 건너뛴다. 설정 전까지 저장소를 빨갛게 만들 이유가 없다.
+  deploy-staging:
+    name: Deploy staging
+    needs: tests
+    # 브랜치는 못 박되, 푸시 말고 수동 실행(Run workflow)으로도 돌 수 있게 한다.
+    # 배포만 다시 밀어야 하는 상황에 의미 없는 빈 커밋을 만들 이유가 없다.
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      ENV_LABEL: staging
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Trigger Laravel Cloud deployment
+        id: hook
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_STAGING }}
+        run: bash scripts/deploy/trigger-hook.sh
+
+      - name: Diagnose the hook URL shape
+        if: steps.hook.outputs.ok != 'true'
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_STAGING }}
+        run: bash scripts/deploy/diagnose-hook.sh
+
+      - name: Verify the deployed build
+        if: always()
+        env:
+          BASE: ${{ vars.STAGING_URL }}
+        run: bash scripts/deploy/verify-build.sh
+
+  # 운영. staging 과 같은 구조이고, 다른 것은 브랜치와 시크릿 이름뿐이다.
+  #
+  # main 에 올리는 것 자체가 이미 의도적인 행동이므로 별도 승인 단계는 두지 않았다.
+  # 사람의 확인을 한 번 더 받고 싶으면 GitHub 의 Environments 에 production 환경을
+  # 만들고 required reviewers 를 걸면 된다 — 그때는 이 잡에 environment: production 만 붙이면 된다.
+  deploy-production:
+    name: Deploy production
+    needs: tests
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      ENV_LABEL: 운영
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Trigger Laravel Cloud deployment
+        id: hook
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION }}
+        run: bash scripts/deploy/trigger-hook.sh
+
+      - name: Diagnose the hook URL shape
+        if: steps.hook.outputs.ok != 'true'
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION }}
+        run: bash scripts/deploy/diagnose-hook.sh
+
+      - name: Verify the deployed build
+        if: always()
+        env:
+          BASE: ${{ vars.PRODUCTION_URL }}
+        run: bash scripts/deploy/verify-build.sh
