@@ -295,8 +295,8 @@ Route::get('/build-version', function () {
                 ];
             }
             $minutes = (int) now()->diffInMinutes(Carbon::parse($last), true);
-            // 1분마다 찍으므로 5분이 넘으면 멈춘 것으로 본다(배포 중 잠깐 끊기는 여유 포함).
-            $running = $minutes <= 5;
+            // 10분마다 찍으므로 두 번 연속 빠지면 멈춘 것으로 본다(배포 중 끊기는 여유 포함).
+            $running = $minutes <= 25;
 
             return [
                 'running' => $running,

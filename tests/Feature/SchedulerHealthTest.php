@@ -47,9 +47,21 @@ class SchedulerHealthTest extends TestCase
     public function test_a_short_gap_still_counts_as_running(): void
     {
         // 배포 중에는 잠깐 끊긴다. 그때마다 경보를 울리면 아무도 안 믿게 된다.
-        Cache::forever('scheduler.last_run_at', now()->subMinutes(3)->toIso8601String());
+        Cache::forever('scheduler.last_run_at', now()->subMinutes(12)->toIso8601String());
 
         $this->get('/build-version')->assertJsonPath('scheduler.running', true);
+    }
+
+    public function test_the_heartbeat_does_not_keep_the_serverless_database_awake(): void
+    {
+        // 데이터베이스가 서버리스라 5분 놀면 잠든다. 캐시가 그 데이터베이스에 있으므로
+        // 매분 맥박을 찍으면 잠들 틈이 없어져 요금이 계속 나간다. 이미 10분마다 도는
+        // 작업이 있으니 같은 리듬에 얹는다 — 감시를 붙이느라 요금을 더 내지는 않는다.
+        $events = collect(app(Schedule::class)->events());
+
+        $heartbeat = $events->first(fn ($e) => $e->description === 'scheduler-heartbeat');
+
+        $this->assertSame('*/10 * * * *', $heartbeat->expression);
     }
 
     public function test_it_says_plainly_when_the_scheduler_never_ran(): void
@@ -63,7 +75,7 @@ class SchedulerHealthTest extends TestCase
         $this->assertStringContainsString('한 번도', $res->json('scheduler.message'));
     }
 
-    public function test_the_heartbeat_is_registered_every_minute(): void
+    public function test_the_heartbeat_is_registered(): void
     {
         // 맥박 자체가 스케줄에 없으면 이 화면은 영원히 "멈춤"이라고 말한다.
         $events = collect(app(Schedule::class)->events());
@@ -71,7 +83,6 @@ class SchedulerHealthTest extends TestCase
         $heartbeat = $events->first(fn ($e) => $e->description === 'scheduler-heartbeat');
 
         $this->assertNotNull($heartbeat, '스케줄러 맥박이 등록되어 있지 않습니다.');
-        $this->assertSame('* * * * *', $heartbeat->expression);
     }
 
     public function test_the_evening_close_runs_at_eight_and_skips_active_workers(): void

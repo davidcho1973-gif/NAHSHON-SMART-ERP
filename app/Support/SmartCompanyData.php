@@ -1346,8 +1346,8 @@ class SmartCompanyData
         $last = cache('scheduler.last_run_at');
         $minutes = $last ? (int) now()->diffInMinutes(Carbon::parse($last), true) : null;
 
-        // 1분마다 찍으므로 5분이면 넉넉하다(배포 중 잠깐 끊기는 여유 포함).
-        if ($minutes !== null && $minutes <= 5) {
+        // 10분마다 찍으므로 두 번 연속 빠질 때까지 기다린다(배포 중 끊기는 여유 포함).
+        if ($minutes !== null && $minutes <= 25) {
             return null;
         }
 
