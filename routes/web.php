@@ -5,7 +5,6 @@ use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
-use App\Http\Controllers\DailyWorkReportController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\ExpensePreApprovalController;
@@ -53,8 +52,6 @@ Route::get('/debug-routes-sec', function () {
 Route::middleware('auth')->group(function (): void {
     // 현장앱은 기존 현장(Site)을 직접 만들고 지운다 — 인증 없이 열어 두면
     // 방문자가 버튼 한 번으로 현장과 딸린 기록(협력사·QR·인원 마감)을 연쇄 삭제할 수 있다.
-    Route::get('/daily-work-report', [DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
-    Route::post('/daily-work-report/store', [DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
     Route::get('/field-app', function () {
         return view('field-app.index');
     })->name('field-app.index');

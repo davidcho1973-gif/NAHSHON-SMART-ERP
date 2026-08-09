@@ -5,11 +5,12 @@ namespace App\Livewire\FieldApp;
 use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\DailyCrewReport;
-use App\Models\FieldCommuteLog;
+use App\Models\Employee;
 use App\Models\FieldDailyReport;
 use App\Models\FieldDrawing;
 use App\Models\FieldDrawingMessage;
 use App\Models\FieldEquipmentLog;
+use App\Models\OpsLaborReport;
 use App\Models\Site;
 use App\Models\SiteContractor;
 use App\Services\FieldApp\DrawingVisionService;
@@ -31,6 +32,9 @@ class FieldCommandApp extends Component
         ['id' => 'safety', 'name' => '안전/관리', 'icon' => '🛡️', 'count' => 0],
         ['id' => 'general', 'name' => '일반조공', 'icon' => '👷', 'count' => 0],
     ];
+
+    /** 현장앱 일일보고에서 넘어온 인원 행 표식 — 재제출 시 이 표식의 행만 갈아끼운다. */
+    private const LABOR_NOTE = '현장앱 일일보고';
 
     // Active tab: 'report' | 'qr' | 'safety' | 'equipment' | 'knowledge'
     public string $activeTab = 'report';
@@ -247,6 +251,7 @@ class FieldCommandApp extends Component
         }
 
         $this->persistReport('submitted');
+        $this->syncTradesToLaborReports();
         $this->toastMessage = "✅ {$this->work_date} 일일 작업 보고서가 서버에 제출되었습니다.";
     }
 
@@ -433,6 +438,41 @@ class FieldCommandApp extends Component
        QR 출퇴근 전자 태깅 (field_commute_logs)
     ------------------------------------------------------------------ */
 
+    /**
+     * 일일보고의 공종별 인원을 운영 인원보고(ops_labor_reports)로 넘긴다.
+     *
+     * 이 숫자가 현장앱 안에만 있으면 일일마감이 모르는 네 번째 인원 숫자가 된다.
+     * 운영 보고로 넘기면 기존 대조 구조(보고 N명 vs QR 실적 M명 → 차이)가 그대로
+     * 이 보고에도 적용된다 — 같은 인원을 상황실에 다시 보고할 필요가 없다.
+     */
+    private function syncTradesToLaborReports(): void
+    {
+        if (! $this->site_id || ! $this->work_date) {
+            return;
+        }
+
+        OpsLaborReport::query()
+            ->where('site_id', $this->site_id)
+            ->where('work_date', $this->work_date)
+            ->where('note', self::LABOR_NOTE)
+            ->delete();
+
+        foreach ($this->trades as $trade) {
+            $count = (int) ($trade['count'] ?? 0);
+            if ($count <= 0) {
+                continue;
+            }
+            OpsLaborReport::query()->create([
+                'site_id' => $this->site_id,
+                'work_date' => $this->work_date,
+                'trade' => (string) ($trade['name'] ?? ''),
+                'headcount' => $count,
+                'note' => self::LABOR_NOTE,
+                'reported_by_id' => auth()->id(),
+            ]);
+        }
+    }
+
     public function recordCommute(string $type): void
     {
         if (! $this->site_id) {
@@ -441,16 +481,68 @@ class FieldCommandApp extends Component
             return;
         }
 
-        $log = FieldCommuteLog::query()->create([
-            'site_id' => $this->site_id,
-            'work_date' => $this->work_date ?: now()->format('Y-m-d'),
-            'worker_name' => trim($this->commute_worker_name) ?: null,
-            'type' => $type === 'in' ? 'in' : 'out',
-            'scanned_at' => now(),
+        // 예전에는 이름 문자열만 적는 별도 대장(field_commute_logs)에 남겼다. 그 대장은
+        // 아무 데도 연결되지 않아 급여·인원집계가 모르는 기록이었고, 같은 출근을 QR 로
+        // 한 번 더 찍어야 했다. 이제 직원을 특정해 정식 출퇴근(attendance_logs)으로
+        // 기록한다 — 타임시트·급여·일일마감이 자동으로 이어진다.
+        $name = trim($this->commute_worker_name);
+        if ($name === '') {
+            $this->toastMessage = '⚠️ 성명을 입력해 주세요. 등록된 작업자만 기록할 수 있습니다.';
+
+            return;
+        }
+
+        $site = Site::query()->find($this->site_id);
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $name).'%';
+        $matches = Employee::query()
+            ->where('employment_status', 'active')
+            ->where('site_id', $site?->id)
+            ->where(fn ($w) => $w->where('name', 'ilike', $like)
+                ->orWhere('first_name', 'ilike', $like)
+                ->orWhere('last_name', 'ilike', $like))
+            ->limit(2)
+            ->get();
+
+        if ($matches->isEmpty()) {
+            $this->toastMessage = "⚠️ 이 현장에 등록된 작업자 중 '{$name}' 을 찾지 못했습니다. 인원관리에 먼저 등록해야 급여로 이어집니다.";
+
+            return;
+        }
+        if ($matches->count() > 1) {
+            $this->toastMessage = "⚠️ '{$name}' 과 일치하는 작업자가 여러 명입니다. 성명을 정확히 입력해 주세요.";
+
+            return;
+        }
+
+        $employee = $matches->first();
+        $now = now($site?->timezone ?: config('app.timezone'));
+
+        // 게이트 QR 과 같은 중복 스캔 창(5분) — 연타로 출근/퇴근이 겹겹이 쌓이는 것 방지.
+        $recent = AttendanceLog::query()->where('employee_id', $employee->id)
+            ->where('event_at', '>=', $now->copy()->subMinutes(5))
+            ->where('status', '!=', 'rejected')->exists();
+        if ($recent) {
+            $this->toastMessage = '⏱️ 방금 처리된 기록이 있어 중복 스캔을 무시했습니다.';
+
+            return;
+        }
+
+        AttendanceLog::query()->create([
+            'employee_id' => $employee->id,
+            'company_id' => $employee->company_id,
+            'site_id' => $site?->id,
+            'team_id' => $employee->team_id,
+            'attendance_date' => $now->toDateString(),
+            'event_type' => $type === 'in' ? 'clock_in' : 'clock_out',
+            'event_at' => $now,
+            'source' => 'field_app',
+            'status' => 'approved',
+            'notes' => '현장앱에서 기록됨.',
         ]);
 
-        $label = $log->type === 'in' ? '출근' : '퇴근';
-        $this->toastMessage = "📱 {$label} 기록 완료 ({$log->scanned_at->format('H:i:s')})";
+        $label = $type === 'in' ? '출근' : '퇴근';
+        $this->commute_worker_name = '';
+        $this->toastMessage = "📱 {$employee->name} {$label} 기록 완료 ({$now->format('H:i:s')}) — 급여 타임시트 자동 반영";
     }
 
     public function getQrDataUriProperty(): ?string
@@ -641,8 +733,18 @@ class FieldCommandApp extends Component
             ? FieldEquipmentLog::query()->where('site_id', $this->site_id)->whereDate('work_date', $this->work_date)->orderBy('id')->get()
             : collect();
 
+        // 정식 출퇴근 대장에서 읽는다 — 현장앱뿐 아니라 QR·GPS·게이트로 찍은 기록도 함께 보인다.
         $commuteLogs = $this->site_id
-            ? FieldCommuteLog::query()->where('site_id', $this->site_id)->whereDate('work_date', $this->work_date)->latest('scanned_at')->limit(8)->get()
+            ? AttendanceLog::query()->where('site_id', $this->site_id)
+                ->whereDate('attendance_date', $this->work_date)
+                ->where('status', '!=', 'rejected')
+                ->with('employee:id,name')
+                ->latest('event_at')->limit(8)->get()
+                ->map(fn (AttendanceLog $l) => (object) [
+                    'worker_name' => $l->employee?->name,
+                    'type' => $l->event_type === 'clock_in' ? 'in' : 'out',
+                    'scanned_at' => $l->event_at,
+                ])
             : collect();
 
         $drawings = FieldDrawing::query()
