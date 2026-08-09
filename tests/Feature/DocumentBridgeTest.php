@@ -201,4 +201,26 @@ class DocumentBridgeTest extends TestCase
         $this->assertCount(1, $res->json('failed'));
         $this->assertSame('floorplan.dwg', $res->json('failed.0.file'));
     }
+
+    public function test_원본이_사라진_문서는_목록에서_표시되고_다운로드는_안내를_준다(): void
+    {
+        // 레코드는 남고 파일만 사라진 상태 — 사용자가 다운로드를 눌러 보고 나서야
+        // 404 를 만나면 원인을 알 수 없다. 목록에서 미리 알려 주고, 눌렀을 때도
+        // "다시 올리면 복원된다"고 말해 준다.
+        $this->actingAs($this->admin());
+        $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('06_전기.pdf', 300, 'application/pdf')],
+        ])->assertSuccessful();
+
+        $doc = IntelligentDocument::firstOrFail();
+        $this->assertFalse($this->get('/document-hub/api/documents')->json('documents.0.fileMissing'));
+
+        Storage::disk($doc->disk)->delete($doc->file_path);   // 배포가 지운 상황
+
+        // 목록이 미리 알려 주므로 화면은 다운로드 버튼 대신 복원 안내를 띄운다.
+        $this->assertTrue($this->get('/document-hub/api/documents')->json('documents.0.fileMissing'));
+        // 그래도 직접 URL 로 들어오면 404 — 파일이 없는데 있는 척하지 않는다.
+        $this->get("/document-hub/documents/{$doc->id}/download")->assertNotFound();
+        $this->get("/document-hub/documents/{$doc->id}/preview")->assertNotFound();
+    }
 }
