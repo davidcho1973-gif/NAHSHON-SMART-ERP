@@ -488,7 +488,8 @@ class WbsScheduleReplaceTest extends TestCase
 
         $row = WbsItem::where('activity_id', 'A250')->first();
         $this->assertNotNull($row, 'ID 에서 ★ 를 떼야 A250 으로 찾을 수 있다');
-        $this->assertTrue($row->payload['critical']);
+        // 화면의 주공정 강조는 payload 가 아니라 is_critical 컬럼을 읽는다.
+        $this->assertTrue((bool) $row->is_critical);
         $this->assertStringNotContainsString('★', $row->name);
     }
 
@@ -534,6 +535,40 @@ class WbsScheduleReplaceTest extends TestCase
         $this->postJson('/wbs-api/schedule/replace', [
             'token' => $token, 'project_code' => self::CODE, 'confirm' => true,
         ])->assertOk();
+    }
+
+    // ── 완료 → 공정률 ───────────────────────────────────────────────────
+
+    public function test_완료_처리한_공사가_공기만큼_공정률에_반영된다(): void
+    {
+        // 현장 간트에는 투입조 칸이 없어 공수가 전부 비어 있다. 그래도 공기가 있으니
+        // 큰 작업을 끝냈을 때 큰 폭으로 올라야 한다 — 여기서 끊기면 "완료" 버튼이
+        // 공정률에 아무 의미를 못 남긴다.
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        $wbs = app(WbsService::class);
+        $this->assertSame(0, $wbs->progressSummary(self::CODE)['progress']);
+
+        // 공기 합 = 1 + 4 + 2 + 17 + 10 = 34일 (조달 2건·마일스톤은 공기 없음)
+        $wbs->markStatus(self::CODE.'-W-A250', '완료'); // 17일
+
+        $this->assertSame(50, $wbs->progressSummary(self::CODE)['progress'], '17/34 = 50%');
+    }
+
+    public function test_조달만_발주완료해도_공정률은_움직이지_않는다(): void
+    {
+        // 조달 23건을 눌러 공정률이 28% 로 뛰던 문제. 발주 행은 공기가 없어 무게 0 이다.
+        Storage::fake('local');
+        $this->actingAs($this->user('admin'));
+        $this->importFieldGantt();
+
+        $wbs = app(WbsService::class);
+        $wbs->markStatus(self::CODE.'-W-M01', '완료');
+        $wbs->markStatus(self::CODE.'-W-M02', '완료');
+
+        $this->assertSame(0, $wbs->progressSummary(self::CODE)['progress']);
     }
 
     // ── 응답 모양 ────────────────────────────────────────────────────────

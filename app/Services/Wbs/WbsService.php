@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * 공정관리(WBS) 서버 로직 — 레거시 SPA(renderWbs)의 트리/진척 API 를 실 DB 로 제공.
  *
- * 진척률 집계는 공수(manhours) 가중 평균을 기본으로 하고, 공수가 없으면 단순 평균으로 폴백한다.
+ * 진척률 집계는 공수(manhours) 가중 평균을 기본으로 하고, 공수가 없으면 공기(days), 그것도 없으면
+ * 단순 평균으로 폴백한다(weightedProgress 참고).
  * 안전 작업카드(safety_work_items)와 연결된 SubTask 는 현장 실측 진행률을 끌어와 롤업한다.
  */
 class WbsService
@@ -774,7 +775,22 @@ class WbsService
     }
 
     /**
-     * 공수 가중 진척률(%). 공수 합이 0이면 단순 평균으로 폴백.
+     * 가중 진척률(%) — 공수(MH) → 공기(일) → 균등 순으로 무게를 잡는다.
+     *
+     * 공정표가 공수를 주는 일은 드물다. 실제로 현장에서 올라온 간트에는 투입조 칸이 없어
+     * 81개 작업 전부 공수가 비어 있었고, 그러면 예전 코드는 단순 평균으로 떨어졌다.
+     * 단순 평균에서는 17일짜리 배관공사 한 건과 발주서 한 장이 같은 1/81 이 된다.
+     *
+     * 그래서 공수가 없으면 공기(일)를 무게로 쓴다. 이 한 줄이 두 가지를 동시에 고친다:
+     *
+     *   1) 큰 작업이 큰 몫을 갖는다 — 17일 공사를 끝내면 1% 가 아니라 4% 가 오른다
+     *   2) 조달 항목이 공정률을 부풀리지 않는다 — 발주 행은 공기가 없어 무게 0 이라
+     *      계산에서 저절로 빠진다. 별도 플래그도, 스키마 변경도 필요 없다
+     *
+     * 실측: 조달 23건(공기합 0일) · 공사 58건(공기합 379일) 인 실제 공정표에서
+     * 조달만 전부 발주완료했을 때 예전 28% → 지금 0%, 공사를 전부 끝냈을 때 예전 72% → 지금 100%.
+     *
+     * 공수도 공기도 없으면 그때는 균등(단순 평균)으로 간다.
      */
     private function weightedProgress(Collection $subtasks): int
     {
@@ -782,13 +798,15 @@ class WbsService
             return 0;
         }
 
-        $totalWeight = $subtasks->sum(fn (WbsItem $s) => max((float) $s->manhours, 0));
+        $weight = fn (WbsItem $s) => max((float) ($s->manhours ?: $s->days), 0);
+
+        $totalWeight = $subtasks->sum($weight);
 
         if ($totalWeight <= 0) {
             return (int) round($subtasks->avg(fn (WbsItem $s) => $s->effectiveProgress()));
         }
 
-        $weighted = $subtasks->sum(fn (WbsItem $s) => max((float) $s->manhours, 0) * $s->effectiveProgress());
+        $weighted = $subtasks->sum(fn (WbsItem $s) => $weight($s) * $s->effectiveProgress());
 
         return (int) round($weighted / $totalWeight);
     }
