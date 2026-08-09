@@ -50,6 +50,25 @@
         @media(max-width:1100px){.app{grid-template-columns:78px 1fr}.brand div,.nav-link span,.nav-label,.sidebar-note{display:none}.brand{padding-left:3px}.sidebar{padding:18px 12px}.nav-link{justify-content:center}.workspace{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
         @media(max-width:700px){.app{display:block}.sidebar{display:none}.topbar{padding:0 14px}.content{padding:17px 12px}.hero{align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}.scope-grid,.searchbar{grid-template-columns:1fr}.doc-table th:nth-child(3),.doc-table td:nth-child(3),.doc-table th:nth-child(4),.doc-table td:nth-child(4){display:none}.detail-grid{grid-template-columns:repeat(2,1fr)}}
     </style>
+    @if(request()->boolean('embed'))
+    {{-- ERP(SPA) 안에 iframe 으로 얹힐 때: 이 페이지 자체의 사이드바를 숨긴다.
+         ERP 사이드바가 이미 왼쪽에 있는데 여기 것까지 보이면 사이드바가 두 개가 된다. --}}
+    <style>
+        .sidebar{display:none!important}
+        .app{display:block}
+    </style>
+    <script>
+        // ERP 로 돌아가는 링크(ERP 홈·알림센터·/admin)는 iframe 안이 아니라 바깥(전체 창)에서 열려야 한다.
+        // 안 그러면 ERP 속 iframe 속에 또 ERP 가 뜬다.
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('a[href^="/"]').forEach(function (a) {
+                var h = a.getAttribute('href') || '';
+                if (h.indexOf('/document-hub') === 0) return; // 문서함 내부 이동은 iframe 안에서
+                a.setAttribute('target', '_top');
+            });
+        });
+    </script>
+    @endif
 </head>
 <body>
 <div class="app">
