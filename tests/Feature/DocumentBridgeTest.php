@@ -147,4 +147,58 @@ class DocumentBridgeTest extends TestCase
         $this->assertSame(1, IntelligentDocument::count());
         $this->assertCount(1, $res->json('duplicates'));
     }
+
+    public function test_저장소_쓰기_실패는_중복이_아니라_실패로_보고된다(): void
+    {
+        // s3 디스크는 config 에서 throw=false 라 쓰기 실패가 예외 없이 false 로 온다.
+        // 그것을 "중복 N개 제외"로 뭉뚱그리면 사용자는 왜 안 올라가는지 영영 알 수 없다.
+        config(['document-intelligence.disk' => 'broken']);
+        config(['filesystems.disks.broken' => ['driver' => 'local', 'root' => '/proc/nope', 'throw' => false]]);
+        $this->actingAs($this->admin());
+
+        $res = $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf')],
+        ])->assertSuccessful();
+
+        // 설정 디스크가 죽어도 로컬로 받아 분석은 진행된다 — 업로드가 조용히 사라지지 않는다.
+        $this->assertSame(1, IntelligentDocument::count());
+        $this->assertSame('local', IntelligentDocument::firstOrFail()->disk);
+        $this->assertSame([], $res->json('duplicates'));
+    }
+
+    public function test_분석_실패로_남은_문서를_다시_올리면_분석이_재개된다(): void
+    {
+        // 사용자가 같은 파일을 또 올리는 이유는 대개 "분석 실패"를 풀려는 것이다.
+        // 원본이 멀쩡하다고 그냥 "중복"으로 돌려보내면 아무 일도 일어나지 않는다.
+        $this->actingAs($this->admin());
+        $make = fn () => UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf');
+
+        $this->post('/document-hub/api/upload', ['files' => [$make()]])->assertSuccessful();
+        $doc = IntelligentDocument::firstOrFail();
+        $doc->update(['ai_status' => 'failed', 'ai_error' => '분석 실패']);
+
+        $res = $this->post('/document-hub/api/upload', ['files' => [$make()]])->assertSuccessful();
+
+        $doc->refresh();
+        $this->assertSame('queued', $doc->ai_status, '재분석이 자동으로 예약된다');
+        $this->assertNull($doc->ai_error);
+        $this->assertTrue($res->json('duplicates.0.requeued'));
+        $this->assertStringContainsString('다시 시작', $res->json('duplicates.0.reason'));
+    }
+
+    public function test_형식이_안_맞는_파일_하나가_나머지_업로드를_막지_않는다(): void
+    {
+        $this->actingAs($this->admin());
+
+        $res = $this->post('/document-hub/api/upload', [
+            'files' => [
+                UploadedFile::fake()->create('floorplan.dwg', 100, 'application/acad'),
+                UploadedFile::fake()->create('spec.pdf', 100, 'application/pdf'),
+            ],
+        ])->assertSuccessful();
+
+        $this->assertSame(1, IntelligentDocument::count(), '멀쩡한 파일은 올라가야 한다');
+        $this->assertCount(1, $res->json('failed'));
+        $this->assertSame('floorplan.dwg', $res->json('failed.0.file'));
+    }
 }
