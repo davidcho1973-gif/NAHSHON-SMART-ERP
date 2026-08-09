@@ -102,13 +102,38 @@ Laravel Cloud 의 GitHub 자동 배포는 대시보드 설정에 달려 있어�
       "commit_short": "9db1bfd",
       "subject": "Merge ...",
       "has": {
-        "admin_screens": true,      // 새 관리자 화면 6개
+        "admin_screens": true,      // ERP 안의 관리 화면
+        "spa_only_admin": true,     // false 면 옛 /admin 링크가 남아 있는 것
         "ops_room": true,           // 현장 상황실
         "old_company_name": false   // true 면 배포가 안 된 것
       }
     }
 
 404 가 나오거나 `old_company_name` 이 `true` 면 배포가 반영되지 않은 것이다.
+
+### 빌드 명령은 대시보드에 있다 — 저장소에서 못 고친다 (2026-08-09 추가)
+
+`composer.json` 이나 워크플로에는 없고 Laravel Cloud → 해당 환경 → `Settings` →
+`Deployments` → **Build commands** 에만 있다. 그래서 저장소에서 패키지를 지워도
+빌드 명령은 그대로 남고, 다음 배포에서 "없는 명령"을 부르다 죽는다.
+
+실제로 겪은 일: 관리자 패널(Filament)을 걷어내면서 `filament/filament` 를 제거했는데
+빌드 명령에 `php artisan filament:assets` 가 남아 있어 배포가 15초 만에 실패했다.
+시험은 전부 통과했고 서버는 직전 버전으로 멀쩡히 돌고 있어서 더 헷갈렸다.
+
+**패키지를 지우거나 추가할 때는 빌드 명령도 함께 본다.** 지금 staging 의 빌드 명령은
+이렇다 — 여기 없는 것을 부르면 배포가 죽는다.
+
+```
+composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+npm ci --audit false
+npm run build
+php artisan optimize
+```
+
+증상으로 알아보는 법: `/build-version` 이 **옛 커밋을 정상 응답**하면 서버가 죽은 게
+아니라 새 빌드가 못 올라온 것이다. Deployments 탭에서 그 커밋의 빌드 로그 마지막 줄을
+본다.
 
 ### staging 도 CI 를 돈다
 
@@ -126,6 +151,6 @@ These actions must be done in the Laravel Cloud dashboard by an owner/admin acco
 5. Confirm the connected branch is `staging`.
 6. Deploy `staging` after each test-ready change.
 7. If deployment fails, open the failed deployment log and fix the reported error.
-8. Verify `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/debug-build-sec-53298bfd9a` returns `member_registration_has_badge_keyvalue: false`.
+8. Verify `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/build-version` reports the commit you just pushed.
 
 Current rule confirmed by David: test in Staging first; after the test passes, deploy/promote to Production.
