@@ -2,12 +2,16 @@
 
 namespace App\Livewire\FieldApp;
 
+use App\Models\AttendanceLog;
+use App\Models\AttendanceQrCode;
+use App\Models\DailyCrewReport;
 use App\Models\FieldCommuteLog;
 use App\Models\FieldDailyReport;
 use App\Models\FieldDrawing;
 use App\Models\FieldDrawingMessage;
 use App\Models\FieldEquipmentLog;
 use App\Models\Site;
+use App\Models\SiteContractor;
 use App\Services\FieldApp\DrawingVisionService;
 use chillerlan\QRCode\QRCode;
 use Illuminate\Support\Str;
@@ -33,8 +37,11 @@ class FieldCommandApp extends Component
 
     // Form inputs: Basic & Site
     public ?int $site_id = null;
+
     public string $work_date = '';
+
     public string $weather = '☀️ 맑음';
+
     public string $temperature = '';
 
     // Dynamic Trade List: ['id' => '...', 'name' => '...', 'icon' => '...', 'count' => 0]
@@ -42,35 +49,48 @@ class FieldCommandApp extends Component
 
     // Inputs for adding/editing trade
     public string $new_trade_name = '';
+
     public string $new_trade_icon = '🔨';
+
     public ?string $editing_trade_id = null;
+
     public string $editing_trade_name = '';
 
     // Inputs for adding/editing site
     public string $new_site_name = '';
+
     public string $new_site_code = '';
+
     public ?int $editing_site_id = null;
+
     public string $editing_site_name = '';
 
     // Modal Visibility Toggles
     public bool $showTradeModal = false;
+
     public bool $showSiteModal = false;
 
     // Daily Work Log
     public string $work_title = '';
+
     public string $work_today = '';
+
     public string $work_tomorrow = '';
+
     public int $progress_rate = 0;
+
     public string $report_status = 'draft';
 
     // Safety & TBM State
     public bool $tbm_completed = false;
+
     public array $safety_checks = [
         'ppe' => false,
         'fall_prevention' => false,
         'electrical_hazard' => false,
         'fire_permit' => false,
     ];
+
     public string $safety_notes = '';
 
     // QR Commute State
@@ -78,14 +98,20 @@ class FieldCommandApp extends Component
 
     // Equipment Dispatch Inputs
     public string $new_eq_name = '';
+
     public string $new_eq_type = '스카이';
+
     public string $new_eq_operator = '';
 
     // AI Drawing Knowledge Hub State
     public ?int $selected_drawing_id = null;
+
     public string $new_drawing_title = '';
+
     public string $new_drawing_category = 'MEP 배관/전기 도면';
+
     public $drawing_file = null;
+
     public string $qa_question = '';
 
     // Flash Notification Message
@@ -269,7 +295,7 @@ class FieldCommandApp extends Component
         }
 
         $this->trades[] = [
-            'id' => 'trade_' . uniqid(),
+            'id' => 'trade_'.uniqid(),
             'name' => trim($this->new_trade_name),
             'icon' => $this->new_trade_icon ?: '🔨',
             'count' => 0,
@@ -334,7 +360,7 @@ class FieldCommandApp extends Component
 
         $site = Site::query()->create([
             'name' => trim($this->new_site_name),
-            'code' => $this->new_site_code ? trim($this->new_site_code) : 'SITE-' . strtoupper(substr(md5(uniqid()), 0, 4)),
+            'code' => $this->new_site_code ? trim($this->new_site_code) : 'SITE-'.strtoupper(substr(md5(uniqid()), 0, 4)),
             'status' => 'active',
         ]);
 
@@ -371,13 +397,36 @@ class FieldCommandApp extends Component
 
     public function deleteSite(int $siteId): void
     {
-        $site = Site::query()->find($siteId);
-        if ($site) {
-            $site->delete();
-            $this->site_id = Site::query()->where('status', 'active')->orWhereNull('status')->first()?->id;
-            $this->loadReport();
-            $this->toastMessage = '🗑️ 현장이 삭제되었습니다.';
+        // 현장 삭제는 하드 삭제이고, sites 를 cascade 로 참조하는 테이블이 7개다
+        // (협력사 명단·QR 코드·WiFi AP·팀별 인원 마감 등). 잘못 누르면 그 기록이
+        // 전부 함께 사라지므로 관리자만, 그리고 기록이 없는 현장만 지울 수 있다.
+        $role = (string) (auth()->user()?->access_role ?? '');
+        if (! in_array($role, ['super_admin', 'admin'], true)) {
+            $this->toastMessage = '⚠️ 현장 삭제는 관리자만 할 수 있습니다.';
+
+            return;
         }
+
+        $site = Site::query()->find($siteId);
+        if (! $site) {
+            return;
+        }
+
+        $hasHistory = AttendanceLog::query()->where('site_id', $site->id)->exists()
+            || AttendanceQrCode::query()->where('site_id', $site->id)->exists()
+            || DailyCrewReport::query()->where('site_id', $site->id)->exists()
+            || SiteContractor::query()->where('site_id', $site->id)->exists();
+
+        if ($hasHistory) {
+            $this->toastMessage = '⚠️ 출퇴근·QR·마감 기록이 있는 현장은 지울 수 없습니다. 관리자 화면에서 상태를 Inactive 로 바꿔 주세요.';
+
+            return;
+        }
+
+        $site->delete();
+        $this->site_id = Site::query()->where('status', 'active')->orWhereNull('status')->first()?->id;
+        $this->loadReport();
+        $this->toastMessage = '🗑️ 현장이 삭제되었습니다.';
     }
 
     /* ---------------------------------------------------------------- border
@@ -416,7 +465,7 @@ class FieldCommandApp extends Component
         }
 
         try {
-            return (new QRCode())->render("FIELD-QR|{$site->code}|{$this->work_date}");
+            return (new QRCode)->render("FIELD-QR|{$site->code}|{$this->work_date}");
         } catch (Throwable) {
             return null;
         }
@@ -500,7 +549,7 @@ class FieldCommandApp extends Component
 
         $drawing = FieldDrawing::query()->create([
             'site_id' => $this->site_id,
-            'drawing_no' => 'DWG-' . strtoupper(Str::random(6)),
+            'drawing_no' => 'DWG-'.strtoupper(Str::random(6)),
             'title' => trim($this->new_drawing_title),
             'category' => $this->new_drawing_category,
             'version' => 'v1.0',
@@ -515,7 +564,7 @@ class FieldCommandApp extends Component
             $this->toastMessage = "🤖 도면 '{$drawing->title}' {$mode}이 완료되어 지식베이스에 추가되었습니다.";
         } catch (Throwable $e) {
             report($e);
-            $drawing->update(['status' => 'failed', 'summary' => 'AI 판독 실패: ' . Str::limit($e->getMessage(), 200)]);
+            $drawing->update(['status' => 'failed', 'summary' => 'AI 판독 실패: '.Str::limit($e->getMessage(), 200)]);
             $this->toastMessage = '⚠️ AI 도면 판독에 실패했습니다. 잠시 후 다시 시도해 주세요.';
         }
 

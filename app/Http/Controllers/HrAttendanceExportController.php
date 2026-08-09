@@ -33,7 +33,10 @@ class HrAttendanceExportController extends Controller
         foreach ($companies as $company) {
             foreach ($company['teams'] ?? [] as $team) {
                 foreach ($team['members'] ?? [] as $member) {
-                    ($member['isOpen'] ?? false) ? $present++ : $absent++;
+                    // isOpen 은 "지금 현장에 있음"이지 "오늘 출근함"이 아니다 — 퇴근 완료자를
+                    // 미출근으로 세면 퇴근 후 뽑은 현황이 "출근 0명"이 된다. 본문 상태 표기
+                    // (근무중/퇴근완료/미출근)와 같은 기준으로 센다.
+                    ($member['isOpen'] ?? false) || ($member['todayOut'] ?? null) ? $present++ : $absent++;
                 }
             }
         }

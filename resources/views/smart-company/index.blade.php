@@ -7981,7 +7981,7 @@
           '</div>' +
           '<label style="' + LBL + '">상태</label><select id="pe-status" class="wbs-edit-field">' + STAGES.map(function(s){ return '<option' + (it.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" value="' + wbsEsc(it.vendor || '') + '"></div>' +
+          '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" list="pe-vendor-options" value="' + wbsEsc(it.vendor || '') + '" placeholder="거래처 선택/입력"><datalist id="pe-vendor-options"></datalist></div>' +
           '<div><label style="' + LBL + '">발주번호(PO)</label><input id="pe-pono" class="wbs-edit-field" value="' + wbsEsc(it.poNo || '') + '"></div>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -8001,6 +8001,17 @@
         function close(){ root.innerHTML = ''; }
         root.querySelector('#pe-close').addEventListener('click', close);
         root.querySelector('#pe-cancel').addEventListener('click', close);
+
+        // 벤더 칸을 거래처 마스터와 잇는다 — 같은 회사를 화면마다 다시 타이핑하면
+        // "Graybar" / "Graybar Inc." 오타 하나로 거래처별 발주 집계가 갈라진다.
+        gsRun('api_getVendorList', [], []).then(function(vendors) {
+          var dl = root.querySelector('#pe-vendor-options');
+          if (!dl || !Array.isArray(vendors)) return;
+          dl.innerHTML = vendors.map(function(v) {
+            var name = v && v.name ? String(v.name) : '';
+            return name ? '<option value="' + wbsEsc(name) + '">' + wbsEsc(v.category && v.category !== '-' ? v.category : '') + '</option>' : '';
+          }).join('');
+        }).catch(function() {});
 
         // 발주서/서류 AI 분석 — 업로드 → 추출·단계 판정 → 폼 자동 채움(사람 확인 후 저장).
         var pendingFile = null;

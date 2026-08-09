@@ -13,10 +13,11 @@ class LivewireFieldCommandAppTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_field_command_app_can_be_accessed_by_guest_without_auth_wall(): void
+    public function test_field_command_app_requires_login(): void
     {
-        $response = $this->get('/field-app');
-        $response->assertOk();
+        // 현장앱은 기존 현장(Site)을 만들고 지우는 화면이다 — 미인증 공개면
+        // 방문자가 현장과 딸린 기록을 연쇄 삭제할 수 있어 로그인 뒤로 옮겼다.
+        $this->get('/field-app')->assertRedirect('/login');
     }
 
     public function test_field_command_app_can_be_rendered(): void
