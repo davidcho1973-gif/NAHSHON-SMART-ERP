@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Item;
 use App\Models\ProcurementItem;
 use App\Models\WbsItem;
 use App\Services\Procurement\ProcurementService;
@@ -69,5 +70,27 @@ class ProcurementServiceTest extends TestCase
         $item = ProcurementItem::where('wbs_code', 'PRC-01-A040')->first();
         $this->assertSame('발주완료', $item->status);
         $this->assertNotNull($item->ordered_on); // 발주로 넘어가면 발주일 자동 기록
+    }
+
+    public function test_품목_마스터를_연결하고_해제할_수_있다(): void
+    {
+        // 품목 마스터는 등록만 되고 아무도 안 읽는 고립 모듈이었다 — 조달이 첫 소비자다.
+        $this->sub('PRC-01-A090', 'EMT 전선관 자재 조달', ['crew_size' => 0]);
+        $item = Item::create(['name' => '3/4in EMT Conduit', 'unit' => 'EA', 'standard_cost' => 3.5, 'status' => 'active']);
+
+        app(ProcurementService::class)->update('PRC-01', 'PRC-01-A090', [
+            'status' => '발주완료', 'item_id' => $item->id,
+        ], 'ALL');
+
+        $row = app(ProcurementService::class)->list('PRC-01', 'ALL')['items'][0];
+        $this->assertSame($item->id, $row['itemId']);
+        $this->assertSame('3/4in EMT Conduit', $row['itemName']);
+
+        // 빈 값이면 연결 해제. 없는 id 도 연결하지 않는다.
+        app(ProcurementService::class)->update('PRC-01', 'PRC-01-A090', ['item_id' => ''], 'ALL');
+        $this->assertNull(app(ProcurementService::class)->list('PRC-01', 'ALL')['items'][0]['itemId']);
+
+        app(ProcurementService::class)->update('PRC-01', 'PRC-01-A090', ['item_id' => 999999], 'ALL');
+        $this->assertNull(app(ProcurementService::class)->list('PRC-01', 'ALL')['items'][0]['itemId']);
     }
 }
