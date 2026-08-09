@@ -342,17 +342,27 @@ class ScheduleImporter
                             'planned_start' => $a['es'],
                             'planned_end' => $a['ef'],
                             'sort_order' => $aIdx + 1,
+                            // CPM 값은 payload 가 아니라 컬럼에 넣는다 — 화면(주공정 강조·여유일·선행)이
+                            // 컬럼을 읽기 때문에 payload 에만 담으면 전부 빈 값으로 보인다.
+                            'late_start' => $a['ls'],
+                            'late_end' => $a['lf'],
+                            'preds' => $a['preds'],
+                            'float_days' => $a['float'],
+                            'is_critical' => $a['cp'],
+                            'planned_cost' => $a['cost'] ?: null,
+                            'crew_text' => $a['crew']['raw'] !== '' ? $a['crew']['raw'] : null,
+                            'crew_size' => $a['crew']['size'] ?: null,
+                            'crew_roles' => $a['crew']['roles'] ?: null,
+                            'equipment' => $a['crew']['equipment'] ?: null,
                             // 재수입해도 현장이 올린 진행 상태와 협력사 배정은 지키다.
                             'status' => $keep->status ?? '검수완료',
                             'progress' => $keep->progress ?? 0,
                             'company' => $keep->company ?? null,
                             'company_id' => $keep->company_id ?? null,
-                            'manhours' => $keep->manhours ?? null,
-                            'ehs' => $keep->ehs ?? null,
+                            // 사람이 손댄 공수가 있으면 그걸 쓰고, 없으면 투입조에서 다시 뽑는다.
+                            'manhours' => $keep->manhours ?? $this->estimateManhours($a),
+                            'ehs' => $keep->ehs ?? $this->inferEhs($a),
                             'payload' => [
-                                'preds' => $a['preds'],
-                                'float' => $a['float'],
-                                'critical' => $a['cp'],
                                 'name_en' => $a['name_en'],
                                 'section' => $a['section'] ?? null,
                             ],
