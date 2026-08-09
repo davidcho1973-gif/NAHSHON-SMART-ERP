@@ -27,6 +27,7 @@ use App\Http\Controllers\SmartCompanyApiController;
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\VehicleApiController;
 use App\Http\Controllers\WbsManualController;
+use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use Illuminate\Support\Facades\Route;
 
@@ -91,6 +92,14 @@ Route::middleware('auth')->group(function (): void {
     // 공정표 엑셀 교체 — 반드시 preview 로 무엇이 읽히고 무엇이 지워지는지 본 뒤에 replace.
     Route::post('/wbs-api/schedule/preview', [WbsScheduleController::class, 'preview'])->name('wbs-schedule.preview');
     Route::post('/wbs-api/schedule/replace', [WbsScheduleController::class, 'replace'])->name('wbs-schedule.replace');
+
+    // 공정별 현장 사진 — 날짜별 업로드·열람. 원본 대신 축소본만 저장한다.
+    Route::get('/wbs-api/photos', [WbsPhotoController::class, 'index'])->name('wbs-photos.index');
+    Route::post('/wbs-api/photos', [WbsPhotoController::class, 'store'])->name('wbs-photos.store');
+    Route::post('/wbs-api/photos/{photo}/caption', [WbsPhotoController::class, 'caption'])->name('wbs-photos.caption');
+    Route::delete('/wbs-api/photos/{photo}', [WbsPhotoController::class, 'destroy'])->name('wbs-photos.destroy');
+    Route::get('/wbs-api/photos/{photo}/file', [WbsPhotoController::class, 'file'])->name('wbs-photos.file');
+    Route::get('/wbs-api/photos/{photo}/thumb', [WbsPhotoController::class, 'thumb'])->name('wbs-photos.thumb');
 
     // 문서통합관리 — 업로드(멀티파트) → AI 자동분석(백그라운드) → 상태 폴링 → 원본 열람
     Route::post('/docs-api/upload', [IntegratedDocumentController::class, 'upload'])->name('docs.upload');

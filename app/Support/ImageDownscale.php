@@ -37,7 +37,7 @@ final class ImageDownscale
      *
      * @return array{data: string, mime: string, width: int, height: int, resized: bool}
      */
-    public static function shrink(string $bytes, string $mime = 'image/jpeg'): array
+    public static function shrink(string $bytes, string $mime = 'image/jpeg', int $maxEdge = self::MAX_EDGE, int $quality = self::QUALITY): array
     {
         $original = ['data' => $bytes, 'mime' => $mime, 'width' => 0, 'height' => 0, 'resized' => false];
 
@@ -55,7 +55,7 @@ final class ImageDownscale
         $original['height'] = (int) $height;
 
         $longEdge = max($width, $height);
-        if ($longEdge <= self::MAX_EDGE && strlen($bytes) <= self::SKIP_UNDER_BYTES) {
+        if ($longEdge <= $maxEdge && strlen($bytes) <= self::SKIP_UNDER_BYTES) {
             return $original;
         }
 
@@ -70,7 +70,7 @@ final class ImageDownscale
             $height = imagesy($src);
             $longEdge = max($width, $height);
 
-            $scale = $longEdge > self::MAX_EDGE ? self::MAX_EDGE / $longEdge : 1.0;
+            $scale = $longEdge > $maxEdge ? $maxEdge / $longEdge : 1.0;
             $targetW = max(1, (int) round($width * $scale));
             $targetH = max(1, (int) round($height * $scale));
 
@@ -80,7 +80,7 @@ final class ImageDownscale
             imagecopyresampled($dst, $src, 0, 0, 0, 0, $targetW, $targetH, $width, $height);
 
             ob_start();
-            imagejpeg($dst, null, self::QUALITY);
+            imagejpeg($dst, null, $quality);
             $out = (string) ob_get_clean();
 
             imagedestroy($src);
