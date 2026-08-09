@@ -14,6 +14,7 @@
     rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
+  <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
@@ -9090,6 +9091,7 @@
           '<button class="btn-secondary" onclick="window.refreshWbs()" title="프로젝트 목록/공정 데이터 새로고침"><i class="ph ph-arrows-clockwise"></i></button>' +
           '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
           '<i class="ph ph-robot"></i> AI 메뉴얼 분석</button>' +
+          '<button class="btn-secondary" onclick="window.openWbsScheduleReplace()" title="엑셀 공정표로 갈아끼우기"><i class="ph ph-microsoft-excel-logo"></i> 공정표 교체</button>' +
           '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>' +
           '</div></div>';
       }
@@ -11207,6 +11209,7 @@
         }).join('');
 
         var modal = document.createElement('div');
+        modal.id = 'wbs-edit-modal';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
         var ehsVal = sub.ehs || '';
         var ehsOpts = [['', '— 없음 —'], ['high', '고위험'], ['medium', '주의'], ['low', '낮음']].map(function(o) {
@@ -11258,6 +11261,7 @@
           '</div>' +
           '<div style="display:flex;gap:10px;margin-top:18px">' +
           '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">취소</button>' +
+          '<button class="btn-secondary" style="flex:1" onclick="document.getElementById(\'wbs-edit-modal\')&&document.getElementById(\'wbs-edit-modal\').remove();window.openWbsInsertRow(\'' + wbsJsArg(wbsId) + '\')">아래에 추가</button>' +
           '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">저장</button>' +
           '</div></div>';
         document.body.appendChild(modal);
