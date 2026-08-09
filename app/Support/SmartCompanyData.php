@@ -113,7 +113,6 @@ class SmartCompanyData
 
             'api_getAlerts' => self::alerts($args[0] ?? 'all'),
             'api_updateAlertStatus' => self::updateAlertStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
-            'api_getSafetyStats' => self::safetyStats(),
             'api_getSafetyWorkItems' => self::safetyWorkItems($siteId),
             'api_saveSafetyWorkItems' => self::saveSafetyWorkItems($args[0] ?? [], $siteId),
             'api_clearSafetyWork' => self::clearSafetyWork($siteId),
@@ -124,20 +123,6 @@ class SmartCompanyData
             'api_getCardPermits' => ['success' => true, 'permits' => app(SafetyPermitService::class)->forWorkCode((string) ($args[0] ?? ''))],
             'api_actPermit' => app(SafetyPermitService::class)->act((int) ($args[0] ?? 0), (string) ($args[1] ?? ''), auth()->id(), ($args[2] ?? null) !== null ? (string) $args[2] : null),
             'api_recommendSafetyProgress' => self::recommendSafetyProgress($args[0] ?? null, $siteId),
-            'api_getPtwList' => app(SafetyPermitService::class)->recent(),
-            'api_getPtwStats' => app(SafetyPermitService::class)->stats(),
-            'api_getInspections' => self::inspections(),
-            'api_getInspectionStats' => ['totalItems' => 42, 'passed' => 37, 'failed' => 5, 'completionRate' => 88],
-            'api_getTrainingRecords' => self::trainingRecords(),
-            'api_getSafetyDocs' => self::safetyDocs(),
-            'api_getOshaForm300' => self::oshaForm300(),
-            'api_getOsha300AStats' => ['year' => (int) ($args[0] ?? 2026), 'totalCases' => 2, 'dartRate' => '0.41', 'trir' => '0.82'],
-            'api_getCertMatrix' => self::certMatrix(),
-            'api_getViolations' => self::violations(),
-            'api_getTbmRecords' => self::tbmRecords(),
-
-            'api_getProjectStatus' => self::projects(),
-            'api_getActionItems' => self::actionItems(),
             'api_getOpsDashboard' => app(DashboardService::class)->overview($siteId),
             'api_getLaborAllocation' => app(LaborAllocationService::class)->forSite((string) ($args[0] ?? $siteId)),
 
@@ -312,8 +297,6 @@ class SmartCompanyData
             'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
             'api_getHousingList' => self::housingList(),
             'api_getHousingStats' => self::housingStats(),
-            'api_getFlightList' => self::flightList(),
-            'api_getOfficeSupplies' => self::officeSupplies(),
             'api_getVendorList' => self::vendors(),
             'api_getCompanyList' => Company::query()->where('status', 'active')->orderBy('name')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all(),
             'api_getWbsCompanyOptions' => self::wbsCompanyOptions($siteId),
@@ -683,15 +666,6 @@ class SmartCompanyData
             ['code' => 'HFF-02', 'name' => 'Hoffman Logistics Hub', 'manager' => 'James Kim', 'progress' => 68, 'color' => '#2563eb', 'endDate' => '2026-09-15', 'status' => 'On Track', 'signal' => 'Schedule risk: low', 'action' => 'Close RFI-104'],
             ['code' => 'LGES-AZ', 'name' => 'Battery Plant AZ', 'manager' => 'Sophia Park', 'progress' => 42, 'color' => '#10b981', 'endDate' => '2026-11-30', 'status' => 'Watch', 'signal' => 'Material delivery', 'action' => 'Confirm conduit ETA'],
             ['code' => 'NV-05', 'name' => 'Nevada EV Plant', 'manager' => 'Daniel Cho', 'progress' => 24, 'color' => '#f59e0b', 'endDate' => '2027-02-20', 'status' => 'At Risk', 'signal' => 'Labor ramp-up', 'action' => 'Approve overtime plan'],
-        ];
-    }
-
-    public static function actionItems(): array
-    {
-        return [
-            ['id' => 'ACT-901', 'type' => 'Safety', 'summary' => 'Open trench barricade inspection required', 'assignee' => 'Safety', 'status' => 'critical', 'date' => 'Today'],
-            ['id' => 'ACT-902', 'type' => 'Finance', 'summary' => 'Rental invoice approval over threshold', 'assignee' => 'Admin', 'status' => 'warning', 'date' => 'Today'],
-            ['id' => 'ACT-903', 'type' => 'WBS', 'summary' => 'LGES-AZ pull plan progress update', 'assignee' => 'PM', 'status' => 'pending', 'date' => 'Tomorrow'],
         ];
     }
 
@@ -1205,11 +1179,6 @@ class SmartCompanyData
         return [['time' => '08:12', 'action' => '불출', 'toolName' => 'Cordless Hammer Drill', 'toolId' => 'TL-101', 'userId' => 'EMP-1002', 'condition' => '정상'], ['time' => '11:40', 'action' => '반납', 'toolName' => 'Laser Level', 'toolId' => 'TL-103', 'userId' => 'EMP-1005', 'condition' => '손상']];
     }
 
-    public static function safetyStats(): array
-    {
-        return ['daysNoIncident' => 47, 'unresolved' => 3, 'resolved' => 18, 'urgent' => 1, 'warning' => 2, 'normal' => 8];
-    }
-
     public static function safetyWorkItems(string $siteId = 'ALL'): array
     {
         try {
@@ -1316,41 +1285,6 @@ class SmartCompanyData
     public static function ptwList(): array
     {
         return [['id' => 'PTW-01', 'job' => 'Hot work Area B', 'status' => '승인대기', 'owner' => 'Safety'], ['id' => 'PTW-02', 'job' => 'Lift work Level 3', 'status' => '완료', 'owner' => 'PM']];
-    }
-
-    public static function inspections(): array
-    {
-        return [['id' => 'INS-01', 'area' => 'Area A', 'result' => 'Pass', 'inspector' => 'Carlos'], ['id' => 'INS-02', 'area' => 'Area C', 'result' => 'Fail', 'inspector' => 'Daniel']];
-    }
-
-    public static function trainingRecords(): array
-    {
-        return [['id' => 'TR-01', 'name' => 'James Kim', 'course' => 'OSHA 30', 'expires' => '2027-04-01', 'status' => '정상']];
-    }
-
-    public static function safetyDocs(): array
-    {
-        return [['id' => 'DOC-01', 'name' => 'Site Safety Plan', 'status' => '완료'], ['id' => 'DOC-02', 'name' => 'JHA Area B', 'status' => '승인대기']];
-    }
-
-    public static function oshaForm300(): array
-    {
-        return [['caseNo' => 'OSHA-001', 'date' => '2026-03-12', 'type' => 'First Aid', 'status' => 'Closed']];
-    }
-
-    public static function certMatrix(): array
-    {
-        return [['name' => 'James Kim', 'osha30' => 'OK', 'lift' => 'OK', 'firstAid' => 'Expiring']];
-    }
-
-    public static function violations(): array
-    {
-        return [['id' => 'VIO-01', 'title' => 'PPE missing', 'status' => 'Corrected']];
-    }
-
-    public static function tbmRecords(): array
-    {
-        return [['id' => 'TBM-01', 'topic' => 'Heat stress', 'attendees' => 18, 'date' => '2026-06-19']];
     }
 
     public static function payrollDashboard(mixed $periodStart, string $siteId = 'ALL'): array
@@ -1875,16 +1809,6 @@ class SmartCompanyData
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
-    }
-
-    public static function flightList(): array
-    {
-        return [['id' => 'FL-001', 'name' => 'Han Gildong', 'direction' => '입국', 'from' => 'ICN', 'to' => 'PHX', 'depDateTime' => '2026-06-28 10:30', 'airline' => 'Korean Air', 'pnr' => 'KXNV7T', 'price' => 1240, 'status' => '발권', 'needPickup' => true, 'pickupBy' => 'Lee', 'housingReady' => true]];
-    }
-
-    public static function officeSupplies(): array
-    {
-        return [['id' => 'OF-001', 'category' => '소모품', 'name' => 'Copy Paper A4', 'qty' => 3, 'minQty' => 5, 'location' => 'Office cabinet', 'lastRestock' => '2026-06-01', 'unitPrice' => 45, 'reorder' => true], ['id' => 'OF-002', 'category' => 'Safety', 'name' => 'Safety Vest', 'qty' => 8, 'minQty' => 10, 'location' => 'Safety shelf', 'lastRestock' => '2026-05-24', 'unitPrice' => 35, 'reorder' => true]];
     }
 
     /**
