@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\DurableDisk;
+
 return [
 
     /*
@@ -20,14 +22,14 @@ return [
     | Laravel Cloud 의 로컬 디스크는 배포마다 초기화되므로(임시), 오브젝트 스토리지(s3)를
     | 붙이면 DOCUMENT_DISK=s3 로 지정한다. AWS_BUCKET 이 설정돼 있으면 자동으로 s3 를 쓴다.
     */
-    'documents_disk' => env('DOCUMENT_DISK', env('AWS_BUCKET') ? 's3' : 'public'),
+    'documents_disk' => DurableDisk::resolve(env('DOCUMENT_DISK'), 'public'),
 
     /*
     | 공정별 현장 사진(wbs_photos)이 쓰는 디스크. 사정은 documents_disk 와 같다 —
     | Laravel Cloud 의 로컬 디스크는 배포마다 초기화되므로 s3 가 붙으면 자동으로 그쪽을 쓴다.
     | 공개 URL 로 서빙하지 않으므로(컨트롤러가 권한 확인 후 스트리밍) public 이 아닌 local 이 기본.
     */
-    'wbs_photos_disk' => env('WBS_PHOTO_DISK', env('AWS_BUCKET') ? 's3' : 'local'),
+    'wbs_photos_disk' => DurableDisk::resolve(env('WBS_PHOTO_DISK'), 'local'),
 
     /*
     | 문서통합관리 업로드 최대 용량(KB). 기본 262144KB=256MB. 시청 제출본 등 대용량 PDF 대응.
