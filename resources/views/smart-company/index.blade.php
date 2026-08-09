@@ -1276,7 +1276,12 @@
         'password': { title: 'Change Password', render: renderAccountPassword },
         'command': { title: 'AI í˜„ìž¥ ì§€íœ˜ì‹¤', render: renderCommandCenter },
         'alerts': { title: '통합 알림 센터', render: renderUnifiedAlerts },
-        'document-hub': { title: 'AI 통합 문서함', render: function () { window.location.assign('/document-hub'); } },
+        'document-hub': { title: 'AI 통합 문서함', render: function () {
+          // 문서함은 별도 페이지지만, 통째로 이동하면 ERP 를 벗어난 느낌이 든다.
+          // ERP 틀 안에 iframe 으로 얹는다 — embed=1 이면 문서함이 자기 사이드바를 숨긴다.
+          pageContainer.innerHTML = '<iframe src="/document-hub?embed=1" ' +
+            'style="width:100%;height:calc(100vh - 150px);min-height:560px;border:1px solid var(--border-strong);border-radius:12px;background:#f3f6fb"></iframe>';
+        } },
         'safety': { title: 'AI ìž‘ì—…ì•ˆì „ê´€ë¦¬', render: renderSafety },
         'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
