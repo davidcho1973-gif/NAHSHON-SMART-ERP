@@ -97,17 +97,31 @@
     panel.innerHTML =
       '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px;display:flex;align-items:center;gap:6px">' +
         '<i class="ph ph-camera" style="color:#7c3aed"></i> 현장 사진 <span id="wbs-photo-count" style="color:var(--text-tertiary);font-weight:400"></span></div>' +
-      // 업로드 줄: 날짜 + 파일 선택. 설명은 선택 사항 — 없어도 사진은 올라간다.
+      // 입구는 둘: 갤러리에서 고르기 / 폰 카메라로 바로 찍기(capture=environment 는 모바일에서
+      // 곧장 후면 카메라를 연다. 데스크톱에서는 그냥 파일 선택으로 동작한다).
+      // 어느 쪽이든 바로 올리지 않는다 — 찍고 나서 내용을 적은 뒤 "올리기" 를 눌러야 올라간다.
       '<div style="display:grid;gap:8px;margin-bottom:12px;padding:10px;border:1px solid var(--border-strong);border-radius:10px;background:var(--bg-base)">' +
-        '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">' +
-          '<input type="date" id="wbs-photo-date" class="wbs-edit-field" value="' + today() + '" style="margin:0">' +
-          '<label class="btn-secondary" style="margin:0;cursor:pointer;white-space:nowrap;font-size:12px;padding:8px 12px">' +
-            '<i class="ph ph-plus"></i> 사진 선택' +
+        '<input type="date" id="wbs-photo-date" class="wbs-edit-field" value="' + today() + '" style="margin:0">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+          '<label class="btn-secondary" style="margin:0;cursor:pointer;white-space:nowrap;font-size:12px;padding:9px 10px;text-align:center">' +
+            '<i class="ph ph-images"></i> 사진 올리기' +
             '<input type="file" id="wbs-photo-file" accept="image/*" multiple style="display:none">' +
           '</label>' +
+          '<label class="btn-secondary" style="margin:0;cursor:pointer;white-space:nowrap;font-size:12px;padding:9px 10px;text-align:center">' +
+            '<i class="ph ph-camera"></i> 바로 찍기' +
+            '<input type="file" id="wbs-photo-camera" accept="image/*" capture="environment" style="display:none">' +
+          '</label>' +
         '</div>' +
-        '<textarea id="wbs-photo-caption" class="wbs-edit-field" rows="2" placeholder="사진 내용 (예: 2층 배관 용접 완료, 검사 대기)" style="margin:0;resize:vertical"></textarea>' +
-        '<div id="wbs-photo-upload-note" style="font-size:11px;color:var(--text-tertiary)">사진을 고르면 바로 올라갑니다. 원본 그대로 올려도 서버가 줄여서 저장합니다.</div>' +
+        // 찍은/고른 사진이 여기 잠시 모인다 — 내용을 적고 올리기 전까지.
+        '<div id="wbs-photo-pending" style="display:none;gap:8px;grid-template-columns:1fr">' +
+          '<div id="wbs-photo-previews" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
+          '<textarea id="wbs-photo-caption" class="wbs-edit-field" rows="2" placeholder="사진 내용 (예: 2층 배관 용접 완료, 검사 대기)" style="margin:0;resize:vertical"></textarea>' +
+          '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px">' +
+            '<button type="button" id="wbs-photo-clear" class="btn-secondary" style="margin:0;font-size:12px;padding:8px 12px">취소</button>' +
+            '<button type="button" id="wbs-photo-send" class="btn-primary" style="margin:0;font-size:12px;padding:8px 12px;background:#7c3aed">올리기</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="wbs-photo-upload-note" style="font-size:11px;color:var(--text-tertiary)">원본 그대로 올려도 서버가 줄여서 저장합니다.</div>' +
       '</div>' +
       // 목록: 날짜별 그룹. 패널 안에서만 스크롤.
       '<div id="wbs-photo-list" style="max-height:46vh;overflow-y:auto;padding-right:4px"></div>';
@@ -116,7 +130,12 @@
     var countEl = panel.querySelector('#wbs-photo-count');
     var noteEl = panel.querySelector('#wbs-photo-upload-note');
     var fileEl = panel.querySelector('#wbs-photo-file');
+    var cameraEl = panel.querySelector('#wbs-photo-camera');
+    var pendingEl = panel.querySelector('#wbs-photo-pending');
+    var previewsEl = panel.querySelector('#wbs-photo-previews');
+    var sendBtn = panel.querySelector('#wbs-photo-send');
     var photoIndex = {};
+    var pending = [];   // [{file, url}] — 올리기 전의 사진들
 
     function render(dates) {
       var total = 0;
@@ -203,39 +222,95 @@
       }
     });
 
+    // ── 올리기 전 대기열 ──────────────────────────────────────────────
+    //
+    // 찍자마자 올리지 않는 이유: 현장의 실제 순서는 "찍는다 → 무엇인지 적는다 → 올린다" 다.
+    // 찍는 순간 올라가 버리면 내용은 영영 안 적히고, 한 달 뒤 그 사진이 무엇인지 아무도 모른다.
+
+    function renderPending() {
+      pendingEl.style.display = pending.length ? 'grid' : 'none';
+      sendBtn.textContent = pending.length ? pending.length + '장 올리기' : '올리기';
+      previewsEl.innerHTML = pending.map(function (it, i) {
+        return '<div style="position:relative">' +
+          '<img src="' + it.url + '" style="width:64px;height:64px;object-fit:cover;border-radius:8px;background:#111">' +
+          '<a href="#" data-pending-remove="' + i + '" title="빼기" ' +
+            'style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;font-size:12px;line-height:18px;text-align:center;text-decoration:none">&times;</a>' +
+        '</div>';
+      }).join('');
+    }
+
+    function addPending(files) {
+      files.forEach(function (f) {
+        pending.push({ file: f, url: URL.createObjectURL(f) });
+      });
+      renderPending();
+      var cap = panel.querySelector('#wbs-photo-caption');
+      if (cap && files.length) cap.focus();
+    }
+
+    previewsEl.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('[data-pending-remove]') : null;
+      if (!t) return;
+      e.preventDefault();
+      var i = parseInt(t.getAttribute('data-pending-remove'), 10);
+      if (pending[i]) { URL.revokeObjectURL(pending[i].url); pending.splice(i, 1); }
+      renderPending();
+    });
+
+    panel.querySelector('#wbs-photo-clear').addEventListener('click', function () {
+      pending.forEach(function (it) { URL.revokeObjectURL(it.url); });
+      pending = [];
+      panel.querySelector('#wbs-photo-caption').value = '';
+      renderPending();
+    });
+
     fileEl.addEventListener('change', function () {
-      var files = Array.prototype.slice.call(fileEl.files || []);
-      if (!files.length) return;
+      addPending(Array.prototype.slice.call(fileEl.files || []));
+      fileEl.value = '';
+    });
+    // 카메라는 한 번에 한 장 — 여러 장 찍으려면 버튼을 다시 누른다(대기열에 계속 쌓인다).
+    cameraEl.addEventListener('change', function () {
+      addPending(Array.prototype.slice.call(cameraEl.files || []));
+      cameraEl.value = '';
+    });
+
+    sendBtn.addEventListener('click', function () {
+      if (!pending.length) return;
 
       var date = panel.querySelector('#wbs-photo-date').value;
-      if (!date) { alert('사진 날짜를 먼저 골라 주세요.'); fileEl.value = ''; return; }
+      if (!date) { alert('사진 날짜를 먼저 골라 주세요.'); return; }
       var caption = panel.querySelector('#wbs-photo-caption').value.trim();
 
+      var items = pending.slice();
       var done = 0, savedTotal = 0, originalTotal = 0, failed = [];
-      noteEl.textContent = '올리는 중... (0/' + files.length + ')';
+      sendBtn.disabled = true;
+      noteEl.textContent = '올리는 중... (0/' + items.length + ')';
 
       // 순차 업로드 — 현장 LTE 에서 대용량 병렬 업로드는 전부 함께 느려지거나 끊긴다.
       var chain = Promise.resolve();
-      files.forEach(function (f) {
+      items.forEach(function (it) {
         chain = chain.then(function () {
           var fd = new FormData();
           fd.append('wbs', wbsId);
-          fd.append('photo', f);
+          fd.append('photo', it.file);
           fd.append('photo_date', date);
           if (caption) fd.append('caption', caption);
           return req('POST', '/wbs-api/photos', fd).then(function (res) {
             done++;
             if (res.success) { savedTotal += res.saved || 0; originalTotal += res.original || 0; }
-            else failed.push((f.name || '사진') + ': ' + (res.error || '실패'));
-            noteEl.textContent = '올리는 중... (' + done + '/' + files.length + ')';
+            else failed.push((it.file.name || '사진') + ': ' + (res.error || '실패'));
+            noteEl.textContent = '올리는 중... (' + done + '/' + items.length + ')';
           });
         });
       });
 
       chain.then(function () {
-        fileEl.value = '';
+        sendBtn.disabled = false;
+        items.forEach(function (it) { URL.revokeObjectURL(it.url); });
+        pending = [];
         panel.querySelector('#wbs-photo-caption').value = '';
-        var msg = (files.length - failed.length) + '장 저장';
+        renderPending();
+        var msg = (items.length - failed.length) + '장 저장';
         if (originalTotal > savedTotal && savedTotal > 0) {
           msg += ' · ' + fmtBytes(originalTotal) + ' → ' + fmtBytes(savedTotal) + ' 로 줄임';
         }
