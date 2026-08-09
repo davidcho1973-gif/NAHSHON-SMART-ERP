@@ -169,9 +169,6 @@
               <li class="nav-item" data-view="vehicle" id="nav-vehicle">
                 <i class="ph ph-car"></i><span>ì°¨ëŸ‰ ê´€ë¦¬</span>
               </li>
-              <li class="nav-item" data-view="rental" id="nav-rental">
-                <i class="ph ph-bulldozer"></i><span>ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬</span>
-              </li>
               <li class="nav-item" data-view="housing" id="nav-housing">
                 <i class="ph ph-house-line"></i><span>ìˆ™ì†Œ ê´€ë¦¬</span>
               </li>
@@ -258,10 +255,8 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>AI 작업안전</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vehicle"><i class="ph ph-car"></i><span>차량관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="personnel"><i class="ph ph-users"></i><span>인원관리</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="analytics"><i class="ph ph-chart-line-up"></i><span>통합분석</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여정산</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재장비</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="rental"><i class="ph ph-bulldozer"></i><span>장비렌탈</span></button>
           <a class="mobile-more-tile" href="/mobile-equipment/index"><i class="ph ph-wrench"></i><span>장비스캔(AI)</span></a>
           <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
@@ -1296,7 +1291,7 @@
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
         'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
         'vehicle': { title: 'ì°¨ëŸ‰ ê´€ë¦¬', render: renderVehicle },
-        'rental': { title: 'ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬', render: renderRental },
+        'rental': { title: '자재/장비 — 렌탈 계약', render: renderRental },
         'housing': { title: 'ìˆ™ì†Œ ê´€ë¦¬', render: renderHousing },
         'vendors': { title: 'êµ¬ë§¤/ë ŒíŠ¸ ê´€ë¦¬', render: renderVendors },
     
@@ -5102,7 +5097,8 @@
               '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> 새로고침</button>' +
               '<button class="btn-secondary" onclick="window.downloadInventoryExcel()"><i class="ph ph-file-csv"></i> 엑셀 다운로드</button>' +
               '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> AI 사진 등록</button>' +
-            '</div></div>';
+            '</div></div>' +
+            window.inventoryTabsHtml('assets');
 
           // ── 2. KPI 5종 (총 자산가치 제거 → 구매/임대/배치/보관/점검) ──
           function kpiCard(label, value, icon, color, meta) {
@@ -5321,12 +5317,24 @@
       // ìƒˆë¡œê³ ì¹¨
       window.refreshInventory = function() { renderInventory(); };
 
+      // 자재/장비 ↔ 렌탈 계약 서브탭 — 사이드바 메뉴 통합 후 두 화면을 오가는 공용 탭
+      window.inventoryTabsHtml = function (active) {
+        function tab(key, icon, label, view) {
+          var cls = (active === key) ? 'btn-primary' : 'btn-secondary';
+          return '<button class="' + cls + '" style="padding:7px 16px;font-size:12.5px" onclick="window.goToView(\'' + view + '\')"><i class="ph ' + icon + '"></i> ' + label + '</button>';
+        }
+        return '<div style="display:flex;gap:8px;margin-bottom:14px">' +
+          tab('assets', 'ph-package', '자산 현황', 'inventory') +
+          tab('rental', 'ph-handshake', '렌탈 계약', 'rental') +
+          '</div>';
+      };
+
       // 현재 활성화된 뷰(렌탈 or 인벤토리) 리프레시
       window.refreshCurrentEquipmentView = function() {
         if (window._currentView === 'inventory') {
           window.refreshInventory();
         } else if (typeof window.renderRental === 'function') {
-          window.refreshCurrentEquipmentView();
+          window.renderRental(true);
         }
       };
 
@@ -10366,11 +10374,12 @@
           }
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">장비 렌탈 관리</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
+            '<div class="header-section"><div><h1 class="page-title">자재 / 장비 — 렌탈 계약</h1><p class="page-subtitle">중장비 단기 렌탈 현황 · 반납일/비용 추적</p></div>' +
             '<div class="action-row">' +
             '<button class="btn-secondary" onclick="window.downloadRentalExcel()"><i class="ph ph-file-xls"></i> 엑셀 다운로드</button>' +
             '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.openAiEquipmentRegModal()"><i class="ph ph-robot"></i> 🤖 AI 계약서 등록</button>' +
             '</div></div>' +
+            window.inventoryTabsHtml('rental') +
             
             '<div style="display:grid; grid-template-columns: 7.2fr 2.8fr; gap:20px; align-items:start;">' +
             '  <div style="display:flex; flex-direction:column; gap:20px;">' +
