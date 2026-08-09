@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -137,18 +138,23 @@ class DocumentIntelligenceController extends Controller
             $request->integer('project_id') ?: null,
         );
 
+        // 디스크는 여기서 미리 열지 않는다 — 설정이 잘못돼 있으면 Storage::disk() 자체가
+        // 예외를 던져 요청 전체가 500 으로 죽고, 화면에는 이유 없이 "업로드 실패"만 뜬다.
+        // 실제 저장은 storeUpload() 안에서 예외를 잡아 파일별로 처리한다.
         $diskName = (string) config('document-intelligence.disk', 'local');
-        $disk = Storage::disk($diskName);
         $allowedExtensions = config('document-intelligence.allowed_extensions', []);
         $created = [];
         $duplicates = [];
+        $failed = [];
 
         foreach ($request->file('files', []) as $file) {
+            $originalName = $file->getClientOriginalName();
             $extension = strtolower((string) $file->getClientOriginalExtension());
             if (! in_array($extension, $allowedExtensions, true)) {
-                throw ValidationException::withMessages([
-                    'files' => "지원하지 않는 파일 형식입니다: {$file->getClientOriginalName()}",
-                ]);
+                // 한 파일이 형식 때문에 막혀도 나머지는 올라가야 한다 — 배치 전체를 죽이지 않는다.
+                $failed[] = ['file' => $originalName, 'reason' => '지원하지 않는 파일 형식입니다.'];
+
+                continue;
             }
 
             $sha256 = hash_file('sha256', $file->getRealPath());
@@ -157,43 +163,64 @@ class DocumentIntelligenceController extends Controller
                 $value ? $duplicateQuery->where($column, $value) : $duplicateQuery->whereNull($column);
             }
             $duplicate = $duplicateQuery->first();
+            $safeName = $this->safeFileName($originalName);
 
             if ($duplicate) {
                 // 원본이 유실된 레코드(배포로 로컬 디스크가 초기화된 경우)는 "중복"으로
                 // 거부하면 안 된다 — 같은 파일을 다시 올릴 유일한 길을 막아 버린다.
-                // 파일을 그 레코드에 되살리고 분석을 다시 태운다.
-                $dupDisk = Storage::disk($duplicate->disk ?: $diskName);
-                if (blank($duplicate->file_path) || ! $dupDisk->exists($duplicate->file_path)) {
+                $lost = blank($duplicate->file_path) || ! $this->fileStillThere($duplicate->disk ?: $diskName, (string) $duplicate->file_path);
+
+                if ($lost) {
                     $uuid = $duplicate->uuid ?: (string) Str::uuid();
-                    $originalName = $file->getClientOriginalName();
-                    $safeName = $this->safeFileName($originalName);
-                    $path = $disk->putFileAs("document-intelligence/inbox/{$uuid}", $file, $safeName);
-                    if ($path) {
-                        $duplicate->update([
-                            'disk' => $diskName,
-                            'file_path' => $path,
-                            'stored_file_name' => $safeName,
-                            'ai_status' => 'queued',
-                            'ai_error' => null,
-                        ]);
-                        AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
-                        $created[] = $this->documentRow($duplicate->fresh());
+                    [$path, $usedDisk, $error] = $this->storeUpload($file, $uuid, $safeName, $diskName);
+
+                    if ($path === null) {
+                        // 저장 실패를 "중복"으로 뭉뚱그리면 사용자는 원인을 영영 알 수 없다.
+                        $failed[] = ['file' => $originalName, 'reason' => $error ?: '파일 저장에 실패했습니다.'];
 
                         continue;
                     }
+
+                    $duplicate->update([
+                        'disk' => $usedDisk,
+                        'file_path' => $path,
+                        'stored_file_name' => $safeName,
+                        'ai_status' => 'queued',
+                        'ai_error' => null,
+                    ]);
+                    AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+                    $created[] = $this->documentRow($duplicate->fresh());
+
+                    continue;
                 }
 
-                $duplicates[] = ['file' => $file->getClientOriginalName(), 'documentId' => $duplicate->id];
+                // 원본은 멀쩡한 진짜 중복. 다만 예전 분석이 실패로 남아 있으면 이 기회에
+                // 다시 태운다 — 사용자가 같은 파일을 또 올리는 이유는 대개 그것이다.
+                $requeued = false;
+                if (in_array((string) $duplicate->ai_status, ['failed', 'queued'], true)) {
+                    $duplicate->update(['ai_status' => 'queued', 'ai_error' => null]);
+                    AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+                    $requeued = true;
+                }
+
+                $duplicates[] = [
+                    'file' => $originalName,
+                    'documentId' => $duplicate->id,
+                    'requeued' => $requeued,
+                    'reason' => $requeued
+                        ? '이미 등록된 문서입니다 — 분석을 다시 시작했습니다.'
+                        : '이미 등록된 문서입니다.',
+                ];
 
                 continue;
             }
 
             $uuid = (string) Str::uuid();
-            $originalName = $file->getClientOriginalName();
-            $safeName = $this->safeFileName($originalName);
-            $path = $disk->putFileAs("document-intelligence/inbox/{$uuid}", $file, $safeName);
-            if (! $path) {
-                throw new \RuntimeException("파일 저장에 실패했습니다: {$originalName}");
+            [$path, $usedDisk, $error] = $this->storeUpload($file, $uuid, $safeName, $diskName);
+            if ($path === null) {
+                $failed[] = ['file' => $originalName, 'reason' => $error ?: '파일 저장에 실패했습니다.'];
+
+                continue;
             }
 
             $document = IntelligentDocument::query()->create([
@@ -203,7 +230,7 @@ class DocumentIntelligenceController extends Controller
                 'project_id' => $projectId,
                 'uploaded_by' => $request->user()->id,
                 'source' => 'dropzone',
-                'disk' => $diskName,
+                'disk' => $usedDisk,
                 'file_path' => $path,
                 'original_file_name' => $originalName,
                 'stored_file_name' => $safeName,
@@ -225,7 +252,62 @@ class DocumentIntelligenceController extends Controller
             'message' => count($created).'개 문서를 접수했고 AI 분석을 시작했습니다.',
             'documents' => $created,
             'duplicates' => $duplicates,
+            'failed' => $failed,
         ], 202);
+    }
+
+    /** 디스크를 열 수 없으면 "파일 없음"으로 본다 — 판정 하나 때문에 업로드가 죽으면 안 된다. */
+    private function fileStillThere(string $diskName, string $path): bool
+    {
+        try {
+            return $path !== '' && Storage::disk($diskName)->exists($path);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return false;
+        }
+    }
+
+    /**
+     * 업로드 원본을 저장한다. 설정 디스크가 실패하면 local 로 내려 받아 둔다.
+     *
+     * s3 디스크는 config 에서 'throw' => false 라 쓰기가 실패해도 예외 없이 false 만
+     * 돌려준다. 그대로 두면 "저장 실패"가 화면에서는 "중복 N개 제외"처럼 보여
+     * 사용자는 왜 안 올라가는지 영영 알 수 없다. 그래서 (1) 이유를 남기고
+     * (2) 최소한 로컬에라도 받아 분석은 진행되게 한다.
+     *
+     * @return array{0: ?string, 1: string, 2: ?string} [path, disk, error]
+     */
+    private function storeUpload(mixed $file, string $uuid, string $safeName, string $diskName): array
+    {
+        $dir = "document-intelligence/inbox/{$uuid}";
+
+        try {
+            $path = Storage::disk($diskName)->putFileAs($dir, $file, $safeName);
+            if ($path) {
+                return [$path, $diskName, null];
+            }
+            $reason = "저장소('{$diskName}')가 파일을 받지 못했습니다.";
+        } catch (\Throwable $e) {
+            report($e);
+            $reason = "저장소('{$diskName}') 오류: ".$e->getMessage();
+        }
+
+        Log::warning('문서 업로드 저장 실패 — 로컬로 대체합니다: '.$reason);
+
+        if ($diskName !== 'local') {
+            try {
+                $path = Storage::disk('local')->putFileAs($dir, $file, $safeName);
+                if ($path) {
+                    // 올라가긴 했지만 저장소 설정이 잘못돼 있다 — 다음 배포에 사라질 수 있다.
+                    return [$path, 'local', null];
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return [null, $diskName, $reason];
     }
 
     public function reanalyze(Request $request, IntelligentDocument $document): JsonResponse
