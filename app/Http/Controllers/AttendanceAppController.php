@@ -6,10 +6,12 @@ use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
+use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,33 +22,60 @@ class AttendanceAppController extends Controller
         private readonly AttendanceQrService $attendanceQrService,
         private readonly CommunicationService $communicationService,
         private readonly DailyCrewReportService $dailyCrewReportService,
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
         $user = $request->user();
         $employee = $user?->employee;
-        $today = Carbon::today()->toDateString();
-
-        $todayLogs = $employee
-            ? AttendanceLog::query()
-                ->with(['dailyWorkAssignment.site', 'dailyWorkAssignment.team', 'dailyWorkAssignment.siteContractor'])
-                ->where('employee_id', $employee->id)
-                ->whereDate('attendance_date', $today)
-                ->orderBy('event_at', 'desc')
-                ->limit(8)
-                ->get()
-            : collect();
 
         return view('attendance-app.index', [
             'user' => $user,
             'employee' => $employee,
-            'todayLogs' => $todayLogs,
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
             'messageUnreadCount' => $user ? $this->communicationService->unreadCountForUser($user) : 0,
         ]);
+    }
+
+    /**
+     * 작업자 홈 화면이 필요한 것 전부(상태 · 오늘 기록 · 현장 정보).
+     *
+     * 화면이 30초마다 부른다. 자동 기록이 들어오면 여기 결과가 바뀌면서 화면이 따라 바뀐다.
+     */
+    public function home(Request $request, WorkerAttendanceService $worker): JsonResponse
+    {
+        $employee = $request->user()?->employee;
+        if (! $employee) {
+            return response()->json([
+                'success' => false,
+                'error' => '이 계정에 직원 정보가 연결되어 있지 않습니다. 관리자에게 요청해 주세요.',
+            ], 422);
+        }
+
+        return response()->json($worker->home($employee));
+    }
+
+    /**
+     * 2단 — 직접 누르는 출퇴근. 위치를 같이 보내면 반경 안인지 보고 승인 여부를 가른다.
+     */
+    public function punch(Request $request, WorkerAttendanceService $worker): JsonResponse
+    {
+        $employee = $request->user()?->employee;
+        if (! $employee) {
+            return response()->json(['success' => false, 'error' => '연결된 직원 정보가 없습니다.'], 422);
+        }
+
+        $data = $request->validate([
+            'direction' => ['required', 'in:in,out'],
+            'lat' => ['nullable', 'numeric'],
+            'lng' => ['nullable', 'numeric'],
+            'accuracy' => ['nullable', 'numeric'],
+        ]);
+
+        // 폰이 보낸 ip 는 믿지 않는다 — 서버가 본 주소로 넣는다.
+        $data['ip'] = $request->ip();
+
+        return response()->json($worker->punch($employee, $data['direction'], $data));
     }
 
     public function team(Request $request, string $token): View|RedirectResponse

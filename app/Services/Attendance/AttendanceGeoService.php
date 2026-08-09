@@ -13,9 +13,18 @@ use Illuminate\Support\Carbon;
 /**
  * 하이브리드 자동 출퇴근 판정.
  *
- * 현장 내(on-site) = GPS 부지 반경 안 OR 현장 WiFi(BSSID) 연결. 진입/이탈을 상태머신으로 처리하되,
- * 정문에서의 GPS 떨림을 막기 위해 이탈 반경 히스테리시스(+버퍼)와 체류시간(dwell)을 둔다.
- * "근무중 구간의 합"을 누적(이탈시간 차감)하고, 첫 진입은 clock_in 으로 기록한다.
+ * 현장 내(on-site) = GPS 부지 반경 안 OR 현장 네트워크(WiFi BSSID · 공인 IP 대역). 진입/이탈을
+ * 상태머신으로 처리하되, 정문에서의 GPS 떨림을 막기 위해 이탈 반경 히스테리시스(+버퍼)와
+ * 체류시간(dwell)을 둔다. "근무중 구간의 합"을 누적(이탈시간 차감)하고, 첫 진입은 clock_in 으로 기록한다.
+ *
+ * GPS 는 실내에서 못 믿는다. 위성이 안 잡히면 폰이 주변 신호로 위치를 추정하는데 오차가
+ * 수백 m~수 km 씩 나고, 그 좌표가 우연히 반경 안에 떨어지면 밖에 있는 사람이 "현장 안"으로
+ * 찍힌다. 그래서 오차(accuracy)가 반경보다 큰 신호는 안팎을 구분할 수 없는 것으로 보고
+ * **모른다(unknown)** 로 처리한다 — 밖에 있다고 단정하지 않는다. 단정하면 실내에 있는 사람이
+ * 이탈로 잡힌다.
+ *
+ * 이 "모른다" 를 메우는 것이 현장 네트워크다. 현장 WiFi 에 붙어 있다는 사실은 물리적으로
+ * 그 근처에 있다는 뜻이라, GPS 가 죽는 실내에서 오히려 GPS 보다 정확하다.
  */
 class AttendanceGeoService
 {
@@ -24,6 +33,15 @@ class AttendanceGeoService
 
     /** 이탈 확정 체류시간(초) — 밖에 이만큼 있어야 진짜 이탈. */
     public const DWELL_SECONDS = 600; // 10분
+
+    /**
+     * 오차가 이 값보다 크면 그 위치 신호는 쓰지 않는다.
+     *
+     * 기준은 현장 반경이다 — 반경 500m 짜리 현장에서 오차 600m 인 좌표는 안팎을 가릴 수
+     * 없다. 다만 반경이 아주 작은 현장(50m 등)에서는 보통의 휴대폰 오차(30~60m)까지 전부
+     * 버리게 되므로 바닥값을 둔다.
+     */
+    public const MIN_ACCURACY_METERS = 75;
 
     /**
      * 위치/네트워크 신호 1건을 받아 상태를 갱신한다.
@@ -54,13 +72,23 @@ class AttendanceGeoService
         $lng = isset($signal['lng']) && is_numeric($signal['lng']) ? (float) $signal['lng'] : null;
         $accuracy = isset($signal['accuracy']) && is_numeric($signal['accuracy']) ? (int) $signal['accuracy'] : null;
         $bssid = isset($signal['bssid']) && $signal['bssid'] ? SiteWifiAccessPoint::normalizeBssid((string) $signal['bssid']) : null;
+        // 폰이 보내는 값이 아니라 요청에서 서버가 읽은 값이다. 브라우저가 막을 수 없다.
+        $ip = isset($signal['ip']) && $signal['ip'] ? trim((string) $signal['ip']) : null;
 
-        $gpsIn = $this->gpsWithin($site, $lat, $lng, false);
-        $gpsInLoose = $this->gpsWithin($site, $lat, $lng, true);
-        $wifiIn = $this->wifiMatch($site, $bssid);
-        $onSiteEnter = $gpsIn || $wifiIn;             // 진입: 반경 안 or WiFi
-        $onSiteStay = $gpsInLoose || $wifiIn;         // 유지: 반경+버퍼 or WiFi(히스테리시스)
-        $source = $wifiIn ? ($gpsIn ? 'both' : 'wifi') : (($gpsIn || $gpsInLoose) ? 'gps' : 'manual');
+        // 판정은 probe() 한 곳에서만 한다 — 직접 출퇴근(2단)도 같은 함수를 쓴다.
+        // 규칙이 두 벌이면 언젠가 어긋나고, 그때 "자동은 되는데 직접은 안 된다"가 된다.
+        $probe = $this->probe($site, ['bssid' => $bssid, 'ip' => $ip, 'lat' => $lat, 'lng' => $lng, 'accuracy' => $accuracy]);
+        $netIn = $probe['network'];
+        $gps = $probe['gps'];                                   // in | in_loose | out | unknown
+
+        $onSiteEnter = $netIn || $gps === 'in';                 // 진입: 반경 안 or 현장 네트워크
+        $onSiteStay = $netIn || $gps === 'in' || $gps === 'in_loose';  // 유지: +버퍼(히스테리시스)
+
+        // 아무 단서도 없는 신호. 밖에 있다는 뜻이 아니라 판단할 근거가 없다는 뜻이다.
+        // 이때는 상태를 건드리지 않는다 — 건드리면 실내 근무자가 이탈로 잡힌다.
+        $noInfo = ! $netIn && $gps === 'unknown';
+
+        $source = $probe['source'];
 
         $session = AttendanceSession::query()->where('employee_id', $employee->id)->where('work_date', $workDate)->first();
         $kind = 'ping';
@@ -75,7 +103,10 @@ class AttendanceGeoService
                 $kind = 'enter';
             }
         } elseif ($session->status === 'on_site') {
-            if ($onSiteStay) {
+            if ($noInfo) {
+                // 판단 근거 없음 — 이번 신호로는 아무것도 바꾸지 않는다.
+                $kind = 'ping';
+            } elseif ($onSiteStay) {
                 if ($session->pending_exit_at) {
                     $session->update(['pending_exit_at' => null]);
                 }
@@ -109,7 +140,14 @@ class AttendanceGeoService
         AttendanceGeoEvent::create([
             'employee_id' => $employee->id, 'site_id' => $site->id, 'kind' => $kind, 'source' => $source,
             'on_site' => $onSiteStay, 'lat' => $lat, 'lng' => $lng, 'accuracy' => $accuracy, 'bssid' => $bssid,
-            'occurred_at' => $now, 'payload' => ['ssid' => $signal['ssid'] ?? null],
+            'occurred_at' => $now,
+            'payload' => [
+                'ssid' => $signal['ssid'] ?? null,
+                'ip' => $ip,
+                // 왜 이렇게 판정했는지 나중에 되짚을 수 있어야 한다.
+                'gps' => $gps,
+                'network' => $netIn,
+            ],
         ]);
 
         return [
@@ -119,6 +157,35 @@ class AttendanceGeoService
             'source' => $source,
             'kind' => $kind,
             'onSiteSeconds' => (int) ($session?->on_site_seconds ?? 0),
+            // 화면이 "왜 이렇게 됐는지" 를 사람 말로 보여 줄 수 있도록 근거를 같이 준다.
+            'gps' => $gps,
+            'network' => $netIn,
+        ];
+    }
+
+    /**
+     * 신호 하나를 읽어 "지금 이 현장에 있다고 볼 수 있는가"를 판정한다. 상태는 바꾸지 않는다.
+     *
+     * 자동 기록과 직접 기록이 같은 규칙을 쓰도록 여기 한 곳에 모아 둔다.
+     *
+     * @param  array<string, mixed>  $signal  lat,lng,accuracy,bssid,ip
+     * @return array{gps: string, network: bool, source: string}
+     */
+    public function probe(Site $site, array $signal): array
+    {
+        $lat = isset($signal['lat']) && is_numeric($signal['lat']) ? (float) $signal['lat'] : null;
+        $lng = isset($signal['lng']) && is_numeric($signal['lng']) ? (float) $signal['lng'] : null;
+        $accuracy = isset($signal['accuracy']) && is_numeric($signal['accuracy']) ? (int) $signal['accuracy'] : null;
+        $bssid = isset($signal['bssid']) && $signal['bssid'] ? SiteWifiAccessPoint::normalizeBssid((string) $signal['bssid']) : null;
+        $ip = isset($signal['ip']) && $signal['ip'] ? trim((string) $signal['ip']) : null;
+
+        $network = $this->networkMatch($site, $bssid, $ip);
+        $gps = $this->gpsState($site, $lat, $lng, $accuracy);
+
+        return [
+            'gps' => $gps,
+            'network' => $network,
+            'source' => $network ? ($gps === 'in' ? 'both' : 'wifi') : ($gps === 'unknown' ? 'manual' : 'gps'),
         ];
     }
 
@@ -145,18 +212,38 @@ class AttendanceGeoService
     }
 
     /**
-     * 자정 마감 — 그날 마지막 이탈을 퇴근으로 확정. 아직 현장 안이면 미마감(관리자 확인).
+     * 하루 마감 — 그날 마지막 이탈을 퇴근으로 확정.
      *
-     * @return array{success: bool, finalized: int, needsReview: int}
+     * 하루가 다 지난 뒤에 마감하면 기록이 하루 늦게 나타난다. 그래서 저녁에 한 번 돌려
+     * 그날 안에 끝낸다. 다만 저녁에 돌 때는 아직 일하고 있는 사람이 있다 — 그 사람을
+     * 그 시각으로 끊으면 연장 근무가 잘린다.
+     *
+     * $activeGraceMinutes 를 주면 "방금까지 현장에 있던 것이 확인되는" 세션은 건너뛴다.
+     * 건너뛴 것은 자정 안전망이 처리한다.
+     *
+     * @return array{success: bool, finalized: int, needsReview: int, skipped: int}
      */
-    public function finalize(Carbon $date): array
+    public function finalize(Carbon $date, int $activeGraceMinutes = 0): array
     {
         $ds = $date->toDateString();
         $sessions = AttendanceSession::query()->where('work_date', $ds)->whereIn('status', ['on_site', 'left'])->get();
 
         $finalized = 0;
         $review = 0;
+        $skipped = 0;
+        $now = Carbon::now();
+
         foreach ($sessions as $s) {
+            // 아직 근무중인 사람은 건드리지 않는다 — 저녁 마감이 연장 근무를 자르면 안 된다.
+            if ($activeGraceMinutes > 0
+                && $s->status === 'on_site'
+                && $s->last_onsite_at
+                && $s->last_onsite_at->diffInMinutes($now) < $activeGraceMinutes) {
+                $skipped++;
+
+                continue;
+            }
+
             if ($s->status === 'left') {
                 $this->closeAttendanceLog($s);
                 $s->update(['status' => 'finalized', 'finalized_at' => now()]);
@@ -193,28 +280,73 @@ class AttendanceGeoService
             }
         }
 
-        return ['success' => true, 'finalized' => $finalized, 'needsReview' => $review];
+        return ['success' => true, 'finalized' => $finalized, 'needsReview' => $review, 'skipped' => $skipped];
     }
 
     // ───────────────────────── 내부 ─────────────────────────
 
-    private function gpsWithin(Site $site, ?float $lat, ?float $lng, bool $loose): bool
+    /**
+     * 위치 신호 하나를 네 가지 중 하나로 읽는다.
+     *
+     *   in       — 반경 안. 출근을 걸 수 있다.
+     *   in_loose — 반경과 이탈 버퍼 사이. 이미 근무중이면 유지하되, 새로 출근을 걸지는 않는다.
+     *   out      — 확실히 밖.
+     *   unknown  — 좌표가 없거나, 현장에 지오펜스가 없거나, 오차가 커서 안팎을 가릴 수 없다.
+     */
+    private function gpsState(Site $site, ?float $lat, ?float $lng, ?int $accuracy): string
     {
         if ($lat === null || $lng === null || $site->latitude === null || $site->longitude === null || ! $site->radius_meters) {
-            return false;
+            return 'unknown';
         }
-        $threshold = (float) $site->radius_meters + ($loose ? self::EXIT_BUFFER_METERS : 0);
 
-        return $this->distanceMeters($lat, $lng, (float) $site->latitude, (float) $site->longitude) <= $threshold;
+        $radius = (float) $site->radius_meters;
+
+        if ($accuracy !== null && $accuracy > max($radius, self::MIN_ACCURACY_METERS)) {
+            return 'unknown';
+        }
+
+        $distance = $this->distanceMeters($lat, $lng, (float) $site->latitude, (float) $site->longitude);
+
+        if ($distance <= $radius) {
+            return 'in';
+        }
+
+        return $distance <= $radius + self::EXIT_BUFFER_METERS ? 'in_loose' : 'out';
     }
 
-    private function wifiMatch(Site $site, ?string $bssid): bool
+    /**
+     * 현장 네트워크에 붙어 있는가.
+     *
+     * BSSID 는 네이티브 앱만 알려 줄 수 있고, 공인 IP 는 서버가 요청에서 직접 본다.
+     * 둘 중 하나만 맞아도 현장으로 인정한다 — 어느 쪽이든 그 네트워크에 물리적으로
+     * 닿아 있다는 뜻이기 때문이다.
+     */
+    private function networkMatch(Site $site, ?string $bssid, ?string $ip): bool
     {
-        if (! $bssid) {
+        if ($bssid === null && $ip === null) {
             return false;
         }
 
-        return SiteWifiAccessPoint::query()->where('site_id', $site->id)->where('bssid', $bssid)->where('active', true)->exists();
+        $rows = SiteWifiAccessPoint::query()
+            ->where('site_id', $site->id)
+            ->where('active', true)
+            ->get(['kind', 'bssid']);
+
+        foreach ($rows as $row) {
+            if ($row->isNetwork()) {
+                if ($ip !== null && SiteWifiAccessPoint::ipInCidr($ip, $row->bssid)) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if ($bssid !== null && $row->bssid === $bssid) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float

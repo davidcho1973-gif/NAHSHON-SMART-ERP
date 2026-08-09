@@ -3831,31 +3831,71 @@
         var geo = d.geofence || {};
         var geoWarn = (geo.lat == null || geo.lng == null || !geo.radius)
           ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:9px 12px;font-size:11.5px;color:#f59e0b;margin-bottom:12px"><i class="ph ph-warning"></i> 이 현장은 GPS 지오펜스(위도·경도·반경)가 설정되지 않았습니다. 관리자 → 현장 관리에서 위치·반경을 입력하면 실외 자동 출퇴근이 활성화됩니다.</div>'
-          : '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:12px">GPS 지오펜스: 반경 <b style="color:var(--text-secondary)">' + geo.radius + 'm</b> (실외 경계). WiFi는 실내 보완.</div>';
+          : '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:12px">GPS 지오펜스: 반경 <b style="color:var(--text-secondary)">' + geo.radius + 'm</b> (실외 경계). 실내는 아래 현장 네트워크가 맡습니다.</div>';
 
         var rows = (d.aps || []).length ? (d.aps || []).map(function (a) {
+          var isNet = a.kind === 'network';
           return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-subtle)">' +
-            '<i class="ph ph-wifi-high" style="color:' + (a.active ? 'var(--status-success)' : 'var(--text-tertiary)') + '"></i>' +
+            '<i class="ph ' + (isNet ? 'ph-globe-simple' : 'ph-wifi-high') + '" style="color:' + (a.active ? 'var(--status-success)' : 'var(--text-tertiary)') + '"></i>' +
             '<div style="flex:1;min-width:0"><div class="cell-mono" style="font-size:12.5px;color:var(--text-primary)">' + dashEsc(a.bssid) + '</div>' +
-            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc([a.ssid, a.label].filter(Boolean).join(' · ') || '—') + '</div></div>' +
+            '<div style="font-size:10.5px;color:var(--text-tertiary)">' + dashEsc([a.kindLabel, a.ssid, a.label].filter(Boolean).join(' · ') || '—') + '</div></div>' +
             '<button class="icon-btn" title="삭제" style="color:var(--status-danger)" onclick="window.swDelete(' + a.id + ',\'' + siteId + '\')"><i class="ph ph-trash"></i></button></div>';
         }).join('') : '<div style="padding:14px;text-align:center;color:var(--text-tertiary);font-size:12.5px">등록된 AP가 없습니다. 아래에서 추가하세요.</div>';
 
         body.innerHTML = geoWarn +
           '<div class="docs-card" style="border:1px solid var(--border-subtle);border-radius:10px;padding:6px 14px;margin-bottom:14px">' + rows + '</div>' +
-          '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:8px;align-items:end">' +
-          '<div><label style="font-size:11px;color:var(--text-tertiary)">BSSID (MAC) *</label><input id="sw-bssid" class="wbs-edit-field" placeholder="a4:5e:60:11:22:33"></div>' +
+          '<div style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:8px;padding:11px 13px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:220px;font-size:11.5px;color:var(--text-secondary);line-height:1.55">' +
+          '지금 이 화면을 <b style="color:var(--text-primary)">현장 WiFi</b>에서 열었다면 이 주소가 그 현장의 주소입니다. 한 번 누르면 등록됩니다.' +
+          '<div class="cell-mono" style="font-size:12.5px;color:var(--text-primary);margin-top:4px">' + dashEsc(d.myIp || '—') + '</div></div>' +
+          '<button class="btn-primary" style="height:36px;white-space:nowrap" onclick="window.swSaveMyIp(\'' + siteId + '\')"><i class="ph ph-globe-simple"></i> 현재 접속 주소 등록</button>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:auto 1.4fr 1fr 1fr auto;gap:8px;align-items:end">' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">종류</label>' +
+          '<select id="sw-kind" class="wbs-edit-field" onchange="window.swKindChanged()">' +
+          '<option value="bssid">공유기 MAC</option><option value="network">공인 IP 대역</option></select></div>' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)" id="sw-value-label">BSSID (MAC) *</label><input id="sw-bssid" class="wbs-edit-field" placeholder="a4:5e:60:11:22:33"></div>' +
           '<div><label style="font-size:11px;color:var(--text-tertiary)">WiFi 이름(SSID)</label><input id="sw-ssid" class="wbs-edit-field" placeholder="DASOL-PRISM-SITE"></div>' +
           '<div><label style="font-size:11px;color:var(--text-tertiary)">위치 메모</label><input id="sw-label" class="wbs-edit-field" placeholder="정문 / B동 2층"></div>' +
           '<button class="btn-primary" style="height:38px" onclick="window.swSave(\'' + siteId + '\')"><i class="ph ph-plus"></i> 추가</button>' +
           '</div>' +
-          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:8px">BSSID 확인: 폰에서 그 WiFi에 연결 → 상세정보, 또는 안드로이드 "WiFi Analyzer" 앱. 한 공유기가 2.4/5GHz로 BSSID가 다르면 둘 다 등록하세요.</div>';
+          '<div id="sw-hint" style="font-size:10.5px;color:var(--text-tertiary);margin-top:8px"></div>';
+        window.swKindChanged();
+      };
+
+      // 종류에 따라 안내가 달라진다 — MAC 과 IP 는 생김새도, 구하는 법도, 쓸 수 있는 시점도 다르다.
+      window.swKindChanged = function () {
+        var kind = ((document.getElementById('sw-kind') || {}).value) || 'bssid';
+        var input = document.getElementById('sw-bssid');
+        var label = document.getElementById('sw-value-label');
+        var hint = document.getElementById('sw-hint');
+        if (!input || !label || !hint) return;
+        if (kind === 'network') {
+          label.textContent = '공인 IP 또는 대역 *';
+          input.placeholder = '203.0.113.24 또는 203.0.113.0/24';
+          hint.innerHTML = '현장 인터넷 회선의 바깥 주소입니다. <b>웹 브라우저에서도 바로 동작합니다</b> — 폰이 알려주는 값이 아니라 서버가 요청에서 직접 보기 때문입니다. 회선 주소가 고정이 아니면 대역(/24)으로 넣으세요.';
+        } else {
+          label.textContent = 'BSSID (MAC) *';
+          input.placeholder = 'a4:5e:60:11:22:33';
+          hint.innerHTML = '가장 정확하지만 <b>네이티브 앱이 나와야 동작합니다</b> — 웹 브라우저는 접속한 WiFi 의 MAC 을 읽을 수 없습니다. 한 공유기가 2.4/5GHz 로 BSSID 가 다르면 둘 다 등록하세요.';
+        }
+      };
+
+      // 현장 WiFi 에서 이 화면을 열고 누르면 그 회선 주소가 등록된다.
+      window.swSaveMyIp = async function (siteId) {
+        var d = await gsRun('api_getSiteWifi', [siteId], { success: false });
+        if (!d || !d.success || !d.myIp) { alert('현재 접속 주소를 확인하지 못했습니다.'); return; }
+        if (!confirm(d.myIp + ' 을(를) 이 현장의 네트워크로 등록할까요?\n\n현장 WiFi 가 아닌 곳(휴대폰 데이터·집)에서 누르면 엉뚱한 주소가 들어갑니다.')) return;
+        var r = await gsRun('api_saveSiteWifi', [siteId, { kind: 'network', bssid: d.myIp, label: '현재 접속 주소로 등록' }], { success: false });
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getSiteWifi') >= 0) delete window.apiCache[k]; });
+        if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); return; }
+        window.swLoad(siteId);
       };
 
       window.swSave = async function (siteId) {
         var bssid = (document.getElementById('sw-bssid') || {}).value || '';
-        if (!bssid.trim()) { alert('BSSID를 입력하세요.'); return; }
-        var payload = { bssid: bssid.trim(), ssid: (document.getElementById('sw-ssid') || {}).value || '', label: (document.getElementById('sw-label') || {}).value || '' };
+        if (!bssid.trim()) { alert('값을 입력하세요.'); return; }
+        var payload = { kind: ((document.getElementById('sw-kind') || {}).value) || 'bssid', bssid: bssid.trim(), ssid: (document.getElementById('sw-ssid') || {}).value || '', label: (document.getElementById('sw-label') || {}).value || '' };
         var r = await gsRun('api_saveSiteWifi', [siteId, payload], { success: false });
         if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getSiteWifi') >= 0) delete window.apiCache[k]; });
         if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); return; }

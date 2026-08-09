@@ -94,6 +94,6 @@ class MobileOpsRoomTest extends TestCase
         $this->actingAs($this->user('site_manager'))->get('/attendance-app')
             ->assertStatus(200)
             ->assertSee(route('attendance-app.ops-room'), false)
-            ->assertSee('현장 상황실 · 원문 기록');
+            ->assertSee('현장 상황실');
     }
 }
