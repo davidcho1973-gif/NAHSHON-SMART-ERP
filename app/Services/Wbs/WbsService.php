@@ -2,6 +2,7 @@
 
 namespace App\Services\Wbs;
 
+use App\Models\Project;
 use App\Models\SafetyWorkItem;
 use App\Models\Site;
 use App\Models\WbsItem;
@@ -158,6 +159,7 @@ class WbsService
                 $item->crew_text = $crew['raw'] !== '' ? $crew['raw'] : null;
                 $item->crew_size = $crew['size'] ?: null;
                 $item->crew_roles = $crew['roles'] ?: null;
+
                 continue;
             }
             // 장비: 쉼표 구분 문자열 → 배열(캐스트).
@@ -166,6 +168,7 @@ class WbsService
                     ? $value
                     : array_values(array_filter(array_map('trim', explode(',', (string) $value))));
                 $item->equipment = $arr ?: null;
+
                 continue;
             }
             // 진척률: 0~100 정수. 빈 값이면 변경 없음.
@@ -174,6 +177,7 @@ class WbsService
                     continue;
                 }
                 $item->progress = max(0, min(100, (int) $value));
+
                 continue;
             }
 
@@ -181,6 +185,7 @@ class WbsService
                 if (in_array($column, $clearable, true)) {
                     $item->{$column} = null;
                 }
+
                 continue;
             }
             $item->{$column} = $value;
@@ -339,7 +344,7 @@ class WbsService
         $trade = trim((string) ($data['trade'] ?? '')) ?: '미지정';
         $date = trim((string) ($data['date'] ?? '')) ?: now()->toDateString();
         $siteRowId = $siteId !== 'ALL' ? Site::query()->where('code', $siteId)->value('id') : null;
-        $projectRowId = \App\Models\Project::query()->where('project_code', $projectCode)->value('id');
+        $projectRowId = Project::query()->where('project_code', $projectCode)->value('id');
         $crew = app(CrewParser::class)->parse((string) ($data['crew_text'] ?? ''));
 
         $wbsCode = DB::transaction(function () use ($projectCode, $projectRowId, $siteRowId, $trade, $name, $date, $data, $crew): string {
@@ -368,7 +373,7 @@ class WbsService
                 'level' => WbsItem::LEVEL_SUBTASK,
                 'wbs_code' => "{$projectCode}-W-M-{$stamp}-{$seq}",
                 'node_no' => "M.{$trade}.{$seq}",
-                'activity_id' => 'M' . str_pad((string) $manualNo, 2, '0', STR_PAD_LEFT),
+                'activity_id' => 'M'.str_pad((string) $manualNo, 2, '0', STR_PAD_LEFT),
                 'name' => $name,
                 'trade' => $trade,
                 'crew_text' => $crew['raw'] !== '' ? $crew['raw'] : null,
@@ -392,6 +397,104 @@ class WbsService
         $card = $this->createSafetyCard($wbsCode, $date, $userId);
 
         return ['success' => true, 'wbs_code' => $wbsCode, 'card' => $card];
+    }
+
+    /**
+     * 기준 행 바로 다음에 같은 레벨의 행을 끼워 넣는다.
+     *
+     * addManualActivity() 는 "현장 추가(비계획)" 라는 별도 구간의 맨 끝에만 붙는다. 계획된
+     * 공정 흐름 중간에 빠진 작업을 넣을 수가 없어서, 실제로는 엑셀을 다시 만들어 통째로
+     * 갈아끼우는 수밖에 없었다.
+     *
+     * 표시 순서는 sort_order 로만 옮기고 node_no(1.2.3 같은 번호)는 건드리지 않는다.
+     * 번호를 다시 매기면 도면·서류·안전카드에 이미 적힌 번호와 어긋난다. 대신 새 행에는
+     * 기준 행 번호 뒤에 a, b, c 를 붙인다 — 1.2.3 과 1.2.4 사이는 1.2.3a 가 된다.
+     * "순서"와 "이름"은 다른 것이고, 바뀌면 안 되는 쪽은 이름이다.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function insertAfter(string $afterWbsCode, array $data, ?int $userId = null): array
+    {
+        $anchor = WbsItem::query()->where('wbs_code', $afterWbsCode)->first();
+        if (! $anchor) {
+            return ['success' => false, 'error' => '기준이 될 행을 찾지 못했습니다.'];
+        }
+
+        if (! $anchor->parent_id) {
+            return ['success' => false, 'error' => '최상위 단계 사이에는 넣을 수 없습니다. 하위 작업을 기준으로 선택하세요.'];
+        }
+
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            return ['success' => false, 'error' => '작업명을 입력하세요.'];
+        }
+
+        $crew = app(CrewParser::class)->parse((string) ($data['crew_text'] ?? ''));
+
+        $created = DB::transaction(function () use ($anchor, $data, $name, $crew): WbsItem {
+            // 기준 행 뒤의 형제들을 한 칸씩 민다. 같은 sort_order 가 겹치면 순서가 들쭉날쭉해진다.
+            WbsItem::query()
+                ->where('parent_id', $anchor->parent_id)
+                ->where('sort_order', '>', $anchor->sort_order)
+                ->increment('sort_order');
+
+            return WbsItem::query()->create([
+                'project_id' => $anchor->project_id,
+                'project_code' => $anchor->project_code,
+                'site_id' => $anchor->site_id,
+                'parent_id' => $anchor->parent_id,
+                'level' => $anchor->level,
+                'wbs_code' => $anchor->project_code.'-I-'.now()->format('ymdHis').'-'.random_int(100, 999),
+                'node_no' => $this->nextInsertedNodeNo($anchor),
+                'name' => $name,
+                'trade' => trim((string) ($data['trade'] ?? '')) ?: $anchor->trade,
+                'company' => $data['company'] ?? $anchor->company,
+                'crew_text' => $crew['raw'] !== '' ? $crew['raw'] : null,
+                'crew_size' => $crew['size'] ?: null,
+                'crew_roles' => $crew['roles'] ?: null,
+                'equipment' => $crew['equipment'] ?: null,
+                'days' => isset($data['days']) ? (int) $data['days'] : null,
+                'manhours' => isset($data['manhours']) ? (float) $data['manhours'] : null,
+                'ehs' => $data['ehs'] ?? null,
+                // 날짜를 안 주면 기준 행의 종료일에 붙인다 — 사이에 끼운 작업은 보통 그 다음에 한다.
+                'planned_start' => $data['planned_start'] ?? $anchor->planned_end ?? $anchor->planned_start,
+                'planned_end' => $data['planned_end'] ?? $anchor->planned_end ?? $anchor->planned_start,
+                'status' => '검수완료',
+                'progress' => 0,
+                'sort_order' => $anchor->sort_order + 1,
+                'source' => 'manual',
+                'payload' => ['inserted_after' => $anchor->wbs_code],
+            ]);
+        });
+
+        return ['success' => true, 'wbs_code' => $created->wbs_code, 'node_no' => $created->node_no];
+    }
+
+    /**
+     * 1.2.3 다음에 넣으면 1.2.3a, 또 넣으면 1.2.3b. 기존 번호는 그대로 둔다.
+     */
+    private function nextInsertedNodeNo(WbsItem $anchor): ?string
+    {
+        $base = (string) ($anchor->node_no ?? '');
+        if ($base === '') {
+            return null;
+        }
+
+        // 이미 1.2.3a 뒤에 넣는 경우에도 뿌리 번호(1.2.3)를 기준으로 다음 글자를 찾는다.
+        $root = rtrim($base, 'abcdefghijklmnopqrstuvwxyz');
+        $taken = WbsItem::query()
+            ->where('parent_id', $anchor->parent_id)
+            ->where('node_no', 'like', $root.'%')
+            ->pluck('node_no')->all();
+
+        foreach (range('a', 'z') as $suffix) {
+            if (! in_array($root.$suffix, $taken, true)) {
+                return $root.$suffix;
+            }
+        }
+
+        return $root.'+';
     }
 
     public function createSafetyCard(string $wbsCode, ?string $date = null, ?int $userId = null): array
@@ -462,16 +565,16 @@ class WbsService
      */
     private function planSeedText(WbsItem $item): string
     {
-        $parts = [$item->name . '.'];
+        $parts = [$item->name.'.'];
 
         if ($item->crew_text) {
-            $parts[] = '투입: ' . $item->crew_text . ($item->crew_size ? " (약 {$item->crew_size}명)" : '') . '.';
+            $parts[] = '투입: '.$item->crew_text.($item->crew_size ? " (약 {$item->crew_size}명)" : '').'.';
         }
         if (! empty($item->equipment)) {
-            $parts[] = '장비: ' . implode(', ', (array) $item->equipment) . '.';
+            $parts[] = '장비: '.implode(', ', (array) $item->equipment).'.';
         }
         if ($item->days) {
-            $parts[] = '공기 ' . $item->days . '일.';
+            $parts[] = '공기 '.$item->days.'일.';
         }
 
         return implode(' ', $parts);
@@ -479,10 +582,10 @@ class WbsService
 
     private function nextWorkCode(string $date): string
     {
-        $prefix = 'WRK-' . str_replace('-', '', mb_substr($date, 2, 8));
+        $prefix = 'WRK-'.str_replace('-', '', mb_substr($date, 2, 8));
 
         do {
-            $code = $prefix . '-' . str_pad((string) random_int(1, 999), 3, '0', STR_PAD_LEFT);
+            $code = $prefix.'-'.str_pad((string) random_int(1, 999), 3, '0', STR_PAD_LEFT);
         } while (SafetyWorkItem::query()->where('work_code', $code)->exists());
 
         return $code;
@@ -498,7 +601,7 @@ class WbsService
     public function importGenerated(string $projectCode, array $stages, string $siteId = 'ALL'): array
     {
         $siteRowId = $siteId !== 'ALL' ? Site::query()->where('code', $siteId)->value('id') : null;
-        $projectRowId = \App\Models\Project::query()->where('project_code', $projectCode)->value('id');
+        $projectRowId = Project::query()->where('project_code', $projectCode)->value('id');
 
         $counts = ['stages' => 0, 'tasks' => 0, 'subtasks' => 0];
 

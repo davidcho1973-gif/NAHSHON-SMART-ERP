@@ -50,6 +50,45 @@ class ScheduleImporter
     public function __construct(private readonly CrewParser $crewParser) {}
 
     /**
+     * 저장하지 않고 읽기만 한다 — 갈아끼우기 전에 "제대로 읽히는지" 부터 보기 위해서.
+     *
+     * 공정표 교체는 되돌리기 어렵다(기존 트리와 딸린 안전카드가 지워진다). 그런데 헤더 이름이
+     * 하나만 달라도 액티비티가 0개로 읽힌다. 그 상태로 교체하면 공정표가 통째로 날아간다.
+     * 그래서 항상 이걸 먼저 보고, 숫자가 납득되면 그때 교체한다.
+     *
+     * @return array{activities: int, milestones: int, warnings: array<int, string>,
+     *               sample: array<int, array{id: string, name: string, trade: ?string, start: ?string, end: ?string}>,
+     *               milestoneNames: array<int, string>}
+     */
+    public function preview(string $path): array
+    {
+        if (! is_file($path)) {
+            throw new RuntimeException("공정표 파일을 찾을 수 없습니다: {$path}");
+        }
+
+        [$activities, $milestones, $warnings] = $this->readXlsx($path);
+
+        return [
+            'activities' => count($activities),
+            'milestones' => count($milestones),
+            'warnings' => $warnings,
+            // 앞의 몇 줄을 그대로 보여 준다. 숫자만 맞고 내용이 엉뚱한 경우를 눈으로 잡으려면
+            // 실제로 읽힌 행을 봐야 한다.
+            'sample' => array_map(fn (array $a): array => [
+                'id' => (string) ($a['id'] ?? ''),
+                'name' => (string) ($a['name_ko'] ?? $a['name_en'] ?? ''),
+                'trade' => isset($a['trade']) ? (string) $a['trade'] : null,
+                'start' => isset($a['es']) ? (string) $a['es'] : null,
+                'end' => isset($a['ef']) ? (string) $a['ef'] : null,
+            ], array_slice($activities, 0, 8)),
+            'milestoneNames' => array_values(array_filter(array_map(
+                fn (array $m): string => (string) ($m['name'] ?? ''),
+                $milestones,
+            ))),
+        ];
+    }
+
+    /**
      * @return array{stages: int, tasks: int, subtasks: int, milestones: int, activities: int, warnings: array<int, string>}
      */
     public function importFromXlsx(string $path, string $projectCode, string $siteId = 'ALL'): array
@@ -75,7 +114,7 @@ class ScheduleImporter
      * 결과 트리(마일스톤 → 공종 → 액티비티)와 보존 규칙(협력사 배정 유지)이 정확히 같다.
      *
      * @param  array<int, array<string, mixed>>  $rawActivities  각 항목 키: id, name_ko, name_en, dur,
-     *         preds(string[]|string), es, ef, ls, lf, float_days, is_critical(bool), cost, trade, crew(string)
+     *                                                           preds(string[]|string), es, ef, ls, lf, float_days, is_critical(bool), cost, trade, crew(string)
      * @param  array<int, array{name?: string, date?: string}>  $rawMilestones
      * @param  array<int, string>  $warnings
      * @return array{stages: int, tasks: int, subtasks: int, milestones: int, activities: int, warnings: array<int, string>}
@@ -146,7 +185,7 @@ class ScheduleImporter
      */
     private function readXlsx(string $path): array
     {
-        $reader = new Reader();
+        $reader = new Reader;
         $reader->open($path);
 
         $activities = [];
@@ -313,7 +352,7 @@ class ScheduleImporter
         // 엑셀 시리얼 번호(날짜 서식이 없는 셀)도 받아준다.
         if (is_numeric($s) && (float) $s > 20000) {
             return \DateTimeImmutable::createFromFormat('Y-m-d', '1899-12-30')
-                ->modify('+' . (int) $s . ' days')->format('Y-m-d');
+                ->modify('+'.(int) $s.' days')->format('Y-m-d');
         }
 
         return null;
@@ -368,7 +407,7 @@ class ScheduleImporter
     {
         if ($milestones === []) {
             $warnings[] = '마일스톤이 없어 전체를 단일 Stage 로 만듭니다.';
-            $milestones = [['name' => $projectCode . ' 전체 공정', 'date' => '9999-12-31']];
+            $milestones = [['name' => $projectCode.' 전체 공정', 'date' => '9999-12-31']];
         }
 
         $stageOf = $this->assignStages($activities, $milestones);
@@ -519,7 +558,7 @@ class ScheduleImporter
     private function inferEhs(array $a): ?string
     {
         $equipment = $a['crew']['equipment'];
-        $text = mb_strtolower($a['name'] . ' ' . $a['name_en'] . ' ' . $a['crew']['raw']);
+        $text = mb_strtolower($a['name'].' '.$a['name_en'].' '.$a['crew']['raw']);
 
         if ($equipment !== [] || str_contains($text, '고소') || str_contains($text, 'lift')) {
             return 'high';
