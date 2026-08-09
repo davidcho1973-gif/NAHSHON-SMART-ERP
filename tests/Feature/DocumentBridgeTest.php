@@ -107,4 +107,44 @@ class DocumentBridgeTest extends TestCase
         $this->assertSame(1, IntegratedDocument::count());
         $this->assertSame(1, IntelligentDocument::count(), '한 번 올리면 문서관리와 AI 문서함 양쪽에 모두 등록된다');
     }
+
+    public function test_원본이_유실된_문서는_같은_파일_재업로드로_복원된다(): void
+    {
+        // Laravel Cloud 로컬 디스크는 배포마다 초기화된다. 원본이 사라진 레코드를
+        // "중복"으로 거부하면 같은 파일을 다시 올릴 유일한 길이 막힌다.
+        $this->actingAs($this->admin());
+        $file = UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf');
+
+        $this->post('/document-hub/api/upload', ['files' => [$file]])->assertSuccessful();
+        $doc = IntelligentDocument::firstOrFail();
+
+        // 배포가 지운 상황 재현: 원본 삭제 + 분석 실패 상태.
+        Storage::disk($doc->disk)->delete($doc->file_path);
+        $doc->update(['ai_status' => 'failed', 'ai_error' => '업로드된 원본 파일을 찾을 수 없습니다.']);
+
+        $again = UploadedFile::fake()->create('08_배관_위생.pdf', 200, 'application/pdf');
+        $res = $this->post('/document-hub/api/upload', ['files' => [$again]])->assertSuccessful();
+
+        $doc->refresh();
+        $this->assertSame(1, IntelligentDocument::count(), '새 레코드를 만들지 않고 기존 레코드에 복원한다');
+        $this->assertTrue(Storage::disk($doc->disk)->exists($doc->file_path), '파일이 되살아나야 한다');
+        $this->assertSame('queued', $doc->ai_status, '분석이 다시 예약된다');
+        $this->assertNull($doc->ai_error);
+        $this->assertSame([], $res->json('duplicates') ?: [], '유실 복원은 중복으로 세지 않는다');
+    }
+
+    public function test_원본이_살아있는_진짜_중복은_여전히_거부된다(): void
+    {
+        $this->actingAs($this->admin());
+
+        $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf')],
+        ])->assertSuccessful();
+        $res = $this->post('/document-hub/api/upload', [
+            'files' => [UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf')],
+        ])->assertSuccessful();
+
+        $this->assertSame(1, IntelligentDocument::count());
+        $this->assertCount(1, $res->json('duplicates'));
+    }
 }

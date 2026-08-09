@@ -159,6 +159,30 @@ class DocumentIntelligenceController extends Controller
             $duplicate = $duplicateQuery->first();
 
             if ($duplicate) {
+                // 원본이 유실된 레코드(배포로 로컬 디스크가 초기화된 경우)는 "중복"으로
+                // 거부하면 안 된다 — 같은 파일을 다시 올릴 유일한 길을 막아 버린다.
+                // 파일을 그 레코드에 되살리고 분석을 다시 태운다.
+                $dupDisk = Storage::disk($duplicate->disk ?: $diskName);
+                if (blank($duplicate->file_path) || ! $dupDisk->exists($duplicate->file_path)) {
+                    $uuid = $duplicate->uuid ?: (string) Str::uuid();
+                    $originalName = $file->getClientOriginalName();
+                    $safeName = $this->safeFileName($originalName);
+                    $path = $disk->putFileAs("document-intelligence/inbox/{$uuid}", $file, $safeName);
+                    if ($path) {
+                        $duplicate->update([
+                            'disk' => $diskName,
+                            'file_path' => $path,
+                            'stored_file_name' => $safeName,
+                            'ai_status' => 'queued',
+                            'ai_error' => null,
+                        ]);
+                        AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+                        $created[] = $this->documentRow($duplicate->fresh());
+
+                        continue;
+                    }
+                }
+
                 $duplicates[] = ['file' => $file->getClientOriginalName(), 'documentId' => $duplicate->id];
 
                 continue;
