@@ -17,6 +17,7 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\SiteContractor;
 use App\Models\SmartRecord;
+use App\Models\SystemHeartbeat;
 use App\Models\Team;
 use App\Models\Vehicle;
 use App\Models\VehicleRental;
@@ -1343,15 +1344,15 @@ class SmartCompanyData
      */
     private static function schedulerAlert(): ?array
     {
-        $last = cache('scheduler.last_run_at');
-        $minutes = $last ? (int) now()->diffInMinutes(Carbon::parse($last), true) : null;
+        $health = SystemHeartbeat::health(SystemHeartbeat::SCHEDULER);
 
-        // 10분마다 찍으므로 두 번 연속 빠질 때까지 기다린다(배포 중 끊기는 여유 포함).
-        if ($minutes !== null && $minutes <= 25) {
+        if ($health['running']) {
             return null;
         }
 
-        $howLong = $minutes === null ? '한 번도 돌지 않았습니다' : "{$minutes}분째 멈춰 있습니다";
+        $howLong = $health['minutes_ago'] === null
+            ? '한 번도 돌지 않았습니다'
+            : "{$health['minutes_ago']}분째 멈춰 있습니다";
 
         return [
             'id' => 'SCHEDULER-STALLED',

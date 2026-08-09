@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\SystemHeartbeat;
 use App\Models\User;
 use App\Support\SmartCompanyData;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -25,7 +25,7 @@ class SchedulerHealthTest extends TestCase
 
     public function test_it_reports_a_healthy_scheduler(): void
     {
-        Cache::forever('scheduler.last_run_at', now()->toIso8601String());
+        SystemHeartbeat::create(['key' => SystemHeartbeat::SCHEDULER, 'beat_at' => now()]);
 
         $this->get('/build-version')
             ->assertOk()
@@ -34,7 +34,7 @@ class SchedulerHealthTest extends TestCase
 
     public function test_it_reports_a_stalled_scheduler_with_how_long(): void
     {
-        Cache::forever('scheduler.last_run_at', now()->subMinutes(90)->toIso8601String());
+        SystemHeartbeat::create(['key' => SystemHeartbeat::SCHEDULER, 'beat_at' => now()->subMinutes(90)]);
 
         $res = $this->get('/build-version')->assertOk();
 
@@ -47,16 +47,15 @@ class SchedulerHealthTest extends TestCase
     public function test_a_short_gap_still_counts_as_running(): void
     {
         // 배포 중에는 잠깐 끊긴다. 그때마다 경보를 울리면 아무도 안 믿게 된다.
-        Cache::forever('scheduler.last_run_at', now()->subMinutes(12)->toIso8601String());
+        SystemHeartbeat::create(['key' => SystemHeartbeat::SCHEDULER, 'beat_at' => now()->subMinutes(12)]);
 
         $this->get('/build-version')->assertJsonPath('scheduler.running', true);
     }
 
     public function test_the_heartbeat_does_not_keep_the_serverless_database_awake(): void
     {
-        // 데이터베이스가 서버리스라 5분 놀면 잠든다. 캐시가 그 데이터베이스에 있으므로
-        // 매분 맥박을 찍으면 잠들 틈이 없어져 요금이 계속 나간다. 이미 10분마다 도는
-        // 작업이 있으니 같은 리듬에 얹는다 — 감시를 붙이느라 요금을 더 내지는 않는다.
+        // 데이터베이스가 서버리스라 5분 놀면 잠든다. 이미 10분마다 도는 작업이 있으니
+        // 같은 리듬에 얹는다 — 감시를 붙이느라 요금을 더 내지는 않는다.
         $events = collect(app(Schedule::class)->events());
 
         $heartbeat = $events->first(fn ($e) => $e->description === 'scheduler-heartbeat');
@@ -66,12 +65,12 @@ class SchedulerHealthTest extends TestCase
 
     public function test_it_says_plainly_when_the_scheduler_never_ran(): void
     {
-        Cache::forget('scheduler.last_run_at');
+        // 표가 비어 있으면 한 번도 돈 적이 없는 것이다.
 
         $res = $this->get('/build-version')->assertOk();
 
         $res->assertJsonPath('scheduler.running', false);
-        $this->assertNull($res->json('scheduler.last_run_at'));
+        $this->assertNull($res->json('scheduler.last_beat_at'));
         $this->assertStringContainsString('한 번도', $res->json('scheduler.message'));
     }
 
@@ -83,6 +82,20 @@ class SchedulerHealthTest extends TestCase
         $heartbeat = $events->first(fn ($e) => $e->description === 'scheduler-heartbeat');
 
         $this->assertNotNull($heartbeat, '스케줄러 맥박이 등록되어 있지 않습니다.');
+    }
+
+    public function test_the_heartbeat_lives_in_the_database_not_the_cache(): void
+    {
+        // 캐시를 파일로 돌렸다 — 그래야 schedule:run 이 매분 데이터베이스를 깨우지 않는다.
+        // 파일 캐시는 컨테이너마다 따로라, 맥박을 캐시에 두면 스케줄러가 쓴 값을 웹 화면이
+        // 못 읽는다. 그래서 표에 둔다.
+        SystemHeartbeat::beat(SystemHeartbeat::SCHEDULER);
+
+        $this->assertDatabaseHas('system_heartbeats', ['key' => SystemHeartbeat::SCHEDULER]);
+
+        // 여러 번 찍어도 줄이 하나여야 한다 — 기록이 아니라 "마지막 시각"이다.
+        SystemHeartbeat::beat(SystemHeartbeat::SCHEDULER);
+        $this->assertSame(1, SystemHeartbeat::count());
     }
 
     public function test_the_evening_close_runs_at_eight_and_skips_active_workers(): void
@@ -101,7 +114,7 @@ class SchedulerHealthTest extends TestCase
     {
         // 스케줄러가 멈추면 알림을 만드는 수집기도 같이 멈춘다 — 화면이 조용해지는데,
         // 그 조용함이 "이상 없음"으로 읽힌다. 이 한 줄만은 스케줄러 없이 그 자리에서 만든다.
-        Cache::forever('scheduler.last_run_at', now()->subHours(3)->toIso8601String());
+        SystemHeartbeat::create(['key' => SystemHeartbeat::SCHEDULER, 'beat_at' => now()->subHours(3)]);
         $this->actingAs(User::factory()->create([
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]));
@@ -115,7 +128,7 @@ class SchedulerHealthTest extends TestCase
 
     public function test_a_healthy_scheduler_adds_no_noise_to_the_alert_centre(): void
     {
-        Cache::forever('scheduler.last_run_at', now()->toIso8601String());
+        SystemHeartbeat::create(['key' => SystemHeartbeat::SCHEDULER, 'beat_at' => now()]);
         $this->actingAs(User::factory()->create([
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]));

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\SystemHeartbeat;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -17,11 +18,14 @@ Artisan::command('inspire', function () {
 // 그 값을 읽어 "스케줄러가 돌고 있는가"를 한 줄로 답한다.
 //
 // 주기를 10분으로 잡은 것은 요금 때문이다. 데이터베이스가 서버리스라 5분 놀면 잠드는데,
-// 캐시가 그 데이터베이스에 저장되므로 매분 맥박을 찍으면 잠들 틈이 없어진다. 아래
-// docs:reap-stuck 이 이미 10분마다 데이터베이스를 건드리므로, 같은 리듬에 얹으면
-// 깨어 있는 시간이 늘지 않는다 — 감시를 붙이느라 요금을 더 내지는 않는다.
+// 매분 맥박을 찍으면 잠들 틈이 없어진다. 아래 docs:reap-stuck 이 이미 10분마다
+// 데이터베이스를 건드리므로, 같은 리듬에 얹으면 깨어 있는 시간이 늘지 않는다.
+//
+// 캐시가 아니라 표에 남기는 이유: 캐시를 파일로 돌렸다(그래야 schedule:run 이 매분
+// 데이터베이스를 깨우지 않는다). 파일 캐시는 컨테이너마다 따로라 스케줄러가 쓴 값을
+// 웹 화면이 읽지 못한다.
 Schedule::call(function (): void {
-    cache()->forever('scheduler.last_run_at', now()->toIso8601String());
+    SystemHeartbeat::beat(SystemHeartbeat::SCHEDULER);
 })->everyTenMinutes()->name('scheduler-heartbeat');
 
 // 자동 출퇴근 마감 — 퇴근 기록(clock_out)을 실제로 만드는 곳이다. 이게 안 돌면
