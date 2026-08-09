@@ -29,6 +29,7 @@ use App\Http\Controllers\W9FormController;
 use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
@@ -282,6 +283,30 @@ Route::get('/build-version', function () {
         'built_at' => $version['built_at'] ?? null,
         'checked_at' => now()->toIso8601String(),
         'env' => app()->environment(),
+        // 스케줄러가 돌고 있는가. 이게 꺼져 있으면 자동 퇴근·문서 재분석·경비 계상이
+        // 전부 조용히 멈춘다 — 화면은 멀쩡해 보여서 며칠 뒤에야 알아챈다.
+        'scheduler' => (function (): array {
+            $last = cache('scheduler.last_run_at');
+            if (! $last) {
+                return [
+                    'running' => false,
+                    'last_run_at' => null,
+                    'message' => '스케줄러가 한 번도 돈 적이 없습니다. Laravel Cloud 에서 스케줄러를 켜 주세요.',
+                ];
+            }
+            $minutes = (int) now()->diffInMinutes(Carbon::parse($last), true);
+            // 1분마다 찍으므로 5분이 넘으면 멈춘 것으로 본다(배포 중 잠깐 끊기는 여유 포함).
+            $running = $minutes <= 5;
+
+            return [
+                'running' => $running,
+                'last_run_at' => $last,
+                'minutes_ago' => $minutes,
+                'message' => $running
+                    ? '스케줄러가 정상 동작 중입니다.'
+                    : "스케줄러가 {$minutes}분째 멈춰 있습니다. 자동 퇴근과 문서 분석이 진행되지 않습니다.",
+            ];
+        })(),
         // 배포가 실제로 반영됐는지는 해시보다 "이 기능이 있나" 로 확인하는 편이 빠르다.
         'has' => [
             'admin_shell' => is_readable(public_path('js/admin-shell.js')),

@@ -8,6 +8,19 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// 스케줄러가 살아 있는지 남기는 맥박.
+//
+// 이 파일의 나머지 작업은 전부 "스케줄러가 돈다"는 전제 위에 있다. 그런데 그 전제가
+// 깨져도 앱은 멀쩡해 보인다 — 출근은 찍히고 화면도 정상이고, 다만 퇴근이 안 찍히고
+// 문서가 "분석 중"에 머물고 경비가 안 잡힐 뿐이다. 무엇이 안 도는지 알아채는 데
+// 며칠이 걸린다.
+//
+// 그래서 1분마다 시각 하나를 남긴다. /build-version 이 이 값을 읽어 "스케줄러가 돌고
+// 있는가"를 한 줄로 답한다. 캐시는 데이터베이스에 저장되므로 배포해도 살아남는다.
+Schedule::call(function (): void {
+    cache()->forever('scheduler.last_run_at', now()->toIso8601String());
+})->everyMinute()->name('scheduler-heartbeat');
+
 // 자동 출퇴근 마감 — 퇴근 기록(clock_out)을 실제로 만드는 곳이다. 이게 안 돌면
 // 출근만 남고 퇴근이 없어 근무시간이 0 이 되고 급여도 0 이 된다.
 //

@@ -1316,12 +1316,61 @@ class SmartCompanyData
         }
 
         try {
-            return app(UnifiedAlertService::class)->forUser($user, 'ALL', is_string($filter) ? $filter : 'all');
+            $alerts = app(UnifiedAlertService::class)->forUser($user, 'ALL', is_string($filter) ? $filter : 'all');
         } catch (\Throwable $e) {
             report($e);
-
-            return [];
+            $alerts = [];
         }
+
+        // 스케줄러가 멈추면 아무 알림도 안 뜬다 — 알림을 만드는 수집기 자체가 스케줄러
+        // 위에서 돌기 때문이다. 조용한 화면이 곧 "이상 없음"이 아니라는 뜻이라,
+        // 이 한 줄만은 스케줄러 없이 지금 이 요청에서 직접 만든다.
+        //
+        // 다만 특정 모듈만 걸러 보는 중이라면 끼워 넣지 않는다 — 계약만 보려는 사람의
+        // 목록에 시스템 알림이 섞이면 필터가 필터 구실을 못 한다.
+        $showingEverything = ! is_string($filter) || $filter === '' || strtolower($filter) === 'all';
+        if ($showingEverything && $stalled = self::schedulerAlert()) {
+            array_unshift($alerts, $stalled);
+        }
+
+        return $alerts;
+    }
+
+    /**
+     * 스케줄러가 멈췄을 때만 뜨는 알림. 정상이면 null.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function schedulerAlert(): ?array
+    {
+        $last = cache('scheduler.last_run_at');
+        $minutes = $last ? (int) now()->diffInMinutes(Carbon::parse($last), true) : null;
+
+        // 1분마다 찍으므로 5분이면 넉넉하다(배포 중 잠깐 끊기는 여유 포함).
+        if ($minutes !== null && $minutes <= 5) {
+            return null;
+        }
+
+        $howLong = $minutes === null ? '한 번도 돌지 않았습니다' : "{$minutes}분째 멈춰 있습니다";
+
+        return [
+            'id' => 'SCHEDULER-STALLED',
+            'module' => 'SYSTEM',
+            'type' => 'scheduler_stalled',
+            'site' => 'Global',
+            'level' => 'critical',
+            'severity' => '긴급',
+            'status' => '미처리',
+            'title' => '자동 작업이 멈춰 있습니다',
+            'content' => "예약 작업이 {$howLong}. 이 상태에서는 자동 퇴근이 기록되지 않아 "
+                .'근무시간이 0 으로 계산되고, 문서 AI 분석과 장비·숙소 경비 계상도 진행되지 않습니다. '
+                .'Laravel Cloud 에서 스케줄러를 켜 주세요.',
+            'date' => now()->toDateString(),
+            'ts' => now()->format('Y-m-d H:i:s'),
+            'dueAt' => null,
+            'relatedId' => null,
+            'actionUrl' => null,
+        ];
     }
 
     public static function ptwList(): array
