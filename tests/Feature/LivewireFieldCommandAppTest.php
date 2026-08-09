@@ -33,6 +33,9 @@ class LivewireFieldCommandAppTest extends TestCase
         $user = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites']);
         $this->actingAs($user);
 
+        // 현장이 있어야 출퇴근이 기록된다 — 없으면 recordCommute 가 경고만 남기고 돌아간다.
+        Site::create(['code' => 'AZ-01', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
+
         Livewire::test(FieldCommandApp::class)
             ->assertSet('activeTab', 'report')
             ->call('setTab', 'qr')
@@ -40,7 +43,8 @@ class LivewireFieldCommandAppTest extends TestCase
             ->call('setTab', 'report')
             ->call('incrementTrade', 'elec')
             ->call('recordCommute', 'in')
-            ->assertSet('last_scan_status', '출근 완료')
+            // 기록 결과는 toastMessage 로 알린다. 시각이 붙으므로 완전일치가 아니라 포함으로 본다.
+            ->assertSet('toastMessage', fn (?string $m): bool => str_contains((string) $m, '출근 기록 완료'))
             ->call('addEquipment')
             ->assertHasNoErrors();
     }
