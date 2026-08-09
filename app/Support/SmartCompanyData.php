@@ -23,9 +23,12 @@ use App\Models\VehicleRental;
 use App\Models\Vendor;
 use App\Services\Admin\ApplicantAdminService;
 use App\Services\Admin\AttendanceLogAdminService;
+use App\Services\Admin\CommunicationAdminService;
 use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\ItemMasterService;
+use App\Services\Admin\PayProfileService;
+use App\Services\Admin\SiteAdminService;
 use App\Services\Admin\UserAccessService;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Services\Attendance\AttendanceGeoService;
@@ -150,6 +153,30 @@ class SmartCompanyData
             'api_setAttendanceLogStatus' => app(AttendanceLogAdminService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_deleteAttendanceLog' => app(AttendanceLogAdminService::class)->delete((int) ($args[0] ?? 0)),
 
+            // 임금 프로필 (Filament EmployeePayrollProfileResource 를 SPA 로 옮긴 것).
+            'api_getPayProfiles' => app(PayProfileService::class)->list(),
+            'api_getPayProfileOptions' => app(PayProfileService::class)->options(),
+            'api_savePayProfile' => app(PayProfileService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deletePayProfile' => app(PayProfileService::class)->delete((int) ($args[0] ?? 0)),
+
+            // 현장 · 프로젝트 (Filament SiteResource / ProjectResource 를 SPA 로 옮긴 것).
+            // api_saveSiteWifi 와 이름이 겹치지 않도록 Admin 접미사를 붙인다.
+            'api_getSiteAdmin' => app(SiteAdminService::class)->list(),
+            'api_getSiteAdminOptions' => app(SiteAdminService::class)->options(),
+            'api_saveSiteAdmin' => app(SiteAdminService::class)->saveSite(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_saveProjectAdmin' => app(SiteAdminService::class)->saveProject(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteSiteAdmin' => app(SiteAdminService::class)->deleteSite((int) ($args[0] ?? 0)),
+            'api_deleteProjectAdmin' => app(SiteAdminService::class)->deleteProject((int) ($args[0] ?? 0)),
+
+            // 메신저 방 · 메시지 관리 (Filament CommunicationRoom/Message 를 SPA 로 옮긴 것).
+            'api_getCommunicationAdmin' => app(CommunicationAdminService::class)->list(),
+            'api_getCommunicationAdminOptions' => app(CommunicationAdminService::class)->options(),
+            'api_saveCommunicationRoom' => app(CommunicationAdminService::class)->saveRoom(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_syncCommunicationRoomMembers' => app(CommunicationAdminService::class)->syncRoomMembers((int) ($args[0] ?? 0)),
+            'api_deleteCommunicationRoom' => app(CommunicationAdminService::class)->deleteRoom((int) ($args[0] ?? 0)),
+            'api_saveCommunicationMessage' => app(CommunicationAdminService::class)->saveMessage(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteCommunicationMessage' => app(CommunicationAdminService::class)->deleteMessage((int) ($args[0] ?? 0)),
+
             // 품목 · 분류 마스터 (Filament Item/ItemCategory 를 SPA 로 옮긴 것).
             'api_getItemMaster' => app(ItemMasterService::class)->list(),
             'api_getItemMasterOptions' => app(ItemMasterService::class)->options(),
@@ -163,6 +190,11 @@ class SmartCompanyData
             'api_getEmployeeAdminOptions' => app(EmployeeAdminService::class)->options(),
             'api_saveEmployeeAdmin' => app(EmployeeAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteEmployeeAdmin' => app(EmployeeAdminService::class)->delete((int) ($args[0] ?? 0)),
+            // 직원 정보를 그대로 써서 로그인 계정을 만든다 — 이름·이메일을 또 치지 않는다.
+            'api_grantEmployeeAccount' => app(EmployeeAdminService::class)->grantAccount(
+                (int) ($args[0] ?? 0),
+                is_array($args[1] ?? null) ? $args[1] : []
+            ),
 
             // 원청 계약 · 서류 (Filament ProjectContractResource 를 SPA 로 옮긴 것).
             // 서류 업로드만 multipart 라 별도 라우트(admin.contract-document.upload)를 쓴다.

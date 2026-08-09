@@ -2,27 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Filament\Resources\ProjectContracts\ProjectContractResource;
 use App\Models\ProjectContractDocument;
+use App\Services\Admin\ContractAdminService;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectContractDocumentController extends Controller
 {
-    public function download(ProjectContractDocument $document): StreamedResponse
+    public function download(ProjectContractDocument $document, ContractAdminService $contracts): StreamedResponse
     {
-        $user = auth()->user();
-
-        abort_unless(
-            $user
-                && $user->account_status === 'active'
-                && ProjectContractResource::canViewAny()
-                && ProjectContractResource::getEloquentQuery()
-                    ->whereKey($document->project_contract_id)
-                    ->exists(),
-            403,
-        );
+        abort_unless($contracts->canAccessContract((int) $document->project_contract_id), 403);
 
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk($document->disk ?: (string) config('document-intelligence.disk', 'local'));

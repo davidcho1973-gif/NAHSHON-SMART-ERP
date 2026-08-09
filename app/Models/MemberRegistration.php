@@ -118,7 +118,7 @@ class MemberRegistration extends Model
         });
 
         // Employee/account/document sync only happens when the applicant transitions to active.
-        // Manual re-sync remains available from the Filament table action.
+        // Manual re-sync remains available from the 입사지원 관리 화면 (api_resyncApplicant).
         static::saved(function (MemberRegistration $registration): void {
             if ($registration->onboarding_status === 'active'
                 && ($registration->wasRecentlyCreated || $registration->wasChanged('onboarding_status'))) {
@@ -242,7 +242,7 @@ class MemberRegistration extends Model
             return null;
         }
 
-        return 'N-' . Str::substr($clean, -9);
+        return 'N-'.Str::substr($clean, -9);
     }
 
     public function ensureApplicantCode(): string
@@ -578,7 +578,7 @@ class MemberRegistration extends Model
             return $fallback;
         }
 
-        return Str::limit($fallback, 70, '') . '-' . $this->id;
+        return Str::limit($fallback, 70, '').'-'.$this->id;
     }
 
     private function matchingEmployeeByNumber(string $employeeNumber): ?Employee
@@ -633,7 +633,7 @@ class MemberRegistration extends Model
 
         $accessUser = User::query()->where('employee_id', $employee->id)->first()
             ?? User::query()->where('email', $email)->first()
-            ?? new User();
+            ?? new User;
 
         $accessUser->fill([
             'employee_id' => $employee->id,
@@ -659,13 +659,13 @@ class MemberRegistration extends Model
 
     private static function makeRegistrationNumber(): string
     {
-        return 'MR-' . now()->format('ymd') . '-' . Str::upper(Str::random(6));
+        return 'MR-'.now()->format('ymd').'-'.Str::upper(Str::random(6));
     }
 
     private static function makeApplicantCode(): string
     {
         do {
-            $code = 'AP-' . now()->format('ymd') . '-' . Str::upper(Str::random(5));
+            $code = 'AP-'.now()->format('ymd').'-'.Str::upper(Str::random(5));
         } while (self::query()->where('applicant_code', $code)->exists());
 
         return $code;

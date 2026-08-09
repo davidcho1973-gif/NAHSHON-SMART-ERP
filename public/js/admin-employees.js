@@ -112,11 +112,18 @@
           },
         },
         {
-          key: 'act', label: '', align: 'right', width: '120px',
+          key: 'act', label: '', align: 'right', width: '200px',
           render: function (r) {
             if (!state.canManage) return '';
-            return u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
+            var html = '';
+            // 계정이 없으면 이 사람은 앱에 못 들어온다. 직원 정보를 그대로 써서
+            // 여기서 바로 만들어 준다 — 계정 화면에서 이름·이메일을 또 치지 않는다.
+            if (!r.hasAccount && state.options && state.options.canGrantAccount) {
+              html += u.rowButton('계정 만들기', 'window.AdminEmployees.grantAccount(' + r.id + ')') + ' ';
+            }
+            html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
+            return html;
           },
         },
       ],
@@ -235,6 +242,36 @@
     }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
   }
 
+  function grantAccount(id) {
+    var u = ui();
+    var r = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+
+    loadOptions().then(function (o) {
+      u.formModal({
+        title: '로그인 계정 만들기',
+        subtitle: r.name + ' 님이 앱에 들어올 수 있게 합니다. 이름과 소속은 직원 정보를 그대로 씁니다.',
+        saveLabel: '만들기',
+        fields: [
+          { name: 'email', label: '이메일', required: true, colSpan: 2, value: r.email || '',
+            hint: '구글 로그인에 쓰는 주소입니다. 직원 정보의 이메일이 기본값입니다.' },
+          { name: 'role', label: '역할', type: 'select', required: true,
+            options: o.accountRoles, value: 'worker' },
+          { name: 'scope', label: '볼 수 있는 범위', type: 'select', required: true,
+            options: o.accountScopes, value: 'self',
+            hint: '"본인" 이면 자기 출퇴근만 봅니다. 현장·팀은 직원 정보의 소속을 따라갑니다.' },
+        ],
+        onSave: function (v) {
+          return call('api_grantEmployeeAccount', [id, v]).then(function (res) {
+            if (res.success === false) return res;
+            u.toast(r.name + ' 님의 계정을 만들었습니다.');
+            return reload().then(function () { return { success: true }; });
+          });
+        },
+      });
+    }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
+  }
+
   function remove(id) {
     var u = ui();
     var r = state.rows.filter(function (x) { return x.id === id; })[0];
@@ -266,6 +303,7 @@
     render: renderScreen,
     applyFilters: applyFilters,
     openForm: openForm,
+    grantAccount: grantAccount,
     remove: remove,
     _state: state,
   };

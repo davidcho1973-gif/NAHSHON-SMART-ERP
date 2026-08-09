@@ -82,7 +82,7 @@ class EmployeeAdminService
         }
 
         $query = Employee::query()
-            ->with(['company:id,name', 'site:id,code', 'team:id,name'])
+            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,access_role,account_status'])
             ->orderBy('name');
         $this->applyScope($query);
 
@@ -146,6 +146,10 @@ class EmployeeAdminService
                 'hasBadgePhoto' => filled($e->badge_photo_path),
                 'qrRole' => $e->attendance_app_role,
                 'qrScope' => $e->attendance_app_scope,
+                // 로그인 계정이 있는지 — 없으면 이 사람은 앱에 못 들어온다.
+                'hasAccount' => $e->user !== null,
+                'accountRole' => $e->user?->access_role,
+                'accountStatus' => $e->user?->account_status,
                 'visaExpiresOn' => $e->visa_expires_on?->toDateString(),
                 'safetyExpiresOn' => $e->safety_training_expires_on?->toDateString(),
                 'expiring' => $expiring,
@@ -183,7 +187,64 @@ class EmployeeAdminService
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
             'teams' => Team::query()->orderBy('name')->get(['id', 'name'])
                 ->map(fn (Team $t): array => ['value' => (string) $t->id, 'label' => $t->name])->all(),
+            // 계정 부여 폼에서 쓴다. 줄 수 있는 역할은 부여하는 사람의 등급에 달렸다.
+            'accountRoles' => $pairs(array_intersect_key(
+                User::ROLE_LABELS_KO,
+                app(UserAccessService::class)->assignableRoles(),
+            )),
+            'accountScopes' => $pairs(User::SCOPE_OPTIONS),
+            'canGrantAccount' => app(UserAccessService::class)->canManage(),
         ];
+    }
+
+    /**
+     * 직원에게 로그인 계정을 만들어 준다.
+     *
+     * 이름과 이메일은 이미 직원 정보에 있다 — 계정 화면에서 다시 치게 하면 오타가 나고,
+     * 오타가 나면 그 사람은 자기 계정으로 못 들어온다. 그래서 여기서 직원 정보를 그대로
+     * 넘긴다. 역할 검증·중복 검사·마지막 슈퍼관리자 보호는 계정 서비스가 그대로 한다 —
+     * 규칙을 두 군데 두면 언젠가 어긋난다.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public function grantAccount(int $employeeId, array $input): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '직원 관리 권한이 없습니다.'];
+        }
+
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'error' => '직원을 찾을 수 없습니다.'];
+        }
+        if (! $this->inScope($employee)) {
+            return ['success' => false, 'error' => '다른 현장의 직원에게는 계정을 만들 수 없습니다.'];
+        }
+        if ($employee->user) {
+            return ['success' => false, 'error' => '이 직원은 이미 로그인 계정이 있습니다. 계정 · 권한 관리에서 수정해 주세요.'];
+        }
+
+        $email = mb_strtolower(trim((string) ($input['email'] ?? $employee->email ?? '')));
+        if ($email === '') {
+            return ['success' => false, 'errors' => ['email' => '이메일을 입력하세요. 구글 로그인에 쓰는 주소입니다.']];
+        }
+
+        $scope = (string) ($input['scope'] ?? 'self');
+
+        return app(UserAccessService::class)->save([
+            'name' => $employee->name,
+            'email' => $email,
+            'role' => (string) ($input['role'] ?? 'worker'),
+            'scope' => $scope,
+            'status' => 'active',
+            'employeeId' => $employee->id,
+            // 범위 대상은 직원 정보에서 그대로 가져온다 — 같은 것을 또 고르게 하지 않는다.
+            'companyId' => $employee->company_id,
+            'siteId' => $employee->site_id,
+            'teamId' => $employee->team_id,
+            'notes' => $input['notes'] ?? null,
+        ]);
     }
 
     /**

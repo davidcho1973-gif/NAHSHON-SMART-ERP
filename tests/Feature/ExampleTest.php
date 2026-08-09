@@ -25,10 +25,9 @@ class ExampleTest extends TestCase
         $response->assertSee('Continue with Google');
     }
 
-    public function test_admin_login_page_renders_successfully(): void
+    public function test_old_admin_login_url_lands_on_the_single_login_page(): void
     {
-        $response = $this->get('/admin/login');
-
-        $response->assertStatus(200);
+        // 로그인 창이 두 개면 어디로 들어가야 하는지 매번 헷갈린다. 이제 하나다.
+        $this->get('/admin/login')->assertRedirect('/');
     }
 }

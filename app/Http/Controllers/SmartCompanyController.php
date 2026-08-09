@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Site;
 use App\Models\AttendanceQrCode;
+use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
-use Illuminate\Http\Request;
+use App\Support\CurrentCompany;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -33,7 +34,7 @@ class SmartCompanyController extends Controller
                     ->get()
                     ->map(fn (Site $site): array => [
                         'code' => $site->code,
-                        'label' => trim($site->code . ' - ' . $site->name),
+                        'label' => trim($site->code.' - '.$site->name),
                         'setup_pending' => is_null($site->setup_completed_at),
                     ])
                     ->values()
@@ -52,6 +53,9 @@ class SmartCompanyController extends Controller
             'siteOptions' => $siteOptions,
             'siteNames' => $siteNames,
             'authUser' => $user instanceof User ? $this->authUserViewData($user) : null,
+            // 회사 전환은 예전 관리자 패널에만 있었다. 패널을 없애면서 여기로 옮긴다 —
+            // 회사가 하나뿐인 사람에게는 보이지 않는다.
+            'companySwitcher' => $user instanceof User ? $this->companySwitcherViewData($user) : null,
         ]);
     }
 
@@ -74,6 +78,29 @@ class SmartCompanyController extends Controller
             'site_code' => $user->employee?->site?->code,
             'can_access_admin' => $user->account_status === 'active'
                 && in_array($user->access_role, User::ADMIN_PANEL_ROLES, true),
+        ];
+    }
+
+    /**
+     * 회사 전환 선택지. 소속 회사가 하나면 null 을 돌려 화면에서 아예 감춘다 —
+     * 고를 것이 없는 선택 상자는 자리만 차지한다.
+     *
+     * @return array{current: int|null, companies: array<int, array{id: int, name: string}>}|null
+     */
+    private function companySwitcherViewData(User $user): ?array
+    {
+        $companies = $user->accessibleCompanies();
+
+        if ($companies->count() < 2) {
+            return null;
+        }
+
+        return [
+            'current' => CurrentCompany::id(),
+            'companies' => $companies->map(fn ($company): array => [
+                'id' => (int) $company->id,
+                'name' => (string) $company->name,
+            ])->values()->all(),
         ];
     }
 

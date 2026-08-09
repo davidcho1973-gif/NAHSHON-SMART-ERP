@@ -49,4 +49,15 @@ class EmployeePayrollProfile extends Model
     {
         return $this->belongsTo(Employee::class);
     }
+
+    /** 단가를 현장별로 다르게 줄 때 쓴다. 비우면 직원의 소속 현장을 따른다. */
+    public function site(): BelongsTo
+    {
+        return $this->belongsTo(Site::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
 }
