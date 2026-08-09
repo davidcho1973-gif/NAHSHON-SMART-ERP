@@ -193,10 +193,12 @@
           '<div style="font-size:11px;color:var(--text-secondary)">읽힌 액티비티</div></div>' +
         '<div><div style="font-size:22px;font-weight:700">' + (read.milestones || 0) + '</div>' +
           '<div style="font-size:11px;color:var(--text-secondary)">마일스톤 → 단계</div></div>' +
+        '<div><div style="font-size:22px;font-weight:700;color:#22c55e">' + (del.kept || 0) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-secondary)">유지 (진행률 보존)</div></div>' +
         '<div><div style="font-size:22px;font-weight:700;color:var(--status-warning)">' + (del.wbsItems || 0) + '</div>' +
-          '<div style="font-size:11px;color:var(--text-secondary)">지워질 기존 행</div></div>' +
+          '<div style="font-size:11px;color:var(--text-secondary)">사라질 작업</div></div>' +
         '<div><div style="font-size:22px;font-weight:700;color:var(--status-warning)">' + (del.safetyCards || 0) + '</div>' +
-          '<div style="font-size:11px;color:var(--text-secondary)">지워질 안전카드</div></div>' +
+          '<div style="font-size:11px;color:var(--text-secondary)">함께 지워질 안전카드</div></div>' +
       '</div>' +
 
       signatureWarning +
@@ -217,7 +219,7 @@
         (blocked
           ? ''
           : '<button class="btn-primary" id="wbs-sched-commit" style="background:var(--status-danger);border:none">' +
-              '기존 공정표를 지우고 교체</button>') +
+              '공정표 교체</button>') +
       '</div>'
     );
 
@@ -242,7 +244,7 @@
 
     post('/wbs-api/schedule/replace', fd).then(function (res) {
       if (!res.success) {
-        if (btn) { btn.disabled = false; btn.textContent = '기존 공정표를 지우고 교체'; }
+        if (btn) { btn.disabled = false; btn.textContent = '공정표 교체'; }
         toast(res.error || '교체하지 못했습니다.', 'error');
         return;
       }

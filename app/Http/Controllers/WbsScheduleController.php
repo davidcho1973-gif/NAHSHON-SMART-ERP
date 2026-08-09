@@ -11,7 +11,6 @@ use App\Models\WbsItem;
 use App\Services\Wbs\ScheduleImporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -82,8 +81,8 @@ class WbsScheduleController extends Controller
             'expiresInMinutes' => self::PREVIEW_TTL_MINUTES,
             'fileName' => $file->getClientOriginalName(),
             'read' => $read,
-            // 지금 무엇이 지워지는지. 숫자를 보고 결정해야 한다.
-            'willDelete' => $this->deletionImpact($projectCode),
+            // 무엇이 유지되고 무엇이 사라지는지. 숫자를 보고 결정해야 한다.
+            'willDelete' => $this->replacementImpact($projectCode, $read['activityIds'] ?? []),
             'blocked' => $read['activities'] === 0
                 ? '액티비티를 하나도 읽지 못했습니다. 헤더 이름(ID / 작업명 / 공기)을 확인하세요. 이대로 교체하면 공정표가 비게 됩니다.'
                 : null,
@@ -137,14 +136,15 @@ class WbsScheduleController extends Controller
         $siteScope = $this->resolveSiteScope($request->input('site_id'));
 
         try {
-            $removed = DB::transaction(function () use ($projectCode): array {
-                $impact = $this->deletionImpact($projectCode);
-                $this->clearProject($projectCode);
-
-                return $impact;
-            });
-
+            // 트리는 임포터가 갈아끼운다 — 직접 지우면 안 된다.
+            // 임포터는 activity_id 로 현장이 올린 진행률·협력사 배정을 물려받는데,
+            // 여기서 먼저 지워 버리면 물려받을 것이 없어져 개정 때마다 실적이 날아간다.
+            // 공정표는 Rev.2 → Rev.3 로 계속 갱신되므로 이 손실은 매번 반복된다.
             $result = $importer->importFromXlsx($path, $projectCode, $siteScope);
+
+            // 새 공정표에서 사라진 작업의 안전카드만 정리한다. 남아 있는 작업은
+            // wbs_code 가 그대로라 카드도 그대로 붙어 있다.
+            $removed = $this->pruneOrphanedSafetyCards($projectCode);
         } catch (Throwable $e) {
             return response()->json(['success' => false, 'error' => '교체 중 오류: '.$e->getMessage()], 500);
         } finally {
@@ -159,47 +159,76 @@ class WbsScheduleController extends Controller
     }
 
     /**
-     * 무엇이 지워지는지 미리 센다.
+     * 교체하면 무엇이 유지되고 무엇이 사라지는지 미리 센다.
      *
-     * TBM 서명은 법적 기록이라 따로 세어 보여 준다. 지워진 뒤에 "그게 없어졌네" 를
-     * 알게 되면 늦다.
+     * 전부 지웠다 새로 넣는 것이 아니다 — 액티비티 ID 가 같은 작업은 현장이 올린
+     * 진행률·협력사 배정을 그대로 물려받는다. 그래서 "지워질 N개" 가 아니라
+     * "유지 N개 / 사라짐 M개" 로 보여 줘야 사실과 맞는다.
      *
-     * @return array{wbsItems: int, safetyCards: int, signatures: int, issues: int}
+     * TBM 서명은 법적 기록이라 따로 세어 보여 준다. 사라진 뒤에 알게 되면 늦다.
+     *
+     * @param  array<int, string>  $incomingIds  새 시트에 들어 있는 액티비티 ID
+     * @return array{wbsItems: int, kept: int, safetyCards: int, signatures: int, issues: int}
      */
-    private function deletionImpact(string $projectCode): array
+    private function replacementImpact(string $projectCode, array $incomingIds): array
     {
-        $cardIds = $this->safetyCardIds($projectCode);
+        $current = WbsItem::query()
+            ->where('project_code', $projectCode)
+            ->where('level', WbsItem::LEVEL_SUBTASK)
+            ->get(['activity_id', 'wbs_code']);
+
+        $incoming = array_flip($incomingIds);
+        $gone = $current->reject(fn (WbsItem $i) => isset($incoming[(string) $i->activity_id]));
+
+        $orphanIds = SafetyWorkItem::query()
+            ->whereIn('wbs_code', $gone->pluck('wbs_code'))
+            ->pluck('id');
 
         return [
-            'wbsItems' => WbsItem::query()->where('project_code', $projectCode)->count(),
-            'safetyCards' => $cardIds->count(),
-            'signatures' => SafetyWorkSignature::query()->whereIn('safety_work_item_id', $cardIds)->count(),
-            'issues' => SafetyWorkIssue::query()->whereIn('safety_work_item_id', $cardIds)->count(),
+            'wbsItems' => $gone->count(),
+            'kept' => $current->count() - $gone->count(),
+            'safetyCards' => $orphanIds->count(),
+            'signatures' => SafetyWorkSignature::query()->whereIn('safety_work_item_id', $orphanIds)->count(),
+            'issues' => SafetyWorkIssue::query()->whereIn('safety_work_item_id', $orphanIds)->count(),
         ];
     }
 
     /**
-     * 삭제 순서는 wbs:clear 와 같게 둔다 — 이미 검증된 순서이고,
-     * 두 경로가 다르게 지우면 한쪽에만 고아 레코드가 남는다.
+     * 교체 뒤, 새 공정표에 없는 작업에 붙어 있던 안전카드를 정리한다.
+     *
+     * 살아남은 작업은 wbs_code 가 그대로라(프로젝트코드-W-액티비티ID) 카드도 그대로 붙어 있다.
+     * 없어진 작업의 카드만 고아가 되므로 그것만 지운다 — 전부 지우면 현장이 이미 서명한
+     * TBM 기록까지 함께 사라진다.
+     *
+     * 삭제 순서는 wbs:clear 와 같다: 자식(서명·이슈) → 안전카드.
+     *
+     * @return array{wbsItems: int, safetyCards: int, signatures: int, issues: int}
      */
-    private function clearProject(string $projectCode): void
+    private function pruneOrphanedSafetyCards(string $projectCode): array
     {
-        $cardIds = $this->safetyCardIds($projectCode);
+        $live = WbsItem::query()->where('project_code', $projectCode)->pluck('wbs_code');
 
-        // FK 순서: 자식(서명·이슈) → 안전카드 → WBS 트리.
-        SafetyWorkSignature::query()->whereIn('safety_work_item_id', $cardIds)->delete();
-        SafetyWorkIssue::query()->whereIn('safety_work_item_id', $cardIds)->delete();
-        SafetyWorkItem::query()->whereIn('id', $cardIds)->delete();
+        $orphanIds = SafetyWorkItem::query()
+            ->where('wbs_code', 'like', $projectCode.'-W-%')
+            ->whereNotIn('wbs_code', $live)
+            ->pluck('id');
 
-        WbsItem::query()->where('project_code', $projectCode)->delete();
-    }
+        $counts = [
+            'wbsItems' => 0,
+            'safetyCards' => $orphanIds->count(),
+            'signatures' => SafetyWorkSignature::query()->whereIn('safety_work_item_id', $orphanIds)->count(),
+            'issues' => SafetyWorkIssue::query()->whereIn('safety_work_item_id', $orphanIds)->count(),
+        ];
 
-    /** @return Collection<int, int> */
-    private function safetyCardIds(string $projectCode): Collection
-    {
-        $wbsCodes = WbsItem::query()->where('project_code', $projectCode)->pluck('wbs_code');
+        if ($orphanIds->isNotEmpty()) {
+            DB::transaction(function () use ($orphanIds): void {
+                SafetyWorkSignature::query()->whereIn('safety_work_item_id', $orphanIds)->delete();
+                SafetyWorkIssue::query()->whereIn('safety_work_item_id', $orphanIds)->delete();
+                SafetyWorkItem::query()->whereIn('id', $orphanIds)->delete();
+            });
+        }
 
-        return SafetyWorkItem::query()->whereIn('wbs_code', $wbsCodes)->pluck('id');
+        return $counts;
     }
 
     // ── 권한 ────────────────────────────────────────────────────────────
