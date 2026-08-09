@@ -376,8 +376,12 @@ class DocumentIntelligenceController extends Controller
     public function download(Request $request, IntelligentDocument $document): StreamedResponse
     {
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+        abort_unless(
+            $this->fileStillThere((string) $document->disk, (string) $document->file_path),
+            404,
+            '원본 파일이 서버에 없습니다. 서버 배포로 저장소가 초기화된 문서입니다 — 같은 파일을 문서함에 다시 올리면 이 문서에 복원됩니다.'
+        );
         $disk = Storage::disk($document->disk);
-        abort_unless($disk->exists($document->file_path), 404);
 
         return $disk->download($document->file_path, $document->original_file_name, [
             'Content-Type' => $document->mime_type ?: 'application/octet-stream',
@@ -389,8 +393,12 @@ class DocumentIntelligenceController extends Controller
     public function preview(Request $request, IntelligentDocument $document): StreamedResponse
     {
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+        abort_unless(
+            $this->fileStillThere((string) $document->disk, (string) $document->file_path),
+            404,
+            '원본 파일이 서버에 없습니다. 같은 파일을 문서함에 다시 올리면 이 문서에 복원됩니다.'
+        );
         $disk = Storage::disk($document->disk);
-        abort_unless($disk->exists($document->file_path), 404);
 
         $previewTypes = [
             'pdf' => 'application/pdf',
@@ -572,6 +580,10 @@ class DocumentIntelligenceController extends Controller
             'fileName' => $document->original_file_name,
             'mimeType' => $document->mime_type,
             'fileSize' => $document->file_size,
+            // 원본이 실제로 남아 있는지 — 배포로 로컬 디스크가 초기화되면 레코드만 남고
+            // 파일은 사라진다. 그 상태를 화면에서 알 수 없으면 사용자는 다운로드를
+            // 눌러 보고 나서야 404 를 만난다.
+            'fileMissing' => ! $this->fileStillThere((string) $document->disk, (string) $document->file_path),
             'category' => $document->category,
             'categoryLabel' => IntelligentDocument::CATEGORY_OPTIONS[$document->category] ?? $document->category,
             'documentType' => $document->document_type,
