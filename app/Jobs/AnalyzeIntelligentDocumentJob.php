@@ -19,6 +19,14 @@ class AnalyzeIntelligentDocumentJob implements ShouldQueue
 
     public int $tries = 1;
 
+    /**
+     * 시간 초과도 "실패"로 기록되게 한다.
+     *
+     * 이게 없으면 제한 시간을 넘긴 작업이 조용히 죽고, 문서는 'analyzing'(AI 분석 중)에
+     * 영원히 머문다 — 화면에서는 계속 도는 것처럼 보이는데 실제로는 아무도 일하지 않는다.
+     */
+    public bool $failOnTimeout = true;
+
     public function __construct(public int $documentId) {}
 
     public function handle(DocumentIntelligenceService $service, UnifiedAlertService $alerts): void

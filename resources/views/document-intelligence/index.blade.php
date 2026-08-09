@@ -108,7 +108,7 @@
 
             <div class="workspace">
                 <section class="panel">
-                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><button class="btn small" id="refresh-btn">↻ 새로고침</button></div>
+                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><div style="display:flex;gap:6px"><button class="btn small" id="unstick-btn" title="AI 분석 중에서 멈춘 문서를 다시 분석합니다">⟳ 멈춘 분석 재시도</button><button class="btn small" id="refresh-btn">↻ 새로고침</button></div></div>
                     <div class="searchbar">
                         <input id="search" placeholder="예: RFI-023, backcharge, cable tray, 30일 notice…">
                         <select id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
@@ -155,6 +155,7 @@ const canManage = @json($canManage);
 const endpoints = {
     list: @json(route('document-intelligence.documents')),
     upload: @json(route('document-intelligence.upload')),
+    reanalyzeStuck: @json(route('document-intelligence.reanalyze-stuck')),
     show: @json(url('/document-hub/api/documents')),
     actions: @json(url('/document-hub/api/actions')),
 };
@@ -212,6 +213,13 @@ function renderDetail(d){
 }
 async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
 async function reanalyze(id){try{await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast('AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+async function unstick(){
+    const btn=document.getElementById('unstick-btn');if(!btn)return;
+    btn.disabled=true;const old=btn.textContent;btn.textContent='확인 중...';
+    try{const d=await jsonFetch(endpoints.reanalyzeStuck,{method:'POST'});toast(d.message);loadDocuments()}
+    catch(e){toast(e.message,true)}
+    finally{btn.disabled=false;btn.textContent=old}
+}
 async function uploadFiles(files){
     if(!files.length)return;const queue=document.getElementById('upload-queue');queue.classList.add('show');document.getElementById('queue-files').innerHTML=[...files].map(f=>`<div class="queue-row"><span>${esc(f.name)}</span><span>${fmtBytes(f.size)}</span></div>`).join('');document.getElementById('upload-progress').style.width='25%';
     const form=new FormData();[...files].forEach(f=>form.append('files[]',f));['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v)form.append(k+'_id',v)});
@@ -219,7 +227,8 @@ async function uploadFiles(files){
 }
 if(canManage){const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
 document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
-document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
+document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
+if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;}else{const ub=document.getElementById('unstick-btn');if(ub)ub.style.display='none';}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
 loadDocuments();const requested=new URLSearchParams(location.search).get('document');if(requested)setTimeout(()=>openDocument(Number(requested)),400);
 </script>
 </body>
