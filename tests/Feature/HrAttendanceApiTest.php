@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\Company;
 use App\Models\Employee;
@@ -19,9 +18,13 @@ class HrAttendanceApiTest extends TestCase
     use RefreshDatabase;
 
     private User $adminUser;
+
     private Employee $employee1;
+
     private Employee $employee2;
+
     private Site $site;
+
     private Company $company;
 
     protected function setUp(): void
@@ -147,7 +150,7 @@ class HrAttendanceApiTest extends TestCase
                     ['NFC-1001', 'NFC-1002'], // badges
                     'AZ-01',                  // site
                     'clock_in',               // type
-                    'https://example.com/badge.jpg' // photo url
+                    'https://example.com/badge.jpg', // photo url
                 ],
             ]);
 
@@ -250,10 +253,12 @@ class HrAttendanceApiTest extends TestCase
             'status' => 'approved',
         ]);
 
+        // 퇴근 전 미확정 상태 표기는 단일 기록자(AttendanceTimesheetSync)의 'draft' 다.
+        // 예전 QR 전용 기록자는 'open' 을 썼지만 그 기록자는 이중 계산 버그로 제거됐다.
         $this->assertDatabaseHas('payroll_timesheets', [
             'employee_id' => $this->employee1->id,
             'team_id' => $team->id,
-            'status' => 'open',
+            'status' => 'draft',
         ]);
 
         // 3. Perform failed clock in with another team's QR code

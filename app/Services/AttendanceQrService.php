@@ -8,7 +8,6 @@ use App\Models\Company;
 use App\Models\DailyWorkAssignment;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
-use App\Models\PayrollTimesheet;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -148,10 +147,6 @@ class AttendanceQrService
                 ]),
             ]);
 
-            if ($log->status === 'approved') {
-                $this->syncTimesheetFor($employee, $workDate);
-            }
-
             return [
                 'success' => true,
                 'ignored' => false,
@@ -182,78 +177,19 @@ class AttendanceQrService
             ])->save();
         }
 
-        $this->syncTimesheetFor($log->employee, $log->attendance_date?->toDateString() ?: now()->toDateString());
-
         return $log;
     }
 
     public function rejectLog(AttendanceLog $log): AttendanceLog
     {
         $log->forceFill(['status' => 'rejected'])->save();
-        $this->syncTimesheetFor($log->employee, $log->attendance_date?->toDateString() ?: now()->toDateString());
 
         return $log;
     }
 
-    public function syncTimesheetFor(Employee $employee, string $workDate): ?PayrollTimesheet
-    {
-        $logs = AttendanceLog::query()
-            ->where('employee_id', $employee->id)
-            ->whereDate('attendance_date', $workDate)
-            ->where('status', 'approved')
-            ->orderBy('event_at')
-            ->get();
-
-        if ($logs->isEmpty()) {
-            PayrollTimesheet::query()
-                ->where('employee_id', $employee->id)
-                ->whereDate('work_date', $workDate)
-                ->delete();
-
-            return null;
-        }
-
-        $firstIn = $logs->firstWhere('event_type', 'clock_in');
-        $lastOut = $logs->where('event_type', 'clock_out')->last();
-        $context = $logs->last() ?: $logs->first();
-
-        $regularMinutes = 0;
-        $overtimeMinutes = 0;
-        $payableMinutes = 0;
-
-        if ($firstIn && $lastOut && $lastOut->event_at->gt($firstIn->event_at)) {
-            $payableMinutes = $firstIn->event_at->diffInMinutes($lastOut->event_at);
-            $regularMinutes = min($payableMinutes, 480);
-            $overtimeMinutes = max(0, $payableMinutes - 480);
-        }
-
-        return PayrollTimesheet::query()->updateOrCreate(
-            [
-                'employee_id' => $employee->id,
-                'work_date' => $workDate,
-            ],
-            [
-                'company_id' => $employee->company_id,
-                'site_id' => $context?->site_id,
-                'team_id' => $context?->team_id,
-                'employer_company_id' => $this->employerCompanyId(),
-                'site_contractor_id' => $context?->site_contractor_id,
-                'check_in_at' => $firstIn?->event_at,
-                'check_out_at' => $lastOut?->event_at,
-                'regular_minutes' => $regularMinutes,
-                'overtime_minutes' => $overtimeMinutes,
-                'payable_minutes' => $payableMinutes,
-                'status' => $firstIn && $lastOut ? 'approved' : 'open',
-                'source' => 'attendance_qr',
-                'approved_by_id' => $context?->approved_by_id ?: $context?->recorded_by_id,
-                'approved_at' => $context?->approved_at,
-                'payload' => [
-                    'attendance_log_ids' => $logs->pluck('id')->all(),
-                    'source' => 'qr_attendance_app',
-                ],
-            ],
-        );
-    }
+    // 타임시트 기록은 AttendanceTimesheetSync 하나만 한다 (AttendanceLog 의 saved/deleted 훅).
+    // 예전에는 이 서비스에도 별도 기록자가 있어 같은 행을 점심 공제 없는 규칙으로 덮어썼다 —
+    // QR 로 찍은 사람만 하루 60분을 더 받는, 경로에 따라 급여가 달라지는 버그였다.
 
     public function canProcessCrew(User $user, ?AttendanceQrCode $qrCode = null): bool
     {

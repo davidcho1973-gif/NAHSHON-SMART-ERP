@@ -72,12 +72,16 @@ class AttendanceTimesheetSync
 
         $employee = Employee::find($employeeId);
 
+        // 그날 실제로 찍힌 현장/팀이 직원 마스터의 소속보다 정확하다 — 파견·이동 근무가 있다.
+        $context = $logs->last();
+
         return PayrollTimesheet::updateOrCreate(
             ['employee_id' => $employeeId, 'work_date' => $date],
             [
                 'company_id' => $employee?->company_id,
-                'site_id' => $employee?->site_id,
-                'team_id' => $employee?->team_id,
+                'site_id' => $context?->site_id ?: $employee?->site_id,
+                'team_id' => $context?->team_id ?: $employee?->team_id,
+                'site_contractor_id' => $context?->site_contractor_id,
                 'check_in_at' => $checkIn,
                 'check_out_at' => $checkOut,
                 'regular_minutes' => $regular,
@@ -85,6 +89,8 @@ class AttendanceTimesheetSync
                 'payable_minutes' => $payable,
                 'status' => $checkOut ? 'approved' : 'draft',
                 'source' => 'attendance_logs',
+                // 어느 로그에서 나온 시간인지 — 급여 이의가 들어왔을 때 추적하는 근거.
+                'payload' => ['attendance_log_ids' => $logs->pluck('id')->all()],
             ]
         );
     }

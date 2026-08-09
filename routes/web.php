@@ -50,16 +50,17 @@ Route::get('/debug-routes-sec', function () {
         'sample_routes' => $routes->pluck('uri')->take(30),
     ]);
 });
-Route::get('/daily-work-report', [DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
-Route::post('/daily-work-report/store', [DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
-Route::get('/field-app', function () {
-    return view('field-app.index');
-})->name('field-app.index');
-Route::get('/field-app/{any}', function () {
-    return view('field-app.index');
-})->where('any', '.*');
-
 Route::middleware('auth')->group(function (): void {
+    // 현장앱은 기존 현장(Site)을 직접 만들고 지운다 — 인증 없이 열어 두면
+    // 방문자가 버튼 한 번으로 현장과 딸린 기록(협력사·QR·인원 마감)을 연쇄 삭제할 수 있다.
+    Route::get('/daily-work-report', [DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
+    Route::post('/daily-work-report/store', [DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
+    Route::get('/field-app', function () {
+        return view('field-app.index');
+    })->name('field-app.index');
+    Route::get('/field-app/{any}', function () {
+        return view('field-app.index');
+    })->where('any', '.*');
     Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
     Route::redirect('/erp', '/');
     Route::redirect('/dashboard', '/');

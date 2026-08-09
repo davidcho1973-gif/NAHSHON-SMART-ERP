@@ -1273,13 +1273,23 @@ class SmartCompanyData
 
     public static function alerts(mixed $filter = 'all'): array
     {
-        $fromDb = self::smartRecords('safety');
+        // 알림센터의 읽기와 쓰기가 오랫동안 서로 다른 곳을 봤다 — 목록은 데모 배열,
+        // 상태 변경은 unified_alerts. 화면에 뜬 알림을 완료 처리하면 "찾을 수 없음"이
+        // 나는 구조였고, 계약·비자·장비 만료를 모으는 refreshKnownModules() 는
+        // forUser() 안에서만 불리는데 forUser() 를 부르는 곳이 없어 전부 죽은 코드였다.
+        // 이제 읽기도 같은 서비스로 간다 — 수집기가 비로소 돌기 시작한다.
+        $user = auth()->user();
+        if (! $user) {
+            return [];
+        }
 
-        return $fromDb ?: [
-            ['id' => 'ALT-100', 'title' => 'Open edge protection missing', 'type' => 'Safety', 'site' => 'HFF-02', 'level' => 'critical', 'status' => '미처리', 'date' => '2026-06-19'],
-            ['id' => 'ALT-101', 'title' => 'Visa expiry review', 'type' => 'HR', 'site' => 'LGES-AZ', 'level' => 'warning', 'status' => '처리중', 'date' => '2026-06-18'],
-            ['id' => 'ALT-102', 'title' => 'Rental return due in 2 days', 'type' => 'Rental', 'site' => 'NV-05', 'level' => 'normal', 'status' => '미처리', 'date' => '2026-06-17'],
-        ];
+        try {
+            return app(UnifiedAlertService::class)->forUser($user, 'ALL', is_string($filter) ? $filter : 'all');
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
     }
 
     public static function ptwList(): array
@@ -1996,7 +2006,13 @@ class SmartCompanyData
 
         $all = Company::query()->where('status', 'active')->orderBy('name')->pluck('name');
 
-        return $names->merge($all)
+        // 거래처 마스터(vendors)도 후보에 넣는다 — 조달·장비 협력사는 대개 여기 등록돼
+        // 있는데 빠져 있으면 사용자가 같은 이름을 손으로 다시 친다(오타 = 집계 분열).
+        $vendorNames = Schema::hasTable('vendors')
+            ? Vendor::query()->where('status', 'active')->orderBy('name')->pluck('name')
+            : collect();
+
+        return $names->merge($all)->merge($vendorNames)
             ->map(fn ($n) => trim((string) $n))
             ->filter()
             ->unique()
@@ -3514,7 +3530,7 @@ class SmartCompanyData
                 'notes' => 'NFC 태그 리더기를 통해 자동 기록됨.',
             ]);
 
-            app(AttendanceQrService::class)->syncTimesheetFor($employee, $today);
+            // 타임시트는 AttendanceLog 저장 훅(AttendanceTimesheetSync)이 이미 갱신했다.
 
             $eventTypeName = $eventType === 'clock_in' ? '출근 (Clock In)' : '퇴근 (Clock Out)';
 
