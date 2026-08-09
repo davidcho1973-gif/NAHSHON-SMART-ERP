@@ -213,6 +213,12 @@ class Employee extends Model
         return $this->hasOne(EmployeePayrollProfile::class);
     }
 
+    /** 제출된 W-9 — 1099 지급의 전제조건. 없으면 24% backup withholding 대상. */
+    public function w9Form(): HasOne
+    {
+        return $this->hasOne(W9Form::class);
+    }
+
     public function communicationRoomMemberships(): HasMany
     {
         return $this->hasMany(CommunicationRoomMember::class);

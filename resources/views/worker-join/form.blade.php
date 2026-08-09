@@ -57,6 +57,14 @@
                     <div class="badge"><span id="t-doneBadge"></span> {{ $employee->employee_number }}</div>
                 @endif
                 <div class="device" id="t-doneDevice"></div>
+
+                @if (!empty($w9Url))
+                    {{-- 1099 지급 전제조건 — 등록에 이어 바로 작성하게 해 종이 수거 행정을 없앤다. --}}
+                    <a href="{{ $w9Url }}" style="display:block;margin-top:16px;padding:15px;font-size:1rem;font-weight:800;color:#fff;background:#0f766e;border-radius:12px;text-decoration:none;">
+                        📄 Tax form W-9 작성하기 / Complete your W-9 →
+                    </a>
+                    <p class="note" style="margin-top:8px">지급 처리를 위해 필요합니다. 지금 이어서 작성해 주세요.<br>Required before your first payment. / Requerido antes de su primer pago.</p>
+                @endif
             </div>
 
             <script>
