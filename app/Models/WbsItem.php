@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * 공정관리(WBS) 노드 — Stage / Task / SubTask 를 단일 자기참조 트리로 표현.
  *
- * @property string $level  stage|task|subtask
+ * @property string $level stage|task|subtask
  * @property string $status AI생성|검수완료|진행중|완료|보류
  */
 class WbsItem extends Model
@@ -18,11 +19,14 @@ class WbsItem extends Model
     use HasFactory;
 
     public const LEVEL_STAGE = 'stage';
+
     public const LEVEL_TASK = 'task';
+
     public const LEVEL_SUBTASK = 'subtask';
 
     /** 완료로 간주되는 상태 (진척률 100%). */
     public const STATUS_DONE = '완료';
+
     public const STATUS_IN_PROGRESS = '진행중';
 
     protected $fillable = [
@@ -154,9 +158,9 @@ class WbsItem extends Model
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, SafetyWorkItem>
+     * @return Collection<int, SafetyWorkItem>
      */
-    private function loadedCards(): \Illuminate\Support\Collection
+    private function loadedCards(): Collection
     {
         return $this->relationLoaded('safetyWorkItems') ? $this->safetyWorkItems : collect();
     }
@@ -186,6 +190,8 @@ class WbsItem extends Model
             'days' => (int) $this->days,
             'status' => $this->status,
             'ehs' => $this->ehs ?? '',
+            // 편집 모달이 조달용/작업용 폼을 가른다 — 조달에는 투입조·장비·EHS 칸이 무의미하다.
+            'isProcurement' => $this->looksLikeProcurement(),
             'plannedStart' => $this->planned_start?->toDateString(),
             'plannedEnd' => $this->planned_end?->toDateString(),
             'progress' => $this->effectiveProgress(),

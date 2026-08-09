@@ -15,6 +15,7 @@
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
+  <script src="{{ asset('js/wbs-photos.js') }}?v={{ filemtime(public_path('js/wbs-photos.js')) }}" defer></script>
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
@@ -10193,13 +10194,36 @@
         }).join('');
         var LBL = 'font-size:12px;color:var(--text-primary);font-weight:600;display:block;margin-bottom:5px';
         var HINT = 'color:var(--text-tertiary);font-weight:400';
-        modal.innerHTML =
-          '<div style="background:var(--bg-panel);border:1px solid var(--border-strong);border-radius:14px;padding:22px;width:560px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-pop)">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-            '<h3 style="margin:0;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--text-primary)"><i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS 상세 편집</h3>' +
-            '<button id="wbs-edit-cancel-x" style="background:none;border:none;color:var(--text-tertiary);font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
-          '</div>' +
-          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;font-family:var(--font-mono)">' + wbsEsc(wbsId) + (sub.activity_id ? ' · ' + wbsEsc(sub.activity_id) : '') + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check" style="color:#10b981"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
+        var isProc = !!sub.isProcurement;
+
+        // 조달과 현장작업은 묻는 것이 다르다 — 발주 행에 투입조·장비·EHS·공수를 물으면
+        // 현장은 그 칸을 억지로 채우거나(가짜 데이터) 편집 자체를 피하게 된다.
+        var formHtml;
+        if (isProc) {
+          formHtml =
+            '<div class="wbs-edit-section" style="display:grid;gap:13px">' +
+            '<div><label style="' + LBL + '">자재 / 품목명</label>' +
+            '<input type="text" id="wbs-edit-name" class="wbs-edit-field" value="' + wbsEsc(sub.sub_name || '') + '"></div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            '<div><label style="' + LBL + '">상태 <span style="' + HINT + '">(완료 = 입고완료)</span></label>' +
+            '<select id="wbs-edit-status" class="wbs-edit-field">' + statusOptions + '</select></div>' +
+            '<div><label style="' + LBL + '">공급업체 <span style="' + HINT + '">(발주처)</span></label>' +
+            '<input type="text" id="wbs-edit-company" class="wbs-edit-field" list="wbs-company-options" value="' + wbsEsc(sub.company || '') + '" placeholder="공급업체 선택/입력">' +
+            '<datalist id="wbs-company-options">' + companyOptions + '</datalist></div>' +
+            '</div>' +
+            '<div><label style="' + LBL + '">공종 <span style="' + HINT + '">(AI 분류)</span></label>' +
+            '<input type="text" id="wbs-edit-trade" class="wbs-edit-field" value="' + wbsEsc(sub.trade || '') + '" placeholder="예: ELEC / PLUMB / GC"></div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            '<div><label style="' + LBL + '">발주 예정일</label>' +
+            '<input type="date" id="wbs-edit-start" class="wbs-edit-field" value="' + wbsEsc(sub.plannedStart || '') + '"></div>' +
+            '<div><label style="' + LBL + '">납기 예정일 <span style="' + HINT + '">(현장 필요일)</span></label>' +
+            '<input type="date" id="wbs-edit-end" class="wbs-edit-field" value="' + wbsEsc(sub.plannedEnd || '') + '"></div>' +
+            '</div>' +
+            '<div style="font-size:11px;color:var(--text-tertiary);line-height:1.6;padding:8px 10px;border:1px dashed var(--border-strong);border-radius:8px">' +
+            '조달 항목은 공정률 계산에 들어가지 않습니다 — 공정률은 현장 작업(공기 기준)만 셉니다.<br>발주서·입고 사진은 오른쪽에 날짜별로 남겨 두세요.</div>' +
+            '</div>';
+        } else {
+          formHtml =
           '<div class="wbs-edit-section" style="display:grid;gap:13px">' +
           '<div><label style="' + LBL + '">작업명</label>' +
           '<input type="text" id="wbs-edit-name" class="wbs-edit-field" value="' + wbsEsc(sub.sub_name || '') + '"></div>' +
@@ -10235,12 +10259,34 @@
           '<input type="date" id="wbs-edit-end" class="wbs-edit-field" value="' + wbsEsc(sub.plannedEnd || '') + '"></div>' +
           '</div>' +
           '</div>' +
+          '';
+        }
+
+        modal.innerHTML =
+          '<div style="background:var(--bg-panel);border:1px solid var(--border-strong);border-radius:14px;padding:22px;width:1080px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:var(--shadow-pop)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<h3 style="margin:0;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--text-primary)">' +
+              (isProc ? '<i class="ph ph-package" style="color:#f59e0b"></i> 조달 상세 편집' : '<i class="ph ph-pencil-simple" style="color:#7c3aed"></i> WBS 상세 편집') + '</h3>' +
+            '<button id="wbs-edit-cancel-x" style="background:none;border:none;color:var(--text-tertiary);font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;font-family:var(--font-mono)">' + wbsEsc(wbsId) + (sub.activity_id ? ' · ' + wbsEsc(sub.activity_id) : '') + (sub.safetyWorkCode ? ' · <i class="ph ph-shield-check" style="color:#10b981"></i> ' + wbsEsc(sub.safetyWorkCode) : '') + '</div>' +
+          '<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">' +
+          '<div style="flex:1 1 460px;min-width:320px">' +
+          formHtml +
           '<div style="display:flex;gap:10px;margin-top:18px">' +
           '<button id="wbs-edit-cancel" class="btn-secondary" style="flex:1">취소</button>' +
           '<button class="btn-secondary" style="flex:1" onclick="document.getElementById(\'wbs-edit-modal\')&&document.getElementById(\'wbs-edit-modal\').remove();window.openWbsInsertRow(\'' + wbsJsArg(wbsId) + '\')">아래에 추가</button>' +
           '<button id="wbs-edit-save" class="btn-primary" style="flex:1;background:#7c3aed">저장</button>' +
-          '</div></div>';
+          '</div>' +
+          '</div>' +
+          // 오른쪽: 날짜별 현장 사진 — 편집 폼과 독립적으로 스크롤된다.
+          '<div id="wbs-photo-panel" style="flex:1 1 360px;min-width:300px"></div>' +
+          '</div>' +
+          '</div>';
         document.body.appendChild(modal);
+
+        // 사진 패널은 별도 파일(public/js/wbs-photos.js)이 그린다.
+        if (window.initWbsPhotoPanel) window.initWbsPhotoPanel(modal.querySelector('#wbs-photo-panel'), wbsId);
 
         // 담당사 후보를 "실제 계약사"(현장 계약사 + 등록 회사)로 채운다 — AI 임의 배정이 아니라 사람이 선택.
         gsRun('api_getWbsCompanyOptions', [window.currentSiteId || 'ALL'], []).then(function(opts) {
@@ -10258,19 +10304,20 @@
           if (!name) { alert('작업명은 비울 수 없습니다.'); return; }
 
           // 변경된 필드만 전송 — 담당사/시작예정/종료예정은 빈 값('')으로 배정 해제 가능.
+          var elv = function (id, dflt) { var el = document.getElementById(id); return el ? el.value : dflt; };
           var current = {
             '작업명': name,
-            '상태': document.getElementById('wbs-edit-status').value,
-            '담당사': document.getElementById('wbs-edit-company').value.trim(),
-            '공종': document.getElementById('wbs-edit-trade').value.trim(),
-            'EHS': document.getElementById('wbs-edit-ehs').value,
-            '투입조': document.getElementById('wbs-edit-crew').value.trim(),
-            '장비': document.getElementById('wbs-edit-equip').value.trim(),
-            '공수': document.getElementById('wbs-edit-manhours').value,
-            '일수': document.getElementById('wbs-edit-days').value,
-            '진척률': document.getElementById('wbs-edit-progress').value,
-            '시작예정': document.getElementById('wbs-edit-start').value,
-            '종료예정': document.getElementById('wbs-edit-end').value
+            '상태': elv('wbs-edit-status', sub.status || ''),
+            '담당사': elv('wbs-edit-company', sub.company || '').trim(),
+            '공종': elv('wbs-edit-trade', sub.trade || '').trim(),
+            'EHS': elv('wbs-edit-ehs', sub.ehs || ''),
+            '투입조': elv('wbs-edit-crew', sub.crewText || '').trim(),
+            '장비': elv('wbs-edit-equip', (sub.equipment || []).join(', ')).trim(),
+            '공수': elv('wbs-edit-manhours', String(parseFloat(sub.manhours) || 0)),
+            '일수': elv('wbs-edit-days', String(parseInt(sub.days, 10) || 0)),
+            '진척률': elv('wbs-edit-progress', String(parseInt(sub.progress, 10) || 0)),
+            '시작예정': elv('wbs-edit-start', sub.plannedStart || ''),
+            '종료예정': elv('wbs-edit-end', sub.plannedEnd || '')
           };
           var original = {
             '작업명': sub.sub_name || '',
