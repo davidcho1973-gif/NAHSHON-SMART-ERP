@@ -176,19 +176,21 @@ class DailyCrewReportTest extends TestCase
             ->assertSee('급여에는 반영되지 않습니다.');
     }
 
-    public function test_safety_manager_can_open_daily_crew_report_admin_page(): void
+    public function test_daily_close_is_recorded_against_the_team_and_site(): void
     {
+        // 마감은 그날 그 팀의 기록으로 남아야 한다 — 나중에 "그날 몇 명이었나" 를
+        // 되짚는 유일한 근거다.
         $this->actingAs($this->manager)
             ->post(route('attendance-app.crew.daily-close', ['token' => $this->qrCode->token]), [
                 'external_headcount' => 6,
                 'manual_adjustment' => 0,
             ]);
 
-        $this->actingAs($this->manager)
-            ->get('/admin/daily-crew-reports')
-            ->assertOk()
-            ->assertSee('일일 현장 인원 보고서')
-            ->assertSee('Electrical Crew A');
+        $this->assertDatabaseHas('daily_crew_reports', [
+            'site_id' => $this->site->id,
+            'team_id' => $this->team->id,
+            'external_headcount' => 6,
+        ]);
     }
 
     private function employee(string $number, string $name): Employee

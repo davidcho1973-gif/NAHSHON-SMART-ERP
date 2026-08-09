@@ -22,6 +22,9 @@
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-applicants.js') }}?v={{ filemtime(public_path('js/admin-applicants.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-payprofiles.js') }}?v={{ filemtime(public_path('js/admin-payprofiles.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-sites.js') }}?v={{ filemtime(public_path('js/admin-sites.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-messenger.js') }}?v={{ filemtime(public_path('js/admin-messenger.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   <style>
@@ -195,6 +198,15 @@
               <li class="nav-item" data-view="contract-admin" id="nav-contract-admin">
                 <i class="ph ph-file-text" style="color:#0ea5e9"></i><span>원청 계약 · 서류</span>
               </li>
+              <li class="nav-item" data-view="site-admin" id="nav-site-admin">
+                <i class="ph ph-buildings" style="color:#0ea5e9"></i><span>현장 · 프로젝트</span>
+              </li>
+              <li class="nav-item" data-view="pay-profiles" id="nav-pay-profiles">
+                <i class="ph ph-currency-dollar" style="color:#0ea5e9"></i><span>임금 프로필</span>
+              </li>
+              <li class="nav-item" data-view="messenger-admin" id="nav-messenger-admin">
+                <i class="ph ph-chats-circle" style="color:#0ea5e9"></i><span>메신저 관리</span>
+              </li>
               <li class="nav-item" style="border-top: 1px solid var(--border-color); margin-top: 5px; padding-top: 5px;"
                 onclick="openUniversalScanner()">
                 <i class="ph ph-magic-wand" style="color:var(--brand-primary)"></i><span
@@ -303,11 +315,20 @@
             <span class="shortcut">âŒ˜K</span>
           </div>
           <div class="topbar-actions">
-            @if ($authUser['can_access_admin'] ?? false)
-              <a class="btn-primary" href="{{ url('/admin') }}" data-admin-entry title="관리자 화면으로 이동">
-                <i class="ph ph-shield-check" style="font-size:14px;"></i>
-                <span>관리자</span>
-              </a>
+            @if ($companySwitcher ?? null)
+              {{-- 회사 전환. 여러 법인을 오가는 사람만 보인다 — 고를 것이 하나면 감춘다. --}}
+              <form method="POST" action="{{ route('company.switch') }}" style="margin:0">
+                @csrf
+                <select name="company_id" onchange="this.form.submit()" aria-label="회사 전환"
+                  style="padding:6px 10px;border-radius:8px;border:1px solid var(--border-strong);
+                         background:var(--bg-elevated);color:var(--text-primary);font-size:12px;cursor:pointer">
+                  @foreach ($companySwitcher['companies'] as $company)
+                    <option value="{{ $company['id'] }}" @selected($companySwitcher['current'] === $company['id'])>
+                      {{ $company['name'] }}
+                    </option>
+                  @endforeach
+                </select>
+              </form>
             @endif
             <button class="btn-primary" id="btn-global-commute" title="내 출퇴근 등록" onclick="window.openMyCommuteModal()" style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:12px; font-weight:600; border-radius:8px; border:none; background:var(--brand-primary); color:white; cursor:pointer; margin-right:8px;">
               <i class="ph ph-clock" style="font-size:14px;"></i>
@@ -338,13 +359,6 @@
                   </div>
                 </div>
               </div>
-              @if ($authUser['can_access_admin'] ?? false)
-                <div class="account-menu-group">
-                  <a class="account-menu-item" href="{{ url('/admin') }}" data-admin-entry>
-                    <i class="ph ph-shield-check"></i><span>관리자 화면</span>
-                  </a>
-                </div>
-              @endif
               <div class="account-menu-group">
                 <div class="account-menu-heading">My Profile</div>
                 <button class="account-menu-item" type="button" data-account-view="profile">
@@ -1292,6 +1306,9 @@
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
         'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
+        'site-admin': { title: '현장 · 프로젝트', render: function () { return window.AdminSites.render(); } },
+        'pay-profiles': { title: '임금 프로필', render: function () { return window.AdminPayProfiles.render(); } },
+        'messenger-admin': { title: '메신저 관리', render: function () { return window.AdminMessenger.render(); } },
         'applicant-admin': { title: '입사지원 · 온보딩', render: function () { return window.AdminApplicants.render(); } },
         'docs': { title: '문서통합관리', render: renderDocs },
         'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },

@@ -49,6 +49,12 @@ Route::get('/debug-routes-sec', function () {
         'sample_routes' => $routes->pluck('uri')->take(30),
     ]);
 });
+// 예전 관리자 패널(/admin)은 없어졌다 — 관리 화면은 전부 ERP 안으로 들어왔다.
+// 북마크와 예전 링크가 404 를 만나지 않도록 홈으로 보낸다. 하위 경로(/admin/sites 등)도
+// 함께 받는다.
+Route::redirect('/admin', '/');
+Route::get('/admin/{any}', fn () => redirect('/'))->where('any', '.*');
+
 Route::middleware('auth')->group(function (): void {
     // 현장앱은 기존 현장(Site)을 직접 만들고 지운다 — 인증 없이 열어 두면
     // 방문자가 버튼 한 번으로 현장과 딸린 기록(협력사·QR·인원 마감)을 연쇄 삭제할 수 있다.
@@ -271,25 +277,9 @@ Route::get('/build-version', function () {
         'has' => [
             'admin_shell' => is_readable(public_path('js/admin-shell.js')),
             'admin_screens' => str_contains($spaSource, 'nav-applicant-admin'),
+            'spa_only_admin' => ! str_contains($spaSource, "url('/admin')"),
             'ops_room' => str_contains($spaSource, 'data-view="opsroom"'),
             'old_company_name' => str_contains($spaSource, 'NASON'),
         ],
-    ]);
-});
-
-Route::get('/debug-build-sec-53298bfd9a', function () {
-    $resourcePath = app_path('Filament/Resources/MemberRegistrations/MemberRegistrationResource.php');
-    $resource = is_readable($resourcePath) ? (string) file_get_contents($resourcePath) : '';
-
-    return response()->json([
-        'marker' => 'hr-badge-save-diagnostic-v1',
-        'checked_at' => now()->toIso8601String(),
-        'app_env' => app()->environment(),
-        'resource_sha1' => $resource !== '' ? sha1($resource) : null,
-        'resource_mtime' => is_readable($resourcePath) ? date('c', (int) filemtime($resourcePath)) : null,
-        'member_registration_has_any_keyvalue' => str_contains($resource, 'KeyValue::make'),
-        'member_registration_has_badge_keyvalue' => str_contains($resource, "KeyValue::make('badge_analysis_payload')"),
-        'member_registration_has_payload_preview' => str_contains($resource, "Textarea::make('payload_preview')"),
-        'git_commit' => trim((string) @shell_exec('git rev-parse --short HEAD')),
     ]);
 });

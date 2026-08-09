@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\Employees\EmployeeResource;
-use App\Filament\Resources\UserAccesses\UserAccessResource;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeePayrollProfile;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Admin\EmployeeAdminService;
+use App\Services\Admin\UserAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,6 +17,7 @@ class OnboardingPayrollLinkTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
 
     protected function setUp(): void
@@ -78,15 +79,17 @@ class OnboardingPayrollLinkTest extends TestCase
 
     public function test_role_gates_restrict_who_can_manage_employees(): void
     {
-        $siteManager = User::factory()->create(['access_role' => 'site_manager', 'access_scope' => 'all_sites']);
-        $this->actingAs($siteManager);
-        $this->assertTrue(EmployeeResource::canViewAny());
-        $this->assertFalse(EmployeeResource::canCreate());   // site_manager cannot create employees
-        $this->assertFalse(EmployeeResource::canDelete(null));
+        $employees = app(EmployeeAdminService::class);
 
-        $hr = User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites']);
+        $siteManager = User::factory()->create(['access_role' => 'site_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($siteManager);
+        $this->assertTrue($employees->canView());
+        $this->assertFalse($employees->canManage());   // site_manager cannot create employees
+        $this->assertNotContains('site_manager', EmployeeAdminService::DELETE_ROLES);
+
+        $hr = User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']);
         $this->actingAs($hr);
-        $this->assertTrue(EmployeeResource::canCreate());
+        $this->assertTrue($employees->canManage());
     }
 
     public function test_employee_query_is_scoped_to_allowed_site(): void
@@ -100,10 +103,11 @@ class OnboardingPayrollLinkTest extends TestCase
             'access_role' => 'site_manager',
             'access_scope' => 'site',
             'allowed_site_id' => $this->site->id,
+            'account_status' => 'active',
         ]);
         $this->actingAs($scoped);
 
-        $ids = EmployeeResource::getEloquentQuery()->pluck('id')->all();
+        $ids = collect(app(EmployeeAdminService::class)->list()['rows'])->pluck('id')->all();
         $this->assertSame([$mine->id], $ids);
     }
 
@@ -111,23 +115,24 @@ class OnboardingPayrollLinkTest extends TestCase
     {
         Employee::create(['name' => 'A', 'employee_number' => 'EMP-A', 'company_id' => $this->company->id, 'site_id' => $this->site->id, 'employment_status' => 'active']);
         // Admin is scoped to "site" yet has no allowed site — must still bypass and see all.
-        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'site', 'allowed_site_id' => null]);
+        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'site', 'allowed_site_id' => null, 'account_status' => 'active']);
         $this->actingAs($admin);
 
-        $this->assertSame(1, EmployeeResource::getEloquentQuery()->count());
+        $this->assertCount(1, app(EmployeeAdminService::class)->list()['rows']);
     }
 
     public function test_non_super_admin_cannot_grant_admin_roles(): void
     {
-        $hr = User::factory()->create(['access_role' => 'hr_manager']);
+        $hr = User::factory()->create(['access_role' => 'hr_manager', 'account_status' => 'active']);
         $this->actingAs($hr);
-        $roles = UserAccessResource::assignableRoles();
+        $access = app(UserAccessService::class);
+        $roles = $access->assignableRoles();
         $this->assertArrayNotHasKey('super_admin', $roles);
         $this->assertArrayNotHasKey('admin', $roles);
         $this->assertArrayHasKey('worker', $roles);
 
-        $super = User::factory()->create(['access_role' => 'super_admin']);
+        $super = User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']);
         $this->actingAs($super);
-        $this->assertArrayHasKey('super_admin', UserAccessResource::assignableRoles());
+        $this->assertArrayHasKey('super_admin', $access->assignableRoles());
     }
 }
