@@ -275,6 +275,17 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="flights"><i class="ph ph-airplane"></i><span>항공권</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="office"><i class="ph ph-archive"></i><span>사무실비품</span></button>
+          <!-- 관리 화면 — 데스크톱 사이드바의 "DASOL PRISM 통합관리" 와 같은 것들. 여기 없으면
+               휴대폰에서는 옮겨 놓은 관리 화면에 들어갈 길이 아예 없다. -->
+          <button class="mobile-more-tile" type="button" data-mobile-view="access-control"><i class="ph ph-shield-check"></i><span>계정·권한</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="attendance-logs"><i class="ph ph-clock-counter-clockwise"></i><span>출퇴근 기록</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="applicant-admin"><i class="ph ph-identification-card"></i><span>입사지원</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="employee-admin"><i class="ph ph-user-plus"></i><span>직원 등록</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-package"></i><span>품목·분류</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-buildings"></i><span>현장·프로젝트</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-currency-dollar"></i><span>임금 프로필</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="messenger-admin"><i class="ph ph-chats-circle"></i><span>메신저 관리</span></button>
           <button class="mobile-more-tile mobile-more-tile-accent" type="button" data-mobile-action="scanner"><i class="ph ph-magic-wand"></i><span>AI 스캔등록</span></button>
         </div>
       </section>
