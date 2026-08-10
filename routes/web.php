@@ -207,6 +207,8 @@ Route::middleware('auth')->group(function (): void {
 
     // W-9 인쇄 — 직원 관리에서 바로 뽑는다. 제출 전이면 아는 칸이 채워진 종이가 나오고,
     // 제출 후면 보관용 사본(1099 신고의 근거 서류)이 나온다.
+    // 빈 양식 — 현장에 챙겨 가는 종이. {employee} 보다 먼저 와야 'blank' 가 직원 ID 로 읽히지 않는다.
+    Route::get('/w9/blank/print', [W9FormController::class, 'blank'])->name('w9.blank');
     Route::get('/w9/{employee}/print', [W9FormController::class, 'printable'])->name('w9.print');
 
     // HR daily attendance status report — styled Excel (.xlsx) export

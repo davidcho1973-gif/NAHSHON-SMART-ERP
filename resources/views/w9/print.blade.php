@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>W-9 — {{ $employee->name }}</title>
+    <title>W-9 @if ($employee)— {{ $employee->name }}@else(빈 양식)@endif</title>
     {{--
         IRS Form W-9 (Rev. 3-2024) 를 그대로 옮긴 인쇄본.
 
@@ -148,7 +148,8 @@
 </head>
 <body>
 @php
-    $c = $values['tax_classification'] ?? 'individual';
+    // 빈 양식은 어떤 칸도 미리 고르지 않는다. 본인이 고를 것을 우리가 정하면 안 된다.
+    $c = $values['tax_classification'] ?? null;
     // TIN 격자에 한 자리씩 넣는다. 값이 없으면 빈 칸으로 남는다.
     $digits = $tin ? str_split($tin) : array_fill(0, 9, '');
     // 가려서 인쇄해 달라고 한 경우에만 앞자리를 비운다(?mask=1).
@@ -246,7 +247,9 @@
             </td>
             <td rowspan="2" class="ln bb">
                 <div class="lbl">Requester's name and address (optional)</div>
-                <div class="fill" style="font-size:9pt">{{ $employee->company?->name ?? 'DASOL PRISM' }}@if ($employee->site)<br><span style="font-size:8pt">Site {{ $employee->site->code }}</span>@endif</div>
+                {{-- 빈 양식은 받는 쪽도 비워 둔다 — 어느 회사 이름이 미리 찍힌 종이는
+                     다른 현장에서 못 쓴다. --}}
+                <div class="fill" style="font-size:9pt">@if ($employee){{ $employee->company?->name ?? 'DASOL PRISM' }}@if ($employee->site)<br><span style="font-size:8pt">Site {{ $employee->site->code }}</span>@endif @endif</div>
             </td>
         </tr>
         <tr>
@@ -356,7 +359,13 @@
 </div>
 
 {{-- 여기부터는 원본에 없는, 우리가 붙이는 안내다. 인쇄물에서도 종이 아래에 남는다. --}}
-@if ($form)
+@if ($blank ?? false)
+    <div class="screen-only todo">
+        <b>빈 양식 · Blank form</b> —
+        아무것도 채워지지 않은 국세청 서식입니다. 현장에 챙겨 가서 손으로 받으실 때 쓰세요.
+        등록된 직원이면 <b>인원관리 → W-9 출력</b> 에서 이름·주소가 채워진 종이를 뽑을 수 있습니다.
+    </div>
+@elseif ($form)
     <div class="screen-only done">
         <b>제출 완료 · Submitted</b> — {{ $form->certified_at?->format('Y-m-d H:i') }},
         {{ $form->signature_name }} 명의 전자 서명.
@@ -377,12 +386,15 @@
 
 <div class="actions">
     <button type="button" class="primary" onclick="window.print()">인쇄</button>
+    @unless ($blank ?? false)
+        <a href="{{ route('w9.blank') }}" target="_blank" rel="noopener">빈 양식</a>
+    @endunless
     @if ($form && $tin)
         <a href="{{ request()->fullUrlWithQuery(['mask' => 1]) }}">TIN 가린 사본</a>
     @endif
-    @unless ($form)
+    @if (! $form && ! ($blank ?? false))
         <a href="{{ $signUrl }}" target="_blank" rel="noopener">작성 링크 열기</a>
-    @endunless
+    @endif
 </div>
 </body>
 </html>

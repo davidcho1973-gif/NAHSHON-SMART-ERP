@@ -214,4 +214,56 @@ class W9PrintTest extends TestCase
         // 예전 방식(줄 밑에 따로 얹던 칸)은 남아 있으면 안 된다.
         $this->assertStringNotContainsString('class="sigval"', $html);
     }
+
+    // ── 빈 양식 ────────────────────────────────────────────────────
+
+    public function test_a_blank_form_prints_with_nothing_filled_in(): void
+    {
+        // 현장에 챙겨 가는 종이. 아직 등록 안 된 사람이나 그 자리에서 처음 만난 사람에게
+        // 받아야 할 때 쓴다.
+        $html = $this->actingAs($this->payrollUser())
+            ->get(route('w9.blank'))->assertOk()->getContent();
+
+        // 양식은 그대로다.
+        $this->assertStringContainsString('Request for Taxpayer', $html);
+        $this->assertStringContainsString('Part I', $html);
+        $this->assertStringContainsString('Cat. No. 10231X', $html);
+
+        // 다만 아무 값도 없다.
+        $this->assertStringNotContainsString('Cristian rosas', $html);
+        $this->assertSame('', $this->ssnDigits($html), '빈 양식에 숫자가 찍혔습니다.');
+        // 세무분류도 미리 고르지 않는다 — 본인이 고를 것을 우리가 정하면 안 된다.
+        $this->assertStringNotContainsString('class="sq on"', $html);
+    }
+
+    public function test_a_blank_form_does_not_name_a_requester(): void
+    {
+        // 어느 회사 이름이 미리 찍힌 종이는 다른 현장에서 못 쓴다.
+        $html = $this->actingAs($this->payrollUser())
+            ->get(route('w9.blank'))->assertOk()->getContent();
+
+        preg_match("/Requester's name and address \(optional\)<\/div>(.*?)<\/div>/s", $html, $m);
+
+        $this->assertSame('', trim(strip_tags($m[1] ?? 'X')));
+    }
+
+    public function test_anyone_signed_in_can_print_a_blank_form(): void
+    {
+        // 이 종이에는 아무 데이터도 없다. 국세청이 공개하는 서식과 같은 것이라,
+        // 막아 봐야 지켜지는 것 없이 필요한 사람만 못 쓰게 된다.
+        $siteManager = User::factory()->create([
+            'access_role' => 'site_manager', 'access_scope' => 'all_sites', 'account_status' => 'active',
+        ]);
+
+        $this->actingAs($siteManager)->get(route('w9.blank'))->assertOk();
+    }
+
+    public function test_the_blank_route_is_not_read_as_an_employee_id(): void
+    {
+        // /w9/blank/print 가 /w9/{employee}/print 보다 뒤에 있으면 'blank' 를 직원 ID 로
+        // 읽고 404 가 난다. 순서가 뒤집히는 사고를 막는다.
+        $this->assertSame('w9/blank/print', route('w9.blank', [], false) === '/w9/blank/print' ? 'w9/blank/print' : 'wrong');
+
+        $this->actingAs($this->payrollUser())->get('/w9/blank/print')->assertOk();
+    }
 }

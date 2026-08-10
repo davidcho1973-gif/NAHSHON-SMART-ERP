@@ -36,6 +36,32 @@ class W9FormController extends Controller
     }
 
     /**
+     * 아무것도 안 채운 빈 W-9.
+     *
+     * 현장에 나갈 때 몇 장 챙겨 가는 종이다. 사람을 아직 등록하지 않았거나, 그 자리에서
+     * 처음 만난 사람에게 받아야 할 때 쓴다.
+     *
+     * 역할을 제한하지 않는다 — 이 종이에는 아무 데이터도 없다. 국세청이 공개하는 서식과
+     * 같은 것이고, 막아 봐야 지켜지는 것 없이 필요한 사람만 못 쓰게 된다.
+     */
+    public function blank(): View
+    {
+        return view('w9.print', [
+            'employee' => null,
+            'form' => null,
+            'values' => [
+                'legal_name' => '', 'business_name' => '', 'tax_classification' => null,
+                'llc_tax_class' => null, 'address' => '', 'city_state_zip' => '',
+            ],
+            'classifications' => W9Form::TAX_CLASSIFICATIONS,
+            'tin' => null,
+            'maskedTin' => null,
+            'signUrl' => null,
+            'blank' => true,
+        ]);
+    }
+
+    /**
      * 인쇄용 W-9 — 직원 관리에서 바로 뽑는다.
      *
      * 두 가지 상태를 모두 인쇄할 수 있어야 한다.
@@ -71,6 +97,7 @@ class W9FormController extends Controller
             'tin' => $form && ! $request->boolean('mask') ? $form->tin : null,
             'maskedTin' => $form?->maskedTin(),
             'signUrl' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
+            'blank' => false,
         ]);
     }
 
