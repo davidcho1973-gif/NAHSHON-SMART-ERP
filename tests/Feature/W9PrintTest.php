@@ -89,7 +89,7 @@ class W9PrintTest extends TestCase
         $res->assertSee('Cristian Rosas');
     }
 
-    public function test_the_full_tin_is_not_printed_unless_asked_for(): void
+    public function test_the_tin_prints_in_full_and_can_be_masked_on_request(): void
     {
         // 사회보장번호가 인쇄물로 돌아다니는 것은 되돌릴 수 없는 사고다.
         W9Form::create([
@@ -99,17 +99,18 @@ class W9PrintTest extends TestCase
             'signature_name' => 'Cristian Rosas', 'certified_at' => now(), 'status' => 'submitted',
         ]);
 
-        // 원본 양식처럼 한 칸에 한 자리씩 들어가므로, 칸에 찍힌 숫자를 모아서 본다.
-        $masked = $this->ssnDigits($this->actingAs($this->payrollUser())
+        // W-9 은 TIN 을 적어 내는 서류다. 가려서 내면 1099 신고에 쓸 수 없으므로 전체가 기본.
+        // 원본처럼 한 칸에 한 자리씩 들어가므로, 칸에 찍힌 숫자를 모아서 본다.
+        $full = $this->ssnDigits($this->actingAs($this->payrollUser())
             ->get(route('w9.print', ['employee' => $this->employee]))->assertOk()->getContent());
 
-        $this->assertSame('6789', $masked, '뒤 4자리 말고 다른 숫자가 인쇄되었습니다.');
-
-        // 1099 신고에는 전체가 필요하다 — 요청하면 나온다.
-        $full = $this->ssnDigits($this->actingAs($this->payrollUser())
-            ->get(route('w9.print', ['employee' => $this->employee, 'full' => 1]))->assertOk()->getContent());
-
         $this->assertSame('123456789', $full);
+
+        // 가린 사본이 필요할 때만 뺀다.
+        $masked = $this->ssnDigits($this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee, 'mask' => 1]))->assertOk()->getContent());
+
+        $this->assertSame('6789', $masked, '가린 사본에 앞자리가 찍혔습니다.');
     }
 
     /** 인쇄된 SSN 격자에 실제로 찍힌 숫자만 뽑아낸다. */
@@ -181,5 +182,36 @@ class W9PrintTest extends TestCase
         preg_match('/\@media print \{(.*?)\n        \}/s', $html, $m);
         $this->assertStringContainsString('.screen-only', $m[1] ?? '', '인쇄 시 안내가 숨겨지지 않습니다.');
         $this->assertStringContainsString('display: none', $m[1] ?? '');
+    }
+
+    public function test_the_signature_line_is_left_blank_for_a_hand_signature(): void
+    {
+        // 타이핑된 이름을 줄에 찍으면 "본인이 쓴 서명" 이 아니라 우리가 인쇄한 글자다.
+        // 손으로 서명할 수 있게 비워 두고, 쓸 높이를 준다.
+        W9Form::create([
+            'employee_id' => $this->employee->id, 'legal_name' => 'HYUNSUK CHO',
+            'tax_classification' => 'individual', 'address' => 'x', 'city_state_zip' => 'y',
+            'tin_type' => 'ssn', 'tin' => '123456789', 'tin_last4' => '6789',
+            'signature_name' => 'HYUNSUK CHO', 'certified_at' => now(), 'status' => 'submitted',
+        ]);
+
+        $html = $this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee]))->assertOk()->getContent();
+
+        preg_match('/<span class="sigcap">Signature of.*?<span class="rule">(.*?)<\/span>/s', $html, $m);
+
+        $this->assertSame('', trim($m[1] ?? 'X'), '서명란에 글자가 인쇄되어 손으로 서명할 수 없습니다.');
+    }
+
+    public function test_values_sit_on_the_ruled_line_not_below_it(): void
+    {
+        // 값이 줄 아래로 떨어지면 양식이 아니라 메모처럼 보인다.
+        $html = $this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee]))->assertOk()->getContent();
+
+        $this->assertStringContainsString('.sigrow { display: flex; align-items: flex-end', $html);
+        $this->assertStringContainsString('border-bottom: 1px solid #000; height: 30px', $html);
+        // 예전 방식(줄 밑에 따로 얹던 칸)은 남아 있으면 안 된다.
+        $this->assertStringNotContainsString('class="sigval"', $html);
     }
 }

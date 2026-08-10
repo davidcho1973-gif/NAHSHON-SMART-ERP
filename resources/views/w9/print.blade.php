@@ -94,9 +94,17 @@
         .cert ol { margin: 2px 0 0; padding-left: 14px; }
         .cert li { margin-bottom: 1px; }
 
-        .signhere { font-size: 8.5pt; font-weight: bold; width: 42px; text-align: center; padding-top: 4px; }
-        .sigcap { font-size: 6.8pt; }
-        .sigval { font-size: 10pt; min-height: 15px; padding-top: 4px; }
+        .signhere { font-size: 8.5pt; font-weight: bold; width: 42px; text-align: center; padding-top: 6px; }
+        /* 값이 줄 아래로 떨어지면 양식이 아니라 메모처럼 보인다. 밑줄 바로 위에 앉힌다.
+           서명 칸은 손으로 쓸 수 있게 높이를 넉넉히 준다. */
+        .sigrow { display: flex; align-items: flex-end; gap: 5px; padding: 3px 0 2px; }
+        .sigcap { font-size: 6.8pt; font-weight: bold; line-height: 1.15; flex: none; padding-bottom: 2px; }
+        .rule {
+            flex: 1; border-bottom: 1px solid #000; height: 30px;
+            display: flex; align-items: flex-end; padding: 0 3px 2px;
+            font-size: 11pt; font-family: Arial, Helvetica, sans-serif;
+        }
+        .rule.date { height: 30px; }
 
         /* ── 하단 안내 ───────────────────────────────────────────── */
         .gi { padding: 6px 5px 4px; }
@@ -143,10 +151,10 @@
     $c = $values['tax_classification'] ?? 'individual';
     // TIN 격자에 한 자리씩 넣는다. 값이 없으면 빈 칸으로 남는다.
     $digits = $tin ? str_split($tin) : array_fill(0, 9, '');
-    $masked = ! $tin && $maskedTin;
-    if ($masked) {
+    // 가려서 인쇄해 달라고 한 경우에만 앞자리를 비운다(?mask=1).
+    if (! $tin && $maskedTin) {
         $last4 = str_split((string) $form->tin_last4);
-        $digits = ['','','','','', $last4[0] ?? '', $last4[1] ?? '', $last4[2] ?? '', $last4[3] ?? ''];
+        $digits = ['', '', '', '', '', $last4[0] ?? '', $last4[1] ?? '', $last4[2] ?? '', $last4[3] ?? ''];
     }
     $isEin = ($form?->tin_type ?? 'ssn') === 'ein';
 @endphp
@@ -310,12 +318,18 @@
         <tr>
             <td class="signhere br">Sign<br>Here</td>
             <td class="ln br" style="width:58%">
-                <div class="sigcap"><b>Signature of<br>U.S. person</b> <span style="display:inline-block;border-bottom:1px solid #000;width:66%"></span></div>
-                <div class="sigval">{{ $form?->signature_name }}</div>
+                {{-- 서명은 비워 둔다 — 손으로 직접 서명할 자리다. 타이핑된 이름을 찍으면
+                     "본인이 쓴 서명" 이 아니라 우리가 인쇄한 글자가 된다. --}}
+                <div class="sigrow">
+                    <span class="sigcap">Signature of<br>U.S. person</span>
+                    <span class="rule"></span>
+                </div>
             </td>
             <td class="ln">
-                <div class="sigcap"><b>Date</b> <span style="display:inline-block;border-bottom:1px solid #000;width:70%"></span></div>
-                <div class="sigval">{{ $form?->certified_at?->format('m/d/Y') }}</div>
+                <div class="sigrow">
+                    <span class="sigcap">Date</span>
+                    <span class="rule date">{{ $form?->certified_at?->format('m/d/Y') }}</span>
+                </div>
             </td>
         </tr>
     </table>
@@ -346,9 +360,11 @@
     <div class="screen-only done">
         <b>제출 완료 · Submitted</b> — {{ $form->certified_at?->format('Y-m-d H:i') }},
         {{ $form->signature_name }} 명의 전자 서명.
-        @unless ($tin)
-            TIN 은 뒤 4자리만 인쇄됩니다. 1099 신고에 전체가 필요하면 아래 <b>TIN 전체 포함 인쇄</b>를 쓰세요.
-        @endunless
+        @if ($tin)
+            TIN 전체가 인쇄됩니다 — 취급에 주의하세요.
+        @else
+            TIN 을 가린 사본입니다(뒤 4자리만).
+        @endif
     </div>
 @else
     <div class="screen-only todo">
@@ -361,8 +377,8 @@
 
 <div class="actions">
     <button type="button" class="primary" onclick="window.print()">인쇄</button>
-    @if ($form && ! $tin)
-        <a href="{{ request()->fullUrlWithQuery(['full' => 1]) }}">TIN 전체 포함 인쇄</a>
+    @if ($form && $tin)
+        <a href="{{ request()->fullUrlWithQuery(['mask' => 1]) }}">TIN 가린 사본</a>
     @endif
     @unless ($form)
         <a href="{{ $signUrl }}" target="_blank" rel="noopener">작성 링크 열기</a>

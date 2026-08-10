@@ -65,8 +65,10 @@ class W9FormController extends Controller
                 'city_state_zip' => $form->city_state_zip,
             ] : W9Form::prefillFor($employee),
             'classifications' => W9Form::TAX_CLASSIFICATIONS,
-            // 전체 TIN 은 요청할 때만 나온다. 인쇄물이 도는 사고를 기본값으로 두지 않는다.
-            'tin' => $form && $request->boolean('full') ? $form->tin : null,
+            // W-9 은 TIN 을 적어 내는 서류다 — 가려서 내면 1099 신고에 쓸 수 없다.
+            // 그래서 전체가 기본이고, 가린 사본이 필요할 때만 ?mask=1 로 뺀다.
+            // 대신 아무나 못 뽑는다(위의 역할 제한).
+            'tin' => $form && ! $request->boolean('mask') ? $form->tin : null,
             'maskedTin' => $form?->maskedTin(),
             'signUrl' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
         ]);
