@@ -105,31 +105,56 @@ class WorkerScreenViewAsTest extends TestCase
         }
     }
 
-    public function test_a_role_that_cannot_see_pay_cannot_use_it(): void
+    public function test_a_role_that_cannot_see_pay_is_told_why(): void
     {
         // 현장소장은 출퇴근은 봐도 시급은 못 본다. 이 화면에는 시급이 나온다.
+        // 예전에는 버튼을 감췄다 — 그러면 "왜 안 보이지" 를 아무도 답할 수 없다.
         $this->assertNotContains('site_manager', PayProfileService::VIEW_ROLES);
 
         $siteManager = User::factory()->create([
             'access_role' => 'site_manager', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($siteManager)
-            ->getJson(route('attendance-app.home', ['as' => $this->worker->id]))
-            ->assertStatus(422)
-            ->assertJsonPath('code', 'no_employee');
+        $res = $this->actingAs($siteManager)
+            ->getJson(route('attendance-app.home', ['as' => $this->worker->id]));
+
+        $res->assertStatus(422);
+        $res->assertJsonPath('code', 'view_as_denied');
+        // 자기 역할과 되는 역할을 나란히 봐야 그 자리에서 끝난다.
+        $res->assertJsonPath('role', 'Site Manager');
+        $this->assertContains('Admin', $res->json('allowedRoles'));
     }
 
-    public function test_the_button_appears_for_the_same_roles(): void
+    public function test_an_unlinked_account_without_as_is_a_different_message(): void
     {
-        // 화면의 버튼과 서버의 판단이 어긋나면 "버튼이 없다" 또는 "눌러도 안 된다" 가 된다.
+        // ?as= 를 안 줬으면 권한 문제가 아니라 연결 문제다. 둘을 섞으면 엉뚱한 데를 고친다.
         $admin = User::factory()->create([
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($admin);
+        $this->actingAs($admin)
+            ->getJson(route('attendance-app.home'))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'no_employee');
+    }
 
-        $this->assertTrue(app(\App\Services\Admin\EmployeeAdminService::class)->options()['canViewAsWorker']);
+    public function test_the_button_is_not_hidden_by_permission(): void
+    {
+        // 권한으로 버튼을 감추면 "왜 안 보이지" 가 되고, 아무도 답할 수 없다.
+        // 이유는 열린 화면이 말한다.
+        $js = file_get_contents(public_path('js/admin-employees.js'));
+
+        $this->assertStringContainsString('작업자 화면 보기', $js);
+        $this->assertStringNotContainsString('canViewAsWorker', $js);
+    }
+
+    public function test_the_screen_can_draw_the_refusal(): void
+    {
+        $html = $this->actingAs($this->superAdmin())
+            ->get(route('attendance-app.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString("d.code === 'view_as_denied'", $html);
+        $this->assertStringContainsString('남의 화면을 볼 수 없습니다', $html);
     }
 
     public function test_a_worker_cannot_look_at_another_worker(): void

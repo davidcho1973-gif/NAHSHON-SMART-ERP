@@ -573,7 +573,8 @@
         if (!d || d.success === false) {
             // 연결이 안 된 것과 진짜로 실패한 것은 다른 상황이다. 같은 빨간 상자로 보여 주면
             // 관리자는 앱이 깨진 줄 알고, 작업자는 자기가 뭘 잘못했다고 생각한다.
-            view.innerHTML = (d && d.code === 'no_employee') ? notLinked(d) : failed(d);
+            view.innerHTML = (d && d.code === 'view_as_denied') ? viewDenied(d)
+                : (d && d.code === 'no_employee') ? notLinked(d) : failed(d);
             document.getElementById('nm').textContent = (d && d.email) ? d.email : '작업자';
             document.getElementById('tag').textContent = '··';
             document.getElementById('sb').textContent = (d && d.code === 'no_employee') ? '연결 대기 중' : '';
@@ -632,6 +633,34 @@
             '<div class="row"><div class="row-m"><div class="row-b">Esta cuenta aún no está vinculada a un trabajador.</div>' +
             '<div class="row-a">Pida a su supervisor que la vincule.</div></div></div>' +
             '</div></div>';
+
+        return h;
+    }
+
+    /**
+     * 다른 사람 화면을 보려 했는데 역할이 안 되는 경우.
+     *
+     * 예전에는 버튼을 아예 감췄다 — 그러면 "왜 안 보이지" 를 아무도 답할 수 없다.
+     * 지금 계정의 역할과 되는 역할을 나란히 보여 주면 그 자리에서 끝난다.
+     */
+    function viewDenied(d) {
+        var h = '<div class="slab is-manual">' +
+            '<div class="state"><i></i>권한 없음</div>' +
+            '<div class="setup-h">이 계정으로는<br>남의 화면을 볼 수 없습니다</div>' +
+            (d.email ? '<div class="setup-who">' + esc(d.email) + '</div>' : '') +
+            '<div class="why">이 화면에는 그 사람의 <b>시급과 급여</b>가 그대로 나옵니다. ' +
+            '그래서 급여를 볼 수 있는 역할에만 열려 있습니다.</div>' +
+            '</div>';
+
+        h += '<div class="sec"><div class="sec-h">지금 이 계정</div><div class="panel">' +
+            kv('역할', d.role) + '</div></div>';
+
+        h += '<div class="sec"><div class="sec-h">볼 수 있는 역할</div><div class="panel">' +
+            (d.allowedRoles || []).map(function (r) {
+                return '<div class="row"><div class="row-m"><div class="row-b">' + esc(r) + '</div></div></div>';
+            }).join('') + '</div>' +
+            '<div class="note" style="color:var(--ink-3);margin-top:10px">' +
+            '계정·권한 관리에서 역할을 바꾸면 바로 됩니다.</div></div>';
 
         return h;
     }

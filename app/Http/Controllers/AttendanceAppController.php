@@ -66,13 +66,19 @@ class AttendanceAppController extends Controller
      */
     private function viewAsEmployee(Request $request): ?Employee
     {
-        $id = $request->query('as');
+        return $this->viewAsAllowed($request) ? Employee::query()->find($request->query('as')) : null;
+    }
 
-        if (blank($id) || ! in_array($request->user()?->access_role, PayProfileService::VIEW_ROLES, true)) {
-            return null;
-        }
+    /** ?as= 를 줬는데 역할이 안 되는 경우 — 화면이 그 이유를 말할 수 있어야 한다. */
+    private function viewAsRefused(Request $request): bool
+    {
+        return filled($request->query('as')) && ! $this->viewAsAllowed($request);
+    }
 
-        return Employee::query()->find($id);
+    private function viewAsAllowed(Request $request): bool
+    {
+        return filled($request->query('as'))
+            && in_array($request->user()?->access_role, PayProfileService::VIEW_ROLES, true);
     }
 
     /**
@@ -112,7 +118,13 @@ class AttendanceAppController extends Controller
             // 뭘 잘못했다고 생각한다.
             return response()->json([
                 'success' => false,
-                'code' => 'no_employee',
+                'code' => $this->viewAsRefused($request) ? 'view_as_denied' : 'no_employee',
+                // 자기 역할을 볼 방법이 없으면 "왜 안 되는지" 를 영원히 못 알아낸다.
+                'role' => $user ? (User::ROLE_OPTIONS[$user->access_role] ?? $user->access_role) : null,
+                'allowedRoles' => array_values(array_map(
+                    fn (string $r): string => User::ROLE_OPTIONS[$r] ?? $r,
+                    PayProfileService::VIEW_ROLES,
+                )),
                 // 지금 어느 계정으로 들어와 있는지. 휴대폰에 구글 계정이 여러 개면
                 // 엉뚱한 것으로 로그인해 놓고 원인을 못 찾는다.
                 'email' => $user?->email,
