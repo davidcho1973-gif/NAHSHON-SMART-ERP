@@ -17,6 +17,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#F4F2ED">
     <title>내 출퇴근 · DASOL PRISM</title>
+
+    {{-- 홈 화면에 추가하면 앱이 된다. --}}
+    <link rel="manifest" href="{{ route('worker-app.manifest') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/apple-touch-icon.png') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="내 출퇴근">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <style>
         :root {
             color-scheme: light;
@@ -298,6 +305,8 @@
     </template>
 @endif
 
+@include('partials.install-app', ['installLang' => $employee?->preferred_language])
+
 <script>
 (function () {
     'use strict';
@@ -486,6 +495,15 @@
             '<div class="note" style="color:var(--ink-3);margin-top:10px">둘 중 하나만 등록돼 있어도 자동 출퇴근이 됩니다. 둘 다 없으면 직접 눌러야 합니다.</div>' +
             '</div>';
 
+        // 홈 화면에 이미 있으면 이 줄은 안 보인다 — 있는 걸 또 설치하라고 하지 않는다.
+        if (window.DasolInstall && !window.DasolInstall.installed()) {
+            h += '<div class="sec"><button type="button" class="link" data-act="install" ' +
+                'style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +
+                '<div><b>＋ ' + esc(window.DasolInstall.label()) + '</b>' +
+                '<div class="row-a" style="margin-top:3px">다음부터 아이콘만 누르면 열립니다</div></div>' +
+                '<span class="go">›</span></button></div>';
+        }
+
         h += '<div class="sec"><form method="POST" action="{{ route('logout') }}">' +
             '<input type="hidden" name="_token" value="' + CSRF + '">' +
             '<button type="submit" class="link" style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +
@@ -587,6 +605,10 @@
             var j = await r.json();
             toast(j.message || j.error || '처리했습니다.');
             await load();
+            // 한 번 찍어 본 뒤에 권한다. 쓸모를 모르는 채로 받는 설치 권유는 닫힌다.
+            if (window.DasolInstall) {
+                setTimeout(function () { window.DasolInstall.offer(); }, 1400);
+            }
         } catch (err) {
             toast('보내지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.');
         }
@@ -600,6 +622,7 @@
         var act = el.getAttribute('data-act');
         if (act === 'in' || act === 'out') return punch(act);
         if (act === 'perm') { state.permission = 'unknown'; startWatch(); return render(); }
+        if (act === 'install') return window.DasolInstall.show();
         // 서버로 이동하지 않는다 — 끊긴 것이 인터넷이라 이동하면 아무 데도 못 간다.
         if (act === 'goqr') { state.tab = 'me'; render(); window.scrollTo({ top: 0 }); }
     });

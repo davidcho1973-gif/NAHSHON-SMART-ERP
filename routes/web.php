@@ -26,6 +26,7 @@ use App\Http\Controllers\SmartCompanyApiController;
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\VehicleApiController;
 use App\Http\Controllers\W9FormController;
+use App\Http\Controllers\WebManifestController;
 use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
@@ -228,6 +229,11 @@ Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store
 // 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
 Route::get('/w9/{employee}', [W9FormController::class, 'show'])->middleware('signed')->name('w9.show');
 Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('signed')->name('w9.store');
+
+// 홈 화면에 추가할 때 브라우저가 읽는 파일. 로그인 뒤에 두면 브라우저가 못 읽어
+// 설치가 조용히 실패한다 — 안에는 아이콘 주소와 화면 이름뿐이라 감출 것이 없다.
+Route::get('/gate/{site}/manifest.webmanifest', [WebManifestController::class, 'gate'])->name('gate.manifest');
+Route::get('/worker-app.webmanifest', [WebManifestController::class, 'worker'])->name('worker-app.manifest');
 
 // 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');

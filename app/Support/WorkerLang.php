@@ -143,6 +143,7 @@ final class WorkerLang
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
                         '이름을 입력해 본인을 선택합니다. (한 번 등록하면 다음부터 자동)',
                         '출근하기 / 퇴근하기 버튼을 누르면 끝.',
+                        '한 번 찍고 나면 “홈 화면에 추가” 안내가 뜹니다 — 추가하면 다음부터 QR 없이 아이콘만 누르면 됩니다.',
                     ],
                 ],
                 'en' => [
@@ -152,6 +153,7 @@ final class WorkerLang
                         'Scan the QR code with your phone camera.',
                         'Type your name and pick yourself. (Remembered from next time)',
                         'Tap CLOCK IN or CLOCK OUT. Done.',
+                        'After your first punch you will be offered "Add to Home Screen" — add it and next time just tap the icon, no QR needed.',
                     ],
                 ],
                 'es' => [
@@ -161,6 +163,7 @@ final class WorkerLang
                         'Escanee el código QR con la cámara.',
                         'Escriba su nombre y elíjase. (Se recuerda la próxima vez)',
                         'Pulse ENTRADA o SALIDA. Listo.',
+                        'Después del primer registro le ofrecerá "Agregar a la pantalla de inicio" — agréguelo y la próxima vez solo toque el ícono, sin QR.',
                     ],
                 ],
             ],
@@ -332,6 +335,64 @@ final class WorkerLang
                 'failed' => 'No se pudo registrar. Intente de nuevo.',
                 'network' => 'Error de red. Intente de nuevo.',
                 'recognized' => '✓ Reconocido en este teléfono',
+            ],
+        ];
+    }
+
+    /**
+     * "홈 화면에 추가" 안내 문구.
+     *
+     * 이 문구가 필요한 이유 — 작업자에게 이건 웹사이트가 아니라 앱이어야 한다. 매번
+     * 게이트 QR 을 찾아 스캔하게 두면 셋째 날부터 안 찍는다. 홈 화면에 아이콘이 있으면
+     * 한 번 눌러서 열고, 주소창도 안 보여서 앱과 구별되지 않는다.
+     *
+     * 안드로이드와 아이폰의 문구가 다른 이유 — 안드로이드는 브라우저가 설치 버튼을
+     * 우리에게 넘겨주지만(누르면 끝), 아이폰 사파리는 그런 것을 주지 않는다. 사람이
+     * 공유 버튼을 직접 눌러야 해서, 어느 버튼인지 그림으로 짚어 줘야 한다.
+     *
+     * @return array<string, array<string, string>>
+     */
+    public static function install(): array
+    {
+        return [
+            'ko' => [
+                'title' => '이 화면을 앱처럼 쓰세요',
+                'body' => '휴대폰 홈 화면에 아이콘이 생깁니다. 다음부터는 QR 을 찾지 않고 아이콘만 누르면 됩니다.',
+                'install' => '홈 화면에 추가',
+                'later' => '나중에',
+                'iosTitle' => '아이폰에서 추가하는 방법',
+                'iosStep1' => '아래 가운데 <b>공유</b> 버튼을 누릅니다',
+                'iosStep2' => '목록을 내려 <b>홈 화면에 추가</b> 를 누릅니다',
+                'iosStep3' => '오른쪽 위 <b>추가</b> 를 누르면 끝입니다',
+                'iosSafari' => '사파리(Safari)에서 열어야 추가할 수 있습니다. 크롬으로 열었다면 사파리로 다시 열어 주세요.',
+                'done' => '홈 화면에 추가되었습니다.',
+                'close' => '닫기',
+            ],
+            'en' => [
+                'title' => 'Use this like an app',
+                'body' => 'An icon is added to your phone\'s home screen. Next time just tap the icon — no QR to find.',
+                'install' => 'Add to Home Screen',
+                'later' => 'Later',
+                'iosTitle' => 'How to add it on iPhone',
+                'iosStep1' => 'Tap the <b>Share</b> button at the bottom center',
+                'iosStep2' => 'Scroll down and tap <b>Add to Home Screen</b>',
+                'iosStep3' => 'Tap <b>Add</b> at the top right — done',
+                'iosSafari' => 'This only works in Safari. If you opened this in Chrome, open it again in Safari.',
+                'done' => 'Added to your home screen.',
+                'close' => 'Close',
+            ],
+            'es' => [
+                'title' => 'Úselo como una aplicación',
+                'body' => 'Se agrega un ícono a la pantalla de inicio de su teléfono. La próxima vez solo toque el ícono — sin buscar el código QR.',
+                'install' => 'Agregar a la pantalla de inicio',
+                'later' => 'Más tarde',
+                'iosTitle' => 'Cómo agregarlo en iPhone',
+                'iosStep1' => 'Toque el botón <b>Compartir</b> abajo al centro',
+                'iosStep2' => 'Baje y toque <b>Agregar a inicio</b>',
+                'iosStep3' => 'Toque <b>Agregar</b> arriba a la derecha — listo',
+                'iosSafari' => 'Solo funciona en Safari. Si lo abrió en Chrome, ábralo de nuevo en Safari.',
+                'done' => 'Agregado a su pantalla de inicio.',
+                'close' => 'Cerrar',
             ],
         ];
     }
