@@ -261,14 +261,31 @@ Route::get('/member/site/{site}/apply/qr', [MemberRegistrationController::class,
 Route::get('/member/site/{site}/apply', [MemberRegistrationController::class, 'siteShow'])->name('member-registration.site.show');
 Route::post('/member/site/{site}/apply', [MemberRegistrationController::class, 'siteStore'])->name('member-registration.site.store');
 
-Route::get('/debug-logs-sec-53298bfd9a', function () {
-    $logPath = storage_path('logs/laravel.log');
-    if (file_exists($logPath)) {
-        return response()->file($logPath);
+/**
+ * 서버 오류 로그 — 500 이 났을 때 원인을 보는 유일한 창.
+ *
+ * 예전에는 로그인 없이 열렸다. 주소가 길어서 안 들킬 뿐, 이 파일에는 오류와 함께
+ * 이메일·요청 내용이 섞여 나온다. 판매용으로 남의 회사 데이터를 담을 제품에서
+ * "주소를 모르면 못 본다" 는 잠금장치가 아니다.
+ *
+ * 기본은 마지막 300줄만 준다. 휴대폰에서 열어 마지막 오류를 확인하는 것이 이 화면의 용도다.
+ */
+Route::get('/debug-logs-sec-53298bfd9a', function (\Illuminate\Http\Request $request) {
+    abort_unless(in_array($request->user()?->access_role, ['super_admin', 'admin'], true), 403);
+
+    $path = storage_path('logs/laravel.log');
+
+    if (! is_readable($path)) {
+        return response('로그 파일이 없습니다. 아직 오류가 기록되지 않았습니다.', 200)
+            ->header('Content-Type', 'text/plain; charset=utf-8');
     }
 
-    return 'Log file not found';
-});
+    $lines = max(50, min(2000, (int) $request->query('lines', 300)));
+    $all = file($path, FILE_IGNORE_NEW_LINES) ?: [];
+
+    return response(implode("\n", array_slice($all, -$lines)), 200)
+        ->header('Content-Type', 'text/plain; charset=utf-8');
+})->middleware('auth')->name('debug.logs');
 
 /**
  * 배포 확인 — 지금 이 서버가 어느 커밋을 돌리고 있나.
