@@ -140,7 +140,7 @@
         document.getElementById('di-s1').innerHTML = T.iosStep1;
         document.getElementById('di-s2').innerHTML = T.iosStep2;
         document.getElementById('di-s3').innerHTML = T.iosStep3;
-        document.getElementById('di-safari').textContent = T.iosSafari;
+        document.getElementById('di-safari').innerHTML = T.iosSafari;
         Array.prototype.forEach.call(root.querySelectorAll('.di-later'), function (b) {
             b.textContent = T.later;
         });
@@ -162,6 +162,15 @@
     function close(andRemember) {
         root.hidden = true;
         if (andRemember) remember();
+    }
+
+    // 서비스워커를 등록해 둔다. 크롬은 fetch 를 처리하는 워커가 없으면 아래
+    // beforeinstallprompt 를 아예 주지 않는다 — 그러면 안드로이드에서 설치 버튼이
+    // 영영 안 뜬다. 오류도 안 난다. 실패하면 조용히 넘어간다(아이폰 경로는 그대로 된다).
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+        });
     }
 
     window.addEventListener('beforeinstallprompt', function (ev) {

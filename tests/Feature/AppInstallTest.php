@@ -194,4 +194,64 @@ class AppInstallTest extends TestCase
             // 스페인어 사용자로 등록됐으면 설치 안내도 스페인어로 시작해야 한다.
             ->assertSee('"es"', false);
     }
+
+    // ── 안드로이드 쪽 필수 조건 ────────────────────────────────────
+
+    public function test_a_service_worker_exists_so_android_offers_to_install(): void
+    {
+        // 크롬은 fetch 를 처리하는 서비스워커가 없으면 beforeinstallprompt 를 주지 않는다.
+        // 그러면 우리 설치 버튼은 영영 안 뜨고 — 오류도 안 나서 되는 줄 알게 된다.
+        $sw = public_path('sw.js');
+
+        $this->assertFileExists($sw, '서비스워커가 없으면 안드로이드 설치가 제안되지 않습니다.');
+        $this->assertStringContainsString("addEventListener('fetch'", file_get_contents($sw));
+    }
+
+    public function test_the_install_sheet_registers_the_service_worker(): void
+    {
+        // 파일만 있고 등록하지 않으면 없는 것과 같다.
+        $blade = file_get_contents(resource_path('views/partials/install-app.blade.php'));
+
+        $this->assertStringContainsString("serviceWorker.register('/sw.js'", $blade);
+    }
+
+    public function test_the_service_worker_never_caches_a_page_with_a_csrf_token(): void
+    {
+        // 이 파일에서 가장 위험한 실수. 출퇴근 화면을 캐시했다가 다시 띄우면 CSRF 토큰이
+        // 만료돼 있어 출근 버튼이 419 로 죽는다 — 작업자에게는 "눌렀는데 안 찍힌다" 다.
+        $sw = file_get_contents(public_path('sw.js'));
+
+        // 화면 이동은 언제나 서버를 먼저 보고, 실패했을 때만 안내 페이지를 내준다.
+        $this->assertMatchesRegularExpression(
+            "/navigate[\s\S]{0,400}fetch\(request\)[\s\S]{0,200}catch/",
+            $sw,
+            '화면 이동을 network-first 로 처리하지 않습니다.'
+        );
+        // POST(출퇴근 기록)는 손대지 않는다.
+        $this->assertStringContainsString("request.method !== 'GET'", $sw);
+    }
+
+    public function test_the_offline_page_exists_and_does_not_promise_a_record(): void
+    {
+        // 신호가 없을 때 "나중에 자동으로 기록됩니다" 라고 쓰면 거짓말이 된다.
+        // 기록은 서버까지 가야 남는다.
+        $html = file_get_contents(public_path('offline.html'));
+
+        $this->assertStringContainsString('아직 기록되지 않았습니다', $html);
+        $this->assertStringContainsString('Español', $html);   // 세 언어를 한 장에
+        $this->assertStringContainsString('English', $html);
+    }
+
+    public function test_the_ios_note_does_not_claim_safari_is_the_only_way(): void
+    {
+        // iOS 16.4 부터는 아이폰 크롬에서도 홈 화면에 추가된다. "사파리에서만 된다" 는
+        // 사실이 아니고, 크롬만 쓰는 작업자를 되돌려 보내게 된다.
+        foreach (WorkerLang::install() as $code => $t) {
+            $this->assertMatchesRegularExpression(
+                '/안 보이면|do not see|no ve/u',
+                $t['iosSafari'],
+                "[{$code}] 아이폰 안내가 사파리 전용이라고 단정합니다."
+            );
+        }
+    }
 }

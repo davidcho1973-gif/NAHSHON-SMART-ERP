@@ -9,6 +9,7 @@
     {{-- 홈 화면에 추가하면 앱이 된다. 이 네 줄이 없으면 아이콘 자리에 화면 캡처가 붙는다. --}}
     <link rel="manifest" href="{{ route('gate.manifest', ['site' => $site]) }}">
     <link rel="apple-touch-icon" href="{{ asset('images/apple-touch-icon.png') }}">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="{{ $site->code }}">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
