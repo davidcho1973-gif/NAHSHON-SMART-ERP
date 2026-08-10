@@ -33,9 +33,11 @@ class AttendanceAppController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        $employee = $user?->employee;
+        $viewingAs = $this->viewAsEmployee($request);
+        $employee = $viewingAs ?? $user?->employee;
 
         return view('attendance-app.index', [
+            'viewingAs' => $viewingAs,
             'user' => $user,
             'employee' => $employee,
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
@@ -45,6 +47,29 @@ class AttendanceAppController extends Controller
             // 미리 그림째로 박아 넣는다. 한 번 연 화면은 신호가 끊겨도 QR 을 보여 준다.
             'badgeQr' => $employee ? $this->badgeQrFor($employee, $user?->id) : null,
         ]);
+    }
+
+    /**
+     * 슈퍼관리자가 "이 사람 화면" 을 그대로 보는 기능(?as=직원ID).
+     *
+     * 왜 필요한가 — 관리자 계정에는 직원 기록이 안 붙어 있어서, 만들어 놓은 화면을
+     * 정작 만든 사람이 못 본다. 확인하려고 자기 계정을 아무 직원에게 붙이면 그 직원의
+     * 진짜 기록이 섞인다. 그래서 붙이지 않고 들여다보는 길을 따로 낸다.
+     *
+     * 보기 전용이다. punch() 가 이 상태를 막는다 — 화면을 둘러보다 누른 버튼 하나가
+     * 남의 근무시간이 되면 나중에 아무도 그게 본인이 찍은 것인지 구별할 수 없다.
+     *
+     * 슈퍼관리자만 쓸 수 있다. 이 화면에는 그 사람의 급여와 시급이 그대로 나온다.
+     */
+    private function viewAsEmployee(Request $request): ?Employee
+    {
+        $id = $request->query('as');
+
+        if (blank($id) || $request->user()?->access_role !== 'super_admin') {
+            return null;
+        }
+
+        return Employee::query()->find($id);
     }
 
     /**
@@ -75,7 +100,8 @@ class AttendanceAppController extends Controller
     public function home(Request $request, WorkerAttendanceService $worker): JsonResponse
     {
         $user = $request->user();
-        $employee = $user?->employee;
+        $viewingAs = $this->viewAsEmployee($request);
+        $employee = $viewingAs ?? $user?->employee;
 
         if (! $employee) {
             // 이건 고장이 아니라 설정이 덜 된 상태다. 화면이 그렇게 말해야 한다 —
@@ -92,7 +118,10 @@ class AttendanceAppController extends Controller
             ], 422);
         }
 
-        return response()->json($worker->home($employee));
+        return response()->json($worker->home($employee) + [
+            // 화면이 "지금 남의 것을 보고 있다" 고 말할 수 있게.
+            'viewingAs' => $viewingAs ? ['id' => $viewingAs->getKey(), 'name' => $viewingAs->name] : null,
+        ]);
     }
 
     /**
@@ -100,6 +129,16 @@ class AttendanceAppController extends Controller
      */
     public function punch(Request $request, WorkerAttendanceService $worker): JsonResponse
     {
+        // 남의 화면을 보는 중에는 절대 찍지 않는다. 이건 편의 문제가 아니라 임금 기록이다 —
+        // 관리자가 화면을 둘러보다 누른 버튼 하나가 그 사람의 근무시간이 되면, 나중에
+        // 아무도 그게 본인이 찍은 것인지 구별할 수 없다.
+        if ($this->viewAsEmployee($request)) {
+            return response()->json([
+                'success' => false,
+                'error' => '다른 사람의 화면을 보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
+            ], 403);
+        }
+
         $employee = $request->user()?->employee;
         if (! $employee) {
             return response()->json(['success' => false, 'error' => '연결된 직원 정보가 없습니다.'], 422);

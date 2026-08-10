@@ -137,6 +137,11 @@
             if (r.hasAccount) {
               html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
             }
+            // 슈퍼관리자는 이 사람 화면을 그대로 볼 수 있다. 만든 화면을 정작 만든 사람이
+            // 못 보는 상태였다 — 관리자 계정에는 직원 기록이 안 붙어 있기 때문이다.
+            if (state.options && state.options.canViewAsWorker) {
+              html += u.rowButton('작업자 화면 보기', "window.open('/attendance-app?as=" + r.id + "','_blank')") + ' ';
+            }
             html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
             return html;

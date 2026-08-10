@@ -66,6 +66,13 @@
             background: var(--slab); color: var(--hivis); text-align: center;
             font-family: var(--mono); font-size: 11px; letter-spacing: .12em; padding: 6px;
         }
+        /* 슈퍼관리자가 남의 화면을 들여다보는 중. 줄무늬는 "이건 실물이 아니다" 의 관용 표현이다. */
+        .peek {
+            background: repeating-linear-gradient(135deg, #2B4C9B 0 10px, #24417F 10px 20px);
+            color: #EAF0FF; text-align: center; padding: 7px 12px;
+            font-size: 12px; font-weight: 700; letter-spacing: .01em;
+        }
+        .peek b { color: #FFFFFF; }
         .top {
             position: sticky; top: 0; z-index: 20;
             background: color-mix(in srgb, var(--paper) 88%, transparent);
@@ -277,6 +284,12 @@
 <body>
 <div class="app">
     <div class="offline" id="offline" hidden>오프라인 · 내 QR 을 반장에게 보여 주세요</div>
+@isset($viewingAs)
+    @if ($viewingAs)
+        {{-- 남의 화면을 보고 있다는 사실이 한순간도 안 숨겨져야 한다. --}}
+        <div class="peek">보는 중 · {{ $viewingAs->name }} 화면 <b>기록은 남지 않습니다</b></div>
+    @endif
+@endisset
 
     <header class="top">
         <div class="tag" id="tag">··</div>
@@ -340,6 +353,17 @@
 
     var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: 'home', lang: 'ko', tick: 0 };
     var watchId = null;
+
+    // 슈퍼관리자가 ?as=직원ID 로 들어왔으면 부르는 곳마다 달고 다녀야 한다 —
+    // 안 그러면 화면은 남의 것인데 데이터만 내 것이 된다.
+    var AS = (function () {
+        var m = /[?&]as=(\d+)/.exec(window.location.search);
+        return m ? m[1] : '';
+    })();
+    function withAs(url) {
+        if (!AS) return url;
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + 'as=' + AS;
+    }
 
     function esc(s) {
         return String(s === null || s === undefined ? '' : s)
@@ -627,7 +651,7 @@
 
     async function load() {
         try {
-            var r = await fetch('{{ route('attendance-app.home') }}', {
+            var r = await fetch(withAs('{{ route('attendance-app.home') }}'), {
                 credentials: 'same-origin', headers: { Accept: 'application/json' }
             });
             state.data = await r.json();
@@ -639,6 +663,10 @@
     }
 
     function startWatch() {
+        // 남의 화면을 보는 중이면 위치를 보내지 않는다. 관리자가 사무실에서 열어 본
+        // 것이 그 작업자의 "현장 재실" 로 기록되면 자동 퇴근 시각이 통째로 틀어진다.
+        if (AS) return;
+
         if (!navigator.geolocation || watchId !== null) return;
         watchId = navigator.geolocation.watchPosition(
             function (pos) {
@@ -670,6 +698,8 @@
     }
 
     async function punch(direction) {
+        if (AS) { toast('보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.'); return; }
+
         if (state.busy) return;
         state.busy = true;
         var body = { direction: direction };
@@ -679,7 +709,7 @@
             body.accuracy = Math.round(state.coords.accuracy || 0);
         }
         try {
-            var r = await fetch('{{ route('attendance-app.punch') }}', {
+            var r = await fetch(withAs('{{ route('attendance-app.punch') }}'), {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, Accept: 'application/json' },
                 body: JSON.stringify(body)
