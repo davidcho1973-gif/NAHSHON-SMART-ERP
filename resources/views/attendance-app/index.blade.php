@@ -215,6 +215,28 @@
             background: var(--bad-bg); border: 1px solid #EEC3BB; color: #7C2418;
             border-radius: 16px; padding: 20px; font-size: 14.5px; line-height: 1.6;
         }
+        .retry {
+            display: block; width: 100%; margin-top: 14px; padding: 14px;
+            border: 1.5px solid #C89184; border-radius: 12px; background: transparent;
+            color: #7C2418; font-family: inherit; font-size: 15px; font-weight: 750; cursor: pointer;
+        }
+
+        /* ── 아직 연결되지 않은 계정 ──────────────────────────────────
+           관리자가 이 앱을 처음 열면 반드시 보는 화면이다(관리자 계정에는 직원 기록이
+           안 붙어 있다). 사실상 이 앱의 첫인상이라, 오류가 아니라 "다음에 할 일" 로 보이게 한다. */
+        .setup-h {
+            font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.25;
+            margin: 14px 0 0; color: #FFFDF5;
+        }
+        .setup-who {
+            font-family: var(--mono); font-size: 12px; color: #9C9889;
+            margin-top: 8px; word-break: break-all;
+        }
+        .step-n {
+            width: 26px; height: 26px; border-radius: 50%; flex: none;
+            background: var(--slab); color: var(--paper);
+            display: grid; place-items: center; font-size: 13px; font-weight: 800;
+        }
 
         /* ── 아래 탭 ──────────────────────────────────────────────── */
         .tabs {
@@ -525,7 +547,13 @@
         document.getElementById('offline').hidden = navigator.onLine;
 
         if (!d || d.success === false) {
-            view.innerHTML = '<div class="fatal">' + esc((d && d.error) || '정보를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.') + '</div>';
+            // 연결이 안 된 것과 진짜로 실패한 것은 다른 상황이다. 같은 빨간 상자로 보여 주면
+            // 관리자는 앱이 깨진 줄 알고, 작업자는 자기가 뭘 잘못했다고 생각한다.
+            view.innerHTML = (d && d.code === 'no_employee') ? notLinked(d) : failed(d);
+            document.getElementById('nm').textContent = (d && d.email) ? d.email : '작업자';
+            document.getElementById('tag').textContent = '··';
+            document.getElementById('sb').textContent = (d && d.code === 'no_employee') ? '연결 대기 중' : '';
+            paintTabs();
             return;
         }
 
@@ -539,9 +567,62 @@
             : state.tab === 'work' ? tabWork(d)
             : state.tab === 'pay' ? tabPay(d) : tabMe(d);
 
+        paintTabs();
+    }
+
+    function paintTabs() {
         Array.prototype.forEach.call(document.querySelectorAll('#tabs .tab'), function (b) {
             b.setAttribute('aria-selected', b.dataset.tab === state.tab ? 'true' : 'false');
         });
+    }
+
+    /**
+     * 아직 작업자와 연결되지 않은 계정.
+     *
+     * 관리자가 이 앱을 처음 열면 반드시 이 화면을 본다 — 관리자 계정에는 직원 기록이
+     * 안 붙어 있기 때문이다. 그래서 이 화면이 사실상 이 앱의 첫인상이다. 오류가 아니라
+     * "다음에 할 일" 로 보이게 만든다.
+     */
+    function notLinked(d) {
+        var who = d && d.email ? d.email : '';
+        var h = '<div class="slab is-waiting">' +
+            '<div class="state"><i></i>연결 대기 중</div>' +
+            '<div class="setup-h">이 계정은 아직<br>작업자와 연결되지 않았습니다</div>' +
+            (who ? '<div class="setup-who">' + esc(who) + '</div>' : '') +
+            '<div class="why">근무시간과 급여는 <b>작업자 본인</b>에게만 보입니다. ' +
+            '계정과 작업자를 이어 주면 이 화면이 채워집니다.</div>' +
+            '</div>';
+
+        h += '<div class="sec"><div class="sec-h">' + (d.canManage ? '연결하는 법' : '요청하는 법') + '</div>' +
+            '<div class="panel">' + (d.canManage
+                ? step(1, 'ERP 인원관리 화면을 엽니다')
+                  + step(2, '이 사람 줄에서 <b>계정 만들기</b> 를 누릅니다')
+                  + step(3, '이메일을 <b>' + esc(who || '이 계정 주소') + '</b> 로 맞춥니다')
+                : step(1, '현장 관리자에게 이 화면을 보여 주세요')
+                  + step(2, '<b>' + esc(who || '내 계정') + '</b> 을 내 이름과 이어 달라고 하면 됩니다')) +
+            '</div></div>';
+
+        h += '<div class="sec"><div class="sec-h">English · Español</div><div class="panel">' +
+            '<div class="row"><div class="row-m"><div class="row-b">This account is not linked to a worker yet.</div>' +
+            '<div class="row-a">Ask your site manager to link it.</div></div></div>' +
+            '<div class="row"><div class="row-m"><div class="row-b">Esta cuenta aún no está vinculada a un trabajador.</div>' +
+            '<div class="row-a">Pida a su supervisor que la vincule.</div></div></div>' +
+            '</div></div>';
+
+        return h;
+    }
+
+    function step(n, text) {
+        return '<div class="row"><div class="step-n">' + n + '</div>' +
+            '<div class="row-m"><div class="row-b">' + text + '</div></div></div>';
+    }
+
+    /** 진짜로 못 불러온 경우 — 다시 해 볼 수 있어야 한다. */
+    function failed(d) {
+        return '<div class="fatal">' +
+            esc((d && d.error) || '정보를 불러오지 못했습니다.') +
+            '<button type="button" class="retry" data-act="retry">다시 시도</button>' +
+            '</div>';
     }
 
     async function load() {
@@ -624,6 +705,7 @@
         if (act === 'in' || act === 'out') return punch(act);
         if (act === 'perm') { state.permission = 'unknown'; startWatch(); return render(); }
         if (act === 'install') return window.DasolInstall.show();
+        if (act === 'retry') return load();
         // 서버로 이동하지 않는다 — 끊긴 것이 인터넷이라 이동하면 아무 데도 못 간다.
         if (act === 'goqr') { state.tab = 'me'; render(); window.scrollTo({ top: 0 }); }
     });

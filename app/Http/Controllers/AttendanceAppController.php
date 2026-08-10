@@ -21,6 +21,9 @@ use Illuminate\Support\Carbon;
 
 class AttendanceAppController extends Controller
 {
+    /** 이 역할이면 화면에서 바로 "인원관리에서 연결하세요" 라고 안내할 수 있다. */
+    private const SETUP_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+
     public function __construct(
         private readonly AttendanceQrService $attendanceQrService,
         private readonly CommunicationService $communicationService,
@@ -71,11 +74,21 @@ class AttendanceAppController extends Controller
      */
     public function home(Request $request, WorkerAttendanceService $worker): JsonResponse
     {
-        $employee = $request->user()?->employee;
+        $user = $request->user();
+        $employee = $user?->employee;
+
         if (! $employee) {
+            // 이건 고장이 아니라 설정이 덜 된 상태다. 화면이 그렇게 말해야 한다 —
+            // 빨간 오류 상자를 띄우면 관리자는 앱이 깨진 줄 알고, 작업자는 자기가
+            // 뭘 잘못했다고 생각한다.
             return response()->json([
                 'success' => false,
-                'error' => '이 계정에 직원 정보가 연결되어 있지 않습니다. 관리자에게 요청해 주세요.',
+                'code' => 'no_employee',
+                // 지금 어느 계정으로 들어와 있는지. 휴대폰에 구글 계정이 여러 개면
+                // 엉뚱한 것으로 로그인해 놓고 원인을 못 찾는다.
+                'email' => $user?->email,
+                'canManage' => in_array($user?->access_role, self::SETUP_ROLES, true),
+                'error' => '이 계정은 아직 작업자와 연결되지 않았습니다.',
             ], 422);
         }
 

@@ -389,4 +389,50 @@ class WorkerAttendanceScreenTest extends TestCase
 
         $this->assertStringNotContainsString('data-tab="home"', $html);
     }
+
+    // ── 아직 연결되지 않은 계정 ────────────────────────────────────
+
+    public function test_an_unlinked_account_gets_setup_guidance_not_an_error(): void
+    {
+        // 관리자가 이 앱을 처음 열면 반드시 이 화면을 본다 — 관리자 계정에는 직원 기록이
+        // 안 붙어 있기 때문이다. 사실상 이 앱의 첫인상이라, 빨간 오류 상자로 두면
+        // 앱이 깨진 줄 안다.
+        $admin = User::factory()->create([
+            'access_role' => 'admin', 'access_scope' => 'all_sites',
+            'account_status' => 'active', 'email' => 'davidcho@example.com',
+        ]);
+
+        $res = $this->actingAs($admin)->getJson(route('attendance-app.home'));
+
+        $res->assertStatus(422);
+        $res->assertJsonPath('code', 'no_employee');
+        // 지금 어느 계정으로 들어와 있는지 — 휴대폰에 구글 계정이 여러 개면 이걸 못 봐서 헤맨다.
+        $res->assertJsonPath('email', 'davidcho@example.com');
+        // 관리자는 그 자리에서 고칠 수 있다.
+        $res->assertJsonPath('canManage', true);
+    }
+
+    public function test_a_worker_without_a_link_is_not_told_to_go_fix_it_himself(): void
+    {
+        // 작업자에게 "인원관리에서 연결하세요" 라고 하면 갈 수 있는 화면이 아니다.
+        $orphan = User::factory()->create([
+            'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
+        ]);
+
+        $this->actingAs($orphan)
+            ->getJson(route('attendance-app.home'))
+            ->assertStatus(422)
+            ->assertJsonPath('canManage', false);
+    }
+
+    public function test_the_screen_can_draw_the_unlinked_state(): void
+    {
+        // 화면 쪽에 그리는 코드가 있어야 한다 — 서버만 고치면 여전히 빨간 상자가 뜬다.
+        $html = $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString("d.code === 'no_employee'", $html);
+        $this->assertStringContainsString('작업자와 연결되지 않았습니다', $html);
+        // 진짜 실패는 다시 해 볼 수 있어야 한다.
+        $this->assertStringContainsString("data-act=\"retry\"", $html);
+    }
 }
