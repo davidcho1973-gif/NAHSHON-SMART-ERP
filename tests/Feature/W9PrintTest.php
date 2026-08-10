@@ -99,17 +99,25 @@ class W9PrintTest extends TestCase
             'signature_name' => 'Cristian Rosas', 'certified_at' => now(), 'status' => 'submitted',
         ]);
 
-        $this->actingAs($this->payrollUser())
-            ->get(route('w9.print', ['employee' => $this->employee]))
-            ->assertOk()
-            ->assertDontSee('123-45-6789')
-            ->assertSee('***-**-6789');
+        // 원본 양식처럼 한 칸에 한 자리씩 들어가므로, 칸에 찍힌 숫자를 모아서 본다.
+        $masked = $this->ssnDigits($this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee]))->assertOk()->getContent());
+
+        $this->assertSame('6789', $masked, '뒤 4자리 말고 다른 숫자가 인쇄되었습니다.');
 
         // 1099 신고에는 전체가 필요하다 — 요청하면 나온다.
-        $this->actingAs($this->payrollUser())
-            ->get(route('w9.print', ['employee' => $this->employee, 'full' => 1]))
-            ->assertOk()
-            ->assertSee('123-45-6789');
+        $full = $this->ssnDigits($this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee, 'full' => 1]))->assertOk()->getContent());
+
+        $this->assertSame('123456789', $full);
+    }
+
+    /** 인쇄된 SSN 격자에 실제로 찍힌 숫자만 뽑아낸다. */
+    private function ssnDigits(string $html): string
+    {
+        preg_match('/data-tin="[a-z0-9]+"(.*?)<\/div>/s', $html, $m);
+
+        return preg_replace('/\D/', '', $m[1] ?? '') ?? '';
     }
 
     public function test_a_role_that_cannot_see_pay_cannot_print_a_w9(): void
@@ -130,5 +138,31 @@ class W9PrintTest extends TestCase
 
         $this->assertStringContainsString('W-9 출력', $js);
         $this->assertStringContainsString("/print'", $js);
+    }
+
+    public function test_the_printout_follows_the_irs_layout(): void
+    {
+        // 이건 우리 서식이 아니라 국세청 서식이다. 감사에서 읽는 사람은 이 배치를 외우고
+        // 있고, 칸이 옮겨져 있으면 "다른 서류" 로 본다.
+        $html = $this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee]))->assertOk()->getContent();
+
+        foreach ([
+            'Request for Taxpayer',
+            'Give form to the',
+            'Before you begin.',
+            'Part I',
+            'Taxpayer Identification Number (TIN)',
+            'Part II',
+            'Under penalties of perjury',
+            'Cat. No. 10231X',
+            '(Rev. 3-2024)',
+        ] as $mark) {
+            $this->assertStringContainsString($mark, $html, "원본에 있는 '{$mark}' 가 빠졌습니다.");
+        }
+
+        // Times 로 두면 한눈에 다른 서류로 보인다.
+        $this->assertStringContainsString('font-family: Helvetica', $html);
+        $this->assertStringNotContainsString('Times New Roman', $html);
     }
 }
