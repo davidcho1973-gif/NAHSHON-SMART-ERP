@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Admin\PayProfileService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -88,17 +89,47 @@ class WorkerScreenViewAsTest extends TestCase
         $this->assertStringContainsString('if (AS) return;', $html);
     }
 
-    public function test_an_ordinary_admin_cannot_look_at_a_workers_pay(): void
+    public function test_everyone_who_already_sees_pay_can_use_it(): void
     {
-        // 이 화면에는 시급과 급여가 그대로 나온다. 슈퍼관리자만이다.
+        // 급여를 이미 볼 수 있는 역할에는 새로 드러나는 것이 없다. 여기만 좁혀 두면
+        // 정작 확인해야 할 사람이 못 쓴다.
+        foreach (PayProfileService::VIEW_ROLES as $role) {
+            $user = User::factory()->create([
+                'access_role' => $role, 'access_scope' => 'all_sites', 'account_status' => 'active',
+            ]);
+
+            $this->actingAs($user)
+                ->getJson(route('attendance-app.home', ['as' => $this->worker->id]))
+                ->assertOk()
+                ->assertJsonPath('employee.name', 'Cristian rosas');
+        }
+    }
+
+    public function test_a_role_that_cannot_see_pay_cannot_use_it(): void
+    {
+        // 현장소장은 출퇴근은 봐도 시급은 못 본다. 이 화면에는 시급이 나온다.
+        $this->assertNotContains('site_manager', PayProfileService::VIEW_ROLES);
+
+        $siteManager = User::factory()->create([
+            'access_role' => 'site_manager', 'access_scope' => 'all_sites', 'account_status' => 'active',
+        ]);
+
+        $this->actingAs($siteManager)
+            ->getJson(route('attendance-app.home', ['as' => $this->worker->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'no_employee');
+    }
+
+    public function test_the_button_appears_for_the_same_roles(): void
+    {
+        // 화면의 버튼과 서버의 판단이 어긋나면 "버튼이 없다" 또는 "눌러도 안 된다" 가 된다.
         $admin = User::factory()->create([
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
 
-        $this->actingAs($admin)
-            ->getJson(route('attendance-app.home', ['as' => $this->worker->id]))
-            ->assertStatus(422)
-            ->assertJsonPath('code', 'no_employee');
+        $this->actingAs($admin);
+
+        $this->assertTrue(app(\App\Services\Admin\EmployeeAdminService::class)->options()['canViewAsWorker']);
     }
 
     public function test_a_worker_cannot_look_at_another_worker(): void

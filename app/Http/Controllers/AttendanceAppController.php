@@ -6,6 +6,7 @@ use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
+use App\Services\Admin\PayProfileService;
 use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
@@ -59,13 +60,15 @@ class AttendanceAppController extends Controller
      * 보기 전용이다. punch() 가 이 상태를 막는다 — 화면을 둘러보다 누른 버튼 하나가
      * 남의 근무시간이 되면 나중에 아무도 그게 본인이 찍은 것인지 구별할 수 없다.
      *
-     * 슈퍼관리자만 쓸 수 있다. 이 화면에는 그 사람의 급여와 시급이 그대로 나온다.
+     * 이 화면에는 그 사람의 시급과 급여가 그대로 나온다. 그래서 급여를 이미 볼 수 있는
+     * 역할에만 연다 — 같은 상수를 쓴다. 여기에만 따로 목록을 적어 두면 나중에 급여
+     * 권한이 바뀔 때 한쪽만 고쳐져 어긋난다.
      */
     private function viewAsEmployee(Request $request): ?Employee
     {
         $id = $request->query('as');
 
-        if (blank($id) || $request->user()?->access_role !== 'super_admin') {
+        if (blank($id) || ! in_array($request->user()?->access_role, PayProfileService::VIEW_ROLES, true)) {
             return null;
         }
 

@@ -199,9 +199,9 @@ class EmployeeAdminService
             )),
             'accountScopes' => $pairs(User::SCOPE_OPTIONS),
             'canGrantAccount' => app(UserAccessService::class)->canManage(),
-            // 슈퍼관리자만 남의 작업자 화면을 들여다볼 수 있다 — 그 화면에는 그 사람의
-            // 시급과 급여가 그대로 나온다.
-            'canViewAsWorker' => auth()->user()?->access_role === 'super_admin',
+            // 남의 작업자 화면에는 그 사람의 시급과 급여가 그대로 나온다. 그래서 급여를
+            // 이미 볼 수 있는 역할에만 연다(같은 상수를 쓴다 — 따로 적으면 어긋난다).
+            'canViewAsWorker' => in_array(auth()->user()?->access_role, PayProfileService::VIEW_ROLES, true),
         ];
     }
 
