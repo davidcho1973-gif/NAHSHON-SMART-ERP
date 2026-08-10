@@ -132,6 +132,11 @@
             if (!r.hasAccount && state.options && state.options.canGrantAccount) {
               html += u.rowButton('계정 만들기', 'window.AdminEmployees.grantAccount(' + r.id + ')') + ' ';
             }
+            // 계정이 생긴 다음에야 앱에 들어올 수 있다. 그때부터 설치 카드를 뽑을 수 있게 한다 —
+            // 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
+            if (r.hasAccount) {
+              html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
+            }
             html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
             return html;

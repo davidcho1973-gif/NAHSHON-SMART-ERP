@@ -10,7 +10,9 @@ use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
+use App\Models\User;
 use App\Support\QrSvg;
+use App\Support\WorkerLang;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -269,6 +271,36 @@ class AttendanceAppController extends Controller
             'employee' => $employee->loadMissing(['company', 'site']),
             'badgeToken' => $badgeToken,
             'badgeUrl' => route('attendance-app.badge', ['token' => $badgeToken->token]),
+        ]);
+    }
+
+    /**
+     * 직영 작업자에게 건네는 앱 설치 카드(인쇄용).
+     *
+     * 협력사는 게이트 포스터 한 장으로 끝나지만(계정이 없고 매일 사람이 바뀐다),
+     * 직영은 사람이 정해져 있고 계정이 있다. 그래서 종이도 사람마다 나온다 —
+     * 이 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
+     */
+    public function installCard(Request $request, Employee $employee): View
+    {
+        $user = $request->user();
+        abort_unless(
+            in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true)
+                || ($user && (int) $user->employee_id === (int) $employee->id),
+            403,
+        );
+
+        $url = route('attendance-app.index');
+
+        // 계정이 있어야 로그인이 된다. 없으면 카드에 그 사실을 적는다.
+        $account = User::query()->where('employee_id', $employee->getKey())->first();
+
+        return view('attendance-app.install-card', [
+            'employee' => $employee->loadMissing('site'),
+            'url' => $url,
+            'qrImage' => QrSvg::dataUri($url, 300),
+            'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
+            'langs' => WorkerLang::installCard(),
         ]);
     }
 

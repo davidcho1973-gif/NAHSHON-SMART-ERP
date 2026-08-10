@@ -213,14 +213,18 @@ class User extends Authenticatable
         return $this->belongsTo(Team::class, 'allowed_team_id');
     }
 
+    /**
+     * 로그인 직후 어디로 보낼 것인가.
+     *
+     * 작업자는 ERP 로 보내면 안 된다. 자기 근무시간을 보러 앱을 열었다가 로그인 뒤에
+     * 회사 전체 화면이 뜨면, 자기가 뭘 잘못 눌렀다고 생각하고 앱을 지운다. 설치를
+     * 부탁하는 첫날에 이걸 겪으면 두 번째 기회는 없다.
+     *
+     * 예전에는 /admin 을 가리켰는데 그 화면은 없어졌다(전부 ERP 안으로 들어왔다).
+     */
     public function landingPath(): string
     {
         return match ($this->access_role) {
-            'super_admin', 'admin' => '/admin',
-            'hr_manager' => '/admin/member-registrations',
-            'site_manager' => '/admin',
-            'safety_manager' => '/admin/member-documents',
-            'payroll' => '/admin',
             'foreman', 'worker' => '/attendance-app',
             default => '/',
         };

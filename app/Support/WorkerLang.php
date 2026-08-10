@@ -340,6 +340,55 @@ final class WorkerLang
     }
 
     /**
+     * 직영 작업자에게 건네는 앱 설치 카드 문구.
+     *
+     * 게이트(협력사)와 다르다 — 이쪽은 사람이 정해져 있고 계정이 있다. 그래서 가장 흔한
+     * 실패는 "설치를 못 한다"가 아니라 <b>어느 구글 계정으로 로그인해야 하는지 모른다</b>
+     * 이다. 휴대폰에 구글 계정이 두세 개 들어 있는 경우가 많다. 그래서 카드에 본인
+     * 이메일을 찍어 준다.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function installCard(): array
+    {
+        return [
+            'ko' => [
+                'title' => '내 출퇴근 앱',
+                'hint' => '내 근무시간과 급여를 내 휴대폰에서 바로 봅니다.',
+                'account' => '로그인할 구글 계정',
+                'steps' => [
+                    '휴대폰 카메라로 위 QR 을 스캔합니다.',
+                    '구글로 로그인 — 반드시 아래 적힌 계정으로 하세요.',
+                    '"홈 화면에 추가" 안내가 뜨면 추가합니다. 다음부터는 아이콘만 누르면 됩니다.',
+                ],
+                'trouble' => '로그인이 안 되면 현장 관리자에게 말씀하세요. 계정 등록이 필요할 수 있습니다.',
+            ],
+            'en' => [
+                'title' => 'My Attendance App',
+                'hint' => 'See your hours and your pay on your own phone.',
+                'account' => 'Sign in with this Google account',
+                'steps' => [
+                    'Scan the QR code above with your phone camera.',
+                    'Sign in with Google — you must use the account printed below.',
+                    'When it offers "Add to Home Screen", add it. Next time just tap the icon.',
+                ],
+                'trouble' => 'If sign-in fails, tell your site manager. Your account may need to be set up.',
+            ],
+            'es' => [
+                'title' => 'Mi aplicación de asistencia',
+                'hint' => 'Vea sus horas y su pago en su propio teléfono.',
+                'account' => 'Inicie sesión con esta cuenta de Google',
+                'steps' => [
+                    'Escanee el código QR de arriba con la cámara de su teléfono.',
+                    'Inicie sesión con Google — debe usar la cuenta impresa abajo.',
+                    'Cuando ofrezca "Agregar a la pantalla de inicio", agréguelo. La próxima vez solo toque el ícono.',
+                ],
+                'trouble' => 'Si no puede iniciar sesión, avise a su supervisor. Puede que falte registrar su cuenta.',
+            ],
+        ];
+    }
+
+    /**
      * "홈 화면에 추가" 안내 문구.
      *
      * 이 문구가 필요한 이유 — 작업자에게 이건 웹사이트가 아니라 앱이어야 한다. 매번

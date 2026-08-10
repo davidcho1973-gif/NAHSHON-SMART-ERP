@@ -201,6 +201,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/attendance-app/team/{token}/crew/daily-close', [AttendanceAppController::class, 'closeCrewDay'])->name('attendance-app.crew.daily-close');
     Route::get('/attendance-app/badge/{token}', [AttendanceAppController::class, 'badge'])->name('attendance-app.badge');
     Route::get('/attendance-app/employee/{employee}/badge-qr', [AttendanceAppController::class, 'employeeBadgeQr'])->name('attendance-app.employee.badge-qr');
+    // 직영 작업자에게 건네는 앱 설치 카드(인쇄용). 협력사는 게이트 포스터 한 장이면 되지만
+    // 직영은 사람마다 로그인 계정이 달라서 종이도 사람마다 나온다.
+    Route::get('/attendance-app/employee/{employee}/install-card', [AttendanceAppController::class, 'installCard'])->name('attendance-app.employee.install-card');
 
     // HR daily attendance status report — styled Excel (.xlsx) export
     Route::get('/hr/attendance/export', HrAttendanceExportController::class.'@export')
