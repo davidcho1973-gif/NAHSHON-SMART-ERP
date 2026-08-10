@@ -140,6 +140,9 @@
             // 버튼을 권한으로 감추지 않는다. 감추면 "왜 안 보이지" 를 아무도 답할 수 없다 —
             // 권한이 없으면 열린 화면이 이유를 말해 준다(조용히 사라지는 것보다 낫다).
             html += u.rowButton('작업자 화면 보기', "window.open('/attendance-app?as=" + r.id + "','_blank')") + ' ';
+            // W-9 는 1099 지급의 전제조건이라 급여 담당이 수시로 찾는다. 제출 전이면
+            // 아는 칸이 채워진 종이가, 제출 후면 보관용 사본이 나온다.
+            html += u.rowButton('W-9 출력', "window.open('/w9/" + r.id + "/print','_blank')") + ' ';
             html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
             return html;

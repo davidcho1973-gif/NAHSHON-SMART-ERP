@@ -49,6 +49,37 @@ class W9Form extends Model
         ];
     }
 
+    /**
+     * 직원 정보로 미리 채운 W-9 초안.
+     *
+     * 자동으로 채울 수 있는 것과 없는 것이 갈린다. 이름·주소·세무분류는 우리가 알고 있으니
+     * 채운다. <b>TIN 과 서명은 채우지 않는다</b> — TIN 은 우리가 가진 적이 없고, 서명은
+     * "위증 시 처벌을 감수한다" 는 본인 진술이다. 대신 써 주면 그건 서류 위조다.
+     *
+     * 그래서 이 초안의 목적은 작성자가 <b>두 칸만</b> 채우면 되게 만드는 것이다.
+     *
+     * @return array<string, string>
+     */
+    public static function prefillFor(Employee $employee): array
+    {
+        $payload = is_array($employee->payload) ? $employee->payload : [];
+
+        $cityStateZip = trim(implode(' ', array_filter([
+            trim((string) ($payload['city'] ?? '')),
+            trim((string) ($payload['state'] ?? '')),
+            trim((string) ($payload['zip'] ?? $payload['postal_code'] ?? '')),
+        ])));
+
+        return [
+            'legal_name' => trim((string) $employee->name),
+            'business_name' => '',
+            // 1099 를 받는 현장 작업자는 거의 전부 개인이다. 회사면 본인이 바꾸면 된다.
+            'tax_classification' => 'individual',
+            'address' => trim((string) ($payload['address'] ?? '')),
+            'city_state_zip' => $cityStateZip,
+        ];
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);

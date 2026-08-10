@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\W9Form;
+use App\Services\Admin\PayProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
@@ -29,6 +30,45 @@ class W9FormController extends Controller
             'resubmitUrl' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
             'classifications' => W9Form::TAX_CLASSIFICATIONS,
             'done' => $request->boolean('done') && $employee->w9Form !== null,
+            // 아직 안 냈으면 아는 것은 미리 채워 준다 — 남는 것은 TIN 과 서명 두 칸이다.
+            'prefill' => W9Form::prefillFor($employee),
+        ]);
+    }
+
+    /**
+     * 인쇄용 W-9 — 직원 관리에서 바로 뽑는다.
+     *
+     * 두 가지 상태를 모두 인쇄할 수 있어야 한다.
+     *   제출됨   — 보관용 사본(1099 신고의 근거 서류다)
+     *   미제출   — 아는 칸이 채워진 종이. 현장에서 손으로 서명받을 때 쓴다.
+     * 미제출일 때 "없습니다" 만 띄우면 정작 필요한 순간에 쓸 수 없다.
+     *
+     * TIN 은 급여를 볼 수 있는 역할에만 전체를 보여준다. 나머지는 뒤 4자리만 —
+     * 사회보장번호가 인쇄물로 돌아다니는 것은 되돌릴 수 없는 사고다.
+     */
+    public function printable(Request $request, Employee $employee): View
+    {
+        $user = $request->user();
+        abort_unless(in_array($user?->access_role, PayProfileService::VIEW_ROLES, true), 403);
+
+        $form = $employee->w9Form;
+
+        return view('w9.print', [
+            'employee' => $employee->loadMissing(['company', 'site']),
+            'form' => $form,
+            'values' => $form ? [
+                'legal_name' => $form->legal_name,
+                'business_name' => $form->business_name,
+                'tax_classification' => $form->tax_classification,
+                'llc_tax_class' => $form->llc_tax_class,
+                'address' => $form->address,
+                'city_state_zip' => $form->city_state_zip,
+            ] : W9Form::prefillFor($employee),
+            'classifications' => W9Form::TAX_CLASSIFICATIONS,
+            // 전체 TIN 은 요청할 때만 나온다. 인쇄물이 도는 사고를 기본값으로 두지 않는다.
+            'tin' => $form && $request->boolean('full') ? $form->tin : null,
+            'maskedTin' => $form?->maskedTin(),
+            'signUrl' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
         ]);
     }
 

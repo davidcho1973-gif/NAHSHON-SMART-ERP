@@ -205,6 +205,10 @@ Route::middleware('auth')->group(function (): void {
     // 직영은 사람마다 로그인 계정이 달라서 종이도 사람마다 나온다.
     Route::get('/attendance-app/employee/{employee}/install-card', [AttendanceAppController::class, 'installCard'])->name('attendance-app.employee.install-card');
 
+    // W-9 인쇄 — 직원 관리에서 바로 뽑는다. 제출 전이면 아는 칸이 채워진 종이가 나오고,
+    // 제출 후면 보관용 사본(1099 신고의 근거 서류)이 나온다.
+    Route::get('/w9/{employee}/print', [W9FormController::class, 'printable'])->name('w9.print');
+
     // HR daily attendance status report — styled Excel (.xlsx) export
     Route::get('/hr/attendance/export', HrAttendanceExportController::class.'@export')
         ->name('hr.attendance.export');

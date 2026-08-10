@@ -90,10 +90,10 @@
                 </div>
 
                 <label>5. Address (number, street, apt) <span style="color:#ef4444">*</span></label>
-                <input type="text" name="address" value="{{ old('address', $existing->address ?? '') }}" placeholder="1234 W Main St, Apt 2" required>
+                <input type="text" name="address" value="{{ old('address', $existing->address ?? ($prefill['address'] ?? '')) }}" placeholder="1234 W Main St, Apt 2" required>
 
                 <label>6. City, State, ZIP <span style="color:#ef4444">*</span></label>
-                <input type="text" name="city_state_zip" value="{{ old('city_state_zip', $existing->city_state_zip ?? '') }}" placeholder="Phoenix, AZ 85001" required>
+                <input type="text" name="city_state_zip" value="{{ old('city_state_zip', $existing->city_state_zip ?? ($prefill['city_state_zip'] ?? '')) }}" placeholder="Phoenix, AZ 85001" required>
 
                 <label>Taxpayer Identification Number <span style="color:#ef4444">*</span></label>
                 <div class="tin-toggle">
