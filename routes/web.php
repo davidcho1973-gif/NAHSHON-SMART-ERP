@@ -280,7 +280,7 @@ Route::get('/debug-logs-sec-53298bfd9a', function () {
  * 로그인 없이 열리지만 커밋 해시와 기능 유무만 보여준다 — 배포가 됐는지 확인하는 데
  * 로그인을 요구하면, 정작 배포가 깨져 로그인이 안 될 때 쓸 수 없다.
  */
-Route::get('/build-version', function () {
+Route::get('/build-version', function (\Illuminate\Http\Request $request) {
     $path = public_path('build/version.json');
     $version = is_readable($path)
         ? (json_decode((string) file_get_contents($path), true) ?: [])
@@ -298,6 +298,16 @@ Route::get('/build-version', function () {
         'built_at' => $version['built_at'] ?? null,
         'checked_at' => now()->toIso8601String(),
         'env' => app()->environment(),
+        // 도메인이 절반만 바뀌는 사고가 흔하다 — 새 주소로 열리는데 APP_URL 은 옛 주소면,
+        // QR·설치 카드·매니페스트가 전부 옛 주소를 가리킨다. 화면은 멀쩡해 보인다.
+        'domain' => [
+            'app_url' => config('app.url'),
+            'served_from' => $request->getSchemeAndHttpHost(),
+            'matches' => rtrim((string) config('app.url'), '/') === $request->getSchemeAndHttpHost(),
+            // 구글 로그인은 이 값과 구글 콘솔이 <b>둘 다</b> 맞아야 된다. 한쪽만 바꾸면
+            // 로그인이 통째로 막힌다.
+            'google_redirect' => config('services.google.redirect'),
+        ],
         // 캐시를 어디에 두고 있는가. 이름만 보면 사소해 보이지만 요금이 걸려 있다 —
         // database 로 두면 schedule:run 이 매분 캐시 표를 조회해 서버리스 데이터베이스가
         // 잠들 틈이 없다(1분마다 깨우면 24시간 깨어 있는 것과 같다). file 이어야 한다.

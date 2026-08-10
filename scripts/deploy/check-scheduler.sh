@@ -66,4 +66,20 @@ if [ "$wakes" = "true" ]; then
   echo "::warning title=캐시가 데이터베이스::${ENV_LABEL} — schedule:run 이 매분 데이터베이스를 깨웁니다. CACHE_STORE=file 을 설정하세요."
 fi
 
-echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?}"
+# 도메인이 절반만 바뀌는 사고 — 새 주소로 열리는데 APP_URL 은 옛 주소인 경우.
+# QR·설치 카드·매니페스트가 전부 옛 주소를 가리키는데 화면은 멀쩡해 보인다.
+appurl=$(field app_url)
+matches=$(printf '%s' "$body" | sed -n 's/.*"matches" *: *\([a-z]*\).*/\1/p')
+
+if [ "$matches" = "false" ]; then
+  echo "::warning title=도메인 불일치::${ENV_LABEL} — 열린 주소는 ${BASE} 인데 APP_URL 은 ${appurl} 입니다. QR·설치 카드가 옛 주소를 가리킵니다."
+  {
+    echo
+    echo "**도메인 불일치** — 열린 주소 \`${BASE}\` / APP_URL \`${appurl}\`"
+    echo
+    echo "APP_URL 을 새 도메인으로 바꾸고 재배포하세요. 안 그러면 QR·앱 설치 카드·매니페스트가"
+    echo "모두 옛 주소를 가리킵니다(화면은 멀쩡해 보입니다)."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+fi
+
+echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?}"
