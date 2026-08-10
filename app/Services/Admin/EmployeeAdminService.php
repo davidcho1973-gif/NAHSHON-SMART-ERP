@@ -125,6 +125,7 @@ class EmployeeAdminService
                 'firstName' => $e->first_name,
                 'lastName' => $e->last_name,
                 'email' => $e->email,
+                'phone' => $e->phone,
                 'nationality' => $e->nationality,
                 'language' => $e->preferred_language,
                 'languageLabel' => WorkerLang::OPTIONS[$e->preferred_language] ?? null,
@@ -360,6 +361,9 @@ class EmployeeAdminService
             'first_name' => $first ?: null,
             'last_name' => $last ?: null,
             'email' => $email ?: null,
+            // 앱 링크를 문자·왓츠앱으로 바로 보낼 때 쓴다. 여기 없으면 반장이 매번
+            // 받는 사람을 손으로 고른다 — 등록 폼이 이미 받은 값을 또 묻는 셈이다.
+            'phone' => trim((string) ($input['phone'] ?? '')) ?: null,
             'nationality' => trim((string) ($input['nationality'] ?? '')) ?: null,
             'preferred_language' => WorkerLang::resolve($input['language'] ?? null),
             'company_id' => $companyId,

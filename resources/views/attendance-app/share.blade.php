@@ -66,6 +66,10 @@
         .row2 a.btn, .row2 button { padding: 14px; font-size: 14.5px; border: 1px solid var(--rule); background: var(--card); color: var(--ink); }
         .mini { padding: 7px 11px; font-size: 12.5px; border: 1px solid var(--rule); background: var(--card); color: var(--ink); }
 
+        .dial { font-size: 13px; color: var(--ok); font-weight: 700; margin-top: 12px; }
+        .dial.none { color: var(--ink-2); font-weight: 400; line-height: 1.5; }
+        .dial.none b { color: var(--ink); }
+
         .toast {
             position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
             background: var(--slab); color: #F6F5EE; padding: 12px 18px; border-radius: 12px;
@@ -111,6 +115,12 @@
     <div class="card">
         <div class="link" id="url">{{ $url }}</div>
         <button type="button" class="big go" data-copy="url">링크 복사</button>
+        @if ($dial)
+            <div class="dial">받는 사람 · {{ $employee->phone }}</div>
+        @else
+            <div class="dial none">전화번호가 없습니다 — 보낼 앱에서 받는 사람을 고르셔야 합니다.
+                <b>수정</b> 에서 번호를 넣어 두면 다음부터 바로 열립니다.</div>
+        @endif
         <div class="row2">
             <button type="button" id="share" hidden>공유하기</button>
             <a class="btn" id="sms" href="#">문자로 보내기</a>
@@ -163,10 +173,11 @@
     var lang = @json($lang);
     var body = (document.getElementById('m-' + lang) || document.getElementById('m-ko')).textContent.trim();
 
-    // 번호를 지정하지 않는다 — 직원 정보에 전화번호 칸이 없다. 문구만 채워 열어 주면
-    // 반장이 받는 사람을 고른다. 그게 실제로 더 빠르다.
-    document.getElementById('sms').href = 'sms:?&body=' + encodeURIComponent(body);
-    document.getElementById('wa').href = 'https://wa.me/?text=' + encodeURIComponent(body);
+    // 번호를 알면 그 사람에게 바로 열린다. 모르면 받는 사람을 고르게 둔다 —
+    // 링크와 문구는 어느 쪽이든 채워져 있으므로 반장이 다시 칠 일은 없다.
+    var dial = @json($dial);
+    document.getElementById('sms').href = 'sms:' + (dial ? '+' + dial : '') + '?&body=' + encodeURIComponent(body);
+    document.getElementById('wa').href = 'https://wa.me/' + (dial || '') + '?text=' + encodeURIComponent(body);
 
     if (navigator.share) {
         var s = document.getElementById('share');

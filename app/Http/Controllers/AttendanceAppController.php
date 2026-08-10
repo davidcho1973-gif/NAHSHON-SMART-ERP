@@ -370,6 +370,8 @@ class AttendanceAppController extends Controller
             'qrImage' => QrSvg::dataUri($url, 320),
             'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
             'messages' => WorkerLang::shareMessage($url),
+            // 번호가 있으면 그 사람에게 바로 열린다. 없으면 반장이 고른다.
+            'dial' => $employee->dialNumber(),
             'lang' => WorkerLang::resolve($employee->preferred_language),
         ]);
     }

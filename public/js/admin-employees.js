@@ -207,6 +207,8 @@
           { name: 'firstName', label: '영문 이름 (First)', group: '① 누구인가', value: r ? r.firstName : '' },
           { name: 'lastName', label: '영문 성 (Last)', group: '① 누구인가', value: r ? r.lastName : '' },
           { name: 'email', label: '이메일', type: 'email', group: '① 누구인가', value: r ? r.email : '' },
+          // 앱 링크를 문자·왓츠앱으로 바로 보낼 때 쓴다. 간편등록은 이미 받고 있다.
+          { name: 'phone', label: '전화번호', type: 'tel', group: '① 누구인가', value: r ? r.phone : '', placeholder: '480-555-0100' },
           { name: 'nationality', label: '국적', group: '① 누구인가', value: r ? r.nationality : '' },
           { name: 'language', label: '사용 언어', type: 'select', group: '① 누구인가',
             options: o.languages, value: r ? r.language : 'ko', colSpan: 2,

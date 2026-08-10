@@ -512,6 +512,8 @@ class MemberRegistration extends Model
             'last_name' => $lastName,
             'name' => $fullName,
             'email' => $email,
+            // 등록 폼이 이미 받은 번호다. 여기서 안 옮기면 나중에 손으로 다시 묻게 된다.
+            'phone' => $this->phone ?: null,
             'badge_company_name' => $this->badge_company_name,
             'badge_issued_on' => $this->badge_issued_on,
             'badge_photo_path' => $this->badge_photo_path,

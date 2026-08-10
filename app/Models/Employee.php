@@ -83,6 +83,7 @@ class Employee extends Model
         'last_name',
         'name',
         'email',
+        'phone',
         'badge_company_name',
         'badge_issued_on',
         'badge_photo_path',
@@ -101,6 +102,23 @@ class Employee extends Model
         'attendance_app_scope',
         'payload',
     ];
+
+    /**
+     * 왓츠앱·문자 링크에 쓰는 번호 — 숫자만, 미국 번호면 국가번호 1 을 붙인다.
+     *
+     * wa.me 는 "+1 480-555-0100" 같은 표기를 못 읽는다. 그렇다고 사람이 보는 칸에
+     * 숫자만 저장하게 하면 읽기 나빠진다 — 보이는 것은 그대로 두고 여기서 정리한다.
+     */
+    public function dialNumber(): ?string
+    {
+        $digits = preg_replace('/\D/', '', (string) $this->phone) ?: '';
+
+        return match (true) {
+            strlen($digits) === 10 => '1'.$digits,          // 미국 지역번호부터 적은 경우
+            strlen($digits) >= 11 => $digits,
+            default => null,                                 // 너무 짧으면 번호가 아니다
+        };
+    }
 
     protected function casts(): array
     {
