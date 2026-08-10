@@ -350,4 +350,43 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->assertSame('자동', $logs[0]['sourceLabel']);
         $this->assertFalse($logs[0]['needsReview']);
     }
+
+    // ── 화면의 뼈대 ────────────────────────────────────────────────
+
+    public function test_the_screen_always_carries_all_four_tabs(): void
+    {
+        // 탭은 이 화면의 뼈대다. 하나라도 사라지면 근무·급여·내 QR 로 갈 길이 없어지는데,
+        // 화면은 안 깨지고 멀쩡해 보인다 — 아무도 오류를 못 본 채 기능만 없어진다.
+        $html = $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('<nav class="tabs"', $html, '탭 바가 없습니다.');
+
+        foreach (['home' => '출퇴근', 'work' => '근무', 'pay' => '급여', 'me' => '나'] as $tab => $label) {
+            $this->assertStringContainsString('data-tab="'.$tab.'"', $html, "[{$tab}] 탭이 없습니다.");
+            $this->assertStringContainsString($label, $html, "[{$tab}] 탭 이름이 없습니다.");
+        }
+    }
+
+    public function test_the_tabs_survive_an_account_with_no_worker_attached(): void
+    {
+        // 직원이 연결되지 않은 계정(관리자 등)이 열어도 화면 뼈대는 그대로여야 한다.
+        // 여기서 탭이 사라지면 "탭이 안 보인다"는 신고가 들어오는데 원인을 못 찾는다.
+        $orphan = User::factory()->create([
+            'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
+        ]);
+
+        $this->actingAs($orphan)
+            ->get(route('attendance-app.index'))
+            ->assertOk()
+            ->assertSee('<nav class="tabs"', false);
+    }
+
+    public function test_the_gate_screen_is_a_different_screen_with_no_tabs(): void
+    {
+        // 게이트 화면(로그인 없이 쓰는 것)에는 탭이 없다 — 설계가 그렇다.
+        // 이 둘을 헷갈리면 "탭 네 개가 안 보인다"가 된다. 차이를 못 박아 둔다.
+        $html = $this->get(route('gate.show', ['site' => $this->site]))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('data-tab="home"', $html);
+    }
 }
