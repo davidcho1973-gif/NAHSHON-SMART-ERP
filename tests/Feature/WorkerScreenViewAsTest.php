@@ -185,4 +185,27 @@ class WorkerScreenViewAsTest extends TestCase
             ->postJson(route('attendance-app.punch'), ['direction' => 'in'])
             ->assertStatus(422);   // 본인에게 직원이 연결 안 된 것 — 403(보는 중)이 아니다
     }
+
+    public function test_the_personnel_master_table_can_open_the_worker_screen(): void
+    {
+        // 인원관리에서 실제로 보게 되는 표는 "인원 마스터" 다. 여기에 여는 길이 없으면
+        // 버튼을 다른 화면에 아무리 잘 달아 놔도 아무도 못 찾는다 — 실제로 못 찾았다.
+        $spa = file_get_contents(resource_path('views/smart-company/index.blade.php'));
+
+        $this->assertStringContainsString('window.workerScreenCell', $spa, '인원 마스터 표에 여는 칸이 없습니다.');
+        // 전체 현장 표와 단일 현장 표 둘 다.
+        $this->assertSame(2, substr_count($spa, 'workerScreenCell(p)'), '두 표 중 하나에만 붙어 있습니다.');
+        $this->assertSame(2, substr_count($spa, '<th>앱 화면</th>'), '헤더와 칸 수가 어긋납니다.');
+        $this->assertStringContainsString('/attendance-app?as=', $spa);
+    }
+
+    public function test_the_personnel_payload_carries_the_id_the_button_needs(): void
+    {
+        // 표에 찍히는 인원ID(MR-...)로는 화면을 열 수 없다. 숫자 id 가 따로 필요하다.
+        $rows = \App\Support\SmartCompanyData::realPersonnel('ALL');
+
+        $this->assertNotEmpty($rows);
+        $this->assertArrayHasKey('employeeDbId', $rows[0]);
+        $this->assertSame($this->worker->id, $rows[0]['employeeDbId']);
+    }
 }

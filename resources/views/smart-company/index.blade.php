@@ -1207,7 +1207,22 @@
         alert('êµ¬ê¸€ í¼ URLì´ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. Setup.gs ì‹¤í–‰ í›„ ì¶œë ¥ëœ ë§í¬ë¥¼ ì½”ë“œì˜ SYSTEM_CONFIG êµ¬ì—­ì— ìž…ë ¥í•´ì£¼ì„¸ìš”.');
       }
     };
-    window.openMasterSheet = function () {
+  
+  /**
+   * 인원 마스터 표에서 그 사람의 작업자 앱 화면을 그대로 열어 보는 칸.
+   *
+   * 만든 화면을 정작 만든 사람이 못 봤다 — 관리자 계정에는 직원 기록이 안 붙어 있고,
+   * 이 표에는 여는 길이 아예 없었다. 권한으로 감추지 않는다. 권한이 없으면 열린 화면이
+   * 이유를 말한다(감춘 것과 고장난 것은 화면에서 똑같이 생긴다).
+   */
+  window.workerScreenCell = function (p) {
+    var id = p && (p.employeeDbId || p.employee_db_id);
+    if (!id) return '<td><span style="color:var(--text-tertiary)">-</span></td>';
+    return '<td><button type="button" class="btn-secondary" style="padding:5px 9px;font-size:11px;white-space:nowrap" ' +
+      'onclick="window.open(\'/attendance-app?as=' + id + '\',\'_blank\')">' +
+      '<i class="ph ph-device-mobile"></i> 작업자 화면</button></td>';
+  };
+  window.openMasterSheet = function () {
       if (SYSTEM_CONFIG.sheetUrl) {
         window.open(SYSTEM_CONFIG.sheetUrl, '_blank');
       } else {
@@ -4038,12 +4053,12 @@
               '<div id="tab-personnel" style="display:none">' +
               '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-identification-card"></i> ì¸ì› ë§ˆìŠ¤í„° (ì „ì²´)</div>' +
               '<input type="text" class="search-inline" id="hr-search" placeholder="ì´ë¦„, ID, ì†Œì† ê²€ìƒ‰..."></div>' +
-              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>ì¸ì›ID</th><th>ì„±ëª…</th><th>ì†Œì†</th><th>ì§ì¢…</th><th>í˜„ìž¥</th><th>ë¹„ìžë§Œë£Œ</th><th>ì•ˆì „êµìœ¡</th></tr></thead><tbody>' +
+              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>ì¸ì›ID</th><th>ì„±ëª…</th><th>ì†Œì†</th><th>ì§ì¢…</th><th>í˜„ìž¥</th><th>ë¹„ìžë§Œë£Œ</th><th>ì•ˆì „êµìœ¡</th><th>앱 화면</th></tr></thead><tbody>' +
               personnel.map(function(p) {
                 return '<tr><td class="cell-mono">' + p.id + '</td><td class="cell-primary">' + p.nameEn + '</td>' +
                   '<td><span class="tag">' + p.company + '</span></td><td>' + p.role + '</td>' +
                   '<td>' + siteBadge(p.site) + '</td><td class="cell-mono">' + (p.visaExpiry || '-') + '</td>' +
-                  '<td>' + statusPill(p.safety) + '</td></tr>';
+                  '<td>' + statusPill(p.safety) + '</td>' + workerScreenCell(p) + '</tr>';
               }).join('') +
               '</tbody></table></div></div></div>';
 
@@ -4081,7 +4096,7 @@
                 '<td><span class="tag">' + p.company + '</span></td><td>' + p.role + '</td>' +
                 '<td class="cell-mono">' + (p.visa||'-') + '</td><td class="cell-mono"' + visaClass + '>' + (p.visaExpiry||'-') + '</td>' +
                 '<td>' + (p.site||'-') + '</td><td><span style="font-size:11px;' + wsColor + '">' + (p.workerStatus||'íŒŒê²¬ì¤‘') + '</span></td>' +
-                '<td>' + statusPill(p.safety) + '</td></tr>';
+                '<td>' + statusPill(p.safety) + '</td>' + workerScreenCell(p) + '</tr>';
             }).join('');
 
             var siteLabel = (window.SITE_NAMES && window.SITE_NAMES[_siteId()]) ? window.SITE_NAMES[_siteId()] : _siteId();
@@ -4372,7 +4387,7 @@
               '<div id="tab-personnel" style="display:none">' +
               '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-identification-card"></i> ì¸ì› ë§ˆìŠ¤í„°</div>' +
               '<input type="text" class="search-inline" id="hr-search" placeholder="ì´ë¦„, ID, ì†Œì† ê²€ìƒ‰..."></div>' +
-              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>ì¸ì›ID</th><th>ì„±ëª…</th><th>ì†Œì†</th><th>ì§ì¢…</th><th>êµ­ì </th><th>ë¹„ìžë§Œë£Œ</th><th>í˜„ìž¥</th><th>ìƒíƒœ</th><th>ì•ˆì „êµìœ¡</th></tr></thead><tbody>' + personnelHtml + '</tbody></table></div></div></div>';
+              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>ì¸ì›ID</th><th>ì„±ëª…</th><th>ì†Œì†</th><th>ì§ì¢…</th><th>êµ­ì </th><th>ë¹„ìžë§Œë£Œ</th><th>í˜„ìž¥</th><th>ìƒíƒœ</th><th>ì•ˆì „êµìœ¡</th><th>앱 화면</th></tr></thead><tbody>' + personnelHtml + '</tbody></table></div></div></div>';
           }
 
           // ê³µí†µ: íƒ­ ì´ë²¤íŠ¸ + ê²€ìƒ‰
