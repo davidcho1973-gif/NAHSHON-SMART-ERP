@@ -40,7 +40,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         $res->assertSee('Electrician');
     }
 
-    public function test_form_reflects_wbs_trades_and_requires_selection(): void
+    public function test_form_suggests_wbs_trades_but_allows_a_new_one(): void
     {
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
@@ -49,25 +49,25 @@ class SimpleWorkerRegistrationTest extends TestCase
 
         $res = $this->get('/join/w/'.$site->id);
         $res->assertStatus(200);
-        $res->assertSee('공정관리(WBS)의 공종 목록');
-        $res->assertSee('value="ELEC"', false);   // WBS 에서 추출
+        $res->assertSee('value="ELEC"', false);   // WBS 에서 추출해 제안한다
         $res->assertSee('value="MECH"', false);
-        $res->assertSee('<select name="role"', false); // 목록 선택만 허용(자유 입력 금지)
+        $res->assertSee('<datalist id="trade-list">', false);
 
-        // 목록에 없는 공정(자유 입력)은 거부된다 — 인원체크 집계가 공정 단위로 묶여야 하기 때문.
+        // 목록에 없는 공정도 받는다 — 협력사는 매일 오는 사람이 다르고, 목록에 없다고
+        // 등록을 막으면 그 사람은 그날 기록이 아예 남지 않는다.
         $company = Company::first();
         $this->post('/join/w/'.$site->id, [
-            'full_name' => 'Kim', 'company_id' => $company->id, 'role' => '특수용접(수기입력)',
-            'email' => 'kim@example.com', 'phone' => '480-555-0199',
-        ])->assertSessionHasErrors(['role']);
-        $this->assertNull(Employee::where('email', 'kim@example.com')->first());
-
-        // 목록에 있는 공정은 정상 등록.
-        $this->post('/join/w/'.$site->id, [
-            'full_name' => 'Kim', 'company_id' => $company->id, 'role' => 'MECH',
+            'full_name' => 'Kim', 'company_id' => $company->id, 'role' => '특수용접',
             'email' => 'kim@example.com', 'phone' => '480-555-0199',
         ])->assertStatus(200);
-        $this->assertSame('MECH', Employee::where('email', 'kim@example.com')->first()->role);
+        $this->assertSame('특수용접', Employee::where('email', 'kim@example.com')->first()->role);
+
+        // 목록에 있는 공정은 그대로.
+        $this->post('/join/w/'.$site->id, [
+            'full_name' => 'Lee', 'company_id' => $company->id, 'role' => 'MECH',
+            'email' => 'lee@example.com', 'phone' => '480-555-0198',
+        ])->assertStatus(200);
+        $this->assertSame('MECH', Employee::where('email', 'lee@example.com')->first()->role);
     }
 
     public function test_submit_creates_active_worker_immediately(): void

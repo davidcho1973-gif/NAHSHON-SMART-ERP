@@ -120,7 +120,11 @@
                     @foreach ($companies as $c)
                         <option value="{{ $c['id'] }}" data-etype="{{ $c['employment_type'] }}" @selected(old('company_id') == $c['id'])>{{ $c['name'] }}</option>
                     @endforeach
+                    {{-- 내일 처음 오는 협력사가 목록에 있을 리 없다. 그때 여기서 막히면 등록 자체를 못 한다. --}}
+                    <option value="__other__" id="opt-other" @selected(old('company_name'))></option>
                 </select>
+                <input type="text" name="company_name" id="company-name" value="{{ old('company_name') }}"
+                       style="display:none;margin-top:8px" maxlength="120">
                 <div class="note" id="company-note"></div>
 
                 {{-- 회사가 아직 분류되지 않았을 때만 뜬다. 사내 용어 대신 "누가 급여를 주는가" 로 묻는다. --}}
@@ -133,13 +137,13 @@
                 </div>
 
                 <label id="t-trade"></label>
-                {{-- 공정은 반드시 목록에서 선택 — 자유 입력을 막아 인원체크 집계가 공정 단위로 묶이게 한다. --}}
-                <select name="role" id="f-role" required>
-                    <option value="" id="opt-trade-blank"></option>
-                    @foreach ($roles as $t)
-                        <option value="{{ $t }}" @selected(old('role') === $t)>{{ $t }}</option>
-                    @endforeach
-                </select>
+                {{-- 목록에서 고르는 것이 기본이지만, 없는 공정은 적을 수 있다. 서버에서 대소문자·공백만
+                     다른 값은 기존 이름으로 맞춘다 — 그래야 집계가 갈리지 않는다. --}}
+                <input type="text" name="role" id="f-role" list="trade-list" value="{{ old('role') }}"
+                       autocomplete="off" maxlength="60" required>
+                <datalist id="trade-list">
+                    @foreach ($roles as $t)<option value="{{ $t }}"></option>@endforeach
+                </datalist>
                 <div class="note" id="t-tradeHint"></div>
 
                 <label id="t-email"></label>
@@ -159,6 +163,7 @@
                     var T = DICT[lang] || DICT.ko;
 
                     var sel = document.getElementById('company');
+                    var nameInput = document.getElementById('company-name');
                     var note = document.getElementById('company-note');
                     var ask = document.getElementById('ask-type');
                     var radios = ask.querySelectorAll('input[type=radio]');
@@ -177,7 +182,9 @@
                         text('t-askTitle', T.askTitle);
                         text('opt-blank', T.companyPlaceholder);
                         document.getElementById('f-name').placeholder = T.namePlaceholder;
-                        text('opt-trade-blank', T.tradePlaceholder);
+                        document.getElementById('f-role').placeholder = T.tradePlaceholder;
+                        text('opt-other', T.companyOther);
+                        document.getElementById('company-name').placeholder = T.companyOtherPlaceholder;
                         document.getElementById('t-askDirect').innerHTML = '';
                         document.getElementById('t-askDirect').append(T.askDirect, Object.assign(document.createElement('small'), { textContent: T.askDirectSub }));
                         document.getElementById('t-askIndirect').innerHTML = '';
@@ -193,6 +200,21 @@
                         // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
                         var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
                         var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient };
+
+                        // 목록에 없는 회사 — 이름을 받고, 자사인지 협력사인지 물어본다.
+                        // 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
+                        var other = sel.value === '__other__';
+                        nameInput.style.display = other ? 'block' : 'none';
+                        nameInput.required = other;
+                        if (!other) { nameInput.value = ''; }
+
+                        if (other) {
+                            note.textContent = T.companyOtherHint; note.className = 'note';
+                            ask.style.display = locked ? 'none' : 'block';
+                            radios.forEach(function (r) { r.required = !locked; });
+
+                            return;
+                        }
 
                         if (!sel.value) {
                             note.textContent = T.companyHint; note.className = 'note';
