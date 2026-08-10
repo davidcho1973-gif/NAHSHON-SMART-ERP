@@ -289,6 +289,14 @@ Route::get('/build-version', function () {
         'built_at' => $version['built_at'] ?? null,
         'checked_at' => now()->toIso8601String(),
         'env' => app()->environment(),
+        // 캐시를 어디에 두고 있는가. 이름만 보면 사소해 보이지만 요금이 걸려 있다 —
+        // database 로 두면 schedule:run 이 매분 캐시 표를 조회해 서버리스 데이터베이스가
+        // 잠들 틈이 없다(1분마다 깨우면 24시간 깨어 있는 것과 같다). file 이어야 한다.
+        // 설정이 되돌아가도 화면은 멀쩡하고 청구서에서만 드러나므로 여기에 적어 둔다.
+        'cache' => [
+            'store' => config('cache.default'),
+            'wakes_database_every_minute' => config('cache.default') === 'database',
+        ],
         // 스케줄러가 돌고 있는가. 이게 꺼져 있으면 자동 퇴근·문서 재분석·경비 계상이
         // 전부 조용히 멈춘다 — 화면은 멀쩡해 보여서 며칠 뒤에야 알아챈다.
         'scheduler' => (function (): array {

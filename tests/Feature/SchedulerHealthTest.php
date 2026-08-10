@@ -138,6 +138,27 @@ class SchedulerHealthTest extends TestCase
         $this->assertNotContains('SCHEDULER-STALLED', $ids);
     }
 
+    public function test_it_reports_which_cache_store_is_in_use(): void
+    {
+        // 캐시가 database 로 되돌아가면 schedule:run 이 매분 서버리스 데이터베이스를
+        // 깨운다 — 화면은 멀쩡하고 청구서에서만 드러난다. 밖에서 보이게 해 둔다.
+        config(['cache.default' => 'database']);
+
+        $res = $this->get('/build-version')->assertOk();
+
+        $res->assertJsonPath('cache.store', 'database');
+        $res->assertJsonPath('cache.wakes_database_every_minute', true);
+    }
+
+    public function test_a_file_cache_does_not_wake_the_database(): void
+    {
+        config(['cache.default' => 'file']);
+
+        $this->get('/build-version')
+            ->assertOk()
+            ->assertJsonPath('cache.wakes_database_every_minute', false);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();

@@ -29,6 +29,8 @@ fi
 field() { printf '%s' "$body" | sed -n "s/.*\"$1\" *: *\"\\([^\"]*\\)\".*/\\1/p"; }
 
 running=$(printf '%s' "$body" | sed -n 's/.*"running" *: *\([a-z]*\).*/\1/p')
+store=$(field store)
+wakes=$(printf '%s' "$body" | sed -n 's/.*"wakes_database_every_minute" *: *\([a-z]*\).*/\1/p')
 minutes=$(printf '%s' "$body" | sed -n 's/.*"minutes_ago" *: *\([0-9]*\).*/\1/p')
 last=$(field last_beat_at)
 message=$(field message)
@@ -44,6 +46,13 @@ message=$(field message)
     echo "이 상태에서는 오후 8시 자동 퇴근, 문서 재분석, 경비 계상이 돌지 않습니다."
     echo "Laravel Cloud → Environment 탭에서 Scheduler 리소스가 켜져 있는지 확인하세요."
   fi
+  echo
+  if [ "$wakes" = "true" ]; then
+    echo "**캐시가 \`${store}\`** — schedule:run 이 매분 데이터베이스를 깨웁니다."
+    echo "Custom environment variables 에 \`CACHE_STORE=file\` 을 넣으세요."
+  else
+    echo "캐시 저장소: \`${store:-?}\` (데이터베이스를 매분 깨우지 않습니다)"
+  fi
 } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 if [ "$running" = "true" ]; then
@@ -53,4 +62,8 @@ else
 fi
 
 # 사람이 로그에서 바로 읽을 수 있게 원문도 남긴다.
-echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?}"
+if [ "$wakes" = "true" ]; then
+  echo "::warning title=캐시가 데이터베이스::${ENV_LABEL} — schedule:run 이 매분 데이터베이스를 깨웁니다. CACHE_STORE=file 을 설정하세요."
+fi
+
+echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?}"
