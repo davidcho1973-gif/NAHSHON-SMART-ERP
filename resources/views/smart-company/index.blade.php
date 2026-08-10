@@ -229,13 +229,13 @@
     </aside>
 
     <nav class="mobile-tabbar" aria-label="Mobile primary navigation">
-      <button class="mobile-tabbar-item" type="button" data-mobile-view="attendance" aria-label="출석관리">
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="attendance" aria-label="출퇴근 현황">
         <i class="ph ph-clock"></i>
-        <span>출석관리</span>
+        <span>출퇴근 현황</span>
       </button>
-      <button class="mobile-tabbar-item" type="button" data-mobile-view="messages" aria-label="메세지">
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="messages" aria-label="알림 센터">
         <i class="ph ph-chat-circle-text"></i>
-        <span>메세지</span>
+        <span>알림 센터</span>
       </button>
       <button class="mobile-tabbar-item mobile-tabbar-more" id="mobile-more-button" type="button" aria-label="More" aria-expanded="false">
         <span class="mobile-more-icon">
@@ -243,13 +243,13 @@
         </span>
         <span>More</span>
       </button>
-      <button class="mobile-tabbar-item" type="button" data-mobile-view="schedule" aria-label="일정관리">
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="schedule" aria-label="공정 관리">
         <i class="ph ph-calendar"></i>
-        <span>일정관리</span>
+        <span>공정 관리</span>
       </button>
-      <button class="mobile-tabbar-item" type="button" data-mobile-view="receipts" aria-label="영수증처리">
+      <button class="mobile-tabbar-item" type="button" data-mobile-view="receipts" aria-label="재무">
         <i class="ph ph-receipt"></i>
-        <span>영수증처리</span>
+        <span>재무</span>
       </button>
     </nav>
 
@@ -1305,10 +1305,10 @@
       const routes = {
         'dashboard': { title: 'Overview', render: renderDashboard },
         'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
-        'attendance': { title: '출석관리', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
-        'receipts': { title: '영수증처리', render: renderFinance },
-        'messages': { title: '메세지', render: renderUnifiedAlerts },
-        'schedule': { title: '일정관리', render: renderWbs },
+        'attendance': { title: '출퇴근 현황', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
+        'receipts': { title: '재무', render: renderFinance },
+        'messages': { title: '알림 센터', render: renderUnifiedAlerts },
+        'schedule': { title: '공정 관리', render: renderWbs },
         'personnel': { title: '인원관리', render: function () { window._pendingHrTab = 'personnel'; return renderHR(); } },
         'profile': { title: 'My Profile', render: renderAccountProfile },
         'profile-update': { title: 'Update Profile', render: renderAccountUpdateProfile },

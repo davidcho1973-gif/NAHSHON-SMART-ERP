@@ -57,4 +57,24 @@ class MobileNavAdminScreensTest extends TestCase
             $this->assertStringContainsString("'".$view."': {", $html, "[{$view}] 화면이 등록되어 있지 않습니다.");
         }
     }
+
+    public function test_the_tab_bar_buttons_are_named_after_the_screen_they_open(): void
+    {
+        // 버튼에 적힌 이름과 열리는 화면이 다르면 누를 때마다 "잘못 눌렀나" 하게 된다.
+        // 예전에는 "메세지" 를 누르면 알림 센터가, "영수증처리" 를 누르면 재무가 열렸다.
+        $html = $this->html();
+
+        foreach (['attendance', 'messages', 'schedule', 'receipts'] as $view) {
+            preg_match('/data-mobile-view="'.$view.'" aria-label="([^"]+)"/', $html, $btn);
+            preg_match("/'".$view."': \{ title: '([^']+)'/", $html, $screen);
+
+            $this->assertNotEmpty($btn[1] ?? '', "[{$view}] 탭바 버튼을 못 찾았습니다.");
+            $this->assertNotEmpty($screen[1] ?? '', "[{$view}] 화면 이름을 못 찾았습니다.");
+            $this->assertSame(
+                $screen[1],
+                $btn[1],
+                "[{$view}] 버튼 이름과 화면 이름이 다릅니다 — 누르면 다른 화면이 열린 것처럼 보입니다."
+            );
+        }
+    }
 }
