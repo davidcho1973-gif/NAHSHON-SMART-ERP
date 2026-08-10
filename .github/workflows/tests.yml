@@ -119,6 +119,14 @@ jobs:
           BASE: ${{ vars.STAGING_URL }}
         run: bash scripts/deploy/verify-build.sh
 
+      # 스케줄러가 꺼져 있으면 앱은 멀쩡해 보이는 채로 자동 퇴근·문서 분석·경비 계상이
+      # 전부 멈춘다. 배포는 어차피 결과를 들여다보는 순간이라 여기서 함께 본다.
+      - name: Check the scheduler
+        if: always()
+        env:
+          BASE: ${{ vars.STAGING_URL }}
+        run: bash scripts/deploy/check-scheduler.sh
+
   # 운영. staging 과 같은 구조이고, 다른 것은 브랜치와 시크릿 이름뿐이다.
   #
   # main 에 올리는 것 자체가 이미 의도적인 행동이므로 별도 승인 단계는 두지 않았다.
@@ -154,3 +162,11 @@ jobs:
         env:
           BASE: ${{ vars.PRODUCTION_URL }}
         run: bash scripts/deploy/verify-build.sh
+
+      # 스케줄러가 꺼져 있으면 앱은 멀쩡해 보이는 채로 자동 퇴근·문서 분석·경비 계상이
+      # 전부 멈춘다. 배포는 어차피 결과를 들여다보는 순간이라 여기서 함께 본다.
+      - name: Check the scheduler
+        if: always()
+        env:
+          BASE: ${{ vars.PRODUCTION_URL }}
+        run: bash scripts/deploy/check-scheduler.sh
