@@ -349,6 +349,29 @@ final class WorkerLang
     }
 
     /**
+     * 작업자에게 보내는 문자 한 통.
+     *
+     * 링크만 덜렁 보내면 안 누른다 — 모르는 주소이기 때문이다. 무엇인지, 무엇으로
+     * 로그인하는지, 두 줄이면 충분하다. 길면 안 읽는다.
+     *
+     * @return array<string, string>
+     */
+    public static function shareMessage(string $url): array
+    {
+        return [
+            'ko' => "내 출퇴근 앱입니다. 근무시간과 급여를 휴대폰에서 바로 볼 수 있어요.\n"
+                ."{$url}\n"
+                ."열어서 구글 계정으로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
+            'en' => "This is your attendance app. See your hours and pay on your phone.\n"
+                ."{$url}\n"
+                ."Open it, sign in with Google, then tap \"Add to Home Screen\".",
+            'es' => "Esta es su aplicación de asistencia. Vea sus horas y su pago en su teléfono.\n"
+                ."{$url}\n"
+                ."Ábrala, inicie sesión con Google y toque \"Agregar a la pantalla de inicio\".",
+        ];
+    }
+
+    /**
      * 직영 작업자에게 건네는 앱 설치 카드 문구.
      *
      * 게이트(협력사)와 다르다 — 이쪽은 사람이 정해져 있고 계정이 있다. 그래서 가장 흔한

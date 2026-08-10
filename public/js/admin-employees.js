@@ -135,6 +135,8 @@
             // 계정이 생긴 다음에야 앱에 들어올 수 있다. 그때부터 설치 카드를 뽑을 수 있게 한다 —
             // 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
             if (r.hasAccount) {
+              // 보내기(문자·QR)와 인쇄 카드는 쓰임이 다르다. 대개 보내기를 먼저 쓴다.
+              html += u.rowButton('링크 보내기', "window.open('/attendance-app/employee/" + r.id + "/share','_blank')") + ' ';
               html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
             }
             // 버튼을 권한으로 감추지 않는다. 감추면 "왜 안 보이지" 를 아무도 답할 수 없다 —

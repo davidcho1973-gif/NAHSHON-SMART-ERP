@@ -342,6 +342,39 @@ class AttendanceAppController extends Controller
     }
 
     /**
+     * 작업자에게 "보내는" 화면 — 링크·QR·문자 문구가 한 자리에.
+     *
+     * 인쇄 카드와 목적이 다르다. 카드는 손에 쥐여 주는 종이고, 이건 문자·왓츠앱으로
+     * 보내는 것이다. 직영은 사람이 정해져 있어 대개 반장이 그 자리에서 보낸다.
+     *
+     * 세 가지가 한 화면에 있어야 한다.
+     *   링크   — 눌러서 바로 복사(주소를 손으로 옮겨 적다 오타가 난다)
+     *   QR    — 반장 휴대폰을 보여 주고 작업자가 스캔(같이 있을 때 가장 빠르다)
+     *   문구   — 3개 국어. 링크만 덜렁 보내면 그게 무엇인지 몰라서 안 누른다.
+     */
+    public function shareLink(Request $request, Employee $employee): View
+    {
+        $user = $request->user();
+        abort_unless(
+            in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true)
+                || ($user && (int) $user->employee_id === (int) $employee->id),
+            403,
+        );
+
+        $url = route('attendance-app.index');
+        $account = User::query()->where('employee_id', $employee->getKey())->first();
+
+        return view('attendance-app.share', [
+            'employee' => $employee->loadMissing('site'),
+            'url' => $url,
+            'qrImage' => QrSvg::dataUri($url, 320),
+            'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
+            'messages' => WorkerLang::shareMessage($url),
+            'lang' => WorkerLang::resolve($employee->preferred_language),
+        ]);
+    }
+
+    /**
      * 직영 작업자에게 건네는 앱 설치 카드(인쇄용).
      *
      * 협력사는 게이트 포스터 한 장으로 끝나지만(계정이 없고 매일 사람이 바뀐다),
