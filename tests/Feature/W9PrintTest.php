@@ -165,4 +165,21 @@ class W9PrintTest extends TestCase
         $this->assertStringContainsString('font-family: Helvetica', $html);
         $this->assertStringNotContainsString('Times New Roman', $html);
     }
+
+    public function test_our_own_notes_never_reach_the_paper(): void
+    {
+        // 국세청 양식에 없는 문구가 인쇄물에 섞이면 그 종이는 W-9 이 아니게 된다 —
+        // 감사에서 읽는 사람에게는 "손댄 서류" 로 보인다. 안내는 화면에서만 쓴다.
+        $html = $this->actingAs($this->payrollUser())
+            ->get(route('w9.print', ['employee' => $this->employee]))->assertOk()->getContent();
+
+        // 화면에는 보여야 한다.
+        $this->assertStringContainsString('아직 제출되지 않았습니다', $html);
+        $this->assertStringContainsString('class="screen-only todo"', $html);
+
+        // 인쇄에서는 감춰져야 한다.
+        preg_match('/\@media print \{(.*?)\n        \}/s', $html, $m);
+        $this->assertStringContainsString('.screen-only', $m[1] ?? '', '인쇄 시 안내가 숨겨지지 않습니다.');
+        $this->assertStringContainsString('display: none', $m[1] ?? '');
+    }
 }

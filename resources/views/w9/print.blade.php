@@ -109,14 +109,16 @@
         .foot .cat { flex: 1; text-align: center; }
         .foot .fm { font-weight: bold; }
 
-        /* ── 우리가 덧붙이는 것(원본에 없는 부분) ──────────────────── */
-        .ours {
+        /* ── 우리가 덧붙이는 것 — 화면에서만 보이고 종이에는 안 찍힌다 ────
+           국세청 양식에 없는 문구가 인쇄물에 섞이면 그 종이는 W-9 이 아니게 된다.
+           감사에서 읽는 사람에게는 "손댄 서류" 로 보인다. */
+        .screen-only {
             width: 7.9in; margin: 10px auto 0; padding: 9px 12px;
             font-family: system-ui, -apple-system, 'Malgun Gothic', sans-serif;
             font-size: 11px; line-height: 1.55; border-radius: 6px; border: 1px solid;
         }
-        .ours.todo { border-color: #b45309; background: #fffbeb; color: #713f12; }
-        .ours.done { border-color: #15803d; background: #f0fdf4; color: #14532d; }
+        .screen-only.todo { border-color: #b45309; background: #fffbeb; color: #713f12; }
+        .screen-only.done { border-color: #15803d; background: #f0fdf4; color: #14532d; }
         .actions {
             width: 7.9in; margin: 9px auto 0; display: flex; gap: 8px;
             font-family: system-ui, sans-serif;
@@ -131,8 +133,8 @@
         @media print {
             body { background: #fff; padding: 0; }
             .page { width: auto; box-shadow: none; }
-            .actions { display: none; }
-            .ours { width: auto; margin-top: 8px; }
+            /* 종이에는 국세청 양식만 남는다. 안내와 버튼은 화면에서만 쓰는 것이다. */
+            .screen-only, .actions { display: none !important; }
         }
     </style>
 </head>
@@ -341,7 +343,7 @@
 
 {{-- 여기부터는 원본에 없는, 우리가 붙이는 안내다. 인쇄물에서도 종이 아래에 남는다. --}}
 @if ($form)
-    <div class="ours done">
+    <div class="screen-only done">
         <b>제출 완료 · Submitted</b> — {{ $form->certified_at?->format('Y-m-d H:i') }},
         {{ $form->signature_name }} 명의 전자 서명.
         @unless ($tin)
@@ -349,7 +351,7 @@
         @endunless
     </div>
 @else
-    <div class="ours todo">
+    <div class="screen-only todo">
         <b>아직 제출되지 않았습니다 · Not submitted yet</b> —
         아는 칸은 미리 채웠습니다. <b>TIN(Part I)과 서명(Part II)</b>은 본인이 직접 써야 합니다.
         서명은 “위증 시 처벌을 감수한다”는 본인 진술이라 대신 쓸 수 없습니다.
