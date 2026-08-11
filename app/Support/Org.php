@@ -73,7 +73,7 @@ final class Org
             return null;
         }
 
-        $stored = self::stored()[$key] ?? null;
+        $stored = self::rows()[$key] ?? null;
         if (is_string($stored) && trim($stored) !== '') {
             return trim($stored);
         }
@@ -81,6 +81,14 @@ final class Org
         $fallback = config(self::EDITABLE[$key]['config']);
 
         return is_string($fallback) && trim($fallback) !== '' ? trim($fallback) : null;
+    }
+
+    /** 화면에서 실제로 고쳐 저장한 값만. 설정 파일 값은 섞지 않는다. */
+    public static function stored(string $key): ?string
+    {
+        $v = self::rows()[$key] ?? null;
+
+        return is_string($v) && trim($v) !== '' ? trim($v) : null;
     }
 
     /**
@@ -192,7 +200,7 @@ final class Org
     /**
      * @return array<string, string|null>
      */
-    private static function stored(): array
+    private static function rows(): array
     {
         if (self::$stored !== null) {
             return self::$stored;

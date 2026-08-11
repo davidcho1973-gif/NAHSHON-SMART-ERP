@@ -30,7 +30,7 @@
     'ê³µì • ê´€ë¦¬ (WBS)': 'WBS Management',
     'ìž¬ë¬´ (Finance)': 'Finance',
     'ìžìž¬/ìž¥ë¹„ (Inventory)': 'Inventory',
-    '{ORG} í†µí•©ê´€ë¦¬': '{ORG} Operations',
+    '{ORG} 통합관리': '{ORG} Operations',
     'ì°¨ëŸ‰ ê´€ë¦¬': 'Vehicle Management',
     'ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬': 'Equipment Rental',
     'ìˆ™ì†Œ ê´€ë¦¬': 'Housing Management',

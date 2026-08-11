@@ -38,10 +38,8 @@ class OrgSettingService
                 'type' => $meta['type'],
                 'hint' => $meta['hint'] ?? null,
                 'value' => Org::get($key),
-                // 저장된 값이 없으면 설정 파일의 값을 쓰고 있다는 뜻이다. 화면에서
-                // 그 차이를 보여 줘야 "왜 지웠는데 안 비나" 를 묻지 않는다.
-                'isDefault' => Org::get($key) === $this->configValue($key),
-                'default' => $this->configValue($key),
+                'note' => $this->note($key),
+                'placeholder' => $this->placeholder($key),
             ];
         }
 
@@ -97,12 +95,54 @@ class OrgSettingService
         }
 
         foreach (array_keys(Org::EDITABLE) as $key) {
-            if (array_key_exists($key, $input)) {
-                Org::put($key, is_scalar($input[$key]) ? (string) $input[$key] : null);
+            if (! array_key_exists($key, $input)) {
+                continue;
             }
+
+            $new = is_scalar($input[$key]) ? trim((string) $input[$key]) : '';
+
+            // 안 건드린 칸은 저장하지 않는다.
+            //
+            // 화면은 배포 설정에서 온 값을 미리 채워 보여 준다. 색 하나 고치려고
+            // 저장을 눌렀을 뿐인데 회사 이름까지 표에 박히면, 나중에 환경변수로
+            // 이름을 바꿔도 표에 남은 값이 이겨서 반영되지 않는다. 그때는 화면이
+            // 멀쩡해 보여서 원인을 찾는 데 한참 걸린다.
+            if (Org::stored($key) === null && $new === (string) Org::get($key)) {
+                continue;
+            }
+
+            Org::put($key, $new);
         }
 
         return ['success' => true] + $this->load();
+    }
+
+    /**
+     * 이 값이 어디서 왔는지 한 줄로. 빈칸에 "기본값 사용 중" 이라고 적으면
+     * 사람들은 어딘가에 값이 있는 줄 알고 찾으러 간다.
+     */
+    private function note(string $key): ?string
+    {
+        if (Org::stored($key) !== null) {
+            return null;
+        }
+
+        if ($this->configValue($key) !== null) {
+            return '배포 설정값 사용 중';
+        }
+
+        return in_array($key, ['short_name', 'legal_name'], true) ? '회사 이름을 따라갑니다' : null;
+    }
+
+    private function placeholder(string $key): ?string
+    {
+        return match ($key) {
+            'short_name' => Org::shortName(),
+            'legal_name' => Org::legalName(),
+            'support_email' => 'help@example.com',
+            'support_phone' => '480-555-0100',
+            default => $this->configValue($key),
+        };
     }
 
     private function configValue(string $key): ?string

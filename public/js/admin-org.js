@@ -50,13 +50,14 @@
     } else {
       var t = f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : 'text';
       input = '<input type="' + t + '" value="' + u.esc(f.value || '') + '" ' +
-        (f.default ? 'placeholder="' + u.esc(f.default) + '" ' : '') + common;
+        (f.placeholder ? 'placeholder="' + u.esc(f.placeholder) + '" ' : '') + common;
     }
 
     return '<div style="margin-bottom:18px">' +
       '<label for="org-' + u.esc(f.key) + '" style="display:block;font-size:13px;font-weight:600;' +
       'color:var(--text-primary);margin-bottom:6px">' + u.esc(f.label) +
-      (f.isDefault ? ' <span style="font-weight:400;color:var(--text-tertiary);font-size:12px">· 기본값 사용 중</span>' : '') +
+      (f.note ? ' <span style="font-weight:400;color:var(--text-tertiary);font-size:12px">· ' +
+        u.esc(f.note) + '</span>' : '') +
       '</label>' + input +
       '<div id="org-err-' + u.esc(f.key) + '" style="display:none;font-size:12px;color:var(--status-danger);margin-top:5px"></div>' +
       (f.hint ? '<div style="font-size:12px;color:var(--text-tertiary);margin-top:5px;line-height:1.5">' +
@@ -67,8 +68,10 @@
   function readOnlyBlock() {
     var u = ui();
     if (!state.readOnly.length) return '';
+    // 바탕색은 --bg-surface 로 둔다. 옛 별칭(--bg-subtle 등)은 밝은 테마에서
+    // 어두운 값을 물고 있어서, 어두운 바탕에 어두운 글씨가 되어 안 보였다.
     return '<div style="margin-top:28px;padding:16px;border:1px solid var(--border-default);border-radius:12px;' +
-      'background:var(--bg-subtle,transparent)">' +
+      'background:var(--bg-surface)">' +
       '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:4px">여기서 못 고치는 값</div>' +
       '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px;line-height:1.6">' +
       '배포 설정(환경변수)에서만 바뀝니다. 매분 도는 자동 작업이 읽는 값이라 화면에서 바꾸면 ' +

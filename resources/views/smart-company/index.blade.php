@@ -171,7 +171,7 @@
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-section-title">{{ \App\Support\Org::name() }} í†µí•©ê´€ë¦¬</div>
+            <div class="nav-section-title">{{ \App\Support\Org::name() }} 통합관리</div>
             <ul class="nav-list">
               <li class="nav-item" data-view="vehicle" id="nav-vehicle">
                 <i class="ph ph-car"></i><span>ì°¨ëŸ‰ ê´€ë¦¬</span>

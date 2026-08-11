@@ -284,6 +284,54 @@ class OrgIdentityTest extends TestCase
         $this->assertArrayHasKey('support_email', $res['errors']);
     }
 
+    public function test_it_does_not_save_the_fields_nobody_touched(): void
+    {
+        // 화면은 배포 설정에서 온 값을 미리 채워 보여 준다. 색 하나 고치려고 저장을
+        // 눌렀을 뿐인데 회사 이름까지 표에 박히면, 나중에 환경변수로 이름을 바꿔도
+        // 표에 남은 값이 이겨서 반영되지 않는다. 화면은 멀쩡해 보인다.
+        config(['org.name' => 'ABC CONSTRUCTION']);
+        Org::forget();
+        $this->actingAs($this->user('super_admin'));
+
+        app(OrgSettingService::class)->save([
+            'name' => 'ABC CONSTRUCTION',   // 화면이 채워 준 그대로 — 안 건드렸다
+            'color' => '#ff8800',           // 이것만 고쳤다
+        ]);
+
+        $this->assertDatabaseMissing('org_settings', ['key' => 'name']);
+        $this->assertDatabaseHas('org_settings', ['key' => 'color']);
+
+        // 나중에 배포 설정으로 이름을 바꾸면 그대로 반영된다.
+        config(['org.name' => 'ABC 건설']);
+        Org::forget();
+        $this->assertSame('ABC 건설', Org::name());
+    }
+
+    public function test_an_empty_field_is_not_called_a_default(): void
+    {
+        // 빈칸에 "기본값 사용 중" 이라고 적으면 어딘가에 값이 있는 줄 알고 찾으러 간다.
+        config(['org.support_phone' => null, 'org.legal_name' => null]);
+        Org::forget();
+        $this->actingAs($this->user('super_admin'));
+
+        $fields = collect(app(OrgSettingService::class)->load()['fields'])->keyBy('key');
+
+        $this->assertNull($fields['support_phone']['note']);
+        $this->assertSame('회사 이름을 따라갑니다', $fields['legal_name']['note']);
+        $this->assertSame('배포 설정값 사용 중', $fields['color']['note']);
+    }
+
+    public function test_a_saved_field_is_not_called_a_default(): void
+    {
+        $this->actingAs($this->user('super_admin'));
+        app(OrgSettingService::class)->save(['name' => 'ABC 건설', 'color' => '#ff8800']);
+
+        $fields = collect(app(OrgSettingService::class)->load()['fields'])->keyBy('key');
+
+        $this->assertNull($fields['name']['note']);
+        $this->assertNull($fields['color']['note']);
+    }
+
     public function test_the_screen_shows_what_it_cannot_change(): void
     {
         // 화면에 아예 없으면 사람들은 있을 거라 생각하고 한참 찾는다.
