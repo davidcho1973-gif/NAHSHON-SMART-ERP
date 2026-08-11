@@ -17,6 +17,43 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    // ── 메뉴 이름 ────────────────────────────────────────────────────
+    // 사이드바와 휴대폰 '더보기' 타일. 여기가 한글로 남으면 영어를 골라도
+    // 첫 화면부터 한국어라, 언어를 바꾼 보람이 없다.
+    '내 출퇴근 기록': 'My Attendance',
+    '내 출퇴근': 'My Attendance',
+    '출퇴근': 'Attendance',
+    '출퇴근 기록': 'Attendance Records',
+    'AI 통합 문서함': 'AI Document Hub',
+    '현장 상황실': 'Field Operations Room',
+    '문서통합관리': 'Document Management',
+    '계정 · 권한 관리': 'Accounts & Permissions',
+    '입사지원 · 온보딩': 'Applications & Onboarding',
+    '직원 등록 · 관리': 'Employee Registration',
+    '품목 · 분류': 'Items & Categories',
+    '원청 계약 · 서류': 'Client Contracts & Documents',
+    '현장 · 프로젝트': 'Sites & Projects',
+    '조직 설정': 'Organization Settings',
+    '임금 프로필': 'Pay Profiles',
+    '메신저 관리': 'Messenger Admin',
+    '대시보드': 'Dashboard',
+    'AI 지휘실': 'AI Command Center',
+    'AI 작업안전': 'AI Safety',
+    '차량관리': 'Vehicles',
+    '급여정산': 'Payroll',
+    '자재장비': 'Materials & Equipment',
+    '장비스캔(AI)': 'Equipment Scan (AI)',
+    '숙소관리': 'Housing',
+    '구매/렌트': 'Purchase / Rental',
+    '항공권': 'Flights',
+    '사무실비품': 'Office Supplies',
+    '계정·권한': 'Accounts',
+    '입사지원': 'Applications',
+    '직원 등록': 'Employees',
+    '품목·분류': 'Items',
+    '원청 계약': 'Contracts',
+    '현장·프로젝트': 'Sites',
+    'AI 스캔등록': 'AI Scan',
     'í˜„ìž¥': 'Site',
     'í†µí•© ë·° (Global)': 'Global View',
     'ë°ì´í„° ë¡œë“œ ì¤‘...': 'Loading data...',
@@ -238,6 +275,37 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    // ── 메뉴 이름 (영어를 거쳐 온다) ─────────────────────────────────
+    'My Attendance': 'Mi asistencia',
+    'Attendance Records': 'Registros de asistencia',
+    'AI Document Hub': 'Centro de documentos IA',
+    'Field Operations Room': 'Sala de operaciones',
+    'Document Management': 'Gestión documental',
+    'Accounts & Permissions': 'Cuentas y permisos',
+    'Applications & Onboarding': 'Solicitudes e incorporación',
+    'Employee Registration': 'Registro de empleados',
+    'Items & Categories': 'Artículos y categorías',
+    'Client Contracts & Documents': 'Contratos y documentos del cliente',
+    'Sites & Projects': 'Obras y proyectos',
+    'Organization Settings': 'Configuración de la organización',
+    'Pay Profiles': 'Perfiles salariales',
+    'Messenger Admin': 'Gestión de mensajería',
+    'Dashboard': 'Panel',
+    'AI Safety': 'Seguridad IA',
+    'Vehicles': 'Vehículos',
+    'Payroll': 'Nómina',
+    'Materials & Equipment': 'Materiales y equipos',
+    'Equipment Scan (AI)': 'Escaneo de equipos (IA)',
+    'Housing': 'Alojamiento',
+    'Purchase / Rental': 'Compra / Renta',
+    'Flights': 'Vuelos',
+    'Accounts': 'Cuentas',
+    'Applications': 'Solicitudes',
+    'Employees': 'Empleados',
+    'Items': 'Artículos',
+    'Contracts': 'Contratos',
+    'Sites': 'Obras',
+    'AI Scan': 'Escaneo IA',
     'Site': 'Obra',
     'Global View': 'Vista global',
     'Loading data...': 'Cargando datos...',
@@ -507,6 +575,84 @@
       if (repaired !== ko) normalizedReplacementsEn.push([repaired, cleanEn]);
     });
     extraReplacementsEn.forEach(([ko, en]) => normalizedReplacementsEn.push([ko, en]));
+
+    // 긴 말부터 바꾼다. 순서를 안 정하면 '퇴근' 이 '출퇴근' 보다 먼저 걸려서
+    // "출퇴근 기록" 이 "출Check Out 기록" 이 된다.
+    normalizedReplacementsEn.sort((a, b) => b[0].length - a[0].length);
+  }
+
+  /**
+   * 한국어에는 낱말 사이에 띄어쓰기가 없다.
+   *
+   * 그래서 문자열을 그냥 바꿔치기하면 낱말 가운데를 잘라 먹는다. '퇴근'을 바꾸면
+   * "출퇴근"이 "출Check Out"이 되고, '장비'를 바꾸면 "중장비"가 "중Equipment"가
+   * 된다. 실제로 그렇게 나오고 있었다.
+   *
+   * 규칙 두 가지로 막는다.
+   *
+   *   앞이 한글이면 바꾸지 않는다 — 더 큰 낱말의 일부다(출<b>퇴근</b>, 중<b>장비</b>).
+   *   뒤가 한글이면 조사일 때만 바꾼다 — "현장에서" 의 '에서' 는 낱말이 아니라
+   *   문법이라 영어에는 옮길 자리가 없다. 그래서 조사는 함께 지운다.
+   *
+   * 조사가 아닌 한글이 붙어 있으면(현장<b>별</b>) 그냥 둔다. 번역이 안 된 한국어는
+   * 읽을 수 있지만, 반쯤 잘린 낱말은 읽을 수 없다.
+   */
+  const PARTICLES = [
+    '으로써', '으로서', '에서는', '에게서', '이라는', '라는',
+    '으로', '에서', '에게', '까지', '부터', '와의', '과의', '이나', '거나',
+    '만큼', '처럼', '보다', '대로', '조차', '마저', '밖에', '이란', '란',
+    '은', '는', '이', '가', '을', '를', '의', '에', '도', '만', '와', '과', '로', '나',
+  ];
+
+  function isHangul(ch) {
+    return !!ch && /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(ch);
+  }
+
+  /** 이 자리에서 시작하는 조사의 길이. 조사가 아니면 -1. */
+  function particleLength(text, at) {
+    for (const particle of PARTICLES) {
+      if (!text.startsWith(particle, at)) continue;
+      // 조사 뒤에 또 한글이 오면 그건 조사가 아니라 다른 낱말의 앞부분이다.
+      if (isHangul(text[at + particle.length])) continue;
+      return particle.length;
+    }
+    return -1;
+  }
+
+  function replaceKorean(text, ko, en) {
+    if (!text.includes(ko)) return text;
+
+    let out = '';
+    let cursor = 0;
+    while (cursor <= text.length) {
+      const at = text.indexOf(ko, cursor);
+      if (at === -1) {
+        out += text.slice(cursor);
+        break;
+      }
+      const end = at + ko.length;
+
+      if (isHangul(text[at - 1])) {          // 더 큰 낱말의 일부
+        out += text.slice(cursor, end);
+        cursor = end;
+        continue;
+      }
+
+      let drop = 0;
+      if (isHangul(text[end])) {
+        const tail = particleLength(text, end);
+        if (tail === -1) {                    // 조사가 아니면 손대지 않는다
+          out += text.slice(cursor, end);
+          cursor = end;
+          continue;
+        }
+        drop = tail;
+      }
+
+      out += text.slice(cursor, at) + en;
+      cursor = end + drop;
+    }
+    return out;
   }
 
   function translateToEnglish(text) {
@@ -517,7 +663,9 @@
     const unitOnly = { '명': 'people', '대': 'units', '건': 'issues', '일': 'days', '개': 'rooms' };
     if (unitOnly[trimmed]) return text.replace(trimmed, unitOnly[trimmed]);
     let output = text;
-    for (const [ko, en] of normalizedReplacementsEn) output = output.split(ko).join(en);
+    for (const [ko, en] of normalizedReplacementsEn) {
+      output = /[가-힣]/.test(ko) ? replaceKorean(output, ko, en) : output.split(ko).join(en);
+    }
     output = output
       .replace(/(\d+)\s*명/g, '$1 people')
       .replace(/(\d+\/\d+)\s*대/g, '$1 units')
@@ -634,6 +782,16 @@
     document.cookie = 'app_locale=' + safe + ';path=/;max-age=31536000;samesite=lax';
     window.location.reload();
   };
+
+  // 번역 규칙만 따로 확인할 수 있게 열어 둔다. 화면 동작에는 쓰이지 않는다.
+  // 낱말 가운데를 잘라 먹는 사고를 눈으로만 잡으면, 사전에 짧은 말을 하나 더
+  // 넣는 순간 조용히 되살아난다.
+  if (typeof window !== 'undefined') {
+    window.__i18n = { translateToEnglish, translateToSpanish, replaceKorean };
+  }
+
+  // 브라우저가 아닌 곳(테스트)에서는 화면에 손대지 않는다.
+  if (typeof document === 'undefined') return;
 
   document.addEventListener('DOMContentLoaded', () => {
     updateLanguageSwitcher();
