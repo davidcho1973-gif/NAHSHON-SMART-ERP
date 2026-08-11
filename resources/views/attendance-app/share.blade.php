@@ -48,6 +48,8 @@
         .acct { border: 2px solid var(--slab); border-radius: 12px; padding: 12px 14px; }
         .acct .lb { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
         .acct .em { font-size: 17px; font-weight: 800; word-break: break-all; margin-top: 3px; }
+        .acct .warn { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--rule);
+                      font-size: 12.5px; line-height: 1.5; color: var(--bad); font-weight: 600; }
         .acct.none { border-color: var(--bad); background: #F8E5E1; }
         .acct.none .em { color: var(--bad); font-size: 14.5px; font-weight: 700; }
 
@@ -94,6 +96,16 @@
         <div class="acct">
             <div class="lb">이 계정으로 로그인해야 합니다</div>
             <div class="em">{{ $loginEmail }}</div>
+            {{-- 직원 정보의 이메일을 고쳐도 로그인 계정은 따라오지 않는다. 그 사실을
+                 여기서 말해 주지 않으면, 방금 고쳐 놓고 옛 주소를 보게 된 반장이
+                 원인을 찾지 못한다 — 어느 화면도 틀려 보이지 않기 때문이다. --}}
+            @if ($employeeEmail && mb_strtolower($employeeEmail) !== mb_strtolower($loginEmail))
+                <div class="warn">
+                    직원 정보의 이메일은 <b>{{ $employeeEmail }}</b> 입니다 — 위 계정과 다릅니다.<br>
+                    작업자가 쓰는 주소가 아래쪽이면, 인원관리 <b>수정</b> 에서 저장할 때
+                    "로그인 계정도 바꿀까요?" 에 <b>예</b> 를 누르세요.
+                </div>
+            @endif
         </div>
     @else
         <div class="acct none">

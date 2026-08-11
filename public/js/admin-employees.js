@@ -189,6 +189,16 @@
     reload();
   }
 
+  /** 이 사람이 실제로 로그인하는 주소. 직원 이메일과 다르면 그 사실을 알린다. */
+  function loginHint(r) {
+    if (!r || !r.hasAccount) return '구글 로그인 계정을 만들 때 기본값으로 쓰입니다.';
+    if (!r.loginEmail) return '';
+    var same = String(r.loginEmail).toLowerCase() === String(r.email || '').toLowerCase();
+    if (same) return '로그인 계정도 이 주소입니다.';
+    return '⚠ 로그인 계정은 ' + r.loginEmail + ' 입니다 — 이 주소와 다릅니다. '
+      + '저장할 때 계정도 옮길지 물어봅니다.';
+  }
+
   function openForm(id) {
     var u = ui();
     var r = id ? state.rows.filter(function (x) { return x.id === id; })[0] : null;
@@ -206,7 +216,10 @@
             hint: '여권·신분증 표기와 맞추면 나중에 서류 대조가 편합니다.' },
           { name: 'firstName', label: '영문 이름 (First)', group: '① 누구인가', value: r ? r.firstName : '' },
           { name: 'lastName', label: '영문 성 (Last)', group: '① 누구인가', value: r ? r.lastName : '' },
-          { name: 'email', label: '이메일', type: 'email', group: '① 누구인가', value: r ? r.email : '' },
+          { name: 'email', label: '이메일', type: 'email', group: '① 누구인가', value: r ? r.email : '',
+            // 로그인 계정은 이 칸과 다른 값이다. 다르면 여기서 말해 주지 않는 한
+            // 아무도 모른다 — 보내기 화면은 계정 쪽을, 이 폼은 직원 쪽을 보여 준다.
+            hint: loginHint(r) },
           // 앱 링크를 문자·왓츠앱으로 바로 보낼 때 쓴다. 간편등록은 이미 받고 있다.
           { name: 'phone', label: '전화번호', type: 'tel', group: '① 누구인가', value: r ? r.phone : '', placeholder: '480-555-0100' },
           { name: 'nationality', label: '국적', group: '① 누구인가', value: r ? r.nationality : '' },
@@ -257,10 +270,24 @@
         ],
         onSave: function (v) {
           v.id = id || 0;
+          // 로그인 주소를 바꾸는 것은 "이 사람이 누구인가" 를 바꾸는 일이다. 잘못
+          // 바꾸면 그 사람은 앱에 못 들어온다. 그래서 조용히 옮기지 않고 물어본다.
+          // 다만 묻지 않으면 두 값이 계속 어긋난 채로 남으므로, 물어보기는 한다.
+          var typed = String(v.email || '').trim().toLowerCase();
+          if (r && r.hasAccount && r.loginEmail && typed && typed !== String(r.loginEmail).toLowerCase()) {
+            v.syncAccountEmail = window.confirm(
+              '로그인 계정 이메일도 ' + typed + ' 로 바꿀까요?\n\n'
+              + '지금 로그인 계정: ' + r.loginEmail + '\n\n'
+              + '바꾸면 이 사람은 새 주소로만 로그인할 수 있습니다.\n'
+              + '취소하면 직원 정보만 바뀌고 로그인은 그대로입니다.'
+            );
+          }
           return call('api_saveEmployeeAdmin', [v]).then(function (res) {
             if (res.success === false) return res;
-            u.toast(r ? '직원 정보를 수정했습니다.'
-              : '등록했습니다. 사번 ' + (res.employeeNumber || '') + ' 이(가) 발급되었습니다.');
+            u.toast(res.accountEmailChanged
+              ? '직원 정보와 로그인 계정을 모두 수정했습니다.'
+              : (r ? '직원 정보를 수정했습니다.'
+                   : '등록했습니다. 사번 ' + (res.employeeNumber || '') + ' 이(가) 발급되었습니다.'));
             return reload().then(function () { return { success: true }; });
           });
         },

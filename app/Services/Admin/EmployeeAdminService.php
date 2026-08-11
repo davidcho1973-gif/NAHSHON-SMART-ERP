@@ -82,7 +82,7 @@ class EmployeeAdminService
         }
 
         $query = Employee::query()
-            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,access_role,account_status',
+            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,email,access_role,account_status',
                 'w9Form:id,employee_id,tin_last4,certified_at'])
             ->orderBy('name');
         $this->applyScope($query);
@@ -150,6 +150,10 @@ class EmployeeAdminService
                 'qrScope' => $e->attendance_app_scope,
                 // 로그인 계정이 있는지 — 없으면 이 사람은 앱에 못 들어온다.
                 'hasAccount' => $e->user !== null,
+                // 로그인에 실제로 쓰는 주소. 직원 정보의 이메일과 다를 수 있는데,
+                // 다르면 링크를 받은 작업자가 자기 것이 아닌 주소로 로그인하라는
+                // 안내를 받게 된다 — 화면이 멀쩡해 보여서 아무도 모른다.
+                'loginEmail' => $e->user?->email,
                 'accountRole' => $e->user?->access_role,
                 'accountStatus' => $e->user?->account_status,
                 'visaExpiresOn' => $e->visa_expires_on?->toDateString(),
@@ -387,13 +391,65 @@ class EmployeeAdminService
         if ($row) {
             $row->update($data);
 
-            return ['success' => true, 'id' => $row->id];
+            $account = $this->syncAccountEmail($row, $email, $input);
+            if (isset($account['errors'])) {
+                return ['success' => false, 'errors' => $account['errors']];
+            }
+
+            return ['success' => true, 'id' => $row->id] + $account;
         }
 
         $created = Employee::create($data);
 
         // 사번은 모델이 자동 발급하므로 새로 만든 뒤에야 알 수 있다 — 화면에 알려준다.
         return ['success' => true, 'id' => $created->id, 'employeeNumber' => $created->employee_number];
+    }
+
+    /**
+     * 직원 이메일과 로그인 계정 이메일을 맞춘다.
+     *
+     * 두 칸이 따로 있다. 직원 정보의 이메일은 연락처고, 로그인 계정의 이메일은 구글
+     * 로그인에 쓰는 신원이다. 그런데 화면에서는 "이메일" 한 칸만 보이니, 그것을 고치면
+     * 로그인도 따라간다고 믿게 된다.
+     *
+     * 실제로 어긋난 적이 있다 — 직원 이메일을 고쳤는데 보내기 화면은 옛 계정을 계속
+     * 보여 줬고, 그 링크를 받은 작업자는 자기 것이 아닌 주소로 로그인하라는 안내를
+     * 받았다. 화면은 어느 쪽도 틀려 보이지 않았다.
+     *
+     * 다만 <b>조용히 바꾸지는 않는다.</b> 로그인 주소를 바꾸는 것은 "이 사람이 누구인가"
+     * 를 바꾸는 일이라, 잘못 바꾸면 그 사람은 앱에 못 들어온다. 화면이 물어보고,
+     * 사람이 예라고 한 경우에만(syncAccountEmail) 옮긴다.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function syncAccountEmail(Employee $employee, string $email, array $input): array
+    {
+        $account = $employee->user()->first();
+        if (! $account) {
+            return [];
+        }
+
+        // 화면에 지금 무엇이 어긋나 있는지 늘 알려 준다 — 이번에 안 바꾸더라도.
+        $mismatch = $email !== '' && mb_strtolower($account->email) !== $email
+            ? ['loginEmail' => $account->email, 'emailMismatch' => true]
+            : ['loginEmail' => $account->email];
+
+        if (! filter_var($input['syncAccountEmail'] ?? false, FILTER_VALIDATE_BOOL)) {
+            return $mismatch;
+        }
+
+        if ($email === '' || mb_strtolower($account->email) === $email) {
+            return $mismatch;
+        }
+
+        if (User::query()->where('email', $email)->whereKeyNot($account->id)->exists()) {
+            return ['errors' => ['email' => '이 이메일을 쓰는 로그인 계정이 이미 있습니다.']];
+        }
+
+        $account->forceFill(['email' => $email])->save();
+
+        return ['loginEmail' => $email, 'accountEmailChanged' => true];
     }
 
     /**

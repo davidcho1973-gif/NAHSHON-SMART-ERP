@@ -369,6 +369,10 @@ class AttendanceAppController extends Controller
             'url' => $url,
             'qrImage' => QrSvg::dataUri($url, 320),
             'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
+            // 직원 정보의 이메일과 로그인 계정이 다를 수 있다. 다르면 반장은 방금
+            // 직원 정보를 고쳐 놓고 여기서 옛 주소를 보게 되는데, 어느 쪽도 틀려
+            // 보이지 않아 원인을 못 찾는다. 여기서 말해 준다.
+            'employeeEmail' => $employee->email,
             'messages' => WorkerLang::shareMessage($url),
             // 번호가 있으면 그 사람에게 바로 열린다. 없으면 반장이 고른다.
             'dial' => $employee->dialNumber(),
@@ -402,6 +406,10 @@ class AttendanceAppController extends Controller
             'url' => $url,
             'qrImage' => QrSvg::dataUri($url, 300),
             'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
+            // 직원 정보의 이메일과 로그인 계정이 다를 수 있다. 다르면 반장은 방금
+            // 직원 정보를 고쳐 놓고 여기서 옛 주소를 보게 되는데, 어느 쪽도 틀려
+            // 보이지 않아 원인을 못 찾는다. 여기서 말해 준다.
+            'employeeEmail' => $employee->email,
             'langs' => WorkerLang::installCard(),
         ]);
     }
