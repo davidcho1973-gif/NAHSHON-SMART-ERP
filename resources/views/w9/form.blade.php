@@ -40,7 +40,7 @@
         @if ($done && $existing)
             <div class="done">
                 <div class="check">✓</div>
-                <p class="brand">DASOL PRISM · FORM W-9</p>
+                <p class="brand">{{ \App\Support\Org::name() }} · FORM W-9</p>
                 <h1>W-9 Submitted</h1>
                 <p><b>{{ $existing->legal_name }}</b><br>
                     제출이 완료되었습니다. / Your tax form is on file. / Su formulario está registrado.</p>
@@ -49,7 +49,7 @@
                 <a class="resub" href="{{ $resubmitUrl }}">Re-submit / 다시 작성</a>
             </div>
         @else
-            <p class="brand">DASOL PRISM · IRS FORM W-9</p>
+            <p class="brand">{{ \App\Support\Org::name() }} · IRS FORM W-9</p>
             <h1>Request for Taxpayer ID</h1>
             <p class="sub">
                 U.S. tax form for payment processing — required before your first payment.<br>

@@ -179,11 +179,10 @@ class GpsGeofencingSecurityTest extends TestCase
         $eventTime = Carbon::now()->subMinutes(10); // 10 minutes ago (offline event)
         $eventAtStr = $eventTime->toDateTimeString();
         
-        $secretKey = config('app.key') ?: 'base64:dasol-prismsmarterpdefaultkey';
-        $validToken = hash_hmac(
-            'sha256',
-            $this->employee->id . '_clock_in_' . $eventAtStr . '_33.4255_-111.94_', // empty team code suffix
-            $secretKey
+        // APP_KEY 가 아니라 거기서 파생한 키로 서명한다. APP_KEY 를 브라우저로
+        // 보내면 화면 소스만 봐도 세션·쿠키를 여는 열쇠가 넘어간다.
+        $validToken = \App\Support\AttendanceSignature::sign(
+            $this->employee->id . '_clock_in_' . $eventAtStr . '_33.4255_-111.94_' // empty team code suffix
         );
 
         $queueItem = [

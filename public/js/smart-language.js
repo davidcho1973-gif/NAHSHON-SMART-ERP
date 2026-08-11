@@ -9,7 +9,14 @@
     '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F,
   };
 
-  const exactEn = new Map(Object.entries({
+  // 고객사 이름은 배포마다 다르다. 사전에 이름을 박아 두면 다른 고객의 화면에서는
+  // 키가 안 맞아 그 줄만 번역되지 않는다 — 한글이 그대로 남는다.
+  const ORG = (typeof window !== 'undefined' && window.ORG_NAME) ? window.ORG_NAME : 'ERP';
+  function b(v) { return typeof v === 'string' ? v.split('{ORG}').join(ORG) : v; }
+  function bMap(o) { const r = {}; Object.keys(o).forEach(function (k) { r[b(k)] = b(o[k]); }); return r; }
+  function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
+
+  const exactEn = new Map(Object.entries(bMap({
     'í˜„ìž¥': 'Site',
     'í†µí•© ë·° (Global)': 'Global View',
     'ë°ì´í„° ë¡œë“œ ì¤‘...': 'Loading data...',
@@ -23,7 +30,7 @@
     'ê³µì • ê´€ë¦¬ (WBS)': 'WBS Management',
     'ìž¬ë¬´ (Finance)': 'Finance',
     'ìžìž¬/ìž¥ë¹„ (Inventory)': 'Inventory',
-    'DASOL PRISM í†µí•©ê´€ë¦¬': 'DASOL PRISM Operations',
+    '{ORG} í†µí•©ê´€ë¦¬': '{ORG} Operations',
     'ì°¨ëŸ‰ ê´€ë¦¬': 'Vehicle Management',
     'ìž¥ë¹„ ë Œíƒˆ ê´€ë¦¬': 'Equipment Rental',
     'ìˆ™ì†Œ ê´€ë¦¬': 'Housing Management',
@@ -63,10 +70,10 @@
     'ìƒˆë¡œê³ ì¹¨': 'Refresh',
     '엑셀 다운로드': 'Excel Download',
     'AI 사진 등록': 'AI Photo Registration'
-  }));
+  })));
 
-  const replacementsEn = [
-    ['DASOL PRISM Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™©', 'DASOL PRISM Â· Live field operations'],
+  const replacementsEn = bPairs([
+    ['{ORG} Â· ì‹¤ì‹œê°„ í˜„ìž¥ ìš´ì˜ í˜„í™©', '{ORG} Â· Live field operations'],
     ['ê¸´ê¸‰ ì²˜ë¦¬ í•„ìš”', 'Urgent Action Items'],
     ['í”„ë¡œì íŠ¸ í˜„í™©', 'Project Status'],
     ['ì˜¤ëŠ˜ì˜ ê²°ì • í', "Today's Decision Queue"],
@@ -126,7 +133,7 @@
     ['ì˜ì–´ë¡œ ë²ˆì—­', 'Translate to English'],
     ['AI ì´ˆì•ˆ', 'AI Draft'],
     ['ë°œì†¡', 'Send']
-  ];
+  ]);
 
   function cp1252Encode(text) {
     const bytes = [];
@@ -230,7 +237,7 @@
     ['완료', 'Done']
   ];
 
-  const exactEs = new Map(Object.entries({
+  const exactEs = new Map(Object.entries(bMap({
     'Site': 'Obra',
     'Global View': 'Vista global',
     'Loading data...': 'Cargando datos...',
@@ -250,7 +257,7 @@
     'WBS Management': 'Gestión WBS',
     'Finance': 'Finanzas',
     'Inventory': 'Inventario',
-    'DASOL PRISM Operations': 'Operaciones DASOL PRISM',
+    '{ORG} Operations': 'Operaciones {ORG}',
     'Vehicle Management': 'Gestión de vehículos',
     'Equipment Rental': 'Renta de equipos',
     'Housing Management': 'Gestión de alojamiento',
@@ -414,11 +421,11 @@
     'Translate to English': 'Traducir al inglés',
     'AI Draft': 'Borrador IA',
     'Send': 'Enviar'
-  }));
+  })));
 
-  const replacementsEs = [
-    ['DASOL PRISM Â· Live field operations', 'DASOL PRISM Â· Operaciones de campo en vivo'],
-    ['DASOL PRISM · Live field operations', 'DASOL PRISM · Operaciones de campo en vivo'],
+  const replacementsEs = bPairs([
+    ['{ORG} Â· Live field operations', '{ORG} Â· Operaciones de campo en vivo'],
+    ['{ORG} · Live field operations', '{ORG} · Operaciones de campo en vivo'],
     ['Urgent Action Items', 'Acciones urgentes'],
     ['Project Status', 'Estado del proyecto'],
     ["Today's Decision Queue", 'Cola de decisiones de hoy'],
@@ -479,7 +486,7 @@
     ['New password and confirmation do not match.', 'La nueva contraseña y la confirmación no coinciden.'],
     ['Password does not meet the requirements.', 'La contraseña no cumple los requisitos.'],
     ['Password change request is ready for backend connection.', 'La solicitud de cambio de contraseña está lista para conectarse al backend.']
-  ];
+  ]);
 
   let normalizedExactEn = null;
   let normalizedReplacementsEn = null;

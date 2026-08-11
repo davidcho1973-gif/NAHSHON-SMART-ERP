@@ -249,7 +249,7 @@
                 <div class="lbl">Requester's name and address (optional)</div>
                 {{-- 빈 양식은 받는 쪽도 비워 둔다 — 어느 회사 이름이 미리 찍힌 종이는
                      다른 현장에서 못 쓴다. --}}
-                <div class="fill" style="font-size:9pt">@if ($employee){{ $employee->company?->name ?? 'DASOL PRISM' }}@if ($employee->site)<br><span style="font-size:8pt">Site {{ $employee->site->code }}</span>@endif @endif</div>
+                <div class="fill" style="font-size:9pt">@if ($employee){{ $employee->company?->name ?? \App\Support\Org::name() }}@if ($employee->site)<br><span style="font-size:8pt">Site {{ $employee->site->code }}</span>@endif @endif</div>
             </td>
         </tr>
         <tr>

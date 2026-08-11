@@ -1,8 +1,12 @@
 @php
+    // 고객사 이름은 배포마다 다르다. 지원서·동의문에 박아 두면 두 번째 고객의
+    // 지원자가 남의 회사 이름에 동의하게 된다.
+    $org = \App\Support\Org::name();
+
     $copy = [
         'ko' => [
             'html' => 'ko',
-            'title' => 'DASOL PRISM 입사지원서',
+            'title' => $org.' 입사지원서',
             'access' => '접속 방법: Google 이메일 링크로 접속 또는 QR 코드 스캔 후 접속',
             'success' => '입사지원서가 제출되었습니다. 지원자 코드가 생성되었고 HR 담당자가 검토 후 안내합니다.',
             'applicant_code' => '지원자 코드',
@@ -48,7 +52,7 @@
             'period' => '근무 기간',
             'duties' => '담당 업무',
             'reason' => '퇴사 사유',
-            'consent_text' => '본인은 입사지원, 서류 검토, 인터뷰, 채용 여부 판단, HOFFMAN 안전교육 진행, 현장 출입 베지 발급, 출퇴근/NFC 관리, 비상 연락 및 인사 기록 관리를 위해 본인이 제출한 개인정보가 DASOL PRISM ERP 시스템에 저장 및 사용되는 것에 동의합니다.',
+            'consent_text' => '본인은 입사지원, 서류 검토, 인터뷰, 채용 여부 판단, HOFFMAN 안전교육 진행, 현장 출입 베지 발급, 출퇴근/NFC 관리, 비상 연락 및 인사 기록 관리를 위해 본인이 제출한 개인정보가 '.$org.' ERP 시스템에 저장 및 사용되는 것에 동의합니다.',
             'collected' => '수집 및 이용 항목: 이름, 생년월일, 국적, 연락처, 이메일, 주소, 비상 연락처, 지원 직책, 경력 사항, 근무 가능일, 신분증 사진, 자격증 및 라이선스 사진, HOFFMAN 안전교육 및 현장 출입 베지 정보, NFC ID 및 출퇴근 기록',
             'purpose' => '보관 및 이용 목적: 입사지원 및 채용 검토, 인터뷰 진행 및 결과 관리, 안전교육 및 현장 출입 자격 확인, 직원 등록 및 현장 배정, 출퇴근, 급여, 비상 연락, 현장 운영 관리',
             'agree' => '위 개인정보 수집 및 이용에 동의합니다.',
@@ -59,7 +63,7 @@
         ],
         'en' => [
             'html' => 'en',
-            'title' => 'DASOL PRISM Employment Application',
+            'title' => $org.' Employment Application',
             'access' => 'Access by Google email link or QR code scan.',
             'success' => 'Application submitted. Your applicant code was created and HR will review it.',
             'applicant_code' => 'Applicant code',
@@ -105,7 +109,7 @@
             'period' => 'Work period',
             'duties' => 'Duties',
             'reason' => 'Reason for leaving',
-            'consent_text' => 'I agree that the personal information I submit may be stored and used in the DASOL PRISM ERP system for job application, document review, interview, hiring decision, HOFFMAN safety training, site badge issuance, attendance/NFC management, emergency contact, and HR records.',
+            'consent_text' => 'I agree that the personal information I submit may be stored and used in the '.$org.' ERP system for job application, document review, interview, hiring decision, HOFFMAN safety training, site badge issuance, attendance/NFC management, emergency contact, and HR records.',
             'collected' => 'Collected items: name, date of birth, nationality, contact, email, address, emergency contact, position, work history, available start date, ID photos, certification/license photos, HOFFMAN safety and site badge information, NFC ID and attendance records.',
             'purpose' => 'Purpose: job application and hiring review, interview/result management, safety and site access qualification, employee registration and site assignment, attendance, payroll, emergency contact, and site operations.',
             'agree' => 'I agree to the personal information collection and use above.',
@@ -116,7 +120,7 @@
         ],
         'es' => [
             'html' => 'es',
-            'title' => 'Solicitud de empleo DASOL PRISM',
+            'title' => 'Solicitud de empleo '.$org,
             'access' => 'Acceso por enlace de Google email o escaneo de código QR.',
             'success' => 'Solicitud enviada. Se creó su código de solicitante y HR la revisará.',
             'applicant_code' => 'Código de solicitante',
@@ -162,7 +166,7 @@
             'period' => 'Periodo',
             'duties' => 'Responsabilidades',
             'reason' => 'Razón de salida',
-            'consent_text' => 'Acepto que la información personal enviada se guarde y use en el sistema DASOL PRISM ERP para solicitud de empleo, revisión de documentos, entrevista, decisión de contratación, entrenamiento de seguridad HOFFMAN, badge de acceso, asistencia/NFC, contacto de emergencia y registros de HR.',
+            'consent_text' => 'Acepto que la información personal enviada se guarde y use en el sistema '.$org.' ERP para solicitud de empleo, revisión de documentos, entrevista, decisión de contratación, entrenamiento de seguridad HOFFMAN, badge de acceso, asistencia/NFC, contacto de emergencia y registros de HR.',
             'collected' => 'Datos recopilados: nombre, fecha de nacimiento, nacionalidad, contacto, email, dirección, contacto de emergencia, puesto, experiencia, fecha disponible, fotos de ID, certificaciones/licencias, seguridad HOFFMAN y badge, NFC ID y registros de asistencia.',
             'purpose' => 'Propósito: revisión de empleo, entrevistas, seguridad y acceso a sitio, registro de empleado y asignación, asistencia, nómina, emergencia y operación del sitio.',
             'agree' => 'Acepto la recopilación y uso de información personal descritos arriba.',
@@ -251,7 +255,7 @@
 
             <section class="summary">
                 <div><span>{{ $t['applicant_code'] }}</span>{{ $registration->applicant_code ?? $t['pending_code'] }}</div>
-                <div><span>{{ $t['company'] }}</span>{{ $registration->company?->name ?? 'DASOL PRISM' }}</div>
+                <div><span>{{ $t['company'] }}</span>{{ $registration->company?->name ?? $org }}</div>
                 <div><span>{{ $t['site'] }}</span>{{ $registration->site?->code ?? 'Pending' }}</div>
             </section>
 

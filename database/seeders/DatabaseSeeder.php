@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\SmartCompanyData;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use App\Support\Org;
 
 class DatabaseSeeder extends Seeder
 {
@@ -37,9 +38,16 @@ class DatabaseSeeder extends Seeder
 
     private function seedOperationalData(): void
     {
+        // 자사(자기 회사) 한 줄. 고객사마다 다르므로 이름을 코드에 두지 않는다 —
+        // 두면 새 고객 배포에 남의 회사 이름이 먼저 들어가 앉는다.
         Company::query()->updateOrCreate(
-            ['code' => 'DASOL-PRISM'],
-            ['name' => 'DASOL PRISM', 'legal_name' => 'DASOL PRISM', 'status' => 'active']
+            ['code' => Org::code()],
+            [
+                'name' => Org::name(),
+                'legal_name' => Org::legalName(),
+                'company_type' => Company::TYPE_OWN,
+                'status' => 'active',
+            ]
         );
     }
 }

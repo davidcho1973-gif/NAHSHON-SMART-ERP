@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
+use App\Support\Org;
 
 class AttendanceQrService
 {
@@ -79,7 +80,7 @@ class AttendanceQrService
         return DB::transaction(function () use ($employee, $qrCode, $recordedBy, $source, $mode, $badgeToken, $reason, $eventTime, $workDate): array {
             $duplicate = AttendanceLog::query()
                 ->where('employee_id', $employee->id)
-                ->where('event_at', '>=', $eventTime->copy()->subMinutes(self::DUPLICATE_WINDOW_MINUTES))
+                ->where('event_at', '>=', $eventTime->copy()->subMinutes(Org::int('attendance.duplicate_window_minutes', self::DUPLICATE_WINDOW_MINUTES)))
                 ->where('event_at', '<=', $eventTime)
                 ->where('status', '!=', 'rejected')
                 ->latest('event_at')
@@ -338,13 +339,20 @@ class AttendanceQrService
             ->first();
     }
 
+    /**
+     * 자사(직접고용을 하는 우리 회사) 한 줄.
+     *
+     * 예전에는 회사 이름을 여기서 글자로 맞췄다. 사명이 한 번 바뀌자 이 줄이 조용히
+     * 아무것도 못 찾게 됐고(화면은 멀쩡했다), 다른 고객에게 배포하면 애초에 맞을
+     * 이름이 없다. 이름이 아니라 <b>구분</b>으로 찾는다 — 자사는 한 곳뿐이다.
+     */
     private function employerCompanyId(): ?int
     {
         return Company::query()
-            ->where(fn ($query) => $query
-                ->whereRaw('lower(code) in (?, ?)', ['dasol-prism-mep', 'dasol-prism'])
-                ->orWhereRaw('lower(name) in (?, ?)', ['dasol-prism mep', 'dasol-prism-mep'])
-                ->orWhereRaw('lower(legal_name) in (?, ?)', ['dasol-prism mep', 'dasol-prism-mep']))
-            ->value('id');
+            ->where('company_type', Company::TYPE_OWN)
+            ->value('id')
+            ?? Company::query()
+                ->whereRaw('lower(code) = ?', [mb_strtolower(Org::code())])
+                ->value('id');
     }
 }

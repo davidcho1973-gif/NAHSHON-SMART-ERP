@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use App\Support\Org;
 
 /**
  * 게이트 QR 출퇴근 — 현장 출입구에 붙인 QR 을 스캔하면(로그인 불필요), 이름으로 본인을 찾아
@@ -100,7 +101,7 @@ class GateAttendanceService
 
         // 중복 스캔(5분 내) → 무시.
         $recent = AttendanceLog::query()->where('employee_id', $employee->id)
-            ->where('event_at', '>=', $now->copy()->subMinutes(self::DUPLICATE_WINDOW_MINUTES))
+            ->where('event_at', '>=', $now->copy()->subMinutes(Org::int('attendance.duplicate_window_minutes', self::DUPLICATE_WINDOW_MINUTES)))
             ->where('status', '!=', 'rejected')->latest('event_at')->first();
         if ($recent) {
             return [

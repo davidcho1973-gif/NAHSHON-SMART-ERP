@@ -35,7 +35,7 @@
     @endphp
 
     <main class="sheet">
-        <p class="brand">DASOL PRISM SMART ERP</p>
+        <p class="brand">{{ \App\Support\Org::name() }} SMART ERP</p>
         <h1>작업자 배지 QR</h1>
 
         <section class="info">

@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
 use Illuminate\Support\Carbon;
+use App\Support\Org;
 
 /**
  * 하이브리드 자동 출퇴근 판정.
@@ -42,6 +43,23 @@ class AttendanceGeoService
      * 버리게 되므로 바닥값을 둔다.
      */
     public const MIN_ACCURACY_METERS = 75;
+
+    // 현장 크기와 건물 구조에 따라 다르다. 좁은 현장에 넓은 버퍼를 쓰면 길 건너에서
+    // 찍히고, 반대면 현장 안에서 못 찍는다. 배포마다 config/org.php 로 바꾼다.
+    private static function exitBufferMeters(): int
+    {
+        return Org::int('geo.exit_buffer_meters', self::EXIT_BUFFER_METERS);
+    }
+
+    private static function dwellSeconds(): int
+    {
+        return Org::int('geo.dwell_seconds', self::DWELL_SECONDS);
+    }
+
+    private static function minAccuracyMeters(): int
+    {
+        return Org::int('geo.min_accuracy_meters', self::MIN_ACCURACY_METERS);
+    }
 
     /**
      * 위치/네트워크 신호 1건을 받아 상태를 갱신한다.
@@ -113,7 +131,7 @@ class AttendanceGeoService
             } else {
                 if (! $session->pending_exit_at) {
                     $session->update(['pending_exit_at' => $now]);
-                } elseif ($session->pending_exit_at->diffInSeconds($now) >= self::DWELL_SECONDS) {
+                } elseif ($session->pending_exit_at->diffInSeconds($now) >= self::dwellSeconds()) {
                     $exitAt = $session->pending_exit_at;
                     $session->on_site_seconds += max(0, $session->last_enter_at->diffInSeconds($exitAt));
                     $session->last_exit_at = $exitAt;
@@ -301,7 +319,7 @@ class AttendanceGeoService
 
         $radius = (float) $site->radius_meters;
 
-        if ($accuracy !== null && $accuracy > max($radius, self::MIN_ACCURACY_METERS)) {
+        if ($accuracy !== null && $accuracy > max($radius, self::minAccuracyMeters())) {
             return 'unknown';
         }
 
@@ -311,7 +329,7 @@ class AttendanceGeoService
             return 'in';
         }
 
-        return $distance <= $radius + self::EXIT_BUFFER_METERS ? 'in_loose' : 'out';
+        return $distance <= $radius + self::exitBufferMeters() ? 'in_loose' : 'out';
     }
 
     /**

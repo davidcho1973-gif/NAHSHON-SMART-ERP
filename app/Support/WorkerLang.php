@@ -33,6 +33,10 @@ final class WorkerLang
      */
     public static function join(): array
     {
+        // 고객사 이름은 배포마다 다르다. 문구에 박아 두면 두 번째 고객에게
+        // 남의 회사 이름이 나간다.
+        $org = Org::name();
+
         return [
             'ko' => [
                 'eyebrow' => '작업자 간편 등록',
@@ -47,8 +51,8 @@ final class WorkerLang
                 'companyOtherPlaceholder' => '회사 이름을 적어 주세요',
                 'companyOtherHint' => '처음 등록되는 회사입니다. 아래에서 누가 급여를 주는지 골라 주세요.',
                 'askTitle' => '소속 구분을 선택해 주세요',
-                'askDirect' => 'DASOL PRISM 소속',
-                'askDirectSub' => 'DASOL PRISM 에서 급여를 받습니다',
+                'askDirect' => $org.' 소속',
+                'askDirectSub' => $org.' 에서 급여를 받습니다',
                 'askIndirect' => '협력업체 소속',
                 'askIndirectSub' => '소속 업체에서 급여를 받습니다',
                 'trade' => '공정 (Trade)',
@@ -62,7 +66,7 @@ final class WorkerLang
                 'doneBody' => '님, 작업자로 등록되었습니다.',
                 'doneDevice' => '이 휴대폰이 기억되었습니다. 다음부터 게이트 QR 을 스캔하면 이름을 찾지 않고 바로 출퇴근할 수 있습니다.',
                 'doneBadge' => '사번',
-                'labelDirect' => 'DASOL PRISM 소속(직접고용)',
+                'labelDirect' => $org.' 소속(직접고용)',
                 'labelIndirect' => '협력사 소속(간접고용)',
                 'labelClient' => '원청 담당자',
                 'suffixRegistered' => ' 으로 등록됩니다.',
@@ -80,8 +84,8 @@ final class WorkerLang
                 'companyOtherPlaceholder' => 'Type your company name',
                 'companyOtherHint' => 'This company is new to us. Please choose below who pays your wages.',
                 'askTitle' => 'Who pays your wages?',
-                'askDirect' => 'DASOL PRISM',
-                'askDirectSub' => 'I am paid by DASOL PRISM',
+                'askDirect' => $org,
+                'askDirectSub' => 'I am paid by '.$org,
                 'askIndirect' => 'Subcontractor',
                 'askIndirectSub' => 'I am paid by my own company',
                 'trade' => 'Trade',
@@ -95,7 +99,7 @@ final class WorkerLang
                 'doneBody' => ', you are now registered as a worker.',
                 'doneDevice' => 'This phone is remembered. Next time, just scan the gate QR — no need to look up your name.',
                 'doneBadge' => 'Employee no.',
-                'labelDirect' => 'DASOL PRISM (direct hire)',
+                'labelDirect' => $org.' (direct hire)',
                 'labelIndirect' => 'Subcontractor (indirect)',
                 'labelClient' => 'Client representative',
                 'suffixRegistered' => ' will be recorded.',
@@ -113,8 +117,8 @@ final class WorkerLang
                 'companyOtherPlaceholder' => 'Escriba el nombre de su empresa',
                 'companyOtherHint' => 'Esta empresa es nueva para nosotros. Elija abajo quién le paga su salario.',
                 'askTitle' => '¿Quién le paga su salario?',
-                'askDirect' => 'DASOL PRISM',
-                'askDirectSub' => 'DASOL PRISM me paga',
+                'askDirect' => $org,
+                'askDirectSub' => $org.' me paga',
                 'askIndirect' => 'Subcontratista',
                 'askIndirectSub' => 'Mi propia empresa me paga',
                 'trade' => 'Oficio',
@@ -128,7 +132,7 @@ final class WorkerLang
                 'doneBody' => ', ya está registrado como trabajador.',
                 'doneDevice' => 'Este teléfono quedó registrado. La próxima vez solo escanee el QR de la entrada; no tendrá que buscar su nombre.',
                 'doneBadge' => 'N.º de empleado',
-                'labelDirect' => 'DASOL PRISM (contratación directa)',
+                'labelDirect' => $org.' (contratación directa)',
                 'labelIndirect' => 'Subcontratista (indirecta)',
                 'labelClient' => 'Representante del cliente',
                 'suffixRegistered' => ' será el registro.',

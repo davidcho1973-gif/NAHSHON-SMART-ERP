@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use Illuminate\Http\JsonResponse;
+use App\Support\Org;
 
 /**
  * 휴대폰이 "이건 앱이다" 라고 판단하는 근거 파일.
@@ -38,10 +39,22 @@ class WebManifestController extends Controller
     {
         return $this->manifest(
             id: 'worker-app',
-            name: '내 출퇴근 · DASOL PRISM',
+            name: '내 출퇴근 · '.Org::name(),
             shortName: '내 출퇴근',
             start: route('attendance-app.index'),
             scope: route('attendance-app.index'),
+        );
+    }
+
+    /** 관리자 ERP 본체. 정적 파일이었는데 고객사 이름이 박혀 있어 라우트로 옮겼다. */
+    public function erp(): JsonResponse
+    {
+        return $this->manifest(
+            id: 'erp',
+            name: Org::name().' SMART ERP',
+            shortName: Org::shortName(),
+            start: url('/'),
+            scope: url('/'),
         );
     }
 

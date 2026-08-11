@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ ($mode ?? null) === 'site' ? 'DASOL PRISM Site Application QR' : 'DASOL PRISM Application QR' }}</title>
+    <title>{{ ($mode ?? null) === 'site' ? \App\Support\Org::name().' Site Application QR' : \App\Support\Org::name().' Application QR' }}</title>
     <style>
         :root {
             color-scheme: light;
@@ -173,7 +173,7 @@
     @endphp
 
     <main class="sheet">
-        <p class="brand">DASOL PRISM</p>
+        <p class="brand">{{ \App\Support\Org::name() }}</p>
         <h1>{{ ($mode ?? null) === 'site' ? '현장 공용 입사지원 QR' : '입사지원서 QR 코드' }}</h1>
         @if (($mode ?? null) === 'site')
             <p class="site-name">{{ $site->code ?? $registration->site?->code }} {{ $site->name ?? $registration->site?->name }}</p>

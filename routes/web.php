@@ -245,6 +245,7 @@ Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('s
 // 설치가 조용히 실패한다 — 안에는 아이콘 주소와 화면 이름뿐이라 감출 것이 없다.
 Route::get('/gate/{site}/manifest.webmanifest', [WebManifestController::class, 'gate'])->name('gate.manifest');
 Route::get('/worker-app.webmanifest', [WebManifestController::class, 'worker'])->name('worker-app.manifest');
+Route::get('/erp.webmanifest', [WebManifestController::class, 'erp'])->name('erp.manifest');
 
 // 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');
@@ -317,6 +318,16 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
         'built_at' => $version['built_at'] ?? null,
         'checked_at' => now()->toIso8601String(),
         'env' => app()->environment(),
+        // 이 배포가 누구의 것인가. 코드 하나로 고객마다 배포하다 보면, 배포를 열어
+        // 놓고도 "이게 어느 고객 것이더라" 를 모르는 순간이 온다. 더 나쁜 경우는
+        // 새 고객 배포가 기본값(우리 회사 이름) 그대로 서 있는 것이다 — 화면은
+        // 멀쩡하고, 고객 눈에만 남의 회사 이름이 보인다.
+        'org' => [
+            'name' => \App\Support\Org::name(),
+            'code' => \App\Support\Org::code(),
+            'configured' => (bool) config('org.configured'),
+            'customized_keys' => \App\Models\OrgSetting::query()->pluck('key')->all(),
+        ],
         // 도메인이 절반만 바뀌는 사고가 흔하다 — 새 주소로 열리는데 APP_URL 은 옛 주소면,
         // QR·설치 카드·매니페스트가 전부 옛 주소를 가리킨다. 화면은 멀쩡해 보인다.
         'domain' => [

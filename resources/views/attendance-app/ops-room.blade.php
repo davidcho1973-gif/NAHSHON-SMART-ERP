@@ -52,7 +52,7 @@
     <div class="app">
         <header>
             <a class="back" href="{{ route('attendance-app.index') }}">← 홈</a>
-            <p class="eyebrow">DASOL PRISM · 현장 상황실</p>
+            <p class="eyebrow">{{ \App\Support\Org::name() }} · 현장 상황실</p>
             <h1>원문 기록</h1>
             <p class="sub">{{ $siteName ?: '전체 현장' }} · 올린 대화 원문이 그대로 보관됩니다.@if ($canManage) 수정·삭제할 수 있습니다.@endif</p>
         </header>

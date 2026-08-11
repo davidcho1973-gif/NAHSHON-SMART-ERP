@@ -56,7 +56,7 @@
     <main class="sheet">
         <div class="top">
             <div>
-                <p class="brand">DASOL PRISM</p>
+                <p class="brand">{{ \App\Support\Org::name() }}</p>
                 <h1 id="t-title"></h1>
             </div>
             <div class="langs" id="langs">
@@ -147,7 +147,7 @@
             T = DICT[code];
             document.documentElement.setAttribute('lang', code);
             if (remember) { try { localStorage.setItem(LANG_KEY, code); } catch (e) {} }
-            if (window.DasolInstall) { window.DasolInstall.setLang(code); }
+            if (window.AppInstall) { window.AppInstall.setLang(code); }
             Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
                 b.classList.toggle('on', b.getAttribute('data-lang') === code);
             });
@@ -165,9 +165,9 @@
             rb.textContent = T.remember;
             rb.classList.toggle('hidden', recognized || !selected);
             var di = document.getElementById('done-install');
-            if (window.DasolInstall) {
-                di.textContent = '＋ ' + window.DasolInstall.label();
-                di.classList.toggle('hidden', window.DasolInstall.installed());
+            if (window.AppInstall) {
+                di.textContent = '＋ ' + window.AppInstall.label();
+                di.classList.toggle('hidden', window.AppInstall.installed());
             }
             if (!document.getElementById('results').dataset.filled) {
                 document.getElementById('results').innerHTML = '<div class="muted">' + T.searchEmpty + '</div>';
@@ -327,15 +327,15 @@
                     // 설치 안내는 여기서만 뜬다 — 출퇴근이 한 번 찍힌 뒤다. 열자마자 권하면
                     // 이 화면이 뭘 해 주는지도 모르는 채로 닫는다. 잠깐 두는 것은 "완료"를
                     // 먼저 읽게 하려는 것이다.
-                    if (window.DasolInstall && !d.ignored) {
-                        setTimeout(function () { window.DasolInstall.offer(); }, 1200);
+                    if (window.AppInstall && !d.ignored) {
+                        setTimeout(function () { window.AppInstall.offer(); }, 1200);
                     }
                 })
                 .catch(function () { btn.disabled = false; btn.textContent = orig; alert(T.network); });
         });
 
         document.getElementById('done-install').addEventListener('click', function () {
-            window.DasolInstall.show();
+            window.AppInstall.show();
         });
     </script>
 </body>

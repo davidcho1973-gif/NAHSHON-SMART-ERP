@@ -6,7 +6,7 @@
 
     설계 하나 — 처음 열자마자 띄우지 않는다. 아무것도 해 보지 않은 사람에게 설치를
     권하면 대부분 닫는다. 출퇴근을 한 번 찍고 나서, 그러니까 이 화면이 쓸모 있다는 걸
-    안 다음에 올라온다. 부르는 쪽에서 window.DasolInstall.offer() 를 호출한다.
+    안 다음에 올라온다. 부르는 쪽에서 window.AppInstall.offer() 를 호출한다.
 
     설계 둘 — 이미 홈 화면에서 연 사람에게는 영원히 안 뜬다. 닫은 사람에게도 안 뜬다.
     현장에서 같은 안내를 두 번 보는 것만큼 앱을 미워하게 만드는 건 없다.
@@ -19,7 +19,7 @@
     $installLang = \App\Support\WorkerLang::resolve($installLang ?? null);
 @endphp
 
-<div id="dasol-install" hidden>
+<div id="app-install" hidden>
     <div class="di-back" data-di-dismiss></div>
     <div class="di-sheet" role="dialog" aria-modal="true" aria-labelledby="di-title">
         <div class="di-head">
@@ -55,8 +55,8 @@
 </div>
 
 <style>
-    #dasol-install { position: fixed; inset: 0; z-index: 9000; font-family: inherit; }
-    #dasol-install[hidden] { display: none; }
+    #app-install { position: fixed; inset: 0; z-index: 9000; font-family: inherit; }
+    #app-install[hidden] { display: none; }
     .di-back { position: absolute; inset: 0; background: rgba(10,10,8,.55); }
     .di-sheet {
         position: absolute; left: 0; right: 0; bottom: 0;
@@ -104,9 +104,9 @@
     {{-- 문구에 <b> 가 들어 있다. 태그를 < 로 escape 해 넣어야 </script> 로 오해될 여지가 없다. --}}
     var DICT = @json($installDict, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP);
     var lang = @json($installLang);
-    var KEY = 'dasolInstallDismissed';
+    var KEY = 'appInstallDismissed';
 
-    var root = document.getElementById('dasol-install');
+    var root = document.getElementById('app-install');
     var deferred = null;   // 안드로이드가 넘겨주는 설치 권한. 한 번만 쓸 수 있다.
 
     // 이미 홈 화면에서 연 사람. 안내할 것이 없다.
@@ -197,7 +197,7 @@
         el.addEventListener('click', function () { close(true); });
     });
 
-    window.DasolInstall = {
+    window.AppInstall = {
         /** 쓸모를 한 번 보여 준 뒤 부른다. 띄웠으면 true. */
         offer: function () { return open(false); },
         /** 사람이 직접 "앱 설치"를 눌렀을 때. 닫았던 기억을 무시한다. */

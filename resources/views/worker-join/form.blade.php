@@ -49,7 +49,7 @@
         @if ($done)
             <div class="done">
                 <div class="check">✓</div>
-                <p class="brand">DASOL PRISM · {{ $site->code }} {{ $site->name }}</p>
+                <p class="brand">{{ \App\Support\Org::name() }} · {{ $site->code }} {{ $site->name }}</p>
                 <h1 id="t-doneTitle"></h1>
                 <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
                 <p><b>{{ $workerName }}</b><span id="t-doneBody"></span></p>
@@ -87,7 +87,7 @@
         @else
             <div class="top">
                 <div>
-                    <p class="brand">DASOL PRISM · <span id="t-eyebrow"></span></p>
+                    <p class="brand">{{ \App\Support\Org::name() }} · <span id="t-eyebrow"></span></p>
                     <h1 id="t-title"></h1>
                 </div>
                 <div class="langs" id="langs">

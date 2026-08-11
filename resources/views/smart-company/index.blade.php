@@ -5,8 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>SMART COMPANY ERP | DASOL PRISM</title>
-  <meta name="description" content="DASOL PRISM í˜„ìž¥ í†µí•© ê´€ë¦¬ ì‹œìŠ¤í…œ">
+  <title>SMART COMPANY ERP | {{ \App\Support\Org::name() }}</title>
+  {{-- 고객사 이름은 배포마다 다르다. 화면 스크립트가 이 하나만 보게 한다. --}}
+  <script>window.ORG_NAME = @json(\App\Support\Org::name()); window.ORG_COLOR = @json(\App\Support\Org::color());</script>
+  <meta name="description" content="{{ \App\Support\Org::name() }} í˜„ìž¥ í†µí•© ê´€ë¦¬ ì‹œìŠ¤í…œ">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -24,6 +26,7 @@
     <script src="{{ asset('js/admin-applicants.js') }}?v={{ filemtime(public_path('js/admin-applicants.js')) }}" defer></script>
     <script src="{{ asset('js/admin-payprofiles.js') }}?v={{ filemtime(public_path('js/admin-payprofiles.js')) }}" defer></script>
     <script src="{{ asset('js/admin-sites.js') }}?v={{ filemtime(public_path('js/admin-sites.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-org.js') }}?v={{ filemtime(public_path('js/admin-org.js')) }}" defer></script>
     <script src="{{ asset('js/admin-messenger.js') }}?v={{ filemtime(public_path('js/admin-messenger.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
@@ -168,7 +171,7 @@
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-section-title">DASOL PRISM í†µí•©ê´€ë¦¬</div>
+            <div class="nav-section-title">{{ \App\Support\Org::name() }} í†µí•©ê´€ë¦¬</div>
             <ul class="nav-list">
               <li class="nav-item" data-view="vehicle" id="nav-vehicle">
                 <i class="ph ph-car"></i><span>ì°¨ëŸ‰ ê´€ë¦¬</span>
@@ -200,6 +203,9 @@
               </li>
               <li class="nav-item" data-view="site-admin" id="nav-site-admin">
                 <i class="ph ph-buildings" style="color:#0ea5e9"></i><span>현장 · 프로젝트</span>
+              </li>
+              <li class="nav-item" data-view="org-settings" id="nav-org-settings">
+                <i class="ph ph-gear-six" style="color:#0ea5e9"></i><span>조직 설정</span>
               </li>
               <li class="nav-item" data-view="pay-profiles" id="nav-pay-profiles">
                 <i class="ph ph-currency-dollar" style="color:#0ea5e9"></i><span>임금 프로필</span>
@@ -275,7 +281,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="flights"><i class="ph ph-airplane"></i><span>항공권</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="office"><i class="ph ph-archive"></i><span>사무실비품</span></button>
-          <!-- 관리 화면 — 데스크톱 사이드바의 "DASOL PRISM 통합관리" 와 같은 것들. 여기 없으면
+          <!-- 관리 화면 — 데스크톱 사이드바의 사이드바 "통합관리" 아래 항목들. 여기 없으면
                휴대폰에서는 옮겨 놓은 관리 화면에 들어갈 길이 아예 없다. -->
           <button class="mobile-more-tile" type="button" data-mobile-view="access-control"><i class="ph ph-shield-check"></i><span>계정·권한</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="attendance-logs"><i class="ph ph-clock-counter-clockwise"></i><span>출퇴근 기록</span></button>
@@ -284,6 +290,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-package"></i><span>품목·분류</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-buildings"></i><span>현장·프로젝트</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear-six"></i><span>조직 설정</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-currency-dollar"></i><span>임금 프로필</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="messenger-admin"><i class="ph ph-chats-circle"></i><span>메신저 관리</span></button>
           <button class="mobile-more-tile mobile-more-tile-accent" type="button" data-mobile-action="scanner"><i class="ph ph-magic-wand"></i><span>AI 스캔등록</span></button>
@@ -306,7 +313,7 @@
             </select>
           </div>
           <div class="breadcrumbs" style="margin-left: 14px; border-left: 1px solid var(--border-color); padding-left: 14px;">
-            <span>DASOL PRISM</span>
+            <span>{{ \App\Support\Org::name() }}</span>
             <i class="ph ph-caret-right"></i>
             <span class="active-crumb" id="breadcrumb-current">Overview</span>
           </div>
@@ -365,7 +372,7 @@
                 <div class="account-company">
                   <span class="account-company-icon"><i class="ph ph-buildings"></i></span>
                   <div>
-                    <div class="account-company-name">DASOL PRISM</div>
+                    <div class="account-company-name">{{ \App\Support\Org::name() }}</div>
                     <div class="account-company-sub">Your Company</div>
                   </div>
                 </div>
@@ -661,16 +668,16 @@
         { time: '08:51', action: 'ë¶ˆì¶œ', toolId: 'TL-001', toolName: 'ì „ë™ë“œë¦´ Makita', userId: 'ì´ë¯¼ì¤€', condition: 'ì •ìƒ' },
       ],
       getPersonnelList: async () => [
-        { id: 'P-2604-0001', nameKr: 'ê¹€ì² ìˆ˜', nameEn: 'Chulsoo Kim', company: 'DASOL PRISM', role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-10-15', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0002', nameKr: 'ì´ë¯¼ì¤€', nameEn: 'Minjun Lee', company: 'DASOL PRISM', role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-09-30', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
+        { id: 'P-2604-0001', nameKr: 'ê¹€ì² ìˆ˜', nameEn: 'Chulsoo Kim', company: ORG_NAME, role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-10-15', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
+        { id: 'P-2604-0002', nameKr: 'ì´ë¯¼ì¤€', nameEn: 'Minjun Lee', company: ORG_NAME, role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-09-30', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
         { id: 'P-2604-0003', nameKr: 'ë°•ì§€í˜¸', nameEn: 'Jiho Park', company: 'SUBO', role: 'ìš©ì ‘ê³µ', visa: 'H-2B', visaExpiry: '2026-08-20', site: 'HFF-02', safety: 'ì™„ë£Œ' },
         { id: 'P-2604-0004', nameKr: 'ìµœë™í˜', nameEn: 'Donghyuk Choi', company: 'SUBO', role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-07-11', site: 'HFF-02', safety: 'ë§Œë£Œìž„ë°•' },
         { id: 'P-2604-0005', nameKr: 'ê°•ìŠ¹ìš°', nameEn: 'Seungwoo Kang', company: 'ETC', role: 'ì¤‘ìž¥ë¹„ê¸°ì‚¬', visa: 'H-2B', visaExpiry: '2026-12-01', site: 'SST-03', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0007', nameKr: 'ìž„ì„±í›ˆ', nameEn: 'Sunghoon Lim', company: 'DASOL PRISM', role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-10-22', site: 'HWH-04', safety: 'ë¯¸ì´ìˆ˜' },
+        { id: 'P-2604-0007', nameKr: 'ìž„ì„±í›ˆ', nameEn: 'Sunghoon Lim', company: ORG_NAME, role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-10-22', site: 'HWH-04', safety: 'ë¯¸ì´ìˆ˜' },
       ],
       getPersonnelStats: async () => ({
         total: 142, active: 138, onLeave: 4, visaExpiringSoon: 3, safetyExpiring: 2,
-        byCompany: [{ name: 'DASOL PRISM', count: 68 }, { name: 'SUBO', count: 44 }, { name: 'ETC', count: 30 }],
+        byCompany: [{ name: ORG_NAME, count: 68 }, { name: 'SUBO', count: 44 }, { name: 'ETC', count: 30 }],
       }),
       getFinanceStats: async () => ({
         mtdTotal: 452400, mtdBudget: 460000, pendingApproval: 3, pendingAmount: 17140, claimable: 38200,
@@ -705,10 +712,10 @@
         trainingExpiringSoon: 2
       }),
       getPtwList: async () => [
-        { id: 'PTW-2604-001', type: 'ê³ ì†Œìž‘ì—…', typeColor: '#f97316', title: 'Aêµ¬ì—­ ì§€ë¶• íŒ¨ë„ ì„¤ì¹˜', zone: 'Aêµ¬ì—­', date: '2026-04-13', timeStart: '07:00', timeEnd: '17:00', applicant: 'ê¹€ì² ìˆ˜', company: 'DASOL PRISM', workers: 4, risks: 'ì¶”ë½, ë‚™í•˜ë¬¼', measures: 'ì•ˆì „ë‚œê°„ ì„¤ì¹˜, ì•ˆì „ë§ ì„¤ì¹˜, ì•ˆì „ë²¨íŠ¸ ì°©ìš©', tbmDone: true, status: 'ì§„í–‰ì¤‘' },
+        { id: 'PTW-2604-001', type: 'ê³ ì†Œìž‘ì—…', typeColor: '#f97316', title: 'Aêµ¬ì—­ ì§€ë¶• íŒ¨ë„ ì„¤ì¹˜', zone: 'Aêµ¬ì—­', date: '2026-04-13', timeStart: '07:00', timeEnd: '17:00', applicant: 'ê¹€ì² ìˆ˜', company: ORG_NAME, workers: 4, risks: 'ì¶”ë½, ë‚™í•˜ë¬¼', measures: 'ì•ˆì „ë‚œê°„ ì„¤ì¹˜, ì•ˆì „ë§ ì„¤ì¹˜, ì•ˆì „ë²¨íŠ¸ ì°©ìš©', tbmDone: true, status: 'ì§„í–‰ì¤‘' },
         { id: 'PTW-2604-002', type: 'í™”ê¸°ìž‘ì—…', typeColor: '#ef4444', title: 'Bêµ¬ì—­ ë°°ê´€ ìš©ì ‘', zone: 'Bêµ¬ì—­', date: '2026-04-13', timeStart: '09:00', timeEnd: '15:00', applicant: 'ì´ë¯¼ì¤€', company: 'SUBO', workers: 2, risks: 'í™”ìž¬, í™”ìƒ, ìœ í•´ê°€ìŠ¤', measures: 'ì†Œí™”ê¸° ë¹„ì¹˜, í™”ê¸°ê°ì‹œìž ë°°ì¹˜, ë°©ì—´ë³µ ì°©ìš©', tbmDone: false, status: 'ìŠ¹ì¸ëŒ€ê¸°' },
         { id: 'PTW-2604-003', type: 'ë°€íê³µê°„', typeColor: '#8b5cf6', title: 'Cêµ¬ì—­ ì§€í•˜ íƒ±í¬ ì²­ì†Œ', zone: 'Cêµ¬ì—­', date: '2026-04-14', timeStart: '08:00', timeEnd: '12:00', applicant: 'ë°•ì§€í˜¸', company: 'ETC', workers: 3, risks: 'ì‚°ì†Œê²°í•, ìœ í•´ê°€ìŠ¤ ì¤‘ë…', measures: 'í™˜ê¸°ìž¥ì¹˜ ê°€ë™, ì‚°ì†Œë†ë„ ì¸¡ì •, êµ¬ì¡°ì› ëŒ€ê¸°', tbmDone: false, status: 'ìŠ¹ì¸ëŒ€ê¸°' },
-        { id: 'PTW-2604-004', type: 'ì¤‘ëŸ‰ë¬¼', typeColor: '#eab308', title: 'Dêµ¬ì—­ ì¹ ëŸ¬ ì–‘ì¤‘', zone: 'Dêµ¬ì—­', date: '2026-04-12', timeStart: '06:00', timeEnd: '10:00', applicant: 'ìµœë™í˜', company: 'DASOL PRISM', workers: 6, risks: 'ë‚™í•˜, ì „ë„, ì¶©ëŒ', measures: 'í¬ë ˆì¸ ìž‘ë™ë°˜ê²½ í†µì œ, ì‹ í˜¸ìˆ˜ ë°°ì¹˜', tbmDone: true, status: 'ì™„ë£Œ' },
+        { id: 'PTW-2604-004', type: 'ì¤‘ëŸ‰ë¬¼', typeColor: '#eab308', title: 'Dêµ¬ì—­ ì¹ ëŸ¬ ì–‘ì¤‘', zone: 'Dêµ¬ì—­', date: '2026-04-12', timeStart: '06:00', timeEnd: '10:00', applicant: 'ìµœë™í˜', company: ORG_NAME, workers: 6, risks: 'ë‚™í•˜, ì „ë„, ì¶©ëŒ', measures: 'í¬ë ˆì¸ ìž‘ë™ë°˜ê²½ í†µì œ, ì‹ í˜¸ìˆ˜ ë°°ì¹˜', tbmDone: true, status: 'ì™„ë£Œ' },
         { id: 'PTW-2604-005', type: 'êµ´ì°©ìž‘ì—…', typeColor: '#3b82f6', title: 'Eêµ¬ì—­ ì§€ì¤‘ë°°ê´€ íŠ¸ë Œì¹˜', zone: 'Eêµ¬ì—­', date: '2026-04-11', timeStart: '07:00', timeEnd: '16:00', applicant: 'ê°•ìŠ¹ìš°', company: 'ETC', workers: 5, risks: 'ë§¤ëª°, ì§€ì¤‘ë§¤ì„¤ë¬¼ ì†ìƒ', measures: 'ì§€í•˜ë§¤ì„¤ë¬¼ í™•ì¸, ê²½ì‚¬ë©´ ë³´ê°•, ì¶œìž…í†µì œ', tbmDone: true, status: 'ì™„ë£Œ' }
       ],
       getPtwStats: async () => ({ todayActive: 2, pending: 1, completed: 2, rejected: 0 }),
@@ -740,14 +747,14 @@
       ],
       getInspectionStats: async () => ({ totalItems: 12, passed: 9, failed: 3, completionRate: 78 }),
       getTrainingRecords: async () => [
-        { id: 'P-2604-0001', name: 'ê¹€ì² ìˆ˜', role: 'ë°°ê´€ê³µ', company: 'DASOL PRISM',
+        { id: 'P-2604-0001', name: 'ê¹€ì² ìˆ˜', role: 'ë°°ê´€ê³µ', company: ORG_NAME,
           trainings: [
             { name: 'OSHA 30-Hour', completedDate: '2024-10-15', expiryDate: '2026-10-15', status: 'ìœ íš¨' },
             { name: 'ê³ ì†Œìž‘ì—… ì•ˆì „êµìœ¡', completedDate: '2025-04-01', expiryDate: '2026-04-01', status: 'ë§Œë£Œ' },
             { name: 'ì•ˆì „ë³´ê±´êµìœ¡ (ê¸°ë³¸)', completedDate: '2025-01-10', expiryDate: '2027-01-10', status: 'ìœ íš¨' }
           ]
         },
-        { id: 'P-2604-0002', name: 'ì´ë¯¼ì¤€', role: 'ì „ê¸°ê³µ', company: 'DASOL PRISM',
+        { id: 'P-2604-0002', name: 'ì´ë¯¼ì¤€', role: 'ì „ê¸°ê³µ', company: ORG_NAME,
           trainings: [
             { name: 'OSHA 10-Hour', completedDate: '2025-03-20', expiryDate: '2027-03-20', status: 'ìœ íš¨' },
             { name: 'í™”ê¸°ìž‘ì—… ì•ˆì „êµìœ¡', completedDate: '2025-02-14', expiryDate: '2026-05-14', status: 'ë§Œë£Œìž„ë°•' },
@@ -797,14 +804,14 @@
         postingRequired: true, postingStart: '2026-02-01', postingEnd: '2026-04-30'
       }),
       getCertMatrix: async () => [
-        { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: 'ê¹€ì² ìˆ˜', role: 'Pipefitter', company: 'DASOL PRISM',
+        { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: 'ê¹€ì² ìˆ˜', role: 'Pipefitter', company: ORG_NAME,
           certs: [
             { type: 'OSHA 30-Hour', issued: '2024-10-15', expiry: '2029-10-15', status: 'ìœ íš¨', hoffmanReq: true },
             { type: 'Fall Protection', issued: '2025-04-01', expiry: '2026-04-01', status: 'ë§Œë£Œ', hoffmanReq: true },
             { type: 'First Aid/CPR', issued: '2025-01-10', expiry: '2027-01-10', status: 'ìœ íš¨', hoffmanReq: true }
           ]
         },
-        { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: 'ì´ë¯¼ì¤€', role: 'Electrician', company: 'DASOL PRISM',
+        { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: 'ì´ë¯¼ì¤€', role: 'Electrician', company: ORG_NAME,
           certs: [
             { type: 'OSHA 10-Hour', issued: '2025-03-20', expiry: '2030-03-20', status: 'ìœ íš¨', hoffmanReq: true },
             { type: 'LOTO', issued: '2025-02-14', expiry: '2026-05-14', status: 'ë§Œë£Œìž„ë°•', hoffmanReq: true },
@@ -866,17 +873,17 @@
         date: new Date().toISOString().substring(0, 10),
         presentCount: 38, totalActive: 42, absentCount: 4,
         checkedIn: [
-          { name: 'Kim Chulsoo', company: 'DASOL PRISM', team: 'Plumbing A', checkIn: '06:32', checkOut: '' },
-          { name: 'Lee Minjun', company: 'DASOL PRISM', team: 'Electrical', checkIn: '06:35', checkOut: '' },
-          { name: 'Park Jiho', company: 'DASOL PRISM', team: 'Plumbing B', checkIn: '06:40', checkOut: '' },
-          { name: 'Choi Donghyuk', company: 'DASOL PRISM', team: 'HVAC', checkIn: '06:41', checkOut: '' },
+          { name: 'Kim Chulsoo', company: ORG_NAME, team: 'Plumbing A', checkIn: '06:32', checkOut: '' },
+          { name: 'Lee Minjun', company: ORG_NAME, team: 'Electrical', checkIn: '06:35', checkOut: '' },
+          { name: 'Park Jiho', company: ORG_NAME, team: 'Plumbing B', checkIn: '06:40', checkOut: '' },
+          { name: 'Choi Donghyuk', company: ORG_NAME, team: 'HVAC', checkIn: '06:41', checkOut: '' },
           { name: 'Kang Seungwoo', company: 'KOREA', team: 'Welding', checkIn: '06:45', checkOut: '' },
         ],
         notCheckedIn: [
-          { name: 'Choi Dongsoo', company: 'DASOL PRISM', nfcUid: '04AA1B2C3D' },
+          { name: 'Choi Dongsoo', company: ORG_NAME, nfcUid: '04AA1B2C3D' },
           { name: 'Kim Youngsik', company: 'KOREA', nfcUid: '04BB2C3D4E' },
-          { name: 'Park Hyunwoo', company: 'DASOL PRISM', nfcUid: '04CC3D4E5F' },
-          { name: 'Lee Jihoon', company: 'DASOL PRISM', nfcUid: '04DD4E5F6G' },
+          { name: 'Park Hyunwoo', company: ORG_NAME, nfcUid: '04CC3D4E5F' },
+          { name: 'Lee Jihoon', company: ORG_NAME, nfcUid: '04DD4E5F6G' },
         ],
         noCheckout: [{ name: 'Kim Chulsoo' }, { name: 'Lee Minjun' }],
         teamSummary: [
@@ -1249,12 +1256,12 @@
       const pageContainer = document.getElementById('page-container');
       const breadcrumbCurrent = document.getElementById('breadcrumb-current');
       const alertBadge = document.getElementById('alert-badge');
-      const accountStorageKey = 'dasol-prismAccountProfile';
+      const accountStorageKey = 'erpAccountProfile';
       const authenticatedAccount = @json($authUser);
       // 별도 스크립트 블록(출퇴근 모달 등)에서도 참조할 수 있도록 전역 노출.
       window.authenticatedAccount = authenticatedAccount;
       const accountDefaults = {
-        company: 'DASOL PRISM',
+        company: ORG_NAME,
         name: authenticatedAccount.name || 'ERP User',
         firstName: (authenticatedAccount.name || 'ERP').split(' ')[0] || 'ERP',
         lastName: (authenticatedAccount.name || 'User').split(' ').slice(1).join(' ') || 'User',
@@ -1263,7 +1270,7 @@
         jobTitle: authenticatedAccount.role || 'ERP User',
         department: 'Operations',
         location: 'HFF-02',
-        manager: 'DASOL PRISM',
+        manager: ORG_NAME,
         email: authenticatedAccount.email || '',
         personalEmail: authenticatedAccount.email || '',
         mobile: '+1 (602) 435-6787',
@@ -1333,6 +1340,7 @@
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
         'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
         'site-admin': { title: '현장 · 프로젝트', render: function () { return window.AdminSites.render(); } },
+        'org-settings': { title: '조직 설정', render: function () { return window.AdminOrg.render(); } },
         'pay-profiles': { title: '임금 프로필', render: function () { return window.AdminPayProfiles.render(); } },
         'messenger-admin': { title: '메신저 관리', render: function () { return window.AdminMessenger.render(); } },
         'applicant-admin': { title: '입사지원 · 온보딩', render: function () { return window.AdminApplicants.render(); } },
@@ -3881,7 +3889,7 @@
           '<select id="sw-kind" class="wbs-edit-field" onchange="window.swKindChanged()">' +
           '<option value="bssid">공유기 MAC</option><option value="network">공인 IP 대역</option></select></div>' +
           '<div><label style="font-size:11px;color:var(--text-tertiary)" id="sw-value-label">BSSID (MAC) *</label><input id="sw-bssid" class="wbs-edit-field" placeholder="a4:5e:60:11:22:33"></div>' +
-          '<div><label style="font-size:11px;color:var(--text-tertiary)">WiFi 이름(SSID)</label><input id="sw-ssid" class="wbs-edit-field" placeholder="DASOL-PRISM-SITE"></div>' +
+          '<div><label style="font-size:11px;color:var(--text-tertiary)">WiFi 이름(SSID)</label><input id="sw-ssid" class="wbs-edit-field" placeholder="SITE-WIFI"></div>' +
           '<div><label style="font-size:11px;color:var(--text-tertiary)">위치 메모</label><input id="sw-label" class="wbs-edit-field" placeholder="정문 / B동 2층"></div>' +
           '<button class="btn-primary" style="height:38px" onclick="window.swSave(\'' + siteId + '\')"><i class="ph ph-plus"></i> 추가</button>' +
           '</div>' +
@@ -4343,7 +4351,7 @@
                 '</div>';
             }
 
-            // KPI ì‹ ê·œ ì˜ë¯¸: DASOL PRISM ë³¸ì‚¬ í†µí•© ì¸ì›í˜„í™©
+            // KPI ì‹ ê·œ ì˜ë¯¸: ë³¸ì‚¬ í†µí•© ì¸ì›í˜„í™©
             var regInfo = (teamMatrix && teamMatrix.registered) || { total: stats.total || 0, managerTotal: 0, managerByCompany: {} };
             var totals = (teamMatrix && teamMatrix.totals) || { manager: 0, korean: 0, local: 0, grandTotal: 0 };
             var totalAttended = totals.grandTotal || 0;
@@ -4355,7 +4363,7 @@
 
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
-              '<p class="page-subtitle">DASOL PRISM ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
+              '<p class="page-subtitle">' + ORG_NAME + ' ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
               '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
@@ -4530,7 +4538,7 @@
         'AI KOREA': '#3b82f6',
         'M-SOL': '#10b981',
         'MSOL': '#10b981',
-        'DASOL PRISM': '#a78bfa'
+        [ORG_NAME]: '#a78bfa'
       };
       window.getCompanyColor = function(name) {
         var k = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -13029,7 +13037,7 @@ window.submitVendorCreate = function() {
       if (!msg || msg.endsWith('...')) { alert('ë©”ì‹œì§€ ì™„ì„± í›„ ë°œì†¡'); return; }
       if (!email) { alert('ì´ë©”ì¼ ë¯¸ë“±ë¡'); return; }
       if (!confirm(name + 'ì—ê²Œ ë°œì†¡?')) return;
-      window.API.sendVendorEmail(email, '[DASOL PRISM] ì—…ë¬´ì—°ë½', msg, name).then(function(res) {
+      window.API.sendVendorEmail(email, '[' + ORG_NAME + '] ì—…ë¬´ì—°ë½', msg, name).then(function(res) {
         if (res.success) { alert('ë°œì†¡ ì™„ë£Œ! ' + res.tag); document.getElementById('vendorModalOverlay').style.display = 'none'; }
         else { alert('ì‹¤íŒ¨: ' + res.error); }
       });
@@ -13815,7 +13823,8 @@ async function renderVendors() {
         throw new Error('인증 계정에 연동된 직원 정보가 없어 오프라인 기록을 할 수 없습니다.');
       }
       
-      const secret = '{{ config('app.key') ?: 'base64:dasol-prismsmarterpdefaultkey' }}';
+      {{-- APP_KEY 를 그대로 보내면 화면 소스만 봐도 세션·쿠키를 여는 열쇠가 넘어간다. --}}
+      const secret = @json(\App\Support\AttendanceSignature::key());
       const message = empId + '_' + eventType + '_' + localTimeStr + '_' + lat + '_' + lng;
       let token = '';
       try {

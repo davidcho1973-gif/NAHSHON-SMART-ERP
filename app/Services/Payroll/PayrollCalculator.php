@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Support\Org;
 
 /**
  * PayrollCalculator — the HR ⇄ Payroll engine.
@@ -51,6 +52,14 @@ class PayrollCalculator
     /** Pay-period length. Anchored to a known Monday so every period is deterministic. */
     public const PERIOD_DAYS = 14;
 
+    // 급여 주기는 회사 정책이다(주급·격주·월급). 세율과 달리 법이 정한 값이 아니다.
+    private static function periodDays(): int
+    {
+        $days = Org::int('payroll.period_days', self::PERIOD_DAYS);
+
+        return $days > 0 ? $days : self::PERIOD_DAYS;
+    }
+
     private const PERIOD_ANCHOR = '2026-01-05'; // a Monday
 
     /** Per-state flat withholding approximation. Default applies when a state is absent. */
@@ -85,7 +94,7 @@ class PayrollCalculator
                 'start' => $period['start']->toDateString(),
                 'end' => $period['end']->toDateString(),
                 'currentDay' => $period['currentDay'],
-                'totalDays' => self::PERIOD_DAYS,
+                'totalDays' => self::periodDays(),
                 'isComplete' => $period['isComplete'],
             ],
             'totals' => $totals,
@@ -130,15 +139,15 @@ class PayrollCalculator
         if (! $start instanceof Carbon) {
             $anchor = Carbon::parse(self::PERIOD_ANCHOR);
             $elapsed = $anchor->diffInDays($today);
-            $offset = intdiv($elapsed, self::PERIOD_DAYS) * self::PERIOD_DAYS;
+            $offset = intdiv($elapsed, self::periodDays()) * self::periodDays();
             $start = $anchor->copy()->addDays($offset);
         }
 
-        $end = $start->copy()->addDays(self::PERIOD_DAYS - 1);
+        $end = $start->copy()->addDays(self::periodDays() - 1);
         $isComplete = $today->gt($end);
         $currentDay = $today->lt($start)
             ? 0
-            : min(self::PERIOD_DAYS, $start->diffInDays($today) + 1);
+            : min(self::periodDays(), $start->diffInDays($today) + 1);
 
         return compact('start', 'end', 'currentDay', 'isComplete');
     }
