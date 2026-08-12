@@ -123,6 +123,55 @@ class ErpResetTest extends TestCase
         $this->assertNotNull(Company::query()->where('company_type', Company::TYPE_OWN)->first());
     }
 
+    // ── 한 갈래만 지우기 ────────────────────────────────────────────────
+
+    public function test_only_attendance_clears_the_punches(): void
+    {
+        $this->artisan('erp:reset --only=attendance --force')->assertSuccessful();
+
+        $this->assertSame(0, AttendanceLog::withTrashed()->count());
+    }
+
+    public function test_only_attendance_leaves_the_people_alone(): void
+    {
+        // 갈래를 고른 사람은 그 갈래만 사라지길 바란다. 직원이 함께 사라지면
+        // 고른 것과 다른 일이 벌어진 것이다.
+        $before = User::count();
+
+        $this->artisan('erp:reset --only=attendance --force')->assertSuccessful();
+
+        $this->assertSame(1, Employee::count());
+        $this->assertSame(1, Site::count());
+        $this->assertSame($before, User::count());
+    }
+
+    public function test_only_attendance_also_clears_the_hours_it_produced(): void
+    {
+        // 근무시간을 남겨 두면 기록은 없는데 급여에는 시간이 잡혀 있는 상태가 된다.
+        $this->assertGreaterThan(0, \Illuminate\Support\Facades\DB::table('payroll_timesheets')->count());
+
+        $this->artisan('erp:reset --only=attendance --force')->assertSuccessful();
+
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('payroll_timesheets')->count());
+    }
+
+    public function test_an_unknown_group_is_refused_with_the_list(): void
+    {
+        $this->artisan('erp:reset --only=없는갈래 --force')
+            ->expectsOutputToContain('쓸 수 있는 것')
+            ->assertFailed();
+
+        $this->assertSame(1, AttendanceLog::count());
+    }
+
+    public function test_only_and_all_may_not_be_combined(): void
+    {
+        // 둘을 같이 주면 어느 쪽이 이겼는지 모른 채 지워진다.
+        $this->artisan('erp:reset --only=attendance --all --force')->assertFailed();
+
+        $this->assertSame(1, AttendanceLog::count());
+    }
+
     // ── 전부 지우기 ─────────────────────────────────────────────────────
 
     public function test_all_wipes_the_sites_too(): void

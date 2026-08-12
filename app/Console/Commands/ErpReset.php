@@ -28,12 +28,35 @@ use Illuminate\Support\Facades\Schema;
 class ErpReset extends Command
 {
     protected $signature = 'erp:reset
+        {--only= : 한 갈래만 지운다 (attendance)}
         {--all : 표를 통째로 다시 만든다(현장·회사까지 전부 사라진다)}
         {--force : 실제로 지운다. 없으면 무엇이 지워지는지만 보여준다}
         {--admin= : 초기화 뒤 최고 관리자로 둘 이메일(기본: 지금 있는 최고 관리자 그대로)}
         {--yes-i-am-sure-this-is-production : 운영 환경에서도 돌린다}';
 
     protected $description = '시험 데이터를 비우고 처음부터 다시 시작한다 (기본은 미리보기)';
+
+    /**
+     * 한 갈래만 지울 때 쓰는 목록.
+     *
+     * 여기만은 "지울 것" 을 적는다. 갈래를 고른 사람은 그 갈래만 사라지길 바라는데,
+     * 새 표가 생겼다고 함께 지워지면 그건 고른 것과 다른 일이 벌어지는 것이다.
+     *
+     * 출퇴근에는 기록 본체만이 아니라 거기서 계산되는 것들이 딸려 있다. 근무시간을
+     * 남겨 두면 기록은 없는데 급여에는 시간이 잡혀 있는 상태가 되고, GPS 재실 상태를
+     * 남겨 두면 이미 퇴근한 사람이 아직 현장에 있는 것으로 남는다.
+     *
+     * @var array<string, list<string>>
+     */
+    private const GROUPS = [
+        'attendance' => [
+            'attendance_logs',        // 출퇴근 기록 본체
+            'attendance_sessions',    // GPS 재실 상태(들어옴·나감)
+            'attendance_geo_events',  // GPS 신호 원본
+            'payroll_timesheets',     // 출퇴근에서 계산된 근무시간
+            'field_commute_logs',     // 현장앱 출퇴근
+        ],
+    ];
 
     /**
      * 업무 데이터를 지울 때 남기는 표.
@@ -60,12 +83,25 @@ class ErpReset extends Command
 
         $all = (bool) $this->option('all');
         $force = (bool) $this->option('force');
+        $only = trim((string) $this->option('only'));
+
+        if ($only !== '' && ! array_key_exists($only, self::GROUPS)) {
+            $this->error('  모르는 갈래입니다: '.$only);
+            $this->line('  쓸 수 있는 것: '.implode(', ', array_keys(self::GROUPS)));
+
+            return self::FAILURE;
+        }
+        if ($only !== '' && $all) {
+            $this->error('  --only 와 --all 은 같이 쓸 수 없습니다. 한 갈래만 지우려면 --only 만 쓰세요.');
+
+            return self::FAILURE;
+        }
 
         $this->line('');
         $this->line('  <options=bold>'.Org::name().'</> · '.app()->environment().' · '.(config('app.url') ?: '주소 없음'));
         $this->line('');
 
-        $tables = $this->tablesToClear($all);
+        $tables = $only !== '' ? $this->groupTables($only) : $this->tablesToClear($all);
         $counts = $this->rowCounts($tables);
         $total = array_sum($counts);
 
@@ -76,12 +112,17 @@ class ErpReset extends Command
         );
 
         $this->line('  모두 <options=bold>'.number_format($total).'</> 줄'
-            .($all ? ' — 표까지 다시 만듭니다(현장·회사도 사라집니다).' : ' — 현장·회사·품목과 관리자 로그인은 남습니다.'));
+            .match (true) {
+                $only !== '' => ' — 이 갈래만 지웁니다. 직원·현장·계정은 손대지 않습니다.',
+                $all => ' — 표까지 다시 만듭니다(현장·회사도 사라집니다).',
+                default => ' — 현장·회사·품목과 관리자 로그인은 남습니다.',
+            });
         $this->line('');
 
         if (! $force) {
             $this->warn('  미리보기입니다. 아무것도 지우지 않았습니다.');
-            $this->line('  실제로 지우려면: php artisan erp:reset'.($all ? ' --all' : '').' --force');
+            $this->line('  실제로 지우려면: php artisan erp:reset'
+                .($only !== '' ? ' --only='.$only : ($all ? ' --all' : '')).' --force');
             $this->line('');
 
             return self::SUCCESS;
@@ -91,6 +132,16 @@ class ErpReset extends Command
         // 그 배포는 화면으로는 되살릴 방법이 없다.
         $admins = User::query()->where('access_role', 'super_admin')
             ->get(['name', 'email'])->map(fn (User $u): array => ['name' => $u->name, 'email' => $u->email])->all();
+
+        if ($only !== '') {
+            // 계정도 회사도 건드리지 않았으므로 되살릴 것이 없다.
+            $this->clear($tables);
+            $this->line('');
+            $this->info('  '.$only.' 기록을 비웠습니다. 직원·현장·계정은 그대로입니다.');
+            $this->line('');
+
+            return self::SUCCESS;
+        }
 
         if ($all) {
             $this->call('migrate:fresh', ['--force' => true]);
@@ -107,6 +158,18 @@ class ErpReset extends Command
         $this->line('');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 갈래에 적힌 표 중 실제로 있는 것만.
+     *
+     * @return list<string>
+     */
+    private function groupTables(string $group): array
+    {
+        return collect(self::GROUPS[$group])
+            ->filter(fn (string $t): bool => Schema::hasTable($t))
+            ->values()->all();
     }
 
     /**
