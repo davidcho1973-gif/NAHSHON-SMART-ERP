@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>AI 문서 인텔리전스 | NAHSHON SMART ERP</title>
+    <title>AI 문서 인텔리전스 | {{ \App\Support\Org::name() }} SMART ERP</title>
     <style>
         :root {
             --navy:#0b1220; --navy-2:#111c30; --panel:#fff; --canvas:#f3f6fb; --line:#dfe6f0;
@@ -73,7 +73,7 @@
 <body>
 <div class="app">
     <aside class="sidebar">
-        <div class="brand"><div class="brand-mark">NS</div><div><strong>SMART COMPANY</strong><small>DOCUMENT CONTROL</small></div></div>
+        <div class="brand"><div class="brand-mark">{{ \App\Support\Org::initials() }}</div><div><strong>{{ \App\Support\Org::name() }}</strong><small>DOCUMENT CONTROL</small></div></div>
         <div class="nav-label">WORKSPACE</div>
         <a class="nav-link" href="/"><b>⌂</b><span>ERP 홈</span></a>
         <a class="nav-link active" href="/document-hub"><b>✦</b><span>AI 통합 문서함</span></a>
@@ -87,7 +87,7 @@
     </aside>
     <main>
         <header class="topbar">
-            <div class="crumb">NAHSHON 통합관리　›　<b>AI 문서 인텔리전스</b></div>
+            <div class="crumb">{{ \App\Support\Org::name() }} 통합관리　›　<b>AI 문서 인텔리전스</b></div>
             <div class="top-actions">
                 <a class="btn" href="{{ route('document-intelligence.export-index') }}">⇩ 인덱스 CSV</a>
                 <a class="btn dark" href="/?view=alerts">통합 알림센터</a>

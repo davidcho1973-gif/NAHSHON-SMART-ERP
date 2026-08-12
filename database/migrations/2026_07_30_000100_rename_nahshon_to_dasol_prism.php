@@ -1,71 +1,36 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
- * 사명 변경: NAHSHON MEP → DASOL PRISM.
+ * 비워 둔 마이그레이션 — 한때 한 고객의 사명 변경을 데이터에 반영하던 자리다.
  *
- * 소스의 문구는 코드에서 바꿨지만, 이미 저장된 데이터에는 옛 이름이 그대로 남아 있다.
- * 회사 마스터와 회사명을 문자열로 들고 있는 컬럼(배지 인식 결과·WBS 담당사)을 함께 옮긴다.
+ * 배포가 하나뿐일 때는 이래도 됐다. 고객마다 배포하는 지금은, 이 파일이 새 고객의
+ * 데이터베이스에서도 그대로 돌면서 "companies 표에서 옛 고객 이름을 찾아 다른 옛
+ * 고객 이름으로 바꾸는" 일을 한다. 그 고객과 아무 상관 없는 두 회사 이름이 코드에
+ * 남아 있다는 뜻이기도 하다.
  *
- * 로그인 이메일(@nahshonmep.com)은 건드리지 않는다 — 계정 식별자라 바꾸면 로그인이 끊긴다.
+ * 지금 이 일을 하는 것은 명령이다:
+ *
+ *     php artisan org:rename            무엇이 바뀌는지 먼저 보여준다
+ *     php artisan org:rename --force    실제로 바꾼다
+ *
+ * 명령은 설정에 적힌 이름(ORG_NAME · 조직 설정 화면)을 읽어서 그 배포의 자사
+ * 한 줄에만 손을 댄다. 어느 배포에서 돌리든 남의 회사 이름이 끼어들 자리가 없다.
+ *
+ * 파일을 지우지 않고 비워 두는 이유 — 이미 이 마이그레이션을 돌린 데이터베이스에는
+ * 실행 기록이 남아 있다. 파일이 사라지면 Laravel 이 "없는 마이그레이션이 기록돼
+ * 있다"고 보고, 되돌리기(rollback)가 그 지점에서 멈춘다.
  */
 return new class extends Migration
 {
-    /** [테이블 => 회사명을 문자열로 저장하는 컬럼들] */
-    private const NAME_COLUMNS = [
-        'companies' => ['name', 'legal_name'],
-        'employees' => ['badge_company_name'],
-        'wbs_items' => ['company'],
-    ];
-
     public function up(): void
     {
-        // 회사 코드도 함께 옮긴다 — 시드/마이그레이션이 이 코드로 자사를 찾는다.
-        if (Schema::hasTable('companies') && Schema::hasColumn('companies', 'code')) {
-            DB::table('companies')->where('code', 'NAHSHON-MEP')->update(['code' => 'DASOL-PRISM']);
-
-            // 회사 구분 마이그레이션이 옛 코드를 못 찾고 지나갔을 수 있다 — 여기서 자사로 확정한다.
-            if (Schema::hasColumn('companies', 'company_type')) {
-                DB::table('companies')->where('code', 'DASOL-PRISM')
-                    ->whereIn('company_type', ['unknown', ''])
-                    ->update(['company_type' => 'own']);
-            }
-        }
-
-        $this->replaceNames('NAHSHON MEP', 'DASOL PRISM');
-        // 'NAHSHON MEP' 을 먼저 바꾼 뒤라, 남은 단독 'NAHSHON' 만 정리된다.
-        $this->replaceNames('NAHSHON', 'DASOL PRISM');
+        // 일부러 아무것도 하지 않는다.
     }
 
     public function down(): void
     {
-        if (Schema::hasTable('companies') && Schema::hasColumn('companies', 'code')) {
-            DB::table('companies')->where('code', 'DASOL-PRISM')->update(['code' => 'NAHSHON-MEP']);
-        }
-
-        $this->replaceNames('DASOL PRISM', 'NAHSHON MEP');
-    }
-
-    private function replaceNames(string $from, string $to): void
-    {
-        foreach (self::NAME_COLUMNS as $table => $columns) {
-            if (! Schema::hasTable($table)) {
-                continue;
-            }
-
-            foreach ($columns as $column) {
-                if (! Schema::hasColumn($table, $column)) {
-                    continue;
-                }
-
-                DB::table($table)
-                    ->whereNotNull($column)
-                    ->where($column, 'like', '%'.$from.'%')
-                    ->update([$column => DB::raw("replace({$column}, '{$from}', '{$to}')")]);
-            }
-        }
+        // 일부러 아무것도 하지 않는다.
     }
 };

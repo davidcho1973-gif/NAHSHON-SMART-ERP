@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>SMART COMPANY ERP | {{ \App\Support\Org::name() }}</title>
+  <title>{{ \App\Support\Org::name() }} SMART ERP</title>
   {{-- 고객사 이름은 배포마다 다르다. 화면 스크립트가 이 하나만 보게 한다. --}}
   <script>window.ORG_NAME = @json(\App\Support\Org::name()); window.ORG_COLOR = @json(\App\Support\Org::color());</script>
   <meta name="description" content="{{ \App\Support\Org::name() }} í˜„ìž¥ í†µí•© ê´€ë¦¬ ì‹œìŠ¤í…œ">
@@ -30,6 +30,15 @@
     <script src="{{ asset('js/admin-messenger.js') }}?v={{ filemtime(public_path('js/admin-messenger.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
+  {{-- 대표 색은 고객이 화면(조직 설정)에서 고른다. 파일에 박아 두면 고객마다
+       CSS 가 갈라져서, 한 곳을 고쳐 전부에 반영할 길이 막힌다.
+       밝은 테마 규칙보다 뒤에 와야 두 테마 모두에서 이긴다. --}}
+  <style>
+    :root, body[data-theme="light"], body[data-theme="dark"] {
+      --brand-primary: {{ \App\Support\Org::color() }};
+      --brand-primary-dim: {{ \App\Support\Org::colorDim() }};
+    }
+  </style>
   <style>
 
     .context-switcher {
@@ -106,10 +115,11 @@
   <div class="erp-layout">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-logo">NS</div>
+        {{-- 로고 자리. 그림 로고를 받기 전까지는 이름에서 뽑은 머리글자를 쓴다 --}}
+        <div class="brand-logo">{{ \App\Support\Org::initials() }}</div>
         <div class="brand-name">
-          <span class="title">SMART COMPANY</span>
-          <span class="subtitle">v2.0 // ENTERPRISE</span>
+          <span class="title">{{ \App\Support\Org::name() }}</span>
+          <span class="subtitle">SMART ERP</span>
         </div>
       </div>
       <div class="sidebar-scroll">

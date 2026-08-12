@@ -150,7 +150,58 @@ final class Org
 
     public static function color(): string
     {
-        return self::get('color') ?? '#0ea5e9';
+        $color = self::get('color') ?? '';
+
+        // 화면에서 손으로 넣는 값이라 오타가 들어온다. 그대로 style 에 흘리면
+        // CSS 한 줄이 통째로 무시되고 강조색이 사라진 화면이 남는다.
+        return preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $color) === 1
+            ? $color
+            : '#0ea5e9';
+    }
+
+    /** 대표 색을 옅게 깐 배경. 눌린 메뉴·태그 뒤에 쓴다. */
+    public static function colorDim(float $alpha = 0.15): string
+    {
+        $hex = ltrim(self::color(), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        return vsprintf('rgba(%d, %d, %d, %s)', [
+            hexdec(substr($hex, 0, 2)),
+            hexdec(substr($hex, 2, 2)),
+            hexdec(substr($hex, 4, 2)),
+            rtrim(rtrim(number_format($alpha, 2, '.', ''), '0'), '.'),
+        ]);
+    }
+
+    /**
+     * 로고 자리에 들어갈 두어 글자.
+     *
+     * 고객마다 그림 로고를 받아 두는 것이 제일 좋지만, 배포 첫날부터 그림이 있는
+     * 경우는 드물다. 그동안 화면 왼쪽 위에 남의 회사 머리글자가 떠 있으면 고객이
+     * 가장 먼저 보는 것이 그것이 된다. 이름에서 뽑으면 적어도 틀리지는 않는다.
+     */
+    public static function initials(): string
+    {
+        $words = preg_split('/[\s._\-\/]+/u', self::shortName(), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($words === []) {
+            return 'ERP';
+        }
+
+        // 이미 약칭인 이름(KSR, ABC)은 자르지 않는다. KS 로 줄이면 무슨 회사인지
+        // 알아볼 수 없고, 알아볼 수 없는 로고는 없느니만 못하다.
+        if (preg_match('/^[A-Z0-9]{2,4}$/u', $words[0]) === 1) {
+            return $words[0];
+        }
+
+        if (count($words) >= 2) {
+            return mb_strtoupper(mb_substr($words[0], 0, 1).mb_substr($words[1], 0, 1));
+        }
+
+        // 한 단어면 앞에서 자른다. 한글은 두 글자에 이미 뜻이 실려 있어서
+        // "다솔" 처럼 그대로 읽힌다.
+        return mb_strtoupper(mb_substr($words[0], 0, mb_strlen($words[0]) <= 3 ? mb_strlen($words[0]) : 2));
     }
 
     public static function supportEmail(): ?string

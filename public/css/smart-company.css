@@ -142,10 +142,14 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
     display: flex; align-items: center; justify-content: center;
     border-radius: var(--radius-sm);
     letter-spacing: 0.5px;
+    flex-shrink: 0;
 }
 
-.brand-name { display:flex; flex-direction:column; }
-.brand-name .title    { font-size:13px; font-weight:600; color:var(--text-primary); letter-spacing:0.5px; }
+.brand-name { display:flex; flex-direction:column; min-width:0; }
+/* 회사 이름은 배포마다 길이가 다르다. 긴 이름이 사이드바 밖으로 삐져나가면
+   메뉴 첫 줄까지 밀려서 화면이 깨진 것처럼 보인다 — 길면 말줄임으로 자른다. */
+.brand-name .title    { font-size:13px; font-weight:600; color:var(--text-primary); letter-spacing:0.5px;
+                        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:190px; }
 .brand-name .subtitle { font-size:10px; color:var(--text-tertiary); font-family:var(--font-mono); }
 
 .sidebar-scroll { flex-grow:1; overflow-y:auto; padding:16px 0; }

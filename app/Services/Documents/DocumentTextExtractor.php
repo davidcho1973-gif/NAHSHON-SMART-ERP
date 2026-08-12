@@ -102,7 +102,7 @@ class DocumentTextExtractor
 
     private function withArchive(string $bytes, callable $callback): ?string
     {
-        $tempPath = tempnam(sys_get_temp_dir(), 'nahshon-doc-');
+        $tempPath = tempnam(sys_get_temp_dir(), 'erp-doc-');
         if ($tempPath === false) {
             return null;
         }

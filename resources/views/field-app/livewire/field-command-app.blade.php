@@ -11,7 +11,7 @@
                         건설현장 일일 현장 관리 보고서 & AI 도면 지식
                         <span class="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Official Field & Knowledge App</span>
                     </h1>
-                    <p class="text-xs text-slate-400">NAHSHON SMART ERP · Daily Field Construction, Daily Closing & AI Blueprint Q&A Hub</p>
+                    <p class="text-xs text-slate-400">{{ \App\Support\Org::name() }} SMART ERP · Daily Field Construction, Daily Closing & AI Blueprint Q&A Hub</p>
                 </div>
             </div>
 

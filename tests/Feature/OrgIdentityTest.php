@@ -43,6 +43,86 @@ class OrgIdentityTest extends TestCase
         Org::forget();
     }
 
+    // ── 로고 자리 ───────────────────────────────────────────────────────
+    //
+    // 그림 로고를 받기 전까지 화면 왼쪽 위에는 이름에서 뽑은 머리글자가 뜬다.
+    // 여기가 틀리면 고객이 화면을 열자마자 처음 보는 것이 그 오류가 된다.
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function names(): array
+    {
+        return [
+            '이미 약칭이면 자르지 않는다' => ['KSR', 'KSR'],
+            '두 단어면 머리글자 하나씩' => ['Smart Company', 'SC'],
+            '약칭 뒤에 말이 붙어도 약칭이 이긴다' => ['ABC 건설', 'ABC'],
+            '소문자는 대문자로' => ['dasolusa corp', 'DC'],
+            '한글 한 단어는 두 글자' => ['다솔유에스에이', '다솔'],
+            '짧은 한글은 통째로' => ['한백', '한백'],
+            '점·하이픈도 단어 경계다' => ['Han-Baek', 'HB'],
+            '앞뒤 공백은 없는 것으로 본다' => ['  Han  Baek  ', 'HB'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('names')]
+    public function test_the_logo_initials_come_from_the_name(string $name, string $expected): void
+    {
+        $this->rename($name);
+
+        $this->assertSame($expected, Org::initials());
+    }
+
+    public function test_the_initials_follow_the_short_name_when_there_is_one(): void
+    {
+        // 좁은 자리에 쓰라고 받아 둔 짧은 이름이 있으면 그쪽이 더 정확하다.
+        $this->rename('한백이엔지 주식회사');
+        OrgSetting::query()->updateOrCreate(['key' => 'short_name'], ['value' => 'HBE']);
+        Org::forget();
+
+        $this->assertSame('HBE', Org::initials());
+    }
+
+    public function test_the_initials_never_come_back_empty(): void
+    {
+        // 빈 배지는 화면이 깨진 것처럼 보인다.
+        config(['org.name' => 'ERP', 'org.short_name' => null]);
+        OrgSetting::query()->delete();
+        Org::forget();
+
+        $this->assertNotSame('', Org::initials());
+    }
+
+    // ── 대표 색 ─────────────────────────────────────────────────────────
+
+    public function test_a_typo_in_the_colour_does_not_reach_the_stylesheet(): void
+    {
+        // 색은 사람이 손으로 넣는다. 그대로 흘리면 CSS 한 줄이 통째로 무시되고
+        // 강조색이 사라진 화면이 남는데, 원인을 찾기가 유난히 어렵다.
+        OrgSetting::query()->updateOrCreate(['key' => 'color'], ['value' => 'red; } body {']);
+        Org::forget();
+
+        $this->assertSame('#0ea5e9', Org::color());
+    }
+
+    public function test_the_dim_colour_is_the_same_colour_made_faint(): void
+    {
+        OrgSetting::query()->updateOrCreate(['key' => 'color'], ['value' => '#2563eb']);
+        Org::forget();
+
+        $this->assertSame('rgba(37, 99, 235, 0.15)', Org::colorDim());
+        $this->assertSame('rgba(37, 99, 235, 0.4)', Org::colorDim(0.4));
+    }
+
+    public function test_a_three_digit_colour_works_too(): void
+    {
+        OrgSetting::query()->updateOrCreate(['key' => 'color'], ['value' => '#0af']);
+        Org::forget();
+
+        $this->assertSame('#0af', Org::color());
+        $this->assertSame('rgba(0, 170, 255, 0.15)', Org::colorDim());
+    }
+
     // ── 값이 어디서 오는가 ──────────────────────────────────────────────
 
     public function test_it_falls_back_to_the_deployment_setting_when_nothing_is_saved(): void
@@ -169,7 +249,12 @@ class OrgIdentityTest extends TestCase
             base_path('resources/views'),
             base_path('public/js'),
             base_path('database/seeders'),
+            base_path('database/migrations'),
         ];
+
+        // 지금 이름과 옛 이름을 함께 본다. 사명이 바뀌기 전에 박아 둔 이름은
+        // 아무도 다시 안 찾아보기 때문에 가장 오래 살아남는다.
+        $names = ['DASOL', 'NAHSHON'];
 
         // 예외는 이 둘뿐이다 — 휴대폰 안에만 있는 저장소 키다. 화면에도, 문서에도,
         // 이메일에도 나가지 않고 고객마다 도메인이 다르니 겹치지도 않는다. 반면
@@ -185,8 +270,11 @@ class OrgIdentityTest extends TestCase
                     continue;
                 }
                 $body = str_replace($allowed, '', (string) file_get_contents($file->getPathname()));
-                if (stripos($body, 'DASOL') !== false) {
-                    $hits[] = str_replace(base_path().'/', '', $file->getPathname());
+                foreach ($names as $name) {
+                    if (stripos($body, $name) !== false) {
+                        $hits[] = str_replace(base_path().'/', '', $file->getPathname());
+                        break;
+                    }
                 }
             }
         }
