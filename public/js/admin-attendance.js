@@ -10,7 +10,7 @@
   'use strict';
 
   var A = null;
-  var state = { rows: [], options: null, filters: null, canManage: false };
+  var state = { rows: [], options: null, filters: null, canManage: false, canDelete: false };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -54,7 +54,7 @@
     return '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding:12px;' +
       'background:var(--bg-surface);border:1px solid var(--border-default);border-radius:12px">' +
       date('at-from', '시작일', f.from) + date('at-until', '종료일', f.until) +
-      sel('at-status', '상태', o.statuses, f.status, '전체') +
+      sel('at-status', '상태', o.filterStatuses || o.statuses, f.status, '전체') +
       sel('at-site', '현장', o.sites, f.siteId, '전체') +
       '<button type="button" onclick="window.AdminAttendance.applyFilters()" style="padding:8px 16px;border-radius:8px;border:none;' +
       'background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer">조회</button>' +
@@ -105,6 +105,11 @@
         {
           key: 'statusLabel', label: '상태', width: '100px',
           render: function (r) {
+            if (r.deleted) {
+              return u.badge('삭제됨', 'danger') +
+                '<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">' +
+                u.esc((r.deletedAt || '').slice(0, 16)) + '</div>';
+            }
             var kind = r.status === 'approved' ? 'ok' : r.status === 'pending' ? 'warn' : 'danger';
             return u.badge(r.statusLabel, kind) +
               // 손댄 적 있는 건은 표시한다 — 급여 담당이 되짚을 단서다.
@@ -113,13 +118,23 @@
           },
         },
         {
-          key: 'act', label: '', align: 'right', width: '190px',
+          key: 'act', label: '', align: 'right', width: '250px',
           render: function (r) {
             if (!state.canManage) return '';
+            // 지워진 줄에서 할 수 있는 것은 되살리기뿐이다. 승인·반려·수정 버튼을
+            // 같이 두면 눌러 보고 거절당하게 된다.
+            if (r.deleted) {
+              return state.canDelete
+                ? u.rowButton('되살리기', 'window.AdminAttendance.restore(' + r.id + ')')
+                : '';
+            }
             var out = '';
             if (r.status !== 'approved') out += u.rowButton('승인', 'window.AdminAttendance.setStatus(' + r.id + ',"approved")') + ' ';
             if (r.status !== 'rejected') out += u.rowButton('반려', 'window.AdminAttendance.setStatus(' + r.id + ',"rejected")') + ' ';
-            return out + u.rowButton('수정', 'window.AdminAttendance.openForm(' + r.id + ')');
+            out += u.rowButton('수정', 'window.AdminAttendance.openForm(' + r.id + ')');
+            // 삭제는 관리자만. 급여 근거를 목록에서 빼는 일이다.
+            if (state.canDelete) out += ' ' + u.rowButton('삭제', 'window.AdminAttendance.remove(' + r.id + ')', 'danger');
+            return out;
           },
         },
       ],
@@ -141,6 +156,7 @@
       }
       state.rows = res.rows || [];
       state.canManage = !!res.canManage;
+      state.canDelete = !!res.canDelete;
       paint(render());
       ui().bindSearch('at-tbl');
     });
@@ -226,6 +242,38 @@
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }
 
+  function remove(id) {
+    var u = ui();
+    var row = state.rows.filter(function (r) { return r.id === id; })[0];
+    var who = row ? row.employee + ' · ' + row.date + ' ' + row.eventTime : '이 기록';
+
+    // 반려로 충분한 경우가 대부분이다. 반려는 급여에서 빠지면서도 "그날 왔었다" 는
+    // 사실은 남긴다. 그래서 삭제 창에서 그 선택지를 먼저 말해 준다.
+    u.confirmDanger({
+      title: '이 기록을 삭제할까요?',
+      body: who + ' 기록을 목록과 급여 계산에서 뺍니다. 잘못 찍힌 기록이라면 '
+        + '"반려" 로 두는 편이 낫습니다 — 그날 왔었다는 사실은 남습니다. '
+        + '삭제해도 기록 자체는 보관되며, 상태 필터의 "삭제됨" 에서 되살릴 수 있습니다.',
+      confirmLabel: '삭제',
+    }).then(function (ok) {
+      if (!ok) return;
+      return call('api_deleteAttendanceLog', [id]).then(function (res) {
+        if (res.success === false) { u.toast(res.error || '삭제하지 못했습니다.', 'error'); return; }
+        u.toast('삭제했습니다. 상태 필터의 "삭제됨" 에서 되살릴 수 있습니다.');
+        return reload();
+      });
+    }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
+  }
+
+  function restore(id) {
+    var u = ui();
+    call('api_restoreAttendanceLog', [id]).then(function (res) {
+      if (res.success === false) { u.toast(res.error || '되살리지 못했습니다.', 'error'); return; }
+      u.toast('되살렸습니다. 그날 근무시간도 함께 돌아옵니다.');
+      return reload();
+    }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
+  }
+
   var FIELD_KO = {
     event_at: '시각', event_type: '구분', status: '상태', attendance_date: '날짜',
     employee_id: '직원', site_id: '현장', notes: '비고',
@@ -281,6 +329,8 @@
     applyFilters: applyFilters,
     openForm: openForm,
     setStatus: setStatus,
+    remove: remove,
+    restore: restore,
     showHistory: showHistory,
     _state: state,
   };

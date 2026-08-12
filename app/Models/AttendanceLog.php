@@ -8,11 +8,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 class AttendanceLog extends Model
 {
     use HasFactory;
+    // 급여의 근거라 진짜로 지우지 않는다. 지우면 "그날 그 사람이 왔었다" 는 사실
+    // 자체가 사라지고, 누가 언제 지웠는지도 남지 않는다. 표시만 하고 화면·급여
+    // 계산에서는 즉시 빠진다.
+    use SoftDeletes;
 
     protected static function booted(): void
     {
@@ -27,6 +32,9 @@ class AttendanceLog extends Model
         // 저장/삭제되면 해당 일자의 payroll_timesheets를 자동 재계산한다.
         static::saved(fn (self $log) => self::syncTimesheet($log));
         static::deleted(fn (self $log) => self::syncTimesheet($log));
+        // 되살리면 그날 근무시간도 같이 돌아와야 한다. 이걸 빠뜨리면 기록은
+        // 보이는데 급여는 0 인 상태가 되고, 화면상으로는 멀쩡해 보인다.
+        static::restored(fn (self $log) => self::syncTimesheet($log));
         static::created(fn (self $log) => self::publishCommunicationAlert($log));
     }
 

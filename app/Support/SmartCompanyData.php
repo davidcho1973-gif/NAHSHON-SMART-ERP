@@ -154,6 +154,7 @@ class SmartCompanyData
             'api_saveAttendanceLog' => app(AttendanceLogAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_setAttendanceLogStatus' => app(AttendanceLogAdminService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_deleteAttendanceLog' => app(AttendanceLogAdminService::class)->delete((int) ($args[0] ?? 0)),
+            'api_restoreAttendanceLog' => app(AttendanceLogAdminService::class)->restore((int) ($args[0] ?? 0)),
 
             // 임금 프로필 (Filament EmployeePayrollProfileResource 를 SPA 로 옮긴 것).
             'api_getPayProfiles' => app(PayProfileService::class)->list(),
