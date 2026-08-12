@@ -28,6 +28,7 @@ use App\Http\Controllers\VehicleApiController;
 use App\Http\Controllers\W9FormController;
 use App\Http\Controllers\WebManifestController;
 use App\Http\Controllers\WbsManualController;
+use App\Http\Controllers\OrgLogoController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Models\SystemHeartbeat;
@@ -107,6 +108,10 @@ Route::middleware('auth')->group(function (): void {
     Route::delete('/wbs-api/photos/{photo}', [WbsPhotoController::class, 'destroy'])->name('wbs-photos.destroy');
     Route::get('/wbs-api/photos/{photo}/file', [WbsPhotoController::class, 'file'])->name('wbs-photos.file');
     Route::get('/wbs-api/photos/{photo}/thumb', [WbsPhotoController::class, 'thumb'])->name('wbs-photos.thumb');
+
+    // 조직 설정 — 로고 그림 올리기·지우기 (권한 확인은 컨트롤러가 한다)
+    Route::post('/org-api/logo', [OrgLogoController::class, 'store'])->name('org.logo.store');
+    Route::delete('/org-api/logo', [OrgLogoController::class, 'destroy'])->name('org.logo.destroy');
 
     // 문서통합관리 — 업로드(멀티파트) → AI 자동분석(백그라운드) → 상태 폴링 → 원본 열람
     Route::post('/docs-api/upload', [IntegratedDocumentController::class, 'upload'])->name('docs.upload');
@@ -246,6 +251,10 @@ Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('s
 Route::get('/gate/{site}/manifest.webmanifest', [WebManifestController::class, 'gate'])->name('gate.manifest');
 Route::get('/worker-app.webmanifest', [WebManifestController::class, 'worker'])->name('worker-app.manifest');
 Route::get('/erp.webmanifest', [WebManifestController::class, 'erp'])->name('erp.manifest');
+
+// 고객사 로고 그림. 로그인 화면과 게이트 화면이 쓰기 때문에 로그인 없이 열린다 —
+// 회사가 명함과 간판에 이미 붙여 둔 그림이라 감출 것이 없다.
+Route::get('/org/logo', [OrgLogoController::class, 'show'])->name('org.logo');
 
 // 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');

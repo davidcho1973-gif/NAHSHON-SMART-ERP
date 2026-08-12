@@ -73,7 +73,7 @@
 <body>
 <div class="app">
     <aside class="sidebar">
-        <div class="brand"><div class="brand-mark">{{ \App\Support\Org::initials() }}</div><div><strong>{{ \App\Support\Org::name() }}</strong><small>DOCUMENT CONTROL</small></div></div>
+        <div class="brand">@if (\App\Support\Org::hasLogo())<img class="brand-mark" style="background:none;object-fit:contain" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="">@else<div class="brand-mark">{{ \App\Support\Org::initials() }}</div>@endif<div><strong>{{ \App\Support\Org::name() }}</strong><small>DOCUMENT CONTROL</small></div></div>
         <div class="nav-label">WORKSPACE</div>
         <a class="nav-link" href="/"><b>⌂</b><span>ERP 홈</span></a>
         <a class="nav-link active" href="/document-hub"><b>✦</b><span>AI 통합 문서함</span></a>

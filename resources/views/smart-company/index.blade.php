@@ -115,8 +115,12 @@
   <div class="erp-layout">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        {{-- 로고 자리. 그림 로고를 받기 전까지는 이름에서 뽑은 머리글자를 쓴다 --}}
-        <div class="brand-logo">{{ \App\Support\Org::initials() }}</div>
+        {{-- 로고 자리. 그림을 올리지 않았으면 이름에서 뽑은 머리글자를 쓴다 --}}
+        @if (\App\Support\Org::hasLogo())
+          <img class="brand-logo brand-logo-image" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="{{ \App\Support\Org::name() }}">
+        @else
+          <div class="brand-logo">{{ \App\Support\Org::initials() }}</div>
+        @endif
         <div class="brand-name">
           <span class="title">{{ \App\Support\Org::name() }}</span>
           <span class="subtitle">SMART ERP</span>

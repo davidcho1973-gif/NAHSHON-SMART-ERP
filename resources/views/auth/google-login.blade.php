@@ -432,13 +432,36 @@
         color: #93a4bc;
       }
     }
+    /* 올린 그림 로고. 배경이 뚫린 로고 뒤에 색을 깔면 로고 색과 부딪히고,
+       흰 로고는 색 판 위에서 뭉개진다. 바탕과 그림자를 걷고 비율만 지킨다.
+
+       스타일 블록 맨 끝에 둔다 — 화면 폭에 따라 .brand-mark 를 다시 칠하는
+       규칙들이 위에 있어서, 앞쪽에 두면 그쪽이 이긴다. */
+    .brand-mark-image,
+    .mobile-app-icon-image {
+      background: transparent !important;
+      box-shadow: none !important;
+      object-fit: contain;
+      border-radius: 0;
+      width: auto;
+    }
+
+    /* 회사 로고는 대개 가로로 길다(글자가 들어 있으니까). 정사각형에 가두면
+       세로가 10px 남짓으로 줄어 무엇인지 알아볼 수 없다 — 높이만 맞추고
+       가로는 필요한 만큼 준다. */
+    .brand-mark-image { height: 34px; max-width: 190px; }
+    .mobile-app-icon-image { height: 72px; max-width: 240px; }
   </style>
 </head>
 
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">{{ \App\Support\Org::initials() }}</span>
+      @if (\App\Support\Org::hasLogo())
+        <img class="brand-mark brand-mark-image" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="">
+      @else
+        <span class="brand-mark">{{ \App\Support\Org::initials() }}</span>
+      @endif
       <span>{{ \App\Support\Org::name() }}</span>
     </div>
     <a class="admin-link" href="{{ url('/admin/login') }}">Password Sign In</a>
@@ -447,7 +470,11 @@
   <main class="page">
     <section class="card" aria-label="ERP sign in">
       <div class="mobile-only mobile-app-hero" aria-hidden="true">
-        <div class="mobile-app-icon">{{ \App\Support\Org::initials() }}</div>
+        @if (\App\Support\Org::hasLogo())
+          <img class="mobile-app-icon mobile-app-icon-image" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="">
+        @else
+          <div class="mobile-app-icon">{{ \App\Support\Org::initials() }}</div>
+        @endif
         <div>
           <div class="mobile-kicker">{{ \App\Support\Org::name() }} FIELD ERP</div>
           <h1>{{ \App\Support\Org::name() }}</h1>
