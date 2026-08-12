@@ -351,6 +351,47 @@ class OrgIdentityTest extends TestCase
         $this->get('/build-version')->assertOk()->assertJsonPath('org.name', 'ABC 건설');
     }
 
+    // ── 원본에 사람이 남아 있지 않은가 ────────────────────────────────
+
+    public function test_a_fresh_install_has_nobody_in_it(): void
+    {
+        // 이 테스트가 원본의 정의다.
+        //
+        // 예전에는 빈 데이터베이스에 마이그레이션만 돌려도 특정 개인이 최고 관리자로
+        // 앉아 있었다. 배포 하나일 때는 편했지만, 고객마다 배포하는 지금은 고객
+        // 데이터베이스마다 우리 계정이 들어간다는 뜻이다. 고객이 지워도 다음 배포에
+        // 되살아나는 것이 가장 나쁘다 — 조용하고, 고객은 알 방법이 없다.
+        //
+        // RefreshDatabase 가 방금 마이그레이션을 돌린 직후라, 여기 보이는 것이
+        // 곧 "새 배포에 들어 있는 것" 이다.
+        $this->assertSame(0, User::query()->count(), '새 배포에 계정이 들어 있습니다.');
+        $this->assertSame(0, Company::query()->count(), '새 배포에 회사가 들어 있습니다.');
+    }
+
+    public function test_no_person_is_named_in_the_migrations(): void
+    {
+        // 이메일 하나가 다시 들어오면 그 사람은 모든 고객 데이터베이스에 생긴다.
+        $hits = [];
+        foreach (glob(database_path('migrations/*.php')) as $file) {
+            $body = (string) file_get_contents($file);
+            if (preg_match('/[\w.+-]+@[\w-]+\.[\w.]+/', $body, $m) === 1) {
+                $hits[] = basename($file).' → '.$m[0];
+            }
+        }
+
+        $this->assertSame([], $hits, "마이그레이션에 사람 이메일이 있습니다:\n  ".implode("\n  ", $hits));
+    }
+
+    public function test_provisioning_takes_the_first_admin_from_the_deployment_setting(): void
+    {
+        // 새 고객을 세울 때 이메일을 손으로 옮겨 적다 오타를 내는 일이 잦다.
+        config(['org.admin_email' => 'owner@abc.com']);
+
+        $this->artisan('org:provision')->assertSuccessful();
+
+        $this->assertSame('super_admin', User::query()->where('email', 'owner@abc.com')->value('access_role'));
+    }
+
     // ── 새 고객 세우기 ──────────────────────────────────────────────────
 
     public function test_provisioning_creates_the_own_company_and_a_top_administrator(): void

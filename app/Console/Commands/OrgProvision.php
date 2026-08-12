@@ -68,7 +68,9 @@ class OrgProvision extends Command
         }
 
         // ② 최고 관리자 — 아무도 없으면 설정을 고칠 사람이 없다.
-        $email = trim((string) $this->option('admin'));
+        // 환경변수에 적어 두면 매번 --admin 을 치지 않아도 된다. 새 고객 배포를
+        // 세울 때 이메일 하나를 손으로 옮겨 적다 오타를 내는 일이 잦다.
+        $email = trim((string) ($this->option('admin') ?: config('org.admin_email')));
         $existing = User::query()->where('access_role', 'super_admin')->count();
 
         if ($email !== '') {
