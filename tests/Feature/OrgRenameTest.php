@@ -53,7 +53,7 @@ class OrgRenameTest extends TestCase
             'status' => 'approved', 'source' => 'web_portal',
         ]);
 
-        config(['org.name' => 'KSR', 'org.code' => 'KSR', 'org.legal_name' => null]);
+        config(['org.name' => 'KSR', 'org.code' => 'KSR', 'org.code_configured' => true, 'org.legal_name' => null]);
         Org::forget();
     }
 
@@ -111,6 +111,20 @@ class OrgRenameTest extends TestCase
             ->assertSuccessful();
 
         $this->assertSame(1, Company::query()->where('code', 'KSR')->count());
+    }
+
+    public function test_it_leaves_the_code_alone_when_nobody_asked_for_it(): void
+    {
+        // 화면(조직 설정)에서 이름만 바꾸는 것이 가장 흔한 경우다. 그때 코드까지
+        // 함께 덮이면 부탁하지 않은 일이 벌어진 것이고, 되돌리려면 또 손이 간다.
+        config(['org.code_configured' => false, 'org.code' => 'OWN']);
+        Org::forget();
+
+        $this->artisan('org:rename --force')->assertSuccessful();
+
+        $own = $this->own->fresh();
+        $this->assertSame('KSR', $own->name);
+        $this->assertSame('OLD', $own->code, '부탁하지 않은 코드까지 바뀌었습니다.');
     }
 
     // ── 헷갈릴 때는 사람에게 묻는다 ────────────────────────────────────

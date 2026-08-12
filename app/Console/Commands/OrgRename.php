@@ -33,7 +33,8 @@ class OrgRename extends Command
     public function handle(): int
     {
         $this->line('');
-        $this->line('  설정에 적힌 이름:  <options=bold>'.Org::name().'</>   (코드 '.Org::code().')');
+        $this->line('  설정에 적힌 이름:  <options=bold>'.Org::name().'</>'
+            .(config('org.code_configured') ? '   (코드 '.Org::code().')' : '   (코드는 건드리지 않습니다)'));
         $this->line('');
 
         $companies = Company::query()->orderBy('id')->get();
@@ -60,9 +61,13 @@ class OrgRename extends Command
             return self::FAILURE;
         }
 
+        // 코드는 환경변수로 일부러 정했을 때만 건드린다. 이름만 바꾸려고 돌렸는데
+        // 코드까지 바뀌면 부탁하지 않은 일이 함께 벌어진 것이다.
+        $touchCode = (bool) config('org.code_configured');
+
         $changes = array_filter([
             '이름' => $target->name !== Org::name() ? [$target->name, Org::name()] : null,
-            '코드' => $target->code !== Org::code() ? [$target->code, Org::code()] : null,
+            '코드' => $touchCode && $target->code !== Org::code() ? [$target->code, Org::code()] : null,
             '법인명' => $target->legal_name !== Org::legalName() ? [$target->legal_name, Org::legalName()] : null,
             '구분' => $target->company_type !== Company::TYPE_OWN
                 ? [Company::COMPANY_TYPES[$target->company_type] ?? $target->company_type, '자사 (직접고용)']
@@ -83,7 +88,9 @@ class OrgRename extends Command
         );
 
         // 코드가 겹치면 자사가 둘이 된다. 그때부터 어느 쪽이 자사인지 코드로는 못 가린다.
-        $clash = Company::query()->where('code', Org::code())->whereKeyNot($target->id)->first();
+        $clash = $touchCode
+            ? Company::query()->where('code', Org::code())->whereKeyNot($target->id)->first()
+            : null;
         if ($clash) {
             $this->error('  코드 '.Org::code().' 를 쓰는 회사가 이미 있습니다 (#'.$clash->id.' '.$clash->name.').');
             $this->line('  ORG_CODE 를 다른 값으로 두거나, 그 회사를 먼저 정리하세요.');
@@ -99,12 +106,12 @@ class OrgRename extends Command
             return self::SUCCESS;
         }
 
-        $target->forceFill([
+        $target->forceFill(array_filter([
             'name' => Org::name(),
-            'code' => Org::code(),
+            'code' => $touchCode ? Org::code() : null,
             'legal_name' => Org::legalName(),
             'company_type' => Company::TYPE_OWN,
-        ])->save();
+        ]))->save();
 
         // 자사가 둘이면 직원의 고용 구분이 회사에 따라 갈릴 때 어느 쪽을 볼지 모른다.
         $others = Company::query()->where('company_type', Company::TYPE_OWN)->whereKeyNot($target->id)->get();
