@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $site->code }} {{ $site->name }}</title>
+
+    {{-- 홈 화면에 추가하면 앱이 된다. 이 네 줄이 없으면 아이콘 자리에 화면 캡처가 붙는다. --}}
+    <link rel="manifest" href="{{ route('gate.manifest', ['site' => $site]) }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/apple-touch-icon.png') }}">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="{{ $site->code }}">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
     <style>
         :root { color-scheme: light; font-family: 'Malgun Gothic', Arial, Helvetica, sans-serif; background: #0f172a; color: #0f172a; }
         * { box-sizing: border-box; }
@@ -47,7 +56,7 @@
     <main class="sheet">
         <div class="top">
             <div>
-                <p class="brand">DASOL PRISM</p>
+                <p class="brand">{{ \App\Support\Org::name() }}</p>
                 <h1 id="t-title"></h1>
             </div>
             <div class="langs" id="langs">
@@ -90,8 +99,12 @@
             </div>
             <div class="remembered hidden" id="done-remembered"></div>
             <button class="ghost" id="done-back"></button>
+            {{-- 안내를 한 번 닫은 사람이 나중에 마음을 바꿀 자리. 이미 설치했으면 숨는다. --}}
+            <button class="ghost hidden" id="done-install"></button>
         </section>
     </main>
+
+    @include('partials.install-app', ['installLang' => $lang])
 
     <script>
         var URLS = {
@@ -134,6 +147,7 @@
             T = DICT[code];
             document.documentElement.setAttribute('lang', code);
             if (remember) { try { localStorage.setItem(LANG_KEY, code); } catch (e) {} }
+            if (window.AppInstall) { window.AppInstall.setLang(code); }
             Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
                 b.classList.toggle('on', b.getAttribute('data-lang') === code);
             });
@@ -150,6 +164,11 @@
             var rb = document.getElementById('remember-btn');
             rb.textContent = T.remember;
             rb.classList.toggle('hidden', recognized || !selected);
+            var di = document.getElementById('done-install');
+            if (window.AppInstall) {
+                di.textContent = '＋ ' + window.AppInstall.label();
+                di.classList.toggle('hidden', window.AppInstall.installed());
+            }
             if (!document.getElementById('results').dataset.filled) {
                 document.getElementById('results').innerHTML = '<div class="muted">' + T.searchEmpty + '</div>';
             }
@@ -304,8 +323,19 @@
                     selected.next = isOut ? 'clock_in' : 'clock_out';
                     paintWorker();
                     show('screen-done');
+
+                    // 설치 안내는 여기서만 뜬다 — 출퇴근이 한 번 찍힌 뒤다. 열자마자 권하면
+                    // 이 화면이 뭘 해 주는지도 모르는 채로 닫는다. 잠깐 두는 것은 "완료"를
+                    // 먼저 읽게 하려는 것이다.
+                    if (window.AppInstall && !d.ignored) {
+                        setTimeout(function () { window.AppInstall.offer(); }, 1200);
+                    }
                 })
                 .catch(function () { btn.disabled = false; btn.textContent = orig; alert(T.network); });
+        });
+
+        document.getElementById('done-install').addEventListener('click', function () {
+            window.AppInstall.show();
         });
     </script>
 </body>

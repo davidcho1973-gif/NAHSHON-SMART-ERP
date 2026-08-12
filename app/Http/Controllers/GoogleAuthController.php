@@ -18,7 +18,9 @@ class GoogleAuthController extends Controller
         $user = $request->user();
 
         if ($user instanceof User) {
-            return redirect()->route('smart-company.index');
+            // 이미 로그인돼 있는데 로그인 화면으로 온 경우(북마크·뒤로가기).
+            // 작업자를 ERP 로 보내면 안 된다 — 아래 landingPath 가 역할별로 갈라 준다.
+            return redirect()->to($user->landingPath());
         }
 
         return view('auth.google-login', [
@@ -165,7 +167,55 @@ class GoogleAuthController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->route('smart-company.index');
+        return redirect()->to($this->destinationFor($request, $user));
+    }
+
+    /**
+     * 로그인 뒤에 어디로 보낼 것인가.
+     *
+     * 원래 열려던 화면이 있으면 거기로 돌려보낸다. 이게 없으면 작업자가
+     * /attendance-app 을 열었다가 로그인 뒤 ERP 첫 화면에 떨어진다 — 자기 근무시간을
+     * 보러 왔는데 회사 전체 화면이 뜨면 잘못 눌렀다고 생각하고 앱을 지운다. 설치를
+     * 부탁하는 첫날에 이걸 겪으면 두 번째 기회는 없다.
+     *
+     * 다만 세션에 남은 주소를 그대로 믿지는 않는다. 없어진 /admin 화면이 옛 세션·북마크에
+     * 남아 있어서(관리 화면은 전부 ERP 안으로 들어왔다), 그대로 따라가면 로그인하자마자
+     * 한 번 튕기는 것처럼 보인다. 그런 주소는 버리고 역할에 맞는 곳으로 보낸다.
+     */
+    private function destinationFor(Request $request, User $user): string
+    {
+        $intended = $request->session()->pull('url.intended');
+
+        if (is_string($intended) && $this->isSafeDestination($intended)) {
+            return $intended;
+        }
+
+        return $user->landingPath();
+    }
+
+    /** 우리 앱 안의, 지금도 살아 있는 화면인가. */
+    private function isSafeDestination(string $url): bool
+    {
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        // 다른 사이트로 보내지 않는다(열린 리다이렉트).
+        $host = parse_url($url, PHP_URL_HOST);
+        if ($host !== null && $host !== parse_url((string) config('app.url'), PHP_URL_HOST)) {
+            return false;
+        }
+
+        if ($path === '' || ! str_starts_with($path, '/')) {
+            return false;
+        }
+
+        // 없어진 관리자 패널, 그리고 로그인 자체로 되돌아가는 고리.
+        foreach (['/admin', '/login', '/auth/'] as $dead) {
+            if (str_starts_with($path, $dead)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function deny(string $message): RedirectResponse

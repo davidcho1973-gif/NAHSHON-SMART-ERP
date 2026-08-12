@@ -1,13 +1,13 @@
 # DASOL PRISM SMART ERP
 
-Laravel and Filament version of the SMART COMPANY ERP workflow.
+Laravel version of the SMART COMPANY ERP workflow.
 
 This repository contains the converted application code only. Local runtime files such as `.env`, `vendor`, `node_modules`, `tools`, SQLite databases, logs, and caches are intentionally not committed.
 
 ## Stack
 
 - Laravel 13
-- Filament 5
+- Livewire 4 (현장앱)
 - PHP 8.3 or newer
 - SQLite for local development
 - Node.js and npm for frontend build tasks
@@ -62,11 +62,8 @@ Open:
 http://127.0.0.1:8000/
 ```
 
-Filament admin:
-
-```text
-http://127.0.0.1:8000/admin
-```
+관리 화면(현장·직원·계정·임금·메신저 등)은 ERP 안에 있다. 별도 관리자 패널은 없다 —
+`/admin` 은 홈으로 넘어간다.
 
 Local seeded admin account:
 

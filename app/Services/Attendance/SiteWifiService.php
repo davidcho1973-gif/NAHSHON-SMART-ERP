@@ -6,8 +6,15 @@ use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
 
 /**
- * 현장 WiFi AP 등록 관리 — 관리자가 현장별 BSSID 화이트리스트를 등록/조회/삭제한다.
- * 이후 하이브리드 출퇴근 판정이 이 목록을 참조한다.
+ * 현장 네트워크 등록 관리 — 관리자가 현장별 화이트리스트를 등록/조회/삭제한다.
+ * 하이브리드 출퇴근 판정이 이 목록을 참조한다.
+ *
+ * 두 가지를 담는다.
+ *   공유기 MAC(BSSID) — 가장 정확하지만 네이티브 앱이 나와야 쓸 수 있다.
+ *   공인 IP 대역      — 현장 WiFi 를 타고 나온 요청의 주소. 브라우저에서 오늘 바로 동작한다.
+ *
+ * 공유기 하나가 BSSID 를 여러 개 쓴다는 점에 주의한다 — 2.4GHz 와 5GHz 가 다르고, 메시
+ * 공유기는 노드마다 다르다. 하나만 등록하면 폰이 다른 대역에 붙는 날 인식이 안 된다.
  */
 class SiteWifiService
 {
@@ -21,9 +28,16 @@ class SiteWifiService
             return ['success' => false, 'error' => '현장을 먼저 선택하세요(전체 현장에서는 등록할 수 없습니다).', 'aps' => []];
         }
 
-        $aps = SiteWifiAccessPoint::query()->where('site_id', $site->id)->orderBy('label')->orderBy('bssid')->get()
+        $aps = SiteWifiAccessPoint::query()->where('site_id', $site->id)
+            ->orderBy('kind')->orderBy('label')->orderBy('bssid')->get()
             ->map(fn (SiteWifiAccessPoint $a) => [
-                'id' => $a->id, 'bssid' => $a->bssid, 'ssid' => $a->ssid, 'label' => $a->label, 'active' => $a->active,
+                'id' => $a->id,
+                'kind' => $a->kind,
+                'kindLabel' => SiteWifiAccessPoint::KIND_OPTIONS[$a->kind] ?? $a->kind,
+                'bssid' => $a->bssid,
+                'ssid' => $a->ssid,
+                'label' => $a->label,
+                'active' => $a->active,
             ])->all();
 
         return [
@@ -35,6 +49,9 @@ class SiteWifiService
                 'radius' => $site->radius_meters !== null ? (int) $site->radius_meters : null,
             ],
             'aps' => $aps,
+            // 지금 이 화면을 보고 있는 사람의 공인 IP. 현장 WiFi 에 붙어서 열었다면
+            // 이 주소가 곧 그 현장의 주소다 — 버튼 한 번으로 등록할 수 있게 미리 준다.
+            'myIp' => request()->ip(),
         ];
     }
 
@@ -48,15 +65,29 @@ class SiteWifiService
             return ['success' => false, 'error' => '현장을 선택하세요.'];
         }
 
-        $bssid = (string) ($data['bssid'] ?? '');
-        if (! SiteWifiAccessPoint::isValidBssid($bssid)) {
-            return ['success' => false, 'error' => 'BSSID 형식이 올바르지 않습니다. 예: a4:5e:60:11:22:33 (12자리 MAC).'];
+        $kind = (string) ($data['kind'] ?? SiteWifiAccessPoint::KIND_BSSID);
+        if (! array_key_exists($kind, SiteWifiAccessPoint::KIND_OPTIONS)) {
+            return ['success' => false, 'error' => '등록 종류가 올바르지 않습니다.'];
         }
-        $bssid = SiteWifiAccessPoint::normalizeBssid($bssid);
+
+        $value = trim((string) ($data['bssid'] ?? ''));
+
+        if ($kind === SiteWifiAccessPoint::KIND_NETWORK) {
+            if (! SiteWifiAccessPoint::isValidCidr($value)) {
+                return ['success' => false, 'error' => 'IP 대역 형식이 올바르지 않습니다. 예: 203.0.113.24 또는 203.0.113.0/24'];
+            }
+            $value = SiteWifiAccessPoint::normalizeCidr($value);
+        } else {
+            if (! SiteWifiAccessPoint::isValidBssid($value)) {
+                return ['success' => false, 'error' => 'BSSID 형식이 올바르지 않습니다. 예: a4:5e:60:11:22:33 (12자리 MAC).'];
+            }
+            $value = SiteWifiAccessPoint::normalizeBssid($value);
+        }
 
         $ap = SiteWifiAccessPoint::query()->updateOrCreate(
-            ['site_id' => $site->id, 'bssid' => $bssid],
+            ['site_id' => $site->id, 'bssid' => $value],
             [
+                'kind' => $kind,
                 'ssid' => ($data['ssid'] ?? null) ?: null,
                 'label' => ($data['label'] ?? null) ?: null,
                 'active' => array_key_exists('active', $data) ? (bool) $data['active'] : true,
@@ -64,7 +95,7 @@ class SiteWifiService
             ]
         );
 
-        return ['success' => true, 'id' => $ap->id, 'bssid' => $ap->bssid];
+        return ['success' => true, 'id' => $ap->id, 'kind' => $ap->kind, 'bssid' => $ap->bssid];
     }
 
     public function delete(int $id): array

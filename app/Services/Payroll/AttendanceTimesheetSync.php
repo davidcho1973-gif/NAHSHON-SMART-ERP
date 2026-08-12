@@ -37,6 +37,20 @@ class AttendanceTimesheetSync
             return null;
         }
 
+        // 시급/일급 직영만 시간 정산 대상이다. 협력사는 소속사가 임금을 지급하고(인원체크만),
+        // 월급제 관리자는 정액이라 일별 근무시간이 급여에 쓰이지 않는다 — 출퇴근 원장은
+        // 그대로 남기되 급여 타임시트는 만들지 않는다.
+        $employee = Employee::find($employeeId);
+        if ($employee && $employee->attendancePolicy() !== Employee::POLICY_HOURLY) {
+            PayrollTimesheet::query()
+                ->where('employee_id', $employeeId)
+                ->where('work_date', $date)
+                ->where('source', 'attendance_logs')
+                ->delete();
+
+            return null;
+        }
+
         $logs = AttendanceLog::query()
             ->where('employee_id', $employeeId)
             ->where('attendance_date', $date)
@@ -70,14 +84,16 @@ class AttendanceTimesheetSync
             $overtime = max(0, $payable - self::REGULAR_MINUTES_PER_DAY);
         }
 
-        $employee = Employee::find($employeeId);
+        // 그날 실제로 찍힌 현장/팀이 직원 마스터의 소속보다 정확하다 — 파견·이동 근무가 있다.
+        $context = $logs->last();
 
         return PayrollTimesheet::updateOrCreate(
             ['employee_id' => $employeeId, 'work_date' => $date],
             [
                 'company_id' => $employee?->company_id,
-                'site_id' => $employee?->site_id,
-                'team_id' => $employee?->team_id,
+                'site_id' => $context?->site_id ?: $employee?->site_id,
+                'team_id' => $context?->team_id ?: $employee?->team_id,
+                'site_contractor_id' => $context?->site_contractor_id,
                 'check_in_at' => $checkIn,
                 'check_out_at' => $checkOut,
                 'regular_minutes' => $regular,
@@ -85,6 +101,8 @@ class AttendanceTimesheetSync
                 'payable_minutes' => $payable,
                 'status' => $checkOut ? 'approved' : 'draft',
                 'source' => 'attendance_logs',
+                // 어느 로그에서 나온 시간인지 — 급여 이의가 들어왔을 때 추적하는 근거.
+                'payload' => ['attendance_log_ids' => $logs->pluck('id')->all()],
             ]
         );
     }

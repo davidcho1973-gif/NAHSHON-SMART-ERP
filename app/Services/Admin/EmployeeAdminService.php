@@ -82,7 +82,8 @@ class EmployeeAdminService
         }
 
         $query = Employee::query()
-            ->with(['company:id,name', 'site:id,code', 'team:id,name'])
+            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,email,access_role,account_status',
+                'w9Form:id,employee_id,tin_last4,certified_at'])
             ->orderBy('name');
         $this->applyScope($query);
 
@@ -124,6 +125,7 @@ class EmployeeAdminService
                 'firstName' => $e->first_name,
                 'lastName' => $e->last_name,
                 'email' => $e->email,
+                'phone' => $e->phone,
                 'nationality' => $e->nationality,
                 'language' => $e->preferred_language,
                 'languageLabel' => WorkerLang::OPTIONS[$e->preferred_language] ?? null,
@@ -146,9 +148,21 @@ class EmployeeAdminService
                 'hasBadgePhoto' => filled($e->badge_photo_path),
                 'qrRole' => $e->attendance_app_role,
                 'qrScope' => $e->attendance_app_scope,
+                // 로그인 계정이 있는지 — 없으면 이 사람은 앱에 못 들어온다.
+                'hasAccount' => $e->user !== null,
+                // 로그인에 실제로 쓰는 주소. 직원 정보의 이메일과 다를 수 있는데,
+                // 다르면 링크를 받은 작업자가 자기 것이 아닌 주소로 로그인하라는
+                // 안내를 받게 된다 — 화면이 멀쩡해 보여서 아무도 모른다.
+                'loginEmail' => $e->user?->email,
+                'accountRole' => $e->user?->access_role,
+                'accountStatus' => $e->user?->account_status,
                 'visaExpiresOn' => $e->visa_expires_on?->toDateString(),
                 'safetyExpiresOn' => $e->safety_training_expires_on?->toDateString(),
                 'expiring' => $expiring,
+                // W-9 제출 여부 — 1099 지급 전제조건. TIN 은 뒤 4자리만 내려간다.
+                'w9OnFile' => $e->w9Form !== null,
+                'w9TinLast4' => $e->w9Form?->tin_last4,
+                'w9CertifiedOn' => $e->w9Form?->certified_at?->toDateString(),
             ];
         })->values()->all();
 
@@ -183,7 +197,67 @@ class EmployeeAdminService
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
             'teams' => Team::query()->orderBy('name')->get(['id', 'name'])
                 ->map(fn (Team $t): array => ['value' => (string) $t->id, 'label' => $t->name])->all(),
+            // 계정 부여 폼에서 쓴다. 줄 수 있는 역할은 부여하는 사람의 등급에 달렸다.
+            'accountRoles' => $pairs(array_intersect_key(
+                User::ROLE_LABELS_KO,
+                app(UserAccessService::class)->assignableRoles(),
+            )),
+            'accountScopes' => $pairs(User::SCOPE_OPTIONS),
+            'canGrantAccount' => app(UserAccessService::class)->canManage(),
+            // 남의 작업자 화면에는 그 사람의 시급과 급여가 그대로 나온다. 그래서 급여를
+            // 이미 볼 수 있는 역할에만 연다(같은 상수를 쓴다 — 따로 적으면 어긋난다).
+            'canViewAsWorker' => in_array(auth()->user()?->access_role, PayProfileService::VIEW_ROLES, true),
         ];
+    }
+
+    /**
+     * 직원에게 로그인 계정을 만들어 준다.
+     *
+     * 이름과 이메일은 이미 직원 정보에 있다 — 계정 화면에서 다시 치게 하면 오타가 나고,
+     * 오타가 나면 그 사람은 자기 계정으로 못 들어온다. 그래서 여기서 직원 정보를 그대로
+     * 넘긴다. 역할 검증·중복 검사·마지막 슈퍼관리자 보호는 계정 서비스가 그대로 한다 —
+     * 규칙을 두 군데 두면 언젠가 어긋난다.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public function grantAccount(int $employeeId, array $input): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '직원 관리 권한이 없습니다.'];
+        }
+
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'error' => '직원을 찾을 수 없습니다.'];
+        }
+        if (! $this->inScope($employee)) {
+            return ['success' => false, 'error' => '다른 현장의 직원에게는 계정을 만들 수 없습니다.'];
+        }
+        if ($employee->user) {
+            return ['success' => false, 'error' => '이 직원은 이미 로그인 계정이 있습니다. 계정 · 권한 관리에서 수정해 주세요.'];
+        }
+
+        $email = mb_strtolower(trim((string) ($input['email'] ?? $employee->email ?? '')));
+        if ($email === '') {
+            return ['success' => false, 'errors' => ['email' => '이메일을 입력하세요. 구글 로그인에 쓰는 주소입니다.']];
+        }
+
+        $scope = (string) ($input['scope'] ?? 'self');
+
+        return app(UserAccessService::class)->save([
+            'name' => $employee->name,
+            'email' => $email,
+            'role' => (string) ($input['role'] ?? 'worker'),
+            'scope' => $scope,
+            'status' => 'active',
+            'employeeId' => $employee->id,
+            // 범위 대상은 직원 정보에서 그대로 가져온다 — 같은 것을 또 고르게 하지 않는다.
+            'companyId' => $employee->company_id,
+            'siteId' => $employee->site_id,
+            'teamId' => $employee->team_id,
+            'notes' => $input['notes'] ?? null,
+        ]);
     }
 
     /**
@@ -291,6 +365,9 @@ class EmployeeAdminService
             'first_name' => $first ?: null,
             'last_name' => $last ?: null,
             'email' => $email ?: null,
+            // 앱 링크를 문자·왓츠앱으로 바로 보낼 때 쓴다. 여기 없으면 반장이 매번
+            // 받는 사람을 손으로 고른다 — 등록 폼이 이미 받은 값을 또 묻는 셈이다.
+            'phone' => trim((string) ($input['phone'] ?? '')) ?: null,
             'nationality' => trim((string) ($input['nationality'] ?? '')) ?: null,
             'preferred_language' => WorkerLang::resolve($input['language'] ?? null),
             'company_id' => $companyId,
@@ -314,13 +391,65 @@ class EmployeeAdminService
         if ($row) {
             $row->update($data);
 
-            return ['success' => true, 'id' => $row->id];
+            $account = $this->syncAccountEmail($row, $email, $input);
+            if (isset($account['errors'])) {
+                return ['success' => false, 'errors' => $account['errors']];
+            }
+
+            return ['success' => true, 'id' => $row->id] + $account;
         }
 
         $created = Employee::create($data);
 
         // 사번은 모델이 자동 발급하므로 새로 만든 뒤에야 알 수 있다 — 화면에 알려준다.
         return ['success' => true, 'id' => $created->id, 'employeeNumber' => $created->employee_number];
+    }
+
+    /**
+     * 직원 이메일과 로그인 계정 이메일을 맞춘다.
+     *
+     * 두 칸이 따로 있다. 직원 정보의 이메일은 연락처고, 로그인 계정의 이메일은 구글
+     * 로그인에 쓰는 신원이다. 그런데 화면에서는 "이메일" 한 칸만 보이니, 그것을 고치면
+     * 로그인도 따라간다고 믿게 된다.
+     *
+     * 실제로 어긋난 적이 있다 — 직원 이메일을 고쳤는데 보내기 화면은 옛 계정을 계속
+     * 보여 줬고, 그 링크를 받은 작업자는 자기 것이 아닌 주소로 로그인하라는 안내를
+     * 받았다. 화면은 어느 쪽도 틀려 보이지 않았다.
+     *
+     * 다만 <b>조용히 바꾸지는 않는다.</b> 로그인 주소를 바꾸는 것은 "이 사람이 누구인가"
+     * 를 바꾸는 일이라, 잘못 바꾸면 그 사람은 앱에 못 들어온다. 화면이 물어보고,
+     * 사람이 예라고 한 경우에만(syncAccountEmail) 옮긴다.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function syncAccountEmail(Employee $employee, string $email, array $input): array
+    {
+        $account = $employee->user()->first();
+        if (! $account) {
+            return [];
+        }
+
+        // 화면에 지금 무엇이 어긋나 있는지 늘 알려 준다 — 이번에 안 바꾸더라도.
+        $mismatch = $email !== '' && mb_strtolower($account->email) !== $email
+            ? ['loginEmail' => $account->email, 'emailMismatch' => true]
+            : ['loginEmail' => $account->email];
+
+        if (! filter_var($input['syncAccountEmail'] ?? false, FILTER_VALIDATE_BOOL)) {
+            return $mismatch;
+        }
+
+        if ($email === '' || mb_strtolower($account->email) === $email) {
+            return $mismatch;
+        }
+
+        if (User::query()->where('email', $email)->whereKeyNot($account->id)->exists()) {
+            return ['errors' => ['email' => '이 이메일을 쓰는 로그인 계정이 이미 있습니다.']];
+        }
+
+        $account->forceFill(['email' => $email])->save();
+
+        return ['loginEmail' => $email, 'accountEmailChanged' => true];
     }
 
     /**

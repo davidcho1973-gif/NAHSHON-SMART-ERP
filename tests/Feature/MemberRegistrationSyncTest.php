@@ -5,10 +5,9 @@ namespace Tests\Feature;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\User;
-use App\Filament\Resources\MemberRegistrations\Pages\ManageMemberRegistrations;
+use App\Services\Admin\ApplicantAdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
-use Livewire\Livewire;
 use Tests\TestCase;
 
 class MemberRegistrationSyncTest extends TestCase
@@ -309,8 +308,10 @@ class MemberRegistrationSyncTest extends TestCase
         $this->assertSame('member-badges/sekon.jpg', $employee->badge_photo_path);
     }
 
-    public function test_badge_nfc_table_action_saves_gemini_payload(): void
+    public function test_badge_registration_records_the_nfc_tag_and_advances_onboarding(): void
     {
+        // 배지 등록은 NFC 태그와 발급일을 남긴다. 발급일이 입사일이 되므로 필수다.
+        // 배지 사진의 AI 판독값(이름·회사·직종)은 사진을 올릴 때 따로 채워진다.
         $user = User::query()->create([
             'name' => 'HR Manager',
             'email' => 'hr@example.com',
@@ -335,42 +336,54 @@ class MemberRegistrationSyncTest extends TestCase
 
         $this->actingAs($user);
 
-        Livewire::test(ManageMemberRegistrations::class)
-            ->callTableAction('registerBadgeNfc', $registration, [
-                'nfc_raw_uid' => '90227842853E04',
-                'badge_number' => 'N-842853E04',
-                'badge_photo_path' => ['member-badges/gianna.jpg'],
-                'badge_printed_number' => 'HB-9911',
-                'badge_company_name' => 'AUTORICA LLC',
-                'badge_last_name' => 'VILLARREAL',
-                'badge_first_name' => 'GERARD',
-                'badge_role' => 'HELPER',
-                'badge_issued_on' => '02/18/2026',
-                'badge_analysis_model' => 'gemini-3.5-flash',
-                'badge_analyzed_at' => now()->toDateTimeString(),
-                'badge_analysis_payload' => json_encode([
-                    'company_name' => 'AUTORICA LLC',
-                    'first_name' => 'GERARD',
-                    'last_name' => 'VILLARREAL',
-                    'role' => 'HELPER',
-                    'issued_on' => '2026-02-18',
-                    'printed_badge_number' => 'HB-9911',
-                    'confidence' => 95,
-                    'model' => 'gemini-3.5-flash',
-                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            ])
-            ->assertHasNoActionErrors();
+        $res = app(ApplicantAdminService::class)->registerBadge($registration->id, [
+            'nfcRawUid' => '90227842853E04',
+            'badgePrintedNumber' => 'HB-9911',
+            'badgeCompanyName' => 'AUTORICA LLC',
+            'badgeIssuedOn' => '2026-02-18',
+        ]);
+
+        $this->assertTrue($res['success'], json_encode($res, JSON_UNESCAPED_UNICODE));
 
         $registration->refresh();
-
         $this->assertSame('badge_pending', $registration->onboarding_status);
         $this->assertSame('registered', $registration->badge_registration_status);
         $this->assertSame('N-842853E04', $registration->badge_number);
         $this->assertSame('HB-9911', $registration->badge_printed_number);
+        $this->assertSame('AUTORICA LLC', $registration->badge_company_name);
+        $this->assertSame('2026-02-18', $registration->badge_issued_on?->toDateString());
         $this->assertSame('Test Applicant', $registration->full_name);
-        $this->assertSame('GERARD', $registration->badge_first_name);
-        $this->assertSame('VILLARREAL', $registration->badge_last_name);
-        $this->assertSame('AUTORICA LLC', $registration->badge_analysis_payload['company_name'] ?? null);
+    }
+
+    public function test_badge_registration_refuses_a_tag_already_given_to_someone_else(): void
+    {
+        // 같은 배지를 두 사람에게 붙이면 게이트에서 누구인지 알 수 없다.
+        $this->actingAs(User::factory()->create([
+            'access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active',
+        ]));
+
+        $base = [
+            'member_type' => 'worker',
+            'onboarding_status' => 'interview_passed',
+            'interview_status' => 'passed',
+            'submitted_at' => now(),
+            'privacy_consent_at' => now(),
+            'safety_training_status' => 'completed',
+        ];
+        $first = MemberRegistration::create($base + ['full_name' => 'First', 'email' => 'first@example.com']);
+        $second = MemberRegistration::create($base + ['full_name' => 'Second', 'email' => 'second@example.com']);
+
+        $svc = app(ApplicantAdminService::class);
+        $this->assertTrue($svc->registerBadge($first->id, [
+            'nfcRawUid' => '90227842853E04', 'badgeIssuedOn' => '2026-02-18',
+        ])['success']);
+
+        $res = $svc->registerBadge($second->id, [
+            'nfcRawUid' => '90227842853E04', 'badgeIssuedOn' => '2026-02-19',
+        ]);
+
+        $this->assertFalse($res['success']);
+        $this->assertNull($second->refresh()->badge_number);
     }
 
     public function test_active_registration_manual_resync_updates_linked_employee_without_duplicates(): void

@@ -24,7 +24,7 @@ class ProcurementItem extends Model
     ];
 
     protected $fillable = [
-        'project_code', 'site_id', 'wbs_code', 'wbs_item_id',
+        'project_code', 'site_id', 'wbs_code', 'wbs_item_id', 'item_id',
         'status', 'vendor', 'po_no', 'amount', 'currency', 'ordered_on', 'eta', 'note', 'created_by_id',
         'document_disk', 'document_path', 'document_name',
     ];
@@ -36,6 +36,12 @@ class ProcurementItem extends Model
             'eta' => 'date',
             'amount' => 'decimal:2',
         ];
+    }
+
+    /** 품목 마스터 연결 — 표준단가 대비 실발주 비교의 근거. */
+    public function item()
+    {
+        return $this->belongsTo(Item::class);
     }
 
     public function wbsItem(): BelongsTo

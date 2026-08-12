@@ -1,48 +1,35 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
 
+/**
+ * (비워 둔 마이그레이션) 예전에는 여기서 관리자 계정을 만들었다.
+ *
+ * 다솔 배포 하나만 있을 때는 편했다. 마이그레이션만 돌리면 로그인할 사람이 생겼으니까.
+ * 그런데 코드 한 벌로 고객마다 배포하게 되면서 성격이 바뀌었다 — <b>모든 고객의
+ * 데이터베이스에 우리 계정이 들어간다.</b> 게다가 마이그레이션이 만드는 것이라
+ * 고객이 지워도 다음 배포에 되살아난다.
+ *
+ * 비밀번호 해시도 소스에 함께 박혀 있었다. 저장소가 공개라 누구나 볼 수 있었다.
+ * (이 앱은 구글 로그인만 있어서 그 해시로 들어올 길은 없지만, 계정이 존재한다는
+ * 것 자체가 문제다.)
+ *
+ * 그래서 여기서는 아무것도 만들지 않는다. 첫 관리자는 배포할 때 정한다.
+ *
+ *     php artisan org:provision --admin=관리자@고객사.com
+ *
+ * 파일을 지우지 않고 비워 둔다. 이미 돌린 배포의 마이그레이션 기록과 어긋나지
+ * 않게 하기 위해서다 — 지우면 "없는 마이그레이션이 기록에 있다" 는 상태가 된다.
+ */
 return new class extends Migration
 {
     public function up(): void
     {
-        $now = now();
-        $email = trim((string) config('smart_company.admin_email', 'admin@nahshonmep.com'));
-        $name = trim((string) config('smart_company.admin_name', 'Admin User'));
-
-        if ($email === '') {
-            $email = 'admin@nahshonmep.com';
-        }
-
-        if ($name === '') {
-            $name = 'Admin User';
-        }
-
-        $attributes = [
-            'name' => $name,
-            'email_verified_at' => $now,
-            'password' => '$2y$12$TqD62TmcPzeCKbuefAVCHO2p87cQ/TtCUYhf2O5qr5X6aYroSMdDW',
-            'access_role' => 'super_admin',
-            'access_scope' => 'all_sites',
-            'account_status' => 'active',
-            'updated_at' => $now,
-        ];
-
-        if (DB::table('users')->where('email', $email)->exists()) {
-            DB::table('users')->where('email', $email)->update($attributes);
-
-            return;
-        }
-
-        DB::table('users')->insert($attributes + [
-            'email' => $email,
-            'created_at' => $now,
-        ]);
+        // 일부러 비어 있다. 위 설명을 참고.
     }
 
     public function down(): void
     {
-        // Password resets are operational changes and are intentionally not rolled back.
+        // 되돌릴 것이 없다.
     }
 };

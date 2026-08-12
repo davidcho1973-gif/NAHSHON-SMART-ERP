@@ -6,6 +6,7 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
+use App\Support\Org;
 
 /**
  * 간접고용(협력사) 퇴근 자동 마감.
@@ -18,8 +19,18 @@ use Illuminate\Support\Carbon;
  */
 class AutoClockOutService
 {
-    /** 자동 퇴근 처리 시각(현장 로컬 기준, 24h). */
+    /**
+     * 자동 퇴근 처리 시각 기본값(현장 로컬 기준, 24h).
+     *
+     * 회사마다 다르다 — config/org.php 의 attendance.indirect_cutoff_hour 로 덮는다.
+     * 여기 상수는 아무것도 설정하지 않은 배포가 쓰는 값이다.
+     */
     public const CUTOFF_HOUR = 16;
+
+    public static function cutoffHour(): int
+    {
+        return Org::int('attendance.indirect_cutoff_hour', self::CUTOFF_HOUR);
+    }
 
     /**
      * @return array{closed: int, pendingDirect: int, date: string}
@@ -33,7 +44,7 @@ class AutoClockOutService
         foreach (Site::query()->where('status', 'active')->get() as $site) {
             $tz = $site->timezone ?: config('app.timezone');
             $workDate = ($dateArg ?? Carbon::now($tz))->copy()->timezone($tz)->toDateString();
-            $cutoff = Carbon::parse($workDate.' '.str_pad((string) self::CUTOFF_HOUR, 2, '0', STR_PAD_LEFT).':00:00', $tz);
+            $cutoff = Carbon::parse($workDate.' '.str_pad((string) self::cutoffHour(), 2, '0', STR_PAD_LEFT).':00:00', $tz);
 
             // 그날 출근만 있고 퇴근이 없는 사람.
             $open = $this->openEmployees($site->id, $workDate);

@@ -2,6 +2,7 @@
 
 namespace App\Services\Procurement;
 
+use App\Models\Item;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\WbsItem;
@@ -37,9 +38,10 @@ class ProcurementService
         $tracking = ProcurementItem::query()
             ->where('project_code', $projectCode)
             ->whereIn('wbs_code', $subs->pluck('wbs_code')->all())
+            ->with('item:id,name,unit,standard_cost')
             ->get()->keyBy('wbs_code');
 
-        $rows = $subs->map(function (WbsItem $i) use ($tracking, $today): array {
+        $rows = $subs->map(function (WbsItem $i) use ($tracking): array {
             $t = $tracking->get($i->wbs_code);
             $status = $t?->status ?? '발주대기';
             $eta = $t?->eta?->toDateString();
@@ -63,6 +65,8 @@ class ProcurementService
                 'progress' => ProcurementItem::progressFor($status),
                 'nextStatus' => ProcurementItem::nextStatus($status),
                 'vendor' => $t?->vendor ?? ($i->company ?? ''),
+                'itemId' => $t?->item_id,
+                'itemName' => $t?->item?->name,
                 'poNo' => $t?->po_no,
                 'amount' => $t?->amount !== null ? (float) $t->amount : null,
                 'currency' => $t?->currency,
@@ -80,6 +84,7 @@ class ProcurementService
         })->sort(function (array $a, array $b): int {
             // 경보(임계 지연) 먼저 → 여유 적은 순 → 납기 빠른 순.
             $rank = ['critical' => 0, 'warning' => 1, 'watch' => 2, 'none' => 3];
+
             return [$rank[$a['alert']] ?? 3, $a['slack'] ?? 99999, $a['needBy'] ?? '9999']
                 <=> [$rank[$b['alert']] ?? 3, $b['slack'] ?? 99999, $b['needBy'] ?? '9999'];
         })->values();
@@ -130,6 +135,11 @@ class ProcurementService
             if ($item->status !== '발주대기' && blank($item->ordered_on)) {
                 $item->ordered_on = now()->toDateString();
             }
+        }
+        if (array_key_exists('item_id', $patch)) {
+            // 품목 마스터 연결 — 있는 품목만. 없는 id 가 오면 연결을 지우는 것으로 본다.
+            $itemId = is_numeric($patch['item_id']) ? (int) $patch['item_id'] : null;
+            $item->item_id = ($itemId && Item::query()->whereKey($itemId)->exists()) ? $itemId : null;
         }
         foreach (['vendor', 'po_no', 'currency', 'note', 'document_disk', 'document_path', 'document_name'] as $k) {
             if (array_key_exists($k, $patch)) {

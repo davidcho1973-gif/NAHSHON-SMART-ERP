@@ -10,7 +10,7 @@
 --}}
 @php($primary = \App\Support\WorkerLang::DEFAULT)
 <main class="sheet">
-    <p class="brand">DASOL PRISM</p>
+    <p class="brand">{{ \App\Support\Org::name() }}</p>
     <h1>{{ $langs[$primary]['title'] }}</h1>
     <p class="alt-titles">
         @foreach ($langs as $code => $t)@if ($code !== $primary)<span>{{ $t['title'] }}</span>@endif @endforeach

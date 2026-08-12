@@ -59,6 +59,15 @@ class AttendanceLogAdminService
             && in_array($actor->access_role, self::VIEW_ROLES, true);
     }
 
+    public function canDelete(?User $actor = null): bool
+    {
+        $actor ??= auth()->user();
+
+        return $actor !== null
+            && $actor->account_status === 'active'
+            && in_array($actor->access_role, self::DELETE_ROLES, true);
+    }
+
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
@@ -98,7 +107,11 @@ class AttendanceLogAdminService
         if ($until !== '') {
             $query->whereDate('attendance_date', '<=', $until);
         }
-        if (array_key_exists($status, self::STATUSES)) {
+        // 삭제된 기록은 기본으로 안 보인다. 다만 볼 방법이 아예 없으면 "되살리기" 도
+        // 없는 셈이고, 잘못 지운 것을 되돌릴 길이 사라진다.
+        if ($status === 'deleted') {
+            $query->onlyTrashed();
+        } elseif (array_key_exists($status, self::STATUSES)) {
             $query->where('status', $status);
         }
         if ($siteId) {
@@ -126,9 +139,13 @@ class AttendanceLogAdminService
             'approvedBy' => $r->approvedBy?->name,
             // 고친 적이 있으면 목록에서 바로 보이게 한다 — 급여 담당이 되짚을 단서다.
             'editCount' => count($r->payload['admin_edits'] ?? []),
+            // 지워진 기록인지. 화면이 그 줄을 다르게 그리고 '되살리기' 를 준다.
+            'deleted' => $r->trashed(),
+            'deletedAt' => $r->deleted_at?->toDateTimeString(),
+            'canDelete' => $this->canDelete(),
         ])->values()->all();
 
-        return ['success' => true, 'rows' => $rows, 'canManage' => $this->canManage()];
+        return ['success' => true, 'rows' => $rows, 'canManage' => $this->canManage(), 'canDelete' => $this->canDelete()];
     }
 
     /**
@@ -150,6 +167,9 @@ class AttendanceLogAdminService
             'success' => true,
             'eventTypes' => $pairs(self::EVENT_TYPES),
             'statuses' => $pairs(self::STATUSES),
+            // 조회용에만 '삭제됨' 을 더한다. 수정 폼의 상태 목록에 넣으면 사람이
+            // 상태를 골라서 삭제하게 되는데, 삭제는 상태가 아니라 별개의 일이다.
+            'filterStatuses' => $pairs(self::STATUSES + ['deleted' => '삭제됨']),
             'sources' => $pairs(self::SOURCES),
             'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
@@ -217,6 +237,24 @@ class AttendanceLogAdminService
         // 미래 시각은 사실일 수 없다. 오타(2026 → 2027)를 여기서 잡는다.
         if ($eventAt && $eventAt->isAfter(Carbon::now()->addDay())) {
             $errors['eventAt'] = '미래 시각은 기록할 수 없습니다.';
+        }
+
+        // 하루에 출근 한 줄, 퇴근 한 줄. 자동 경로(GPS·게이트)에서는 중복이 조용히
+        // 버려지지만, 사람이 손으로 넣을 때는 말해 줘야 한다 — 눌렀는데 아무 일도
+        // 안 일어나면 저장이 안 된 줄 알고 또 누른다.
+        if ($employee && $eventAt && array_key_exists($eventType, self::EVENT_TYPES)) {
+            $clash = AttendanceLog::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('attendance_date', $eventAt->copy()->toDateString())
+                ->where('event_type', $eventType)
+                ->where('status', '!=', 'rejected')
+                ->when($row, fn ($q) => $q->whereKeyNot($row->id))
+                ->first();
+
+            if ($clash) {
+                $errors['eventType'] = '그날 '.self::EVENT_TYPES[$eventType].' 기록이 이미 있습니다('
+                    .$clash->event_at?->format('H:i').'). 새로 넣지 말고 그 기록을 수정하세요.';
+            }
         }
 
         if ($errors !== []) {
@@ -316,8 +354,7 @@ class AttendanceLogAdminService
      */
     public function delete(int $id): array
     {
-        $actor = auth()->user();
-        if (! $actor || $actor->account_status !== 'active' || ! in_array($actor->access_role, self::DELETE_ROLES, true)) {
+        if (! $this->canDelete()) {
             return ['success' => false, 'error' => '출퇴근 기록 삭제 권한이 없습니다. 잘못된 기록은 "반려" 로 두세요.'];
         }
 
@@ -325,9 +362,67 @@ class AttendanceLogAdminService
         if (! $row) {
             return ['success' => false, 'error' => '기록을 찾을 수 없습니다.'];
         }
+        if (! $this->inScope($row)) {
+            return ['success' => false, 'error' => '다른 현장의 기록은 삭제할 수 없습니다.'];
+        }
+
+        // 지운 흔적을 먼저 남기고 지운다. 순서가 반대면, 지우는 데 성공하고 흔적을
+        // 남기는 데 실패했을 때 아무 기록도 안 남는다.
+        $this->record($row, 'delete', ['deleted' => ['from' => '있음', 'to' => '삭제됨']]);
+
+        // 진짜로 지우지 않는다 — 급여 다툼이 생겼을 때 근거가 통째로 사라진다.
+        // 화면과 급여 계산에서는 즉시 빠지고, 표에는 남는다.
         $row->delete();
 
         return ['success' => true];
+    }
+
+    /**
+     * 삭제한 기록 되살리기.
+     *
+     * 되살릴 방법이 없으면 삭제 버튼은 되돌릴 수 없는 버튼이 된다. 급여 근거를
+     * 다루는 화면에서 그런 버튼은 아무도 편히 못 누른다.
+     *
+     * @return array<string, mixed>
+     */
+    public function restore(int $id): array
+    {
+        if (! $this->canDelete()) {
+            return ['success' => false, 'error' => '출퇴근 기록 복구 권한이 없습니다.'];
+        }
+
+        $row = AttendanceLog::withTrashed()->find($id);
+        if (! $row) {
+            return ['success' => false, 'error' => '기록을 찾을 수 없습니다.'];
+        }
+        if (! $this->inScope($row)) {
+            return ['success' => false, 'error' => '다른 현장의 기록은 복구할 수 없습니다.'];
+        }
+        if (! $row->trashed()) {
+            return ['success' => false, 'error' => '이미 살아 있는 기록입니다.'];
+        }
+
+        $row->restore();
+        $this->record($row, 'restore', ['deleted' => ['from' => '삭제됨', 'to' => '있음']]);
+
+        return ['success' => true];
+    }
+
+    /**
+     * 손댄 흔적 한 줄을 payload 에 쌓는다.
+     *
+     * @param  array<string, mixed>  $changes
+     */
+    private function record(AttendanceLog $row, string $action, array $changes): void
+    {
+        $payload = $row->payload ?? [];
+        $edits = $payload['admin_edits'] ?? [];
+        $edits[] = $this->stamp($action, $changes);
+        $payload['admin_edits'] = array_slice($edits, -20);
+
+        // saveQuietly — 흔적을 남기는 것뿐인데 타임시트 재계산이나 알림이 또 도는 것은
+        // 낭비다. 실제 재계산은 delete()/restore() 가 일으킨다.
+        $row->forceFill(['payload' => $payload])->saveQuietly();
     }
 
     /**

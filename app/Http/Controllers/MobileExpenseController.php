@@ -2,15 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MobileExpense;
 use App\Models\ExpensePreApproval;
+use App\Models\MobileExpense;
 use App\Models\Site;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -20,9 +22,7 @@ use RuntimeException;
 
 class MobileExpenseController extends Controller
 {
-    public function __construct(private readonly GeminiReceiptAnalyzer $receiptAnalyzer)
-    {
-    }
+    public function __construct(private readonly GeminiReceiptAnalyzer $receiptAnalyzer) {}
 
     public function index(): View
     {
@@ -88,7 +88,7 @@ class MobileExpenseController extends Controller
 
             return response()->json([
                 'success' => true,
-                'receipt_path' => '/storage/' . $path,
+                'receipt_path' => '/storage/'.$path,
                 'data' => $analysisResult,
             ]);
         } catch (\Throwable $e) {
@@ -107,7 +107,7 @@ class MobileExpenseController extends Controller
         if ($databaseFile !== null) {
             return response($databaseFile)
                 ->header('Content-Type', $expense->receipt_mime_type ?: 'application/octet-stream')
-                ->header('Content-Disposition', 'inline; filename="' . ($expense->receipt_original_name ?: 'receipt') . '"');
+                ->header('Content-Disposition', 'inline; filename="'.($expense->receipt_original_name ?: 'receipt').'"');
         }
 
         $path = $this->publicReceiptPath($expense->receipt_path);
@@ -130,7 +130,6 @@ class MobileExpenseController extends Controller
         ]);
     }
 
-
     public function store(Request $request)
     {
         $request->validate([
@@ -144,6 +143,8 @@ class MobileExpenseController extends Controller
             'receipt_path' => 'nullable|string',
             'ocr_data' => 'nullable',
             'site_id' => 'nullable|exists:sites,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'wbs_code' => 'nullable|string|max:120',
             'expense_pre_approval_id' => 'nullable|exists:expense_pre_approvals,id',
         ]);
 
@@ -176,6 +177,8 @@ class MobileExpenseController extends Controller
 
         MobileExpense::create($this->mobileExpensePayload([
             'company_id' => $companyId,
+            'project_id' => $request->input('project_id'),
+            'wbs_code' => $request->input('wbs_code'),
             'site_id' => $siteId,
             'employee_id' => $employeeId,
             'expense_pre_approval_id' => $preApprovalId,
@@ -257,7 +260,7 @@ class MobileExpenseController extends Controller
             $path = $file->store('receipts', 'public');
             $receiptFile = $this->storedReceiptFile($path);
 
-            $updates['receipt_path'] = '/storage/' . $path;
+            $updates['receipt_path'] = '/storage/'.$path;
             $updates['receipt_mime_type'] = $receiptFile['mime_type'] ?? null;
             $updates['receipt_original_name'] = $file->getClientOriginalName() ?: ($receiptFile['name'] ?? null);
             $updates['receipt_file'] = $receiptFile['contents'] ?? null;
@@ -300,7 +303,7 @@ class MobileExpenseController extends Controller
     /**
      * 영수증 한 건을 즉시 승인/반려/지급완료 처리(관리자 전용). 목록에서 원클릭 승인용.
      */
-    public function review(Request $request, MobileExpense $expense): \Illuminate\Http\RedirectResponse
+    public function review(Request $request, MobileExpense $expense): RedirectResponse
     {
         abort_unless($this->canManageAllExpenses(), 403);
 
@@ -353,7 +356,7 @@ class MobileExpenseController extends Controller
             return $description;
         }
 
-        return trim($description . "\nHandwritten note: " . $handwrittenNotes);
+        return trim($description."\nHandwritten note: ".$handwrittenNotes);
     }
 
     private function requestedSiteId(Request $request): ?int
@@ -393,9 +396,9 @@ class MobileExpenseController extends Controller
      * 회사 현장 하나만 보여 다른 현장으로 지정할 수 없다(David 리포트). 지금 선택된
      * 현장이 비활성화됐더라도 목록에 포함해 값이 유지되게 한다.
      *
-     * @return \Illuminate\Support\Collection<int, Site>
+     * @return Collection<int, Site>
      */
-    private function siteOptions(int|string|null $currentSiteId = null): \Illuminate\Support\Collection
+    private function siteOptions(int|string|null $currentSiteId = null): Collection
     {
         $sites = Site::query()->where('status', 'active')->orderBy('code')->get();
 

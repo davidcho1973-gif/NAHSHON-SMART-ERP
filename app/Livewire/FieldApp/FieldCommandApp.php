@@ -2,133 +2,121 @@
 
 namespace App\Livewire\FieldApp;
 
-use App\Models\Equipment;
+use App\Models\AttendanceLog;
+use App\Models\AttendanceQrCode;
+use App\Models\DailyCrewReport;
+use App\Models\Employee;
+use App\Models\FieldDailyReport;
+use App\Models\FieldDrawing;
+use App\Models\FieldDrawingMessage;
+use App\Models\FieldEquipmentLog;
+use App\Models\OpsLaborReport;
 use App\Models\Site;
+use App\Models\SiteContractor;
+use App\Services\FieldApp\DrawingVisionService;
+use chillerlan\QRCode\QRCode;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Throwable;
 
 class FieldCommandApp extends Component
 {
     use WithFileUploads;
+
+    private const DEFAULT_TRADES = [
+        ['id' => 'elec', 'name' => '전기/배관', 'icon' => '⚡', 'count' => 0],
+        ['id' => 'duct', 'name' => '덕트/설비', 'icon' => '🛠️', 'count' => 0],
+        ['id' => 'weld', 'name' => '용접/제작', 'icon' => '🔥', 'count' => 0],
+        ['id' => 'mason', 'name' => '조적/비계', 'icon' => '🧱', 'count' => 0],
+        ['id' => 'safety', 'name' => '안전/관리', 'icon' => '🛡️', 'count' => 0],
+        ['id' => 'general', 'name' => '일반조공', 'icon' => '👷', 'count' => 0],
+    ];
+
+    /** 현장앱 일일보고에서 넘어온 인원 행 표식 — 재제출 시 이 표식의 행만 갈아끼운다. */
+    private const LABOR_NOTE = '현장앱 일일보고';
 
     // Active tab: 'report' | 'qr' | 'safety' | 'equipment' | 'knowledge'
     public string $activeTab = 'report';
 
     // Form inputs: Basic & Site
     public ?int $site_id = null;
+
     public string $work_date = '';
+
     public string $weather = '☀️ 맑음';
-    public string $temperature = '18°C ~ 29°C';
+
+    public string $temperature = '';
 
     // Dynamic Trade List: ['id' => '...', 'name' => '...', 'icon' => '...', 'count' => 0]
-    public array $trades = [
-        ['id' => 'elec', 'name' => '전기/배관', 'icon' => '⚡', 'count' => 12],
-        ['id' => 'duct', 'name' => '덕트/설비', 'icon' => '🛠️', 'count' => 8],
-        ['id' => 'weld', 'name' => '용접/제작', 'icon' => '🔥', 'count' => 10],
-        ['id' => 'mason', 'name' => '조적/비계', 'icon' => '🧱', 'count' => 5],
-        ['id' => 'safety', 'name' => '안전/관리', 'icon' => '🛡️', 'count' => 3],
-        ['id' => 'general', 'name' => '일반조공', 'icon' => '👷', 'count' => 4],
-    ];
+    public array $trades = self::DEFAULT_TRADES;
 
     // Inputs for adding/editing trade
     public string $new_trade_name = '';
+
     public string $new_trade_icon = '🔨';
+
     public ?string $editing_trade_id = null;
+
     public string $editing_trade_name = '';
 
     // Inputs for adding/editing site
     public string $new_site_name = '';
+
     public string $new_site_code = '';
+
     public ?int $editing_site_id = null;
+
     public string $editing_site_name = '';
 
     // Modal Visibility Toggles
     public bool $showTradeModal = false;
+
     public bool $showSiteModal = false;
 
     // Daily Work Log
-    public string $work_title = 'A동 2층 메인 배관 서포트 용접 및 전기 트레이 설치';
-    public string $work_today = "1. A동 2층 배관 서포트 용접 35포인트 완료\n2. 메인 케이블 트레이 설치 120m 완료";
-    public string $work_tomorrow = "1. A동 3층 메인 배관 입상관 용접 및 수압 테스트\n2. 고소작업대 이용 외벽 덕트 마감";
-    public int $progress_rate = 78;
+    public string $work_title = '';
+
+    public string $work_today = '';
+
+    public string $work_tomorrow = '';
+
+    public int $progress_rate = 0;
+
+    public string $report_status = 'draft';
 
     // Safety & TBM State
-    public bool $tbm_completed = true;
+    public bool $tbm_completed = false;
+
     public array $safety_checks = [
-        'ppe' => true,
-        'fall_prevention' => true,
-        'electrical_hazard' => true,
-        'fire_permit' => true,
-    ];
-    public string $safety_notes = '작업 전 보호구 및 고소작업대 벨트 안전 고리 100% 체결 확인';
-
-    // QR State
-    public string $qr_code_token = 'SITE-TX01-QR-88492';
-    public string $last_scan_status = '미출근';
-    public ?string $last_scan_time = null;
-
-    // Equipment Dispatch State
-    public array $equipments = [
-        ['name' => '고소작업대 (Sky-01)', 'type' => '스카이', 'status' => '가동중', 'operator' => '김기사'],
-        ['name' => '25톤 크레인 (Crane-02)', 'type' => '크레인', 'status' => '가동중', 'operator' => '박크레인'],
-        ['name' => '4.5톤 지게차 (Fork-01)', 'type' => '지게차', 'status' => '대기중', 'operator' => '이입고'],
+        'ppe' => false,
+        'fall_prevention' => false,
+        'electrical_hazard' => false,
+        'fire_permit' => false,
     ];
 
+    public string $safety_notes = '';
+
+    // QR Commute State
+    public string $commute_worker_name = '';
+
+    // Equipment Dispatch Inputs
     public string $new_eq_name = '';
+
     public string $new_eq_type = '스카이';
+
     public string $new_eq_operator = '';
 
-    /* ---------------------------------------------------------------- border
-       5. AI 도면 판독 & 지식 Q&A (AI Blueprint Knowledge Base) State
-    ------------------------------------------------------------------ */
-    public int $selected_drawing_idx = 0;
+    // AI Drawing Knowledge Hub State
+    public ?int $selected_drawing_id = null;
+
     public string $new_drawing_title = '';
+
     public string $new_drawing_category = 'MEP 배관/전기 도면';
+
+    public $drawing_file = null;
+
     public string $qa_question = '';
-    public bool $is_analyzing = false;
-
-    // Analyzed Blueprint Drawings Library
-    public array $drawings = [
-        [
-            'id' => 'DWG-MEP-2026-01',
-            'title' => 'A동 2층 메인 배관 및 케이블 트레이 상세 도면 (DWG-202)',
-            'category' => 'MEP 배관/전기 도면',
-            'version' => 'v2.1',
-            'summary' => 'A동 2층 200A 칠러 입상 배관 및 600mm 전력 트레이 구간. 용접 서포트 간격 1.8m 준수 및 화기 작업 조치 필수.',
-            'specs' => ['배관 관경: 200A Carbon Steel', '서포트 간격: 1,800mm 이하', '트레이 폭: 600mm W', '안전 요구: 고소 작업허가서 및 LOTO'],
-            'analyzed_at' => '2026-08-06 09:30',
-        ],
-        [
-            'id' => 'DWG-STR-2026-04',
-            'title' => 'B동 외부 프레임 철골 구조 및 비계 설치 상세도',
-            'category' => '건축 구조 도면',
-            'version' => 'v1.0',
-            'summary' => 'B동 외벽 3단 비계 설치 및 25톤 크레인 양중 작업 구역. 하부 인원 통제구역 지정 및 추락 방지망 100% 설치.',
-            'specs' => ['비계 하중: 350kg/m²', '양중 중장비: 25t Crane', '추락 방지: 2중 안전고리 및 방지망'],
-            'analyzed_at' => '2026-08-05 14:15',
-        ],
-    ];
-
-    // Q&A Conversation History
-    public array $chat_messages = [
-        [
-            'role' => 'assistant',
-            'text' => '안녕하세요! 현장 AI 도면 지식 도우미입니다. 선택하신 [A동 2층 메인 배관 상세 도면]에 대해 궁금한 점(관경, 서포트 간격, 화기 작업 수칙, 자재 스펙 등)을 물어보세요.',
-            'time' => '09:30',
-            'sources' => ['도면 DWG-202 S-04 구역', '시방서 Section 15100'],
-        ],
-        [
-            'role' => 'user',
-            'text' => 'A동 2층 배관 서포트 간격 및 용접 시 주의사항 알려줘.',
-            'time' => '09:31',
-        ],
-        [
-            'role' => 'assistant',
-            'text' => "📋 **AI 도면 판독 분석 결과 (DWG-202 S-04)**:\n1. **서포트 간격**: 200A Carbon Steel 관경 기준 **최대 1.8m(1,800mm) 이내**로 서포트를 고정해야 합니다.\n2. **용접 시 안전 수칙**: 2층 해당 구역은 가설 전력 케이블 인근이므로 **[화기작업 허가서] 발급** 및 **2인 1조 화재감시자 배치**, **소화기 2대 전진 배치** 후 용접을 진행하십시오.",
-            'time' => '09:31',
-            'sources' => ['DWG-202 노트 3항', '안전시방서 4.2절'],
-        ]
-    ];
 
     // Flash Notification Message
     public ?string $toastMessage = null;
@@ -140,11 +128,143 @@ class FieldCommandApp extends Component
         if ($site) {
             $this->site_id = $site->id;
         }
+
+        $this->loadReport();
+        $this->selected_drawing_id = FieldDrawing::query()->latest()->value('id');
     }
 
     public function setTab(string $tab): void
     {
         $this->activeTab = $tab;
+    }
+
+    /* ---------------------------------------------------------------- border
+       일일 보고서 로드 & 영속화 (site_id + work_date 단위 upsert)
+    ------------------------------------------------------------------ */
+
+    public function updated(string $name): void
+    {
+        if (in_array($name, ['site_id', 'work_date'], true)) {
+            $this->loadReport();
+
+            return;
+        }
+
+        $autoPersist = ['weather', 'temperature', 'work_title', 'work_today', 'work_tomorrow', 'progress_rate', 'tbm_completed', 'safety_notes'];
+        if (in_array($name, $autoPersist, true) || str_starts_with($name, 'safety_checks.')) {
+            $this->persistReport();
+        }
+    }
+
+    private function loadReport(): void
+    {
+        $report = $this->currentReport();
+
+        if ($report) {
+            $this->weather = $report->weather ?? '☀️ 맑음';
+            $this->temperature = $report->temperature ?? '';
+            $this->trades = $report->trades ?: self::DEFAULT_TRADES;
+            $this->work_title = $report->work_title ?? '';
+            $this->work_today = $report->work_today ?? '';
+            $this->work_tomorrow = $report->work_tomorrow ?? '';
+            $this->progress_rate = (int) $report->progress_rate;
+            $this->tbm_completed = (bool) $report->tbm_completed;
+            $this->safety_checks = $report->safety_checks ?: $this->safety_checks;
+            $this->safety_notes = $report->safety_notes ?? '';
+            $this->report_status = $report->status;
+        } else {
+            $this->weather = '☀️ 맑음';
+            $this->temperature = '';
+            $this->trades = self::DEFAULT_TRADES;
+            $this->work_title = '';
+            $this->work_today = '';
+            $this->work_tomorrow = '';
+            $this->progress_rate = 0;
+            $this->tbm_completed = false;
+            $this->safety_checks = ['ppe' => false, 'fall_prevention' => false, 'electrical_hazard' => false, 'fire_permit' => false];
+            $this->safety_notes = '';
+            $this->report_status = 'draft';
+        }
+    }
+
+    private function currentReport(): ?FieldDailyReport
+    {
+        if (! $this->site_id || ! $this->work_date) {
+            return null;
+        }
+
+        return FieldDailyReport::query()
+            ->where('site_id', $this->site_id)
+            ->whereDate('work_date', $this->work_date)
+            ->first();
+    }
+
+    private function persistReport(?string $status = null): ?FieldDailyReport
+    {
+        if (! $this->site_id || ! $this->work_date) {
+            return null;
+        }
+
+        $attributes = [
+            'weather' => $this->weather,
+            'temperature' => $this->temperature,
+            'trades' => $this->trades,
+            'work_title' => $this->work_title,
+            'work_today' => $this->work_today,
+            'work_tomorrow' => $this->work_tomorrow,
+            'progress_rate' => max(0, min(100, $this->progress_rate)),
+            'tbm_completed' => $this->tbm_completed,
+            'safety_checks' => $this->safety_checks,
+            'safety_notes' => $this->safety_notes,
+        ];
+
+        if ($status !== null) {
+            $attributes['status'] = $status;
+            if ($status === 'submitted') {
+                $attributes['submitted_at'] = now();
+            }
+        }
+
+        // updateOrCreate 의 plain where 는 SQLite 의 날짜 문자열('Y-m-d H:i:s')과 매칭되지 않아
+        // 중복 INSERT 를 유발하므로, whereDate 로 직접 조회 후 갱신/생성한다.
+        $report = $this->currentReport();
+        if ($report) {
+            $report->update($attributes);
+        } else {
+            $report = FieldDailyReport::query()->create(
+                $attributes + ['site_id' => $this->site_id, 'work_date' => $this->work_date],
+            );
+        }
+
+        // 신규 생성 직후에는 DB 기본값(status=draft)이 모델에 반영되지 않아 null 일 수 있다.
+        $this->report_status = $report->status ?? 'draft';
+
+        return $report;
+    }
+
+    public function saveDailyReport(): void
+    {
+        if (! $this->site_id) {
+            $this->toastMessage = '⚠️ 먼저 현장을 등록·선택해 주세요.';
+
+            return;
+        }
+
+        $this->persistReport('submitted');
+        $this->syncTradesToLaborReports();
+        $this->toastMessage = "✅ {$this->work_date} 일일 작업 보고서가 서버에 제출되었습니다.";
+    }
+
+    public function saveSafetyCheck(): void
+    {
+        if (! $this->site_id) {
+            $this->toastMessage = '⚠️ 먼저 현장을 등록·선택해 주세요.';
+
+            return;
+        }
+
+        $this->persistReport();
+        $this->toastMessage = '🛡️ 안전점검 TBM 기록이 저장되었습니다.';
     }
 
     /* ---------------------------------------------------------------- border
@@ -159,6 +279,7 @@ class FieldCommandApp extends Component
                 break;
             }
         }
+        $this->persistReport();
     }
 
     public function decrementTrade(string $tradeId): void
@@ -169,6 +290,7 @@ class FieldCommandApp extends Component
                 break;
             }
         }
+        $this->persistReport();
     }
 
     public function addTrade(): void
@@ -177,14 +299,14 @@ class FieldCommandApp extends Component
             return;
         }
 
-        $newId = 'trade_' . uniqid();
         $this->trades[] = [
-            'id' => $newId,
+            'id' => 'trade_'.uniqid(),
             'name' => trim($this->new_trade_name),
             'icon' => $this->new_trade_icon ?: '🔨',
             'count' => 0,
         ];
 
+        $this->persistReport();
         $this->toastMessage = "✅ 신규 공정 '{$this->new_trade_name}'이(가) 추가되었습니다.";
         $this->new_trade_name = '';
     }
@@ -213,6 +335,7 @@ class FieldCommandApp extends Component
             }
         }
 
+        $this->persistReport();
         $this->toastMessage = "✏️ 공정명이 '{$this->editing_trade_name}'(으)로 수정되었습니다.";
         $this->editing_trade_id = null;
         $this->editing_trade_name = '';
@@ -221,6 +344,7 @@ class FieldCommandApp extends Component
     public function removeTrade(string $tradeId): void
     {
         $this->trades = array_values(array_filter($this->trades, fn ($t) => $t['id'] !== $tradeId));
+        $this->persistReport();
         $this->toastMessage = '🗑️ 공정이 목록에서 삭제되었습니다.';
     }
 
@@ -241,13 +365,14 @@ class FieldCommandApp extends Component
 
         $site = Site::query()->create([
             'name' => trim($this->new_site_name),
-            'code' => $this->new_site_code ? trim($this->new_site_code) : 'SITE-' . strtoupper(substr(md5(uniqid()), 0, 4)),
+            'code' => $this->new_site_code ? trim($this->new_site_code) : 'SITE-'.strtoupper(substr(md5(uniqid()), 0, 4)),
             'status' => 'active',
         ]);
 
         $this->site_id = $site->id;
         $this->new_site_name = '';
         $this->new_site_code = '';
+        $this->loadReport();
         $this->toastMessage = "🏗️ 신규 현장 '{$site->name}'이(가) 등록되었습니다.";
     }
 
@@ -262,7 +387,7 @@ class FieldCommandApp extends Component
 
     public function updateSite(): void
     {
-        if (!$this->editing_site_id || blank($this->editing_site_name)) {
+        if (! $this->editing_site_id || blank($this->editing_site_name)) {
             return;
         }
 
@@ -277,139 +402,369 @@ class FieldCommandApp extends Component
 
     public function deleteSite(int $siteId): void
     {
+        // 현장 삭제는 하드 삭제이고, sites 를 cascade 로 참조하는 테이블이 7개다
+        // (협력사 명단·QR 코드·WiFi AP·팀별 인원 마감 등). 잘못 누르면 그 기록이
+        // 전부 함께 사라지므로 관리자만, 그리고 기록이 없는 현장만 지울 수 있다.
+        $role = (string) (auth()->user()?->access_role ?? '');
+        if (! in_array($role, ['super_admin', 'admin'], true)) {
+            $this->toastMessage = '⚠️ 현장 삭제는 관리자만 할 수 있습니다.';
+
+            return;
+        }
+
         $site = Site::query()->find($siteId);
-        if ($site) {
-            $site->delete();
-            $this->site_id = Site::query()->where('status', 'active')->orWhereNull('status')->first()?->id;
-            $this->toastMessage = "🗑️ 현장이 삭제되었습니다.";
-        }
-    }
-
-    /* ---------------------------------------------------------------- border
-       5. AI 도면 판독 & 지식 Q&A 메서드 (AI Drawing Q&A Engine)
-    ------------------------------------------------------------------ */
-
-    public function selectDrawing(int $idx): void
-    {
-        if (isset($this->drawings[$idx])) {
-            $this->selected_drawing_idx = $idx;
-            $drawing = $this->drawings[$idx];
-            $this->chat_messages[] = [
-                'role' => 'assistant',
-                'text' => "📄 [{$drawing['title']}] 도면 지식베이스로 전환되었습니다. 해당 도면에 대해 궁금한 점을 질문해 주세요.",
-                'time' => now()->format('H:i'),
-                'sources' => [$drawing['id'], 'AI Vision Index'],
-            ];
-        }
-    }
-
-    public function uploadAndAnalyzeDrawing(): void
-    {
-        if (blank($this->new_drawing_title)) {
+        if (! $site) {
             return;
         }
 
-        $id = 'DWG-' . strtoupper(substr(md5(uniqid()), 0, 6));
-        $newDrawing = [
-            'id' => $id,
-            'title' => trim($this->new_drawing_title),
-            'category' => $this->new_drawing_category,
-            'version' => 'v1.0',
-            'summary' => 'AI Vision이 도면 텍스트 및 그리드를 스캔하여 파이프 관경, 안전 통제구역, 시공 가이드를 자동 인덱싱했습니다.',
-            'specs' => ['AI 자동 추출 스펙', '시공 가이드 포함', '안전 수칙 검증 완료'],
-            'analyzed_at' => now()->format('Y-m-d H:i'),
-        ];
+        $hasHistory = AttendanceLog::query()->where('site_id', $site->id)->exists()
+            || AttendanceQrCode::query()->where('site_id', $site->id)->exists()
+            || DailyCrewReport::query()->where('site_id', $site->id)->exists()
+            || SiteContractor::query()->where('site_id', $site->id)->exists();
 
-        array_unshift($this->drawings, $newDrawing);
-        $this->selected_drawing_idx = 0;
-        $this->new_drawing_title = '';
-        $this->toastMessage = "🤖 AI가 신규 도면 '{$newDrawing['title']}'을(를) 정밀 판독하고 지식베이스에 추가했습니다.";
-    }
+        if ($hasHistory) {
+            $this->toastMessage = '⚠️ 출퇴근·QR·마감 기록이 있는 현장은 지울 수 없습니다. 관리자 화면에서 상태를 Inactive 로 바꿔 주세요.';
 
-    public function askDrawingQuestion(): void
-    {
-        if (blank($this->qa_question)) {
             return;
         }
 
-        $userQuery = trim($this->qa_question);
-        $this->chat_messages[] = [
-            'role' => 'user',
-            'text' => $userQuery,
-            'time' => now()->format('H:i'),
-        ];
-
-        $currentDrawing = $this->drawings[$this->selected_drawing_idx] ?? $this->drawings[0];
-
-        // Intelligent AI Response Generator based on user query keywords
-        $replyText = "🔍 **AI 도면 판독 결과 [{$currentDrawing['id']}]**:\n";
-        
-        if (str_contains($userQuery, '배관') || str_contains($userQuery, '관경') || str_contains($userQuery, '서포트') || str_contains($userQuery, '간격')) {
-            $replyText .= "• **관경 및 재질**: 200A Carbon Steel Schedule 40 규격\n• **서포트 시공 간격**: 최대 1,800mm 이내 고정 필수\n• **용접 및 결합**: Flange 접속 및 Full Penetration 용접 시공";
-        } elseif (str_contains($userQuery, '안전') || str_contains($userQuery, '주의') || str_contains($userQuery, 'LOTO') || str_contains($userQuery, '화기')) {
-            $replyText .= "• **안전 관리 지침**: 해당 도면 구역은 가설 전력 및 고소 작업선이 교차하므로 **[화기작업 허가서]** 발급 후 2인 1조 작업 진행\n• **보호구**: 2중 안전대 고리 100% 체결 및 화재감시자 전진 배치";
-        } else {
-            $replyText .= "질문하신 내용 「{$userQuery}」에 대해 도면 [{$currentDrawing['title']}]의 주석 및 시방서를 분석한 결과:\n• **요약**: {$currentDrawing['summary']}\n• **권장 조치**: 현장 반장 확인 후 안전 수칙 준수 시공 진행";
-        }
-
-        $this->chat_messages[] = [
-            'role' => 'assistant',
-            'text' => $replyText,
-            'time' => now()->format('H:i'),
-            'sources' => [$currentDrawing['id'] . ' 노트 4절', '시방서 Section 15100'],
-        ];
-
-        $this->qa_question = '';
+        $site->delete();
+        $this->site_id = Site::query()->where('status', 'active')->orWhereNull('status')->first()?->id;
+        $this->loadReport();
+        $this->toastMessage = '🗑️ 현장이 삭제되었습니다.';
     }
 
     /* ---------------------------------------------------------------- border
-       기타 기능 (보고서 저장, QR, 장비 수불)
+       QR 출퇴근 전자 태깅 (field_commute_logs)
     ------------------------------------------------------------------ */
 
-    public function saveDailyReport(): void
+    /**
+     * 일일보고의 공종별 인원을 운영 인원보고(ops_labor_reports)로 넘긴다.
+     *
+     * 이 숫자가 현장앱 안에만 있으면 일일마감이 모르는 네 번째 인원 숫자가 된다.
+     * 운영 보고로 넘기면 기존 대조 구조(보고 N명 vs QR 실적 M명 → 차이)가 그대로
+     * 이 보고에도 적용된다 — 같은 인원을 상황실에 다시 보고할 필요가 없다.
+     */
+    private function syncTradesToLaborReports(): void
     {
-        $this->toastMessage = '✅ 일일 작업 보고서가 Livewire 실시간 저장되었습니다.';
+        if (! $this->site_id || ! $this->work_date) {
+            return;
+        }
+
+        OpsLaborReport::query()
+            ->where('site_id', $this->site_id)
+            ->where('work_date', $this->work_date)
+            ->where('note', self::LABOR_NOTE)
+            ->delete();
+
+        foreach ($this->trades as $trade) {
+            $count = (int) ($trade['count'] ?? 0);
+            if ($count <= 0) {
+                continue;
+            }
+            OpsLaborReport::query()->create([
+                'site_id' => $this->site_id,
+                'work_date' => $this->work_date,
+                'trade' => (string) ($trade['name'] ?? ''),
+                'headcount' => $count,
+                'note' => self::LABOR_NOTE,
+                'reported_by_id' => auth()->id(),
+            ]);
+        }
     }
 
     public function recordCommute(string $type): void
     {
-        $this->last_scan_status = ($type === 'in') ? '출근 완료' : '퇴근 완료';
-        $this->last_scan_time = now()->format('H:i:s');
-        $this->toastMessage = "📱 {$this->last_scan_status} ({$this->last_scan_time}) 기록 완료!";
+        if (! $this->site_id) {
+            $this->toastMessage = '⚠️ 먼저 현장을 등록·선택해 주세요.';
+
+            return;
+        }
+
+        // 예전에는 이름 문자열만 적는 별도 대장(field_commute_logs)에 남겼다. 그 대장은
+        // 아무 데도 연결되지 않아 급여·인원집계가 모르는 기록이었고, 같은 출근을 QR 로
+        // 한 번 더 찍어야 했다. 이제 직원을 특정해 정식 출퇴근(attendance_logs)으로
+        // 기록한다 — 타임시트·급여·일일마감이 자동으로 이어진다.
+        $name = trim($this->commute_worker_name);
+        if ($name === '') {
+            $this->toastMessage = '⚠️ 성명을 입력해 주세요. 등록된 작업자만 기록할 수 있습니다.';
+
+            return;
+        }
+
+        $site = Site::query()->find($this->site_id);
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $name).'%';
+        $matches = Employee::query()
+            ->where('employment_status', 'active')
+            ->where('site_id', $site?->id)
+            ->where(fn ($w) => $w->where('name', 'ilike', $like)
+                ->orWhere('first_name', 'ilike', $like)
+                ->orWhere('last_name', 'ilike', $like))
+            ->limit(2)
+            ->get();
+
+        if ($matches->isEmpty()) {
+            $this->toastMessage = "⚠️ 이 현장에 등록된 작업자 중 '{$name}' 을 찾지 못했습니다. 인원관리에 먼저 등록해야 급여로 이어집니다.";
+
+            return;
+        }
+        if ($matches->count() > 1) {
+            $this->toastMessage = "⚠️ '{$name}' 과 일치하는 작업자가 여러 명입니다. 성명을 정확히 입력해 주세요.";
+
+            return;
+        }
+
+        $employee = $matches->first();
+        $now = now($site?->timezone ?: config('app.timezone'));
+
+        // 게이트 QR 과 같은 중복 스캔 창(5분) — 연타로 출근/퇴근이 겹겹이 쌓이는 것 방지.
+        $recent = AttendanceLog::query()->where('employee_id', $employee->id)
+            ->where('event_at', '>=', $now->copy()->subMinutes(5))
+            ->where('status', '!=', 'rejected')->exists();
+        if ($recent) {
+            $this->toastMessage = '⏱️ 방금 처리된 기록이 있어 중복 스캔을 무시했습니다.';
+
+            return;
+        }
+
+        AttendanceLog::query()->create([
+            'employee_id' => $employee->id,
+            'company_id' => $employee->company_id,
+            'site_id' => $site?->id,
+            'team_id' => $employee->team_id,
+            'attendance_date' => $now->toDateString(),
+            'event_type' => $type === 'in' ? 'clock_in' : 'clock_out',
+            'event_at' => $now,
+            'source' => 'field_app',
+            'status' => 'approved',
+            'notes' => '현장앱에서 기록됨.',
+        ]);
+
+        $label = $type === 'in' ? '출근' : '퇴근';
+        $this->commute_worker_name = '';
+        $this->toastMessage = "📱 {$employee->name} {$label} 기록 완료 ({$now->format('H:i:s')}) — 급여 타임시트 자동 반영";
     }
+
+    public function getQrDataUriProperty(): ?string
+    {
+        if (! $this->site_id) {
+            return null;
+        }
+
+        $site = Site::query()->find($this->site_id);
+        if (! $site) {
+            return null;
+        }
+
+        try {
+            return (new QRCode)->render("FIELD-QR|{$site->code}|{$this->work_date}");
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /* ---------------------------------------------------------------- border
+       중장비 수불 (field_equipment_logs)
+    ------------------------------------------------------------------ */
 
     public function addEquipment(): void
     {
         if (blank($this->new_eq_name)) {
             return;
         }
+        if (! $this->site_id) {
+            $this->toastMessage = '⚠️ 먼저 현장을 등록·선택해 주세요.';
 
-        $this->equipments[] = [
-            'name' => $this->new_eq_name,
+            return;
+        }
+
+        FieldEquipmentLog::query()->create([
+            'site_id' => $this->site_id,
+            'work_date' => $this->work_date ?: now()->format('Y-m-d'),
+            'name' => trim($this->new_eq_name),
             'type' => $this->new_eq_type,
-            'status' => '가동중',
-            'operator' => $this->new_eq_operator ?: '미정',
-        ];
+            'operator' => trim($this->new_eq_operator) ?: null,
+            'status' => 'running',
+        ]);
 
         $this->new_eq_name = '';
         $this->new_eq_operator = '';
-        $this->toastMessage = '🚜 중장비 수불 등록이 즉시 반영되었습니다.';
+        $this->toastMessage = '🚜 중장비 수불 등록이 저장되었습니다.';
     }
 
-    public function toggleEquipmentStatus(int $index): void
+    public function toggleEquipmentStatus(int $logId): void
     {
-        if (isset($this->equipments[$index])) {
-            $current = $this->equipments[$index]['status'];
-            $this->equipments[$index]['status'] = ($current === '가동중') ? '대기중' : '가동중';
+        $log = FieldEquipmentLog::query()->find($logId);
+        if ($log) {
+            $log->update(['status' => $log->status === 'running' ? 'standby' : 'running']);
         }
     }
+
+    public function removeEquipment(int $logId): void
+    {
+        FieldEquipmentLog::query()->whereKey($logId)->delete();
+        $this->toastMessage = '🗑️ 장비 수불 기록이 삭제되었습니다.';
+    }
+
+    /* ---------------------------------------------------------------- border
+       5. AI 도면 판독 & 지식 Q&A (field_drawings + Claude Vision)
+    ------------------------------------------------------------------ */
+
+    public function selectDrawing(int $drawingId): void
+    {
+        $drawing = FieldDrawing::query()->find($drawingId);
+        if ($drawing) {
+            $this->selected_drawing_id = $drawing->id;
+        }
+    }
+
+    public function uploadAndAnalyzeDrawing(DrawingVisionService $vision): void
+    {
+        if (blank($this->new_drawing_title)) {
+            $this->toastMessage = '⚠️ 도면 명칭을 입력해 주세요.';
+
+            return;
+        }
+
+        $this->validate(
+            ['drawing_file' => 'nullable|file|max:20480|mimes:jpg,jpeg,png,webp,gif,pdf'],
+            [],
+            ['drawing_file' => '도면 파일'],
+        );
+
+        $filePath = null;
+        $fileMime = null;
+        if ($this->drawing_file) {
+            $filePath = $this->drawing_file->store('field-drawings', 'local');
+            $fileMime = $this->drawing_file->getMimeType();
+        }
+
+        $drawing = FieldDrawing::query()->create([
+            'site_id' => $this->site_id,
+            'drawing_no' => 'DWG-'.strtoupper(Str::random(6)),
+            'title' => trim($this->new_drawing_title),
+            'category' => $this->new_drawing_category,
+            'version' => 'v1.0',
+            'file_path' => $filePath,
+            'file_mime' => $fileMime,
+            'status' => 'pending',
+        ]);
+
+        try {
+            $drawing = $vision->analyze($drawing);
+            $mode = $vision->isLive() && $filePath ? 'AI Vision 정밀 판독' : '오프라인 등록';
+            $this->toastMessage = "🤖 도면 '{$drawing->title}' {$mode}이 완료되어 지식베이스에 추가되었습니다.";
+        } catch (Throwable $e) {
+            report($e);
+            $drawing->update(['status' => 'failed', 'summary' => 'AI 판독 실패: '.Str::limit($e->getMessage(), 200)]);
+            $this->toastMessage = '⚠️ AI 도면 판독에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+        }
+
+        $drawing->messages()->create([
+            'role' => 'assistant',
+            'content' => "안녕하세요! 현장 AI 도면 지식 도우미입니다. [{$drawing->title}] 도면에 대해 궁금한 점(관경, 서포트 간격, 안전 수칙, 자재 스펙 등)을 물어보세요.",
+            'sources' => [$drawing->drawing_no],
+        ]);
+
+        $this->selected_drawing_id = $drawing->id;
+        $this->new_drawing_title = '';
+        $this->drawing_file = null;
+    }
+
+    public function removeDrawing(int $drawingId): void
+    {
+        FieldDrawing::query()->whereKey($drawingId)->delete();
+        if ($this->selected_drawing_id === $drawingId) {
+            $this->selected_drawing_id = FieldDrawing::query()->latest()->value('id');
+        }
+        $this->toastMessage = '🗑️ 도면이 지식베이스에서 삭제되었습니다.';
+    }
+
+    public function askDrawingQuestion(DrawingVisionService $vision): void
+    {
+        if (blank($this->qa_question)) {
+            return;
+        }
+
+        $drawing = $this->selected_drawing_id ? FieldDrawing::query()->find($this->selected_drawing_id) : null;
+        if (! $drawing) {
+            $this->toastMessage = '⚠️ 먼저 도면을 업로드·선택해 주세요.';
+
+            return;
+        }
+
+        $question = trim($this->qa_question);
+        $this->qa_question = '';
+
+        $history = $drawing->messages()
+            ->orderBy('id')
+            ->get()
+            ->map(fn (FieldDrawingMessage $m) => ['role' => $m->role, 'content' => $m->content])
+            ->all();
+
+        $drawing->messages()->create(['role' => 'user', 'content' => $question]);
+
+        try {
+            $answer = $vision->answer($drawing, $question, $history);
+        } catch (Throwable $e) {
+            report($e);
+            $answer = [
+                'text' => '⚠️ AI 응답 생성에 실패했습니다. 네트워크 상태 확인 후 다시 질문해 주세요.',
+                'sources' => [$drawing->drawing_no],
+            ];
+        }
+
+        $drawing->messages()->create([
+            'role' => 'assistant',
+            'content' => $answer['text'],
+            'sources' => $answer['sources'],
+        ]);
+    }
+
+    /* ---------------------------------------------------------------- border
+       렌더링
+    ------------------------------------------------------------------ */
 
     public function render()
     {
         $sites = Site::query()->where('status', 'active')->orWhereNull('status')->orderBy('name')->get();
 
+        $equipments = $this->site_id
+            ? FieldEquipmentLog::query()->where('site_id', $this->site_id)->whereDate('work_date', $this->work_date)->orderBy('id')->get()
+            : collect();
+
+        // 정식 출퇴근 대장에서 읽는다 — 현장앱뿐 아니라 QR·GPS·게이트로 찍은 기록도 함께 보인다.
+        $commuteLogs = $this->site_id
+            ? AttendanceLog::query()->where('site_id', $this->site_id)
+                ->whereDate('attendance_date', $this->work_date)
+                ->where('status', '!=', 'rejected')
+                ->with('employee:id,name')
+                ->latest('event_at')->limit(8)->get()
+                ->map(fn (AttendanceLog $l) => (object) [
+                    'worker_name' => $l->employee?->name,
+                    'type' => $l->event_type === 'clock_in' ? 'in' : 'out',
+                    'scanned_at' => $l->event_at,
+                ])
+            : collect();
+
+        $drawings = FieldDrawing::query()
+            ->when($this->site_id, fn ($q) => $q->where(fn ($w) => $w->where('site_id', $this->site_id)->orWhereNull('site_id')))
+            ->latest()
+            ->get();
+
+        $selectedDrawing = $drawings->firstWhere('id', $this->selected_drawing_id) ?? $drawings->first();
+        if ($selectedDrawing && $this->selected_drawing_id !== $selectedDrawing->id) {
+            $this->selected_drawing_id = $selectedDrawing->id;
+        }
+
         return view('field-app.livewire.field-command-app', [
             'sites' => $sites,
+            'equipments' => $equipments,
+            'commuteLogs' => $commuteLogs,
+            'drawings' => $drawings,
+            'selectedDrawing' => $selectedDrawing,
+            'chatMessages' => $selectedDrawing ? $selectedDrawing->messages()->orderBy('id')->get() : collect(),
+            'aiLive' => app(DrawingVisionService::class)->isLive(),
         ]);
     }
 }

@@ -25,7 +25,7 @@ class DocumentIntelligenceService
         $disk = Storage::disk($document->disk ?: config('document-intelligence.disk'));
 
         if (! $disk->exists($document->file_path)) {
-            throw new \RuntimeException('업로드된 원본 파일을 찾을 수 없습니다.');
+            throw new \RuntimeException('업로드된 원본 파일을 찾을 수 없습니다. 서버 배포로 저장소가 초기화됐을 수 있습니다 — 같은 파일을 다시 올리면 이 문서에 복원되어 분석이 재개됩니다.');
         }
 
         $document->update(['ai_status' => 'analyzing', 'ai_error' => null]);

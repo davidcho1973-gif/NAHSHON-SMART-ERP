@@ -32,15 +32,44 @@ class Employee extends Model
         self::TYPE_CLIENT => '원청',
     ];
 
+    /** 출퇴근 정책 — 정밀 시간관리(시급/일급 직영). 퇴근 시각이 임금에 직결된다. */
+    public const POLICY_HOURLY = 'hourly';
+
+    /** 출퇴근 정책 — 출석 확인만(관리직·월급제). 급여는 정액이라 퇴근 시각은 참고용. */
+    public const POLICY_PRESENCE = 'presence';
+
+    /** 출퇴근 정책 — 출역 인원체크만(협력사). 임금은 소속사가 지급한다. */
+    public const POLICY_HEADCOUNT = 'headcount';
+
+    /** 출퇴근 정책 — 대상 아님(원청). */
+    public const POLICY_NONE = 'none';
+
     public function employmentTypeLabel(): string
     {
         return self::EMPLOYMENT_TYPES[$this->employment_type] ?? (string) $this->employment_type;
     }
 
+    /**
+     * 이 직원의 출퇴근 관리 정책.
+     *
+     * 협력사(간접고용)=인원체크만, 관리직 또는 월급제(pay_type=salary)=출석만,
+     * 그 외 직영=정밀 시간관리. 급여 프로필이 없는 직영은 시급으로 본다(기본값과 일치).
+     */
+    public function attendancePolicy(): string
+    {
+        return match (true) {
+            $this->employment_type === self::TYPE_CLIENT => self::POLICY_NONE,
+            $this->employment_type === self::TYPE_INDIRECT => self::POLICY_HEADCOUNT,
+            $this->employment_type === self::TYPE_STAFF => self::POLICY_PRESENCE,
+            $this->payrollProfile?->pay_type === 'salary' => self::POLICY_PRESENCE,
+            default => self::POLICY_HOURLY,
+        };
+    }
+
     /** 시급 계산 대상인가(퇴근 시각이 임금에 직결되는가). */
     public function isHourly(): bool
     {
-        return $this->employment_type === self::TYPE_DIRECT;
+        return $this->attendancePolicy() === self::POLICY_HOURLY;
     }
 
     protected $fillable = [
@@ -54,6 +83,7 @@ class Employee extends Model
         'last_name',
         'name',
         'email',
+        'phone',
         'badge_company_name',
         'badge_issued_on',
         'badge_photo_path',
@@ -72,6 +102,23 @@ class Employee extends Model
         'attendance_app_scope',
         'payload',
     ];
+
+    /**
+     * 왓츠앱·문자 링크에 쓰는 번호 — 숫자만, 미국 번호면 국가번호 1 을 붙인다.
+     *
+     * wa.me 는 "+1 480-555-0100" 같은 표기를 못 읽는다. 그렇다고 사람이 보는 칸에
+     * 숫자만 저장하게 하면 읽기 나빠진다 — 보이는 것은 그대로 두고 여기서 정리한다.
+     */
+    public function dialNumber(): ?string
+    {
+        $digits = preg_replace('/\D/', '', (string) $this->phone) ?: '';
+
+        return match (true) {
+            strlen($digits) === 10 => '1'.$digits,          // 미국 지역번호부터 적은 경우
+            strlen($digits) >= 11 => $digits,
+            default => null,                                 // 너무 짧으면 번호가 아니다
+        };
+    }
 
     protected function casts(): array
     {
@@ -176,6 +223,18 @@ class Employee extends Model
     public function attendanceLogs(): HasMany
     {
         return $this->hasMany(AttendanceLog::class);
+    }
+
+    /** 급여 프로필 — pay_type(시급/연봉/일급)이 출퇴근 정책 판별에도 쓰인다. */
+    public function payrollProfile(): HasOne
+    {
+        return $this->hasOne(EmployeePayrollProfile::class);
+    }
+
+    /** 제출된 W-9 — 1099 지급의 전제조건. 없으면 24% backup withholding 대상. */
+    public function w9Form(): HasOne
+    {
+        return $this->hasOne(W9Form::class);
     }
 
     public function communicationRoomMemberships(): HasMany

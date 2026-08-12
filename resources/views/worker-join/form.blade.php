@@ -49,7 +49,7 @@
         @if ($done)
             <div class="done">
                 <div class="check">✓</div>
-                <p class="brand">DASOL PRISM · {{ $site->code }} {{ $site->name }}</p>
+                <p class="brand">{{ \App\Support\Org::name() }} · {{ $site->code }} {{ $site->name }}</p>
                 <h1 id="t-doneTitle"></h1>
                 <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
                 <p><b>{{ $workerName }}</b><span id="t-doneBody"></span></p>
@@ -57,6 +57,14 @@
                     <div class="badge"><span id="t-doneBadge"></span> {{ $employee->employee_number }}</div>
                 @endif
                 <div class="device" id="t-doneDevice"></div>
+
+                @if (!empty($w9Url))
+                    {{-- 1099 지급 전제조건 — 등록에 이어 바로 작성하게 해 종이 수거 행정을 없앤다. --}}
+                    <a href="{{ $w9Url }}" style="display:block;margin-top:16px;padding:15px;font-size:1rem;font-weight:800;color:#fff;background:#0f766e;border-radius:12px;text-decoration:none;">
+                        📄 Tax form W-9 작성하기 / Complete your W-9 →
+                    </a>
+                    <p class="note" style="margin-top:8px">지급 처리를 위해 필요합니다. 지금 이어서 작성해 주세요.<br>Required before your first payment. / Requerido antes de su primer pago.</p>
+                @endif
             </div>
 
             <script>
@@ -79,7 +87,7 @@
         @else
             <div class="top">
                 <div>
-                    <p class="brand">DASOL PRISM · <span id="t-eyebrow"></span></p>
+                    <p class="brand">{{ \App\Support\Org::name() }} · <span id="t-eyebrow"></span></p>
                     <h1 id="t-title"></h1>
                 </div>
                 <div class="langs" id="langs">
@@ -112,7 +120,11 @@
                     @foreach ($companies as $c)
                         <option value="{{ $c['id'] }}" data-etype="{{ $c['employment_type'] }}" @selected(old('company_id') == $c['id'])>{{ $c['name'] }}</option>
                     @endforeach
+                    {{-- 내일 처음 오는 협력사가 목록에 있을 리 없다. 그때 여기서 막히면 등록 자체를 못 한다. --}}
+                    <option value="__other__" id="opt-other" @selected(old('company_name'))></option>
                 </select>
+                <input type="text" name="company_name" id="company-name" value="{{ old('company_name') }}"
+                       style="display:none;margin-top:8px" maxlength="120">
                 <div class="note" id="company-note"></div>
 
                 {{-- 회사가 아직 분류되지 않았을 때만 뜬다. 사내 용어 대신 "누가 급여를 주는가" 로 묻는다. --}}
@@ -125,11 +137,12 @@
                 </div>
 
                 <label id="t-trade"></label>
-                <input type="text" name="role" id="f-role" list="trade-list" value="{{ old('role') }}" required autocomplete="off">
+                {{-- 목록에서 고르는 것이 기본이지만, 없는 공정은 적을 수 있다. 서버에서 대소문자·공백만
+                     다른 값은 기존 이름으로 맞춘다 — 그래야 집계가 갈리지 않는다. --}}
+                <input type="text" name="role" id="f-role" list="trade-list" value="{{ old('role') }}"
+                       autocomplete="off" maxlength="60" required>
                 <datalist id="trade-list">
-                    @foreach ($roles as $t)
-                        <option value="{{ $t }}"></option>
-                    @endforeach
+                    @foreach ($roles as $t)<option value="{{ $t }}"></option>@endforeach
                 </datalist>
                 <div class="note" id="t-tradeHint"></div>
 
@@ -150,6 +163,7 @@
                     var T = DICT[lang] || DICT.ko;
 
                     var sel = document.getElementById('company');
+                    var nameInput = document.getElementById('company-name');
                     var note = document.getElementById('company-note');
                     var ask = document.getElementById('ask-type');
                     var radios = ask.querySelectorAll('input[type=radio]');
@@ -169,6 +183,8 @@
                         text('opt-blank', T.companyPlaceholder);
                         document.getElementById('f-name').placeholder = T.namePlaceholder;
                         document.getElementById('f-role').placeholder = T.tradePlaceholder;
+                        text('opt-other', T.companyOther);
+                        document.getElementById('company-name').placeholder = T.companyOtherPlaceholder;
                         document.getElementById('t-askDirect').innerHTML = '';
                         document.getElementById('t-askDirect').append(T.askDirect, Object.assign(document.createElement('small'), { textContent: T.askDirectSub }));
                         document.getElementById('t-askIndirect').innerHTML = '';
@@ -184,6 +200,21 @@
                         // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
                         var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
                         var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient };
+
+                        // 목록에 없는 회사 — 이름을 받고, 자사인지 협력사인지 물어본다.
+                        // 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
+                        var other = sel.value === '__other__';
+                        nameInput.style.display = other ? 'block' : 'none';
+                        nameInput.required = other;
+                        if (!other) { nameInput.value = ''; }
+
+                        if (other) {
+                            note.textContent = T.companyOtherHint; note.className = 'note';
+                            ask.style.display = locked ? 'none' : 'block';
+                            radios.forEach(function (r) { r.required = !locked; });
+
+                            return;
+                        }
 
                         if (!sel.value) {
                             note.textContent = T.companyHint; note.className = 'note';

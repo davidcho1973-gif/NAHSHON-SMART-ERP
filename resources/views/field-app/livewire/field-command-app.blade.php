@@ -75,6 +75,11 @@
                     <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                         <h2 class="text-sm font-bold text-slate-100 flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-slate-400"></span> Ⅰ. 현장 개요 및 일기 현황
+                            @if($report_status === 'submitted')
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-600">제출 완료</span>
+                            @else
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">작성중 (자동저장)</span>
+                            @endif
                         </h2>
                         <button wire:click="$toggle('showSiteModal')" class="text-xs font-medium text-slate-300 hover:text-white bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md transition-colors">
                             <i class="fa-solid fa-gear mr-1 text-slate-400"></i>현장 관리
@@ -109,17 +114,16 @@
                                 @if($site_id)
                                     <div class="space-x-1">
                                         <button wire:click="editSite({{ $site_id }})" class="text-[10px] text-slate-400 hover:underline">수정</button>
-                                        <button wire:click="deleteSite({{ $site_id }})" onclick="confirm('이 현장을 삭제하시겠습니까?') || event.stopImmediatePropagation()" class="text-[10px] text-slate-400 hover:underline">삭제</button>
+                                        <button wire:click="deleteSite({{ $site_id }})" wire:confirm="이 현장을 삭제하시겠습니까?" class="text-[10px] text-slate-400 hover:underline">삭제</button>
                                     </div>
                                 @endif
                             </div>
                             <select wire:model.live="site_id" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-semibold text-slate-100 focus:border-slate-600 focus:outline-none">
-                                @foreach($sites as $site)
+                                @forelse($sites as $site)
                                     <option value="{{ $site->id }}">{{ $site->name }} ({{ $site->code }})</option>
-                                @endforeach
-                                @if($sites->isEmpty())
-                                    <option value="1">텍사스 킬린 신축현장 (TX-01)</option>
-                                @endif
+                                @empty
+                                    <option value="">— [현장 관리]에서 현장을 등록하세요 —</option>
+                                @endforelse
                             </select>
                         </div>
                         <div>
@@ -137,7 +141,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-400 mb-1">기온 범위</label>
-                            <input type="text" wire:model.live="temperature" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-semibold text-slate-100">
+                            <input type="text" wire:model.blur="temperature" placeholder="예: 18°C ~ 29°C" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-semibold text-slate-100">
                         </div>
                     </div>
                 </div>
@@ -205,11 +209,11 @@
                         </h2>
                         <div>
                             <label class="block text-xs font-semibold text-slate-400 mb-1">공종 대표 작업명</label>
-                            <input type="text" wire:model.live="work_title" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-semibold text-slate-100">
+                            <input type="text" wire:model.blur="work_title" placeholder="예: A동 2층 메인 배관 서포트 용접 및 전기 트레이 설치" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-semibold text-slate-100">
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-400 mb-1">금일 세부 작업 내역</label>
-                            <textarea wire:model.live="work_today" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 leading-relaxed font-mono"></textarea>
+                            <textarea wire:model.blur="work_today" rows="4" placeholder="1. A동 2층 배관 서포트 용접 35포인트 완료&#10;2. 메인 케이블 트레이 설치 120m 완료" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 leading-relaxed font-mono"></textarea>
                         </div>
                         <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
                             <span class="text-xs font-semibold text-slate-400">금일 공정 진척도</span>
@@ -226,11 +230,12 @@
                         </h2>
                         <div>
                             <label class="block text-xs font-semibold text-slate-400 mb-1">익일 주요 시공 예정 사항</label>
-                            <textarea wire:model.live="work_tomorrow" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 leading-relaxed font-mono"></textarea>
+                            <textarea wire:model.blur="work_tomorrow" rows="5" placeholder="1. A동 3층 메인 배관 입상관 용접 및 수압 테스트&#10;2. 고소작업대 이용 외벽 덕트 마감" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 leading-relaxed font-mono"></textarea>
                         </div>
-                        <button wire:click="saveDailyReport" class="w-full py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center space-x-2">
+                        <button wire:click="saveDailyReport" wire:loading.attr="disabled" class="w-full py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center space-x-2">
                             <i class="fa-solid fa-floppy-disk text-slate-300"></i>
-                            <span>일일 보고서 서버 전송 및 제출</span>
+                            <span wire:loading.remove wire:target="saveDailyReport">일일 보고서 서버 전송 및 제출</span>
+                            <span wire:loading wire:target="saveDailyReport">제출 중...</span>
                         </button>
                     </div>
                 </div>
@@ -242,23 +247,50 @@
             <div class="max-w-2xl mx-auto space-y-6">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm text-center space-y-6">
                     <h2 class="text-sm font-bold text-slate-100 border-b border-slate-800 pb-3">현장 출퇴근 전자 태깅</h2>
-                    <div class="inline-block p-4 rounded-xl bg-white shadow-md">
-                        <div class="w-44 h-44 bg-slate-950 rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
-                            <i class="fa-solid fa-qrcode text-5xl text-slate-200"></i>
-                            <span class="text-[10px] font-mono text-slate-400 tracking-wider">{{ $qr_code_token }}</span>
+
+                    @if($this->qrDataUri)
+                        <div class="inline-block p-4 rounded-xl bg-white shadow-md">
+                            <img src="{{ $this->qrDataUri }}" alt="현장 출퇴근 QR" class="w-44 h-44">
                         </div>
+                        <p class="text-[10px] font-mono text-slate-500 tracking-wider">FIELD-QR · {{ $work_date }}</p>
+                    @else
+                        <div class="inline-block p-4 rounded-xl bg-white shadow-md">
+                            <div class="w-44 h-44 bg-slate-950 rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+                                <i class="fa-solid fa-qrcode text-5xl text-slate-200"></i>
+                                <span class="text-[10px] font-mono text-slate-400 tracking-wider">현장 선택 후 QR 생성</span>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="max-w-sm mx-auto">
+                        <input type="text" wire:model.blur="commute_worker_name" placeholder="성명 입력 (예: 김반장)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 text-center focus:border-slate-600 focus:outline-none">
                     </div>
+
                     <div class="grid grid-cols-2 gap-3 max-w-sm mx-auto">
-                        <button wire:click="recordCommute('in')" class="py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs transition-all">
+                        <button wire:click="recordCommute('in')" wire:loading.attr="disabled" class="py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs transition-all">
                             <i class="fa-solid fa-right-to-bracket mr-1.5 text-slate-400"></i>출근 기록
                         </button>
-                        <button wire:click="recordCommute('out')" class="py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs transition-all">
+                        <button wire:click="recordCommute('out')" wire:loading.attr="disabled" class="py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs transition-all">
                             <i class="fa-solid fa-right-from-bracket mr-1.5 text-slate-400"></i>퇴근 기록
                         </button>
                     </div>
-                    <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between text-xs max-w-sm mx-auto">
-                        <span class="text-slate-400">최근 스캔 기록:</span>
-                        <span class="font-semibold text-slate-200">{{ $last_scan_status }} {{ $last_scan_time ? '('.$last_scan_time.')' : '' }}</span>
+
+                    <div class="bg-slate-950 rounded-lg border border-slate-800 max-w-sm mx-auto divide-y divide-slate-800 text-xs">
+                        <div class="px-3 py-2 flex items-center justify-between text-slate-400 font-semibold">
+                            <span>금일 태깅 기록</span>
+                            <span>{{ $commuteLogs->count() }}건</span>
+                        </div>
+                        @forelse($commuteLogs as $log)
+                            <div class="px-3 py-2 flex items-center justify-between">
+                                <span class="text-slate-300 font-medium">
+                                    <i class="fa-solid {{ $log->type === 'in' ? 'fa-right-to-bracket' : 'fa-right-from-bracket' }} mr-1.5 text-slate-500"></i>
+                                    {{ $log->worker_name ?? '무기명' }}
+                                </span>
+                                <span class="text-slate-400">{{ $log->type === 'in' ? '출근' : '퇴근' }} · {{ $log->scanned_at->format('H:i:s') }}</span>
+                            </div>
+                        @empty
+                            <div class="px-3 py-3 text-slate-500">아직 태깅 기록이 없습니다.</div>
+                        @endforelse
                     </div>
                 </div>
             </div>
@@ -297,8 +329,12 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-400 mb-1">안전 지시사항</label>
-                        <textarea wire:model.live="safety_notes" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 font-mono"></textarea>
+                        <textarea wire:model.blur="safety_notes" rows="3" placeholder="예: 작업 전 보호구 및 고소작업대 벨트 안전 고리 100% 체결 확인" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 font-mono"></textarea>
                     </div>
+                    <button wire:click="saveSafetyCheck" wire:loading.attr="disabled" class="w-full py-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-shield-halved text-slate-300"></i>
+                        <span>안전점검 TBM 기록 저장</span>
+                    </button>
                 </div>
             </div>
         @endif
@@ -318,25 +354,30 @@
                         </select>
                         <input type="text" wire:model.live="new_eq_operator" placeholder="조종원 성명" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
                     </div>
-                    <button wire:click="addEquipment" class="mt-3 w-full py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-lg transition-all">
+                    <button wire:click="addEquipment" wire:loading.attr="disabled" class="mt-3 w-full py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-lg transition-all">
                         + 장비 수불 등록
                     </button>
                 </div>
 
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-                    <h2 class="text-sm font-bold text-slate-100 mb-4 border-b border-slate-800 pb-3">현장 장비 운용 현황 ({{ count($equipments) }}대)</h2>
+                    <h2 class="text-sm font-bold text-slate-100 mb-4 border-b border-slate-800 pb-3">현장 장비 운용 현황 ({{ $equipments->count() }}대)</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        @foreach($equipments as $idx => $eq)
+                        @forelse($equipments as $eq)
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-3.5 flex items-center justify-between">
                                 <div>
-                                    <h3 class="text-xs font-bold text-slate-100">{{ $eq['name'] }}</h3>
-                                    <p class="text-[11px] text-slate-400 mt-0.5">구분: {{ $eq['type'] }} | 조종원: {{ $eq['operator'] }}</p>
+                                    <h3 class="text-xs font-bold text-slate-100">{{ $eq->name }}</h3>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">구분: {{ $eq->type }} | 조종원: {{ $eq->operator ?? '미정' }}</p>
                                 </div>
-                                <button wire:click="toggleEquipmentStatus({{ $idx }})" class="px-2.5 py-1 rounded text-xs font-semibold border transition-all {{ $eq['status'] === '가동중' ? 'bg-slate-800 text-slate-100 border-slate-700' : 'bg-slate-950 text-slate-500 border-slate-800' }}">
-                                    {{ $eq['status'] }}
-                                </button>
+                                <div class="flex items-center space-x-1.5">
+                                    <button wire:click="toggleEquipmentStatus({{ $eq->id }})" class="px-2.5 py-1 rounded text-xs font-semibold border transition-all {{ $eq->status === 'running' ? 'bg-slate-800 text-slate-100 border-slate-700' : 'bg-slate-950 text-slate-500 border-slate-800' }}">
+                                        {{ $eq->status === 'running' ? '가동중' : '대기중' }}
+                                    </button>
+                                    <button wire:click="removeEquipment({{ $eq->id }})" wire:confirm="이 장비 수불 기록을 삭제하시겠습니까?" class="text-[11px] text-slate-500 hover:text-white px-1"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
                             </div>
-                        @endforeach
+                        @empty
+                            <div class="col-span-full text-xs text-slate-500 py-4 text-center">금일 등록된 장비 수불 기록이 없습니다.</div>
+                        @endforelse
                     </div>
                 </div>
             </div>
@@ -349,8 +390,13 @@
                 <div class="space-y-6">
                     <!-- Upload Blueprint Box -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-                        <h2 class="text-sm font-bold text-slate-100 mb-3 border-b border-slate-800 pb-3 flex items-center gap-2">
-                            <i class="fa-solid fa-cloud-arrow-up text-slate-400"></i> 신규 도면 업로드 & AI 스캔
+                        <h2 class="text-sm font-bold text-slate-100 mb-3 border-b border-slate-800 pb-3 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-cloud-arrow-up text-slate-400"></i> 신규 도면 업로드 & AI 스캔</span>
+                            @if($aiLive)
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-600">AI Vision 연결됨</span>
+                            @else
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">오프라인 모드</span>
+                            @endif
                         </h2>
                         <div class="space-y-3">
                             <div>
@@ -365,9 +411,21 @@
                                     <option value="안전 시방서">안전 시방서 및 공정도</option>
                                 </select>
                             </div>
-                            <button wire:click="uploadAndAnalyzeDrawing" class="w-full py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-lg transition-all flex items-center justify-center space-x-1.5">
-                                <i class="fa-solid fa-brain text-slate-300"></i>
-                                <span>AI Vision 도면 판독 및 지식등록</span>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 mb-1">도면 파일 (이미지/PDF, 최대 20MB)</label>
+                                <input type="file" wire:model="drawing_file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[11px] file:text-slate-200">
+                                <div wire:loading wire:target="drawing_file" class="text-[11px] text-slate-400 mt-1"><i class="fa-solid fa-spinner fa-spin mr-1"></i>파일 업로드 중...</div>
+                                @error('drawing_file') <span class="text-[11px] text-red-400 mt-1 block">{{ $message }}</span> @enderror
+                            </div>
+                            <button wire:click="uploadAndAnalyzeDrawing" wire:loading.attr="disabled" wire:target="uploadAndAnalyzeDrawing, drawing_file" class="w-full py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 disabled:opacity-50 text-slate-100 font-bold text-xs rounded-lg transition-all flex items-center justify-center space-x-1.5">
+                                <span wire:loading.remove wire:target="uploadAndAnalyzeDrawing" class="flex items-center gap-1.5">
+                                    <i class="fa-solid fa-brain text-slate-300"></i>
+                                    <span>AI Vision 도면 판독 및 지식등록</span>
+                                </span>
+                                <span wire:loading wire:target="uploadAndAnalyzeDrawing" class="flex items-center gap-1.5">
+                                    <i class="fa-solid fa-spinner fa-spin text-slate-300"></i>
+                                    <span>AI 정밀 판독 중... (최대 1~2분)</span>
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -375,24 +433,32 @@
                     <!-- Analyzed Drawing Library List -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
                         <h2 class="text-sm font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center justify-between">
-                            <span>등록된 도면 지식베이스 ({{ count($drawings) }})</span>
+                            <span>등록된 도면 지식베이스 ({{ $drawings->count() }})</span>
                             <span class="text-[10px] text-slate-400">AI Vision Indexed</span>
                         </h2>
 
                         <div class="space-y-2">
-                            @foreach($drawings as $idx => $dwg)
-                                <div wire:click="selectDrawing({{ $idx }})" class="p-3 rounded-lg border transition-all cursor-pointer {{ $selected_drawing_idx === $idx ? 'bg-slate-800 border-slate-600' : 'bg-slate-950 border-slate-800 hover:border-slate-700' }}">
+                            @forelse($drawings as $dwg)
+                                <div wire:click="selectDrawing({{ $dwg->id }})" class="p-3 rounded-lg border transition-all cursor-pointer relative group {{ $selected_drawing_id === $dwg->id ? 'bg-slate-800 border-slate-600' : 'bg-slate-950 border-slate-800 hover:border-slate-700' }}">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-xs font-bold text-slate-100 truncate max-w-[200px]">{{ $dwg['title'] }}</span>
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">{{ $dwg['version'] }}</span>
+                                        <span class="text-xs font-bold text-slate-100 truncate max-w-[180px]">{{ $dwg->title }}</span>
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">{{ $dwg->version }}</span>
                                     </div>
-                                    <p class="text-[11px] text-slate-400 mt-1 line-clamp-2">{{ $dwg['summary'] }}</p>
+                                    <p class="text-[11px] text-slate-400 mt-1 line-clamp-2">{{ $dwg->summary ?? '판독 대기 중...' }}</p>
                                     <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-                                        <span>{{ $dwg['category'] }}</span>
-                                        <span>{{ $dwg['analyzed_at'] }}</span>
+                                        <span>{{ $dwg->category }}</span>
+                                        <span class="flex items-center gap-1.5">
+                                            @if($dwg->status === 'failed')
+                                                <span class="text-red-400">판독 실패</span>
+                                            @endif
+                                            {{ $dwg->analyzed_at?->format('Y-m-d H:i') ?? '대기' }}
+                                        </span>
                                     </div>
+                                    <button wire:click.stop="removeDrawing({{ $dwg->id }})" wire:confirm="이 도면을 지식베이스에서 삭제하시겠습니까?" class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-[10px] text-slate-500 hover:text-white transition-opacity"><i class="fa-solid fa-trash"></i></button>
                                 </div>
-                            @endforeach
+                            @empty
+                                <div class="text-xs text-slate-500 py-4 text-center">등록된 도면이 없습니다.<br>위에서 도면을 업로드하면 AI가 판독해 드립니다.</div>
+                            @endforelse
                         </div>
                     </div>
                 </div>
@@ -400,77 +466,94 @@
                 <!-- Right Column: Interactive AI Drawing Q&A Panel -->
                 <div class="lg:col-span-2 space-y-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-                        <!-- Drawing Specs Summary Header -->
-                        @php $currentDwg = $drawings[$selected_drawing_idx] ?? $drawings[0]; @endphp
-                        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-2">
-                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                                <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-file-pdf text-slate-400"></i> {{ $currentDwg['title'] }}
-                                </span>
-                                <span class="text-[10px] text-slate-400 font-mono">{{ $currentDwg['id'] }}</span>
-                            </div>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                                @foreach($currentDwg['specs'] as $spec)
-                                    <div class="bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 text-slate-300 font-medium truncate">
-                                        ✓ {{ $spec }}
-                                    </div>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        <!-- Chat Messages Container -->
-                        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 h-96 overflow-y-auto space-y-4">
-                            @foreach($chat_messages as $msg)
-                                @if($msg['role'] === 'assistant')
-                                    <div class="flex space-x-3">
-                                        <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
-                                            <i class="fa-solid fa-robot"></i>
+                        @if($selectedDrawing)
+                            <!-- Drawing Specs Summary Header -->
+                            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-2">
+                                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                    <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-file-pdf text-slate-400"></i> {{ $selectedDrawing->title }}
+                                    </span>
+                                    <span class="text-[10px] text-slate-400 font-mono">{{ $selectedDrawing->drawing_no }}</span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                                    @forelse($selectedDrawing->specs ?? [] as $spec)
+                                        <div class="bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 text-slate-300 font-medium truncate" title="{{ $spec }}">
+                                            ✓ {{ $spec }}
                                         </div>
-                                        <div class="space-y-1 max-w-xl">
-                                            <div class="bg-slate-900 border border-slate-800 text-xs text-slate-200 p-3 rounded-lg leading-relaxed whitespace-pre-line font-mono">
-                                                {!! nl2br(e($msg['text'])) !!}
+                                    @empty
+                                        <div class="col-span-full text-slate-500">추출된 스펙이 없습니다.</div>
+                                    @endforelse
+                                </div>
+                            </div>
+
+                            <!-- Chat Messages Container -->
+                            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 h-96 overflow-y-auto space-y-4">
+                                @foreach($chatMessages as $msg)
+                                    @if($msg->role === 'assistant')
+                                        <div class="flex space-x-3">
+                                            <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
+                                                <i class="fa-solid fa-robot"></i>
                                             </div>
-                                            @if(isset($msg['sources']))
-                                                <div class="flex items-center space-x-2 text-[10px] text-slate-500">
-                                                    <span>판독 근거:</span>
-                                                    @foreach($msg['sources'] as $src)
-                                                        <span class="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{{ $src }}</span>
-                                                    @endforeach
+                                            <div class="space-y-1 max-w-xl">
+                                                <div class="bg-slate-900 border border-slate-800 text-xs text-slate-200 p-3 rounded-lg leading-relaxed whitespace-pre-line font-mono">
+                                                    {!! nl2br(e($msg->content)) !!}
                                                 </div>
-                                            @endif
+                                                @if($msg->sources)
+                                                    <div class="flex items-center flex-wrap gap-2 text-[10px] text-slate-500">
+                                                        <span>판독 근거:</span>
+                                                        @foreach($msg->sources as $src)
+                                                            <span class="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{{ $src }}</span>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+                                            </div>
                                         </div>
-                                    </div>
-                                @else
-                                    <div class="flex justify-end space-x-3">
-                                        <div class="bg-slate-800 text-xs text-white p-3 rounded-lg max-w-lg font-medium border border-slate-700">
-                                            {{ $msg['text'] }}
+                                    @else
+                                        <div class="flex justify-end space-x-3">
+                                            <div class="bg-slate-800 text-xs text-white p-3 rounded-lg max-w-lg font-medium border border-slate-700">
+                                                {{ $msg->content }}
+                                            </div>
+                                            <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
+                                                <i class="fa-solid fa-user"></i>
+                                            </div>
                                         </div>
-                                        <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
-                                            <i class="fa-solid fa-user"></i>
-                                        </div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        </div>
+                                    @endif
+                                @endforeach
 
-                        <!-- Quick Recommended Prompts -->
-                        <div class="flex flex-wrap gap-2 text-xs">
-                            <span class="text-slate-400 text-[11px] self-center">추천 질문:</span>
-                            <button wire:click="$set('qa_question', 'A동 2층 배관 서포트 간격 및 용접 주의사항 알려줘.')" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
-                                💡 배관 서포트 간격 & 용접 규격
-                            </button>
-                            <button wire:click="$set('qa_question', '이 도면에서 고소작업 시 필수 안전 지침은?')" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
-                                💡 고소작업 안전 지침 & LOTO
-                            </button>
-                        </div>
+                                <div wire:loading wire:target="askDrawingQuestion" class="flex space-x-3">
+                                    <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs shrink-0">
+                                        <i class="fa-solid fa-robot"></i>
+                                    </div>
+                                    <div class="bg-slate-900 border border-slate-800 text-xs text-slate-400 p-3 rounded-lg">
+                                        <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>AI가 도면을 분석해 답변을 작성 중입니다...
+                                    </div>
+                                </div>
+                            </div>
 
-                        <!-- Q&A Question Input Box -->
-                        <div class="flex space-x-2">
-                            <input type="text" wire:model.live="qa_question" wire:keydown.enter="askDrawingQuestion" placeholder="도면에 대해 궁금한 점을 질문하세요 (예: 관경 규격, 용접 수칙, 자재 요구사항)..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 focus:border-slate-600 focus:outline-none">
-                            <button wire:click="askDrawingQuestion" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg border border-slate-700 transition-all">
-                                <i class="fa-solid fa-paper-plane mr-1 text-slate-300"></i>질문 전송
-                            </button>
-                        </div>
+                            <!-- Quick Recommended Prompts -->
+                            <div class="flex flex-wrap gap-2 text-xs">
+                                <span class="text-slate-400 text-[11px] self-center">추천 질문:</span>
+                                <button wire:click="$set('qa_question', '이 도면의 배관 서포트 간격 및 용접 주의사항 알려줘.')" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
+                                    💡 배관 서포트 간격 & 용접 규격
+                                </button>
+                                <button wire:click="$set('qa_question', '이 도면에서 고소작업 시 필수 안전 지침은?')" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
+                                    💡 고소작업 안전 지침 & LOTO
+                                </button>
+                            </div>
+
+                            <!-- Q&A Question Input Box -->
+                            <div class="flex space-x-2">
+                                <input type="text" wire:model.live="qa_question" wire:keydown.enter="askDrawingQuestion" placeholder="도면에 대해 궁금한 점을 질문하세요 (예: 관경 규격, 용접 수칙, 자재 요구사항)..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 focus:border-slate-600 focus:outline-none">
+                                <button wire:click="askDrawingQuestion" wire:loading.attr="disabled" wire:target="askDrawingQuestion" class="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-xs px-4 py-2.5 rounded-lg border border-slate-700 transition-all">
+                                    <i class="fa-solid fa-paper-plane mr-1 text-slate-300"></i>질문 전송
+                                </button>
+                            </div>
+                        @else
+                            <div class="h-96 flex flex-col items-center justify-center text-center space-y-3 text-slate-500">
+                                <i class="fa-solid fa-compass-drafting text-4xl"></i>
+                                <p class="text-xs leading-relaxed">아직 선택된 도면이 없습니다.<br>왼쪽에서 도면을 업로드하면 AI Vision이 판독 후<br>이곳에서 도면 기반 Q&A를 시작할 수 있습니다.</p>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>

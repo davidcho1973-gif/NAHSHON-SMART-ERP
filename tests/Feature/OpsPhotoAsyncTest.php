@@ -244,7 +244,11 @@ class OpsPhotoAsyncTest extends TestCase
     {
         $paths = array_map(fn (int $i): string => 'ops-intake/1/'.$i.'.bin', range(1, 30));
 
-        $res = app(OpsIntakeService::class)->queue('많은 사진', $this->site, 1, $paths);
+        // 사람 id 를 숫자로 박지 않는다. 예전에는 마이그레이션이 1번 계정을 만들어
+        // 둬서 우연히 통했는데, 그 계정은 이제 원본에 없다.
+        $actor = User::factory()->create();
+
+        $res = app(OpsIntakeService::class)->queue('많은 사진', $this->site, $actor->id, $paths);
 
         $this->assertSame(ImageParts::MAX_IMAGES, $res['imageCount']);
     }

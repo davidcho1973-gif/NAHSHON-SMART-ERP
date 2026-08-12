@@ -37,7 +37,9 @@ class GoogleAuthTest extends TestCase
             ->withSession(['google_oauth_state' => 'known-state'])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
-        $response->assertRedirect('/');
+        // 작업자는 ERP 가 아니라 자기 앱으로 간다. 자기 근무시간을 보러 로그인했는데
+        // 회사 전체 화면이 뜨면 잘못 눌렀다고 생각하고 앱을 지운다.
+        $response->assertRedirect('/attendance-app');
         $this->assertAuthenticatedAs($user->fresh());
         $this->assertSame('google-123', $user->fresh()->google_id);
         $this->assertNotNull($user->fresh()->last_login_at);

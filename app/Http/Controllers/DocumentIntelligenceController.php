@@ -10,9 +10,11 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Services\Documents\StuckAnalysisReaper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -137,18 +139,23 @@ class DocumentIntelligenceController extends Controller
             $request->integer('project_id') ?: null,
         );
 
+        // 디스크는 여기서 미리 열지 않는다 — 설정이 잘못돼 있으면 Storage::disk() 자체가
+        // 예외를 던져 요청 전체가 500 으로 죽고, 화면에는 이유 없이 "업로드 실패"만 뜬다.
+        // 실제 저장은 storeUpload() 안에서 예외를 잡아 파일별로 처리한다.
         $diskName = (string) config('document-intelligence.disk', 'local');
-        $disk = Storage::disk($diskName);
         $allowedExtensions = config('document-intelligence.allowed_extensions', []);
         $created = [];
         $duplicates = [];
+        $failed = [];
 
         foreach ($request->file('files', []) as $file) {
+            $originalName = $file->getClientOriginalName();
             $extension = strtolower((string) $file->getClientOriginalExtension());
             if (! in_array($extension, $allowedExtensions, true)) {
-                throw ValidationException::withMessages([
-                    'files' => "지원하지 않는 파일 형식입니다: {$file->getClientOriginalName()}",
-                ]);
+                // 한 파일이 형식 때문에 막혀도 나머지는 올라가야 한다 — 배치 전체를 죽이지 않는다.
+                $failed[] = ['file' => $originalName, 'reason' => '지원하지 않는 파일 형식입니다.'];
+
+                continue;
             }
 
             $sha256 = hash_file('sha256', $file->getRealPath());
@@ -157,19 +164,64 @@ class DocumentIntelligenceController extends Controller
                 $value ? $duplicateQuery->where($column, $value) : $duplicateQuery->whereNull($column);
             }
             $duplicate = $duplicateQuery->first();
+            $safeName = $this->safeFileName($originalName);
 
             if ($duplicate) {
-                $duplicates[] = ['file' => $file->getClientOriginalName(), 'documentId' => $duplicate->id];
+                // 원본이 유실된 레코드(배포로 로컬 디스크가 초기화된 경우)는 "중복"으로
+                // 거부하면 안 된다 — 같은 파일을 다시 올릴 유일한 길을 막아 버린다.
+                $lost = blank($duplicate->file_path) || ! $this->fileStillThere($duplicate->disk ?: $diskName, (string) $duplicate->file_path);
+
+                if ($lost) {
+                    $uuid = $duplicate->uuid ?: (string) Str::uuid();
+                    [$path, $usedDisk, $error] = $this->storeUpload($file, $uuid, $safeName, $diskName);
+
+                    if ($path === null) {
+                        // 저장 실패를 "중복"으로 뭉뚱그리면 사용자는 원인을 영영 알 수 없다.
+                        $failed[] = ['file' => $originalName, 'reason' => $error ?: '파일 저장에 실패했습니다.'];
+
+                        continue;
+                    }
+
+                    $duplicate->update([
+                        'disk' => $usedDisk,
+                        'file_path' => $path,
+                        'stored_file_name' => $safeName,
+                        'ai_status' => 'queued',
+                        'ai_error' => null,
+                    ]);
+                    AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+                    $created[] = $this->documentRow($duplicate->fresh());
+
+                    continue;
+                }
+
+                // 원본은 멀쩡한 진짜 중복. 다만 예전 분석이 실패로 남아 있으면 이 기회에
+                // 다시 태운다 — 사용자가 같은 파일을 또 올리는 이유는 대개 그것이다.
+                $requeued = false;
+                if (in_array((string) $duplicate->ai_status, ['failed', 'queued'], true)) {
+                    $duplicate->update(['ai_status' => 'queued', 'ai_error' => null]);
+                    AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+                    $requeued = true;
+                }
+
+                $duplicates[] = [
+                    'file' => $originalName,
+                    'documentId' => $duplicate->id,
+                    'requeued' => $requeued,
+                    'reason' => $requeued
+                        ? '이미 등록된 문서입니다 — 분석을 다시 시작했습니다.'
+                        : '이미 등록된 문서입니다.',
+                ];
 
                 continue;
             }
 
             $uuid = (string) Str::uuid();
-            $originalName = $file->getClientOriginalName();
-            $safeName = $this->safeFileName($originalName);
-            $path = $disk->putFileAs("document-intelligence/inbox/{$uuid}", $file, $safeName);
-            if (! $path) {
-                throw new \RuntimeException("파일 저장에 실패했습니다: {$originalName}");
+            [$path, $usedDisk, $error] = $this->storeUpload($file, $uuid, $safeName, $diskName);
+            if ($path === null) {
+                $failed[] = ['file' => $originalName, 'reason' => $error ?: '파일 저장에 실패했습니다.'];
+
+                continue;
             }
 
             $document = IntelligentDocument::query()->create([
@@ -179,7 +231,7 @@ class DocumentIntelligenceController extends Controller
                 'project_id' => $projectId,
                 'uploaded_by' => $request->user()->id,
                 'source' => 'dropzone',
-                'disk' => $diskName,
+                'disk' => $usedDisk,
                 'file_path' => $path,
                 'original_file_name' => $originalName,
                 'stored_file_name' => $safeName,
@@ -201,7 +253,82 @@ class DocumentIntelligenceController extends Controller
             'message' => count($created).'개 문서를 접수했고 AI 분석을 시작했습니다.',
             'documents' => $created,
             'duplicates' => $duplicates,
+            'failed' => $failed,
         ], 202);
+    }
+
+    /** 디스크를 열 수 없으면 "파일 없음"으로 본다 — 판정 하나 때문에 업로드가 죽으면 안 된다. */
+    private function fileStillThere(string $diskName, string $path): bool
+    {
+        try {
+            return $path !== '' && Storage::disk($diskName)->exists($path);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return false;
+        }
+    }
+
+    /**
+     * 업로드 원본을 저장한다. 설정 디스크가 실패하면 local 로 내려 받아 둔다.
+     *
+     * s3 디스크는 config 에서 'throw' => false 라 쓰기가 실패해도 예외 없이 false 만
+     * 돌려준다. 그대로 두면 "저장 실패"가 화면에서는 "중복 N개 제외"처럼 보여
+     * 사용자는 왜 안 올라가는지 영영 알 수 없다. 그래서 (1) 이유를 남기고
+     * (2) 최소한 로컬에라도 받아 분석은 진행되게 한다.
+     *
+     * @return array{0: ?string, 1: string, 2: ?string} [path, disk, error]
+     */
+    private function storeUpload(mixed $file, string $uuid, string $safeName, string $diskName): array
+    {
+        $dir = "document-intelligence/inbox/{$uuid}";
+
+        try {
+            $path = Storage::disk($diskName)->putFileAs($dir, $file, $safeName);
+            if ($path) {
+                return [$path, $diskName, null];
+            }
+            $reason = "저장소('{$diskName}')가 파일을 받지 못했습니다.";
+        } catch (\Throwable $e) {
+            report($e);
+            $reason = "저장소('{$diskName}') 오류: ".$e->getMessage();
+        }
+
+        Log::warning('문서 업로드 저장 실패 — 로컬로 대체합니다: '.$reason);
+
+        if ($diskName !== 'local') {
+            try {
+                $path = Storage::disk('local')->putFileAs($dir, $file, $safeName);
+                if ($path) {
+                    // 올라가긴 했지만 저장소 설정이 잘못돼 있다 — 다음 배포에 사라질 수 있다.
+                    return [$path, 'local', null];
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return [null, $diskName, $reason];
+    }
+
+    /**
+     * "AI 분석 중"에 갇힌 문서를 한 번에 되살린다.
+     *
+     * 스케줄러가 10분마다 같은 일을 하지만, 스케줄러가 꺼진 환경도 있고 사용자는
+     * 지금 당장 풀고 싶다. 규칙은 한 곳(StuckAnalysisReaper)에 두고 둘이 공유한다.
+     */
+    public function reanalyzeStuck(Request $request, StuckAnalysisReaper $reaper): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+
+        $r = $reaper->reap((int) $request->integer('minutes', 10));
+
+        return response()->json([
+            'success' => true,
+            'message' => $r['total'] === 0
+                ? '멈춘 문서가 없습니다.'
+                : "멈춘 문서 {$r['total']}건 — 재시도 {$r['requeued']}건, 실패 표시 {$r['failed']}건.",
+        ] + $r);
     }
 
     public function reanalyze(Request $request, IntelligentDocument $document): JsonResponse
@@ -240,6 +367,51 @@ class DocumentIntelligenceController extends Controller
         return response()->json(['success' => true, 'document' => $this->documentRow($document->fresh())]);
     }
 
+    /**
+     * 문서 삭제 — 레코드와 원본 파일을 함께 지운다.
+     *
+     * 잘못 올린 문서, 중복 스캔, 폐기된 개정본은 목록에 남아 있으면 그 자체가 오정보다.
+     * 원본 파일을 남기면 저장소만 먹으므로 같이 지운다 — 다만 파일 삭제가 실패해도
+     * (이미 없거나 저장소 오류) 레코드 삭제는 진행한다. 화면에서 지웠는데 그대로
+     * 남아 있는 것이 더 나쁘다.
+     */
+    public function destroy(Request $request, IntelligentDocument $document): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+
+        $name = $document->original_file_name;
+
+        if (filled($document->file_path)) {
+            try {
+                Storage::disk($document->disk)->delete($document->file_path);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        // 이 문서에서 나온 후속조치·알림도 함께 정리한다 — 원본이 없어진 조치는
+        // 처리할 방법이 없는데 목록에만 남아 "미처리"로 계속 센다.
+        UnifiedAlert::query()
+            ->where('source_type', IntelligentDocument::class)
+            ->where('source_id', (string) $document->id)
+            ->delete();
+        $actionIds = DocumentActionItem::query()
+            ->where('intelligent_document_id', $document->id)
+            ->pluck('id');
+        if ($actionIds->isNotEmpty()) {
+            UnifiedAlert::query()
+                ->where('source_type', DocumentActionItem::class)
+                ->whereIn('source_id', $actionIds->map(fn ($id) => (string) $id))
+                ->delete();
+            DocumentActionItem::query()->whereIn('id', $actionIds)->delete();
+        }
+
+        $document->delete();
+
+        return response()->json(['success' => true, 'message' => "'{$name}' 을(를) 삭제했습니다."]);
+    }
+
     public function updateAction(Request $request, DocumentActionItem $action): JsonResponse
     {
         $this->authorizeManage($request->user());
@@ -270,8 +442,12 @@ class DocumentIntelligenceController extends Controller
     public function download(Request $request, IntelligentDocument $document): StreamedResponse
     {
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+        abort_unless(
+            $this->fileStillThere((string) $document->disk, (string) $document->file_path),
+            404,
+            '원본 파일이 서버에 없습니다. 서버 배포로 저장소가 초기화된 문서입니다 — 같은 파일을 문서함에 다시 올리면 이 문서에 복원됩니다.'
+        );
         $disk = Storage::disk($document->disk);
-        abort_unless($disk->exists($document->file_path), 404);
 
         return $disk->download($document->file_path, $document->original_file_name, [
             'Content-Type' => $document->mime_type ?: 'application/octet-stream',
@@ -283,8 +459,12 @@ class DocumentIntelligenceController extends Controller
     public function preview(Request $request, IntelligentDocument $document): StreamedResponse
     {
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+        abort_unless(
+            $this->fileStillThere((string) $document->disk, (string) $document->file_path),
+            404,
+            '원본 파일이 서버에 없습니다. 같은 파일을 문서함에 다시 올리면 이 문서에 복원됩니다.'
+        );
         $disk = Storage::disk($document->disk);
-        abort_unless($disk->exists($document->file_path), 404);
 
         $previewTypes = [
             'pdf' => 'application/pdf',
@@ -466,6 +646,10 @@ class DocumentIntelligenceController extends Controller
             'fileName' => $document->original_file_name,
             'mimeType' => $document->mime_type,
             'fileSize' => $document->file_size,
+            // 원본이 실제로 남아 있는지 — 배포로 로컬 디스크가 초기화되면 레코드만 남고
+            // 파일은 사라진다. 그 상태를 화면에서 알 수 없으면 사용자는 다운로드를
+            // 눌러 보고 나서야 404 를 만난다.
+            'fileMissing' => ! $this->fileStillThere((string) $document->disk, (string) $document->file_path),
             'category' => $document->category,
             'categoryLabel' => IntelligentDocument::CATEGORY_OPTIONS[$document->category] ?? $document->category,
             'documentType' => $document->document_type,

@@ -50,6 +50,25 @@
         @media(max-width:1100px){.app{grid-template-columns:78px 1fr}.brand div,.nav-link span,.nav-label,.sidebar-note{display:none}.brand{padding-left:3px}.sidebar{padding:18px 12px}.nav-link{justify-content:center}.workspace{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
         @media(max-width:700px){.app{display:block}.sidebar{display:none}.topbar{padding:0 14px}.content{padding:17px 12px}.hero{align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}.scope-grid,.searchbar{grid-template-columns:1fr}.doc-table th:nth-child(3),.doc-table td:nth-child(3),.doc-table th:nth-child(4),.doc-table td:nth-child(4){display:none}.detail-grid{grid-template-columns:repeat(2,1fr)}}
     </style>
+    @if(request()->boolean('embed'))
+    {{-- ERP(SPA) 안에 iframe 으로 얹힐 때: 이 페이지 자체의 사이드바를 숨긴다.
+         ERP 사이드바가 이미 왼쪽에 있는데 여기 것까지 보이면 사이드바가 두 개가 된다. --}}
+    <style>
+        .sidebar{display:none!important}
+        .app{display:block}
+    </style>
+    <script>
+        // ERP 로 돌아가는 링크(ERP 홈·알림센터·/admin)는 iframe 안이 아니라 바깥(전체 창)에서 열려야 한다.
+        // 안 그러면 ERP 속 iframe 속에 또 ERP 가 뜬다.
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('a[href^="/"]').forEach(function (a) {
+                var h = a.getAttribute('href') || '';
+                if (h.indexOf('/document-hub') === 0) return; // 문서함 내부 이동은 iframe 안에서
+                a.setAttribute('target', '_top');
+            });
+        });
+    </script>
+    @endif
 </head>
 <body>
 <div class="app">
@@ -89,7 +108,7 @@
 
             <div class="workspace">
                 <section class="panel">
-                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><button class="btn small" id="refresh-btn">↻ 새로고침</button></div>
+                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><div style="display:flex;gap:6px"><button class="btn small" id="unstick-btn" title="AI 분석 중에서 멈춘 문서를 다시 분석합니다">⟳ 멈춘 분석 재시도</button><button class="btn small" id="refresh-btn">↻ 새로고침</button></div></div>
                     <div class="searchbar">
                         <input id="search" placeholder="예: RFI-023, backcharge, cable tray, 30일 notice…">
                         <select id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
@@ -136,9 +155,12 @@ const canManage = @json($canManage);
 const endpoints = {
     list: @json(route('document-intelligence.documents')),
     upload: @json(route('document-intelligence.upload')),
+    reanalyzeStuck: @json(route('document-intelligence.reanalyze-stuck')),
     show: @json(url('/document-hub/api/documents')),
     actions: @json(url('/document-hub/api/actions')),
 };
+const CATEGORY_OPTIONS = @json(collect(\App\Models\IntelligentDocument::CATEGORY_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
+const TYPE_OPTIONS = @json(collect(\App\Models\IntelligentDocument::TYPE_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 let currentDocuments = [];
 let pollTimer = null;
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -160,7 +182,7 @@ function renderRows(){
     const list=document.getElementById('doc-list');
     if(!currentDocuments.length){list.innerHTML='<tr><td colspan="6" class="empty">검색된 문서가 없습니다. 오른쪽 드롭존에 첫 문서를 넣어보세요.</td></tr>';return}
     list.innerHTML=currentDocuments.map(d=>`<tr>
-      <td><div class="doc-title">${esc(d.title)}</div><div class="doc-sub">${esc(d.fileName)} · ${fmtBytes(d.fileSize)}</div></td>
+      <td><div class="doc-title">${esc(d.title)}</div><div class="doc-sub">${esc(d.fileName)} · ${fmtBytes(d.fileSize)}${d.fileMissing?' · <span class="badge failed" title="서버 배포로 저장소가 초기화된 문서입니다. 같은 파일을 다시 올리면 복원됩니다.">원본 없음</span>':''}</div></td>
       <td><span class="badge ${esc(d.aiStatus)}">${esc(statusLabel(d.aiStatus))}</span><div class="doc-sub">${esc(d.categoryLabel)}<br>${esc(d.documentTypeLabel)}</div></td>
       <td><b style="font-size:11px">${esc(d.project||d.site||'Global')}</b><div class="doc-sub">${esc(d.virtualPath||'AI 분류 대기')}</div></td>
       <td><div style="font-size:11px">${esc(d.documentDate||'-')}</div><div class="doc-sub">${d.documentNumber?'No. '+esc(d.documentNumber):''} ${d.revision?'· Rev '+esc(d.revision):''}</div></td>
@@ -183,7 +205,22 @@ function renderDetail(d){
     const actions=(d.actions||[]).map(a=>`<div class="action-card ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.details||'')}</p>${a.recommendedAction?`<p><b>권고:</b> ${esc(a.recommendedAction)}</p>`:''}${a.sourceExcerpt?`<div class="doc-sub">근거: “${esc(a.sourceExcerpt)}”</div>`:''}<div class="action-foot"><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'명시 기한 없음'} · 신뢰도 ${esc(a.confidence||0)}%</span>${canManage&&!['completed','ignored'].includes(a.status)?`<button class="btn small" onclick="completeAction(${a.id},${d.id})">처리완료</button>`:`<span class="badge ${a.status==='completed'?'ready':''}">${esc(a.status)}</span>`}</div></div>`).join('')||'<p>AI가 발견한 필수 후속조치가 없습니다.</p>';
     document.getElementById('drawer-body').innerHTML=`
       <div class="detail-grid"><div class="detail-chip"><span>분류</span><b>${esc(d.categoryLabel)}</b></div><div class="detail-chip"><span>문서유형</span><b>${esc(d.documentTypeLabel)}</b></div><div class="detail-chip"><span>문서번호 / Revision</span><b>${esc(d.documentNumber||'-')} / ${esc(d.revision||'-')}</b></div><div class="detail-chip"><span>AI 신뢰도</span><b>${esc(d.aiConfidence||0)}%</b></div></div>
-      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn primary" target="_blank" href="${esc(d.previewUrl)}">바로 보기</a><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button>`:''}</div></div>
+      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<a class="btn primary" target="_blank" href="${esc(d.previewUrl)}">바로 보기</a><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
+      ${canManage?`<div class="section" id="edit-form" style="display:none"><h3>문서 정보 수정</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <div class="field" style="grid-column:1/-1"><label>제목</label><input id="ed-title" value="${esc(d.title||'')}"></div>
+          <div class="field"><label>분류</label><select id="ed-category">${CATEGORY_OPTIONS.map(o=>`<option value="${esc(o.value)}"${o.value===d.category?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="field"><label>문서유형</label><select id="ed-type">${TYPE_OPTIONS.map(o=>`<option value="${esc(o.value)}"${o.value===d.documentType?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="field"><label>공종/부문</label><input id="ed-discipline" value="${esc(d.discipline||'')}"></div>
+          <div class="field"><label>문서번호</label><input id="ed-number" value="${esc(d.documentNumber||'')}"></div>
+          <div class="field"><label>Revision</label><input id="ed-revision" value="${esc(d.revision||'')}"></div>
+          <div class="field"><label>문서일</label><input type="date" id="ed-date" value="${esc(d.documentDate||'')}"></div>
+          <div class="field"><label>회신기한</label><input type="date" id="ed-due" value="${esc(d.responseDueOn||'')}"></div>
+          <div class="field"><label>만료일</label><input type="date" id="ed-expires" value="${esc(d.expiresOn||'')}"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEdit(${d.id})">저장</button><button class="btn" onclick="document.getElementById('edit-form').style.display='none'">취소</button></div>
+        <p style="font-size:11px;color:var(--muted);margin:9px 0 0">저장하면 이 문서는 "정리 완료(사람 검수)"로 표시됩니다 — AI 추정이 아니라 사람이 확정한 값이라는 뜻입니다.</p>
+      </div>`:''}
       ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
       <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
       <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
@@ -193,14 +230,45 @@ function renderDetail(d){
 }
 async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
 async function reanalyze(id){try{await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast('AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+function openEdit(){const f=document.getElementById('edit-form');if(f)f.style.display=f.style.display==='none'?'block':'none'}
+async function saveEdit(id){
+    const v=x=>{const el=document.getElementById(x);return el?el.value.trim():''};
+    const title=v('ed-title');
+    if(!title){toast('제목은 비울 수 없습니다.',true);return}
+    try{
+        await jsonFetch(endpoints.show+'/'+id+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            title:title,category:v('ed-category'),document_type:v('ed-type'),
+            discipline:v('ed-discipline')||null,document_number:v('ed-number')||null,revision:v('ed-revision')||null,
+            document_date:v('ed-date')||null,response_due_on:v('ed-due')||null,expires_on:v('ed-expires')||null
+        })});
+        toast('문서 정보를 저장했습니다.');openDocument(id);loadDocuments()
+    }catch(e){toast(e.message,true)}
+}
+async function removeDocument(id){
+    const d=currentDocuments.find(x=>x.id===id);
+    const name=d?(d.fileName||d.title):'이 문서';
+    if(!confirm(`'${name}' 을(를) 삭제할까요?\n\n원본 파일과 이 문서에서 나온 후속조치·알림도 함께 지워집니다. 되돌릴 수 없습니다.`))return;
+    try{
+        await jsonFetch(endpoints.show+'/'+id,{method:'DELETE'});
+        toast('삭제했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()
+    }catch(e){toast(e.message,true)}
+}
+async function unstick(){
+    const btn=document.getElementById('unstick-btn');if(!btn)return;
+    btn.disabled=true;const old=btn.textContent;btn.textContent='확인 중...';
+    try{const d=await jsonFetch(endpoints.reanalyzeStuck,{method:'POST'});toast(d.message);loadDocuments()}
+    catch(e){toast(e.message,true)}
+    finally{btn.disabled=false;btn.textContent=old}
+}
 async function uploadFiles(files){
     if(!files.length)return;const queue=document.getElementById('upload-queue');queue.classList.add('show');document.getElementById('queue-files').innerHTML=[...files].map(f=>`<div class="queue-row"><span>${esc(f.name)}</span><span>${fmtBytes(f.size)}</span></div>`).join('');document.getElementById('upload-progress').style.width='25%';
     const form=new FormData();[...files].forEach(f=>form.append('files[]',f));['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v)form.append(k+'_id',v)});
-    try{const data=await jsonFetch(endpoints.upload,{method:'POST',body:form});document.getElementById('upload-progress').style.width='100%';toast(data.message+(data.duplicates?.length?` · 중복 ${data.duplicates.length}개 제외`:''));setTimeout(()=>{queue.classList.remove('show');document.getElementById('upload-progress').style.width='0';loadDocuments()},800)}catch(e){toast(e.message,true);document.getElementById('upload-progress').style.width='0'}
+    try{const data=await jsonFetch(endpoints.upload,{method:'POST',body:form});document.getElementById('upload-progress').style.width='100%';const dup=(data.duplicates||[]),fail=(data.failed||[]);let msg=data.message;if(dup.length)msg+=' · '+dup.map(d=>`${d.file}: ${d.reason||'이미 등록된 문서'}`).join(' / ');if(fail.length)msg+=' · 실패 '+fail.map(f=>`${f.file}: ${f.reason}`).join(' / ');toast(msg,fail.length>0);setTimeout(()=>{queue.classList.remove('show');document.getElementById('upload-progress').style.width='0';loadDocuments()},800)}catch(e){toast(e.message,true);document.getElementById('upload-progress').style.width='0'}
 }
 if(canManage){const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
 document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
-document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
+document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
+if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;}else{const ub=document.getElementById('unstick-btn');if(ub)ub.style.display='none';}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
 loadDocuments();const requested=new URLSearchParams(location.search).get('document');if(requested)setTimeout(()=>openDocument(Number(requested)),400);
 </script>
 </body>

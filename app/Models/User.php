@@ -3,8 +3,6 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,7 +30,7 @@ use Illuminate\Support\Collection;
     'access_notes',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -62,9 +60,9 @@ class User extends Authenticatable implements FilamentUser
     /**
      * 화면에 보여줄 한국어 이름.
      *
-     * ROLE_OPTIONS 는 영어라 Filament 시절부터 화면에 영어가 섞여 나왔다. SPA 는 한국어가
+     * ROLE_OPTIONS 는 영어라 예전 관리자 패널 시절부터 화면에 영어가 섞여 나왔다. SPA 는 한국어가
      * 원문이고 smart-language.js 가 영어·스페인어로 옮기므로, 여기서 한국어를 정본으로 둔다.
-     * ROLE_OPTIONS 는 남은 Filament 화면이 아직 쓰고 있어 건드리지 않는다.
+     * ROLE_OPTIONS 는 저장값 그대로라 건드리지 않는다.
      */
     public const ROLE_LABELS_KO = [
         'super_admin' => '슈퍼관리자',
@@ -142,6 +140,13 @@ class User extends Authenticatable implements FilamentUser
         'disabled' => 'Disabled',
     ];
 
+    /**
+     * 관리 화면(현장·직원·계정·임금 등)을 볼 수 있는 역할.
+     *
+     * 예전에는 별도 관리자 패널(/admin)에 들어갈 수 있는지를 뜻했다. 지금은 그 패널이
+     * 없고 관리 화면이 ERP 안에 있으므로, 실제 접근 판정은 각 서비스의 VIEW_ROLES 가
+     * 한다. 이 목록은 "관리 메뉴를 보여 줄 사람" 을 고르는 데 쓴다.
+     */
     public const ADMIN_PANEL_ROLES = [
         'super_admin',
         'admin',
@@ -150,12 +155,6 @@ class User extends Authenticatable implements FilamentUser
         'safety_manager',
         'payroll',
     ];
-
-    public function canAccessPanel(Panel $panel): bool
-    {
-        return $this->account_status === 'active'
-            && in_array($this->access_role, self::ADMIN_PANEL_ROLES, true);
-    }
 
     public function employee(): BelongsTo
     {
@@ -214,14 +213,18 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(Team::class, 'allowed_team_id');
     }
 
+    /**
+     * 로그인 직후 어디로 보낼 것인가.
+     *
+     * 작업자는 ERP 로 보내면 안 된다. 자기 근무시간을 보러 앱을 열었다가 로그인 뒤에
+     * 회사 전체 화면이 뜨면, 자기가 뭘 잘못 눌렀다고 생각하고 앱을 지운다. 설치를
+     * 부탁하는 첫날에 이걸 겪으면 두 번째 기회는 없다.
+     *
+     * 예전에는 /admin 을 가리켰는데 그 화면은 없어졌다(전부 ERP 안으로 들어왔다).
+     */
     public function landingPath(): string
     {
         return match ($this->access_role) {
-            'super_admin', 'admin' => '/admin',
-            'hr_manager' => '/admin/member-registrations',
-            'site_manager' => '/admin',
-            'safety_manager' => '/admin/member-documents',
-            'payroll' => '/admin',
             'foreman', 'worker' => '/attendance-app',
             default => '/',
         };

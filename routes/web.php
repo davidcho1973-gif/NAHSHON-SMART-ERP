@@ -1,16 +1,36 @@
 <?php
 
-use App\Http\Controllers\SmartCompanyController;
+use App\Http\Controllers\AdminUploadController;
 use App\Http\Controllers\AttendanceAppController;
+use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
-use App\Http\Controllers\GoogleAuthController;
-use App\Http\Controllers\MemberRegistrationController;
-use App\Http\Controllers\MobileExpenseController;
+use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\ExpensePreApprovalController;
+use App\Http\Controllers\GateAttendanceController;
+use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\HrAttendanceExportController;
+use App\Http\Controllers\IntegratedDocumentController;
+use App\Http\Controllers\MemberRegistrationController;
+use App\Http\Controllers\MobileEquipmentController;
+use App\Http\Controllers\MobileExpenseController;
+use App\Http\Controllers\MobileOpsRoomController;
+use App\Http\Controllers\OpsPhotoController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\ProjectContractDocumentController;
+use App\Http\Controllers\QrPrintController;
+use App\Http\Controllers\SimpleWorkerRegistrationController;
+use App\Http\Controllers\SmartCompanyApiController;
+use App\Http\Controllers\SmartCompanyController;
+use App\Http\Controllers\VehicleApiController;
+use App\Http\Controllers\W9FormController;
+use App\Http\Controllers\WebManifestController;
+use App\Http\Controllers\WbsManualController;
+use App\Http\Controllers\WbsPhotoController;
+use App\Http\Controllers\WbsScheduleController;
+use App\Models\SystemHeartbeat;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
@@ -18,14 +38,13 @@ Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('aut
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
 
-
-
 Route::get('/debug-routes-sec', function () {
     $routes = collect(Route::getRoutes())->map(fn ($r) => [
         'uri' => $r->uri(),
         'methods' => $r->methods(),
         'name' => $r->getName(),
     ]);
+
     return response()->json([
         'total' => $routes->count(),
         'has_field_app' => $routes->pluck('uri')->contains('field-app'),
@@ -33,16 +52,21 @@ Route::get('/debug-routes-sec', function () {
         'sample_routes' => $routes->pluck('uri')->take(30),
     ]);
 });
-Route::get('/daily-work-report', [\App\Http\Controllers\DailyWorkReportController::class, 'index'])->name('daily-work-report.index');
-Route::post('/daily-work-report/store', [\App\Http\Controllers\DailyWorkReportController::class, 'store'])->name('daily-work-report.store');
-Route::get('/field-app', function () {
-    return view('field-app.index');
-})->name('field-app.index');
-Route::get('/field-app/{any}', function () {
-    return view('field-app.index');
-})->where('any', '.*');
+// 예전 관리자 패널(/admin)은 없어졌다 — 관리 화면은 전부 ERP 안으로 들어왔다.
+// 북마크와 예전 링크가 404 를 만나지 않도록 홈으로 보낸다. 하위 경로(/admin/sites 등)도
+// 함께 받는다.
+Route::redirect('/admin', '/');
+Route::get('/admin/{any}', fn () => redirect('/'))->where('any', '.*');
 
 Route::middleware('auth')->group(function (): void {
+    // 현장앱은 기존 현장(Site)을 직접 만들고 지운다 — 인증 없이 열어 두면
+    // 방문자가 버튼 한 번으로 현장과 딸린 기록(협력사·QR·인원 마감)을 연쇄 삭제할 수 있다.
+    Route::get('/field-app', function () {
+        return view('field-app.index');
+    })->name('field-app.index');
+    Route::get('/field-app/{any}', function () {
+        return view('field-app.index');
+    })->where('any', '.*');
     Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
     Route::redirect('/erp', '/');
     Route::redirect('/dashboard', '/');
@@ -68,62 +92,73 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/expense-pre-approval/{expensePreApproval}/reject', [ExpensePreApprovalController::class, 'reject'])->name('expense-pre-approval.reject');
 
     // WBS 공정 — AI 매뉴얼 분석 (업로드 → 분석, 분석된 매뉴얼 리스트)
-    Route::post('/wbs-api/upload-manual', [App\Http\Controllers\WbsManualController::class, 'upload'])->name('wbs-manual.upload');
-    Route::get('/wbs-api/manuals', [App\Http\Controllers\WbsManualController::class, 'index'])->name('wbs-manual.index');
-    Route::get('/wbs-api/manual/{manual}', [App\Http\Controllers\WbsManualController::class, 'show'])->name('wbs-manual.show');
+    Route::post('/wbs-api/upload-manual', [WbsManualController::class, 'upload'])->name('wbs-manual.upload');
+    Route::get('/wbs-api/manuals', [WbsManualController::class, 'index'])->name('wbs-manual.index');
+    Route::get('/wbs-api/manual/{manual}', [WbsManualController::class, 'show'])->name('wbs-manual.show');
+
+    // 공정표 엑셀 교체 — 반드시 preview 로 무엇이 읽히고 무엇이 지워지는지 본 뒤에 replace.
+    Route::post('/wbs-api/schedule/preview', [WbsScheduleController::class, 'preview'])->name('wbs-schedule.preview');
+    Route::post('/wbs-api/schedule/replace', [WbsScheduleController::class, 'replace'])->name('wbs-schedule.replace');
+
+    // 공정별 현장 사진 — 날짜별 업로드·열람. 원본 대신 축소본만 저장한다.
+    Route::get('/wbs-api/photos', [WbsPhotoController::class, 'index'])->name('wbs-photos.index');
+    Route::post('/wbs-api/photos', [WbsPhotoController::class, 'store'])->name('wbs-photos.store');
+    Route::post('/wbs-api/photos/{photo}/caption', [WbsPhotoController::class, 'caption'])->name('wbs-photos.caption');
+    Route::delete('/wbs-api/photos/{photo}', [WbsPhotoController::class, 'destroy'])->name('wbs-photos.destroy');
+    Route::get('/wbs-api/photos/{photo}/file', [WbsPhotoController::class, 'file'])->name('wbs-photos.file');
+    Route::get('/wbs-api/photos/{photo}/thumb', [WbsPhotoController::class, 'thumb'])->name('wbs-photos.thumb');
 
     // 문서통합관리 — 업로드(멀티파트) → AI 자동분석(백그라운드) → 상태 폴링 → 원본 열람
-    Route::post('/docs-api/upload', [App\Http\Controllers\IntegratedDocumentController::class, 'upload'])->name('docs.upload');
-    Route::get('/docs-api/status', [App\Http\Controllers\IntegratedDocumentController::class, 'status'])->name('docs.status');
-    Route::get('/docs-api/file/{document}', [App\Http\Controllers\IntegratedDocumentController::class, 'show'])->name('docs.show');
+    Route::post('/docs-api/upload', [IntegratedDocumentController::class, 'upload'])->name('docs.upload');
+    Route::get('/docs-api/status', [IntegratedDocumentController::class, 'status'])->name('docs.status');
+    Route::get('/docs-api/file/{document}', [IntegratedDocumentController::class, 'show'])->name('docs.show');
 
     // 조달 관리 — 발주서/선적서 AI 분석(업로드 → 추출·단계 판정) + 근거 서류 열람
-    Route::post('/procurement-api/analyze', [App\Http\Controllers\ProcurementController::class, 'analyze'])->name('procurement.analyze');
-    Route::get('/procurement-api/file/{item}', [App\Http\Controllers\ProcurementController::class, 'showFile'])->name('procurement.file');
+    Route::post('/procurement-api/analyze', [ProcurementController::class, 'analyze'])->name('procurement.analyze');
+    Route::get('/procurement-api/file/{item}', [ProcurementController::class, 'showFile'])->name('procurement.file');
 
     // 하이브리드 자동 출퇴근 — 작업자 앱이 위치/WiFi 신호 전송 + 현재 상태 조회
-    Route::post('/attendance-geo/ping', [App\Http\Controllers\AttendanceGeoController::class, 'ping'])->name('attendance-geo.ping');
-    Route::get('/attendance-geo/status', [App\Http\Controllers\AttendanceGeoController::class, 'status'])->name('attendance-geo.status');
+    Route::post('/attendance-geo/ping', [AttendanceGeoController::class, 'ping'])->name('attendance-geo.ping');
+    Route::get('/attendance-geo/status', [AttendanceGeoController::class, 'status'])->name('attendance-geo.status');
 
     // Vehicle API Routes
-    Route::post('/vehicle-api/scan-rental', [App\Http\Controllers\VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
-    Route::post('/vehicle-api/save', [App\Http\Controllers\VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');
-    Route::post('/vehicle-api/assign', [App\Http\Controllers\VehicleApiController::class, 'assignVehicle'])->name('vehicle.assign');
-    Route::post('/vehicle-api/return', [App\Http\Controllers\VehicleApiController::class, 'returnVehicle'])->name('vehicle.return');
-    Route::get('/vehicle-api/{vehicle}/history', [App\Http\Controllers\VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
-    Route::get('/vehicle-api/file', [App\Http\Controllers\VehicleApiController::class, 'serveFile'])->name('vehicle.file');
+    Route::post('/vehicle-api/scan-rental', [VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
+    Route::post('/vehicle-api/save', [VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');
+    Route::post('/vehicle-api/assign', [VehicleApiController::class, 'assignVehicle'])->name('vehicle.assign');
+    Route::post('/vehicle-api/return', [VehicleApiController::class, 'returnVehicle'])->name('vehicle.return');
+    Route::get('/vehicle-api/{vehicle}/history', [VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
+    Route::get('/vehicle-api/file', [VehicleApiController::class, 'serveFile'])->name('vehicle.file');
 
     // Equipment API Routes
-    Route::post('/equipment-api/scan-rental', [App\Http\Controllers\EquipmentApiController::class, 'scanRental'])->name('equipment.scan-rental');
-    Route::post('/equipment-api/save', [App\Http\Controllers\EquipmentApiController::class, 'saveEquipment'])->name('equipment.save');
-    Route::post('/equipment-api/scan-inventory', [App\Http\Controllers\EquipmentApiController::class, 'scanInventory'])->name('equipment.scan-inventory');
-    Route::post('/equipment-api/save-inventory', [App\Http\Controllers\EquipmentApiController::class, 'saveInventory'])->name('equipment.save-inventory');
-    Route::post('/equipment-api/assign', [App\Http\Controllers\EquipmentApiController::class, 'assignEquipment'])->name('equipment.assign');
-    Route::post('/equipment-api/return', [App\Http\Controllers\EquipmentApiController::class, 'returnEquipment'])->name('equipment.return');
-    Route::get('/equipment-api/{equipment}/history', [App\Http\Controllers\EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
-    Route::get('/equipment-api/file', [App\Http\Controllers\EquipmentApiController::class, 'serveFile'])->name('equipment.file');
-    Route::post('/equipment-api/{equipment}/update', [App\Http\Controllers\EquipmentApiController::class, 'updateEquipment'])->name('equipment.update');
-    Route::post('/equipment-api/{equipment}/delete', [App\Http\Controllers\EquipmentApiController::class, 'deleteEquipment'])->name('equipment.delete');
-
+    Route::post('/equipment-api/scan-rental', [EquipmentApiController::class, 'scanRental'])->name('equipment.scan-rental');
+    Route::post('/equipment-api/save', [EquipmentApiController::class, 'saveEquipment'])->name('equipment.save');
+    Route::post('/equipment-api/scan-inventory', [EquipmentApiController::class, 'scanInventory'])->name('equipment.scan-inventory');
+    Route::post('/equipment-api/save-inventory', [EquipmentApiController::class, 'saveInventory'])->name('equipment.save-inventory');
+    Route::post('/equipment-api/assign', [EquipmentApiController::class, 'assignEquipment'])->name('equipment.assign');
+    Route::post('/equipment-api/return', [EquipmentApiController::class, 'returnEquipment'])->name('equipment.return');
+    Route::get('/equipment-api/{equipment}/history', [EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
+    Route::get('/equipment-api/file', [EquipmentApiController::class, 'serveFile'])->name('equipment.file');
+    Route::post('/equipment-api/{equipment}/update', [EquipmentApiController::class, 'updateEquipment'])->name('equipment.update');
+    Route::post('/equipment-api/{equipment}/delete', [EquipmentApiController::class, 'deleteEquipment'])->name('equipment.delete');
 
     // Mobile Equipment Routes
-    Route::get('/mobile-equipment/index', [\App\Http\Controllers\MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');
-    Route::get('/mobile-equipment/wizard', [\App\Http\Controllers\MobileEquipmentController::class, 'wizard'])->name('mobile-equipment.wizard');
-    Route::post('/mobile-equipment/scan-photo', [\App\Http\Controllers\MobileEquipmentController::class, 'scanPhoto'])->name('mobile-equipment.scan-photo');
-    Route::post('/mobile-equipment/scan-photos-batch', [\App\Http\Controllers\MobileEquipmentController::class, 'scanPhotosBatch'])->name('mobile-equipment.scan-photos-batch');
-    Route::post('/mobile-equipment/store', [\App\Http\Controllers\MobileEquipmentController::class, 'store'])->name('mobile-equipment.store');
-    Route::post('/mobile-equipment/store-batch', [\App\Http\Controllers\MobileEquipmentController::class, 'storeBatch'])->name('mobile-equipment.store-batch');
-    Route::put('/mobile-equipment/{equipment}', [\App\Http\Controllers\MobileEquipmentController::class, 'update'])->name('mobile-equipment.update');
-    Route::delete('/mobile-equipment/{equipment}', [\App\Http\Controllers\MobileEquipmentController::class, 'destroy'])->name('mobile-equipment.destroy');
+    Route::get('/mobile-equipment/index', [MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');
+    Route::get('/mobile-equipment/wizard', [MobileEquipmentController::class, 'wizard'])->name('mobile-equipment.wizard');
+    Route::post('/mobile-equipment/scan-photo', [MobileEquipmentController::class, 'scanPhoto'])->name('mobile-equipment.scan-photo');
+    Route::post('/mobile-equipment/scan-photos-batch', [MobileEquipmentController::class, 'scanPhotosBatch'])->name('mobile-equipment.scan-photos-batch');
+    Route::post('/mobile-equipment/store', [MobileEquipmentController::class, 'store'])->name('mobile-equipment.store');
+    Route::post('/mobile-equipment/store-batch', [MobileEquipmentController::class, 'storeBatch'])->name('mobile-equipment.store-batch');
+    Route::put('/mobile-equipment/{equipment}', [MobileEquipmentController::class, 'update'])->name('mobile-equipment.update');
+    Route::delete('/mobile-equipment/{equipment}', [MobileEquipmentController::class, 'destroy'])->name('mobile-equipment.destroy');
 
     // Payroll documents (printable payslip + WH-347 certified payroll)
     Route::get('/payroll/run/{run}/certified', [PayrollController::class, 'certified'])->name('payroll.certified');
     Route::get('/payroll/payslip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
     // 관리자 화면의 파일 업로드(multipart) — SPA 의 JSON API 로는 파일을 실을 수 없다.
-    Route::post('/admin-api/contracts/{contract}/documents', [App\Http\Controllers\AdminUploadController::class, 'contractDocument'])
+    Route::post('/admin-api/contracts/{contract}/documents', [AdminUploadController::class, 'contractDocument'])
         ->name('admin.contract-document.upload');
-    Route::post('/admin-api/applicants/{applicant}/badge-photo', [App\Http\Controllers\AdminUploadController::class, 'applicantBadgePhoto'])
+    Route::post('/admin-api/applicants/{applicant}/badge-photo', [AdminUploadController::class, 'applicantBadgePhoto'])
         ->name('admin.applicant-badge-photo.upload');
 
     // Private contract files — authenticated and access-scope checked before download.
@@ -137,18 +172,23 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/document-hub/api/index.csv', [DocumentIntelligenceController::class, 'exportIndex'])->name('document-intelligence.export-index');
     Route::get('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'show'])->name('document-intelligence.show');
     Route::post('/document-hub/api/documents/{document}/reanalyze', [DocumentIntelligenceController::class, 'reanalyze'])->name('document-intelligence.reanalyze');
+    Route::post('/document-hub/api/reanalyze-stuck', [DocumentIntelligenceController::class, 'reanalyzeStuck'])->name('document-intelligence.reanalyze-stuck');
     Route::patch('/document-hub/api/documents/{document}/review', [DocumentIntelligenceController::class, 'review'])->name('document-intelligence.review');
+    Route::delete('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'destroy'])->name('document-intelligence.destroy');
     Route::patch('/document-hub/api/actions/{action}', [DocumentIntelligenceController::class, 'updateAction'])->name('document-intelligence.action.update');
     Route::get('/document-hub/documents/{document}/download', [DocumentIntelligenceController::class, 'download'])->name('document-intelligence.download');
     Route::get('/document-hub/documents/{document}/preview', [DocumentIntelligenceController::class, 'preview'])->name('document-intelligence.preview');
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
+    // 작업자 홈이 쓰는 두 개. 화면은 이 둘만 보고 자동 → 직접 → QR 로 내려간다.
+    Route::get('/attendance-app/home', [AttendanceAppController::class, 'home'])->name('attendance-app.home');
+    Route::post('/attendance-app/punch', [AttendanceAppController::class, 'punch'])->name('attendance-app.punch');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
-    Route::post('/ops-api/photo', [\App\Http\Controllers\OpsPhotoController::class, 'store'])->name('ops.photo');
+    Route::post('/ops-api/photo', [OpsPhotoController::class, 'store'])->name('ops.photo');
 
     // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
-    Route::get('/attendance-app/ops-room', [\App\Http\Controllers\MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
+    Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
     Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
     Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
@@ -161,39 +201,61 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/attendance-app/team/{token}/crew/daily-close', [AttendanceAppController::class, 'closeCrewDay'])->name('attendance-app.crew.daily-close');
     Route::get('/attendance-app/badge/{token}', [AttendanceAppController::class, 'badge'])->name('attendance-app.badge');
     Route::get('/attendance-app/employee/{employee}/badge-qr', [AttendanceAppController::class, 'employeeBadgeQr'])->name('attendance-app.employee.badge-qr');
+    // 직영 작업자에게 건네는 앱 설치 카드(인쇄용). 협력사는 게이트 포스터 한 장이면 되지만
+    // 직영은 사람마다 로그인 계정이 달라서 종이도 사람마다 나온다.
+    Route::get('/attendance-app/employee/{employee}/install-card', [AttendanceAppController::class, 'installCard'])->name('attendance-app.employee.install-card');
+    // 작업자에게 링크를 "보내는" 화면 — 복사·QR·문자 문구. 인쇄 카드와 목적이 다르다.
+    Route::get('/attendance-app/employee/{employee}/share', [AttendanceAppController::class, 'shareLink'])->name('attendance-app.employee.share');
+
+    // W-9 인쇄 — 직원 관리에서 바로 뽑는다. 제출 전이면 아는 칸이 채워진 종이가 나오고,
+    // 제출 후면 보관용 사본(1099 신고의 근거 서류)이 나온다.
+    // 빈 양식 — 현장에 챙겨 가는 종이. {employee} 보다 먼저 와야 'blank' 가 직원 ID 로 읽히지 않는다.
+    Route::get('/w9/blank/print', [W9FormController::class, 'blank'])->name('w9.blank');
+    Route::get('/w9/{employee}/print', [W9FormController::class, 'printable'])->name('w9.print');
 
     // HR daily attendance status report — styled Excel (.xlsx) export
-    Route::get('/hr/attendance/export', \App\Http\Controllers\HrAttendanceExportController::class . '@export')
+    Route::get('/hr/attendance/export', HrAttendanceExportController::class.'@export')
         ->name('hr.attendance.export');
 
     // Team QR Code Printable Sheet
     Route::get('/team/{team}/qr', [SmartCompanyController::class, 'teamQr'])->name('team.qr');
 
     // Universal Scanner and Compatibility Adapter Route
-    Route::post('/smart-company-api/{method}', \App\Http\Controllers\SmartCompanyApiController::class)
+    Route::post('/smart-company-api/{method}', SmartCompanyApiController::class)
         ->where('method', '[A-Za-z0-9_]+')
         ->name('api.smart-company');
 });
 
 // 현장 QR 모아 인쇄 — 게이트·간편등록(직접/협력사)·입사지원서 포스터를 한 번에 출력
-Route::get('/print/qr/{site}', [App\Http\Controllers\QrPrintController::class, 'sheet'])
+Route::get('/print/qr/{site}', [QrPrintController::class, 'sheet'])
     ->middleware(['auth'])
     ->name('qr-print.sheet');
 
 // 간편 작업자 등록 — 현장 QR 스캔 → 최소 정보 입력 → 즉시 활성 작업자 등록 (공개)
-Route::get('/join/w/{site}/qr', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'qr'])->name('worker-join.qr');
-Route::get('/join/w/{site}', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'form'])->name('worker-join.form');
-Route::post('/join/w/{site}', [App\Http\Controllers\SimpleWorkerRegistrationController::class, 'store'])->name('worker-join.store');
+Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])->name('worker-join.qr');
+Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])->name('worker-join.form');
+Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])->name('worker-join.store');
+
+// W-9 작성 — 간편 등록 완료 화면에서 서명된 링크로 진입(공개, 서명 URL 이 본인 확인을 대신).
+// 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
+Route::get('/w9/{employee}', [W9FormController::class, 'show'])->middleware('signed')->name('w9.show');
+Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('signed')->name('w9.store');
+
+// 홈 화면에 추가할 때 브라우저가 읽는 파일. 로그인 뒤에 두면 브라우저가 못 읽어
+// 설치가 조용히 실패한다 — 안에는 아이콘 주소와 화면 이름뿐이라 감출 것이 없다.
+Route::get('/gate/{site}/manifest.webmanifest', [WebManifestController::class, 'gate'])->name('gate.manifest');
+Route::get('/worker-app.webmanifest', [WebManifestController::class, 'worker'])->name('worker-app.manifest');
+Route::get('/erp.webmanifest', [WebManifestController::class, 'erp'])->name('erp.manifest');
 
 // 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
-Route::get('/gate/{site}/qr', [App\Http\Controllers\GateAttendanceController::class, 'qr'])->name('gate.qr');
-Route::get('/gate/{site}', [App\Http\Controllers\GateAttendanceController::class, 'show'])->name('gate.show');
-Route::post('/gate/{site}/search', [App\Http\Controllers\GateAttendanceController::class, 'search'])->name('gate.search');
-Route::post('/gate/{site}/punch', [App\Http\Controllers\GateAttendanceController::class, 'punch'])->name('gate.punch');
+Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');
+Route::get('/gate/{site}', [GateAttendanceController::class, 'show'])->name('gate.show');
+Route::post('/gate/{site}/search', [GateAttendanceController::class, 'search'])->name('gate.search');
+Route::post('/gate/{site}/punch', [GateAttendanceController::class, 'punch'])->name('gate.punch');
 // 기억된 휴대폰으로 본인 자동 인식 — 이름 검색을 건너뛴다.
-Route::post('/gate/{site}/me', [App\Http\Controllers\GateAttendanceController::class, 'me'])->name('gate.me');
-Route::post('/gate/{site}/remember', [App\Http\Controllers\GateAttendanceController::class, 'remember'])->name('gate.remember');
-Route::post('/gate/{site}/forget', [App\Http\Controllers\GateAttendanceController::class, 'forget'])->name('gate.forget');
+Route::post('/gate/{site}/me', [GateAttendanceController::class, 'me'])->name('gate.me');
+Route::post('/gate/{site}/remember', [GateAttendanceController::class, 'remember'])->name('gate.remember');
+Route::post('/gate/{site}/forget', [GateAttendanceController::class, 'forget'])->name('gate.forget');
 
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
@@ -202,13 +264,31 @@ Route::get('/member/site/{site}/apply/qr', [MemberRegistrationController::class,
 Route::get('/member/site/{site}/apply', [MemberRegistrationController::class, 'siteShow'])->name('member-registration.site.show');
 Route::post('/member/site/{site}/apply', [MemberRegistrationController::class, 'siteStore'])->name('member-registration.site.store');
 
-Route::get('/debug-logs-sec-53298bfd9a', function() {
-    $logPath = storage_path('logs/laravel.log');
-    if (file_exists($logPath)) {
-        return response()->file($logPath);
+/**
+ * 서버 오류 로그 — 500 이 났을 때 원인을 보는 유일한 창.
+ *
+ * 예전에는 로그인 없이 열렸다. 주소가 길어서 안 들킬 뿐, 이 파일에는 오류와 함께
+ * 이메일·요청 내용이 섞여 나온다. 판매용으로 남의 회사 데이터를 담을 제품에서
+ * "주소를 모르면 못 본다" 는 잠금장치가 아니다.
+ *
+ * 기본은 마지막 300줄만 준다. 휴대폰에서 열어 마지막 오류를 확인하는 것이 이 화면의 용도다.
+ */
+Route::get('/debug-logs-sec-53298bfd9a', function (\Illuminate\Http\Request $request) {
+    abort_unless(in_array($request->user()?->access_role, ['super_admin', 'admin'], true), 403);
+
+    $path = storage_path('logs/laravel.log');
+
+    if (! is_readable($path)) {
+        return response('로그 파일이 없습니다. 아직 오류가 기록되지 않았습니다.', 200)
+            ->header('Content-Type', 'text/plain; charset=utf-8');
     }
-    return 'Log file not found';
-});
+
+    $lines = max(50, min(2000, (int) $request->query('lines', 300)));
+    $all = file($path, FILE_IGNORE_NEW_LINES) ?: [];
+
+    return response(implode("\n", array_slice($all, -$lines)), 200)
+        ->header('Content-Type', 'text/plain; charset=utf-8');
+})->middleware('auth')->name('debug.logs');
 
 /**
  * 배포 확인 — 지금 이 서버가 어느 커밋을 돌리고 있나.
@@ -220,7 +300,7 @@ Route::get('/debug-logs-sec-53298bfd9a', function() {
  * 로그인 없이 열리지만 커밋 해시와 기능 유무만 보여준다 — 배포가 됐는지 확인하는 데
  * 로그인을 요구하면, 정작 배포가 깨져 로그인이 안 될 때 쓸 수 없다.
  */
-Route::get('/build-version', function () {
+Route::get('/build-version', function (\Illuminate\Http\Request $request) {
     $path = public_path('build/version.json');
     $version = is_readable($path)
         ? (json_decode((string) file_get_contents($path), true) ?: [])
@@ -238,29 +318,54 @@ Route::get('/build-version', function () {
         'built_at' => $version['built_at'] ?? null,
         'checked_at' => now()->toIso8601String(),
         'env' => app()->environment(),
+        // 이 배포가 누구의 것인가. 코드 하나로 고객마다 배포하다 보면, 배포를 열어
+        // 놓고도 "이게 어느 고객 것이더라" 를 모르는 순간이 온다. 더 나쁜 경우는
+        // 새 고객 배포가 기본값(우리 회사 이름) 그대로 서 있는 것이다 — 화면은
+        // 멀쩡하고, 고객 눈에만 남의 회사 이름이 보인다.
+        'org' => [
+            'name' => \App\Support\Org::name(),
+            'code' => \App\Support\Org::code(),
+            'configured' => (bool) config('org.configured'),
+            'customized_keys' => \App\Models\OrgSetting::query()->pluck('key')->all(),
+        ],
+        // 도메인이 절반만 바뀌는 사고가 흔하다 — 새 주소로 열리는데 APP_URL 은 옛 주소면,
+        // QR·설치 카드·매니페스트가 전부 옛 주소를 가리킨다. 화면은 멀쩡해 보인다.
+        'domain' => [
+            'app_url' => config('app.url'),
+            'served_from' => $request->getSchemeAndHttpHost(),
+            'matches' => rtrim((string) config('app.url'), '/') === $request->getSchemeAndHttpHost(),
+            // 구글 로그인은 이 값과 구글 콘솔이 <b>둘 다</b> 맞아야 된다. 한쪽만 바꾸면
+            // 로그인이 통째로 막힌다.
+            'google_redirect' => config('services.google.redirect'),
+        ],
+        // 캐시를 어디에 두고 있는가. 이름만 보면 사소해 보이지만 요금이 걸려 있다 —
+        // database 로 두면 schedule:run 이 매분 캐시 표를 조회해 서버리스 데이터베이스가
+        // 잠들 틈이 없다(1분마다 깨우면 24시간 깨어 있는 것과 같다). file 이어야 한다.
+        // 설정이 되돌아가도 화면은 멀쩡하고 청구서에서만 드러나므로 여기에 적어 둔다.
+        'cache' => [
+            'store' => config('cache.default'),
+            'wakes_database_every_minute' => config('cache.default') === 'database',
+        ],
+        // 스케줄러가 돌고 있는가. 이게 꺼져 있으면 자동 퇴근·문서 재분석·경비 계상이
+        // 전부 조용히 멈춘다 — 화면은 멀쩡해 보여서 며칠 뒤에야 알아챈다.
+        'scheduler' => (function (): array {
+            $health = SystemHeartbeat::health(SystemHeartbeat::SCHEDULER);
+
+            return $health + [
+                'message' => match (true) {
+                    $health['running'] => '스케줄러가 정상 동작 중입니다.',
+                    $health['minutes_ago'] === null => '스케줄러가 한 번도 돈 적이 없습니다. Laravel Cloud 에서 스케줄러를 켜 주세요.',
+                    default => "스케줄러가 {$health['minutes_ago']}분째 멈춰 있습니다. 자동 퇴근과 문서 분석이 진행되지 않습니다.",
+                },
+            ];
+        })(),
         // 배포가 실제로 반영됐는지는 해시보다 "이 기능이 있나" 로 확인하는 편이 빠르다.
         'has' => [
             'admin_shell' => is_readable(public_path('js/admin-shell.js')),
             'admin_screens' => str_contains($spaSource, 'nav-applicant-admin'),
+            'spa_only_admin' => ! str_contains($spaSource, "url('/admin')"),
             'ops_room' => str_contains($spaSource, 'data-view="opsroom"'),
             'old_company_name' => str_contains($spaSource, 'NASON'),
         ],
-    ]);
-});
-
-Route::get('/debug-build-sec-53298bfd9a', function () {
-    $resourcePath = app_path('Filament/Resources/MemberRegistrations/MemberRegistrationResource.php');
-    $resource = is_readable($resourcePath) ? (string) file_get_contents($resourcePath) : '';
-
-    return response()->json([
-        'marker' => 'hr-badge-save-diagnostic-v1',
-        'checked_at' => now()->toIso8601String(),
-        'app_env' => app()->environment(),
-        'resource_sha1' => $resource !== '' ? sha1($resource) : null,
-        'resource_mtime' => is_readable($resourcePath) ? date('c', (int) filemtime($resourcePath)) : null,
-        'member_registration_has_any_keyvalue' => str_contains($resource, 'KeyValue::make'),
-        'member_registration_has_badge_keyvalue' => str_contains($resource, "KeyValue::make('badge_analysis_payload')"),
-        'member_registration_has_payload_preview' => str_contains($resource, "Textarea::make('payload_preview')"),
-        'git_commit' => trim((string) @shell_exec('git rev-parse --short HEAD')),
     ]);
 });

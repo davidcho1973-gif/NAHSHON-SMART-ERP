@@ -61,10 +61,12 @@
       return (r.expiring || []).some(function (x) { return x.state === 'expired'; });
     }).length;
     var noBadge = rows.filter(function (r) { return !r.badgeNumber; }).length;
+    var noW9 = rows.filter(function (r) { return !r.w9OnFile; }).length;
 
     var notes = [rows.length + '명'];
     if (expired) notes.push(expired + '명 자격 만료');
     if (noBadge) notes.push(noBadge + '명 NFC 미등록');
+    if (noW9) notes.push(noW9 + '명 W-9 미제출');
 
     return u.pageHeader(
       '직원 등록 · 관리',
@@ -103,6 +105,15 @@
           },
         },
         {
+          key: 'w9OnFile', label: 'W-9', width: '90px',
+          render: function (r) {
+            // W-9 가 없으면 1099 지급 전 24% backup withholding 대상이 된다.
+            return r.w9OnFile
+              ? u.badge('···' + (r.w9TinLast4 || ''), 'ok')
+              : '<span style="font-size:11px;color:var(--status-warning)">미제출</span>';
+          },
+        },
+        {
           key: 'statusLabel', label: '상태', width: '150px',
           render: function (r) {
             var kind = r.status === 'active' ? 'ok' : r.status === 'terminated' ? 'danger' : 'warn';
@@ -112,11 +123,31 @@
           },
         },
         {
-          key: 'act', label: '', align: 'right', width: '120px',
+          key: 'act', label: '', align: 'right', width: '200px',
           render: function (r) {
             if (!state.canManage) return '';
-            return u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
+            var html = '';
+            // 계정이 없으면 이 사람은 앱에 못 들어온다. 직원 정보를 그대로 써서
+            // 여기서 바로 만들어 준다 — 계정 화면에서 이름·이메일을 또 치지 않는다.
+            if (!r.hasAccount && state.options && state.options.canGrantAccount) {
+              html += u.rowButton('계정 만들기', 'window.AdminEmployees.grantAccount(' + r.id + ')') + ' ';
+            }
+            // 계정이 생긴 다음에야 앱에 들어올 수 있다. 그때부터 설치 카드를 뽑을 수 있게 한다 —
+            // 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
+            if (r.hasAccount) {
+              // 보내기(문자·QR)와 인쇄 카드는 쓰임이 다르다. 대개 보내기를 먼저 쓴다.
+              html += u.rowButton('링크 보내기', "window.open('/attendance-app/employee/" + r.id + "/share','_blank')") + ' ';
+              html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
+            }
+            // 버튼을 권한으로 감추지 않는다. 감추면 "왜 안 보이지" 를 아무도 답할 수 없다 —
+            // 권한이 없으면 열린 화면이 이유를 말해 준다(조용히 사라지는 것보다 낫다).
+            html += u.rowButton('작업자 화면 보기', "window.open('/attendance-app?as=" + r.id + "','_blank')") + ' ';
+            // W-9 는 1099 지급의 전제조건이라 급여 담당이 수시로 찾는다. 제출 전이면
+            // 아는 칸이 채워진 종이가, 제출 후면 보관용 사본이 나온다.
+            html += u.rowButton('W-9 출력', "window.open('/w9/" + r.id + "/print','_blank')") + ' ';
+            html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
+            return html;
           },
         },
       ],
@@ -158,6 +189,16 @@
     reload();
   }
 
+  /** 이 사람이 실제로 로그인하는 주소. 직원 이메일과 다르면 그 사실을 알린다. */
+  function loginHint(r) {
+    if (!r || !r.hasAccount) return '구글 로그인 계정을 만들 때 기본값으로 쓰입니다.';
+    if (!r.loginEmail) return '';
+    var same = String(r.loginEmail).toLowerCase() === String(r.email || '').toLowerCase();
+    if (same) return '로그인 계정도 이 주소입니다.';
+    return '⚠ 로그인 계정은 ' + r.loginEmail + ' 입니다 — 이 주소와 다릅니다. '
+      + '저장할 때 계정도 옮길지 물어봅니다.';
+  }
+
   function openForm(id) {
     var u = ui();
     var r = id ? state.rows.filter(function (x) { return x.id === id; })[0] : null;
@@ -175,7 +216,12 @@
             hint: '여권·신분증 표기와 맞추면 나중에 서류 대조가 편합니다.' },
           { name: 'firstName', label: '영문 이름 (First)', group: '① 누구인가', value: r ? r.firstName : '' },
           { name: 'lastName', label: '영문 성 (Last)', group: '① 누구인가', value: r ? r.lastName : '' },
-          { name: 'email', label: '이메일', type: 'email', group: '① 누구인가', value: r ? r.email : '' },
+          { name: 'email', label: '이메일', type: 'email', group: '① 누구인가', value: r ? r.email : '',
+            // 로그인 계정은 이 칸과 다른 값이다. 다르면 여기서 말해 주지 않는 한
+            // 아무도 모른다 — 보내기 화면은 계정 쪽을, 이 폼은 직원 쪽을 보여 준다.
+            hint: loginHint(r) },
+          // 앱 링크를 문자·왓츠앱으로 바로 보낼 때 쓴다. 간편등록은 이미 받고 있다.
+          { name: 'phone', label: '전화번호', type: 'tel', group: '① 누구인가', value: r ? r.phone : '', placeholder: '480-555-0100' },
           { name: 'nationality', label: '국적', group: '① 누구인가', value: r ? r.nationality : '' },
           { name: 'language', label: '사용 언어', type: 'select', group: '① 누구인가',
             options: o.languages, value: r ? r.language : 'ko', colSpan: 2,
@@ -224,10 +270,54 @@
         ],
         onSave: function (v) {
           v.id = id || 0;
+          // 로그인 주소를 바꾸는 것은 "이 사람이 누구인가" 를 바꾸는 일이다. 잘못
+          // 바꾸면 그 사람은 앱에 못 들어온다. 그래서 조용히 옮기지 않고 물어본다.
+          // 다만 묻지 않으면 두 값이 계속 어긋난 채로 남으므로, 물어보기는 한다.
+          var typed = String(v.email || '').trim().toLowerCase();
+          if (r && r.hasAccount && r.loginEmail && typed && typed !== String(r.loginEmail).toLowerCase()) {
+            v.syncAccountEmail = window.confirm(
+              '로그인 계정 이메일도 ' + typed + ' 로 바꿀까요?\n\n'
+              + '지금 로그인 계정: ' + r.loginEmail + '\n\n'
+              + '바꾸면 이 사람은 새 주소로만 로그인할 수 있습니다.\n'
+              + '취소하면 직원 정보만 바뀌고 로그인은 그대로입니다.'
+            );
+          }
           return call('api_saveEmployeeAdmin', [v]).then(function (res) {
             if (res.success === false) return res;
-            u.toast(r ? '직원 정보를 수정했습니다.'
-              : '등록했습니다. 사번 ' + (res.employeeNumber || '') + ' 이(가) 발급되었습니다.');
+            u.toast(res.accountEmailChanged
+              ? '직원 정보와 로그인 계정을 모두 수정했습니다.'
+              : (r ? '직원 정보를 수정했습니다.'
+                   : '등록했습니다. 사번 ' + (res.employeeNumber || '') + ' 이(가) 발급되었습니다.'));
+            return reload().then(function () { return { success: true }; });
+          });
+        },
+      });
+    }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
+  }
+
+  function grantAccount(id) {
+    var u = ui();
+    var r = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+
+    loadOptions().then(function (o) {
+      u.formModal({
+        title: '로그인 계정 만들기',
+        subtitle: r.name + ' 님이 앱에 들어올 수 있게 합니다. 이름과 소속은 직원 정보를 그대로 씁니다.',
+        saveLabel: '만들기',
+        fields: [
+          { name: 'email', label: '이메일', required: true, colSpan: 2, value: r.email || '',
+            hint: '구글 로그인에 쓰는 주소입니다. 직원 정보의 이메일이 기본값입니다.' },
+          { name: 'role', label: '역할', type: 'select', required: true,
+            options: o.accountRoles, value: 'worker' },
+          { name: 'scope', label: '볼 수 있는 범위', type: 'select', required: true,
+            options: o.accountScopes, value: 'self',
+            hint: '"본인" 이면 자기 출퇴근만 봅니다. 현장·팀은 직원 정보의 소속을 따라갑니다.' },
+        ],
+        onSave: function (v) {
+          return call('api_grantEmployeeAccount', [id, v]).then(function (res) {
+            if (res.success === false) return res;
+            u.toast(r.name + ' 님의 계정을 만들었습니다.');
             return reload().then(function () { return { success: true }; });
           });
         },
@@ -266,6 +356,7 @@
     render: renderScreen,
     applyFilters: applyFilters,
     openForm: openForm,
+    grantAccount: grantAccount,
     remove: remove,
     _state: state,
   };

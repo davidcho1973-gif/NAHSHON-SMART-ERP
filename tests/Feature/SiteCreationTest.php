@@ -2,39 +2,68 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\Site;
-use App\Filament\Resources\Sites\Pages\ManageSites;
-use Livewire\Livewire;
-use Tests\TestCase;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
+/**
+ * 현장 등록이 ERP 화면에서 끝까지 동작하는가.
+ *
+ * 규칙 자체는 SiteAdminServiceTest 가 지킨다. 여기서는 그 앞단 — 화면이 실제로 부르는
+ * API 이름이 서버에 붙어 있는지를 본다. 이름이 어긋나면 서비스가 아무리 맞아도
+ * 버튼이 아무 일도 하지 않는다.
+ */
 class SiteCreationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_site_create_form_can_be_rendered(): void
+    private function user(string $role): User
     {
-        $user = User::query()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => bcrypt('password'),
-            'access_role' => 'admin',
+        return User::factory()->create([
+            'access_role' => $role,
+            'access_scope' => 'all_sites',
             'account_status' => 'active',
         ]);
+    }
 
-        $this->actingAs($user);
+    public function test_admin_can_register_a_site_through_the_erp_api(): void
+    {
+        $this->actingAs($this->user('admin'));
 
-        Livewire::test(ManageSites::class)
-            ->mountAction('create')
-            ->set('mountedActions.0.data', [
+        $this->postJson('/smart-company-api/api_saveSiteAdmin', [
+            'args' => [[
                 'code' => 'NEW-SITE',
                 'name' => 'New Site Name',
                 'country' => 'US',
                 'timezone' => 'America/Phoenix',
                 'status' => 'active',
-            ])
-            ->callMountedAction()
-            ->assertHasNoActionErrors();
+            ]],
+            'siteId' => 'ALL',
+        ])->assertOk()->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('sites', ['code' => 'NEW-SITE', 'timezone' => 'America/Phoenix']);
+    }
+
+    public function test_the_screen_lists_sites_and_projects_together(): void
+    {
+        $this->actingAs($this->user('admin'));
+
+        $this->postJson('/smart-company-api/api_getSiteAdmin', ['args' => [], 'siteId' => 'ALL'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['sites', 'projects', 'canManage']);
+    }
+
+    public function test_worker_cannot_register_a_site_through_the_api(): void
+    {
+        $this->actingAs($this->user('worker'));
+
+        $this->postJson('/smart-company-api/api_saveSiteAdmin', [
+            'args' => [['code' => 'HACK', 'name' => 'x', 'timezone' => 'America/Phoenix']],
+            'siteId' => 'ALL',
+        ]);
+
+        $this->assertSame(0, Site::where('code', 'HACK')->count());
     }
 }

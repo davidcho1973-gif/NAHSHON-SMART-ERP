@@ -779,7 +779,7 @@
       const cardId = cardCounter;
       const container = document.getElementById('batchItemsList');
 
-      const imageUrl = data.photo_path || '/images/dasol-prism-app-icon.svg';
+      const imageUrl = data.photo_path || '/images/app-icon.svg';
       const type = data.equipment_type || 'Other (기타)';
       const vendor = data.vendor || '';
       const model = data.model || '';
@@ -801,7 +801,7 @@
           
           <div class="batch-card-body">
             <div class="batch-card-img-wrap" onclick="triggerCardPhotoUpload(${cardId})" title="사진 변경">
-              <button type="button" class="btn-delete-card-photo" id="btn-del-photo-${cardId}" onclick="deleteCardPhoto(event, ${cardId})" style="${imageUrl === '/images/dasol-prism-app-icon.svg' ? 'display:none' : ''}" title="사진 삭제">
+              <button type="button" class="btn-delete-card-photo" id="btn-del-photo-${cardId}" onclick="deleteCardPhoto(event, ${cardId})" style="${imageUrl === '/images/app-icon.svg' ? 'display:none' : ''}" title="사진 삭제">
                 <i class="ph ph-trash-simple"></i>
               </button>
               <img src="${displayUrl}" id="img-preview-${cardId}" class="batch-card-img">
@@ -896,7 +896,7 @@
 
     function deleteCardPhoto(event, cardId) {
       event.stopPropagation(); // prevent triggering click event of parent batch-card-img-wrap
-      document.getElementById('img-preview-' + cardId).src = '/images/dasol-prism-app-icon.svg';
+      document.getElementById('img-preview-' + cardId).src = '/images/app-icon.svg';
       document.getElementById('photo-front-' + cardId).value = '';
       document.getElementById('photo-input-' + cardId).value = '';
       document.getElementById('btn-del-photo-' + cardId).style.display = 'none';
@@ -909,7 +909,7 @@
         model: '',
         quantity: 1,
         is_bulk: false,
-        photo_path: '/images/dasol-prism-app-icon.svg'
+        photo_path: '/images/app-icon.svg'
       });
       updateBatchCounts();
     }

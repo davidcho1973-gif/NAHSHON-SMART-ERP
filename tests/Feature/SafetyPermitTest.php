@@ -61,14 +61,17 @@ class SafetyPermitTest extends TestCase
         app(SafetyPermitService::class)->issueFromCard('WRK-PTW', null);
         $permit = SafetyPermit::first();
         $svc = app(SafetyPermitService::class);
+        // 승인·서명한 사람이 실제로 있어야 한다. 예전에는 마이그레이션이 1번 계정을
+        // 만들어 둬서 우연히 통했는데, 그 계정은 이제 원본에 없다.
+        $actor = \App\Models\User::factory()->create();
 
         // 발행 상태에서 바로 서명 불가.
         $this->assertFalse($svc->act($permit->id, 'sign')['success']);
 
         // 승인 → 서명.
-        $this->assertTrue($svc->act($permit->id, 'approve', 1)['success']);
+        $this->assertTrue($svc->act($permit->id, 'approve', $actor->id)['success']);
         $this->assertSame('승인', $permit->fresh()->status);
-        $this->assertTrue($svc->act($permit->id, 'sign', 1, '김반장')['success']);
+        $this->assertTrue($svc->act($permit->id, 'sign', $actor->id, '김반장')['success']);
 
         $permit->refresh();
         $this->assertSame('서명완료', $permit->status);

@@ -33,6 +33,10 @@ final class WorkerLang
      */
     public static function join(): array
     {
+        // 고객사 이름은 배포마다 다르다. 문구에 박아 두면 두 번째 고객에게
+        // 남의 회사 이름이 나간다.
+        $org = Org::name();
+
         return [
             'ko' => [
                 'eyebrow' => '작업자 간편 등록',
@@ -43,14 +47,17 @@ final class WorkerLang
                 'company' => '소속회사',
                 'companyPlaceholder' => '선택하세요',
                 'companyHint' => '소속회사를 고르면 고용 구분이 자동으로 정해집니다.',
+                'companyOther' => '목록에 없음 — 직접 입력',
+                'companyOtherPlaceholder' => '회사 이름을 적어 주세요',
+                'companyOtherHint' => '처음 등록되는 회사입니다. 아래에서 누가 급여를 주는지 골라 주세요.',
                 'askTitle' => '소속 구분을 선택해 주세요',
-                'askDirect' => 'DASOL PRISM 소속',
-                'askDirectSub' => 'DASOL PRISM 에서 급여를 받습니다',
+                'askDirect' => $org.' 소속',
+                'askDirectSub' => $org.' 에서 급여를 받습니다',
                 'askIndirect' => '협력업체 소속',
                 'askIndirectSub' => '소속 업체에서 급여를 받습니다',
                 'trade' => '공정 (Trade)',
-                'tradePlaceholder' => '목록에서 선택하거나 직접 입력',
-                'tradeHint' => '공정관리(WBS)의 공종 목록이며, 없으면 직접 입력하세요.',
+                'tradePlaceholder' => '공정을 선택하세요',
+                'tradeHint' => '목록에서 고르거나, 없으면 직접 적어 주세요.',
                 'email' => '이메일',
                 'phone' => '전화번호',
                 'submit' => '작업자로 등록하기',
@@ -59,7 +66,7 @@ final class WorkerLang
                 'doneBody' => '님, 작업자로 등록되었습니다.',
                 'doneDevice' => '이 휴대폰이 기억되었습니다. 다음부터 게이트 QR 을 스캔하면 이름을 찾지 않고 바로 출퇴근할 수 있습니다.',
                 'doneBadge' => '사번',
-                'labelDirect' => 'DASOL PRISM 소속(직접고용)',
+                'labelDirect' => $org.' 소속(직접고용)',
                 'labelIndirect' => '협력사 소속(간접고용)',
                 'labelClient' => '원청 담당자',
                 'suffixRegistered' => ' 으로 등록됩니다.',
@@ -73,14 +80,17 @@ final class WorkerLang
                 'company' => 'Company',
                 'companyPlaceholder' => 'Select',
                 'companyHint' => 'Pick your company and your employment type is set automatically.',
+                'companyOther' => 'Not on the list — type it in',
+                'companyOtherPlaceholder' => 'Type your company name',
+                'companyOtherHint' => 'This company is new to us. Please choose below who pays your wages.',
                 'askTitle' => 'Who pays your wages?',
-                'askDirect' => 'DASOL PRISM',
-                'askDirectSub' => 'I am paid by DASOL PRISM',
+                'askDirect' => $org,
+                'askDirectSub' => 'I am paid by '.$org,
                 'askIndirect' => 'Subcontractor',
                 'askIndirectSub' => 'I am paid by my own company',
                 'trade' => 'Trade',
-                'tradePlaceholder' => 'Pick from the list or type your own',
-                'tradeHint' => 'Trades come from the WBS schedule. Type your own if it is missing.',
+                'tradePlaceholder' => 'Select your trade',
+                'tradeHint' => 'Pick from the list, or type yours if it is not there.',
                 'email' => 'Email',
                 'phone' => 'Phone',
                 'submit' => 'Register as worker',
@@ -89,7 +99,7 @@ final class WorkerLang
                 'doneBody' => ', you are now registered as a worker.',
                 'doneDevice' => 'This phone is remembered. Next time, just scan the gate QR — no need to look up your name.',
                 'doneBadge' => 'Employee no.',
-                'labelDirect' => 'DASOL PRISM (direct hire)',
+                'labelDirect' => $org.' (direct hire)',
                 'labelIndirect' => 'Subcontractor (indirect)',
                 'labelClient' => 'Client representative',
                 'suffixRegistered' => ' will be recorded.',
@@ -103,14 +113,17 @@ final class WorkerLang
                 'company' => 'Empresa',
                 'companyPlaceholder' => 'Seleccione',
                 'companyHint' => 'Elija su empresa y el tipo de empleo se define automáticamente.',
+                'companyOther' => 'No está en la lista — escríbala',
+                'companyOtherPlaceholder' => 'Escriba el nombre de su empresa',
+                'companyOtherHint' => 'Esta empresa es nueva para nosotros. Elija abajo quién le paga su salario.',
                 'askTitle' => '¿Quién le paga su salario?',
-                'askDirect' => 'DASOL PRISM',
-                'askDirectSub' => 'DASOL PRISM me paga',
+                'askDirect' => $org,
+                'askDirectSub' => $org.' me paga',
                 'askIndirect' => 'Subcontratista',
                 'askIndirectSub' => 'Mi propia empresa me paga',
                 'trade' => 'Oficio',
-                'tradePlaceholder' => 'Elija de la lista o escriba el suyo',
-                'tradeHint' => 'Los oficios vienen del cronograma (WBS). Escriba el suyo si no aparece.',
+                'tradePlaceholder' => 'Seleccione su oficio',
+                'tradeHint' => 'Elija de la lista, o escriba el suyo si no aparece.',
                 'email' => 'Correo electrónico',
                 'phone' => 'Teléfono',
                 'submit' => 'Registrarme como trabajador',
@@ -119,7 +132,7 @@ final class WorkerLang
                 'doneBody' => ', ya está registrado como trabajador.',
                 'doneDevice' => 'Este teléfono quedó registrado. La próxima vez solo escanee el QR de la entrada; no tendrá que buscar su nombre.',
                 'doneBadge' => 'N.º de empleado',
-                'labelDirect' => 'DASOL PRISM (contratación directa)',
+                'labelDirect' => $org.' (contratación directa)',
                 'labelIndirect' => 'Subcontratista (indirecta)',
                 'labelClient' => 'Representante del cliente',
                 'suffixRegistered' => ' será el registro.',
@@ -143,6 +156,7 @@ final class WorkerLang
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
                         '이름을 입력해 본인을 선택합니다. (한 번 등록하면 다음부터 자동)',
                         '출근하기 / 퇴근하기 버튼을 누르면 끝.',
+                        '한 번 찍고 나면 “홈 화면에 추가” 안내가 뜹니다 — 추가하면 다음부터 QR 없이 아이콘만 누르면 됩니다.',
                     ],
                 ],
                 'en' => [
@@ -152,6 +166,7 @@ final class WorkerLang
                         'Scan the QR code with your phone camera.',
                         'Type your name and pick yourself. (Remembered from next time)',
                         'Tap CLOCK IN or CLOCK OUT. Done.',
+                        'After your first punch you will be offered "Add to Home Screen" — add it and next time just tap the icon, no QR needed.',
                     ],
                 ],
                 'es' => [
@@ -161,6 +176,7 @@ final class WorkerLang
                         'Escanee el código QR con la cámara.',
                         'Escriba su nombre y elíjase. (Se recuerda la próxima vez)',
                         'Pulse ENTRADA o SALIDA. Listo.',
+                        'Después del primer registro le ofrecerá "Agregar a la pantalla de inicio" — agréguelo y la próxima vez solo toque el ícono, sin QR.',
                     ],
                 ],
             ],
@@ -332,6 +348,136 @@ final class WorkerLang
                 'failed' => 'No se pudo registrar. Intente de nuevo.',
                 'network' => 'Error de red. Intente de nuevo.',
                 'recognized' => '✓ Reconocido en este teléfono',
+            ],
+        ];
+    }
+
+    /**
+     * 작업자에게 보내는 문자 한 통.
+     *
+     * 링크만 덜렁 보내면 안 누른다 — 모르는 주소이기 때문이다. 무엇인지, 무엇으로
+     * 로그인하는지, 두 줄이면 충분하다. 길면 안 읽는다.
+     *
+     * @return array<string, string>
+     */
+    public static function shareMessage(string $url): array
+    {
+        return [
+            'ko' => "내 출퇴근 앱입니다. 근무시간과 급여를 휴대폰에서 바로 볼 수 있어요.\n"
+                ."{$url}\n"
+                ."열어서 구글 계정으로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
+            'en' => "This is your attendance app. See your hours and pay on your phone.\n"
+                ."{$url}\n"
+                ."Open it, sign in with Google, then tap \"Add to Home Screen\".",
+            'es' => "Esta es su aplicación de asistencia. Vea sus horas y su pago en su teléfono.\n"
+                ."{$url}\n"
+                ."Ábrala, inicie sesión con Google y toque \"Agregar a la pantalla de inicio\".",
+        ];
+    }
+
+    /**
+     * 직영 작업자에게 건네는 앱 설치 카드 문구.
+     *
+     * 게이트(협력사)와 다르다 — 이쪽은 사람이 정해져 있고 계정이 있다. 그래서 가장 흔한
+     * 실패는 "설치를 못 한다"가 아니라 <b>어느 구글 계정으로 로그인해야 하는지 모른다</b>
+     * 이다. 휴대폰에 구글 계정이 두세 개 들어 있는 경우가 많다. 그래서 카드에 본인
+     * 이메일을 찍어 준다.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function installCard(): array
+    {
+        return [
+            'ko' => [
+                'title' => '내 출퇴근 앱',
+                'hint' => '내 근무시간과 급여를 내 휴대폰에서 바로 봅니다.',
+                'account' => '로그인할 구글 계정',
+                'steps' => [
+                    '휴대폰 카메라로 위 QR 을 스캔합니다.',
+                    '구글로 로그인 — 반드시 아래 적힌 계정으로 하세요.',
+                    '"홈 화면에 추가" 안내가 뜨면 추가합니다. 다음부터는 아이콘만 누르면 됩니다.',
+                ],
+                'trouble' => '로그인이 안 되면 현장 관리자에게 말씀하세요. 계정 등록이 필요할 수 있습니다.',
+            ],
+            'en' => [
+                'title' => 'My Attendance App',
+                'hint' => 'See your hours and your pay on your own phone.',
+                'account' => 'Sign in with this Google account',
+                'steps' => [
+                    'Scan the QR code above with your phone camera.',
+                    'Sign in with Google — you must use the account printed below.',
+                    'When it offers "Add to Home Screen", add it. Next time just tap the icon.',
+                ],
+                'trouble' => 'If sign-in fails, tell your site manager. Your account may need to be set up.',
+            ],
+            'es' => [
+                'title' => 'Mi aplicación de asistencia',
+                'hint' => 'Vea sus horas y su pago en su propio teléfono.',
+                'account' => 'Inicie sesión con esta cuenta de Google',
+                'steps' => [
+                    'Escanee el código QR de arriba con la cámara de su teléfono.',
+                    'Inicie sesión con Google — debe usar la cuenta impresa abajo.',
+                    'Cuando ofrezca "Agregar a la pantalla de inicio", agréguelo. La próxima vez solo toque el ícono.',
+                ],
+                'trouble' => 'Si no puede iniciar sesión, avise a su supervisor. Puede que falte registrar su cuenta.',
+            ],
+        ];
+    }
+
+    /**
+     * "홈 화면에 추가" 안내 문구.
+     *
+     * 이 문구가 필요한 이유 — 작업자에게 이건 웹사이트가 아니라 앱이어야 한다. 매번
+     * 게이트 QR 을 찾아 스캔하게 두면 셋째 날부터 안 찍는다. 홈 화면에 아이콘이 있으면
+     * 한 번 눌러서 열고, 주소창도 안 보여서 앱과 구별되지 않는다.
+     *
+     * 안드로이드와 아이폰의 문구가 다른 이유 — 안드로이드는 브라우저가 설치 버튼을
+     * 우리에게 넘겨주지만(누르면 끝), 아이폰 사파리는 그런 것을 주지 않는다. 사람이
+     * 공유 버튼을 직접 눌러야 해서, 어느 버튼인지 그림으로 짚어 줘야 한다.
+     *
+     * @return array<string, array<string, string>>
+     */
+    public static function install(): array
+    {
+        return [
+            'ko' => [
+                'title' => '이 화면을 앱처럼 쓰세요',
+                'body' => '휴대폰 홈 화면에 아이콘이 생깁니다. 다음부터는 QR 을 찾지 않고 아이콘만 누르면 됩니다.',
+                'install' => '홈 화면에 추가',
+                'later' => '나중에',
+                'iosTitle' => '아이폰에서 추가하는 방법',
+                'iosStep1' => '아래 가운데 <b>공유</b> 버튼을 누릅니다',
+                'iosStep2' => '목록을 내려 <b>홈 화면에 추가</b> 를 누릅니다',
+                'iosStep3' => '오른쪽 위 <b>추가</b> 를 누르면 끝입니다',
+                'iosSafari' => '공유 목록에 <b>홈 화면에 추가</b> 가 안 보이면, 이 주소를 사파리(Safari)로 열어 다시 해 보세요.',
+                'done' => '홈 화면에 추가되었습니다.',
+                'close' => '닫기',
+            ],
+            'en' => [
+                'title' => 'Use this like an app',
+                'body' => 'An icon is added to your phone\'s home screen. Next time just tap the icon — no QR to find.',
+                'install' => 'Add to Home Screen',
+                'later' => 'Later',
+                'iosTitle' => 'How to add it on iPhone',
+                'iosStep1' => 'Tap the <b>Share</b> button at the bottom center',
+                'iosStep2' => 'Scroll down and tap <b>Add to Home Screen</b>',
+                'iosStep3' => 'Tap <b>Add</b> at the top right — done',
+                'iosSafari' => 'If you do not see <b>Add to Home Screen</b> in the share list, open this address in Safari and try again.',
+                'done' => 'Added to your home screen.',
+                'close' => 'Close',
+            ],
+            'es' => [
+                'title' => 'Úselo como una aplicación',
+                'body' => 'Se agrega un ícono a la pantalla de inicio de su teléfono. La próxima vez solo toque el ícono — sin buscar el código QR.',
+                'install' => 'Agregar a la pantalla de inicio',
+                'later' => 'Más tarde',
+                'iosTitle' => 'Cómo agregarlo en iPhone',
+                'iosStep1' => 'Toque el botón <b>Compartir</b> abajo al centro',
+                'iosStep2' => 'Baje y toque <b>Agregar a inicio</b>',
+                'iosStep3' => 'Toque <b>Agregar</b> arriba a la derecha — listo',
+                'iosSafari' => 'Si no ve <b>Agregar a inicio</b> en la lista de compartir, abra esta dirección en Safari e intente de nuevo.',
+                'done' => 'Agregado a su pantalla de inicio.',
+                'close' => 'Cerrar',
             ],
         ];
     }

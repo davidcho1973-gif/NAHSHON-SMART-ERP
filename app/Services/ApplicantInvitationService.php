@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MemberRegistration;
+use App\Support\Org;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -55,7 +56,7 @@ class ApplicantInvitationService
         Mail::raw($this->emailBody($registration), function ($message) use ($registration, $recipientEmail): void {
             $message
                 ->to($recipientEmail, $registration->full_name)
-                ->subject('DASOL PRISM application link');
+                ->subject($this->subject());
         });
     }
 
@@ -75,7 +76,7 @@ class ApplicantInvitationService
         $recipientEmail = $this->normalizeRecipientEmail($registration, $recipientEmail);
 
         return 'mailto:' . rawurlencode($recipientEmail) . '?' . http_build_query([
-            'subject' => 'DASOL PRISM application link',
+            'subject' => $this->subject(),
             'body' => $this->emailBody($registration),
         ], '', '&', PHP_QUERY_RFC3986);
     }
@@ -125,12 +126,18 @@ class ApplicantInvitationService
         return $recipientEmail;
     }
 
+    private function subject(): string
+    {
+        return Org::name().' application link';
+    }
+
     private function emailBody(MemberRegistration $registration): string
     {
         $url = $registration->intakeUrl();
+        $org = Org::name();
 
         return <<<TEXT
-DASOL PRISM 입사지원서 작성 링크입니다.
+{$org} 입사지원서 작성 링크입니다.
 
 아래 링크를 열고 입사지원서를 작성해 주세요.
 {$url}
@@ -140,7 +147,7 @@ Please open the link above and complete your job application.
 Abra el enlace de arriba y complete su solicitud de empleo.
 
 Thank you,
-DASOL PRISM
+{$org}
 TEXT;
     }
 }

@@ -6,47 +6,170 @@ use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
+use App\Services\Admin\PayProfileService;
+use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
+use App\Models\User;
+use App\Support\QrSvg;
+use App\Support\WorkerLang;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class AttendanceAppController extends Controller
 {
+    /** 이 역할이면 화면에서 바로 "인원관리에서 연결하세요" 라고 안내할 수 있다. */
+    private const SETUP_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+
     public function __construct(
         private readonly AttendanceQrService $attendanceQrService,
         private readonly CommunicationService $communicationService,
         private readonly DailyCrewReportService $dailyCrewReportService,
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
         $user = $request->user();
-        $employee = $user?->employee;
-        $today = Carbon::today()->toDateString();
-
-        $todayLogs = $employee
-            ? AttendanceLog::query()
-                ->with(['dailyWorkAssignment.site', 'dailyWorkAssignment.team', 'dailyWorkAssignment.siteContractor'])
-                ->where('employee_id', $employee->id)
-                ->whereDate('attendance_date', $today)
-                ->orderBy('event_at', 'desc')
-                ->limit(8)
-                ->get()
-            : collect();
+        $viewingAs = $this->viewAsEmployee($request);
+        $employee = $viewingAs ?? $user?->employee;
 
         return view('attendance-app.index', [
+            'viewingAs' => $viewingAs,
             'user' => $user,
             'employee' => $employee,
-            'todayLogs' => $todayLogs,
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
             'messageUnreadCount' => $user ? $this->communicationService->unreadCountForUser($user) : 0,
+            // 3단(QR)은 인터넷이 끊겼을 때 쓰는 마지막 수단이다. 그런데 그때 QR 을 받으러
+            // 서버에 다녀올 수는 없다 — 끊긴 게 인터넷이기 때문이다. 그래서 화면을 열 때
+            // 미리 그림째로 박아 넣는다. 한 번 연 화면은 신호가 끊겨도 QR 을 보여 준다.
+            'badgeQr' => $employee ? $this->badgeQrFor($employee, $user?->id) : null,
         ]);
+    }
+
+    /**
+     * 슈퍼관리자가 "이 사람 화면" 을 그대로 보는 기능(?as=직원ID).
+     *
+     * 왜 필요한가 — 관리자 계정에는 직원 기록이 안 붙어 있어서, 만들어 놓은 화면을
+     * 정작 만든 사람이 못 본다. 확인하려고 자기 계정을 아무 직원에게 붙이면 그 직원의
+     * 진짜 기록이 섞인다. 그래서 붙이지 않고 들여다보는 길을 따로 낸다.
+     *
+     * 보기 전용이다. punch() 가 이 상태를 막는다 — 화면을 둘러보다 누른 버튼 하나가
+     * 남의 근무시간이 되면 나중에 아무도 그게 본인이 찍은 것인지 구별할 수 없다.
+     *
+     * 이 화면에는 그 사람의 시급과 급여가 그대로 나온다. 그래서 급여를 이미 볼 수 있는
+     * 역할에만 연다 — 같은 상수를 쓴다. 여기에만 따로 목록을 적어 두면 나중에 급여
+     * 권한이 바뀔 때 한쪽만 고쳐져 어긋난다.
+     */
+    private function viewAsEmployee(Request $request): ?Employee
+    {
+        return $this->viewAsAllowed($request) ? Employee::query()->find($request->query('as')) : null;
+    }
+
+    /** ?as= 를 줬는데 역할이 안 되는 경우 — 화면이 그 이유를 말할 수 있어야 한다. */
+    private function viewAsRefused(Request $request): bool
+    {
+        return filled($request->query('as')) && ! $this->viewAsAllowed($request);
+    }
+
+    private function viewAsAllowed(Request $request): bool
+    {
+        return filled($request->query('as'))
+            && in_array($request->user()?->access_role, PayProfileService::VIEW_ROLES, true);
+    }
+
+    /**
+     * 작업자 배지 QR 을 페이지에 박아 넣을 수 있는 형태로.
+     *
+     * @return array{uri: string, badge: string|null}|null
+     */
+    private function badgeQrFor(Employee $employee, ?int $userId): ?array
+    {
+        try {
+            $token = EmployeeBadgeQrToken::activeForEmployee($employee, $userId);
+            $uri = QrSvg::dataUri(route('attendance-app.badge', ['token' => $token->token]), 280);
+
+            return $uri === '' ? null : ['uri' => $uri, 'badge' => $employee->badge_number];
+        } catch (\Throwable $e) {
+            // QR 을 못 만들어도 출퇴근 화면 자체는 열려야 한다. 1·2단은 그대로 쓸 수 있다.
+            report($e);
+
+            return null;
+        }
+    }
+
+    /**
+     * 작업자 홈 화면이 필요한 것 전부(상태 · 오늘 기록 · 현장 정보).
+     *
+     * 화면이 30초마다 부른다. 자동 기록이 들어오면 여기 결과가 바뀌면서 화면이 따라 바뀐다.
+     */
+    public function home(Request $request, WorkerAttendanceService $worker): JsonResponse
+    {
+        $user = $request->user();
+        $viewingAs = $this->viewAsEmployee($request);
+        $employee = $viewingAs ?? $user?->employee;
+
+        if (! $employee) {
+            // 이건 고장이 아니라 설정이 덜 된 상태다. 화면이 그렇게 말해야 한다 —
+            // 빨간 오류 상자를 띄우면 관리자는 앱이 깨진 줄 알고, 작업자는 자기가
+            // 뭘 잘못했다고 생각한다.
+            return response()->json([
+                'success' => false,
+                'code' => $this->viewAsRefused($request) ? 'view_as_denied' : 'no_employee',
+                // 자기 역할을 볼 방법이 없으면 "왜 안 되는지" 를 영원히 못 알아낸다.
+                'role' => $user ? (User::ROLE_OPTIONS[$user->access_role] ?? $user->access_role) : null,
+                'allowedRoles' => array_values(array_map(
+                    fn (string $r): string => User::ROLE_OPTIONS[$r] ?? $r,
+                    PayProfileService::VIEW_ROLES,
+                )),
+                // 지금 어느 계정으로 들어와 있는지. 휴대폰에 구글 계정이 여러 개면
+                // 엉뚱한 것으로 로그인해 놓고 원인을 못 찾는다.
+                'email' => $user?->email,
+                'canManage' => in_array($user?->access_role, self::SETUP_ROLES, true),
+                'error' => '이 계정은 아직 작업자와 연결되지 않았습니다.',
+            ], 422);
+        }
+
+        return response()->json($worker->home($employee) + [
+            // 화면이 "지금 남의 것을 보고 있다" 고 말할 수 있게.
+            'viewingAs' => $viewingAs ? ['id' => $viewingAs->getKey(), 'name' => $viewingAs->name] : null,
+        ]);
+    }
+
+    /**
+     * 2단 — 직접 누르는 출퇴근. 위치를 같이 보내면 반경 안인지 보고 승인 여부를 가른다.
+     */
+    public function punch(Request $request, WorkerAttendanceService $worker): JsonResponse
+    {
+        // 남의 화면을 보는 중에는 절대 찍지 않는다. 이건 편의 문제가 아니라 임금 기록이다 —
+        // 관리자가 화면을 둘러보다 누른 버튼 하나가 그 사람의 근무시간이 되면, 나중에
+        // 아무도 그게 본인이 찍은 것인지 구별할 수 없다.
+        if ($this->viewAsEmployee($request)) {
+            return response()->json([
+                'success' => false,
+                'error' => '다른 사람의 화면을 보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
+            ], 403);
+        }
+
+        $employee = $request->user()?->employee;
+        if (! $employee) {
+            return response()->json(['success' => false, 'error' => '연결된 직원 정보가 없습니다.'], 422);
+        }
+
+        $data = $request->validate([
+            'direction' => ['required', 'in:in,out'],
+            'lat' => ['nullable', 'numeric'],
+            'lng' => ['nullable', 'numeric'],
+            'accuracy' => ['nullable', 'numeric'],
+        ]);
+
+        // 폰이 보낸 ip 는 믿지 않는다 — 서버가 본 주소로 넣는다.
+        $data['ip'] = $request->ip();
+
+        return response()->json($worker->punch($employee, $data['direction'], $data));
     }
 
     public function team(Request $request, string $token): View|RedirectResponse
@@ -215,6 +338,79 @@ class AttendanceAppController extends Controller
             'employee' => $employee->loadMissing(['company', 'site']),
             'badgeToken' => $badgeToken,
             'badgeUrl' => route('attendance-app.badge', ['token' => $badgeToken->token]),
+        ]);
+    }
+
+    /**
+     * 작업자에게 "보내는" 화면 — 링크·QR·문자 문구가 한 자리에.
+     *
+     * 인쇄 카드와 목적이 다르다. 카드는 손에 쥐여 주는 종이고, 이건 문자·왓츠앱으로
+     * 보내는 것이다. 직영은 사람이 정해져 있어 대개 반장이 그 자리에서 보낸다.
+     *
+     * 세 가지가 한 화면에 있어야 한다.
+     *   링크   — 눌러서 바로 복사(주소를 손으로 옮겨 적다 오타가 난다)
+     *   QR    — 반장 휴대폰을 보여 주고 작업자가 스캔(같이 있을 때 가장 빠르다)
+     *   문구   — 3개 국어. 링크만 덜렁 보내면 그게 무엇인지 몰라서 안 누른다.
+     */
+    public function shareLink(Request $request, Employee $employee): View
+    {
+        $user = $request->user();
+        abort_unless(
+            in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true)
+                || ($user && (int) $user->employee_id === (int) $employee->id),
+            403,
+        );
+
+        $url = route('attendance-app.index');
+        $account = User::query()->where('employee_id', $employee->getKey())->first();
+
+        return view('attendance-app.share', [
+            'employee' => $employee->loadMissing('site'),
+            'url' => $url,
+            'qrImage' => QrSvg::dataUri($url, 320),
+            'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
+            // 직원 정보의 이메일과 로그인 계정이 다를 수 있다. 다르면 반장은 방금
+            // 직원 정보를 고쳐 놓고 여기서 옛 주소를 보게 되는데, 어느 쪽도 틀려
+            // 보이지 않아 원인을 못 찾는다. 여기서 말해 준다.
+            'employeeEmail' => $employee->email,
+            'messages' => WorkerLang::shareMessage($url),
+            // 번호가 있으면 그 사람에게 바로 열린다. 없으면 반장이 고른다.
+            'dial' => $employee->dialNumber(),
+            'lang' => WorkerLang::resolve($employee->preferred_language),
+        ]);
+    }
+
+    /**
+     * 직영 작업자에게 건네는 앱 설치 카드(인쇄용).
+     *
+     * 협력사는 게이트 포스터 한 장으로 끝나지만(계정이 없고 매일 사람이 바뀐다),
+     * 직영은 사람이 정해져 있고 계정이 있다. 그래서 종이도 사람마다 나온다 —
+     * 이 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
+     */
+    public function installCard(Request $request, Employee $employee): View
+    {
+        $user = $request->user();
+        abort_unless(
+            in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager'], true)
+                || ($user && (int) $user->employee_id === (int) $employee->id),
+            403,
+        );
+
+        $url = route('attendance-app.index');
+
+        // 계정이 있어야 로그인이 된다. 없으면 카드에 그 사실을 적는다.
+        $account = User::query()->where('employee_id', $employee->getKey())->first();
+
+        return view('attendance-app.install-card', [
+            'employee' => $employee->loadMissing('site'),
+            'url' => $url,
+            'qrImage' => QrSvg::dataUri($url, 300),
+            'loginEmail' => $account && $account->account_status === 'active' ? $account->email : null,
+            // 직원 정보의 이메일과 로그인 계정이 다를 수 있다. 다르면 반장은 방금
+            // 직원 정보를 고쳐 놓고 여기서 옛 주소를 보게 되는데, 어느 쪽도 틀려
+            // 보이지 않아 원인을 못 찾는다. 여기서 말해 준다.
+            'employeeEmail' => $employee->email,
+            'langs' => WorkerLang::installCard(),
         ]);
     }
 

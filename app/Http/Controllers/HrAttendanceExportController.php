@@ -14,6 +14,7 @@ use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Options;
 use OpenSpout\Writer\XLSX\Writer;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use App\Support\Org;
 
 class HrAttendanceExportController extends Controller
 {
@@ -33,7 +34,10 @@ class HrAttendanceExportController extends Controller
         foreach ($companies as $company) {
             foreach ($company['teams'] ?? [] as $team) {
                 foreach ($team['members'] ?? [] as $member) {
-                    ($member['isOpen'] ?? false) ? $present++ : $absent++;
+                    // isOpen 은 "지금 현장에 있음"이지 "오늘 출근함"이 아니다 — 퇴근 완료자를
+                    // 미출근으로 세면 퇴근 후 뽑은 현황이 "출근 0명"이 된다. 본문 상태 표기
+                    // (근무중/퇴근완료/미출근)와 같은 기준으로 센다.
+                    ($member['isOpen'] ?? false) || ($member['todayOut'] ?? null) ? $present++ : $absent++;
                 }
             }
         }
@@ -76,7 +80,7 @@ class HrAttendanceExportController extends Controller
 
         $blank = array_fill(0, count(self::HEADERS), '');
 
-        $writer->addRow(Row::fromValues(array_replace($blank, [0 => 'DASOL PRISM · 출퇴근 현황 보고서']), $titleStyle));
+        $writer->addRow(Row::fromValues(array_replace($blank, [0 => Org::name().' · 출퇴근 현황 보고서']), $titleStyle));
         $writer->addRow(Row::fromValues(array_replace($blank, [0 => '현장: '.$siteLabel.'    기준일: '.$date]), $subStyle));
         $writer->addRow(Row::fromValues(array_replace($blank, [
             0 => '총원 '.$total.'명    ·    출근 '.$present.'명    ·    미출근 '.$absent.'명    ·    생성 '.Carbon::now()->format('Y-m-d H:i'),

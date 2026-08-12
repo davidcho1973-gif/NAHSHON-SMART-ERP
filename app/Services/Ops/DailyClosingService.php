@@ -4,6 +4,7 @@ namespace App\Services\Ops;
 
 use App\Jobs\WriteDailyClosingReportJob;
 use App\Models\DailyClosingReport;
+use App\Models\DailyCrewReport;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\OpsLaborReport;
@@ -100,6 +101,8 @@ class DailyClosingService
         $reportedTotal = (int) $reports->sum('headcount');
         $actualTotal = (int) ($actual['direct']['count'] + $actual['indirect']['count'] + $actual['other']['count']);
 
+        $crew = $this->crewSummary($siteId, $date);
+
         // ── 상황실 활동
         $batches = OpsIntakeBatch::query()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
@@ -123,6 +126,12 @@ class DailyClosingService
                 'directHours' => $actual['direct']['workedHours'],
                 'directAvgHours' => $actual['direct']['avgHours'],
                 'openClockOut' => $actual['direct']['open'] + $actual['indirect']['open'],
+                // 모바일 팀 마감이 남긴 것 — QR 에 안 잡히는 외부 인원과 수기 보정.
+                'crew' => $crew,
+                // 그날 최종 인원. QR 실적에 팀 마감의 외부인원·보정을 얹은 값이고,
+                // 이 보고서가 그 정본이다. 예전에는 이 숫자가 팀별 daily_crew_reports 에
+                // 흩어져 있어서 현장 단위 최종 인원을 아무도 갖고 있지 않았다.
+                'final' => max(0, $actualTotal + $crew['external'] + $crew['adjustment']),
             ],
             'ops' => [
                 'batches' => $batches->count(),
@@ -156,6 +165,47 @@ class DailyClosingService
             // 공정·자재·인원 어디에도 안 들어가는 것들 — 원청 지시·승인·의사결정·준비물.
             // 이게 곧 "오늘 한 일 / 내일 할 일" 이다.
             'actions' => $this->actionSummary($siteId, $date),
+        ];
+    }
+
+    /**
+     * 팀별 모바일 마감을 현장 마감으로 끌어온다.
+     *
+     * 마감이 두 군데였다. 모바일 출퇴근앱은 팀 단위로 daily_crew_reports 에,
+     * 상황실은 현장 단위로 daily_closing_reports 에 남기면서 서로를 몰랐다.
+     * 그래서 그날 최종 인원이 두 벌 남고 어느 쪽이 정본인지 알 수 없었다.
+     *
+     * 이제 현장 마감이 팀 마감을 읽어 정본을 만든다. 팀 마감은 "입력",
+     * 현장 마감은 "확정" 이다. QR 에 안 잡히는 외부 인원과 수기 보정은
+     * 현장에서만 알 수 있으니 팀 마감이 계속 필요하고, 다만 결론은 한 곳에 모인다.
+     *
+     * @return array{teams: array<int, array<string, mixed>>, external: int, adjustment: int, scanned: int, closedTeams: int}
+     */
+    private function crewSummary(?int $siteId, string $date): array
+    {
+        $rows = DailyCrewReport::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            ->whereDate('work_date', $date)
+            ->with('team:id,name')
+            ->orderByDesc('final_headcount')
+            ->get();
+
+        return [
+            'teams' => $rows->map(fn (DailyCrewReport $r): array => [
+                'team' => $r->team?->name ?: '팀 미지정',
+                'scanned' => (int) $r->scanned_headcount,
+                'external' => (int) $r->external_headcount,
+                'adjustment' => (int) $r->manual_adjustment,
+                'final' => (int) $r->final_headcount,
+                // 보정에는 사유가 붙어야 한다. 숫자만 바뀌고 이유가 없으면 나중에 아무도 설명 못 한다.
+                'adjustmentReason' => $r->adjustment_reason,
+                'workDescription' => $r->work_description,
+                'closedAt' => $r->closed_at?->toIso8601String(),
+            ])->values()->all(),
+            'scanned' => (int) $rows->sum('scanned_headcount'),
+            'external' => (int) $rows->sum('external_headcount'),
+            'adjustment' => (int) $rows->sum('manual_adjustment'),
+            'closedTeams' => $rows->where('status', 'closed')->count(),
         ];
     }
 
@@ -314,6 +364,9 @@ PROMPT;
                 'headline' => (string) (($r->narrative['headline'] ?? '')),
                 'reported' => (int) (($r->metrics['labor']['reported'] ?? 0)),
                 'actualQr' => (int) (($r->metrics['labor']['actualQr'] ?? 0)),
+                // 그날 최종 인원. 이 값이 없던 예전 보고서는 QR 실적을 그대로 쓴다 —
+                // 팀 마감이 없었다면 최종 인원이 곧 QR 실적이라 값이 같다.
+                'final' => (int) (($r->metrics['labor']['final'] ?? $r->metrics['labor']['actualQr'] ?? 0)),
                 'closedBy' => $r->closedBy?->name,
             ])->all(),
         ];

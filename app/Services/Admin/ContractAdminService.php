@@ -63,6 +63,25 @@ class ContractAdminService
             && in_array($actor->access_role, self::MANAGE_ROLES, true);
     }
 
+    /**
+     * 이 계약을 볼 수 있는가 — 역할과 담당 범위를 모두 본다.
+     *
+     * 서류 내려받기는 SPA 를 거치지 않고 파일 라우트로 바로 들어오므로, 목록에
+     * 걸어 둔 범위 제한을 여기서 한 번 더 확인해야 한다. 링크만 알면 남의 현장
+     * 계약서를 받아 갈 수 있으면 안 된다.
+     */
+    public function canAccessContract(int $contractId): bool
+    {
+        if (! $this->canView()) {
+            return false;
+        }
+
+        $query = ProjectContract::query()->whereKey($contractId);
+        $this->applyScope($query);
+
+        return $query->exists();
+    }
+
     private function disk(): string
     {
         return (string) config('document-intelligence.disk', 'local');
