@@ -239,6 +239,24 @@ class AttendanceLogAdminService
             $errors['eventAt'] = '미래 시각은 기록할 수 없습니다.';
         }
 
+        // 하루에 출근 한 줄, 퇴근 한 줄. 자동 경로(GPS·게이트)에서는 중복이 조용히
+        // 버려지지만, 사람이 손으로 넣을 때는 말해 줘야 한다 — 눌렀는데 아무 일도
+        // 안 일어나면 저장이 안 된 줄 알고 또 누른다.
+        if ($employee && $eventAt && array_key_exists($eventType, self::EVENT_TYPES)) {
+            $clash = AttendanceLog::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('attendance_date', $eventAt->copy()->toDateString())
+                ->where('event_type', $eventType)
+                ->where('status', '!=', 'rejected')
+                ->when($row, fn ($q) => $q->whereKeyNot($row->id))
+                ->first();
+
+            if ($clash) {
+                $errors['eventType'] = '그날 '.self::EVENT_TYPES[$eventType].' 기록이 이미 있습니다('
+                    .$clash->event_at?->format('H:i').'). 새로 넣지 말고 그 기록을 수정하세요.';
+            }
+        }
+
         if ($errors !== []) {
             return ['success' => false, 'errors' => $errors];
         }
