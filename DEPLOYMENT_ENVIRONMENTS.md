@@ -1,64 +1,103 @@
-# Deployment Environments
+# 배포 환경
 
-This project should use only the environments below.
+코드는 한 벌(`davidcho1973-gif/NAHSHON-SMART-ERP`), 배포는 고객마다 하나.
+아래 두 개 말고 다른 배포를 만들지 않는다.
 
-## Production
+새 고객을 세우는 절차는 `docs/새-고객-배포.md`, 도메인을 붙이는 절차는
+`docs/도메인-전환.md` 에 있다. 이 문서는 **지금 서 있는 것**만 적는다.
 
-- Laravel Cloud app: `nahshon-smart-erp`
-- URL: `https://nahshon-smart-erp-main-m9veux.laravel.cloud`
-- GitHub repository: `davidcho1973-gif/NAHSHON-SMART-ERP`
-- Branch: `main`
-- Purpose: final owner-approved production ERP.
+---
 
-## Staging / Official Test
+## 지금 있는 배포
 
-- Laravel Cloud app: `nahshon-smart-erp-staging`
-- URL: `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud`
-- GitHub repository: `davidcho1973-gif/NAHSHON-SMART-ERP`
-- Recommended branch: `staging`
-- Purpose: official test ERP with test applicant and employee data.
+| | **운영** | **스테이징** |
+|---|---|---|
+| 누구 것 | **DASOL USA** — 우리 회사. 원본 | **KSR** — 첫 시험 고객 (무상) |
+| Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp-staging` |
+| 환경 이름 | `main` | `main` |
+| 브랜치 | `main` | `staging` |
+| 주소 | **`https://erp.dasolusa.com`** | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
+| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | — |
+| `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `KSR` |
+| `ORG_CODE` | `DASOLUSA` | — |
+| 데이터 | 거의 비어 있음 | **실제 데이터** |
 
-## Retire / Delete After Backup Check
+> **두 앱 모두 환경 이름이 `main` 이다.** 화면 위쪽 파란 네모만 보면 구별이 안 된다.
+> 그 왼쪽의 **앱 이름에 `-staging` 이 붙었는지**로 가린다. 여기서 헷갈리면 KSR 의
+> 실제 데이터를 건드리게 된다.
 
-- Laravel Cloud app: `dasol-prism-erp`
-- URL: `https://dasol-prism-erp-main-ttend5.laravel.cloud`
-- GitHub repository: `davidcho1973-gif/dasol-prism-erp`
-- Reason: old separate application. It is not part of the current DASOL PRISM SMART ERP workflow.
+KSR 은 "연습용"이 아니라 실제로 쓰는 첫 고객이다. 화면에 "연습용" 같은 띠를 붙이지
+않는 이유이고, 데이터를 함부로 비우지 않는 이유이기도 하다.
 
-Before deleting this app, confirm there is no needed database, storage file, or environment variable inside it.
+### 정리 대상
 
-## Cleanup Rules
+- Laravel Cloud 앱 `dasol-prism-erp` (`https://dasol-prism-erp-main-ttend5.laravel.cloud`)
+- 옛 별도 앱이고 지금 흐름에 들어 있지 않다. 데이터베이스·저장 파일·환경변수·도메인에
+  필요한 것이 없는지 확인한 뒤 지운다.
 
-- Do not use multiple Laravel Cloud apps for the same active workflow unless their purpose is production versus staging.
-- Production deploys from `main`.
-- Staging deploys from `staging`.
-- New work is verified in Staging first. After David approves the test result, the same tested code can be promoted to Production.
-- If staging must temporarily deploy from `main`, document the reason in `WORK_LOG.md`.
-- Do not migrate data between environments casually. Decide which environment is official before copying data.
-- Production and Staging can run the same code, but their databases are intentionally separate.
+---
 
-## 자동 배포가 멈췄을 때 (2026-08-07 추가)
+## 규칙
 
-Laravel Cloud 의 GitHub 자동 배포는 대시보드 설정에 달려 있어서, 연결 브랜치가 바뀌거나
-자동 배포가 꺼지면 푸시해도 아무 일이 일어나지 않는다. 실패로도 안 잡히기 때문에 알아채기
-어렵다. 그래서 두 번째 경로를 만들어 뒀다.
+- 새 작업은 **staging(KSR)에서 먼저** 확인하고, 확인된 코드를 `main`(원본)으로 올린다.
+- `main` 은 원본이다. 여기서 새 고객을 뽑아내므로 **뒤처져 있으면 안 된다** — 뒤처진
+  원본에서 뽑은 고객은 이미 고친 문제를 그대로 안고 선다.
+- `main` 을 맞출 때 **되감기(force push)를 하지 않는다.** 지난 기록은 이 코드가 왜
+  이렇게 생겼는지에 대한 유일한 설명이다. 트리만 staging 과 같게 맞추고 그 위에 커밋을
+  얹는다.
+- 두 배포는 같은 코드를 돌리되 **데이터베이스는 일부러 따로다.** 환경 사이로 데이터를
+  옮기지 않는다.
+- `APP_KEY` 는 배포마다 다르다. 복사해 쓰지 않는다.
 
-### 배포 경로 두 가지
+---
 
-1. Laravel Cloud 자동 배포 — 대시보드 설정에 의존
-2. GitHub Actions (`.github/workflows/tests.yml` 의 `deploy-staging` 잡) — 시크릿만 있으면 동작
+## 도메인 · DNS
 
-2번을 켜려면 환경마다 값 두 개를 넣는다. 한 번만 하면 된다.
+`dasolusa.com` 은 **Hostinger** 에서 샀고 DNS 도 거기서 관리한다
+(네임서버 `BYTE.DNS-PARKING.COM` / `PIXEL.DNS-PARKING.COM`).
 
-| 환경 | 브랜치 | 시크릿 (Secrets 탭) | 주소 (Variables 탭) |
-| --- | --- | --- | --- |
-| staging | `staging` | `LARAVEL_CLOUD_DEPLOY_HOOK_STAGING` | `STAGING_URL` |
-| 운영 | `main` | `LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION` | `PRODUCTION_URL` |
+운영 배포에 붙인 레코드는 이것 하나다.
 
-`Settings → Secrets and variables → Actions` 에서 넣는다. Secrets 와 Variables 는 **탭이 다르다.**
+| Type | Name | Value | TTL |
+|---|---|---|---|
+| A | `erp` | *(Laravel Cloud 가 Domains 화면에서 알려 준 IP)* | 300 |
 
-시크릿 값은 Laravel Cloud → 해당 환경 → `Settings` → 오른쪽 위 드롭다운을 `General` 에서
-**`Deployments`** 로 바꾸면 나오는 **Deploy hook URL** 이다. 토글을 켜야 주소가 나타난다.
+- **Name 칸에는 `erp` 만** 넣는다. 전체 주소를 넣으면 `erp.dasolusa.com.dasolusa.com`
+  이 되는데, 화면에는 그럴듯하게 보여서 왜 연결이 안 되는지 한참 찾게 된다.
+- Hostinger 가 "이 도메인을 웹사이트에 연결할까요?" 하고 물으면 **하지 않는다.**
+  호스팅이 아니라 DNS 레코드 한 줄만 필요하다.
+- Laravel Cloud 의 도메인 추가 대화상자 토글 세 개(wildcard / Cloudflare / uninterrupted
+  transfer)는 **전부 끈다.** 이 도메인은 Cloudflare 를 쓰지 않고, 옮겨 올 서비스도 없다.
+
+고객마다 주소가 하나씩 늘어난다. `erp.<고객도메인>` 또는 `<고객>.erp.dasolusa.com` 중
+하나로 규칙을 정해 두면 열 번째 고객에서 다시 정하지 않아도 된다.
+
+---
+
+## 배포가 나가는 두 가지 길
+
+1. **Laravel Cloud 자동 배포** — 대시보드의 `Push to deploy` 설정에 의존
+2. **GitHub Actions** (`.github/workflows/tests.yml`) — 시크릿만 있으면 동작
+
+**1번만 믿으면 안 된다.** 대시보드 설정은 조용히 꺼질 수 있고, 꺼지면 푸시해도 아무 일도
+일어나지 않는다. 실패로도 안 잡힌다.
+
+2번을 켜려면 배포마다 값 두 개를 넣는다. 한 번만 하면 된다.
+
+| 배포 | 브랜치 | 시크릿 (Secrets 탭) | 주소 (Variables 탭) |
+|---|---|---|---|
+| 운영 (DASOL USA) | `main` | `LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION` | `PRODUCTION_URL` |
+| 스테이징 (KSR) | `staging` | `LARAVEL_CLOUD_DEPLOY_HOOK_STAGING` | `STAGING_URL` |
+
+`저장소 → Settings → Secrets and variables → Actions`. **Secrets 와 Variables 는 탭이 다르다.**
+
+**변수 이름을 바꿔 넣으면 조용히 틀린다.** 운영 주소를 `STAGING_URL` 에 넣으면 배포는
+성공했다고 나오고 확인만 엉뚱한 서버를 본다. 배포가 실제로 됐는지 아무도 모르게 된다.
+
+주소 값은 `https://` 로 시작하고 **끝에 `/` 를 붙이지 않는다.**
+
+시크릿 값은 Laravel Cloud → 해당 환경 → `Settings` → `Deployments` → **Deploy hook URL**
+이다. 토글을 켜야 주소가 나타난다.
 
 > **입력칸에서 마우스로 드래그해 복사하지 말 것.** 칸이 좁아 토큰이 `QQj…` 처럼 잘려
 > 보이는데, 그렇게 복사하면 앞부분만 들어간다. 그러면 Laravel Cloud 가 훅으로 알아보지
@@ -67,14 +106,13 @@ Laravel Cloud 의 GitHub 자동 배포는 대시보드 설정에 달려 있어�
 >
 > 그 옆의 재발급 버튼은 누르지 말 것 — 주소가 바뀌어 시크릿을 다시 넣어야 한다.
 
-주소 변수 값은 `https://` 로 시작하고 끝에 `/` 를 붙이지 않는다.
-
 넣고 나면 해당 브랜치에 푸시할 때마다 이렇게 돈다.
 
-    푸시 → 테스트 719개 → 통과하면 Deploy Hook 호출 → /build-version 이 그 커밋으로
-    바뀔 때까지 최대 10분 확인 → Actions 화면에 결과 표시
+    푸시 → 테스트 1,185개 → 통과하면 Deploy Hook 호출 → {URL}/build-version 이
+    그 커밋으로 바뀔 때까지 최대 10분 확인 → Actions 화면에 결과 표시
 
-시크릿이 없으면 배포 단계를 조용히 건너뛰므로, 설정 전에도 저장소가 빨개지지 않는다.
+시크릿이 없으면 배포 단계를 **조용히 건너뛴다.** 그래서 설정 전에도 저장소가 빨개지지
+않는다 — 편하지만, 그 조용함이 아래 사고의 원인이었다.
 
 ### 훅이 실패해도 잡은 안 죽는다
 
@@ -94,24 +132,26 @@ Laravel Cloud 의 GitHub 자동 배포는 대시보드 설정에 달려 있어�
 에서 `production` 환경을 만들고 required reviewers 를 건 뒤, `deploy-production` 잡에
 `environment: production` 한 줄만 붙이면 된다.
 
-### 배포됐는지 확인하는 법
+---
 
-`{URL}/build-version` 을 연다. 로그인 없이 열린다.
+## 겪은 사고
 
-    {
-      "commit_short": "9db1bfd",
-      "subject": "Merge ...",
-      "has": {
-        "admin_screens": true,      // ERP 안의 관리 화면
-        "spa_only_admin": true,     // false 면 옛 /admin 링크가 남아 있는 것
-        "ops_room": true,           // 현장 상황실
-        "old_company_name": false   // true 면 배포가 안 된 것
-      }
-    }
+### 운영 배포가 6일간 멈춰 있었다 (2026-08-13 기록)
 
-404 가 나오거나 `old_company_name` 이 `true` 면 배포가 반영되지 않은 것이다.
+`main` 에 두 번 올렸는데 배포가 나가지 않았다. 마지막 성공 배포는 8월 6일이었고,
+서버는 그 코드로 멀쩡히 돌고 있었다. **화면이 열렸기 때문에 아무도 몰랐다.**
 
-### 빌드 명령은 대시보드에 있다 — 저장소에서 못 고친다 (2026-08-09 추가)
+- 대시보드의 자동 배포가 꺼져 있었고,
+- GitHub Actions 쪽 시크릿(`LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION`)도 없어서
+  `Deploy production` 잡이 **0초 만에 끝나며 조용히 건너뛰었다.**
+
+두 번째 경로가 준비만 되어 있고 켜져 있지 않으면 없는 것과 같다. 지금은 켰다.
+
+**알아보는 법:** `/build-version` 의 `commit_short` 가 방금 올린 커밋과 다르면 배포가
+안 나간 것이다. Actions 의 `Deploy production` 잡이 **1분 안쪽에 끝났다면** 건너뛴 것이고,
+1~2분 걸렸다면 실제로 일한 것이다.
+
+### 빌드 명령은 대시보드에 있다 — 저장소에서 못 고친다 (2026-08-09 기록)
 
 `composer.json` 이나 워크플로에는 없고 Laravel Cloud → 해당 환경 → `Settings` →
 `Deployments` → **Build commands** 에만 있다. 그래서 저장소에서 패키지를 지워도
@@ -121,36 +161,65 @@ Laravel Cloud 의 GitHub 자동 배포는 대시보드 설정에 달려 있어�
 빌드 명령에 `php artisan filament:assets` 가 남아 있어 배포가 15초 만에 실패했다.
 시험은 전부 통과했고 서버는 직전 버전으로 멀쩡히 돌고 있어서 더 헷갈렸다.
 
-**패키지를 지우거나 추가할 때는 빌드 명령도 함께 본다.** 지금 staging 의 빌드 명령은
-이렇다 — 여기 없는 것을 부르면 배포가 죽는다.
+**패키지를 지우거나 추가할 때는 빌드 명령도 함께 본다.** 지금 값은 이렇다.
 
 ```
+# Build commands
 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 npm ci --audit false
 npm run build
-php artisan optimize
+
+# Deploy commands
+php artisan migrate --force
 ```
 
+`Deploy commands` 의 `migrate --force` 가 빠지면 새 코드가 옛 스키마 위에서 돌아
+화면 곳곳이 500 이 된다. 원인이 코드가 아니라 스키마라는 걸 알아내는 데 오래 걸린다.
+
 증상으로 알아보는 법: `/build-version` 이 **옛 커밋을 정상 응답**하면 서버가 죽은 게
-아니라 새 빌드가 못 올라온 것이다. Deployments 탭에서 그 커밋의 빌드 로그 마지막 줄을
-본다.
+아니라 새 빌드가 못 올라온 것이다. Deployments 탭에서 그 커밋의 빌드 로그 마지막 줄을 본다.
 
-### staging 도 CI 를 돈다
+---
 
-`tests.yml` 이 `main` 만 보고 있어서 staging 은 테스트가 한 번도 돌지 않았다.
-배포되는 브랜치일수록 CI 가 먼저 봐야 하므로 `staging` 을 트리거에 넣었다.
+## 배포됐는지 확인하는 법
 
-## Laravel Cloud Dashboard Actions
+`{URL}/build-version` 을 연다. 로그인 없이 열린다.
 
-These actions must be done in the Laravel Cloud dashboard by an owner/admin account.
+```json
+{
+  "commit_short": "8955c73",
+  "env": "production",
+  "org":       { "name": "DASOL USA", "code": "DASOLUSA", "configured": true },
+  "domain":    { "matches": true, "google_redirect": "https://erp.dasolusa.com/auth/google/callback" },
+  "cache":     { "store": "file", "wakes_database_every_minute": false },
+  "scheduler": { "running": true, "last_beat_at": "..." },
+  "has":       { "old_company_name": false }
+}
+```
 
-1. Open `dasol-prism-erp`.
-2. Confirm there is no needed database, storage file, environment variable, or custom domain.
-3. Delete `dasol-prism-erp`.
-4. Open `nahshon-smart-erp-staging`.
-5. Confirm the connected branch is `staging`.
-6. Deploy `staging` after each test-ready change.
-7. If deployment fails, open the failed deployment log and fix the reported error.
-8. Verify `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud/build-version` reports the commit you just pushed.
+| 값 | 아니면 |
+|---|---|
+| `commit_short` | 방금 올린 커밋과 다르면 배포가 안 나간 것 |
+| `org.configured: false` | `ORG_NAME` 이 안 들어갔다. 화면에는 남의 이름 또는 `ERP` 가 나간다 |
+| `domain.matches: false` | `APP_URL` 이 옛 주소. 화면은 멀쩡한데 QR·앱 설치 카드·매니페스트가 옛 주소를 가리킨다 |
+| `google_redirect: null` | 구글 로그인 환경변수가 없다 — 아무도 못 들어온다 |
+| `cache.store: "database"` | 스케줄러가 매분 데이터베이스를 깨운다. `CACHE_STORE=file` 로 |
+| `scheduler.running: false` | 저녁 자동 마감·서류 만료 알림이 안 돈다 |
+| 404 | 배포가 8월 7일 이전 코드다 (`/build-version` 이 그때 생겼다) |
 
-Current rule confirmed by David: test in Staging first; after the test passes, deploy/promote to Production.
+`scheduler.last_beat_at` 은 스케줄러가 실제로 돌 때마다 데이터베이스에 남기는 심장박동이다.
+**"켰다고 표시된 것"이 아니라 "진짜 돌았다"** 는 증거라서, 이 값이 없으면 안 도는 것이다.
+
+마지막으로 **로그인을 한 번 해 본다.** 구글 리디렉션이 맞는지 확인하는 유일한 방법이다.
+
+---
+
+## 새 배포를 세울 때 빠뜨리기 쉬운 것
+
+`docs/새-고객-배포.md` 에 전체 절차가 있다. 그중 **빠뜨려도 화면이 멀쩡해 보이는** 것들:
+
+1. `php artisan org:provision` — 안 하면 계정이 0개다. 구글 인증은 성공해도 못 들어간다
+2. 스케줄러 켜기 — 안 켜면 몇 주 뒤 "왜 마감이 안 돼 있지?" 로 알게 된다
+3. `CACHE_STORE=file` — 없으면 `database` 가 기본값이라 매분 데이터베이스를 깨운다
+4. GitHub 의 `*_URL` 변수와 배포 훅 시크릿 — 없으면 배포가 멈춰도 아무도 모른다
+5. 구글 콘솔의 리디렉션 URI — 앱 쪽만 맞추면 `redirect_uri_mismatch` 가 난다
