@@ -8,6 +8,66 @@
 
 ---
 
+## 지금 열려 있는 것 (2026-08-13 기준)
+
+**운영 배포가 코드를 못 받고 있다.** 저장소는 `8955c73`, 서버는 `3eba77d` 에 머물러 있다.
+화면은 멀쩡히 열리므로 눈으로는 알 수 없다.
+
+원인 두 가지가 겹쳤다 — 배포가 나가는 두 길이 **둘 다 막혀 있다.**
+
+### 1. 배포 훅 시크릿이 잘린 값이다
+
+Actions 로그가 그대로 말해 준다.
+
+    POST + commit_hash → HTTP 302
+    ...네 조합 모두 → Redirecting to https://cloud.laravel.com/sign-in
+
+    호스트: cloud.laravel.com   전체 86자
+    경로: /deploy / <36자> / <16자>      ← 마지막 토큰 구간이 짧다
+
+**고치는 법**
+
+1. Laravel Cloud → `nahshon-smart-erp` → `main` → Settings → Deployments → Deploy hook
+   → **칸 옆의 복사 버튼**으로 복사 (드래그 금지 — 이게 원인이다)
+2. GitHub → Settings → Secrets and variables → Actions → **Secrets** 탭
+   → `LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION` 연필 아이콘 → 새 값으로 덮어쓰기
+
+### 2. `Push to deploy` 가 꺼져 있다
+
+훅이 실패해도 이게 켜져 있으면 푸시만으로 배포가 나간다. 10분 동안 서버가 안 바뀐 것은
+**두 길이 다 막혔다**는 뜻이다.
+
+Settings → Deployments → `Push to deploy` → 켠다.
+
+### 3. 그다음
+
+Deployments 탭에서 수동 **Deploy** 한 번 → `https://erp.dasolusa.com/build-version` 의
+`commit_short` 가 `8955c73` 인지 확인.
+
+### 이미 끝난 것 — 다시 하지 않는다
+
+| | |
+|---|---|
+| 도메인 `erp.dasolusa.com` | Hostinger A 레코드 → Laravel Cloud, HTTPS 발급 완료 |
+| 구글 로그인 | 리디렉션 URI 등록, 로그인 확인됨 |
+| 스케줄러 | `running=true`, 심장박동 확인됨 |
+| `ORG_NAME` · `ORG_CODE` · `CACHE_STORE` | 들어감 (`configured: true`, `store: file`) |
+| GitHub `PRODUCTION_URL` | 정상 (`BASE: https://erp.dasolusa.com`) |
+| `org:rename` · `org:provision` | 완료 — 회사 `DASOL USA`, 최고 관리자 세움 |
+
+### 급하지 않은 것
+
+- 구글 OAuth 클라이언트 `NAHSHON SMART ERP Staging` 에 보안 비밀이 둘이다.
+  하나로 줄인다 — **`Disable` 먼저, 며칠 뒤 `Delete`.** 잘못 지우면 KSR 로그인이 즉시 막힌다.
+- 클라이언트를 `SMART ERP` 하나로 모으고 옛 이름이 든 것을 지운다.
+  두 배포 다 옮기고 로그인 확인한 뒤에.
+- KSR 에도 자체 도메인 붙이기 — 다만 KSR 은 이미 쓰고 있어서 QR 포스터·휴대폰
+  재설치가 따라온다. 현장이 쉬는 날에.
+- `dasol-prism-erp` 앱 삭제 (아래 정리 대상 참고)
+- 조직 설정에서 DASOL USA 로고 그림·대표 색 넣기
+
+---
+
 ## 지금 있는 배포
 
 | | **운영** | **스테이징** |
