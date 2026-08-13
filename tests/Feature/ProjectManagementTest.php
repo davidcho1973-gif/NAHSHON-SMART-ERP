@@ -23,7 +23,7 @@ class ProjectManagementTest extends TestCase
 
     public function test_project_registration_stores_installation_project_metadata(): void
     {
-        $company = Company::query()->create(['code' => 'DASOL PRISM', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::query()->create(['code' => 'ABC ENG', 'name' => 'ABC ENG', 'status' => 'active']);
         $client = Company::query()->create(['code' => 'LGES', 'name' => 'LG Energy Solution', 'status' => 'active']);
         $upperContractor = Company::query()->create(['code' => 'SAMSUNG-EA', 'name' => 'Samsung E&A', 'status' => 'active']);
 
@@ -106,7 +106,7 @@ class ProjectManagementTest extends TestCase
     {
         // milestone_plan 같은 표 항목은 아직 이 화면에서 못 고친다. 저장할 때
         // 지워지면 안 된다 — 안 보이는 데이터가 조용히 사라지는 것이 제일 나쁘다.
-        $company = Company::query()->create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::query()->create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $site = Site::query()->create([
             'company_id' => $company->id, 'code' => 'AZ', 'name' => 'AZ',
             'timezone' => 'America/Phoenix', 'status' => 'active',

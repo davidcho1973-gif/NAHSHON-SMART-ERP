@@ -61,7 +61,7 @@ class AttendanceSignatureKeyTest extends TestCase
     {
         // 이 테스트가 목적이다. 화면 소스에 APP_KEY 가 한 번이라도 찍히면
         // 그 배포의 모든 세션이 위조 가능해진다.
-        $company = Company::create(['code' => 'DP', 'name' => 'TEST CO', 'status' => 'active']);
+        $company = Company::create(['code' => 'C1', 'name' => 'TEST CO', 'status' => 'active']);
         $employee = Employee::create([
             'company_id' => $company->id, 'name' => '테스터', 'employment_status' => 'active',
         ]);

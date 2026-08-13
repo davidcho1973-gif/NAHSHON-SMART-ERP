@@ -27,7 +27,7 @@ class WorkerAppInstallCardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create([
             'company_id' => $this->company->id, 'code' => 'LG_ESS_PH', 'name' => 'LG ESS Phoenix',
             'timezone' => 'America/Phoenix', 'status' => 'active',

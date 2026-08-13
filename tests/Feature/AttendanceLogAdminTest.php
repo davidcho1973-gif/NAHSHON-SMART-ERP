@@ -36,7 +36,7 @@ class AttendanceLogAdminTest extends TestCase
 
         $this->site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         $this->other = Site::create(['code' => 'OTHER', 'name' => 'Other', 'timezone' => 'America/Phoenix', 'status' => 'active']);
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->employee = Employee::create([
             'name' => '강민철', 'employee_number' => 'E-1001',
             'company_id' => $this->company->id, 'site_id' => $this->site->id, 'employment_status' => 'active',

@@ -184,7 +184,7 @@ class ProjectContractManagementTest extends TestCase
     /** @return array{Company, Company, Site, Project} */
     private function projectFixture(): array
     {
-        $company = Company::query()->create(['code' => 'DASOL PRISM', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::query()->create(['code' => 'ABC ENG', 'name' => 'ABC ENG', 'status' => 'active']);
         $counterparty = Company::query()->create(['code' => 'GC-USA', 'name' => 'GC USA', 'status' => 'active']);
         $site = Site::query()->create([
             'company_id' => $company->id,

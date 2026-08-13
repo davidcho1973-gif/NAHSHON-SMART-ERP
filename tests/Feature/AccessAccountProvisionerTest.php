@@ -20,7 +20,7 @@ class AccessAccountProvisionerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'NH', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C2', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create(['company_id' => $this->company->id, 'code' => 'LGES-AZ', 'name' => 'LG AZ', 'status' => 'active']);
     }
 
@@ -28,7 +28,7 @@ class AccessAccountProvisionerTest extends TestCase
     {
         $emp = Employee::create([
             'company_id' => $this->company->id, 'site_id' => $this->site->id,
-            'name' => '홍길동', 'email' => 'gildong@nahshonmep.com', 'employment_status' => 'active',
+            'name' => '홍길동', 'email' => 'gildong@example.test', 'employment_status' => 'active',
         ]);
 
         $user = app(AccessAccountProvisioner::class)->grant($emp, 'worker');
@@ -36,7 +36,7 @@ class AccessAccountProvisionerTest extends TestCase
         $this->assertSame($emp->id, $user->employee_id);
         $this->assertSame('worker', $user->access_role);
         $this->assertSame('active', $user->account_status);
-        $this->assertSame('gildong@nahshonmep.com', $user->email);
+        $this->assertSame('gildong@example.test', $user->email);
         $this->assertSame($this->site->id, $user->allowed_site_id);
         $this->assertNotNull($user->password); // 구글 전용이라도 자리값은 채워짐
         $this->assertTrue($emp->fresh()->user->is($user));
@@ -46,7 +46,7 @@ class AccessAccountProvisionerTest extends TestCase
     {
         $emp = Employee::create([
             'company_id' => $this->company->id, 'site_id' => $this->site->id,
-            'name' => 'PM Kim', 'email' => 'pm@nahshonmep.com', 'employment_status' => 'active',
+            'name' => 'PM Kim', 'email' => 'pm@example.test', 'employment_status' => 'active',
         ]);
 
         $svc = app(AccessAccountProvisioner::class);
@@ -62,17 +62,17 @@ class AccessAccountProvisionerTest extends TestCase
 
     public function test_links_existing_user_by_email_instead_of_duplicating(): void
     {
-        $existing = User::factory()->create(['email' => 'dup@nahshonmep.com', 'access_role' => 'viewer']);
+        $existing = User::factory()->create(['email' => 'dup@example.test', 'access_role' => 'viewer']);
         $emp = Employee::create([
             'company_id' => $this->company->id,
-            'name' => 'Dup', 'email' => 'dup@nahshonmep.com', 'employment_status' => 'active',
+            'name' => 'Dup', 'email' => 'dup@example.test', 'employment_status' => 'active',
         ]);
 
         $user = app(AccessAccountProvisioner::class)->grant($emp, 'worker');
 
         $this->assertSame($existing->id, $user->id);
         $this->assertSame($emp->id, $user->employee_id);
-        $this->assertSame(1, User::where('email', 'dup@nahshonmep.com')->count());
+        $this->assertSame(1, User::where('email', 'dup@example.test')->count());
     }
 
     public function test_requires_email(): void

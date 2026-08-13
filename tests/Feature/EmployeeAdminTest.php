@@ -31,7 +31,7 @@ class EmployeeAdminTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         $this->other = Site::create(['code' => 'OTHER', 'name' => 'Other', 'timezone' => 'America/Phoenix', 'status' => 'active']);
     }
@@ -274,7 +274,7 @@ class EmployeeAdminTest extends TestCase
 
         $res = $this->svc()->save($this->base([
             'name' => '박소피아', 'firstName' => 'Sophia', 'lastName' => 'Park',
-            'email' => 'Sophia@DasolPrism.com', 'nationality' => 'KR', 'language' => 'es',
+            'email' => 'Sophia@Example.test', 'nationality' => 'KR', 'language' => 'es',
             'siteId' => (string) $this->site->id, 'role' => '배관',
             'employmentType' => 'indirect', 'startDate' => '2026-07-01',
             'badgeNumber' => 'N777', 'badgePrintedNumber' => 'P-12', 'badgeCompanyName' => 'LG',
@@ -283,7 +283,7 @@ class EmployeeAdminTest extends TestCase
         ]));
 
         $e = Employee::find($res['id']);
-        $this->assertSame('sophia@dasolprism.com', $e->email, '이메일은 소문자로 정규화돼야 한다');
+        $this->assertSame('sophia@example.test', $e->email, '이메일은 소문자로 정규화돼야 한다');
         $this->assertSame('es', $e->preferred_language);
         $this->assertSame('indirect', $e->employment_type);
         $this->assertSame('2026-07-01', $e->start_date->toDateString());

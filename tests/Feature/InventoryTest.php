@@ -21,7 +21,7 @@ class InventoryTest extends TestCase
     {
         parent::setUp();
 
-        $company = Company::create(['code' => 'DASOL PRISM', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::create(['code' => 'ABC ENG', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create(['company_id' => $company->id, 'code' => 'LGES-AZ', 'name' => 'LGES Arizona', 'status' => 'active']);
         $this->user = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
 

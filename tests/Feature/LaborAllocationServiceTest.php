@@ -46,7 +46,7 @@ class LaborAllocationServiceTest extends TestCase
     private function deploy(WbsItem $item, int $n): void
     {
         app(WbsService::class)->createSafetyCard($item->wbs_code);
-        $company = Company::firstOrCreate(['code' => 'DASOL PRISM'], ['name' => 'DASOL PRISM']);
+        $company = Company::firstOrCreate(['code' => 'ABC ENG'], ['name' => 'ABC ENG']);
         $sigs = SafetyWorkSignature::whereHas('workItem', fn ($q) => $q->where('wbs_code', $item->wbs_code))
             ->orderBy('id')->take($n)->get();
         foreach ($sigs as $i => $sig) {

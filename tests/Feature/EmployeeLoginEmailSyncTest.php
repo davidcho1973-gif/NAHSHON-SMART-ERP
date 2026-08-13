@@ -37,7 +37,7 @@ class EmployeeLoginEmailSyncTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'DP', 'name' => 'TEST CO', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'TEST CO', 'status' => 'active']);
         $this->employee = Employee::create([
             'company_id' => $this->company->id, 'name' => 'Cristian rosas',
             'email' => 'old@gmail.com', 'employment_status' => 'active',

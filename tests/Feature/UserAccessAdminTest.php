@@ -119,13 +119,13 @@ class UserAccessAdminTest extends TestCase
         $this->actingAs($this->user('hr_manager'));
 
         $res = $this->svc()->save([
-            'name' => '침입자', 'email' => 'x@dasolprism.com',
+            'name' => '침입자', 'email' => 'x@example.test',
             'role' => 'super_admin', 'scope' => 'all_sites', 'status' => 'active',
         ]);
 
         $this->assertFalse($res['success']);
         $this->assertArrayHasKey('role', $res['errors']);
-        $this->assertSame(0, User::where('email', 'x@dasolprism.com')->count(), '거절된 요청은 계정을 만들지 않아야 한다');
+        $this->assertSame(0, User::where('email', 'x@example.test')->count(), '거절된 요청은 계정을 만들지 않아야 한다');
     }
 
     // ── 자기 잠금 방지 ───────────────────────────────────────────────────
@@ -222,7 +222,7 @@ class UserAccessAdminTest extends TestCase
         $this->actingAs($this->user('admin'));
 
         $res = $this->svc()->save([
-            'name' => '김현장', 'email' => 'site@dasolprism.com',
+            'name' => '김현장', 'email' => 'site@example.test',
             'role' => 'site_manager', 'scope' => 'site', 'status' => 'active',
         ]);
 
@@ -264,14 +264,14 @@ class UserAccessAdminTest extends TestCase
         $site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
 
         $res = $this->svc()->save([
-            'name' => '강민철', 'email' => 'MC.Kang@DasolPrism.com',
+            'name' => '강민철', 'email' => 'MC.Kang@Example.test',
             'role' => 'site_manager', 'scope' => 'site', 'status' => 'active', 'siteId' => (string) $site->id,
             'notes' => 'LG 현장 담당',
         ]);
 
         $this->assertTrue($res['success']);
         $new = User::find($res['id']);
-        $this->assertSame('mc.kang@dasolprism.com', $new->email, '이메일은 소문자로 정규화돼야 중복 판정이 샌다');
+        $this->assertSame('mc.kang@example.test', $new->email, '이메일은 소문자로 정규화돼야 중복 판정이 샌다');
         $this->assertSame($site->id, $new->allowed_site_id);
         $this->assertSame('LG 현장 담당', $new->access_notes);
     }
@@ -299,9 +299,9 @@ class UserAccessAdminTest extends TestCase
         // worker 는 열람 전용 역할이 아니라 컨트롤러를 통과한다 — 그래서 서비스가 막아야 한다.
         $this->actingAs($this->user('worker', 'active', 'self'));
 
-        $this->api('api_saveUserAccess', [['name' => '침입', 'email' => 'w@dasolprism.com', 'role' => 'admin']])
+        $this->api('api_saveUserAccess', [['name' => '침입', 'email' => 'w@example.test', 'role' => 'admin']])
             ->assertOk()->assertJsonPath('success', false);
-        $this->assertSame(0, User::where('email', 'w@dasolprism.com')->count());
+        $this->assertSame(0, User::where('email', 'w@example.test')->count());
     }
 
     public function test_options_only_offer_roles_the_caller_may_grant(): void

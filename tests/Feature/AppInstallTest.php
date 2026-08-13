@@ -23,7 +23,7 @@ class AppInstallTest extends TestCase
 
     private function company(): Company
     {
-        return Company::firstOrCreate(['code' => 'DP'], ['name' => 'DASOL PRISM', 'status' => 'active']);
+        return Company::firstOrCreate(['code' => 'C1'], ['name' => 'ABC ENG', 'status' => 'active']);
     }
 
     private function site(string $code = 'LG_ESS_PH', string $name = 'LG ESS Phoenix'): Site

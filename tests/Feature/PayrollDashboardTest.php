@@ -26,7 +26,7 @@ class PayrollDashboardTest extends TestCase
     {
         parent::setUp();
 
-        $this->company = Company::create(['name' => 'DASOL PRISM', 'code' => 'NMEP']);
+        $this->company = Company::create(['name' => 'ABC ENG', 'code' => 'C1']);
         $this->site = Site::create(['name' => 'LG AZ Plant', 'code' => 'LGES-AZ']);
 
         $this->hourly = Employee::create([

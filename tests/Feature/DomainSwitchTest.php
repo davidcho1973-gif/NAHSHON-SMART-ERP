@@ -19,18 +19,18 @@ class DomainSwitchTest extends TestCase
 
     public function test_it_reports_the_configured_and_the_served_address(): void
     {
-        config(['app.url' => 'https://erp.dasolusa.com']);
+        config(['app.url' => 'https://erp.example.com']);
 
         $res = $this->get('/build-version')->assertOk();
 
-        $res->assertJsonPath('domain.app_url', 'https://erp.dasolusa.com');
+        $res->assertJsonPath('domain.app_url', 'https://erp.example.com');
         $this->assertNotEmpty($res->json('domain.served_from'));
     }
 
     public function test_it_says_plainly_when_the_two_do_not_match(): void
     {
         // 옛 주소가 APP_URL 에 남아 있는 상태.
-        config(['app.url' => 'https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud']);
+        config(['app.url' => 'https://old-address.example.net']);
 
         $this->get('/build-version')
             ->assertOk()
@@ -50,11 +50,11 @@ class DomainSwitchTest extends TestCase
     {
         // 구글 로그인은 이 값과 구글 콘솔이 둘 다 맞아야 된다. 한쪽만 바꾸면 로그인이
         // 통째로 막히는데, 화면에는 영어 오류 한 줄만 뜬다.
-        config(['services.google.redirect' => 'https://erp.dasolusa.com/auth/google/callback']);
+        config(['services.google.redirect' => 'https://erp.example.com/auth/google/callback']);
 
         $this->get('/build-version')
             ->assertOk()
-            ->assertJsonPath('domain.google_redirect', 'https://erp.dasolusa.com/auth/google/callback');
+            ->assertJsonPath('domain.google_redirect', 'https://erp.example.com/auth/google/callback');
     }
 
     public function test_the_deploy_check_warns_about_a_mismatch(): void

@@ -37,7 +37,7 @@ class CommunicationMessengerTest extends TestCase
         $this->communicationService = app(CommunicationService::class);
 
         $this->company = Company::query()->create([
-            'name' => 'Dasol Prism Test',
+            'name' => 'ABC ENG Test',
             'code' => 'NAH-TEST',
         ]);
 

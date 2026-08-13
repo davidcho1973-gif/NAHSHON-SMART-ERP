@@ -28,7 +28,7 @@ class DirectEmployeeRegistrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'NH', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C2', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create([
             'company_id' => $this->company->id, 'code' => 'LGES-AZ', 'name' => 'LG AZ',
             'timezone' => 'America/Phoenix', 'status' => 'active',
@@ -38,7 +38,7 @@ class DirectEmployeeRegistrationTest extends TestCase
     private function admin(): User
     {
         return User::query()->create([
-            'name' => 'Super', 'email' => 'super@nahshonmep.com', 'password' => bcrypt('x'),
+            'name' => 'Super', 'email' => 'super@example.test', 'password' => bcrypt('x'),
             'access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]);
     }
@@ -54,7 +54,7 @@ class DirectEmployeeRegistrationTest extends TestCase
             'company_id' => $this->company->id,
             'site_id' => $this->site->id,
             'name' => 'PM Kim',
-            'email' => 'pmkim@nahshonmep.com',
+            'email' => 'pmkim@example.test',
             'employment_status' => 'active',
         ], $extra));
     }
@@ -88,7 +88,7 @@ class DirectEmployeeRegistrationTest extends TestCase
         $user = User::where('employee_id', $emp->id)->firstOrFail();
         // 이름·소속은 직원 정보에서 그대로 온다 — 사람이 다시 치지 않는다.
         $this->assertSame('PM Kim', $user->name);
-        $this->assertSame('pmkim@nahshonmep.com', $user->email);
+        $this->assertSame('pmkim@example.test', $user->email);
         $this->assertSame('site_manager', $user->access_role);
         $this->assertSame('site', $user->access_scope);
         $this->assertSame($this->site->id, $user->allowed_site_id);

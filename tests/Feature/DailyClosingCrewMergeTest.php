@@ -43,7 +43,7 @@ class DailyClosingCrewMergeTest extends TestCase
             'code' => 'AZ-01', 'name' => 'Arizona Site',
             'timezone' => 'America/Phoenix', 'status' => 'active',
         ]);
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
     }
 
     private function team(string $code, string $name): Team

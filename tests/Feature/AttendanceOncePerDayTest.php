@@ -36,7 +36,7 @@ class AttendanceOncePerDayTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'DP', 'name' => 'TEST CO', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'TEST CO', 'status' => 'active']);
         $this->site = Site::create([
             'code' => 'S1', 'name' => 'Site One',
             'timezone' => 'America/Phoenix', 'status' => 'active',

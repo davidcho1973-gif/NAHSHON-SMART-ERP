@@ -30,7 +30,7 @@ class WorkerScreenViewAsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $site = Site::create([
             'company_id' => $company->id, 'code' => 'LG_ESS_PH', 'name' => 'LG ESS Phoenix',
             'timezone' => 'America/Phoenix', 'status' => 'active',

@@ -18,7 +18,7 @@ class MobileNavAdminScreensTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** 데스크톱 사이드바의 "DASOL PRISM 통합관리" 화면들. */
+    /** 데스크톱 사이드바의 "ABC ENG 통합관리" 화면들. */
     private const ADMIN_VIEWS = [
         'access-control', 'attendance-logs', 'applicant-admin', 'employee-admin',
         'item-master', 'contract-admin', 'site-admin', 'pay-profiles', 'messenger-admin',

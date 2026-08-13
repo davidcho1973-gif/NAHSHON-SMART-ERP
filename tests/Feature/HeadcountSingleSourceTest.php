@@ -44,7 +44,7 @@ class HeadcountSingleSourceTest extends TestCase
             'code' => 'AZ-01', 'name' => 'Arizona Site',
             'timezone' => 'America/Phoenix', 'status' => 'active',
         ]);
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->team = Team::create([
             'company_id' => $this->company->id,
             'site_id' => $this->site->id,

@@ -83,8 +83,8 @@ class ApplicantIntakeTest extends TestCase
         Storage::fake('public');
 
         $company = Company::query()->create([
-            'code' => 'DASOL PRISM',
-            'name' => 'DASOL PRISM',
+            'code' => 'ABC ENG',
+            'name' => 'ABC ENG',
             'status' => 'active',
         ]);
         $site = Site::query()->create([
