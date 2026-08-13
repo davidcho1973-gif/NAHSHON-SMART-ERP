@@ -7,11 +7,11 @@
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SMART COMPANY">
+  <meta name="apple-mobile-web-app-title" content="{{ \App\Support\Org::shortName() }}">
   <link rel="manifest" href="{{ route('erp.manifest') }}">
   <link rel="icon" href="{{ asset('images/app-icon.svg') }}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="{{ asset('images/app-icon.svg') }}">
-  <title>Sign In - SMART COMPANY ERP</title>
+  <title>Sign In - {{ \App\Support\Org::name() }} SMART ERP</title>
   <style>
     :root {
       color-scheme: light;
@@ -64,7 +64,7 @@
       border-radius: 8px;
       display: grid;
       place-items: center;
-      background: #0ea5e9;
+      background: {{ \App\Support\Org::color() }};
       color: white;
       font-size: 14px;
     }
@@ -246,8 +246,8 @@
         width: 36px;
         height: 36px;
         border-radius: 12px;
-        background: linear-gradient(135deg, #38bdf8, #2563eb);
-        box-shadow: 0 12px 30px rgba(37, 99, 235, .38);
+        background: {{ \App\Support\Org::color() }};
+        box-shadow: 0 12px 30px {{ \App\Support\Org::colorDim(0.38) }};
       }
 
       .brand span:last-child {
@@ -319,12 +319,12 @@
         border-radius: 24px;
         display: grid;
         place-items: center;
-        background: linear-gradient(135deg, rgba(56, 189, 248, .96), rgba(37, 99, 235, .96));
+        background: {{ \App\Support\Org::color() }};
         color: #fff;
         font-size: 26px;
         font-weight: 900;
         letter-spacing: .02em;
-        box-shadow: 0 22px 60px rgba(37, 99, 235, .42);
+        box-shadow: 0 22px 60px {{ \App\Support\Org::colorDim(0.42) }};
       }
 
       .mobile-kicker {
@@ -432,14 +432,37 @@
         color: #93a4bc;
       }
     }
+    /* 올린 그림 로고. 배경이 뚫린 로고 뒤에 색을 깔면 로고 색과 부딪히고,
+       흰 로고는 색 판 위에서 뭉개진다. 바탕과 그림자를 걷고 비율만 지킨다.
+
+       스타일 블록 맨 끝에 둔다 — 화면 폭에 따라 .brand-mark 를 다시 칠하는
+       규칙들이 위에 있어서, 앞쪽에 두면 그쪽이 이긴다. */
+    .brand-mark-image,
+    .mobile-app-icon-image {
+      background: transparent !important;
+      box-shadow: none !important;
+      object-fit: contain;
+      border-radius: 0;
+      width: auto;
+    }
+
+    /* 회사 로고는 대개 가로로 길다(글자가 들어 있으니까). 정사각형에 가두면
+       세로가 10px 남짓으로 줄어 무엇인지 알아볼 수 없다 — 높이만 맞추고
+       가로는 필요한 만큼 준다. */
+    .brand-mark-image { height: 34px; max-width: 190px; }
+    .mobile-app-icon-image { height: 72px; max-width: 240px; }
   </style>
 </head>
 
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">NS</span>
-      <span>SMART COMPANY</span>
+      @if (\App\Support\Org::hasLogo())
+        <img class="brand-mark brand-mark-image" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="">
+      @else
+        <span class="brand-mark">{{ \App\Support\Org::initials() }}</span>
+      @endif
+      <span>{{ \App\Support\Org::name() }}</span>
     </div>
     <a class="admin-link" href="{{ url('/admin/login') }}">Password Sign In</a>
   </header>
@@ -447,10 +470,14 @@
   <main class="page">
     <section class="card" aria-label="ERP sign in">
       <div class="mobile-only mobile-app-hero" aria-hidden="true">
-        <div class="mobile-app-icon">NS</div>
+        @if (\App\Support\Org::hasLogo())
+          <img class="mobile-app-icon mobile-app-icon-image" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="">
+        @else
+          <div class="mobile-app-icon">{{ \App\Support\Org::initials() }}</div>
+        @endif
         <div>
           <div class="mobile-kicker">{{ \App\Support\Org::name() }} FIELD ERP</div>
-          <h1>SMART COMPANY</h1>
+          <h1>{{ \App\Support\Org::name() }}</h1>
           <p class="subtitle">현장, 직원, 안전, 장비 데이터를 휴대폰에서 바로 확인합니다.</p>
         </div>
       </div>
@@ -463,7 +490,7 @@
 
       <div class="auth-actions">
       <h1>Sign In</h1>
-      <p class="subtitle">Google 인증 후 SMART COMPANY ERP 홈으로 이동합니다.</p>
+      <p class="subtitle">Google 인증 후 {{ \App\Support\Org::name() }} ERP 홈으로 이동합니다.</p>
 
       @if ($sessionExpired ?? false)
         <div class="notice error">로그인 세션이 만료되었습니다. Google로 다시 로그인해 주세요.</div>

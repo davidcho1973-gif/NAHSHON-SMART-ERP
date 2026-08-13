@@ -24,8 +24,9 @@ return new class extends Migration
             $table->string('company_type', 16)->default('unknown')->after('status')->index();
         });
 
-        // 시드로 만들어지는 자사(DASOL PRISM)는 확실하므로 미리 분류해 둔다.
-        DB::table('companies')->where('code', 'DASOL-PRISM')->update(['company_type' => 'own']);
+        // 시드로 만들어지는 자사는 확실하므로 미리 분류해 둔다. 자사 코드는 배포마다
+        // 다르다 — 여기 특정 회사 코드를 박아 두면 다음 고객에서는 아무것도 못 찾는다.
+        DB::table('companies')->where('code', \App\Support\Org::code())->update(['company_type' => 'own']);
     }
 
     public function down(): void

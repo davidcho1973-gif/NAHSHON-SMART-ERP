@@ -14,7 +14,7 @@
   'use strict';
 
   var A = null;
-  var state = { fields: [], readOnly: [], canManage: false, dirty: false };
+  var state = { fields: [], readOnly: [], logo: null, canManage: false, dirty: false, busy: false };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -65,6 +65,91 @@
       '</div>';
   }
 
+  /**
+   * 로고 칸.
+   *
+   * 글자 칸들과 함께 저장 버튼에 묶지 않는다. 파일은 고른 즉시 올라가고, 그 결과를
+   * 바로 옆 미리보기에서 본다 — 로고는 "맞게 보이나" 를 눈으로 확인하는 일이라,
+   * 저장을 누르고 새로고침해야 결과가 보이면 몇 번을 왔다 갔다 하게 된다.
+   */
+  function logoBlock() {
+    var u = ui();
+    var l = state.logo || {};
+    var preview = l.has
+      ? '<img src="' + u.esc(l.url) + '" alt="로고" ' +
+        'style="max-width:100%;max-height:100%;object-fit:contain">'
+      : '<span style="font-size:15px;font-weight:800;color:#fff;letter-spacing:.5px">' +
+        u.esc(l.initials || '') + '</span>';
+
+    return '<div style="margin-bottom:22px">' +
+      '<label style="display:block;font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:6px">로고</label>' +
+      '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">' +
+      '<div style="width:72px;height:72px;flex-shrink:0;display:flex;align-items:center;justify-content:center;' +
+      'border-radius:12px;border:1px solid var(--border-default);padding:8px;' +
+      (l.has ? 'background:var(--bg-surface)' : 'background:var(--brand-primary)') + '">' + preview + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<input type="file" id="org-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" ' +
+      'onchange="window.AdminOrg.uploadLogo(this)" style="display:none">' +
+      u.rowButton(l.has ? '다른 그림으로' : '그림 올리기', "document.getElementById('org-logo-file').click()") +
+      (l.has ? u.rowButton('지우기', 'window.AdminOrg.removeLogo()', 'danger') : '') +
+      '</div></div>' +
+      '<div style="font-size:12px;color:var(--text-tertiary);margin-top:8px;line-height:1.6">' +
+      'PNG · JPG · WEBP · SVG, ' + u.esc(String(l.maxMb || 2)) + 'MB 까지. 배경이 뚫린 PNG 나 SVG 가 가장 깔끔합니다.<br>' +
+      '작은 자리(사이드바 32px)에 들어가므로 글씨가 많은 로고는 잘 안 읽힙니다. ' +
+      '올리지 않으면 회사 이름에서 뽑은 글자가 대신 들어갑니다.' +
+      '</div></div>';
+  }
+
+  function uploadLogo(input) {
+    var u = ui();
+    var file = input && input.files && input.files[0];
+    input.value = '';
+    if (!file || state.busy) return;
+
+    state.busy = true;
+    u.toast('올리는 중…', 'info');
+    u.uploadFile('/org-api/logo', file).then(function (res) {
+      state.busy = false;
+      if (!res || !res.success) { u.toast((res && res.error) || '올리지 못했습니다.', 'error'); return; }
+      applyLoad(res);
+      paint(render());
+      u.toast('로고를 바꿨습니다. 사이드바는 새로고침 후 바뀝니다.', 'success');
+    }).catch(function (e) {
+      state.busy = false;
+      u.toast(e.message || '올리지 못했습니다.', 'error');
+    });
+  }
+
+  function removeLogo() {
+    var u = ui();
+    u.confirmDanger({
+      title: '로고를 지울까요?',
+      body: '지우면 회사 이름에서 뽑은 글자가 대신 들어갑니다. 그림 파일은 저장돼 있지 않으므로 다시 올려야 합니다.',
+      confirmLabel: '지우기',
+    }).then(function (ok) {
+      if (!ok || state.busy) return;
+      state.busy = true;
+      var tokenEl = document.querySelector('meta[name="csrf-token"]');
+      fetch('/org-api/logo', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : '',
+        },
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        state.busy = false;
+        if (!res || !res.success) { u.toast((res && res.error) || '지우지 못했습니다.', 'error'); return; }
+        applyLoad(res);
+        paint(render());
+        u.toast('로고를 지웠습니다. 사이드바는 새로고침 후 바뀝니다.', 'success');
+      }).catch(function (e) {
+        state.busy = false;
+        u.toast(e.message || '지우지 못했습니다.', 'error');
+      });
+    });
+  }
+
   function readOnlyBlock() {
     var u = ui();
     if (!state.readOnly.length) return '';
@@ -101,6 +186,7 @@
       u.primaryButton('저장', 'window.AdminOrg.save()', 'floppy-disk')
     ) +
       '<div style="max-width:560px">' +
+      logoBlock() +
       state.fields.map(field).join('') +
       readOnlyBlock() +
       '</div>';
@@ -136,6 +222,14 @@
     });
   }
 
+  function applyLoad(res) {
+    if (!res) return;
+    if (res.fields) state.fields = res.fields;
+    if (res.readOnly) state.readOnly = res.readOnly;
+    if (res.logo) state.logo = res.logo;
+    if ('canManage' in res) state.canManage = !!res.canManage;
+  }
+
   function save() {
     var u = ui();
     clearErrors();
@@ -145,8 +239,7 @@
         else u.toast(res.error || '저장하지 못했습니다.', 'error');
         return;
       }
-      state.fields = res.fields || state.fields;
-      state.readOnly = res.readOnly || state.readOnly;
+      applyLoad(res);
       state.dirty = false;
       paint(render());
       // 이름을 바꾸면 화면 곳곳(제목·사이드바)이 아직 옛 이름이다. 서버가 그리는
@@ -159,9 +252,7 @@
 
   function reload() {
     return call('api_getOrgSettings', []).then(function (res) {
-      state.canManage = !!res.canManage;
-      state.fields = res.fields || [];
-      state.readOnly = res.readOnly || [];
+      applyLoad(res);
       paint(render());
     });
   }
@@ -180,6 +271,8 @@
     save: save,
     touch: touch,
     syncColor: syncColor,
+    uploadLogo: uploadLogo,
+    removeLogo: removeLogo,
     _state: state,
   };
 })(window);

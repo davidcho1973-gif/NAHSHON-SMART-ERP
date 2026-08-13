@@ -523,7 +523,7 @@ class DocumentIntelligenceController extends Controller
                 ]);
             }
             fclose($stream);
-        }, 'NAHSHON-Document-Index-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, \Illuminate\Support\Str::slug(\App\Support\Org::name()).'-document-index-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     private function scopedDocument(User $user, int $id): Builder

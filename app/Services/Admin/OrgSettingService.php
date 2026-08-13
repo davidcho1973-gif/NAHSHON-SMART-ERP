@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Support\Org;
+use App\Support\OrgLogo;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -47,6 +48,14 @@ class OrgSettingService
             'success' => true,
             'canManage' => $this->canManage(),
             'fields' => $fields,
+            'logo' => [
+                'has' => Org::hasLogo(),
+                // 주소에 로고 판을 붙인다. 안 붙이면 로고를 바꿔도 브라우저가 어제
+                // 받아 둔 그림을 계속 보여 주고, 원인이 캐시라는 걸 알아내기까지가 길다.
+                'url' => Org::hasLogo() ? route('org.logo').'?v='.Org::logoVersion() : null,
+                'initials' => Org::initials(),
+                'maxMb' => round(OrgLogo::MAX_UPLOAD_BYTES / 1024 / 1024, 1),
+            ],
             // 여기서 못 고치는 것들. 화면에 같이 보여 주지 않으면 사람들이 찾다가 지친다.
             'readOnly' => [
                 ['label' => '앱 주소', 'value' => (string) config('app.url'),

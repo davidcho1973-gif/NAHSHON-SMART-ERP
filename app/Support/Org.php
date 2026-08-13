@@ -61,6 +61,27 @@ final class Org
         ],
     ];
 
+    /**
+     * 그림 로고가 사는 자리. EDITABLE 에 넣지 않는다 — 저 목록은 글자 칸을 그리는
+     * 데 쓰이고, 로고는 파일이라 다루는 길이 처음부터 끝까지 다르다.
+     */
+    public const LOGO_KEY = 'logo';
+
+    public const LOGO_MIME_KEY = 'logo_mime';
+
+    public const LOGO_VERSION_KEY = 'logo_version';
+
+    /**
+     * 요청마다 읽지 않는 줄.
+     *
+     * 로고 그림은 수십 KB 다. 설정 한 줄 읽자고 매 요청에 그걸 같이 끌고 오면,
+     * 로고를 쓰지 않는 화면까지 전부 느려진다. 필요할 때(그림을 실제로 내보낼 때)
+     * 만 따로 읽는다.
+     *
+     * @var array<int, string>
+     */
+    private const HEAVY = [self::LOGO_KEY];
+
     /** @var array<string, string|null>|null */
     private static ?array $stored = null;
 
@@ -150,7 +171,58 @@ final class Org
 
     public static function color(): string
     {
-        return self::get('color') ?? '#0ea5e9';
+        $color = self::get('color') ?? '';
+
+        // 화면에서 손으로 넣는 값이라 오타가 들어온다. 그대로 style 에 흘리면
+        // CSS 한 줄이 통째로 무시되고 강조색이 사라진 화면이 남는다.
+        return preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $color) === 1
+            ? $color
+            : '#0ea5e9';
+    }
+
+    /** 대표 색을 옅게 깐 배경. 눌린 메뉴·태그 뒤에 쓴다. */
+    public static function colorDim(float $alpha = 0.15): string
+    {
+        $hex = ltrim(self::color(), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        return vsprintf('rgba(%d, %d, %d, %s)', [
+            hexdec(substr($hex, 0, 2)),
+            hexdec(substr($hex, 2, 2)),
+            hexdec(substr($hex, 4, 2)),
+            rtrim(rtrim(number_format($alpha, 2, '.', ''), '0'), '.'),
+        ]);
+    }
+
+    /**
+     * 로고 자리에 들어갈 두어 글자.
+     *
+     * 고객마다 그림 로고를 받아 두는 것이 제일 좋지만, 배포 첫날부터 그림이 있는
+     * 경우는 드물다. 그동안 화면 왼쪽 위에 남의 회사 머리글자가 떠 있으면 고객이
+     * 가장 먼저 보는 것이 그것이 된다. 이름에서 뽑으면 적어도 틀리지는 않는다.
+     */
+    public static function initials(): string
+    {
+        $words = preg_split('/[\s._\-\/]+/u', self::shortName(), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($words === []) {
+            return 'ERP';
+        }
+
+        // 이미 약칭인 이름(KSR, ABC)은 자르지 않는다. KS 로 줄이면 무슨 회사인지
+        // 알아볼 수 없고, 알아볼 수 없는 로고는 없느니만 못하다.
+        if (preg_match('/^[A-Z0-9]{2,4}$/u', $words[0]) === 1) {
+            return $words[0];
+        }
+
+        if (count($words) >= 2) {
+            return mb_strtoupper(mb_substr($words[0], 0, 1).mb_substr($words[1], 0, 1));
+        }
+
+        // 한 단어면 앞에서 자른다. 한글은 두 글자에 이미 뜻이 실려 있어서
+        // "다솔" 처럼 그대로 읽힌다.
+        return mb_strtoupper(mb_substr($words[0], 0, mb_strlen($words[0]) <= 3 ? mb_strlen($words[0]) : 2));
     }
 
     public static function supportEmail(): ?string
@@ -161,6 +233,67 @@ final class Org
     public static function supportPhone(): ?string
     {
         return self::get('support_phone');
+    }
+
+    // ── 그림 로고 ───────────────────────────────────────────────────────
+    //
+    // 그림은 데이터베이스에 넣는다. 파일로 두면 배포마다 사라지거나(Laravel Cloud 의
+    // 로컬 디스크는 배포할 때 초기화된다) 오브젝트 스토리지를 먼저 붙여야 하는데,
+    // 그러면 "환경변수만 채우면 새 고객이 선다"는 규칙이 로고 하나 때문에 깨진다.
+    // 로고는 수십 KB 라 표에 넣어도 무겁지 않다.
+
+    public static function hasLogo(): bool
+    {
+        return self::stored(self::LOGO_MIME_KEY) !== null;
+    }
+
+    public static function logoMime(): ?string
+    {
+        return self::stored(self::LOGO_MIME_KEY);
+    }
+
+    /**
+     * 주소 뒤에 붙이는 값. 로고를 바꾸면 이 값이 바뀌고, 그래야 이미 받아 둔
+     * 옛 그림을 들고 있는 브라우저가 새 그림을 가지러 온다. 이게 없으면
+     * "바꿨는데 안 바뀐다" 가 되고, 원인이 캐시라는 걸 알아내기까지가 길다.
+     */
+    public static function logoVersion(): string
+    {
+        return self::stored(self::LOGO_VERSION_KEY) ?? '0';
+    }
+
+    /** 실제 그림 바이트. 내보낼 때만 읽는다. */
+    public static function logoBytes(): ?string
+    {
+        $row = OrgSetting::query()->where('key', self::LOGO_KEY)->value('value');
+        if (! is_string($row) || $row === '') {
+            return null;
+        }
+
+        $bytes = base64_decode($row, true);
+
+        return is_string($bytes) && $bytes !== '' ? $bytes : null;
+    }
+
+    public static function putLogo(string $bytes, string $mime): void
+    {
+        OrgSetting::query()->updateOrCreate(['key' => self::LOGO_KEY], ['value' => base64_encode($bytes)]);
+        OrgSetting::query()->updateOrCreate(['key' => self::LOGO_MIME_KEY], ['value' => $mime]);
+        OrgSetting::query()->updateOrCreate(
+            ['key' => self::LOGO_VERSION_KEY],
+            ['value' => substr(hash('sha256', $bytes), 0, 12)]
+        );
+
+        self::forget();
+    }
+
+    public static function removeLogo(): void
+    {
+        OrgSetting::query()
+            ->whereIn('key', [self::LOGO_KEY, self::LOGO_MIME_KEY, self::LOGO_VERSION_KEY])
+            ->delete();
+
+        self::forget();
     }
 
     /** companies 표에서 자사를 가리키는 코드. 화면에 보이는 이름이 아니다. */
@@ -214,7 +347,9 @@ final class Org
                 return self::$stored = [];
             }
 
-            return self::$stored = OrgSetting::query()->pluck('value', 'key')->all();
+            return self::$stored = OrgSetting::query()
+                ->whereNotIn('key', self::HEAVY)
+                ->pluck('value', 'key')->all();
         } catch (Throwable) {
             return self::$stored = [];
         }

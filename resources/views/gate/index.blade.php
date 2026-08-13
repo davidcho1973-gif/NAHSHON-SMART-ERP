@@ -21,6 +21,8 @@
         .sheet { width: min(100%, 460px); background: #fff; border-radius: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.35); padding: 22px; }
         .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
         .brand { margin: 0 0 4px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: #4f46e5; font-weight: 800; }
+        /* 올린 그림 로고. 작업자가 출입구에서 보는 화면이라 회사 표시가 크게 도움이 된다. */
+        .brand-logo { display: block; max-height: 34px; max-width: 150px; object-fit: contain; margin: 0 0 8px; }
         h1 { margin: 0 0 2px; font-size: 1.5rem; }
         .site { margin: 0 0 16px; color: #475569; font-size: .95rem; font-weight: 700; }
         .langs { display: flex; gap: 4px; flex-shrink: 0; }
@@ -56,6 +58,9 @@
     <main class="sheet">
         <div class="top">
             <div>
+                @if (\App\Support\Org::hasLogo())
+                    <img class="brand-logo" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="{{ \App\Support\Org::name() }}">
+                @endif
                 <p class="brand">{{ \App\Support\Org::name() }}</p>
                 <h1 id="t-title"></h1>
             </div>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>SMART COMPANY 메신저</title>
+    <title>{{ \App\Support\Org::name() }} 메신저</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f6f7f9; color: #111827; }
         body { margin: 0; min-height: 100vh; background: #f6f7f9; }
@@ -50,7 +50,7 @@
         <header>
             <div class="top">
                 <div>
-                    <p class="eyebrow">SMART COMPANY</p>
+                    <p class="eyebrow">{{ \App\Support\Org::name() }}</p>
                     <h1>내부 메신저</h1>
                 </div>
                 <a class="back" href="{{ route('attendance-app.index') }}">출석 홈</a>
