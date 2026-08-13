@@ -34,7 +34,7 @@ class ContractAdminTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->us = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->us = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->them = Company::create(['code' => 'LG', 'name' => 'LG', 'status' => 'active']);
         $this->site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         Storage::fake('local');

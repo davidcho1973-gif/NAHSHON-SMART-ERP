@@ -24,7 +24,7 @@ class WorkerJoinFreeTextTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $own = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
+        $own = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
         $this->site = Site::create([
             'company_id' => $own->id, 'code' => 'LG_ESS_PH', 'name' => 'LG ESS Phoenix',
             'timezone' => 'America/Phoenix', 'status' => 'active',

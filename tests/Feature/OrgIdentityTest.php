@@ -57,7 +57,7 @@ class OrgIdentityTest extends TestCase
             '이미 약칭이면 자르지 않는다' => ['KSR', 'KSR'],
             '두 단어면 머리글자 하나씩' => ['Smart Company', 'SC'],
             '약칭 뒤에 말이 붙어도 약칭이 이긴다' => ['ABC 건설', 'ABC'],
-            '소문자는 대문자로' => ['dasolusa corp', 'DC'],
+            '소문자는 대문자로' => ['acme corp', 'AC'],
             '한글 한 단어는 두 글자' => ['다솔유에스에이', '다솔'],
             '짧은 한글은 통째로' => ['한백', '한백'],
             '점·하이픈도 단어 경계다' => ['Han-Baek', 'HB'],
@@ -250,11 +250,22 @@ class OrgIdentityTest extends TestCase
             base_path('public/js'),
             base_path('database/seeders'),
             base_path('database/migrations'),
+            // 시험 자료도 본다. 고객에게 나가지는 않지만, 시험을 읽는 사람은
+            // 거기 적힌 회사 이름을 이 제품이 아는 회사라고 읽는다. 그래서
+            // "이 회사가 뭔가 특별한가" 를 알아보는 데 시간을 쓴다.
+            base_path('tests'),
         ];
 
         // 지금 이름과 옛 이름을 함께 본다. 사명이 바뀌기 전에 박아 둔 이름은
         // 아무도 다시 안 찾아보기 때문에 가장 오래 살아남는다.
         $names = ['DASOL', 'NAHSHON'];
+
+        // 감시하는 쪽은 뺀다. 무엇을 찾는지 적어 두려면 그 이름을 적을 수밖에
+        // 없는데, 그것까지 걸리면 감시를 없애야만 통과하는 시험이 된다.
+        $watchers = [
+            base_path('tests/Feature/OrgIdentityTest.php'),
+            base_path('tests/Feature/OrgBrandInScreensTest.php'),
+        ];
 
         // 예외는 이 둘뿐이다 — 휴대폰 안에만 있는 저장소 키다. 화면에도, 문서에도,
         // 이메일에도 나가지 않고 고객마다 도메인이 다르니 겹치지도 않는다. 반면
@@ -267,6 +278,9 @@ class OrgIdentityTest extends TestCase
             $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
             foreach ($files as $file) {
                 if (! $file->isFile() || ! in_array($file->getExtension(), ['php', 'js'], true)) {
+                    continue;
+                }
+                if (in_array($file->getPathname(), $watchers, true)) {
                     continue;
                 }
                 $body = str_replace($allowed, '', (string) file_get_contents($file->getPathname()));

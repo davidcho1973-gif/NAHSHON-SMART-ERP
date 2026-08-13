@@ -30,8 +30,8 @@ class EquipmentTest extends TestCase
         parent::setUp();
 
         $this->company = Company::create([
-            'code' => 'DASOL PRISM',
-            'name' => 'DASOL PRISM',
+            'code' => 'ABC ENG',
+            'name' => 'ABC ENG',
             'status' => 'active',
         ]);
 
@@ -153,7 +153,7 @@ class EquipmentTest extends TestCase
         $details = [
             'quote_no' => 'Q-2391330',
             'ship_to_address' => '335 E Pecos Rd Queen Creek, AZ 85140',
-            'lessee' => ['name' => 'DASOL PRISM LLC', 'contact_email' => 'lili@outlook.com'],
+            'lessee' => ['name' => 'ABC ENG LLC', 'contact_email' => 'lili@outlook.com'],
             'pricing' => ['total_with_tax' => 3683.62],
         ];
 
@@ -328,7 +328,7 @@ class EquipmentTest extends TestCase
                         'quote_no' => 'Q-2391330',
                         'ship_to_address' => '335 E Pecos Rd Queen Creek, AZ 85140',
                         'sales_rep' => ['name' => 'Daniel Carrillo Gonzalez', 'phone' => '6023259147'],
-                        'lessee' => ['name' => 'DASOL PRISM LLC', 'contact_email' => 'lili@outlook.com'],
+                        'lessee' => ['name' => 'ABC ENG LLC', 'contact_email' => 'lili@outlook.com'],
                         'terms' => ['payment_terms' => 'Net 10 Days', 'min_lease_term' => '4 cycles'],
                     ],
                 ])]]]]],

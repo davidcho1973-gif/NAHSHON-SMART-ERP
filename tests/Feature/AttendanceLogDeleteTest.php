@@ -35,7 +35,7 @@ class AttendanceLogDeleteTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $company = Company::create(['code' => 'DP', 'name' => 'TEST CO', 'status' => 'active']);
+        $company = Company::create(['code' => 'C1', 'name' => 'TEST CO', 'status' => 'active']);
         $this->site = Site::create([
             'code' => 'S1', 'name' => 'Site One',
             'timezone' => 'America/Phoenix', 'status' => 'active',

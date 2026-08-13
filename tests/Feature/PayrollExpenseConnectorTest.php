@@ -30,8 +30,8 @@ class PayrollExpenseConnectorTest extends TestCase
         parent::setUp();
 
         $this->company = Company::create([
-            'code' => 'DASOL PRISM',
-            'name' => 'DASOL PRISM',
+            'code' => 'ABC ENG',
+            'name' => 'ABC ENG',
             'status' => 'active',
         ]);
 

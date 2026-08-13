@@ -91,7 +91,7 @@ class DocumentIntelligenceHubTest extends TestCase
                     'document_number' => 'NOTICE-017',
                     'revision' => '0',
                     'sender' => 'General Contractor',
-                    'recipients' => ['NAHSHON MEP'],
+                    'recipients' => ['XYZ MEP'],
                     'document_date' => '2026-07-20',
                     'response_due_on' => '2026-07-25',
                     'confidentiality' => 'confidential',
@@ -125,7 +125,7 @@ class DocumentIntelligenceHubTest extends TestCase
         $this->assertSame('notice', $processed->document_type);
         $this->assertSame('NOTICE-017', $processed->document_number);
         $this->assertSame('2026-07-25', $processed->response_due_on?->toDateString());
-        $this->assertSame('NAHSHON / LGES-AZ-2026-001 / Claims / Notices / 2026', $processed->virtual_path);
+        $this->assertSame('XYZ / LGES-AZ-2026-001 / Claims / Notices / 2026', $processed->virtual_path);
         $this->assertStringContainsString('Liquidated Damages', $processed->search_text);
         $this->assertStringStartsWith('document-intelligence/library/', $processed->file_path);
         Storage::disk('local')->assertExists($processed->file_path);
@@ -277,7 +277,7 @@ class DocumentIntelligenceHubTest extends TestCase
     /** @return array{Company, Site, Project} */
     private function projectFixture(): array
     {
-        $company = Company::query()->create(['code' => 'NAHSHON', 'name' => 'NAHSHON MEP', 'status' => 'active']);
+        $company = Company::query()->create(['code' => 'XYZ', 'name' => 'XYZ MEP', 'status' => 'active']);
         $site = Site::query()->create([
             'company_id' => $company->id,
             'code' => 'LGES-AZ',

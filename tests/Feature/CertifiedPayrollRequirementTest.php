@@ -43,7 +43,7 @@ class CertifiedPayrollRequirementTest extends TestCase
             'code' => 'AZ-01', 'name' => 'LG PHOENIX',
             'timezone' => 'America/Phoenix', 'status' => 'active',
         ]);
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->start = Carbon::parse('2026-08-03');
         $this->end = Carbon::parse('2026-08-16');
     }

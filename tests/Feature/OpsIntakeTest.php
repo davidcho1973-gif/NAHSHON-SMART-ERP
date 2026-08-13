@@ -28,7 +28,7 @@ class OpsIntakeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $company = Company::create(['code' => 'DASOL PRISM', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::create(['code' => 'ABC ENG', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create(['company_id' => $company->id, 'code' => 'LG-PH', 'name' => 'LG Phoenix', 'status' => 'active']);
 
         Project::firstOrCreate(['project_code' => 'LG-01'], ['name' => 'LG', 'construction_type' => 'equipment_setting']);

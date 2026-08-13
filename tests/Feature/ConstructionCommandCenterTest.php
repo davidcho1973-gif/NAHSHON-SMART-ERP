@@ -282,8 +282,8 @@ class ConstructionCommandCenterTest extends TestCase
     private function siteFixture(string $code, ?Company $company = null): array
     {
         $company ??= Company::query()->create([
-            'code' => 'NAHSHON-'.$code,
-            'name' => 'NAHSHON '.$code,
+            'code' => 'XYZ-'.$code,
+            'name' => 'XYZ '.$code,
             'status' => 'active',
         ]);
         $site = Site::query()->create([

@@ -48,7 +48,7 @@ class WbsManualUploadTest extends TestCase
                         'tasks' => [[
                             'task_no' => '1.1', 'task_name' => '반입',
                             'sub_tasks' => [
-                                ['sub_no' => '1.1.1', 'sub_name' => '양중', 'company' => 'DASOL PRISM', 'manhours' => 40, 'days' => 2, 'ehs' => 'high'],
+                                ['sub_no' => '1.1.1', 'sub_name' => '양중', 'company' => 'ABC ENG', 'manhours' => 40, 'days' => 2, 'ehs' => 'high'],
                             ],
                         ]],
                     ]]]),

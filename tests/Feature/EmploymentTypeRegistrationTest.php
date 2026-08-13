@@ -65,7 +65,7 @@ class EmploymentTypeRegistrationTest extends TestCase
     public function test_own_company_registers_as_direct(): void
     {
         $site = $this->site();
-        $own = $this->company('DASOL PRISM', Company::TYPE_OWN);
+        $own = $this->company('ABC ENG', Company::TYPE_OWN);
 
         $this->register($site, $own, 'own@example.com')->assertStatus(200);
 
@@ -87,7 +87,7 @@ class EmploymentTypeRegistrationTest extends TestCase
         $site = $this->site();
         $sub = $this->company('한빛전기', Company::TYPE_PARTNER);
 
-        // 협력사 직원이 실수로 "DASOL PRISM 소속" 을 골라도 회사 분류가 이긴다(급여 오분류 방지).
+        // 협력사 직원이 실수로 "ABC ENG 소속" 을 골라도 회사 분류가 이긴다(급여 오분류 방지).
         $this->register($site, $sub, 'mistake@example.com', ['employment_type' => Employee::TYPE_DIRECT])
             ->assertStatus(200);
 
@@ -112,7 +112,7 @@ class EmploymentTypeRegistrationTest extends TestCase
     public function test_form_shows_company_types_for_live_hint(): void
     {
         $site = $this->site();
-        $this->company('DASOL PRISM', Company::TYPE_OWN);
+        $this->company('ABC ENG', Company::TYPE_OWN);
         $this->company('한빛전기', Company::TYPE_PARTNER);
 
         $res = $this->get('/join/w/'.$site->id);
@@ -141,7 +141,7 @@ class EmploymentTypeRegistrationTest extends TestCase
     public function test_legacy_qr_loses_to_a_classified_company(): void
     {
         $site = $this->site();
-        $own = $this->company('DASOL PRISM', Company::TYPE_OWN);
+        $own = $this->company('ABC ENG', Company::TYPE_OWN);
 
         // 예전 협력사 QR 로 들어왔어도 회사가 자사로 분류돼 있으면 회사가 이긴다.
         $this->register($site, $own, 'both@example.com', ['qr_type' => 'indirect'])->assertStatus(200);

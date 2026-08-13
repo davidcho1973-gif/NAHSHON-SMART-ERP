@@ -32,7 +32,7 @@ class ApplicantAdminTest extends TestCase
         parent::setUp();
         Storage::fake('public');
         $this->site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
     }
 
     private function user(string $role, array $extra = []): User

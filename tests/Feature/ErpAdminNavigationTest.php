@@ -69,16 +69,16 @@ class ErpAdminNavigationTest extends TestCase
     {
         // 회사 전환은 예전 관리자 패널에만 있었다. 패널이 없어졌으니 ERP 안에 있어야
         // 여러 법인을 오가는 사람이 갇히지 않는다. 회사가 하나면 감춘다.
-        $a = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
-        $b = Company::create(['code' => 'NH', 'name' => 'NAHSHON MEP', 'status' => 'active']);
+        $a = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
+        $b = Company::create(['code' => 'C2', 'name' => 'XYZ MEP', 'status' => 'active']);
 
         $admin = $this->admin();   // super_admin 은 모든 회사를 본다
         $this->actingAs($admin)
             ->get('/')
             ->assertOk()
             ->assertSee(route('company.switch'))
-            ->assertSee('DASOL PRISM')
-            ->assertSee('NAHSHON MEP');
+            ->assertSee('ABC ENG')
+            ->assertSee('XYZ MEP');
 
         // 한 회사에만 속한 사람에게는 고를 것이 없다.
         $single = User::factory()->create([

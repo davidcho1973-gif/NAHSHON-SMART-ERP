@@ -40,7 +40,7 @@ class AttendanceGeoNetworkTest extends TestCase
         parent::setUp();
         Carbon::setTestNow(Carbon::parse('2026-08-10 09:00:00'));
 
-        $company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->site = Site::create([
             'company_id' => $company->id,
             'code' => 'LG_ESS_PH',

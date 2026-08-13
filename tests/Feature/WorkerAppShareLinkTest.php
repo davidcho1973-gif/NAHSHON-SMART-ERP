@@ -25,7 +25,7 @@ class WorkerAppShareLinkTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->employee = Employee::create([
             'company_id' => $company->id, 'name' => 'Cristian rosas',
             'employment_status' => 'active', 'preferred_language' => 'es',

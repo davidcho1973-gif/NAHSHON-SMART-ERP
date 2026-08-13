@@ -26,7 +26,7 @@ class ItemMasterAdminTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->company = Company::create(['code' => 'DP', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->otherCompany = Company::create(['code' => 'OT', 'name' => 'Other Co', 'status' => 'active']);
     }
 

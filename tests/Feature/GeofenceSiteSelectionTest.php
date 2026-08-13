@@ -27,7 +27,7 @@ class GeofenceSiteSelectionTest extends TestCase
     {
         parent::setUp();
 
-        $this->company = Company::create(['code' => 'DASOL PRISM', 'name' => 'DASOL PRISM', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'ABC ENG', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->siteA = Site::create(['company_id' => $this->company->id, 'code' => 'SITE-A', 'name' => '가 현장', 'status' => 'active']);
         $this->siteB = Site::create(['company_id' => $this->company->id, 'code' => 'SITE-B', 'name' => '나 현장', 'status' => 'active']);
     }
