@@ -95,6 +95,15 @@ class DocumentIntelligenceService
             $this->organizeFile($document, $folderParts);
             $this->replaceActionItems($document, is_array($data['action_items'] ?? null) ? $data['action_items'] : []);
 
+            // 돈이 나간 문서(영수증·인보이스·급여 지급 내역)면 재무(경비)로 넘긴다.
+            // 분류·편철에서 끝나면 같은 내용을 사람이 재무에 다시 입력해야 한다 —
+            // 실패해도 분석 결과 저장은 살아야 하므로 여기서 삼킨다.
+            try {
+                app(\App\Services\Finance\DocumentExpenseConnector::class)->sync($document);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });
     }

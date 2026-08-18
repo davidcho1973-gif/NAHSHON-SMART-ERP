@@ -56,6 +56,8 @@ class IntelligentDocument extends Model
         'certificate' => '인증서·자격증',
         'warranty' => '보증서',
         'closeout_package' => '준공서류',
+        'receipt' => '영수증',
+        'payroll_record' => '급여 지급 내역',
         'other' => '기타',
     ];
 

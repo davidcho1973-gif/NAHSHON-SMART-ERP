@@ -82,7 +82,7 @@ class DocumentIntelligenceAnalyzer
 반드시 수행할 작업:
 1. 문서 제목, 문서유형, 공종, 발신/수신, 문서번호, Revision, 문서일자를 추출한다.
 2. contract/correspondence/rfi_submittal/drawing_spec/schedule/quality/safety/finance/procurement/hr/closeout/legal/general 중 category를 고른다.
-3. contract/change_order/amendment/notice/official_letter/email_correspondence/rfi/submittal/transmittal/drawing/specification/schedule/daily_report/meeting_minutes/inspection/ncr/safety_plan/incident_report/pay_application/invoice/lien_waiver/purchase_order/delivery_ticket/certificate/warranty/closeout_package/other 중 document_type을 고른다.
+3. contract/change_order/amendment/notice/official_letter/email_correspondence/rfi/submittal/transmittal/drawing/specification/schedule/daily_report/meeting_minutes/inspection/ncr/safety_plan/incident_report/pay_application/invoice/lien_waiver/purchase_order/delivery_ticket/certificate/warranty/closeout_package/receipt/payroll_record/other 중 document_type을 고른다.
 4. 가상 폴더 구성요소를 [대분류, 문서유형, 연도] 순서의 folder_parts로 제안한다. 실제 PROJECT/회사는 시스템이 앞에 붙인다.
 5. 사람이 검색할 가능성이 높은 고유명사·장비·공종·도면번호·RFI/CO 번호·금액·날짜를 keywords와 tags로 충분히 만든다.
 6. 반드시 기억해야 하는 사실을 key_facts로 만든다. 금액, 책임범위, 제외사항, 승인조건, 통보기간, 회신기한, 보증, 안전·품질 요구를 누락하지 않는다.
@@ -90,6 +90,15 @@ class DocumentIntelligenceAnalyzer
 8. action_items의 due_on은 문서에 명시된 날짜 또는 문서일+통보기간을 계산한 YYYY-MM-DD다. 추측이면 details에 추정이라고 밝히고 confidence를 낮춘다.
 9. 권리 포기, 손해배상, Liquidated Damages, backcharge, scope gap, 승인 없는 추가작업, Notice 미제출, 잘못된 Revision, 안전중지, 검사실패, 지급보류 가능성은 high/critical로 표시한다.
 10. 문서에 없는 내용을 창작하지 않는다. 불명확한 값은 빈 문자열/빈 배열로 둔다.
+11. 이 문서가 "돈이 실제로 나갔거나 나가야 하는 기록"(영수증, 공급사 인보이스, 급여 지급 내역,
+    청구서, 카드 명세 항목)이면 money 를 채운다: flow=out. 반대로 우리가 받을 돈의 기록
+    (우리가 발행한 기성청구·인보이스)이면 flow=in. 돈 기록이 아니면 flow=none 으로 두고
+    나머지 money 필드는 비워 둔다.
+    - money.amount 는 문서의 대표 지급 총액(숫자만). 세금 포함 총액을 우선한다.
+    - money.currency 는 USD 등 통화 코드. money.paid_on 은 지급일 YYYY-MM-DD(없으면 빈 문자열).
+    - money.payee 는 돈을 받는 쪽 이름. money.purpose 는 무엇에 쓴 돈인지 한 줄.
+    - money.category_hint 는 payroll/materials/equipment/lodging/fuel/meals/utilities/other 중
+      가장 가까운 하나. 급여 지급 내역이면 반드시 payroll.
 
 direction은 incoming/outgoing/internal, confidentiality는 public/internal/confidential/restricted 중 하나다.
 severity는 critical/high/warning/normal 중 하나다. confidence는 0~100 숫자다.
@@ -125,6 +134,18 @@ PROMPT
                 'key_facts' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
                 'project_code' => ['type' => 'STRING'],
                 'confidence' => ['type' => 'NUMBER'],
+                'money' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'flow' => ['type' => 'STRING'],
+                        'amount' => ['type' => 'NUMBER'],
+                        'currency' => ['type' => 'STRING'],
+                        'paid_on' => ['type' => 'STRING'],
+                        'payee' => ['type' => 'STRING'],
+                        'purpose' => ['type' => 'STRING'],
+                        'category_hint' => ['type' => 'STRING'],
+                    ],
+                ],
                 'action_items' => [
                     'type' => 'ARRAY',
                     'items' => [
