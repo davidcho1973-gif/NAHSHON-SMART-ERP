@@ -8711,6 +8711,44 @@
         var m = d.metrics || {}, n = d.narrative || {};
         var labor = m.labor || {}, ops = m.ops || {};
 
+        // 현장소장이 현장앱에서 직접 쓴 부분. AI 서술과 섞지 않고 따로 보여준다 —
+        // 섞으면 "이 문장 누가 썼나" 를 나중에 못 가린다.
+        var f = d.field || m.field || null;
+        function fieldBlock() {
+          if (!f) {
+            return '<div style="margin-bottom:14px;padding:10px 13px;border:1px dashed var(--border-subtle);border-radius:10px;' +
+              'font-size:12px;color:var(--text-tertiary)">현장앱 일일보고가 아직 없습니다.</div>';
+          }
+          var chips = (f.trades || []).filter(function (t) { return (t.count || 0) > 0; })
+            .map(function (t) {
+              return '<span style="display:inline-block;padding:2px 8px;margin:0 5px 5px 0;border-radius:999px;' +
+                'background:var(--bg-panel);border:1px solid var(--border-subtle);font-size:11px">' +
+                opsEsc(t.name || '') + ' ' + (t.count || 0) + '명</span>';
+            }).join('');
+          var unsafe = Object.keys(f.safetyChecks || {}).filter(function (k) { return !f.safetyChecks[k]; });
+          function para(label, text) {
+            if (!text) return '';
+            return '<div style="margin-top:9px"><div style="font-size:11px;font-weight:800;color:var(--text-tertiary)">' + label + '</div>' +
+              '<div style="font-size:12.5px;line-height:1.7;color:var(--text-primary);white-space:pre-line">' + opsEsc(text) + '</div></div>';
+          }
+          return '<div style="margin-bottom:14px;padding:12px 14px;border-left:3px solid var(--brand-primary);' +
+            'background:var(--bg-panel);border-radius:0 10px 10px 0">' +
+            '<div style="font-size:11.5px;font-weight:800;color:var(--brand-primary);margin-bottom:6px">' +
+            '<i class="ph ph-user-focus"></i> 현장이 쓴 보고' +
+            (f.status === 'submitted' ? ' · 제출됨' : ' · 작성 중') +
+            (f.weather ? ' · ' + opsEsc(f.weather) : '') + (f.temperature ? ' ' + opsEsc(f.temperature) : '') +
+            ' · 진도 ' + (f.progressRate || 0) + '%' +
+            (f.tbmCompleted ? '' : ' · <span style="color:var(--status-danger)">TBM 미완</span>') +
+            (unsafe.length ? ' · <span style="color:var(--status-danger)">안전점검 ' + unsafe.length + '건 미확인</span>' : '') +
+            '</div>' +
+            (chips ? '<div style="margin-bottom:4px">' + chips + '</div>' : '') +
+            (f.workTitle ? '<div style="font-size:13px;font-weight:700">' + opsEsc(f.workTitle) + '</div>' : '') +
+            para('오늘 한 일 (현장)', f.workToday) +
+            para('내일 할 일 (현장)', f.workTomorrow) +
+            para('안전 특이사항', f.safetyNotes) +
+            '</div>';
+        }
+
         function list(title, arr, color) {
           if (!arr || !arr.length) return '';
           return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;color:' + color + ';margin-bottom:6px">' + title + '</div>' +
@@ -8745,6 +8783,8 @@
           stat('직접고용 근무', (labor.directHours || 0) + 'h', '평균 ' + (labor.directAvgHours || 0) + 'h', '#4338ca') +
           stat('상황실 접수', (ops.batches || 0) + '건', '사진 ' + (ops.photos || 0) + '장', 'var(--text-primary)') +
           '</div>' +
+
+          fieldBlock() +
 
           (n.summary ? '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-line;margin-bottom:6px">' + opsEsc(n.summary) + '</div>' : '') +
 

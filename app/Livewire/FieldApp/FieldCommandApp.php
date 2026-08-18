@@ -4,9 +4,9 @@ namespace App\Livewire\FieldApp;
 
 use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
+use App\Models\DailyClosingReport;
 use App\Models\DailyCrewReport;
 use App\Models\Employee;
-use App\Models\FieldDailyReport;
 use App\Models\FieldDrawing;
 use App\Models\FieldDrawingMessage;
 use App\Models\FieldEquipmentLog;
@@ -171,7 +171,7 @@ class FieldCommandApp extends Component
             $this->tbm_completed = (bool) $report->tbm_completed;
             $this->safety_checks = $report->safety_checks ?: $this->safety_checks;
             $this->safety_notes = $report->safety_notes ?? '';
-            $this->report_status = $report->status;
+            $this->report_status = $report->field_status ?: 'draft';
         } else {
             $this->weather = '☀️ 맑음';
             $this->temperature = '';
@@ -187,19 +187,26 @@ class FieldCommandApp extends Component
         }
     }
 
-    private function currentReport(): ?FieldDailyReport
+    /**
+     * 그날 그 현장의 보고서 — 마감 보고서와 <b>같은 줄</b>이다.
+     *
+     * 예전에는 현장앱이 field_daily_reports 라는 자기 표를 따로 갖고 있었다. 고유키가
+     * 마감 보고서와 똑같은 (현장, 날짜) 라서 같은 것을 가리키는 표가 둘이었고, 여기 쓴
+     * "오늘 한 일" 을 마감이 못 봐서 AI 가 같은 것을 다시 썼다. 이제 한 줄에 같이 쓴다.
+     */
+    private function currentReport(): ?DailyClosingReport
     {
         if (! $this->site_id || ! $this->work_date) {
             return null;
         }
 
-        return FieldDailyReport::query()
+        return DailyClosingReport::query()
             ->where('site_id', $this->site_id)
-            ->whereDate('work_date', $this->work_date)
+            ->whereDate('report_date', $this->work_date)
             ->first();
     }
 
-    private function persistReport(?string $status = null): ?FieldDailyReport
+    private function persistReport(?string $status = null): ?DailyClosingReport
     {
         if (! $this->site_id || ! $this->work_date) {
             return null;
@@ -219,25 +226,29 @@ class FieldCommandApp extends Component
         ];
 
         if ($status !== null) {
-            $attributes['status'] = $status;
+            $attributes['field_status'] = $status;
             if ($status === 'submitted') {
-                $attributes['submitted_at'] = now();
+                $attributes['field_submitted_at'] = now();
             }
         }
 
-        // updateOrCreate 의 plain where 는 SQLite 의 날짜 문자열('Y-m-d H:i:s')과 매칭되지 않아
-        // 중복 INSERT 를 유발하므로, whereDate 로 직접 조회 후 갱신/생성한다.
+        // updateOrCreate 의 plain where 는 날짜 칼럼의 저장 형식과 매칭되지 않아 중복
+        // INSERT 를 유발하므로, whereDate 로 직접 조회 후 갱신/생성한다.
         $report = $this->currentReport();
         if ($report) {
             $report->update($attributes);
         } else {
-            $report = FieldDailyReport::query()->create(
-                $attributes + ['site_id' => $this->site_id, 'work_date' => $this->work_date],
-            );
+            $report = DailyClosingReport::query()->create($attributes + [
+                'site_id' => $this->site_id,
+                'report_date' => $this->work_date,
+                'field_status' => $attributes['field_status'] ?? 'draft',
+                // 현장이 쓴 것만 있고 아직 마감은 안 눌렀다. writing 으로 두면 상황실
+                // 화면이 끝나지 않는 마감으로 읽는다.
+                'status' => DailyClosingReport::OPEN,
+            ]);
         }
 
-        // 신규 생성 직후에는 DB 기본값(status=draft)이 모델에 반영되지 않아 null 일 수 있다.
-        $this->report_status = $report->status ?? 'draft';
+        $this->report_status = $report->field_status ?: 'draft';
 
         return $report;
     }
@@ -420,6 +431,7 @@ class FieldCommandApp extends Component
         $hasHistory = AttendanceLog::query()->where('site_id', $site->id)->exists()
             || AttendanceQrCode::query()->where('site_id', $site->id)->exists()
             || DailyCrewReport::query()->where('site_id', $site->id)->exists()
+            || DailyClosingReport::query()->where('site_id', $site->id)->exists()
             || SiteContractor::query()->where('site_id', $site->id)->exists();
 
         if ($hasHistory) {

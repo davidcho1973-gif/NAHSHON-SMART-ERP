@@ -123,6 +123,38 @@ class RepoFactsTest extends TestCase
             ."두 곳이면 한쪽만 고쳐집니다.");
     }
 
+    // ── 일하는 원칙이 아직 거기 있는가 ─────────────────────────────────
+
+    public function test_the_guide_still_carries_the_root_cause_rule(): void
+    {
+        // 2026-08-18 오너 지시: "편법 대안보다 근본적인 원인을 찾아 근본적으로 고쳐라."
+        //
+        // 원칙은 지켜지지 않아서가 아니라 <b>잊혀서</b> 사라진다. 문서를 손보다 슬쩍
+        // 빠지면 아무도 모르고, 몇 달 뒤 다시 임기응변이 쌓인다. 그래서 여기서 붙잡는다.
+        $guide = $this->guide();
+
+        $this->assertStringContainsString('일하는 원칙', $guide,
+            "AGENTS.md 에서 '일하는 원칙' 절이 사라졌습니다. "
+            ."이건 오너가 명시적으로 기록해 두라고 한 규칙입니다.");
+
+        foreach (['근본', '임기응변'] as $word) {
+            $this->assertStringContainsString($word, $guide,
+                "일하는 원칙에서 '{$word}' 이 빠졌습니다 — 규칙의 내용이 지워졌습니다.");
+        }
+    }
+
+    public function test_the_precedents_the_rule_points_at_are_real_tests(): void
+    {
+        // 원칙이 "이렇게 끝냈다" 며 드는 예가 실제로 없으면, 읽는 사람은 규칙을
+        // 구호로 읽는다. 예가 살아 있어야 따라할 형태가 된다.
+        foreach (['RepoFactsTest', 'NoMergeMarkersTest', 'HeadcountSingleSourceTest', 'OneDailyReportTest'] as $case) {
+            $this->assertStringContainsString($case, $this->guide(),
+                "일하는 원칙의 선례 표에서 {$case} 이 빠졌습니다.");
+            $this->assertFileExists(base_path("tests/Feature/{$case}.php"),
+                "AGENTS.md 가 {$case} 를 선례로 들지만 그 시험이 없습니다.");
+        }
+    }
+
     // ── 문서가 스스로 낡았다고 말하는가 ────────────────────────────────
 
     public function test_the_guide_records_when_it_was_last_checked(): void
