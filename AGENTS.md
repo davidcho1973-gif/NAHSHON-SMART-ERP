@@ -7,7 +7,7 @@
 - Repo: https://github.com/davidcho1973-gif/NAHSHON-SMART-ERP
 - 배포: https://cloud.laravel.com/davidcho1973/nahshon-smart-erp/main (`main` 브랜치 → Laravel Cloud 자동 배포)
 - 오너: David (davidcho1973@gmail.com)
-- 최종 갱신: 2026-06-20 (작성: Cowork)
+- 최종 갱신: 2026-08-18 — §1 을 실제 코드에 맞춰 다시 씀 (그 전 갱신 2026-06-20)
 
 ---
 
@@ -25,20 +25,39 @@
 
 ---
 
-## 1. 프로젝트 개요
+## 1. 이 저장소는 무엇인가
 
-기존 Google Apps Script "SMART COMPANY" ERP를 **Laravel + Filament**로 이전하는 프로젝트.
+> **이 절은 `tests/Feature/RepoFactsTest.php` 가 지킨다.** 여기 적힌 것이 코드와
+> 어긋나면 시험이 깨진다. 문서만 고쳐 두면 반드시 낡기 때문이다 — 실제로 그래서
+> 기획서 한 판을 버렸다(아래 "겪은 일" 참고).
+
+기존 Google Apps Script "SMART COMPANY" ERP를 **Laravel SPA** 로 옮긴 현장 관리 시스템.
+코드는 한 벌, 배포는 고객마다 하나(`DEPLOYMENT_ENVIRONMENTS.md`).
 
 | 항목 | 값 |
 |---|---|
-| 프레임워크 | Laravel 13, Filament 5 |
+| 프레임워크 | Laravel 13 · Livewire 4 |
+| 관리자 패널 | **없음.** 2026-07 에 걷어냈다(`e21b20a`). 관리 화면은 전부 ERP SPA 안에 있다 |
 | PHP | 8.3+ |
-| DB | PostgreSQL (`pgsql`) |
-| 프론트(레거시) | Blade + `public/js/smart-language.js` (ko/en/es 다국어), `public/css/smart-company.css` |
-| 테스트 | PHPUnit 12 (`tests/Feature`, `tests/Unit`) |
-| CI | GitHub Actions — `tests.yml`, `pull-requests.yml`, `issues.yml`, `update-changelog.yml`, `dependabot-auto-merge.yml` |
+| DB | **PostgreSQL (`pgsql`)** — MySQL 문법(`FULLTEXT` 등)은 쓸 수 없다 |
+| 화면 | `resources/views/smart-company/index.blade.php` (SPA 한 장) + `public/js/admin-*.js` |
+| **공용 UI 킷** | **`public/js/admin-shell.js` 의 `AdminUI`** — `table` · `formModal` · `pageHeader` · `confirmDanger` · `badge` · `toast` · `uploadFile`. 관리 화면은 전부 이 위에 서 있다 |
+| 다국어 | `public/js/smart-language.js` (ko/en/es) |
+| 테스트 | PHPUnit (`tests/Feature`, `tests/Unit`) |
+| 에이전트 지침 | **이 파일 하나.** `CLAUDE.md` 는 없다 — 같은 내용을 두 파일에 두면 한쪽만 고쳐진다 |
 
-레거시 UI는 `/api/smart-company/{method}` 어댑터로 유지되며, 모듈은 점진적으로 Filament로 이전합니다.
+레거시 UI는 `/api/smart-company/{method}` 어댑터로 유지된다.
+
+### 겪은 일 — 이 절이 시험으로 잠긴 이유 (2026-08-18)
+
+2026-07 에 Filament 를 걷어냈다. 코드는 고쳤지만 **이 문서는 안 고쳤다.** 고칠 이유가
+없었기 때문이다 — 아무도 강제하지 않았다.
+
+두 달 뒤, 이 문서를 읽고 K-TALK 기획서 v1.0 이 작성됐다. "Filament 기반" 이라는
+전제 위에 화면 설계와 일정이 얹혔다. 실코드를 확인한 v1.1 에서 그 전제를 통째로
+버려야 했다.
+
+**낡은 문서 한 줄이 기획서 한 판을 버리게 했다.** 그래서 이제 이 절은 시험이 지킨다.
 
 ---
 
@@ -52,9 +71,9 @@
 
 | 에이전트 | 담당 모듈 | 주요 디렉터리 |
 |---|---|---|
-| **CODEX** (핵심·기준) | 회사/현장/직원, 스마트멤버 등록, 문서, SmartRecord, 근태·AI, 접근제어/인증, **재무·급여(Payroll), WBS, 협력사(Vendor)** | `app/Filament/Resources/{Companies,Sites,Employees,MemberRegistrations,MemberDocuments,SmartRecords}`, `app/Models` (핵심), `app/Filament/Pages/Auth` |
-| **Cowork (Claude)** | **안전(Safety), 장비(Equipment), 재고(Inventory)** | `app/Filament/Resources/{Safety,Equipment,Inventory}` (신규), 해당 모델·마이그레이션·테스트 |
-| **Antigravity** | **프론트엔드/UI, 차량(Vehicle), 임대·숙소(Rental/Housing)**, 다국어(ko/en/es) | `resources/views`, `public/js`, `public/css`, `app/Filament/Resources/{Vehicle,Housing}` (신규) |
+| **CODEX** (핵심·기준) | 회사/현장/직원, 스마트멤버 등록, 문서, SmartRecord, 근태·AI, 접근제어/인증, **재무·급여(Payroll), WBS, 협력사(Vendor)** | `app/Services/Admin/*`, `app/Models` (핵심), `app/Http/Controllers/GoogleAuthController.php` |
+| **Cowork (Claude)** | **안전(Safety), 장비(Equipment), 재고(Inventory)** | `app/Services/Safety`, `app/Services/Inventory`, `public/js/admin-items.js`, 해당 모델·마이그레이션·테스트 |
+| **Antigravity** | **프론트엔드/UI, 차량(Vehicle), 임대·숙소(Rental/Housing)**, 다국어(ko/en/es) | `resources/views`, `public/js`, `public/css` |
 
 **공유(누구나 수정 가능하지만 PR 필수):** `composer.json`, `package.json`, `config/*`, `routes/*`, `.github/*`, 이 `AGENTS.md`.
 공유 파일 변경 시 PR 설명에 이유를 명시하고, 머지 전 다른 에이전트 작업과의 충돌을 확인합니다.
@@ -78,9 +97,14 @@
 
 ## 4. 코드 컨벤션 (기존 코드 기준)
 
-**Filament 5 리소스 구조** — `app/Filament/Resources/<Module>/<Module>Resource.php` + `Pages/Manage<Module>.php`.
-- `form(Schema $schema)` / `table(Table $table)` 시그니처 사용 (Filament 5 신규 API).
-- import: `Filament\Schemas\Schema`, `Filament\Actions\{EditAction,BulkActionGroup,DeleteBulkAction}`, `Filament\Tables\...`.
+**관리 화면 구조** (2026-07 Filament 제거 후) — 화면 하나당 세 조각이다.
+
+- `app/Services/Admin/<Module>AdminService.php` — 목록·저장·권한. `canView()/canManage()` 패턴.
+- `public/js/admin-<module>.js` — 화면. **`AdminUI` 위에 조립한다**(표·폼·모달을 새로 짜지 않는다).
+- `App\Support\SmartCompanyData` 의 `api_*` 디스패치에 한 줄 — 프론트가 `gsRun('api_...')` 로 부른다.
+
+새 UI 부품이 필요하면 `AdminUI` 에 추가한다. 화면마다 따로 만들면 생김새가 갈라지고,
+그때부터는 어느 것이 표준인지 아무도 모른다.
 - 테이블은 `->recordActions([...])`, `->toolbarActions([...])` 사용 (구버전 `actions()` 아님).
 - 라벨은 한국어 + 괄호 영문 병기. 예: `->label('현장 코드')`, `navigationLabel = '현장 관리 (Sites)'`.
 - `navigationGroup = 'SMART COMPANY'` 로 그룹 통일.
@@ -118,7 +142,7 @@
 
 1. **모듈 분담 확정** — ✅ 확정. Cowork = 안전/장비/재고. 유일 겹침은 `SmartCompanyData`·`/api/smart-company/*` → 사전 공유 후 수정.
 
-2. **Filament 리소스 공통 베이스** — 공통 베이스/트레이트 **없음**. 모든 리소스가 `Filament\Resources\Resource` 직접 상속. 표준 권한 메서드도 아직 없음. 유일한 표준은 `User::canAccessPanel()` — `access_role ∈ {super_admin, admin, hr_manager, site_manager, safety_manager, payroll}` 이면 admin 패널 접근 가능. **신규 리소스는 각 Resource에 `canViewAny/canCreate/canEdit` 명시적 작성 권장.** 반복되면 추후 `App\Filament\Concerns\AuthorizesResourceAccess` trait로 묶기.
+2. ~~**Filament 리소스 공통 베이스**~~ *(2026-06 답변 — Filament 는 2026-07 에 제거됐다. 아래는 그때의 기록이다)* — 공통 베이스/트레이트 **없음**. 모든 리소스가 `Filament\Resources\Resource` 직접 상속. 표준 권한 메서드도 아직 없음. 유일한 표준은 `User::canAccessPanel()` — `access_role ∈ {super_admin, admin, hr_manager, site_manager, safety_manager, payroll}` 이면 admin 패널 접근 가능. **신규 리소스는 각 Resource에 `canViewAny/canCreate/canEdit` 명시적 작성 권장.** 반복되면 추후 `App\Filament\Concerns\AuthorizesResourceAccess` trait로 묶기.
 
 3. **접근제어 적용법** — 공통 쿼리 스코프 헬퍼 **없음**. 각 리소스 `getEloquentQuery()`에서 직접 제한. 기준 필드(`users`): `access_role, access_scope, allowed_company_id, allowed_site_id, allowed_team_id, employee_id, account_status`. **해석 규칙:**
    - `super_admin/admin` 또는 `access_scope=all_sites` → 전체
