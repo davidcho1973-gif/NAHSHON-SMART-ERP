@@ -343,40 +343,50 @@
         @if($activeTab === 'equipment')
             <div class="space-y-6">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-                    <h2 class="text-sm font-bold text-slate-100 mb-3 border-b border-slate-800 pb-3">신규 중장비 등록</h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input type="text" wire:model.live="new_eq_name" placeholder="장비명 (예: 스카이 03호)" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
-                        <select wire:model.live="new_eq_type" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
-                            <option value="스카이">고소작업대 (Sky)</option>
-                            <option value="크레인">25톤 크레인</option>
-                            <option value="지게차">지게차 (Forklift)</option>
-                            <option value="굴착기">굴착기 (Excavator)</option>
+                    <h2 class="text-sm font-bold text-slate-100 mb-1 border-b border-slate-800 pb-3">현장으로 장비 불출</h2>
+                    <p class="text-[11px] text-slate-500 mt-2 mb-3">
+                        등록된 장비만 고를 수 있습니다. 대장에 있어야 임대료가 원가로 이어집니다 —
+                        목록에 없으면 자재·장비 화면에서 먼저 등록해 주세요.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <select wire:model.live="new_eq_id" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
+                            <option value="">장비를 고르세요</option>
+                            @foreach($availableEquipment as $option)
+                                <option value="{{ $option->id }}">
+                                    {{ $option->equipment_type }} · {{ $option->model ?: $option->equipment_code }}@if($option->daily_rate) · 일대 {{ number_format($option->daily_rate) }}@endif
+                                </option>
+                            @endforeach
                         </select>
-                        <input type="text" wire:model.live="new_eq_operator" placeholder="조종원 성명" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
+                        <input type="text" wire:model.live="new_eq_operator" placeholder="조종원 성명 (등록된 작업자, 선택)" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100">
                     </div>
                     <button wire:click="addEquipment" wire:loading.attr="disabled" class="mt-3 w-full py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-lg transition-all">
-                        + 장비 수불 등록
+                        + 이 현장으로 불출
                     </button>
                 </div>
 
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
                     <h2 class="text-sm font-bold text-slate-100 mb-4 border-b border-slate-800 pb-3">현장 장비 운용 현황 ({{ $equipments->count() }}대)</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        @forelse($equipments as $eq)
+                        @forelse($equipments as $rental)
+                            @php($eq = $rental->equipment)
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-3.5 flex items-center justify-between">
                                 <div>
-                                    <h3 class="text-xs font-bold text-slate-100">{{ $eq->name }}</h3>
-                                    <p class="text-[11px] text-slate-400 mt-0.5">구분: {{ $eq->type }} | 조종원: {{ $eq->operator ?? '미정' }}</p>
+                                    <h3 class="text-xs font-bold text-slate-100">{{ $eq->equipment_type }} · {{ $eq->model ?: $eq->equipment_code }}</h3>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">
+                                        조종원: {{ $rental->employee?->name ?: '미정' }}
+                                        @if($eq->daily_rate) | 일대 {{ number_format($eq->daily_rate) }} @endif
+                                    </p>
+                                    <p class="text-[10px] text-slate-500 mt-0.5">불출 {{ $rental->rented_at?->format('m/d') }}</p>
                                 </div>
                                 <div class="flex items-center space-x-1.5">
-                                    <button wire:click="toggleEquipmentStatus({{ $eq->id }})" class="px-2.5 py-1 rounded text-xs font-semibold border transition-all {{ $eq->status === 'running' ? 'bg-slate-800 text-slate-100 border-slate-700' : 'bg-slate-950 text-slate-500 border-slate-800' }}">
-                                        {{ $eq->status === 'running' ? '가동중' : '대기중' }}
+                                    <button wire:click="toggleEquipmentStatus({{ $eq->id }})" class="px-2.5 py-1 rounded text-xs font-semibold border transition-all {{ $eq->status === '사용중' ? 'bg-slate-800 text-slate-100 border-slate-700' : 'bg-slate-950 text-slate-500 border-slate-800' }}">
+                                        {{ $eq->status === '사용중' ? '가동중' : '대기중' }}
                                     </button>
-                                    <button wire:click="removeEquipment({{ $eq->id }})" wire:confirm="이 장비 수불 기록을 삭제하시겠습니까?" class="text-[11px] text-slate-500 hover:text-white px-1"><i class="fa-solid fa-xmark"></i></button>
+                                    <button wire:click="removeEquipment({{ $eq->id }})" wire:confirm="이 장비를 반납 처리할까요? 수불 이력은 남습니다." class="text-[11px] text-slate-500 hover:text-white px-1" title="반납"><i class="fa-solid fa-rotate-left"></i></button>
                                 </div>
                             </div>
                         @empty
-                            <div class="col-span-full text-xs text-slate-500 py-4 text-center">금일 등록된 장비 수불 기록이 없습니다.</div>
+                            <div class="col-span-full text-xs text-slate-500 py-4 text-center">이 현장에 불출된 장비가 없습니다.</div>
                         @endforelse
                     </div>
                 </div>

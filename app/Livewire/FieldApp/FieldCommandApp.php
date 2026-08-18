@@ -7,12 +7,14 @@ use App\Models\AttendanceQrCode;
 use App\Models\DailyClosingReport;
 use App\Models\DailyCrewReport;
 use App\Models\Employee;
+use App\Models\Equipment;
+use App\Models\EquipmentRental;
 use App\Models\FieldDrawing;
 use App\Models\FieldDrawingMessage;
-use App\Models\FieldEquipmentLog;
 use App\Models\OpsLaborReport;
 use App\Models\Site;
 use App\Models\SiteContractor;
+use App\Services\Equipment\EquipmentAssignmentService;
 use App\Services\FieldApp\DrawingVisionService;
 use chillerlan\QRCode\QRCode;
 use Illuminate\Support\Str;
@@ -100,10 +102,8 @@ class FieldCommandApp extends Component
     // QR Commute State
     public string $commute_worker_name = '';
 
-    // Equipment Dispatch Inputs
-    public string $new_eq_name = '';
-
-    public string $new_eq_type = '스카이';
+    // Equipment Dispatch Inputs — 글자로 적지 않고 장비 대장에서 고른다(아래 addEquipment 주석).
+    public ?int $new_eq_id = null;
 
     public string $new_eq_operator = '';
 
@@ -447,7 +447,7 @@ class FieldCommandApp extends Component
     }
 
     /* ---------------------------------------------------------------- border
-       QR 출퇴근 전자 태깅 (field_commute_logs)
+       QR 출퇴근 전자 태깅 (attendance_logs — 정식 출퇴근 대장)
     ------------------------------------------------------------------ */
 
     /**
@@ -576,46 +576,114 @@ class FieldCommandApp extends Component
     }
 
     /* ---------------------------------------------------------------- border
-       중장비 수불 (field_equipment_logs)
+       중장비 수불 (equipments + equipment_rentals — 정식 장비 대장)
     ------------------------------------------------------------------ */
 
-    public function addEquipment(): void
+    /**
+     * 장비를 이 현장으로 불출한다.
+     *
+     * 예전에는 장비명을 글자로 적어 `field_equipment_logs` 라는 별도 대장에 남겼다.
+     * 그 기록은 장비 대장과 이어지지 않아서 **임대료가 원가에 안 잡혔다** —
+     * `RentalExpenseConnector` 는 `equipments.daily_rate` 를 보는데 현장에서 부른 장비는
+     * 거기 없었다. 현장에서 굴착기를 한 달 굴려도 원가는 0원이었다는 뜻이다.
+     *
+     * 그래서 등록된 장비만 고를 수 있게 했다. 출퇴근을 등록된 직원만 찍게 만든 것과
+     * 같은 이유다 — 대장에 없으면 돈으로 이어지지 않는다.
+     */
+    public function addEquipment(EquipmentAssignmentService $assignments): void
     {
-        if (blank($this->new_eq_name)) {
-            return;
-        }
         if (! $this->site_id) {
             $this->toastMessage = '⚠️ 먼저 현장을 등록·선택해 주세요.';
 
             return;
         }
+        if (! $this->new_eq_id) {
+            $this->toastMessage = '⚠️ 불출할 장비를 골라 주세요. 목록에 없으면 자재·장비 화면에서 먼저 등록해야 임대료가 원가로 이어집니다.';
 
-        FieldEquipmentLog::query()->create([
+            return;
+        }
+
+        $equipment = Equipment::query()->find($this->new_eq_id);
+        if (! $equipment) {
+            $this->toastMessage = '⚠️ 그 장비를 찾지 못했습니다.';
+
+            return;
+        }
+
+        $operator = null;
+        $name = trim($this->new_eq_operator);
+        if ($name !== '') {
+            $operator = $this->findSiteEmployee($name);
+            if (! $operator) {
+                $this->toastMessage = "⚠️ 이 현장에 등록된 작업자 중 '{$name}' 을 찾지 못했습니다.";
+
+                return;
+            }
+        }
+
+        $assignments->assign($equipment, [
+            'company_id' => $operator?->company_id ?: $equipment->company_id,
+            'employee_id' => $operator?->id,
             'site_id' => $this->site_id,
-            'work_date' => $this->work_date ?: now()->format('Y-m-d'),
-            'name' => trim($this->new_eq_name),
-            'type' => $this->new_eq_type,
-            'operator' => trim($this->new_eq_operator) ?: null,
-            'status' => 'running',
+            'notes' => '현장앱 불출 '.($this->work_date ?: now()->format('Y-m-d')),
         ]);
 
-        $this->new_eq_name = '';
+        $this->new_eq_id = null;
         $this->new_eq_operator = '';
-        $this->toastMessage = '🚜 중장비 수불 등록이 저장되었습니다.';
+
+        // 원가로 이어지려면 일대와 임대 시작일이 둘 다 있어야 한다(RentalExpenseConnector).
+        // 하나라도 비어 있으면 조용히 0원이 되므로, 조용히 두지 않고 그 자리에서 말한다.
+        $missing = [];
+        if ((int) $equipment->daily_rate <= 0) {
+            $missing[] = '일대';
+        }
+        if (blank($equipment->rent_start)) {
+            $missing[] = '임대 시작일';
+        }
+
+        $this->toastMessage = $missing === []
+            ? '🚜 장비를 이 현장으로 불출했습니다. 임대료는 원가에 자동 반영됩니다.'
+            : '🚜 불출했습니다. 다만 '.implode('·', $missing).'이 비어 있어 임대료가 원가로 잡히지 않습니다 — 자재·장비 화면에서 채워 주세요.';
     }
 
-    public function toggleEquipmentStatus(int $logId): void
+    /** 가동중 ↔ 대기중. 장비 대장의 상태를 그대로 쓴다 — 상태가 두 벌이 되지 않게. */
+    public function toggleEquipmentStatus(int $equipmentId, EquipmentAssignmentService $assignments): void
     {
-        $log = FieldEquipmentLog::query()->find($logId);
-        if ($log) {
-            $log->update(['status' => $log->status === 'running' ? 'standby' : 'running']);
+        $equipment = Equipment::query()->find($equipmentId);
+        if ($equipment) {
+            $assignments->toggleRunning($equipment);
         }
     }
 
-    public function removeEquipment(int $logId): void
+    /**
+     * 반납. 기록을 지우지 않는다 — 지우면 그 기간의 임대료 근거가 사라진다.
+     */
+    public function removeEquipment(int $equipmentId, EquipmentAssignmentService $assignments): void
     {
-        FieldEquipmentLog::query()->whereKey($logId)->delete();
-        $this->toastMessage = '🗑️ 장비 수불 기록이 삭제되었습니다.';
+        $equipment = Equipment::query()->find($equipmentId);
+        if (! $equipment) {
+            return;
+        }
+
+        $assignments->returnToStock($equipment, '현장앱 반납');
+        $this->toastMessage = '↩️ 장비를 반납 처리했습니다. 수불 이력은 남습니다.';
+    }
+
+    /** 이 현장에 등록된 작업자 한 명을 성명으로 찾는다(동명이인이면 못 찾은 것으로 본다). */
+    private function findSiteEmployee(string $name): ?Employee
+    {
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $name).'%';
+
+        $matches = Employee::query()
+            ->where('employment_status', 'active')
+            ->where('site_id', $this->site_id)
+            ->where(fn ($w) => $w->where('name', 'ilike', $like)
+                ->orWhere('first_name', 'ilike', $like)
+                ->orWhere('last_name', 'ilike', $like))
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     /* ---------------------------------------------------------------- border
@@ -741,8 +809,25 @@ class FieldCommandApp extends Component
     {
         $sites = Site::query()->where('status', 'active')->orWhereNull('status')->orderBy('name')->get();
 
+        // 이 현장에 불출돼 있는 장비 — 정식 수불 대장에서 읽는다. 현장앱이 자기 표를
+        // 갖고 있으면 같은 장비가 두 곳에 다르게 적힌다.
         $equipments = $this->site_id
-            ? FieldEquipmentLog::query()->where('site_id', $this->site_id)->whereDate('work_date', $this->work_date)->orderBy('id')->get()
+            ? EquipmentRental::query()
+                ->where('site_id', $this->site_id)
+                ->whereNull('returned_at')
+                ->with(['equipment', 'employee:id,name'])
+                ->orderBy('id')
+                ->get()
+                ->filter(fn (EquipmentRental $r): bool => $r->equipment !== null)
+                ->values()
+            : collect();
+
+        // 아직 이 현장에 안 나간 장비 — 불출 선택지.
+        $availableEquipment = $this->site_id
+            ? Equipment::query()
+                ->where('status', '!=', EquipmentAssignmentService::IN_USE)
+                ->orderBy('equipment_type')->orderBy('model')
+                ->limit(200)->get()
             : collect();
 
         // 정식 출퇴근 대장에서 읽는다 — 현장앱뿐 아니라 QR·GPS·게이트로 찍은 기록도 함께 보인다.
@@ -772,6 +857,7 @@ class FieldCommandApp extends Component
         return view('field-app.livewire.field-command-app', [
             'sites' => $sites,
             'equipments' => $equipments,
+            'availableEquipment' => $availableEquipment,
             'commuteLogs' => $commuteLogs,
             'drawings' => $drawings,
             'selectedDrawing' => $selectedDrawing,
