@@ -7,6 +7,7 @@ use App\Models\Team;
 use App\Models\Employee;
 use App\Models\Equipment;
 use App\Models\EquipmentRental;
+use App\Services\Equipment\EquipmentAssignmentService;
 use App\Services\GeminiEquipmentAnalyzer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,8 +17,10 @@ use RuntimeException;
 
 class EquipmentApiController extends Controller
 {
-    public function __construct(private readonly GeminiEquipmentAnalyzer $analyzer)
-    {
+    public function __construct(
+        private readonly GeminiEquipmentAnalyzer $analyzer,
+        private readonly EquipmentAssignmentService $assignments,
+    ) {
     }
 
     public function scanRental(Request $request): JsonResponse
@@ -158,40 +161,17 @@ class EquipmentApiController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($request): void {
-                $equipment = Equipment::findOrFail($request->input('equipment_id'));
-                $companyId = $request->input('company_id');
-                $teamId = $request->input('team_id');
-                $employeeId = $request->input('employee_id');
-
-                // Terminate any active rentals for this equipment
-                EquipmentRental::where('equipment_id', $equipment->id)
-                    ->whereNull('returned_at')
-                    ->update([
-                        'returned_at' => now(),
-                        'status' => 'returned',
-                    ]);
-
-                // Create a new rental
-                EquipmentRental::create([
-                    'equipment_id' => $equipment->id,
-                    'company_id' => $companyId,
-                    'team_id' => $teamId,
-                    'employee_id' => $employeeId,
-                    'site_id' => $equipment->site_id,
-                    'rented_at' => now(),
-                    'status' => 'active',
+            // 불출 규칙은 EquipmentAssignmentService 한 곳에 있다 — 예전에는 이 메서드와
+            // returnEquipment, 그리고 현장앱에 각각 적혀 있었다.
+            $this->assignments->assign(
+                Equipment::findOrFail($request->input('equipment_id')),
+                [
+                    'company_id' => $request->input('company_id'),
+                    'team_id' => $request->input('team_id'),
+                    'employee_id' => $request->input('employee_id'),
                     'notes' => $request->input('notes'),
-                ]);
-
-                // Update equipment
-                $equipment->update([
-                    'company_id' => $companyId,
-                    'team_id' => $teamId,
-                    'employee_id' => $employeeId,
-                    'status' => '사용중'
-                ]);
-            });
+                ],
+            );
 
             return response()->json(['success' => true, 'message' => '장비가 성공적으로 배정되었습니다.']);
         } catch (\Throwable $e) {
@@ -207,30 +187,10 @@ class EquipmentApiController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($request): void {
-                $equipment = Equipment::findOrFail($request->input('equipment_id'));
-
-                // Update active rental
-                $activeRental = EquipmentRental::where('equipment_id', $equipment->id)
-                    ->whereNull('returned_at')
-                    ->first();
-
-                if ($activeRental) {
-                    $activeRental->update([
-                        'returned_at' => now(),
-                        'status' => 'returned',
-                        'notes' => trim(($activeRental->notes ? $activeRental->notes . "\n" : '') . '반납시 메모: ' . $request->input('notes')),
-                    ]);
-                }
-
-                // Update equipment to available/unassigned status
-                $equipment->update([
-                    'company_id' => null,
-                    'team_id' => null,
-                    'employee_id' => null,
-                    'status' => '대기중',
-                ]);
-            });
+            $this->assignments->returnToStock(
+                Equipment::findOrFail($request->input('equipment_id')),
+                $request->input('notes'),
+            );
 
             return response()->json(['success' => true, 'message' => '장비가 성공적으로 반납되었습니다.']);
         } catch (\Throwable $e) {

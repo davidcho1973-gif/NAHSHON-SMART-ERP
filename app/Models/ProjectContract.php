@@ -57,6 +57,7 @@ class ProjectContract extends Model
     protected $fillable = [
         'company_id',
         'counterparty_company_id',
+        'counterparty_vendor_id',
         'site_id',
         'project_id',
         'manager_employee_id',
@@ -146,6 +147,22 @@ class ProjectContract extends Model
     public function counterparty(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'counterparty_company_id');
+    }
+
+    /**
+     * 발주(payable) 계약의 상대를 거래처 마스터로 잇는다. 같은 협력사가 계약에서는
+     * company, 발주에서는 문자열, 거래처 화면에서는 vendor 행으로 세 벌이던 것을
+     * vendors 정본 하나로 모으는 연결이다.
+     */
+    public function counterpartyVendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class, 'counterparty_vendor_id');
+    }
+
+    /** 이 계약에 걸린 발주들 — 계약 대비 발주 누계의 근거. */
+    public function procurementItems(): HasMany
+    {
+        return $this->hasMany(ProcurementItem::class, 'contract_id');
     }
 
     public function site(): BelongsTo

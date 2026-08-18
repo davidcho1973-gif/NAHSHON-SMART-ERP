@@ -25,7 +25,8 @@ class ProcurementItem extends Model
 
     protected $fillable = [
         'project_code', 'site_id', 'wbs_code', 'wbs_item_id', 'item_id',
-        'status', 'vendor', 'po_no', 'amount', 'currency', 'ordered_on', 'eta', 'note', 'created_by_id',
+        'status', 'vendor', 'vendor_id', 'contract_id',
+        'po_no', 'amount', 'currency', 'ordered_on', 'eta', 'note', 'created_by_id',
         'document_disk', 'document_path', 'document_name',
     ];
 
@@ -42,6 +43,21 @@ class ProcurementItem extends Model
     public function item()
     {
         return $this->belongsTo(Item::class);
+    }
+
+    /**
+     * 거래처 마스터 연결. vendor 문자열은 이 행의 이름 사본일 뿐, 정본은 여기다.
+     * 예전에는 문자열뿐이라 "Graybar" / "Graybar Inc." 가 다른 회사로 집계됐다.
+     */
+    public function vendorRef(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class, 'vendor_id');
+    }
+
+    /** 이 발주가 걸린 협력사 발주 계약 — 계약 대비 발주 누계의 근거. */
+    public function contract(): BelongsTo
+    {
+        return $this->belongsTo(ProjectContract::class, 'contract_id');
     }
 
     public function wbsItem(): BelongsTo

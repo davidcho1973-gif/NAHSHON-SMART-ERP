@@ -54,7 +54,6 @@ class ErpReset extends Command
             'attendance_sessions',    // GPS 재실 상태(들어옴·나감)
             'attendance_geo_events',  // GPS 신호 원본
             'payroll_timesheets',     // 출퇴근에서 계산된 근무시간
-            'field_commute_logs',     // 현장앱 출퇴근
         ],
     ];
 

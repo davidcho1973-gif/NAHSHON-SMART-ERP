@@ -17,10 +17,17 @@ use Illuminate\Support\Facades\Log;
 /**
  * 일일 마감 보고서 — 마감 버튼 한 번으로 그날 상황실에 올라온 모든 것을 정리한다.
  *
- * 설계 원칙: **숫자는 DB 에서, 문장은 AI 에서.**
+ * 설계 원칙: **숫자는 DB 에서, 문장은 AI 에서, 그리고 사람이 쓴 것은 사람 것 그대로.**
+ *
  * 인원·진도·지출 같은 수치를 AI 에게 세게 하면 보고서의 숫자가 틀릴 수 있고, 숫자가 한 번
  * 틀리면 보고서 전체를 못 믿는다. 그래서 집계는 코드가 정확히 뽑고, AI 는 그 숫자를 근거로
  * 총평·이슈·내일 계획만 쓴다.
+ *
+ * 여기에 하나가 더 있다 — **현장소장이 현장앱에서 직접 쓴 보고**(`metrics.field`).
+ * 예전에는 그게 `field_daily_reports` 라는 별도 표에 있어서 이 마감이 못 봤고, 그래서
+ * AI 가 "오늘 한 일 / 내일 할 일" 을 처음부터 다시 썼다. 같은 것을 두 사람이 두 번 쓰고
+ * 어긋나면 가릴 방법이 없는 상태였다. 2026-08-18 에 표를 하나로 합쳐서, 이제 사람이 쓴
+ * 문장은 그대로 살리고 AI 는 거기에 집계가 드러낸 것만 덧붙인다.
  */
 class DailyClosingService
 {
@@ -85,6 +92,12 @@ class DailyClosingService
     public function metrics(?int $siteId, string $date): array
     {
         $site = $siteId ? Site::find($siteId) : null;
+
+        // 현장이 직접 쓴 것. 같은 줄에 있으므로 다른 표를 찾아갈 필요가 없다.
+        $report = DailyClosingReport::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId), fn ($q) => $q->whereNull('site_id'))
+            ->whereDate('report_date', $date)
+            ->first();
 
         // ── 인원: 상황실 보고 vs 게이트 QR 실적. 이 차이가 이 보고서의 핵심이다.
         $reports = OpsLaborReport::query()
@@ -165,6 +178,11 @@ class DailyClosingService
             // 공정·자재·인원 어디에도 안 들어가는 것들 — 원청 지시·승인·의사결정·준비물.
             // 이게 곧 "오늘 한 일 / 내일 할 일" 이다.
             'actions' => $this->actionSummary($siteId, $date),
+
+            // 현장소장이 현장앱에서 직접 쓴 것. 날씨·오늘 한 일·내일 할 일·진도율·TBM.
+            // 사람이 본 것이라 이 보고서에서 가장 1차 사실에 가깝고, AI 서술은 이걸
+            // 다시 쓰는 게 아니라 근거로 삼는다.
+            'field' => $report && $report->hasFieldReport() ? $report->fieldReport() : null,
         ];
     }
 
@@ -262,6 +280,15 @@ class DailyClosingService
    - gap > 0 : 보고보다 QR 기록이 적음 → 미등록 인원이거나 QR 미스캔
    - gap < 0 : QR 기록이 보고보다 많음 → 보고 누락
 3. 오늘 올라온 내용이 거의 없으면(batches 0~1) 억지로 길게 쓰지 말고 그렇다고 쓰세요.
+3-0. `field` 는 **현장소장이 오늘 현장앱에서 직접 쓴 보고**입니다(있을 때만 들어옵니다).
+   사람이 본 것이므로 이 보고서에서 가장 1차 사실에 가깝습니다.
+   - `field.workToday` 가 있으면 그 내용이 **오늘 한 일의 정본**입니다. 바꿔 쓰지 말고
+     done 배열 **맨 앞**에 그대로 살리고, 집계에서 추가로 드러난 것만 뒤에 덧붙이세요.
+   - `field.workTomorrow` 가 있으면 tomorrow 의 맨 앞에 그대로 살리세요.
+   - `field.progressRate` 는 현장이 보고한 진도율입니다. progressNote 에 반드시 쓰세요.
+   - `field.tbmCompleted` 가 false 이거나 `field.safetyChecks` 에 false 가 있으면
+     attention 에 넣으세요 — 안전점검 미완은 그날 안에 확인해야 합니다.
+   - `field` 가 null 이면 현장 보고가 아직 없다는 뜻입니다. 그 사실을 attention 에 쓰세요.
 3-1. `actions` 는 공정·자재·인원 어디에도 안 들어가는 실무 항목입니다(원청 지시, 승인,
    의사결정, 준비물). **여기 있는 내용을 반드시 보고서에 반영하세요.**
    - `actions.doneToday`  → done 배열(오늘 한 일)에 넣으세요
@@ -341,6 +368,7 @@ PROMPT;
             'closedAt' => $report->closed_at?->format('Y-m-d H:i'),
             'metrics' => $report->metrics ?: [],
             'narrative' => $report->narrative ?: [],
+            'field' => $report->hasFieldReport() ? $report->fieldReport() : null,
         ];
     }
 
@@ -368,6 +396,10 @@ PROMPT;
                 // 팀 마감이 없었다면 최종 인원이 곧 QR 실적이라 값이 같다.
                 'final' => (int) (($r->metrics['labor']['final'] ?? $r->metrics['labor']['actualQr'] ?? 0)),
                 'closedBy' => $r->closedBy?->name,
+                // 현장은 썼는데 마감을 안 누른 날. 목록에서 이게 안 보이면 빠진 날을
+                // 아무도 모른다 — 예전에는 그 기록이 다른 표에 있어서 여기 안 나왔다.
+                'fieldStatus' => $r->field_status,
+                'hasField' => $r->hasFieldReport(),
             ])->all(),
         ];
     }

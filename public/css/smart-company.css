@@ -180,6 +180,30 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
 
 .nav-list { display:flex; flex-direction:column; gap:1px; }
 
+/* 접히는 하위 메뉴.
+
+   메뉴가 26개였다. 한 화면에 다 늘어놓으면 "이 일을 하려면 어디로 가지" 를 매번
+   판단하게 되는데, 혼자 관리하는 사람에게는 그 판단이 하루에 수십 번이다.
+   그래서 갈래를 누를 때만 그 아래를 편다 — 한 번에 보이는 것은 열 개 남짓. */
+.nav-sub { display: none; }
+.nav-sub.open { display: block; }
+
+.nav-item.nav-child { padding-left: 44px; font-size: 12.5px; }
+.nav-item.nav-child i { font-size: 14px; }
+
+/* 펼칠 것이 있다는 표시. 없으면 눌러 볼 생각을 안 한다. */
+.nav-item[data-group]::after {
+    content: '\203A';
+    margin-left: auto;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--text-tertiary);
+    transform: rotate(0deg);
+    transition: transform 0.15s;
+}
+/* 닫힘은 오른쪽(›), 열림은 아래(⌄). 반대로 두면 "열려 있다" 가 "더 있다" 로 읽힌다. */
+.nav-item[data-group].sub-open::after { transform: rotate(90deg); }
+
 .nav-item {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 20px;

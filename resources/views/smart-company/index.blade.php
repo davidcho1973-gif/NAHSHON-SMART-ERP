@@ -129,109 +129,127 @@
       <div class="sidebar-scroll">
         <nav class="sidebar-nav">
           <div class="nav-section">
-            <div class="nav-section-title">CORE</div>
+            <div class="nav-section-title">오늘</div>
             <ul class="nav-list">
-              <li class="nav-item active" data-view="dashboard" id="nav-dashboard">
-                <i class="ph ph-squares-four"></i><span>ëŒ€ì‹œë³´ë“œ (Overview)</span>
+              <li class="nav-item active" data-view="dashboard" id="nav-dashboard" data-group="g-today">
+                <i class="ph ph-squares-four"></i><span>대시보드</span>
               </li>
-              <li class="nav-item" data-view="my-attendance" id="nav-my-attendance">
-                <i class="ph ph-clock"></i><span>내 출퇴근 기록</span>
+            <ul class="nav-sub" data-sub="g-today">
+              <li class="nav-item nav-child" data-view="command" id="nav-command">
+                <i class="ph ph-command" style="color:#38bdf8"></i><span>AI 현장 지휘실</span>
               </li>
-              <li class="nav-item" data-view="command" id="nav-command">
-                <i class="ph ph-command" style="color:#38bdf8"></i><span>AI í˜„ìž¥ ì§€íœ˜ì‹¤</span>
-                <span class="nav-badge" style="background:rgba(56,189,248,.14);color:#38bdf8">NEW</span>
-              </li>
+            </ul>
               <li class="nav-item" data-view="alerts" id="nav-alerts">
-                <i class="ph ph-bell-ringing" style="color:#f97316"></i><span>ðŸ”” í†µí•© ì•Œë¦¼ ì„¼í„°</span>
-                <span class="nav-badge alert" id="alert-unread-badge" style="background:#ef4444">0</span>
-              </li>
-              <li class="nav-item" data-view="document-hub" id="nav-document-hub">
-                <i class="ph ph-files" style="color:#2563eb"></i><span>AI 통합 문서함</span>
-                <span class="nav-badge" style="background:rgba(37,99,235,.12);color:#2563eb">NEW</span>
+                <i class="ph ph-bell-ringing" style="color:#f97316"></i><span>알림</span><span class="nav-badge alert" id="alert-unread-badge" style="background:#ef4444">0</span>
               </li>
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-section-title">MODULES</div>
+            <div class="nav-section-title">현장</div>
             <ul class="nav-list">
-              <li class="nav-item" data-view="safety" id="nav-safety">
-                <i class="ph ph-shield-check"></i><span>AI ìž‘ì—…ì•ˆì „ê´€ë¦¬</span>
-                <span class="nav-badge alert" id="alert-badge">5</span>
+              <li class="nav-item" data-view="wbs" id="nav-wbs" data-group="g-site">
+                <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>공정 관리</span><span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
-              <li class="nav-item" data-view="hr" id="nav-hr">
-                <i class="ph ph-users"></i><span>ì¸ì›ê´€ë¦¬</span>
-              </li>
-              <li class="nav-item" data-view="payroll" id="nav-payroll">
-                <i class="ph ph-coins"></i><span>ê¸‰ì—¬/ì •ì‚° (Payroll)</span>
-              </li>
-              <li class="nav-item" data-view="wbs" id="nav-wbs">
-                <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>ê³µì • ê´€ë¦¬ (WBS)</span>
-                <span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
-              </li>
-              <li class="nav-item" data-view="opsroom" id="nav-opsroom" style="padding-left:26px">
+            <ul class="nav-sub" data-sub="g-site">
+              <li class="nav-item nav-child" data-view="opsroom" id="nav-opsroom">
                 <i class="ph ph-broadcast" style="color:#22c55e"></i><span>현장 상황실</span>
-                <span class="nav-badge" style="background:rgba(34,197,94,.16);color:#22c55e">AI</span>
               </li>
-              <li class="nav-item" data-view="docs" id="nav-docs" style="padding-left:26px">
-                <i class="ph ph-folders" style="color:#818cf8"></i><span>문서통합관리</span>
-                <span class="nav-badge" style="background:rgba(129,140,248,.16);color:#818cf8">AI</span>
+            </ul>
+              <li class="nav-item" data-view="safety" id="nav-safety">
+                <i class="ph ph-shield-check"></i><span>작업안전</span><span class="nav-badge alert" id="alert-badge">5</span>
               </li>
+              <li class="nav-item" data-view="attendance-logs" id="nav-attendance-logs" data-group="g-att">
+                <i class="ph ph-clock"></i><span>출퇴근</span>
+              </li>
+            <ul class="nav-sub" data-sub="g-att">
+              <li class="nav-item nav-child" data-view="my-attendance" id="nav-my-attendance">
+                <i class="ph ph-user-circle"></i><span>내 출퇴근 기록</span>
+              </li>
+            </ul>
+            </ul>
+          </div>
+          <div class="nav-section">
+            <div class="nav-section-title">사람</div>
+            <ul class="nav-list">
+              <li class="nav-item" data-view="hr" id="nav-hr" data-group="g-hr">
+                <i class="ph ph-users"></i><span>인원</span>
+              </li>
+            <ul class="nav-sub" data-sub="g-hr">
+              <li class="nav-item nav-child" data-view="employee-admin" id="nav-employee-admin">
+                <i class="ph ph-identification-card"></i><span>직원 등록 · 관리</span>
+              </li>
+              <li class="nav-item nav-child" data-view="applicant-admin" id="nav-applicant-admin">
+                <i class="ph ph-user-plus"></i><span>입사지원 · 온보딩</span>
+              </li>
+              <li class="nav-item nav-child" data-view="access-control" id="nav-access-control">
+                <i class="ph ph-lock-key"></i><span>계정 · 권한 관리</span>
+              </li>
+            </ul>
+              <li class="nav-item" data-view="payroll" id="nav-payroll" data-group="g-pay">
+                <i class="ph ph-coins"></i><span>급여 / 정산</span>
+              </li>
+            <ul class="nav-sub" data-sub="g-pay">
+              <li class="nav-item nav-child" data-view="pay-profiles" id="nav-pay-profiles">
+                <i class="ph ph-sliders"></i><span>임금 프로필</span>
+              </li>
+            </ul>
+            </ul>
+          </div>
+          <div class="nav-section">
+            <div class="nav-section-title">물자 · 돈</div>
+            <ul class="nav-list">
+              <li class="nav-item" data-view="inventory" id="nav-inventory" data-group="g-inv">
+                <i class="ph ph-package"></i><span>자재 · 장비</span>
+              </li>
+            <ul class="nav-sub" data-sub="g-inv">
+              <li class="nav-item nav-child" data-view="item-master" id="nav-item-master">
+                <i class="ph ph-list-bullets"></i><span>품목 · 분류</span>
+              </li>
+              <li class="nav-item nav-child" data-view="vendors" id="nav-vendors">
+                <i class="ph ph-shopping-cart"></i><span>구매 / 렌트</span>
+              </li>
+              <li class="nav-item nav-child" data-view="vehicle" id="nav-vehicle">
+                <i class="ph ph-truck"></i><span>차량 관리</span>
+              </li>
+              <li class="nav-item nav-child" data-view="housing" id="nav-housing">
+                <i class="ph ph-house-line"></i><span>숙소 관리</span>
+              </li>
+            </ul>
               <li class="nav-item" data-view="finance" id="nav-finance">
-                <i class="ph ph-currency-dollar"></i><span>ìž¬ë¬´ (Finance)</span>
-              </li>
-              <li class="nav-item" data-view="inventory" id="nav-inventory">
-                <i class="ph ph-package"></i><span>ìžìž¬/ìž¥ë¹„ (Inventory)</span>
+                <i class="ph ph-chart-line"></i><span>재무</span>
               </li>
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-section-title">{{ \App\Support\Org::name() }} 통합관리</div>
+            <div class="nav-section-title">문서</div>
             <ul class="nav-list">
-              <li class="nav-item" data-view="vehicle" id="nav-vehicle">
-                <i class="ph ph-car"></i><span>ì°¨ëŸ‰ ê´€ë¦¬</span>
+              <li class="nav-item" data-view="document-hub" id="nav-document-hub" data-group="g-doc">
+                <i class="ph ph-files" style="color:#2563eb"></i><span>문서함</span>
               </li>
-              <li class="nav-item" data-view="housing" id="nav-housing">
-                <i class="ph ph-house-line"></i><span>ìˆ™ì†Œ ê´€ë¦¬</span>
+            <ul class="nav-sub" data-sub="g-doc">
+              <li class="nav-item nav-child" data-view="docs" id="nav-docs">
+                <i class="ph ph-folders" style="color:#818cf8"></i><span>문서통합관리</span>
               </li>
-                            <li class="nav-item" data-view="vendors" id="nav-vendors">
-                                <i class="ph ph-storefront"></i><span>êµ¬ë§¤/ë ŒíŠ¸ ê´€ë¦¬</span>
-                            </li>
-                            
-              <li class="nav-item" data-view="access-control" id="nav-access-control">
-                <i class="ph ph-shield-check" style="color:#0ea5e9"></i><span>계정 · 권한 관리</span>
+              <li class="nav-item nav-child" data-view="contract-admin" id="nav-contract-admin">
+                <i class="ph ph-file-text"></i><span>원청 계약 · 서류</span>
               </li>
-              <li class="nav-item" data-view="attendance-logs" id="nav-attendance-logs">
-                <i class="ph ph-clock-counter-clockwise" style="color:#0ea5e9"></i><span>출퇴근 기록</span>
-              </li>
-              <li class="nav-item" data-view="applicant-admin" id="nav-applicant-admin">
-                <i class="ph ph-identification-card" style="color:#0ea5e9"></i><span>입사지원 · 온보딩</span>
-              </li>
-              <li class="nav-item" data-view="employee-admin" id="nav-employee-admin">
-                <i class="ph ph-user-plus" style="color:#0ea5e9"></i><span>직원 등록 · 관리</span>
-              </li>
-              <li class="nav-item" data-view="item-master" id="nav-item-master">
-                <i class="ph ph-package" style="color:#0ea5e9"></i><span>품목 · 분류</span>
-              </li>
-              <li class="nav-item" data-view="contract-admin" id="nav-contract-admin">
-                <i class="ph ph-file-text" style="color:#0ea5e9"></i><span>원청 계약 · 서류</span>
-              </li>
+            </ul>
+            </ul>
+          </div>
+          <div class="nav-section">
+            <div class="nav-section-title">설정</div>
+            <ul class="nav-list">
               <li class="nav-item" data-view="site-admin" id="nav-site-admin">
-                <i class="ph ph-buildings" style="color:#0ea5e9"></i><span>현장 · 프로젝트</span>
+                <i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span>
               </li>
-              <li class="nav-item" data-view="org-settings" id="nav-org-settings">
-                <i class="ph ph-gear-six" style="color:#0ea5e9"></i><span>조직 설정</span>
+              <li class="nav-item" data-view="org-settings" id="nav-org-settings" data-group="g-set">
+                <i class="ph ph-gear"></i><span>조직 설정</span>
               </li>
-              <li class="nav-item" data-view="pay-profiles" id="nav-pay-profiles">
-                <i class="ph ph-currency-dollar" style="color:#0ea5e9"></i><span>임금 프로필</span>
+            <ul class="nav-sub" data-sub="g-set">
+              <li class="nav-item nav-child" data-view="messenger-admin" id="nav-messenger-admin">
+                <i class="ph ph-chat-circle-text"></i><span>메신저 관리</span>
               </li>
-              <li class="nav-item" data-view="messenger-admin" id="nav-messenger-admin">
-                <i class="ph ph-chats-circle" style="color:#0ea5e9"></i><span>메신저 관리</span>
-              </li>
-              <li class="nav-item" style="border-top: 1px solid var(--border-color); margin-top: 5px; padding-top: 5px;"
-                onclick="openUniversalScanner()">
-                <i class="ph ph-magic-wand" style="color:var(--brand-primary)"></i><span
-                  style="color:var(--brand-primary); font-weight:600;">AI ìŠ¤ìº” í†µí•© ë“±ë¡</span>
-              </li>
+            </ul>
             </ul>
           </div>
         </nav>
@@ -284,29 +302,31 @@
         </div>
         <div class="mobile-more-grid">
           <button class="mobile-more-tile" type="button" data-mobile-view="dashboard"><i class="ph ph-squares-four"></i><span>대시보드</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="command"><i class="ph ph-command"></i><span>AI 지휘실</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>AI 작업안전</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="vehicle"><i class="ph ph-car"></i><span>차량관리</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="personnel"><i class="ph ph-users"></i><span>인원관리</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여정산</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재장비</span></button>
-          <a class="mobile-more-tile" href="/mobile-equipment/index"><i class="ph ph-wrench"></i><span>장비스캔(AI)</span></a>
-          <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소관리</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-storefront"></i><span>구매/렌트</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="flights"><i class="ph ph-airplane"></i><span>항공권</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="office"><i class="ph ph-archive"></i><span>사무실비품</span></button>
-          <!-- 관리 화면 — 데스크톱 사이드바의 사이드바 "통합관리" 아래 항목들. 여기 없으면
-               휴대폰에서는 옮겨 놓은 관리 화면에 들어갈 길이 아예 없다. -->
-          <button class="mobile-more-tile" type="button" data-mobile-view="access-control"><i class="ph ph-shield-check"></i><span>계정·권한</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="attendance-logs"><i class="ph ph-clock-counter-clockwise"></i><span>출퇴근 기록</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="applicant-admin"><i class="ph ph-identification-card"></i><span>입사지원</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="employee-admin"><i class="ph ph-user-plus"></i><span>직원 등록</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-package"></i><span>품목·분류</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-buildings"></i><span>현장·프로젝트</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear-six"></i><span>조직 설정</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-currency-dollar"></i><span>임금 프로필</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="messenger-admin"><i class="ph ph-chats-circle"></i><span>메신저 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="command"><i class="ph ph-command"></i><span>AI 현장 지휘실</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="alerts"><i class="ph ph-bell-ringing"></i><span>알림</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="wbs"><i class="ph ph-tree-structure"></i><span>공정 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="opsroom"><i class="ph ph-broadcast"></i><span>현장 상황실</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>작업안전</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="attendance-logs"><i class="ph ph-clock"></i><span>출퇴근</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="my-attendance"><i class="ph ph-user-circle"></i><span>내 출퇴근 기록</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="hr"><i class="ph ph-users"></i><span>인원</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="employee-admin"><i class="ph ph-identification-card"></i><span>직원 등록 · 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="applicant-admin"><i class="ph ph-user-plus"></i><span>입사지원 · 온보딩</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="access-control"><i class="ph ph-lock-key"></i><span>계정 · 권한 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여 / 정산</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-sliders"></i><span>임금 프로필</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재 · 장비</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-list-bullets"></i><span>품목 · 분류</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-shopping-cart"></i><span>구매 / 렌트</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="vehicle"><i class="ph ph-truck"></i><span>차량 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="finance"><i class="ph ph-chart-line"></i><span>재무</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="document-hub"><i class="ph ph-files"></i><span>문서함</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="docs"><i class="ph ph-folders"></i><span>문서통합관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약 · 서류</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear"></i><span>조직 설정</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="messenger-admin"><i class="ph ph-chat-circle-text"></i><span>메신저 관리</span></button>
           <button class="mobile-more-tile mobile-more-tile-accent" type="button" data-mobile-action="scanner"><i class="ph ph-magic-wand"></i><span>AI 스캔등록</span></button>
         </div>
       </section>
@@ -1455,16 +1475,48 @@
         if (event.key === 'Escape') closeMobileMore();
       });
 
+      /**
+       * 하위 메뉴는 그 갈래를 볼 때만 펼친다.
+       *
+       * 메뉴가 26개였다. 한 화면에 다 늘어놓으면 "이 일을 하려면 어디로 가지" 를
+       * 매번 판단하게 되는데, 혼자 관리하는 사람에게는 그 판단이 하루에 수십 번이다.
+       * 부모를 누르면 그 갈래만 열리고 나머지는 닫힌다 — 한 번에 보이는 것은 열 개 남짓.
+       *
+       * 화면을 없애지는 않는다. 자리만 접는다 — 없애면 그 화면을 쓰던 사람이
+       * 갈 곳을 잃는다.
+       */
+      function openNavGroupFor(item) {
+        if (!item) return;
+        var own = item.getAttribute('data-group');
+        var parentList = item.parentElement;
+        var inside = parentList && parentList.classList.contains('nav-sub')
+          ? parentList.getAttribute('data-sub')
+          : null;
+        var keep = own || inside;
+
+        document.querySelectorAll('.nav-sub').forEach(function (ul) {
+          ul.classList.toggle('open', !!keep && ul.getAttribute('data-sub') === keep);
+        });
+        document.querySelectorAll('.nav-item[data-group]').forEach(function (parent) {
+          parent.classList.toggle('sub-open', !!keep && parent.getAttribute('data-group') === keep);
+        });
+      }
+      window.openNavGroupFor = openNavGroupFor;
+
       navItems.forEach(function (item) {
         item.addEventListener('click', function () {
           navItems.forEach(function (n) { n.classList.remove('active'); });
           item.classList.add('active');
+          openNavGroupFor(item);
           var view = item.getAttribute('data-view');
           prepareViewNavigation(view);
           closeMobileMore();
           loadView(view);
         });
       });
+
+      // 첫 화면에서도 지금 열려 있는 갈래는 펼쳐 둔다.
+      openNavGroupFor(document.querySelector('.nav-item.active'));
 
       var accountButton = document.getElementById('account-menu-button');
       var accountDropdown = document.getElementById('account-dropdown');
@@ -1555,6 +1607,7 @@
         if (target) {
           navItems.forEach(function(n) { n.classList.remove('active'); });
           target.classList.add('active');
+          if (window.openNavGroupFor) window.openNavGroupFor(target);
         }
         window.loadView(viewKey);
       };
@@ -8091,6 +8144,9 @@
           '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" list="pe-vendor-options" value="' + wbsEsc(it.vendor || '') + '" placeholder="거래처 선택/입력"><datalist id="pe-vendor-options"></datalist></div>' +
           '<div><label style="' + LBL + '">발주번호(PO)</label><input id="pe-pono" class="wbs-edit-field" value="' + wbsEsc(it.poNo || '') + '"></div>' +
           '</div>' +
+          '<div><label style="' + LBL + '">발주 계약 <span style="color:var(--text-tertiary);font-weight:400">(협력사 계약에 이 발주를 겁니다)</span></label>' +
+          '<select id="pe-contract" class="wbs-edit-field"><option value="">계약 없이 발주</option></select>' +
+          '<div id="pe-contract-sum" style="font-size:11px;color:var(--text-tertiary);margin-top:3px"></div></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="' + LBL + '">발주일</label><input id="pe-ordered" type="date" class="wbs-edit-field" value="' + wbsEsc(it.orderedOn || '') + '"></div>' +
           '<div><label style="' + LBL + '">도착예정(ETA)</label><input id="pe-eta" type="date" class="wbs-edit-field" value="' + wbsEsc(it.eta || '') + '"></div>' +
@@ -8119,6 +8175,34 @@
             return name ? '<option value="' + wbsEsc(name) + '">' + wbsEsc(v.category && v.category !== '-' ? v.category : '') + '</option>' : '';
           }).join('');
         }).catch(function() {});
+
+        // 발주 계약 연결 — 계약을 걸어야 "이 계약으로 얼마나 샀나"(계약 대비 발주
+        // 누계)가 나온다. 목록은 list 응답에 함께 온 발주(payable)·상호 계약이다.
+        (function() {
+          var sel = root.querySelector('#pe-contract');
+          var sumEl = root.querySelector('#pe-contract-sum');
+          var contracts = (window._wbsProcure && window._wbsProcure.contracts) || [];
+          contracts.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.label + (c.vendor ? ' — ' + c.vendor : '');
+            if (it.contractId === c.id) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          function showSum() {
+            var c = contracts.filter(function(x){ return String(x.id) === sel.value; })[0];
+            if (!c) { sumEl.textContent = ''; return; }
+            var parts = ['이 계약 발주 누계 ' + (c.poTotal || 0).toLocaleString()];
+            if (c.amount != null) {
+              parts.push('계약 금액 ' + c.amount.toLocaleString() + (c.currency ? ' ' + c.currency : ''));
+              parts.push((c.remaining != null && c.remaining < 0 ? '⚠ 초과 ' : '잔여 ') + Math.abs(c.remaining != null ? c.remaining : 0).toLocaleString());
+            }
+            sumEl.innerHTML = parts.join(' · ');
+            if (c.remaining != null && c.remaining < 0) sumEl.style.color = '#ef4444'; else sumEl.style.color = 'var(--text-tertiary)';
+          }
+          sel.addEventListener('change', showSum);
+          showSum();
+        })();
 
         // 품목 마스터 연결 — 이름을 다시 서술하는 대신 등록된 품목을 고른다.
         // 저장 시 이름→id 로 바꿔 보내므로 표준단가 대비 실발주 비교의 근거가 된다.
@@ -8171,6 +8255,7 @@
           var patch = {
             status: root.querySelector('#pe-status').value,
             item_id: itemNameToId[itemText] || '',
+            contract_id: root.querySelector('#pe-contract').value,
             vendor: root.querySelector('#pe-vendor').value.trim(),
             po_no: root.querySelector('#pe-pono').value.trim(),
             ordered_on: root.querySelector('#pe-ordered').value,
@@ -8658,6 +8743,44 @@
         var m = d.metrics || {}, n = d.narrative || {};
         var labor = m.labor || {}, ops = m.ops || {};
 
+        // 현장소장이 현장앱에서 직접 쓴 부분. AI 서술과 섞지 않고 따로 보여준다 —
+        // 섞으면 "이 문장 누가 썼나" 를 나중에 못 가린다.
+        var f = d.field || m.field || null;
+        function fieldBlock() {
+          if (!f) {
+            return '<div style="margin-bottom:14px;padding:10px 13px;border:1px dashed var(--border-subtle);border-radius:10px;' +
+              'font-size:12px;color:var(--text-tertiary)">현장앱 일일보고가 아직 없습니다.</div>';
+          }
+          var chips = (f.trades || []).filter(function (t) { return (t.count || 0) > 0; })
+            .map(function (t) {
+              return '<span style="display:inline-block;padding:2px 8px;margin:0 5px 5px 0;border-radius:999px;' +
+                'background:var(--bg-panel);border:1px solid var(--border-subtle);font-size:11px">' +
+                opsEsc(t.name || '') + ' ' + (t.count || 0) + '명</span>';
+            }).join('');
+          var unsafe = Object.keys(f.safetyChecks || {}).filter(function (k) { return !f.safetyChecks[k]; });
+          function para(label, text) {
+            if (!text) return '';
+            return '<div style="margin-top:9px"><div style="font-size:11px;font-weight:800;color:var(--text-tertiary)">' + label + '</div>' +
+              '<div style="font-size:12.5px;line-height:1.7;color:var(--text-primary);white-space:pre-line">' + opsEsc(text) + '</div></div>';
+          }
+          return '<div style="margin-bottom:14px;padding:12px 14px;border-left:3px solid var(--brand-primary);' +
+            'background:var(--bg-panel);border-radius:0 10px 10px 0">' +
+            '<div style="font-size:11.5px;font-weight:800;color:var(--brand-primary);margin-bottom:6px">' +
+            '<i class="ph ph-user-focus"></i> 현장이 쓴 보고' +
+            (f.status === 'submitted' ? ' · 제출됨' : ' · 작성 중') +
+            (f.weather ? ' · ' + opsEsc(f.weather) : '') + (f.temperature ? ' ' + opsEsc(f.temperature) : '') +
+            ' · 진도 ' + (f.progressRate || 0) + '%' +
+            (f.tbmCompleted ? '' : ' · <span style="color:var(--status-danger)">TBM 미완</span>') +
+            (unsafe.length ? ' · <span style="color:var(--status-danger)">안전점검 ' + unsafe.length + '건 미확인</span>' : '') +
+            '</div>' +
+            (chips ? '<div style="margin-bottom:4px">' + chips + '</div>' : '') +
+            (f.workTitle ? '<div style="font-size:13px;font-weight:700">' + opsEsc(f.workTitle) + '</div>' : '') +
+            para('오늘 한 일 (현장)', f.workToday) +
+            para('내일 할 일 (현장)', f.workTomorrow) +
+            para('안전 특이사항', f.safetyNotes) +
+            '</div>';
+        }
+
         function list(title, arr, color) {
           if (!arr || !arr.length) return '';
           return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;color:' + color + ';margin-bottom:6px">' + title + '</div>' +
@@ -8692,6 +8815,8 @@
           stat('직접고용 근무', (labor.directHours || 0) + 'h', '평균 ' + (labor.directAvgHours || 0) + 'h', '#4338ca') +
           stat('상황실 접수', (ops.batches || 0) + '건', '사진 ' + (ops.photos || 0) + '장', 'var(--text-primary)') +
           '</div>' +
+
+          fieldBlock() +
 
           (n.summary ? '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-line;margin-bottom:6px">' + opsEsc(n.summary) + '</div>' : '') +
 

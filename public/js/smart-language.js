@@ -20,6 +20,27 @@
     // ── 메뉴 이름 ────────────────────────────────────────────────────
     // 사이드바와 휴대폰 '더보기' 타일. 여기가 한글로 남으면 영어를 골라도
     // 첫 화면부터 한국어라, 언어를 바꾼 보람이 없다.
+    // ── 새 메뉴 구조 (2026-08-13 재편) ──────────────────────────────
+    // 갈래 제목. 메뉴를 "하는 일" 순서로 묶으면서 생겼다.
+    '오늘': 'Today',
+    '현장': 'Site',
+    '사람': 'People',
+    '물자 · 돈': 'Materials & Money',
+    '문서': 'Documents',
+    '설정': 'Settings',
+    // 최상위 메뉴
+    '알림': 'Alerts',
+    '공정 관리': 'Schedule (WBS)',
+    '작업안전': 'Safety',
+    '인원': 'People',
+    '급여 / 정산': 'Payroll',
+    '자재 · 장비': 'Materials & Equipment',
+    '재무': 'Finance',
+    '문서함': 'Documents',
+    // 하위 메뉴
+    '구매 / 렌트': 'Purchase / Rental',
+    '차량 관리': 'Vehicles',
+    '숙소 관리': 'Housing',
     '내 출퇴근 기록': 'My Attendance',
     '내 출퇴근': 'My Attendance',
     '출퇴근': 'Attendance',
@@ -276,6 +297,22 @@
 
   const exactEs = new Map(Object.entries(bMap({
     // ── 메뉴 이름 (영어를 거쳐 온다) ─────────────────────────────────
+    // ── 새 메뉴 구조 (2026-08-13 재편) ──────────────────────────────
+    'Today': 'Hoy',
+    'Site': 'Obra',
+    'People': 'Personal',
+    'Materials & Money': 'Materiales y dinero',
+    'Documents': 'Documentos',
+    'Settings': 'Ajustes',
+    'Alerts': 'Alertas',
+    'Schedule (WBS)': 'Programación (WBS)',
+    'Safety': 'Seguridad',
+    'Payroll': 'Nómina',
+    'Materials & Equipment': 'Materiales y equipos',
+    'Finance': 'Finanzas',
+    'Purchase / Rental': 'Compra / Alquiler',
+    'Vehicles': 'Vehículos',
+    'Housing': 'Alojamiento',
     'My Attendance': 'Mi asistencia',
     'Attendance Records': 'Registros de asistencia',
     'AI Document Hub': 'Centro de documentos IA',

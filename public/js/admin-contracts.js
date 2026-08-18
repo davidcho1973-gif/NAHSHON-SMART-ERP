@@ -104,6 +104,18 @@
           render: function (r) { return u.esc(money(r.currentAmount, r.currency)); },
         },
         {
+          // 계약 대비 발주 누계 — 발주(payable) 계약에서만 뜻이 있다. 이 숫자가 없으면
+          // 계약에 발주를 걸어도 "이 계약으로 얼마나 샀나" 를 아무도 모른다.
+          key: 'poTotal', label: '발주 누계', align: 'right', width: '120px',
+          render: function (r) {
+            if (r.direction === 'receivable' || !r.poCount) return '<span style="color:var(--text-tertiary)">—</span>';
+            var over = r.currentAmount !== null && r.poTotal > r.currentAmount;
+            return '<div style="font-size:12px;' + (over ? 'color:#ef4444;font-weight:700' : '') + '">'
+              + u.esc(money(r.poTotal, r.currency)) + (over ? ' ⚠' : '') + '</div>'
+              + '<div style="font-size:10px;color:var(--text-tertiary)">' + r.poCount + '건</div>';
+          },
+        },
+        {
           key: 'endsOn', label: '기간', width: '190px',
           render: function (r) {
             var period = (r.startsOn || '?') + ' ~ ' + (r.endsOn || '?');

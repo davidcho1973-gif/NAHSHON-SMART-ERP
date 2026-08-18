@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\ProcurementItem;
 use App\Models\Project;
 use App\Models\ProjectContract;
 use App\Models\ProjectContractDocument;
@@ -117,7 +118,16 @@ class ContractAdminService
 
         $today = Carbon::now()->toDateString();
 
-        $rows = $query->get()->map(function (ProjectContract $c) use ($today): array {
+        $contractsPage = $query->get();
+
+        // 계약 대비 발주 누계 — 발주(procurement_items.contract_id)에서 한 번에 집계한다.
+        // 이 숫자가 없으면 계약에 발주를 걸어도 "이 계약으로 얼마나 샀나" 를 아무도 모른다.
+        $poTotals = ProcurementItem::query()
+            ->whereIn('contract_id', $contractsPage->pluck('id'))
+            ->selectRaw('contract_id, SUM(COALESCE(amount, 0)) as total, COUNT(*) as cnt')
+            ->groupBy('contract_id')->get()->keyBy('contract_id');
+
+        $rows = $contractsPage->map(function (ProjectContract $c) use ($today, $poTotals): array {
             // 종료일·갱신 통보 기한·다음 조치일 중 지났거나 임박한 것을 모아 올린다.
             $alerts = [];
             $ends = $c->ends_on?->toDateString();
@@ -187,6 +197,8 @@ class ContractAdminService
                 'prevailingWageRequired' => (bool) $c->prevailing_wage_required,
                 'certifiedPayrollRequired' => (bool) $c->certified_payroll_required,
                 'documentCount' => $c->documents_count,
+                'poTotal' => (float) ($poTotals[$c->id]->total ?? 0),
+                'poCount' => (int) ($poTotals[$c->id]->cnt ?? 0),
                 'alerts' => $alerts,
             ];
         })->values()->all();
