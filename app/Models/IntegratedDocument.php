@@ -64,7 +64,7 @@ class IntegratedDocument extends Model
     protected $fillable = [
         'site_id', 'project_code', 'procurement_item_id', 'employee_id', 'company_id', 'wbs_code', 'link_locked', 'folder_code', 'document_type', 'type_confidence', 'folder_confidence', 'folder_locked',
         'title', 'document_number', 'issuer', 'counterparty', 'issued_on', 'effective_on', 'expires_on',
-        'amount', 'currency', 'summary', 'body_text', 'fields', 'tags', 'duplicate_note', 'duplicate_of_id',
+        'amount', 'currency', 'summary', 'body_text', 'fields', 'tags', 'duplicate_note', 'duplicate_of_id', 'source_document_id',
         'disk', 'path', 'original_name', 'mime_type', 'size',
         'status', 'uploaded_by_id', 'uploaded_by_label', 'engine', 'model', 'error', 'analyzed_at',
     ];

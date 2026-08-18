@@ -7,6 +7,7 @@ use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Models\IntegratedDocument;
+use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
@@ -14,6 +15,7 @@ use App\Observers\EmployeePayrollProfileObserver;
 use App\Observers\LinkedDocumentFilingObserver;
 use App\Observers\MobileExpenseReceiptObserver;
 use App\Services\Documents\IntegratedToIntelligentBridge;
+use App\Services\Documents\IntelligentToIntegratedBridge;
 use App\Services\Ocr\ClaudeOcrEngine;
 use App\Services\Ocr\GeminiOcrEngine;
 use App\Services\Ocr\OcrEngine;
@@ -58,6 +60,35 @@ class AppServiceProvider extends ServiceProvider
                 app(IntegratedToIntelligentBridge::class)->index($d);
             } catch (\Throwable $e) {
                 report($e); // 인덱싱 실패가 원본 편철을 막으면 안 된다.
+            }
+        });
+
+        // 반대 방향도 같다 — AI 문서함에 직접 올린 것은 문서관리에도 등록한다.
+        //
+        // 한쪽 방향만 있으면 쓰는 사람이 올릴 때마다 "어디에 올려야 하지" 를 판단해야
+        // 하고, 틀리면 한쪽 화면에서 그 문서가 아예 안 보인다. 없는 것인지 다른 데
+        // 있는 것인지 구별할 방법이 없다.
+        IntelligentDocument::created(function (IntelligentDocument $d): void {
+            try {
+                app(IntelligentToIntegratedBridge::class)->file($d);
+            } catch (\Throwable $e) {
+                report($e); // 되돌리기 실패가 원본 등록을 막으면 안 된다.
+            }
+        });
+
+        // AI 문서함의 분석이 끝나면 그 결과를 문서관리 쪽 줄에도 옮겨 적는다.
+        // 안 옮기면 제목도 종류도 없는 줄이 남아, 결국 사람이 열어 보고 손으로 채운다.
+        IntelligentDocument::updated(function (IntelligentDocument $d): void {
+            // 분석이 끝난 상태는 둘이다 — 확신이 높으면 ready, 낮으면 review_required.
+            // 둘 다 "읽기는 끝났다" 는 뜻이라 결과를 내려보낸다.
+            if (! $d->wasChanged('ai_status')
+                || ! in_array($d->ai_status, ['ready', 'review_required'], true)) {
+                return;
+            }
+            try {
+                app(IntelligentToIntegratedBridge::class)->syncAnalysis($d);
+            } catch (\Throwable $e) {
+                report($e);
             }
         });
         ProjectContractDocument::saved(fn (ProjectContractDocument $d) => app(LinkedDocumentFilingObserver::class)->contractDocumentSaved($d));
