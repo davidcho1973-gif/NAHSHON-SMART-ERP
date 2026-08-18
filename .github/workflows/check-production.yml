@@ -1,0 +1,19 @@
+# 운영 서버 상태 수동 점검 — 버튼(또는 API)으로 언제든 실행.
+#
+# 왜 있나: 대시보드에서 수동 배포를 누른 경우 CI 가 돌지 않아 "지금 운영이 어느
+# 커밋인가" 를 확인할 길이 없다. 에이전트 세션은 망 정책상 운영 도메인에 직접
+# 접속할 수 없어서, GitHub 러너가 대신 읽어 준다.
+name: Check production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Read build-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch /build-version
+        run: |
+          echo "== 운영 (erp.dasolusa.com) =="
+          curl -sS -m 30 https://erp.dasolusa.com/build-version | python3 -m json.tool || echo "운영 응답 없음"
