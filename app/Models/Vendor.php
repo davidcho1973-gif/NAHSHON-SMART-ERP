@@ -34,4 +34,16 @@ class Vendor extends Model
     {
         return $this->belongsTo(Company::class);
     }
+
+    /** 이 거래처로 나간 발주들. */
+    public function procurementItems()
+    {
+        return $this->hasMany(ProcurementItem::class, 'vendor_id');
+    }
+
+    /** 이 거래처와 맺은 발주(payable) 계약들. */
+    public function contracts()
+    {
+        return $this->hasMany(ProjectContract::class, 'counterparty_vendor_id');
+    }
 }

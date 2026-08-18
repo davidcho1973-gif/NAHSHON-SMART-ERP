@@ -8144,6 +8144,9 @@
           '<div><label style="' + LBL + '">협력사 / 벤더</label><input id="pe-vendor" class="wbs-edit-field" list="pe-vendor-options" value="' + wbsEsc(it.vendor || '') + '" placeholder="거래처 선택/입력"><datalist id="pe-vendor-options"></datalist></div>' +
           '<div><label style="' + LBL + '">발주번호(PO)</label><input id="pe-pono" class="wbs-edit-field" value="' + wbsEsc(it.poNo || '') + '"></div>' +
           '</div>' +
+          '<div><label style="' + LBL + '">발주 계약 <span style="color:var(--text-tertiary);font-weight:400">(협력사 계약에 이 발주를 겁니다)</span></label>' +
+          '<select id="pe-contract" class="wbs-edit-field"><option value="">계약 없이 발주</option></select>' +
+          '<div id="pe-contract-sum" style="font-size:11px;color:var(--text-tertiary);margin-top:3px"></div></div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
           '<div><label style="' + LBL + '">발주일</label><input id="pe-ordered" type="date" class="wbs-edit-field" value="' + wbsEsc(it.orderedOn || '') + '"></div>' +
           '<div><label style="' + LBL + '">도착예정(ETA)</label><input id="pe-eta" type="date" class="wbs-edit-field" value="' + wbsEsc(it.eta || '') + '"></div>' +
@@ -8172,6 +8175,34 @@
             return name ? '<option value="' + wbsEsc(name) + '">' + wbsEsc(v.category && v.category !== '-' ? v.category : '') + '</option>' : '';
           }).join('');
         }).catch(function() {});
+
+        // 발주 계약 연결 — 계약을 걸어야 "이 계약으로 얼마나 샀나"(계약 대비 발주
+        // 누계)가 나온다. 목록은 list 응답에 함께 온 발주(payable)·상호 계약이다.
+        (function() {
+          var sel = root.querySelector('#pe-contract');
+          var sumEl = root.querySelector('#pe-contract-sum');
+          var contracts = (window._wbsProcure && window._wbsProcure.contracts) || [];
+          contracts.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.label + (c.vendor ? ' — ' + c.vendor : '');
+            if (it.contractId === c.id) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          function showSum() {
+            var c = contracts.filter(function(x){ return String(x.id) === sel.value; })[0];
+            if (!c) { sumEl.textContent = ''; return; }
+            var parts = ['이 계약 발주 누계 ' + (c.poTotal || 0).toLocaleString()];
+            if (c.amount != null) {
+              parts.push('계약 금액 ' + c.amount.toLocaleString() + (c.currency ? ' ' + c.currency : ''));
+              parts.push((c.remaining != null && c.remaining < 0 ? '⚠ 초과 ' : '잔여 ') + Math.abs(c.remaining != null ? c.remaining : 0).toLocaleString());
+            }
+            sumEl.innerHTML = parts.join(' · ');
+            if (c.remaining != null && c.remaining < 0) sumEl.style.color = '#ef4444'; else sumEl.style.color = 'var(--text-tertiary)';
+          }
+          sel.addEventListener('change', showSum);
+          showSum();
+        })();
 
         // 품목 마스터 연결 — 이름을 다시 서술하는 대신 등록된 품목을 고른다.
         // 저장 시 이름→id 로 바꿔 보내므로 표준단가 대비 실발주 비교의 근거가 된다.
@@ -8224,6 +8255,7 @@
           var patch = {
             status: root.querySelector('#pe-status').value,
             item_id: itemNameToId[itemText] || '',
+            contract_id: root.querySelector('#pe-contract').value,
             vendor: root.querySelector('#pe-vendor').value.trim(),
             po_no: root.querySelector('#pe-pono').value.trim(),
             ordered_on: root.querySelector('#pe-ordered').value,
