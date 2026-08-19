@@ -42,12 +42,18 @@ class MobileExpenseController extends Controller
         // Calculate stats
         $approvedMtd = $expenses->filter(fn ($ex) => $ex->status === 'approved' && $ex->expense_date->gte($startOfMonth))->sum('amount');
         $pendingCount = $expenses->where('status', 'pending')->count();
-        $totalReimbursement = $expenses->where('status', 'approved')->where('payment_type', 'personal')->sum('amount');
+        $pendingAmount = $expenses->where('status', 'pending')->sum('amount');
+        // 환급 "대기"(승인됐지만 아직 안 준 돈)와 "완료"(지급된 돈)는 다른 돈이다.
+        // 예전엔 approved 합계를 '개인환급 완료'로 보여줘서, 아직 못 받은 돈이 받은 돈처럼 보였다.
+        $claimableAmount = $expenses->where('status', 'approved')->where('payment_type', 'personal')->sum('amount');
+        $totalReimbursement = $expenses->where('status', 'paid')->where('payment_type', 'personal')->sum('amount');
 
         return view('mobile-expense.index', [
             'expenses' => $expenses,
             'approvedMtd' => $approvedMtd,
             'pendingCount' => $pendingCount,
+            'pendingAmount' => $pendingAmount,
+            'claimableAmount' => $claimableAmount,
             'totalReimbursement' => $totalReimbursement,
             'canManageAllExpenses' => $canManageAllExpenses,
         ]);

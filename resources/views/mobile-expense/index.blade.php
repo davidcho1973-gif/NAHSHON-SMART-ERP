@@ -325,14 +325,18 @@
     </div>
 
     <!-- KPI Summary Grid -->
-    <div class="kpi-grid">
+    <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr)">
       <div class="kpi-box">
         <span class="kpi-title">이번달 승인</span>
         <span class="kpi-num highlight">${{ number_format($approvedMtd, 2) }}</span>
       </div>
       <div class="kpi-box">
-        <span class="kpi-title">승인대기</span>
-        <span class="kpi-num">${{ $pendingCount }}</span>
+        <span class="kpi-title">승인대기 ({{ $pendingCount }}건)</span>
+        <span class="kpi-num">${{ number_format($pendingAmount, 2) }}</span>
+      </div>
+      <div class="kpi-box">
+        <span class="kpi-title">개인환급 대기</span>
+        <span class="kpi-num">${{ number_format($claimableAmount, 2) }}</span>
       </div>
       <div class="kpi-box">
         <span class="kpi-title">개인환급 완료</span>
