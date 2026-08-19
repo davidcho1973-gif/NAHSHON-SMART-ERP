@@ -215,4 +215,63 @@ class ErpResetTest extends TestCase
 
         $this->assertSame(1, Employee::count());
     }
+
+    // ── documents · expenses 갈래 ─────────────────────────────────────
+
+    private function seedDocumentAndExpense(): array
+    {
+        $disk = (string) config('document-intelligence.disk', 'local');
+        \Illuminate\Support\Facades\Storage::fake($disk);
+        $path = 'document-intelligence/inbox/'.\Illuminate\Support\Str::uuid().'/doc.pdf';
+        \Illuminate\Support\Facades\Storage::disk($disk)->put($path, '%PDF test');
+
+        $doc = \App\Models\IntelligentDocument::query()->create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(), 'source' => 'dropzone',
+            'disk' => $disk, 'file_path' => $path,
+            'original_file_name' => 'a.pdf', 'stored_file_name' => 'a.pdf',
+            'mime_type' => 'application/pdf', 'extension' => 'pdf', 'file_size' => 9,
+            'sha256' => hash('sha256', (string) \Illuminate\Support\Str::uuid()),
+            'title' => '문서', 'received_at' => now(), 'ai_status' => 'ready',
+        ]);
+        $expense = \App\Models\MobileExpense::query()->create([
+            'payment_type' => 'corporate', 'category' => '5900 Other Expenses',
+            'description' => '시험 경비', 'amount' => 10, 'expense_date' => now()->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        return [$doc, $expense, $disk, $path];
+    }
+
+    public function test_only_documents_clears_both_hubs_and_their_files(): void
+    {
+        [$doc, $expense, $disk, $path] = $this->seedDocumentAndExpense();
+
+        $this->artisan('erp:reset --only=documents --force')->assertSuccessful();
+
+        // 두 문서함이 서로 미러라 함께 비워져야 하고, 원본 파일도 고아로 남으면 안 된다.
+        $this->assertSame(0, \App\Models\IntelligentDocument::query()->count());
+        $this->assertSame(0, \App\Models\IntegratedDocument::query()->count());
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk($disk)->exists($path),
+            '표만 비우고 저장소의 원본 파일을 고아로 남겼습니다.');
+        // 문서 갈래는 재무를 건드리지 않는다.
+        $this->assertSame(1, \App\Models\MobileExpense::query()->count());
+    }
+
+    public function test_documents_and_expenses_can_be_cleared_together(): void
+    {
+        $this->seedDocumentAndExpense();
+
+        $this->artisan('erp:reset --only=documents,expenses --force')->assertSuccessful();
+
+        $this->assertSame(0, \App\Models\IntelligentDocument::query()->count());
+        $this->assertSame(0, \App\Models\MobileExpense::query()->count());
+        // 직원·현장·계정은 그대로여야 한다 — 갈래 초기화의 약속이다.
+        $this->assertNotSame(0, \App\Models\User::query()->count());
+    }
+
+    public function test_an_unknown_group_in_the_list_refuses_to_run(): void
+    {
+        $this->artisan('erp:reset --only=documents,everything --force')->assertFailed();
+    }
 }
+

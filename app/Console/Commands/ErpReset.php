@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\Schema;
 class ErpReset extends Command
 {
     protected $signature = 'erp:reset
-        {--only= : 한 갈래만 지운다 (attendance)}
+        {--only= : 고른 갈래만 지운다. 쉼표로 여러 개 (attendance, documents, expenses)}
         {--all : 표를 통째로 다시 만든다(현장·회사까지 전부 사라진다)}
         {--force : 실제로 지운다. 없으면 무엇이 지워지는지만 보여준다}
         {--admin= : 초기화 뒤 최고 관리자로 둘 이메일(기본: 지금 있는 최고 관리자 그대로)}
@@ -54,6 +54,17 @@ class ErpReset extends Command
             'attendance_sessions',    // GPS 재실 상태(들어옴·나감)
             'attendance_geo_events',  // GPS 신호 원본
             'payroll_timesheets',     // 출퇴근에서 계산된 근무시간
+        ],
+        // 문서는 두 문서함이 서로 미러라 함께 지워야 한다 — 한쪽만 지우면
+        // 다리(bridge)가 남은 쪽을 보고 "이미 있네" 하며 되살리거나, 반쪽만 남는다.
+        // 저장소의 원본 파일도 함께 지운다(아래 purgeUploadedFiles).
+        'documents' => [
+            'document_action_items',  // AI 문서함의 후속조치 큐(문서에 딸림)
+            'intelligent_documents',  // AI 문서함(검색 인덱스·분석 결과)
+            'integrated_documents',   // 문서 통합관리
+        ],
+        'expenses' => [
+            'mobile_expenses',        // 재무 경비/영수증 제출 내역 전체(영수증 사본 포함)
         ],
     ];
 
@@ -83,12 +94,15 @@ class ErpReset extends Command
         $all = (bool) $this->option('all');
         $force = (bool) $this->option('force');
         $only = trim((string) $this->option('only'));
+        $groups = $only === '' ? [] : array_values(array_filter(array_map('trim', explode(',', $only))));
 
-        if ($only !== '' && ! array_key_exists($only, self::GROUPS)) {
-            $this->error('  모르는 갈래입니다: '.$only);
-            $this->line('  쓸 수 있는 것: '.implode(', ', array_keys(self::GROUPS)));
+        foreach ($groups as $group) {
+            if (! array_key_exists($group, self::GROUPS)) {
+                $this->error('  모르는 갈래입니다: '.$group);
+                $this->line('  쓸 수 있는 것: '.implode(', ', array_keys(self::GROUPS)));
 
-            return self::FAILURE;
+                return self::FAILURE;
+            }
         }
         if ($only !== '' && $all) {
             $this->error('  --only 와 --all 은 같이 쓸 수 없습니다. 한 갈래만 지우려면 --only 만 쓰세요.');
@@ -100,7 +114,9 @@ class ErpReset extends Command
         $this->line('  <options=bold>'.Org::name().'</> · '.app()->environment().' · '.(config('app.url') ?: '주소 없음'));
         $this->line('');
 
-        $tables = $only !== '' ? $this->groupTables($only) : $this->tablesToClear($all);
+        $tables = $groups !== []
+            ? collect($groups)->flatMap(fn (string $g): array => $this->groupTables($g))->unique()->values()->all()
+            : $this->tablesToClear($all);
         $counts = $this->rowCounts($tables);
         $total = array_sum($counts);
 
@@ -132,11 +148,12 @@ class ErpReset extends Command
         $admins = User::query()->where('access_role', 'super_admin')
             ->get(['name', 'email'])->map(fn (User $u): array => ['name' => $u->name, 'email' => $u->email])->all();
 
-        if ($only !== '') {
+        if ($groups !== []) {
             // 계정도 회사도 건드리지 않았으므로 되살릴 것이 없다.
+            $this->purgeUploadedFiles($tables);
             $this->clear($tables);
             $this->line('');
-            $this->info('  '.$only.' 기록을 비웠습니다. 직원·현장·계정은 그대로입니다.');
+            $this->info('  '.implode(', ', $groups).' 기록을 비웠습니다. 직원·현장·계정은 그대로입니다.');
             $this->line('');
 
             return self::SUCCESS;
@@ -145,6 +162,7 @@ class ErpReset extends Command
         if ($all) {
             $this->call('migrate:fresh', ['--force' => true]);
         } else {
+            $this->purgeUploadedFiles($tables);
             $this->clear($tables);
         }
 
@@ -153,10 +171,62 @@ class ErpReset extends Command
 
         $this->line('');
         $this->info('  비웠습니다. 관리자 '.count($admins).'명은 그대로 로그인할 수 있습니다.');
-        $this->line('  올려 둔 파일(배지 사진·문서)은 저장소에 남아 있습니다 — 표에서만 사라졌습니다.');
+        $this->line('  문서 원본 파일은 함께 지웠습니다. 배지 사진 등 그 밖의 파일은 저장소에 남습니다.');
         $this->line('');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 문서 표를 지우기 전에 저장소의 원본 파일을 먼저 지운다.
+     *
+     * 표만 비우면 버킷에 파일이 고아로 쌓인다 — 보이지도 않고 지울 길도 없어진다.
+     * 파일 삭제 실패가 초기화를 막으면 안 되므로 조용히 넘어간다(고아가 남을 뿐
+     * 데이터가 틀어지지는 않는다). 문서에 딸린 알림도 함께 정리한다 — 원본이 없어진
+     * 알림은 눌러도 갈 곳이 없다.
+     *
+     * @param  list<string>  $tables
+     */
+    private function purgeUploadedFiles(array $tables): void
+    {
+        $stores = [
+            'intelligent_documents' => ['disk' => 'disk', 'path' => 'file_path'],
+            'integrated_documents' => ['disk' => 'disk', 'path' => 'path'],
+        ];
+
+        $deleted = 0;
+        foreach ($stores as $table => $columns) {
+            if (! in_array($table, $tables, true) || ! Schema::hasTable($table)) {
+                continue;
+            }
+            DB::table($table)
+                ->select(['id', $columns['disk'].' as disk', $columns['path'].' as path'])
+                ->orderBy('id')
+                ->chunkById(200, function ($rows) use (&$deleted): void {
+                    foreach ($rows as $row) {
+                        if (blank($row->path)) {
+                            continue;
+                        }
+                        try {
+                            \Illuminate\Support\Facades\Storage::disk($row->disk ?: 'local')->delete($row->path);
+                            $deleted++;
+                        } catch (\Throwable) {
+                            // 파일이 이미 없거나 저장소가 안 열려도 초기화는 계속한다.
+                        }
+                    }
+                });
+        }
+
+        if (array_intersect(['intelligent_documents', 'integrated_documents'], $tables) !== []
+            && Schema::hasTable('unified_alerts')) {
+            DB::table('unified_alerts')
+                ->where('source_type', 'like', '%Document')
+                ->delete();
+        }
+
+        if ($deleted > 0) {
+            $this->line('  저장소에서 문서 원본 '.number_format($deleted).'개를 지웠습니다.');
+        }
     }
 
     /**
