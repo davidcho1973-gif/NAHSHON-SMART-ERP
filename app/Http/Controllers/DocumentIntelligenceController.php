@@ -658,6 +658,7 @@ class DocumentIntelligenceController extends Controller
             'title' => $document->displayTitle(),
             'fileName' => $document->original_file_name,
             'mimeType' => $document->mime_type,
+            'extension' => strtolower((string) $document->extension),
             'fileSize' => $document->file_size,
             // 원본이 실제로 남아 있는지 — 배포로 로컬 디스크가 초기화되면 레코드만 남고
             // 파일은 사라진다. 그 상태를 화면에서 알 수 없으면 사용자는 다운로드를

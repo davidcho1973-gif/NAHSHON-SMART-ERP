@@ -5102,6 +5102,11 @@
           var mtdTotal = Number(stats.mtdTotal || 0);
           var budgetBalance = Number((stats.budgetBalance !== undefined ? stats.budgetBalance : (mtdBudget - mtdTotal)) || 0);
           var budgetPct = mtdBudget > 0 ? Math.min(100, Math.round(mtdTotal / mtdBudget * 100)) : 0;
+          // 수주 계약(계약관리) 기준의 프로젝트 손익 — 라벨과 데이터가 어긋나 있던 KPI 교정.
+          var contractTotal = Number(stats.contractTotal || 0);
+          var totalSpend = Number(stats.totalSpend || 0);
+          var contractBalance = Number((stats.contractBalance !== undefined ? stats.contractBalance : (contractTotal - totalSpend)) || 0);
+          var contractPct = contractTotal > 0 ? Math.min(100, Math.round(totalSpend / contractTotal * 100)) : 0;
           var pendingApproval = Number(stats.pendingApproval || 0);
           var pendingAmount = Number(stats.pendingAmount || 0);
 
@@ -5161,11 +5166,11 @@
             '  <button class="btn-secondary" style="height:38px;padding:0 14px;border-radius:6px;" onclick="window.print()"><i class="ph ph-printer"></i> 지출내역 출력</button>' +
             '</div></div>' +
             '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ì´ ìˆ˜ì£¼ ê¸ˆì•¡ (ì˜ˆì‚°)<i class="ph ph-buildings" style="font-size:14px;color:var(--brand-primary)"></i></div><div class="kpi-value">' + fmtUSD(stats.mtdBudget) + '</div>' +
-            '<div class="kpi-meta"><div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:' + budgetPct + '%;background:var(--brand-primary)"></div></div><span style="color:var(--text-secondary);margin-left:6px">ì†Œì§„ìœ¨ ' + budgetPct + '%</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ê¸°ì„± ìˆ˜ê¸ˆì•¡ (ê³ ê°ì‚¬ ì§€ê¸‰)<i class="ph ph-hand-coins" style="font-size:14px;color:var(--status-success)"></i></div><div class="kpi-value" style="color:var(--status-success)">' + fmtUSD(stats.claimable) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">í˜„ìž¬ê¹Œì§€ ìž…ê¸ˆ(ìˆ˜ë ¹)ëœ ê³„ì•½ê¸ˆ</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ëˆ„ì  ì§€ì¶œ ê¸ˆì•¡ (ë¹„ìš©)<i class="ph ph-credit-card" style="font-size:14px;color:var(--status-warning)"></i></div><div class="kpi-value" style="color:var(--status-warning)">' + fmtUSD(stats.mtdTotal) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ë°œìƒí•œ ì „ì²´ ê³µì‚¬ ì§€ì¶œì•¡</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì‹¤í–‰ ì˜ˆì‚° ìž”ì•¡<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(stats.mtdBudget - stats.mtdTotal) + '</div><div class="kpi-meta"><span class="trend-' + ((stats.mtdBudget - stats.mtdTotal) >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">ê°€ìš© ê°€ëŠ¥ ìž”ì—¬ ì˜ˆì‚° (ì´ìµê¸ˆ)</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">총 수주 금액 (계약)<i class="ph ph-buildings" style="font-size:14px;color:var(--brand-primary)"></i></div><div class="kpi-value">' + fmtUSD(contractTotal) + '</div>' +
+            '<div class="kpi-meta"><div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:' + contractPct + '%;background:var(--brand-primary)"></div></div><span style="color:var(--text-secondary);margin-left:6px">소진율 ' + contractPct + '%</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">개인카드 환급 대기<i class="ph ph-hand-coins" style="font-size:14px;color:var(--status-success)"></i></div><div class="kpi-value" style="color:var(--status-success)">' + fmtUSD(stats.claimable) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">승인됨 · 직원에게 지급할 경비</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">누적 지출 금액 (비용)<i class="ph ph-credit-card" style="font-size:14px;color:var(--status-warning)"></i></div><div class="kpi-value" style="color:var(--status-warning)">' + fmtUSD(totalSpend) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">승인·지급 전체 누적 · 이번 달 ' + fmtUSD(mtdTotal) + '</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">실행 예산 잔액<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(contractBalance) + '</div><div class="kpi-meta"><span class="trend-' + (contractBalance >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">총 수주 − 누적 지출</span></div></div>' +
             '</div>' +
 
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +

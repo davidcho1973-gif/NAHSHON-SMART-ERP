@@ -14,6 +14,7 @@ use App\Models\MemberRegistration;
 use App\Models\MobileExpense;
 use App\Models\PayrollRun;
 use App\Models\Project;
+use App\Models\ProjectContract;
 use App\Models\Site;
 use App\Models\SiteContractor;
 use App\Models\SmartRecord;
@@ -733,6 +734,29 @@ class SmartCompanyData
                     ->where('status', 'approved')
                     ->where('payment_type', 'personal');
 
+                // 누적 지출(전 기간) — 승인·지급된 확정 지출만. "누적 지출 금액" 카드가
+                // 이번 달(mtdTotal)만 보여줘서 지난달 지출이 전부 빠져 보이던 버그의 교정값.
+                $totalSpend = (float) $rows
+                    ->whereIn('status', ['approved', 'paid'])
+                    ->sum(fn (MobileExpense $e): float => (float) $e->amount);
+
+                // 총 수주 금액 — 계약 관리의 원청 수주 계약(receivable) 유효 금액 합.
+                // 사전예산(mtdBudget)을 "총 수주"로 보여주던 라벨-데이터 불일치의 교정값.
+                // draft(작성중)·under_review(미체결)·terminated(해지)는 수주로 세지 않는다.
+                $contractTotal = 0.0;
+                if (Schema::hasTable('project_contracts')) {
+                    $contractQuery = ProjectContract::query()
+                        ->where('direction', 'receivable')
+                        ->whereIn('status', ['active', 'suspended', 'completed', 'expired']);
+                    $resolvedSiteId = self::resolveSiteId($siteId);
+                    if ($resolvedSiteId !== null) {
+                        $contractQuery->where(function ($q) use ($resolvedSiteId): void {
+                            $q->where('site_id', $resolvedSiteId)->orWhereNull('site_id');
+                        });
+                    }
+                    $contractTotal = (float) $contractQuery->sum('current_amount');
+                }
+
                 $preApprovals = collect();
                 if (Schema::hasTable('expense_pre_approvals')) {
                     $preApprovals = self::financePreApprovalQuery($siteId)
@@ -771,6 +795,9 @@ class SmartCompanyData
                     'pendingPreApprovalAmount' => (float) $pendingPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
                     'approvedExpenseAmount' => (float) $rows->where('status', 'approved')->sum(fn (MobileExpense $e): float => (float) $e->amount),
                     'budgetBalance' => $mtdBudget - $mtdTotal,
+                    'totalSpend' => $totalSpend,
+                    'contractTotal' => $contractTotal,
+                    'contractBalance' => $contractTotal - $totalSpend,
                     'byCategory' => $byCategory,
                 ];
             }
@@ -778,7 +805,7 @@ class SmartCompanyData
             // Fall back to empty totals when the table is not ready.
         }
 
-        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'byCategory' => []];
+        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'byCategory' => []];
     }
 
     public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true): array

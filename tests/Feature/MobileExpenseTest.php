@@ -101,7 +101,10 @@ class MobileExpenseTest extends TestCase
         $response->assertViewHas('expenses');
         $response->assertViewHas('approvedMtd', 50.00);
         $response->assertViewHas('pendingCount', 1);
-        $response->assertViewHas('totalReimbursement', 50.00);
+        $response->assertViewHas('pendingAmount', 25.00);
+        // 승인됐지만 아직 지급 전 → 환급 "대기". 지급(paid) 전에는 환급 "완료"가 0이어야 한다.
+        $response->assertViewHas('claimableAmount', 50.00);
+        $response->assertViewHas('totalReimbursement', 0.00);
         $response->assertSee('Business lunch');
         $response->assertSee('Notebooks');
     }
