@@ -262,10 +262,16 @@ class OrgIdentityTest extends TestCase
 
         // 감시하는 쪽은 뺀다. 무엇을 찾는지 적어 두려면 그 이름을 적을 수밖에
         // 없는데, 그것까지 걸리면 감시를 없애야만 통과하는 시험이 된다.
-        $watchers = [
+        //
+        // 경로는 구분자를 통일해서 비교한다 — 윈도우에서는 반복자가 역슬래시(\)를,
+        // base_path() 는 슬래시(/)가 섞인 경로를 줘서, 같은 파일을 다른 파일로
+        // 보고 감시자 제외가 무너진다. 그러면 이 시험은 윈도우에서만 자기 자신을
+        // 잡아 깨진다.
+        $normalize = fn (string $p): string => str_replace('\\', '/', $p);
+        $watchers = array_map($normalize, [
             base_path('tests/Feature/OrgIdentityTest.php'),
             base_path('tests/Feature/OrgBrandInScreensTest.php'),
-        ];
+        ]);
 
         // 예외는 이 둘뿐이다 — 휴대폰 안에만 있는 저장소 키다. 화면에도, 문서에도,
         // 이메일에도 나가지 않고 고객마다 도메인이 다르니 겹치지도 않는다. 반면
@@ -280,13 +286,13 @@ class OrgIdentityTest extends TestCase
                 if (! $file->isFile() || ! in_array($file->getExtension(), ['php', 'js'], true)) {
                     continue;
                 }
-                if (in_array($file->getPathname(), $watchers, true)) {
+                if (in_array($normalize($file->getPathname()), $watchers, true)) {
                     continue;
                 }
                 $body = str_replace($allowed, '', (string) file_get_contents($file->getPathname()));
                 foreach ($names as $name) {
                     if (stripos($body, $name) !== false) {
-                        $hits[] = str_replace(base_path().'/', '', $file->getPathname());
+                        $hits[] = str_replace($normalize(base_path()).'/', '', $normalize($file->getPathname()));
                         break;
                     }
                 }
