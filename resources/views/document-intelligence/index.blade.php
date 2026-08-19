@@ -47,6 +47,15 @@
         .section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 15px;margin-bottom:12px}.section h3{font-size:13px;margin:0 0 8px}.section p{font-size:12px;color:#46556d;white-space:pre-wrap}.fact{padding:8px 10px;margin:6px 0;border-left:3px solid var(--blue);background:#f5f8ff;border-radius:0 8px 8px 0;font-size:11px}.tag{display:inline-block;padding:3px 7px;border-radius:7px;background:#edf2fa;margin:2px;font-size:10px;color:#45546a}
         .action-card{border:1px solid var(--line);border-radius:9px;padding:10px;margin-top:8px}.action-card.critical,.action-card.high{border-left:3px solid var(--red)}.action-card.warning{border-left:3px solid var(--amber)}.action-card strong{font-size:12px}.action-card p{margin:4px 0}.action-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:10px}
         .toast{position:fixed;right:22px;bottom:22px;z-index:200;background:var(--navy);color:#fff;border-radius:10px;padding:11px 15px;box-shadow:var(--shadow);display:none}.toast.show{display:block}.toast.error{background:#991b1b}
+        .viewer-bg{display:none;position:fixed;inset:0;background:rgba(2,8,23,.72);z-index:300;padding:22px}.viewer-bg.open{display:grid;place-items:center}
+        .viewer{width:min(1240px,97vw);height:92vh;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden}
+        .viewer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:#fbfcfe}.viewer-head .vh-title{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.viewer-head .vh-actions{display:flex;gap:8px;flex-shrink:0}
+        .viewer-tabs{display:flex;gap:4px;padding:8px 12px 0;overflow-x:auto;border-bottom:1px solid var(--line);background:#fbfcfe}.viewer-tab{border:1px solid var(--line);border-bottom:none;background:#eef2f7;color:#53637a;padding:6px 12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}.viewer-tab.active{background:#fff;color:var(--blue)}
+        .viewer-body{flex:1;overflow:auto;background:#f3f6fb}.viewer-body iframe{width:100%;height:100%;border:0;background:#fff}.viewer-body img{max-width:100%;display:block;margin:0 auto}
+        .viewer-doc{background:#fff;max-width:900px;margin:20px auto;padding:38px 46px;box-shadow:0 2px 12px rgba(0,0,0,.08);font-size:14px;line-height:1.7;color:#1f2937}.viewer-doc h1,.viewer-doc h2,.viewer-doc h3{line-height:1.3}.viewer-doc img{max-width:100%}.viewer-doc table{border-collapse:collapse;margin:10px 0}.viewer-doc td,.viewer-doc th{border:1px solid #cbd5e1;padding:5px 9px}
+        .viewer-pre{white-space:pre-wrap;word-break:break-word;padding:24px;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;color:#1f2937}
+        .xls-wrap{padding:14px}.xls-wrap table{border-collapse:collapse;font-size:12px;background:#fff}.xls-wrap td,.xls-wrap th{border:1px solid #d0d7e2;padding:4px 8px;white-space:nowrap;max-width:360px;overflow:hidden;text-overflow:ellipsis;vertical-align:top}.xls-wrap tr:first-child td{background:#f1f5fb;font-weight:700}
+        .viewer-msg,.viewer-spin{padding:56px 24px;text-align:center;color:var(--muted);line-height:1.7}
         @media(max-width:1100px){.app{grid-template-columns:78px 1fr}.brand div,.nav-link span,.nav-label,.sidebar-note{display:none}.brand{padding-left:3px}.sidebar{padding:18px 12px}.nav-link{justify-content:center}.workspace{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
         @media(max-width:700px){.app{display:block}.sidebar{display:none}.topbar{padding:0 14px}.content{padding:17px 12px}.hero{align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}.scope-grid,.searchbar{grid-template-columns:1fr}.doc-table th:nth-child(3),.doc-table td:nth-child(3),.doc-table th:nth-child(4),.doc-table td:nth-child(4){display:none}.detail-grid{grid-template-columns:repeat(2,1fr)}}
     </style>
@@ -149,6 +158,20 @@
 <div class="drawer-bg" id="drawer-bg"><div class="drawer"><div class="drawer-head"><div><h2 id="detail-title">문서 상세</h2><div class="doc-sub" id="detail-file"></div></div><button class="btn" id="drawer-close">닫기</button></div><div class="drawer-body" id="drawer-body"></div></div></div>
 <div class="toast" id="toast"></div>
 
+<div class="viewer-bg" id="viewer-bg">
+  <div class="viewer">
+    <div class="viewer-head">
+      <div class="vh-title" id="viewer-title">문서</div>
+      <div class="vh-actions">
+        <a class="btn small" id="viewer-dl" href="#" download>원본 다운로드</a>
+        <button class="btn small" id="viewer-close">닫기 ✕</button>
+      </div>
+    </div>
+    <div class="viewer-tabs" id="viewer-tabs" style="display:none"></div>
+    <div class="viewer-body" id="viewer-body"></div>
+  </div>
+</div>
+
 <script>
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const canManage = @json($canManage);
@@ -162,6 +185,7 @@ const endpoints = {
 const CATEGORY_OPTIONS = @json(collect(\App\Models\IntelligentDocument::CATEGORY_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 const TYPE_OPTIONS = @json(collect(\App\Models\IntelligentDocument::TYPE_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 let currentDocuments = [];
+let currentDoc = null;
 let pollTimer = null;
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtBytes = bytes => !bytes ? '-' : bytes >= 1048576 ? (bytes/1048576).toFixed(1)+' MB' : (bytes/1024).toFixed(1)+' KB';
@@ -199,13 +223,14 @@ function renderMemory(actions){
     box.innerHTML=open.slice(0,8).map(a=>`<div class="memory-item ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.recommendedAction||a.details||'')}</p><div class="memory-meta"><span>${esc(a.severity)}</span><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'기한 확인 필요'}</span></div></div>`).join('');
 }
 function renderDetail(d){
+    currentDoc={id:d.id,fileName:d.fileName,extension:(d.extension||'').toLowerCase(),previewUrl:d.previewUrl,downloadUrl:d.downloadUrl,mimeType:d.mimeType};
     document.getElementById('detail-title').textContent=d.title;document.getElementById('detail-file').textContent=d.fileName+' · '+fmtBytes(d.fileSize);
     const facts=(d.keyFacts||[]).map(f=>`<div class="fact">${esc(f)}</div>`).join('')||'<p>추출된 핵심 사실이 없습니다.</p>';
     const tags=[...(d.keywords||[]),...(d.tags||[])].slice(0,50).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     const actions=(d.actions||[]).map(a=>`<div class="action-card ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.details||'')}</p>${a.recommendedAction?`<p><b>권고:</b> ${esc(a.recommendedAction)}</p>`:''}${a.sourceExcerpt?`<div class="doc-sub">근거: “${esc(a.sourceExcerpt)}”</div>`:''}<div class="action-foot"><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'명시 기한 없음'} · 신뢰도 ${esc(a.confidence||0)}%</span>${canManage&&!['completed','ignored'].includes(a.status)?`<button class="btn small" onclick="completeAction(${a.id},${d.id})">처리완료</button>`:`<span class="badge ${a.status==='completed'?'ready':''}">${esc(a.status)}</span>`}</div></div>`).join('')||'<p>AI가 발견한 필수 후속조치가 없습니다.</p>';
     document.getElementById('drawer-body').innerHTML=`
       <div class="detail-grid"><div class="detail-chip"><span>분류</span><b>${esc(d.categoryLabel)}</b></div><div class="detail-chip"><span>문서유형</span><b>${esc(d.documentTypeLabel)}</b></div><div class="detail-chip"><span>문서번호 / Revision</span><b>${esc(d.documentNumber||'-')} / ${esc(d.revision||'-')}</b></div><div class="detail-chip"><span>AI 신뢰도</span><b>${esc(d.aiConfidence||0)}%</b></div></div>
-      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<a class="btn primary" target="_blank" href="${esc(d.previewUrl)}">바로 보기</a><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
+      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<button class="btn primary" onclick="openViewer()">바로 보기</button><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
       ${canManage?`<div class="section" id="edit-form" style="display:none"><h3>문서 정보 수정</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
           <div class="field" style="grid-column:1/-1"><label>제목</label><input id="ed-title" value="${esc(d.title||'')}"></div>
@@ -269,6 +294,55 @@ if(canManage){const dz=document.getElementById('dropzone'),input=document.getEle
 document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
 document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
 if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;}else{const ub=document.getElementById('unstick-btn');if(ub)ub.style.display='none';}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
+/* ===== 원본 뷰어 — 올린 형식 그대로 화면에서 보기 (엑셀→표, 워드→문서, PDF/이미지 인라인) ===== */
+const VIEWER_LIBS={
+    xlsx:{url:'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',ready:()=>window.XLSX},
+    mammoth:{url:'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js',ready:()=>window.mammoth},
+};
+const _libPromises={};
+function loadViewerLib(name){
+    const L=VIEWER_LIBS[name];
+    if(L.ready())return Promise.resolve();
+    if(_libPromises[name])return _libPromises[name];
+    return _libPromises[name]=new Promise((res,rej)=>{const s=document.createElement('script');s.src=L.url;s.async=true;s.onload=()=>L.ready()?res():rej(new Error(name+' 초기화 실패'));s.onerror=()=>{_libPromises[name]=null;rej(new Error(name+' 라이브러리를 불러오지 못했습니다(네트워크 확인).'))};document.head.appendChild(s)});
+}
+async function fetchBuffer(url){const r=await fetch(url,{credentials:'same-origin'});if(!r.ok)throw new Error('원본 파일을 불러오지 못했습니다('+r.status+').');return r.arrayBuffer()}
+function closeViewer(){const bg=document.getElementById('viewer-bg');bg.classList.remove('open');document.getElementById('viewer-body').innerHTML='';document.getElementById('viewer-tabs').style.display='none';document.getElementById('viewer-tabs').innerHTML=''}
+async function openViewer(){
+    if(!currentDoc)return;
+    const {fileName,extension:ext,previewUrl,downloadUrl}=currentDoc;
+    const bg=document.getElementById('viewer-bg'),body=document.getElementById('viewer-body'),tabs=document.getElementById('viewer-tabs');
+    bg.classList.add('open');document.getElementById('viewer-title').textContent=fileName||'문서';document.getElementById('viewer-dl').href=downloadUrl;
+    tabs.style.display='none';tabs.innerHTML='';body.innerHTML='<div class="viewer-spin">원본을 불러오는 중…</div>';
+    const images=['jpg','jpeg','png','webp','gif','bmp'];
+    try{
+        if(ext==='pdf'){body.innerHTML=`<iframe src="${esc(previewUrl)}#toolbar=1" title="PDF"></iframe>`;}
+        else if(images.includes(ext)){body.innerHTML=`<div style="padding:16px"><img src="${esc(previewUrl)}" alt="${esc(fileName)}"></div>`;}
+        else if(ext==='txt'){const r=await fetch(previewUrl,{credentials:'same-origin'});const t=await r.text();body.innerHTML='<div class="viewer-pre"></div>';body.firstChild.textContent=t;}
+        else if(ext==='xlsx'||ext==='xls'||ext==='csv'){body.innerHTML='<div class="viewer-spin">엑셀을 표로 변환하는 중…</div>';await renderSpreadsheet(downloadUrl,body,tabs);}
+        else if(ext==='docx'){body.innerHTML='<div class="viewer-spin">워드 문서를 변환하는 중…</div>';await renderDocx(downloadUrl,body);}
+        else{body.innerHTML=viewerFallback(ext,downloadUrl);}
+    }catch(e){body.innerHTML=`<div class="viewer-msg">화면 미리보기를 불러오지 못했습니다.<br><span style="font-size:12px">${esc(e.message)}</span><br><br><a class="btn primary" href="${esc(downloadUrl)}">원본 다운로드</a></div>`;}
+}
+function viewerFallback(ext,downloadUrl){return `<div class="viewer-msg">이 형식(.${esc(ext||'?')})은 화면 미리보기를 지원하지 않습니다.<br>원본을 내려받아 확인해 주세요.<br><br><a class="btn primary" href="${esc(downloadUrl)}">원본 다운로드</a></div>`}
+async function renderSpreadsheet(url,body,tabs){
+    await loadViewerLib('xlsx');
+    const wb=XLSX.read(await fetchBuffer(url),{type:'array'});
+    const names=wb.SheetNames||[];
+    if(!names.length){body.innerHTML='<div class="viewer-msg">시트를 찾을 수 없습니다.</div>';return}
+    const show=name=>{const ws=wb.Sheets[name];body.innerHTML=`<div class="xls-wrap">${XLSX.utils.sheet_to_html(ws,{editable:false,header:''})}</div>`;[...tabs.children].forEach(c=>c.classList.toggle('active',c.dataset.sheet===name))};
+    if(names.length>1){tabs.style.display='flex';tabs.innerHTML=names.map(n=>`<button class="viewer-tab" data-sheet="${esc(n)}">${esc(n)}</button>`).join('');[...tabs.children].forEach(c=>c.onclick=()=>show(c.dataset.sheet));}
+    show(names[0]);
+}
+async function renderDocx(url,body){
+    await loadViewerLib('mammoth');
+    const {value}=await mammoth.convertToHtml({arrayBuffer:await fetchBuffer(url)});
+    body.innerHTML=`<div class="viewer-doc">${value||'<p>표시할 내용이 없습니다.</p>'}</div>`;
+}
+document.getElementById('viewer-close').onclick=closeViewer;
+document.getElementById('viewer-bg').addEventListener('click',e=>{if(e.target.id==='viewer-bg')closeViewer()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('viewer-bg').classList.contains('open'))closeViewer()});
+
 loadDocuments();const requested=new URLSearchParams(location.search).get('document');if(requested)setTimeout(()=>openDocument(Number(requested)),400);
 </script>
 </body>
