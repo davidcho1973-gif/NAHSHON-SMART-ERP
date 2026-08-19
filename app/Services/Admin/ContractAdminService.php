@@ -413,6 +413,13 @@ class ContractAdminService
             return ['success' => false, 'error' => "붙어 있는 서류가 {$docs}건 있습니다. 서류를 먼저 정리하거나 상태를 \"해지\" 로 두세요."];
         }
 
+        // 기성 회차·수금이 붙어 있어도 지우지 않는다 — GC 제출·수취의 재무 1차 기록이라
+        // 계약과 함께 사라지면 분쟁·감사 증빙이 소실된다 (DB restrictOnDelete 와 이중 방어).
+        $billings = $row->payApplications()->count() + $row->billingReceipts()->count();
+        if ($billings > 0) {
+            return ['success' => false, 'error' => "기성 청구·수금 기록이 {$billings}건 있습니다. 원장이 남은 계약은 삭제할 수 없습니다. 상태를 \"해지\" 로 두세요."];
+        }
+
         $row->delete();
 
         return ['success' => true];

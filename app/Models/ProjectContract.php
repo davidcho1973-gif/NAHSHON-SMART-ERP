@@ -165,6 +165,18 @@ class ProjectContract extends Model
         return $this->hasMany(ProcurementItem::class, 'contract_id');
     }
 
+    /** 이 계약의 기성 청구 회차들 — 계약 대비 청구 누계의 근거 (procurementItems 의 수주 측 대칭). */
+    public function payApplications(): HasMany
+    {
+        return $this->hasMany(PayApplication::class, 'project_contract_id');
+    }
+
+    /** 이 계약으로 들어온 수금들 — 회차 미배정(매칭 대기) 입금도 계약 직속으로 여기 귀속된다. */
+    public function billingReceipts(): HasMany
+    {
+        return $this->hasMany(BillingReceipt::class, 'project_contract_id');
+    }
+
     public function site(): BelongsTo
     {
         return $this->belongsTo(Site::class);

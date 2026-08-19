@@ -155,7 +155,10 @@ class DocumentBridgeTest extends TestCase
         // s3 디스크는 config 에서 throw=false 라 쓰기 실패가 예외 없이 false 로 온다.
         // 그것을 "중복 N개 제외"로 뭉뚱그리면 사용자는 왜 안 올라가는지 영영 알 수 없다.
         config(['document-intelligence.disk' => 'broken']);
-        config(['filesystems.disks.broken' => ['driver' => 'local', 'root' => '/proc/nope', 'throw' => false]]);
+        // 죽은 디스크는 "파일 밑의 경로"로 만든다 — 파일은 어느 OS 에서도 디렉터리가
+        // 될 수 없어 쓰기가 반드시 실패한다. /proc/nope 같은 리눅스 경로는 윈도우
+        // 로컬에서 C:\proc 이 그냥 만들어져 쓰기가 성공해 버린다.
+        config(['filesystems.disks.broken' => ['driver' => 'local', 'root' => __FILE__.'/nope', 'throw' => false]]);
         $this->actingAs($this->admin());
 
         $res = $this->post('/document-hub/api/upload', [

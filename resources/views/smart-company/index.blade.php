@@ -23,6 +23,7 @@
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-billing.js') }}?v={{ filemtime(public_path('js/admin-billing.js')) }}" defer></script>
     <script src="{{ asset('js/admin-applicants.js') }}?v={{ filemtime(public_path('js/admin-applicants.js')) }}" defer></script>
     <script src="{{ asset('js/admin-payprofiles.js') }}?v={{ filemtime(public_path('js/admin-payprofiles.js')) }}" defer></script>
     <script src="{{ asset('js/admin-sites.js') }}?v={{ filemtime(public_path('js/admin-sites.js')) }}" defer></script>
@@ -217,6 +218,9 @@
             </ul>
               <li class="nav-item" data-view="finance" id="nav-finance">
                 <i class="ph ph-chart-line"></i><span>재무</span>
+              </li>
+              <li class="nav-item" data-view="billing-admin" id="nav-billing-admin">
+                <i class="ph ph-hand-coins"></i><span>기성 청구 · 수금</span>
               </li>
             </ul>
           </div>
@@ -1172,6 +1176,16 @@
       },
       getGlobalAttendance: () => gsRun('api_getGlobalAttendance', [], { success: false, mode: 'global', checkedIn: [], notCheckedIn: [], siteStats: {}, totalPresent: 0, totalWorkers: 0 }),
       getExpenses: () => gsRun('api_getExpenses', [], []),
+      // 기성 청구·수금 (billing-admin) — 조회 3 + 쓰기 6. api_get* 접두사가 곧 캐시·읽기전용 게이트다.
+      getBillingContracts: (filters) => gsRun('api_getBillingContracts', [filters || {}], { success: false, rows: [] }),
+      getBillings: (contractId) => gsRun('api_getBillings', [contractId], { success: false, rows: [] }),
+      getBillingOptions: () => gsRun('api_getBillingOptions', [], { success: false }),
+      saveBilling: (payload) => gsRun('api_saveBilling', [payload], { success: false }),
+      setBillingStatus: (payload) => gsRun('api_setBillingStatus', [payload], { success: false }),
+      deleteBilling: (id) => gsRun('api_deleteBilling', [id], { success: false }),
+      saveBillingReceipt: (payload) => gsRun('api_saveBillingReceipt', [payload], { success: false }),
+      assignBillingReceipt: (payload) => gsRun('api_assignBillingReceipt', [payload], { success: false }),
+      deleteBillingReceipt: (id) => gsRun('api_deleteBillingReceipt', [id], { success: false }),
       getFinanceStats: () => gsRun('api_getFinanceStats', [], { mtdTotal: 0, mtdBudget: 50000, pendingApproval: 0, pendingAmount: 0, claimable: 0, byCategory: [] }),
       getEquipmentList: () => gsRun('api_getEquipmentList', [], []),
       getEquipmentStats: () => gsRun('api_getEquipmentStats', [], { total: 0, operable: 0, inoperable: 0, todayInspections: 0 }),
@@ -1348,6 +1362,7 @@
         'my-attendance': { title: '내 출퇴근 기록', render: function () { return window.renderMyAttendance(); } },
         'attendance': { title: '출퇴근 현황', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '재무', render: renderFinance },
+        'billing-admin': { title: '기성 청구 · 수금', render: function () { return window.AdminBilling.render(); } },
         'messages': { title: '알림 센터', render: renderUnifiedAlerts },
         'schedule': { title: '공정 관리', render: renderWbs },
         'personnel': { title: '인원관리', render: function () { window._pendingHrTab = 'personnel'; return renderHR(); } },
@@ -5109,6 +5124,12 @@
           var contractPct = contractTotal > 0 ? Math.min(100, Math.round(totalSpend / contractTotal * 100)) : 0;
           var pendingApproval = Number(stats.pendingApproval || 0);
           var pendingAmount = Number(stats.pendingAmount || 0);
+          // 기성 원장(§5.2) — 수금·미수금은 원가(지출) 프레임이 아니라 수금 프레임이다.
+          // 제거됐던 '기성 수금액' 카드의 복원 — 이번엔 billing_receipts 가 진짜 소스다.
+          var receivedTotal = Number(stats.receivedTotal || 0);
+          var arOutstanding = Number(stats.arOutstanding || 0);
+          var collectionRate = Number(stats.collectionRate || 0);
+          var arNote = '유보 ' + fmtUSD(stats.retainageHeld || 0) + ' · 제출 대기 ' + fmtUSD(stats.submittedPending || 0) + ' · 분쟁 차감 ' + fmtUSD(stats.disputedDeductions || 0);
 
           function financeStatusLabel(status) {
             var labels = {
@@ -5165,12 +5186,14 @@
             '  <a href="' + expenseWizardUrl + '" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;"><i class="ph ph-magic-wand" style="font-size:16px"></i> AI 경비 등록</a>' +
             '  <button class="btn-secondary" style="height:38px;padding:0 14px;border-radius:6px;" onclick="window.print()"><i class="ph ph-printer"></i> 지출내역 출력</button>' +
             '</div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
+            '<div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">' +
             '<div class="kpi-card"><div class="kpi-label">총 수주 금액 (계약)<i class="ph ph-buildings" style="font-size:14px;color:var(--brand-primary)"></i></div><div class="kpi-value">' + fmtUSD(contractTotal) + '</div>' +
             '<div class="kpi-meta"><div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:' + contractPct + '%;background:var(--brand-primary)"></div></div><span style="color:var(--text-secondary);margin-left:6px">소진율 ' + contractPct + '%</span></div></div>' +
+            '<div class="kpi-card" onclick="window.goToView(\'billing-admin\')" style="cursor:pointer"><div class="kpi-label">기성 수금액 (고객사 지급)<i class="ph ph-hand-coins" style="font-size:14px;color:var(--status-success)"></i></div><div class="kpi-value" style="color:var(--status-success)">' + fmtUSD(receivedTotal) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">수금률 ' + collectionRate + '% · 기성 원장 열기</span></div></div>' +
+            '<div class="kpi-card" onclick="window.goToView(\'billing-admin\')" style="cursor:pointer"><div class="kpi-label">미수금 (AR)<i class="ph ph-warning-circle" style="font-size:14px;color:var(--status-warning)"></i></div><div class="kpi-value" style="color:var(--status-warning)">' + fmtUSD(arOutstanding) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + arNote + '</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">개인카드 환급 대기<i class="ph ph-hand-coins" style="font-size:14px;color:var(--status-success)"></i></div><div class="kpi-value" style="color:var(--status-success)">' + fmtUSD(stats.claimable) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">승인됨 · 직원에게 지급할 경비</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">누적 지출 금액 (비용)<i class="ph ph-credit-card" style="font-size:14px;color:var(--status-warning)"></i></div><div class="kpi-value" style="color:var(--status-warning)">' + fmtUSD(totalSpend) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">승인·지급 전체 누적 · 이번 달 ' + fmtUSD(mtdTotal) + '</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">실행 예산 잔액<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(contractBalance) + '</div><div class="kpi-meta"><span class="trend-' + (contractBalance >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">총 수주 − 누적 지출</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">실행 예산 잔액 (원가 기준)<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(contractBalance) + '</div><div class="kpi-meta"><span class="trend-' + (contractBalance >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">총 수주 − 누적 지출</span></div></div>' +
             '</div>' +
 
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
