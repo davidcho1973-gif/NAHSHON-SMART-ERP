@@ -95,11 +95,18 @@ class DocumentIntelligenceService
             $this->organizeFile($document, $folderParts);
             $this->replaceActionItems($document, is_array($data['action_items'] ?? null) ? $data['action_items'] : []);
 
-            // 돈이 나간 문서(영수증·인보이스·급여 지급 내역)면 재무(경비)로 넘긴다.
-            // 분류·편철에서 끝나면 같은 내용을 사람이 재무에 다시 입력해야 한다 —
-            // 실패해도 분석 결과 저장은 살아야 하므로 여기서 삼킨다.
+            // 문서가 가리키는 모듈로 흘려보낸다 — 분류·편철에서 끝나면 같은 내용을
+            // 사람이 각 화면에 다시 입력해야 한다. 어느 쪽이 실패해도 분석 결과
+            // 저장은 살아야 하므로 각각 삼킨다.
             try {
+                // 돈이 나간 문서(영수증·인보이스·급여 지급 내역) → 재무(경비)
                 app(\App\Services\Finance\DocumentExpenseConnector::class)->sync($document);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+            try {
+                // 장비 임대·구매 문서 → 장비 대장(자재/장비·렌탈 화면)
+                app(\App\Services\Equipment\DocumentEquipmentConnector::class)->sync($document);
             } catch (\Throwable $e) {
                 report($e);
             }

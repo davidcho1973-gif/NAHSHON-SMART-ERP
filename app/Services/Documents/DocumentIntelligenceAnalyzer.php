@@ -100,6 +100,13 @@ class DocumentIntelligenceAnalyzer
     - money.category_hint 는 payroll/materials/equipment/lodging/fuel/meals/utilities/other 중
       가장 가까운 하나. 급여 지급 내역이면 반드시 payroll.
 
+12. 이 문서가 <b>장비를 빌리거나 산 기록</b>(임대 계약, 장비 인보이스, 구매 주문, 반납서)이면
+    equipment 를 채운다: involved 는 rental(임대)/purchase(구매)/none 중 하나.
+    - equipment.name 은 장비 이름(예: JCB 18Z Mini Excavator). model 은 모델명/규격.
+    - equipment.rate 는 임대 요율 숫자, rate_unit 은 day/week/month 중 문서에 적힌 단위.
+    - equipment.rent_start / rent_end 는 임대 기간 YYYY-MM-DD (없으면 빈 문자열).
+    장비 문서가 아니면 involved=none 으로 두고 나머지는 비운다.
+
 direction은 incoming/outgoing/internal, confidentiality는 public/internal/confidential/restricted 중 하나다.
 severity는 critical/high/warning/normal 중 하나다. confidence는 0~100 숫자다.
 PROMPT
@@ -134,6 +141,18 @@ PROMPT
                 'key_facts' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
                 'project_code' => ['type' => 'STRING'],
                 'confidence' => ['type' => 'NUMBER'],
+                'equipment' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'involved' => ['type' => 'STRING'],
+                        'name' => ['type' => 'STRING'],
+                        'model' => ['type' => 'STRING'],
+                        'rate' => ['type' => 'NUMBER'],
+                        'rate_unit' => ['type' => 'STRING'],
+                        'rent_start' => ['type' => 'STRING'],
+                        'rent_end' => ['type' => 'STRING'],
+                    ],
+                ],
                 'money' => [
                     'type' => 'OBJECT',
                     'properties' => [
