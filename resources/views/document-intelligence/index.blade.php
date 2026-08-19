@@ -50,7 +50,6 @@
         .viewer-bg{display:none;position:fixed;inset:0;background:rgba(2,8,23,.72);z-index:300;padding:22px}.viewer-bg.open{display:grid;place-items:center}
         .viewer{width:min(1240px,97vw);height:92vh;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden}
         .viewer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:#fbfcfe}.viewer-head .vh-title{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.viewer-head .vh-actions{display:flex;gap:8px;flex-shrink:0}
-        .viewer-tabs{display:flex;gap:4px;padding:8px 12px 0;overflow-x:auto;border-bottom:1px solid var(--line);background:#fbfcfe}.viewer-tab{border:1px solid var(--line);border-bottom:none;background:#eef2f7;color:#53637a;padding:6px 12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}.viewer-tab.active{background:#fff;color:var(--blue)}
         .viewer-body{flex:1;overflow:auto;background:#f3f6fb}.viewer-body iframe{width:100%;height:100%;border:0;background:#fff}.viewer-body img{max-width:100%;display:block;margin:0 auto}
         .viewer-doc{background:#fff;max-width:900px;margin:20px auto;padding:38px 46px;box-shadow:0 2px 12px rgba(0,0,0,.08);font-size:14px;line-height:1.7;color:#1f2937}.viewer-doc h1,.viewer-doc h2,.viewer-doc h3{line-height:1.3}.viewer-doc img{max-width:100%}.viewer-doc table{border-collapse:collapse;margin:10px 0}.viewer-doc td,.viewer-doc th{border:1px solid #cbd5e1;padding:5px 9px}
         .viewer-pre{white-space:pre-wrap;word-break:break-word;padding:24px;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;color:#1f2937}
@@ -167,7 +166,6 @@
         <button class="btn small" id="viewer-close">닫기 ✕</button>
       </div>
     </div>
-    <div class="viewer-tabs" id="viewer-tabs" style="display:none"></div>
     <div class="viewer-body" id="viewer-body"></div>
   </div>
 </div>
@@ -294,51 +292,24 @@ if(canManage){const dz=document.getElementById('dropzone'),input=document.getEle
 document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
 document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
 if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;}else{const ub=document.getElementById('unstick-btn');if(ub)ub.style.display='none';}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
-/* ===== 원본 뷰어 — 올린 형식 그대로 화면에서 보기 (엑셀→표, 워드→문서, PDF/이미지 인라인) ===== */
-const VIEWER_LIBS={
-    xlsx:{url:'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',ready:()=>window.XLSX},
-    mammoth:{url:'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js',ready:()=>window.mammoth},
-};
-const _libPromises={};
-function loadViewerLib(name){
-    const L=VIEWER_LIBS[name];
-    if(L.ready())return Promise.resolve();
-    if(_libPromises[name])return _libPromises[name];
-    return _libPromises[name]=new Promise((res,rej)=>{const s=document.createElement('script');s.src=L.url;s.async=true;s.onload=()=>L.ready()?res():rej(new Error(name+' 초기화 실패'));s.onerror=()=>{_libPromises[name]=null;rej(new Error(name+' 라이브러리를 불러오지 못했습니다(네트워크 확인).'))};document.head.appendChild(s)});
-}
-async function fetchBuffer(url){const r=await fetch(url,{credentials:'same-origin'});if(!r.ok)throw new Error('원본 파일을 불러오지 못했습니다('+r.status+').');return r.arrayBuffer()}
-function closeViewer(){const bg=document.getElementById('viewer-bg');bg.classList.remove('open');document.getElementById('viewer-body').innerHTML='';document.getElementById('viewer-tabs').style.display='none';document.getElementById('viewer-tabs').innerHTML=''}
-async function openViewer(){
+/* ===== 원본 뷰어 — 올린 형식 그대로 화면에서 보기 =====
+   변환은 전부 서버(OfficePreview)가 한다: 엑셀→표(색·병합 유지), 워드→문서, PPT→슬라이드,
+   PDF/이미지/텍스트는 그대로. 화면은 preview URL 을 iframe 으로 띄우기만 한다.
+   처음에는 CDN 라이브러리(SheetJS·mammoth)를 브라우저에서 내려받아 그렸지만 걷어냈다 —
+   현장 인터넷에서 CDN 이 막히면 매번 다운로드로 후퇴했고, 변환기가 서버·브라우저 두 벌이
+   되면 같은 파일이 화면마다 다르게 보인다. 변환 규칙은 한 곳에만 둔다. */
+const VIEWER_INLINE=['pdf','jpg','jpeg','png','webp','tif','tiff','txt','csv','xlsx','xls','docx','pptx'];
+function closeViewer(){const bg=document.getElementById('viewer-bg');bg.classList.remove('open');document.getElementById('viewer-body').innerHTML=''}
+function openViewer(){
     if(!currentDoc)return;
     const {fileName,extension:ext,previewUrl,downloadUrl}=currentDoc;
-    const bg=document.getElementById('viewer-bg'),body=document.getElementById('viewer-body'),tabs=document.getElementById('viewer-tabs');
+    const bg=document.getElementById('viewer-bg'),body=document.getElementById('viewer-body');
     bg.classList.add('open');document.getElementById('viewer-title').textContent=fileName||'문서';document.getElementById('viewer-dl').href=downloadUrl;
-    tabs.style.display='none';tabs.innerHTML='';body.innerHTML='<div class="viewer-spin">원본을 불러오는 중…</div>';
-    const images=['jpg','jpeg','png','webp','gif','bmp'];
-    try{
-        if(ext==='pdf'){body.innerHTML=`<iframe src="${esc(previewUrl)}#toolbar=1" title="PDF"></iframe>`;}
-        else if(images.includes(ext)){body.innerHTML=`<div style="padding:16px"><img src="${esc(previewUrl)}" alt="${esc(fileName)}"></div>`;}
-        else if(ext==='txt'){const r=await fetch(previewUrl,{credentials:'same-origin'});const t=await r.text();body.innerHTML='<div class="viewer-pre"></div>';body.firstChild.textContent=t;}
-        else if(ext==='xlsx'||ext==='xls'||ext==='csv'){body.innerHTML='<div class="viewer-spin">엑셀을 표로 변환하는 중…</div>';await renderSpreadsheet(downloadUrl,body,tabs);}
-        else if(ext==='docx'){body.innerHTML='<div class="viewer-spin">워드 문서를 변환하는 중…</div>';await renderDocx(downloadUrl,body);}
-        else{body.innerHTML=viewerFallback(ext,downloadUrl);}
-    }catch(e){body.innerHTML=`<div class="viewer-msg">화면 미리보기를 불러오지 못했습니다.<br><span style="font-size:12px">${esc(e.message)}</span><br><br><a class="btn primary" href="${esc(downloadUrl)}">원본 다운로드</a></div>`;}
+    if(!VIEWER_INLINE.includes(ext)){body.innerHTML=viewerFallback(ext,downloadUrl);return}
+    // sandbox: 업로드된 내용은 남이 만든 것 — 스크립트로 살아나면 안 된다(서버 CSP 와 이중 잠금).
+    body.innerHTML=`<iframe src="${esc(previewUrl)}" title="${esc(fileName||'문서')}" sandbox="allow-same-origin"></iframe>`;
 }
 function viewerFallback(ext,downloadUrl){return `<div class="viewer-msg">이 형식(.${esc(ext||'?')})은 화면 미리보기를 지원하지 않습니다.<br>원본을 내려받아 확인해 주세요.<br><br><a class="btn primary" href="${esc(downloadUrl)}">원본 다운로드</a></div>`}
-async function renderSpreadsheet(url,body,tabs){
-    await loadViewerLib('xlsx');
-    const wb=XLSX.read(await fetchBuffer(url),{type:'array'});
-    const names=wb.SheetNames||[];
-    if(!names.length){body.innerHTML='<div class="viewer-msg">시트를 찾을 수 없습니다.</div>';return}
-    const show=name=>{const ws=wb.Sheets[name];body.innerHTML=`<div class="xls-wrap">${XLSX.utils.sheet_to_html(ws,{editable:false,header:''})}</div>`;[...tabs.children].forEach(c=>c.classList.toggle('active',c.dataset.sheet===name))};
-    if(names.length>1){tabs.style.display='flex';tabs.innerHTML=names.map(n=>`<button class="viewer-tab" data-sheet="${esc(n)}">${esc(n)}</button>`).join('');[...tabs.children].forEach(c=>c.onclick=()=>show(c.dataset.sheet));}
-    show(names[0]);
-}
-async function renderDocx(url,body){
-    await loadViewerLib('mammoth');
-    const {value}=await mammoth.convertToHtml({arrayBuffer:await fetchBuffer(url)});
-    body.innerHTML=`<div class="viewer-doc">${value||'<p>표시할 내용이 없습니다.</p>'}</div>`;
-}
 document.getElementById('viewer-close').onclick=closeViewer;
 document.getElementById('viewer-bg').addEventListener('click',e=>{if(e.target.id==='viewer-bg')closeViewer()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('viewer-bg').classList.contains('open'))closeViewer()});
