@@ -327,7 +327,7 @@
     <!-- KPI Summary Grid -->
     <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr)">
       <div class="kpi-box">
-        <span class="kpi-title">이번달 승인</span>
+        <span class="kpi-title">누적 승인 지출</span>
         <span class="kpi-num highlight">${{ number_format($approvedMtd, 2) }}</span>
       </div>
       <div class="kpi-box">
@@ -358,7 +358,12 @@
       @forelse($expenses as $expense)
         @php
           $submitterName = trim(($expense->employee->first_name ?? '').' '.($expense->employee->last_name ?? ''));
-          $submitterName = $submitterName !== '' ? $submitterName : ($expense->employee->email ?? '미상');
+          // 문서함에서 자동 등록된 경비는 제출한 "사람"이 없다 — 미상이라고 쓰면
+          // 문제가 있는 것처럼 읽히므로 출처를 그대로 밝힌다.
+          $expenseSource = is_array($expense->ocr_data) ? ($expense->ocr_data['source'] ?? '') : '';
+          $submitterName = $submitterName !== ''
+              ? $submitterName
+              : ($expense->employee->email ?? ($expenseSource === 'document-hub' ? '문서함 자동' : '미상'));
           $expensePayload = $expense->toArray();
           $expensePayload['category'] = $expense->accounting_account ?: $expense->category;
           $expensePayload['receipt_view_url'] = $expense->receipt_path ? route('mobile-expense.receipt', $expense) : null;

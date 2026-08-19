@@ -37,10 +37,11 @@ class MobileExpenseController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $startOfMonth = Carbon::now()->startOfMonth();
-
-        // Calculate stats
-        $approvedMtd = $expenses->filter(fn ($ex) => $ex->status === 'approved' && $ex->expense_date->gte($startOfMonth))->sum('amount');
+        // 누적 승인 지출 — 월 구분 없이 전 기간(David 지시 2026-08-19: "프로젝트 시작부터
+        // 끝날 때까지 전부"). 예전에는 이번 달 지출분만 세서, 지출일이 지난달인 건을
+        // 방금 승인해도 카드가 $0 이었다 — 승인 즉시 잡히려면 날짜 창이 없어야 한다.
+        // paid 도 포함한다: 지급완료는 승인을 거쳐 나간 돈이지, 승인이 취소된 게 아니다.
+        $approvedMtd = $expenses->filter(fn ($ex) => in_array($ex->status, ['approved', 'paid'], true))->sum('amount');
         $pendingCount = $expenses->where('status', 'pending')->count();
         $pendingAmount = $expenses->where('status', 'pending')->sum('amount');
         // 환급 "대기"(승인됐지만 아직 안 준 돈)와 "완료"(지급된 돈)는 다른 돈이다.

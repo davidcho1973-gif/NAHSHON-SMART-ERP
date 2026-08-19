@@ -95,11 +95,37 @@ class MobileExpenseTest extends TestCase
             'status' => 'pending',
         ]);
 
+        // 지난달 지출인데 오늘 승인한 건 — 누적 카드는 월 구분 없이 전 기간을 센다
+        // (David 지시 2026-08-19). 예전엔 이번 달 지출만 세서, 방금 승인해도 $0 이었다.
+        MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'corporate',
+            'category' => '5401 Equipment Rental',
+            'description' => '지난달 장비 임대',
+            'amount' => 3186.00,
+            'expense_date' => now()->subMonthNoOverflow()->format('Y-m-d'),
+            'status' => 'approved',
+        ]);
+        // 지급완료도 승인을 거쳐 나간 돈이다 — 누적에서 빠지면 안 된다.
+        MobileExpense::create([
+            'company_id' => $this->company->id,
+            'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id,
+            'payment_type' => 'corporate',
+            'category' => '5502 Vehicle & Fuel',
+            'description' => '유류비',
+            'amount' => 100.00,
+            'expense_date' => now()->subMonths(2)->format('Y-m-d'),
+            'status' => 'paid',
+        ]);
+
         $response = $this->actingAs($this->user)->get(route('mobile-expense.index'));
 
         $response->assertStatus(200);
         $response->assertViewHas('expenses');
-        $response->assertViewHas('approvedMtd', 50.00);
+        $response->assertViewHas('approvedMtd', 3336.00);
         $response->assertViewHas('pendingCount', 1);
         $response->assertViewHas('pendingAmount', 25.00);
         // 승인됐지만 아직 지급 전 → 환급 "대기". 지급(paid) 전에는 환급 "완료"가 0이어야 한다.
