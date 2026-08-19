@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Http\Controllers\OpsPhotoController;
 use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
+use App\Models\BillingReceipt;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Equipment;
@@ -12,6 +13,7 @@ use App\Models\ExpensePreApproval;
 use App\Models\Housing;
 use App\Models\MemberRegistration;
 use App\Models\MobileExpense;
+use App\Models\PayApplication;
 use App\Models\PayrollRun;
 use App\Models\Project;
 use App\Models\ProjectContract;
@@ -25,6 +27,7 @@ use App\Models\VehicleRental;
 use App\Models\Vendor;
 use App\Services\Admin\ApplicantAdminService;
 use App\Services\Admin\AttendanceLogAdminService;
+use App\Services\Admin\BillingAdminService;
 use App\Services\Admin\CommunicationAdminService;
 use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\EmployeeAdminService;
@@ -212,6 +215,19 @@ class SmartCompanyData
             'api_saveContract' => app(ContractAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteContract' => app(ContractAdminService::class)->delete((int) ($args[0] ?? 0)),
             'api_deleteContractDocument' => app(ContractAdminService::class)->deleteDocument((int) ($args[0] ?? 0)),
+
+            // 기성 청구 · 수금 — 수주 계약의 청구 원장 (재무 대시보드 수금 카드의 데이터 공급원).
+            // 조회 3개는 api_get* 접두사라 읽기전용 계정 게이트·프론트 캐시가 그대로 작동하고,
+            // 쓰기 6개는 read-only 계정에 403 이 떨어진다. 산식·전이 규칙은 서비스 안에서 방어한다.
+            'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getBillings' => app(BillingAdminService::class)->getBillings((int) ($args[0] ?? 0)),
+            'api_getBillingOptions' => app(BillingAdminService::class)->getBillingOptions(),
+            'api_saveBilling' => app(BillingAdminService::class)->saveBilling(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setBillingStatus' => app(BillingAdminService::class)->setBillingStatus(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteBilling' => app(BillingAdminService::class)->deleteBilling((int) ($args[0] ?? 0)),
+            'api_saveBillingReceipt' => app(BillingAdminService::class)->saveBillingReceipt(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_assignBillingReceipt' => app(BillingAdminService::class)->assignBillingReceipt(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_deleteBillingReceipt' => app(BillingAdminService::class)->deleteBillingReceipt((int) ($args[0] ?? 0)),
 
             // 입사지원 → 면접 → 안전교육 → 배지 → 활성화 (Filament MemberRegistrationResource).
             // 배지 사진 업로드만 multipart 라 별도 라우트를 쓴다.
@@ -757,6 +773,49 @@ class SmartCompanyData
                     $contractTotal = (float) $contractQuery->sum('current_amount');
                 }
 
+                // 기성 청구·수금 지표 (§5.1) — 신설 원장. 마이그레이션 전 배포에서도 죽지
+                // 않게 테이블 존재를 먼저 확인한다. 산식 주의 두 가지:
+                //  - billedTotal 은 approved·paid 만. 미인증(submitted) 청구를 섞으면 AR 이
+                //    과대계상되므로 submittedPending 으로 분리한다.
+                //  - retainageHeld 는 회차 합산이 아니라 계약별 최신 확정 회차의 "누계" 값.
+                //    합산하면 이중 계상이다.
+                $billedTotal = 0.0;
+                $submittedPending = 0.0;
+                $receivedTotal = 0.0;
+                $acceptedDeductions = 0.0;
+                $disputedDeductions = 0.0;
+                $retainageHeld = 0.0;
+                if (Schema::hasTable('pay_applications') && Schema::hasTable('billing_receipts')) {
+                    $appQuery = PayApplication::query();
+                    self::applyFinanceSiteScope($appQuery, $siteId);   // site_id = X OR NULL 본사 공통 규약
+                    $billedTotal = (float) (clone $appQuery)
+                        ->whereIn('status', ['approved', 'paid'])
+                        ->sum(DB::raw('COALESCE(approved_amount, amount_due)'));
+                    $submittedPending = (float) (clone $appQuery)
+                        ->where('status', 'submitted')
+                        ->sum('amount_due');
+
+                    // 계약별 최신 (approved∪paid) 회차의 retainage_held 합 — application_no
+                    // 오름차순 keyBy 로 마지막(최신) 회차만 남긴다.
+                    $retainageHeld = round((float) (clone $appQuery)
+                        ->whereIn('status', ['approved', 'paid'])
+                        ->orderBy('application_no')
+                        ->get(['project_contract_id', 'application_no', 'retainage_held'])
+                        ->keyBy('project_contract_id')
+                        ->sum(fn (PayApplication $a): float => (float) $a->retainage_held), 2);
+
+                    $receiptQuery = BillingReceipt::query();
+                    self::applyFinanceSiteScope($receiptQuery, $siteId);
+                    $receiptTotals = $receiptQuery->selectRaw(
+                        'COALESCE(SUM(amount), 0) as received, '
+                        .'COALESCE(SUM(CASE WHEN deduction_accepted IS TRUE THEN deduction_amount ELSE 0 END), 0) as accepted, '
+                        .'COALESCE(SUM(CASE WHEN deduction_accepted IS FALSE THEN deduction_amount ELSE 0 END), 0) as disputed'
+                    )->first();
+                    $receivedTotal = (float) ($receiptTotals->received ?? 0);
+                    $acceptedDeductions = (float) ($receiptTotals->accepted ?? 0);
+                    $disputedDeductions = (float) ($receiptTotals->disputed ?? 0);
+                }
+
                 $preApprovals = collect();
                 if (Schema::hasTable('expense_pre_approvals')) {
                     $preApprovals = self::financePreApprovalQuery($siteId)
@@ -798,6 +857,15 @@ class SmartCompanyData
                     'totalSpend' => $totalSpend,
                     'contractTotal' => $contractTotal,
                     'contractBalance' => $contractTotal - $totalSpend,
+                    // 기성 청구·수금 원장 지표 (§5.1) — 기존 키는 절대 불변, 여기부터 추가분
+                    'billedTotal' => round($billedTotal, 2),
+                    'submittedPending' => round($submittedPending, 2),
+                    'receivedTotal' => round($receivedTotal, 2),
+                    'arOutstanding' => round($billedTotal - $receivedTotal - $acceptedDeductions, 2),
+                    'disputedDeductions' => round($disputedDeductions, 2),
+                    'retainageHeld' => $retainageHeld,
+                    // 수금률(%): receivedTotal ÷ billedTotal × 100 — 0 나눗셈 가드. 예: 332,000/403,000 → 82.4
+                    'collectionRate' => $billedTotal > 0 ? round($receivedTotal / $billedTotal * 100, 1) : 0.0,
                     'byCategory' => $byCategory,
                 ];
             }
@@ -805,7 +873,7 @@ class SmartCompanyData
             // Fall back to empty totals when the table is not ready.
         }
 
-        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'byCategory' => []];
+        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'billedTotal' => 0, 'submittedPending' => 0, 'receivedTotal' => 0, 'arOutstanding' => 0, 'disputedDeductions' => 0, 'retainageHeld' => 0, 'collectionRate' => 0, 'byCategory' => []];
     }
 
     public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true): array
