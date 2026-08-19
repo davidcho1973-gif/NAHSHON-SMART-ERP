@@ -9749,7 +9749,9 @@
           '<span style="font-size:13px;color:#e2e8f0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + docEsc(doc.title) + '</span></div>' +
           '<div style="background:var(--bg-subtle);padding:24px;border-radius:0 0 14px 14px;min-height:220px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">' +
           (doc.fileUrl ? '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" style="text-decoration:none"><div style="width:130px;height:170px;background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--brand-primary);box-shadow:0 8px 24px rgba(15,23,42,.12)"><i class="ph ph-file-text"></i></div></a>' +
-            '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" class="docs-chip" style="text-decoration:none"><i class="ph ph-arrow-square-out"></i> 원본 열기</a>'
+            '<a href="' + docEsc(doc.fileUrl) + '" target="_blank" class="docs-chip" style="text-decoration:none"><i class="ph ph-arrow-square-out"></i> 바로 보기</a>' +
+            // 오피스 파일의 "바로 보기" 는 서버가 그린 HTML 이다. 원본 그대로가 필요할 때를 위해 내려받기를 따로 둔다.
+            '<a href="' + docEsc(doc.fileUrl) + (doc.fileUrl.indexOf('?') >= 0 ? '&' : '?') + 'download=1" class="docs-chip" style="text-decoration:none"><i class="ph ph-download-simple"></i> 원본 내려받기</a>'
             : (doc.fileMissing
               ? '<div style="text-align:center;color:var(--status-warning);font-size:12.5px;line-height:1.6"><i class="ph ph-warning-circle" style="font-size:26px;display:block;margin-bottom:8px"></i>원본 파일이 서버에 없습니다.<br>메타데이터는 보존되어 있으니<br><b>같은 문서를 다시 업로드</b>해 주세요.</div>'
               : '<div style="color:var(--text-tertiary);font-size:13px">원본 파일 없음</div>')) +

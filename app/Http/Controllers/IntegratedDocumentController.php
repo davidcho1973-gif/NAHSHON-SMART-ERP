@@ -130,6 +130,20 @@ class IntegratedDocumentController extends Controller
         $disk = $document->disk ?: 'public';
         abort_unless(filled($document->path) && Storage::disk($disk)->exists($document->path), 404);
 
+        // 엑셀·워드·파워포인트는 브라우저가 못 그리므로, 내려받기를 명시하지 않는 한
+        // 서버가 HTML 로 바꿔 보여준다. 문서함(document-hub) 미리보기와 같은 규칙이다.
+        $extension = strtolower(pathinfo((string) ($document->original_name ?: $document->path), PATHINFO_EXTENSION));
+        if (! request()->boolean('download') && \App\Support\OfficePreview::supports($extension)) {
+            $html = \App\Support\OfficePreview::html(
+                (string) Storage::disk($disk)->get($document->path),
+                $extension,
+                (string) ($document->title ?: $document->original_name),
+            );
+            if ($html !== null) {
+                return response($html, 200, \App\Support\OfficePreview::safeHeaders());
+            }
+        }
+
         return Storage::disk($disk)->response(
             $document->path,
             $document->original_name ?: ('document-' . $document->id),

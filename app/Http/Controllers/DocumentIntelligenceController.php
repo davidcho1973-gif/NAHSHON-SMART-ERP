@@ -456,7 +456,7 @@ class DocumentIntelligenceController extends Controller
         ]);
     }
 
-    public function preview(Request $request, IntelligentDocument $document): StreamedResponse
+    public function preview(Request $request, IntelligentDocument $document): \Symfony\Component\HttpFoundation\Response
     {
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
         abort_unless(
@@ -465,6 +465,19 @@ class DocumentIntelligenceController extends Controller
             '원본 파일이 서버에 없습니다. 같은 파일을 문서함에 다시 올리면 이 문서에 복원됩니다.'
         );
         $disk = Storage::disk($document->disk);
+
+        // 엑셀은 표로, 워드는 문서로 — 브라우저가 못 그리는 형식은 서버가 HTML 로
+        // 바꿔 보여준다. 예전에는 여기서 415 로 밀어내서 화면이 추출 텍스트로 후퇴했다.
+        if (\App\Support\OfficePreview::supports((string) $document->extension)) {
+            $html = \App\Support\OfficePreview::html(
+                (string) $disk->get($document->file_path),
+                (string) $document->extension,
+                (string) ($document->title ?: $document->original_file_name),
+            );
+            if ($html !== null) {
+                return response($html, 200, \App\Support\OfficePreview::safeHeaders());
+            }
+        }
 
         $previewTypes = [
             'pdf' => 'application/pdf',
