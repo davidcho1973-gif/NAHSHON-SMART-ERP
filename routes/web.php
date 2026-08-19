@@ -368,6 +368,23 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 },
             ];
         })(),
+        // 업로드 파일이 배포를 견디는 저장소에 있는가. local/public 이면 Laravel Cloud
+        // 배포마다 문서 원본·현장 사진이 조용히 사라진다 — DB 기록은 남아서 화면에는
+        // 멀쩡히 보이다가 열 때만 "파일 없음" 이 난다. 버킷을 붙이고도 환경변수
+        // (DOCUMENT_STORAGE_DISK 등)를 안 넣어 로컬로 가는 사고가 실제로 있었다.
+        'storage' => (function (): array {
+            $docs = (string) config('document-intelligence.disk');
+            $filed = (string) config('filesystems.documents_disk');
+            $photos = (string) config('filesystems.wbs_photos_disk');
+            $volatile = fn (string $d): bool => in_array($d, ['local', 'public'], true);
+
+            return [
+                'document_hub' => $docs,
+                'document_management' => $filed,
+                'wbs_photos' => $photos,
+                'durable' => ! $volatile($docs) && ! $volatile($filed) && ! $volatile($photos),
+            ];
+        })(),
         // 배포가 실제로 반영됐는지는 해시보다 "이 기능이 있나" 로 확인하는 편이 빠르다.
         'has' => [
             'admin_shell' => is_readable(public_path('js/admin-shell.js')),

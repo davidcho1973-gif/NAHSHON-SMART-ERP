@@ -82,4 +82,12 @@ if [ "$matches" = "false" ]; then
   } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 fi
 
-echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?}"
+# 업로드 저장소가 배포를 견디는가 — local/public 이면 배포마다 문서 원본이 사라진다.
+durable=$(printf '%s' "$body" | sed -n 's/.*"durable" *: *\([a-z]*\).*/\1/p')
+dochub=$(field document_hub)
+
+if [ "$durable" = "false" ]; then
+  echo "::warning title=업로드 저장소가 휘발성::${ENV_LABEL} — 문서 디스크가 \`${dochub:-?}\` 입니다. 배포마다 문서 원본·현장 사진이 사라집니다. 버킷 연결 + DOCUMENT_STORAGE_DISK/DOCUMENT_DISK/WBS_PHOTO_DISK 환경변수를 확인하세요."
+fi
+
+echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?}"
