@@ -4,6 +4,8 @@ namespace App\Services\Finance;
 
 use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
+use App\Support\ReceiptFilePayload;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 문서함에 들어온 "돈이 나간 문서"를 재무(경비 원장)로 넘긴다.
@@ -92,6 +94,10 @@ class DocumentExpenseConnector
             ],
         ];
 
+        // 영수증 원본을 경비 줄에 사본으로 붙인다. 파일이 문서함에만 있으면 경비
+        // 목록에 사진 버튼이 안 떠서, 승인하는 사람이 근거를 못 보고 승인하게 된다.
+        $attributes += $this->receiptCopy($document);
+
         if (! $existing) {
             MobileExpense::query()->create($attributes + ['source_ref' => $sourceRef, 'status' => 'pending']);
 
@@ -99,10 +105,42 @@ class DocumentExpenseConnector
         }
 
         if ((float) $existing->amount !== $amount
-            || (string) $existing->description !== (string) $attributes['description']) {
+            || (string) $existing->description !== (string) $attributes['description']
+            || (blank($existing->receipt_file) && isset($attributes['receipt_file']))) {
             // 지출일은 처음 잡힌 값을 지킨다 — 재분석 때마다 날짜가 밀리면 안 된다.
             unset($attributes['expense_date']);
             $existing->update($attributes);
+        }
+    }
+
+    /**
+     * 문서 원본을 경비의 영수증 칸(DB 보관)으로 복사한다.
+     *
+     * DB 에 넣는 이유는 기존 모바일 영수증과 같다 — 배포가 로컬 디스크를 초기화해도
+     * 장부의 근거는 남아야 한다. 너무 큰 파일(10MB 초과)은 붙이지 않는다: 장부 근거로
+     * 쓰기엔 과하고, 원본은 문서함에 그대로 있다.
+     *
+     * @return array<string, mixed>
+     */
+    private function receiptCopy(IntelligentDocument $document): array
+    {
+        try {
+            if (blank($document->file_path) || (int) $document->file_size > 10 * 1024 * 1024) {
+                return [];
+            }
+
+            $disk = Storage::disk($document->disk ?: (string) config('document-intelligence.disk', 'local'));
+            if (! $disk->exists($document->file_path)) {
+                return [];
+            }
+
+            return [
+                'receipt_file' => ReceiptFilePayload::encode((string) $disk->get($document->file_path)),
+                'receipt_mime_type' => $document->mime_type ?: 'application/octet-stream',
+                'receipt_original_name' => $document->original_file_name ?: 'receipt',
+            ];
+        } catch (\Throwable) {
+            return []; // 사본 실패가 경비 등록을 막으면 안 된다.
         }
     }
 }

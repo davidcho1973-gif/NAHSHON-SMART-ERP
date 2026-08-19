@@ -159,6 +159,48 @@ class DocumentMoneyRoutingTest extends TestCase
             ->where('source_ref', "document:{$doc->id}")->value('amount'));
     }
 
+    // ── 영수증 원본이 경비 줄에 붙는가 ─────────────────────────────────
+
+    public function test_the_original_file_rides_along_as_the_receipt(): void
+    {
+        // 파일이 문서함에만 있으면 경비 목록에 사진 버튼이 안 떠서,
+        // 승인하는 사람이 근거를 못 보고 승인하게 된다.
+        $disk = (string) config('document-intelligence.disk', 'local');
+        \Illuminate\Support\Facades\Storage::fake($disk);
+        $path = 'document-intelligence/inbox/'.Str::uuid().'/sunbelt.pdf';
+        \Illuminate\Support\Facades\Storage::disk($disk)->put($path, '%PDF-1.4 sunbelt rental invoice');
+
+        $doc = $this->analyzedDocument(
+            ['flow' => 'out', 'amount' => 3186, 'payee' => 'Sunbelt Rentals', 'category_hint' => 'equipment'],
+            ['disk' => $disk, 'file_path' => $path, 'original_file_name' => 'Sunbelt_186971353.pdf',
+                'mime_type' => 'application/pdf', 'file_size' => 31],
+        );
+
+        app(DocumentExpenseConnector::class)->sync($doc);
+
+        $expense = MobileExpense::query()->where('source_ref', "document:{$doc->id}")->firstOrFail();
+        $this->assertSame('%PDF-1.4 sunbelt rental invoice',
+            \App\Support\ReceiptFilePayload::decode($expense->receipt_file),
+            '영수증 원본이 경비 줄에 안 붙었습니다 — 사진 버튼이 안 뜹니다.');
+        $this->assertSame('application/pdf', $expense->receipt_mime_type);
+        $this->assertSame('Sunbelt_186971353.pdf', $expense->receipt_original_name);
+    }
+
+    public function test_a_missing_file_still_registers_the_expense_without_a_receipt(): void
+    {
+        // 사본 실패가 경비 등록 자체를 막으면 안 된다 — 금액은 장부에 올라야 한다.
+        $doc = $this->analyzedDocument(
+            ['flow' => 'out', 'amount' => 500, 'category_hint' => 'materials'],
+            ['file_path' => 'document-intelligence/inbox/없는/파일.pdf'],
+        );
+
+        app(DocumentExpenseConnector::class)->sync($doc);
+
+        $expense = MobileExpense::query()->where('source_ref', "document:{$doc->id}")->firstOrFail();
+        $this->assertNull($expense->receipt_file);
+        $this->assertSame(500.0, (float) $expense->amount);
+    }
+
     // ── 길 자체가 살아 있는가 ──────────────────────────────────────────
 
     public function test_the_analysis_pipeline_actually_calls_the_connector(): void
