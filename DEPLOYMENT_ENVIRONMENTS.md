@@ -8,41 +8,29 @@
 
 ---
 
-## 지금 열려 있는 것 (2026-08-13 기준)
+## 지금 열려 있는 것 (2026-08-19 기준)
 
-**운영 배포가 코드를 못 받고 있다.** 저장소는 `8955c73`, 서버는 `3eba77d` 에 머물러 있다.
-화면은 멀쩡히 열리므로 눈으로는 알 수 없다.
+**운영 배포는 다시 흐른다.** 2026-08-19 에 `Push to deploy` 를 켜서 6일 막혔던 운영이
+`b99d21b` 로 올라왔다(Actions 로그: "운영 — b99d21b 가 돌고 있습니다"). 지금은
+**main 에 푸시하면 즉시 배포**되는 상태다 — 그래서 main 에는 전체 테스트를 통과한
+것만 푸시한다(AGENTS.md §5).
 
-원인 두 가지가 겹쳤다 — 배포가 나가는 두 길이 **둘 다 막혀 있다.**
+### 남은 것 하나 — 배포 훅 시크릿이 여전히 잘린 값이다
 
-### 1. 배포 훅 시크릿이 잘린 값이다
+훅은 "테스트 통과 후에만 배포" 를 가능하게 하는 더 안전한 길인데, 시크릿이 잘려 있어
+호출하면 302 → sign-in 으로 튕긴다(경로 `/deploy/<36자>/<16자>` — 마지막 토큰이 짧다).
+두 번 갱신을 시도했지만 두 번 다 같은 잘린 모양이 저장됐다.
 
-Actions 로그가 그대로 말해 준다.
-
-    POST + commit_hash → HTTP 302
-    ...네 조합 모두 → Redirecting to https://cloud.laravel.com/sign-in
-
-    호스트: cloud.laravel.com   전체 86자
-    경로: /deploy / <36자> / <16자>      ← 마지막 토큰 구간이 짧다
-
-**고치는 법**
+**고치는 법 (서두르지 않아도 된다 — Push to deploy 가 배포를 대신하고 있다)**
 
 1. Laravel Cloud → `nahshon-smart-erp` → `main` → Settings → Deployments → Deploy hook
-   → **칸 옆의 복사 버튼**으로 복사 (드래그 금지 — 이게 원인이다)
+   → **🔄 재생성 버튼으로 새 주소를 만든 뒤** 그 옆 **📋 복사 버튼**으로 복사.
+   (재생성부터 하는 이유: 잘린 옛 값과 헷갈릴 일이 없어지고, 화면 캡처에 일부가
+   노출된 적이 있어 어차피 바꾸는 것이 맞다. 드래그 복사가 잘림의 원인이었다.)
 2. GitHub → Settings → Secrets and variables → Actions → **Secrets** 탭
    → `LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION` 연필 아이콘 → 새 값으로 덮어쓰기
-
-### 2. `Push to deploy` 가 꺼져 있다
-
-훅이 실패해도 이게 켜져 있으면 푸시만으로 배포가 나간다. 10분 동안 서버가 안 바뀐 것은
-**두 길이 다 막혔다**는 뜻이다.
-
-Settings → Deployments → `Push to deploy` → 켠다.
-
-### 3. 그다음
-
-Deployments 탭에서 수동 **Deploy** 한 번 → `https://erp.dasolusa.com/build-version` 의
-`commit_short` 가 `8955c73` 인지 확인.
+3. 훅이 통하는 것을 확인한 뒤(Actions 의 Deploy production 이 훅 302 경고 없이 초록),
+   원하면 `Push to deploy` 를 다시 꺼서 "테스트 통과 후에만 배포" 로 되돌린다.
 
 ### 이미 끝난 것 — 다시 하지 않는다
 
