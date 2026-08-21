@@ -1176,6 +1176,7 @@
       },
       getGlobalAttendance: () => gsRun('api_getGlobalAttendance', [], { success: false, mode: 'global', checkedIn: [], notCheckedIn: [], siteStats: {}, totalPresent: 0, totalWorkers: 0 }),
       getExpenses: () => gsRun('api_getExpenses', [], []),
+      reviewExpense: (expenseId, decision) => gsRun('api_reviewExpense', [expenseId, decision], { success: false, message: '' }),
       // 기성 청구·수금 (billing-admin) — 조회 3 + 쓰기 6. api_get* 접두사가 곧 캐시·읽기전용 게이트다.
       getBillingContracts: (filters) => gsRun('api_getBillingContracts', [filters || {}], { success: false, rows: [] }),
       getBillings: (contractId) => gsRun('api_getBillings', [contractId], { success: false, rows: [] }),
@@ -5102,6 +5103,30 @@
         }
       };
 
+      // 승인대기 건을 목록에서 바로 처리한다 — 승인 화면으로 건너갈 필요 없이.
+      // 처리 후 캐시를 비우고 다시 그리므로 KPI(누적 지출·환급 대기)에도 즉시 반영된다.
+      window.reviewFinanceExpense = async function(expenseId, decision) {
+        var confirmMessages = {
+          approved: '이 비용을 승인할까요?',
+          rejected: '이 비용을 반려할까요?',
+          paid: '이 비용을 지급완료로 처리할까요?'
+        };
+        if (!expenseId || !confirmMessages[decision]) return;
+        if (!confirm(confirmMessages[decision])) return;
+
+        try {
+          var result = await window.API.reviewExpense(Number(expenseId), decision);
+          if (!result || !result.success) {
+            throw new Error((result && result.message) || '처리에 실패했습니다.');
+          }
+          window.apiCache = {};
+          await renderFinance();
+        } catch (err) {
+          console.error(err);
+          alert(err.message || '처리에 실패했습니다. 새로고침 후 다시 시도해 주세요.');
+        }
+      };
+
       async function renderFinance() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -5147,8 +5172,21 @@
             var receiptLink = ex.receiptUrl ? '<a href="' + safeHtml(ex.receiptUrl) + '" target="_blank" class="btn-primary" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;text-decoration:none;padding:0" title="영수증 보기"><i class="ph ph-image" style="font-size:18px"></i></a>' : '';
             var editLink = ex.editUrl ? '<a href="' + safeHtml(ex.editUrl) + '" class="btn-secondary" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;text-decoration:none;padding:0" title="수정"><i class="ph ph-pencil-simple" style="font-size:17px"></i></a>' : '';
             var deleteButton = ex.deleteUrl ? '<button type="button" class="btn-secondary finance-delete-expense" data-delete-url="' + safeHtml(ex.deleteUrl) + '" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;padding:0;color:var(--status-danger);border-color:var(--status-danger)" title="삭제"><i class="ph ph-trash" style="font-size:17px"></i></button>' : '';
-            var actions = (receiptLink || editLink || deleteButton)
-              ? '<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">' + receiptLink + editLink + deleteButton + '</div>'
+            // 승인대기는 목록에서 바로 승인/반려, 승인완료는 바로 지급완료 처리한다.
+            var reviewButtons = '';
+            if (ex.canReview && ex.expenseId) {
+              var reviewButton = function (decision, title, icon, color) {
+                return '<button type="button" class="btn-secondary finance-review-expense" data-expense-id="' + ex.expenseId + '" data-decision="' + decision + '" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;padding:0;color:' + color + ';border-color:' + color + '" title="' + title + '"><i class="ph ' + icon + '" style="font-size:18px"></i></button>';
+              };
+              if (ex.status === 'pending') {
+                reviewButtons = reviewButton('approved', '승인', 'ph-check-circle', 'var(--status-success)')
+                  + reviewButton('rejected', '반려', 'ph-x-circle', 'var(--status-danger)');
+              } else if (ex.status === 'approved') {
+                reviewButtons = reviewButton('paid', '지급완료 처리', 'ph-currency-circle-dollar', 'var(--brand-primary)');
+              }
+            }
+            var actions = (reviewButtons || receiptLink || editLink || deleteButton)
+              ? '<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">' + reviewButtons + receiptLink + editLink + deleteButton + '</div>'
               : '<span style="color:var(--text-tertiary)">-</span>';
             var siteName = (ex.site && ex.site !== '-') ? '<span class="tag">' + ex.site + '</span>' : '<span style="color:var(--text-tertiary)">-</span>';
             var accountName = (ex.account && ex.account !== '-') ? safeHtml(ex.account) : '<span style="color:var(--text-tertiary)">-</span>';
@@ -5216,6 +5254,11 @@
           document.querySelectorAll('.finance-delete-expense').forEach(function (button) {
             button.addEventListener('click', function () {
               window.deleteFinanceExpense(this.dataset.deleteUrl);
+            });
+          });
+          document.querySelectorAll('.finance-review-expense').forEach(function (button) {
+            button.addEventListener('click', function () {
+              window.reviewFinanceExpense(this.dataset.expenseId, this.dataset.decision);
             });
           });
         } catch (err) { renderError('ìž¬ë¬´ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }

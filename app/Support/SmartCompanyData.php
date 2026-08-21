@@ -44,6 +44,7 @@ use App\Services\AttendanceQrService;
 use App\Services\CommandCenter\ConstructionCommandCenterService;
 use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
+use App\Services\Finance\ExpenseReviewService;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
@@ -104,6 +105,8 @@ class SmartCompanyData
 
             'api_getFinanceStats' => self::financeStats($siteId),
             'api_getExpenses' => self::expenses($siteId),
+            // 재무 목록 원클릭 승인/반려/지급 — 규칙은 ExpenseReviewService 한 곳에 있다.
+            'api_reviewExpense' => self::reviewExpense((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_getPayrollDashboard' => self::payrollDashboard($args[1] ?? null, $siteId),
             'api_runPayroll' => self::runPayroll($args[1] ?? $args[0] ?? null, $siteId),
             'api_approvePayroll' => self::approvePayroll($args[0] ?? null),
@@ -880,12 +883,14 @@ class SmartCompanyData
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
+                $canReview = app(ExpenseReviewService::class)->canReview(auth()->user());
+
                 return self::financeExpenseQuery($siteId, $applyUserScope)
                     ->with(['site', 'employee', 'preApproval'])
                     ->orderByDesc('expense_date')
                     ->orderByDesc('id')
                     ->get()
-                    ->map(function (MobileExpense $e): array {
+                    ->map(function (MobileExpense $e) use ($canReview): array {
                         $canModify = self::canModifyMobileExpense($e);
                         $employeeName = trim(($e->employee?->first_name ?? '').' '.($e->employee?->last_name ?? ''));
 
@@ -909,6 +914,7 @@ class SmartCompanyData
                             'reviewedAt' => optional($e->reviewed_at)->toIso8601String(),
                             'paidAt' => optional($e->paid_at)->toIso8601String(),
                             'receiptUrl' => self::mobileExpenseReceiptUrl($e),
+                            'canReview' => $canReview,
                             'canModify' => $canModify,
                             'editUrl' => $canModify ? route('mobile-expense.edit', $e, false) : '',
                             'deleteUrl' => $canModify ? route('mobile-expense.destroy', $e, false) : '',
@@ -936,10 +942,25 @@ class SmartCompanyData
         }
     }
 
+    /**
+     * 재무 목록에서의 원클릭 승인/반려/지급 — 권한·상태 전이 규칙은
+     * ExpenseReviewService 한 곳에 있고, 영수증 목록의 review 와 같은 규칙을 쓴다.
+     */
+    private static function reviewExpense(int $expenseId, string $decision): array
+    {
+        $expense = MobileExpense::query()->find($expenseId);
+
+        if (! $expense) {
+            return ['success' => false, 'message' => '해당 비용을 찾을 수 없습니다.'];
+        }
+
+        return app(ExpenseReviewService::class)->review($expense, $decision, auth()->user());
+    }
+
     private static function canModifyMobileExpense(MobileExpense $expense): bool
     {
         $user = auth()->user();
-        $canManageAll = in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
+        $canManageAll = app(ExpenseReviewService::class)->canReview($user);
 
         if ($canManageAll) {
             return true;

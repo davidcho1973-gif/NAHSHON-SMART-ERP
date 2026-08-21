@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
 use App\Models\Site;
+use App\Services\Finance\ExpenseReviewService;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
@@ -316,17 +317,10 @@ class MobileExpenseController extends Controller
 
         $data = $request->validate(['decision' => 'required|in:approved,rejected,paid']);
 
-        $expense->update([
-            'status' => $data['decision'],
-            'reviewed_by_user_id' => auth()->id(),
-            'reviewed_at' => now(),
-            'paid_by_user_id' => $data['decision'] === 'paid' ? auth()->id() : $expense->paid_by_user_id,
-            'paid_at' => $data['decision'] === 'paid' ? now() : $expense->paid_at,
-        ]);
+        $result = app(ExpenseReviewService::class)->review($expense, $data['decision'], auth()->user());
+        abort_unless($result['success'], 403);
 
-        $label = ['approved' => '승인', 'rejected' => '반려', 'paid' => '지급완료'][$data['decision']];
-
-        return back()->with('success', "영수증을 {$label} 처리했습니다.");
+        return back()->with('success', $result['message']);
     }
 
     private function canAccessExpense(MobileExpense $expense): bool
@@ -432,7 +426,7 @@ class MobileExpenseController extends Controller
 
     private function canManageAllExpenses(): bool
     {
-        return in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
+        return app(ExpenseReviewService::class)->canReview(auth()->user());
     }
 
     private function availablePreApprovals(?int $employeeId = null)
