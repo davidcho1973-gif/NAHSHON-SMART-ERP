@@ -197,6 +197,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
     Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
     Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
+    Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
     Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
     Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
     Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');

@@ -119,6 +119,13 @@ class DocumentIntelligenceService
             } catch (\Throwable $e) {
                 report($e);
             }
+            try {
+                // 채팅방에서 올라온 파일이면 그 자리에 결과를 알린다 — 결과가 보이지
+                // 않으면 사람들은 자동화를 믿지 않고 각 화면에 다시 입력한다.
+                app(\App\Services\Communication\ChatDocumentReplyConnector::class)->sync($document);
+            } catch (\Throwable $e) {
+                report($e);
+            }
 
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });

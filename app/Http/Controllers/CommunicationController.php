@@ -3,17 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationMessageFile;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
+use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\CommunicationService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CommunicationController extends Controller
 {
-    public function __construct(private readonly CommunicationService $communicationService)
-    {
+    public function __construct(
+        private readonly CommunicationService $communicationService,
+        private readonly ChatAttachmentService $attachments,
+    ) {
     }
 
     public function index(Request $request): View
@@ -89,7 +95,7 @@ class CommunicationController extends Controller
 
         $room->load(['site', 'team']);
         $messages = CommunicationMessage::query()
-            ->with(['senderEmployee', 'senderUser', 'reads', 'replies.senderEmployee', 'replies.senderUser', 'replies.reads'])
+            ->with(['senderEmployee', 'senderUser', 'reads', 'files', 'replies.senderEmployee', 'replies.senderUser', 'replies.reads', 'replies.files'])
             ->where('communication_room_id', $room->id)
             ->whereNull('parent_id')
             ->active()
@@ -114,10 +120,13 @@ class CommunicationController extends Controller
         $user = $request->user();
         abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
 
+        // 사진 한 장만 보내는 것도 메시지다 — 글이 없어도 첨부가 있으면 받는다.
         $data = $request->validate([
-            'body' => ['required', 'string', 'max:4000'],
+            'body' => ['required_without:files', 'nullable', 'string', 'max:4000'],
             'title' => ['nullable', 'string', 'max:255'],
             'parent_id' => ['nullable', 'integer'],
+            'files' => ['nullable', 'array', 'max:10'],
+            'files.*' => ['file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
         ]);
 
         $parent = null;
@@ -134,7 +143,7 @@ class CommunicationController extends Controller
             ? CommunicationMessage::KIND_ANNOUNCEMENT
             : CommunicationMessage::KIND_MESSAGE;
 
-        $this->communicationService->postMessage($user, $room, (string) $data['body'], [
+        $message = $this->communicationService->postMessage($user, $room, (string) ($data['body'] ?? ''), [
             'parent_id' => $parent?->id,
             'kind' => $kind,
             'title' => $parent ? null : ($data['title'] ?? null),
@@ -142,6 +151,33 @@ class CommunicationController extends Controller
             'is_pinned' => $kind === CommunicationMessage::KIND_ANNOUNCEMENT,
         ]);
 
+        // 첨부는 메시지에 붙는 동시에 문서함으로도 들어가 분석·모듈 배달을 탄다.
+        $files = $request->file('files', []);
+        if ($files !== []) {
+            $this->attachments->attachAll($message, is_array($files) ? $files : [$files], $user);
+        }
+
         return redirect()->route('communication.show', ['room' => $room]);
+    }
+
+    /**
+     * 첨부 파일 내려주기 — 그 방의 사람만.
+     *
+     * 파일은 비공개 저장소에 있으므로 링크를 아는 것만으로는 열 수 없다.
+     * 영수증·급여 서류가 오가는 방이라 이 확인이 곧 잠금장치다.
+     */
+    public function file(Request $request, CommunicationRoom $room, CommunicationMessageFile $file): StreamedResponse
+    {
+        abort_unless($this->communicationService->canAccessRoom($request->user(), $room), 403);
+        abort_unless((int) $file->message?->communication_room_id === (int) $room->id, 404);
+        abort_if(blank($file->disk) || blank($file->path), 404);
+
+        $disk = Storage::disk((string) $file->disk);
+        abort_unless($disk->exists((string) $file->path), 404);
+
+        return $disk->response((string) $file->path, $file->original_name, [
+            'Content-Type' => $file->mime_type ?: 'application/octet-stream',
+            'Cache-Control' => 'private, max-age=300',
+        ]);
     }
 }

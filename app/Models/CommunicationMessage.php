@@ -143,6 +143,12 @@ class CommunicationMessage extends Model
         return $this->hasMany(CommunicationMessageRead::class);
     }
 
+    /** 이 메시지에 붙은 파일 — 사진·영수증·도면. 문서함 문서와 이어져 있을 수 있다. */
+    public function files(): HasMany
+    {
+        return $this->hasMany(CommunicationMessageFile::class)->orderBy('id');
+    }
+
     public function related(): MorphTo
     {
         return $this->morphTo();

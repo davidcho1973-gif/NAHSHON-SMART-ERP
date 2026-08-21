@@ -31,6 +31,13 @@
         textarea, input { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 9px; padding: 10px 11px; font: inherit; background: #fff; }
         textarea { min-height: 46px; resize: vertical; }
         button { appearance: none; border: 0; border-radius: 9px; padding: 10px 13px; background: #145fff; color: #fff; font-weight: 800; cursor: pointer; }
+        .attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .attachments img { max-width: min(260px, 72vw); max-height: 260px; border-radius: 10px; border: 1px solid #e5e7eb; display: block; }
+        .file-card { display: grid; gap: 2px; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; text-decoration: none; color: #111827; }
+        .file-name { font-size: 13px; font-weight: 700; word-break: break-all; }
+        .file-size { font-size: 11px; color: #6b7280; }
+        .attach-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4b5563; }
+        .attach-row input[type=file] { border: 0; padding: 0; font-size: 12px; }
         .reply-form button { padding: 9px 11px; }
         .empty { padding: 36px 8px; color: #6b7280; text-align: center; }
         .notice { color: #6b7280; font-size: 13px; line-height: 1.4; }
@@ -69,6 +76,7 @@
                         <h2>{{ $message->title }}</h2>
                     @endif
                     <div class="body">{{ $message->body }}</div>
+                    @include('communication.partials.attachments', ['message' => $message, 'room' => $room])
                     <div class="line">
                         <span class="kind">{{ \App\Models\CommunicationMessage::KIND_OPTIONS[$message->kind] ?? $message->kind }}</span>
                         <span>{{ $sender }}</span>
@@ -85,6 +93,7 @@
                                 @endphp
                                 <div class="reply">
                                     <div class="body">{{ $reply->body }}</div>
+                                    @include('communication.partials.attachments', ['message' => $reply, 'room' => $room])
                                     <div class="line">
                                         <span>{{ $replySender }}</span>
                                         <span>{{ $reply->sent_at?->format('m/d H:i') }}</span>
@@ -109,14 +118,21 @@
 
         <section class="composer">
             @if($canPostTopLevel)
-                <form method="POST" action="{{ route('communication.store', ['room' => $room]) }}">
+                <form method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
                     @csrf
                     @if($room->type === 'site_announcement')
                         <input name="title" maxlength="255" placeholder="공지 제목">
                     @endif
-                    <textarea name="body" maxlength="4000" placeholder="{{ $room->type === 'site_announcement' ? '공지 내용' : '메시지' }}" required></textarea>
+                    <textarea name="body" maxlength="4000" placeholder="{{ $room->type === 'site_announcement' ? '공지 내용' : '메시지' }}"></textarea>
+                    {{-- 사진·영수증·도면을 그대로 던지면 문서함이 읽고 해당 모듈로 보낸다. --}}
+                    <div class="attach-row">
+                        <input type="file" name="files[]" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
+                    </div>
                     <button type="submit">{{ $room->type === 'site_announcement' ? '공지 보내기' : '보내기' }}</button>
                 </form>
+                @if($room->type !== 'direct')
+                    <div class="meta" style="margin-top:6px">사진·영수증·도면을 올리면 AI 가 읽고 재무·장비·문서함으로 보냅니다.</div>
+                @endif
             @else
                 <div class="notice">이 방은 공지 전용입니다. 댓글은 각 공지 아래에서 남길 수 있습니다.</div>
             @endif

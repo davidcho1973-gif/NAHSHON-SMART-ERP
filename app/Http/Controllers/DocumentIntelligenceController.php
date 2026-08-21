@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Services\Documents\DocumentIntake;
 use App\Services\Documents\StuckAnalysisReaper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -139,113 +140,33 @@ class DocumentIntelligenceController extends Controller
             $request->integer('project_id') ?: null,
         );
 
-        // 디스크는 여기서 미리 열지 않는다 — 설정이 잘못돼 있으면 Storage::disk() 자체가
-        // 예외를 던져 요청 전체가 500 으로 죽고, 화면에는 이유 없이 "업로드 실패"만 뜬다.
-        // 실제 저장은 storeUpload() 안에서 예외를 잡아 파일별로 처리한다.
-        $diskName = (string) config('document-intelligence.disk', 'local');
-        $allowedExtensions = config('document-intelligence.allowed_extensions', []);
+        // 접수 규칙(형식·중복·유실 복원·저장·분석 큐)은 DocumentIntake 한 곳에 있다 —
+        // 채팅방에 올린 파일도 같은 창구로 들어오기 때문이다. 여기서는 결과를
+        // 화면이 이해하는 세 갈래(접수/중복/실패)로 나누기만 한다.
+        $intake = app(DocumentIntake::class);
         $created = [];
         $duplicates = [];
         $failed = [];
 
         foreach ($request->file('files', []) as $file) {
             $originalName = $file->getClientOriginalName();
-            $extension = strtolower((string) $file->getClientOriginalExtension());
-            if (! in_array($extension, $allowedExtensions, true)) {
-                // 한 파일이 형식 때문에 막혀도 나머지는 올라가야 한다 — 배치 전체를 죽이지 않는다.
-                $failed[] = ['file' => $originalName, 'reason' => '지원하지 않는 파일 형식입니다.'];
+            // 한 파일이 막혀도 나머지는 올라가야 한다 — 배치 전체를 죽이지 않는다.
+            $result = $intake->ingest(
+                $file,
+                ['company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId],
+                ['uploaded_by' => $request->user()->id, 'source' => 'dropzone'],
+            );
 
-                continue;
-            }
-
-            $sha256 = hash_file('sha256', $file->getRealPath());
-            $duplicateQuery = IntelligentDocument::query()->where('sha256', $sha256);
-            foreach (['company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId] as $column => $value) {
-                $value ? $duplicateQuery->where($column, $value) : $duplicateQuery->whereNull($column);
-            }
-            $duplicate = $duplicateQuery->first();
-            $safeName = $this->safeFileName($originalName);
-
-            if ($duplicate) {
-                // 원본이 유실된 레코드(배포로 로컬 디스크가 초기화된 경우)는 "중복"으로
-                // 거부하면 안 된다 — 같은 파일을 다시 올릴 유일한 길을 막아 버린다.
-                $lost = blank($duplicate->file_path) || ! $this->fileStillThere($duplicate->disk ?: $diskName, (string) $duplicate->file_path);
-
-                if ($lost) {
-                    $uuid = $duplicate->uuid ?: (string) Str::uuid();
-                    [$path, $usedDisk, $error] = $this->storeUpload($file, $uuid, $safeName, $diskName);
-
-                    if ($path === null) {
-                        // 저장 실패를 "중복"으로 뭉뚱그리면 사용자는 원인을 영영 알 수 없다.
-                        $failed[] = ['file' => $originalName, 'reason' => $error ?: '파일 저장에 실패했습니다.'];
-
-                        continue;
-                    }
-
-                    $duplicate->update([
-                        'disk' => $usedDisk,
-                        'file_path' => $path,
-                        'stored_file_name' => $safeName,
-                        'ai_status' => 'queued',
-                        'ai_error' => null,
-                    ]);
-                    AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
-                    $created[] = $this->documentRow($duplicate->fresh());
-
-                    continue;
-                }
-
-                // 원본은 멀쩡한 진짜 중복. 다만 예전 분석이 실패로 남아 있으면 이 기회에
-                // 다시 태운다 — 사용자가 같은 파일을 또 올리는 이유는 대개 그것이다.
-                $requeued = false;
-                if (in_array((string) $duplicate->ai_status, ['failed', 'queued'], true)) {
-                    $duplicate->update(['ai_status' => 'queued', 'ai_error' => null]);
-                    AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
-                    $requeued = true;
-                }
-
-                $duplicates[] = [
+            match ($result['status']) {
+                'created', 'restored' => $created[] = $this->documentRow($result['document']),
+                'duplicate' => $duplicates[] = [
                     'file' => $originalName,
-                    'documentId' => $duplicate->id,
-                    'requeued' => $requeued,
-                    'reason' => $requeued
-                        ? '이미 등록된 문서입니다 — 분석을 다시 시작했습니다.'
-                        : '이미 등록된 문서입니다.',
-                ];
-
-                continue;
-            }
-
-            $uuid = (string) Str::uuid();
-            [$path, $usedDisk, $error] = $this->storeUpload($file, $uuid, $safeName, $diskName);
-            if ($path === null) {
-                $failed[] = ['file' => $originalName, 'reason' => $error ?: '파일 저장에 실패했습니다.'];
-
-                continue;
-            }
-
-            $document = IntelligentDocument::query()->create([
-                'uuid' => $uuid,
-                'company_id' => $companyId,
-                'site_id' => $siteId,
-                'project_id' => $projectId,
-                'uploaded_by' => $request->user()->id,
-                'source' => 'dropzone',
-                'disk' => $usedDisk,
-                'file_path' => $path,
-                'original_file_name' => $originalName,
-                'stored_file_name' => $safeName,
-                'mime_type' => $file->getMimeType() ?: $file->getClientMimeType(),
-                'extension' => $extension,
-                'file_size' => $file->getSize() ?: 0,
-                'sha256' => $sha256,
-                'title' => pathinfo($originalName, PATHINFO_FILENAME),
-                'received_at' => now(),
-                'ai_status' => 'queued',
-            ]);
-
-            AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterResponse();
-            $created[] = $this->documentRow($document);
+                    'documentId' => $result['document']?->id,
+                    'requeued' => $result['requeued'],
+                    'reason' => $result['reason'],
+                ],
+                default => $failed[] = ['file' => $originalName, 'reason' => $result['reason']],
+            };
         }
 
         return response()->json([
@@ -267,48 +188,6 @@ class DocumentIntelligenceController extends Controller
 
             return false;
         }
-    }
-
-    /**
-     * 업로드 원본을 저장한다. 설정 디스크가 실패하면 local 로 내려 받아 둔다.
-     *
-     * s3 디스크는 config 에서 'throw' => false 라 쓰기가 실패해도 예외 없이 false 만
-     * 돌려준다. 그대로 두면 "저장 실패"가 화면에서는 "중복 N개 제외"처럼 보여
-     * 사용자는 왜 안 올라가는지 영영 알 수 없다. 그래서 (1) 이유를 남기고
-     * (2) 최소한 로컬에라도 받아 분석은 진행되게 한다.
-     *
-     * @return array{0: ?string, 1: string, 2: ?string} [path, disk, error]
-     */
-    private function storeUpload(mixed $file, string $uuid, string $safeName, string $diskName): array
-    {
-        $dir = "document-intelligence/inbox/{$uuid}";
-
-        try {
-            $path = Storage::disk($diskName)->putFileAs($dir, $file, $safeName);
-            if ($path) {
-                return [$path, $diskName, null];
-            }
-            $reason = "저장소('{$diskName}')가 파일을 받지 못했습니다.";
-        } catch (\Throwable $e) {
-            report($e);
-            $reason = "저장소('{$diskName}') 오류: ".$e->getMessage();
-        }
-
-        Log::warning('문서 업로드 저장 실패 — 로컬로 대체합니다: '.$reason);
-
-        if ($diskName !== 'local') {
-            try {
-                $path = Storage::disk('local')->putFileAs($dir, $file, $safeName);
-                if ($path) {
-                    // 올라가긴 했지만 저장소 설정이 잘못돼 있다 — 다음 배포에 사라질 수 있다.
-                    return [$path, 'local', null];
-                }
-            } catch (\Throwable $e) {
-                report($e);
-            }
-        }
-
-        return [null, $diskName, $reason];
     }
 
     /**
@@ -685,13 +564,5 @@ class DocumentIntelligenceController extends Controller
             'openActions' => (int) ($document->open_actions_count ?? $document->actionItems()->whereIn('status', ['open', 'in_progress'])->count()),
             'receivedAt' => $document->received_at?->toIso8601String(),
         ];
-    }
-
-    private function safeFileName(string $name): string
-    {
-        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        $base = Str::slug(pathinfo($name, PATHINFO_FILENAME)) ?: 'document';
-
-        return Str::limit($base, 120, '').($extension ? '.'.$extension : '');
     }
 }
