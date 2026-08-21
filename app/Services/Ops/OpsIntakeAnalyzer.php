@@ -26,9 +26,9 @@ class OpsIntakeAnalyzer
      * @param  array<int, array{data: string, mime_type: string}>  $images
      * @return array<int, array<string, mixed>>
      */
-    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = []): array
+    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = []): array
     {
-        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== [], $photoKinds).$learned;
+        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== [], $photoKinds, $specs).$learned;
 
         $result = $images !== []
             ? $this->ocr->analyze($images, $prompt, $this->schema())['data'] ?? []
@@ -43,7 +43,7 @@ class OpsIntakeAnalyzer
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false, array $photoKinds = []): string
+    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false, array $photoKinds = [], array $specs = []): string
     {
         $kindLine = $photoKinds === [] ? '' : ("\n[첨부 사진 종류(자동 판별)]\n".collect($photoKinds)
             ->map(fn (array $k, int $i) => sprintf('- %d번째 사진: %s%s', $i + 1, $k['label'] ?? '', ($k['summary'] ?? '') !== '' ? ' — '.$k['summary'] : ''))
@@ -66,14 +66,14 @@ class OpsIntakeAnalyzer
 - **글이 비어 있어도 사진만으로 판독하세요.** 사진이 곧 보고 내용입니다. 빈 결과를 돌려주지 마세요.
 P : '';
 
-        return $this->body($text, $activities, $purchases, $today).$kindLine.$photoRule;
+        return $this->body($text, $activities, $purchases, $today, $specs).$kindLine.$photoRule;
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function body(string $text, array $activities, array $purchases, string $today): string
+    private function body(string $text, array $activities, array $purchases, string $today, array $specs = []): string
     {
         $actList = collect($activities)->take(200)->map(
             fn (array $a) => sprintf(
@@ -85,6 +85,13 @@ P : '';
         $poList = collect($purchases)->take(100)->map(
             fn (array $p) => sprintf('- [%s] %s (ETA:%s)', $p['po'] ?? '', $p['vendor'] ?? '', $p['eta'] ?? '-'),
         )->implode("\n") ?: '(등록된 발주 없음)';
+
+        // 이미 확정된 사양 — 대화가 이것과 어긋나면 그것이 개입의 근거가 된다.
+        $specList = collect($specs)->take(25)->map(function (array $s): string {
+            $facts = collect($s['facts'] ?? [])->take(8)->map(fn ($f): string => '  · '.(is_string($f) ? $f : json_encode($f, JSON_UNESCAPED_UNICODE)))->implode("\n");
+
+            return sprintf("- [%s] %s\n%s", $s['source'] ?? '', $s['title'] ?? '', $facts);
+        })->implode("\n") ?: '(판독된 도면·문서 없음)';
 
         return <<<PROMPT
 당신은 미국 내 한국 대기업 플랜트/공장 설치현장(기계·전기·배관)의 공정관리자입니다.
@@ -106,6 +113,9 @@ P : '';
 
 [등록된 발주 목록]
 {$poList}
+
+[이미 확정된 사양 — 도면·문서에서 읽은 것]
+{$specList}
 
 [현장 대화 원문]
 {$text}
@@ -139,6 +149,12 @@ P : '';
    category=labor, proposed 는 {"company": "플러밍팀"} 만 넣고 confidence 를 40 이하로,
    question 에 "플러밍팀 몇 명 오셨나요?" 라고 적으세요. **인원 보고가 사라지는 것이 가장 나쁩니다.**
 8. 같은 사람이 여러 줄에 걸쳐 한 가지를 말하면 **하나의 item 으로 합치세요.**
+9. **대화가 [이미 확정된 사양]과 어긋나면 conflict 를 채우세요.** (예: 도면에 4인치인데 6인치로
+   시공한다고 함, 자재 규격이 다름, 확정 일정과 다른 날짜)
+   - conflict = {"with": "M-101 Rev.2", "expected": "3층 배관 4인치", "heard": "6인치로 시공"}
+   - **어긋남을 발견해도 proposed 로 값을 바꾸지 마세요.** 도면이 바뀐 것인지 착오인지는
+     사람만 압니다. 어긋났다는 사실과 근거만 적고, question 에 되물을 말을 쓰세요.
+   - 확실하지 않으면 conflict 를 비우세요. 근거 없는 지적은 잔소리가 되어 아무도 안 읽게 됩니다.
 
 ## proposed(변경안) 작성법 — 확실한 것만
 - 진행률: {"progress": 60}
@@ -171,6 +187,7 @@ P : '';
 - occurred_on  : 이 내용이 해당하는 날짜(YYYY-MM-DD). 모르면 빈 문자열
 - proposed     : 위 형식의 변경안 객체. 없으면 빈 객체 {}
 - question     : 확인이 필요할 때 관리자에게 되물을 한 문장. 없으면 빈 문자열
+- conflict     : 확정된 사양과 어긋날 때 {"with":"근거 문서","expected":"기록된 내용","heard":"대화 내용"}. 없으면 빈 객체 {}
 PROMPT;
     }
 
@@ -198,6 +215,7 @@ PROMPT;
                             'occurred_on' => ['type' => 'string'],
                             'proposed' => ['type' => 'object'],
                             'question' => ['type' => 'string'],
+                            'conflict' => ['type' => 'object'],
                         ],
                     ],
                 ],

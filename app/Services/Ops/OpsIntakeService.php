@@ -17,6 +17,7 @@ use App\Support\ImageParts;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -66,7 +67,7 @@ class OpsIntakeService
         try {
             // 지금까지 축적된 현장 용어·오판 사례를 함께 넘긴다 — 쓸수록 정확해진다.
             $learned = $this->learning->promptBlock($site?->id);
-            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned);
+            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned, [], $this->specContext($site)->all());
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => 'AI 판독에 실패했습니다: '.$e->getMessage()];
         }
@@ -177,6 +178,7 @@ class OpsIntakeService
 
             $activities = $this->activityContext($site);
             $purchases = $this->purchaseContext($site);
+            $specs = $this->specContext($site);
             $learned = $this->learning->promptBlock($site?->id);
 
             // 1단계: 사진이 무엇인지 먼저 가른다(영수증/납품서/시공/안전/출역명부).
@@ -192,6 +194,7 @@ class OpsIntakeService
                 $images,
                 $learned,
                 $photoKinds,
+                $specs->all(),
             );
 
             $validCodes = $activities->pluck('code')->filter()->all();
@@ -826,11 +829,25 @@ class OpsIntakeService
             $question = '어느 작업/발주 건인지 확인해 주세요. (AI 가 대상을 특정하지 못했습니다)';
         }
 
+        // 확정된 것과 어긋나는가. AI 가 찾은 것(도면 사양 대조)과 코드가 확실히 아는 것
+        // (숫자가 뒤로 감)을 합친다 — 숫자 역행까지 AI 판단에 맡기지 않는다.
+        $conflict = $this->normalizeConflict($r['conflict'] ?? null)
+            ?? app(OpsConflictDetector::class)->check($targetType, $targetCode, $proposed, $site?->id);
+
+        if ($conflict !== null) {
+            // 어긋난 값을 조용히 덮어쓰지 않는다 — 도면이 바뀐 것인지 착오인지는 사람만 안다.
+            $proposed = [];
+            if ($question === '') {
+                $question = app(OpsConflictDetector::class)->question($conflict);
+            }
+        }
+
         // 잡담은 기록만 하고 목록에서 빠진다. 그 외는 확신도·대상 유무로 상태를 정한다.
         $status = 'pending';
         if ($category === 'noise') {
             $status = 'ignored';
-        } elseif ($question !== '' || $confidence < self::LOW_CONFIDENCE || ($targetCode === '' && $proposed !== [])) {
+        } elseif ($conflict !== null || $question !== '' || $confidence < self::LOW_CONFIDENCE || ($targetCode === '' && $proposed !== [])) {
+            // 어긋남은 언제나 사람 확인 대상이다.
             $status = 'needs_input';
         }
 
@@ -853,8 +870,37 @@ class OpsIntakeService
             'target_name' => mb_substr(trim((string) ($r['target_name'] ?? '')), 0, 200) ?: null,
             'proposed' => $proposed ?: null,
             'question' => $question ?: null,
+            'conflict' => $conflict,
             'status' => $status,
         ]);
+    }
+
+    /**
+     * AI 가 준 어긋남을 믿을 수 있는 모양으로만 받는다 — 근거(무엇과)와 양쪽 값이
+     * 다 있어야 사람에게 보여줄 수 있다. 반쪽짜리 지적은 잔소리가 된다.
+     *
+     * @return array{with: string, expected: string, heard: string, note: string}|null
+     */
+    private function normalizeConflict(mixed $raw): ?array
+    {
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        $with = mb_substr(trim((string) ($raw['with'] ?? '')), 0, 200);
+        $expected = mb_substr(trim((string) ($raw['expected'] ?? '')), 0, 300);
+        $heard = mb_substr(trim((string) ($raw['heard'] ?? '')), 0, 300);
+
+        if ($with === '' || $expected === '' || $heard === '') {
+            return null;
+        }
+
+        return [
+            'with' => $with,
+            'expected' => $expected,
+            'heard' => $heard,
+            'note' => mb_substr(trim((string) ($raw['note'] ?? '')), 0, 300),
+        ];
     }
 
     private function safeDate(string $value): ?string
@@ -908,6 +954,58 @@ class OpsIntakeService
     }
 
     /**
+     * 이 현장에서 이미 <b>확정된 사양</b> — 판독된 도면의 스펙과 문서의 핵심 사실.
+     *
+     * 대화만 읽으면 "6인치로 간다" 가 그냥 보고로 보인다. 도면에 4인치로 적혀 있다는
+     * 것을 알아야 비로소 "어긋났다" 가 보인다. 개입의 근거가 되는 자료다.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function specContext(?Site $site): Collection
+    {
+        $specs = collect();
+
+        try {
+            if (Schema::hasTable('field_drawings')) {
+                $specs = $specs->merge(
+                    \App\Models\FieldDrawing::query()
+                        ->when($site, fn ($q) => $q->where('site_id', $site->id))
+                        ->where('status', 'analyzed')
+                        ->latest('analyzed_at')
+                        ->limit(20)->get()
+                        ->map(fn ($d): array => [
+                            'source' => trim(($d->drawing_no ?: '도면').' '.($d->version ? "Rev.{$d->version}" : '')),
+                            'title' => (string) $d->title,
+                            'facts' => collect(is_array($d->specs) ? $d->specs : [])->take(8)->values()->all(),
+                        ])
+                        ->filter(fn (array $r): bool => $r['facts'] !== [])
+                );
+            }
+
+            if (Schema::hasTable('intelligent_documents')) {
+                $specs = $specs->merge(
+                    \App\Models\IntelligentDocument::query()
+                        ->when($site, fn ($q) => $q->where('site_id', $site->id))
+                        ->whereIn('document_type', ['drawing', 'specification', 'submittal', 'contract', 'change_order'])
+                        ->where('ai_status', 'ready')
+                        ->latest('analyzed_at')
+                        ->limit(15)->get()
+                        ->map(fn ($d): array => [
+                            'source' => trim(($d->document_number ?: $d->original_file_name).' '.($d->revision ? "Rev.{$d->revision}" : '')),
+                            'title' => (string) $d->title,
+                            'facts' => collect(is_array($d->key_facts) ? $d->key_facts : [])->take(8)->values()->all(),
+                        ])
+                        ->filter(fn (array $r): bool => $r['facts'] !== [])
+                );
+            }
+        } catch (\Throwable $e) {
+            report($e); // 사양을 못 읽어도 판독 자체는 돌아야 한다.
+        }
+
+        return $specs->take(25)->values();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function row(OpsIntakeItem $i): array
@@ -926,6 +1024,7 @@ class OpsIntakeService
             'targetName' => $i->target_name,
             'proposed' => $i->proposed ?: [],
             'question' => $i->question,
+            'conflict' => $i->conflict ?: null,
             'status' => $i->status,
             'batchId' => $i->ops_intake_batch_id,
             'previous' => $i->previous ?: [],

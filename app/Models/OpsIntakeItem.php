@@ -33,7 +33,7 @@ class OpsIntakeItem extends Model
         'raw_text', 'speaker', 'occurred_on',
         'category', 'confidence', 'summary',
         'target_type', 'target_code', 'target_name',
-        'proposed', 'previous', 'question',
+        'proposed', 'previous', 'question', 'conflict',
         'status', 'applied_at', 'applied_by_id', 'result_note',
     ];
 
@@ -43,6 +43,7 @@ class OpsIntakeItem extends Model
             'occurred_on' => 'date',
             'confidence' => 'integer',
             'proposed' => 'array',
+            'conflict' => 'array',
             'previous' => 'array',
             'applied_at' => 'datetime',
         ];

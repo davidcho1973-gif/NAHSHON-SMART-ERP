@@ -78,17 +78,38 @@ class OpsRoomAutoReader
             return; // 잡담뿐이면 답글로 방을 어지럽히지 않는다.
         }
 
-        $lines = $items->take(5)->map(function (array $i): string {
-            $head = $i['status'] === 'needs_input' ? '❓' : '•';
-            $target = $i['targetName'] ? ' ['.$i['targetName'].']' : '';
+        // 어긋남이 있으면 그것부터 말한다 — 확정된 것과 다르게 흘러가는 중이라면
+        // 요약 다섯 줄보다 그 한 줄이 훨씬 급하다.
+        $conflicts = $items->filter(fn (array $i): bool => is_array($i['conflict'] ?? null) && ($i['conflict']['with'] ?? '') !== '');
+        $head = $conflicts->take(3)->map(function (array $i): string {
+            $c = $i['conflict'];
+            $note = ($c['note'] ?? '') !== '' ? "\n   ".$c['note'] : '';
 
-            return $head.' '.($i['summary'] ?: '(내용 없음)').$target;
+            return sprintf(
+                "⚠️ %s 은(는) 기록상 %s 인데 %s 로 말씀하셨습니다. 바뀐 것이 맞나요?%s",
+                $c['with'], $c['expected'], $c['heard'], $note,
+            );
         })->implode("\n");
 
+        $lines = $items->take(5)->map(function (array $i): string {
+            $mark = is_array($i['conflict'] ?? null) && ($i['conflict']['with'] ?? '') !== ''
+                ? '⚠️'
+                : ($i['status'] === 'needs_input' ? '❓' : '•');
+            $target = $i['targetName'] ? ' ['.$i['targetName'].']' : '';
+
+            return $mark.' '.($i['summary'] ?: '(내용 없음)').$target;
+        })->implode("\n");
+
+        if ($head !== '') {
+            $lines = $head."\n\n".$lines;
+        }
+
         $needs = $items->where('status', 'needs_input')->count();
-        $foot = $needs > 0
-            ? "\n\n❓ {$needs}건은 확인이 필요합니다. 현장 상황실 화면에서 확인해 주세요."
-            : "\n\n확인 후 [공정표에 반영]을 누르면 적용됩니다.";
+        $foot = $conflicts->isNotEmpty()
+            ? "\n\n확정된 내용과 달라서 자동 반영하지 않았습니다. 답을 주시면 그대로 기록합니다."
+            : ($needs > 0
+                ? "\n\n❓ {$needs}건은 확인이 필요합니다. 현장 상황실 화면에서 확인해 주세요."
+                : "\n\n확인 후 [공정표에 반영]을 누르면 적용됩니다.");
 
         CommunicationMessage::query()->create([
             'communication_room_id' => $message->communication_room_id,
