@@ -8,7 +8,9 @@ use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\CommunicationService;
+use App\Services\Communication\RoomStreamService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -113,6 +115,22 @@ class CommunicationController extends Controller
             'membersCount' => $room->activeMembers()->count(),
             'canPostTopLevel' => $this->communicationService->canPost($user, $room),
         ]);
+    }
+
+    /**
+     * 마지막으로 본 뒤로 새로 온 메시지만 — 새로고침 없이 대화가 흐르게.
+     *
+     * 응답에 "다음엔 몇 밀리초 뒤에 물어봐"(nextPollMs)를 함께 실어 보낸다. 화면에
+     * 간격을 박아 두면 나중에 요금이 문제가 됐을 때 앱을 새로 배포해야 바꿀 수 있다.
+     */
+    public function stream(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+
+        return response()->json(
+            app(RoomStreamService::class)->since($room, $user, (int) $request->integer('after')),
+        );
     }
 
     public function store(Request $request, CommunicationRoom $room): RedirectResponse

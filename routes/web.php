@@ -204,6 +204,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/push/subscribe', [PushSubscriptionController::class, 'store'])->name('push.subscribe');
     Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
     Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
+    // 새로고침 없이 대화가 흐르게 — 마지막으로 받은 번호 이후만.
+    Route::get('/attendance-app/messages/{room}/stream', [CommunicationController::class, 'stream'])->name('communication.stream');
     Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
     Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
     Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');

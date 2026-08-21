@@ -139,5 +139,123 @@
             @endif
         </section>
     </div>
+
+<script>
+/**
+ * 새로고침 없이 대화가 흐르게 — 마지막으로 받은 번호 이후만 받아 온다.
+ *
+ * 간격은 서버가 정한다(응답의 nextPollMs). 화면에 3초를 박아 두면 나중에 요금이
+ * 문제가 됐을 때 앱을 새로 배포해야 바꿀 수 있고, 조용한 방까지 3초마다 두드린다.
+ *
+ * 다른 화면을 보고 있을 때는 아예 묻지 않는다(보이지 않는 화면을 위해 서버를 두드리는
+ * 것은 순전한 낭비다 — 앱이 잠들 수 있는 배포에서는 그게 곧 요금이다). 돌아오면
+ * 그 즉시 한 번 물어본다.
+ *
+ * 이 화면은 "새 메시지 목록" 만 받는다. 그것이 폴링으로 왔는지 나중에 웹소켓으로
+ * 오는지 모른다 — 전송 방식을 갈아탈 때 이 아래를 고치면 되고 화면은 그대로다.
+ */
+(function () {
+    var main = document.querySelector('main');
+    if (!main) return;
+
+    var streamUrl = '{{ route('communication.stream', ['room' => $room], false) }}';
+    var lastId = {{ $messages->max('id') ?? 0 }};
+    @php($replyMax = $messages->flatMap(fn ($m) => $m->replies)->max('id') ?? 0)
+    if ({{ $replyMax }} > lastId) lastId = {{ $replyMax }};
+
+    var timer = null;
+    var stopped = false;
+
+    function esc(text) {
+        var d = document.createElement('div');
+        d.textContent = text == null ? '' : String(text);
+        return d.innerHTML;
+    }
+
+    function attachmentsHtml(files) {
+        if (!files || !files.length) return '';
+        var parts = files.map(function (f) {
+            if (f.isImage && f.url) {
+                return '<a href="' + esc(f.url) + '" target="_blank" rel="noopener"><img src="' + esc(f.url) + '" alt="' + esc(f.name) + '" loading="lazy"></a>';
+            }
+            var open = f.url ? '<a class="file-card" href="' + esc(f.url) + '" target="_blank" rel="noopener">' : '<a class="file-card">';
+            return open + '<span class="file-name">📎 ' + esc(f.name) + '</span><span class="file-size">' + esc(f.size) + '</span></a>';
+        });
+        return '<div class="attachments">' + parts.join('') + '</div>';
+    }
+
+    function render(message) {
+        // 이미 화면에 있는 글은 다시 그리지 않는다(보낸 뒤 되돌아오는 경우).
+        if (document.getElementById('message-' + message.id)) return;
+
+        var body = '<div class="body">' + esc(message.body) + '</div>' + attachmentsHtml(message.files);
+        var line = '<div class="line"><span>' + esc(message.sender) + '</span><span>' + esc(message.sentAt || '') + '</span></div>';
+
+        if (message.parentId) {
+            var parent = document.getElementById('message-' + message.parentId);
+            if (!parent) return;                       // 원글이 화면에 없으면 건너뛴다
+            var box = parent.querySelector('.replies');
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'replies';
+                parent.insertBefore(box, parent.querySelector('.reply-form'));
+            }
+            var reply = document.createElement('div');
+            reply.className = 'reply';
+            reply.id = 'message-' + message.id;
+            reply.innerHTML = body + line;
+            box.appendChild(reply);
+
+            return;
+        }
+
+        var article = document.createElement('article');
+        article.className = 'message' + (message.kind === 'announcement' ? ' announcement' : (message.kind === 'system' || message.kind === 'attendance_alert' ? ' system' : ''));
+        article.id = 'message-' + message.id;
+        article.innerHTML = (message.title ? '<h2>' + esc(message.title) + '</h2>' : '') + body + line;
+
+        var empty = main.querySelector('.empty');
+        if (empty) empty.remove();
+        main.appendChild(article);
+    }
+
+    function schedule(ms) {
+        if (stopped) return;
+        clearTimeout(timer);
+        timer = setTimeout(poll, Math.max(2000, ms || 5000));
+    }
+
+    function poll() {
+        if (document.hidden) { schedule(15000); return; }   // 안 보는 화면은 묻지 않는다
+
+        fetch(streamUrl + '?after=' + lastId, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (!data) { schedule(30000); return; }      // 실패하면 천천히 다시
+
+                var atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 120);
+                (data.messages || []).forEach(render);
+                if (data.messages && data.messages.length && atBottom) {
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
+                if (data.lastId) lastId = data.lastId;
+                schedule(data.nextPollMs);
+            })
+            .catch(function () { schedule(30000); });
+    }
+
+    // 다른 화면을 보다 돌아오면 그 즉시 한 번 확인한다.
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) { clearTimeout(timer); poll(); }
+    });
+
+    window.addEventListener('pagehide', function () { stopped = true; clearTimeout(timer); });
+
+    schedule(3000);
+})();
+</script>
 </body>
 </html>
