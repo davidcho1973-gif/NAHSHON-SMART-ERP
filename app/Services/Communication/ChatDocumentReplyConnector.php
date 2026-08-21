@@ -57,7 +57,7 @@ class ChatDocumentReplyConnector
             return;
         }
 
-        CommunicationMessage::query()->create([
+        $reply = CommunicationMessage::query()->create([
             'communication_room_id' => $parent->communication_room_id,
             'company_id' => $parent->company_id,
             'site_id' => $parent->site_id,
@@ -71,6 +71,14 @@ class ChatDocumentReplyConnector
             'priority' => 'normal',
             'payload' => ['bot' => self::BOT_MARKER, 'document_id' => $document->id],
         ]);
+
+        // 사람의 확인이 필요한 답글(⚠️·❓)만 폰을 울린다 — 잘 처리된 건까지 울리면
+        // 알림이 소음이 되고, 그러면 정작 확인이 필요한 것도 묻힌다.
+        try {
+            app(\App\Services\Push\ChatPushNotifier::class)->notify($reply);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     private function body(IntelligentDocument $document): string

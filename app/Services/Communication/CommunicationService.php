@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
+use App\Services\Push\ChatPushNotifier;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -329,6 +330,14 @@ class CommunicationService
 
         if ($message->kind === CommunicationMessage::KIND_ANNOUNCEMENT && $message->parent_id === null) {
             $this->fanOutAnnouncement($message, $room);
+        }
+
+        // 폰이 주머니에 있어도 닿게 한다. 알림이 실패해도 글은 이미 올라갔다 —
+        // 알림 때문에 전송이 죽으면 안 되므로 여기서 삼킨다.
+        try {
+            app(ChatPushNotifier::class)->notify($message);
+        } catch (\Throwable $e) {
+            report($e);
         }
 
         return $message;

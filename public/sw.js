@@ -76,3 +76,51 @@ self.addEventListener('fetch', (event) => {
 
     // 그 밖의 모든 요청: 아무것도 하지 않는다.
 });
+
+/**
+ * 푸시 알림 — 폰이 주머니에 있어도 소식이 닿게 한다.
+ *
+ * 현장 작업자는 화면을 계속 보고 있지 않다. 긴급 지시가 방에 올라와도 앱을 열어야만
+ * 보인다면 그 지시는 전달된 것이 아니다.
+ *
+ * 내용이 깨져 오더라도 알림 자체는 띄운다 — 조용히 삼키면 "알림이 안 온다" 가 되고,
+ * 그러면 사람들은 앱을 믿지 않는다.
+ */
+self.addEventListener('push', (event) => {
+    let data = {};
+    try {
+        data = event.data ? event.data.json() : {};
+    } catch (e) {
+        data = { body: event.data ? event.data.text() : '' };
+    }
+
+    const title = data.title || 'SMART ERP';
+    const options = {
+        body: data.body || '',
+        icon: '/images/worker-icon-192.png',
+        badge: '/images/worker-icon-192.png',
+        // 같은 방의 알림은 쌓이지 않고 최신 것으로 덮인다 — 잠금화면이 도배되지 않게.
+        tag: data.tag || 'erp-message',
+        renotify: true,
+        data: { url: data.url || '/attendance-app/messages' },
+        requireInteraction: data.priority === 'urgent',
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/** 알림을 누르면 그 방을 연다. 이미 열려 있는 창이 있으면 그 창을 쓴다. */
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || '/attendance-app/messages';
+
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+            for (const client of windows) {
+                if (client.url.includes(target) && 'focus' in client) return client.focus();
+            }
+
+            return self.clients.openWindow ? self.clients.openWindow(target) : undefined;
+        })
+    );
+});

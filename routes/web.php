@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminUploadController;
 use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\EquipmentApiController;
@@ -197,6 +198,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
     Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
     Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
+
+    // 푸시 알림 — 이 기기로 받겠다는 등록/해지. 화면이 꺼져 있어도 지시가 닿는 길.
+    Route::get('/push/key', [PushSubscriptionController::class, 'key'])->name('push.key');
+    Route::post('/push/subscribe', [PushSubscriptionController::class, 'store'])->name('push.subscribe');
+    Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
     Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
     Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
     Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
@@ -407,6 +413,19 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                     'live' => $crossCheckOn && $anthropic,
                     'min_amount' => (float) config('document-intelligence.cross_check.min_amount', 1000),
                 ],
+            ];
+        })(),
+        // 알림이 실제로 나갈 수 있는가. 열쇠(VAPID)가 없으면 화면은 알림 버튼을 감추고,
+        // 아무도 "알림이 왜 안 오지" 를 묻지 않는다 — 조용히 없는 기능이 된다.
+        'push' => (function (): array {
+            $ready = trim((string) config('services.webpush.public_key')) !== ''
+                && trim((string) config('services.webpush.private_key')) !== '';
+
+            return [
+                'configured' => $ready,
+                'devices' => $ready && \Illuminate\Support\Facades\Schema::hasTable('push_subscriptions')
+                    ? \App\Models\PushSubscription::query()->count()
+                    : 0,
             ];
         })(),
         // 배포가 실제로 반영됐는지는 해시보다 "이 기능이 있나" 로 확인하는 편이 빠르다.

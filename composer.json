@@ -17,6 +17,7 @@
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.35",
         "livewire/livewire": "^4.3",
+        "minishlink/web-push": "^11.0",
         "openspout/openspout": "^4.32",
         "phpoffice/phpspreadsheet": "^5.9",
         "phpoffice/phpword": "^1.4",

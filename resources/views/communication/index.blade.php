@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ \App\Support\Org::name() }} 메신저</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f6f7f9; color: #111827; }
@@ -58,6 +59,7 @@
         </header>
 
         <main>
+            @include('partials.push-optin')
             <section class="identity">
                 <strong>{{ $employee?->name ?? $user->name }}</strong>
                 <span>{{ $employee?->site?->name ?? '현장 미지정' }} · {{ $employee?->company?->name ?? '소속 회사 미지정' }}</span>
