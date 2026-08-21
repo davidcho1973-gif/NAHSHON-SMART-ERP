@@ -250,8 +250,11 @@
                 <i class="ph ph-gear"></i><span>조직 설정</span>
               </li>
             <ul class="nav-sub" data-sub="g-set">
+              <li class="nav-item nav-child" data-view="messenger" id="nav-messenger">
+                <i class="ph ph-chat-circle-text"></i><span>메신저 (채팅방)</span>
+              </li>
               <li class="nav-item nav-child" data-view="messenger-admin" id="nav-messenger-admin">
-                <i class="ph ph-chat-circle-text"></i><span>메신저 관리</span>
+                <i class="ph ph-gear-six"></i><span>메신저 관리</span>
               </li>
             </ul>
             </ul>
@@ -330,6 +333,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약 · 서류</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear"></i><span>조직 설정</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="messenger"><i class="ph ph-chat-circle-text"></i><span>메신저</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="messenger-admin"><i class="ph ph-chat-circle-text"></i><span>메신저 관리</span></button>
           <button class="mobile-more-tile mobile-more-tile-accent" type="button" data-mobile-action="scanner"><i class="ph ph-magic-wand"></i><span>AI 스캔등록</span></button>
         </div>
@@ -1373,6 +1377,13 @@
         'password': { title: 'Change Password', render: renderAccountPassword },
         'command': { title: 'AI í˜„ìž¥ ì§€íœ˜ì‹¤', render: renderCommandCenter },
         'alerts': { title: '통합 알림 센터', render: renderUnifiedAlerts },
+        'messenger': { title: '메신저', render: function () {
+          // 채팅은 현장앱 안에 있었고, 데스크톱에서는 들어가는 길이 아예 없었다
+          // (관리 화면에는 방 목록만 있고 "열기" 가 없었다). 문서함과 같은 방식으로
+          // ERP 틀 안에 얹는다 — 같은 사이트라 iframe 이 허용된다(SAMEORIGIN).
+          pageContainer.innerHTML = '<iframe src="/attendance-app/messages" ' +
+            'style="width:100%;height:calc(100vh - 150px);min-height:560px;border:1px solid var(--border-strong);border-radius:12px;background:#f6f7f9"></iframe>';
+        } },
         'document-hub': { title: 'AI 통합 문서함', render: function () {
           // 문서함은 별도 페이지지만, 통째로 이동하면 ERP 를 벗어난 느낌이 든다.
           // ERP 틀 안에 iframe 으로 얹는다 — embed=1 이면 문서함이 자기 사이드바를 숨긴다.

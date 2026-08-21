@@ -88,10 +88,12 @@
           render: function (r) { return u.badge(r.status === 'active' ? 'Active' : 'Archived', r.status === 'active' ? 'ok' : 'muted'); },
         },
         {
-          key: 'act', label: '', align: 'right', width: '210px',
+          key: 'act', label: '', align: 'right', width: '270px',
           render: function (r) {
             if (!state.canManage) return '';
             var html = '';
+            // 관리 화면에서 방을 보고도 들어갈 길이 없었다 — 그래서 아무도 채팅을 찾지 못했다.
+            html += u.rowButton('열기', 'window.AdminMessenger.enterRoom(' + r.id + ')') + ' ';
             if (r.canSyncMembers) {
               html += u.rowButton('직원 동기화', 'window.AdminMessenger.syncMembers(' + r.id + ')') + ' ';
             }
@@ -373,6 +375,13 @@
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }
 
+  /** 그 방의 대화 화면으로 간다. ERP 안에 얹힌 상태(iframe)면 그 안에서 연다. */
+  function enterRoom(id) {
+    var url = '/attendance-app/messages/' + id;
+    if (window.top !== window.self) { window.location.href = url; return; }
+    window.open(url, '_blank', 'noopener');
+  }
+
   function renderScreen() {
     paint('<div style="padding:40px;text-align:center;color:var(--text-tertiary)">불러오는 중…</div>');
     reload().catch(function (e) {
@@ -384,6 +393,7 @@
 
   global.AdminMessenger = {
     render: renderScreen,
+    enterRoom: enterRoom,
     setTab: setTab,
     openRoom: openRoom,
     syncMembers: syncMembers,
