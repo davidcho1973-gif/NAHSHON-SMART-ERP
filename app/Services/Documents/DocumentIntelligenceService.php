@@ -29,9 +29,18 @@ class DocumentIntelligenceService
         }
 
         $document->update(['ai_status' => 'analyzing', 'ai_error' => null]);
-        $analysis = $this->analyzer->analyze($document, (string) $disk->get($document->file_path));
+        $bytes = (string) $disk->get($document->file_path);
+        $analysis = $this->analyzer->analyze($document, $bytes);
         $data = $analysis['data'];
         $confidence = $this->confidence($data['confidence'] ?? null);
+
+        // 두 번째 눈 — 돈·장비처럼 틀리면 장부가 틀어지는 문서만, 회사가 다른 모델이
+        // 원본에서 독립적으로 다시 읽는다. 바깥 호출이므로 트랜잭션 밖에서 끝낸다.
+        // 검증이 죽어도 분석은 살아야 하므로 서비스가 안에서 전부 삼킨다.
+        $verification = app(DocumentCrossCheck::class)->check($document, $data, $bytes, $analysis);
+        if ($verification !== null) {
+            $data['verification'] = $verification;
+        }
 
         return DB::transaction(function () use ($document, $analysis, $data, $confidence): IntelligentDocument {
             $projectId = $document->project_id ?: $this->resolveProjectId($document, (string) ($data['project_code'] ?? ''));

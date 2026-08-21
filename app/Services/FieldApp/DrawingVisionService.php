@@ -3,7 +3,7 @@
 namespace App\Services\FieldApp;
 
 use App\Models\FieldDrawing;
-use Illuminate\Http\Client\Factory as HttpFactory;
+use App\Support\AnthropicChat;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -14,13 +14,13 @@ use RuntimeException;
  */
 class DrawingVisionService
 {
-    public function __construct(private readonly HttpFactory $http)
+    public function __construct(private readonly AnthropicChat $chat)
     {
     }
 
     public function isLive(): bool
     {
-        return (string) config('services.anthropic.api_key') !== '';
+        return $this->chat->available();
     }
 
     /**
@@ -187,30 +187,7 @@ class DrawingVisionService
      */
     private function callClaude(array $payload): array
     {
-        $endpoint = rtrim((string) config('services.anthropic.endpoint', 'https://api.anthropic.com'), '/') . '/v1/messages';
-
-        $response = $this->http
-            ->timeout((int) config('services.anthropic.timeout', 180))
-            ->withHeaders([
-                'x-api-key' => (string) config('services.anthropic.api_key'),
-                'anthropic-version' => (string) config('services.anthropic.version', '2023-06-01'),
-                'content-type' => 'application/json',
-            ])
-            ->post($endpoint, $payload + [
-                'model' => (string) config('services.anthropic.model', 'claude-opus-4-8'),
-            ]);
-
-        if ($response->failed()) {
-            throw new RuntimeException('Anthropic API returned status ' . $response->status() . ': ' . $response->body());
-        }
-
-        $json = $response->json();
-
-        if (($json['stop_reason'] ?? null) === 'refusal') {
-            throw new RuntimeException('Claude 가 도면 분석을 거부했습니다(refusal).');
-        }
-
-        return is_array($json) ? $json : [];
+        return $this->chat->raw($payload);
     }
 
     /**
@@ -218,18 +195,7 @@ class DrawingVisionService
      */
     private function collectText(array $json): string
     {
-        $text = '';
-        foreach ((is_array($json['content'] ?? null) ? $json['content'] : []) as $block) {
-            if (($block['type'] ?? null) === 'text' && is_string($block['text'] ?? null)) {
-                $text .= $block['text'];
-            }
-        }
-
-        $text = trim($text);
-        $text = (string) preg_replace('/^```(?:json)?/i', '', $text);
-        $text = (string) preg_replace('/```$/', '', $text);
-
-        return trim($text);
+        return $this->chat->textOf($json);
     }
 
     /**

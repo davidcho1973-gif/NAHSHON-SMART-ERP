@@ -27,4 +27,17 @@ return [
     'native_max_bytes' => (int) env('DOCUMENT_AI_NATIVE_MAX_BYTES', 15728640),
 
     'reminder_windows' => [30, 14, 7, 3, 1],
+
+    /*
+     * 교차검증 — 1차(Gemini)가 읽은 것을 회사가 다른 두 번째 눈(Claude)이 원본에서
+     * 독립적으로 다시 읽는다. 틀리면 손해가 큰 문서만 소집한다: 모든 문서를 두 번
+     * 읽으면 요금과 시간만 두 배가 된다. ANTHROPIC_API_KEY 가 없으면 자동으로 꺼진다.
+     */
+    'cross_check' => [
+        'enabled' => (bool) env('DOCUMENT_CROSS_CHECK', true),
+        // 이 금액 이상이면 두 번 읽는다(USD).
+        'min_amount' => (float) env('DOCUMENT_CROSS_CHECK_MIN_AMOUNT', 1000),
+        // 금액과 무관하게 항상 두 번 읽는 문서 종류 — 장부·계약의 뿌리가 되는 것들.
+        'always_types' => ['contract', 'change_order', 'lien_waiver', 'payroll_record'],
+    ],
 ];
