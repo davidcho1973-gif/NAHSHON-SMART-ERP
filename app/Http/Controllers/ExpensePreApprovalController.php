@@ -120,6 +120,6 @@ class ExpensePreApprovalController extends Controller
 
     private function canManageAllRequests(): bool
     {
-        return in_array(auth()->user()?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true);
+        return \App\Support\AccessPolicy::canManageMoney(auth()->user());
     }
 }

@@ -10,7 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PayrollController extends Controller
 {
-    private const ALLOWED_ROLES = ['super_admin', 'admin', 'hr_manager', 'payroll'];
+    /** 급여도 돈이다 — 규칙은 AccessPolicy 한 곳에 있다. */
+    private const ALLOWED_ROLES = \App\Support\AccessPolicy::MONEY_ROLES;
 
     public function __construct(private readonly PayrollCalculator $calculator)
     {

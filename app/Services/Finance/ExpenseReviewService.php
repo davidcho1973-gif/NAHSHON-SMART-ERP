@@ -15,8 +15,8 @@ use App\Models\User;
  */
 class ExpenseReviewService
 {
-    /** 경비 전체를 승인·반려·지급 처리할 수 있는 역할. */
-    public const MANAGER_ROLES = ['super_admin', 'admin', 'hr_manager', 'payroll'];
+    /** 경비 전체를 승인·반려·지급 처리할 수 있는 역할 — 규칙은 AccessPolicy 한 곳에. */
+    public const MANAGER_ROLES = \App\Support\AccessPolicy::MONEY_ROLES;
 
     public const DECISIONS = ['approved', 'rejected', 'paid'];
 
@@ -24,7 +24,7 @@ class ExpenseReviewService
 
     public function canReview(?User $user): bool
     {
-        return in_array($user?->access_role, self::MANAGER_ROLES, true);
+        return \App\Support\AccessPolicy::canManageMoney($user);
     }
 
     /**

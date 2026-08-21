@@ -1017,8 +1017,16 @@ class SmartCompanyData
             return;
         }
 
+        // 협력사 관리자는 범위를 아무리 넓게 줘도 자기 회사 밖을 못 본다 —
+        // 역할이 범위를 이긴다. 남의 회사 인건비가 보이면 그것만으로 사고다.
+        if (\App\Support\AccessPolicy::lockedCompanyId($user) !== null) {
+            \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+
+            return;
+        }
+
         if (
-            in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)
+            \App\Support\AccessPolicy::canManageMoney($user)
             || $user->access_scope === 'all_sites'
         ) {
             return;

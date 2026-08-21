@@ -487,7 +487,14 @@ class EmployeeAdminService
 
             return;
         }
-        if (in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)
+        // 협력사 관리자는 자기 회사 사람만 — 범위 설정보다 역할이 우선한다.
+        if (\App\Support\AccessPolicy::lockedCompanyId($user) !== null) {
+            \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+
+            return;
+        }
+
+        if (\App\Support\AccessPolicy::canManageMoney($user)
             || $user->access_scope === 'all_sites') {
             return;
         }

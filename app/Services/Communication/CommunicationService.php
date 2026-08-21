@@ -488,6 +488,9 @@ class CommunicationService
             ->where('employment_status', 'active')
             ->when($user->employee_id, fn (Builder $q) => $q->where('id', '!=', $user->employee_id));
 
+        // 협력사 관리자는 자기 회사 사람에게만 말을 걸 수 있다 — 명단 자체가 정보다.
+        \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+
         if (! $this->hasAllSiteAccess($user)) {
             $siteId = $user->employee?->site_id ?? $user->allowed_site_id;
 

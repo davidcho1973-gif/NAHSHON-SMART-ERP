@@ -465,7 +465,14 @@ class AttendanceLogAdminService
 
             return;
         }
-        if (in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)
+        // 협력사 관리자는 자기 회사 사람의 출퇴근만 본다.
+        if (\App\Support\AccessPolicy::lockedCompanyId($user) !== null) {
+            \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+
+            return;
+        }
+
+        if (\App\Support\AccessPolicy::canManageMoney($user)
             || $user->access_scope === 'all_sites') {
             return;
         }
