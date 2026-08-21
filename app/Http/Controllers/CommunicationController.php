@@ -178,6 +178,41 @@ class CommunicationController extends Controller
         return redirect()->route('communication.show', ['room' => $room]);
     }
 
+    /** 잘못 쓴 글 고치기 — 본인만. 고친 흔적((수정됨))은 남는다. */
+    public function updateMessage(Request $request, CommunicationRoom $room, CommunicationMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+        abort_unless((int) $message->communication_room_id === (int) $room->id, 404);
+        abort_unless($this->communicationService->canEdit($user, $message), 403);
+
+        $data = $request->validate(['body' => ['required', 'string', 'max:4000']]);
+        $this->communicationService->editMessage($user, $message, $data['body']);
+
+        return response()->json(['success' => true]);
+    }
+
+    /** 글 지우기 — 자리는 남기고 내용만 감춘다. 현장 지시는 증거이기 때문이다. */
+    public function destroyMessage(Request $request, CommunicationRoom $room, CommunicationMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+        abort_unless((int) $message->communication_room_id === (int) $room->id, 404);
+        abort_unless($this->communicationService->canRemove($user, $message), 403);
+
+        $this->communicationService->removeMessage($user, $message);
+
+        return response()->json(['success' => true]);
+    }
+
+    /** 이 방에 누가 있는지 — 그리고 지금 보고 있는지. */
+    public function members(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        abort_unless($this->communicationService->canAccessRoom($request->user(), $room), 403);
+
+        return response()->json(['members' => $this->communicationService->presence($room)]);
+    }
+
     /**
      * 첨부 파일 내려주기 — 그 방의 사람만.
      *

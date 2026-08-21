@@ -37,21 +37,37 @@ class RoomStreamService
 
     private const IDLE_SECONDS = 60;
 
+    /** 처음 열 때 보여줄 최근 대화 수. */
+    private const FIRST_PAGE = 60;
+
     public function __construct(private readonly CommunicationService $communication) {}
 
     /**
-     * @return array{messages: array<int, array<string, mixed>>, lastId: int, nextPollMs: int, membersCount: int}
+     * @return array<string, mixed>
      */
     public function since(CommunicationRoom $room, User $user, int $afterId): array
     {
-        $messages = CommunicationMessage::query()
+        // 이 사람이 지금 이 방을 보고 있다고 표시한다 — 상대가 화면 앞에 있는지 알 수 있게.
+        $this->communication->touchPresence($user, $room);
+
+        $base = CommunicationMessage::query()
             ->with(['senderEmployee', 'senderUser', 'files'])
             ->where('communication_room_id', $room->id)
-            ->where('id', '>', max(0, $afterId))
-            ->active()
-            ->orderBy('id')
-            ->limit(100)
-            ->get();
+            ->active();
+
+        if ($afterId <= 0) {
+            // 처음 여는 화면 — 방의 첫 글이 아니라 <b>가장 최근</b> 대화가 보여야 한다.
+            // 오래된 것부터 100개를 주면 1년 전 대화를 보며 스크롤을 내려야 한다.
+            $messages = (clone $base)->orderByDesc('id')->limit(self::FIRST_PAGE)->get()->sortBy('id')->values();
+        } else {
+            // 새 글뿐 아니라 <b>방금 고쳐지거나 지워진 글</b>도 내려보낸다 —
+            // 안 그러면 지운 글이 남의 화면에는 그대로 남아 있는다.
+            $messages = $base->where(function ($q) use ($afterId): void {
+                $q->where('id', '>', $afterId)
+                    ->orWhere('edited_at', '>=', now()->subMinutes(2))
+                    ->orWhere('removed_at', '>=', now()->subMinutes(2));
+            })->orderBy('id')->limit(100)->get();
+        }
 
         // 받아 간 순간 읽은 것으로 친다 — 화면에 떠 있는데 안 읽음으로 남으면
         // 미읽음 숫자가 영원히 줄지 않는다.
@@ -59,13 +75,18 @@ class RoomStreamService
             $this->communication->markRoomRead($user, $room);
         }
 
-        $lastId = (int) ($messages->last()->id ?? $afterId);
+        // 고쳐진 옛 글이 섞여 오므로 마지막 줄이 곧 최신 번호는 아니다 — 가장 큰 번호를 쓴다.
+        $lastId = max($afterId, (int) $messages->max('id'));
+
+        $presence = $this->communication->presence($room);
 
         return [
-            'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room))->all(),
+            'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user))->all(),
             'lastId' => $lastId,
             'nextPollMs' => $this->nextPollMs($room, $messages->isNotEmpty()) * 1000,
-            'membersCount' => $room->activeMembers()->count(),
+            'membersCount' => count($presence),
+            'onlineCount' => count(array_filter($presence, fn (array $m): bool => $m['online'])),
+            'members' => $presence,
         ];
     }
 
@@ -96,20 +117,29 @@ class RoomStreamService
      *
      * @return array<string, mixed>
      */
-    private function row(CommunicationMessage $message, CommunicationRoom $room): array
+    private function row(CommunicationMessage $message, CommunicationRoom $room, ?User $viewer = null): array
     {
+        $removed = $message->isRemoved();
+
         return [
             'id' => (int) $message->id,
             'parentId' => $message->parent_id ? (int) $message->parent_id : null,
             'kind' => (string) $message->kind,
-            'title' => $message->title,
-            'body' => (string) $message->body,
+            'title' => $removed ? null : $message->title,
+            'body' => $message->visibleBody(),
             'priority' => (string) $message->priority,
             'sender' => $message->senderEmployee?->name
                 ?? $message->senderUser?->name
                 ?? ($message->kind === CommunicationMessage::KIND_SYSTEM ? '🤖 AI' : 'SMART ERP'),
-            'sentAt' => $message->sent_at?->format('m/d H:i'),
-            'files' => $message->files->map(fn (CommunicationMessageFile $f): array => [
+            // 내 말풍선은 오른쪽 노란색, 남의 것은 왼쪽 흰색 — 카카오톡과 같은 규칙.
+            'mine' => $viewer !== null && (int) $message->sender_user_id === (int) $viewer->id,
+            'sentAt' => $message->sent_at?->format('H:i'),
+            'sentOn' => $message->sent_at?->toDateString(),
+            'edited' => $message->edited_at !== null && ! $removed,
+            'removed' => $removed,
+            'canEdit' => $this->communication->canEdit($viewer, $message),
+            'canRemove' => $this->communication->canRemove($viewer, $message),
+            'files' => $removed ? [] : $message->files->map(fn (CommunicationMessageFile $f): array => [
                 'id' => (int) $f->id,
                 'name' => (string) $f->original_name,
                 'size' => $f->humanSize(),

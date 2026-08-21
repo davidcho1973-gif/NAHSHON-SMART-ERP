@@ -343,6 +343,95 @@ class CommunicationService
         return $message;
     }
 
+    // ---- 본인 글 고치기·지우기 ---------------------------------------------
+
+    /**
+     * 잘못 쓴 글은 본인이 고칠 수 있다. 다만 고친 흔적은 남는다 —
+     * 조용히 바뀌면 "분명히 다르게 봤는데" 가 되고, 그 다툼은 (수정됨) 한 마디로 끝난다.
+     */
+    public function canEdit(?User $user, CommunicationMessage $message): bool
+    {
+        if (! $user || $message->isRemoved()) {
+            return false;
+        }
+
+        // 로봇이 쓴 글은 사람이 고치지 않는다 — 근거 기록이기 때문이다.
+        if ($message->kind === CommunicationMessage::KIND_SYSTEM) {
+            return false;
+        }
+
+        return (int) $message->sender_user_id === (int) $user->id;
+    }
+
+    /** 지우는 것은 본인과 관리자 — 관리자는 남의 부적절한 글을 내려야 할 때가 있다. */
+    public function canRemove(?User $user, CommunicationMessage $message): bool
+    {
+        if (! $user || $message->isRemoved()) {
+            return false;
+        }
+
+        return (int) $message->sender_user_id === (int) $user->id
+            || in_array($user->access_role, ['super_admin', 'admin', 'site_manager'], true);
+    }
+
+    public function editMessage(User $user, CommunicationMessage $message, string $body): CommunicationMessage
+    {
+        $message->update(['body' => trim($body), 'edited_at' => now()]);
+
+        return $message->fresh();
+    }
+
+    /**
+     * 글을 감춘다 — 지우지 않는다.
+     *
+     * 현장 지시는 나중에 분쟁의 증거가 된다. 데이터베이스에서 진짜로 지우면 그 증거가
+     * 사라지고, 무엇이 있었는지조차 알 수 없게 된다. 카카오톡처럼 자리는 남기고
+     * 내용만 감춘다.
+     *
+     * 첨부가 문서함으로 이미 넘어간 경우, 그 문서는 여기서 지우지 않는다 —
+     * 경비·장비 원장이 그 문서를 근거로 삼고 있을 수 있다. 문서는 문서함에서 지운다.
+     */
+    public function removeMessage(User $user, CommunicationMessage $message): CommunicationMessage
+    {
+        $message->update(['removed_at' => now(), 'removed_by_user_id' => $user->id]);
+
+        return $message->fresh();
+    }
+
+    /** 지금 이 방을 보고 있다고 표시한다 — 상대가 화면 앞에 있는지 알 수 있게. */
+    public function touchPresence(User $user, CommunicationRoom $room): void
+    {
+        $query = CommunicationRoomMember::query()->where('communication_room_id', $room->id);
+        $this->applyMemberIdentity($query, $user);
+
+        $query->update(['last_seen_at' => now()]);
+    }
+
+    /**
+     * 이 방에 누가 있는가 — 그리고 지금 보고 있는가.
+     *
+     * @return array<int, array{name: string, role: string, online: bool, lastSeen: string|null}>
+     */
+    public function presence(CommunicationRoom $room, int $onlineWithinMinutes = 3): array
+    {
+        return $room->activeMembers()
+            ->with(['employee', 'user'])
+            ->get()
+            ->map(function (CommunicationRoomMember $m) use ($onlineWithinMinutes): array {
+                $seen = $m->last_seen_at;
+
+                return [
+                    'name' => $m->employee?->name ?? $m->user?->name ?? '이름 없음',
+                    'role' => (string) ($m->role ?: 'member'),
+                    'online' => $seen !== null && $seen->gt(now()->subMinutes($onlineWithinMinutes)),
+                    'lastSeen' => $seen?->diffForHumans(),
+                ];
+            })
+            ->sortByDesc('online')
+            ->values()
+            ->all();
+    }
+
     // ---- direct messages ---------------------------------------------------
 
     /**

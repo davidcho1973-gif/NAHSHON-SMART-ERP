@@ -19,6 +19,7 @@ class CommunicationRoomMember extends Model
         'joined_at',
         'last_read_message_id',
         'last_read_at',
+        'last_seen_at',
         'payload',
     ];
 
@@ -27,6 +28,7 @@ class CommunicationRoomMember extends Model
         return [
             'joined_at' => 'datetime',
             'last_read_at' => 'datetime',
+            'last_seen_at' => 'datetime',
             'payload' => 'array',
         ];
     }

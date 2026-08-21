@@ -206,6 +206,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
     // 새로고침 없이 대화가 흐르게 — 마지막으로 받은 번호 이후만.
     Route::get('/attendance-app/messages/{room}/stream', [CommunicationController::class, 'stream'])->name('communication.stream');
+    // 이 방에 누가 있는지 · 잘못 쓴 글 고치기·지우기(본인)
+    Route::get('/attendance-app/messages/{room}/members', [CommunicationController::class, 'members'])->name('communication.members');
+    Route::patch('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'updateMessage'])->name('communication.message.update');
+    Route::delete('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'destroyMessage'])->name('communication.message.destroy');
     Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
     Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
     Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');

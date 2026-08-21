@@ -52,6 +52,9 @@ class CommunicationMessage extends Model
         'priority',
         'status',
         'sent_at',
+        'edited_at',
+        'removed_at',
+        'removed_by_user_id',
         'payload',
     ];
 
@@ -89,8 +92,22 @@ class CommunicationMessage extends Model
         return [
             'is_pinned' => 'boolean',
             'sent_at' => 'datetime',
+            'edited_at' => 'datetime',
+            'removed_at' => 'datetime',
             'payload' => 'array',
         ];
+    }
+
+    /** 쓴 사람이 지운 글. 내용은 감추되 자리는 남는다 — 기록이 곧 증거다. */
+    public function isRemoved(): bool
+    {
+        return $this->removed_at !== null;
+    }
+
+    /** 화면에 보일 내용. 지워진 글은 내용 대신 지워졌다는 사실만 보인다. */
+    public function visibleBody(): string
+    {
+        return $this->isRemoved() ? '삭제된 메시지입니다.' : (string) $this->body;
     }
 
     public function scopeActive(Builder $query): Builder
