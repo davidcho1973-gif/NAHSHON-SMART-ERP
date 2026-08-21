@@ -167,6 +167,8 @@ class OfficePreviewTest extends TestCase
         $this->assertStringStartsWith('text/html', (string) $response->headers->get('Content-Type'));
         // 업로드된 내용은 남이 만든 것이다 — 스크립트로 살아나면 안 된다.
         $this->assertStringContainsString('sandbox', (string) $response->headers->get('Content-Security-Policy'));
+        // 같은 사이트 안의 뷰어(iframe)가 품을 수 있어야 한다 — deny 면 뷰어가 회색으로 깨진다.
+        $this->assertSame('SAMEORIGIN', $response->headers->get('X-Frame-Options'));
         $this->assertStringContainsString('김반장', $response->getContent());
     }
 

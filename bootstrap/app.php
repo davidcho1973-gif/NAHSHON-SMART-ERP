@@ -26,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // 모든 웹 요청에 선택 언어를 적용.
         $middleware->web(append: [
             \App\Http\Middleware\SetLocale::class,
+            // 같은 사이트 안에서는 iframe 허용(SAMEORIGIN) — 안 붙이면 플랫폼이
+            // deny 를 붙여 SPA 가 품은 문서함·문서 뷰어가 회색으로 깨진다.
+            \App\Http\Middleware\AllowSameOriginFraming::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
