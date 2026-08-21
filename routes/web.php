@@ -386,6 +386,29 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 'durable' => ! $volatile($docs) && ! $volatile($filed) && ! $volatile($photos),
             ];
         })(),
+        // 어떤 AI 가 살아 있는가. 키를 넣었다고 믿었는데 실은 안 들어간 경우가 화면에서는
+        // 전혀 드러나지 않는다 — 분석이 조용히 실패하거나(문서함), 기능이 조용히 사라진다
+        // (도면 판독·교차검증). 값은 절대 내보내지 않고 "켜졌는가" 만 적는다.
+        'ai' => (function (): array {
+            $gemini = trim((string) config('services.gemini.api_key')) !== '';
+            $anthropic = trim((string) config('services.anthropic.api_key')) !== '';
+            $crossCheckOn = (bool) config('document-intelligence.cross_check.enabled', true);
+
+            return [
+                'gemini' => $gemini,
+                'anthropic' => $anthropic,
+                // 문서 분석의 1차 판독. 이게 false 면 문서함이 아무것도 못 읽는다.
+                'document_analysis' => $gemini,
+                // 도면 판독은 Claude 전용 — 키가 없으면 규칙 기반으로 후퇴한다.
+                'drawing_vision' => $anthropic,
+                // 두 번째 눈. enabled 여도 키가 없으면 살아 있지 않다(live=false).
+                'cross_check' => [
+                    'enabled' => $crossCheckOn,
+                    'live' => $crossCheckOn && $anthropic,
+                    'min_amount' => (float) config('document-intelligence.cross_check.min_amount', 1000),
+                ],
+            ];
+        })(),
         // 배포가 실제로 반영됐는지는 해시보다 "이 기능이 있나" 로 확인하는 편이 빠르다.
         'has' => [
             'admin_shell' => is_readable(public_path('js/admin-shell.js')),
