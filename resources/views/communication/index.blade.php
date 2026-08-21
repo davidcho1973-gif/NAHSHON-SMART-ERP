@@ -68,7 +68,12 @@
                     <h1>채팅</h1>
                     <div class="who">{{ $employee?->name ?? $user->name }} · {{ $employee?->site?->name ?? '현장 미지정' }}</div>
                 </div>
-                <a class="back" href="{{ route('attendance-app.index') }}">출석 홈</a>
+                <div style="display:flex;align-items:center;gap:12px">
+                    {{-- 알림 상태를 한눈에 — 켜짐 🔔 / 꺼짐 🔕. 눌러서 켜고 끈다. --}}
+                    <button type="button" id="push-bell" hidden
+                            style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;padding:2px">🔕</button>
+                    <a class="back" href="{{ route('attendance-app.index') }}">출석 홈</a>
+                </div>
             </div>
         </header>
 

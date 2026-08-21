@@ -84,6 +84,10 @@
         .hint { font-size: 11px; color: #6b7280; padding: 6px 2px 0; }
         input[type=file] { display: none; }
         .readonly { padding: 12px; color: #6b7280; font-size: 13px; text-align: center; }
+        .replying { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-left: 3px solid #2563eb; border-radius: 8px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #334155; }
+        .replying span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .replying button { border: 0; background: none; font-size: 16px; color: #64748b; cursor: pointer; line-height: 1; }
+        .quote { border-left: 3px solid rgba(0,0,0,.15); padding-left: 8px; margin-bottom: 5px; font-size: 12px; color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* 참여자 시트 */
         .sheet-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: none; }
@@ -128,6 +132,12 @@
             @if($canPostTopLevel)
                 <form id="composer-form" method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
                     @csrf
+                    <input type="hidden" name="parent_id" id="parent-id" value="">
+                    {{-- 답장 대상 — 무엇에 답하는 중인지 보이지 않으면 엉뚱한 곳에 달린다. --}}
+                    <div class="replying" id="replying" hidden>
+                        <span id="replying-text"></span>
+                        <button type="button" id="replying-cancel" aria-label="답장 취소">×</button>
+                    </div>
                     @if($room->type === 'site_announcement')
                         <input type="text" name="title" maxlength="255" placeholder="공지 제목"
                                style="border:1px solid var(--line);border-radius:12px;padding:9px 12px;width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit">
@@ -146,7 +156,24 @@
                     @endif
                 </form>
             @else
-                <div class="readonly">이 방은 공지 전용입니다. 각 공지에 답글로 이야기해 주세요.</div>
+                {{-- 공지 전용 방이라도 답글은 쓸 수 있다 — 안내만 하고 길을 막아 두면 거짓말이 된다. --}}
+                <form id="composer-form" method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" name="parent_id" id="parent-id" value="">
+                    <div class="replying" id="replying" hidden>
+                        <span id="replying-text"></span>
+                        <button type="button" id="replying-cancel" aria-label="답장 취소">×</button>
+                    </div>
+                    <div class="cbar">
+                        <button class="plus" type="button" id="btn-file" aria-label="파일 첨부">＋</button>
+                        <textarea name="body" id="body" maxlength="4000" rows="1" placeholder="공지의 [답글] 을 눌러 답을 남겨 주세요"></textarea>
+                        <button class="send" type="submit" id="btn-send">전송</button>
+                    </div>
+                    <input type="file" name="files[]" id="files" multiple
+                           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
+                    <div class="picked" id="picked"></div>
+                    <div class="hint">이 방은 공지 전용입니다 — 새 글은 관리자만 쓰고, 각 공지에는 누구나 답글을 달 수 있습니다.</div>
+                </form>
             @endif
         </section>
     </div>
@@ -175,6 +202,7 @@
     var lastDay = '';
     var timer = null;
     var membersCache = [];
+    var byId = {};          // 인용에 쓰려고 받은 메시지를 기억해 둔다
 
     function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
     function initials(name) {
@@ -204,20 +232,33 @@
         var ai = m.kind === 'system';
         return '<div class="notice-card ' + (ai ? 'ai' : '') + '" id="message-' + m.id + '">' +
             '<b>' + esc(m.title || (ai ? '🤖 AI' : '공지')) + '</b>' +
-            esc(m.body) + filesHtml(m.files) + '</div>';
+            quoteHtml(m) + esc(m.body) + filesHtml(m.files) +
+            (m.removed ? '' : '<div class="tools" style="margin-top:8px"><button type="button" onclick="window.Chat.reply(' + m.id + ')">답글</button>' +
+                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + ')">삭제</button>' : '') + '</div>') +
+            '</div>';
+    }
+
+    /** 무엇에 답한 글인지 한 줄로 — 답글이 어디에 달린 건지 모르면 대화가 엉킨다. */
+    function quoteHtml(m) {
+        if (!m.parentId) return '';
+        var parent = byId[m.parentId];
+        var who = parent ? parent.sender : '';
+        var text = parent ? (parent.body || '') : '(원본 메시지)';
+        return '<div class="quote">↩ ' + esc(who ? who + ': ' : '') + esc(text.slice(0, 60)) + '</div>';
     }
 
     function bubbleHtml(m) {
         var tools = '';
-        if (!m.removed && (m.canEdit || m.canRemove)) {
+        if (!m.removed) {
             tools = '<div class="tools">' +
+                '<button type="button" onclick="window.Chat.reply(' + m.id + ')">답글</button>' +
                 (m.canEdit ? '<button type="button" onclick="window.Chat.edit(' + m.id + ')">수정</button>' : '') +
                 (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + ')">삭제</button>' : '') +
                 '</div>';
         }
 
         var stamp = '<span class="stamp">' + (m.edited ? '<span class="edited">수정됨 </span>' : '') + esc(m.sentAt || '') + '</span>';
-        var bubble = '<div class="bubble' + (m.removed ? ' gone' : '') + '">' + esc(m.body) + '</div>';
+        var bubble = '<div class="bubble' + (m.removed ? ' gone' : '') + '">' + quoteHtml(m) + esc(m.body) + '</div>';
         var body = m.removed ? bubble : bubble + filesHtml(m.files);
 
         if (m.mine) {
@@ -232,6 +273,7 @@
     }
 
     function render(m) {
+        byId[m.id] = m;
         var existing = document.getElementById('message-' + m.id);
         var isNotice = m.kind === 'announcement' || m.kind === 'system' || m.kind === 'attendance_alert';
         var html = isNotice ? noticeHtml(m) : bubbleHtml(m);
@@ -286,6 +328,22 @@
 
     // ── 내 글 손보기 ────────────────────────────────────────────────
     window.Chat = {
+        reply: function (id) {
+            var target = byId[id];
+            var box = document.getElementById('replying');
+            var field = document.getElementById('parent-id');
+            if (!box || !field || !target) return;
+
+            // 답글은 원글에만 달린다 — 답글의 답글까지 허용하면 대화가 계단이 된다.
+            field.value = target.parentId ? target.parentId : id;
+            var shown = byId[field.value] || target;
+            document.getElementById('replying-text').textContent =
+                '↩ ' + (shown.sender ? shown.sender + ': ' : '') + (shown.body || '').slice(0, 50);
+            box.hidden = false;
+
+            var body = document.getElementById('body');
+            if (body) body.focus();
+        },
         edit: function (id) {
             var row = document.getElementById('message-' + id);
             var current = row ? (row.getAttribute('data-body') || '') : '';
@@ -344,6 +402,14 @@
     window.addEventListener('pagehide', function () { clearTimeout(timer); });
 
     // ── 입력창 ─────────────────────────────────────────────────────
+    var cancel = document.getElementById('replying-cancel');
+    if (cancel) {
+        cancel.addEventListener('click', function () {
+            document.getElementById('parent-id').value = '';
+            document.getElementById('replying').hidden = true;
+        });
+    }
+
     var form = document.getElementById('composer-form');
     if (form) {
         var body = document.getElementById('body');

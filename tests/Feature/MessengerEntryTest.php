@@ -51,4 +51,25 @@ class MessengerEntryTest extends TestCase
             '방 목록에서 그 방으로 들어가는 버튼이 없습니다.');
         $this->assertStringContainsString('/attendance-app/messages/', $script);
     }
+
+    public function test_the_chat_list_shows_the_alarm_state_at_a_glance(): void
+    {
+        // 예전에는 "알림을 켜면…" 이라는 큰 상자가 자리만 차지하고, 정작 지금 켜져
+        // 있는지 꺼져 있는지는 알 수 없었다. 설명이 필요한 화면은 모양을 고쳐야 한다.
+        $company = Company::create(['code' => 'BELL-CO', 'name' => 'Bell Co', 'status' => 'active']);
+        $site = Site::create(['company_id' => $company->id, 'code' => 'BELL', 'name' => '현장', 'status' => 'active']);
+        $employee = Employee::create([
+            'company_id' => $company->id, 'site_id' => $site->id,
+            'first_name' => 'B', 'last_name' => 'Cho', 'email' => 'bell@example.com',
+            'employment_status' => 'active',
+        ]);
+        $user = User::factory()->create([
+            'employee_id' => $employee->id, 'access_role' => 'worker', 'account_status' => 'active',
+        ]);
+
+        $html = $this->actingAs($user)->get(route('communication.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('id="push-bell"', $html, '알림 상태를 보여주는 종이 없습니다.');
+        $this->assertStringContainsString('알림 켜짐', $html, '켜짐/꺼짐 상태 문구가 없습니다.');
+    }
 }
