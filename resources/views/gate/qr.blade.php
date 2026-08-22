@@ -17,7 +17,7 @@
         ])
         <div class="actions" style="text-align:center">
             <button type="button" onclick="window.print()">포스터 인쇄 (Print)</button>
-            @auth<button type="button" style="background:#fff;color:#4f46e5" onclick="window.location.href='{{ route('qr-print.sheet', ['site' => $site]) }}'">현장 QR 모아 인쇄</button>@endauth
+            @auth<button type="button" style="background:#fff;color:#191919;border:1px solid #EDEEF0" onclick="window.location.href='{{ route('qr-print.sheet', ['site' => $site]) }}'">현장 QR 모아 인쇄</button>@endauth
         </div>
     </div>
 </body>

@@ -12,46 +12,76 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="{{ $site->code }}">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#FEE500">
     <style>
-        :root { color-scheme: light; font-family: 'Malgun Gothic', Arial, Helvetica, sans-serif; background: #0f172a; color: #0f172a; }
-        * { box-sizing: border-box; }
-        body { min-height: 100vh; margin: 0; display: grid; place-items: start center; padding: 18px; background: #0f172a; }
-        .sheet { width: min(100%, 460px); background: #fff; border-radius: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.35); padding: 22px; }
+        /*
+            게이트(현장 출입구 태블릿) — 카카오 디자인 언어.
+
+            작업자 앱·대화방과 같은 규격을 쓴다. 같은 사람이 폰에서는 작업자 앱을,
+            출입구에서는 이 화면을 쓰는데 둘이 딴 회사 것처럼 생기면 안 된다.
+
+              노랑 #FEE500 (R255 G232 B18) · 노랑 위 글자 rgba(0,0,0,.85)
+              글자 #191919 / #767676 / #B0B8C1 · 구분선 #EDEEF0 · 모서리 12px
+
+            바탕 전체가 노란 면이고 그 위에 흰 판이 얹힌다 — 카카오 가이드의 판(panel)
+            구성 그대로다. 출근은 노랑, 퇴근은 검정. 작업자 앱의 버튼과 같은 규칙이라
+            어느 화면에서 눌러도 손이 헷갈리지 않는다.
+        */
+        :root {
+            color-scheme: light;
+            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Arial, sans-serif;
+            --kakao: #FEE500;
+            --label: rgba(0,0,0,.85);
+            --ink: #191919;
+            --ink-2: #767676;
+            --ink-3: #B0B8C1;
+            --rule: #EDEEF0;
+            --paper: #F2F3F5;
+            background: var(--kakao); color: var(--ink);
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { min-height: 100vh; margin: 0; display: grid; place-items: start center; padding: 18px; background: var(--kakao); }
+        .sheet { width: min(100%, 460px); background: #fff; border-radius: 20px; padding: 24px; }
         .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-        .brand { margin: 0 0 4px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: #4f46e5; font-weight: 800; }
+        .brand { margin: 0 0 4px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); font-weight: 800; }
         /* 올린 그림 로고. 작업자가 출입구에서 보는 화면이라 회사 표시가 크게 도움이 된다. */
         .brand-logo { display: block; max-height: 34px; max-width: 150px; object-fit: contain; margin: 0 0 8px; }
-        h1 { margin: 0 0 2px; font-size: 1.5rem; }
-        .site { margin: 0 0 16px; color: #475569; font-size: .95rem; font-weight: 700; }
+        h1 { margin: 0 0 2px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
+        .site { margin: 0 0 16px; color: var(--ink-2); font-size: .95rem; font-weight: 700; }
         .langs { display: flex; gap: 4px; flex-shrink: 0; }
-        .langs button { border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; border-radius: 8px; padding: 6px 9px; font-size: .74rem; font-weight: 800; cursor: pointer; }
-        .langs button.on { background: #4f46e5; border-color: #4f46e5; color: #fff; }
-        label { display: block; font-size: .8rem; color: #64748b; margin: 0 0 6px; font-weight: 700; }
-        input[type=text] { width: 100%; padding: 14px; font-size: 1.1rem; border: 1px solid #cbd5e1; border-radius: 12px; }
+        .langs button { border: 1px solid var(--rule); background: #fff; color: var(--ink-2); border-radius: 999px; padding: 7px 11px; font-size: .74rem; font-weight: 800; font-family: inherit; cursor: pointer; }
+        .langs button.on { background: var(--label); border-color: transparent; color: #fff; }
+        label { display: block; font-size: .8rem; color: var(--ink-2); margin: 0 0 6px; font-weight: 700; }
+        input[type=text] { width: 100%; padding: 15px; font-size: 1.1rem; font-family: inherit; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); }
+        input[type=text]:focus { outline: 2px solid var(--kakao); outline-offset: -2px; background: #fff; }
         .results { margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
-        .worker { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; cursor: pointer; }
-        .worker:active { background: #eef2ff; }
+        .worker { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px 16px; border: 1px solid var(--rule); border-radius: 12px; background: #fff; cursor: pointer; }
+        .worker:active { background: var(--paper); }
         .worker .nm { font-weight: 800; font-size: 1.05rem; }
-        .worker .co { font-size: .8rem; color: #64748b; }
-        .muted { color: #94a3b8; font-size: .9rem; text-align: center; padding: 14px; white-space: pre-line; }
+        .worker .co { font-size: .8rem; color: var(--ink-2); }
+        .muted { color: var(--ink-3); font-size: .9rem; text-align: center; padding: 14px; white-space: pre-line; }
         .panel { text-align: center; }
-        .hello { color: #4f46e5; font-weight: 800; font-size: .85rem; margin: 0 0 2px; }
-        .who { font-size: 1.6rem; font-weight: 900; margin: 6px 0 2px; }
-        .sub { color: #64748b; font-size: .92rem; margin: 0 0 18px; }
-        .statuschip { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: .82rem; font-weight: 800; margin-bottom: 18px; }
-        .big { width: 100%; border: none; border-radius: 14px; padding: 22px; font-size: 1.4rem; font-weight: 900; color: #fff; cursor: pointer; }
-        .in { background: #059669; }
-        .out { background: #dc2626; }
-        .ghost { width: 100%; margin-top: 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 13px; font-size: .95rem; font-weight: 700; color: #475569; cursor: pointer; }
+        /* "이 기기 주인" 인사 — 노란 형광펜 한 줄. 얼굴 사진이 없는 화면에서 이게 신원 표시다. */
+        .hello { display: inline-block; color: var(--label); background: var(--kakao); border-radius: 999px; padding: 4px 12px; font-weight: 800; font-size: .82rem; margin: 0 0 6px; }
+        .who { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin: 6px 0 2px; }
+        .sub { color: var(--ink-2); font-size: .92rem; margin: 0 0 18px; }
+        .statuschip { display: inline-block; padding: 6px 13px; border-radius: 999px; font-size: .82rem; font-weight: 700; margin-bottom: 18px; background: var(--paper); color: var(--ink-2); }
+        /* 검색 결과 오른쪽 "선택" — 줄 전체가 누르는 자리라 글자만 진하게 둔다. */
+        .worker .pick { font-weight: 800; color: var(--label); flex-shrink: 0; }
+        /* 출근은 노랑(지금 눌러야 할 것), 퇴근은 검정 — 작업자 앱과 같은 규칙이다. */
+        .big { width: 100%; border: none; border-radius: 12px; padding: 22px; font-size: 1.4rem; font-weight: 800; font-family: inherit; cursor: pointer; min-height: 68px; }
+        .in { background: var(--kakao); color: var(--label); }
+        .out { background: var(--label); color: #fff; }
+        .big:active { opacity: .88; }
+        .ghost { width: 100%; margin-top: 12px; background: #fff; border: 1px solid var(--rule); border-radius: 12px; padding: 14px; font-size: .95rem; font-weight: 700; font-family: inherit; color: var(--ink-2); cursor: pointer; }
         .ok { text-align: center; padding: 8px 0; }
         .ok .mark { font-size: 3.2rem; }
-        .ok .msg { font-size: 1.5rem; font-weight: 900; margin: 8px 0 2px; }
-        .ok .time { color: #475569; }
-        .remembered { color: #047857; font-weight: 800; font-size: .86rem; margin-top: 12px; }
+        .ok .msg { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 2px; }
+        .ok .time { color: var(--ink-2); }
+        .remembered { color: #1E8E3E; font-weight: 800; font-size: .86rem; margin-top: 12px; }
         .hidden { display: none; }
-        .spin { color: #94a3b8; text-align: center; padding: 10px; }
+        .spin { color: var(--ink-3); text-align: center; padding: 10px; }
     </style>
 </head>
 <body>
@@ -207,7 +237,7 @@
                     ws.forEach(function (w) {
                         var el = document.createElement('div');
                         el.className = 'worker';
-                        el.innerHTML = '<div><div class="nm"></div><div class="co"></div></div><div style="color:#4f46e5;font-weight:800"></div>';
+                        el.innerHTML = '<div><div class="nm"></div><div class="co"></div></div><div class="pick"></div>';
                         el.querySelector('.nm').textContent = w.name;
                         el.querySelector('.co').textContent = [w.company, w.role].filter(Boolean).join(' · ');
                         el.lastElementChild.textContent = T.pick;
@@ -239,7 +269,7 @@
             var text = T.noRecord;
             if (w.lastEvent === 'clock_in') { text = T.onDuty + ' ' + (w.lastAt || '') + ')'; }
             else if (w.lastEvent) { text = T.offDuty; }
-            chip.innerHTML = '<span class="statuschip" style="background:#f1f5f9;color:#475569"></span>';
+            chip.innerHTML = '<span class="statuschip"></span>';
             chip.firstChild.textContent = text;
 
             var next = w.next || 'clock_in';

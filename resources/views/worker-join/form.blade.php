@@ -5,43 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $site->code }} {{ $site->name }}</title>
     <style>
-        :root { color-scheme: light; font-family: 'Malgun Gothic', Arial, Helvetica, sans-serif; background: #f1f5f9; color: #0f172a; }
-        body { margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .card { width: min(100%, 460px); background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 12px 40px rgba(15,23,42,.08); padding: 26px 22px; box-sizing: border-box; }
+        /*
+            현장 등록 — 벽에 붙은 QR 을 찍으면 바로 이 화면이 열린다.
+
+            포스터가 노란 카카오 판이므로 이어지는 이 화면도 같은 규격이어야 한다.
+            찍고 넘어온 사람이 "다른 데로 왔나" 하고 멈칫하지 않게.
+        */
+        :root {
+            color-scheme: light;
+            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif;
+            --kakao: #FEE500; --label: rgba(0,0,0,.85);
+            --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0; --paper: #F2F3F5;
+            background: var(--kakao); color: var(--ink);
+        }
+        * { -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 20px; display: flex; justify-content: center; background: var(--kakao); }
+        .card { width: min(100%, 460px); background: #fff; border: 0; border-radius: 20px; padding: 26px 22px; box-sizing: border-box; }
         .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-        .brand { font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; color: #4f46e5; font-weight: 800; margin: 0 0 4px; }
-        h1 { margin: 0 0 4px; font-size: 1.5rem; }
-        .site { color: #475569; font-size: .95rem; margin: 0 0 18px; }
+        .brand { font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); font-weight: 800; margin: 0 0 4px; }
+        h1 { margin: 0 0 4px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
+        .site { color: var(--ink-2); font-size: .95rem; margin: 0 0 18px; }
         .langs { display: flex; gap: 4px; flex-shrink: 0; }
-        .langs button { border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; border-radius: 8px; padding: 6px 9px; font-size: .74rem; font-weight: 800; cursor: pointer; }
-        .langs button.on { background: #4f46e5; border-color: #4f46e5; color: #fff; }
-        label { display: block; font-size: .85rem; font-weight: 700; color: #334155; margin: 14px 0 6px; }
-        input, select { width: 100%; box-sizing: border-box; padding: 13px 14px; font-size: 1rem; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #0f172a; font-family: inherit; }
-        input:focus, select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
-        .req { color: #ef4444; }
-        button[type=submit] { width: 100%; margin-top: 22px; padding: 15px; font-size: 1.05rem; font-weight: 800; color: #fff; background: #4f46e5; border: none; border-radius: 12px; cursor: pointer; }
-        button[type=submit]:hover { background: #4338ca; }
-        .err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: .85rem; margin-bottom: 14px; }
+        .langs button { border: 1px solid var(--rule); background: #fff; color: var(--ink-2); border-radius: 999px; padding: 7px 11px; font-size: .74rem; font-weight: 800; font-family: inherit; cursor: pointer; }
+        .langs button.on { background: var(--label); border-color: transparent; color: #fff; }
+        label { display: block; font-size: .85rem; font-weight: 700; color: var(--ink-2); margin: 14px 0 6px; }
+        input, select { width: 100%; box-sizing: border-box; padding: 14px; font-size: 1rem; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); color: var(--ink); font-family: inherit; }
+        input:focus, select:focus { outline: 2px solid var(--kakao); outline-offset: -2px; background: #fff; }
+        .req { color: #D94C4C; }
+        /* 보내기 — 이 화면에서 눌러야 할 것은 이것 하나다. */
+        button[type=submit] { width: 100%; margin-top: 22px; padding: 16px; font-size: 1.05rem; font-weight: 800; font-family: inherit; color: var(--label); background: var(--kakao); border: none; border-radius: 12px; min-height: 56px; cursor: pointer; }
+        button[type=submit]:active { opacity: .88; }
+        .err { background: #FDECEC; border: 0; color: #A63232; border-radius: 12px; padding: 11px 13px; font-size: .85rem; margin-bottom: 14px; }
         .err ul { margin: 4px 0 0; padding-left: 18px; }
         .done { text-align: center; padding: 12px 0; }
-        .check { width: 64px; height: 64px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; font-size: 34px; margin: 0 auto 16px; }
+        .check { width: 64px; height: 64px; border-radius: 50%; background: var(--kakao); color: var(--label); display: grid; place-items: center; font-size: 34px; font-weight: 800; margin: 0 auto 16px; }
         .done h1 { font-size: 1.5rem; }
-        .done p { color: #475569; line-height: 1.6; }
-        .badge { display: inline-block; background: #eef2ff; color: #4338ca; font-weight: 700; border-radius: 8px; padding: 6px 12px; margin-top: 6px; font-family: monospace; }
-        .device { margin-top: 16px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; }
-        .type { display: inline-block; border-radius: 999px; padding: 5px 14px; font-size: .82rem; font-weight: 800; margin-bottom: 12px; }
-        .type-direct { background: #eef2ff; color: #4338ca; }
-        .type-indirect { background: #ecfdf5; color: #047857; }
-        .type-client, .type-staff { background: #f1f5f9; color: #475569; }
-        .note { font-size: .78rem; color: #64748b; margin-top: 6px; line-height: 1.5; }
-        .note.on-direct { color: #4338ca; font-weight: 700; }
-        .note.on-indirect { color: #047857; font-weight: 700; }
-        .ask { margin-top: 16px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 12px; padding: 14px; }
-        .ask p { margin: 0 0 10px; font-size: .85rem; font-weight: 700; color: #92400e; }
-        .ask .opt { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; margin-bottom: 8px; cursor: pointer; font-size: .92rem; }
+        .done p { color: var(--ink-2); line-height: 1.6; }
+        .badge { display: inline-block; background: var(--paper); color: var(--ink); font-weight: 700; border-radius: 8px; padding: 6px 12px; margin-top: 6px; font-family: monospace; }
+        .device { margin-top: 16px; background: #E8F5EA; border: 0; color: #1E8E3E; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; }
+        .type { display: inline-block; border-radius: 999px; padding: 6px 15px; font-size: .82rem; font-weight: 800; margin-bottom: 12px; }
+        .type-direct { background: var(--label); color: #fff; }
+        .type-indirect { background: var(--paper); color: var(--ink-2); }
+        .type-client, .type-staff { background: var(--paper); color: var(--ink-2); }
+        .note { font-size: .78rem; color: var(--ink-2); margin-top: 6px; line-height: 1.5; }
+        .note.on-direct { color: var(--ink); font-weight: 700; }
+        .note.on-indirect { color: var(--ink); font-weight: 700; }
+        /* 고용 형태를 되묻는 칸 — 여기만 노란 판이다. 잘못 고르면 급여가 통째로 틀어진다. */
+        .ask { margin-top: 16px; border: 0; background: var(--kakao); border-radius: 14px; padding: 14px; }
+        .ask p { margin: 0 0 10px; font-size: .85rem; font-weight: 800; color: var(--label); }
+        .ask .opt { display: flex; align-items: center; gap: 9px; padding: 12px; border: 0; border-radius: 12px; background: #fff; margin-bottom: 8px; cursor: pointer; font-size: .92rem; }
         .ask .opt:last-child { margin-bottom: 0; }
-        .ask input[type=radio] { width: 18px; height: 18px; accent-color: #4f46e5; }
-        .ask small { display: block; color: #64748b; font-size: .76rem; font-weight: 400; }
+        .ask input[type=radio] { width: 18px; height: 18px; accent-color: #191919; }
+        .ask small { display: block; color: var(--ink-2); font-size: .76rem; font-weight: 400; }
     </style>
 </head>
 <body>

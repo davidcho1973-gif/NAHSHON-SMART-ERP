@@ -12,7 +12,7 @@
         .bar .sub { color: #64748b; font-size: .82rem; margin: 2px 0 0; }
         .picks { display: flex; gap: 12px; flex-wrap: wrap; }
         .picks label { display: inline-flex; align-items: center; gap: 6px; font-size: .86rem; color: #334155; cursor: pointer; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 11px; }
-        .picks input { width: 15px; height: 15px; accent-color: #4f46e5; }
+        .picks input { width: 15px; height: 15px; accent-color: #191919; }
         .pages { padding: 22px; display: grid; gap: 22px; justify-items: center; }
         .page { width: min(100%, 640px); }
         .page-label { text-align: center; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: #94a3b8; font-weight: 800; margin: 0 0 8px; }

@@ -31,6 +31,8 @@ class WebManifestController extends Controller
             shortName: (string) ($site->code ?: '출퇴근'),
             start: $url,
             scope: $url,
+            theme: '#FEE500',
+            background: '#FEE500',
         );
     }
 
