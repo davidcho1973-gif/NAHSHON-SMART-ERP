@@ -190,6 +190,7 @@ Route::middleware('auth')->group(function (): void {
     // 작업자 홈이 쓰는 두 개. 화면은 이 둘만 보고 자동 → 직접 → QR 로 내려간다.
     Route::get('/attendance-app/home', [AttendanceAppController::class, 'home'])->name('attendance-app.home');
     Route::post('/attendance-app/punch', [AttendanceAppController::class, 'punch'])->name('attendance-app.punch');
+    Route::post('/attendance-app/correction', [AttendanceAppController::class, 'requestCorrection'])->name('attendance-app.correction');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
     Route::post('/ops-api/photo', [OpsPhotoController::class, 'store'])->name('ops.photo');
 

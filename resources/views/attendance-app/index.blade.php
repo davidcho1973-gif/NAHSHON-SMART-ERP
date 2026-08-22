@@ -423,6 +423,9 @@
             retry: '다시 시도', loadFail: '정보를 불러오지 못했습니다.',
             sentFail: '보내지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.', done: '처리했습니다.',
             viewOnly: '보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
+            fixTime: '출근 시각이 실제와 다르면 정정 요청',
+            fixPrompt: '실제 도착 시각을 입력해 주세요 (예: 05:00)',
+            fixPending: '정정 요청됨 — 반장 확인 대기',
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
         en: {
@@ -459,6 +462,9 @@
             retry: 'Retry', loadFail: 'Could not load your data.',
             sentFail: 'Could not send. Check your internet and try again.', done: 'Done.',
             viewOnly: 'View-only mode. You cannot punch here.',
+            fixTime: 'Wrong clock-in time? Request a fix',
+            fixPrompt: 'Enter your actual arrival time (e.g. 05:00)',
+            fixPending: 'Fix requested — waiting for foreman',
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
         es: {
@@ -495,6 +501,9 @@
             retry: 'Reintentar', loadFail: 'No se pudo cargar su información.',
             sentFail: 'No se pudo enviar. Revise su internet e intente de nuevo.', done: 'Listo.',
             viewOnly: 'Modo de solo lectura. No puede marcar aquí.',
+            fixTime: '¿Hora de entrada incorrecta? Pedir corrección',
+            fixPrompt: 'Escriba su hora real de llegada (ej. 05:00)',
+            fixPending: 'Corrección pedida — esperando al capataz',
             weekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
         }
     };
@@ -630,7 +639,18 @@
                     '<div class="row-b">' + esc(d.site ? d.site.code : '') + '</div></div>' + chip(l) + '</div>';
             }).join('')
             : '<div class="empty">' + T.noLogs + '</div>';
-        h += '</div></div>';
+        h += '</div>';
+
+        // 출근이 늦게 잡혔을 때의 구제 — 주머니 속 웹 앱은 위치를 못 보내므로
+        // 5시 도착이 11시 기록이 될 수 있다. 본인이 실제 시각을 말하면 반장 확인
+        // 대기로 돌린다. 이미 요청했으면 그 사실만 보인다.
+        var firstIn = (d.logs || []).filter(function (l) { return l.type === 'clock_in'; })[0];
+        if (firstIn && !AS) {
+            h += firstIn.correctionRequested
+                ? '<div class="note" style="margin-top:8px">⏳ ' + T.fixPending + '</div>'
+                : '<button type="button" class="btn quiet" data-act="fixtime" style="margin-top:8px;font-size:13.5px;min-height:44px;padding:11px">' + T.fixTime + '</button>';
+        }
+        h += '</div>';
 
         h += '<div class="sec"><div class="sec-h">' + T.more + '</div>' +
             '<a class="link" href="{{ route('communication.index') }}"><div><b>' + T.messages +
@@ -942,12 +962,31 @@
         state.busy = false;
     }
 
+    /** 출근 시각 정정 요청 — 실제 도착 시각을 물어 서버에 접수한다. */
+    async function requestFix() {
+        var time = window.prompt(T.fixPrompt, '');
+        if (!time) return;
+        try {
+            var r = await fetch('{{ route('attendance-app.correction') }}', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, Accept: 'application/json' },
+                body: JSON.stringify({ time: time.trim(), lang: state.lang })
+            });
+            var j = await r.json();
+            toast(j.message || j.error || T.done);
+            await load();
+        } catch (err) {
+            toast(T.sentFail);
+        }
+    }
+
     document.getElementById('view').addEventListener('click', function (ev) {
         var el = ev.target.closest('[data-act]');
         if (!el) return;
         ev.preventDefault();
         var act = el.getAttribute('data-act');
         if (act === 'in' || act === 'out') return punch(act);
+        if (act === 'fixtime') return requestFix();
         if (act === 'perm') { state.permission = 'unknown'; startWatch(); return render(); }
         if (act === 'install') return window.AppInstall.show();
         if (act === 'retry') return load();

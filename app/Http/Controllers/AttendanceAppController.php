@@ -174,6 +174,29 @@ class AttendanceAppController extends Controller
         return response()->json($worker->punch($employee, $data['direction'], $data, $data['lang'] ?? 'ko'));
     }
 
+    /**
+     * 출근 시각 정정 요청 — "실제로는 더 일찍 왔다". 기록을 바로 고치지 않고
+     * 확인 대기로 돌린다. 임금 기록은 본인 신고만으로 바뀌면 안 된다.
+     */
+    public function requestCorrection(Request $request, WorkerAttendanceService $worker): JsonResponse
+    {
+        if ($this->viewAsEmployee($request)) {
+            return response()->json(['success' => false, 'error' => '다른 사람의 화면을 보는 중입니다.'], 403);
+        }
+
+        $employee = $request->user()?->employee;
+        if (! $employee) {
+            return response()->json(['success' => false, 'error' => '연결된 직원 정보가 없습니다.'], 422);
+        }
+
+        $data = $request->validate([
+            'time' => ['required', 'string', 'max:5'],
+            'lang' => ['nullable', 'in:ko,en,es'],
+        ]);
+
+        return response()->json($worker->requestCorrection($employee, $data['time'], $data['lang'] ?? 'ko'));
+    }
+
     public function team(Request $request, string $token): View|RedirectResponse
     {
         $qrCode = AttendanceQrCode::activeForToken($token);

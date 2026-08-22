@@ -54,6 +54,12 @@ Schedule::command('attendance:auto-clockout')
 // 만료 임박 문서(COI·면허·인허가·비자) 알림 — 매일 아침 업무 시작 전.
 Schedule::command('docs:alert-expiring')->dailyAt(Org::time('schedule.docs_expiry_alert_at', '07:00'));
 
+// 아침 출근 알림 — 사람마다 평소 출근 시각(최근 2주 중간값)이 지났는데 기록이 없으면
+// 푸시로 묻는다. 웹 앱은 주머니 속에서 위치를 못 보내므로(OS 제한), 누르는 순간
+// 앱이 열리며 찍히게 하는 것이 현실적인 자동이다. 10분마다 돌지만 아침 시간대
+// 밖에서는 아무것도 하지 않고, 하루 2번을 넘지 않는다.
+Schedule::command('attendance:remind-clockin')->everyTenMinutes();
+
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
 Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18:00'));
 

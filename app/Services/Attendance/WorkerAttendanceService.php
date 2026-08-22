@@ -56,6 +56,7 @@ class WorkerAttendanceService
                 'sourceLabel' => self::SOURCE_LABELS[$l->source] ?? $l->source,
                 'status' => $l->status,
                 'needsReview' => $l->status === 'pending',
+                'correctionRequested' => is_array($l->payload) && isset($l->payload['correction_request']),
             ])->values()->all();
 
         $clockedIn = $snap['firstIn'] !== null && $snap['lastOut'] === null;
@@ -354,6 +355,92 @@ class WorkerAttendanceService
                 : ($verified ? $t['out_ok'] : $t['out_pending']),
         ];
     }
+
+    /**
+     * 출근 시각 정정 요청 — "실제로는 더 일찍 왔다".
+     *
+     * 웹 앱은 주머니 속에서 위치를 못 보내므로, 5시에 도착해도 11시에 앱을 열면
+     * 그때가 출근으로 찍힌다. 그 사람이 실제 도착 시각을 말하면 기록을 <b>바로
+     * 고치지 않고</b> 확인 대기(pending)로 돌린다 — 임금 기록을 본인 신고만으로
+     * 고치면 나중에 아무도 그 시간을 설명하지 못한다. 반장이 보고 승인한다.
+     * 요청 내용은 기록의 메모와 payload 에 남아 관리 화면에서 그대로 보인다.
+     *
+     * @return array<string, mixed>
+     */
+    public function requestCorrection(Employee $employee, string $time, string $lang = 'ko'): array
+    {
+        $t = self::CORRECTION_MESSAGES[$lang] ?? self::CORRECTION_MESSAGES['ko'];
+
+        if (! preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', $time)) {
+            return ['success' => false, 'error' => $t['bad_time']];
+        }
+
+        $site = $employee->site_id ? Site::find($employee->site_id) : null;
+        $tz = $site?->timezone ?: config('app.timezone');
+        $today = Carbon::now($tz)->toDateString();
+
+        $log = AttendanceLog::query()
+            ->where('employee_id', $employee->id)
+            ->where('attendance_date', $today)
+            ->where('event_type', 'clock_in')
+            ->where('status', '!=', 'rejected')
+            ->orderBy('event_at')
+            ->first();
+
+        if (! $log) {
+            return ['success' => false, 'error' => $t['no_log']];
+        }
+        if (is_array($log->payload) && isset($log->payload['correction_request'])) {
+            return ['success' => false, 'error' => $t['already']];
+        }
+
+        $recordedLocal = $log->event_at?->timezone($tz)->format('H:i');
+        if ($recordedLocal !== null && $time >= $recordedLocal) {
+            // 더 늦게 왔다는 정정은 받지 않는다 — 그건 반장이 기록을 줄이는 방향이라
+            // 본인 요청으로 시작할 일이 아니다.
+            return ['success' => false, 'error' => $t['not_earlier']];
+        }
+
+        $payload = is_array($log->payload) ? $log->payload : [];
+        $payload['correction_request'] = [
+            'requested_time' => $time,
+            'recorded_time' => $recordedLocal,
+            'requested_at' => Carbon::now()->toIso8601String(),
+        ];
+
+        $log->update([
+            'status' => 'pending',   // 반장 확인 대기 — 화면에는 "확인 필요" 로 뜬다.
+            'notes' => trim(($log->notes ? $log->notes."\n" : '')
+                ."[작업자 정정 요청] 실제 도착 {$time} (기록 {$recordedLocal})"),
+            'payload' => $payload,
+        ]);
+
+        return ['success' => true, 'message' => $t['ok']];
+    }
+
+    private const CORRECTION_MESSAGES = [
+        'ko' => [
+            'bad_time' => '시각을 05:00 처럼 입력해 주세요.',
+            'no_log' => '오늘 출근 기록이 없습니다. 먼저 출근을 찍어 주세요.',
+            'already' => '오늘 정정 요청이 이미 접수돼 있습니다.',
+            'not_earlier' => '기록된 시각보다 이른 시각만 요청할 수 있습니다.',
+            'ok' => '정정 요청을 접수했습니다. 반장 확인 후 반영됩니다.',
+        ],
+        'en' => [
+            'bad_time' => 'Enter the time like 05:00.',
+            'no_log' => 'No clock-in today yet. Clock in first.',
+            'already' => 'A correction request is already in for today.',
+            'not_earlier' => 'Only an earlier time than the recorded one can be requested.',
+            'ok' => 'Request received. It applies after foreman review.',
+        ],
+        'es' => [
+            'bad_time' => 'Escriba la hora como 05:00.',
+            'no_log' => 'Aún no hay entrada hoy. Marque la entrada primero.',
+            'already' => 'Ya hay una solicitud de corrección para hoy.',
+            'not_earlier' => 'Solo puede pedir una hora anterior a la registrada.',
+            'ok' => 'Solicitud recibida. Se aplica tras la revisión del capataz.',
+        ],
+    ];
 
     /**
      * 출퇴근 응답 문구 — 작업자의 언어로.
