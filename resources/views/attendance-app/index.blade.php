@@ -15,7 +15,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#F4F2ED">
+    <meta name="theme-color" content="#FFFFFF">
     <title>내 출퇴근 · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
@@ -26,258 +26,265 @@
     <meta name="apple-mobile-web-app-title" content="내 출퇴근">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <style>
+        /*
+            카카오 디자인 언어를 그대로 쓴다.
+
+            현장 작업자 대부분이 한국인이고 카카오톡을 매일 쓴다. 익숙한 색·모서리·간격을
+            그대로 쓰면 "이건 어떻게 쓰는 거냐" 는 질문이 줄어든다.
+
+            규격(카카오 브랜드 가이드):
+              노랑 #FEE500 · 라벨 rgba(0,0,0,.85) · 모서리 12px · 바탕 #F2F3F5
+              글자 #191919 / #767676 / #B0B8C1 · 구분선 #EDEEF0
+
+            노랑은 <b>한 화면에 하나</b>만 쓴다. 지금 눌러야 할 것 하나에만 칠하고 나머지는
+            흰 카드로 둔다 — 두 곳이 노랗면 어디를 눌러야 할지 모른다.
+        */
         :root {
             color-scheme: light;
 
-            /* 현장 표지판의 어휘. 형광색은 글자로 쓰지 않는다 — 채움으로 쓰고 검은 글자를 얹는다. */
-            --paper:   #F4F2ED;
-            --card:    #FFFFFF;
-            --slab:    #17160F;
-            --slab-2:  #23221A;
-            --ink:     #17160F;
-            --ink-2:   #625E52;
-            --ink-3:   #96917F;
-            --rule:    #E2DED3;
-            --hivis:   #D8E000;
+            --kakao:    #FEE500;
+            --kakao-2:  #F6DC00;          /* 눌렀을 때 */
+            --label:    rgba(0,0,0,.85);  /* 노랑 위 글자 — 카카오 규격 */
 
-            --ok:      #167A46;
-            --ok-bg:   #E3F1E8;
-            --warn:    #96600A;
-            --warn-bg: #FAEFD9;
-            --bad:     #B0392A;
-            --bad-bg:  #F8E5E1;
-            --info:    #2B4C9B;
-            --info-bg: #E6EAF7;
+            --paper:    #F2F3F5;
+            --card:     #FFFFFF;
+            --ink:      #191919;
+            --ink-2:    #767676;
+            --ink-3:    #B0B8C1;
+            --rule:     #EDEEF0;
 
-            --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-            --tabh: 66px;
+            --ok:      #1E8E3E;  --ok-bg:   #E8F5EA;
+            --warn:    #B26A00;  --warn-bg: #FFF4E0;
+            --bad:     #D94C4C;  --bad-bg:  #FDECEC;
+            --info:    #3E6BE0;  --info-bg: #ECF1FE;
+
+            /* 예전에는 라벨까지 고정폭 글꼴이었다 — 산업용 계기판처럼 보였다.
+               카카오는 UI 글자에 고정폭을 쓰지 않는다. 숫자 정렬은 tabular-nums 가 맡는다. */
+            --mono: inherit;
+            --tabh: 60px;
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { -webkit-text-size-adjust: 100%; }
         body {
             margin: 0; background: var(--paper); color: var(--ink);
-            font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-            font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+            font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
         }
-        .app { max-width: 520px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+        .app { max-width: 520px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--paper); }
 
         /* ── 머리 ─────────────────────────────────────────────────── */
         .offline {
-            background: var(--slab); color: var(--hivis); text-align: center;
-            font-family: var(--mono); font-size: 11px; letter-spacing: .12em; padding: 6px;
+            background: var(--ink); color: #fff; text-align: center;
+            font-size: 12px; font-weight: 600; padding: 7px;
         }
-        /* 슈퍼관리자가 남의 화면을 들여다보는 중. 줄무늬는 "이건 실물이 아니다" 의 관용 표현이다. */
+        /* 슈퍼관리자가 남의 화면을 들여다보는 중 — 실물이 아님을 분명히. */
         .peek {
-            background: repeating-linear-gradient(135deg, #2B4C9B 0 10px, #24417F 10px 20px);
-            color: #EAF0FF; text-align: center; padding: 7px 12px;
-            font-size: 12px; font-weight: 700; letter-spacing: .01em;
+            background: #3E6BE0; color: #fff; text-align: center; padding: 7px 12px;
+            font-size: 12px; font-weight: 600;
         }
-        .peek b { color: #FFFFFF; }
+        .peek b { color: #fff; font-weight: 800; }
         .top {
             position: sticky; top: 0; z-index: 20;
-            background: color-mix(in srgb, var(--paper) 88%, transparent);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--rule);
-            display: flex; align-items: center; gap: 11px; padding: 12px 18px;
+            background: var(--card); border-bottom: 1px solid var(--rule);
+            display: flex; align-items: center; gap: 11px; padding: 12px 16px;
         }
         .tag {
-            width: 42px; height: 42px; border-radius: 11px; flex: none;
-            background: var(--slab); color: var(--hivis);
-            display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -.02em;
+            width: 40px; height: 40px; border-radius: 14px; flex: none;
+            background: var(--kakao); color: var(--label);
+            display: grid; place-items: center; font-weight: 800; font-size: 14px;
         }
         .who { flex: 1; min-width: 0; }
-        .who b { display: block; font-size: 16px; font-weight: 750; line-height: 1.3; }
+        .who b { display: block; font-size: 16px; font-weight: 700; line-height: 1.3; }
         .who span {
-            display: block; font-family: var(--mono); font-size: 11px;
-            color: var(--ink-3); letter-spacing: .02em;
+            display: block; font-size: 12px; color: var(--ink-3);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .langs { display: flex; gap: 3px; flex: none; }
+        .langs { display: flex; gap: 4px; flex: none; }
         .langs button {
-            font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-            padding: 5px 7px; border-radius: 6px; border: 1px solid var(--rule);
-            background: transparent; color: var(--ink-3); cursor: pointer;
+            font-size: 11px; font-weight: 700; padding: 6px 9px; border-radius: 999px;
+            border: 1px solid var(--rule); background: var(--card); color: var(--ink-2); cursor: pointer;
+            font-family: inherit;
         }
-        .langs button[aria-pressed="true"] { background: var(--slab); color: var(--paper); border-color: var(--slab); }
+        .langs button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
 
-        main { flex: 1; padding: 16px 18px calc(var(--tabh) + env(safe-area-inset-bottom) + 20px); }
+        main { flex: 1; padding: 14px 16px calc(var(--tabh) + env(safe-area-inset-bottom) + 20px); }
 
-        /* ── 계기판 ───────────────────────────────────────────────── */
+        /* ── 오늘 근무 카드 ────────────────────────────────────────
+           일하는 중일 때만 노랗다. 그 순간 이 화면에서 가장 중요한 것이 이 카드이고,
+           나머지는 전부 흰 종이로 물러난다. */
         .slab {
-            background: var(--slab); color: #F6F5EE;
-            border-radius: 20px; padding: 22px 20px 20px;
+            background: var(--card); color: var(--ink);
+            border-radius: 16px; padding: 20px;
             position: relative; overflow: hidden;
         }
-        /* 상태는 위쪽 굵은 선 하나로 말한다. 카드 전체를 물들이는 것보다 조용하고 분명하다. */
-        .slab::before {
-            content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--accent, #55524A);
-        }
-        .slab.is-working { --accent: var(--hivis); }
-        .slab.is-manual  { --accent: #E0A33A; }
-        .slab.is-offline { --accent: #D3604E; }
-        .slab.is-waiting { --accent: #55524A; }
+        .slab.is-working { background: var(--kakao); color: var(--label); }
+        .slab.is-manual  { background: var(--card); }
+        .slab.is-offline { background: var(--card); }
+        .slab.is-waiting { background: var(--card); }
+        .slab::before { content: none; }   /* 카카오는 카드 위 색 띠를 쓰지 않는다 */
 
-        .state { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #CFCCC0; }
-        .state i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #55524A); display: block; flex: none; }
+        .state { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+        .slab.is-working .state { color: rgba(0,0,0,.62); }
+        .state i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); display: block; flex: none; }
+        .slab.is-working .state i { background: #1E8E3E; }
+        .slab.is-manual  .state i { background: #B26A00; }
+        .slab.is-offline .state i { background: var(--bad); }
         @media (prefers-reduced-motion: no-preference) {
             .slab.is-working .state i { animation: pulse 2.4s ease-in-out infinite; }
         }
         @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
 
         .clock {
-            font-size: 56px; font-weight: 800; letter-spacing: -.045em; line-height: 1.02;
-            font-variant-numeric: tabular-nums; margin: 14px 0 4px; color: #FFFDF5;
+            font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1.05;
+            font-variant-numeric: tabular-nums; margin: 10px 0 3px; color: inherit;
         }
-        .clock small { font-size: 20px; font-weight: 700; margin: 0 2px 0 3px; color: #9C9889; }
-        .meta { font-family: var(--mono); font-size: 12px; color: #9C9889; letter-spacing: .02em; }
+        .clock small { font-size: 19px; font-weight: 700; margin: 0 2px 0 3px; opacity: .5; }
+        .meta { font-size: 12.5px; color: var(--ink-2); }
+        .slab.is-working .meta { color: rgba(0,0,0,.6); }
 
         .why {
-            margin-top: 16px; padding-top: 15px; border-top: 1px solid #34322A;
-            font-size: 14.5px; line-height: 1.55; color: #CFCCC0;
+            margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--rule);
+            font-size: 14px; line-height: 1.55; color: var(--ink-2);
         }
-        .why b { color: #FFFDF5; font-weight: 700; }
+        .slab.is-working .why { border-top-color: rgba(0,0,0,.12); color: rgba(0,0,0,.7); }
+        .why b { color: var(--ink); font-weight: 700; }
+        .slab.is-working .why b { color: var(--label); }
 
+        /* 버튼 — 카카오 규격: 모서리 12px, 굵은 라벨, 그림자 없음 */
         .btn {
-            width: 100%; margin-top: 14px; padding: 18px; border: none; border-radius: 15px;
-            font-family: inherit; font-size: 17px; font-weight: 750; letter-spacing: -.01em;
-            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; margin-top: 13px; padding: 15px; border: none; border-radius: 12px;
+            font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: -.01em;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+            min-height: 52px;
         }
-        .btn.go    { background: var(--hivis); color: var(--slab); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
-        .btn.stop  { background: #F6F5EE; color: var(--slab); box-shadow: inset 0 -3px 0 rgba(0,0,0,.14); }
-        .btn.quiet { background: transparent; color: #CFCCC0; border: 1.5px solid #3C3A31; font-size: 15px; font-weight: 650; padding: 15px; }
-        .btn:active { transform: translateY(1px); }
-        .btn:focus-visible { outline: 3px solid var(--hivis); outline-offset: 2px; }
-        .note { font-size: 12.5px; color: #8E8A7C; margin-top: 10px; line-height: 1.5; }
-        .note b { color: #CFCCC0; }
+        .btn.go    { background: var(--kakao); color: var(--label); }
+        .btn.stop  { background: var(--ink); color: #fff; }
+        .btn.quiet { background: var(--card); color: var(--ink-2); border: 1px solid var(--rule); font-size: 15px; }
+        .slab.is-working .btn.stop { background: rgba(0,0,0,.85); color: #fff; }
+        .slab.is-working .btn.quiet { background: rgba(255,255,255,.5); border-color: rgba(0,0,0,.1); color: rgba(0,0,0,.7); }
+        .btn:active { background: var(--kakao-2); }
+        .btn.stop:active { opacity: .85; background: var(--ink); }
+        .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+        .note { font-size: 12.5px; color: var(--ink-3); margin-top: 9px; line-height: 1.5; }
+        .note b { color: var(--ink-2); font-weight: 700; }
+        .slab.is-working .note { color: rgba(0,0,0,.55); }
+        .slab.is-working .note b { color: rgba(0,0,0,.75); }
 
-        /* ── 종이 위 요소 ─────────────────────────────────────────── */
-        .sec { margin-top: 26px; }
+        /* ── 목록·카드 ────────────────────────────────────────────── */
+        .sec { margin-top: 24px; }
         .sec-h {
-            font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
-            text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px;
+            font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 9px;
             display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+            letter-spacing: -.01em;
         }
-        .sec-h em { font-style: normal; color: var(--ink-2); letter-spacing: 0; text-transform: none; font-size: 12px; }
+        .sec-h em { font-style: normal; color: var(--ink-3); font-size: 12px; font-weight: 500; }
 
-        .panel { background: var(--card); border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; }
+        .panel { background: var(--card); border-radius: 14px; overflow: hidden; }
         .row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
         .row:last-child { border-bottom: none; }
-        .row-k { font-family: var(--mono); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+        .row-k { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; color: var(--ink-2); }
         .row-m { flex: 1; min-width: 0; }
-        .row-a { font-weight: 650; font-size: 15px; letter-spacing: -.01em; }
-        .row-b { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
-        .row-n { font-family: var(--mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+        .row-a { font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+        .row-b { font-size: 12.5px; color: var(--ink-3); }
+        .row-n { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
 
         .chip {
-            font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 7px;
-            font-family: var(--mono); white-space: nowrap; letter-spacing: .03em; flex: none;
+            font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
+            white-space: nowrap; flex: none;
         }
         .chip.auto { background: var(--ok-bg);   color: var(--ok); }
         .chip.hand { background: var(--info-bg); color: var(--info); }
-        .chip.qr   { background: #F0E9F6;        color: #63398C; }
+        .chip.qr   { background: #F3EEFB;        color: #6B3FA0; }
         .chip.rev  { background: var(--warn-bg); color: var(--warn); }
 
-        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat { background: var(--card); border: 1px solid var(--rule); border-radius: 16px; padding: 15px 17px; }
-        .stat-k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-        .stat-v { font-size: 30px; font-weight: 800; letter-spacing: -.035em; font-variant-numeric: tabular-nums; margin-top: 2px; }
-        .stat-v small { font-size: 15px; font-weight: 650; color: var(--ink-3); margin-left: 1px; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+        .stat { background: var(--card); border-radius: 14px; padding: 15px 16px; }
+        .stat-k { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+        .stat-v { font-size: 28px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 2px; }
+        .stat-v small { font-size: 14px; font-weight: 700; color: var(--ink-3); margin-left: 1px; }
 
-        .money { background: var(--slab); color: #F6F5EE; border-radius: 20px; padding: 22px 20px; }
-        .money .stat-k { color: #8E8A7C; }
+        /* 급여 — 노랑을 또 쓰지 않는다. 흰 카드에 숫자만 크게, 강조는 형광펜처럼. */
+        .money { background: var(--card); color: var(--ink); border-radius: 16px; padding: 20px; }
+        .money .stat-k { color: var(--ink-2); }
         .money .amt {
-            font-size: 42px; font-weight: 800; letter-spacing: -.04em;
-            font-variant-numeric: tabular-nums; margin: 6px 0 2px; color: #FFFDF5;
+            font-size: 38px; font-weight: 800; letter-spacing: -.035em;
+            font-variant-numeric: tabular-nums; margin: 5px 0 2px;
         }
-        .money .amt em { font-style: normal; color: var(--hivis); }
-        .money .sub { font-family: var(--mono); font-size: 11.5px; color: #8E8A7C; }
+        .money .amt em { font-style: normal; background: var(--kakao); border-radius: 6px; padding: 0 6px; }
+        .money .sub { font-size: 12.5px; color: var(--ink-3); }
         .money .line {
             display: flex; justify-content: space-between; gap: 12px;
-            font-size: 13.5px; padding: 9px 0; border-top: 1px solid #34322A;
-            font-variant-numeric: tabular-nums; color: #CFCCC0;
+            font-size: 14px; padding: 10px 0; border-top: 1px solid var(--rule);
+            font-variant-numeric: tabular-nums; color: var(--ink-2);
         }
         .money .line:first-of-type { margin-top: 14px; }
-        .money .line b { color: #FFFDF5; font-weight: 700; }
+        .money .line b { color: var(--ink); font-weight: 700; }
 
-        .qr { background: var(--card); border: 1px solid var(--rule); border-radius: 20px; padding: 22px; text-align: center; }
+        .qr { background: var(--card); border-radius: 16px; padding: 22px; text-align: center; }
         .qr img { display: block; margin: 0 auto; width: 232px; height: 232px; max-width: 100%; }
-        .qr-id {
-            font-family: var(--mono); font-size: 16px; font-weight: 700;
-            letter-spacing: .08em; margin-top: 12px;
-        }
+        .qr-id { font-size: 16px; font-weight: 800; letter-spacing: .06em; margin-top: 12px; }
         .qr-note { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; line-height: 1.5; }
-        .qr-note b { color: var(--ink-2); }
+        .qr-note b { color: var(--ink-2); font-weight: 700; }
 
         .link {
             display: flex; align-items: center; justify-content: space-between; gap: 12px;
-            padding: 16px 17px; border: 1px solid var(--rule); border-radius: 16px;
-            background: var(--card); text-decoration: none; color: inherit; margin-top: 10px;
+            padding: 16px; border-radius: 14px;
+            background: var(--card); text-decoration: none; color: inherit; margin-top: 9px;
         }
-        .link b { font-size: 15.5px; font-weight: 700; display: block; letter-spacing: -.01em; }
+        .link b { font-size: 15px; font-weight: 700; display: block; letter-spacing: -.01em; }
         .link span { font-size: 12.5px; color: var(--ink-3); }
-        .link .go { color: var(--ink-3); font-size: 22px; flex: none; line-height: 1; }
+        .link .go { color: var(--ink-3); font-size: 20px; flex: none; line-height: 1; }
 
-        .empty { color: var(--ink-3); font-size: 14px; padding: 18px 16px; text-align: center; }
+        .empty { color: var(--ink-3); font-size: 14px; padding: 20px 16px; text-align: center; }
         .fatal {
-            background: var(--bad-bg); border: 1px solid #EEC3BB; color: #7C2418;
-            border-radius: 16px; padding: 20px; font-size: 14.5px; line-height: 1.6;
+            background: var(--bad-bg); color: #A63232;
+            border-radius: 14px; padding: 20px; font-size: 14px; line-height: 1.6;
         }
         .retry {
             display: block; width: 100%; margin-top: 14px; padding: 14px;
-            border: 1.5px solid #C89184; border-radius: 12px; background: transparent;
-            color: #7C2418; font-family: inherit; font-size: 15px; font-weight: 750; cursor: pointer;
+            border: none; border-radius: 12px; background: var(--ink);
+            color: #fff; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
         }
 
         /* ── 아직 연결되지 않은 계정 ──────────────────────────────────
-           관리자가 이 앱을 처음 열면 반드시 보는 화면이다(관리자 계정에는 직원 기록이
-           안 붙어 있다). 사실상 이 앱의 첫인상이라, 오류가 아니라 "다음에 할 일" 로 보이게 한다. */
-        .setup-h {
-            font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.25;
-            margin: 14px 0 0; color: #FFFDF5;
-        }
-        .setup-who {
-            font-family: var(--mono); font-size: 12px; color: #9C9889;
-            margin-top: 8px; word-break: break-all;
-        }
+           관리자가 이 앱을 처음 열면 반드시 보는 화면이다. 오류가 아니라 "다음에 할 일"로. */
+        .setup-h { font-size: 24px; font-weight: 800; letter-spacing: -.03em; line-height: 1.3; margin: 12px 0 0; }
+        .setup-who { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; word-break: break-all; }
         .step-n {
-            width: 26px; height: 26px; border-radius: 50%; flex: none;
-            background: var(--slab); color: var(--paper);
-            display: grid; place-items: center; font-size: 13px; font-weight: 800;
+            width: 24px; height: 24px; border-radius: 50%; flex: none;
+            background: var(--kakao); color: var(--label);
+            display: grid; place-items: center; font-size: 12px; font-weight: 800;
         }
 
         /* ── 아래 탭 ──────────────────────────────────────────────── */
         .tabs {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
             display: grid; grid-template-columns: repeat(4, 1fr);
-            background: color-mix(in srgb, var(--paper) 92%, transparent);
-            backdrop-filter: blur(14px);
-            border-top: 1px solid var(--rule);
+            background: var(--card); border-top: 1px solid var(--rule);
             padding-bottom: env(safe-area-inset-bottom);
         }
         .tabs > div { max-width: 520px; margin: 0 auto; width: 100%; display: contents; }
         .tab {
             background: none; border: none; cursor: pointer; font-family: inherit;
-            padding: 9px 0 11px; display: flex; flex-direction: column; align-items: center; gap: 4px;
-            font-size: 11px; font-weight: 650; color: var(--ink-3); position: relative;
+            padding: 8px 0 10px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+            font-size: 11px; font-weight: 600; color: var(--ink-3); position: relative;
         }
-        .tab svg { width: 22px; height: 22px; display: block; }
-        .tab[aria-selected="true"] { color: var(--ink); }
-        .tab[aria-selected="true"]::before {
-            content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            width: 26px; height: 3px; border-radius: 0 0 3px 3px; background: var(--hivis);
-        }
+        .tab svg { width: 24px; height: 24px; display: block; }
+        /* 카카오는 고른 칸에 색 막대를 두지 않는다 — 글자와 아이콘이 진해질 뿐이다. */
+        .tab[aria-selected="true"] { color: var(--ink); font-weight: 700; }
+        .tab[aria-selected="true"]::before { content: none; }
         .tab .dot {
-            position: absolute; top: 7px; right: calc(50% - 18px);
-            min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
-            background: var(--bad); color: #fff; font-size: 10px; font-weight: 800;
-            display: grid; place-items: center; font-family: var(--mono);
+            position: absolute; top: 5px; right: calc(50% - 19px);
+            min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+            background: #FF3B30; color: #fff; font-size: 10px; font-weight: 800;
+            display: grid; place-items: center;
         }
 
         .toast {
-            position: fixed; left: 50%; bottom: calc(var(--tabh) + env(safe-area-inset-bottom) + 18px);
-            transform: translateX(-50%); background: var(--slab); color: #F6F5EE;
-            padding: 14px 20px; border-radius: 13px; font-size: 14.5px; font-weight: 600;
-            max-width: 88vw; text-align: center; z-index: 50; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5);
+            position: fixed; left: 50%; bottom: calc(var(--tabh) + env(safe-area-inset-bottom) + 16px);
+            transform: translateX(-50%); background: rgba(25,25,25,.92); color: #fff;
+            padding: 13px 20px; border-radius: 999px; font-size: 14px; font-weight: 600;
+            max-width: 88vw; text-align: center; z-index: 50;
         }
     </style>
 </head>
