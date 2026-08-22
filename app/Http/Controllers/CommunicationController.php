@@ -6,6 +6,7 @@ use App\Models\CommunicationMessage;
 use App\Models\CommunicationMessageFile;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
+use App\Services\Admin\CommunicationAdminService;
 use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\CommunicationService;
 use App\Services\Communication\RoomStreamService;
@@ -46,6 +47,9 @@ class CommunicationController extends Controller
                 ? $this->communicationService->directCandidatesForUser($user, $request->query('people'))
                 : collect(),
             'peopleSearch' => (string) $request->query('people', ''),
+            // 방을 만들 수 있는 사람에게만 [+] 를 보여준다 — 눌러도 막히는 버튼은 안 만든다.
+            'canManageRooms' => app(CommunicationAdminService::class)->canManage($user),
+            'siteOptions' => \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get(['id', 'code', 'name']),
         ]);
     }
 
@@ -114,6 +118,7 @@ class CommunicationController extends Controller
             'messages' => $messages,
             'membersCount' => $room->activeMembers()->count(),
             'canPostTopLevel' => $this->communicationService->canPost($user, $room),
+            'canManageRoom' => app(CommunicationAdminService::class)->canManage($user),
         ]);
     }
 
@@ -203,6 +208,63 @@ class CommunicationController extends Controller
         $this->communicationService->removeMessage($user, $message);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * 채팅 화면에서 방 만들기.
+     *
+     * 방을 만들려면 관리 화면(ERP)까지 들어가야 했다 — 현장 사람은 폰만 보는데
+     * 거기서 못 만들면 없는 기능이다. 규칙(누가 만들 수 있는가, 어떤 유형이 되는가)은
+     * CommunicationAdminService 한 곳에 있고 여기서는 그것을 부르기만 한다.
+     */
+    public function storeRoom(Request $request, CommunicationAdminService $admin): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', 'string'],
+            'site_id' => ['nullable', 'integer'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $result = $admin->saveRoom($data);
+
+        if (! ($result['success'] ?? false)) {
+            return back()->with('error', $result['error'] ?? '방을 만들지 못했습니다.');
+        }
+
+        // 만든 사람은 그 방에 들어가 있어야 한다 — 만들고 못 들어가면 앞뒤가 안 맞는다.
+        $room = CommunicationRoom::query()->find((int) ($result['id'] ?? 0));
+        if ($room && $request->user()->employee) {
+            $this->communicationService->ensureRoomMember($room, $request->user()->employee, 'owner');
+        }
+
+        return $room
+            ? redirect()->route('communication.show', ['room' => $room])
+            : redirect()->route('communication.index');
+    }
+
+    /**
+     * 방 정리 — 대화가 오간 방은 지우지 않고 보관으로 내린다.
+     *
+     * 현장 지시·확인의 유일한 기록일 수 있기 때문이다. 규칙은 관리 서비스와 같다.
+     */
+    public function destroyRoom(Request $request, CommunicationRoom $room, CommunicationAdminService $admin): RedirectResponse
+    {
+        $result = $admin->deleteRoom($room->id);
+
+        if ($result['success'] ?? false) {
+            return redirect()->route('communication.index')->with('success', '방을 삭제했습니다.');
+        }
+
+        // 메시지가 있어 지울 수 없는 방은 보관으로 내린다(목록에서만 사라지고 기록은 남는다).
+        if ($admin->canManage($request->user()) && $room->messages()->exists()) {
+            $room->update(['status' => 'archived']);
+
+            return redirect()->route('communication.index')
+                ->with('success', '대화가 오간 방이라 삭제 대신 보관했습니다. 기록은 그대로 남습니다.');
+        }
+
+        return back()->with('error', $result['error'] ?? '방을 정리할 권한이 없습니다.');
     }
 
     /** 이 방에 누가 있는지 — 그리고 지금 보고 있는지. */

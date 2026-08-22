@@ -203,6 +203,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/push/key', [PushSubscriptionController::class, 'key'])->name('push.key');
     Route::post('/push/subscribe', [PushSubscriptionController::class, 'store'])->name('push.subscribe');
     Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
+    // 채팅 화면에서 방 만들기·정리 — 규칙은 관리 서비스 한 곳에 있고 여기서는 부르기만 한다.
+    Route::post('/attendance-app/messages/rooms', [CommunicationController::class, 'storeRoom'])->name('communication.room.store');
+    Route::delete('/attendance-app/messages/rooms/{room}', [CommunicationController::class, 'destroyRoom'])->name('communication.room.destroy');
     Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
     // 새로고침 없이 대화가 흐르게 — 마지막으로 받은 번호 이후만.
     Route::get('/attendance-app/messages/{room}/stream', [CommunicationController::class, 'stream'])->name('communication.stream');

@@ -72,6 +72,11 @@
                     {{-- 알림 상태를 한눈에 — 켜짐 🔔 / 꺼짐 🔕. 눌러서 켜고 끈다. --}}
                     <button type="button" id="push-bell" hidden
                             style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;padding:2px">🔕</button>
+                    @if($canManageRooms)
+                        {{-- 방 만들기 — 폰에서 못 만들면 없는 기능이나 마찬가지다. --}}
+                        <button type="button" id="btn-new-room"
+                                style="border:0;background:none;font-size:24px;line-height:1;cursor:pointer;padding:2px;color:#2563eb">＋</button>
+                    @endif
                     <a class="back" href="{{ route('attendance-app.index') }}">출석 홈</a>
                 </div>
             </div>
@@ -153,6 +158,37 @@
                 @endforelse
             </section>
 
+            @if($canManageRooms)
+                <div id="new-room" hidden style="margin:12px 16px;padding:14px;border:1px solid #e5e7eb;border-radius:14px;background:#fafbfc">
+                    <form method="POST" action="{{ route('communication.room.store') }}" style="display:grid;gap:9px">
+                        @csrf
+                        <b style="font-size:14px">새 대화방 만들기</b>
+                        <input name="name" maxlength="255" placeholder="방 이름 (예: 3층 배관팀)" required
+                               style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
+                        <select name="type" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
+                            <option value="site_chat">현장 채팅방</option>
+                            <option value="team">팀 채팅방</option>
+                            <option value="company">회사 채팅방</option>
+                            <option value="site_announcement">공지방 (관리자만 글쓰기)</option>
+                        </select>
+                        @if($siteOptions->isNotEmpty())
+                            <select name="site_id" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
+                                <option value="">현장 지정 안 함</option>
+                                @foreach($siteOptions as $option)
+                                    <option value="{{ $option->id }}">{{ $option->code }} · {{ $option->name }}</option>
+                                @endforeach
+                            </select>
+                        @endif
+                        <input name="description" maxlength="500" placeholder="어떤 이야기를 하는 방인지 한 줄 (선택)"
+                               style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
+                        <div style="display:flex;gap:8px;justify-content:flex-end">
+                            <button type="button" id="new-room-cancel" style="border:1px solid #e5e7eb;background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer">취소</button>
+                            <button type="submit" style="border:0;background:#fee500;color:#3c1e1e;border-radius:9px;padding:8px 16px;font-weight:800;font-size:13px;cursor:pointer">만들기</button>
+                        </div>
+                    </form>
+                </div>
+            @endif
+
             @if($employee)
                 <div class="section-title">1:1 대화 시작</div>
                 <form class="picker" method="GET" action="{{ route('communication.index') }}">
@@ -174,5 +210,26 @@
             @endif
         </main>
     </div>
+
+    @if(session('success') || session('error'))
+        <div style="position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111827;color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;z-index:50;max-width:92vw">
+            {{ session('success') ?: session('error') }}
+        </div>
+    @endif
+
+<script>
+(function () {
+    var open = document.getElementById('btn-new-room');
+    var box = document.getElementById('new-room');
+    var cancel = document.getElementById('new-room-cancel');
+    if (!open || !box) return;
+
+    open.addEventListener('click', function () {
+        box.hidden = !box.hidden;
+        if (!box.hidden) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    if (cancel) cancel.addEventListener('click', function () { box.hidden = true; });
+})();
+</script>
 </body>
 </html>

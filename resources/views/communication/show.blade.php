@@ -122,7 +122,18 @@
                         <span id="sub-text">{{ $typeLabel }} · {{ $membersCount }}명</span>
                     </div>
                 </div>
-                <button class="peo" type="button" id="btn-members">참여자</button>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <button class="peo" type="button" id="btn-members">참여자</button>
+                    @if($canManageRoom)
+                        {{-- 대화가 오간 방은 지워지지 않고 보관으로 내려간다 — 기록이 증거이기 때문이다. --}}
+                        <form method="POST" action="{{ route('communication.room.destroy', ['room' => $room]) }}"
+                              onsubmit="return confirm('이 방을 정리할까요?\n대화가 오간 방은 삭제되지 않고 보관으로 내려갑니다(기록은 남습니다).')">
+                            @csrf
+                            @method('DELETE')
+                            <button class="peo" type="submit" style="color:#b91c1c">방 정리</button>
+                        </form>
+                    @endif
+                </div>
             </div>
         </header>
 
