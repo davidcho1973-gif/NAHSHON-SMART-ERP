@@ -15,10 +15,11 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#FEE500">
     <title>{{ \App\Support\Org::name() }} 메신저</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         :root {
             color-scheme: light;
-            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
             --kakao: #FEE500;             /* R255 G232 B18 — 카카오 브랜드 노랑 */
             --label: rgba(0,0,0,.85);     /* 노랑 위 글자 */
             --rule: #EDEEF0;

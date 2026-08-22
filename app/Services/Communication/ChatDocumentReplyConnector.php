@@ -81,18 +81,32 @@ class ChatDocumentReplyConnector
         }
     }
 
+    /**
+     * 방에 남길 말 — 핵심만.
+     *
+     * 처음에는 문서 제목을 그대로 첫 줄에 실었다. 그런데 영수증의 제목이란
+     * "Transaction Details - WWW.STORE.COM PHOENIX AZ" 같은 원문 찌꺼기다.
+     * 방에서 궁금한 것은 세 가지뿐이다: <b>어디서 얼마를 썼고, 어디로 갔는가.</b>
+     * 그래서 거래처·금액·날짜를 첫 줄에 놓고 제목은 거래처를 모를 때만 쓴다.
+     */
     private function body(IntelligentDocument $document): string
     {
-        $title = $document->title ?: $document->original_file_name;
         $type = IntelligentDocument::TYPE_OPTIONS[$document->document_type] ?? ($document->document_type ?: '문서');
+        $money = (array) (($document->ai_payload ?? [])['money'] ?? []);
 
-        $lines = ["읽었습니다 — {$type}: {$title}"];
+        $head = array_filter([
+            $type,
+            $this->payeeOf($document, $money),
+            $this->dayLabel($money['paid_on'] ?? null),
+        ]);
+        $lines = [implode(' · ', $head)];
 
         foreach ($this->destinations($document) as $destination) {
-            $lines[] = '• '.$destination;
+            $lines[] = '→ '.$destination;
         }
 
-        $lines[] = '• 문서함 보관: '.($document->virtual_path ?: '분류 대기');
+        // 보관 경로 전체(회사/GENERAL/Finance/…)는 여기서 소음이다 — 문서함에서 찾으면 된다.
+        $lines[] = '→ 문서함 보관';
 
         // 두 판독이 어긋났으면 그것부터 말한다 — 확인 없이 승인되면 안 되기 때문이다.
         $verification = (array) (($document->ai_payload ?? [])['verification'] ?? []);
@@ -109,6 +123,39 @@ class ChatDocumentReplyConnector
         }
 
         return implode("\n", $lines);
+    }
+
+    /** 거래처 — AI 가 뽑아 둔 이름이 우선, 없으면 제목에서 주소·URL 찌꺼기를 걷어낸다. */
+    private function payeeOf(IntelligentDocument $document, array $money): string
+    {
+        $payee = trim((string) ($money['payee'] ?? ''));
+        if ($payee !== '') {
+            return Str::limit($payee, 40, '…');
+        }
+
+        $title = (string) ($document->title ?: $document->original_file_name);
+        $title = (string) preg_replace('/\b(?:https?:\/\/\S+|www\.\S+|\S+\.(?:com|net|org)\b)/iu', '', $title);
+        $title = trim((string) preg_replace('/\s{2,}/', ' ', $title), " \t-–·|");
+
+        return $title === '' ? '이름 없는 문서' : Str::limit($title, 40, '…');
+    }
+
+    /** "8/21" — 연도는 올해가 아닐 때만 붙인다. */
+    private function dayLabel(mixed $day): ?string
+    {
+        try {
+            $date = filled($day) ? \Illuminate\Support\Carbon::parse((string) $day) : null;
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $date) {
+            return null;
+        }
+
+        return $date->isCurrentYear()
+            ? $date->format('n/j')
+            : $date->format('Y/n/j');
     }
 
     private const FIELD_LABELS = [
@@ -132,7 +179,8 @@ class ChatDocumentReplyConnector
         $expense = MobileExpense::query()->where('source_ref', "document:{$document->id}")->first();
         if ($expense) {
             $status = ['pending' => '승인대기', 'approved' => '승인완료', 'paid' => '지급완료', 'rejected' => '반려됨'][$expense->status] ?? $expense->status;
-            $out[] = '재무 · '.$expense->accounting_account.' '.number_format((float) $expense->amount, 2).' USD → '.$status;
+            $out[] = '재무 '.$status.' · $'.number_format((float) $expense->amount, 2)
+                .($expense->accounting_account ? ' ('.$expense->accounting_account.')' : '');
         }
 
         $equipment = \App\Models\Equipment::query()->where('equipment_code', "DOC-{$document->id}")->first();

@@ -14,6 +14,7 @@
     <meta name="apple-mobile-web-app-title" content="{{ $site->code }}">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#FEE500">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         /*
             게이트(현장 출입구 태블릿) — 카카오 디자인 언어.
@@ -30,7 +31,7 @@
         */
         :root {
             color-scheme: light;
-            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Arial, sans-serif;
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Arial, sans-serif;
             --kakao: #FEE500;
             --label: rgba(0,0,0,.85);
             --ink: #191919;

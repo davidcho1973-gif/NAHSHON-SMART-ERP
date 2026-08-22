@@ -18,10 +18,14 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#FEE500">
     <title>{{ $roomLabel ?? $room->name }}</title>
+    {{-- Pretendard — 윈도우 기본 한글 글꼴(맑은 고딕)이 화면을 낡아 보이게 한다.
+         이 글꼴 하나로 어느 기기에서 열어도 같은 얼굴이 된다. CDN 이 안 닿으면
+         뒤의 시스템 글꼴로 조용히 물러난다. --}}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         :root {
             color-scheme: light;
-            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
             --kakao: #fee500;         /* R255 G232 B18 — 브랜드 노랑 */
             --label: rgba(0,0,0,.85); /* 노랑 위 글자 */
             --kakao-bg: #b2c7d9;      /* 대화 배경 */
@@ -54,7 +58,8 @@
         .who { font-size: 12px; color: #33475b; margin-left: 2px; }
         .bundle { display: flex; gap: 5px; align-items: flex-end; }
         .row.mine .bundle { flex-direction: row-reverse; }
-        .bubble { background: #fff; border-radius: 14px; padding: 9px 12px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
+        /* 14px — 카카오톡 기본 크기와 같다. 15px 는 PC 에서 소리치는 것처럼 보였다. */
+        .bubble { background: #fff; border-radius: 14px; padding: 8px 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
         .row.mine .bubble { background: var(--mine); }
         .bubble.gone { background: rgba(255,255,255,.55); color: #64748b; font-style: italic; }
         .stamp { font-size: 10px; color: #4b5563; white-space: nowrap; padding-bottom: 2px; }
@@ -62,9 +67,11 @@
         .edited { font-size: 10px; color: #6b7280; }
 
         /* 공지·AI — 가운데 카드 */
-        .notice-card { background: rgba(255,255,255,.94); border-radius: 14px; padding: 11px 13px; margin: 0 auto 12px; max-width: 90%; font-size: 14px; line-height: 1.5; white-space: pre-wrap; border-left: 5px solid var(--kakao); }
+        /* AI·공지 카드 — 말풍선(14px)보다 한 단 작게(13px). 기계의 말이 사람 말보다
+           커 보이면 방의 주인이 바뀐 것처럼 느껴진다. 제목은 작은 꼬리표로. */
+        .notice-card { background: rgba(255,255,255,.94); border-radius: 14px; padding: 11px 14px 12px; margin: 0 auto 12px; max-width: 88%; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; border-left: 4px solid var(--kakao); }
         .notice-card.ai { border-left-color: #3e6be0; }
-        .notice-card b { display: block; font-size: 12px; margin-bottom: 5px; color: #191919; }
+        .notice-card b { display: block; font-size: 11px; font-weight: 700; letter-spacing: .02em; margin-bottom: 6px; color: #767676; }
 
         /* 첨부 */
         .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -84,7 +91,7 @@
         .plus { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--kakao); font-size: 22px; font-weight: 800; color: var(--label); cursor: pointer; line-height: 1; }
         /* AI 부르기 — 노란 [＋] 옆이라 검정으로 뒤집는다. "@AI" 를 외우게 하지 않는 장치다. */
         .aibtn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.85); color: var(--kakao); font-size: 13px; font-weight: 800; cursor: pointer; line-height: 1; letter-spacing: .02em; }
-        textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 18px; padding: 10px 13px; font: inherit; font-size: 15px; resize: none; max-height: 120px; min-height: 40px; background: #f2f3f5; }
+        textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 18px; padding: 10px 13px; font: inherit; font-size: 14px; resize: none; max-height: 120px; min-height: 40px; background: #f2f3f5; }
         /* 보내기는 검정 — 노란 [＋] 와 나란히 서므로 여기서 노랑을 또 쓰면 둘 다 죽는다. */
         .send { border: 0; border-radius: 12px; padding: 0 16px; height: 40px; background: rgba(0,0,0,.85); color: #fff; font-weight: 800; cursor: pointer; }
         .send:disabled { background: #edeef0; color: #b0b8c1; }
@@ -95,7 +102,7 @@
         .replying { display: flex; align-items: center; gap: 8px; background: #f2f3f5; border-left: 4px solid var(--kakao); border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #191919; }
         .replying span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .replying button { border: 0; background: none; font-size: 16px; color: #64748b; cursor: pointer; line-height: 1; }
-        .quote { border-left: 3px solid rgba(0,0,0,.15); padding-left: 8px; margin-bottom: 5px; font-size: 12px; color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .quote { border-left: 3px solid rgba(0,0,0,.15); padding-left: 8px; margin-bottom: 5px; font-size: 11px; color: #767676; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* 참여자 시트 */
         .sheet-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: none; }

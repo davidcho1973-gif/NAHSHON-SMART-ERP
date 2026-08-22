@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $site->code }} {{ $site->name }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         /*
             현장 등록 — 벽에 붙은 QR 을 찍으면 바로 이 화면이 열린다.
@@ -13,7 +14,7 @@
         */
         :root {
             color-scheme: light;
-            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif;
+            font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif;
             --kakao: #FEE500; --label: rgba(0,0,0,.85);
             --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0; --paper: #F2F3F5;
             background: var(--kakao); color: var(--ink);

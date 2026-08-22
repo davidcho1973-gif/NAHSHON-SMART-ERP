@@ -5,10 +5,11 @@
     만드는 방식 그대로다. 다만 인쇄할 때는 바탕을 흰색으로 되돌린다(노랑을 A4 한 장
     가득 찍으면 토너만 먹고 벽에 붙였을 때 오히려 흐릿하다).
 --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
     :root {
         color-scheme: light;
-        font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif;
+        font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif;
         --kakao: #FEE500; --label: rgba(0,0,0,.85);
         --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0; --paper: #F2F3F5;
         background: var(--kakao); color: var(--ink);
