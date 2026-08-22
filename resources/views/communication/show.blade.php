@@ -16,27 +16,30 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#FEE500">
     <title>{{ $roomLabel ?? $room->name }}</title>
     <style>
         :root {
             color-scheme: light;
             font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
-            --kakao-bg: #b2c7d9;      /* 카카오톡 대화 배경 */
+            --kakao: #fee500;         /* R255 G232 B18 — 브랜드 노랑 */
+            --label: rgba(0,0,0,.85); /* 노랑 위 글자 */
+            --kakao-bg: #b2c7d9;      /* 대화 배경 */
             --mine: #fee500;          /* 내 말풍선 */
-            --line: #dfe3e8;
+            --line: #edeef0;
         }
         * { -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: var(--kakao-bg); color: #111827; }
+        body { margin: 0; background: var(--kakao-bg); color: #191919; }
         .app { min-height: 100vh; max-width: 640px; margin: 0 auto; background: var(--kakao-bg); display: flex; flex-direction: column; }
 
-        /* 머리 — 방 이름 + 지금 몇 명이 보고 있는지 */
-        header { position: sticky; top: 0; z-index: 20; background: #a1b8cc; padding: 10px 12px; }
+        /* 머리띠 — 노랑 면에 검정 글자. 방 이름 + 지금 몇 명이 보고 있는지. */
+        header { position: sticky; top: 0; z-index: 20; background: var(--kakao); color: var(--label); padding: 11px 12px; }
         .top { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
-        .back { color: #1f2937; font-size: 22px; text-decoration: none; line-height: 1; padding: 2px 6px; }
-        h1 { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.2; }
-        .sub { margin-top: 2px; font-size: 12px; color: #33475b; display: flex; align-items: center; gap: 5px; }
-        .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: inline-block; }
-        .peo { background: rgba(255,255,255,.55); border: 0; border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .back { color: var(--label); font-size: 22px; text-decoration: none; line-height: 1; padding: 2px 6px; }
+        h1 { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--label); }
+        .sub { margin-top: 2px; font-size: 12px; color: rgba(0,0,0,.55); display: flex; align-items: center; gap: 5px; }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: #1e8e3e; display: inline-block; }
+        .peo { background: rgba(255,255,255,.65); border: 0; border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; color: var(--label); cursor: pointer; }
 
         /* 대화 */
         main { flex: 1; padding: 14px 12px 120px; }
@@ -45,7 +48,8 @@
 
         .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-end; }
         .row.mine { flex-direction: row-reverse; }
-        .face { width: 36px; height: 36px; border-radius: 13px; background: #fff; color: #64748b; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex: 0 0 36px; overflow: hidden; }
+        /* 얼굴은 흰 동그라미에 검정 글자 — 노란 말풍선(내 말)과 겹치지 않게 반대로 둔다. */
+        .face { width: 36px; height: 36px; border-radius: 50%; background: #fff; color: var(--label); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex: 0 0 36px; overflow: hidden; }
         .stack { max-width: 74%; display: flex; flex-direction: column; gap: 3px; }
         .who { font-size: 12px; color: #33475b; margin-left: 2px; }
         .bundle { display: flex; gap: 5px; align-items: flex-end; }
@@ -58,9 +62,9 @@
         .edited { font-size: 10px; color: #6b7280; }
 
         /* 공지·AI — 가운데 카드 */
-        .notice-card { background: rgba(255,255,255,.92); border-radius: 12px; padding: 11px 13px; margin: 0 auto 12px; max-width: 90%; font-size: 14px; line-height: 1.5; white-space: pre-wrap; border-left: 4px solid #f59e0b; }
-        .notice-card.ai { border-left-color: #2563eb; }
-        .notice-card b { display: block; font-size: 12px; margin-bottom: 5px; color: #374151; }
+        .notice-card { background: rgba(255,255,255,.94); border-radius: 14px; padding: 11px 13px; margin: 0 auto 12px; max-width: 90%; font-size: 14px; line-height: 1.5; white-space: pre-wrap; border-left: 5px solid var(--kakao); }
+        .notice-card.ai { border-left-color: #3e6be0; }
+        .notice-card b { display: block; font-size: 12px; margin-bottom: 5px; color: #191919; }
 
         /* 첨부 */
         .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -76,15 +80,17 @@
         /* 입력창 */
         .composer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: min(640px, 100vw); background: #fff; border-top: 1px solid var(--line); padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); box-sizing: border-box; }
         .cbar { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: end; }
-        .plus { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: #f7f8fa; font-size: 22px; color: #4b5563; cursor: pointer; line-height: 1; }
-        textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 18px; padding: 10px 13px; font: inherit; font-size: 15px; resize: none; max-height: 120px; min-height: 40px; background: #f7f8fa; }
-        .send { border: 0; border-radius: 14px; padding: 0 16px; height: 40px; background: var(--mine); color: #3c1e1e; font-weight: 800; cursor: pointer; }
-        .send:disabled { background: #e5e7eb; color: #9ca3af; }
+        /* 첨부 [＋] 는 노란 동그라미에 검정 글자 — 카카오가 아이콘을 담는 방식이다. */
+        .plus { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--kakao); font-size: 22px; font-weight: 800; color: var(--label); cursor: pointer; line-height: 1; }
+        textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 18px; padding: 10px 13px; font: inherit; font-size: 15px; resize: none; max-height: 120px; min-height: 40px; background: #f2f3f5; }
+        /* 보내기는 검정 — 노란 [＋] 와 나란히 서므로 여기서 노랑을 또 쓰면 둘 다 죽는다. */
+        .send { border: 0; border-radius: 12px; padding: 0 16px; height: 40px; background: rgba(0,0,0,.85); color: #fff; font-weight: 800; cursor: pointer; }
+        .send:disabled { background: #edeef0; color: #b0b8c1; }
         .picked { font-size: 12px; color: #4b5563; padding: 6px 2px 0; display: none; }
         .hint { font-size: 11px; color: #6b7280; padding: 6px 2px 0; }
         input[type=file] { display: none; }
         .readonly { padding: 12px; color: #6b7280; font-size: 13px; text-align: center; }
-        .replying { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-left: 3px solid #2563eb; border-radius: 8px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #334155; }
+        .replying { display: flex; align-items: center; gap: 8px; background: #f2f3f5; border-left: 4px solid var(--kakao); border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #191919; }
         .replying span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .replying button { border: 0; background: none; font-size: 16px; color: #64748b; cursor: pointer; line-height: 1; }
         .quote { border-left: 3px solid rgba(0,0,0,.15); padding-left: 8px; margin-bottom: 5px; font-size: 12px; color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -94,7 +100,7 @@
         .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: min(640px, 100vw); background: #fff; border-radius: 18px 18px 0 0; z-index: 41; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); display: none; max-height: 70vh; overflow: auto; }
         .sheet h2 { margin: 0 0 12px; font-size: 16px; }
         .mem { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid #f1f3f5; }
-        .mem .face { width: 32px; height: 32px; flex: 0 0 32px; background: #eef2f7; border-radius: 11px; }
+        .mem .face { width: 32px; height: 32px; flex: 0 0 32px; background: var(--kakao); color: var(--label); border-radius: 50%; }
         .mem .nm { font-size: 14px; font-weight: 700; }
         .mem .st { font-size: 11px; color: #6b7280; margin-left: auto; }
         .mem .st.on { color: #16a34a; font-weight: 800; }

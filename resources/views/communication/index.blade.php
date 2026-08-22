@@ -3,6 +3,9 @@
 
     방마다 동그란 얼굴, 이름 굵게, 마지막 대화 한 줄, 오른쪽에 시간과 안 읽은 수.
     익숙한 모양이면 현장 사람들이 배우지 않고 바로 쓴다.
+
+    색은 카카오 브랜드 가이드를 따른다 — 머리띠는 노랑(#FEE500) 면에 검정 글자,
+    방 얼굴은 노란 동그라미에 검정 글자. 목록 자체는 흰 종이 위에 둔다.
 --}}
 <!DOCTYPE html>
 <html lang="ko">
@@ -10,18 +13,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#FEE500">
     <title>{{ \App\Support\Org::name() }} 메신저</title>
     <style>
-        :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
+        :root {
+            color-scheme: light;
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+            --kakao: #FEE500;             /* R255 G232 B18 — 카카오 브랜드 노랑 */
+            --label: rgba(0,0,0,.85);     /* 노랑 위 글자 */
+            --rule: #EDEEF0;
+        }
         * { -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: #fff; color: #111827; }
+        body { margin: 0; background: #fff; color: #191919; }
         .app { min-height: 100vh; max-width: 640px; margin: 0 auto; background: #fff; }
 
-        header { position: sticky; top: 0; z-index: 10; background: #fff; padding: 16px 16px 10px; border-bottom: 1px solid #f1f3f5; }
+        /* 머리띠 — 노랑 면. 그 위의 글자·아이콘은 전부 검정이다. */
+        header { position: sticky; top: 0; z-index: 10; background: var(--kakao); color: var(--label); padding: 16px 16px 13px; }
         .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        h1 { margin: 0; font-size: 22px; font-weight: 800; }
-        .who { margin-top: 3px; font-size: 12px; color: #6b7280; }
-        .back { color: #2563eb; font-weight: 700; text-decoration: none; font-size: 13px; }
+        h1 { margin: 0; font-size: 22px; font-weight: 800; color: var(--label); }
+        .who { margin-top: 3px; font-size: 12px; color: rgba(0,0,0,.55); }
+        .back { color: var(--label); font-weight: 700; text-decoration: none; font-size: 13px; background: rgba(255,255,255,.6); border-radius: 999px; padding: 6px 12px; }
+        .icon-btn { border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; padding: 2px; color: var(--label); }
 
         main { padding: 0 0 40px; }
         .pad { padding: 12px 16px 0; }
@@ -41,10 +53,13 @@
         .rooms { display: block; }
         .room { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 16px; text-decoration: none; color: inherit; }
         .room:active { background: #f6f7f9; }
-        .face { width: 48px; height: 48px; border-radius: 17px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #fff; }
+        /* 방 얼굴 — 노란 동그라미에 검정 글자. 종류는 색이 아니라 이름 옆 꼬리표로 구분한다
+           (색은 여섯 가지가 되면 아무도 못 외우지만 "공지"·"현장" 이라는 글자는 바로 읽힌다). */
+        .face { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background: var(--kakao); color: var(--label); }
+        .face.plain { background: #F2F3F5; color: #767676; }
         .mid { min-width: 0; }
         .nm { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-        .nm small { font-size: 11px; color: #9ca3af; font-weight: 500; }
+        .nm small { font-size: 11px; color: #767676; font-weight: 700; background: #F2F3F5; border-radius: 999px; padding: 2px 7px; }
         .last { font-size: 13px; color: #6b7280; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .right { text-align: right; display: grid; gap: 5px; justify-items: end; }
         .time { font-size: 11px; color: #9ca3af; }
@@ -70,12 +85,10 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:12px">
                     {{-- 알림 상태를 한눈에 — 켜짐 🔔 / 꺼짐 🔕. 눌러서 켜고 끈다. --}}
-                    <button type="button" id="push-bell" hidden
-                            style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;padding:2px">🔕</button>
+                    <button type="button" id="push-bell" class="icon-btn" hidden>🔕</button>
                     @if($canManageRooms)
                         {{-- 방 만들기 — 폰에서 못 만들면 없는 기능이나 마찬가지다. --}}
-                        <button type="button" id="btn-new-room"
-                                style="border:0;background:none;font-size:24px;line-height:1;cursor:pointer;padding:2px;color:#2563eb">＋</button>
+                        <button type="button" id="btn-new-room" class="icon-btn" style="font-size:24px">＋</button>
                     @endif
                     <a class="back" href="{{ route('attendance-app.index') }}">출석 홈</a>
                 </div>
@@ -109,15 +122,6 @@
 
             <section class="rooms">
                 @php
-                    // 방 종류마다 얼굴 색을 달리해 목록에서 한눈에 구분되게.
-                    $faceColors = [
-                        'site_announcement' => '#f59e0b',
-                        'site_chat' => '#3b82f6',
-                        'site_ops' => '#10b981',
-                        'company' => '#8b5cf6',
-                        'team' => '#0ea5e9',
-                        'direct' => '#64748b',
-                    ];
                     $typeLabels = [
                         'site_announcement' => '공지',
                         'site_chat' => '현장',
@@ -132,7 +136,8 @@
                         $latest = $room->latestMessage;
                         $unread = $unreadCounts[$room->id] ?? 0;
                         $label = $roomLabels[$room->id] ?? $room->name;
-                        $color = $faceColors[$room->type] ?? '#64748b';
+                        // 1:1 은 회색 동그라미 — 사람 대 사람 대화는 브랜드 면이 아니다.
+                        $faceClass = $room->type === 'direct' ? 'face plain' : 'face';
                         $initial = preg_match('/[가-힣]/u', $label)
                             ? mb_substr($label, 0, 2)
                             : mb_strtoupper(mb_substr($label, 0, 2));
@@ -141,7 +146,7 @@
                             : ($latest?->body ? \Illuminate\Support\Str::limit($latest->body, 40) : ($room->description ?: '새 메시지가 없습니다.'));
                     @endphp
                     <a class="room" href="{{ route('communication.show', ['room' => $room]) }}">
-                        <div class="face" style="background: {{ $color }}">{{ $initial }}</div>
+                        <div class="{{ $faceClass }}">{{ $initial }}</div>
                         <div class="mid">
                             <div class="nm">{{ $label }} <small>{{ $typeLabels[$room->type] ?? '' }}</small></div>
                             <div class="last">{{ $preview }}</div>

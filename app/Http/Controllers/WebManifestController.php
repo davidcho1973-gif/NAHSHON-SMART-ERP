@@ -43,6 +43,10 @@ class WebManifestController extends Controller
             shortName: '내 출퇴근',
             start: route('attendance-app.index'),
             scope: route('attendance-app.index'),
+            // 앱을 여는 첫 0.5초(스플래시)도 화면과 같은 색이어야 한다 — 어두운 판이
+            // 번쩍였다가 노란 화면이 뜨면 잘못 눌린 것처럼 보인다.
+            theme: '#FEE500',
+            background: '#FFFFFF',
         );
     }
 
@@ -58,8 +62,15 @@ class WebManifestController extends Controller
         );
     }
 
-    private function manifest(string $id, string $name, string $shortName, string $start, string $scope): JsonResponse
-    {
+    private function manifest(
+        string $id,
+        string $name,
+        string $shortName,
+        string $start,
+        string $scope,
+        string $theme = '#17160F',
+        string $background = '#17160F',
+    ): JsonResponse {
         return response()->json([
             'id' => $id,
             'name' => $name,
@@ -70,8 +81,8 @@ class WebManifestController extends Controller
             // 주소창을 숨긴다. 이게 앱처럼 보이게 만드는 거의 전부다.
             'display' => 'standalone',
             'orientation' => 'portrait',
-            'background_color' => '#17160F',
-            'theme_color' => '#17160F',
+            'background_color' => $background,
+            'theme_color' => $theme,
             'lang' => 'ko',
             'dir' => 'ltr',
             'icons' => [

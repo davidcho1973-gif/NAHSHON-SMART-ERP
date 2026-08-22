@@ -6,7 +6,7 @@
     고쳐야 한다.
 
     그래서 카카오톡처럼 <b>종 아이콘 하나</b>로 바꾼다:
-      켜짐 🔔(파랑) / 꺼짐 🔕(회색) — 눌러서 켜고, 다시 눌러서 끈다.
+      켜짐 🔔(진하게) / 꺼짐 🔕(흐리게) — 눌러서 켜고, 다시 눌러서 끈다.
 
     설계 하나: 열자마자 권한을 묻지 않는다. 브라우저는 한 번 거절당하면 다시 물을 수
     없고, 그러면 그 사람에게는 알림이 영영 안 간다. 종을 누를 때만 묻는다.
@@ -16,10 +16,11 @@
 
     부르는 화면에 <button id="push-bell"> 자리를 두면 여기서 그 버튼을 살린다.
 --}}
-<div id="push-strip" hidden style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px 12px;background:#eff6ff;border-radius:10px;font-size:12.5px;color:#1e40af">
+{{-- 회색 판 위 검정 버튼 — 바로 위 머리띠가 노랑이라 여기서 노랑을 또 쓰면 둘 다 죽는다. --}}
+<div id="push-strip" hidden style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:9px 12px;background:#F2F3F5;border-radius:12px;font-size:12.5px;color:#191919">
     <span style="flex:1">🔔 알림을 켜면 화면이 꺼져 있어도 새 메시지를 받습니다.</span>
-    <button type="button" id="push-strip-go" style="border:0;background:#2563eb;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer">켜기</button>
-    <button type="button" id="push-strip-x" aria-label="닫기" style="border:0;background:none;color:#64748b;font-size:16px;cursor:pointer;line-height:1;padding:2px 4px">×</button>
+    <button type="button" id="push-strip-go" style="border:0;background:rgba(0,0,0,.85);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer">켜기</button>
+    <button type="button" id="push-strip-x" aria-label="닫기" style="border:0;background:none;color:#767676;font-size:16px;cursor:pointer;line-height:1;padding:2px 4px">×</button>
 </div>
 
 <script>

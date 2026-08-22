@@ -60,7 +60,7 @@
     .di-back { position: absolute; inset: 0; background: rgba(10,10,8,.55); }
     .di-sheet {
         position: absolute; left: 0; right: 0; bottom: 0;
-        background: #FFFFFF; color: #17160F;
+        background: #FFFFFF; color: #191919;
         border-radius: 22px 22px 0 0; padding: 22px 20px calc(20px + env(safe-area-inset-bottom));
         max-width: 520px; margin: 0 auto;
         box-shadow: 0 -14px 40px rgba(0,0,0,.3);
@@ -72,31 +72,31 @@
     .di-head { display: flex; gap: 14px; align-items: flex-start; }
     .di-icon { border-radius: 13px; flex-shrink: 0; }
     .di-head b { display: block; font-size: 1.12rem; line-height: 1.3; font-weight: 900; }
-    .di-head p { margin: 6px 0 0; font-size: .93rem; line-height: 1.5; color: #625E52; }
+    .di-head p { margin: 6px 0 0; font-size: .93rem; line-height: 1.5; color: #767676; }
 
     .di-go {
-        width: 100%; margin-top: 18px; border: 0; border-radius: 14px;
-        background: #D8E000; color: #17160F;
+        width: 100%; margin-top: 18px; border: 0; border-radius: 12px;
+        background: #FEE500; color: rgba(0,0,0,.85);
         padding: 18px; font-size: 1.12rem; font-weight: 900; font-family: inherit; cursor: pointer;
     }
     .di-later {
         width: 100%; margin-top: 10px; border: 0; background: none;
-        color: #96917F; padding: 13px; font-size: .93rem; font-weight: 700; font-family: inherit; cursor: pointer;
+        color: #767676; padding: 13px; font-size: .93rem; font-weight: 700; font-family: inherit; cursor: pointer;
     }
 
-    .di-ios-h { margin-top: 20px; font-size: .78rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #96917F; }
+    .di-ios-h { margin-top: 20px; font-size: .78rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #B0B8C1; }
     .di-steps { list-style: none; margin: 12px 0 0; padding: 0; }
-    .di-steps li { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid #EDEAE1; }
+    .di-steps li { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid #EDEEF0; }
     .di-steps li:last-child { border-bottom: 0; }
     .di-n {
         flex-shrink: 0; width: 25px; height: 25px; border-radius: 50%;
-        background: #17160F; color: #FFF; font-size: .82rem; font-weight: 900;
+        background: #FEE500; color: rgba(0,0,0,.85); font-size: .82rem; font-weight: 900;
         display: grid; place-items: center;
     }
     .di-t { flex: 1; font-size: .97rem; line-height: 1.45; }
     .di-t b { font-weight: 900; }
-    .di-g { width: 24px; height: 24px; flex-shrink: 0; color: #17160F; }
-    .di-note { margin: 14px 0 0; font-size: .84rem; line-height: 1.5; color: #96600A; background: #FAEFD9; border-radius: 10px; padding: 11px 13px; }
+    .di-g { width: 24px; height: 24px; flex-shrink: 0; color: #191919; }
+    .di-note { margin: 14px 0 0; font-size: .84rem; line-height: 1.5; color: #B26A00; background: #FFF4E0; border-radius: 10px; padding: 11px 13px; }
 </style>
 
 <script>

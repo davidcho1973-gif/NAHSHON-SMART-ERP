@@ -15,7 +15,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#FFFFFF">
+    <meta name="theme-color" content="#FEE500">
     <title>내 출퇴근 · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
@@ -33,11 +33,16 @@
             그대로 쓰면 "이건 어떻게 쓰는 거냐" 는 질문이 줄어든다.
 
             규격(카카오 브랜드 가이드):
-              노랑 #FEE500 · 라벨 rgba(0,0,0,.85) · 모서리 12px · 바탕 #F2F3F5
+              노랑 #FEE500 (R255 G232 B18) · 라벨 rgba(0,0,0,.85) · 모서리 12px · 바탕 #F2F3F5
               글자 #191919 / #767676 / #B0B8C1 · 구분선 #EDEEF0
 
-            노랑은 <b>한 화면에 하나</b>만 쓴다. 지금 눌러야 할 것 하나에만 칠하고 나머지는
-            흰 카드로 둔다 — 두 곳이 노랗면 어디를 눌러야 할지 모른다.
+            카카오 가이드는 판(panel)을 흰 판·노란 판 두 가지로 두고, 어느 쪽이든 그 위의
+            글자와 아이콘은 <b>검정</b>으로 쓴다. 그 규칙을 그대로 따른다:
+              1. <b>면</b>  — 머리띠·QR 판·지금 일하는 중인 카드. 노란 바닥에 검정 글자.
+              2. <b>행동</b> — 지금 눌러야 할 버튼.
+              3. <b>동그라미</b> — 아이콘·번호를 담는 원형 배지. 안의 글자는 검정.
+            노란 면 위에 또 노란 것을 얹지 않는다(그때는 검정으로 뒤집는다). 목록처럼
+            오래 읽는 것은 흰 판 위에 둔다 — 노랑은 눈이 오래 머무는 색이 아니다.
         */
         :root {
             color-scheme: light;
@@ -83,29 +88,31 @@
             font-size: 12px; font-weight: 600;
         }
         .peek b { color: #fff; font-weight: 800; }
+        /* 머리띠 — 노랑 면. 브랜드가 서는 자리이고, 그 위 글자는 전부 검정이다. */
         .top {
             position: sticky; top: 0; z-index: 20;
-            background: var(--card); border-bottom: 1px solid var(--rule);
-            display: flex; align-items: center; gap: 11px; padding: 12px 16px;
-        }
-        .tag {
-            width: 40px; height: 40px; border-radius: 14px; flex: none;
             background: var(--kakao); color: var(--label);
+            display: flex; align-items: center; gap: 11px; padding: 13px 16px;
+        }
+        /* 노랑 위의 동그라미는 반대로 검정 — 노랑 위 노랑은 보이지 않는다. */
+        .tag {
+            width: 40px; height: 40px; border-radius: 50%; flex: none;
+            background: rgba(0,0,0,.85); color: var(--kakao);
             display: grid; place-items: center; font-weight: 800; font-size: 14px;
         }
         .who { flex: 1; min-width: 0; }
-        .who b { display: block; font-size: 16px; font-weight: 700; line-height: 1.3; }
+        .who b { display: block; font-size: 16px; font-weight: 800; line-height: 1.3; color: var(--label); }
         .who span {
-            display: block; font-size: 12px; color: var(--ink-3);
+            display: block; font-size: 12px; color: rgba(0,0,0,.55);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .langs { display: flex; gap: 4px; flex: none; }
         .langs button {
             font-size: 11px; font-weight: 700; padding: 6px 9px; border-radius: 999px;
-            border: 1px solid var(--rule); background: var(--card); color: var(--ink-2); cursor: pointer;
+            border: 1px solid rgba(0,0,0,.1); background: rgba(255,255,255,.6); color: rgba(0,0,0,.6); cursor: pointer;
             font-family: inherit;
         }
-        .langs button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+        .langs button[aria-pressed="true"] { background: rgba(0,0,0,.85); color: #fff; border-color: transparent; }
 
         main { flex: 1; padding: 14px 16px calc(var(--tabh) + env(safe-area-inset-bottom) + 20px); }
 
@@ -220,11 +227,13 @@
         .money .line:first-of-type { margin-top: 14px; }
         .money .line b { color: var(--ink); font-weight: 700; }
 
-        .qr { background: var(--card); border-radius: 16px; padding: 22px; text-align: center; }
+        /* QR 판 — 카카오 포스터 그대로. 노랑 바닥에 검정 코드.
+           인터넷이 끊겼을 때 반장에게 내미는 화면이라 멀리서도 한눈에 알아보여야 한다. */
+        .qr { background: var(--kakao); color: var(--label); border-radius: 16px; padding: 22px; text-align: center; }
         .qr img { display: block; margin: 0 auto; width: 232px; height: 232px; max-width: 100%; }
-        .qr-id { font-size: 16px; font-weight: 800; letter-spacing: .06em; margin-top: 12px; }
-        .qr-note { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; line-height: 1.5; }
-        .qr-note b { color: var(--ink-2); font-weight: 700; }
+        .qr-id { font-size: 16px; font-weight: 800; letter-spacing: .06em; margin-top: 12px; color: var(--label); }
+        .qr-note { font-size: 12.5px; color: rgba(0,0,0,.6); margin-top: 8px; line-height: 1.5; }
+        .qr-note b { color: var(--label); font-weight: 700; }
 
         .link {
             display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -233,7 +242,12 @@
         }
         .link b { font-size: 15px; font-weight: 700; display: block; letter-spacing: -.01em; }
         .link span { font-size: 12.5px; color: var(--ink-3); }
-        .link .go { color: var(--ink-3); font-size: 20px; flex: none; line-height: 1; }
+        /* 화살표는 노랑 동그라미 안에 — 카카오가 아이콘을 담는 방식이다. */
+        .link .go {
+            width: 28px; height: 28px; border-radius: 50%; flex: none;
+            background: var(--kakao); color: var(--label);
+            display: grid; place-items: center; font-size: 15px; font-weight: 800; line-height: 1;
+        }
 
         .empty { color: var(--ink-3); font-size: 14px; padding: 20px 16px; text-align: center; }
         .fatal {
