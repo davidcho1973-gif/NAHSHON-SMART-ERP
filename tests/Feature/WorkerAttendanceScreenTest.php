@@ -435,4 +435,47 @@ class WorkerAttendanceScreenTest extends TestCase
         // 진짜 실패는 다시 해 볼 수 있어야 한다.
         $this->assertStringContainsString("data-act=\"retry\"", $html);
     }
+
+    // ── 오늘 줄(진행 중)과 언어 ─────────────────────────────────────
+
+    public function test_the_work_tab_shows_today_as_a_live_row_before_the_day_is_settled(): void
+    {
+        // 홈 카드에는 시간이 흐르는데 근무 탭이 비어 있으면 사람은 연동이 끊겼다고
+        // 생각한다(실제로 그렇게 보고됐다). 타임시트가 아직 없어도 오늘 줄은
+        // 카드와 같은 계산으로 나타나야 한다.
+        AttendanceLog::create([
+            'employee_id' => $this->employee->id,
+            'company_id' => $this->employee->company_id,
+            'site_id' => $this->site->id,
+            'attendance_date' => '2026-08-10',
+            'event_type' => 'clock_in',
+            'event_at' => Carbon::parse('2026-08-10 05:00:00'),
+            'source' => 'web_portal',
+            'status' => 'approved',
+        ]);
+        // 타임시트 동기화가 만든 0시간짜리 줄(퇴근 전)은 살아 있는 줄로 대체된다.
+
+        $week = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('week');
+
+        $today = collect($week['days'])->firstWhere('date', '2026-08-10');
+        $this->assertNotNull($today, '오늘 줄이 근무 탭에 없습니다 — 카드와 탭이 다른 말을 합니다.');
+        $this->assertTrue($today['live']);
+        $this->assertFalse($today['settled']);
+        $this->assertEqualsWithDelta(2.0, $today['regularHours'], 0.11);
+        $this->assertEqualsWithDelta(2.0, $week['regularHours'], 0.11, '합계에도 오늘 시간이 들어가야 한다');
+    }
+
+    public function test_punch_replies_in_the_language_the_screen_chose(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+            'direction' => 'in',
+            'lat' => self::SITE_LAT,
+            'lng' => self::SITE_LNG,
+            'accuracy' => 10,
+            'lang' => 'es',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Entrada registrada.', $response->json('message'));
+    }
 }

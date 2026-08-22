@@ -358,7 +358,11 @@
             @if ($badgeQr['badge'])
                 <div class="qr-id">{{ $badgeQr['badge'] }}</div>
             @endif
-            <div class="qr-note">반장이 이 QR 을 스캔하면 기록됩니다. <b>인터넷이 끊겨도 보입니다.</b></div>
+            {{-- 세 언어를 함께 — 이 카드는 오프라인에서도 떠야 해서 그림째 박혀 있고,
+                 그래서 언어 버튼으로 다시 그릴 수 없다. --}}
+            <div class="qr-note">반장이 이 QR 을 스캔하면 기록됩니다. <b>인터넷이 끊겨도 보입니다.</b><br>
+                Scanned by your foreman — works offline.<br>
+                Su capataz lo escanea — funciona sin internet.</div>
         </div>
     </template>
 @endif
@@ -375,6 +379,153 @@
 
     var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: 'home', lang: 'ko', tick: 0 };
     var watchId = null;
+
+    /*
+     * 세 언어 사전 — 화면의 모든 글자는 여기서 나온다.
+     *
+     * 언어 버튼은 있는데 번역이 없어 "눌러도 아무 일 없는 버튼" 이었다(실제로 그렇게
+     * 보고됐다). 문구를 코드 곳곳에 두면 언어를 붙일 방법이 없다 — 한 곳에 모으고
+     * 렌더는 전부 T.xxx 만 읽는다. 출퇴근 응답 문구만은 서버가 만든다(서버 문장을
+     * 화면이 되번역하게 두면 문구가 바뀔 때마다 두 곳이 어긋난다).
+     */
+    var DICT = {
+        ko: {
+            working: '근무중', offline: '오프라인', outside: '현장 밖', noAuto: '자동 안 됨',
+            offlineBar: '오프라인 · 내 QR 을 반장에게 보여 주세요',
+            h: '시간', m: '분', clockInAt: '출근', noSite: '현장 미배정', radius: '반경',
+            btnOut: '퇴근하기', btnIn: '출근 누르기', btnInAnyway: '그래도 직접 누르기',
+            btnPerm: '위치 권한 켜기', btnQr: '내 QR 보여주기',
+            noteAuto: '현장을 벗어나고 10분이 지나면 <b>자동으로 퇴근 처리</b>됩니다. 안 눌러도 됩니다.',
+            notePunch: '현장에 있는 것이 확인되면 바로 기록됩니다. 확인이 안 되면 <b>반장 승인</b>을 거칩니다.',
+            whyOffline: '<b>인터넷이 끊겼습니다.</b> 아래 내 QR 을 반장에게 보여 주세요. 기록은 반장 휴대폰이 보냅니다.',
+            whyNoSite: '<b>배정된 현장이 없습니다.</b> 관리자에게 현장 배정을 요청해 주세요.',
+            whyNoAuto: '<b>이 현장은 자동 기준이 아직 없습니다.</b> 관리자가 등록할 때까지 직접 눌러 주세요.',
+            whyPerm: '<b>위치 권한이 꺼져 있습니다.</b> 켜면 다음부터 자동으로 찍힙니다.',
+            whyWaiting: '<b>아직 현장 밖입니다.</b> 반경 안에 들어오거나 현장 WiFi 에 연결되면 자동으로 찍힙니다.',
+            todayLog: '오늘 내 기록', clockIn: '출근', clockOut: '퇴근', noLogs: '아직 기록이 없습니다.',
+            chipReview: '확인 필요', chipAuto: '자동', chipHand: '직접',
+            more: '그 밖에', messages: '메시지', messagesSub: '현장 채팅방과 공지',
+            opsRoom: '현장 상황실', opsRoomSub: '오늘 한 일 · 자재 · 이슈 올리기',
+            weekRegular: '이번 주 정규', ot: '연장', regular: '정규', byDay: '일자별',
+            unsettled: '미확정', inProgress: '진행 중', noWeek: '이번 주 기록이 아직 없습니다.',
+            liveNote: '오늘 줄은 지금까지 일한 시간입니다. 연장 구분과 확정은 하루가 끝날 때 계산됩니다.',
+            wrong: '기록이 틀렸다면', wrongText: '반장에게 말씀해 주세요. 화면에서 바로 정정을 요청하는 기능은 준비 중입니다.',
+            noRate: '단가 미정',
+            noRateText: '<b>아직 시급이 정해지지 않았습니다.</b> 정해지면 이 화면에 이번 주 예상 금액이 나옵니다. 근무 시간은 그대로 쌓이고 있으니 걱정하지 않으셔도 됩니다.',
+            weekEst: '이번 주 예상', preTax: '세금·공제 전',
+            payNote: '실제 지급액은 세금과 공제를 뺀 금액입니다. 확정 명세서는 마감 뒤에 올라옵니다.',
+            pastSlips: '지난 명세서', paid: '지급', noSlips: '아직 명세서가 없습니다.',
+            myQr: '내 배지 QR', myInfo: '내 정보', name: '이름', number: '사번', trade: '직종', site: '현장',
+            autoDetect: '현장 자동 인식', gps: 'GPS 반경', wifi: '현장 WiFi',
+            registered: '등록됨', notRegistered: '미등록',
+            autoNote: '둘 중 하나만 등록돼 있어도 자동 출퇴근이 됩니다. 둘 다 없으면 직접 눌러야 합니다.',
+            installNote: '다음부터 아이콘만 누르면 열립니다', logout: '로그아웃',
+            retry: '다시 시도', loadFail: '정보를 불러오지 못했습니다.',
+            sentFail: '보내지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.', done: '처리했습니다.',
+            viewOnly: '보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
+            weekdays: ['일', '월', '화', '수', '목', '금', '토']
+        },
+        en: {
+            working: 'Working', offline: 'Offline', outside: 'Off site', noAuto: 'No auto',
+            offlineBar: 'Offline · Show your QR to the foreman',
+            h: 'h', m: 'm', clockInAt: 'In', noSite: 'No site assigned', radius: 'radius',
+            btnOut: 'Clock out', btnIn: 'Clock in', btnInAnyway: 'Clock in anyway',
+            btnPerm: 'Enable location', btnQr: 'Show my QR',
+            noteAuto: 'Leaving the site for 10 minutes <b>clocks you out automatically</b>. No need to press.',
+            notePunch: 'Recorded right away if you are on site. Otherwise it waits for <b>foreman approval</b>.',
+            whyOffline: '<b>No internet.</b> Show the QR below to your foreman — their phone sends the record.',
+            whyNoSite: '<b>No site assigned.</b> Ask your manager to assign you to a site.',
+            whyNoAuto: '<b>This site has no auto rule yet.</b> Press the button until it is set up.',
+            whyPerm: '<b>Location is off.</b> Turn it on and clock-in becomes automatic.',
+            whyWaiting: '<b>You are outside the site.</b> Enter the radius or join site WiFi and it records automatically.',
+            todayLog: 'Today', clockIn: 'Clock in', clockOut: 'Clock out', noLogs: 'No records yet.',
+            chipReview: 'Review', chipAuto: 'Auto', chipHand: 'Manual',
+            more: 'More', messages: 'Messages', messagesSub: 'Site chats and notices',
+            opsRoom: 'Ops room', opsRoomSub: 'Report work · materials · issues',
+            weekRegular: 'Regular this week', ot: 'OT', regular: 'Regular', byDay: 'By day',
+            unsettled: 'Pending', inProgress: 'In progress', noWeek: 'No records this week yet.',
+            liveNote: "Today's row is time worked so far. Overtime split is calculated at day close.",
+            wrong: 'Wrong record?', wrongText: 'Tell your foreman. In-app corrections are coming.',
+            noRate: 'No rate yet',
+            noRateText: '<b>Your hourly rate is not set yet.</b> Once set, the weekly estimate shows here. Your hours are still being counted.',
+            weekEst: 'Estimated this week', preTax: 'before tax & deductions',
+            payNote: 'Actual pay is after taxes and deductions. Final payslips appear after closing.',
+            pastSlips: 'Past payslips', paid: 'Paid', noSlips: 'No payslips yet.',
+            myQr: 'My badge QR', myInfo: 'My info', name: 'Name', number: 'ID', trade: 'Trade', site: 'Site',
+            autoDetect: 'Site auto-detect', gps: 'GPS radius', wifi: 'Site WiFi',
+            registered: 'Registered', notRegistered: 'Not set',
+            autoNote: 'Either one enables automatic clock-in. With neither, press the button.',
+            installNote: 'Opens with one tap next time', logout: 'Log out',
+            retry: 'Retry', loadFail: 'Could not load your data.',
+            sentFail: 'Could not send. Check your internet and try again.', done: 'Done.',
+            viewOnly: 'View-only mode. You cannot punch here.',
+            weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        },
+        es: {
+            working: 'Trabajando', offline: 'Sin conexión', outside: 'Fuera del sitio', noAuto: 'Sin auto',
+            offlineBar: 'Sin conexión · Muestre su QR al capataz',
+            h: 'h', m: 'm', clockInAt: 'Entrada', noSite: 'Sin sitio asignado', radius: 'radio',
+            btnOut: 'Marcar salida', btnIn: 'Marcar entrada', btnInAnyway: 'Marcar de todos modos',
+            btnPerm: 'Activar ubicación', btnQr: 'Mostrar mi QR',
+            noteAuto: 'Al salir del sitio por 10 minutos <b>la salida se marca sola</b>. No necesita presionar.',
+            notePunch: 'Se registra al instante si está en el sitio. Si no, espera <b>aprobación del capataz</b>.',
+            whyOffline: '<b>Sin internet.</b> Muestre el QR de abajo a su capataz — su teléfono envía el registro.',
+            whyNoSite: '<b>No tiene sitio asignado.</b> Pida a su supervisor que le asigne uno.',
+            whyNoAuto: '<b>Este sitio aún no tiene regla automática.</b> Presione el botón hasta que se configure.',
+            whyPerm: '<b>La ubicación está apagada.</b> Actívela y la entrada será automática.',
+            whyWaiting: '<b>Está fuera del sitio.</b> Entre al radio o conéctese al WiFi del sitio y se registra solo.',
+            todayLog: 'Hoy', clockIn: 'Entrada', clockOut: 'Salida', noLogs: 'Sin registros todavía.',
+            chipReview: 'Revisar', chipAuto: 'Auto', chipHand: 'Manual',
+            more: 'Más', messages: 'Mensajes', messagesSub: 'Chats y avisos del sitio',
+            opsRoom: 'Sala de obra', opsRoomSub: 'Reportar trabajo · materiales · problemas',
+            weekRegular: 'Regular esta semana', ot: 'Extra', regular: 'Regular', byDay: 'Por día',
+            unsettled: 'Pendiente', inProgress: 'En curso', noWeek: 'Sin registros esta semana.',
+            liveNote: 'La fila de hoy es el tiempo trabajado hasta ahora. Las horas extra se calculan al cierre del día.',
+            wrong: '¿Registro incorrecto?', wrongText: 'Avise a su capataz. Pronto podrá corregirlo desde la app.',
+            noRate: 'Sin tarifa aún',
+            noRateText: '<b>Su tarifa por hora aún no está definida.</b> Cuando lo esté, verá aquí el estimado semanal. Sus horas se siguen contando.',
+            weekEst: 'Estimado esta semana', preTax: 'antes de impuestos y deducciones',
+            payNote: 'El pago real es después de impuestos y deducciones. El recibo final aparece tras el cierre.',
+            pastSlips: 'Recibos anteriores', paid: 'Pagado', noSlips: 'Sin recibos todavía.',
+            myQr: 'Mi QR de gafete', myInfo: 'Mis datos', name: 'Nombre', number: 'ID', trade: 'Oficio', site: 'Sitio',
+            autoDetect: 'Detección automática', gps: 'Radio GPS', wifi: 'WiFi del sitio',
+            registered: 'Registrado', notRegistered: 'Sin registrar',
+            autoNote: 'Con uno de los dos, la entrada es automática. Sin ninguno, presione el botón.',
+            installNote: 'La próxima vez abre con un toque', logout: 'Cerrar sesión',
+            retry: 'Reintentar', loadFail: 'No se pudo cargar su información.',
+            sentFail: 'No se pudo enviar. Revise su internet e intente de nuevo.', done: 'Listo.',
+            viewOnly: 'Modo de solo lectura. No puede marcar aquí.',
+            weekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+        }
+    };
+    var T = DICT.ko;
+    var LANG_KEY = 'workerAppLang';
+    var langChosen = false;   // 사람이 고른 적이 있으면 서버의 기본 언어가 못 덮는다
+
+    function setLang(code, remember) {
+        if (!DICT[code]) return;
+        state.lang = code;
+        T = DICT[code];
+        langChosen = langChosen || !!remember;
+        if (remember) { try { localStorage.setItem(LANG_KEY, code); } catch (e) {} }
+        document.documentElement.setAttribute('lang', code);
+        Array.prototype.forEach.call(document.querySelectorAll('#langs [data-lang]'), function (n) {
+            n.setAttribute('aria-pressed', n.dataset.lang === code ? 'true' : 'false');
+        });
+        document.getElementById('offline').textContent = T.offlineBar;
+    }
+    (function () {
+        var saved = null;
+        try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
+        if (saved && DICT[saved]) { langChosen = true; setLang(saved, false); }
+    })();
+
+    /** 요일은 서버(한국어)가 아니라 날짜에서 그 언어로 만든다. */
+    function weekday(dateStr) {
+        if (!dateStr) return '';
+        var d = new Date(dateStr + 'T00:00:00');
+        return isNaN(d) ? '' : T.weekdays[d.getDay()];
+    }
 
     // 슈퍼관리자가 ?as=직원ID 로 들어왔으면 부르는 곳마다 달고 다녀야 한다 —
     // 안 그러면 화면은 남의 것인데 데이터만 내 것이 된다.
@@ -399,7 +550,7 @@
     }
     function hm(sec) {
         var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-        return h + '<small>시간</small>' + m + '<small>분</small>';
+        return h + '<small>' + T.h + '</small>' + m + '<small>' + T.m + '</small>';
     }
     function money(v, cur) {
         var sign = cur === 'KRW' ? '₩' : '$';
@@ -412,29 +563,29 @@
      */
     function decide(d) {
         if (!navigator.onLine) {
-            return { tier: 'qr', why: '<b>인터넷이 끊겼습니다.</b> 아래 내 QR 을 반장에게 보여 주세요. 기록은 반장 휴대폰이 보냅니다.' };
+            return { tier: 'qr', why: T.whyOffline };
         }
         if (!d.site) {
-            return { tier: 'blocked', why: '<b>배정된 현장이 없습니다.</b> 관리자에게 현장 배정을 요청해 주세요.' };
+            return { tier: 'blocked', why: T.whyNoSite };
         }
         if (d.clockedIn) return { tier: 'working' };
 
         if (!d.site.hasGeofence && !d.site.hasNetwork) {
-            return { tier: 'manual', why: '<b>이 현장은 자동 기준이 아직 없습니다.</b> 관리자가 등록할 때까지 직접 눌러 주세요.' };
+            return { tier: 'manual', why: T.whyNoAuto };
         }
         if (state.permission === 'denied') {
-            return { tier: 'manual', fix: true, why: '<b>위치 권한이 꺼져 있습니다.</b> 켜면 다음부터 자동으로 찍힙니다.' };
+            return { tier: 'manual', fix: true, why: T.whyPerm };
         }
         if (d.state === 'on_site') return { tier: 'working' };
 
-        return { tier: 'waiting', why: '<b>아직 현장 밖입니다.</b> 반경 안에 들어오거나 현장 WiFi 에 연결되면 자동으로 찍힙니다.' };
+        return { tier: 'waiting', why: T.whyWaiting };
     }
 
     function chip(log) {
-        if (log.needsReview) return '<span class="chip rev">확인 필요</span>';
-        if (log.source === 'geo_auto') return '<span class="chip auto">자동</span>';
+        if (log.needsReview) return '<span class="chip rev">' + T.chipReview + '</span>';
+        if (log.source === 'geo_auto') return '<span class="chip auto">' + T.chipAuto + '</span>';
         if (log.source === 'qr') return '<span class="chip qr">QR</span>';
-        return '<span class="chip hand">' + esc(log.sourceLabel) + '</span>';
+        return '<span class="chip hand">' + T.chipHand + '</span>';
     }
 
     function qrBlock() {
@@ -446,73 +597,82 @@
         var v = decide(d);
         var working = v.tier === 'working';
         var tone = working ? 'working' : (v.tier === 'qr' ? 'offline' : (v.tier === 'waiting' ? 'waiting' : 'manual'));
-        var label = working ? '근무중' : (v.tier === 'qr' ? '오프라인' : (v.tier === 'waiting' ? '현장 밖' : '자동 안 됨'));
+        var label = working ? T.working : (v.tier === 'qr' ? T.offline : (v.tier === 'waiting' ? T.outside : T.noAuto));
         var secs = (d.elapsedSeconds || 0) + (working ? state.tick : 0);
 
         var h = '<div class="slab is-' + tone + '">' +
             '<div class="state"><i></i>' + label + '</div>' +
             '<div class="clock">' + hm(secs) + '</div>' +
             '<div class="meta">' + (working && d.firstEnterAt
-                ? '출근 ' + esc(d.firstEnterAt) + (d.site ? ' · ' + esc(d.site.code) : '')
-                : (d.site ? esc(d.site.code) + (d.site.radius ? ' · 반경 ' + d.site.radius + 'm' : '') : '현장 미배정')) + '</div>';
+                ? T.clockInAt + ' ' + esc(d.firstEnterAt) + (d.site ? ' · ' + esc(d.site.code) : '')
+                : (d.site ? esc(d.site.code) + (d.site.radius ? ' · ' + T.radius + ' ' + d.site.radius + 'm' : '') : T.noSite)) + '</div>';
 
         if (working) {
-            h += '<button class="btn stop" data-act="out">퇴근하기</button>' +
-                 '<div class="note">현장을 벗어나고 10분이 지나면 <b>자동으로 퇴근 처리</b>됩니다. 안 눌러도 됩니다.</div>';
+            h += '<button class="btn stop" data-act="out">' + T.btnOut + '</button>' +
+                 '<div class="note">' + T.noteAuto + '</div>';
         } else {
             h += '<div class="why">' + v.why + '</div>';
-            if (v.fix) h += '<button class="btn stop" data-act="perm">위치 권한 켜기</button>';
+            if (v.fix) h += '<button class="btn stop" data-act="perm">' + T.btnPerm + '</button>';
             if (v.tier === 'manual' || v.tier === 'waiting') {
                 h += '<button class="btn ' + (v.tier === 'manual' ? 'go' : 'quiet') + '" data-act="in">' +
-                     (v.tier === 'manual' ? '출근 누르기' : '그래도 직접 누르기') + '</button>' +
-                     '<div class="note">현장에 있는 것이 확인되면 바로 기록됩니다. 확인이 안 되면 <b>반장 승인</b>을 거칩니다.</div>';
+                     (v.tier === 'manual' ? T.btnIn : T.btnInAnyway) + '</button>' +
+                     '<div class="note">' + T.notePunch + '</div>';
             }
-            if (v.tier === 'qr') h += '<button class="btn go" data-act="goqr">내 QR 보여주기</button>';
+            if (v.tier === 'qr') h += '<button class="btn go" data-act="goqr">' + T.btnQr + '</button>';
         }
         h += '</div>';
 
-        h += '<div class="sec"><div class="sec-h">오늘 내 기록</div><div class="panel">';
+        h += '<div class="sec"><div class="sec-h">' + T.todayLog + '</div><div class="panel">';
         h += (d.logs || []).length
             ? d.logs.map(function (l) {
                 return '<div class="row"><div class="row-k">' + esc(l.at) + '</div>' +
-                    '<div class="row-m"><div class="row-a">' + esc(l.typeLabel) + '</div>' +
+                    '<div class="row-m"><div class="row-a">' + (l.type === 'clock_in' ? T.clockIn : T.clockOut) + '</div>' +
                     '<div class="row-b">' + esc(d.site ? d.site.code : '') + '</div></div>' + chip(l) + '</div>';
             }).join('')
-            : '<div class="empty">아직 기록이 없습니다.</div>';
+            : '<div class="empty">' + T.noLogs + '</div>';
         h += '</div></div>';
 
-        h += '<div class="sec"><div class="sec-h">그 밖에</div>' +
-            '<a class="link" href="{{ route('communication.index') }}"><div><b>메시지' +
-            (UNREAD ? ' · ' + UNREAD : '') + '</b><span>현장 채팅방과 공지</span></div><span class="go">›</span></a>' +
-            '<a class="link" href="{{ route('attendance-app.ops-room') }}"><div><b>현장 상황실</b>' +
-            '<span>오늘 한 일 · 자재 · 이슈 올리기</span></div><span class="go">›</span></a>' +
+        h += '<div class="sec"><div class="sec-h">' + T.more + '</div>' +
+            '<a class="link" href="{{ route('communication.index') }}"><div><b>' + T.messages +
+            (UNREAD ? ' · ' + UNREAD : '') + '</b><span>' + T.messagesSub + '</span></div><span class="go">›</span></a>' +
+            '<a class="link" href="{{ route('attendance-app.ops-room') }}"><div><b>' + T.opsRoom + '</b>' +
+            '<span>' + T.opsRoomSub + '</span></div><span class="go">›</span></a>' +
             '</div>';
         return h;
     }
 
     function tabWork(d) {
         var w = d.week || { regularHours: 0, overtimeHours: 0, days: [] };
+        var hasLive = (w.days || []).some(function (x) { return x.live; });
+
         var h = '<div class="stats">' +
-            '<div class="stat"><div class="stat-k">이번 주 정규</div><div class="stat-v">' + w.regularHours + '<small>시간</small></div></div>' +
-            '<div class="stat"><div class="stat-k">연장 ×' + (d.pay ? d.pay.multiplier : 1.5) + '</div><div class="stat-v">' + w.overtimeHours + '<small>시간</small></div></div>' +
+            '<div class="stat"><div class="stat-k">' + T.weekRegular + '</div><div class="stat-v">' + w.regularHours + '<small>' + T.h + '</small></div></div>' +
+            '<div class="stat"><div class="stat-k">' + T.ot + ' ×' + (d.pay ? d.pay.multiplier : 1.5) + '</div><div class="stat-v">' + w.overtimeHours + '<small>' + T.h + '</small></div></div>' +
             '</div>';
 
-        h += '<div class="sec"><div class="sec-h">일자별<em>' + esc(w.from || '') + ' – ' + esc(w.to || '') + '</em></div><div class="panel">';
+        h += '<div class="sec"><div class="sec-h">' + T.byDay + '<em>' + esc(w.from || '') + ' – ' + esc(w.to || '') + '</em></div><div class="panel">';
         h += (w.days || []).length
             ? w.days.map(function (x) {
                 var total = (x.regularHours + x.overtimeHours).toFixed(1);
-                return '<div class="row"><div class="row-k">' + esc(x.label) + '<div class="row-b">' + esc(x.weekday) + '</div></div>' +
-                    '<div class="row-m"><div class="row-a">' + esc(x.in || '—') + ' → ' + esc(x.out || '—') + '</div>' +
-                    '<div class="row-b">' + (x.overtimeHours ? '연장 ' + x.overtimeHours + 'h' : '정규') + '</div></div>' +
-                    '<div class="row-n">' + total + 'h</div>' +
-                    (x.settled ? '' : '<span class="chip rev">미확정</span>') + '</div>';
+                // 진행 중인 오늘 줄 — 끝 시각 대신 "지금까지" 라는 뜻의 ⋯ 를 둔다.
+                var range = x.live
+                    ? esc(x.in || '—') + ' → ⋯'
+                    : esc(x.in || '—') + ' → ' + esc(x.out || '—');
+                var tag = x.live ? '<span class="chip auto">' + T.inProgress + '</span>'
+                    : (x.settled ? '' : '<span class="chip rev">' + T.unsettled + '</span>');
+                return '<div class="row"><div class="row-k">' + esc(x.label) + '<div class="row-b">' + weekday(x.date) + '</div></div>' +
+                    '<div class="row-m"><div class="row-a">' + range + '</div>' +
+                    '<div class="row-b">' + (x.overtimeHours ? T.ot + ' ' + x.overtimeHours + 'h' : T.regular) + '</div></div>' +
+                    '<div class="row-n">' + total + 'h</div>' + tag + '</div>';
             }).join('')
-            : '<div class="empty">이번 주 기록이 아직 없습니다.</div>';
-        h += '</div></div>';
+            : '<div class="empty">' + T.noWeek + '</div>';
+        h += '</div>';
+        if (hasLive) h += '<div class="note" style="color:var(--ink-3);margin-top:10px">' + T.liveNote + '</div>';
+        h += '</div>';
 
-        h += '<div class="sec"><div class="sec-h">기록이 틀렸다면</div>' +
+        h += '<div class="sec"><div class="sec-h">' + T.wrong + '</div>' +
             '<div class="panel"><div class="empty" style="text-align:left;padding:16px">' +
-            '반장에게 말씀해 주세요. 화면에서 바로 정정을 요청하는 기능은 준비 중입니다.</div></div></div>';
+            T.wrongText + '</div></div></div>';
         return h;
     }
 
@@ -522,46 +682,45 @@
         var h = '';
 
         if (!p.hasRate) {
-            h += '<div class="slab is-manual"><div class="state"><i></i>단가 미정</div>' +
-                 '<div class="why"><b>아직 시급이 정해지지 않았습니다.</b> 정해지면 이 화면에 이번 주 예상 금액이 나옵니다. ' +
-                 '근무 시간은 그대로 쌓이고 있으니 걱정하지 않으셔도 됩니다.</div></div>';
+            h += '<div class="slab is-manual"><div class="state"><i></i>' + T.noRate + '</div>' +
+                 '<div class="why">' + T.noRateText + '</div></div>';
         } else {
-            h += '<div class="money"><div class="stat-k">이번 주 예상</div>' +
+            h += '<div class="money"><div class="stat-k">' + T.weekEst + '</div>' +
                 '<div class="amt"><em>' + (p.currency === 'KRW' ? '₩' : '$') + '</em>' +
                 Number(p.estimated).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div>' +
-                '<div class="sub">' + esc(w.from || '') + ' – ' + esc(w.to || '') + ' · 세금·공제 전</div>' +
-                '<div class="line"><span>정규 ' + w.regularHours + 'h × ' + money(p.rate, p.currency) + '</span><b>' + money(p.regularPay, p.currency) + '</b></div>' +
-                '<div class="line"><span>연장 ' + w.overtimeHours + 'h × ' + money(p.rate * p.multiplier, p.currency) + '</span><b>' + money(p.overtimePay, p.currency) + '</b></div>' +
+                '<div class="sub">' + esc(w.from || '') + ' – ' + esc(w.to || '') + ' · ' + T.preTax + '</div>' +
+                '<div class="line"><span>' + T.regular + ' ' + w.regularHours + 'h × ' + money(p.rate, p.currency) + '</span><b>' + money(p.regularPay, p.currency) + '</b></div>' +
+                '<div class="line"><span>' + T.ot + ' ' + w.overtimeHours + 'h × ' + money(p.rate * p.multiplier, p.currency) + '</span><b>' + money(p.overtimePay, p.currency) + '</b></div>' +
                 '</div>' +
-                '<div class="note" style="color:var(--ink-3);margin-top:12px">실제 지급액은 세금과 공제를 뺀 금액입니다. 확정 명세서는 마감 뒤에 올라옵니다.</div>';
+                '<div class="note" style="color:var(--ink-3);margin-top:12px">' + T.payNote + '</div>';
         }
 
-        h += '<div class="sec"><div class="sec-h">지난 명세서</div><div class="panel">';
+        h += '<div class="sec"><div class="sec-h">' + T.pastSlips + '</div><div class="panel">';
         h += (p.payslips || []).length
             ? p.payslips.map(function (s) {
                 return '<div class="row"><div class="row-m"><div class="row-a">' + money(s.net, p.currency) + '</div>' +
                     '<div class="row-b">' + esc(s.from || '') + ' – ' + esc(s.to || '') + '</div></div>' +
-                    '<span class="chip ' + (s.status === 'paid' ? 'auto' : 'hand') + '">' + esc(s.status === 'paid' ? '지급' : s.status) + '</span></div>';
+                    '<span class="chip ' + (s.status === 'paid' ? 'auto' : 'hand') + '">' + esc(s.status === 'paid' ? T.paid : s.status) + '</span></div>';
             }).join('')
-            : '<div class="empty">아직 명세서가 없습니다.</div>';
+            : '<div class="empty">' + T.noSlips + '</div>';
         h += '</div></div>';
         return h;
     }
 
     function tabMe(d) {
         var e = d.employee || {};
-        var h = '<div class="sec" style="margin-top:0"><div class="sec-h">내 배지 QR</div>' + qrBlock() + '</div>';
+        var h = '<div class="sec" style="margin-top:0"><div class="sec-h">' + T.myQr + '</div>' + qrBlock() + '</div>';
 
-        h += '<div class="sec"><div class="sec-h">내 정보</div><div class="panel">' +
-            kv('이름', e.name) + kv('사번', e.number) + kv('직종', e.trade) +
-            kv('현장', d.site ? d.site.code + ' · ' + d.site.name : null) +
+        h += '<div class="sec"><div class="sec-h">' + T.myInfo + '</div><div class="panel">' +
+            kv(T.name, e.name) + kv(T.number, e.number) + kv(T.trade, e.trade) +
+            kv(T.site, d.site ? d.site.code + ' · ' + d.site.name : null) +
             '</div></div>';
 
-        h += '<div class="sec"><div class="sec-h">현장 자동 인식</div><div class="panel">' +
-            kv('GPS 반경', d.site && d.site.hasGeofence ? (d.site.radius + 'm 등록됨') : '미등록') +
-            kv('현장 WiFi', d.site && d.site.hasNetwork ? '등록됨' : '미등록') +
+        h += '<div class="sec"><div class="sec-h">' + T.autoDetect + '</div><div class="panel">' +
+            kv(T.gps, d.site && d.site.hasGeofence ? (d.site.radius + 'm · ' + T.registered) : T.notRegistered) +
+            kv(T.wifi, d.site && d.site.hasNetwork ? T.registered : T.notRegistered) +
             '</div>' +
-            '<div class="note" style="color:var(--ink-3);margin-top:10px">둘 중 하나만 등록돼 있어도 자동 출퇴근이 됩니다. 둘 다 없으면 직접 눌러야 합니다.</div>' +
+            '<div class="note" style="color:var(--ink-3);margin-top:10px">' + T.autoNote + '</div>' +
             '</div>';
 
         // 홈 화면에 이미 있으면 이 줄은 안 보인다 — 있는 걸 또 설치하라고 하지 않는다.
@@ -569,14 +728,14 @@
             h += '<div class="sec"><button type="button" class="link" data-act="install" ' +
                 'style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +
                 '<div><b>＋ ' + esc(window.AppInstall.label()) + '</b>' +
-                '<div class="row-a" style="margin-top:3px">다음부터 아이콘만 누르면 열립니다</div></div>' +
+                '<div class="row-a" style="margin-top:3px">' + T.installNote + '</div></div>' +
                 '<span class="go">›</span></button></div>';
         }
 
         h += '<div class="sec"><form method="POST" action="{{ route('logout') }}">' +
             '<input type="hidden" name="_token" value="' + CSRF + '">' +
             '<button type="submit" class="link" style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +
-            '<div><b style="color:var(--bad)">로그아웃</b></div><span class="go">›</span></button>' +
+            '<div><b style="color:var(--bad)">' + T.logout + '</b></div><span class="go">›</span></button>' +
             '</form></div>';
         return h;
     }
@@ -695,8 +854,8 @@
     /** 진짜로 못 불러온 경우 — 다시 해 볼 수 있어야 한다. */
     function failed(d) {
         return '<div class="fatal">' +
-            esc((d && d.error) || '정보를 불러오지 못했습니다.') +
-            '<button type="button" class="retry" data-act="retry">다시 시도</button>' +
+            esc((d && d.error) || T.loadFail) +
+            '<button type="button" class="retry" data-act="retry">' + T.retry + '</button>' +
             '</div>';
     }
 
@@ -707,6 +866,11 @@
             });
             state.data = await r.json();
             state.tick = 0;
+
+            // 직접 고른 적이 없으면 직원 정보의 언어를 따른다 — 스페인어 작업자는
+            // 버튼을 찾기 전에 이미 자기 말로 보여야 한다.
+            var pref = state.data && state.data.employee && state.data.employee.lang;
+            if (!langChosen && pref && DICT[pref] && pref !== state.lang) setLang(pref, false);
         } catch (err) {
             // 통신 실패는 화면을 비우지 않는다 — 마지막으로 받은 내용을 그대로 둔다.
         }
@@ -749,11 +913,11 @@
     }
 
     async function punch(direction) {
-        if (AS) { toast('보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.'); return; }
+        if (AS) { toast(T.viewOnly); return; }
 
         if (state.busy) return;
         state.busy = true;
-        var body = { direction: direction };
+        var body = { direction: direction, lang: state.lang };
         if (state.coords) {
             body.lat = state.coords.latitude;
             body.lng = state.coords.longitude;
@@ -766,7 +930,7 @@
                 body: JSON.stringify(body)
             });
             var j = await r.json();
-            toast(j.message || j.error || '처리했습니다.');
+            toast(j.message || j.error || T.done);
             await load();
             // 한 번 찍어 본 뒤에 권한다. 쓸모를 모르는 채로 받는 설치 권유는 닫힌다.
             if (window.AppInstall) {
@@ -802,11 +966,8 @@
     document.getElementById('langs').addEventListener('click', function (ev) {
         var b = ev.target.closest('[data-lang]');
         if (!b) return;
-        state.lang = b.dataset.lang;
-        Array.prototype.forEach.call(this.querySelectorAll('[data-lang]'), function (n) {
-            n.setAttribute('aria-pressed', n.dataset.lang === state.lang ? 'true' : 'false');
-        });
-        // 화면 글자 번역은 아직 없다. 고른 언어는 기억해 두고 다음 단계에서 쓴다.
+        setLang(b.dataset.lang, true);   // 기억해 둔다 — 다음에 열어도 그 언어다.
+        render();
     });
 
     window.addEventListener('online', render);

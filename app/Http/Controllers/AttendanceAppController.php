@@ -164,12 +164,14 @@ class AttendanceAppController extends Controller
             'lat' => ['nullable', 'numeric'],
             'lng' => ['nullable', 'numeric'],
             'accuracy' => ['nullable', 'numeric'],
+            // 화면에서 고른 언어 — 응답 문구를 그 언어로 만든다.
+            'lang' => ['nullable', 'in:ko,en,es'],
         ]);
 
         // 폰이 보낸 ip 는 믿지 않는다 — 서버가 본 주소로 넣는다.
         $data['ip'] = $request->ip();
 
-        return response()->json($worker->punch($employee, $data['direction'], $data));
+        return response()->json($worker->punch($employee, $data['direction'], $data, $data['lang'] ?? 'ko'));
     }
 
     public function team(Request $request, string $token): View|RedirectResponse

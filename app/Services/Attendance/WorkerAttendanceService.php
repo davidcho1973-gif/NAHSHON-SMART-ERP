@@ -43,18 +43,10 @@ class WorkerAttendanceService
         $tz = $site?->timezone ?: config('app.timezone');
         $today = Carbon::now($tz)->toDateString();
 
-        $session = $site
-            ? AttendanceSession::query()
-                ->where('employee_id', $employee->id)
-                ->where('work_date', $today)
-                ->first()
-            : null;
+        $snap = $this->todaySnapshot($employee, $tz);
+        $session = $snap['session'];
 
-        $logs = AttendanceLog::query()
-            ->where('employee_id', $employee->id)
-            ->where('attendance_date', $today)
-            ->orderBy('event_at')
-            ->get()
+        $logs = $snap['logs']
             ->map(fn (AttendanceLog $l): array => [
                 'id' => $l->id,
                 'type' => $l->event_type,
@@ -66,26 +58,8 @@ class WorkerAttendanceService
                 'needsReview' => $l->status === 'pending',
             ])->values()->all();
 
-        $clockedIn = collect($logs)->firstWhere('type', 'clock_in') !== null
-            && collect($logs)->firstWhere('type', 'clock_out') === null;
-
-        // 화면이 초를 세려면 "지금까지 몇 초"가 한 숫자로 와야 한다. 자동은 세션이,
-        // 직접 누른 경우는 출근 기록이 기준이라 여기서 합쳐 준다 — 화면에서 두 갈래로
-        // 계산하게 두면 자동과 직접의 시간이 다르게 보인다.
-        $elapsed = 0;
-        if ($session && $session->status === 'on_site' && $session->last_enter_at) {
-            $elapsed = (int) $session->on_site_seconds + $session->last_enter_at->diffInSeconds(Carbon::now());
-        } elseif ($session) {
-            $elapsed = (int) $session->on_site_seconds;
-        } elseif ($clockedIn) {
-            $openedAt = AttendanceLog::query()
-                ->where('employee_id', $employee->id)
-                ->where('attendance_date', $today)
-                ->where('event_type', 'clock_in')
-                ->orderBy('event_at')
-                ->value('event_at');
-            $elapsed = $openedAt ? Carbon::parse($openedAt)->diffInSeconds(Carbon::now()) : 0;
-        }
+        $clockedIn = $snap['firstIn'] !== null && $snap['lastOut'] === null;
+        $elapsed = $snap['seconds'];
 
         return [
             'success' => true,
@@ -114,6 +88,55 @@ class WorkerAttendanceService
             'logs' => $logs,
             'week' => $this->week($employee, $tz),
             'pay' => $this->pay($employee),
+        ];
+    }
+
+    /**
+     * 오늘 하루의 실시간 스냅샷 — 세션(자동)과 출퇴근 기록(직접)을 한 숫자로.
+     *
+     * 상태 카드와 근무 탭이 <b>같은 계산</b>을 봐야 한다. 전에는 카드만 이 계산을 쓰고
+     * 근무 탭은 급여 타임시트(하루가 끝나야 확정)를 봤다 — 카드에는 2시간 36분이
+     * 흐르는데 근무 탭은 비어 있어, 연동이 끊긴 것으로 보고됐다. 계산이 한 곳에 있으면
+     * 두 탭이 다른 말을 할 수 없다.
+     *
+     * @return array{session: ?AttendanceSession, logs: \Illuminate\Support\Collection<int, AttendanceLog>, firstIn: ?Carbon, lastOut: ?Carbon, seconds: int}
+     */
+    private function todaySnapshot(Employee $employee, string $tz): array
+    {
+        $today = Carbon::now($tz)->toDateString();
+
+        $session = $employee->site_id
+            ? AttendanceSession::query()
+                ->where('employee_id', $employee->id)
+                ->where('work_date', $today)
+                ->first()
+            : null;
+
+        $logs = AttendanceLog::query()
+            ->where('employee_id', $employee->id)
+            ->where('attendance_date', $today)
+            ->orderBy('event_at')
+            ->get();
+
+        $firstIn = $logs->firstWhere('event_type', 'clock_in')?->event_at;
+        $lastOut = $logs->where('event_type', 'clock_out')->last()?->event_at;
+
+        $seconds = 0;
+        if ($session && $session->status === 'on_site' && $session->last_enter_at) {
+            $seconds = (int) $session->on_site_seconds + $session->last_enter_at->diffInSeconds(Carbon::now());
+        } elseif ($session) {
+            $seconds = (int) $session->on_site_seconds;
+        } elseif ($firstIn) {
+            // 직접 찍은 경우 — 퇴근 전이면 지금까지, 퇴근했으면 출근→퇴근.
+            $seconds = Carbon::parse($firstIn)->diffInSeconds($lastOut ? Carbon::parse($lastOut) : Carbon::now());
+        }
+
+        return [
+            'session' => $session,
+            'logs' => $logs,
+            'firstIn' => $firstIn ? Carbon::parse($firstIn) : null,
+            'lastOut' => $lastOut ? Carbon::parse($lastOut) : null,
+            'seconds' => max(0, (int) $seconds),
         ];
     }
 
@@ -149,17 +172,52 @@ class WorkerAttendanceService
                 'regularHours' => round($regular / 60, 1),
                 'overtimeHours' => round($overtime / 60, 1),
                 'status' => $t->status,
+                'live' => false,
                 // 아직 안 닫힌 날은 숫자가 바뀔 수 있다. 확정처럼 보이면 안 된다.
                 'settled' => in_array($t->status, ['approved', 'locked', 'paid'], true),
             ];
-        })->values()->all();
+        })->values();
+
+        // 오늘 줄 — 타임시트는 하루가 끝나야 채워지는데(자동 근무는 저녁 마감 때,
+        // 시급 정산도 퇴근을 찍어야 시간이 계산된다), 홈 카드는 실시간으로 초를 세고
+        // 있다. 같은 앱의 두 탭이 다른 말을 하면 사람은 연동이 끊겼다고 생각한다 —
+        // 실제로 그렇게 보고됐다. 그래서 오늘만은 카드와 같은 스냅샷으로 만들어 넣고
+        // '진행 중' 표시로 확정 숫자와 구별한다.
+        $today = Carbon::now($tz)->toDateString();
+        $settled = $days->first(fn (array $d): bool => $d['date'] === $today
+            && ($d['regularHours'] + $d['overtimeHours']) > 0);
+
+        if (! $settled) {
+            $snap = $this->todaySnapshot($employee, $tz);
+
+            if ($snap['seconds'] > 0 || $snap['firstIn']) {
+                $now = Carbon::now($tz);
+                $days = $days->reject(fn (array $d): bool => $d['date'] === $today)
+                    ->push([
+                        'date' => $today,
+                        'label' => $now->format('m/d'),
+                        'weekday' => self::WEEKDAYS[(int) $now->dayOfWeek],
+                        'in' => ($snap['session']?->first_enter_at ?? $snap['firstIn'])?->timezone($tz)->format('H:i'),
+                        'out' => $snap['lastOut']?->timezone($tz)->format('H:i'),
+                        // 연장 구분은 마감이 한다 — 진행 중에는 전부 한 줄의 시간일 뿐이다.
+                        'regularHours' => round($snap['seconds'] / 3600, 1),
+                        'overtimeHours' => 0.0,
+                        'status' => 'live',
+                        'live' => true,
+                        'settled' => false,
+                    ])
+                    ->sortBy('date')->values();
+            }
+        }
 
         return [
             'from' => $start->toDateString(),
             'to' => $end->toDateString(),
-            'regularHours' => round($sheets->sum('regular_minutes') / 60, 1),
-            'overtimeHours' => round($sheets->sum('overtime_minutes') / 60, 1),
-            'days' => $days,
+            // 합계는 화면의 줄들과 같은 숫자에서 나와야 한다 — 줄 따로 합계 따로면
+            // 더해 본 사람이 "안 맞는다" 고 한다.
+            'regularHours' => round($days->sum('regularHours'), 1),
+            'overtimeHours' => round($days->sum('overtimeHours'), 1),
+            'days' => $days->all(),
         ];
     }
 
@@ -230,15 +288,17 @@ class WorkerAttendanceService
      * @param  array<string, mixed>  $signal
      * @return array<string, mixed>
      */
-    public function punch(Employee $employee, string $direction, array $signal = []): array
+    public function punch(Employee $employee, string $direction, array $signal = [], string $lang = 'ko'): array
     {
+        $t = self::PUNCH_MESSAGES[$lang] ?? self::PUNCH_MESSAGES['ko'];
+
         if (! in_array($direction, ['in', 'out'], true)) {
-            return ['success' => false, 'error' => '출근/퇴근 중 하나를 선택해 주세요.'];
+            return ['success' => false, 'error' => $t['pick']];
         }
 
         $site = $employee->site_id ? Site::find($employee->site_id) : null;
         if (! $site) {
-            return ['success' => false, 'error' => '배정된 현장이 없습니다. 관리자에게 현장 배정을 요청해 주세요.'];
+            return ['success' => false, 'error' => $t['no_site']];
         }
 
         $tz = $site->timezone ?: config('app.timezone');
@@ -253,14 +313,14 @@ class WorkerAttendanceService
             ->get();
 
         if ($direction === 'in' && $existing->where('event_type', 'clock_in')->isNotEmpty()) {
-            return ['success' => false, 'error' => '오늘은 이미 출근이 기록되었습니다.'];
+            return ['success' => false, 'error' => $t['dup_in']];
         }
         if ($direction === 'out') {
             if ($existing->where('event_type', 'clock_in')->isEmpty()) {
-                return ['success' => false, 'error' => '출근 기록이 없습니다. 먼저 출근을 눌러 주세요.'];
+                return ['success' => false, 'error' => $t['no_in']];
             }
             if ($existing->where('event_type', 'clock_out')->isNotEmpty()) {
-                return ['success' => false, 'error' => '오늘은 이미 퇴근이 기록되었습니다.'];
+                return ['success' => false, 'error' => $t['dup_out']];
             }
         }
 
@@ -290,10 +350,53 @@ class WorkerAttendanceService
             'success' => true,
             'verified' => $verified,
             'message' => $direction === 'in'
-                ? ($verified ? '출근이 기록되었습니다.' : '출근을 접수했습니다. 현장 확인이 안 되어 반장 승인을 기다립니다.')
-                : ($verified ? '퇴근이 기록되었습니다.' : '퇴근을 접수했습니다. 현장 확인이 안 되어 반장 승인을 기다립니다.'),
+                ? ($verified ? $t['in_ok'] : $t['in_pending'])
+                : ($verified ? $t['out_ok'] : $t['out_pending']),
         ];
     }
+
+    /**
+     * 출퇴근 응답 문구 — 작업자의 언어로.
+     *
+     * 화면 글자는 화면(JS 사전)이 바꾸지만, 이 문구는 서버가 만든다. 화면이 서버의
+     * 한국어 문장을 받아 다시 번역하게 두면 문구가 바뀔 때마다 두 곳이 어긋난다 —
+     * 만든 쪽이 언어까지 책임진다.
+     */
+    private const PUNCH_MESSAGES = [
+        'ko' => [
+            'pick' => '출근/퇴근 중 하나를 선택해 주세요.',
+            'no_site' => '배정된 현장이 없습니다. 관리자에게 현장 배정을 요청해 주세요.',
+            'dup_in' => '오늘은 이미 출근이 기록되었습니다.',
+            'no_in' => '출근 기록이 없습니다. 먼저 출근을 눌러 주세요.',
+            'dup_out' => '오늘은 이미 퇴근이 기록되었습니다.',
+            'in_ok' => '출근이 기록되었습니다.',
+            'in_pending' => '출근을 접수했습니다. 현장 확인이 안 되어 반장 승인을 기다립니다.',
+            'out_ok' => '퇴근이 기록되었습니다.',
+            'out_pending' => '퇴근을 접수했습니다. 현장 확인이 안 되어 반장 승인을 기다립니다.',
+        ],
+        'en' => [
+            'pick' => 'Please choose clock-in or clock-out.',
+            'no_site' => 'No site assigned. Ask your manager to assign you to a site.',
+            'dup_in' => 'You already clocked in today.',
+            'no_in' => 'No clock-in yet. Please clock in first.',
+            'dup_out' => 'You already clocked out today.',
+            'in_ok' => 'Clock-in recorded.',
+            'in_pending' => 'Clock-in received. Site could not be verified — waiting for foreman approval.',
+            'out_ok' => 'Clock-out recorded.',
+            'out_pending' => 'Clock-out received. Site could not be verified — waiting for foreman approval.',
+        ],
+        'es' => [
+            'pick' => 'Elija entrada o salida.',
+            'no_site' => 'No tiene sitio asignado. Pida a su supervisor que le asigne uno.',
+            'dup_in' => 'Ya registró su entrada hoy.',
+            'no_in' => 'No hay entrada registrada. Marque la entrada primero.',
+            'dup_out' => 'Ya registró su salida hoy.',
+            'in_ok' => 'Entrada registrada.',
+            'in_pending' => 'Entrada recibida. No se pudo verificar el sitio — pendiente de aprobación del capataz.',
+            'out_ok' => 'Salida registrada.',
+            'out_pending' => 'Salida recibida. No se pudo verificar el sitio — pendiente de aprobación del capataz.',
+        ],
+    ];
 
     /**
      * 지금 이 사람이 현장에 있다고 볼 수 있는가.
