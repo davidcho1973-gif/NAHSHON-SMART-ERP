@@ -79,9 +79,11 @@
 
         /* 입력창 */
         .composer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: min(640px, 100vw); background: #fff; border-top: 1px solid var(--line); padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); box-sizing: border-box; }
-        .cbar { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: end; }
+        .cbar { display: grid; grid-template-columns: auto auto 1fr auto; gap: 7px; align-items: end; }
         /* 첨부 [＋] 는 노란 동그라미에 검정 글자 — 카카오가 아이콘을 담는 방식이다. */
         .plus { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--kakao); font-size: 22px; font-weight: 800; color: var(--label); cursor: pointer; line-height: 1; }
+        /* AI 부르기 — 노란 [＋] 옆이라 검정으로 뒤집는다. "@AI" 를 외우게 하지 않는 장치다. */
+        .aibtn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.85); color: var(--kakao); font-size: 13px; font-weight: 800; cursor: pointer; line-height: 1; letter-spacing: .02em; }
         textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 18px; padding: 10px 13px; font: inherit; font-size: 15px; resize: none; max-height: 120px; min-height: 40px; background: #f2f3f5; }
         /* 보내기는 검정 — 노란 [＋] 와 나란히 서므로 여기서 노랑을 또 쓰면 둘 다 죽는다. */
         .send { border: 0; border-radius: 12px; padding: 0 16px; height: 40px; background: rgba(0,0,0,.85); color: #fff; font-weight: 800; cursor: pointer; }
@@ -101,6 +103,7 @@
         .sheet h2 { margin: 0 0 12px; font-size: 16px; }
         .mem { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid #f1f3f5; }
         .mem .face { width: 32px; height: 32px; flex: 0 0 32px; background: var(--kakao); color: var(--label); border-radius: 50%; }
+        .mem .face.bot { background: rgba(0,0,0,.85); font-size: 15px; }
         .mem .nm { font-size: 14px; font-weight: 700; }
         .mem .st { font-size: 11px; color: #6b7280; margin-left: auto; }
         .mem .st.on { color: #16a34a; font-weight: 800; }
@@ -161,6 +164,10 @@
                     @endif
                     <div class="cbar">
                         <button class="plus" type="button" id="btn-file" aria-label="파일 첨부">＋</button>
+                        @if($aiAvailable)
+                            {{-- 규칙("@AI 라고 쓰세요")을 외우게 하지 않는다 — 버튼이 대신 써 준다. --}}
+                            <button class="aibtn" type="button" id="btn-ai" aria-label="AI 에게 묻기" title="AI 에게 묻기">AI</button>
+                        @endif
                         <textarea name="body" id="body" maxlength="4000" rows="1"
                                   placeholder="{{ $room->type === 'site_announcement' ? '공지 내용' : '메시지 입력' }}"></textarea>
                         <button class="send" type="submit" id="btn-send">전송</button>
@@ -170,6 +177,9 @@
                     <div class="picked" id="picked"></div>
                     @if($room->type !== 'direct')
                         <div class="hint">사진·영수증·도면을 올리면 AI 가 읽고 재무·장비·문서함으로 보냅니다.</div>
+                    @endif
+                    @if($aiAvailable)
+                        <div class="hint">[AI] 를 누르고 물어보세요 — 공정·자재·장비를 대신 찾아 답합니다(볼 수 있는 것만).</div>
                     @endif
                 </form>
             @else
@@ -183,6 +193,9 @@
                     </div>
                     <div class="cbar">
                         <button class="plus" type="button" id="btn-file" aria-label="파일 첨부">＋</button>
+                        @if($aiAvailable)
+                            <button class="aibtn" type="button" id="btn-ai" aria-label="AI 에게 묻기" title="AI 에게 묻기">AI</button>
+                        @endif
                         <textarea name="body" id="body" maxlength="4000" rows="1" placeholder="공지의 [답글] 을 눌러 답을 남겨 주세요"></textarea>
                         <button class="send" type="submit" id="btn-send">전송</button>
                     </div>
@@ -324,9 +337,13 @@
         var list = document.getElementById('sheet-list');
         document.getElementById('sheet-count').textContent = membersCache.length + '명';
         list.innerHTML = membersCache.map(function (m) {
-            return '<div class="mem"><div class="face">' + esc(initials(m.name)) + '</div>' +
-                '<div><div class="nm">' + esc(m.name) + '</div></div>' +
-                '<div class="st ' + (m.online ? 'on' : '') + '">' + (m.online ? '● 접속 중' : esc(m.lastSeen || '접속 기록 없음')) + '</div></div>';
+            // AI 도 참여자 줄에 선다 — 목록에 없으면 부를 수 있는 줄 아무도 모른다.
+            var face = m.bot ? '<div class="face bot">🤖</div>' : '<div class="face">' + esc(initials(m.name)) + '</div>';
+            var right = m.bot
+                ? '<div class="st on">● ' + esc(m.lastSeen || '대기 중') + '</div>'
+                : '<div class="st ' + (m.online ? 'on' : '') + '">' + (m.online ? '● 접속 중' : esc(m.lastSeen || '접속 기록 없음')) + '</div>';
+
+            return '<div class="mem">' + face + '<div><div class="nm">' + esc(m.name) + '</div></div>' + right + '</div>';
         }).join('') || '<div style="color:#6b7280;font-size:13px">아직 참여자가 없습니다. 관리 화면에서 "직원 동기화" 를 눌러 주세요.</div>';
         document.getElementById('sheet').style.display = 'block';
         document.getElementById('sheet-back').style.display = 'block';
@@ -434,6 +451,19 @@
         var picked = document.getElementById('picked');
 
         document.getElementById('btn-file').addEventListener('click', function () { files.click(); });
+
+        // [AI] — "@AI" 를 대신 써 준다. 이미 부른 뒤라면 두 번 붙이지 않는다.
+        var ai = document.getElementById('btn-ai');
+        if (ai) {
+            ai.addEventListener('click', function () {
+                if (!/@\s*(ai|에이아이)\b/i.test(body.value)) {
+                    body.value = '@AI ' + body.value.replace(/^\s+/, '');
+                }
+                body.focus();
+                body.setSelectionRange(body.value.length, body.value.length);
+                body.dispatchEvent(new Event('input'));
+            });
+        }
         files.addEventListener('change', function () {
             var names = Array.prototype.map.call(files.files, function (f) { return f.name; });
             picked.textContent = names.length ? '📎 ' + names.join(', ') : '';

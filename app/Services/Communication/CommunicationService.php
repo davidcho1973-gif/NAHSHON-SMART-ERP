@@ -414,7 +414,7 @@ class CommunicationService
      */
     public function presence(CommunicationRoom $room, int $onlineWithinMinutes = 3): array
     {
-        return $room->activeMembers()
+        $people = $room->activeMembers()
             ->with(['employee', 'user'])
             ->get()
             ->map(function (CommunicationRoomMember $m) use ($onlineWithinMinutes): array {
@@ -425,11 +425,26 @@ class CommunicationService
                     'role' => (string) ($m->role ?: 'member'),
                     'online' => $seen !== null && $seen->gt(now()->subMinutes($onlineWithinMinutes)),
                     'lastSeen' => $seen?->diffForHumans(),
+                    'bot' => false,
                 ];
             })
             ->sortByDesc('online')
             ->values()
             ->all();
+
+        // AI 도 이 방의 참여자다 — 참여자 목록에 없으면 아무도 부를 수 있는 줄 모른다.
+        // 열쇠가 없는 배포에서는 넣지 않는다(불러도 답이 없는 이름이 가장 나쁘다).
+        if (app(ChatAssistant::class)->available()) {
+            array_unshift($people, [
+                'name' => ChatAssistant::DISPLAY_NAME,
+                'role' => 'assistant',
+                'online' => true,
+                'lastSeen' => ChatAssistant::HANDLE.' 로 부르면 답합니다',
+                'bot' => true,
+            ]);
+        }
+
+        return $people;
     }
 
     // ---- direct messages ---------------------------------------------------

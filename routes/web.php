@@ -422,6 +422,9 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                     'live' => $crossCheckOn && $anthropic,
                     'min_amount' => (float) config('document-intelligence.cross_check.min_amount', 1000),
                 ],
+                // 대화방의 AI 도우미(@AI). 꺼져 있으면 참여자 목록에도, 입력창에도
+                // 나타나지 않는다 — 불러도 답이 없는 이름을 만들지 않기 위해서다.
+                'chat_assistant' => $anthropic,
             ];
         })(),
         // 알림이 실제로 나갈 수 있는가. 열쇠(VAPID)가 없으면 화면은 알림 버튼을 감추고,

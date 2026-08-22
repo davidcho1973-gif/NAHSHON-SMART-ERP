@@ -119,6 +119,9 @@ class CommunicationController extends Controller
             'membersCount' => $room->activeMembers()->count(),
             'canPostTopLevel' => $this->communicationService->canPost($user, $room),
             'canManageRoom' => app(CommunicationAdminService::class)->canManage($user),
+            // 열쇠가 없는 배포에서는 [AI] 버튼을 아예 만들지 않는다 —
+            // 눌러도 아무 일 없는 버튼이 가장 나쁘다.
+            'aiAvailable' => app(\App\Services\Communication\ChatAssistant::class)->available(),
         ]);
     }
 

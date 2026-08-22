@@ -80,12 +80,16 @@ class RoomStreamService
 
         $presence = $this->communication->presence($room);
 
+        // 사람 수를 셀 때 AI 는 빼고 센다 — "3명" 이 사람 셋을 뜻하지 않으면
+        // 그 숫자를 보고 아무도 판단할 수 없다. AI 는 목록에만 보인다.
+        $humans = array_values(array_filter($presence, fn (array $m): bool => ! ($m['bot'] ?? false)));
+
         return [
             'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user))->all(),
             'lastId' => $lastId,
             'nextPollMs' => $this->nextPollMs($room, $messages->isNotEmpty()) * 1000,
-            'membersCount' => count($presence),
-            'onlineCount' => count(array_filter($presence, fn (array $m): bool => $m['online'])),
+            'membersCount' => count($humans),
+            'onlineCount' => count(array_filter($humans, fn (array $m): bool => $m['online'])),
             'members' => $presence,
         ];
     }

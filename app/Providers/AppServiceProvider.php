@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Jobs\AnswerChatQuestionJob;
 use App\Jobs\ReadOpsRoomMessageJob;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
@@ -93,11 +94,19 @@ class AppServiceProvider extends ServiceProvider
         });
         ProjectContractDocument::saved(fn (ProjectContractDocument $d) => app(LinkedDocumentFilingObserver::class)->contractDocumentSaved($d));
 
-        // 현장 상황실에 글이 올라오면 AI 가 자동 판독한다(응답 후 처리 — 글쓰기를 붙잡지 않는다).
+        // 방에 글이 올라오면 두 가지를 본다(둘 다 응답 후 처리 — 글쓰기를 붙잡지 않는다).
+        //   1. @AI 로 부른 질문인가 → 어느 방에서든 답한다.
+        //   2. 현장 상황실 글인가   → 공정 반영 제안을 만든다.
         CommunicationMessage::created(function (CommunicationMessage $m): void {
             if (($m->payload['bot'] ?? null) !== null) {
                 return; // AI 자신의 답글은 다시 읽지 않는다.
             }
+
+            // 부름은 방 종류를 가리지 않는다 — 공지방이든 1:1 이든 물으면 답한다.
+            if (app(\App\Services\Communication\ChatAssistant::class)->mentioned($m->body)) {
+                AnswerChatQuestionJob::dispatch($m->id)->afterResponse();
+            }
+
             $room = $m->relationLoaded('room') ? $m->room : CommunicationRoom::find($m->communication_room_id);
             if ($room?->type !== CommunicationRoom::TYPE_SITE_OPS) {
                 return;
