@@ -87,6 +87,11 @@ class WorkerAttendanceService
                 ?? collect($logs)->firstWhere('type', 'clock_in')['at'] ?? null,
             'clockedIn' => $clockedIn,
             'logs' => $logs,
+            // 정정 요청 칸에 미리 채워 줄 평소 출근 시각 — 대부분 확인만 누르면 되게.
+            // 타이핑을 시키면 그 기능은 안 쓰인다.
+            'usualTime' => $snap['firstIn']
+                ? app(ClockInReminderService::class)->usualClockIn($employee, $tz, Carbon::now($tz))?->format('H:i')
+                : null,
             'week' => $this->week($employee, $tz),
             'pay' => $this->pay($employee),
         ];

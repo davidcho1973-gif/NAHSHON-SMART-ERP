@@ -423,8 +423,8 @@
             retry: '다시 시도', loadFail: '정보를 불러오지 못했습니다.',
             sentFail: '보내지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.', done: '처리했습니다.',
             viewOnly: '보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
-            fixTime: '출근 시각이 실제와 다르면 정정 요청',
-            fixPrompt: '실제 도착 시각을 입력해 주세요 (예: 05:00)',
+            fixTime: '출근 시각 정정 요청',
+            fixPrompt: '실제 도착 시각 (맞으면 확인만 누르세요)',
             fixPending: '정정 요청됨 — 반장 확인 대기',
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
@@ -462,8 +462,8 @@
             retry: 'Retry', loadFail: 'Could not load your data.',
             sentFail: 'Could not send. Check your internet and try again.', done: 'Done.',
             viewOnly: 'View-only mode. You cannot punch here.',
-            fixTime: 'Wrong clock-in time? Request a fix',
-            fixPrompt: 'Enter your actual arrival time (e.g. 05:00)',
+            fixTime: 'Fix clock-in time',
+            fixPrompt: 'Actual arrival time (just OK if correct)',
             fixPending: 'Fix requested — waiting for foreman',
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
@@ -501,8 +501,8 @@
             retry: 'Reintentar', loadFail: 'No se pudo cargar su información.',
             sentFail: 'No se pudo enviar. Revise su internet e intente de nuevo.', done: 'Listo.',
             viewOnly: 'Modo de solo lectura. No puede marcar aquí.',
-            fixTime: '¿Hora de entrada incorrecta? Pedir corrección',
-            fixPrompt: 'Escriba su hora real de llegada (ej. 05:00)',
+            fixTime: 'Corregir hora de entrada',
+            fixPrompt: 'Hora real de llegada (OK si es correcta)',
             fixPending: 'Corrección pedida — esperando al capataz',
             weekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
         }
@@ -962,9 +962,10 @@
         state.busy = false;
     }
 
-    /** 출근 시각 정정 요청 — 실제 도착 시각을 물어 서버에 접수한다. */
+    /** 출근 시각 정정 요청 — 평소 시각이 미리 채워져 있어 대부분 확인만 누르면 된다. */
     async function requestFix() {
-        var time = window.prompt(T.fixPrompt, '');
+        var d = state.data || {};
+        var time = window.prompt(T.fixPrompt, d.usualTime || '');
         if (!time) return;
         try {
             var r = await fetch('{{ route('attendance-app.correction') }}', {
