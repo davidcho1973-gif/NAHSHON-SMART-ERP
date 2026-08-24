@@ -84,8 +84,24 @@
 
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
 
+    /**
+     * 서비스워커 준비를 마냥 기다리지 않는다.
+     *
+     * ready 가 영영 안 풀리는 환경(등록 실패, 브라우저 확장 간섭)에서는 [켜기]를
+     * 눌러도 아무 일이 안 일어나는 것처럼 보인다 — 실제로 그렇게 보고됐다.
+     * 5초 안에 준비가 안 되면 실패로 치고 이유를 말한다.
+     */
+    function swReady() {
+        return Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise(function (_, reject) {
+                setTimeout(function () { reject(new Error('service worker not ready')); }, 5000);
+            })
+        ]);
+    }
+
     function subscribe() {
-        return navigator.serviceWorker.ready.then(function (reg) {
+        return swReady().then(function (reg) {
             return reg.pushManager.getSubscription().then(function (existing) {
                 return existing || reg.pushManager.subscribe({
                     userVisibleOnly: true,
@@ -103,7 +119,7 @@
     }
 
     function unsubscribe() {
-        return navigator.serviceWorker.ready.then(function (reg) {
+        return swReady().then(function (reg) {
             return reg.pushManager.getSubscription();
         }).then(function (sub) {
             if (!sub) return;
@@ -116,16 +132,30 @@
     }
 
     function turnOn() {
+        // ERP 화면 안에 끼워진 창(iframe)에서는 브라우저가 알림 권한 요청을 조용히
+        // 막는 경우가 많다 — 버튼이 고장난 것처럼 보인다. 그때는 이 화면을 제 창으로
+        // 새로 열어 거기서 켜게 한다.
+        if (window.self !== window.top) {
+            window.open(window.location.href, '_blank');
+            return;
+        }
+
         if (Notification.permission === 'denied') {
-            alert('브라우저에서 이 사이트의 알림이 차단돼 있습니다.\n브라우저 설정 → 알림에서 허용으로 바꿔 주세요.');
+            alert('브라우저에서 이 사이트의 알림이 차단돼 있습니다.\n주소창 왼쪽 자물쇠 → 알림 → 허용으로 바꾼 뒤 다시 눌러 주세요.');
 
             return;
         }
 
         Notification.requestPermission().then(function (permission) {
+            if (permission === 'default') {
+                // 사용자가 창을 닫았거나, 브라우저가 요청 자체를 보여주지 않았다.
+                alert('알림 허용 창이 닫혔습니다.\n다시 누르거나, 주소창 왼쪽 자물쇠 → 알림에서 직접 허용해 주세요.');
+                paint(false);
+                return;
+            }
             if (permission !== 'granted') { paint(false); return; }
-            subscribe().then(function () { paint(true); }).catch(function () {
-                alert('알림을 켜지 못했습니다. 잠시 후 다시 시도해 주세요.');
+            subscribe().then(function () { paint(true); }).catch(function (e) {
+                alert('알림을 켜지 못했습니다.\n(' + ((e && e.message) || '알 수 없는 오류') + ')\n잠시 후 다시 시도해 주세요.');
             });
         });
     }
@@ -140,7 +170,18 @@
             if (!info || !info.available) return;  // 이 배포에는 알림이 설정돼 있지 않다 — 종을 감춘다.
             publicKey = info.publicKey;
 
-            return navigator.serviceWorker.ready.then(function (reg) {
+            // 손잡이 연결을 상태 확인보다 먼저 한다 — 상태 확인이 늦거나 실패해도
+            // 버튼은 눌리고, 눌리면 왜 안 되는지 말할 수 있다. 반대로 두면
+            // "눌러도 아무 일 없는 버튼" 이 된다(실제로 그렇게 보고됐다).
+            if (bell) {
+                bell.addEventListener('click', function () {
+                    if (bell.textContent === '🔔') { turnOff(); } else { turnOn(); }
+                });
+            }
+            if (stripGo) stripGo.addEventListener('click', turnOn);
+            if (stripX) stripX.addEventListener('click', function () { remember(); strip.hidden = true; });
+
+            return swReady().then(function (reg) {
                 return reg.pushManager.getSubscription();
             }).then(function (sub) {
                 var on = Notification.permission === 'granted' && !!sub;
@@ -151,14 +192,8 @@
                 if (Notification.permission === 'granted' && !sub) {
                     subscribe().then(function () { paint(true); }).catch(function () {});
                 }
-
-                if (bell) {
-                    bell.addEventListener('click', function () {
-                        if (bell.textContent === '🔔') { turnOff(); } else { turnOn(); }
-                    });
-                }
-                if (stripGo) stripGo.addEventListener('click', turnOn);
-                if (stripX) stripX.addEventListener('click', function () { remember(); strip.hidden = true; });
+            }).catch(function () {
+                paint(false);   // 준비가 안 됐어도 종과 안내는 보인다 — 누르면 이유를 말한다.
             });
         })
         .catch(function () {});
