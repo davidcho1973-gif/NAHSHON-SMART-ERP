@@ -134,8 +134,10 @@ class DocumentIntake
 
         // 원본은 멀쩡한 진짜 중복. 다만 예전 분석이 실패로 남아 있으면 이 기회에
         // 다시 태운다 — 사용자가 같은 파일을 또 올리는 이유는 대개 그것이다.
+        // 'queued' 는 여기서 다시 태우지 않는다 — 큐에 있는 상태는 10분 리퍼
+        // (StuckAnalysisReaper)의 소관이라, 여기서도 태우면 같은 문서가 두 번 분석된다.
         $requeued = false;
-        if (in_array((string) $duplicate->ai_status, ['failed', 'queued'], true)) {
+        if (in_array((string) $duplicate->ai_status, ['failed'], true)) {
             $duplicate->update(['ai_status' => 'queued', 'ai_error' => null]);
             AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
             $requeued = true;

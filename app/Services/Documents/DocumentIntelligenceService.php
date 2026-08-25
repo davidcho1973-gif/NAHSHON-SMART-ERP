@@ -57,6 +57,10 @@ class DocumentIntelligenceService
 
             $document->fill([
                 'project_id' => $projectId,
+                // 계약 문서 ↔ 계약 모듈 자동 링크 — 죽은 칼럼(project_contract_id)을 살린다.
+                // 그 프로젝트의 계약이 하나일 때만: 애매하면 잇지 않는다(연계 점검: 계약서 자동 링크 없음).
+                'project_contract_id' => $document->project_contract_id
+                    ?: $this->resolveContractId($documentType, $projectId),
                 'title' => $title,
                 'category' => $category,
                 'document_type' => $documentType,
@@ -241,6 +245,28 @@ class DocumentIntelligenceService
             $suggested[1] ?? $type,
             $suggested[2] ?? (string) ($documentDate ? Carbon::parse($documentDate)->year : now()->year),
         ])));
+    }
+
+    /**
+     * 계약류 문서 → 계약 모듈. 프로젝트에 계약이 정확히 하나일 때만 잇는다.
+     */
+    private function resolveContractId(string $documentType, ?int $projectId): ?int
+    {
+        if ($projectId === null
+            || ! in_array($documentType, ['contract', 'change_order', 'amendment', 'lien_waiver', 'pay_application'], true)) {
+            return null;
+        }
+
+        try {
+            $ids = \App\Models\ProjectContract::query()
+                ->where('project_id', $projectId)
+                ->limit(2)
+                ->pluck('id');
+
+            return $ids->count() === 1 ? (int) $ids->first() : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function resolveProjectId(IntelligentDocument $document, string $projectCode): ?int

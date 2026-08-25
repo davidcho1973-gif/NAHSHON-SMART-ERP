@@ -328,12 +328,10 @@ class ConstructionCommandCenterService
         return $projects->map(function (Project $project) use ($wbsItems, $now): array {
             $items = $wbsItems->filter(fn (WbsItem $item): bool => (int) $item->project_id === (int) $project->id
                 || $item->project_code === $project->project_code);
-            $totalWeight = (float) $items->sum(fn (WbsItem $item): float => max((float) $item->manhours, 0));
-            $progress = $items->isEmpty()
-                ? 0
-                : ($totalWeight > 0
-                    ? (int) round($items->sum(fn (WbsItem $item): float => max((float) $item->manhours, 0) * $item->effectiveProgress()) / $totalWeight)
-                    : (int) round($items->avg(fn (WbsItem $item): int => $item->effectiveProgress())));
+            // 진척률은 정본 산식 하나(WbsService::weightedProgress — 공수→공기→균등)로.
+            // 자체 산식(공수만)은 공수가 빈 흔한 공정표에서 단순 평균으로 떨어져,
+            // 같은 프로젝트에 공정 화면과 다른 숫자가 떴다(연계 점검: 가중치 상이).
+            $progress = $items->isEmpty() ? 0 : app(\App\Services\Wbs\WbsService::class)->weightedProgress($items->values());
             $endDate = $project->planned_completion_date
                 ?: $items->whereNotNull('planned_end')->max('planned_end');
             $daysLeft = $endDate ? $now->copy()->startOfDay()->diffInDays(Carbon::parse($endDate), false) : null;

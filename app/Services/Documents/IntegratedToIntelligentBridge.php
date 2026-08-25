@@ -27,6 +27,36 @@ use Illuminate\Support\Str;
  */
 class IntegratedToIntelligentBridge
 {
+    /**
+     * 문서관리 어휘 → AI 문서함 어휘. 두 체계의 종류 이름이 달라 다리가 그대로
+     * 복사하면 화면 필터에 안 잡히던 문제(연계 점검: 어휘 25종 vs 29종)의 매핑표.
+     * 목록에 없는 값은 'other' — 지어내지 않는다.
+     */
+    private const TYPE_MAP = [
+        'receipt' => 'receipt',
+        'invoice' => 'invoice',
+        'purchase_order' => 'purchase_order',
+        'delivery' => 'delivery_ticket',
+        'delivery_ticket' => 'delivery_ticket',
+        'contract' => 'contract',
+        'change_order' => 'change_order',
+        'drawing' => 'drawing',
+        'specification' => 'specification',
+        'schedule' => 'schedule',
+        'certificate' => 'certificate',
+        'warranty' => 'warranty',
+        'payroll' => 'payroll_record',
+        'payroll_record' => 'payroll_record',
+        'pay_application' => 'pay_application',
+    ];
+
+    private function mappedType(IntegratedDocument $doc): string
+    {
+        $type = strtolower(trim((string) $doc->document_type));
+
+        return self::TYPE_MAP[$type] ?? 'other';
+    }
+
     public function index(IntegratedDocument $doc): ?IntelligentDocument
     {
         if (blank($doc->path)) {
@@ -77,6 +107,12 @@ class IntegratedToIntelligentBridge
             return null;
         }
 
+        // 이미 판독을 마치고 편철된 문서(영수증 등 — analyzed_at 을 갖고 태어난다)는
+        // AI 를 한 번 더 부르지 않는다. 같은 파일을 두 AI 가 읽던 낭비(연계 점검:
+        // 이중 분석)이고, 영수증은 재분석되면 경비 커넥터가 원장에 한 건 더 앉힐
+        // 위험까지 있다. 판독 결과의 기본 값을 복사해 '완료'로 등록만 한다.
+        $preAnalyzed = $doc->analyzed_at !== null;
+
         $document = IntelligentDocument::query()->create([
             'uuid' => $uuid,
             'company_id' => $doc->company_id,
@@ -94,10 +130,22 @@ class IntegratedToIntelligentBridge
             'sha256' => $sha256,
             'title' => $doc->title ?: pathinfo((string) $doc->original_name, PATHINFO_FILENAME),
             'received_at' => now(),
-            'ai_status' => 'queued',
+            'ai_status' => $preAnalyzed ? 'ready' : 'queued',
+            ...($preAnalyzed ? [
+                'document_type' => $this->mappedType($doc),
+                'document_number' => $doc->document_number,
+                'sender' => $doc->issuer,
+                'document_date' => $doc->issued_on,
+                'expires_on' => $doc->expires_on,
+                'summary' => $doc->summary,
+                'analyzed_at' => now(),
+                'ai_payload' => ['bridged_from' => 'integrated', 'note' => '원 모듈 판독 결과 복사 — 재분석 생략'],
+            ] : []),
         ]);
 
-        AnalyzeIntelligentDocumentJob::dispatch($document->id);
+        if (! $preAnalyzed) {
+            AnalyzeIntelligentDocumentJob::dispatch($document->id);
+        }
 
         return $document;
     }

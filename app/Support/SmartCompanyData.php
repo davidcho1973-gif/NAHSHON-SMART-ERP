@@ -778,6 +778,7 @@ class SmartCompanyData
                         ->whereIn('status', ['active', 'suspended', 'completed', 'expired']);
                     $resolvedSiteId = self::resolveSiteId($siteId);
                     if ($resolvedSiteId !== null) {
+                        // 재무 스코프 규약(applyFinanceSiteScope 참고): 현장 + 본사 공통.
                         $contractQuery->where(function ($q) use ($resolvedSiteId): void {
                             $q->where('site_id', $resolvedSiteId)->orWhereNull('site_id');
                         });
@@ -1007,6 +1008,15 @@ class SmartCompanyData
         return $query;
     }
 
+    /**
+     * 재무 화면의 현장 스코프 규약(정본): "그 현장 + 본사 공통(site NULL)".
+     *
+     * 본사 공통 계약·경비가 현장 화면에서 증발하면 수금·잔액이 틀려 보인다 — 이건
+     * 테스트로 고정된 의도된 결정이다(BillingAdminTest·MobileExpenseTest).
+     * 대가: 현장별 숫자를 단순 합산하면 공통분이 현장 수만큼 겹친다. 그래서
+     * **현장별 숫자는 서로 더하지 말고 전체는 ALL 로 본다** — 이것이 규약이다.
+     * (운영 대시보드(DashboardService)는 반대로 엄격 일치 — 현장 실적만 본다.)
+     */
     private static function applyFinanceSiteScope($query, string $siteId): void
     {
         $resolvedSiteId = self::resolveSiteId($siteId);
@@ -1302,7 +1312,9 @@ class SmartCompanyData
                     'total' => $all->count(),
                     'operable' => $all->where('status', '사용중')->count() + $all->where('status', '대기중')->count(),
                     'inoperable' => $all->where('status', '정비중')->count(),
-                    'todayInspections' => 0,
+                    // 점검 도래 — 점검기한이 오늘까지 온 장비 수. 상수 0 이던 칸(연계 점검: 가짜 데이터).
+                    'todayInspections' => $all->filter(fn ($eq) => $eq->inspection_due_on !== null
+                        && $eq->inspection_due_on->lte(today()))->count(),
                 ];
             }
         } catch (\Throwable) {
@@ -1352,19 +1364,22 @@ class SmartCompanyData
         return [];
     }
 
+    // 공구 대장은 아직 실데이터 원장이 없다. 예전엔 하드코딩 견본(18대·TL-101…)을
+    // 돌려줬는데, 가짜 숫자는 빈 것보다 나쁘다 — 화면을 믿고 공구를 찾으러 가게 만든다
+    // (연계 점검: 가짜 데이터 제거). 원장이 생기기 전까지는 정직하게 비워 보낸다.
     public static function toolStats(): array
     {
-        return ['total' => 18, 'available' => 12, 'checkedOut' => 6, 'damaged' => 2];
+        return ['total' => 0, 'available' => 0, 'checkedOut' => 0, 'damaged' => 0, 'notConfigured' => true];
     }
 
     public static function toolList(): array
     {
-        return [['id' => 'TL-101', 'name' => 'Cordless Hammer Drill', 'category' => 'Power Tool', 'status' => '불출중', 'holder' => 'EMP-1002', 'checkoutDate' => '2026-06-18', 'condition' => '정상'], ['id' => 'TL-102', 'name' => 'Torque Wrench', 'category' => 'Hand Tool', 'status' => '보관중', 'holder' => null, 'checkoutDate' => null, 'condition' => '정상'], ['id' => 'TL-103', 'name' => 'Laser Level', 'category' => 'Survey', 'status' => '수리필요', 'holder' => null, 'checkoutDate' => null, 'condition' => '손상']];
+        return [];
     }
 
     public static function toolTransactions(): array
     {
-        return [['time' => '08:12', 'action' => '불출', 'toolName' => 'Cordless Hammer Drill', 'toolId' => 'TL-101', 'userId' => 'EMP-1002', 'condition' => '정상'], ['time' => '11:40', 'action' => '반납', 'toolName' => 'Laser Level', 'toolId' => 'TL-103', 'userId' => 'EMP-1005', 'condition' => '손상']];
+        return [];
     }
 
     public static function safetyWorkItems(string $siteId = 'ALL'): array
@@ -1529,9 +1544,28 @@ class SmartCompanyData
         ];
     }
 
+    // 작업허가(PTW)의 정본은 SafetyPermit 모델이다. 예전의 하드코딩 견본 두 줄은
+    // 진짜 허가 시스템을 가리는 가짜였다(연계 점검: 가짜 데이터 제거).
     public static function ptwList(): array
     {
-        return [['id' => 'PTW-01', 'job' => 'Hot work Area B', 'status' => '승인대기', 'owner' => 'Safety'], ['id' => 'PTW-02', 'job' => 'Lift work Level 3', 'status' => '완료', 'owner' => 'PM']];
+        try {
+            if (Schema::hasTable('safety_permits')) {
+                return \App\Models\SafetyPermit::query()
+                    ->orderByDesc('id')
+                    ->limit(20)
+                    ->get()
+                    ->map(fn ($p): array => [
+                        'id' => $p->permit_no ?: ('PTW-'.$p->id),
+                        'job' => (string) ($p->title ?: $p->type),
+                        'status' => (string) $p->status,
+                        'owner' => (string) ($p->signed_by ?: ''),
+                    ])->all();
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return [];
     }
 
     public static function payrollDashboard(mixed $periodStart, string $siteId = 'ALL'): array
@@ -1893,7 +1927,10 @@ class SmartCompanyData
         try {
             if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
                 $query = Equipment::query()->visibleTo(auth()->user());
-                $all = $query->get();
+                // 렌탈 통계는 임대·리스분만 — 구매(소유) 장비가 섞이면 "임대 몇 대" 숫자가
+                // 부풀어 임대료 검증이 틀어진다(연계 점검: rentalStats 소유 장비 혼입).
+                // acquisition_type 미기재(null)는 스키마 기본값 규칙대로 임대로 본다.
+                $all = $query->get()->filter(fn (Equipment $e): bool => ($e->acquisition_type ?: '임대') !== '소유')->values();
 
                 $total = $all->count();
                 $active = $all->where('status', '사용중')->count();

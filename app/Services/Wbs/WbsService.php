@@ -827,8 +827,11 @@ class WbsService
      * 조달만 전부 발주완료했을 때 예전 28% → 지금 0%, 공사를 전부 끝냈을 때 예전 72% → 지금 100%.
      *
      * 공수도 공기도 없으면 그때는 균등(단순 평균)으로 간다.
+     *
+     * public 인 이유: 이 산식이 진척률의 정본이다. 지휘본부가 자체 산식(공수만, 공기
+     * 폴백 없음)을 따로 갖고 있어 같은 프로젝트에 다른 진척률이 뜨던 것을 여기로 통일했다.
      */
-    private function weightedProgress(Collection $subtasks): int
+    public function weightedProgress(Collection $subtasks): int
     {
         if ($subtasks->isEmpty()) {
             return 0;
