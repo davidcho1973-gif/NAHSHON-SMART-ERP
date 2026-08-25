@@ -478,4 +478,18 @@ class WorkerAttendanceScreenTest extends TestCase
         $response->assertOk();
         $this->assertSame('Entrada registrada.', $response->json('message'));
     }
+
+    public function test_a_non_active_employee_cannot_punch(): void
+    {
+        // 게이트·QR 은 이미 막는데 작업자앱 길만 열려 있었다 — 퇴사자가 계속 찍어
+        // 타임시트·급여까지 흘러가는 길이었다.
+        $this->employee->update(['employment_status' => 'terminated']);
+
+        $response = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
+            'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG,
+        ]);
+
+        $this->assertFalse($response->json('success'));
+        $this->assertDatabaseCount('attendance_logs', 0);
+    }
 }

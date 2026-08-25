@@ -111,7 +111,7 @@ class OpsRoomAutoReader
                 ? "\n\n❓ {$needs}건은 확인이 필요합니다. 현장 상황실 화면에서 확인해 주세요."
                 : "\n\n확인 후 [공정표에 반영]을 누르면 적용됩니다.");
 
-        CommunicationMessage::query()->create([
+        $reply = CommunicationMessage::query()->create([
             'communication_room_id' => $message->communication_room_id,
             'parent_id' => $message->id,
             'sender_user_id' => null,
@@ -123,5 +123,14 @@ class OpsRoomAutoReader
             'priority' => 'normal',
             'payload' => ['bot' => self::BOT_MARKER, 'intake_ids' => $items->pluck('id')->all()],
         ]);
+
+        // ⚠️(확정 내용과 충돌)·❓(확인 필요)는 사람이 답해야 다음으로 간다 — 폰이
+        // 울려야 한다. 다른 AI 답글들은 전부 ChatPushNotifier 를 지나는데 이 경로만
+        // 빠져 있어서, 정작 가장 급한 알림이 조용했다.
+        try {
+            app(\App\Services\Push\ChatPushNotifier::class)->notify($reply);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 }

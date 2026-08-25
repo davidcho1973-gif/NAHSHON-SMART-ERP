@@ -497,9 +497,19 @@ class MemberRegistration extends Model
         $startDate = $this->start_date ?: $this->badge_issued_on;
 
         $employee = $linkedEmployee
-            ?? ($email ? Employee::query()->where('email', $email)->first() : null)
+            ?? ($email ? $this->matchingEmployeeByEmail($email) : null)
             ?? $this->matchingEmployeeByNumber($employeeNumber)
             ?? new Employee(['employee_number' => $employeeNumber]);
+
+        // 이메일이 이미 다른 직원의 것이면 이 레코드에는 적지 않는다 — employees.email
+        // 은 유니크라 저장이 터지고, 유니크가 아니었더라도 두 직원이 같은 이메일을
+        // 갖는 순간 다음 조회부터 아무나 걸린다.
+        if ($email && Employee::query()
+            ->where('email', $email)
+            ->when($employee->exists, fn ($q) => $q->whereKeyNot($employee->getKey()))
+            ->exists()) {
+            $email = $employee->exists ? $employee->email : null;
+        }
 
         $employee->fill([
             'employee_number' => $employeeNumber,
@@ -540,11 +550,53 @@ class MemberRegistration extends Model
             ]),
         ]);
 
+        // 고용형태·언어 — 값이 있을 때만 채운다(컬럼 NOT NULL 기본값을 살리기 위해
+        // null 을 명시적으로 넣지 않는다). 이 보완이 없으면 정식(B) 경로로 들어온
+        // 협력사 인원이 기본값 'direct'(시급 직영)로 둔갑해 급여 대상에 올랐다.
+        // 회사 분류가 정본이고, 이미 있는 값은 보존한다. 미분류 회사는 그대로 둔다
+        // (QR 경로는 작업자에게 직접 묻고, 관리자 분류 시 따라잡는다).
+        if (! $employee->employment_type && ($companyType = $this->company?->employmentType())) {
+            $employee->employment_type = $companyType;
+        }
+        if ($this->preferred_language && $employee->preferred_language !== $this->preferred_language
+            && (! $employee->exists || ! $employee->preferred_language)) {
+            $employee->preferred_language = $this->preferred_language;
+        }
+
         $employee->save();
 
         $this->forceFill(['employee_id' => $employee->id])->saveQuietly();
 
         return $employee;
+    }
+
+    /**
+     * 이메일로 기존 직원을 찾되, 이름이 같을 때만 같은 사람으로 본다.
+     *
+     * 공개 QR 폼의 이메일은 검증되지 않은 자유 입력이다. 이메일만으로 매칭하면
+     * 남의 이메일을 적는 순간 그 직원의 이름·소속이 등록 폼 값으로 덮여 신원이
+     * 통째로 바뀐다(시험에서 실제로 재현됐다). 같은 사람이 다시 등록하는 경우
+     * (지원하는 흐름)는 이름이 같으므로 그대로 이어진다.
+     */
+    private function matchingEmployeeByEmail(string $email): ?Employee
+    {
+        $found = Employee::query()->where('email', $email)->first();
+
+        if (! $found) {
+            return null;
+        }
+
+        $same = mb_strtolower(trim((string) $found->name)) === mb_strtolower(trim((string) $this->full_name));
+
+        if (! $same) {
+            report(new \RuntimeException(
+                "등록 이메일 {$email} 이 이미 다른 이름의 직원에게 있어 매칭하지 않습니다 (registration {$this->id})."
+            ));
+
+            return null;
+        }
+
+        return $found;
     }
 
     private function resolveEmployeeNumber(?Employee $currentEmployee = null): string
@@ -636,6 +688,20 @@ class MemberRegistration extends Model
         $accessUser = User::query()->where('employee_id', $employee->id)->first()
             ?? User::query()->where('email', $email)->first()
             ?? new User;
+
+        // 공개 QR 폼의 이메일은 검증되지 않은 자유 입력이다. 그 이메일이 이미 다른
+        // 사람(다른 직원, 혹은 관리자 계정)에 붙어 있으면 그 계정을 이쪽으로 갈아타지
+        // 않는다 — 누군가 사장 이메일을 적는 순간 관리자 계정의 이름과 직원 연결이
+        // 조용히 바뀌는 문을 닫는다. 이 경우 계정 없이 등록만 진행한다(관리자가 확인).
+        if ($accessUser->exists
+            && $accessUser->employee_id !== null
+            && (int) $accessUser->employee_id !== (int) $employee->id) {
+            report(new \RuntimeException(
+                "등록 이메일 {$email} 이 이미 다른 직원의 계정에 연결되어 있어 계정 연결을 건너뜁니다 (registration {$this->id})."
+            ));
+
+            return null;
+        }
 
         $accessUser->fill([
             'employee_id' => $employee->id,

@@ -302,6 +302,13 @@ class WorkerAttendanceService
             return ['success' => false, 'error' => $t['pick']];
         }
 
+        // 재직 중이 아니면 찍을 수 없다. 게이트와 QR 은 이미 막는데 이 길만 열려
+        // 있었다 — 퇴사 처리 뒤에도 계정이 살아 있으면(정지 누락) 여기로 계속 찍혀
+        // 타임시트·급여까지 흘러갔다.
+        if ($employee->employment_status !== 'active') {
+            return ['success' => false, 'error' => $t['not_active']];
+        }
+
         $site = $employee->site_id ? Site::find($employee->site_id) : null;
         if (! $site) {
             return ['success' => false, 'error' => $t['no_site']];
@@ -458,6 +465,7 @@ class WorkerAttendanceService
         'ko' => [
             'pick' => '출근/퇴근 중 하나를 선택해 주세요.',
             'no_site' => '배정된 현장이 없습니다. 관리자에게 현장 배정을 요청해 주세요.',
+            'not_active' => '재직 상태가 아니라 출퇴근을 기록할 수 없습니다. 관리자에게 문의해 주세요.',
             'dup_in' => '오늘은 이미 출근이 기록되었습니다.',
             'no_in' => '출근 기록이 없습니다. 먼저 출근을 눌러 주세요.',
             'dup_out' => '오늘은 이미 퇴근이 기록되었습니다.',
@@ -469,6 +477,7 @@ class WorkerAttendanceService
         'en' => [
             'pick' => 'Please choose clock-in or clock-out.',
             'no_site' => 'No site assigned. Ask your manager to assign you to a site.',
+            'not_active' => 'Your employment is not active — clock-in is disabled. Contact your manager.',
             'dup_in' => 'You already clocked in today.',
             'no_in' => 'No clock-in yet. Please clock in first.',
             'dup_out' => 'You already clocked out today.',
@@ -480,6 +489,7 @@ class WorkerAttendanceService
         'es' => [
             'pick' => 'Elija entrada o salida.',
             'no_site' => 'No tiene sitio asignado. Pida a su supervisor que le asigne uno.',
+            'not_active' => 'Su empleo no está activo — no puede marcar. Contacte a su supervisor.',
             'dup_in' => 'Ya registró su entrada hoy.',
             'no_in' => 'No hay entrada registrada. Marque la entrada primero.',
             'dup_out' => 'Ya registró su salida hoy.',

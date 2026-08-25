@@ -8,7 +8,7 @@
   <title>{{ \App\Support\Org::name() }} SMART ERP</title>
   {{-- 고객사 이름은 배포마다 다르다. 화면 스크립트가 이 하나만 보게 한다. --}}
   <script>window.ORG_NAME = @json(\App\Support\Org::name()); window.ORG_COLOR = @json(\App\Support\Org::color());</script>
-  <meta name="description" content="{{ \App\Support\Org::name() }} í˜„ìž¥ í†µí•© ê´€ë¦¬ ì‹œìŠ¤í…œ">
+  <meta name="description" content="{{ \App\Support\Org::name() }} 현장 통합 관리 시스템">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -344,7 +344,7 @@
       <header class="topbar">
         <div class="topbar-left" style="display:flex;align-items:center;gap:0;">
           <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:5px 10px;">
-            <span style="font-size:12px;color:var(--text-tertiary);font-weight:500;white-space:nowrap;">ðŸ“ í˜„ìž¥</span>
+            <span style="font-size:12px;color:var(--text-tertiary);font-weight:500;white-space:nowrap;">📍 현장</span>
             <select id="project-context-switcher"
               onchange="window.setProjectContext(this.value)"
               style="background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:700;cursor:pointer;outline:none;font-family:inherit;padding:0 4px;max-width:200px;">
@@ -371,8 +371,8 @@
           </div>
           <div class="search-container">
             <i class="ph ph-magnifying-glass"></i>
-            <input type="text" placeholder="ì¸ì›, ìž¥ë¹„, ê±°ëž˜ID ê²€ìƒ‰..." class="global-search" id="global-search-input">
-            <span class="shortcut">âŒ˜K</span>
+            <input type="text" placeholder="인원, 장비, 거래ID 검색..." class="global-search" id="global-search-input">
+            <span class="shortcut">⌘K</span>
           </div>
           <div class="topbar-actions">
             @if ($companySwitcher ?? null)
@@ -394,11 +394,11 @@
               <i class="ph ph-clock" style="font-size:14px;"></i>
               <span>내 출퇴근</span>
             </button>
-            <button class="icon-btn" id="btn-notifications" title="ì•Œë¦¼">
+            <button class="icon-btn" id="btn-notifications" title="알림">
               <i class="ph ph-bell"></i>
               <span class="status-dot"></span>
             </button>
-            <button class="icon-btn" id="btn-settings" title="ì„¤ì •">
+            <button class="icon-btn" id="btn-settings" title="설정">
               <i class="ph ph-gear"></i>
             </button>
           </div>
@@ -472,7 +472,7 @@
       // 2. Loading toast
       var toast = document.createElement('div');
       toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity 0.3s;';
-      toast.textContent = (window.SITE_NAMES[siteId] || siteId) + ' ë°ì´í„° ë¡œë“œ ì¤‘...';
+      toast.textContent = (window.SITE_NAMES[siteId] || siteId) + ' 데이터 로드 중...';
       document.body.appendChild(toast);
       setTimeout(function() { toast.style.opacity = '0'; setTimeout(function() { toast.remove(); }, 300); }, 2500);
 
@@ -624,62 +624,62 @@
         attendance: await MockAPI.getAttendanceLive()
       }),
       getLgesProcessData: async () => ({
-        projectName: "LGES Battery Plant AZ - NFF 46-Series ì„¤ë¹„ ì„¤ì¹˜",
+        projectName: "LGES Battery Plant AZ - NFF 46-Series 설비 설치",
         manager: "PM Team",
         progress: 45,
         stages: [
           {
             id: "stage1",
-            title: "STAGE 1. Winder (ê¶Œì·¨ ê³µì •)",
+            title: "STAGE 1. Winder (권취 공정)",
             status: "in-progress",
             progress: 80,
             tasks: [
-              { name: "ìˆ˜ë ¹ ë° ëª©ìž¬ íŒ¨í‚¹ í•´ì²´ (Lay-down Area)", status: "done", detail: "ì—ì–´ìºìŠ¤í„° ë° ì§€ê²Œì°¨ íˆ¬ìž… ì¤€ë¹„" },
-              { name: "Air Caster ë¨¸ì‹  í¬ì§€ì…˜ ì´ë™ (Move-in)", status: "done", detail: "Turn Table, Winder ë‹¨í’ˆ ì´ë™" },
-              { name: "ê¸°ê³„ì  ë„í‚¹ (Docking)", status: "done", detail: "ë‹¨í’ˆê°„ 1ì°¨ ì¡°ë¦½ ê²°í•©" },
-              { name: "Rough / Final ë ˆë²¨ë§", status: "in-progress", detail: "Rough Â±5mm / Final Â±0.5mm ê¸°ì¤€ ì •ë ¬" },
-              { name: "Shaft Pin & Coupling ê²°í•©", status: "pending", detail: "Winder ë³¸ì²´ ë° Eject Conveyor ë™ë ¥ì¶• ì¼ì¹˜í™”" }
+              { name: "수령 및 목재 패킹 해체 (Lay-down Area)", status: "done", detail: "에어캐스터 및 지게차 투입 준비" },
+              { name: "Air Caster 머신 포지션 이동 (Move-in)", status: "done", detail: "Turn Table, Winder 단품 이동" },
+              { name: "기계적 도킹 (Docking)", status: "done", detail: "단품간 1차 조립 결합" },
+              { name: "Rough / Final 레벨링", status: "in-progress", detail: "Rough ±5mm / Final ±0.5mm 기준 정렬" },
+              { name: "Shaft Pin & Coupling 결합", status: "pending", detail: "Winder 본체 및 Eject Conveyor 동력축 일치화" }
             ]
           },
           {
             id: "stage2",
-            title: "STAGE 2. Assembly (ì¡°ë¦½ ê³µì •)",
+            title: "STAGE 2. Assembly (조립 공정)",
             status: "pending",
             progress: 15,
             tasks: [
-              { name: "Zone 1 ì…‹ì—… (CAN LOADER ê¸°ì¤€)", status: "done", detail: "Datum ë¨¸ì‹  ì¶• ì¢Œìš° ì •ë ¬" },
-              { name: "Zone 2 ì…‹ì—… (IOU ê¸°ì¤€)", status: "in-progress", detail: "ì¢ì€ êµ¬ì—­ ì „ë™ ìŠ¤íƒœì»¤ í™œìš© ë°°ì¹˜" },
-              { name: "ìœ í‹¸ë¦¬í‹° ë°°ê´€ ì„  ì—°ê²°", status: "pending", detail: "CDA, Vacuum, ë°°ê¸°ê´€ ë„í‚¹" },
-              { name: "ê¸°ë°€(Leak) í…ŒìŠ¤íŠ¸", status: "pending", detail: "ì§„ê³µ ë° ì••ì¶•ê³µê¸° ë¼ì¸ ëˆ„ì„¤ ê²€ì‚¬" }
+              { name: "Zone 1 셋업 (CAN LOADER 기준)", status: "done", detail: "Datum 머신 축 좌우 정렬" },
+              { name: "Zone 2 셋업 (IOU 기준)", status: "in-progress", detail: "좁은 구역 전동 스태커 활용 배치" },
+              { name: "유틸리티 배관 선 연결", status: "pending", detail: "CDA, Vacuum, 배기관 도킹" },
+              { name: "기밀(Leak) 테스트", status: "pending", detail: "진공 및 압축공기 라인 누설 검사" }
             ]
           },
           {
             id: "stage3",
-            title: "STAGE 3. ì „ê¸°/í™˜ê²½ ì—°ë™ (Interconnection)",
+            title: "STAGE 3. 전기/환경 연동 (Interconnection)",
             status: "pending",
             progress: 0,
             tasks: [
-              { name: "Scrap & Fume Collector ë•íŠ¸ ì—°ê²°", status: "pending", detail: "í”Œëžœì§€ ê°œìŠ¤í‚· ì‚½ìž… ë° ë³¼íŒ…" },
-              { name: "ìž¥ë¹„ ì ‘ì§€ ë° LOTO ì ê²€", status: "pending", detail: "ì „ì› ì¸ê°€ ì „ í•„ìˆ˜ EHS ì²´í¬" },
-              { name: "í†µì‹  ë° ë™ë ¥ì„  (EtherCAT) ì²´ê²°", status: "pending", detail: "ì„¼ì„œ ë°Ž ì¸í„°ë½ ì „ê¸° ë°°ì„ " },
-              { name: "ìµœì¢… ì´ê´€ (Punch-list í•´ì†Œ)", status: "pending", detail: "LGES ë° ë²¤ë” í•©ë™ ì‹œìš´ì „" }
+              { name: "Scrap & Fume Collector 덕트 연결", status: "pending", detail: "플랜지 개스킷 삽입 및 볼팅" },
+              { name: "장비 접지 및 LOTO 점검", status: "pending", detail: "전원 인가 전 필수 EHS 체크" },
+              { name: "통신 및 동력선 (EtherCAT) 체결", status: "pending", detail: "센서 밎 인터락 전기 배선" },
+              { name: "최종 이관 (Punch-list 해소)", status: "pending", detail: "LGES 및 벤더 합동 시운전" }
             ]
           }
         ]
       }),
       getKPIs: async () => [
-        { label: 'í˜„ìž¥ ì¸ì›', value: '142', unit: 'ëª…', trend: 'ì „ì¼ ëŒ€ë¹„ +3', trendType: 'up', icon: 'ph-users' },
-        { label: 'ì¤‘ìž¥ë¹„ ìš´ìš©', value: '11/14', unit: 'ëŒ€', trend: 'ìš´í–‰ë¶ˆê°€ 3ëŒ€', trendType: 'down', icon: 'ph-truck' },
-        { label: 'MTD ì§€ì¶œ', value: '$452.4K', unit: 'USD', trend: 'ì˜ˆì‚° ëŒ€ë¹„ -1.2%', trendType: 'up', icon: 'ph-currency-dollar' },
-        { label: 'ë¯¸ì²˜ë¦¬ ì•Œë¦¼', value: '5', unit: 'ê±´', trend: 'ê¸´ê¸‰ 2ê±´ í¬í•¨', trendType: 'down', icon: 'ph-warning-circle' },
-        { label: 'í™œì„± í˜„ìž¥', value: '4', unit: 'ê³³', trend: 'ì˜ˆì •ëŒ€ë¡œ ì§„í–‰ì¤‘', trendType: 'neutral', icon: 'ph-buildings' },
+        { label: '현장 인원', value: '142', unit: '명', trend: '전일 대비 +3', trendType: 'up', icon: 'ph-users' },
+        { label: '중장비 운용', value: '11/14', unit: '대', trend: '운행불가 3대', trendType: 'down', icon: 'ph-truck' },
+        { label: 'MTD 지출', value: '$452.4K', unit: 'USD', trend: '예산 대비 -1.2%', trendType: 'up', icon: 'ph-currency-dollar' },
+        { label: '미처리 알림', value: '5', unit: '건', trend: '긴급 2건 포함', trendType: 'down', icon: 'ph-warning-circle' },
+        { label: '활성 현장', value: '4', unit: '곳', trend: '예정대로 진행중', trendType: 'neutral', icon: 'ph-buildings' },
       ],
       getActionItems: async () => [
-        { id: 'ACT-0192', type: 'ì•ˆì „', summary: 'FPP ì—…ë°ì´íŠ¸ â€” LGES AZ ì§€ë¶• ê³µì‚¬ êµ¬ê°„', assignee: 'David H.', status: 'critical', date: '2026-04-06' },
-        { id: 'ACT-0193', type: 'HR', summary: 'OSHA 30 ê°±ì‹  í•„ìš” â€” ìµœë™í˜ (4ì¼ í›„ ë§Œë£Œ)', assignee: 'SYSTEM', status: 'critical', date: '2026-04-06' },
-        { id: 'ACT-0194', type: 'ìž¬ë¬´', summary: 'ì¸ë³´ì´ìŠ¤ #IV-8821 ìŠ¹ì¸ ìš”ì²­ $12,400', assignee: 'Accounting', status: 'warning', date: '2026-04-05' },
-        { id: 'ACT-0195', type: 'HR', summary: 'íƒ€ìž„ì‹œíŠ¸ ì´ìƒ ê°ì§€: 3ëª… 12ì‹œê°„ ì´ˆê³¼ ê·¼ë¬´', assignee: 'PM Team', status: 'warning', date: '2026-04-05' },
-        { id: 'ACT-0196', type: 'ìžìž¬', summary: 'ìž¬ê³ ë¶€ì¡±: ì „ì„ ê´€ 3/4" â€” ìµœì†Œ ìˆ˜ëŸ‰ ë¯¸ë‹¬', assignee: 'Warehouse', status: 'pending', date: '2026-04-04' },
+        { id: 'ACT-0192', type: '안전', summary: 'FPP 업데이트 — LGES AZ 지붕 공사 구간', assignee: 'David H.', status: 'critical', date: '2026-04-06' },
+        { id: 'ACT-0193', type: 'HR', summary: 'OSHA 30 갱신 필요 — 최동혁 (4일 후 만료)', assignee: 'SYSTEM', status: 'critical', date: '2026-04-06' },
+        { id: 'ACT-0194', type: '재무', summary: '인보이스 #IV-8821 승인 요청 $12,400', assignee: 'Accounting', status: 'warning', date: '2026-04-05' },
+        { id: 'ACT-0195', type: 'HR', summary: '타임시트 이상 감지: 3명 12시간 초과 근무', assignee: 'PM Team', status: 'warning', date: '2026-04-05' },
+        { id: 'ACT-0196', type: '자재', summary: '재고부족: 전선관 3/4" — 최소 수량 미달', assignee: 'Warehouse', status: 'pending', date: '2026-04-04' },
       ],
       getProjectStatus: async () => [
         { code: 'PRJ-LGS-01', name: 'LGES Battery Plant AZ', manager: 'S. Connor', progress: 68, color: '#2563eb', endDate: '2026-11-30' },
@@ -688,34 +688,34 @@
         { code: 'PRJ-HWH-04', name: 'Hanwha Solar Site', manager: 'A. Chen', progress: 89, color: '#8b5cf6', endDate: '2026-05-20' },
       ],
       getEquipmentList: async () => [
-        { id: 'EQ-001', name: 'êµ´ì°©ê¸° CAT 320', type: 'êµ´ì°©ê¸°', site: 'LGES-AZ', status: 'ìš´í–‰ê°€ëŠ¥', inspector: 'ê¹€ì² ìˆ˜', lastCheck: '2026-04-09', checkStatus: 'ì™„ë£Œ' },
-        { id: 'EQ-002', name: 'í¬ë ˆì¸ Liebherr', type: 'í¬ë ˆì¸', site: 'LGES-AZ', status: 'ìš´í–‰ë¶ˆê°€', inspector: 'ì´ë¯¼ì¤€', lastCheck: '2026-04-09', checkStatus: 'ì™„ë£Œ' },
-        { id: 'EQ-003', name: 'ì§€ê²Œì°¨ 5T', type: 'ì§€ê²Œì°¨', site: 'HFF-02', status: 'ìš´í–‰ê°€ëŠ¥', inspector: 'ë°•ì§€í˜¸', lastCheck: '2026-04-09', checkStatus: 'ì™„ë£Œ' },
-        { id: 'EQ-004', name: 'ì»´í”„ë ˆì„œ Doosan', type: 'ì»´í”„ë ˆì„œ', site: 'HFF-02', status: 'ìš´í–‰ê°€ëŠ¥', inspector: 'ìµœë™í˜', lastCheck: '2026-04-08', checkStatus: 'ì™„ë£Œ' },
-        { id: 'EQ-005', name: 'ë¤í”„íŠ¸ëŸ­ 10T', type: 'íŠ¸ëŸ­', site: 'SST-03', status: 'ìš´í–‰ë¶ˆê°€', inspector: 'ê°•ìŠ¹ìš°', lastCheck: '2026-04-09', checkStatus: 'ì™„ë£Œ' },
-        { id: 'EQ-006', name: 'êµ´ì°©ê¸° Komatsu', type: 'êµ´ì°©ê¸°', site: 'SST-03', status: 'ìš´í–‰ê°€ëŠ¥', inspector: 'ìœ¤ìž¬ì›', lastCheck: '2026-04-09', checkStatus: 'ì™„ë£Œ' },
+        { id: 'EQ-001', name: '굴착기 CAT 320', type: '굴착기', site: 'LGES-AZ', status: '운행가능', inspector: '김철수', lastCheck: '2026-04-09', checkStatus: '완료' },
+        { id: 'EQ-002', name: '크레인 Liebherr', type: '크레인', site: 'LGES-AZ', status: '운행불가', inspector: '이민준', lastCheck: '2026-04-09', checkStatus: '완료' },
+        { id: 'EQ-003', name: '지게차 5T', type: '지게차', site: 'HFF-02', status: '운행가능', inspector: '박지호', lastCheck: '2026-04-09', checkStatus: '완료' },
+        { id: 'EQ-004', name: '컴프레서 Doosan', type: '컴프레서', site: 'HFF-02', status: '운행가능', inspector: '최동혁', lastCheck: '2026-04-08', checkStatus: '완료' },
+        { id: 'EQ-005', name: '덤프트럭 10T', type: '트럭', site: 'SST-03', status: '운행불가', inspector: '강승우', lastCheck: '2026-04-09', checkStatus: '완료' },
+        { id: 'EQ-006', name: '굴착기 Komatsu', type: '굴착기', site: 'SST-03', status: '운행가능', inspector: '윤재원', lastCheck: '2026-04-09', checkStatus: '완료' },
       ],
       getEquipmentStats: async () => ({ total: 14, operable: 11, inoperable: 3, todayInspections: 8 }),
       getToolList: async () => [
-        { id: 'TL-001', name: 'ì „ë™ë“œë¦´ Makita', category: 'ì „ë™ê³µêµ¬', status: 'ë¶ˆì¶œì¤‘', holder: 'ì´ë¯¼ì¤€', checkoutDate: '2026-04-08', condition: 'ì •ìƒ' },
-        { id: 'TL-002', name: 'ê°ë„ê¸°-200mm', category: 'ì¸¡ì •', status: 'ë³´ê´€ì¤‘', holder: '', checkoutDate: '', condition: 'ì •ìƒ' },
-        { id: 'TL-003', name: 'í† í¬ë Œì¹˜ 300Nm', category: 'ìˆ˜ê³µêµ¬', status: 'ë¶ˆì¶œì¤‘', holder: 'ë°•ì§€í˜¸', checkoutDate: '2026-04-07', condition: 'ì •ìƒ' },
-        { id: 'TL-004', name: 'ì—´í™”ìƒ ì¹´ë©”ë¼ FLIR', category: 'ê²€ì‚¬ìž¥ë¹„', status: 'ë¶ˆì¶œì¤‘', holder: 'ìµœë™í˜', checkoutDate: '2026-04-09', condition: 'ìˆ˜ë¦¬í•„ìš”' },
-        { id: 'TL-006', name: 'íŒŒì´í”„ë Œì¹˜ 18"', category: 'ìˆ˜ê³µêµ¬', status: 'ë³´ê´€ì¤‘', holder: '', checkoutDate: '', condition: 'ì†ìƒ' },
+        { id: 'TL-001', name: '전동드릴 Makita', category: '전동공구', status: '불출중', holder: '이민준', checkoutDate: '2026-04-08', condition: '정상' },
+        { id: 'TL-002', name: '각도기-200mm', category: '측정', status: '보관중', holder: '', checkoutDate: '', condition: '정상' },
+        { id: 'TL-003', name: '토크렌치 300Nm', category: '수공구', status: '불출중', holder: '박지호', checkoutDate: '2026-04-07', condition: '정상' },
+        { id: 'TL-004', name: '열화상 카메라 FLIR', category: '검사장비', status: '불출중', holder: '최동혁', checkoutDate: '2026-04-09', condition: '수리필요' },
+        { id: 'TL-006', name: '파이프렌치 18"', category: '수공구', status: '보관중', holder: '', checkoutDate: '', condition: '손상' },
       ],
       getToolStats: async () => ({ total: 87, checkedOut: 31, inStorage: 52, damaged: 4 }),
       getToolTransactions: async () => [
-        { time: '09:42', action: 'ë¶ˆì¶œ', toolId: 'TL-007', toolName: 'ë ˆì´ì € ìˆ˜í‰ê¸°', userId: 'ê°•ìŠ¹ìš°', condition: 'ì •ìƒ' },
-        { time: '09:15', action: 'ë°˜ë‚©', toolId: 'TL-004', toolName: 'ì—´í™”ìƒ ì¹´ë©”ë¼', userId: 'ì •ëŒ€ê±´', condition: 'ìˆ˜ë¦¬í•„ìš”' },
-        { time: '08:51', action: 'ë¶ˆì¶œ', toolId: 'TL-001', toolName: 'ì „ë™ë“œë¦´ Makita', userId: 'ì´ë¯¼ì¤€', condition: 'ì •ìƒ' },
+        { time: '09:42', action: '불출', toolId: 'TL-007', toolName: '레이저 수평기', userId: '강승우', condition: '정상' },
+        { time: '09:15', action: '반납', toolId: 'TL-004', toolName: '열화상 카메라', userId: '정대건', condition: '수리필요' },
+        { time: '08:51', action: '불출', toolId: 'TL-001', toolName: '전동드릴 Makita', userId: '이민준', condition: '정상' },
       ],
       getPersonnelList: async () => [
-        { id: 'P-2604-0001', nameKr: 'ê¹€ì² ìˆ˜', nameEn: 'Chulsoo Kim', company: ORG_NAME, role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-10-15', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0002', nameKr: 'ì´ë¯¼ì¤€', nameEn: 'Minjun Lee', company: ORG_NAME, role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-09-30', site: 'LGES-AZ', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0003', nameKr: 'ë°•ì§€í˜¸', nameEn: 'Jiho Park', company: 'SUBO', role: 'ìš©ì ‘ê³µ', visa: 'H-2B', visaExpiry: '2026-08-20', site: 'HFF-02', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0004', nameKr: 'ìµœë™í˜', nameEn: 'Donghyuk Choi', company: 'SUBO', role: 'ë°°ê´€ê³µ', visa: 'H-2B', visaExpiry: '2026-07-11', site: 'HFF-02', safety: 'ë§Œë£Œìž„ë°•' },
-        { id: 'P-2604-0005', nameKr: 'ê°•ìŠ¹ìš°', nameEn: 'Seungwoo Kang', company: 'ETC', role: 'ì¤‘ìž¥ë¹„ê¸°ì‚¬', visa: 'H-2B', visaExpiry: '2026-12-01', site: 'SST-03', safety: 'ì™„ë£Œ' },
-        { id: 'P-2604-0007', nameKr: 'ìž„ì„±í›ˆ', nameEn: 'Sunghoon Lim', company: ORG_NAME, role: 'ì „ê¸°ê³µ', visa: 'H-2B', visaExpiry: '2026-10-22', site: 'HWH-04', safety: 'ë¯¸ì´ìˆ˜' },
+        { id: 'P-2604-0001', nameKr: '김철수', nameEn: 'Chulsoo Kim', company: ORG_NAME, role: '배관공', visa: 'H-2B', visaExpiry: '2026-10-15', site: 'LGES-AZ', safety: '완료' },
+        { id: 'P-2604-0002', nameKr: '이민준', nameEn: 'Minjun Lee', company: ORG_NAME, role: '전기공', visa: 'H-2B', visaExpiry: '2026-09-30', site: 'LGES-AZ', safety: '완료' },
+        { id: 'P-2604-0003', nameKr: '박지호', nameEn: 'Jiho Park', company: 'SUBO', role: '용접공', visa: 'H-2B', visaExpiry: '2026-08-20', site: 'HFF-02', safety: '완료' },
+        { id: 'P-2604-0004', nameKr: '최동혁', nameEn: 'Donghyuk Choi', company: 'SUBO', role: '배관공', visa: 'H-2B', visaExpiry: '2026-07-11', site: 'HFF-02', safety: '만료임박' },
+        { id: 'P-2604-0005', nameKr: '강승우', nameEn: 'Seungwoo Kang', company: 'ETC', role: '중장비기사', visa: 'H-2B', visaExpiry: '2026-12-01', site: 'SST-03', safety: '완료' },
+        { id: 'P-2604-0007', nameKr: '임성훈', nameEn: 'Sunghoon Lim', company: ORG_NAME, role: '전기공', visa: 'H-2B', visaExpiry: '2026-10-22', site: 'HWH-04', safety: '미이수' },
       ],
       getPersonnelStats: async () => ({
         total: 142, active: 138, onLeave: 4, visaExpiringSoon: 3, safetyExpiring: 2,
@@ -724,27 +724,27 @@
       getFinanceStats: async () => ({
         mtdTotal: 452400, mtdBudget: 460000, pendingApproval: 3, pendingAmount: 17140, claimable: 38200,
         byCategory: [
-          { name: 'ìžìž¬', amount: 142000, color: '#2563eb' },
-          { name: 'ì¸ê±´ë¹„', amount: 168000, color: '#10b981' },
-          { name: 'ìž¥ë¹„ìž„ëŒ€', amount: 88400, color: '#f59e0b' },
-          { name: 'ì‹ë¹„/ìˆ™ì†Œ', amount: 38200, color: '#8b5cf6' },
-          { name: 'ê¸°íƒ€', amount: 15800, color: '#64748b' },
+          { name: '자재', amount: 142000, color: '#2563eb' },
+          { name: '인건비', amount: 168000, color: '#10b981' },
+          { name: '장비임대', amount: 88400, color: '#f59e0b' },
+          { name: '식비/숙소', amount: 38200, color: '#8b5cf6' },
+          { name: '기타', amount: 15800, color: '#64748b' },
         ],
       }),
       getExpenses: async () => [
-        { id: 'TX-2604-0021', date: '2026-04-09', category: 'ì‹ë¹„', site: 'LGES-AZ', detail: 'í˜„ìž¥ ì¤‘ì‹ (142ëª…)', amount: 2840, method: 'ë²•ì¸ì¹´ë“œ', claimable: true, status: 'ë¯¸ì²­êµ¬', receiptUrl: '#' },
-        { id: 'TX-2604-0020', date: '2026-04-09', category: 'ìžìž¬', site: 'HFF-02', detail: 'ë°°ê´€ í”¼íŒ… ì„¸íŠ¸ #B-48', amount: 4210, method: 'êµ¬ë§¤ì£¼ë¬¸', claimable: true, status: 'ì²­êµ¬ì™„ë£Œ', receiptUrl: '#' },
-        { id: 'TX-2604-0019', date: '2026-04-08', category: 'ìž¥ë¹„ìž„ëŒ€', site: 'SST-03', detail: 'í¬ë ˆì¸ 1ì¼ ìž„ëŒ€', amount: 12400, method: 'ì¸ë³´ì´ìŠ¤', claimable: true, status: 'ìŠ¹ì¸ëŒ€ê¸°', receiptUrl: '#' },
-        { id: 'TX-2604-0018', date: '2026-04-08', category: 'ìˆ™ì†Œ', site: 'HWH-04', detail: '4ì›” ì›”ì„¸ â€” Unit 14', amount: 3600, method: 'ìˆ˜í‘œ', claimable: false, status: 'ì²­êµ¬ì™„ë£Œ', receiptUrl: '' },
-        { id: 'TX-2604-0016', date: '2026-04-07', category: 'ì•ˆì „', site: 'LGES-AZ', detail: 'PPE ì†Œëª¨í’ˆ ë³´ì¶©', amount: 890, method: 'ë²•ì¸ì¹´ë“œ', claimable: true, status: 'ë¯¸ì²­êµ¬', receiptUrl: '#' },
+        { id: 'TX-2604-0021', date: '2026-04-09', category: '식비', site: 'LGES-AZ', detail: '현장 중식 (142명)', amount: 2840, method: '법인카드', claimable: true, status: '미청구', receiptUrl: '#' },
+        { id: 'TX-2604-0020', date: '2026-04-09', category: '자재', site: 'HFF-02', detail: '배관 피팅 세트 #B-48', amount: 4210, method: '구매주문', claimable: true, status: '청구완료', receiptUrl: '#' },
+        { id: 'TX-2604-0019', date: '2026-04-08', category: '장비임대', site: 'SST-03', detail: '크레인 1일 임대', amount: 12400, method: '인보이스', claimable: true, status: '승인대기', receiptUrl: '#' },
+        { id: 'TX-2604-0018', date: '2026-04-08', category: '숙소', site: 'HWH-04', detail: '4월 월세 — Unit 14', amount: 3600, method: '수표', claimable: false, status: '청구완료', receiptUrl: '' },
+        { id: 'TX-2604-0016', date: '2026-04-07', category: '안전', site: 'LGES-AZ', detail: 'PPE 소모품 보충', amount: 890, method: '법인카드', claimable: true, status: '미청구', receiptUrl: '#' },
       ],
       getAlerts: async () => [
-        { id: 'AL-2604-0008', time: '09:42', type: 'ì¤‘ìž¥ë¹„', target: 'EQ-002', summary: 'Liebherr í¬ë ˆì¸ ìš´í–‰ë¶ˆê°€ íŒì •', level: 'ê¸´ê¸‰', status: 'ë¯¸ì²˜ë¦¬', reporter: 'ì´ë¯¼ì¤€' },
-        { id: 'AL-2604-0007', time: '09:15', type: 'ê³µêµ¬ì†ìƒ', target: 'TL-004', summary: 'ì—´í™”ìƒ ì¹´ë©”ë¼ ìˆ˜ë¦¬í•„ìš”', level: 'ì£¼ì˜', status: 'ë¯¸ì²˜ë¦¬', reporter: 'ì •ëŒ€ê±´' },
-        { id: 'AL-2604-0006', time: '08:33', type: 'ì¤‘ìž¥ë¹„', target: 'EQ-005', summary: 'ë¤í”„íŠ¸ëŸ­ 10T ì—”ì§„ì˜¤ì¼ ëˆ„ì¶œ', level: 'ê¸´ê¸‰', status: 'ì²˜ë¦¬ì¤‘', reporter: 'ê°•ìŠ¹ìš°' },
-        { id: 'AL-2604-0005', time: '2026-04-08', type: 'ìˆ™ì†Œ', target: 'HSG-07', summary: 'í™”ìž¥ì‹¤ ë°°ê´€ ëˆ„ìˆ˜ â€” Unit 7', level: 'ì£¼ì˜', status: 'ì²˜ë¦¬ì™„ë£Œ', reporter: 'ë°•ì§€í˜¸' },
-        { id: 'AL-2604-0004', time: '2026-04-08', type: 'ì¸ì¦', target: 'P-2604-0004', summary: 'ë¹„ìž ë§Œë£Œ 60ì¼ ì´ë‚´ â€” ìµœë™í˜', level: 'ì£¼ì˜', status: 'ë¯¸ì²˜ë¦¬', reporter: 'SYSTEM' },
-        { id: 'AL-2604-0003', time: '2026-04-07', type: 'ì•ˆì „', target: 'P-2604-0007', summary: 'ì•ˆì „êµìœ¡ ë¯¸ì´ìˆ˜ â€” ìž„ì„±í›ˆ', level: 'ì£¼ì˜', status: 'ë¯¸ì²˜ë¦¬', reporter: 'SYSTEM' },
+        { id: 'AL-2604-0008', time: '09:42', type: '중장비', target: 'EQ-002', summary: 'Liebherr 크레인 운행불가 판정', level: '긴급', status: '미처리', reporter: '이민준' },
+        { id: 'AL-2604-0007', time: '09:15', type: '공구손상', target: 'TL-004', summary: '열화상 카메라 수리필요', level: '주의', status: '미처리', reporter: '정대건' },
+        { id: 'AL-2604-0006', time: '08:33', type: '중장비', target: 'EQ-005', summary: '덤프트럭 10T 엔진오일 누출', level: '긴급', status: '처리중', reporter: '강승우' },
+        { id: 'AL-2604-0005', time: '2026-04-08', type: '숙소', target: 'HSG-07', summary: '화장실 배관 누수 — Unit 7', level: '주의', status: '처리완료', reporter: '박지호' },
+        { id: 'AL-2604-0004', time: '2026-04-08', type: '인증', target: 'P-2604-0004', summary: '비자 만료 60일 이내 — 최동혁', level: '주의', status: '미처리', reporter: 'SYSTEM' },
+        { id: 'AL-2604-0003', time: '2026-04-07', type: '안전', target: 'P-2604-0007', summary: '안전교육 미이수 — 임성훈', level: '주의', status: '미처리', reporter: 'SYSTEM' },
       ],
       getSafetyStats: async () => ({
         daysNoIncident: 32, lastIncidentDate: '2026-03-12',
@@ -754,86 +754,86 @@
         trainingExpiringSoon: 2
       }),
       getPtwList: async () => [
-        { id: 'PTW-2604-001', type: 'ê³ ì†Œìž‘ì—…', typeColor: '#f97316', title: 'Aêµ¬ì—­ ì§€ë¶• íŒ¨ë„ ì„¤ì¹˜', zone: 'Aêµ¬ì—­', date: '2026-04-13', timeStart: '07:00', timeEnd: '17:00', applicant: 'ê¹€ì² ìˆ˜', company: ORG_NAME, workers: 4, risks: 'ì¶”ë½, ë‚™í•˜ë¬¼', measures: 'ì•ˆì „ë‚œê°„ ì„¤ì¹˜, ì•ˆì „ë§ ì„¤ì¹˜, ì•ˆì „ë²¨íŠ¸ ì°©ìš©', tbmDone: true, status: 'ì§„í–‰ì¤‘' },
-        { id: 'PTW-2604-002', type: 'í™”ê¸°ìž‘ì—…', typeColor: '#ef4444', title: 'Bêµ¬ì—­ ë°°ê´€ ìš©ì ‘', zone: 'Bêµ¬ì—­', date: '2026-04-13', timeStart: '09:00', timeEnd: '15:00', applicant: 'ì´ë¯¼ì¤€', company: 'SUBO', workers: 2, risks: 'í™”ìž¬, í™”ìƒ, ìœ í•´ê°€ìŠ¤', measures: 'ì†Œí™”ê¸° ë¹„ì¹˜, í™”ê¸°ê°ì‹œìž ë°°ì¹˜, ë°©ì—´ë³µ ì°©ìš©', tbmDone: false, status: 'ìŠ¹ì¸ëŒ€ê¸°' },
-        { id: 'PTW-2604-003', type: 'ë°€íê³µê°„', typeColor: '#8b5cf6', title: 'Cêµ¬ì—­ ì§€í•˜ íƒ±í¬ ì²­ì†Œ', zone: 'Cêµ¬ì—­', date: '2026-04-14', timeStart: '08:00', timeEnd: '12:00', applicant: 'ë°•ì§€í˜¸', company: 'ETC', workers: 3, risks: 'ì‚°ì†Œê²°í•, ìœ í•´ê°€ìŠ¤ ì¤‘ë…', measures: 'í™˜ê¸°ìž¥ì¹˜ ê°€ë™, ì‚°ì†Œë†ë„ ì¸¡ì •, êµ¬ì¡°ì› ëŒ€ê¸°', tbmDone: false, status: 'ìŠ¹ì¸ëŒ€ê¸°' },
-        { id: 'PTW-2604-004', type: 'ì¤‘ëŸ‰ë¬¼', typeColor: '#eab308', title: 'Dêµ¬ì—­ ì¹ ëŸ¬ ì–‘ì¤‘', zone: 'Dêµ¬ì—­', date: '2026-04-12', timeStart: '06:00', timeEnd: '10:00', applicant: 'ìµœë™í˜', company: ORG_NAME, workers: 6, risks: 'ë‚™í•˜, ì „ë„, ì¶©ëŒ', measures: 'í¬ë ˆì¸ ìž‘ë™ë°˜ê²½ í†µì œ, ì‹ í˜¸ìˆ˜ ë°°ì¹˜', tbmDone: true, status: 'ì™„ë£Œ' },
-        { id: 'PTW-2604-005', type: 'êµ´ì°©ìž‘ì—…', typeColor: '#3b82f6', title: 'Eêµ¬ì—­ ì§€ì¤‘ë°°ê´€ íŠ¸ë Œì¹˜', zone: 'Eêµ¬ì—­', date: '2026-04-11', timeStart: '07:00', timeEnd: '16:00', applicant: 'ê°•ìŠ¹ìš°', company: 'ETC', workers: 5, risks: 'ë§¤ëª°, ì§€ì¤‘ë§¤ì„¤ë¬¼ ì†ìƒ', measures: 'ì§€í•˜ë§¤ì„¤ë¬¼ í™•ì¸, ê²½ì‚¬ë©´ ë³´ê°•, ì¶œìž…í†µì œ', tbmDone: true, status: 'ì™„ë£Œ' }
+        { id: 'PTW-2604-001', type: '고소작업', typeColor: '#f97316', title: 'A구역 지붕 패널 설치', zone: 'A구역', date: '2026-04-13', timeStart: '07:00', timeEnd: '17:00', applicant: '김철수', company: ORG_NAME, workers: 4, risks: '추락, 낙하물', measures: '안전난간 설치, 안전망 설치, 안전벨트 착용', tbmDone: true, status: '진행중' },
+        { id: 'PTW-2604-002', type: '화기작업', typeColor: '#ef4444', title: 'B구역 배관 용접', zone: 'B구역', date: '2026-04-13', timeStart: '09:00', timeEnd: '15:00', applicant: '이민준', company: 'SUBO', workers: 2, risks: '화재, 화상, 유해가스', measures: '소화기 비치, 화기감시자 배치, 방열복 착용', tbmDone: false, status: '승인대기' },
+        { id: 'PTW-2604-003', type: '밀폐공간', typeColor: '#8b5cf6', title: 'C구역 지하 탱크 청소', zone: 'C구역', date: '2026-04-14', timeStart: '08:00', timeEnd: '12:00', applicant: '박지호', company: 'ETC', workers: 3, risks: '산소결핍, 유해가스 중독', measures: '환기장치 가동, 산소농도 측정, 구조원 대기', tbmDone: false, status: '승인대기' },
+        { id: 'PTW-2604-004', type: '중량물', typeColor: '#eab308', title: 'D구역 칠러 양중', zone: 'D구역', date: '2026-04-12', timeStart: '06:00', timeEnd: '10:00', applicant: '최동혁', company: ORG_NAME, workers: 6, risks: '낙하, 전도, 충돌', measures: '크레인 작동반경 통제, 신호수 배치', tbmDone: true, status: '완료' },
+        { id: 'PTW-2604-005', type: '굴착작업', typeColor: '#3b82f6', title: 'E구역 지중배관 트렌치', zone: 'E구역', date: '2026-04-11', timeStart: '07:00', timeEnd: '16:00', applicant: '강승우', company: 'ETC', workers: 5, risks: '매몰, 지중매설물 손상', measures: '지하매설물 확인, 경사면 보강, 출입통제', tbmDone: true, status: '완료' }
       ],
       getPtwStats: async () => ({ todayActive: 2, pending: 1, completed: 2, rejected: 0 }),
       getInspections: async () => [
-        { id: 'INS-001', date: '2026-04-13', inspector: 'ê¹€ì•ˆì „', zone: 'ì „ì²´í˜„ìž¥', category: 'ì¶”ë½ë°©ì§€',
+        { id: 'INS-001', date: '2026-04-13', inspector: '김안전', zone: '전체현장', category: '추락방지',
           items: [
-            { name: 'ì•ˆì „ë‚œê°„ ì„¤ì¹˜ ìƒíƒœ', result: 'pass' },
-            { name: 'ê°œêµ¬ë¶€ ë®ê°œ ì„¤ì¹˜', result: 'fail', note: 'Bêµ¬ì—­ 2ê°œì†Œ ë®ê°œ íŒŒì†' },
-            { name: 'ì•ˆì „ë§ ì„¤ì¹˜ ì™„ë£Œ', result: 'pass' },
-            { name: 'ì‚¬ë‹¤ë¦¬ ê³ ì • ìƒíƒœ', result: 'pass' }
+            { name: '안전난간 설치 상태', result: 'pass' },
+            { name: '개구부 덮개 설치', result: 'fail', note: 'B구역 2개소 덮개 파손' },
+            { name: '안전망 설치 완료', result: 'pass' },
+            { name: '사다리 고정 상태', result: 'pass' }
           ]
         },
-        { id: 'INS-002', date: '2026-04-13', inspector: 'ì´ê°ë…', zone: 'Aêµ¬ì—­', category: 'ì¤‘ìž¥ë¹„',
+        { id: 'INS-002', date: '2026-04-13', inspector: '이감독', zone: 'A구역', category: '중장비',
           items: [
-            { name: 'ì¼ì¼ì ê²€í‘œ ìž‘ì„± ì—¬ë¶€', result: 'pass' },
-            { name: 'ê²½ì  ë° í›„ë°©ê²½ë³´ê¸°', result: 'pass' },
-            { name: 'ì§€ê²Œì°¨ í¬í¬ ìƒíƒœ', result: 'fail', note: 'í•€ ë§ˆëª¨ â€” ì •ë¹„ í•„ìš”' },
-            { name: 'ì•ˆì „ë²¨íŠ¸ ìž¥ì°© í™•ì¸', result: 'pass' }
+            { name: '일일점검표 작성 여부', result: 'pass' },
+            { name: '경적 및 후방경보기', result: 'pass' },
+            { name: '지게차 포크 상태', result: 'fail', note: '핀 마모 — 정비 필요' },
+            { name: '안전벨트 장착 확인', result: 'pass' }
           ]
         },
-        { id: 'INS-003', date: '2026-04-13', inspector: 'ë°•ì†Œìž¥', zone: 'ì‚¬ë¬´ì‹¤/ì°½ê³ ', category: 'ì „ê¸°/í™”ìž¬',
+        { id: 'INS-003', date: '2026-04-13', inspector: '박소장', zone: '사무실/창고', category: '전기/화재',
           items: [
-            { name: 'ìž„ì‹œë°°ì „ë°˜ ì»¤ë²„ ì²´ê²°', result: 'pass' },
-            { name: 'ì ‘ì§€ì„  ì—°ê²° ìƒíƒœ', result: 'pass' },
-            { name: 'ì†Œí™”ê¸° ìœ„ì¹˜ ë° ìƒíƒœ', result: 'fail', note: 'Cêµ¬ì—­ ì†Œí™”ê¸° ì••ë ¥ë¶€ì¡± â€” êµì²´ ìš”ì²­' },
-            { name: 'ê°€ì—°ì„± ë¬¼ì§ˆ ì´ê²© ê´€ë¦¬', result: 'pass' }
+            { name: '임시배전반 커버 체결', result: 'pass' },
+            { name: '접지선 연결 상태', result: 'pass' },
+            { name: '소화기 위치 및 상태', result: 'fail', note: 'C구역 소화기 압력부족 — 교체 요청' },
+            { name: '가연성 물질 이격 관리', result: 'pass' }
           ]
         }
       ],
       getInspectionStats: async () => ({ totalItems: 12, passed: 9, failed: 3, completionRate: 78 }),
       getTrainingRecords: async () => [
-        { id: 'P-2604-0001', name: 'ê¹€ì² ìˆ˜', role: 'ë°°ê´€ê³µ', company: ORG_NAME,
+        { id: 'P-2604-0001', name: '김철수', role: '배관공', company: ORG_NAME,
           trainings: [
-            { name: 'OSHA 30-Hour', completedDate: '2024-10-15', expiryDate: '2026-10-15', status: 'ìœ íš¨' },
-            { name: 'ê³ ì†Œìž‘ì—… ì•ˆì „êµìœ¡', completedDate: '2025-04-01', expiryDate: '2026-04-01', status: 'ë§Œë£Œ' },
-            { name: 'ì•ˆì „ë³´ê±´êµìœ¡ (ê¸°ë³¸)', completedDate: '2025-01-10', expiryDate: '2027-01-10', status: 'ìœ íš¨' }
+            { name: 'OSHA 30-Hour', completedDate: '2024-10-15', expiryDate: '2026-10-15', status: '유효' },
+            { name: '고소작업 안전교육', completedDate: '2025-04-01', expiryDate: '2026-04-01', status: '만료' },
+            { name: '안전보건교육 (기본)', completedDate: '2025-01-10', expiryDate: '2027-01-10', status: '유효' }
           ]
         },
-        { id: 'P-2604-0002', name: 'ì´ë¯¼ì¤€', role: 'ì „ê¸°ê³µ', company: ORG_NAME,
+        { id: 'P-2604-0002', name: '이민준', role: '전기공', company: ORG_NAME,
           trainings: [
-            { name: 'OSHA 10-Hour', completedDate: '2025-03-20', expiryDate: '2027-03-20', status: 'ìœ íš¨' },
-            { name: 'í™”ê¸°ìž‘ì—… ì•ˆì „êµìœ¡', completedDate: '2025-02-14', expiryDate: '2026-05-14', status: 'ë§Œë£Œìž„ë°•' },
-            { name: 'ì „ê¸°ì•ˆì „ íŠ¹ë³„êµìœ¡', completedDate: '2025-06-01', expiryDate: '2027-06-01', status: 'ìœ íš¨' }
+            { name: 'OSHA 10-Hour', completedDate: '2025-03-20', expiryDate: '2027-03-20', status: '유효' },
+            { name: '화기작업 안전교육', completedDate: '2025-02-14', expiryDate: '2026-05-14', status: '만료임박' },
+            { name: '전기안전 특별교육', completedDate: '2025-06-01', expiryDate: '2027-06-01', status: '유효' }
           ]
         },
-        { id: 'P-2604-0003', name: 'ë°•ì§€í˜¸', role: 'ìš©ì ‘ê³µ', company: 'SUBO',
+        { id: 'P-2604-0003', name: '박지호', role: '용접공', company: 'SUBO',
           trainings: [
-            { name: 'OSHA 10-Hour', completedDate: '2025-01-05', expiryDate: '2027-01-05', status: 'ìœ íš¨' },
-            { name: 'ë°€íê³µê°„ ì•ˆì „êµìœ¡', completedDate: '2025-08-20', expiryDate: '2026-08-20', status: 'ìœ íš¨' }
+            { name: 'OSHA 10-Hour', completedDate: '2025-01-05', expiryDate: '2027-01-05', status: '유효' },
+            { name: '밀폐공간 안전교육', completedDate: '2025-08-20', expiryDate: '2026-08-20', status: '유효' }
           ]
         },
-        { id: 'P-2604-0004', name: 'ìµœë™í˜', role: 'ë°°ê´€ê³µ', company: 'SUBO',
+        { id: 'P-2604-0004', name: '최동혁', role: '배관공', company: 'SUBO',
           trainings: [
-            { name: 'OSHA 30-Hour', completedDate: '2023-09-01', expiryDate: '2025-09-01', status: 'ë§Œë£Œ' },
-            { name: 'ì¤‘ëŸ‰ë¬¼ ì·¨ê¸‰ êµìœ¡', completedDate: '2025-04-10', expiryDate: '2026-04-10', status: 'ë§Œë£Œìž„ë°•' }
+            { name: 'OSHA 30-Hour', completedDate: '2023-09-01', expiryDate: '2025-09-01', status: '만료' },
+            { name: '중량물 취급 교육', completedDate: '2025-04-10', expiryDate: '2026-04-10', status: '만료임박' }
           ]
         },
-        { id: 'P-2604-0005', name: 'ê°•ìŠ¹ìš°', role: 'ì¤‘ìž¥ë¹„ê¸°ì‚¬', company: 'ETC',
+        { id: 'P-2604-0005', name: '강승우', role: '중장비기사', company: 'ETC',
           trainings: [
-            { name: 'êµ´ì°©ê¸° ìš´ì „êµìœ¡', completedDate: '2024-07-15', expiryDate: '2027-07-15', status: 'ìœ íš¨' },
-            { name: 'OSHA 10-Hour', completedDate: '2025-05-20', expiryDate: '2027-05-20', status: 'ìœ íš¨' }
+            { name: '굴착기 운전교육', completedDate: '2024-07-15', expiryDate: '2027-07-15', status: '유효' },
+            { name: 'OSHA 10-Hour', completedDate: '2025-05-20', expiryDate: '2027-05-20', status: '유효' }
           ]
         }
       ],
       getSafetyDocs: async () => [
-        { id: 'DOC-001', category: 'ë§¤ë‰´ì–¼', title: 'ê³ ì†Œìž‘ì—…ëŒ€ ì•ˆì „ìˆ˜ì¹™ ê°€ì´ë“œ', size: '2.4 MB', date: '2026-01-15', uploader: 'Admin', url: '#' },
-        { id: 'DOC-002', category: 'ì ˆì°¨ì„œ', title: 'ë°€íê³µê°„ êµ¬ì¡° ì ˆì°¨ì„œ (v2)', size: '1.8 MB', date: '2026-02-20', uploader: 'Safety Team', url: '#' },
-        { id: 'DOC-003', category: 'ì–‘ì‹', title: 'ì¼ì¼ TBM ì ê²€ì¼ì§€ (ì—‘ì…€)', size: '145 KB', date: '2026-03-05', uploader: 'Admin', url: '#' },
-        { id: 'DOC-004', category: 'MSDS', title: 'ìš°ë ˆíƒ„ í¼ ì½”íŒ…ì œ í™”í•™ë¬¼ì§ˆì •ë³´', size: '3.1 MB', date: '2026-04-01', uploader: 'Safety Team', url: '#' },
-        { id: 'DOC-005', category: 'ë²•ì •ì§€ì¹¨', title: 'ì¤‘ëŒ€ìž¬í•´ì²˜ë²Œë²• ëŒ€ì‘ ê°€ì´ë“œ', size: '5.6 MB', date: '2025-12-10', uploader: 'HQ', url: '#' },
-        { id: 'DOC-006', category: 'ì–‘ì‹', title: 'ìž‘ì—…í—ˆê°€ì„œ (PTW) í‘œì¤€ ì–‘ì‹', size: '88 KB', date: '2026-03-01', uploader: 'Admin', url: '#' },
-        { id: 'DOC-007', category: 'MSDS', title: 'ì—í­ì‹œ ë„ë£Œ í™”í•™ë¬¼ì§ˆì •ë³´', size: '2.2 MB', date: '2026-02-10', uploader: 'Safety Team', url: '#' }
+        { id: 'DOC-001', category: '매뉴얼', title: '고소작업대 안전수칙 가이드', size: '2.4 MB', date: '2026-01-15', uploader: 'Admin', url: '#' },
+        { id: 'DOC-002', category: '절차서', title: '밀폐공간 구조 절차서 (v2)', size: '1.8 MB', date: '2026-02-20', uploader: 'Safety Team', url: '#' },
+        { id: 'DOC-003', category: '양식', title: '일일 TBM 점검일지 (엑셀)', size: '145 KB', date: '2026-03-05', uploader: 'Admin', url: '#' },
+        { id: 'DOC-004', category: 'MSDS', title: '우레탄 폼 코팅제 화학물질정보', size: '3.1 MB', date: '2026-04-01', uploader: 'Safety Team', url: '#' },
+        { id: 'DOC-005', category: '법정지침', title: '중대재해처벌법 대응 가이드', size: '5.6 MB', date: '2025-12-10', uploader: 'HQ', url: '#' },
+        { id: 'DOC-006', category: '양식', title: '작업허가서 (PTW) 표준 양식', size: '88 KB', date: '2026-03-01', uploader: 'Admin', url: '#' },
+        { id: 'DOC-007', category: 'MSDS', title: '에폭시 도료 화학물질정보', size: '2.2 MB', date: '2026-02-10', uploader: 'Safety Team', url: '#' }
       ],
       getOshaForm300: async () => [
-        { caseNo: 'INC-2603-001', name: 'Kim Chulsoo', title: 'Pipefitter', dateOfInjury: '2026-03-12', zone: 'WINDER', description: 'Laceration to left hand â€” angle grinder slip', classification: 'other_recordable', daysAway: 0, restricted: 2, injuryCode: 'CUT', form301Id: 'F301-2603-001' },
-        { caseNo: 'INC-2601-001', name: 'Park Jiho', title: 'Welder', dateOfInjury: '2026-01-08', zone: 'ASSEMBLY', description: 'Strain to lower back â€” heavy lift without team lift', classification: 'restricted', daysAway: 0, restricted: 5, injuryCode: 'STR', form301Id: 'F301-2601-001' }
+        { caseNo: 'INC-2603-001', name: 'Kim Chulsoo', title: 'Pipefitter', dateOfInjury: '2026-03-12', zone: 'WINDER', description: 'Laceration to left hand — angle grinder slip', classification: 'other_recordable', daysAway: 0, restricted: 2, injuryCode: 'CUT', form301Id: 'F301-2603-001' },
+        { caseNo: 'INC-2601-001', name: 'Park Jiho', title: 'Welder', dateOfInjury: '2026-01-08', zone: 'ASSEMBLY', description: 'Strain to lower back — heavy lift without team lift', classification: 'restricted', daysAway: 0, restricted: 5, injuryCode: 'STR', form301Id: 'F301-2601-001' }
       ],
       getOsha300AStats: async () => ({
         year: 2026,
@@ -846,70 +846,70 @@
         postingRequired: true, postingStart: '2026-02-01', postingEnd: '2026-04-30'
       }),
       getCertMatrix: async () => [
-        { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: 'ê¹€ì² ìˆ˜', role: 'Pipefitter', company: ORG_NAME,
+        { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: '김철수', role: 'Pipefitter', company: ORG_NAME,
           certs: [
-            { type: 'OSHA 30-Hour', issued: '2024-10-15', expiry: '2029-10-15', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'Fall Protection', issued: '2025-04-01', expiry: '2026-04-01', status: 'ë§Œë£Œ', hoffmanReq: true },
-            { type: 'First Aid/CPR', issued: '2025-01-10', expiry: '2027-01-10', status: 'ìœ íš¨', hoffmanReq: true }
+            { type: 'OSHA 30-Hour', issued: '2024-10-15', expiry: '2029-10-15', status: '유효', hoffmanReq: true },
+            { type: 'Fall Protection', issued: '2025-04-01', expiry: '2026-04-01', status: '만료', hoffmanReq: true },
+            { type: 'First Aid/CPR', issued: '2025-01-10', expiry: '2027-01-10', status: '유효', hoffmanReq: true }
           ]
         },
-        { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: 'ì´ë¯¼ì¤€', role: 'Electrician', company: ORG_NAME,
+        { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: '이민준', role: 'Electrician', company: ORG_NAME,
           certs: [
-            { type: 'OSHA 10-Hour', issued: '2025-03-20', expiry: '2030-03-20', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'LOTO', issued: '2025-02-14', expiry: '2026-05-14', status: 'ë§Œë£Œìž„ë°•', hoffmanReq: true },
-            { type: 'Electrical Safety', issued: '2025-06-01', expiry: '2027-06-01', status: 'ìœ íš¨', hoffmanReq: false }
+            { type: 'OSHA 10-Hour', issued: '2025-03-20', expiry: '2030-03-20', status: '유효', hoffmanReq: true },
+            { type: 'LOTO', issued: '2025-02-14', expiry: '2026-05-14', status: '만료임박', hoffmanReq: true },
+            { type: 'Electrical Safety', issued: '2025-06-01', expiry: '2027-06-01', status: '유효', hoffmanReq: false }
           ]
         },
-        { id: 'P-2604-0003', name: 'Park Jiho', nameKr: 'ë°•ì§€í˜¸', role: 'Welder', company: 'SUBO',
+        { id: 'P-2604-0003', name: 'Park Jiho', nameKr: '박지호', role: 'Welder', company: 'SUBO',
           certs: [
-            { type: 'OSHA 10-Hour', issued: '2025-01-05', expiry: '2030-01-05', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'Hot Work Permit', issued: '2025-08-20', expiry: '2026-08-20', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'Confined Space', issued: '2024-06-01', expiry: '2025-06-01', status: 'ë§Œë£Œ', hoffmanReq: true }
+            { type: 'OSHA 10-Hour', issued: '2025-01-05', expiry: '2030-01-05', status: '유효', hoffmanReq: true },
+            { type: 'Hot Work Permit', issued: '2025-08-20', expiry: '2026-08-20', status: '유효', hoffmanReq: true },
+            { type: 'Confined Space', issued: '2024-06-01', expiry: '2025-06-01', status: '만료', hoffmanReq: true }
           ]
         },
-        { id: 'P-2604-0004', name: 'Choi Donghyuk', nameKr: 'ìµœë™í˜', role: 'Pipefitter', company: 'SUBO',
+        { id: 'P-2604-0004', name: 'Choi Donghyuk', nameKr: '최동혁', role: 'Pipefitter', company: 'SUBO',
           certs: [
-            { type: 'OSHA 30-Hour', issued: '2023-09-01', expiry: '2028-09-01', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'Rigging/Signal', issued: '2025-04-10', expiry: '2026-04-10', status: 'ë§Œë£Œìž„ë°•', hoffmanReq: true }
+            { type: 'OSHA 30-Hour', issued: '2023-09-01', expiry: '2028-09-01', status: '유효', hoffmanReq: true },
+            { type: 'Rigging/Signal', issued: '2025-04-10', expiry: '2026-04-10', status: '만료임박', hoffmanReq: true }
           ]
         },
-        { id: 'P-2604-0005', name: 'Kang Seungwoo', nameKr: 'ê°•ìŠ¹ìš°', role: 'Equipment Operator', company: 'ETC',
+        { id: 'P-2604-0005', name: 'Kang Seungwoo', nameKr: '강승우', role: 'Equipment Operator', company: 'ETC',
           certs: [
-            { type: 'Forklift/Telehandler', issued: '2024-07-15', expiry: '2027-07-15', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'OSHA 10-Hour', issued: '2025-05-20', expiry: '2030-05-20', status: 'ìœ íš¨', hoffmanReq: true },
-            { type: 'Crane Operator (NCCCO)', issued: '2022-03-10', expiry: '2027-03-10', status: 'ìœ íš¨', hoffmanReq: false }
+            { type: 'Forklift/Telehandler', issued: '2024-07-15', expiry: '2027-07-15', status: '유효', hoffmanReq: true },
+            { type: 'OSHA 10-Hour', issued: '2025-05-20', expiry: '2030-05-20', status: '유효', hoffmanReq: true },
+            { type: 'Crane Operator (NCCCO)', issued: '2022-03-10', expiry: '2027-03-10', status: '유효', hoffmanReq: false }
           ]
         }
       ],
       getViolations: async () => [
-        { id: 'VIO-2604-001', company: 'SUBO', oshaRef: 'OSHA 1926.502(d)', description: 'ê³ ì†Œ ìž‘ì—… ì‹œ ì „ì‹  ì•ˆì „ë²¨íŠ¸ ë¯¸ì°©ìš© (Bêµ¬ì—­ 2ì¸µ)', discoveredAt: '2026-04-10 09:30', discoveredBy: 'ê¹€ì•ˆì „', zone: 'Bêµ¬ì—­', photo: '#', dueDate: '2026-04-13', completedDate: '', points: 10, cumulativePoints: 10, letterSent: false, letterUrl: '' },
-        { id: 'VIO-2604-002', company: 'ETC', oshaRef: 'OSHA 1926.602(a)', description: 'ì§€ê²Œì°¨ ìš´ì „ ì¤‘ ì•ˆì „ë²¨íŠ¸ ë¯¸ì°©ìš©', discoveredAt: '2026-04-08 14:15', discoveredBy: 'ì´ê°ë…', zone: 'Aêµ¬ì—­', photo: '#', dueDate: '2026-04-10', completedDate: '2026-04-10', points: 5, cumulativePoints: 5, letterSent: true, letterUrl: '#' },
-        { id: 'VIO-2603-001', company: 'SUBO', oshaRef: 'OSHA 1926.451(e)', description: 'ë¹„ê³„ ë°œíŒ ê°„ê²© ê¸°ì¤€ ì´ˆê³¼ (9ì¸ì¹˜ ì´ìƒ)', discoveredAt: '2026-03-25 11:00', discoveredBy: 'ë°•ì†Œìž¥', zone: 'Cêµ¬ì—­', photo: '#', dueDate: '2026-03-27', completedDate: '2026-03-27', points: 10, cumulativePoints: 15, letterSent: true, letterUrl: '#' }
+        { id: 'VIO-2604-001', company: 'SUBO', oshaRef: 'OSHA 1926.502(d)', description: '고소 작업 시 전신 안전벨트 미착용 (B구역 2층)', discoveredAt: '2026-04-10 09:30', discoveredBy: '김안전', zone: 'B구역', photo: '#', dueDate: '2026-04-13', completedDate: '', points: 10, cumulativePoints: 10, letterSent: false, letterUrl: '' },
+        { id: 'VIO-2604-002', company: 'ETC', oshaRef: 'OSHA 1926.602(a)', description: '지게차 운전 중 안전벨트 미착용', discoveredAt: '2026-04-08 14:15', discoveredBy: '이감독', zone: 'A구역', photo: '#', dueDate: '2026-04-10', completedDate: '2026-04-10', points: 5, cumulativePoints: 5, letterSent: true, letterUrl: '#' },
+        { id: 'VIO-2603-001', company: 'SUBO', oshaRef: 'OSHA 1926.451(e)', description: '비계 발판 간격 기준 초과 (9인치 이상)', discoveredAt: '2026-03-25 11:00', discoveredBy: '박소장', zone: 'C구역', photo: '#', dueDate: '2026-03-27', completedDate: '2026-03-27', points: 10, cumulativePoints: 15, letterSent: true, letterUrl: '#' }
       ],
       getAlerts: async (filter) => {
         var all = [
-          { id:'AL-2604-0001', ts:'2026-04-13 09:32', module:'SAFETY', type:'INC',  severity:'ê¸´ê¸‰', title:'[ì‚¬ê³ ] WINDER Aêµ¬ì—­ â€” ê¹€ì² ìˆ˜ ì ˆë‹¨ ìƒí•´', content:'ì™¼ì† 2ì§€ ì ˆë‹¨ / ë³‘ì› ì´ì†¡ ì™„ë£Œ / Form 301 ìž‘ì„± í•„ìš”', relatedId:'INC-2604-001', assignee:'ë°•ì†Œìž¥', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0002', ts:'2026-04-13 08:10', module:'FLT',    type:'VISA', severity:'ê¸´ê¸‰', title:'[ë¹„ìž ë§Œë£Œ] ë°•ì§€í˜¸ H-2B â€” D-28', content:'ë§Œë£Œì¼: 2026-05-11 / ê°±ì‹  ì¦‰ì‹œ ì°©ìˆ˜ í•„ìš” / ë‹´ë‹¹: HRíŒ€', relatedId:'HR-00023', assignee:'ì¸ì‚¬íŒ€', status:'ì²˜ë¦¬ì¤‘', formUrl:'' },
-          { id:'AL-2604-0003', ts:'2026-04-13 07:00', module:'SAFETY', type:'CERT', severity:'ê¸´ê¸‰', title:'[ìžê²©ì¦ ë§Œë£Œ] ê¹€ì² ìˆ˜ â€” Fall Protection ë§Œë£Œ D+12', content:'OSHA 1926.502 ìœ„ë°˜ ìœ„í—˜ / í˜„ìž¥ íˆ¬ìž… ì¦‰ì‹œ ì¤‘ë‹¨ ê¶Œê³ ', relatedId:'CERT-0019', assignee:'ê¹€ì•ˆì „', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0004', ts:'2026-04-12 16:45', module:'VEH',    type:'RTN',  severity:'ì£¼ì˜', title:'[ë Œíƒˆ ë°˜ë‚©] Toyota Tacoma AZ-2241 â€” D-3', content:'ë°˜ë‚© ì˜ˆì •: 2026-04-16 / Enterprise Rent-A-Car / ì›” $1,850', relatedId:'VEH-0041', assignee:'ì°¨ëŸ‰ë‹´ë‹¹', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0005', ts:'2026-04-12 14:20', module:'HSG',    type:'RPR',  severity:'ì£¼ì˜', title:'[ìˆ˜ë¦¬ìš”ì²­] 202í˜¸ ì—ì–´ì»¨ ëƒ‰ë§¤ ë¶€ì¡±', content:'ìš”ì²­ìž: ì´ë¯¼ì¤€ / ì¦ìƒ: ëƒ‰ë°© ë¶ˆëŸ‰, ì‹¤ì™¸ê¸° ì´ìƒìŒ / ì—…ì²´ ì—°ë½ í•„ìš”', relatedId:'HSG-RPR-0088', assignee:'ìˆ™ì†Œë‹´ë‹¹', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0006', ts:'2026-04-12 11:00', module:'PUR',    type:'APR',  severity:'ì£¼ì˜', title:'[êµ¬ë§¤ ê²°ìž¬] ì•ˆì „ìž¥ê°‘ ì™¸ 3ì¢… â€” PO#2604-019', content:'ì‹ ì²­: ìµœë™í˜ / ê¸ˆì•¡: $1,240 / ê²°ìž¬ ëŒ€ê¸° 3ì¼ ê²½ê³¼', relatedId:'PO-2604-019', assignee:'êµ¬ë§¤ë‹´ë‹¹', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0007', ts:'2026-04-12 09:15', module:'SAFETY', type:'VIO',  severity:'ì£¼ì˜', title:'[ìœ„ë°˜] SUBO â€” ê³ ì†Œìž‘ì—… ì•ˆì „ë²¨íŠ¸ ë¯¸ì°©ìš© Bêµ¬ì—­', content:'OSHA 1926.502(d) / ë°œê²¬ìž: ê¹€ì•ˆì „ / ë²Œì  10ì  (ëˆ„ì  10ì )', relatedId:'VIO-2604-001', assignee:'ë°•ì†Œìž¥', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0008', ts:'2026-04-11 17:30', module:'SAFETY', type:'CERT', severity:'ì£¼ì˜', title:'[ìžê²©ì¦ ë§Œë£Œìž„ë°•] ì´ë¯¼ì¤€ â€” LOTO D-30', content:'ë§Œë£Œì¼: 2026-05-14 / ê°±ì‹  êµìœ¡ ì¼ì • ìˆ˜ë¦½ í•„ìš”', relatedId:'CERT-0022', assignee:'ê¹€ì•ˆì „', status:'ì²˜ë¦¬ì¤‘', formUrl:'' },
-          { id:'AL-2604-0009', ts:'2026-04-11 15:00', module:'HR',     type:'VISA', severity:'ì£¼ì˜', title:'[ì·¨ì—…ë¹„ìž] ê°•ìŠ¹ìš° H-2B ê°±ì‹  D-45', content:'ë§Œë£Œ: 2026-05-26 / ë³€í˜¸ì‚¬ ì—°ë½ í•„ìš”', relatedId:'HR-00031', assignee:'ì¸ì‚¬íŒ€', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0010', ts:'2026-04-11 10:30', module:'VEH',    type:'INS',  severity:'ì£¼ì˜', title:'[ë³´í—˜ ë§Œë£Œ] Ford F-150 TX-9901 â€” D-22', content:'ë§Œë£Œ: 2026-05-03 / Progressive ê°±ì‹  í•„ìš” / ë‹´ë‹¹: ì°¨ëŸ‰íŒ€', relatedId:'VEH-0028', assignee:'ì°¨ëŸ‰ë‹´ë‹¹', status:'ë¯¸ì²˜ë¦¬', formUrl:'' },
-          { id:'AL-2604-0011', ts:'2026-04-10 09:00', module:'HSG',    type:'EXP',  severity:'ì¼ë°˜', title:'[ìž„ëŒ€ ê³„ì•½] Sunridge Apt 301í˜¸ ë§Œë£Œ D-45', content:'ë§Œë£Œ: 2026-05-25 / ì›” $2,100 / ê°±ì‹  í˜‘ì˜ í•„ìš”', relatedId:'HSG-0014', assignee:'ìˆ™ì†Œë‹´ë‹¹', status:'ì¼ë°˜', formUrl:'' },
-          { id:'AL-2604-0012', ts:'2026-04-10 08:30', module:'PUR',    type:'DLV',  severity:'ì¼ë°˜', title:'[ë‚©í’ˆ ë„ì°©] ì•ˆì „ í•˜ë„¤ìŠ¤ 20ê°œ â€” PO#2603-044', content:'ë„ì°©: 2026-04-10 / ì°½ê³  ìž…ê³  í™•ì¸ ì™„ë£Œ', relatedId:'PO-2603-044', assignee:'êµ¬ë§¤ë‹´ë‹¹', status:'ì™„ë£Œ', formUrl:'' },
-          { id:'AL-2603-0031', ts:'2026-03-28 14:00', module:'FLT',    type:'BOOK', severity:'ì¼ë°˜', title:'[í•­ê³µê¶Œ ë°œê¶Œ] ê¹€ì² ìˆ˜ PHXâ†’ICN â€” 2026-06-15', content:'íŽ¸ëª…: KE018 / PNR: KEXUZ1 / ì¶œë°œ 12ì£¼ ì „ í™•ì¸', relatedId:'FLT-0055', assignee:'', status:'ì™„ë£Œ', formUrl:'' }
+          { id:'AL-2604-0001', ts:'2026-04-13 09:32', module:'SAFETY', type:'INC',  severity:'긴급', title:'[사고] WINDER A구역 — 김철수 절단 상해', content:'왼손 2지 절단 / 병원 이송 완료 / Form 301 작성 필요', relatedId:'INC-2604-001', assignee:'박소장', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0002', ts:'2026-04-13 08:10', module:'FLT',    type:'VISA', severity:'긴급', title:'[비자 만료] 박지호 H-2B — D-28', content:'만료일: 2026-05-11 / 갱신 즉시 착수 필요 / 담당: HR팀', relatedId:'HR-00023', assignee:'인사팀', status:'처리중', formUrl:'' },
+          { id:'AL-2604-0003', ts:'2026-04-13 07:00', module:'SAFETY', type:'CERT', severity:'긴급', title:'[자격증 만료] 김철수 — Fall Protection 만료 D+12', content:'OSHA 1926.502 위반 위험 / 현장 투입 즉시 중단 권고', relatedId:'CERT-0019', assignee:'김안전', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0004', ts:'2026-04-12 16:45', module:'VEH',    type:'RTN',  severity:'주의', title:'[렌탈 반납] Toyota Tacoma AZ-2241 — D-3', content:'반납 예정: 2026-04-16 / Enterprise Rent-A-Car / 월 $1,850', relatedId:'VEH-0041', assignee:'차량담당', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0005', ts:'2026-04-12 14:20', module:'HSG',    type:'RPR',  severity:'주의', title:'[수리요청] 202호 에어컨 냉매 부족', content:'요청자: 이민준 / 증상: 냉방 불량, 실외기 이상음 / 업체 연락 필요', relatedId:'HSG-RPR-0088', assignee:'숙소담당', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0006', ts:'2026-04-12 11:00', module:'PUR',    type:'APR',  severity:'주의', title:'[구매 결재] 안전장갑 외 3종 — PO#2604-019', content:'신청: 최동혁 / 금액: $1,240 / 결재 대기 3일 경과', relatedId:'PO-2604-019', assignee:'구매담당', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0007', ts:'2026-04-12 09:15', module:'SAFETY', type:'VIO',  severity:'주의', title:'[위반] SUBO — 고소작업 안전벨트 미착용 B구역', content:'OSHA 1926.502(d) / 발견자: 김안전 / 벌점 10점 (누적 10점)', relatedId:'VIO-2604-001', assignee:'박소장', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0008', ts:'2026-04-11 17:30', module:'SAFETY', type:'CERT', severity:'주의', title:'[자격증 만료임박] 이민준 — LOTO D-30', content:'만료일: 2026-05-14 / 갱신 교육 일정 수립 필요', relatedId:'CERT-0022', assignee:'김안전', status:'처리중', formUrl:'' },
+          { id:'AL-2604-0009', ts:'2026-04-11 15:00', module:'HR',     type:'VISA', severity:'주의', title:'[취업비자] 강승우 H-2B 갱신 D-45', content:'만료: 2026-05-26 / 변호사 연락 필요', relatedId:'HR-00031', assignee:'인사팀', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0010', ts:'2026-04-11 10:30', module:'VEH',    type:'INS',  severity:'주의', title:'[보험 만료] Ford F-150 TX-9901 — D-22', content:'만료: 2026-05-03 / Progressive 갱신 필요 / 담당: 차량팀', relatedId:'VEH-0028', assignee:'차량담당', status:'미처리', formUrl:'' },
+          { id:'AL-2604-0011', ts:'2026-04-10 09:00', module:'HSG',    type:'EXP',  severity:'일반', title:'[임대 계약] Sunridge Apt 301호 만료 D-45', content:'만료: 2026-05-25 / 월 $2,100 / 갱신 협의 필요', relatedId:'HSG-0014', assignee:'숙소담당', status:'일반', formUrl:'' },
+          { id:'AL-2604-0012', ts:'2026-04-10 08:30', module:'PUR',    type:'DLV',  severity:'일반', title:'[납품 도착] 안전 하네스 20개 — PO#2603-044', content:'도착: 2026-04-10 / 창고 입고 확인 완료', relatedId:'PO-2603-044', assignee:'구매담당', status:'완료', formUrl:'' },
+          { id:'AL-2603-0031', ts:'2026-03-28 14:00', module:'FLT',    type:'BOOK', severity:'일반', title:'[항공권 발권] 김철수 PHX→ICN — 2026-06-15', content:'편명: KE018 / PNR: KEXUZ1 / 출발 12주 전 확인', relatedId:'FLT-0055', assignee:'', status:'완료', formUrl:'' }
         ];
         if (!filter || filter === 'all') return all;
         return all.filter(function(a){ return a.module === filter || a.severity === filter || a.status === filter; });
       },
       updateAlertStatus: async (id, status) => ({ success: true, id, status }),
       getTbmRecords: async () => [
-        { id: 'TBM-2604-013', date: '2026-04-13', zone: 'WINDER', facilitator: 'ê¹€ì² ìˆ˜', topic: 'ê³ ì†Œìž‘ì—… ì•ˆì „ìˆ˜ì¹™ ë° Fall Protection ì°©ìš© ì˜ë¬´í™”', attendees: ['ê¹€ì² ìˆ˜','ì´ë¯¼ì¤€','ë°•ì§€í˜¸','ìµœë™í˜','ê°•ìŠ¹ìš°'], attendeeCount: 5 },
-        { id: 'TBM-2604-012', date: '2026-04-12', zone: 'ASSEMBLY', facilitator: 'ì´ë¯¼ì¤€', topic: 'í™”ê¸°ìž‘ì—… êµ¬ì—­ Hot Work Permit í”„ë¡œì„¸ìŠ¤ ìž¬ê³µìœ ', attendees: ['ì´ë¯¼ì¤€','ë°•ì§€í˜¸','ê°•ìŠ¹ìš°'], attendeeCount: 3 },
-        { id: 'TBM-2604-011', date: '2026-04-11', zone: 'ALL', facilitator: 'ë°•ì†Œìž¥', topic: 'ì£¼ê°„ ì•ˆì „ì ê²€ ê²°ê³¼ ê³µìœ  â€” ì§€ì ì‚¬í•­ 3ê±´ ìž¬ë°œë°©ì§€', attendees: ['ê¹€ì² ìˆ˜','ì´ë¯¼ì¤€','ë°•ì§€í˜¸','ìµœë™í˜','ê°•ìŠ¹ìš°', 'ìž„ì„±í›ˆ'], attendeeCount: 6 }
+        { id: 'TBM-2604-013', date: '2026-04-13', zone: 'WINDER', facilitator: '김철수', topic: '고소작업 안전수칙 및 Fall Protection 착용 의무화', attendees: ['김철수','이민준','박지호','최동혁','강승우'], attendeeCount: 5 },
+        { id: 'TBM-2604-012', date: '2026-04-12', zone: 'ASSEMBLY', facilitator: '이민준', topic: '화기작업 구역 Hot Work Permit 프로세스 재공유', attendees: ['이민준','박지호','강승우'], attendeeCount: 3 },
+        { id: 'TBM-2604-011', date: '2026-04-11', zone: 'ALL', facilitator: '박소장', topic: '주간 안전점검 결과 공유 — 지적사항 3건 재발방지', attendees: ['김철수','이민준','박지호','최동혁','강승우', '임성훈'], attendeeCount: 6 }
       ],
       getAttendanceLive: async () => ({
         date: new Date().toISOString().substring(0, 10),
@@ -934,18 +934,18 @@
         ],
       }),
       getVehicleList: async () => [
-        { id: 'VH-0001', type: 'í”½ì—…íŠ¸ëŸ­', plate: 'AZÂ·HNF-221', model: 'Ford F-150 2023', company: 'Enterprise', rentEnd: '2026-07-14', insuranceExp: '2026-09-30', assignee: 'Kim Chulsoo', mileage: 14200, nextOil: 15000, status: 'ì‚¬ìš©ì¤‘' },
-        { id: 'VH-0002', type: 'SUV', plate: 'AZÂ·KLP-884', model: 'Chevy Tahoe 2022', company: 'Hertz', rentEnd: '2026-08-31', insuranceExp: '2026-08-01', assignee: 'Lee Minjun', mileage: 9800, nextOil: 10000, status: 'ì‚¬ìš©ì¤‘' },
-        { id: 'VH-0003', type: 'ë°´', plate: 'AZÂ·RQT-556', model: 'Ford Transit 2023', company: 'Enterprise', rentEnd: '2026-05-20', insuranceExp: '2026-11-01', assignee: '', mileage: 22100, nextOil: 25000, status: 'ë°˜ë‚©ì˜ˆì •' },
-        { id: 'VH-0005', type: 'ìŠ¹ìš©', plate: 'AZÂ·EBP-779', model: 'Honda CR-V 2022', company: 'Hertz', rentEnd: '2026-06-30', insuranceExp: '2026-07-01', assignee: 'Choi Admin', mileage: 18900, nextOil: 20000, status: 'ì •ë¹„ì¤‘' },
+        { id: 'VH-0001', type: '픽업트럭', plate: 'AZ·HNF-221', model: 'Ford F-150 2023', company: 'Enterprise', rentEnd: '2026-07-14', insuranceExp: '2026-09-30', assignee: 'Kim Chulsoo', mileage: 14200, nextOil: 15000, status: '사용중' },
+        { id: 'VH-0002', type: 'SUV', plate: 'AZ·KLP-884', model: 'Chevy Tahoe 2022', company: 'Hertz', rentEnd: '2026-08-31', insuranceExp: '2026-08-01', assignee: 'Lee Minjun', mileage: 9800, nextOil: 10000, status: '사용중' },
+        { id: 'VH-0003', type: '밴', plate: 'AZ·RQT-556', model: 'Ford Transit 2023', company: 'Enterprise', rentEnd: '2026-05-20', insuranceExp: '2026-11-01', assignee: '', mileage: 22100, nextOil: 25000, status: '반납예정' },
+        { id: 'VH-0005', type: '승용', plate: 'AZ·EBP-779', model: 'Honda CR-V 2022', company: 'Hertz', rentEnd: '2026-06-30', insuranceExp: '2026-07-01', assignee: 'Choi Admin', mileage: 18900, nextOil: 20000, status: '정비중' },
       ],
       getVehicleStats: async () => ({ total: 5, active: 3, maintenance: 1, returning: 1, rentExpiringSoon: 2, insuranceExpiring: 1, oilChangeDue: 2 }),
       getRentalList: async () => [
-        { id:'RENT-2605-001', siteId:'HFF-02', equipType:'Excavator', model:'CAT 320GC', vendor:'United Rentals', startDate:'2026-04-15', endDate:'2026-05-15', returnedDate:'', dailyRate:850, deliveryFee:450, operator:'Kim Chulsoo', task:'ê¸°ì´ˆê³µì‚¬ êµ´ì°©', status:'ì‚¬ìš©ì¤‘', daysRemaining:12, totalCost:16150, notes:'' },
-        { id:'RENT-2605-002', siteId:'HFF-02', equipType:'Boom Lift', model:'JLG 1932R', vendor:'Sunbelt', startDate:'2026-04-20', endDate:'2026-05-05', returnedDate:'', dailyRate:185, deliveryFee:200, operator:'Lee Minjun', task:'ì²œìž¥ ë°°ê´€ì„¤ì¹˜', status:'ì‚¬ìš©ì¤‘', daysRemaining:2, totalCost:2585, notes:'ë°˜ë‚© ìž„ë°•' },
-        { id:'RENT-2605-003', siteId:'HFF-02', equipType:'Forklift', model:'Toyota 8FGU25', vendor:'Herc Rentals', startDate:'2026-04-01', endDate:'2026-04-30', returnedDate:'', dailyRate:120, deliveryFee:180, operator:'Park Jiho', task:'ìžìž¬ í•˜ì—­', status:'ì—°ì²´', daysRemaining:-3, totalCost:4140, notes:'ì—°ìž¥ í˜‘ì˜ í•„ìš”' },
-        { id:'RENT-2605-004', siteId:'HFF-02', equipType:'Generator', model:'CAT XQ60', vendor:'United Rentals', startDate:'2026-03-20', endDate:'2026-04-25', returnedDate:'2026-04-24', dailyRate:95, deliveryFee:150, operator:'', task:'ìž„ì‹œ ì „ì›ê³µê¸‰', status:'ë°˜ë‚©ì™„ë£Œ', daysRemaining:0, totalCost:3475, notes:'' },
-        { id:'RENT-2605-005', siteId:'HFF-02', equipType:'Skid Steer', model:'Bobcat S70', vendor:'Local AZ', startDate:'2026-04-25', endDate:'2026-05-25', returnedDate:'', dailyRate:280, deliveryFee:300, operator:'Choi Donghyuk', task:'ì™¸ë¶€ í† ëª©ìž‘ì—…', status:'ì‚¬ìš©ì¤‘', daysRemaining:22, totalCost:2540, notes:'' }
+        { id:'RENT-2605-001', siteId:'HFF-02', equipType:'Excavator', model:'CAT 320GC', vendor:'United Rentals', startDate:'2026-04-15', endDate:'2026-05-15', returnedDate:'', dailyRate:850, deliveryFee:450, operator:'Kim Chulsoo', task:'기초공사 굴착', status:'사용중', daysRemaining:12, totalCost:16150, notes:'' },
+        { id:'RENT-2605-002', siteId:'HFF-02', equipType:'Boom Lift', model:'JLG 1932R', vendor:'Sunbelt', startDate:'2026-04-20', endDate:'2026-05-05', returnedDate:'', dailyRate:185, deliveryFee:200, operator:'Lee Minjun', task:'천장 배관설치', status:'사용중', daysRemaining:2, totalCost:2585, notes:'반납 임박' },
+        { id:'RENT-2605-003', siteId:'HFF-02', equipType:'Forklift', model:'Toyota 8FGU25', vendor:'Herc Rentals', startDate:'2026-04-01', endDate:'2026-04-30', returnedDate:'', dailyRate:120, deliveryFee:180, operator:'Park Jiho', task:'자재 하역', status:'연체', daysRemaining:-3, totalCost:4140, notes:'연장 협의 필요' },
+        { id:'RENT-2605-004', siteId:'HFF-02', equipType:'Generator', model:'CAT XQ60', vendor:'United Rentals', startDate:'2026-03-20', endDate:'2026-04-25', returnedDate:'2026-04-24', dailyRate:95, deliveryFee:150, operator:'', task:'임시 전원공급', status:'반납완료', daysRemaining:0, totalCost:3475, notes:'' },
+        { id:'RENT-2605-005', siteId:'HFF-02', equipType:'Skid Steer', model:'Bobcat S70', vendor:'Local AZ', startDate:'2026-04-25', endDate:'2026-05-25', returnedDate:'', dailyRate:280, deliveryFee:300, operator:'Choi Donghyuk', task:'외부 토목작업', status:'사용중', daysRemaining:22, totalCost:2540, notes:'' }
       ],
       getRentalStats: async () => ({ total:5, active:3, overdue:1, returned:1, returningSoon:1, mtdCost:8540 }),
       getHousingList: async () => [
@@ -957,7 +957,7 @@
     };
 
     // ============================================================
-    // ðŸ”´ LiveAPI (Actual Google Sheets Fetching) - Timing Issue Fixed
+    // 🔴 LiveAPI (Actual Google Sheets Fetching) - Timing Issue Fixed
     // ============================================================
     window.apiCache = {}; // Global Response Cache (window scope for cross-function access)
     window.sessionExpiryRedirectPending = false;
@@ -1083,7 +1083,7 @@
       getDailyTeamMatrix: () => gsRun('api_getDailyTeamMatrix', [_siteId()], { success: false, teams: [], matrix: {}, foremen: {}, subtotals: {}, totals: {} }),
       autoFillTeamDivide: () => gsRun('autoFillTeamDivide', [_siteId()], { success: false }),
       getDailyAttendanceDetail: (date) => gsRun('api_getDailyAttendanceDetail', [_siteId(), date || ''], { success: false, companies: [], teamStats: [], availableDates: [] }),
-      // í”„ë¡ íŠ¸ í˜¸í™˜ ì–´ëŒ‘í„°: companies[].teams[].members â†’ .employees + í•„ë“œ ë³„ì¹­
+      // 프론트 호환 어댑터: companies[].teams[].members → .employees + 필드 별칭
       getAttendanceDetailed: function(date) {
         return gsRun('api_getDailyAttendanceDetail', [_siteId(), date || ''], { success: false, companies: [], teamStats: [] })
           .then(function(r) {
@@ -1110,7 +1110,7 @@
             return r;
           });
       },
-      // í†µê³„ ì–´ëŒ‘í„°: companies/teamStats â†’ byCompany/byTeam í˜•ì‹
+      // 통계 어댑터: companies/teamStats → byCompany/byTeam 형식
       getCompanyTeamStats: function(date) {
         return gsRun('api_getDailyAttendanceDetail', [_siteId(), date || ''], { success: false })
           .then(function(r) {
@@ -1145,7 +1145,7 @@
       setupInventorySheets: () => gsRun('setupInventorySheets', [], { success: false }),
       setupInventoryFolders: () => gsRun('setupInventoryFolders', [], { success: false }),
       getEmployeeDetail: function(badgeId, date) {
-        // ìºì‹œ ë¬´ë ¥í™” â€” ì§ì› í´ë¦­ ì‹œ í•­ìƒ ìµœì‹  ë°ì´í„° ê°€ì ¸ì˜´
+        // 캐시 무력화 — 직원 클릭 시 항상 최신 데이터 가져옴
         // 백엔드는 args[0]을 badgeId로 사용한다(현장은 요청 siteId로 별도 전달).
         const cacheKey = 'api_getEmployeeDetail' + JSON.stringify([badgeId, date || '']);
         if (window.apiCache && window.apiCache[cacheKey]) delete window.apiCache[cacheKey];
@@ -1153,7 +1153,7 @@
           .then(function(r) {
             if (r && r.employee) {
               r.employee.todayInTime  = r.employee.todayIn || '';
-              r.employee.todayOutTime = (r.employee.todayOut && r.employee.todayOut !== 'ë¯¸ë§ˆê°') ? r.employee.todayOut : '';
+              r.employee.todayOutTime = (r.employee.todayOut && r.employee.todayOut !== '미마감') ? r.employee.todayOut : '';
               r.employee.todayWorking = !!r.employee.isOpen;
             }
             return r;
@@ -1218,17 +1218,17 @@
       getDailyAlertScan: async () => {
         try {
           const alerts = await window.API.getAlerts();
-          const unresolved = alerts.filter(function (a) { return a.status === 'ë¯¸ì²˜ë¦¬' || !a.status; }).length;
+          const unresolved = alerts.filter(function (a) { return a.status === '미처리' || !a.status; }).length;
           return [
-            "ì¼ì¼ í†µí•© ì ê²€ ìŠ¤ìº” ì™„ë£Œ",
-            "ì „ì¼ ì•ˆì „ì´ìŠˆ: ë¯¸ì²˜ë¦¬ ê±´ìˆ˜ (" + unresolved + ")",
-            "ë¹„ìž ë§Œë£Œ ì˜ˆì •ìž ë°ì´í„° ì—°ë™ ì™„ë£Œ"
+            "일일 통합 점검 스캔 완료",
+            "전일 안전이슈: 미처리 건수 (" + unresolved + ")",
+            "비자 만료 예정자 데이터 연동 완료"
           ];
-        } catch (e) { return ["ì‹œìŠ¤í…œ ì •ìƒë™ìž‘ì¤‘"]; }
+        } catch (e) { return ["시스템 정상동작중"]; }
       },
       getOpsDashboard: () => gsRun('api_getOpsDashboard', [], { success: false }),
       getLaborAllocation: () => gsRun('api_getLaborAllocation', [_siteId()], { success: false, items: [], kpi: {} }),
-      // WBS ê³µì •ê´€ë¦¬ APIs
+      // WBS 공정관리 APIs
       getProjectWbsTree: (projectId) => gsRun('api_getProjectWbsTree', [projectId], { success: false, stages: [] }),
       updateWbsRow: (wbsId, updates) => gsRun('api_updateWbsRow', [wbsId, updates], { success: false }),
       getProjectProgressSummary: (projectId) => gsRun('api_getProjectProgressSummary', [projectId], { success: false }),
@@ -1261,21 +1261,21 @@
     window.LiveAPI = window.API;
 
     const SYSTEM_CONFIG = {
-      // ì‚¬ìš©ìžëŠ” ì‹œìŠ¤í…œ ì…‹ì—… ì‹œ ì¶œë ¥ëœ Google Forms/Sheet URLì„ ì—¬ê¸°ì— ìž…ë ¥í•˜ì„¸ìš”.
+      // 사용자는 시스템 셋업 시 출력된 Google Forms/Sheet URL을 여기에 입력하세요.
       forms: {
-        expense: 'https://docs.google.com/forms/d/e/1FAIpQLSfHXwLyGZsB0fAtg2grcIA6ew6LObxiRMfvMyj5A9iOaav_jw/viewform', // ë¹„ìš©ì²­êµ¬ í¼ ê³µìœ  ë§í¬
-        equipment: 'https://docs.google.com/forms/d/e/1FAIpQLSe2u46nVxdRZ0_Iom_FCUanVBVG86uqRYa05x43HYCCYt2xHg/viewform', // ìž¥ë¹„ì ê²€ í¼ ê³µìœ  ë§í¬
-        hr: 'https://docs.google.com/forms/d/e/1FAIpQLScjmUfYk-4w_97XTZgIF-z0MTULEEqblPXJEY3LrBKyijmWQw/viewform', // ì¸ì›ë“±ë¡ í¼ ê³µìœ  ë§í¬
-        housing: 'https://docs.google.com/forms/d/e/1FAIpQLSfwwgS8RP8Rj3VqlQPHTFqUDeStrxFUOdZkHK9kMiZAVix5ng/viewform' // ìˆ™ì†Œì°¨ëŸ‰ì‹ ê³  í¼ ê³µìœ  ë§í¬
+        expense: 'https://docs.google.com/forms/d/e/1FAIpQLSfHXwLyGZsB0fAtg2grcIA6ew6LObxiRMfvMyj5A9iOaav_jw/viewform', // 비용청구 폼 공유 링크
+        equipment: 'https://docs.google.com/forms/d/e/1FAIpQLSe2u46nVxdRZ0_Iom_FCUanVBVG86uqRYa05x43HYCCYt2xHg/viewform', // 장비점검 폼 공유 링크
+        hr: 'https://docs.google.com/forms/d/e/1FAIpQLScjmUfYk-4w_97XTZgIF-z0MTULEEqblPXJEY3LrBKyijmWQw/viewform', // 인원등록 폼 공유 링크
+        housing: 'https://docs.google.com/forms/d/e/1FAIpQLSfwwgS8RP8Rj3VqlQPHTFqUDeStrxFUOdZkHK9kMiZAVix5ng/viewform' // 숙소차량신고 폼 공유 링크
       },
-      sheetUrl: 'https://docs.google.com/spreadsheets/d/1FhIjAaBuk0A2m72ywI5wH3gGmQEYxwozLaWBrWE88ss/edit' // ì‹œíŠ¸ ë§ˆìŠ¤í„° (ì˜ˆ: https://docs.google.com/spreadsheets/d/ID/edit)
+      sheetUrl: 'https://docs.google.com/spreadsheets/d/1FhIjAaBuk0A2m72ywI5wH3gGmQEYxwozLaWBrWE88ss/edit' // 시트 마스터 (예: https://docs.google.com/spreadsheets/d/ID/edit)
     };
 
     window.openGoogleForm = function (type) {
       if (SYSTEM_CONFIG.forms[type]) {
         window.open(SYSTEM_CONFIG.forms[type], '_blank');
       } else {
-        alert('êµ¬ê¸€ í¼ URLì´ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. Setup.gs ì‹¤í–‰ í›„ ì¶œë ¥ëœ ë§í¬ë¥¼ ì½”ë“œì˜ SYSTEM_CONFIG êµ¬ì—­ì— ìž…ë ¥í•´ì£¼ì„¸ìš”.');
+        alert('구글 폼 URL이 설정되지 않았습니다. Setup.gs 실행 후 출력된 링크를 코드의 SYSTEM_CONFIG 구역에 입력해주세요.');
       }
     };
   
@@ -1297,7 +1297,7 @@
       if (SYSTEM_CONFIG.sheetUrl) {
         window.open(SYSTEM_CONFIG.sheetUrl, '_blank');
       } else {
-        alert('êµ¬ê¸€ ì‹œíŠ¸ ë§ˆìŠ¤í„° URLì´ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. ì½”ë“œ ë‚´ë¶€ì˜ SYSTEM_CONFIG.sheetUrlì„ ìž…ë ¥í•´ ì£¼ì„¸ìš”.');
+        alert('구글 시트 마스터 URL이 설정되지 않았습니다. 코드 내부의 SYSTEM_CONFIG.sheetUrl을 입력해 주세요.');
       }
     };
 
@@ -1375,7 +1375,7 @@
         'profile-update': { title: 'Update Profile', render: renderAccountUpdateProfile },
         'ui-settings': { title: 'UI Settings', render: renderAccountUiSettings },
         'password': { title: 'Change Password', render: renderAccountPassword },
-        'command': { title: 'AI í˜„ìž¥ ì§€íœ˜ì‹¤', render: renderCommandCenter },
+        'command': { title: 'AI 현장 지휘실', render: renderCommandCenter },
         'alerts': { title: '통합 알림 센터', render: renderUnifiedAlerts },
         'messenger': { title: '메신저', render: function () {
           // 채팅은 현장앱 안에 있었고, 데스크톱에서는 들어가는 길이 아예 없었다
@@ -1390,10 +1390,10 @@
           pageContainer.innerHTML = '<iframe src="/document-hub?embed=1" ' +
             'style="width:100%;height:calc(100vh - 150px);min-height:560px;border:1px solid var(--border-strong);border-radius:12px;background:#f3f6fb"></iframe>';
         } },
-        'safety': { title: 'AI ìž‘ì—…ì•ˆì „ê´€ë¦¬', render: renderSafety },
-        'hr': { title: 'ì¸ì›ê´€ë¦¬', render: renderHR },
+        'safety': { title: 'AI 작업안전관리', render: renderSafety },
+        'hr': { title: '인원관리', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
-        'wbs': { title: 'ê³µì • ê´€ë¦¬ (WBS)', render: renderWbs },
+        'wbs': { title: '공정 관리', render: renderWbs },
         'opsroom': { title: '현장 상황실', render: renderOpsRoom },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
@@ -1406,12 +1406,12 @@
         'messenger-admin': { title: '메신저 관리', render: function () { return window.AdminMessenger.render(); } },
         'applicant-admin': { title: '입사지원 · 온보딩', render: function () { return window.AdminApplicants.render(); } },
         'docs': { title: '문서통합관리', render: renderDocs },
-        'finance': { title: 'ìž¬ë¬´ / ë¹„ìš©', render: renderFinance },
-        'inventory': { title: 'ìžìž¬ / ìž¥ë¹„', render: renderInventory },
-        'vehicle': { title: 'ì°¨ëŸ‰ ê´€ë¦¬', render: renderVehicle },
+        'finance': { title: '재무 / 비용', render: renderFinance },
+        'inventory': { title: '자재 / 장비', render: renderInventory },
+        'vehicle': { title: '차량 관리', render: renderVehicle },
         'rental': { title: '자재/장비 — 렌탈 계약', render: renderRental },
-        'housing': { title: 'ìˆ™ì†Œ ê´€ë¦¬', render: renderHousing },
-        'vendors': { title: 'êµ¬ë§¤/ë ŒíŠ¸ ê´€ë¦¬', render: renderVendors },
+        'housing': { title: '숙소 관리', render: renderHousing },
+        'vendors': { title: '구매/렌트 관리', render: renderVendors },
     
       };
 
@@ -1641,10 +1641,10 @@
 
       function statusPill(text) {
         var map = {
-          'ìš´í–‰ê°€ëŠ¥': 'ok', 'ì™„ë£Œ': 'ok', 'ë³´ê´€ì¤‘': 'ok', 'ì •ìƒ': 'ok', 'ì²­êµ¬ì™„ë£Œ': 'ok', 'ì²˜ë¦¬ì™„ë£Œ': 'ok', 'ë°œê¶Œ': 'ok',
-          'ìš´í–‰ë¶ˆê°€': 'critical', 'ê¸´ê¸‰': 'critical', 'ìˆ˜ë¦¬í•„ìš”': 'critical', 'ì†ìƒ': 'critical', 'ë¯¸ì´ìˆ˜': 'critical',
-          'ì ê²€ì¤‘': 'warning', 'ë¶ˆì¶œì¤‘': 'warning', 'ì£¼ì˜': 'warning', 'ìŠ¹ì¸ëŒ€ê¸°': 'warning', 'ì²˜ë¦¬ì¤‘': 'warning', 'ë§Œë£Œìž„ë°•': 'warning', 'ë°˜ë‚©ì˜ˆì •': 'warning', 'ì •ë¹„ì¤‘': 'warning', 'ì˜ˆì•½ì™„ë£Œ': 'warning',
-          'ë¯¸ì²˜ë¦¬': 'pending', 'ë¯¸ì²­êµ¬': 'pending', 'ì¼ë°˜': 'pending'
+          '운행가능': 'ok', '완료': 'ok', '보관중': 'ok', '정상': 'ok', '청구완료': 'ok', '처리완료': 'ok', '발권': 'ok',
+          '운행불가': 'critical', '긴급': 'critical', '수리필요': 'critical', '손상': 'critical', '미이수': 'critical',
+          '점검중': 'warning', '불출중': 'warning', '주의': 'warning', '승인대기': 'warning', '처리중': 'warning', '만료임박': 'warning', '반납예정': 'warning', '정비중': 'warning', '예약완료': 'warning',
+          '미처리': 'pending', '미청구': 'pending', '일반': 'pending'
         };
         var cls = map[text] || 'pending';
         return '<span class="status-pill ' + cls + '">' + text + '</span>';
@@ -1686,7 +1686,7 @@
       function currentSiteLabel() {
         var sel = document.getElementById('project-context-switcher');
         if (sel && sel.selectedIndex >= 0) return sel.options[sel.selectedIndex].text;
-        return window.currentSiteId || 'ì „ì²´ í˜„ìž¥';
+        return window.currentSiteId || '전체 현장';
       }
 
       function accountValue(value, fallback) {
@@ -1868,8 +1868,8 @@
 
       function levelClass(level) {
         level = String(level || '').toLowerCase();
-        if (level === 'critical' || level === 'ê¸´ê¸‰') return 'critical';
-        if (level === 'warning' || level === 'ì£¼ì˜') return 'warning';
+        if (level === 'critical' || level === '긴급') return 'critical';
+        if (level === 'warning' || level === '주의') return 'warning';
         return 'ok';
       }
 
@@ -2159,7 +2159,7 @@
         window.goToView(view || 'alerts');
       };
 
-      // â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── DASHBOARD ──────────────────────────────────────────
       // ── 글로벌 인사·출퇴근 현황 (국가 → 현장 → 원청사 → 팀) ──────────
       window._globalHrCountry = window._globalHrCountry || 'ALL';
 
@@ -2676,7 +2676,7 @@
         }
       }
 
-      // â”€â”€ SAFETY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── SAFETY ──────────────────────────────────────────
       async function renderSafety() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -3562,14 +3562,14 @@
           if (alertBadge) alertBadge.textContent = '0';
 
           var aiSafetyWorkItems = [
-            { id:'WRK-2605-001', project:'LGES-AZ ì˜¤í”¼ìŠ¤ ì „ê¸°', site:'2ì¸µ ì‚¬ë¬´ì‹¤', title:'ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤', crew:3, plan:'ìŠ¹ì¸ì™„ë£Œ', tbm:'ì™„ë£Œ', close:'ë§ˆê°ëŒ€ê¸°', progress:60, due:'ì˜¤ëŠ˜ 17:00' },
-            { id:'WRK-2605-002', project:'HFF-02 ìž¥ë¹„ ì„¤ì¹˜', site:'Production Bay B', title:'ì»¨íŠ¸ë¡¤ íŒ¨ë„ ì•µì»¤ ì„¤ì¹˜ ë° ì¼€ì´ë¸” íŠ¸ë ˆì´ ë³´ê°•', crew:4, plan:'ê²€í† ì¤‘', tbm:'ëŒ€ê¸°', close:'ì‹œìž‘ì „', progress:35, due:'ì˜¤ëŠ˜ 13:00' },
-            { id:'WRK-2605-003', project:'SST-03 ë°°ê´€ ìˆ˜ì •', site:'Utility Room', title:'ê¸°ì¡´ ë°°ê´€ ì² ê±° í›„ ì‹ ê·œ ë¼ì¸ 12m ì„¤ì¹˜', crew:5, plan:'ì´ˆì•ˆ', tbm:'ëŒ€ê¸°', close:'ì‹œìž‘ì „', progress:15, due:'ë‚´ì¼' }
+            { id:'WRK-2605-001', project:'LGES-AZ 오피스 전기', site:'2층 사무실', title:'천장 전기 배선 정리 및 신규 케이블 포설', crew:3, plan:'승인완료', tbm:'완료', close:'마감대기', progress:60, due:'오늘 17:00' },
+            { id:'WRK-2605-002', project:'HFF-02 장비 설치', site:'Production Bay B', title:'컨트롤 패널 앵커 설치 및 케이블 트레이 보강', crew:4, plan:'검토중', tbm:'대기', close:'시작전', progress:35, due:'오늘 13:00' },
+            { id:'WRK-2605-003', project:'SST-03 배관 수정', site:'Utility Room', title:'기존 배관 철거 후 신규 라인 12m 설치', crew:5, plan:'초안', tbm:'대기', close:'시작전', progress:15, due:'내일' }
           ];
 
           function safetyStatus(text) {
-            var color = text === 'ì™„ë£Œ' || text === 'ìŠ¹ì¸ì™„ë£Œ' ? 'var(--status-success)' : text === 'ê²€í† ì¤‘' || text === 'ë§ˆê°ëŒ€ê¸°' ? 'var(--status-warning)' : 'var(--text-tertiary)';
-            var bg = text === 'ì™„ë£Œ' || text === 'ìŠ¹ì¸ì™„ë£Œ' ? 'rgba(16,185,129,.12)' : text === 'ê²€í† ì¤‘' || text === 'ë§ˆê°ëŒ€ê¸°' ? 'rgba(245,158,11,.12)' : 'var(--bg-surface-elevated)';
+            var color = text === '완료' || text === '승인완료' ? 'var(--status-success)' : text === '검토중' || text === '마감대기' ? 'var(--status-warning)' : 'var(--text-tertiary)';
+            var bg = text === '완료' || text === '승인완료' ? 'rgba(16,185,129,.12)' : text === '검토중' || text === '마감대기' ? 'rgba(245,158,11,.12)' : 'var(--bg-surface-elevated)';
             return '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;background:'+bg+';color:'+color+';font-size:10px;font-weight:700">'+text+'</span>';
           }
 
@@ -3580,8 +3580,8 @@
           var workRows = aiSafetyWorkItems.map(function(w) {
             return '<tr>'
               +'<td class="cell-mono">'+w.id+'</td>'
-              +'<td><div class="cell-primary">'+w.title+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+w.project+' Â· '+w.site+'</div></td>'
-              +'<td style="text-align:center">'+w.crew+'ëª…</td>'
+              +'<td><div class="cell-primary">'+w.title+'</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px">'+w.project+' · '+w.site+'</div></td>'
+              +'<td style="text-align:center">'+w.crew+'명</td>'
               +'<td>'+safetyStatus(w.plan)+'</td>'
               +'<td>'+safetyStatus(w.tbm)+'</td>'
               +'<td>'+safetyStatus(w.close)+'</td>'
@@ -3592,99 +3592,99 @@
 
           pageContainer.innerHTML =
             '<div class="header-section"><div>'
-            +'<h1 class="page-title">AI ìž‘ì—…ì•ˆì „ê´€ë¦¬</h1>'
-            +'<p class="page-subtitle">ìž‘ì—…ë‚´ìš© ìž…ë ¥ â†’ ì•ˆì „ ìž‘ì—… ê³„íšì„œ ìƒì„± â†’ TBM/ì„œëª… â†’ ìž‘ì—… ë§ˆê° â†’ AI ê³µì •ìœ¨ ì¶”ì²œ</p>'
+            +'<h1 class="page-title">AI 작업안전관리</h1>'
+            +'<p class="page-subtitle">작업내용 입력 → 안전 작업 계획서 생성 → TBM/서명 → 작업 마감 → AI 공정율 추천</p>'
             +'</div><div class="action-row">'
-            +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button>'
-            +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> ì˜¤ëŠ˜ ìž‘ì—… ë“±ë¡</button>'
+            +'<button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button>'
+            +'<button class="btn-primary" id="safety-new-work-btn"><i class="ph ph-plus"></i> 오늘 작업 등록</button>'
             +'</div></div>'
 
             +'<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">'
-            +'<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> ì˜¤ëŠ˜ ì§„í–‰ ìž‘ì—…</div><div class="kpi-value" style="color:var(--brand-primary)">3</div><div class="kpi-meta">ë‹¨ê¸° í”„ë¡œì íŠ¸ ìž‘ì—… ì¹´ë“œ</div></div>'
-            +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> ì•ˆì „ê³„íš ìŠ¹ì¸</div><div class="kpi-value" style="color:var(--status-success)">1 / 3</div><div class="kpi-meta">PHA Â· PTP Â· TBM ì´ˆì•ˆ í¬í•¨</div></div>'
-            +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM ì™„ë£Œ</div><div class="kpi-value" style="color:#8b5cf6">1 / 3</div><div class="kpi-meta">ìž‘ì—…ìž ì„œëª… ê¸°ì¤€</div></div>'
-            +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> ê³µì • ë°˜ì˜ ëŒ€ê¸°</div><div class="kpi-value" style="color:var(--status-warning)">1</div><div class="kpi-meta">AI ì¶”ì²œ í›„ 관리자 í™•ì •</div></div>'
-            +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> ë¯¸ì¡°ì¹˜ ì´ìŠˆ</div><div class="kpi-value" style="color:var(--status-danger)">2</div><div class="kpi-meta">ë§ˆê° ì „ ì¡°ì¹˜ í•„ìš”</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid var(--brand-primary)"><div class="kpi-label"><i class="ph ph-briefcase"></i> 오늘 진행 작업</div><div class="kpi-value" style="color:var(--brand-primary)">3</div><div class="kpi-meta">단기 프로젝트 작업 카드</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid var(--status-success)"><div class="kpi-label"><i class="ph ph-shield-check"></i> 안전계획 승인</div><div class="kpi-value" style="color:var(--status-success)">1 / 3</div><div class="kpi-meta">PHA · PTP · TBM 초안 포함</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid #8b5cf6"><div class="kpi-label"><i class="ph ph-users-three"></i> TBM 완료</div><div class="kpi-value" style="color:#8b5cf6">1 / 3</div><div class="kpi-meta">작업자 서명 기준</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid var(--status-warning)"><div class="kpi-label"><i class="ph ph-chart-line-up"></i> 공정 반영 대기</div><div class="kpi-value" style="color:var(--status-warning)">1</div><div class="kpi-meta">AI 추천 후 관리자 확정</div></div>'
+            +'<div class="kpi-card" style="border-left:3px solid var(--status-danger)"><div class="kpi-label"><i class="ph ph-warning"></i> 미조치 이슈</div><div class="kpi-value" style="color:var(--status-danger)">2</div><div class="kpi-meta">마감 전 조치 필요</div></div>'
             +'</div>'
 
             +'<div class="tab-nav" id="safety-tabs">'
-            +'<button class="tab-btn active" data-tab="s-today"><i class="ph ph-calendar-check"></i> ì˜¤ëŠ˜ì˜ ìž‘ì—…</button>'
-            +'<button class="tab-btn" data-tab="s-ai-plan"><i class="ph ph-sparkle"></i> AI ê³„íšì„œ</button>'
-            +'<button class="tab-btn" data-tab="s-tbm"><i class="ph ph-signature"></i> TBM / ì„œëª…</button>'
-            +'<button class="tab-btn" data-tab="s-close"><i class="ph ph-chart-pie-slice"></i> ìž‘ì—… ë§ˆê° / ê³µì •</button>'
-            +'<button class="tab-btn" data-tab="s-issues"><i class="ph ph-warning-circle"></i> ì´ìŠˆ</button>'
-            +'<button class="tab-btn" data-tab="s-records"><i class="ph ph-folder-open"></i> í”„ë¡œì íŠ¸ ê¸°ë¡</button>'
+            +'<button class="tab-btn active" data-tab="s-today"><i class="ph ph-calendar-check"></i> 오늘의 작업</button>'
+            +'<button class="tab-btn" data-tab="s-ai-plan"><i class="ph ph-sparkle"></i> AI 계획서</button>'
+            +'<button class="tab-btn" data-tab="s-tbm"><i class="ph ph-signature"></i> TBM / 서명</button>'
+            +'<button class="tab-btn" data-tab="s-close"><i class="ph ph-chart-pie-slice"></i> 작업 마감 / 공정</button>'
+            +'<button class="tab-btn" data-tab="s-issues"><i class="ph ph-warning-circle"></i> 이슈</button>'
+            +'<button class="tab-btn" data-tab="s-records"><i class="ph ph-folder-open"></i> 프로젝트 기록</button>'
             +'</div>'
 
             +'<div id="s-today" class="tab-content" style="display:block">'
             +'<div style="display:grid;grid-template-columns:1.45fr .9fr;gap:16px">'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> ì˜¤ëŠ˜ ìž‘ì—… íë¦„</div><button class="btn-secondary" style="padding:4px 10px;font-size:12px"><i class="ph ph-funnel"></i> í•„í„°</button></div>'
-            +'<div class="panel-body"><table class="data-table"><thead><tr><th>ID</th><th>ìž‘ì—…ë‚´ìš©</th><th>ì¸ì›</th><th>ê³„íšì„œ</th><th>TBM</th><th>ë§ˆê°</th><th>ê³µì •ìœ¨</th><th>ê¸°í•œ</th></tr></thead><tbody>'+workRows+'</tbody></table></div></div>'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> ì˜¤ëŠ˜ í•´ì•¼ í•  ì¼</div></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-checks"></i> 오늘 작업 흐름</div><button class="btn-secondary" style="padding:4px 10px;font-size:12px"><i class="ph ph-funnel"></i> 필터</button></div>'
+            +'<div class="panel-body"><table class="data-table"><thead><tr><th>ID</th><th>작업내용</th><th>인원</th><th>계획서</th><th>TBM</th><th>마감</th><th>공정율</th><th>기한</th></tr></thead><tbody>'+workRows+'</tbody></table></div></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-clock-countdown"></i> 오늘 해야 할 일</div></div>'
             +'<div class="panel-body padded">'
-            +'<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle)"><div style="font-weight:700;font-size:12px;color:var(--status-warning)">HFF-02 ì•ˆì „ê³„íš ê²€í† </div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">ì»¨íŠ¸ë¡¤ íŒ¨ë„ ì•µì»¤ ì„¤ì¹˜ Â· TBM ì „ ìŠ¹ì¸ í•„ìš”</div></div>'
-            +'<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle)"><div style="font-weight:700;font-size:12px;color:var(--brand-primary)">LGES-AZ ìž‘ì—… ë§ˆê° ìž…ë ¥</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">ì™„ë£Œ ìˆ˜ëŸ‰ ìž…ë ¥ í›„ ê³µì •ìœ¨ í™•ì • ëŒ€ê¸°</div></div>'
-            +'<div style="padding:10px 0"><div style="font-weight:700;font-size:12px;color:var(--status-danger)">ë¯¸ì¡°ì¹˜ 2ê±´ í™•ì¸</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">ìžìž¬ ë¶€ì¡± Â· ì‚¬ë‹¤ë¦¬ ê³ ì •ìƒíƒœ ìž¬ì ê²€</div></div>'
+            +'<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle)"><div style="font-weight:700;font-size:12px;color:var(--status-warning)">HFF-02 안전계획 검토</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">컨트롤 패널 앵커 설치 · TBM 전 승인 필요</div></div>'
+            +'<div style="padding:10px 0;border-bottom:1px solid var(--border-subtle)"><div style="font-weight:700;font-size:12px;color:var(--brand-primary)">LGES-AZ 작업 마감 입력</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">완료 수량 입력 후 공정율 확정 대기</div></div>'
+            +'<div style="padding:10px 0"><div style="font-weight:700;font-size:12px;color:var(--status-danger)">미조치 2건 확인</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">자재 부족 · 사다리 고정상태 재점검</div></div>'
             +'</div></div></div></div>'
 
             +'<div id="s-ai-plan" class="tab-content" style="display:none">'
             +'<div style="display:grid;grid-template-columns:420px 1fr;gap:16px">'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple-line"></i> ìž‘ì—…ë‚´ìš© ìž…ë ¥</div></div><div class="panel-body padded">'
-            +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">í”„ë¡œì íŠ¸ / ìž¥ì†Œ</label><input id="ai-project-input" class="search-inline" style="width:100%;margin-bottom:10px" value="LGES-AZ ì˜¤í”¼ìŠ¤ ì „ê¸° / 2ì¸µ ì‚¬ë¬´ì‹¤">'
-            +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">ìž‘ì—…ë‚´ìš©</label><textarea id="ai-work-input" style="width:100%;height:138px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤. ìž‘ì—…ìžëŠ” 3ëª…ì´ê³  ì‚¬ë‹¤ë¦¬ë¥¼ ì‚¬ìš©í•©ë‹ˆë‹¤. ì˜ˆì • ìž‘ì—…ëŸ‰ì€ 30mìž…ë‹ˆë‹¤.</textarea>'
-            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="ai-qty-input" class="search-inline" style="width:100%" value="30"><select id="ai-unit-input" class="search-inline" style="width:100%"><option>m</option><option>ea</option><option>%</option><option>ë‹¨ê³„</option></select></div>'
-            +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><span class="tag">ê³ ì†Œìž‘ì—…</span><span class="tag">ì „ê¸°ìž‘ì—…</span><span class="tag">ì‚¬ë‹¤ë¦¬</span><span class="tag">PPE</span></div>'
-            +'<button class="btn-primary" id="ai-generate-plan" style="width:100%;margin-top:14px"><i class="ph ph-sparkle"></i> ì•ˆì „ ìž‘ì—… ê³„íšì„œ ìƒì„±</button>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-pencil-simple-line"></i> 작업내용 입력</div></div><div class="panel-body padded">'
+            +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">프로젝트 / 장소</label><input id="ai-project-input" class="search-inline" style="width:100%;margin-bottom:10px" value="LGES-AZ 오피스 전기 / 2층 사무실">'
+            +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">작업내용</label><textarea id="ai-work-input" style="width:100%;height:138px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">천장 전기 배선 정리 및 신규 케이블 포설. 작업자는 3명이고 사다리를 사용합니다. 예정 작업량은 30m입니다.</textarea>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="ai-qty-input" class="search-inline" style="width:100%" value="30"><select id="ai-unit-input" class="search-inline" style="width:100%"><option>m</option><option>ea</option><option>%</option><option>단계</option></select></div>'
+            +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><span class="tag">고소작업</span><span class="tag">전기작업</span><span class="tag">사다리</span><span class="tag">PPE</span></div>'
+            +'<button class="btn-primary" id="ai-generate-plan" style="width:100%;margin-top:14px"><i class="ph ph-sparkle"></i> 안전 작업 계획서 생성</button>'
             +'</div></div>'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-text"></i> AI ìƒì„± ì´ˆì•ˆ</div><span style="font-size:10px;color:var(--status-warning);font-weight:700">í˜„ìž¥ ì±…ìž„ìž í™•ì¸ í•„ìš”</span></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-file-text"></i> AI 생성 초안</div><span style="font-size:10px;color:var(--status-warning);font-weight:700">현장 책임자 확인 필요</span></div>'
             +'<div class="panel-body padded" id="ai-plan-preview"></div></div>'
             +'</div></div>'
 
             +'<div id="s-tbm" class="tab-content" style="display:none">'
             +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-megaphone"></i> TBM ì§„í–‰ ë‚´ìš©</div><span>'+safetyStatus('ì™„ë£Œ')+'</span></div><div class="panel-body padded">'
-            +'<div style="font-size:13px;font-weight:700;margin-bottom:8px">ì˜¤ëŠ˜ ìž‘ì—…ì€ ì²œìž¥ ì „ê¸° ë°°ì„  ì •ë¦¬ ë° ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤ìž…ë‹ˆë‹¤.</div>'
-            +'<div style="font-size:12px;color:var(--text-secondary);line-height:1.7">ì£¼ìš” ìœ„í—˜ì€ ê°ì „, ì‚¬ë‹¤ë¦¬ ì¶”ë½, ì²œìž¥ ë‚´ë¶€ ì´ë¬¼ì§ˆ ë‚™í•˜ìž…ë‹ˆë‹¤. ìž‘ì—… ì „ ì „ì› ì°¨ë‹¨ê³¼ ë¬´ì „ì•• í™•ì¸ì„ ë¨¼ì € ì§„í–‰í•˜ê³ , ì‚¬ë‹¤ë¦¬ëŠ” í”ë“¤ë¦¼ ì—†ì´ ì„¤ì¹˜í•©ë‹ˆë‹¤. ì´ìƒ ìƒí™© ë°œìƒ ì‹œ ì¦‰ì‹œ ìž‘ì—…ì„ ì¤‘ì§€í•˜ê³  í˜„ìž¥ ì±…ìž„ìžì—ê²Œ ë³´ê³ í•©ë‹ˆë‹¤.</div>'
-            +'<div style="display:flex;gap:8px;margin-top:14px"><span class="tag">ì•ˆì „ëª¨</span><span class="tag">ë³´ì•ˆê²½</span><span class="tag">ì ˆì—°ìž¥ê°‘</span><span class="tag">2ì¸ 1ì¡°</span></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-megaphone"></i> TBM 진행 내용</div><span>'+safetyStatus('완료')+'</span></div><div class="panel-body padded">'
+            +'<div style="font-size:13px;font-weight:700;margin-bottom:8px">오늘 작업은 천장 전기 배선 정리 및 신규 케이블 포설입니다.</div>'
+            +'<div style="font-size:12px;color:var(--text-secondary);line-height:1.7">주요 위험은 감전, 사다리 추락, 천장 내부 이물질 낙하입니다. 작업 전 전원 차단과 무전압 확인을 먼저 진행하고, 사다리는 흔들림 없이 설치합니다. 이상 상황 발생 시 즉시 작업을 중지하고 현장 책임자에게 보고합니다.</div>'
+            +'<div style="display:flex;gap:8px;margin-top:14px"><span class="tag">안전모</span><span class="tag">보안경</span><span class="tag">절연장갑</span><span class="tag">2인 1조</span></div>'
             +'</div></div>'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-signature"></i> ìž‘ì—…ìž ì„œëª…</div><button class="btn-secondary" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> ìž‘ì—…ìž ì¶”ê°€</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>ìž‘ì—…ìž</th><th>ì—­í• </th><th>í™•ì¸ì‹œê°„</th><th>ì„œëª…</th></tr></thead><tbody><tr><td class="cell-primary">ê¹€ì² ìˆ˜</td><td>ì „ê¸°ê³µ</td><td class="cell-mono">07:42</td><td>'+safetyStatus('ì™„ë£Œ')+'</td></tr><tr><td class="cell-primary">ì´ë¯¼ì¤€</td><td>ë³´ì¡°</td><td class="cell-mono">07:43</td><td>'+safetyStatus('ì™„ë£Œ')+'</td></tr><tr><td class="cell-primary">ìž„ì„±í›ˆ</td><td>ê°ì‹œìž</td><td class="cell-mono">-</td><td>'+safetyStatus('ëŒ€ê¸°')+'</td></tr></tbody></table></div></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-signature"></i> 작업자 서명</div><button class="btn-secondary" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> 작업자 추가</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>작업자</th><th>역할</th><th>확인시간</th><th>서명</th></tr></thead><tbody><tr><td class="cell-primary">김철수</td><td>전기공</td><td class="cell-mono">07:42</td><td>'+safetyStatus('완료')+'</td></tr><tr><td class="cell-primary">이민준</td><td>보조</td><td class="cell-mono">07:43</td><td>'+safetyStatus('완료')+'</td></tr><tr><td class="cell-primary">임성훈</td><td>감시자</td><td class="cell-mono">-</td><td>'+safetyStatus('대기')+'</td></tr></tbody></table></div></div>'
             +'</div></div>'
 
             +'<div id="s-close" class="tab-content" style="display:none">'
             +'<div style="display:grid;grid-template-columns:420px 1fr;gap:16px">'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> ìž‘ì—… ë§ˆê° ìž…ë ¥</div></div><div class="panel-body padded">'
-            +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">ì‹¤ì œ ì™„ë£Œë‚´ìš©</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">ì²œìž¥ ë°°ì„  18m í¬ì„¤ ì™„ë£Œ. ìžìž¬ ë¶€ì¡±ìœ¼ë¡œ ë‚˜ë¨¸ì§€ 12mëŠ” ë‚´ì¼ ì§„í–‰ ì˜ˆì •. ì²œìž¥ ë‚´ë¶€ ìž¥ì• ë¬¼ë¡œ ìž‘ì—… ì†ë„ ì§€ì—°.</textarea>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-flag-checkered"></i> 작업 마감 입력</div></div><div class="panel-body padded">'
+            +'<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:6px">실제 완료내용</label><textarea id="close-work-input" style="width:100%;height:118px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-family:var(--font-base);font-size:12px;padding:10px;resize:vertical">천장 배선 18m 포설 완료. 자재 부족으로 나머지 12m는 내일 진행 예정. 천장 내부 장애물로 작업 속도 지연.</textarea>'
             +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><input id="done-qty-input" class="search-inline" style="width:100%" value="18"><input id="total-qty-input" class="search-inline" style="width:100%" value="30"></div>'
-            +'<select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>ì¼ë¶€ ì™„ë£Œ</option><option>ì™„ë£Œ</option><option>ì§€ì—°</option><option>ì¤‘ë‹¨</option><option>ìž¬ìž‘ì—… í•„ìš”</option></select>'
-            +'<button class="btn-primary" id="ai-progress-btn" style="width:100%;margin-top:14px"><i class="ph ph-chart-line-up"></i> AI ê³µì •ìœ¨ ë¶„ì„</button>'
+            +'<select id="work-state-input" class="search-inline" style="width:100%;margin-top:10px"><option>일부 완료</option><option>완료</option><option>지연</option><option>중단</option><option>재작업 필요</option></select>'
+            +'<button class="btn-primary" id="ai-progress-btn" style="width:100%;margin-top:14px"><i class="ph ph-chart-line-up"></i> AI 공정율 분석</button>'
             +'</div></div>'
-            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> ê³µì •ìœ¨ ì¶”ì²œ ë° í™•ì •</div><span style="font-size:10px;color:var(--text-tertiary)">AI ì¶”ì²œ + 관리자 í™•ì •</span></div><div class="panel-body padded" id="progress-result"></div></div>'
+            +'<div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-donut"></i> 공정율 추천 및 확정</div><span style="font-size:10px;color:var(--text-tertiary)">AI 추천 + 관리자 확정</span></div><div class="panel-body padded" id="progress-result"></div></div>'
             +'</div></div>'
 
             +'<div id="s-issues" class="tab-content" style="display:none">'
-            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-first-aid-kit"></i> ì‚¬ê³  Â· ì•„ì°¨ì‚¬ê³ </div><button class="btn-primary" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> ë“±ë¡</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>ìœ í˜•</th><th>í”„ë¡œì íŠ¸</th><th>ë‚´ìš©</th><th>ìƒíƒœ</th></tr></thead><tbody><tr><td>ìœ„í—˜ìƒí™©</td><td>HFF-02</td><td class="cell-primary">ì¼€ì´ë¸” íŠ¸ë ˆì´ ëª¨ì„œë¦¬ ë‚ ì¹´ë¡œì›€</td><td>'+safetyStatus('ì¡°ì¹˜ì¤‘')+'</td></tr><tr><td>ì•„ì°¨ì‚¬ê³ </td><td>SST-03</td><td class="cell-primary">ë°°ê´€ ìžìž¬ ì´ë™ ì¤‘ í†µë¡œ í˜‘ì†Œ</td><td>'+safetyStatus('ì™„ë£Œ')+'</td></tr></tbody></table></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-wrench"></i> ë¯¸ì¡°ì¹˜ ì‚¬í•­</div></div><div class="panel-body"><table class="data-table"><thead><tr><th>ì´ìŠˆ</th><th>ë‹´ë‹¹</th><th>ë§ˆê°</th><th>ìƒíƒœ</th></tr></thead><tbody><tr><td class="cell-primary">ìžìž¬ ë¶€ì¡±ìœ¼ë¡œ ìž”ì—¬ 12m ëŒ€ê¸°</td><td>êµ¬ë§¤íŒ€</td><td>ì˜¤ëŠ˜</td><td>'+safetyStatus('ì¡°ì¹˜ì¤‘')+'</td></tr><tr><td class="cell-primary">ì‚¬ë‹¤ë¦¬ í•˜ë‹¨ ë¯¸ë„ëŸ¼ ë°©ì§€íŒ¨ë“œ êµì²´</td><td>ë°•ì†Œìž¥</td><td>ë‚´ì¼</td><td>'+safetyStatus('ëŒ€ê¸°')+'</td></tr></tbody></table></div></div></div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-first-aid-kit"></i> 사고 · 아차사고</div><button class="btn-primary" style="padding:4px 10px;font-size:12px"><i class="ph ph-plus"></i> 등록</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>유형</th><th>프로젝트</th><th>내용</th><th>상태</th></tr></thead><tbody><tr><td>위험상황</td><td>HFF-02</td><td class="cell-primary">케이블 트레이 모서리 날카로움</td><td>'+safetyStatus('조치중')+'</td></tr><tr><td>아차사고</td><td>SST-03</td><td class="cell-primary">배관 자재 이동 중 통로 협소</td><td>'+safetyStatus('완료')+'</td></tr></tbody></table></div></div><div class="panel" style="margin:0"><div class="panel-header"><div class="panel-title"><i class="ph ph-wrench"></i> 미조치 사항</div></div><div class="panel-body"><table class="data-table"><thead><tr><th>이슈</th><th>담당</th><th>마감</th><th>상태</th></tr></thead><tbody><tr><td class="cell-primary">자재 부족으로 잔여 12m 대기</td><td>구매팀</td><td>오늘</td><td>'+safetyStatus('조치중')+'</td></tr><tr><td class="cell-primary">사다리 하단 미끄럼 방지패드 교체</td><td>박소장</td><td>내일</td><td>'+safetyStatus('대기')+'</td></tr></tbody></table></div></div></div>'
             +'</div>'
 
             +'<div id="s-records" class="tab-content" style="display:none">'
-            +'<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-archive"></i> í”„ë¡œì íŠ¸ ì•ˆì „Â·ìž‘ì—… ê¸°ë¡</div><button class="btn-secondary" style="padding:4px 10px;font-size:12px"><i class="ph ph-file-pdf"></i> PDF ì¶œë ¥</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>í”„ë¡œì íŠ¸</th><th>ì•ˆì „ê³„íš</th><th>TBM</th><th>ìž‘ì—…ë§ˆê°</th><th>ê³µì • ì´ë ¥</th><th>ë¦¬í¬íŠ¸</th></tr></thead><tbody><tr><td class="cell-primary">LGES-AZ ì˜¤í”¼ìŠ¤ ì „ê¸°</td><td>3ê±´</td><td>3íšŒ / ì„œëª… 8ëª…</td><td>2ê±´</td><td>35% â†’ 60%</td><td><button class="icon-btn"><i class="ph ph-download-simple"></i></button></td></tr><tr><td class="cell-primary">HFF-02 ìž¥ë¹„ ì„¤ì¹˜</td><td>1ê±´</td><td>ëŒ€ê¸°</td><td>-</td><td>35%</td><td><button class="icon-btn"><i class="ph ph-download-simple"></i></button></td></tr></tbody></table></div></div>'
+            +'<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-archive"></i> 프로젝트 안전·작업 기록</div><button class="btn-secondary" style="padding:4px 10px;font-size:12px"><i class="ph ph-file-pdf"></i> PDF 출력</button></div><div class="panel-body"><table class="data-table"><thead><tr><th>프로젝트</th><th>안전계획</th><th>TBM</th><th>작업마감</th><th>공정 이력</th><th>리포트</th></tr></thead><tbody><tr><td class="cell-primary">LGES-AZ 오피스 전기</td><td>3건</td><td>3회 / 서명 8명</td><td>2건</td><td>35% → 60%</td><td><button class="icon-btn"><i class="ph ph-download-simple"></i></button></td></tr><tr><td class="cell-primary">HFF-02 장비 설치</td><td>1건</td><td>대기</td><td>-</td><td>35%</td><td><button class="icon-btn"><i class="ph ph-download-simple"></i></button></td></tr></tbody></table></div></div>'
             +'</div>';
 
           function buildPlanPreview() {
-            var project = document.getElementById('ai-project-input').value || 'ë¯¸ì§€ì • í”„ë¡œì íŠ¸';
-            var work = document.getElementById('ai-work-input').value || 'ìž‘ì—…ë‚´ìš© ë¯¸ìž…ë ¥';
+            var project = document.getElementById('ai-project-input').value || '미지정 프로젝트';
+            var work = document.getElementById('ai-work-input').value || '작업내용 미입력';
             var qty = document.getElementById('ai-qty-input').value || '0';
             var unit = document.getElementById('ai-unit-input').value || '';
             document.getElementById('ai-plan-preview').innerHTML =
               '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">'
-              +'<div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ìž‘ì—…ëª…</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+project+'</div></div>'
-              +'<div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ì˜ˆì • ìž‘ì—…ëŸ‰</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+qty+' '+unit+'</div></div>'
-              +'<div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">ìŠ¹ì¸ ìƒíƒœ</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">ì´ˆì•ˆ</div></div>'
+              +'<div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">작업명</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+project+'</div></div>'
+              +'<div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정 작업량</div><div style="font-weight:700;font-size:12px;margin-top:4px">'+qty+' '+unit+'</div></div>'
+              +'<div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">승인 상태</div><div style="font-weight:700;font-size:12px;margin-top:4px;color:var(--status-warning)">초안</div></div>'
               +'</div>'
               +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
-              +'<div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA ìœ„í—˜ì„± ë¶„ì„</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>ê°ì „ ë° ì „ê¸° ì ‘ì´‰ ìœ„í—˜</li><li>ì‚¬ë‹¤ë¦¬ ì‚¬ìš© ì¤‘ ì¶”ë½ ìœ„í—˜</li><li>ì²œìž¥ ë‚´ë¶€ ì´ë¬¼ì§ˆ ë‚™í•˜ ìœ„í—˜</li><li>ë¬´ë¦¬í•œ ìžì„¸ë¡œ ì¸í•œ ê·¼ê³¨ê²©ê³„ ë¶€ë‹´</li></ul></div>'
-              +'<div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP ìž‘ì—… ì „ ê³„íš</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>ìž‘ì—…êµ¬ì—­ ì„¤ì • ë° ì¶œìž… í†µì œ</li><li>ì „ì› ì°¨ë‹¨ ë° ë¬´ì „ì•• í™•ì¸</li><li>ì‚¬ë‹¤ë¦¬ ì ê²€ ë° 2ì¸ 1ì¡° ë°°ì¹˜</li><li>ë°°ì„  ì •ë¦¬, ì‹ ê·œ ì¼€ì´ë¸” í¬ì„¤</li><li>ì •ë¦¬ì •ëˆ ë° ì™„ë£Œ ì‚¬ì§„ ê¸°ë¡</li></ol></div>'
-              +'</div><div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">TBM ë©˜íŠ¸:</b> ì˜¤ëŠ˜ ìž‘ì—…ì€ '+work+' ì£¼ìš” ìœ„í—˜ì€ ê°ì „ê³¼ ì¶”ë½ìž…ë‹ˆë‹¤. ì „ì› ì°¨ë‹¨ í™•ì¸ ì „ ìž‘ì—…í•˜ì§€ ì•Šê³ , ì´ìƒ ìƒí™© ë°œìƒ ì‹œ ì¦‰ì‹œ ìž‘ì—…ì„ ì¤‘ì§€í•©ë‹ˆë‹¤.</div>'
-              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary"><i class="ph ph-check-circle"></i> í˜„ìž¥ ì±…ìž„ìž ìŠ¹ì¸</button><button class="btn-secondary"><i class="ph ph-pencil"></i> ìˆ˜ì •</button></div>';
+              +'<div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--brand-primary)">PHA 위험성 분석</div><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>감전 및 전기 접촉 위험</li><li>사다리 사용 중 추락 위험</li><li>천장 내부 이물질 낙하 위험</li><li>무리한 자세로 인한 근골격계 부담</li></ul></div>'
+              +'<div><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--status-success)">PTP 작업 전 계획</div><ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--text-secondary)"><li>작업구역 설정 및 출입 통제</li><li>전원 차단 및 무전압 확인</li><li>사다리 점검 및 2인 1조 배치</li><li>배선 정리, 신규 케이블 포설</li><li>정리정돈 및 완료 사진 기록</li></ol></div>'
+              +'</div><div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">TBM 멘트:</b> 오늘 작업은 '+work+' 주요 위험은 감전과 추락입니다. 전원 차단 확인 전 작업하지 않고, 이상 상황 발생 시 즉시 작업을 중지합니다.</div>'
+              +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn-primary"><i class="ph ph-check-circle"></i> 현장 책임자 승인</button><button class="btn-secondary"><i class="ph ph-pencil"></i> 수정</button></div>';
           }
 
           function buildProgressResult() {
@@ -3694,13 +3694,13 @@
             var remain = Math.max(total - done, 0);
             document.getElementById('progress-result').innerHTML =
               '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">'
-              +'<div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">ì˜ˆì •</div><div style="font-size:20px;font-weight:700">'+total+'</div></div>'
-              +'<div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">ì™„ë£Œ</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div>'
-              +'<div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">ìž”ì—¬</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div>'
-              +'<div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI ì¶”ì²œ</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div>'
+              +'<div style="padding:10px;background:var(--bg-subtle);border-radius:8px"><div style="font-size:10px;color:var(--text-tertiary)">예정</div><div style="font-size:20px;font-weight:700">'+total+'</div></div>'
+              +'<div style="padding:10px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-success)">완료</div><div style="font-size:20px;font-weight:700;color:var(--status-success)">'+done+'</div></div>'
+              +'<div style="padding:10px;background:rgba(245,158,11,.08);border-radius:8px"><div style="font-size:10px;color:var(--status-warning)">잔여</div><div style="font-size:20px;font-weight:700;color:var(--status-warning)">'+remain+'</div></div>'
+              +'<div style="padding:10px;background:rgba(37,99,235,.08);border-radius:8px"><div style="font-size:10px;color:var(--brand-primary)">AI 추천</div><div style="font-size:20px;font-weight:700;color:var(--brand-primary)">'+rate+'%</div></div>'
               +'</div>'+progressBar(rate)
-              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">AI ë¶„ì„: ì‹¤ì œ ì™„ë£Œë‚´ìš© ê¸°ì¤€ìœ¼ë¡œ '+rate+'% ë°˜ì˜ì„ ì¶”ì²œí•©ë‹ˆë‹¤. ì§€ì—° ì‚¬ìœ ëŠ” ìžìž¬ ë¶€ì¡±ê³¼ ì²œìž¥ ë‚´ë¶€ ìž¥ì• ë¬¼ë¡œ ìš”ì•½ë©ë‹ˆë‹¤. ìž”ì—¬ '+remain+'ì€ ë‹¤ìŒ ìž‘ì—…ìœ¼ë¡œ ìžë™ ìƒì„±í•  ìˆ˜ ìžˆìŠµë‹ˆë‹¤.</div>'
-              +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary"><i class="ph ph-check-circle"></i> ê³µì •ìœ¨ í™•ì • ë°˜ì˜</button><button class="btn-secondary"><i class="ph ph-arrow-clockwise"></i> ë‹¤ìŒ ìž‘ì—… ìƒì„±</button></div>';
+              +'<div style="margin-top:14px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.7">AI 분석: 실제 완료내용 기준으로 '+rate+'% 반영을 추천합니다. 지연 사유는 자재 부족과 천장 내부 장애물로 요약됩니다. 잔여 '+remain+'은 다음 작업으로 자동 생성할 수 있습니다.</div>'
+              +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><input class="search-inline" style="width:90px" value="'+rate+'%"><button class="btn-primary"><i class="ph ph-check-circle"></i> 공정율 확정 반영</button><button class="btn-secondary"><i class="ph ph-arrow-clockwise"></i> 다음 작업 생성</button></div>';
           }
 
           document.querySelectorAll('#safety-tabs .tab-btn').forEach(function(btn){
@@ -3719,10 +3719,10 @@
           });
           buildPlanPreview();
           buildProgressResult();
-        } catch(err){ renderError('ì•ˆì „ê´€ë¦¬ ë¡œë”© ì‹¤íŒ¨: '+err.message); console.error(err); }
+        } catch(err){ renderError('안전관리 로딩 실패: '+err.message); console.error(err); }
       }
 
-      // â”€â”€ HR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── HR ──────────────────────────────────────────
       // 작업자 QR 셀프 등록 — 현장을 고르면 인쇄용 QR 포스터를 열고, 작업자가 스캔해 직접 입사지원.
       window.openWorkerJoinModal = async function () {
         var host = document.getElementById('worker-join-modal-root');
@@ -4055,10 +4055,10 @@
             return;
           }
 
-          // í†µí•©ë·°: getHRData(stats/personnel) + getAttendanceLive(global merged)
-          // ë‹¨ì¼ë·°: getHRData + getDailyTeamMatrix + getDailyAttendanceDetail ë³‘ë ¬
+          // 통합뷰: getHRData(stats/personnel) + getAttendanceLive(global merged)
+          // 단일뷰: getHRData + getDailyTeamMatrix + getDailyAttendanceDetail 병렬
           var hrData, attendance, teamMatrix, attendDetail;
-          var queryDate = window._hrSelectedDate || '';  // ë‚ ì§œ ì„ íƒê¸° ìƒíƒœ
+          var queryDate = window._hrSelectedDate || '';  // 날짜 선택기 상태
           if (isGlobal) {
             [hrData, attendance] = await Promise.all([
               window.API.getHRData(),
@@ -4076,7 +4076,7 @@
           var stats     = hrData ? (hrData.stats || { total: 0, active: 0, onLeave: 0, visaExpiringSoon: 0, safetyExpiring: 0 }) : { total: 0, active: 0, onLeave: 0, visaExpiringSoon: 0, safetyExpiring: 0 };
           var personnel = hrData ? (hrData.list || []) : [];
 
-          // â”€â”€ í˜„ìž¥ë³„ ì‚¬ì´íŠ¸ ë°°ì§€ ìƒ‰ìƒ ë§µ â”€â”€
+          // ── 현장별 사이트 배지 색상 맵 ──
           var siteColors = {
             'HFF-02':  '#f59e0b',
             'LGES-AZ': '#2563eb',
@@ -4089,14 +4089,14 @@
             return '<span style="display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;color:white;background:' + c + ';margin-left:4px">' + (siteId || '') + '</span>';
           }
 
-          // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          // ðŸŒ í†µí•© ë·° ëª¨ë“œ
-          // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // ─────────────────────────────────
+          // 🌐 통합 뷰 모드
+          // ─────────────────────────────────
           if (isGlobal && attendance && attendance.mode === 'global') {
             var ss = attendance.siteStats || {};
             var siteKeys = Object.keys(ss);
 
-            // í˜„ìž¥ë³„ ìš”ì•½ ì¹´ë“œ
+            // 현장별 요약 카드
             var siteCardsHtml = siteKeys.map(function(sid) {
               var s = ss[sid];
               var pct = s.totalActive > 0 ? Math.round(s.presentCount / s.totalActive * 100) : 0;
@@ -4107,13 +4107,13 @@
                 '<span style="font-size:12px;color:var(--text-tertiary);font-weight:400"> / ' + s.totalActive + '</span></div>' +
                 '<div style="background:var(--border-subtle);border-radius:4px;height:6px;margin-top:8px">' +
                 '<div style="background:' + c + ';height:6px;border-radius:4px;width:' + pct + '%"></div></div>' +
-                '<div class="kpi-meta" style="margin-top:6px"><span style="color:var(--text-secondary)">ì¶œê·¼ìœ¨ ' + pct + '%</span></div>' +
+                '<div class="kpi-meta" style="margin-top:6px"><span style="color:var(--text-secondary)">출근율 ' + pct + '%</span></div>' +
                 '</div>';
             }).join('');
 
-            // í†µí•© ì¶œê·¼ìž ëª©ë¡ (í˜„ìž¥ ë°°ì§€ í¬í•¨)
+            // 통합 출근자 목록 (현장 배지 포함)
             var globalCheckedInHtml = (attendance.checkedIn || []).map(function(e) {
-              var checkoutCell = e.checkOut ? e.checkOut : '<span style="color:var(--text-tertiary)">ê·¼ë¬´ì¤‘</span>';
+              var checkoutCell = e.checkOut ? e.checkOut : '<span style="color:var(--text-tertiary)">근무중</span>';
               return '<tr><td class="cell-primary">' + (e.name || '-') + '</td>' +
                 '<td><span class="tag">' + (e.company || '-') + '</span></td>' +
                 '<td>' + (e.team || 'None') + '</td>' +
@@ -4123,8 +4123,8 @@
             }).join('');
 
             var globalAbsentHtml = (attendance.notCheckedIn || []).length === 0
-              ? '<div style="padding:32px;text-align:center;color:var(--status-success)"><i class="ph ph-check-circle" style="font-size:36px;display:block;margin-bottom:8px"></i>ì „ì› ì¶œê·¼ ì™„ë£Œ</div>'
-              : '<table class="data-table"><thead><tr><th>ì„±ëª…</th><th>ì†Œì†</th><th>í˜„ìž¥</th><th>NFC UID</th></tr></thead><tbody>' +
+              ? '<div style="padding:32px;text-align:center;color:var(--status-success)"><i class="ph ph-check-circle" style="font-size:36px;display:block;margin-bottom:8px"></i>전원 출근 완료</div>'
+              : '<table class="data-table"><thead><tr><th>성명</th><th>소속</th><th>현장</th><th>NFC UID</th></tr></thead><tbody>' +
                 (attendance.notCheckedIn || []).map(function(e) {
                   return '<tr><td class="cell-primary" style="color:var(--status-warning)">' + (e.name || '-') + '</td>' +
                     '<td><span class="tag">' + (e.company || '-') + '</span></td>' +
@@ -4134,39 +4134,39 @@
 
             pageContainer.innerHTML =
               '<div class="header-section"><div>' +
-              '<h1 class="page-title">ðŸŒ í†µí•© í˜„í™© â€” ì „ì²´ í˜„ìž¥</h1>' +
-              '<p class="page-subtitle">ëª¨ë“  ì—°ë™ í˜„ìž¥ì˜ ì¶œí‡´ê·¼ ë°ì´í„°ë¥¼ í†µí•© ì§‘ê³„í•©ë‹ˆë‹¤ (' + attendance.date + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸</button></div></div>' +
-              // ì „ì²´ KPI
+              '<h1 class="page-title">🌐 통합 현황 — 전체 현장</h1>' +
+              '<p class="page-subtitle">모든 연동 현장의 출퇴근 데이터를 통합 집계합니다 (' + attendance.date + ')</p></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button></div></div>' +
+              // 전체 KPI
               '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
-              '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì¶œê·¼ ì¸ì› <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
+              '<div class="kpi-card"><div class="kpi-label">전체 출근 인원 <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
               '<div class="kpi-value" style="color:var(--status-success)">' + attendance.totalPresent + '<span style="font-size:12px;color:var(--text-tertiary);font-weight:400"> / ' + attendance.totalWorkers + '</span></div>' +
-              '<div class="kpi-meta"><span style="color:var(--text-secondary)">ì „ì²´ í•©ì‚° ì¶œê·¼</span></div></div>' +
-              '<div class="kpi-card"><div class="kpi-label">ë¯¸ì¶œê·¼ <i class="ph ph-user-minus" style="font-size:14px;color:var(--status-warning)"></i></div>' +
+              '<div class="kpi-meta"><span style="color:var(--text-secondary)">전체 합산 출근</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">미출근 <i class="ph ph-user-minus" style="font-size:14px;color:var(--status-warning)"></i></div>' +
               '<div class="kpi-value" style="color:var(--status-warning)">' + attendance.absentCount + '</div>' +
-              '<div class="kpi-meta"><span style="color:var(--text-secondary)">ì „ì²´ ë¯¸ì²´í¬ì¸</span></div></div>' +
-              '<div class="kpi-card"><div class="kpi-label">ì—°ë™ í˜„ìž¥ ìˆ˜ <i class="ph ph-buildings" style="font-size:14px;color:var(--brand-primary)"></i></div>' +
+              '<div class="kpi-meta"><span style="color:var(--text-secondary)">전체 미체크인</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">연동 현장 수 <i class="ph ph-buildings" style="font-size:14px;color:var(--brand-primary)"></i></div>' +
               '<div class="kpi-value" style="color:var(--brand-primary)">' + attendance.activeSiteCount + '</div>' +
-              '<div class="kpi-meta"><span style="color:var(--text-secondary)">í™œì„± í˜„ìž¥</span></div></div>' +
-              '<div class="kpi-card"><div class="kpi-label">ì „ì²´ ì¸ì› <i class="ph ph-identification-badge" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
+              '<div class="kpi-meta"><span style="color:var(--text-secondary)">활성 현장</span></div></div>' +
+              '<div class="kpi-card"><div class="kpi-label">전체 인원 <i class="ph ph-identification-badge" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
               '<div class="kpi-value">' + stats.total + '</div>' +
-              '<div class="kpi-meta"><span style="color:var(--text-secondary)">ERP ë“±ë¡ ì¸ì›</span></div></div>' +
+              '<div class="kpi-meta"><span style="color:var(--text-secondary)">ERP 등록 인원</span></div></div>' +
               '</div>' +
-              // í˜„ìž¥ë³„ ì¹´ë“œ
-              '<h3 style="font-size:13px;font-weight:700;color:var(--text-secondary);margin:8px 0 12px;text-transform:uppercase;letter-spacing:.06em">í˜„ìž¥ë³„ ì¶œê·¼ í˜„í™©</h3>' +
+              // 현장별 카드
+              '<h3 style="font-size:13px;font-weight:700;color:var(--text-secondary);margin:8px 0 12px;text-transform:uppercase;letter-spacing:.06em">현장별 출근 현황</h3>' +
               '<div class="kpi-row" style="grid-template-columns:repeat(' + Math.min(siteKeys.length, 4) + ',1fr);margin-bottom:16px">' + siteCardsHtml + '</div>' +
-              // ì¶œí‡´ê·¼ íƒ­
-              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">ðŸŒ í†µí•© ì¶œí‡´ê·¼ ëª©ë¡</button><button class="tab-btn" data-tab="personnel">ðŸ‘¤ ì¸ì› ë§ˆìŠ¤í„°</button></div>' +
+              // 출퇴근 탭
+              '<div class="tab-nav" id="hr-tabs"><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn active" data-tab="attendance">🌐 통합 출퇴근 목록</button><button class="tab-btn" data-tab="personnel">👤 인원 마스터</button></div>' +
               '<div id="tab-global" style="display:none"></div><div id="tab-attendance">' +
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-              '<div class="panel"><div class="panel-header"><div class="panel-title" style="color:var(--status-success)"><i class="ph ph-check-circle"></i> ì¶œê·¼ ì™„ë£Œ (' + attendance.totalPresent + 'ëª…)</div></div>' +
-              '<div class="panel-body"><table class="data-table"><thead><tr><th>ì„±ëª…</th><th>ì†Œì†</th><th>íŒ€</th><th>í˜„ìž¥</th><th>ì²´í¬ì¸</th><th>í‡´ê·¼</th></tr></thead><tbody>' + (globalCheckedInHtml || '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary)">ì¶œê·¼ ê¸°ë¡ ì—†ìŒ</td></tr>') + '</tbody></table></div></div>' +
-              '<div class="panel"><div class="panel-header"><div class="panel-title" style="color:var(--status-warning)"><i class="ph ph-warning"></i> ë¯¸ì¶œê·¼ (' + attendance.absentCount + 'ëª…)</div></div>' +
+              '<div class="panel"><div class="panel-header"><div class="panel-title" style="color:var(--status-success)"><i class="ph ph-check-circle"></i> 출근 완료 (' + attendance.totalPresent + '명)</div></div>' +
+              '<div class="panel-body"><table class="data-table"><thead><tr><th>성명</th><th>소속</th><th>팀</th><th>현장</th><th>체크인</th><th>퇴근</th></tr></thead><tbody>' + (globalCheckedInHtml || '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary)">출근 기록 없음</td></tr>') + '</tbody></table></div></div>' +
+              '<div class="panel"><div class="panel-header"><div class="panel-title" style="color:var(--status-warning)"><i class="ph ph-warning"></i> 미출근 (' + attendance.absentCount + '명)</div></div>' +
               '<div class="panel-body">' + globalAbsentHtml + '</div></div></div></div>' +
               '<div id="tab-personnel" style="display:none">' +
-              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-identification-card"></i> ì¸ì› ë§ˆìŠ¤í„° (ì „ì²´)</div>' +
-              '<input type="text" class="search-inline" id="hr-search" placeholder="ì´ë¦„, ID, ì†Œì† ê²€ìƒ‰..."></div>' +
-              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>ì¸ì›ID</th><th>ì„±ëª…</th><th>ì†Œì†</th><th>ì§ì¢…</th><th>í˜„ìž¥</th><th>ë¹„ìžë§Œë£Œ</th><th>ì•ˆì „êµìœ¡</th><th>앱 화면</th></tr></thead><tbody>' +
+              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-identification-card"></i> 인원 마스터 (전체)</div>' +
+              '<input type="text" class="search-inline" id="hr-search" placeholder="이름, ID, 소속 검색..."></div>' +
+              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>인원ID</th><th>성명</th><th>소속</th><th>직종</th><th>현장</th><th>비자만료</th><th>안전교육</th><th>앱 화면</th></tr></thead><tbody>' +
               personnel.map(function(p) {
                 return '<tr><td class="cell-mono">' + p.id + '</td><td class="cell-primary">' + p.nameEn + '</td>' +
                   '<td><span class="tag">' + p.company + '</span></td><td>' + p.role + '</td>' +
@@ -4176,24 +4176,24 @@
               '</tbody></table></div></div></div>';
 
           } else {
-            // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            // ðŸ—ï¸ ë‹¨ì¼ í˜„ìž¥ ëª¨ë“œ (ê¸°ì¡´ ë¡œì§ ìœ ì§€)
-            // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ─────────────────────────────────
+            // 🏗️ 단일 현장 모드 (기존 로직 유지)
+            // ─────────────────────────────────
             var teamSummaryHtml = (attendance.teamSummary || []).map(function (t) {
               return '<div style="background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;padding:10px 14px;text-align:center">' +
                 '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;margin-bottom:4px">' + t.team + '</div>' +
                 '<div style="font-size:22px;font-weight:700;font-family:var(--font-mono)">' + t.count + '</div>' +
-                '<div style="font-size:10px;color:var(--text-tertiary)">ëª…</div></div>';
+                '<div style="font-size:10px;color:var(--text-tertiary)">명</div></div>';
             }).join('');
 
             var checkedInHtml = (attendance.checkedIn || []).map(function (e) {
-              var checkoutCell = e.checkOut ? e.checkOut : '<span style="color:var(--text-tertiary)">ê·¼ë¬´ì¤‘</span>';
+              var checkoutCell = e.checkOut ? e.checkOut : '<span style="color:var(--text-tertiary)">근무중</span>';
               return '<tr><td class="cell-primary">' + (e.name||'-') + '</td><td><span class="tag">' + (e.company||'-') + '</span></td><td>' + (e.team||'None') + '</td><td class="cell-mono" style="color:var(--status-success)">' + (e.checkIn||'-') + '</td><td class="cell-mono">' + checkoutCell + '</td></tr>';
             }).join('');
 
             var absentHtml = (attendance.absentCount || 0) === 0
-              ? '<div style="padding:40px;text-align:center;color:var(--status-success)"><i class="ph ph-check-circle" style="font-size:40px;display:block;margin-bottom:8px"></i>ì „ì› ì¶œê·¼ ì™„ë£Œ</div>'
-              : '<table class="data-table"><thead><tr><th>ì„±ëª…</th><th>ì†Œì†</th><th>NFC UID</th></tr></thead><tbody>' +
+              ? '<div style="padding:40px;text-align:center;color:var(--status-success)"><i class="ph ph-check-circle" style="font-size:40px;display:block;margin-bottom:8px"></i>전원 출근 완료</div>'
+              : '<table class="data-table"><thead><tr><th>성명</th><th>소속</th><th>NFC UID</th></tr></thead><tbody>' +
                 (attendance.notCheckedIn || []).map(function (e) {
                   return '<tr><td class="cell-primary" style="color:var(--status-warning)">' + (e.name||'-') + '</td><td><span class="tag">' + (e.company||'-') + '</span></td><td class="cell-mono" style="font-size:10px">' + (e.nfcUid||'-') + '</td></tr>';
                 }).join('') + '</tbody></table>';
@@ -4204,46 +4204,46 @@
               var visaClass = '';
               if (visaExpDate) { if (visaExpDate < today2) visaClass = ' style="color:var(--status-danger);font-weight:700"'; else if (visaExpDate < thirtyDays2) visaClass = ' style="color:var(--status-warning);font-weight:600"'; }
               var krName = p.nameKr ? '<br><span style="font-size:10px;color:var(--text-tertiary)">' + p.nameKr + '</span>' : '';
-              var wsColor = p.workerStatus === 'ê·€êµ­' ? 'color:var(--text-tertiary)' : p.workerStatus === 'í‡´ì‚¬' ? 'color:var(--status-danger)' : 'color:var(--status-success)';
+              var wsColor = p.workerStatus === '귀국' ? 'color:var(--text-tertiary)' : p.workerStatus === '퇴사' ? 'color:var(--status-danger)' : 'color:var(--status-success)';
               return '<tr><td class="cell-mono">' + p.id + '</td><td class="cell-primary">' + p.nameEn + krName + '</td>' +
                 '<td><span class="tag">' + p.company + '</span></td><td>' + p.role + '</td>' +
                 '<td class="cell-mono">' + (p.visa||'-') + '</td><td class="cell-mono"' + visaClass + '>' + (p.visaExpiry||'-') + '</td>' +
-                '<td>' + (p.site||'-') + '</td><td><span style="font-size:11px;' + wsColor + '">' + (p.workerStatus||'íŒŒê²¬ì¤‘') + '</span></td>' +
+                '<td>' + (p.site||'-') + '</td><td><span style="font-size:11px;' + wsColor + '">' + (p.workerStatus||'파견중') + '</span></td>' +
                 '<td>' + statusPill(p.safety) + '</td>' + workerScreenCell(p) + '</tr>';
             }).join('');
 
             var siteLabel = (window.SITE_NAMES && window.SITE_NAMES[_siteId()]) ? window.SITE_NAMES[_siteId()] : _siteId();
 
-            // â”€â”€ ì¼ì¼ íŒ€ë³„ êµ¬ì„±ì¸ì› ë§¤íŠ¸ë¦­ìŠ¤ (ERP ë‹¤í¬ í…Œë§ˆ í†µí•© ë””ìžì¸) â”€â”€
+            // ── 일일 팀별 구성인원 매트릭스 (ERP 다크 테마 통합 디자인) ──
             var matrixHtml = '';
             if (teamMatrix && teamMatrix.success && teamMatrix.teams && teamMatrix.teams.length > 0) {
               var tm = teamMatrix;
               var dateParts = (tm.date || '').split('-');
               var yy = dateParts[0] || '----', mm = dateParts[1] || '--', dd = dateParts[2] || '--';
 
-              // ìƒ‰ìƒ í† í° â€” ì˜ë¯¸ì  ë§¤í•‘
-              var COLOR_MGR = '#f59e0b';   // 관리자 = ì£¼í™© (ì±…ìž„ìž)
-              var COLOR_KOR = '#3b82f6';   // 한국인 = íŒŒëž‘
-              var COLOR_LOC = '#10b981';   // 외국인 = ë…¹ìƒ‰
-              var COLOR_TOTAL = '#a78bfa'; // í•©ê³„ = ë³´ë¼ (brand)
+              // 색상 토큰 — 의미적 매핑
+              var COLOR_MGR = '#f59e0b';   // 관리자 = 주황 (책임자)
+              var COLOR_KOR = '#3b82f6';   // 한국인 = 파랑
+              var COLOR_LOC = '#10b981';   // 외국인 = 녹색
+              var COLOR_TOTAL = '#a78bfa'; // 합계 = 보라 (brand)
 
-              // â”€â”€ ìš°ì¸¡: ì¸í„°ëž™í‹°ë¸Œ ë§¤íŠ¸ë¦­ìŠ¤ â”€â”€
-              // Header 1: íŒ€ëª…
+              // ── 우측: 인터랙티브 매트릭스 ──
+              // Header 1: 팀명
               var thTeams = tm.teams.map(function(t) {
                 var icon = (t === 'MAIN') ? 'ph-buildings' :
                            (t.indexOf('CDC') !== -1) ? 'ph-stack' :
                            (t.indexOf('ASSEMBLY') !== -1) ? 'ph-wrench' :
                            (t.indexOf('CLEAN') !== -1) ? 'ph-broom' :
-                           (t === 'ë¬¼ë¥˜' || t.indexOf('LOGI') !== -1) ? 'ph-truck' :
-                           (t.indexOf('í˜„ìž¥ì§€ì›') !== -1 || t.indexOf('LAYDOWN') !== -1) ? 'ph-package' :
+                           (t === '물류' || t.indexOf('LOGI') !== -1) ? 'ph-truck' :
+                           (t.indexOf('현장지원') !== -1 || t.indexOf('LAYDOWN') !== -1) ? 'ph-package' :
                            'ph-users-three';
                 return '<th style="padding:10px 8px;background:linear-gradient(180deg,rgba(167,139,250,0.18),rgba(167,139,250,0.08));border-bottom:1px solid var(--border-default);color:var(--text-primary);font-size:11px;font-weight:700;letter-spacing:0.3px;text-align:center;text-transform:uppercase;white-space:nowrap">' +
                   '<i class="ph ' + icon + '" style="font-size:13px;color:' + COLOR_TOTAL + ';margin-right:4px"></i>' + t + '</th>';
               }).join('');
 
-              // Header 2: íŒ€ìž¥ ì´ë¦„
+              // Header 2: 팀장 이름
               var thForemen = tm.teams.map(function(t) {
-                var foreman = (t === 'MAIN') ? 'ì‚¬ë¬´ì‹¤' : (tm.foremen[t] || 'â€”');
+                var foreman = (t === 'MAIN') ? '사무실' : (tm.foremen[t] || '—');
                 var isOffice = (t === 'MAIN');
                 return '<th style="padding:6px 8px;background:var(--bg-base);border-bottom:1px solid var(--border-subtle);color:' +
                   (isOffice ? 'var(--text-tertiary)' : 'var(--text-secondary)') +
@@ -4252,19 +4252,19 @@
                   foreman + '</th>';
               }).join('');
 
-              // â”€â”€ íšŒì‚¬ë³„ ì¢Œ(í†µê³„ ì¹´ë“œ) + ìš°(ìžê¸° íŒ€ ë§¤íŠ¸ë¦­ìŠ¤) í–‰ ë¹Œë” â”€â”€
+              // ── 회사별 좌(통계 카드) + 우(자기 팀 매트릭스) 행 빌더 ──
               function getTeamIcon(t) {
                 return (t === 'MAIN') ? 'ph-buildings' :
                        (t.indexOf('CDC') !== -1) ? 'ph-stack' :
                        (t.indexOf('ASSEMBLY') !== -1 || t.indexOf('ASSY') !== -1) ? 'ph-wrench' :
                        (t.indexOf('CLEAN') !== -1) ? 'ph-broom' :
-                       (t === 'ë¬¼ë¥˜' || t.indexOf('LOGI') !== -1) ? 'ph-truck' :
-                       (t.indexOf('í˜„ìž¥ì§€ì›') !== -1 || t.indexOf('LAYDOWN') !== -1) ? 'ph-package' :
-                       (t.indexOf('ë°°ê´€') !== -1) ? 'ph-pipe' :
+                       (t === '물류' || t.indexOf('LOGI') !== -1) ? 'ph-truck' :
+                       (t.indexOf('현장지원') !== -1 || t.indexOf('LAYDOWN') !== -1) ? 'ph-package' :
+                       (t.indexOf('배관') !== -1) ? 'ph-pipe' :
                        'ph-users-three';
               }
 
-              // 1) íšŒì‚¬ê°€ ì‚¬ìš©í•œ íŒ€ ì¶”ì¶œ (matrixì— ì¹´ìš´íŠ¸ê°€ ìžˆëŠ” íŒ€)
+              // 1) 회사가 사용한 팀 추출 (matrix에 카운트가 있는 팀)
               function extractCompanyTeams(companyData) {
                 var s = new Set();
                 ['관리자','한국인','외국인'].forEach(function(div) {
@@ -4279,7 +4279,7 @@
                 });
               }
 
-              // 2) ì¢Œì¸¡ í†µê³„ ë°•ìŠ¤ (íšŒì‚¬ ë‹¨ìœ„)
+              // 2) 좌측 통계 박스 (회사 단위)
               function buildLeftStatBox(company) {
                 var compColor = window.getCompanyColor ? window.getCompanyColor(company.name) : COLOR_TOTAL;
                 var t = company.totals || { manager:0, korean:0, local:0, total:0 };
@@ -4306,20 +4306,20 @@
                   row('한국인', t.korean  || 0, pctKor, COLOR_KOR, 'ph-flag') +
                   row('외국인', t.local   || 0, pctLoc, COLOR_LOC, 'ph-globe') +
                   '<div style="margin-top:4px;padding:6px 10px;background:' + compColor + '22;border-radius:6px;display:flex;justify-content:space-between;align-items:center">' +
-                    '<span style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;text-transform:uppercase">í•©ê³„</span>' +
-                    '<span class="cell-mono" style="font-size:13px;font-weight:800;color:' + compColor + '">' + (t.total || 0) + ' ëª…</span>' +
+                    '<span style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;text-transform:uppercase">합계</span>' +
+                    '<span class="cell-mono" style="font-size:13px;font-weight:800;color:' + compColor + '">' + (t.total || 0) + ' 명</span>' +
                   '</div>' +
                   '</div>';
               }
 
-              // 3) ìš°ì¸¡ ë§¤íŠ¸ë¦­ìŠ¤ (íšŒì‚¬ ë‹¨ìœ„ â€” ìžê¸° íŒ€ë§Œ)
+              // 3) 우측 매트릭스 (회사 단위 — 자기 팀만)
               function buildRightMatrix(company) {
                 var compColor = window.getCompanyColor ? window.getCompanyColor(company.name) : COLOR_TOTAL;
                 var compTeams = extractCompanyTeams(company);
 
                 if (compTeams.length === 0) {
                   return '<div style="background:var(--bg-panel);border:1px solid var(--border-subtle);border-radius:10px;padding:32px;text-align:center;color:var(--text-tertiary);font-size:12px;display:flex;align-items:center;justify-content:center">' +
-                    '<i class="ph ph-clock-counter-clockwise" style="font-size:18px;margin-right:8px;opacity:0.5"></i>ì˜¤ëŠ˜ ì¶œê·¼ ë°ì´í„° ì—†ìŒ</div>';
+                    '<i class="ph ph-clock-counter-clockwise" style="font-size:18px;margin-right:8px;opacity:0.5"></i>오늘 출근 데이터 없음</div>';
                 }
 
                 var thTeams = compTeams.map(function(t) {
@@ -4328,7 +4328,7 @@
                 }).join('');
 
                 var thForemen = compTeams.map(function(t) {
-                  var foreman = (t === 'MAIN') ? 'ì‚¬ë¬´ì‹¤' : (tm.foremen[t] || 'â€”');
+                  var foreman = (t === 'MAIN') ? '사무실' : (tm.foremen[t] || '—');
                   var isOffice = (t === 'MAIN');
                   return '<th style="padding:5px 8px;background:var(--bg-base);border-bottom:1px solid var(--border-subtle);color:' +
                     (isOffice ? 'var(--text-tertiary)' : 'var(--text-secondary)') +
@@ -4370,14 +4370,14 @@
                         buildRow('외국인', '외국인', COLOR_LOC, 'ph-globe') +
                         '<tr style="border-top:2px solid ' + compColor + '44">' +
                           '<td style="padding:10px 12px;background:linear-gradient(90deg,' + compColor + '22,' + compColor + '08);text-align:left;font-weight:800;font-size:12px;color:var(--text-primary);letter-spacing:0.3px">' +
-                          '<i class="ph ph-equals" style="color:' + compColor + ';margin-right:6px;font-size:13px"></i>ì†Œ ê³„</td>' +
+                          '<i class="ph ph-equals" style="color:' + compColor + ';margin-right:6px;font-size:13px"></i>소 계</td>' +
                           subtotalCells + '</tr>' +
                       '</tbody>' +
                     '</table></div>' +
                   '</div>';
               }
 
-              // 4) íšŒì‚¬ ëª©ë¡ â€” ë“±ë¡ íšŒì‚¬ ëª¨ë‘ í¬í•¨, ì¶œê·¼ ë§Žì€ ìˆœ ì •ë ¬
+              // 4) 회사 목록 — 등록 회사 모두 포함, 출근 많은 순 정렬
               var companies = (tm.byCompany || []).slice();
               var registered = tm.registered || { managerByCompany: {} };
               var existingNames = new Set(companies.map(function(c) { return c.name; }));
@@ -4393,9 +4393,9 @@
               });
               companies.sort(function(a, b) { return (b.totals.total || 0) - (a.totals.total || 0); });
 
-              // 5) íšŒì‚¬ë³„ í–‰ (ì¢Œì¸¡ ë°•ìŠ¤ + ìš°ì¸¡ ë§¤íŠ¸ë¦­ìŠ¤) HTML
+              // 5) 회사별 행 (좌측 박스 + 우측 매트릭스) HTML
               var companyRowsHtml = companies.length === 0
-                ? '<div style="padding:32px;text-align:center;color:var(--text-tertiary)">ì¶œê·¼ ë°ì´í„° ì—†ìŒ</div>'
+                ? '<div style="padding:32px;text-align:center;color:var(--text-tertiary)">출근 데이터 없음</div>'
                 : companies.map(function(c) {
                     return '<div style="display:grid;grid-template-columns:230px 1fr;gap:14px;align-items:start">' +
                       buildLeftStatBox(c) +
@@ -4403,38 +4403,38 @@
                       '</div>';
                   }).join('');
 
-              // 6) í•˜ë‹¨ ì „ì²´ í•©ê³„ (ëª¨ë“  íšŒì‚¬ í•©ì‚°)
+              // 6) 하단 전체 합계 (모든 회사 합산)
               var grandTotal = tm.totals.grandTotal || 0;
               var grandHtml = '<div style="margin-top:6px;padding:14px 18px;background:linear-gradient(135deg,' + COLOR_TOTAL + '22,' + COLOR_TOTAL + '08);border:1px solid ' + COLOR_TOTAL + '44;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:18px">' +
                 '<div style="display:flex;align-items:center;gap:8px">' +
                   '<i class="ph ph-users-four" style="font-size:22px;color:' + COLOR_TOTAL + '"></i>' +
-                  '<span style="font-size:13px;font-weight:800;color:var(--text-primary);letter-spacing:0.3px">ì „ì²´ í•©ê³„</span>' +
-                  '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary);background:var(--bg-base);padding:3px 8px;border-radius:4px">' + companies.length + 'ê°œì‚¬</span>' +
+                  '<span style="font-size:13px;font-weight:800;color:var(--text-primary);letter-spacing:0.3px">전체 합계</span>' +
+                  '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary);background:var(--bg-base);padding:3px 8px;border-radius:4px">' + companies.length + '개사</span>' +
                 '</div>' +
                 '<div style="display:flex;align-items:center;gap:18px;font-size:12px">' +
                   '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-crown" style="color:' + COLOR_MGR + '"></i><span style="color:var(--text-tertiary)">관리자</span><span class="cell-mono" style="color:' + COLOR_MGR + ';font-weight:800">' + (tm.totals.manager||0) + '</span></span>' +
                   '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-flag" style="color:' + COLOR_KOR + '"></i><span style="color:var(--text-tertiary)">한국인</span><span class="cell-mono" style="color:' + COLOR_KOR + ';font-weight:800">' + (tm.totals.korean||0) + '</span></span>' +
                   '<span style="display:flex;align-items:center;gap:5px"><i class="ph ph-globe" style="color:' + COLOR_LOC + '"></i><span style="color:var(--text-tertiary)">외국인</span><span class="cell-mono" style="color:' + COLOR_LOC + ';font-weight:800">' + (tm.totals.local||0) + '</span></span>' +
-                  '<span style="display:flex;align-items:center;gap:5px;padding-left:14px;border-left:1px solid var(--border-default)"><span style="color:var(--text-tertiary)">ì´</span><span class="cell-mono" style="font-size:18px;color:' + COLOR_TOTAL + ';font-weight:800">' + grandTotal + '</span><span style="color:var(--text-tertiary)">ëª…</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:5px;padding-left:14px;border-left:1px solid var(--border-default)"><span style="color:var(--text-tertiary)">총</span><span class="cell-mono" style="font-size:18px;color:' + COLOR_TOTAL + ';font-weight:800">' + grandTotal + '</span><span style="color:var(--text-tertiary)">명</span></span>' +
                 '</div></div>';
 
               var unclassifiedHtml = (tm.unclassified && tm.unclassified.length > 0)
                 ? '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(239,68,68,0.10);border-radius:8px;border:1px solid rgba(239,68,68,0.25);font-size:11px;color:var(--status-danger)">' +
-                  '<i class="ph ph-warning"></i>Pì—´ ë¯¸ë¶„ë¥˜ <strong>' + tm.unclassified.length + 'ëª…</strong> (관리자 ìˆ˜ë™ ì§€ì • í•„ìš”)</div>'
+                  '<i class="ph ph-warning"></i>P열 미분류 <strong>' + tm.unclassified.length + '명</strong> (관리자 수동 지정 필요)</div>'
                 : '';
 
-              // â”€â”€ ì „ì²´ íŒ¨ë„ ì»¨í…Œì´ë„ˆ â”€â”€
+              // ── 전체 패널 컨테이너 ──
               matrixHtml =
                 '<div class="panel" style="margin-bottom:16px;overflow:hidden">' +
                   '<div class="panel-header" style="background:linear-gradient(90deg,rgba(167,139,250,0.10),transparent);border-bottom:1px solid var(--border-default);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
                     '<div class="panel-title" style="display:flex;align-items:center;gap:10px">' +
                       '<i class="ph ph-chart-bar" style="font-size:18px;color:' + COLOR_TOTAL + '"></i>' +
-                      '<span style="color:var(--text-primary);font-weight:700;font-size:14px">ì¼ì¼ íšŒì‚¬Â·íŒ€ë³„ êµ¬ì„±ì¸ì›</span>' +
+                      '<span style="color:var(--text-primary);font-weight:700;font-size:14px">일일 회사·팀별 구성인원</span>' +
                       '<span style="font-size:10px;padding:3px 8px;background:rgba(167,139,250,0.15);color:' + COLOR_TOTAL + ';border-radius:4px;font-weight:600;letter-spacing:0.3px">' + yy + '.' + mm + '.' + dd + '</span>' +
                     '</div>' +
                     '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-tertiary)">' +
                       '<i class="ph ph-clock"></i>' +
-                      '<span>ì‹¤ì‹œê°„ PAYABLE_TIMESHEET ì§‘ê³„</span>' +
+                      '<span>실시간 PAYABLE_TIMESHEET 집계</span>' +
                     '</div>' +
                   '</div>' +
                   '<div class="panel-body" style="padding:14px;display:flex;flex-direction:column;gap:14px">' +
@@ -4445,65 +4445,65 @@
                 '</div>';
             }
 
-            // KPI ì‹ ê·œ ì˜ë¯¸: ë³¸ì‚¬ í†µí•© ì¸ì›í˜„í™©
+            // KPI 신규 의미: 본사 통합 인원현황
             var regInfo = (teamMatrix && teamMatrix.registered) || { total: stats.total || 0, managerTotal: 0, managerByCompany: {} };
             var totals = (teamMatrix && teamMatrix.totals) || { manager: 0, korean: 0, local: 0, grandTotal: 0 };
             var totalAttended = totals.grandTotal || 0;
             var totalAbsent = (regInfo.total || 0) - totalAttended;
-            // íšŒì‚¬ë³„ 관리자 ë¶„í¬ ë¯¸ë‹ˆ í‘œì‹œ
+            // 회사별 관리자 분포 미니 표시
             var mgrCompanyHint = Object.keys(regInfo.managerByCompany || {}).map(function(cn) {
               return cn + ' ' + regInfo.managerByCompany[cn];
-            }).join(' Â· ');
+            }).join(' · ');
 
             pageContainer.innerHTML =
-              '<div class="header-section"><div><h1 class="page-title">ì¸ì‚¬ / ì¶œí‡´ê·¼ ê´€ë¦¬</h1>' +
-              '<p class="page-subtitle">' + ORG_NAME + ' ì´ ì¸ì› í˜„í™© (' + (attendance.date||'') + ')</p></div>' +
+              '<div class="header-section"><div><h1 class="page-title">인사 / 출퇴근 관리</h1>' +
+              '<p class="page-subtitle">' + ORG_NAME + ' 총 인원 현황 (' + (attendance.date||'') + ')</p></div>' +
               '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
-              // 60% ì••ì¶• KPI ì¹´ë“œ â€” padding/font ì¶•ì†Œ
+              // 60% 압축 KPI 카드 — padding/font 축소
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 ì´í•©<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 총합<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#f59e0b;line-height:1.1">' + (regInfo.managerTotal || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (mgrCompanyHint || 'íšŒì‚¬ë³„ ë“±ë¡ í•©ê³„') + '</span></div></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">' + (mgrCompanyHint || '회사별 등록 합계') + '</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">한국인<i class="ph ph-flag" style="font-size:12px;color:#3b82f6"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#3b82f6;line-height:1.1">' + (totals.korean || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì˜¤ëŠ˜ ì¶œê·¼</span></div></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">오늘 출근</span></div></div>' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">외국인<i class="ph ph-globe" style="font-size:12px;color:#10b981"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:#10b981;line-height:1.1">' + (totals.local || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">ì˜¤ëŠ˜ ì¶œê·¼</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ ë“±ë¡ì¸ì›<i class="ph ph-identification-card" style="font-size:12px;color:var(--brand-primary)"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">오늘 출근</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">총 등록인원<i class="ph ph-identification-card" style="font-size:12px;color:var(--brand-primary)"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:var(--brand-primary);line-height:1.1">' + (regInfo.total || 0) + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Active ì¸ì›</span></div></div>' +
-              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">ì´ ì¶œì„<i class="ph ph-identification-badge" style="font-size:12px;color:var(--status-success)"></i></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--text-secondary)">Active 인원</span></div></div>' +
+              '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">총 출석<i class="ph ph-identification-badge" style="font-size:12px;color:var(--status-success)"></i></div>' +
                 '<div class="kpi-value" style="font-size:22px;color:var(--status-success);line-height:1.1">' + totalAttended + '</div>' +
-                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--status-warning)">ë¯¸ì¶œì„ ' + totalAbsent + 'ëª…</span></div></div>' +
+                '<div class="kpi-meta" style="font-size:9px"><span style="color:var(--status-warning)">미출석 ' + totalAbsent + '명</span></div></div>' +
               '</div>' +
               '<div class="tab-nav" id="hr-tabs"><button class="tab-btn active" data-tab="labor">🔗 공정 배치</button><button class="tab-btn" data-tab="global">🌐 글로벌 현황</button><button class="tab-btn" data-tab="attendance">🔖 출퇴근 현황</button><button class="tab-btn" data-tab="personnel">👤 인원 마스터</button></div>' +
               '<div id="tab-labor"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 공정 배치 현황 로딩 중...</div></div>' +
               '<div id="tab-global" style="display:none"></div><div id="tab-attendance" style="display:none">' +
               matrixHtml +
-              // â”€â”€ ì¶œê·¼ ìƒì„¸ ë³´ê³  (ì¢Œ) + íšŒì‚¬ë³„ í†µê³„ ë„í‘œ (ìš°) â€” ì»¨í…Œì´ë„ˆë§Œ â”€â”€
+              // ── 출근 상세 보고 (좌) + 회사별 통계 도표 (우) — 컨테이너만 ──
               '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px" class="hr-detail-grid">' +
                 '<div id="attendance-detail-panel" class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">' +
-                  '<div class="panel-title" style="color:var(--status-success)"><i class="ph ph-list-bullets"></i> ì¶œê·¼ ìƒì„¸ ë³´ê³ </div>' +
+                  '<div class="panel-title" style="color:var(--status-success)"><i class="ph ph-list-bullets"></i> 출근 상세 보고</div>' +
                   '<span style="font-size:11px;color:var(--text-tertiary)" id="att-detail-count"></span>' +
-                '</div><div class="panel-body" id="attendance-detail-body" style="padding:0"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> ë¡œë”© ì¤‘...</div></div></div>' +
+                '</div><div class="panel-body" id="attendance-detail-body" style="padding:0"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 로딩 중...</div></div></div>' +
                 '<div id="company-stats-panel" class="panel"><div class="panel-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px">' +
-                  '<div class="panel-title" style="color:var(--brand-primary)"><i class="ph ph-chart-bar-horizontal"></i> íšŒì‚¬ë³„/íŒ€ë³„ í†µê³„</div>' +
+                  '<div class="panel-title" style="color:var(--brand-primary)"><i class="ph ph-chart-bar-horizontal"></i> 회사별/팀별 통계</div>' +
                   '<div style="display:flex;align-items:center;gap:6px">' +
-                    '<button onclick="window.shiftStatsDate(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:28px;height:28px;border-radius:6px;cursor:pointer">â€¹</button>' +
+                    '<button onclick="window.shiftStatsDate(-1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:28px;height:28px;border-radius:6px;cursor:pointer">‹</button>' +
                     '<input id="stats-date-picker" type="date" value="' + (attendance.date || '') + '" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer" onchange="window.loadCompanyStats(this.value)">' +
-                    '<button onclick="window.shiftStatsDate(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:28px;height:28px;border-radius:6px;cursor:pointer">â€º</button>' +
+                    '<button onclick="window.shiftStatsDate(1)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);width:28px;height:28px;border-radius:6px;cursor:pointer">›</button>' +
                   '</div>' +
-                '</div><div class="panel-body" id="company-stats-body" style="padding:16px"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> ë¡œë”© ì¤‘...</div></div></div>' +
+                '</div><div class="panel-body" id="company-stats-body" style="padding:16px"><div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 로딩 중...</div></div></div>' +
               '</div>' +
               '</div>' +
               '<div id="tab-personnel" style="display:none">' +
-              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-identification-card"></i> ì¸ì› ë§ˆìŠ¤í„°</div>' +
-              '<input type="text" class="search-inline" id="hr-search" placeholder="ì´ë¦„, ID, ì†Œì† ê²€ìƒ‰..."></div>' +
-              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>ì¸ì›ID</th><th>ì„±ëª…</th><th>ì†Œì†</th><th>ì§ì¢…</th><th>êµ­ì </th><th>ë¹„ìžë§Œë£Œ</th><th>í˜„ìž¥</th><th>ìƒíƒœ</th><th>ì•ˆì „êµìœ¡</th><th>앱 화면</th></tr></thead><tbody>' + personnelHtml + '</tbody></table></div></div></div>';
+              '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-identification-card"></i> 인원 마스터</div>' +
+              '<input type="text" class="search-inline" id="hr-search" placeholder="이름, ID, 소속 검색..."></div>' +
+              '<div class="panel-body"><table class="data-table" id="hr-table"><thead><tr><th>인원ID</th><th>성명</th><th>소속</th><th>직종</th><th>국적</th><th>비자만료</th><th>현장</th><th>상태</th><th>안전교육</th><th>앱 화면</th></tr></thead><tbody>' + personnelHtml + '</tbody></table></div></div></div>';
           }
 
-          // ê³µí†µ: íƒ­ ì´ë²¤íŠ¸ + ê²€ìƒ‰
+          // 공통: 탭 이벤트 + 검색
           function ensureGlobalTab() {
             var gt = document.getElementById('tab-global');
             if (gt && !gt.getAttribute('data-loaded')) { gt.setAttribute('data-loaded', '1'); window.renderGlobalHrInto(gt, true); }
@@ -4543,12 +4543,12 @@
             });
           }
 
-          // ì¶œê·¼ ìƒì„¸ ë³´ê³  + íšŒì‚¬ë³„ í†µê³„ ë¹„ë™ê¸° ë¡œë“œ (ë‹¨ì¼ í˜„ìž¥ ë·°ì¼ ë•Œë§Œ)
+          // 출근 상세 보고 + 회사별 통계 비동기 로드 (단일 현장 뷰일 때만)
           if (!isGlobal && document.getElementById('attendance-detail-body')) {
             window.loadAttendanceDetail(attendance.date || null);
             window.loadCompanyStats(attendance.date || null);
           }
-        } catch (err) { renderError('ì¸ì› ë°ì´í„° ë¡œë”© ì‹¤íŒ¨: ' + err.message); console.error(err); }
+        } catch (err) { renderError('인원 데이터 로딩 실패: ' + err.message); console.error(err); }
       }
 
       // ─────────────────────────────────────────────
@@ -4622,9 +4622,9 @@
         }
       };
 
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // ðŸ‘¥ ì¶œê·¼ ìƒì„¸ ë³´ê³  â€” íšŒì‚¬ë³„ â†’ íŒ€ë³„ ê·¸ë£¹í•‘ ë Œë”
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ──────────────────────────────────────────────
+      // 👥 출근 상세 보고 — 회사별 → 팀별 그룹핑 렌더
+      // ──────────────────────────────────────────────
       window.COMPANY_COLOR = {
         'AUTORICA': '#f59e0b',
         'AUTORICA LLC': '#f59e0b',
@@ -4656,40 +4656,40 @@
       window.loadAttendanceDetail = async function(date) {
         var body = document.getElementById('attendance-detail-body');
         if (!body) return;
-        body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> ë¡œë”© ì¤‘...</div>';
+        body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 로딩 중...</div>';
         try {
           var res = await window.API.getAttendanceDetailed(date);
           if (!res.success || !res.companies || res.companies.length === 0) {
-            body.innerHTML = '<div style="padding:48px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-info" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.5"></i>í•´ë‹¹ ë‚ ì§œì— ì¶œê·¼ ê¸°ë¡ì´ ì—†ìŠµë‹ˆë‹¤.</div>';
+            body.innerHTML = '<div style="padding:48px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-info" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.5"></i>해당 날짜에 출근 기록이 없습니다.</div>';
             return;
           }
           var countEl = document.getElementById('att-detail-count');
-          if (countEl) countEl.textContent = 'ì´ ' + res.totalCount + 'ëª… Â· ' + res.companies.length + 'ê°œ íšŒì‚¬';
+          if (countEl) countEl.textContent = '총 ' + res.totalCount + '명 · ' + res.companies.length + '개 회사';
 
           var html = res.companies.map(function(c) {
             var compColor = window.getCompanyColor(c.name);
             var teamsHtml = c.teams.map(function(t) {
               var empsHtml = t.employees.map(function(e) {
                 var hasPhoto = e.photoUrl && /^https?:\/\//.test(e.photoUrl);
-                // Badge ID escape â€” ì•ˆì „í•œ ì˜ìˆ«ìžë§Œ í—ˆìš© (ì‚¬ì´íŠ¸ID ê°™ì€ ìž˜ëª»ëœ ê°’ ì°¨ë‹¨)
+                // Badge ID escape — 안전한 영숫자만 허용 (사이트ID 같은 잘못된 값 차단)
                 var safeBadge = String(e.badgeId || '').replace(/[^A-Za-z0-9_-]/g, '');
                 var avatar = hasPhoto
                   ? '<img src="' + e.photoUrl + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ' + compColor + '" onerror="this.outerHTML=\'<div style=&quot;width:32px;height:32px;border-radius:50%;background:' + compColor + ';display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px;border:2px solid ' + compColor + '&quot;>' + window.getInitials(e.firstName, e.lastName) + '</div>\'">'
                   : '<div style="width:32px;height:32px;border-radius:50%;background:' + compColor + ';display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px;border:2px solid ' + compColor + '">' + window.getInitials(e.firstName, e.lastName) + '</div>';
                 var nameDisplay = (e.firstName + ' ' + e.lastName).trim() || e.badgeId;
                 var statusDot = e.isWorking
-                  ? '<span title="ê·¼ë¬´ì¤‘" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--status-success);margin-right:4px;animation:pulse 2s infinite"></span>'
-                  : '<span title="í‡´ê·¼ì™„ë£Œ" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);margin-right:4px"></span>';
+                  ? '<span title="근무중" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--status-success);margin-right:4px;animation:pulse 2s infinite"></span>'
+                  : '<span title="퇴근완료" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);margin-right:4px"></span>';
                 return '<div data-badge="' + safeBadge + '" onclick="window.openEmpInfoModal(this.dataset.badge)" style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background=\'rgba(167,139,250,0.08)\'" onmouseout="this.style.background=\'\'">' +
                   avatar +
                   '<div style="flex:1;min-width:0">' +
                     '<div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + statusDot + nameDisplay + '</div>' +
                     '<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px">' +
-                      '<span class="cell-mono">' + e.badgeId + '</span>' + (e.role ? ' Â· ' + e.role : '') + '</div>' +
+                      '<span class="cell-mono">' + e.badgeId + '</span>' + (e.role ? ' · ' + e.role : '') + '</div>' +
                   '</div>' +
                   '<div style="text-align:right;flex-shrink:0">' +
                     '<div class="cell-mono" style="font-size:12px;color:var(--status-success);font-weight:700">' + (e.inTime || '-') + '</div>' +
-                    '<div style="font-size:10px;color:' + (e.outTime ? 'var(--text-tertiary)' : 'var(--status-warning)') + '">' + (e.outTime || 'ê·¼ë¬´ì¤‘') + '</div>' +
+                    '<div style="font-size:10px;color:' + (e.outTime ? 'var(--text-tertiary)' : 'var(--status-warning)') + '">' + (e.outTime || '근무중') + '</div>' +
                   '</div>' +
                   '<i class="ph ph-caret-right" style="color:var(--text-tertiary);font-size:14px;flex-shrink:0"></i>' +
                 '</div>';
@@ -4703,28 +4703,28 @@
               '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:linear-gradient(90deg,' + compColor + '22,transparent);border-bottom:1px solid ' + compColor + '44;border-left:3px solid ' + compColor + '">' +
                 '<div style="display:flex;align-items:center;gap:10px"><i class="ph ph-buildings" style="color:' + compColor + ';font-size:16px"></i>' +
                   '<span style="font-size:13px;font-weight:700;color:var(--text-primary)">' + c.name + '</span></div>' +
-                '<span style="font-size:12px;font-weight:700;color:' + compColor + '">' + c.total + 'ëª…</span>' +
+                '<span style="font-size:12px;font-weight:700;color:' + compColor + '">' + c.total + '명</span>' +
               '</div>' + teamsHtml + '</div>';
           }).join('');
           body.innerHTML = '<div style="max-height:600px;overflow-y:auto">' + html + '</div>';
         } catch(err) {
-          body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--status-danger)">ë¡œë”© ì‹¤íŒ¨: ' + err.message + '</div>';
+          body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--status-danger)">로딩 실패: ' + err.message + '</div>';
         }
       };
 
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // ðŸ“Š íšŒì‚¬ë³„/íŒ€ë³„ í†µê³„ ë„í‘œ (Stacked Bar + Horizontal Bar)
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ──────────────────────────────────────────────
+      // 📊 회사별/팀별 통계 도표 (Stacked Bar + Horizontal Bar)
+      // ──────────────────────────────────────────────
       window.loadCompanyStats = async function(date) {
         var body = document.getElementById('company-stats-body');
         if (!body) return;
-        body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> í†µê³„ ì§‘ê³„ ì¤‘...</div>';
+        body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"></i> 통계 집계 중...</div>';
         try {
           var picker = document.getElementById('stats-date-picker');
           if (picker && date) picker.value = date;
           var res = await window.API.getCompanyTeamStats(date);
           if (!res.success || (!res.byCompany.length && !res.byTeam.length)) {
-            body.innerHTML = '<div style="padding:48px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-info" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.5"></i>í•´ë‹¹ ë‚ ì§œì— ë°ì´í„°ê°€ ì—†ìŠµë‹ˆë‹¤.</div>';
+            body.innerHTML = '<div style="padding:48px;text-align:center;color:var(--text-tertiary)"><i class="ph ph-info" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.5"></i>해당 날짜에 데이터가 없습니다.</div>';
             return;
           }
 
@@ -4732,7 +4732,7 @@
           var maxCompTotal = Math.max.apply(null, res.byCompany.map(function(c){return c.total;})) || 1;
           var maxTeamCount = Math.max.apply(null, res.byTeam.map(function(t){return t.count;})) || 1;
 
-          // íšŒì‚¬ë³„ ëˆ„ì  ë§‰ëŒ€
+          // 회사별 누적 막대
           var companyHtml = res.byCompany.map(function(c) {
             var compColor = window.getCompanyColor(c.name);
             var w = (c.total / maxCompTotal) * 100;
@@ -4742,12 +4742,12 @@
             return '<div style="margin-bottom:14px">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
                 '<span style="font-size:12px;font-weight:700;color:var(--text-primary)"><i class="ph ph-buildings" style="color:' + compColor + ';margin-right:6px"></i>' + c.name + '</span>' +
-                '<span class="cell-mono" style="font-size:13px;font-weight:700;color:' + compColor + '">' + c.total + 'ëª…</span>' +
+                '<span class="cell-mono" style="font-size:13px;font-weight:700;color:' + compColor + '">' + c.total + '명</span>' +
               '</div>' +
               '<div style="height:24px;background:var(--bg-base);border-radius:6px;overflow:hidden;display:flex;width:' + w + '%;min-width:60px;border:1px solid var(--border-subtle)">' +
-                (c.manager > 0 ? '<div title="관리자 ' + c.manager + 'ëª…" style="width:' + mgrW + '%;background:' + COLOR_MGR + ';display:flex;align-items:center;justify-content:center;color:#000;font-size:10px;font-weight:700">' + (mgrW > 12 ? c.manager : '') + '</div>' : '') +
-                (c.korean  > 0 ? '<div title="한국인 ' + c.korean  + 'ëª…" style="width:' + korW + '%;background:' + COLOR_KOR + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (korW > 12 ? c.korean : '') + '</div>' : '') +
-                (c.local   > 0 ? '<div title="외국인 ' + c.local   + 'ëª…" style="width:' + locW + '%;background:' + COLOR_LOC + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (locW > 12 ? c.local : '') + '</div>' : '') +
+                (c.manager > 0 ? '<div title="관리자 ' + c.manager + '명" style="width:' + mgrW + '%;background:' + COLOR_MGR + ';display:flex;align-items:center;justify-content:center;color:#000;font-size:10px;font-weight:700">' + (mgrW > 12 ? c.manager : '') + '</div>' : '') +
+                (c.korean  > 0 ? '<div title="한국인 ' + c.korean  + '명" style="width:' + korW + '%;background:' + COLOR_KOR + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (korW > 12 ? c.korean : '') + '</div>' : '') +
+                (c.local   > 0 ? '<div title="외국인 ' + c.local   + '명" style="width:' + locW + '%;background:' + COLOR_LOC + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + (locW > 12 ? c.local : '') + '</div>' : '') +
               '</div>' +
               '<div style="display:flex;gap:10px;font-size:10px;color:var(--text-tertiary);margin-top:4px">' +
                 '<span><span style="display:inline-block;width:8px;height:8px;background:' + COLOR_MGR + ';border-radius:2px;margin-right:4px"></span>관리자 ' + c.manager + '</span>' +
@@ -4757,7 +4757,7 @@
             '</div>';
           }).join('');
 
-          // íŒ€ë³„ ê°€ë¡œ ë§‰ëŒ€
+          // 팀별 가로 막대
           var teamHtml = res.byTeam.map(function(t) {
             var w = (t.count / maxTeamCount) * 100;
             return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
@@ -4771,15 +4771,15 @@
 
           body.innerHTML =
             '<div style="margin-bottom:18px">' +
-              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-buildings" style="margin-right:4px"></i>íšŒì‚¬ë³„ ë¶„í¬ (관리자/한국인/외국인)</div>' +
+              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-buildings" style="margin-right:4px"></i>회사별 분포 (관리자/한국인/외국인)</div>' +
               companyHtml +
             '</div>' +
             '<div style="border-top:1px solid var(--border-subtle);padding-top:14px">' +
-              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-users-three" style="margin-right:4px"></i>íŒ€ë³„ ì¸ì› í˜„í™©</div>' +
+              '<div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:10px;text-transform:uppercase"><i class="ph ph-users-three" style="margin-right:4px"></i>팀별 인원 현황</div>' +
               teamHtml +
             '</div>';
         } catch(err) {
-          body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--status-danger)">ë¡œë”© ì‹¤íŒ¨: ' + err.message + '</div>';
+          body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--status-danger)">로딩 실패: ' + err.message + '</div>';
         }
       };
 
@@ -4794,15 +4794,15 @@
         window.loadAttendanceDetail(ds);
       };
 
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // ðŸ‘¤ ì§ì› ì¸í¬ ëª¨ë‹¬ (ì‚¬ì§„ + ì •ë³´ + ì•¡ì…˜)
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // ðŸ“· ì§ì› ì‚¬ì§„ â€” ì¹´ë©”ë¼ ì´¬ì˜ / íŒŒì¼ ì—…ë¡œë“œ
-      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ──────────────────────────────────────────────
+      // 👤 직원 인포 모달 (사진 + 정보 + 액션)
+      // ──────────────────────────────────────────────
+      // ──────────────────────────────────────────────
+      // 📷 직원 사진 — 카메라 촬영 / 파일 업로드
+      // ──────────────────────────────────────────────
       window.ADMIN_PASSWORD = '1234';
 
-      // ì´ë¯¸ì§€ ì••ì¶• (canvas ë¦¬ì‚¬ì´ì¦ˆ â†’ JPEG base64) â€” ì—…ë¡œë“œ íŽ˜ì´ë¡œë“œ ì¶•ì†Œ
+      // 이미지 압축 (canvas 리사이즈 → JPEG base64) — 업로드 페이로드 축소
       window._compressImage = function(file, maxSize, quality) {
         return new Promise(function(resolve, reject) {
           var reader = new FileReader();
@@ -4825,13 +4825,13 @@
         });
       };
 
-      // ì‚¬ì§„ ì—…ë¡œë“œ í›„ ì¸í¬ ëª¨ë‹¬ ì‚¬ì§„ ì˜ì—­ ê°±ì‹  + í† ìŠ¤íŠ¸
+      // 사진 업로드 후 인포 모달 사진 영역 갱신 + 토스트
       window._afterPhotoUpload = function(res, badgeId) {
         if (!res || !res.success) {
-          alert('ì—…ë¡œë“œ ì‹¤íŒ¨: ' + (res && res.error ? res.error : 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
+          alert('업로드 실패: ' + (res && res.error ? res.error : '알 수 없는 오류'));
           return;
         }
-        // ì´ë¯¸ì§€ ì˜ì—­ ì¦‰ì‹œ ê°±ì‹  (ìºì‹œ ë¬´ë ¥í™”)
+        // 이미지 영역 즉시 갱신 (캐시 무력화)
         var wrap = document.getElementById('emp-photo-wrapper');
         if (wrap) {
           var compColor = '#a78bfa';
@@ -4840,12 +4840,12 @@
         }
         var t = document.createElement('div');
         t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--status-success);color:white;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:700;z-index:10001;box-shadow:0 8px 24px rgba(0,0,0,0.4)';
-        t.textContent = 'âœ… ' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ ì™„ë£Œ';
+        t.textContent = '✅ ' + badgeId + ' 사진 업로드 완료';
         document.body.appendChild(t);
         setTimeout(function() { t.remove(); }, 2500);
       };
 
-      // â”€â”€ ì¹´ë©”ë¼ ì´¬ì˜ ëª¨ë‹¬ (ëª¨ë“  ì‚¬ìš©ìž) â”€â”€
+      // ── 카메라 촬영 모달 (모든 사용자) ──
       window.empPhotoCapture = async function(badgeId) {
         var SITE_ID_PATTERNS = /^(HFF|NV|LGES|SST|HWH)[-_][A-Z0-9]+$/i;
         if (!badgeId || SITE_ID_PATTERNS.test(badgeId)) return;
@@ -4854,15 +4854,15 @@
         cam.id = 'cam-modal';
         cam.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10002;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
         cam.innerHTML =
-          '<div style="color:white;font-size:14px;font-weight:700"><i class="ph ph-camera"></i> ' + badgeId + ' ì‚¬ì§„ ì´¬ì˜</div>' +
+          '<div style="color:white;font-size:14px;font-weight:700"><i class="ph ph-camera"></i> ' + badgeId + ' 사진 촬영</div>' +
           '<video id="cam-video" autoplay playsinline style="width:min(100%, 480px);max-height:60vh;border-radius:12px;background:#000;border:2px solid var(--brand-primary)"></video>' +
           '<canvas id="cam-canvas" style="display:none"></canvas>' +
           '<div style="display:flex;gap:10px">' +
-            '<button id="cam-snap" style="background:var(--brand-primary);color:white;border:none;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer"><i class="ph ph-camera"></i> ì´¬ì˜</button>' +
-            '<button id="cam-flip" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:12px 16px;border-radius:8px;font-size:13px;cursor:pointer" title="ì „í›„ë°© ì¹´ë©”ë¼ ì „í™˜"><i class="ph ph-arrows-clockwise"></i></button>' +
-            '<button id="cam-cancel" style="background:var(--bg-base);color:var(--text-secondary);border:1px solid var(--border-default);padding:12px 24px;border-radius:8px;font-size:13px;cursor:pointer">ì·¨ì†Œ</button>' +
+            '<button id="cam-snap" style="background:var(--brand-primary);color:white;border:none;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer"><i class="ph ph-camera"></i> 촬영</button>' +
+            '<button id="cam-flip" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:12px 16px;border-radius:8px;font-size:13px;cursor:pointer" title="전후방 카메라 전환"><i class="ph ph-arrows-clockwise"></i></button>' +
+            '<button id="cam-cancel" style="background:var(--bg-base);color:var(--text-secondary);border:1px solid var(--border-default);padding:12px 24px;border-radius:8px;font-size:13px;cursor:pointer">취소</button>' +
           '</div>' +
-          '<div style="color:rgba(255,255,255,0.6);font-size:11px">ESC ë˜ëŠ” [ì·¨ì†Œ] ëˆ„ë¥´ë©´ ë‹«íž˜</div>';
+          '<div style="color:rgba(255,255,255,0.6);font-size:11px">ESC 또는 [취소] 누르면 닫힘</div>';
         document.body.appendChild(cam);
 
         var stream = null;
@@ -4875,7 +4875,7 @@
             stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
             video.srcObject = stream;
           } catch(err) {
-            alert('ì¹´ë©”ë¼ ê¶Œí•œ í•„ìš”: ' + err.message);
+            alert('카메라 권한 필요: ' + err.message);
             cleanup();
           }
         }
@@ -4900,28 +4900,28 @@
           canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
           var b64 = canvas.toDataURL('image/jpeg', 0.85);
           this.disabled = true;
-          this.innerHTML = '<i class="ph ph-spinner ph-spin"></i> ì—…ë¡œë“œ ì¤‘...';
+          this.innerHTML = '<i class="ph ph-spinner ph-spin"></i> 업로드 중...';
           try {
             var res = await window.API.uploadEmployeePhoto(badgeId, b64, 'image/jpeg');
             cleanup();
             window._afterPhotoUpload(res, badgeId);
           } catch(err) {
-            alert('ì—…ë¡œë“œ ì‹¤íŒ¨: ' + err.message);
+            alert('업로드 실패: ' + err.message);
             cleanup();
           }
         };
         startCam(facingMode);
       };
 
-      // â”€â”€ íŒŒì¼ ì—…ë¡œë“œ (관리자 â€” ë¹„ë°€ë²ˆí˜¸ 1234) â”€â”€
+      // ── 파일 업로드 (관리자 — 비밀번호 1234) ──
       window.empPhotoUpload = async function(badgeId) {
         var SITE_ID_PATTERNS = /^(HFF|NV|LGES|SST|HWH)[-_][A-Z0-9]+$/i;
         if (!badgeId || SITE_ID_PATTERNS.test(badgeId)) return;
 
-        var pw = prompt('ðŸ”’ 관리자 ë¹„ë°€ë²ˆí˜¸ë¥¼ ìž…ë ¥í•˜ì„¸ìš” (' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ)');
+        var pw = prompt('🔒 관리자 비밀번호를 입력하세요 (' + badgeId + ' 사진 업로드)');
         if (pw === null) return;
         if (pw !== window.ADMIN_PASSWORD) {
-          alert('âŒ ë¹„ë°€ë²ˆí˜¸ê°€ í‹€ë¦½ë‹ˆë‹¤.');
+          alert('❌ 비밀번호가 틀립니다.');
           return;
         }
 
@@ -4935,13 +4935,13 @@
           input.remove();
           if (!file) return;
           if (file.size > 8 * 1024 * 1024) {
-            alert('íŒŒì¼ì´ ë„ˆë¬´ í½ë‹ˆë‹¤ (ìµœëŒ€ 8MB)');
+            alert('파일이 너무 큽니다 (최대 8MB)');
             return;
           }
-          // ì§„í–‰ í† ìŠ¤íŠ¸
+          // 진행 토스트
           var t = document.createElement('div');
           t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--brand-primary);color:white;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:700;z-index:10001';
-          t.innerHTML = '<i class="ph ph-spinner ph-spin"></i> ' + badgeId + ' ì‚¬ì§„ ì—…ë¡œë“œ ì¤‘...';
+          t.innerHTML = '<i class="ph ph-spinner ph-spin"></i> ' + badgeId + ' 사진 업로드 중...';
           document.body.appendChild(t);
           try {
             var b64 = await window._compressImage(file, 600, 0.85);
@@ -4950,25 +4950,25 @@
             window._afterPhotoUpload(res, badgeId);
           } catch(err) {
             t.remove();
-            alert('ì—…ë¡œë“œ ì‹¤íŒ¨: ' + err.message);
+            alert('업로드 실패: ' + err.message);
           }
         };
         input.click();
       };
 
       window.openEmpInfoModal = async function(badgeId) {
-        // ë””ë²„ê·¸ ë¡œê·¸ â€” ì–´ë””ì„œ ì–´ë–¤ ì¸ìžë¡œ í˜¸ì¶œëëŠ”ì§€ ì¶”ì 
+        // 디버그 로그 — 어디서 어떤 인자로 호출됐는지 추적
         console.log('[openEmpInfoModal] badgeId:', JSON.stringify(badgeId), 'caller:', new Error().stack.split('\n').slice(1, 4).join(' | '));
 
-        // ì‚¬ì´íŠ¸ ID í˜•ì‹ ì°¨ë‹¨ (ì˜ˆ: HFF-02, NV-05, LGES-AZ, SST-03 ë“±)
+        // 사이트 ID 형식 차단 (예: HFF-02, NV-05, LGES-AZ, SST-03 등)
         var SITE_ID_PATTERNS = /^(HFF|NV|LGES|SST|HWH)[-_][A-Z0-9]+$/i;
         if (!badgeId || SITE_ID_PATTERNS.test(String(badgeId).trim())) {
-          console.warn('[openEmpInfoModal] ì°¨ë‹¨ë¨ â€” ì‚¬ì´íŠ¸ ID ë˜ëŠ” ë¹ˆê°’ì´ Badge ID ìžë¦¬ì— ë“¤ì–´ì˜´:', badgeId);
+          console.warn('[openEmpInfoModal] 차단됨 — 사이트 ID 또는 빈값이 Badge ID 자리에 들어옴:', badgeId);
           return;
         }
-        // Badge IDëŠ” ë³´í†µ 4-7ìž (TF65, TK01 ë“±). ë„ˆë¬´ ê¸¸ë©´ ìž˜ëª»ëœ í˜¸ì¶œ
+        // Badge ID는 보통 4-7자 (TF65, TK01 등). 너무 길면 잘못된 호출
         if (String(badgeId).length > 12) {
-          console.warn('[openEmpInfoModal] ì°¨ë‹¨ë¨ â€” Badge IDê°€ ë„ˆë¬´ ê¹€:', badgeId);
+          console.warn('[openEmpInfoModal] 차단됨 — Badge ID가 너무 김:', badgeId);
           return;
         }
 
@@ -4987,14 +4987,14 @@
           var res = await window.API.getEmployeeDetail(badgeId);
           if (!res.success || !res.employee) {
             var debugInfo = '';
-            if (res.totalRowsInSheet) debugInfo += '<div style="margin-top:8px;font-size:11px;color:var(--text-tertiary)">ì‹œíŠ¸ ì „ì²´: ' + res.totalRowsInSheet + 'ëª…</div>';
-            if (res.availableBadgesPreview) debugInfo += '<div style="margin-top:4px;font-size:10px;color:var(--text-tertiary);font-family:monospace;word-break:break-all">ìƒ˜í”Œ: ' + res.availableBadgesPreview + '</div>';
-            if (res.sheetName) debugInfo += '<div style="margin-top:4px;font-size:10px;color:var(--text-tertiary)">ì‹œíŠ¸ëª…: ' + res.sheetName + '</div>';
+            if (res.totalRowsInSheet) debugInfo += '<div style="margin-top:8px;font-size:11px;color:var(--text-tertiary)">시트 전체: ' + res.totalRowsInSheet + '명</div>';
+            if (res.availableBadgesPreview) debugInfo += '<div style="margin-top:4px;font-size:10px;color:var(--text-tertiary);font-family:monospace;word-break:break-all">샘플: ' + res.availableBadgesPreview + '</div>';
+            if (res.sheetName) debugInfo += '<div style="margin-top:4px;font-size:10px;color:var(--text-tertiary)">시트명: ' + res.sheetName + '</div>';
             modal.innerHTML = '<div style="background:var(--bg-panel);padding:24px;border-radius:12px;color:var(--text-primary);max-width:500px">' +
-              '<div style="color:var(--status-danger);font-weight:700;margin-bottom:8px"><i class="ph ph-warning"></i> ì§ì› ì •ë³´ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤</div>' +
+              '<div style="color:var(--status-danger);font-weight:700;margin-bottom:8px"><i class="ph ph-warning"></i> 직원 정보를 찾을 수 없습니다</div>' +
               '<div style="color:var(--text-secondary);font-size:13px">' + (res.error || ('Badge ID: ' + badgeId)) + '</div>' +
               debugInfo +
-              '<br><button onclick="document.getElementById(\'emp-info-modal\').remove()" class="btn-secondary">ë‹«ê¸°</button></div>';
+              '<br><button onclick="document.getElementById(\'emp-info-modal\').remove()" class="btn-secondary">닫기</button></div>';
             return;
           }
           var e = res.employee;
@@ -5005,19 +5005,19 @@
             : '<div style="width:160px;height:160px;border-radius:12px;background:linear-gradient(135deg,' + compColor + ',' + compColor + 'AA);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:48px;border:3px solid ' + compColor + '">' + window.getInitials(e.firstName, e.lastName) + '</div>';
 
           var natFlag = '';
-          if (e.divide === '한국인' || /korea/i.test(e.nationality)) natFlag = 'ðŸ‡°ðŸ‡· 한국인';
-          else if (e.divide === '관리자') natFlag = 'ðŸ‘‘ 관리자';
-          else natFlag = 'ðŸŒ 외국인';
+          if (e.divide === '한국인' || /korea/i.test(e.nationality)) natFlag = '🇰🇷 한국인';
+          else if (e.divide === '관리자') natFlag = '👑 관리자';
+          else natFlag = '🌐 외국인';
 
           var fullName = (e.firstName + ' ' + e.lastName).trim() || badgeId;
           var workingBadge = e.todayWorking
-            ? '<span style="background:rgba(16,185,129,0.15);color:var(--status-success);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--status-success);margin-right:4px;animation:pulse 2s infinite"></span>ê·¼ë¬´ì¤‘</span>'
+            ? '<span style="background:rgba(16,185,129,0.15);color:var(--status-success);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--status-success);margin-right:4px;animation:pulse 2s infinite"></span>근무중</span>'
             : (e.todayInTime
-                ? '<span style="background:rgba(100,116,139,0.15);color:var(--text-tertiary);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">í‡´ê·¼ì™„ë£Œ</span>'
-                : '<span style="background:rgba(245,158,11,0.15);color:var(--status-warning);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">ë¯¸ì¶œê·¼</span>');
+                ? '<span style="background:rgba(100,116,139,0.15);color:var(--text-tertiary);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">퇴근완료</span>'
+                : '<span style="background:rgba(245,158,11,0.15);color:var(--status-warning);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">미출근</span>');
 
           function infoRow(label, val, mono) {
-            if (!val) val = '<span style="color:var(--text-tertiary)">â€”</span>';
+            if (!val) val = '<span style="color:var(--text-tertiary)">—</span>';
             return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-subtle)">' +
               '<span style="font-size:11px;color:var(--text-tertiary);font-weight:600;letter-spacing:0.3px;text-transform:uppercase">' + label + '</span>' +
               '<span ' + (mono ? 'class="cell-mono"' : '') + ' style="font-size:13px;color:var(--text-primary);font-weight:600;text-align:right">' + val + '</span>' +
@@ -5029,20 +5029,20 @@
               '<div style="padding:20px;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,' + compColor + '22,transparent)">' +
                 '<div style="display:flex;align-items:center;gap:10px">' +
                   '<i class="ph ph-identification-badge" style="font-size:20px;color:' + compColor + '"></i>' +
-                  '<span style="font-size:14px;font-weight:700;color:var(--text-primary)">ì§ì› ì •ë³´</span>' +
+                  '<span style="font-size:14px;font-weight:700;color:var(--text-primary)">직원 정보</span>' +
                   workingBadge +
                 '</div>' +
-                '<button onclick="document.getElementById(\'emp-info-modal\').remove()" style="background:var(--bg-base);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-secondary);font-size:18px">Ã—</button>' +
+                '<button onclick="document.getElementById(\'emp-info-modal\').remove()" style="background:var(--bg-base);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-secondary);font-size:18px">×</button>' +
               '</div>' +
               '<div style="padding:24px;display:grid;grid-template-columns:160px 1fr;gap:24px">' +
                 '<div style="display:flex;flex-direction:column;align-items:center;gap:12px">' +
                   '<div id="emp-photo-wrapper" style="position:relative">' + avatarBlock + '</div>' +
-                  // ì¹´ë©”ë¼ / ì—…ë¡œë“œ ë²„íŠ¼
+                  // 카메라 / 업로드 버튼
                   '<div style="display:flex;gap:6px;width:100%">' +
-                    '<button onclick="window.empPhotoCapture(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="ì¹´ë©”ë¼ë¡œ ì´¬ì˜">' +
-                      '<i class="ph ph-camera" style="font-size:13px"></i>ì´¬ì˜</button>' +
-                    '<button onclick="window.empPhotoUpload(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-secondary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="관리자: íŒŒì¼ ì—…ë¡œë“œ (ë¹„ë°€ë²ˆí˜¸)">' +
-                      '<i class="ph ph-upload-simple" style="font-size:13px"></i>ì—…ë¡œë“œ<i class="ph ph-lock-key" style="font-size:10px;opacity:0.6"></i></button>' +
+                    '<button onclick="window.empPhotoCapture(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="카메라로 촬영">' +
+                      '<i class="ph ph-camera" style="font-size:13px"></i>촬영</button>' +
+                    '<button onclick="window.empPhotoUpload(\'' + e.badgeId + '\')" style="flex:1;background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-secondary);padding:7px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px" title="관리자: 파일 업로드 (비밀번호)">' +
+                      '<i class="ph ph-upload-simple" style="font-size:13px"></i>업로드<i class="ph ph-lock-key" style="font-size:10px;opacity:0.6"></i></button>' +
                   '</div>' +
                   '<div style="text-align:center">' +
                     '<div style="font-size:14px;color:var(--text-tertiary);margin-bottom:2px">' + natFlag + '</div>' +
@@ -5054,43 +5054,43 @@
                     '<div style="font-size:22px;font-weight:800;color:var(--text-primary);line-height:1.2">' + fullName + '</div>' +
                     '<div style="font-size:13px;color:var(--text-secondary);margin-top:4px">' +
                       '<span style="background:' + compColor + '22;color:' + compColor + ';padding:3px 10px;border-radius:6px;font-weight:700;font-size:11px">' + (e.company || '-') + '</span>' +
-                      (e.todayTeam ? '  <span style="color:var(--text-tertiary);font-size:11px">Â·</span>  <strong>' + e.todayTeam + '</strong>' : '') +
-                      (e.role ? '  <span style="color:var(--text-tertiary);font-size:11px">Â·</span>  ' + e.role : '') +
+                      (e.todayTeam ? '  <span style="color:var(--text-tertiary);font-size:11px">·</span>  <strong>' + e.todayTeam + '</strong>' : '') +
+                      (e.role ? '  <span style="color:var(--text-tertiary);font-size:11px">·</span>  ' + e.role : '') +
                     '</div>' +
                   '</div>' +
-                  // ì˜¤ëŠ˜ ì¶œí‡´ê·¼ ì¹´ë“œ
+                  // 오늘 출퇴근 카드
                   '<div style="background:var(--bg-base);border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid var(--border-subtle)">' +
-                    '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:8px;text-transform:uppercase"><i class="ph ph-clock"></i> ì˜¤ëŠ˜ ì¶œí‡´ê·¼</div>' +
+                    '<div style="font-size:10px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-bottom:8px;text-transform:uppercase"><i class="ph ph-clock"></i> 오늘 출퇴근</div>' +
                     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-                      '<div><div style="font-size:10px;color:var(--text-tertiary)">ì¶œê·¼</div><div class="cell-mono" style="font-size:18px;font-weight:800;color:var(--status-success)">' + (e.todayInTime || 'â€”') + '</div></div>' +
-                      '<div><div style="font-size:10px;color:var(--text-tertiary)">í‡´ê·¼</div><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + (e.todayOutTime ? 'var(--text-primary)' : 'var(--status-warning)') + '">' + (e.todayOutTime || 'ê·¼ë¬´ì¤‘') + '</div></div>' +
+                      '<div><div style="font-size:10px;color:var(--text-tertiary)">출근</div><div class="cell-mono" style="font-size:18px;font-weight:800;color:var(--status-success)">' + (e.todayInTime || '—') + '</div></div>' +
+                      '<div><div style="font-size:10px;color:var(--text-tertiary)">퇴근</div><div class="cell-mono" style="font-size:18px;font-weight:800;color:' + (e.todayOutTime ? 'var(--text-primary)' : 'var(--status-warning)') + '">' + (e.todayOutTime || '근무중') + '</div></div>' +
                     '</div>' +
-                    (e.todayShift ? '<div style="margin-top:8px;font-size:11px;color:var(--text-tertiary)">ê·¼ë¬´í˜•íƒœ: <strong style="color:var(--text-secondary)">' + e.todayShift + '</strong></div>' : '') +
+                    (e.todayShift ? '<div style="margin-top:8px;font-size:11px;color:var(--text-tertiary)">근무형태: <strong style="color:var(--text-secondary)">' + e.todayShift + '</strong></div>' : '') +
                   '</div>' +
-                  // ìƒì„¸ ì •ë³´
+                  // 상세 정보
                   '<div>' +
                     infoRow('NFC UID', '<span class="cell-mono" style="font-size:11px">' + (e.nfcUid || '') + '</span>') +
-                    infoRow('ì „í™”', e.phone || '', true) +
-                    infoRow('ì´ë©”ì¼', e.email ? '<a href="mailto:' + e.email + '" style="color:var(--brand-primary)">' + e.email + '</a>' : '') +
-                    infoRow('êµ­ì ', e.nationality || '') +
-                    infoRow('ìƒíƒœ', e.status || '') +
-                    infoRow('ë°œê¸‰ì¼', e.issueDate || '', true) +
-                    (e.currentRole ? infoRow('í˜„ìž¬ ì—­í• ', e.currentRole) : '') +
+                    infoRow('전화', e.phone || '', true) +
+                    infoRow('이메일', e.email ? '<a href="mailto:' + e.email + '" style="color:var(--brand-primary)">' + e.email + '</a>' : '') +
+                    infoRow('국적', e.nationality || '') +
+                    infoRow('상태', e.status || '') +
+                    infoRow('발급일', e.issueDate || '', true) +
+                    (e.currentRole ? infoRow('현재 역할', e.currentRole) : '') +
                   '</div>' +
                 '</div>' +
               '</div>' +
-              // ì•¡ì…˜ ë²„íŠ¼
+              // 액션 버튼
               '<div style="padding:16px 24px;border-top:1px solid var(--border-default);display:flex;gap:10px;justify-content:flex-end;background:var(--bg-base)">' +
-                '<button onclick="document.getElementById(\'emp-info-modal\').remove()" class="btn-secondary">ë‹«ê¸°</button>' +
-                '<button onclick="window.open(\'' + e.sheetUrl + '\', \'_blank\')" class="btn-primary"><i class="ph ph-arrow-square-out"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸ ì—´ê¸°</button>' +
+                '<button onclick="document.getElementById(\'emp-info-modal\').remove()" class="btn-secondary">닫기</button>' +
+                '<button onclick="window.open(\'' + e.sheetUrl + '\', \'_blank\')" class="btn-primary"><i class="ph ph-arrow-square-out"></i> 마스터 시트 열기</button>' +
               '</div>' +
             '</div>';
         } catch(err) {
-          modal.innerHTML = '<div style="background:var(--bg-panel);padding:24px;border-radius:12px;color:var(--status-danger);max-width:400px">ë¡œë”© ì‹¤íŒ¨: ' + err.message + '<br><br><button onclick="document.getElementById(\'emp-info-modal\').remove()" class="btn-secondary">ë‹«ê¸°</button></div>';
+          modal.innerHTML = '<div style="background:var(--bg-panel);padding:24px;border-radius:12px;color:var(--status-danger);max-width:400px">로딩 실패: ' + err.message + '<br><br><button onclick="document.getElementById(\'emp-info-modal\').remove()" class="btn-secondary">닫기</button></div>';
         }
       };
 
-      // â”€â”€ FINANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── FINANCE ──────────────────────────────────────────
       window.deleteFinanceExpense = async function(deleteUrl) {
         if (!deleteUrl) return;
         if (!confirm('이 영수증 처리를 삭제할까요?')) return;
@@ -5228,7 +5228,7 @@
           }
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ìž¬ë¬´ / ë¹„ìš© ê´€ë¦¬</h1><p class="page-subtitle">ë¹„ìš© ì œì¶œ ë‚´ì—­ Â· ìŠ¹ì¸ ëŒ€ê¸° Â· ì²­êµ¬ í˜„í™©</p></div>' +
+            '<div class="header-section"><div><h1 class="page-title">재무 / 비용 관리</h1><p class="page-subtitle">비용 제출 내역 · 승인 대기 · 청구 현황</p></div>' +
             '<div class="action-row" style="flex-wrap: wrap; gap: 8px;">' +
             '  <a href="/mobile-expense/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-receipt" style="font-size:16px"></i> 비용/영수증 목록</a>' +
             '  <a href="/expense-pre-approval/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-hand-coins" style="font-size:16px"></i> 사전 예산 승인</a>' +
@@ -5246,13 +5246,13 @@
             '</div>' +
 
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-bullets"></i> ë¹„ìš© ì œì¶œ ë‚´ì—­</div>' +
-            '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> ë§ˆìŠ¤í„° ì—‘ì…€ ë‹¤ìš´ë¡œë“œ</button>' +
-            '<input type="text" class="search-inline" id="fin-search" placeholder="ë‚´ì—­ ê²€ìƒ‰..."></div></div>' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-bullets"></i> 비용 제출 내역</div>' +
+            '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드</button>' +
+            '<input type="text" class="search-inline" id="fin-search" placeholder="내역 검색..."></div></div>' +
             '<div class="panel-body"><table class="data-table" id="fin-table"><thead><tr>' +
-            '<th>ë‚ ì§œ</th><th>í˜„ìž¥</th><th>ê³„ì •</th><th>ì„¸ë¶€ë‚´ì—­</th><th style="text-align:right">ê¸ˆì•¡</th><th style="text-align:right">관리</th>' +
+            '<th>날짜</th><th>현장</th><th>계정</th><th>세부내역</th><th style="text-align:right">금액</th><th style="text-align:right">관리</th>' +
             '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div></div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-pie-slice"></i> ê³„ì •ë³„ ì§€ì¶œí˜„í™©</div></div>' +
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-pie-slice"></i> 계정별 지출현황</div></div>' +
             '<div class="panel-body padded" style="display:flex;flex-direction:column;gap:14px">' + categoryHtml + '</div></div>' +
             '</div>';
 
@@ -5272,22 +5272,22 @@
               window.reviewFinanceExpense(this.dataset.expenseId, this.dataset.decision);
             });
           });
-        } catch (err) { renderError('ìž¬ë¬´ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
+        } catch (err) { renderError('재무 데이터 로딩 실패'); console.error(err); }
       }
 
-      // â”€â”€ INVENTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // ì¹´í…Œê³ ë¦¬ë³„ ì•„ì´ì½˜ + ìƒ‰ìƒ
+      // ── INVENTORY ──────────────────────────────────────────
+      // 카테고리별 아이콘 + 색상
       window.INV_CATEGORY_META = {
         '중장비':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
         '전동공구': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
         '측정기':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
         '수공구':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
         '안전장비': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
-        'ì¤‘ìž¥ë¹„':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
-        'ì „ë ™ê³µêµ¬': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
-        'ì¸¡ì •ê¸°':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
-        'ìˆ˜ê³µêµ¬':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
-        'ì•ˆì „ìž¥ë¹„': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
+        '중장비':   { icon: 'ph-truck',          color: '#f59e0b', prefix: 'EQ' },
+        '전동공구': { icon: 'ph-screwdriver',    color: '#3b82f6', prefix: 'TL' },
+        '측정기':   { icon: 'ph-gauge',          color: '#a78bfa', prefix: 'IN' },
+        '수공구':   { icon: 'ph-wrench',         color: '#10b981', prefix: 'HT' },
+        '안전장비': { icon: 'ph-shield-check',   color: '#ef4444', prefix: 'SF' },
         'Power Tool (전동공구)': { icon: 'ph-screwdriver', color: '#3b82f6', prefix: 'TL' },
         'Hand Tool (수공구)': { icon: 'ph-wrench', color: '#10b981', prefix: 'HT' },
         'Pipes & Fittings (배관 자재)': { icon: 'ph-line-segments', color: '#06b6d4', prefix: 'PP' },
@@ -5560,7 +5560,7 @@
         }).join('');
       };
 
-      // ìƒˆë¡œê³ ì¹¨
+      // 새로고침
       window.refreshInventory = function() { renderInventory(); };
 
       // 자재/장비 ↔ 렌탈 계약 서브탭 — 사이드바 메뉴 통합 후 두 화면을 오가는 공용 탭
@@ -5633,20 +5633,20 @@
         }
       };
 
-      // ìžë™ ì…‹ì—… â€” ì‹œíŠ¸ + í´ë” í•œë²ˆì—
+      // 자동 셋업 — 시트 + 폴더 한번에
       window.bootstrapInventory = async function() {
-        if (!confirm('Inventory ì‹œíŠ¸ 3ê°œ + Drive í´ë” 6ê°œë¥¼ ìžë™ ìƒì„±í•©ë‹ˆë‹¤.\nê³„ì†í•˜ì‹œê² ìŠµë‹ˆê¹Œ?')) return;
+        if (!confirm('Inventory 시트 3개 + Drive 폴더 6개를 자동 생성합니다.\n계속하시겠습니까?')) return;
         try {
           var s = await window.API.setupInventorySheets();
           var f = await window.API.setupInventoryFolders();
-          alert('âœ… ì…‹ì—… ì™„ë£Œ\nì‹œíŠ¸: ' + (s.created || []).join(', ') + '\ní´ë” IDëŠ” Apps Script ì‹¤í–‰ ë¡œê·¸ì—ì„œ í™•ì¸í•˜ì—¬ Code.gs FOLDERSì— ìž…ë ¥ í›„ push ìž¬ë°°í¬ í•„ìš”');
+          alert('✅ 셋업 완료\n시트: ' + (s.created || []).join(', ') + '\n폴더 ID는 Apps Script 실행 로그에서 확인하여 Code.gs FOLDERS에 입력 후 push 재배포 필요');
           renderInventory();
         } catch(err) {
-          alert('ì…‹ì—… ì‹¤íŒ¨: ' + err.message);
+          alert('셋업 실패: ' + err.message);
         }
       };
 
-      // AI ì‚¬ì§„ ë“±ë¡ ì‹¤í–‰
+      // AI 사진 등록 실행
       window.runAIInventoryRegister = function() {
   var modal = document.createElement('div');
   modal.id = 'ai-inventory-reg-modal';
@@ -6484,7 +6484,7 @@
 };
 
 
-      // ìžì‚° ìƒì„¸ ëª¨ë‹¬
+      // 자산 상세 모달
       window.openInventoryAssetModal = async function(assetId) {
         if (!window.currentRentals || window.currentRentals.length === 0) {
           try {
@@ -6589,7 +6589,7 @@
         }
       };
 
-      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── PROJECT ──────────────────────────────────────────
       async function renderVehicle() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -7654,7 +7654,7 @@
         };
       };
 
-      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── PROJECT ──────────────────────────────────────────
 
       // Pay Period 좌우 이동
       window._payrollPeriodStart = null;
@@ -7758,14 +7758,14 @@
         };
       };
 
-      // â”€â”€ PROJECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── PROJECT ──────────────────────────────────────────
       async function renderPayroll(periodStart) {
         pageContainer.innerHTML = skeleton();
         try {
           var res = await window.API.getPayrollDashboard(periodStart);
           if (!res || !res.success) {
             pageContainer.innerHTML = '<div class="panel"><div class="panel-body padded">' +
-              '<div style="color:var(--status-danger);text-align:center;padding:32px">급여 ë °ì ´í„° 로딩 실패<br>' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
+              '<div style="color:var(--status-danger);text-align:center;padding:32px">급여 데이터 로딩 실패<br>' + (res && res.error || '알 수 없는 오류') + '</div></div></div>';
             return;
           }
 
@@ -7981,15 +7981,20 @@
       // ══════════════════════════════════════════════════════
       window.WBS_CURRENT_PROJECT = null;
 
+      // 내부 상태는 5종(AI생성/검수완료/진행중/완료/보류)이지만 화면에는 4종만 보인다 —
+      // "AI생성"과 "검수완료"의 차이는 관리 절차이지 현장이 알 일이 아니다. 상태가
+      // 다섯 색이면 범례부터 공부해야 한다.
+      var WBS_STATUS_DISPLAY = { 'AI생성': '대기', '검수완료': '대기', '진행중': '진행중', '완료': '완료', '보류': '보류' };
       var WBS_STATUS_META = {
-        'AI생성':   { color: '#8b5cf6', bg: 'rgba(139,92,246,0.13)',  icon: 'ph-sparkle' },
-        '검수완료': { color: '#3b82f6', bg: 'rgba(59,130,246,0.13)',  icon: 'ph-clipboard-text' },
-        '진행중':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.13)',  icon: 'ph-arrows-clockwise' },
-        '완료':     { color: '#10b981', bg: 'rgba(16,185,129,0.13)',  icon: 'ph-check-circle' },
-        '보류':     { color: '#64748b', bg: 'rgba(100,116,139,0.13)', icon: 'ph-pause-circle' }
+        '대기':   { color: '#3b82f6', bg: 'rgba(59,130,246,0.13)',  icon: 'ph-circle-dashed' },
+        '진행중': { color: '#f59e0b', bg: 'rgba(245,158,11,0.13)',  icon: 'ph-arrows-clockwise' },
+        '완료':   { color: '#10b981', bg: 'rgba(16,185,129,0.13)',  icon: 'ph-check-circle' },
+        '보류':   { color: '#64748b', bg: 'rgba(100,116,139,0.13)', icon: 'ph-pause-circle' }
       };
       var WBS_COMPANY_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
-      var WBS_GRID_COLS = '92px 58px minmax(220px,1fr) 100px 62px 60px 48px 132px 132px';
+      // 6열 — 상태·작업명·공종·일수·진척·액션. ID/인원·장비/공수는 편집 모달에서 본다.
+      // 아홉 칸짜리 표는 어느 칸을 봐야 하는지부터 가르쳐야 했다.
+      var WBS_GRID_COLS = '86px minmax(240px,1fr) 130px 48px 132px 116px';
 
       function wbsEsc(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, function(ch) {
@@ -8000,12 +8005,14 @@
         return wbsEsc(String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
       }
       function wbsStatusMeta(status) {
-        return WBS_STATUS_META[status] || { color: 'var(--text-tertiary)', bg: 'var(--bg-base)', icon: 'ph-circle' };
+        var shown = WBS_STATUS_DISPLAY[status] || status;
+        return WBS_STATUS_META[shown] || { color: 'var(--text-tertiary)', bg: 'var(--bg-base)', icon: 'ph-circle' };
       }
       function wbsStatusPill(status) {
+        var shown = WBS_STATUS_DISPLAY[status] || status || '-';
         var m = wbsStatusMeta(status);
         return '<span style="display:inline-flex;align-items:center;gap:5px;background:' + m.bg + ';color:' + m.color + ';font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap">' +
-          '<i class="ph ' + m.icon + '"></i>' + wbsEsc(status || '-') + '</span>';
+          '<i class="ph ' + m.icon + '"></i>' + wbsEsc(shown) + '</span>';
       }
       function wbsCompanyColor(name, companies) {
         var idx = companies.indexOf(name);
@@ -8364,19 +8371,24 @@
       }
 
       function wbsHeaderHtml(projOptions) {
+        // 머리에는 매일 쓰는 것만 — 프로젝트 선택과 새로고침. 셋업·파괴적 작업
+        // (AI 분석, 공정표 교체 — TBM 서명까지 지운다, 메뉴얼 폴더)은 ⚙ 뒤로 숨긴다.
+        // 매일 보는 화면에서 위험한 버튼이 손 닿는 곳에 있으면 언젠가 눌린다.
         return '<div class="header-section"><div>' +
-          '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> 공정 관리 (WBS)</h1>' +
-          '<p class="page-subtitle">AI 메뉴얼 분석 기반 실시간 공정 추적 · Stage → Task → SubTask 계층 구조</p>' +
+          '<h1 class="page-title"><i class="ph ph-tree-structure" style="color:#7c3aed"></i> 공정 관리</h1>' +
+          '<p class="page-subtitle">오늘 할 일 → 공정표 → 숫자 3개. 보고는 K-TALK 현장 상황실에 쓰면 AI 가 반영을 제안합니다.</p>' +
           '</div>' +
           '<div class="action-row" style="gap:8px">' +
           (projOptions
             ? '<select id="wbs-project-select" onchange="window.changeWbsProject(this.value)" style="background:var(--bg-base);border:1px solid var(--border-default);color:var(--text-primary);padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;max-width:280px">' + projOptions + '</select>'
             : '') +
           '<button class="btn-secondary" onclick="window.refreshWbs()" title="프로젝트 목록/공정 데이터 새로고침"><i class="ph ph-arrows-clockwise"></i></button>' +
-          '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runWbsAiAnalysis()">' +
-          '<i class="ph ph-robot"></i> AI 메뉴얼 분석</button>' +
-          '<button class="btn-secondary" onclick="window.openWbsScheduleReplace()" title="엑셀 공정표로 갈아끼우기"><i class="ph ph-microsoft-excel-logo"></i> 공정표 교체</button>' +
-          '<button class="btn-secondary" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>' +
+          '<details style="position:relative"><summary class="btn-secondary" style="list-style:none;cursor:pointer" title="공정표 설정"><i class="ph ph-gear-six"></i></summary>' +
+          '<div style="position:absolute;right:0;top:calc(100% + 6px);z-index:40;background:var(--bg-panel);border:1px solid var(--border-strong);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:190px;box-shadow:0 8px 24px rgba(0,0,0,0.25)">' +
+          '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.runWbsAiAnalysis()"><i class="ph ph-robot"></i> AI 메뉴얼 분석</button>' +
+          '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.openWbsScheduleReplace()" title="엑셀 공정표로 갈아끼우기 — 기존 진행 기록이 교체됩니다"><i class="ph ph-microsoft-excel-logo"></i> 공정표 교체</button>' +
+          '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>' +
+          '</div></details>' +
           '</div></div>';
       }
 
@@ -8434,12 +8446,27 @@
       var WBS_WD = ['일', '월', '화', '수', '목', '금', '토'];
       var WBS_TRADE_COLORS = { GC: '#64748b', ELEC: '#f59e0b', PLUMB: '#3b82f6', MECH: '#06b6d4', FIRE: '#ef4444', FRAME: '#8b5cf6', DEMO: '#a16207', DOOR: '#0ea5e9', PAINT: '#ec4899', CEIL: '#14b8a6', TILE: '#10b981', MILL: '#d97706', FLOOR: '#84cc16', SPEC: '#6366f1', INSP: '#94a3b8', LV: '#22d3ee', DRY: '#0891b2', PE: '#64748b' };
       function wbsTradeColor(t) { if (!t) return '#7c3aed'; var k = String(t).toUpperCase().trim(); return WBS_TRADE_COLORS[k] || '#7c3aed'; }
+      // 공종 코드는 저장용, 화면에는 한국어 — ELEC 을 읽을 수 있는 사람만 쓰는 화면이 아니다.
+      var WBS_TRADE_LABELS = { GC: '종합', ELEC: '전기', PLUMB: '배관', MECH: '기계', FIRE: '소방', FRAME: '골조', DEMO: '철거', DOOR: '창호', PAINT: '도장', CEIL: '천장', TILE: '타일', MILL: '가구', FLOOR: '바닥', SPEC: '특수', INSP: '검사', LV: '약전', DRY: '건식벽', PE: '설계' };
+      function wbsTradeLabel(t) { if (!t) return '-'; var k = String(t).toUpperCase().trim(); return WBS_TRADE_LABELS[k] || t; }
       function wbsPD(s) { if (!s) return null; var p = String(s).split('-'); if (p.length !== 3) return null; var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); return isNaN(d.getTime()) ? null : d; }
       function wbsDaysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
       function wbsAddDays(d, n) { return new Date(d.getTime() + n * 86400000); }
       function wbsISOdate(d) { return d.toISOString().slice(0, 10); }
       function wbsWeekdayNum(d) { return d.getUTCDay(); }
       function wbsTodayISO() { return new Date().toISOString().slice(0, 10); }
+
+      // 간트 범례 — 화면에 실제로 있는 공종만, 한글 이름으로. "공종색" 이라는
+      // 설명 한 칸은 아무것도 설명하지 못했다.
+      function wbsGanttTradeLegend(tree) {
+        var seen = {};
+        (tree || []).forEach(function(st) { (st.tasks || []).forEach(function(t) { (t.sub_tasks || []).forEach(function(su) {
+          if (su.trade) seen[String(su.trade).toUpperCase().trim()] = true;
+        }); }); });
+        return Object.keys(seen).slice(0, 8).map(function(k) {
+          return '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:' + wbsTradeColor(k) + ';border-radius:2px"></span>' + wbsEsc(wbsTradeLabel(k)) + '</span>';
+        }).join('') || '';
+      }
 
       // tree(stages > tasks > sub_tasks) → 간트 공정표 HTML.
       function wbsGanttPanel(tree, projectId) {
@@ -8510,7 +8537,7 @@
               '<div style="width:' + WBS_GANTT_LABEL_W + 'px;flex:none;position:sticky;left:0;z-index:2;background:var(--bg-panel);padding:4px 12px;border-right:1px solid var(--border-default);display:flex;align-items:center;gap:6px;overflow:hidden">' +
                 '<span class="cell-mono" style="font-size:9px;color:var(--text-tertiary);flex:none;width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + wbsEsc(sub.activity_id || '') + '">' + wbsEsc(sub.activity_id || '') + '</span>' +
                 '<span onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')" style="font-size:12px;color:var(--text-primary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0" title="' + wbsEsc(sub.sub_name || '') + '">' + critDot + wbsEsc(sub.sub_name || '') + '</span>' +
-                '<span style="font-size:9px;font-weight:700;color:' + wbsTradeColor(sub.trade) + ';flex:none">' + wbsEsc(sub.trade || '') + '</span>' +
+                '<span style="font-size:9px;font-weight:700;color:' + wbsTradeColor(sub.trade) + ';flex:none">' + wbsEsc(sub.trade ? wbsTradeLabel(sub.trade) : '') + '</span>' +
               '</div>' +
               '<div style="width:' + trackW + 'px;flex:none;position:relative;height:26px">' + barHtml + '</div>' +
             '</div>';
@@ -8523,7 +8550,7 @@
           '<div class="panel-header"><div class="panel-title"><i class="ph ph-chart-bar-horizontal"></i> 공정표 (간트) — ' + wbsEsc(projectId) + '</div>' +
           '<div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-tertiary);flex-wrap:wrap">' +
             '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:#ef4444;border-radius:2px"></span>임계경로</span>' +
-            '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:#3b82f6;border-radius:2px"></span>공종색</span>' +
+            wbsGanttTradeLegend(tree) +
             '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:2px;height:12px;background:#7c3aed"></span>오늘</span>' +
             '<span><i class="ph ph-cursor-click"></i> 날짜 클릭 = 그날 작업</span>' +
           '</div></div>' +
@@ -10029,16 +10056,15 @@
           });
           var companies = Object.keys(byCompany).sort(function(a, b) { return byCompany[b].mh - byCompany[a].mh; });
 
-          // KPI (6개)
-          var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(7,1fr)">' +
+          // KPI 는 딱 3장 — 얼마나 왔나, 준공을 쥔 작업은 어떤가, 오늘 막힌 건 없나.
+          // 일곱 장이면 어느 숫자를 봐야 하는지부터 물어봐야 한다. 공수·고위험·진행중
+          // 수는 상세(트리)와 안전 화면의 소관이다.
+          var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">' +
             '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">전체 진척률</div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
-            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">SubTask 완료</div><div class="kpi-value"><span style="color:#10b981">' + (sum.completedCount || 0) + '</span><span style="font-size:15px;color:var(--text-tertiary)"> / ' + totalSubTasks + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + tree.length + ' Stages</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">진행중</div><div class="kpi-value" style="color:#f59e0b">' + (sum.inProgressCount || 0) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">Active tasks</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">예상 총공수</div><div class="kpi-value">' + totalManhours.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">MH</span></div></div>' +
-            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">임계경로</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">지연 시 준공 밀림</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">EHS 고위험</div><div class="kpi-value" style="color:' + (ehsHigh > 0 ? '#ef4444' : 'var(--text-tertiary)') + '">' + ehsHigh + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">위험작업</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건' : '오늘 계획됨') + '</span></div></div>' +
+            '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div>' +
+            '<div class="kpi-meta"><span style="color:var(--text-secondary)">작업 ' + (sum.completedCount || 0) + '/' + totalSubTasks + ' 완료</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">준공을 쥔 작업 (임계경로)</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">이 작업이 늦으면 준공일이 그대로 밀립니다</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건 — 서명해야 시작됩니다' : '오늘 계획됨') + '</span></div></div>' +
             '</div>';
 
           // 협력사 작업 부하 (DB 데이터 기반 동적 목록).
@@ -10066,15 +10092,17 @@
               '<span class="cell-mono" style="font-size:12px;font-weight:700;color:' + color + ';min-width:40px;text-align:right">' + pct + '%</span></div>';
           }).join('');
 
-          var panelsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">' +
+          // 보고서 성격의 두 패널은 접어 둔다 — 매일 보는 화면의 기본값은 얇아야 한다.
+          var panelsHtml = '<details style="margin-bottom:18px"><summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text-secondary);padding:8px 4px"><i class="ph ph-chart-bar"></i> 협력사 부하 · 단계별 진척 보고서 펼치기</summary>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px">' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> 협력사 작업 부하</div></div>' +
             '<div class="panel-body">' + (companyBars || '<div style="color:var(--text-tertiary);text-align:center;padding:20px;font-size:12px">협력사 배정 데이터가 없습니다</div>') + '</div></div>' +
-            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-steps"></i> Stage별 진척</div></div>' +
-            '<div class="panel-body">' + stageBars + '</div></div></div>';
+            '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-steps"></i> 단계별 진척</div></div>' +
+            '<div class="panel-body">' + stageBars + '</div></div></div></details>';
 
           // WBS 트리 — 컬럼 헤더 + Stage(접기) > Task > SubTask 행.
-          var colHeader = '<div style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:6px 12px;font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em">' +
-            '<span>상태</span><span>ID</span><span>작업명</span><span>공종</span><span style="text-align:right">인원·장비</span><span style="text-align:right">공수</span><span style="text-align:right">일수</span><span>진척</span><span style="text-align:right">액션</span></div>';
+          var colHeader = '<div style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:6px 12px;font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.05em">' +
+            '<span>상태</span><span>작업명</span><span>공종 · 담당</span><span style="text-align:right">일수</span><span>진척</span><span style="text-align:right">액션</span></div>';
 
           var openAll = tree.length <= 4;
           var treeHtml = tree.map(function(stage, sIdx) {
@@ -10120,13 +10148,12 @@
 
                 var rowBorder = sub.isCritical ? 'border-left:3px solid #ef4444;' : 'border-left:3px solid transparent;';
 
+                // 6열 — ID·인원·공수는 이름 클릭(편집 모달)에서 본다. 표는 "무엇을,
+                // 누가, 얼마나 됐고, 다음에 뭘 누르나"만 답하면 된다.
                 return '<div class="wbs-subtask" data-wbsid="' + wbsEsc(sub.wbs_id) + '" style="display:grid;grid-template-columns:' + WBS_GRID_COLS + ';gap:10px;align-items:center;padding:7px 12px;border-radius:6px;' + rowBorder + 'background:' + (isDone ? 'rgba(16,185,129,0.05)' : 'transparent') + ';border-bottom:1px solid var(--border-subtle)">' +
                   '<span>' + wbsStatusPill(status) + '</span>' +
-                  '<span class="cell-mono" style="font-size:10px;color:var(--text-tertiary)">' + wbsEsc(sub.activity_id || sub.sub_no || '') + '</span>' +
-                  '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + wbsCpBadge(sub) + ehsBadge + safetyChip + wbsPredsChip(sub) + '</span>' +
-                  '<span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="공종: ' + wbsEsc(sub.trade || '-') + (sub.company ? ' / 협력사: ' + wbsEsc(sub.company) : ' / 협력사 미배정') + '"><span style="color:var(--text-secondary)">' + wbsEsc(sub.trade || '-') + '</span>' + (sub.company ? ' <span style="color:' + compColor + ';font-weight:700">· ' + wbsEsc(sub.company) + '</span>' : ' <span style="color:var(--text-tertiary);font-weight:400">· 미배정</span>') + '</span>' +
-                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right" title="' + wbsEsc(sub.crewText || '') + '">' + wbsCrewLabel(sub) + '</span>' +
-                  '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (parseFloat(sub.manhours) || 0) + '</span>' +
+                  '<span style="font-size:13px;' + nameStyle + ';cursor:pointer;min-width:0" title="' + wbsEsc(sub.activity_id || sub.sub_no || '') + (sub.crewText ? ' · ' + wbsEsc(sub.crewText) : '') + '" onclick="window.openWbsEditModal(\'' + wbsJsArg(sub.wbs_id) + '\')">' + wbsEsc(sub.sub_name || '') + wbsCpBadge(sub) + ehsBadge + safetyChip + wbsPredsChip(sub) + '</span>' +
+                  '<span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="공종: ' + wbsEsc(wbsTradeLabel(sub.trade)) + (sub.company ? ' / 협력사: ' + wbsEsc(sub.company) : ' / 협력사 미배정') + '"><span style="color:var(--text-secondary)">' + wbsEsc(wbsTradeLabel(sub.trade)) + '</span>' + (sub.company ? ' <span style="color:' + compColor + ';font-weight:700">· ' + wbsEsc(sub.company) + '</span>' : ' <span style="color:var(--text-tertiary);font-weight:400">· 미배정</span>') + '</span>' +
                   '<span class="cell-mono" style="font-size:11px;color:var(--text-secondary);text-align:right">' + (sub.days || 0) + '</span>' +
                   wbsProgressBar(sub.progress, progColor, 100) +
                   '<span style="display:flex;align-items:center;justify-content:flex-end;gap:2px">' + actionBtn + '</span>' +
@@ -10174,7 +10201,16 @@
             '</div>';
           var ganttHtml = wbsGanttPanel(tree, projectId);
 
-          pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsOpsBlock(todayRes, procureRes) + viewToggle +
+          // 폰에서는 간트를 쓸 수 없다(가로 스크롤 2중 + 툴팁 의존). 현장의 실사용은
+          // "오늘 뭘 하고 뭘 누르나"이므로 오늘 할 일만 남긴다. 전체 공정표는 PC 에서.
+          if (window.innerWidth < 768) {
+            pageContainer.innerHTML = headerHtml + sumWarnHtml + kpiHtml + wbsTodayPanel(todayRes) +
+              '<div style="text-align:center;color:var(--text-tertiary);font-size:12px;padding:10px 16px">전체 공정표(간트)와 상세 목록은 PC 화면에서 보입니다.<br>보고는 K-TALK 현장 상황실 방에 쓰면 AI 가 반영을 제안합니다.</div>';
+            return;
+          }
+
+          // 순서가 곧 우선순위다: 오늘 할 일 → 숫자 3개 → 공정표.
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + wbsOpsBlock(todayRes, procureRes) + kpiHtml + viewToggle +
             '<div id="wbs-view-gantt"' + (vm === 'gantt' ? '' : ' style="display:none"') + '>' + ganttHtml + '</div>' +
             '<div id="wbs-view-tree"' + (vm === 'tree' ? '' : ' style="display:none"') + '>' + panelsHtml + treePanel + '</div>';
 
@@ -10598,7 +10634,7 @@
           '<input type="number" step="0.5" min="0" id="wbs-edit-manhours" class="wbs-edit-field" value="' + (parseFloat(sub.manhours) || 0) + '"></div>' +
           '<div><label style="' + LBL + '">일수</label>' +
           '<input type="number" step="1" min="0" id="wbs-edit-days" class="wbs-edit-field" value="' + (parseInt(sub.days, 10) || 0) + '"></div>' +
-          '<div><label style="' + LBL + '">진척률 (%)</label>' +
+          '<div><label style="' + LBL + '">진척률 (%) <span style="' + HINT + '">(보통은 상태 버튼과 AI 가 채웁니다 — 숫자를 직접 고치는 건 정정용)</span></label>' +
           '<input type="number" step="5" min="0" max="100" id="wbs-edit-progress" class="wbs-edit-field" value="' + (parseInt(sub.progress, 10) || 0) + '"></div>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
@@ -10705,7 +10741,7 @@
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
       };
 
-      // â”€â”€ VEHICLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── VEHICLE ──────────────────────────────────────────
       
 
       async function renderRental(force) {
@@ -12517,7 +12553,7 @@
         document.body.removeChild(link);
       };
 
-      // â”€â”€ HOUSING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── HOUSING ──────────────────────────────────────────
       async function renderHousing() {
         pageContainer.innerHTML = skeleton();
         try {
@@ -12530,39 +12566,39 @@
             var totalUtil = h.elecAmt + h.waterAmt + h.gasAmt + h.internet;
             var occColor = occRate >= 100 ? 'var(--status-success)' : occRate >= 50 ? 'var(--status-warning)' : 'var(--status-danger)';
             var pillCls = occRate >= 100 ? 'ok' : occRate >= 50 ? 'warning' : 'pending';
-            var gasHtml = h.gasAmt > 0 ? '<div style="font-size:11px;color:var(--text-secondary)">ê°€ìŠ¤</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.gasAmt + '</div>' : '';
+            var gasHtml = h.gasAmt > 0 ? '<div style="font-size:11px;color:var(--text-secondary)">가스</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.gasAmt + '</div>' : '';
             var residentsHtml = h.residents.map(function (r) { return '<span class="tag">' + r + '</span>'; }).join('');
-            return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> ' + h.building + ' â€” ' + h.unit + '</div><span class="status-pill ' + pillCls + '">' + h.currentOcc + '/' + h.maxOcc + 'ëª…</span></div>' +
+            return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> ' + h.building + ' — ' + h.unit + '</div><span class="status-pill ' + pillCls + '">' + h.currentOcc + '/' + h.maxOcc + '명</span></div>' +
               '<div class="panel-body padded"><div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">' + h.address + '</div>' +
               '<div class="progress-wrapper" style="margin-bottom:14px"><div class="progress-bar"><div class="progress-fill" style="width:' + occRate + '%;background:' + occColor + '"></div></div><div class="progress-text cell-primary">' + occRate + '%</div></div>' +
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
-              '<div style="font-size:11px;color:var(--text-secondary)">ì›” ìž„ëŒ€ë£Œ</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.rent + '</div>' +
-              '<div style="font-size:11px;color:var(--text-secondary)">ì „ê¸°</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.elecAmt + ' (ë‚©ë¶€ì¼: ' + h.elecDue + 'ì¼)</div>' +
-              '<div style="font-size:11px;color:var(--text-secondary)">ìˆ˜ë„</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.waterAmt + '</div>' +
+              '<div style="font-size:11px;color:var(--text-secondary)">월 임대료</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.rent + '</div>' +
+              '<div style="font-size:11px;color:var(--text-secondary)">전기</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.elecAmt + ' (납부일: ' + h.elecDue + '일)</div>' +
+              '<div style="font-size:11px;color:var(--text-secondary)">수도</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.waterAmt + '</div>' +
               gasHtml +
-              '<div style="font-size:11px;color:var(--text-secondary)">ì¸í„°ë„·</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.internet + '</div>' +
-              '<div style="font-size:11px;font-weight:700;color:var(--text-primary)">ì›” í•©ê³„</div><div class="cell-mono" style="font-size:11px;text-align:right;font-weight:700">$' + (h.rent + totalUtil).toLocaleString() + '</div>' +
+              '<div style="font-size:11px;color:var(--text-secondary)">인터넷</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.internet + '</div>' +
+              '<div style="font-size:11px;font-weight:700;color:var(--text-primary)">월 합계</div><div class="cell-mono" style="font-size:11px;text-align:right;font-weight:700">$' + (h.rent + totalUtil).toLocaleString() + '</div>' +
               '</div>' +
-              '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">ìž…ì£¼ìž</div>' +
+              '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">입주자</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:4px">' + residentsHtml + '</div>' +
               '</div></div>';
           }).join('');
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">ìˆ™ì†Œ ê´€ë¦¬</h1><p class="page-subtitle">ìˆ™ì†Œë³„ ìž…ì£¼í˜„í™© Â· ìœ í‹¸ë¦¬í‹° ë‚©ë¶€ ì¶”ì  Â· ìˆ˜ë¦¬ ìš”ì²­</p></div>' +
-            '<div class="action-row"><button class="btn-secondary" onclick="window.print()"><i class="ph ph-export"></i> í˜„í™© ì¶œë ¥</button><button class="btn-primary" onclick="openUniversalScanner(\'HOUSING\', \'ìˆ™ì†Œ ë ŒíŠ¸/ë¦¬ìŠ¤ ê³„ì•½ì„œ\')"><i class="ph ph-scan"></i> AI ìˆ™ì†Œ ë“±ë¡</button><button class="btn-primary" style="background:var(--status-warning); color:#000;" onclick="openNfcAssignModal(\'HOUSING\')"><i class="ph ph-identification-card"></i> NFC ìˆ™ì†Œ ë°°ì •</button></div></div>' +
+            '<div class="header-section"><div><h1 class="page-title">숙소 관리</h1><p class="page-subtitle">숙소별 입주현황 · 유틸리티 납부 추적 · 수리 요청</p></div>' +
+            '<div class="action-row"><button class="btn-secondary" onclick="window.print()"><i class="ph ph-export"></i> 현황 출력</button><button class="btn-primary" onclick="openUniversalScanner(\'HOUSING\', \'숙소 렌트/리스 계약서\')"><i class="ph ph-scan"></i> AI 숙소 등록</button><button class="btn-primary" style="background:var(--status-warning); color:#000;" onclick="openNfcAssignModal(\'HOUSING\')"><i class="ph ph-identification-card"></i> NFC 숙소 배정</button></div></div>' +
             '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">ìž…ì£¼ìœ¨</div><div class="kpi-value">' + stats.occupancyRate + '%</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + stats.currentOcc + ' / ' + stats.totalCapacity + 'ëª…</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì›” ìž„ëŒ€ë¹„</div><div class="kpi-value">$' + stats.monthlyRentTotal.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + stats.totalUnits + 'ê°œ ìœ ë‹›</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ì›” ìœ í‹¸ë¹„</div><div class="kpi-value">$' + stats.monthlyUtilTotal.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì „ê¸°+ìˆ˜ë„+ê°€ìŠ¤+ì¸í„°ë„·</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ë‚©ë¶€ìž„ë°•</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.utilPayingDueSoon + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">7ì¼ ì´ë‚´</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">ë¯¸ì²˜ë¦¬ ìˆ˜ë¦¬</div><div class="kpi-value" style="color:var(--status-danger)">' + stats.pendingIssues + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">ì²˜ë¦¬ í•„ìš”</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">입주율</div><div class="kpi-value">' + stats.occupancyRate + '%</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + stats.currentOcc + ' / ' + stats.totalCapacity + '명</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">월 임대비</div><div class="kpi-value">$' + stats.monthlyRentTotal.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + stats.totalUnits + '개 유닛</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">월 유틸비</div><div class="kpi-value">$' + stats.monthlyUtilTotal.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">전기+수도+가스+인터넷</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">납부임박</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.utilPayingDueSoon + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">7일 이내</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">미처리 수리</div><div class="kpi-value" style="color:var(--status-danger)">' + stats.pendingIssues + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">처리 필요</span></div></div>' +
             '</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' + housingsHtml + '</div>';
-        } catch (err) { renderError('ìˆ™ì†Œ ë°ì´í„° ë¡œë”© ì‹¤íŒ¨'); console.error(err); }
+        } catch (err) { renderError('숙소 데이터 로딩 실패'); console.error(err); }
       }
 
-      // â”€â”€ ì´ˆê¸°í™” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 초기화 ──────────────────────────────────────────
       pageContainer.style.transition = 'opacity 0.15s';
       const urlParams = new URLSearchParams(window.location.search);
       const requestedView = urlParams.get('view');
@@ -12585,7 +12621,7 @@
       }
     });
 
-    // â”€â”€ ë¬¸ì„œ ëª¨ë‹¬ ì œì–´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── 문서 모달 제어 ──────────────────────────────────────────
     function showProjectDoc() {
       var modal = document.getElementById('doc-modal');
       modal.classList.add('active');
@@ -12624,96 +12660,96 @@
     <div class="doc-modal-content">
       <div class="doc-modal-header">
         <div class="doc-modal-title"><i class="ph ph-file-text" style="color:var(--brand-primary);font-size:20px"></i>
-          LGES AZ Plant ìž¥ë¹„ì„¤ì¹˜ ë§ˆìŠ¤í„° ì‹¤í–‰ê³„íšì„œ</div>
+          LGES AZ Plant 장비설치 마스터 실행계획서</div>
         <button class="doc-modal-close" onclick="closeProjectDoc()"><i class="ph ph-x"></i></button>
       </div>
       <div class="doc-modal-body md-content" id="doc-modal-body">
         <!-- Markdown Data -->
-        <h1>LGES AZ Plant ë°°í„°ë¦¬ ì œì¡° ìž¥ë¹„ ì„¤ì¹˜ ë§ˆìŠ¤í„° ì‹¤í–‰ê³„íšì„œ (Project Execution Plan)</h1>
+        <h1>LGES AZ Plant 배터리 제조 장비 설치 마스터 실행계획서 (Project Execution Plan)</h1>
 
-        <h2>1. í”„ë¡œì íŠ¸ ê°œìš” (Project Overview)</h2>
-        <p>ë³¸ ì‹¤í–‰ê³„íšì„œëŠ” LG Energy Solution (LGES) AZ Plantì˜ ë°°í„°ë¦¬ ì œì¡° ë¼ì¸ ìž¥ë¹„ ë°˜ìž…, ì¡°ë¦½, ì„¤ì¹˜ ë° ì‹œìš´ì „ì„ ìœ„í•œ ë§ˆìŠ¤í„° ê³„íšì„œìž…ë‹ˆë‹¤. NFF 46-Series ìž¥ë¹„
-          ìŠ¤íŽ™ê³¼ ê° ë²¤ë”ì˜ ì„¤ì¹˜ ë§¤ë‰´ì–¼(PPTX/PDF) í…ìŠ¤íŠ¸ ë¶„ì„ ë°ì´í„°ë¥¼ ë°”íƒ•ìœ¼ë¡œ ì „ì²´ ì„¤ì¹˜ ìž‘ì—…ì„ í†µì œí•˜ê³  ë‹¨ê³„ë³„ ì‹¤í–‰ ë°©ì•ˆì„ í™•ë¦½í•˜ì—¬ ì•ˆì „í•˜ê³  ì²´ê³„ì ì¸ ë¼ì¸ ì…‹ì—…ì„ ëª©í‘œë¡œ í•©ë‹ˆë‹¤.</p>
+        <h2>1. 프로젝트 개요 (Project Overview)</h2>
+        <p>본 실행계획서는 LG Energy Solution (LGES) AZ Plant의 배터리 제조 라인 장비 반입, 조립, 설치 및 시운전을 위한 마스터 계획서입니다. NFF 46-Series 장비
+          스펙과 각 벤더의 설치 매뉴얼(PPTX/PDF) 텍스트 분석 데이터를 바탕으로 전체 설치 작업을 통제하고 단계별 실행 방안을 확립하여 안전하고 체계적인 라인 셋업을 목표로 합니다.</p>
 
-        <h3>1.1 ëŒ€ìƒ ê³µì • ë° ë¼ì¸ êµ¬ì„± (NFF 46-Series Process)</h3>
-        <p>ì„¤ì¹˜ ëŒ€ìƒì€ í¬ê²Œ 3ê°€ì§€ ì£¼ìš” ë°°í„°ë¦¬ ì œì¡° ê³µì •ìœ¼ë¡œ ë‚˜ë‰˜ë©°, ê° ê³µì •ë³„ í•˜ìœ„ ìž¥ë¹„êµ°ê³¼ í™˜ê²½ ì œì–´ ê¸°ê¸°ë¡œ ì„¸ë¶„í™”ë©ë‹ˆë‹¤.</p>
+        <h3>1.1 대상 공정 및 라인 구성 (NFF 46-Series Process)</h3>
+        <p>설치 대상은 크게 3가지 주요 배터리 제조 공정으로 나뉘며, 각 공정별 하위 장비군과 환경 제어 기기로 세분화됩니다.</p>
         <ul>
-          <li><strong>100. Winder (ê¶Œì·¨ ê³µì •)</strong>: ì ¤ë¦¬ë¡¤(Jelly Roll) ì œì¡° ì˜ì—­. AZ #1 ë¼ì¸ ê¸°ì¤€ 12ëŒ€ì˜ Winder Machine (#1-1 ~
-            #1-12) êµ¬ì„±.</li>
-          <li><strong>200. Assembly (ì¡°ë¦½ ê³µì •)</strong>: NFF Cell Assembly Line (Zone 1 & Zone 2)</li>
-          <li><strong>300. Formation (í™œì„±í™” ê³µì •)</strong>: ì „ê·¹ í™œì„±í™”, ë””ê°œì‹± ë° í’ˆì§ˆ ê²€ì‚¬ ì˜ì—­</li>
+          <li><strong>100. Winder (권취 공정)</strong>: 젤리롤(Jelly Roll) 제조 영역. AZ #1 라인 기준 12대의 Winder Machine (#1-1 ~
+            #1-12) 구성.</li>
+          <li><strong>200. Assembly (조립 공정)</strong>: NFF Cell Assembly Line (Zone 1 & Zone 2)</li>
+          <li><strong>300. Formation (활성화 공정)</strong>: 전극 활성화, 디개싱 및 품질 검사 영역</li>
         </ul>
 
         <hr>
 
-        <h2>2. ì‚¬ì „ ì¤€ë¹„ ë° EHS (í™˜ê²½Â·ë³´ê±´Â·ì•ˆì „)</h2>
-        <p>ëª¨ë“  ìž¥ë¹„ ë°˜ìž… ë° ì„¤ì¹˜ëŠ” í˜„ìž¥ ì§€ì • ì•ˆì „ìˆ˜ì¹™(ESAZ Safety Manual) ë° ìŠ¹ì¸ëœ ê¸°ë³¸ ì•ˆì „ ì¤€ìˆ˜(Basic Safety Prevention) ì§€ì¹¨ì— ê¸°ë°˜í•˜ì—¬ ìˆ˜í–‰ë©ë‹ˆë‹¤.</p>
+        <h2>2. 사전 준비 및 EHS (환경·보건·안전)</h2>
+        <p>모든 장비 반입 및 설치는 현장 지정 안전수칙(ESAZ Safety Manual) 및 승인된 기본 안전 준수(Basic Safety Prevention) 지침에 기반하여 수행됩니다.</p>
 
-        <h3>2.1 ì‚¬ì´íŠ¸ ê³µí†µ ì² ì¹™ (Basic Safety Prevention)</h3>
+        <h3>2.1 사이트 공통 철칙 (Basic Safety Prevention)</h3>
         <ul>
-          <li><strong>ì˜ë¬´ êµìœ¡</strong>: êµìœ¡(training) ë¯¸ì´ìˆ˜ìžì˜ ìž¥ë¹„ ì»¨íŠ¸ë¡¤ ì ˆëŒ€ ê¸ˆì§€.</li>
-          <li><strong>ë³´í˜¸êµ¬ ì°©ìš©</strong>: ì„¤ì¹˜ êµ¬ì—­ ë‚´ í•˜ë“œí–‡, ì•ˆì „í™”, ë³´ì•ˆê²½ ì°©ìš© í•„ìˆ˜.</li>
-          <li><strong>Interlock í†µì œ</strong>: ì•ˆì „ìš© ì „ìž ì¸í„°ë½ ìž¥ì¹˜ì˜ ìž„ì˜ í•´ì œ ê¸ˆì§€ (ìœ ì§€ë³´ìˆ˜ ëª©ì  ì œì™¸).</li>
-          <li><strong>P&P Gripper ì ‘ê·¼ ê¸ˆì§€</strong>: ìž‘ë™ ì¤‘ì¸ ì²´ì¸, ì»¨ë² ì´ì–´ ì˜ì—­ ë¬´ë‹¨ íˆ¬ìž… ê¸ˆì§€.</li>
+          <li><strong>의무 교육</strong>: 교육(training) 미이수자의 장비 컨트롤 절대 금지.</li>
+          <li><strong>보호구 착용</strong>: 설치 구역 내 하드햇, 안전화, 보안경 착용 필수.</li>
+          <li><strong>Interlock 통제</strong>: 안전용 전자 인터락 장치의 임의 해제 금지 (유지보수 목적 제외).</li>
+          <li><strong>P&P Gripper 접근 금지</strong>: 작동 중인 체인, 컨베이어 영역 무단 투입 금지.</li>
         </ul>
 
-        <h3>2.2 ìž¥ë¹„ ì ‘ì§€ ë° ì „ì› ì°¨ë‹¨ í†µì œ</h3>
+        <h3>2.2 장비 접지 및 전원 차단 통제</h3>
         <ul>
-          <li><strong>ì ‘ì§€(Grounding)</strong>: ê¸°ê³„ ê¸°êµ¬ ë° ì „ìž ì¸¡ì • ìž¥ì¹˜ì˜ ì ‘ì§€ ìƒíƒœ í•­ì‹œ ìœ ì§€.</li>
-          <li><strong>LOTO (Lockout/Tagout)</strong>: ëª¨í„° êµì²´ ë˜ëŠ” ì „ìž¥ ì»¤ë„¥í„° ê²°í•© ì‹œ ì „ì›(Power) ì°¨ë‹¨ ìƒíƒœ ì§‘ì¤‘ í™•ì¸.</li>
+          <li><strong>접지(Grounding)</strong>: 기계 기구 및 전자 측정 장치의 접지 상태 항시 유지.</li>
+          <li><strong>LOTO (Lockout/Tagout)</strong>: 모터 교체 또는 전장 커넥터 결합 시 전원(Power) 차단 상태 집중 확인.</li>
         </ul>
 
-        <h3>2.3 ì¤‘ìž¥ë¹„ ì•ˆì „ í†µì œ (Heavy Equipment EHS)</h3>
+        <h3>2.3 중장비 안전 통제 (Heavy Equipment EHS)</h3>
         <ul>
-          <li><strong>ì§€ê²Œì°¨ ë° í…”ë ˆí•¸ë“¤ëŸ¬ ìš´ìš©</strong>: ì‹¤ë‚´/ì™¸ í•˜ì—­ ë° ì´ì†¡ ì‹œ ì „ë‹´ ìŠ¤íŒŸí„°(Spotter) 1ì¸ í•„ìˆ˜ ë°°ì¹˜.</li>
-          <li><strong>í¬ë ˆì¸ (Mobile Crane)</strong>: ì¶œìž… í†µì œ ë°”ë¦¬ì¼€ì´ë“œ í™•ë¦½ ë° ê·œì • ì‹ í˜¸ìˆ˜ ë°°ì¹˜, í’ì†ê³„(10m/s) í™•ì¸.</li>
-        </ul>
-
-        <hr>
-
-        <h2>3. ìž¥ë¹„ ë°˜ìž… ë° ì–‘ì¤‘ ê³„íš (Move-In & Rigging Plan)</h2>
-
-        <h3>3.1 íŒ©í† ë¦¬(Factory) ê²Œì´íŠ¸ ì§„ìž… ê·œì •</h3>
-        <ul>
-          <li><strong>Zone 1 ìž¥ë¹„êµ°</strong>: í­ 4.5m ì´ìƒ. <strong>Gate 7 (4.5m x 4.5m)</strong> í™œìš©.</li>
-          <li><strong>Zone 2 ìž¥ë¹„êµ°</strong>: í­ 4.0m ì´í•˜. <strong>Gate 8 (4.0m x 3.5m)</strong> í™œìš©.</li>
-        </ul>
-
-        <h3>3.2 íˆ¬ìž… ì˜ˆìƒ ì¤‘ìž¥ë¹„ (Heavy Equipment)</h3>
-        <ul>
-          <li><strong>Winder</strong>: ì´ˆì •ë°€ ì§„ë™ í†µì œë¥¼ ìœ„í•œ 10~20í†¤ê¸‰ ì—ì–´ìºìŠ¤í„°(Air Casters) ë° ë¨¸ì‹  ìŠ¤ì¼€ì´íŠ¸ ì ìš©.</li>
-          <li><strong>Assembly</strong>: ì¢ì€ êµ¬ì—­ì—ì„œì˜ ì„¸ë°€í•œ ë¶€í’ˆ ì¡°ë¦½ì„ ìœ„í•œ ì „ë™ ìŠ¤íƒœì»¤ ë° ì „ë™ ì‹œì € ë¦¬í”„íŠ¸ ìš´ìš©.</li>
+          <li><strong>지게차 및 텔레핸들러 운용</strong>: 실내/외 하역 및 이송 시 전담 스팟터(Spotter) 1인 필수 배치.</li>
+          <li><strong>크레인 (Mobile Crane)</strong>: 출입 통제 바리케이드 확립 및 규정 신호수 배치, 풍속계(10m/s) 확인.</li>
         </ul>
 
         <hr>
 
-        <h2>4. ê³µì •ë³„ ì„¸ë¶€ ì„¤ì¹˜ ê³„íš (Installation Plan by Process)</h2>
+        <h2>3. 장비 반입 및 양중 계획 (Move-In & Rigging Plan)</h2>
 
-        <h3>4.1 [STAGE 1] Winder ê³µì • </h3>
+        <h3>3.1 팩토리(Factory) 게이트 진입 규정</h3>
         <ul>
-          <li><strong>ì£¼ìš” ì„¤ì¹˜ ì‹œí€€ìŠ¤</strong>: Lay-down Area ìˆ˜ë ¹ âž” Air Caster ì´ë™ âž” Docking âž” Leveling âž” Anchoring</li>
-          <li><strong>ê¶Œì·¨ê¸° ê¸°ê³„ ì—°ê²°</strong>: <strong>ìƒ¤í”„íŠ¸ í•€(Shaft Pin)ê³¼ ì»¤í”Œë§(Coupling) ê²°í•©</strong>ì„ ì„ í–‰í•˜ì—¬ ë™ë ¥ ì¶• ì¼ì¹˜.</li>
-          <li><strong>ë ˆë²¨ë§ ì˜¤ì°¨ ê¸°ì¤€</strong>: 1ì°¨ Rough(Â±5mm) âž” 2ì°¨ Final(<strong>Â±0.5mm</strong>) ì´ë‚´ ì •ë°€ êµì •.</li>
+          <li><strong>Zone 1 장비군</strong>: 폭 4.5m 이상. <strong>Gate 7 (4.5m x 4.5m)</strong> 활용.</li>
+          <li><strong>Zone 2 장비군</strong>: 폭 4.0m 이하. <strong>Gate 8 (4.0m x 3.5m)</strong> 활용.</li>
         </ul>
 
-        <h3>4.2 [STAGE 2] Assembly ê³µì • (NFF Cell Assembly Line)</h3>
+        <h3>3.2 투입 예상 중장비 (Heavy Equipment)</h3>
         <ul>
-          <li><strong>Zone 1 ê¸°ì¤€ ì„¤ë¹„</strong>: <strong>[CAN LOADER]</strong> ë¨¸ì‹ ì„ ì¶•(Datum)ìœ¼ë¡œ ì§€ì •.</li>
-          <li><strong>Zone 2 ê¸°ì¤€ ì„¤ë¹„</strong>: <strong>[IOU]</strong> ë¨¸ì‹ ì„ ì¶•(Datum)ìœ¼ë¡œ ì§€ì •, ì¢Œ/ìš° ìˆœì°¨ ì¡°ë¦½ ì „ê°œ.</li>
-          <li><strong>ì„¤ì¹˜ ìœ ì˜ì‚¬í•­</strong>: 1, 2ì°¨ ë ˆë²¨ë§ ê³µì°¨ê°€ ì™„ë²½ížˆ ì¸¡ì •ëœ ì§í›„ì—ë§Œ ë°”ë‹¥ íƒ€ê³µ ë° íŒ©ë‹¤ìš´(Anchoring) ì§„í–‰.</li>
+          <li><strong>Winder</strong>: 초정밀 진동 통제를 위한 10~20톤급 에어캐스터(Air Casters) 및 머신 스케이트 적용.</li>
+          <li><strong>Assembly</strong>: 좁은 구역에서의 세밀한 부품 조립을 위한 전동 스태커 및 전동 시저 리프트 운용.</li>
         </ul>
 
         <hr>
 
-        <h2>5. ê²€ì‚¬ ë° ì „ê¸° ì—°ë™ (Interconnection & Inspection)</h2>
+        <h2>4. 공정별 세부 설치 계획 (Installation Plan by Process)</h2>
 
-        <h3>5.1 ì „ê¸°(Electrical) ì—°ë™ íƒ€ê²Ÿ</h3>
+        <h3>4.1 [STAGE 1] Winder 공정 </h3>
         <ul>
-          <li>Turn Table ìƒ/í•˜ë‹¨ ì¼€ì´ë¸” ë° Eject Conveyorì˜ EtherCAT, Limit Sensor í†µì‹ ì„  ì²´ê²°.</li>
+          <li><strong>주요 설치 시퀀스</strong>: Lay-down Area 수령 ➔ Air Caster 이동 ➔ Docking ➔ Leveling ➔ Anchoring</li>
+          <li><strong>권취기 기계 연결</strong>: <strong>샤프트 핀(Shaft Pin)과 커플링(Coupling) 결합</strong>을 선행하여 동력 축 일치.</li>
+          <li><strong>레벨링 오차 기준</strong>: 1차 Rough(±5mm) ➔ 2차 Final(<strong>±0.5mm</strong>) 이내 정밀 교정.</li>
         </ul>
 
-        <h3>5.2 ë²¤ë” ë§ˆê° ì´ê´€ ì ˆì°¨</h3>
-        <p>ëª¨ë“  ì„¤ë¹„ê°€ ì •ìƒ ê°€ë™ ë²”ìœ„(Â±0.5mm) ë‚´ì— ë“¤ì–´ì˜¤ë©´, LGES íŒŒê²¬ ì—”ì§€ë‹ˆì–´ ë° ë²¤ë” í•©ë™ìœ¼ë¡œ Punch Item ë³´ì™„ í›„ ê²€ìˆ˜ ë° ì´ê´€(Hand-over) ìŠ¹ì¸ì„ ì§„í–‰í•©ë‹ˆë‹¤.</p>
+        <h3>4.2 [STAGE 2] Assembly 공정 (NFF Cell Assembly Line)</h3>
+        <ul>
+          <li><strong>Zone 1 기준 설비</strong>: <strong>[CAN LOADER]</strong> 머신을 축(Datum)으로 지정.</li>
+          <li><strong>Zone 2 기준 설비</strong>: <strong>[IOU]</strong> 머신을 축(Datum)으로 지정, 좌/우 순차 조립 전개.</li>
+          <li><strong>설치 유의사항</strong>: 1, 2차 레벨링 공차가 완벽히 측정된 직후에만 바닥 타공 및 팩다운(Anchoring) 진행.</li>
+        </ul>
+
+        <hr>
+
+        <h2>5. 검사 및 전기 연동 (Interconnection & Inspection)</h2>
+
+        <h3>5.1 전기(Electrical) 연동 타겟</h3>
+        <ul>
+          <li>Turn Table 상/하단 케이블 및 Eject Conveyor의 EtherCAT, Limit Sensor 통신선 체결.</li>
+        </ul>
+
+        <h3>5.2 벤더 마감 이관 절차</h3>
+        <p>모든 설비가 정상 가동 범위(±0.5mm) 내에 들어오면, LGES 파견 엔지니어 및 벤더 합동으로 Punch Item 보완 후 검수 및 이관(Hand-over) 승인을 진행합니다.</p>
       </div>
     </div>
   </div>
@@ -12725,26 +12761,26 @@
       <div
         style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border-strong);background:var(--bg-surface-elevated);">
         <h3 style="margin:0;font-size:17px;display:flex;align-items:center;gap:8px;"><i
-            class="ph ph-identification-card" style="color:var(--brand-primary);font-size:22px;"></i> ì¸ì› í†µí•© ì¹´ë“œ</h3>
+            class="ph ph-identification-card" style="color:var(--brand-primary);font-size:22px;"></i> 인원 통합 카드</h3>
         <button class="icon-btn" onclick="document.getElementById('personnel-card-modal').classList.remove('active')"><i
             class="ph ph-x"></i></button>
       </div>
       <div id="personnel-card-body" style="padding:24px;overflow-y:auto;max-height:75vh;">
         <div style="text-align:center;padding:40px;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin"
-            style="font-size:32px;"></i><br>ë¡œë”©ì¤‘...</div>
+            style="font-size:32px;"></i><br>로딩중...</div>
       </div>
       <div
         style="padding:14px 24px;border-top:1px solid var(--border-subtle);display:flex;gap:10px;justify-content:flex-end;background:var(--bg-surface);">
         <select id="personnel-status-select"
           style="padding:7px 12px;border-radius:var(--radius-md);border:1px solid var(--border-strong);background:var(--bg-body);color:var(--text-primary);font-size:13px;">
-          <option value="íŒŒê²¬ì¤‘">ðŸŸ¢ íŒŒê²¬ì¤‘</option>
-          <option value="ê·€êµ­">ðŸŸ¡ ê·€êµ­</option>
-          <option value="í‡´ì‚¬">ðŸ”´ í‡´ì‚¬</option>
+          <option value="파견중">🟢 파견중</option>
+          <option value="귀국">🟡 귀국</option>
+          <option value="퇴사">🔴 퇴사</option>
         </select>
         <button class="btn-primary" id="btn-personnel-status-save" onclick="window.savePersonnelStatus()"><i
-            class="ph ph-floppy-disk"></i> ìƒíƒœ ì €ìž¥</button>
+            class="ph ph-floppy-disk"></i> 상태 저장</button>
         <button class="btn-secondary"
-          onclick="document.getElementById('personnel-card-modal').classList.remove('active')">ë‹«ê¸°</button>
+          onclick="document.getElementById('personnel-card-modal').classList.remove('active')">닫기</button>
       </div>
     </div>
   </div>
@@ -12756,50 +12792,50 @@
       <div
         style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid var(--border-strong); padding-bottom:12px;">
         <h3 style="margin:0; font-size:18px; display:flex; align-items:center; gap:8px;"><i class="ph ph-lightning"
-            style="color:var(--brand-primary); font-size:24px;"></i> í€µ ì•¡ì…˜ ì»¤ë§¨ë“œ ì„¼í„°</h3>
+            style="color:var(--brand-primary); font-size:24px;"></i> 퀵 액션 커맨드 센터</h3>
         <button class="icon-btn" onclick="document.getElementById('quick-action-modal').classList.remove('active')"><i
             class="ph ph-x"></i></button>
       </div>
 
       <div
         style="font-size:13px; color:var(--text-secondary); margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-        <i class="ph ph-info"></i> ëŒ€ì‹œë³´ë“œì—ì„œ ì‹œìŠ¤í…œì˜ ê°€ìž¥ í•µì‹¬ì ì¸ ê¸°ëŠ¥ì„ ì¦‰ì‹œ ì‹¤í–‰í•©ë‹ˆë‹¤.
+        <i class="ph ph-info"></i> 대시보드에서 시스템의 가장 핵심적인 기능을 즉시 실행합니다.
       </div>
 
       <div class="qa-grid">
         <div class="qa-card"
           onclick="document.getElementById('quick-action-modal').classList.remove('active'); window.goToView('command')">
           <div class="qa-icon project"><i class="ph ph-command"></i></div>
-          <div class="qa-title">AI í˜„ìž¥ ì§€íœ˜ì‹¤</div>
-          <div class="qa-desc">ì˜¤ëŠ˜ ê²°ì •í•  ì¼ê³¼<br>ê³µì§œ ìž‘ì—… ìœ„í—˜ í•œ ë²ˆì— í™•ì¸</div>
+          <div class="qa-title">AI 현장 지휘실</div>
+          <div class="qa-desc">오늘 결정할 일과<br>공짜 작업 위험 한 번에 확인</div>
         </div>
 
         <div class="qa-card"
           onclick="document.getElementById('quick-action-modal').classList.remove('active'); openUniversalScanner()">
           <div class="qa-icon scanner"><i class="ph ph-scan"></i></div>
-          <div class="qa-title">AI ìŠ¤ë§ˆíŠ¸ ìŠ¤ìºë„ˆ</div>
-          <div class="qa-desc">ì˜ìˆ˜ì¦ ë° ê°ì¢… ì„œë¥˜ ì´¬ì˜<br>Gemini ë©€í‹°ëª¨ë‹¬ ìžë™ìž…ë ¥</div>
+          <div class="qa-title">AI 스마트 스캐너</div>
+          <div class="qa-desc">영수증 및 각종 서류 촬영<br>Gemini 멀티모달 자동입력</div>
         </div>
 
         <div class="qa-card"
           onclick="document.getElementById('quick-action-modal').classList.remove('active'); promptNewProject()">
           <div class="qa-icon project"><i class="ph ph-kanban"></i></div>
-          <div class="qa-title">ì‹ ê·œ í˜„ìž¥ ê°œì„¤</div>
-          <div class="qa-desc">ìƒˆë¡œìš´ PM ì±…ìž„ìž ë°°ì • ë°<br>ì‹ ê·œ í”„ë¡œì íŠ¸ ì´ˆê¸° ì…‹ì—…</div>
+          <div class="qa-title">신규 현장 개설</div>
+          <div class="qa-desc">새로운 PM 책임자 배정 및<br>신규 프로젝트 초기 셋업</div>
         </div>
 
         <div class="qa-card"
           onclick="document.getElementById('quick-action-modal').classList.remove('active'); promptActionItem()">
           <div class="qa-icon action"><i class="ph ph-warning-circle"></i></div>
-          <div class="qa-title">ìž‘ì—… ì§€ì‹œ í•˜ë‹¬</div>
-          <div class="qa-desc">íŠ¹ì • í˜„ìž¥ ì¸ì›ì—ê²Œ ê¸´ê¸‰<br>Action Item ìˆ˜ë™ ë°œí–‰</div>
+          <div class="qa-title">작업 지시 하달</div>
+          <div class="qa-desc">특정 현장 인원에게 긴급<br>Action Item 수동 발행</div>
         </div>
 
         <div class="qa-card"
           onclick="document.getElementById('quick-action-modal').classList.remove('active'); openGoogleForm('hr')">
           <div class="qa-icon form"><i class="ph ph-user-plus"></i></div>
-          <div class="qa-title">ì‹ ê·œ ì¸ì› ë“±ë¡</div>
-          <div class="qa-desc">ìƒˆë¡œìš´ ê·¼ë¡œìž HR ì •ë³´<br>ê¸°ë³¸ ë°ì´í„° ìˆ˜ë™ ê¸°ìž… í¼</div>
+          <div class="qa-title">신규 인원 등록</div>
+          <div class="qa-desc">새로운 근로자 HR 정보<br>기본 데이터 수동 기입 폼</div>
         </div>
       </div>
     </div>
@@ -12895,22 +12931,22 @@
     let currentAiMime = null;
     let _currentPersonnelUid = null;
 
-    // â”€â”€â”€ ì¸ì› í†µí•© ì¹´ë“œ ì—´ê¸° â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── 인원 통합 카드 열기 ───────────────────────────────────
     window.openPersonnelCard = function (uid) {
       _currentPersonnelUid = uid;
       var modal = document.getElementById('personnel-card-modal');
       var body = document.getElementById('personnel-card-body');
-      body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin" style="font-size:32px;display:block;margin-bottom:12px;"></i>ì¸ì› ë°ì´í„° ë¶ˆëŸ¬ì˜¤ëŠ” ì¤‘...</div>';
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-tertiary)"><i class="ph ph-spinner ph-spin" style="font-size:32px;display:block;margin-bottom:12px;"></i>인원 데이터 불러오는 중...</div>';
       modal.classList.add('active');
 
       if (typeof google === 'undefined') {
-        body.innerHTML = '<div style="padding:20px;color:var(--text-tertiary)">ë¡œì»¬ í…ŒìŠ¤íŠ¸ ëª¨ë“œ: ì‹¤ì œ ë°ì´í„° ì¡°íšŒ ë¶ˆê°€</div>';
+        body.innerHTML = '<div style="padding:20px;color:var(--text-tertiary)">로컬 테스트 모드: 실제 데이터 조회 불가</div>';
         return;
       }
       google.script.run
         .withSuccessHandler(function (result) {
           if (!result || !result.success) {
-            body.innerHTML = '<div style="padding:20px;color:var(--status-danger)">âš ï¸ ' + (result && result.error ? result.error : 'ë°ì´í„° ì¡°íšŒ ì‹¤íŒ¨') + '</div>';
+            body.innerHTML = '<div style="padding:20px;color:var(--status-danger)">⚠️ ' + (result && result.error ? result.error : '데이터 조회 실패') + '</div>';
             return;
           }
           var p = result.person;
@@ -12918,11 +12954,11 @@
           var h = result.housing;
           var flights = result.flights || [];
 
-          // ìƒíƒœ ë“œë¡­ë‹¤ìš´ ë™ê¸°í™”
+          // 상태 드롭다운 동기화
           var sel = document.getElementById('personnel-status-select');
-          if (sel) sel.value = p.workerStatus || 'íŒŒê²¬ì¤‘';
+          if (sel) sel.value = p.workerStatus || '파견중';
 
-          // ë¹„ìž ë§Œë£Œ ê²½ê³  ìƒ‰ìƒ
+          // 비자 만료 경고 색상
           var visaColor = 'var(--text-primary)';
           if (p.visaExpiry && p.visaExpiry !== '-') {
             var vExp = new Date(p.visaExpiry);
@@ -12930,58 +12966,58 @@
             if (vExp < now) visaColor = 'var(--status-danger)';
             else if (vExp < new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)) visaColor = 'var(--status-warning)';
           }
-          var wsColor = p.workerStatus === 'ê·€êµ­' ? 'var(--text-tertiary)' : p.workerStatus === 'í‡´ì‚¬' ? 'var(--status-danger)' : 'var(--status-success)';
+          var wsColor = p.workerStatus === '귀국' ? 'var(--text-tertiary)' : p.workerStatus === '퇴사' ? 'var(--status-danger)' : 'var(--status-success)';
 
           var flightsHtml = flights.length > 0
             ? flights.map(function (f) {
               return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle)">' +
                 '<i class="ph ph-airplane-takeoff" style="color:var(--brand-primary)"></i>' +
                 '<span class="cell-mono" style="font-size:12px">' + (f.depDateTime || '') + '</span>' +
-                '<span>' + (f.from || '') + ' â†’ ' + (f.to || '') + '</span>' +
+                '<span>' + (f.from || '') + ' → ' + (f.to || '') + '</span>' +
                 '<span style="color:var(--text-tertiary);font-size:12px">' + (f.airline || '') + ' ' + (f.pnr || '') + '</span></div>';
             }).join('')
-            : '<div style="color:var(--text-tertiary);font-size:13px;padding:8px 0">ë“±ë¡ëœ í•­ê³µ ì •ë³´ ì—†ìŒ</div>';
+            : '<div style="color:var(--text-tertiary);font-size:13px;padding:8px 0">등록된 항공 정보 없음</div>';
 
           body.innerHTML =
-            // ê¸°ë³¸ ì •ë³´
+            // 기본 정보
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">' +
-            _cardRow('ðŸ‘¤ ì˜ë¬¸ ì„±ëª…', p.nameEn) +
-            _cardRow('ðŸ‡°ðŸ‡· í•œêµ­ì–´ ì´ë¦„', p.nameKr || '-') +
-            _cardRow('ðŸ”– UID', '<code style="font-size:12px;background:var(--bg-base);padding:2px 6px;border-radius:4px">' + p.id + '</code>') +
-            _cardRow('ðŸ¢ íšŒì‚¬', p.company) +
-            _cardRow('ðŸ’¼ ì§ì¢…', p.role) +
-            _cardRow('ðŸ“ í˜„ìž¥', p.site || '-') +
+            _cardRow('👤 영문 성명', p.nameEn) +
+            _cardRow('🇰🇷 한국어 이름', p.nameKr || '-') +
+            _cardRow('🔖 UID', '<code style="font-size:12px;background:var(--bg-base);padding:2px 6px;border-radius:4px">' + p.id + '</code>') +
+            _cardRow('🏢 회사', p.company) +
+            _cardRow('💼 직종', p.role) +
+            _cardRow('📍 현장', p.site || '-') +
             '</div>' +
             '<hr style="border:none;border-top:1px solid var(--border-subtle);margin:12px 0">' +
-            // ì—¬ê¶Œ / ë¹„ìž
-            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">ì—¬ê¶Œ / ë¹„ìž</div>' +
+            // 여권 / 비자
+            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">여권 / 비자</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">' +
-            _cardRow('ðŸ›‚ ì—¬ê¶Œë²ˆí˜¸', p.passport || '-') +
-            _cardRow('ðŸŽ‚ ìƒë…„ì›”ì¼', p.birthday || '-') +
-            _cardRow('ðŸ“‹ ë¹„ìžíƒ€ìž…', p.visa || '-') +
-            _cardRow('ðŸ“… ë¹„ìžë§Œë£Œ', '<span style="color:' + visaColor + ';font-weight:600">' + (p.visaExpiry || '-') + '</span>') +
-            _cardRow('ðŸŒ êµ­ì ', p.nationality || '-') +
-            _cardRow('ðŸ“Š í˜„ìž¬ìƒíƒœ', '<span style="color:' + wsColor + ';font-weight:600">' + (p.workerStatus || 'íŒŒê²¬ì¤‘') + '</span>') +
+            _cardRow('🛂 여권번호', p.passport || '-') +
+            _cardRow('🎂 생년월일', p.birthday || '-') +
+            _cardRow('📋 비자타입', p.visa || '-') +
+            _cardRow('📅 비자만료', '<span style="color:' + visaColor + ';font-weight:600">' + (p.visaExpiry || '-') + '</span>') +
+            _cardRow('🌍 국적', p.nationality || '-') +
+            _cardRow('📊 현재상태', '<span style="color:' + wsColor + ';font-weight:600">' + (p.workerStatus || '파견중') + '</span>') +
             '</div>' +
             '<hr style="border:none;border-top:1px solid var(--border-subtle);margin:12px 0">' +
-            // ì°¨ëŸ‰
-            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">ðŸš™ ë°°ì • ì°¨ëŸ‰</div>' +
+            // 차량
+            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">🚙 배정 차량</div>' +
             (v ? '<div style="background:var(--bg-base);border-radius:6px;padding:10px 14px;font-size:13px;margin-bottom:16px">' +
               '<b>' + (v.model || '') + '</b>&nbsp;&nbsp;<code style="font-size:11px">' + (v.plate || '') + '</code><br>' +
-              '<span style="color:var(--text-tertiary);font-size:12px">ë ŒíŠ¸ë§Œë£Œ: ' + (v.rentEnd || '-') + ' | í˜„ìž¬ë§ˆì¼: ' + (v.mileage || 0).toLocaleString() + 'mi</span>' +
-              '</div>' : '<div style="color:var(--text-tertiary);font-size:13px;padding:6px 0;margin-bottom:16px">ë°°ì •ëœ ì°¨ëŸ‰ ì—†ìŒ</div>') +
-            // ìˆ™ì†Œ
-            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">ðŸ  ë°°ì • ìˆ™ì†Œ</div>' +
+              '<span style="color:var(--text-tertiary);font-size:12px">렌트만료: ' + (v.rentEnd || '-') + ' | 현재마일: ' + (v.mileage || 0).toLocaleString() + 'mi</span>' +
+              '</div>' : '<div style="color:var(--text-tertiary);font-size:13px;padding:6px 0;margin-bottom:16px">배정된 차량 없음</div>') +
+            // 숙소
+            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">🏠 배정 숙소</div>' +
             (h ? '<div style="background:var(--bg-base);border-radius:6px;padding:10px 14px;font-size:13px;margin-bottom:16px">' +
               '<b>' + (h.building || '') + '</b> ' + (h.unit || '') + '<br>' +
-              '<span style="color:var(--text-tertiary);font-size:12px">' + (h.address || '') + ' | ì›”ìž„ëŒ€: $' + (h.rent || 0).toLocaleString() + '</span>' +
-              '</div>' : '<div style="color:var(--text-tertiary);font-size:13px;padding:6px 0;margin-bottom:16px">ë°°ì •ëœ ìˆ™ì†Œ ì—†ìŒ</div>') +
-            // í•­ê³µ
-            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">âœˆï¸ í•­ê³µ ì´ë ¥</div>' +
+              '<span style="color:var(--text-tertiary);font-size:12px">' + (h.address || '') + ' | 월임대: $' + (h.rent || 0).toLocaleString() + '</span>' +
+              '</div>' : '<div style="color:var(--text-tertiary);font-size:13px;padding:6px 0;margin-bottom:16px">배정된 숙소 없음</div>') +
+            // 항공
+            '<div style="font-size:12px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">✈️ 항공 이력</div>' +
             '<div style="font-size:13px">' + flightsHtml + '</div>';
         })
         .withFailureHandler(function (err) {
-          body.innerHTML = '<div style="padding:20px;color:var(--status-danger)">âš ï¸ ì˜¤ë¥˜: ' + err.message + '</div>';
+          body.innerHTML = '<div style="padding:20px;color:var(--status-danger)">⚠️ 오류: ' + err.message + '</div>';
         })
         .api_getPersonnelCard(uid);
     };
@@ -12993,32 +13029,32 @@
         '</div>';
     }
 
-    // â”€â”€â”€ ì¸ì› ìƒíƒœ ì €ìž¥ (Cascade ì²˜ë¦¬) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── 인원 상태 저장 (Cascade 처리) ───────────────────────
     window.savePersonnelStatus = function () {
       if (!_currentPersonnelUid) return;
       var newStatus = document.getElementById('personnel-status-select').value;
       var btn = document.getElementById('btn-personnel-status-save');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> ì €ìž¥ì¤‘...'; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> 저장중...'; }
 
       if (typeof google === 'undefined') {
-        alert('[ë¡œì»¬] ìƒíƒœë¥¼ [' + newStatus + ']ìœ¼ë¡œ ë³€ê²½ ì‹œë®¬ë ˆì´ì…˜');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-floppy-disk"></i> ìƒíƒœ ì €ìž¥'; }
+        alert('[로컬] 상태를 [' + newStatus + ']으로 변경 시뮬레이션');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-floppy-disk"></i> 상태 저장'; }
         return;
       }
       google.script.run
         .withSuccessHandler(function (result) {
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-floppy-disk"></i> ìƒíƒœ ì €ìž¥'; }
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-floppy-disk"></i> 상태 저장'; }
           if (result && result.success) {
             document.getElementById('personnel-card-modal').classList.remove('active');
-            alert('âœ… ' + result.messages.join('\n'));
-            window.loadView && window.loadView('hr'); // HR í™”ë©´ ìƒˆë¡œê³ ì¹¨
+            alert('✅ ' + result.messages.join('\n'));
+            window.loadView && window.loadView('hr'); // HR 화면 새로고침
           } else {
-            alert('âš ï¸ ì €ìž¥ ì‹¤íŒ¨: ' + (result && result.error ? result.error : 'ì•Œ ìˆ˜ ì—†ëŠ” ì˜¤ë¥˜'));
+            alert('⚠️ 저장 실패: ' + (result && result.error ? result.error : '알 수 없는 오류'));
           }
         })
         .withFailureHandler(function (err) {
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-floppy-disk"></i> ìƒíƒœ ì €ìž¥'; }
-          alert('âš ï¸ ì˜¤ë¥˜: ' + err.message);
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-floppy-disk"></i> 상태 저장'; }
+          alert('⚠️ 오류: ' + err.message);
         })
         .api_syncWorkerStatus(_currentPersonnelUid, newStatus);
     };
@@ -13104,7 +13140,7 @@
     };
 
 
-    // â”€â”€ Vendor Management Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Vendor Management Functions ──────────────────────────────
     window.openVendorCreateModal = function() {
       // Remove existing modal if any
       var existing = document.getElementById('vendorCreateModalOverlay');
@@ -13117,22 +13153,22 @@
       overlay.innerHTML = [
         '<div style="background:#1e2433;width:90%;max-width:480px;padding:28px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);border:1px solid #2d3748;">',
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid #2d3748;">',
-            '<h2 style="margin:0;font-size:17px;color:#e2e8f0;font-weight:600;">ì‹ ê·œ ê±°ëž˜ì²˜ ë“±ë¡</h2>',
+            '<h2 style="margin:0;font-size:17px;color:#e2e8f0;font-weight:600;">신규 거래처 등록</h2>',
             '<button id="vc-close" style="background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1;">&times;</button>',
           '</div>',
           '<div style="display:flex;flex-direction:column;gap:12px;">',
             '<select id="vc-category" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;">',
-              '<option>ì°¨ëŸ‰ ë ŒíŠ¸</option>',
-              '<option>ì»¨í…Œì´ë„ˆ/ìˆ™ì†Œ</option>',
-              '<option>ì¤‘ìž¥ë¹„/ë°œì „ê¸°</option>',
-              '<option>ì´ë™ì‹ í™”ìž¥ì‹¤</option>',
-              '<option>ê¸°íƒ€ ìžìž¬</option>',
+              '<option>차량 렌트</option>',
+              '<option>컨테이너/숙소</option>',
+              '<option>중장비/발전기</option>',
+              '<option>이동식 화장실</option>',
+              '<option>기타 자재</option>',
             '</select>',
-            '<input type="text" id="vc-name" placeholder="ì—…ì²´ëª… *" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
-            '<input type="text" id="vc-manager" placeholder="ë‹´ë‹¹ìž ì„±í•¨" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
-            '<input type="text" id="vc-phone" placeholder="ì—°ë½ì²˜ (Phone)" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
-            '<input type="email" id="vc-email" placeholder="ì´ë©”ì¼ ì£¼ì†Œ" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
-            '<button id="vc-submit" style="width:100%;padding:12px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;margin-top:4px;">ë§ˆìŠ¤í„° ì‹œíŠ¸ì— ë“±ë¡</button>',
+            '<input type="text" id="vc-name" placeholder="업체명 *" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
+            '<input type="text" id="vc-manager" placeholder="담당자 성함" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
+            '<input type="text" id="vc-phone" placeholder="연락처 (Phone)" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
+            '<input type="email" id="vc-email" placeholder="이메일 주소" style="width:100%;padding:9px 12px;border-radius:6px;background:#0f172a;border:1px solid #2d3748;color:#e2e8f0;font-size:13px;box-sizing:border-box;">',
+            '<button id="vc-submit" style="width:100%;padding:12px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;margin-top:4px;">마스터 시트에 등록</button>',
           '</div>',
         '</div>'
       ].join('');
@@ -13150,14 +13186,14 @@
           phone: document.getElementById('vc-phone').value.trim(),
           email: document.getElementById('vc-email').value.trim()
         };
-        if (!data.name) { alert('ì—…ì²´ëª…ì„ ìž…ë ¥í•´ì£¼ì„¸ìš”.'); return; }
+        if (!data.name) { alert('업체명을 입력해주세요.'); return; }
         window.API.createVendor(data).then(function(res) {
           if (res.success) {
-            alert('ë“±ë¡ ì™„ë£Œ!');
+            alert('등록 완료!');
             overlay.remove();
             if (typeof renderVendors === 'function') renderVendors();
           } else {
-            alert('ì‹¤íŒ¨: ' + (res.error || 'ì˜¤ë¥˜'));
+            alert('실패: ' + (res.error || '오류'));
           }
         });
       };
@@ -13172,15 +13208,15 @@ window.submitVendorCreateBtn = function() {
         phone: document.getElementById('vc-phone').value.trim(),
         email: document.getElementById('vc-email').value.trim()
     };
-    if (!data.name) { alert('ì—…ì²´ëª…ì„ ìž…ë ¥í•´ì£¼ì„¸ìš”.'); return; }
+    if (!data.name) { alert('업체명을 입력해주세요.'); return; }
     window.API.createVendor(data).then(function(res) {
         if (res.success) {
-            alert('ë“±ë¡ ì™„ë£Œ!');
+            alert('등록 완료!');
             var over = document.getElementById('vendorCreateModalOverlay');
             if (over) over.style.display='none';
             if (typeof renderVendors === 'function') renderVendors();
         } else {
-            alert('ì‹¤íŒ¨: ' + (res.error || 'ì˜¤ë¥˜'));
+            alert('실패: ' + (res.error || '오류'));
         }
     });
 };
@@ -13194,15 +13230,15 @@ window.submitVendorCreate = function() {
         phone: (document.getElementById('vc-phone') || {}).value ? document.getElementById('vc-phone').value.trim() : '',
         email: (document.getElementById('vc-email') || {}).value ? document.getElementById('vc-email').value.trim() : ''
       };
-      if (!data.name) { alert('ì—…ì²´ëª…ì„ ìž…ë ¥í•´ì£¼ì„¸ìš”.'); return; }
+      if (!data.name) { alert('업체명을 입력해주세요.'); return; }
       window.API.createVendor(data).then(function(res) {
         if (res.success) {
-          alert('ë“±ë¡ ì™„ë£Œ!');
+          alert('등록 완료!');
           var m = document.getElementById('vendorCreateModalOverlay');
           if(m) m.style.display = 'none';
           if (typeof renderVendors === 'function') renderVendors();
         } else {
-          alert('ì‹¤íŒ¨: ' + (res.error || 'ì˜¤ë¥˜'));
+          alert('실패: ' + (res.error || '오류'));
         }
       });
     };
@@ -13213,10 +13249,10 @@ window.submitVendorCreate = function() {
       document.getElementById('vm-category').innerText = v.category || '';
       document.getElementById('vm-manager').innerText = v.manager || '-';
       document.getElementById('vm-phone').innerText = v.phone || '-';
-      document.getElementById('vm-email').innerText = v.email || 'ë¯¸ë“±ë¡';
+      document.getElementById('vm-email').innerText = v.email || '미등록';
       document.getElementById('vm-email-val').value = v.email || '';
       document.getElementById('vm-draft').value = '';
-      document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary)">ì´ë ¥ ì¡°íšŒ ì¤‘...</div>';
+      document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary)">이력 조회 중...</div>';
       document.getElementById('vendorModalOverlay').style.display = 'flex';
       if (v.email) {
         window.API.getVendorReplies(v.email).then(function(res) {
@@ -13225,31 +13261,31 @@ window.submitVendorCreate = function() {
               return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border-color);"><b style="color:var(--brand-primary);font-size:12px;">' + r.date + '</b><div style="margin:4px 0;">' + r.body + '</div>' + (r.summaryKr ? '<div style="color:#b45309;font-size:12px;">AI: ' + r.summaryKr + '</div>' : '') + '</div>';
             }).join('');
           } else {
-            document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">ë‹µìž¥ ì—†ìŒ</div>';
+            document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">답장 없음</div>';
           }
-        }).catch(function() { document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">ì¡°íšŒ ì‹¤íŒ¨</div>'; });
+        }).catch(function() { document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">조회 실패</div>'; });
       } else {
-        document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">ì´ë©”ì¼ ë¯¸ë“±ë¡</div>';
+        document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">이메일 미등록</div>';
       }
     };
 
     window.generateDraft = function() {
       var input = document.getElementById('vm-draft').value;
-      if (!input) { alert('ìƒí™©ì„ ìž…ë ¥í•˜ì„¸ìš”'); return; }
+      if (!input) { alert('상황을 입력하세요'); return; }
       var email = document.getElementById('vm-email-val').value;
-      if (!email) { alert('ì´ë©”ì¼ ë¯¸ë“±ë¡'); return; }
-      document.getElementById('vm-draft').value = 'ì´ˆì•ˆ ìž‘ì„± ì¤‘...';
+      if (!email) { alert('이메일 미등록'); return; }
+      document.getElementById('vm-draft').value = '초안 작성 중...';
       window.API.generateVendorEmailPrompt(input, email, document.getElementById('vm-name').innerText).then(function(res) {
-        document.getElementById('vm-draft').value = res.success ? res.draft : 'ì‹¤íŒ¨: ' + res.error;
+        document.getElementById('vm-draft').value = res.success ? res.draft : '실패: ' + res.error;
       });
     };
 
     window.translateDraft = function() {
       var d = document.getElementById('vm-draft').value;
-      if (!d || d.endsWith('...')) { alert('ì´ˆì•ˆ ë¨¼ì € ìž‘ì„±'); return; }
-      document.getElementById('vm-draft').value = 'ë²ˆì—­ ì¤‘...';
+      if (!d || d.endsWith('...')) { alert('초안 먼저 작성'); return; }
+      document.getElementById('vm-draft').value = '번역 중...';
       window.API.translateToEnglish(d).then(function(res) {
-        document.getElementById('vm-draft').value = res.success ? res.english : 'ì‹¤íŒ¨: ' + res.error;
+        document.getElementById('vm-draft').value = res.success ? res.english : '실패: ' + res.error;
       });
     };
 
@@ -13257,12 +13293,12 @@ window.submitVendorCreate = function() {
       var msg = document.getElementById('vm-draft').value;
       var email = document.getElementById('vm-email-val').value;
       var name = document.getElementById('vm-name').innerText;
-      if (!msg || msg.endsWith('...')) { alert('ë©”ì‹œì§€ ì™„ì„± í›„ ë°œì†¡'); return; }
-      if (!email) { alert('ì´ë©”ì¼ ë¯¸ë“±ë¡'); return; }
-      if (!confirm(name + 'ì—ê²Œ ë°œì†¡?')) return;
-      window.API.sendVendorEmail(email, '[' + ORG_NAME + '] ì—…ë¬´ì—°ë½', msg, name).then(function(res) {
-        if (res.success) { alert('ë°œì†¡ ì™„ë£Œ! ' + res.tag); document.getElementById('vendorModalOverlay').style.display = 'none'; }
-        else { alert('ì‹¤íŒ¨: ' + res.error); }
+      if (!msg || msg.endsWith('...')) { alert('메시지 완성 후 발송'); return; }
+      if (!email) { alert('이메일 미등록'); return; }
+      if (!confirm(name + '에게 발송?')) return;
+      window.API.sendVendorEmail(email, '[' + ORG_NAME + '] 업무연락', msg, name).then(function(res) {
+        if (res.success) { alert('발송 완료! ' + res.tag); document.getElementById('vendorModalOverlay').style.display = 'none'; }
+        else { alert('실패: ' + res.error); }
       });
     };
 
@@ -13272,15 +13308,15 @@ window.submitVendorCreate = function() {
       document.getElementById('ai-scanner-modal').classList.remove('active');
     }
 
-    // â”€â”€ Quick Action Controllers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Quick Action Controllers ───────────────────
     function openQuickActions() {
       document.getElementById('quick-action-modal').classList.add('active');
     }
     function promptNewProject() {
-      alert("ðŸš§ ì‹ ê·œ í˜„ìž¥(í”„ë¡œì íŠ¸) ê°œì„¤ ë§ˆë²•ì‚¬ëŠ” ë‹¤ìŒ ë¦´ë¦¬ì¦ˆì—ì„œ ì§€ì›ë  ì˜ˆì •ìž…ë‹ˆë‹¤.");
+      alert("🚧 신규 현장(프로젝트) 개설 마법사는 다음 릴리즈에서 지원될 예정입니다.");
     }
     function promptActionItem() {
-      alert("ðŸš§ ìƒˆ ìž‘ì—… ì§€ì‹œë¥¼(Action Item) ìƒì„±í•˜ê³  Discordë¡œ ì „ì†¡í•˜ëŠ” íŒ¨ë„ì€ ì¤€ë¹„ ì¤‘ìž…ë‹ˆë‹¤.");
+      alert("🚧 새 작업 지시를(Action Item) 생성하고 Discord로 전송하는 패널은 준비 중입니다.");
     }
 
     window.handleAiFileSelect = function (e) {
@@ -13325,7 +13361,7 @@ window.submitVendorCreate = function() {
 
     window.submitUniversalAiScan = function () {
       if (!currentAiBase64) {
-        // ì´ë¯¸ì§€ ì—†ìœ¼ë©´ ì—…ë¡œë“œ ì˜ì—­ì„ í”ë“¤ì–´ ì•ˆë‚´
+        // 이미지 없으면 업로드 영역을 흔들어 안내
         var zone = document.getElementById('ai-upload-area');
         if (zone) {
           zone.style.border = '2px solid var(--status-warning)';
@@ -13347,7 +13383,7 @@ window.submitVendorCreate = function() {
       document.getElementById('ai-preview-container').style.opacity = '0.5';
 
       if (typeof google === 'undefined') {
-        // ë¯¹ìŠ¤ ëª¨ë“œ(ë¡œì»¬ í…ŒìŠ¤íŠ¸) ë™ìž‘
+        // 믹스 모드(로컬 테스트) 동작
         setTimeout(() => {
           alert('Mock Mode: AI 분류 완료 -> ' + category);
           window.closeUniversalScanner();
@@ -13391,14 +13427,14 @@ window.submitVendorCreate = function() {
     window.downloadFinanceExcel = function () {
       var btn = document.getElementById('btn-fin-export');
       if (btn) {
-        btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> ë§í¬ í™•ì¸ì¤‘...';
+        btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> 링크 확인중...';
         btn.disabled = true;
       }
       if (typeof google === 'undefined') {
         setTimeout(function () {
-          alert('ë¡œì»¬ í…ŒìŠ¤íŠ¸ ëª¨ë“œ: ë‹¤ìš´ë¡œë“œ ë§í¬ë¥¼ ì‹œë®¬ë ˆì´ì…˜ í•©ë‹ˆë‹¤.');
+          alert('로컬 테스트 모드: 다운로드 링크를 시뮬레이션 합니다.');
           if (btn) {
-            btn.innerHTML = '<i class="ph ph-download-simple"></i> ë§ˆìŠ¤í„° ì—‘ì…€ ë‹¤ìš´ë¡œë“œ';
+            btn.innerHTML = '<i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드';
             btn.disabled = false;
           }
         }, 1000);
@@ -13407,45 +13443,45 @@ window.submitVendorCreate = function() {
       google.script.run
         .withSuccessHandler(function (base64) {
           if (btn) {
-            btn.innerHTML = '<i class="ph ph-download-simple"></i> ë§ˆìŠ¤í„° ì—‘ì…€ ë‹¤ìš´ë¡œë“œ';
+            btn.innerHTML = '<i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드';
             btn.disabled = false;
           }
           if (base64) {
             var link = document.createElement('a');
             link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
-            link.download = 'ë¹„ìš©_ë§ˆìŠ¤í„°_ë‚´ì—­.xlsx';
+            link.download = '비용_마스터_내역.xlsx';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
           } else {
-            alert('ì—‘ì…€ íŒŒì¼ì„ ìƒì„±í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤. (ì ‘ê·¼ ê¶Œí•œ ë˜ëŠ” ì‹œíŠ¸ ì´ë¦„ ì˜¤ë¥˜)');
+            alert('엑셀 파일을 생성할 수 없습니다. (접근 권한 또는 시트 이름 오류)');
           }
         })
         .withFailureHandler(function (err) {
           if (btn) {
-            btn.innerHTML = '<i class="ph ph-download-simple"></i> ë§ˆìŠ¤í„° ì—‘ì…€ ë‹¤ìš´ë¡œë“œ';
+            btn.innerHTML = '<i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드';
             btn.disabled = false;
           }
-          alert('ì—‘ì…€ ìƒì„± ì‹¤íŒ¨: ' + err.message);
+          alert('엑셀 생성 실패: ' + err.message);
         })
         .api_getFinanceExcelBase64();
     };
   </script>
 
-  <!-- NFC ì°¨ëŸ‰ ë°°ì • ëª¨ë‹¬ -->
-    <!-- NFC ê³µìš© ë°°ì • ëª¨ë‹¬ -->
+  <!-- NFC 차량 배정 모달 -->
+    <!-- NFC 공용 배정 모달 -->
     <div id="nfcAssignModal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6);"
       class="flex-center">
       <div class="card" style="width:400px; padding:30px; text-align:center;">
-        <h3 id="nfcModalTitle" style="margin-bottom:15px; font-size:20px;">NFC ëŒ€ìƒ ë°°ì •</h3>
-        <p id="nfcModalSubtitle" style="color:var(--text-secondary); margin-bottom:20px; font-size:14px;">1. ë°°ì •í•  ëŒ€ìƒì„
-          ì„ íƒí•˜ì„¸ìš”.</p>
+        <h3 id="nfcModalTitle" style="margin-bottom:15px; font-size:20px;">NFC 대상 배정</h3>
+        <p id="nfcModalSubtitle" style="color:var(--text-secondary); margin-bottom:20px; font-size:14px;">1. 배정할 대상을
+          선택하세요.</p>
         <select id="nfcAssignTargetSelect" class="form-control" style="margin-bottom:20px;">
-          <option value="">(ë°ì´í„°ë¥¼ ë¶ˆëŸ¬ì˜¤ëŠ” ì¤‘...)</option>
+          <option value="">(데이터를 불러오는 중...)</option>
         </select>
 
         <div id="nfcScanArea" style="display:none;">
-          <p style="color:var(--status-danger); font-weight:600; margin-bottom:15px;">2. ë‹´ë‹¹ìžì˜ ì‚¬ì›ì¦(NFC)ì„ íƒœê·¸í•˜ì„¸ìš”.</p>
+          <p style="color:var(--status-danger); font-weight:600; margin-bottom:15px;">2. 담당자의 사원증(NFC)을 태그하세요.</p>
           <div
             style="width:80px; height:80px; margin:0 auto 20px; border-radius:50%; background:var(--bg-primary); display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 5px rgba(245, 166, 35, 0.2); animation: pulse 2s infinite;">
             <i class="ph ph-identification-card" style="font-size:36px; color:var(--status-warning);"></i>
@@ -13455,13 +13491,13 @@ window.submitVendorCreate = function() {
         </div>
 
         <div style="display:flex; justify-content:center; gap:10px;">
-          <button class="btn-secondary" onclick="closeNfcAssignModal()">ë‹«ê¸°</button>
+          <button class="btn-secondary" onclick="closeNfcAssignModal()">닫기</button>
         </div>
       </div>
     </div>
 
     <script>
-      // NFC í†µí•© ë°°ì • ë¡œì§ (ì°¨ëŸ‰/ìˆ™ì†Œ ê³µìš©)
+      // NFC 통합 배정 로직 (차량/숙소 공용)
       function openNfcAssignModal(mode) {
         document.getElementById('nfcAssignModal').style.display = 'flex';
         const sel = document.getElementById('nfcAssignTargetSelect');
@@ -13470,33 +13506,33 @@ window.submitVendorCreate = function() {
         const title = document.getElementById('nfcModalTitle');
         const subtitle = document.getElementById('nfcModalSubtitle');
 
-        sel.innerHTML = '<option value="">ë¡œë”© ì¤‘...</option>';
+        sel.innerHTML = '<option value="">로딩 중...</option>';
         scanArea.style.display = 'none';
         nfcInput.value = '';
 
         if (mode === 'VEHICLE') {
-          title.innerText = 'NFC ì°¨ëŸ‰ ë°°ì • ë° í•´ì œ';
-          subtitle.innerText = '1. ëŒ€ìƒ ì°¨ëŸ‰ì„ ì„ íƒí•˜ì„¸ìš”. (ê¸°ì¡´ ë°°ì •ìžëŠ” í•´ì œë©ë‹ˆë‹¤)';
+          title.innerText = 'NFC 차량 배정 및 해제';
+          subtitle.innerText = '1. 대상 차량을 선택하세요. (기존 배정자는 해제됩니다)';
           window.API.getVehicleList().then(function (list) {
             if (list.length === 0) {
-              sel.innerHTML = '<option value="">ë“±ë¡ëœ ì°¨ëŸ‰ì´ ì—†ìŠµë‹ˆë‹¤.</option>';
+              sel.innerHTML = '<option value="">등록된 차량이 없습니다.</option>';
               return;
             }
-            sel.innerHTML = '<option value="">-- ì°¨ëŸ‰ ì„ íƒ --</option>' + list.map(v => {
-              const mark = v.assignee ? `[ë°°ì •:${v.assignee}] ` : '[ë¯¸ë°°ì •] ';
+            sel.innerHTML = '<option value="">-- 차량 선택 --</option>' + list.map(v => {
+              const mark = v.assignee ? `[배정:${v.assignee}] ` : '[미배정] ';
               return `<option value="${v.id}">${mark}${v.model} (${v.plate})</option>`;
             }).join('');
           });
         } else if (mode === 'HOUSING') {
-          title.innerText = 'NFC ìˆ™ì†Œ ìž…ì£¼/í‡´ê±°';
-          subtitle.innerText = '1. ëŒ€ìƒ ìˆ™ì†Œë¥¼ ì„ íƒí•˜ì„¸ìš”. (ê¸°ì¡´ ìž…ì£¼ìžëŠ” í‡´ê±°ë©ë‹ˆë‹¤)';
+          title.innerText = 'NFC 숙소 입주/퇴거';
+          subtitle.innerText = '1. 대상 숙소를 선택하세요. (기존 입주자는 퇴거됩니다)';
           window.API.getHousingList().then(function (list) {
             if (list.length === 0) {
-              sel.innerHTML = '<option value="">ë“±ë¡ëœ ìˆ™ì†Œê°€ ì—†ìŠµë‹ˆë‹¤.</option>';
+              sel.innerHTML = '<option value="">등록된 숙소가 없습니다.</option>';
               return;
             }
-            sel.innerHTML = '<option value="">-- ìˆ™ì†Œ ì„ íƒ --</option>' + list.map(h => {
-              const mark = (h.currentOcc >= h.maxOcc) ? '[ë§Œì‹¤] ' : `[ì—¬ìœ :${h.maxOcc - h.currentOcc}] `;
+            sel.innerHTML = '<option value="">-- 숙소 선택 --</option>' + list.map(h => {
+              const mark = (h.currentOcc >= h.maxOcc) ? '[만실] ' : `[여유:${h.maxOcc - h.currentOcc}] `;
               return `<option value="${h.id}">${mark}${h.building} - ${h.unit}</option>`;
             }).join('');
           });
@@ -13511,7 +13547,7 @@ window.submitVendorCreate = function() {
           }
         };
 
-        // ëª¨ë‹¬ ì˜ì—­ í´ë¦­ì‹œ ì»¤ì„œ ìœ ì§€ ë°©ì–´ì½”ë“œ
+        // 모달 영역 클릭시 커서 유지 방어코드
         document.getElementById('nfcAssignModal').onclick = function () {
           if (sel.value) {
             setTimeout(() => nfcInput.focus(), 100);
@@ -13526,27 +13562,27 @@ window.submitVendorCreate = function() {
             if (!uid || !targetId) return;
 
             document.getElementById('nfcAssignModal').style.display = 'none';
-            showToast('ë°°ì • ì •ë³´ë¥¼ ì „ì†¡í•˜ëŠ” ì¤‘...');
+            showToast('배정 정보를 전송하는 중...');
 
             const runner = google.script.run
               .withSuccessHandler(function (res) {
                 if (res.success) {
                   showToast(res.message);
-                  // íƒ­ ìƒˆë¡œê³ ì¹¨
+                  // 탭 새로고침
                   const curTab = document.querySelector('.sidebar-item.active').getAttribute('data-tab');
                   if (curTab === 'vehicle') window.renderVehicle();
                   if (curTab === 'rental') window.loadView('rental');
                   if (curTab === 'housing') window.renderHousing();
                   if (curTab === 'personnel') window.renderPersonnel();
                 } else {
-                  alert('ë°°ì • ì‹¤íŒ¨: ' + res.error);
+                  alert('배정 실패: ' + res.error);
                 }
               })
               .withFailureHandler(function (err) {
-                alert('ì„œë²„ ì˜¤ë¥˜: ' + err.message);
+                alert('서버 오류: ' + err.message);
               });
 
-            // ëª¨ë“œì— ë”°ë¼ ë°±ì—”ë“œ API í˜¸ì¶œ ë¶„ê¸°
+            // 모드에 따라 백엔드 API 호출 분기
             if (mode === 'VEHICLE') runner.api_nfcAssignVehicle(uid, targetId);
             else if (mode === 'HOUSING') runner.api_nfcAssignHousing(uid, targetId);
           }
@@ -13573,18 +13609,18 @@ window.submitVendorCreate = function() {
 <div id="vendorCreateModalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
   <div style="background:var(--bg-surface); width:90%; max-width:500px; padding:24px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
     <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:12px; margin-bottom:20px; border-bottom:1px solid var(--border-color);">
-      <h2 style="margin:0; font-size:18px; color:var(--text-primary);"><i class="ph ph-plus-circle"></i> ì‹ ê·œ ê±°ëž˜ì²˜ ë“±ë¡</h2>
+      <h2 style="margin:0; font-size:18px; color:var(--text-primary);"><i class="ph ph-plus-circle"></i> 신규 거래처 등록</h2>
       <button onclick="document.getElementById(\'vendorCreateModalOverlay\').style.display=\'none\'" style="background:none;border:none;cursor:pointer;font-size:20px;"><i class="ph ph-x"></i></button>
     </div>
     <div style="display:flex; flex-direction:column; gap:12px;">
       <select id="vc-category" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary);">
-        <option>ì°¨ëŸ‰ ë ŒíŠ¸</option><option>ì»¨í…Œì´ë„ˆ/ìˆ™ì†Œ</option><option>ì¤‘ìž¥ë¹„/ë°œì „ê¸°</option><option>ì´ë™ì‹ í™”ìž¥ì‹¤</option><option>ê¸°íƒ€ ìžìž¬</option>
+        <option>차량 렌트</option><option>컨테이너/숙소</option><option>중장비/발전기</option><option>이동식 화장실</option><option>기타 자재</option>
       </select>
-      <input type="text" id="vc-name" placeholder="ì—…ì²´ëª… *" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
-      <input type="text" id="vc-manager" placeholder="ë‹´ë‹¹ìž ì„±í•¨" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
-      <input type="text" id="vc-phone" placeholder="ì—°ë½ì²˜ (Phone)" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
-      <input type="email" id="vc-email" placeholder="ì´ë©”ì¼" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
-      <button onclick="submitVendorCreate()" style="padding:12px; background:var(--brand-primary); color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;"><i class="ph ph-check"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸ì— ë“±ë¡</button>
+      <input type="text" id="vc-name" placeholder="업체명 *" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
+      <input type="text" id="vc-manager" placeholder="담당자 성함" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
+      <input type="text" id="vc-phone" placeholder="연락처 (Phone)" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
+      <input type="email" id="vc-email" placeholder="이메일" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-body); border:1px solid var(--border-color); color:var(--text-primary); box-sizing:border-box;">
+      <button onclick="submitVendorCreate()" style="padding:12px; background:var(--brand-primary); color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;"><i class="ph ph-check"></i> 마스터 시트에 등록</button>
     </div>
   </div>
 </div>
@@ -13592,31 +13628,31 @@ window.submitVendorCreate = function() {
 <div id="vendorModalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
   <div style="background:var(--bg-surface); width:90%; max-width:800px; max-height:90vh; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
     <div style="padding:16px 24px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0; font-size:18px; color:var(--text-primary);"><i class="ph ph-storefront"></i> ê±°ëž˜ì²˜ ì´ë©”ì¼ í†µì‹ </h2>
-      <button onclick="document.getElementById('vendorModalOverlay').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;"><i class="ph ph-x"></i> ë‹«ê¸°</button>
+      <h2 style="margin:0; font-size:18px; color:var(--text-primary);"><i class="ph ph-storefront"></i> 거래처 이메일 통신</h2>
+      <button onclick="document.getElementById('vendorModalOverlay').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;"><i class="ph ph-x"></i> 닫기</button>
     </div>
     <div style="display:flex; flex:1; overflow:hidden;">
       <div style="flex:1; padding:20px; border-right:1px solid var(--border-color); overflow-y:auto; background:var(--bg-body);">
         <h3 id="vm-name" style="margin-top:0; color:var(--text-primary);"></h3>
         <p id="vm-category" style="color:var(--brand-primary); font-weight:bold; margin-bottom:12px;"></p>
         <div style="font-size:13px; color:var(--text-secondary); line-height:1.8; margin-bottom:16px;">
-          <div>ë‹´ë‹¹ìž: <span id="vm-manager"></span></div>
-          <div>ì „í™”: <span id="vm-phone"></span></div>
+          <div>담당자: <span id="vm-manager"></span></div>
+          <div>전화: <span id="vm-phone"></span></div>
           <div>Email: <span id="vm-email"></span></div>
           <input type="hidden" id="vm-email-val">
         </div>
-        <div style="font-weight:600; margin-bottom:8px; color:var(--text-primary);">ìµœê·¼ ì»¤ë®¤ë‹ˆì¼€ì´ì…˜ ì´ë ¥</div>
-        <div id="vm-replies" style="font-size:13px; color:var(--text-secondary);">ì¡°íšŒ ì¤‘...</div>
+        <div style="font-weight:600; margin-bottom:8px; color:var(--text-primary);">최근 커뮤니케이션 이력</div>
+        <div id="vm-replies" style="font-size:13px; color:var(--text-secondary);">조회 중...</div>
       </div>
       <div style="flex:1.2; padding:20px; display:flex; flex-direction:column;">
         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-          <span style="font-weight:600; color:var(--text-primary);">AI íŽ¸ì§€ ë¹„ì„œ</span>
-          <button onclick="translateDraft()" style="padding:4px 10px; background:var(--brand-primary); color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">ì˜ì–´ë¡œ ë²ˆì—­</button>
+          <span style="font-weight:600; color:var(--text-primary);">AI 편지 비서</span>
+          <button onclick="translateDraft()" style="padding:4px 10px; background:var(--brand-primary); color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">영어로 번역</button>
         </div>
-        <textarea id="vm-draft" style="flex:1; min-height:180px; width:100%; border:1px solid var(--border-color); border-radius:6px; padding:12px; background:var(--bg-body); color:var(--text-primary); resize:none; margin-bottom:12px; box-sizing:border-box; font-family:inherit;" placeholder="ìƒí™©ì„ í•œêµ­ì–´ë¡œ ìž…ë ¥í•˜ë©´ AIê°€ ì´ˆì•ˆì„ ìž‘ì„±í•©ë‹ˆë‹¤."></textarea>
+        <textarea id="vm-draft" style="flex:1; min-height:180px; width:100%; border:1px solid var(--border-color); border-radius:6px; padding:12px; background:var(--bg-body); color:var(--text-primary); resize:none; margin-bottom:12px; box-sizing:border-box; font-family:inherit;" placeholder="상황을 한국어로 입력하면 AI가 초안을 작성합니다."></textarea>
         <div style="display:flex; gap:8px;">
-          <button onclick="generateDraft()" style="flex:1; padding:10px; background:var(--bg-surface); border:1px solid var(--border-color); border-radius:6px; cursor:pointer; color:var(--text-primary); font-weight:600;">AI ì´ˆì•ˆ</button>
-          <button onclick="sendDraft()" style="flex:1; padding:10px; background:#059669; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">ë°œì†¡</button>
+          <button onclick="generateDraft()" style="flex:1; padding:10px; background:var(--bg-surface); border:1px solid var(--border-color); border-radius:6px; cursor:pointer; color:var(--text-primary); font-weight:600;">AI 초안</button>
+          <button onclick="sendDraft()" style="flex:1; padding:10px; background:#059669; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">발송</button>
         </div>
       </div>
     </div>
@@ -13628,20 +13664,20 @@ async function renderVendors() {
   document.getElementById('page-container').innerHTML = '<div class="skeleton-loader"><div class="sk-line sk-w60"></div><div class="sk-line sk-w80"></div><div class="sk-line sk-w40"></div></div>';
   try {
     var vendors = await window.API.getVendorList();
-    var h = '<div class="header-section"><div><h1 class="page-title">êµ¬ë§¤/ë ŒíŠ¸ ë‹´ë‹¹ìž</h1><p class="page-subtitle">ë¹„ìƒì—°ë½ë§ ë° AI ë©”ì¼ ë°œì†¡ ì„¼í„°</p></div>' +
-            '<div class="action-row"><button onclick="document.getElementById(\'vendorCreateModalOverlay\').style.display=\'flex\'" style="padding:8px 16px;background:var(--brand-primary);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;"><i class="ph ph-plus"></i> ì‹ ê·œ ê±°ëž˜ì²˜ ë“±ë¡</button></div></div>' +
+    var h = '<div class="header-section"><div><h1 class="page-title">구매/렌트 담당자</h1><p class="page-subtitle">비상연락망 및 AI 메일 발송 센터</p></div>' +
+            '<div class="action-row"><button onclick="document.getElementById(\'vendorCreateModalOverlay\').style.display=\'flex\'" style="padding:8px 16px;background:var(--brand-primary);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;"><i class="ph ph-plus"></i> 신규 거래처 등록</button></div></div>' +
             '<div class="vendor-grid">';
     if (!vendors || vendors.length === 0) {
-      h += '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-secondary);">ë“±ë¡ëœ ê±°ëž˜ì²˜ê°€ ì—†ìŠµë‹ˆë‹¤. ìƒë‹¨ ë²„íŠ¼ì„ ëˆŒëŸ¬ ì¶”ê°€í•˜ì„¸ìš”.</div>';
+      h += '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-secondary);">등록된 거래처가 없습니다. 상단 버튼을 눌러 추가하세요.</div>';
     } else {
       var escVendorText = function(s) {
         return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       };
       vendors.forEach(function(v) {
-        // encodeURIComponent ëŠ” ìž‘ì€ë”°ì˜´í‘œë¥¼ ì¸ì½”ë”©í•˜ì§€ ì•Šì•„ inline onclick ì´ ê¹¨ì§ â€” %27 ë¡œ ì¹˜í™˜ (ì˜ˆ: O'Reilly)
+        // encodeURIComponent 는 작은따옴표를 인코딩하지 않아 inline onclick 이 깨짐 — %27 로 치환 (예: O'Reilly)
         var enc = encodeURIComponent(JSON.stringify(v)).replace(/'/g, '%27');
         h += '<div class="vendor-card" onclick="openVendorModal(\'' + enc + '\')">' +
-             '<div style="display:flex;justify-content:space-between;"><span class="v-cat">' + escVendorText(v.category||'') + '</span><span class="v-tag">' + escVendorText(v.contractStatus||'ì§„í–‰ì¤‘') + '</span></div>' +
+             '<div style="display:flex;justify-content:space-between;"><span class="v-cat">' + escVendorText(v.category||'') + '</span><span class="v-tag">' + escVendorText(v.contractStatus||'진행중') + '</span></div>' +
              '<h3 class="v-name">' + escVendorText(v.name||'') + '</h3>' +
              '<div class="v-contact"><i class="ph ph-user"></i> ' + escVendorText(v.manager||'-') + '</div>' +
              '<div class="v-contact"><i class="ph ph-phone"></i> ' + escVendorText(v.phone||'-') + '</div>' +
@@ -13654,39 +13690,39 @@ async function renderVendors() {
     h += '<div id="vendorCreateModalOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:9999;justify-content:center;align-items:center;animation:fadeIn 0.2s ease-out;">' +
          '<div style="background:var(--bg-surface-elevated);width:90%;max-width:550px;border-radius:16px;box-shadow:0 24px 48px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);overflow:hidden;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
          '<div style="display:flex;justify-content:space-between;align-items:center;padding:24px 28px;background:linear-gradient(135deg, rgba(59,130,246,0.1), transparent);border-bottom:1px solid var(--border-color);">' +
-         '<h2 style="margin:0;font-size:20px;color:var(--text-primary);font-weight:700;display:flex;align-items:center;gap:10px;"><i class="ph ph-buildings" style="color:var(--brand-primary);font-size:24px;"></i> ì‹ ê·œ ê±°ëž˜ì²˜ ë§ˆìŠ¤í„° ë“±ë¡</h2>' +
+         '<h2 style="margin:0;font-size:20px;color:var(--text-primary);font-weight:700;display:flex;align-items:center;gap:10px;"><i class="ph ph-buildings" style="color:var(--brand-primary);font-size:24px;"></i> 신규 거래처 마스터 등록</h2>' +
          '<button onclick="document.getElementById(\'vendorCreateModalOverlay\').style.display=\'none\'" style="background:var(--bg-surface);border:1px solid var(--border-color);color:var(--text-secondary);font-size:18px;cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;">&times;</button>' +
          '</div>' +
          
          '<div style="padding:24px 28px;display:flex;flex-direction:column;gap:16px;">' +
          '<div style="background:rgba(16,185,129,0.08);border:1px dashed rgba(16,185,129,0.4);padding:16px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all 0.2s;"' +
          ' onmouseover="this.style.background=\'rgba(16,185,129,0.15)\'" onmouseout="this.style.background=\'rgba(16,185,129,0.08)\'"' +
-         ' onclick="document.getElementById(\'vendorCreateModalOverlay\').style.display=\'none\'; window.openUniversalScanner(\'VENDORS\', \'ê±°ëž˜ì²˜ ëª…í•¨ / ì‚¬ì—…ìžë“±ë¡ì¦ ë¡œë“œ\');">' +
+         ' onclick="document.getElementById(\'vendorCreateModalOverlay\').style.display=\'none\'; window.openUniversalScanner(\'VENDORS\', \'거래처 명함 / 사업자등록증 로드\');">' +
          '<div style="display:flex;align-items:center;gap:12px;"><div style="width:40px;height:40px;background:var(--status-success);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#000;"><i class="ph ph-scan" style="font-size:24px;bold"></i></div>' +
-         '<div><div style="font-weight:700;color:var(--status-success);font-size:15px;">AI ìžë™ ìŠ¤ìº” ê¸°ìž…</div><div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">ëª…í•¨, ì¸ë³´ì´ìŠ¤ ì‚¬ì§„ì„ ë„£ìœ¼ë©´ 3ì´ˆë§Œì— ìžë™ ë“±ë¡</div></div></div>' +
+         '<div><div style="font-weight:700;color:var(--status-success);font-size:15px;">AI 자동 스캔 기입</div><div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">명함, 인보이스 사진을 넣으면 3초만에 자동 등록</div></div></div>' +
          '<i class="ph ph-caret-right" style="color:var(--status-success);font-size:20px;"></i>' +
          '</div>' +
          
-         '<div style="display:flex;align-items:center;gap:16px;"><div style="flex:1;height:1px;background:var(--border-color);"></div><div style="font-size:12px;color:var(--text-tertiary);font-weight:600;">ë˜ëŠ” ìˆ˜ë™ ìž…ë ¥</div><div style="flex:1;height:1px;background:var(--border-color);"></div></div>' +
+         '<div style="display:flex;align-items:center;gap:16px;"><div style="flex:1;height:1px;background:var(--border-color);"></div><div style="font-size:12px;color:var(--text-tertiary);font-weight:600;">또는 수동 입력</div><div style="flex:1;height:1px;background:var(--border-color);"></div></div>' +
 
          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
-         '<div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">ì—…ì¢… ì¹´í…Œê³ ë¦¬</label><div style="position:relative;"><select id="vc-category" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;appearance:none;outline:none;">' +
-         '<option>ì°¨ëŸ‰ ë ŒíŠ¸</option><option>ì»¨í…Œì´ë„ˆ/ìˆ™ì†Œ</option><option>ì¤‘ìž¥ë¹„/ë°œì „ê¸°</option><option>ì´ë™ì‹ í™”ìž¥ì‹¤</option><option>ê¸°íƒ€ ìžìž¬</option></select>' +
+         '<div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">업종 카테고리</label><div style="position:relative;"><select id="vc-category" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;appearance:none;outline:none;">' +
+         '<option>차량 렌트</option><option>컨테이너/숙소</option><option>중장비/발전기</option><option>이동식 화장실</option><option>기타 자재</option></select>' +
          '<i class="ph ph-caret-down" style="position:absolute;right:14px;top:14px;color:var(--text-tertiary);pointer-events:none;"></i></div></div>' +
          
-         '<div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">ìƒí˜¸ëª… (ì—…ì²´ëª…) <span style="color:#f43f5e;">*</span></label><input type="text" id="vc-name" placeholder="(ì£¼) ë‚˜ì† ê¸°ì—…" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
+         '<div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">상호명 (업체명) <span style="color:#f43f5e;">*</span></label><input type="text" id="vc-name" placeholder="(주) 나손 기업" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
          
-         '<div><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">ë‹´ë‹¹ìž ì„±í•¨</label><input type="text" id="vc-manager" placeholder="í™ê¸¸ë™ ì´ì‚¬" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
-         '<div><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">ì—°ë½ì²˜ (Phone)</label><input type="text" id="vc-phone" placeholder="000-000-0000" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
-         '<div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">ìˆ˜ì‹ ìš© ì´ë©”ì¼ ì£¼ì†Œ</label><input type="email" id="vc-email" placeholder="billing@company.com" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
+         '<div><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">담당자 성함</label><input type="text" id="vc-manager" placeholder="홍길동 이사" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
+         '<div><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">연락처 (Phone)</label><input type="text" id="vc-phone" placeholder="000-000-0000" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
+         '<div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;">수신용 이메일 주소</label><input type="email" id="vc-email" placeholder="billing@company.com" style="width:100%;padding:12px 14px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.12);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);color:var(--text-primary);font-size:14px;box-sizing:border-box;outline:none;"></div>' +
          '</div>' +
          
-         '<button onclick="window.submitVendorCreateBtn()" style="width:100%;padding:14px;background:var(--brand-primary);color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(59,130,246,0.3);transition:all 0.2s;"><i class="ph ph-floppy-disk"></i> ë§ˆìŠ¤í„° ì‹œíŠ¸ì— ìˆ˜ë™ ë“±ë¡</button>' +
+         '<button onclick="window.submitVendorCreateBtn()" style="width:100%;padding:14px;background:var(--brand-primary);color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(59,130,246,0.3);transition:all 0.2s;"><i class="ph ph-floppy-disk"></i> 마스터 시트에 수동 등록</button>' +
          '</div></div></div>';
 
     document.getElementById('page-container').innerHTML = h;
   } catch(e) {
-    document.getElementById('page-container').innerHTML = '<div style="padding:40px;">ì˜¤ë¥˜: ' + e.message + '</div>';
+    document.getElementById('page-container').innerHTML = '<div style="padding:40px;">오류: ' + e.message + '</div>';
   }
 }
 
