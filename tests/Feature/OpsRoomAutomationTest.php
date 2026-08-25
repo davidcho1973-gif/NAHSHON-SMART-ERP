@@ -196,11 +196,19 @@ class OpsRoomAutomationTest extends TestCase
         $r = app(OpsDigestService::class)->dispatchDigest();
 
         $this->assertSame(1, $r['posted']);
-        $this->assertGreaterThan(0, $r['notified']);
         $digest = CommunicationMessage::where('title', 'like', '%하루 요약%')->first();
         $this->assertNotNull($digest);
         $this->assertStringContainsString('반영 1건', $digest->body);
+        // 방 멤버인 관리자는 방 게시로 받는다 — 종(개인 알림)까지 울리면 같은 요약이
+        // 두 번 온다(연계 점검). 방에 없는 관리자에게만 개인 알림이 간다.
         $this->assertSame($r['notified'], CommunicationNotification::where('type', 'ops_digest')->count());
+        $memberUserIds = \App\Models\CommunicationRoomMember::query()
+            ->whereNotNull('user_id')->pluck('user_id')->all();
+        $this->assertSame(
+            0,
+            CommunicationNotification::where('type', 'ops_digest')->whereIn('user_id', $memberUserIds)->count(),
+            '방 멤버가 개인 알림까지 받으면 이중 수신이다'
+        );
     }
 
     public function test_digest_is_silent_when_nothing_was_captured(): void

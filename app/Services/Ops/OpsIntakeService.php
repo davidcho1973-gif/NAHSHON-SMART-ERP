@@ -626,6 +626,10 @@ class OpsIntakeService
             'result_note' => mb_substr($note, 0, 300),
         ]);
 
+        // 보고가 올라온 그 메시지에 결과를 붙인다 — "반영됐나요?"를 묻지 않게.
+        app(\App\Services\Communication\DecisionReplyConnector::class)
+            ->intakeApplied($item, "공정표 반영 완료 — {$item->target_name}".mb_substr(str_replace('공정표 반영 완료', '', $note), 0, 200));
+
         return ['success' => true, 'target' => $item->target_code, 'applied' => $clean, 'cpm' => $cpm];
     }
 
@@ -689,6 +693,12 @@ class OpsIntakeService
             'applied_by_id' => $userId,
             'result_note' => '조달 반영 완료',
         ]);
+
+        // "그 자재 언제 와요?"의 답이 방으로 돌아간다 — 특히 입고완료가 그렇다.
+        $summary = isset($clean['status']) ? "상태 {$clean['status']}" : '';
+        $summary .= isset($clean['eta']) ? ($summary ? ' · ' : '')."ETA {$clean['eta']}" : '';
+        app(\App\Services\Communication\DecisionReplyConnector::class)
+            ->intakeApplied($item, "조달 반영 완료 — PO {$item->target_code}".($summary ? " ({$summary})" : ''));
 
         return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
     }

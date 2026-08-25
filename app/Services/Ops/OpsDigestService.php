@@ -96,8 +96,21 @@ class OpsDigestService
                 $posted++;
             }
 
+            // 방 멤버인 관리자는 방 게시로 이미 받는다 — 종(개인 알림)까지 울리면
+            // 같은 요약이 두 번 온다(연계 점검: 다이제스트 방+종 2번).
+            $roomMemberUserIds = $room
+                ? \App\Models\CommunicationRoomMember::query()
+                    ->where('communication_room_id', $room->id)
+                    ->where('status', 'active')
+                    ->whereNotNull('user_id')
+                    ->pluck('user_id')->all()
+                : [];
+
             $title = sprintf('[상황실 요약] %s · 반영 %d · 확인필요 %d', $site->code, $s['applied'], $s['needsInput']);
             foreach ($this->managers($site->id) as $m) {
+                if (in_array($m->id, $roomMemberUserIds, true)) {
+                    continue;
+                }
                 $exists = CommunicationNotification::query()
                     ->where('user_id', $m->id)->where('type', 'ops_digest')
                     ->where('title', $title)->whereDate('created_at', $date->toDateString())->exists();

@@ -117,6 +117,105 @@ class UnifiedAlertService
         $this->refreshEquipment();
         $this->refreshProjectNotices();
         $this->refreshSafetyIssues();
+        // 재무·조달은 알림 6갈래 어디에도 한 줄을 안 넣던 발원지 0곳이었다(연계 점검).
+        $this->refreshFinance();
+        $this->refreshProcurement();
+    }
+
+    /**
+     * 재무 발원 — 기성 미수 초과·과청구·승인 대기 적체.
+     * 화면을 열어야 보이는 숫자는 사건이 아니다. 여기 실려야 아침에 눈에 띈다.
+     */
+    private function refreshFinance(): void
+    {
+        if (Schema::hasTable('pay_applications')) {
+            \App\Models\PayApplication::query()
+                ->whereIn('status', ['approved'])
+                ->with(['receipts', 'contract:id,title,payment_terms'])
+                ->get()
+                ->each(function (\App\Models\PayApplication $app): void {
+                    $expected = (float) ($app->approved_amount ?? $app->amount_due);
+                    $outstanding = \App\Services\Finance\BillingCalculator::outstanding($expected, $app->receipts->all());
+                    if ($outstanding <= 0) {
+                        return;
+                    }
+                    $netDays = \App\Services\Finance\BillingCalculator::parseNetDays($app->contract?->payment_terms)
+                        ?? \App\Services\Finance\BillingCalculator::DEFAULT_NET_DAYS;
+                    $due = $app->due_on ?? $app->period_end?->copy()->addDays($netDays);
+                    if ($due === null || $due->gte(today())) {
+                        return;
+                    }
+                    $days = (int) $due->diffInDays(today());
+                    $this->emit('billing-overdue:'.$app->id, [
+                        'company_id' => $app->company_id,
+                        'site_id' => $app->site_id,
+                        'project_id' => $app->project_id,
+                        'source_module' => 'FIN',
+                        'source_type' => \App\Models\PayApplication::class,
+                        'source_id' => (string) $app->id,
+                        'event_type' => 'billing_overdue',
+                        'severity' => $days >= 30 ? 'critical' : 'warning',
+                        'title' => '기성 미수: '.($app->contract?->title ?: ('회차 #'.$app->application_no)),
+                        'content' => sprintf('지급 기일이 %d일 지났는데 $%s 이 미수입니다. 수금을 확인하세요.', $days, number_format($outstanding, 2)),
+                        'action_url' => '/admin/billing',
+                        'due_at' => $due->endOfDay(),
+                    ]);
+                });
+        }
+
+        if (Schema::hasTable('mobile_expenses')) {
+            $stale = \App\Models\MobileExpense::query()
+                ->where('status', 'pending')
+                ->where('created_at', '<=', now()->subDays(7))
+                ->selectRaw('count(*) as cnt, coalesce(sum(amount),0) as total')
+                ->first();
+            if ($stale && (int) $stale->cnt > 0) {
+                $this->emit('expense-approval-backlog', [
+                    'source_module' => 'FIN',
+                    'source_type' => \App\Models\MobileExpense::class,
+                    'source_id' => 'backlog',
+                    'event_type' => 'expense_backlog',
+                    'severity' => 'warning',
+                    'title' => '경비 승인 대기 적체: '.$stale->cnt.'건',
+                    'content' => sprintf('7일 넘게 승인 대기 중인 경비가 %d건, $%s 입니다. 승인 전에는 누적 지출·잔액에 안 잡힙니다.',
+                        (int) $stale->cnt, number_format((float) $stale->total, 2)),
+                    'action_url' => '/admin/finance',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * 조달 발원 — ETA 가 지났는데 입고가 안 된 발주. 후속 공정(need-by)이 물려 있어
+     * 하루 늦으면 준공이 같이 밀린다(CPM 엔진이 그 전파를 계산한다).
+     */
+    private function refreshProcurement(): void
+    {
+        if (! Schema::hasTable('procurement_items')) {
+            return;
+        }
+
+        \App\Models\ProcurementItem::query()
+            ->where('status', '!=', '입고완료')
+            ->whereNotNull('eta')
+            ->where('eta', '<', today())
+            ->get()
+            ->each(function (\App\Models\ProcurementItem $po): void {
+                $days = (int) $po->eta->diffInDays(today());
+                $this->emit('procurement-late:'.$po->id.':'.$po->eta->toDateString(), [
+                    'site_id' => $po->site_id,
+                    'source_module' => 'PROC',
+                    'source_type' => \App\Models\ProcurementItem::class,
+                    'source_id' => (string) $po->id,
+                    'event_type' => 'procurement_late',
+                    'severity' => $days >= 7 ? 'critical' : 'warning',
+                    'title' => '자재 입고 지연'.($po->po_no ? ': PO '.$po->po_no : ''),
+                    'content' => sprintf('ETA(%s)가 %d일 지났는데 아직 %s 입니다. 벤더에 확인하세요.',
+                        $po->eta->toDateString(), $days, (string) $po->status),
+                    'action_url' => '/smart-company#wbs',
+                    'due_at' => $po->eta->endOfDay(),
+                ]);
+            });
     }
 
     private function refreshDocumentActions(): void
@@ -213,14 +312,32 @@ class UnifiedAlertService
 
     private function refreshHrExpiries(): void
     {
+        // 만료일 원장이 셋(직원 칼럼 / 등록 서류함 / 등록 원본)이라 같은 비자에 날짜가
+        // 다른 알림이 2~3번 가던 문제(연계 점검 ⑧) — 실서류(member_documents)가 있으면
+        // 그쪽이 정본이다: 그 사람·그 종류의 직원 칼럼 알림은 내지 않는다.
+        $documentBacked = Schema::hasTable('member_documents')
+            ? MemberDocument::query()
+                ->whereNotNull('expires_on')
+                ->join('member_registrations', 'member_registrations.id', '=', 'member_documents.member_registration_id')
+                ->whereNotNull('member_registrations.employee_id')
+                ->get(['member_documents.document_type', 'member_registrations.employee_id'])
+                ->groupBy('employee_id')
+                ->map(fn ($docs) => $docs->pluck('document_type')->map(fn ($t) => strtolower((string) $t))->all())
+            : collect();
+
         if (Schema::hasTable('employees')) {
-            Employee::query()->where('employment_status', 'active')->get()->each(function (Employee $employee): void {
+            Employee::query()->where('employment_status', 'active')->get()->each(function (Employee $employee) use ($documentBacked): void {
                 foreach ([
-                    'visa_expires_on' => ['비자 만료', 'visa_expiry'],
-                    'safety_training_expires_on' => ['안전교육 만료', 'safety_training_expiry'],
-                ] as $field => [$label, $event]) {
+                    'visa_expires_on' => ['비자 만료', 'visa_expiry', 'visa'],
+                    'safety_training_expires_on' => ['안전교육 만료', 'safety_training_expiry', 'safety'],
+                ] as $field => [$label, $event, $docKeyword]) {
                     $due = $employee->{$field};
                     if (! $due || $due->gt(today()->addDays(30))) {
+                        continue;
+                    }
+                    // 실서류가 있으면 서류 쪽 알림 하나만 간다.
+                    $types = (array) ($documentBacked[$employee->id] ?? []);
+                    if (array_filter($types, fn (string $t): bool => str_contains($t, $docKeyword)) !== []) {
                         continue;
                     }
                     $days = today()->diffInDays($due, false);

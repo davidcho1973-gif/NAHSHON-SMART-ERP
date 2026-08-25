@@ -50,6 +50,9 @@ class ExpenseReviewService
             'paid_at' => $decision === 'paid' ? now() : $expense->paid_at,
         ]);
 
+        // 결정이 방으로 돌아간다 — 방에서 태어난 경비면 그 자리에 결과 답글.
+        app(\App\Services\Communication\DecisionReplyConnector::class)->expenseDecided($expense->fresh());
+
         return [
             'success' => true,
             'message' => '영수증을 '.self::DECISION_LABELS[$decision].' 처리했습니다.',

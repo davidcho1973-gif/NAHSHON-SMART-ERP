@@ -52,6 +52,22 @@ class AppServiceProvider extends ServiceProvider
         // 퇴사·비활성 전환 시 계정·배지·기기·채팅방·푸시를 한 번에 닫는다(열쇠 회수).
         Employee::observe(EmployeeOffboardingObserver::class);
 
+        // 신규 직원 → 회사방·팀방 자동 가입. 함수는 있었는데 부르는 곳이 0곳이라
+        // 새 직원은 아무 방에도 없이 시작했다(연계 점검 ⑮).
+        Employee::created(function (Employee $employee): void {
+            try {
+                $comm = app(\App\Services\Communication\CommunicationService::class);
+                if ($employee->company) {
+                    $comm->ensureRoomMember($comm->ensureCompanyRoom($employee->company), $employee);
+                }
+                if ($employee->team) {
+                    $comm->ensureRoomMember($comm->ensureTeamRoom($employee->team), $employee);
+                }
+            } catch (\Throwable $e) {
+                report($e); // 방 가입 실패가 직원 등록을 막으면 안 된다.
+            }
+        });
+
         // 재무관리 영수증 등록 → 문서함 "자재·구매" 폴더 자동 편철.
         MobileExpense::observe(MobileExpenseReceiptObserver::class);
 
