@@ -102,6 +102,122 @@ class CpmEngine
         ];
     }
 
+    /**
+     * What-if 시뮬레이션 — "이 작업이 N일 밀리면 무엇이 밀리는가". 아무것도 저장하지 않는다.
+     *
+     * 같은 규칙(기준선·최소 간격·고정 상태)으로 지금 상태와 지연 주입 상태를 각각
+     * 계산해 차이만 돌려준다. 지연은 "종료가 N일 늦어짐"으로 넣는다 — 현장의 지연은
+     * 대부분 공기가 늘어나는 형태다.
+     *
+     * @return array{success: bool, error?: string, activity?: string, name?: string,
+     *               delayDays?: int, projectedEndBefore?: ?string, projectedEndAfter?: ?string,
+     *               projectDelayDays?: int, moved?: array<int, array{id: string, name: string, from: ?string, to: ?string}>}
+     */
+    public function simulate(string $projectCode, string $activityKey, int $delayDays): array
+    {
+        if ($delayDays === 0) {
+            return ['success' => false, 'error' => '지연 일수가 0입니다.'];
+        }
+
+        $items = WbsItem::query()
+            ->where('project_code', $projectCode)
+            ->where('level', WbsItem::LEVEL_SUBTASK)
+            ->orderBy('sort_order')->orderBy('id')
+            ->get();
+        $nodes = $items->keyBy(fn (WbsItem $i): string => $this->keyOf($i));
+
+        $key = $this->resolveKey($nodes, $activityKey);
+        if ($key === null) {
+            return ['success' => false, 'error' => "공정표에서 '{$activityKey}' 작업을 특정하지 못했습니다."];
+        }
+
+        [$edges] = $this->buildEdges($nodes);
+        if ($edges === []) {
+            return ['success' => false, 'error' => '선행관계가 없어 지연 전파를 계산할 수 없습니다.'];
+        }
+
+        [$order, $cyclic] = $this->topologicalOrder($nodes, $edges);
+        $edges = array_filter($edges, fn (array $e): bool => ! in_array($e[0], $cyclic, true) && ! in_array($e[1], $cyclic, true));
+        $baselines = $this->captureBaselines($nodes, $edges);
+
+        $before = $this->computePasses($nodes, $edges, $order, $baselines);
+
+        // 지연 주입(메모리에서만) — 종료 +N. 날짜가 아예 없으면 시작일 기준으로 만든다.
+        $target = $nodes[$key];
+        $end = $target->planned_end ?? $target->planned_start;
+        if ($end === null) {
+            return ['success' => false, 'error' => "'{$target->name}' 에 계획 날짜가 없어 시뮬레이션할 수 없습니다."];
+        }
+        $target->planned_end = $end->toImmutable()->addDays($delayDays)->toDateString();
+
+        $after = $this->computePasses($nodes, $edges, $order, $baselines);
+
+        $moved = [];
+        foreach ($order as $k) {
+            if ($k === $key) {
+                continue; // 지연시킨 작업 자신은 당연히 밀린다 — 후속만 나열한다.
+            }
+            $fromEf = $before['ef'][$k] ?? null;
+            $toEf = $after['ef'][$k] ?? null;
+            if ($fromEf !== null && $toEf !== null && ! $fromEf->equalTo($toEf)) {
+                $moved[] = [
+                    'id' => $k,
+                    'name' => (string) $nodes[$k]->name,
+                    'from' => $fromEf->toDateString(),
+                    'to' => $toEf->toDateString(),
+                ];
+            }
+        }
+
+        $beforeEnd = $before['projectEnd'];
+        $afterEnd = $after['projectEnd'];
+
+        return [
+            'success' => true,
+            'activity' => $key,
+            'name' => (string) $target->name,
+            'wbsCode' => (string) $target->wbs_code,
+            'delayDays' => $delayDays,
+            'projectedEndBefore' => $beforeEnd?->toDateString(),
+            'projectedEndAfter' => $afterEnd?->toDateString(),
+            'projectDelayDays' => ($beforeEnd && $afterEnd) ? (int) $beforeEnd->diffInDays($afterEnd) : 0,
+            'moved' => array_slice($moved, 0, 15),
+            'movedCount' => count($moved),
+        ];
+    }
+
+    /**
+     * 액티비티 특정 — ID 정확 일치 → 이름 정확 일치 → 이름 부분 일치(유일할 때만).
+     *
+     * @param  Collection<string, WbsItem>  $nodes
+     */
+    private function resolveKey(Collection $nodes, string $raw): ?string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
+        if ($nodes->has($raw)) {
+            return $raw;
+        }
+
+        $upper = mb_strtoupper($raw);
+        foreach ($nodes as $key => $item) {
+            if (mb_strtoupper((string) $item->activity_id) === $upper) {
+                return (string) $key;
+            }
+        }
+
+        $exact = $nodes->filter(fn (WbsItem $i): bool => trim((string) $i->name) === $raw);
+        if ($exact->count() === 1) {
+            return (string) $exact->keys()->first();
+        }
+
+        $partial = $nodes->filter(fn (WbsItem $i): bool => mb_stripos((string) $i->name, $raw) !== false);
+
+        return $partial->count() === 1 ? (string) $partial->keys()->first() : null;
+    }
+
     private function keyOf(WbsItem $i): string
     {
         return (string) ($i->activity_id ?: $i->wbs_code);

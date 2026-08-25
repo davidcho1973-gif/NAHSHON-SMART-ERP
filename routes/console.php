@@ -63,6 +63,9 @@ Schedule::command('attendance:remind-clockin')->everyTenMinutes();
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
 Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18:00'));
 
+// 아침 브리핑 — "오늘 가장 위험한 3가지"를 영향도 순으로. 위험이 없으면 조용하다.
+Schedule::command('ops:morning-brief')->dailyAt(Org::time('schedule.morning_brief_at', '06:30'));
+
 // 장비 임대료·숙소 월세 → 월별 경비 자동 계상(pending, 사람이 승인).
 // 매일 새벽에 돌려도 멱등이라 안전하고, 월중에 등록된 장비도 그 달치가 잡힌다.
 Schedule::command('finance:accrue-rentals')->dailyAt(Org::time('schedule.rental_accrual_at', '05:30'));

@@ -122,7 +122,18 @@ class ChatAssistant
 
         try {
             $gathered = $this->facts->gather($question, $room, $asker);
+
+            // What-if — "A작업 3일 밀리면 뭐가 밀려?" 는 CPM 엔진이 계산한 사실로 답한다.
+            // 상용 제품들은 조회까지만 한다 — 우리는 반영 제안까지 만들어 [반영] 한 번이면 된다.
+            $whatIf = $this->tryWhatIf($question, $room, $message);
+            if ($whatIf !== null) {
+                $gathered['facts']['지연 시뮬레이션(CPM 엔진 계산)'] = $whatIf;
+            }
+
             $text = $this->ask($question, $message, $room, $asker, $gathered);
+            if ($whatIf !== null && ! blank($text)) {
+                $text .= "\n\n📌 이 지연을 반영하는 제안을 등록했습니다 — 현장 상황실에서 [반영]을 누르면 종료일이 실제로 바뀌고 후속 일정·예상 준공이 함께 갱신됩니다.";
+            }
         } catch (Throwable $e) {
             report($e);
 
@@ -130,6 +141,72 @@ class ChatAssistant
         }
 
         return blank($text) ? null : $this->reply($message, $text);
+    }
+
+    /**
+     * "…이 N일 밀리면/늦으면" 질문이면 CPM 시뮬레이션을 돌리고 반영 제안까지 만든다.
+     *
+     * 답은 AI 가 말로 풀지만 숫자는 전부 엔진이 계산한 사실이다 — 지어낸 날짜가 아니다.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function tryWhatIf(string $question, CommunicationRoom $room, CommunicationMessage $message): ?array
+    {
+        if ($room->site_id === null) {
+            return null;
+        }
+        if (! preg_match('/(.+?)\s*(?:이|가|은|는)?\s*(하루|이틀|사흘|나흘|\d+\s*일)\s*(?:정도\s*)?(밀리|늦|지연)/u', $question, $m)) {
+            return null;
+        }
+
+        $days = match (trim($m[2])) {
+            '하루' => 1, '이틀' => 2, '사흘' => 3, '나흘' => 4,
+            default => (int) $m[2],
+        };
+        $target = trim((string) preg_replace('/^(만약|혹시|근데|그런데|그럼)\s+/u', '', trim($m[1])));
+        $target = trim((string) preg_replace('/(작업|공정)$/u', '', $target));
+        if ($target === '' || $days <= 0) {
+            return null;
+        }
+
+        $codes = \App\Models\WbsItem::query()
+            ->where('site_id', $room->site_id)
+            ->whereNotNull('project_code')
+            ->distinct()->pluck('project_code');
+
+        foreach ($codes as $code) {
+            $sim = app(\App\Services\Wbs\CpmEngine::class)->simulate((string) $code, $target, $days);
+            if (! ($sim['success'] ?? false)) {
+                continue;
+            }
+
+            // 반영 제안 — [반영] 한 번으로 실제 공정표가 갱신되게. 결과는 방으로 돌아온다.
+            try {
+                $newEnd = \Illuminate\Support\Carbon::parse((string) \App\Models\WbsItem::query()
+                    ->where('wbs_code', $sim['wbsCode'])->value('planned_end'))
+                    ->addDays($days)->toDateString();
+                \App\Models\OpsIntakeItem::create([
+                    'site_id' => $room->site_id,
+                    'source' => 'chat',
+                    'communication_message_id' => $message->id,
+                    'raw_text' => mb_substr($question, 0, 500),
+                    'category' => 'plan',
+                    'confidence' => 95,
+                    'summary' => "{$sim['name']} {$days}일 지연 반영 (AI what-if)",
+                    'target_type' => 'wbs',
+                    'target_code' => $sim['wbsCode'],
+                    'target_name' => $sim['name'],
+                    'proposed' => ['planned_end' => $newEnd],
+                    'status' => 'pending',
+                ]);
+            } catch (Throwable $e) {
+                report($e); // 제안 등록 실패가 답변을 막으면 안 된다.
+            }
+
+            return $sim;
+        }
+
+        return null;
     }
 
     // ── Claude 에게 묻기 ───────────────────────────────────────────────

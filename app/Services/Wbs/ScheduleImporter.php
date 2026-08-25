@@ -380,7 +380,12 @@ class ScheduleImporter
         return $counts + [
             'milestones' => count($milestones),
             'activities' => count($activities),
-            'warnings' => array_merge($warnings, is_array($cpm['warnings'] ?? null) ? $cpm['warnings'] : []),
+            'warnings' => array_merge(
+                $warnings,
+                is_array($cpm['warnings'] ?? null) ? $cpm['warnings'] : [],
+                // 자사 이력 위험 — 약속을 자주 못 지킨 공종이 이 공정표에 있으면 경고.
+                app(DelayRiskService::class)->warningsFor($projectCode),
+            ),
             'cpm' => $cpm,
         ];
     }
@@ -780,7 +785,11 @@ class ScheduleImporter
         return $counts + [
             'milestones' => count($milestones),
             'activities' => count($activities),
-            'warnings' => array_merge($warnings, is_array($cpm['warnings'] ?? null) ? $cpm['warnings'] : []),
+            'warnings' => array_merge(
+                $warnings,
+                is_array($cpm['warnings'] ?? null) ? $cpm['warnings'] : [],
+                app(DelayRiskService::class)->warningsFor($projectCode),
+            ),
             'cpm' => $cpm,
         ];
     }
