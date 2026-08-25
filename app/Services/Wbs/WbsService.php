@@ -151,6 +151,7 @@ class WbsService
             '투입조' => 'crew_text', 'crew_text' => 'crew_text',
             '장비' => 'equipment', 'equipment' => 'equipment',
             '진척률' => 'progress', 'progress' => 'progress',
+            '미완료사유' => 'incomplete_reason', 'incomplete_reason' => 'incomplete_reason',
         ];
 
         // 빈 값은 기본적으로 "변경 없음"이지만, 배정 해제가 의미 있는 컬럼은 명시적 클리어로 처리.
@@ -178,6 +179,13 @@ class WbsService
                     ? $value
                     : array_values(array_filter(array_map('trim', explode(',', (string) $value))));
                 $item->equipment = $arr ?: null;
+
+                continue;
+            }
+            // 미완료 사유: 표준 코드만 — 자유 텍스트는 통계가 안 된다. 모르는 값은 비움.
+            if ($column === 'incomplete_reason') {
+                $code = trim((string) $value);
+                $item->incomplete_reason = array_key_exists($code, WeeklyPlanService::REASONS) ? $code : null;
 
                 continue;
             }

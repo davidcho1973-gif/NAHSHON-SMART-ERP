@@ -267,6 +267,9 @@ class SmartCompanyData
                 ($args[1] ?? null) !== null ? (int) $args[1] : null
             ),
             'api_getWbsLabor' => app(WbsLaborService::class)->laborFor((string) ($args[0] ?? '')),
+            // 주간 리듬(LPS): 3주 선행 뷰 + 지난주 PPC / 이번 주 약속 토글.
+            'api_getWeeklyPlan' => app(\App\Services\Wbs\WeeklyPlanService::class)->lookahead((string) ($args[0] ?? ''), $siteId),
+            'api_toggleWeekCommit' => app(\App\Services\Wbs\WeeklyPlanService::class)->toggleCommit((string) ($args[0] ?? '')),
             'api_getAssignableEmployees' => self::assignableEmployees($siteId, ($args[0] ?? null) ? (string) $args[0] : null),
             'api_getTodayWbsWork' => app(WbsService::class)->todayWork((string) ($args[0] ?? ''), $siteId),
             'api_getWbsPickList' => app(WbsService::class)->pickList((string) ($args[0] ?? ''), $siteId, ($args[1] ?? null) ? (string) $args[1] : null),

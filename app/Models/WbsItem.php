@@ -33,7 +33,7 @@ class WbsItem extends Model
         'project_id', 'project_code', 'parent_id', 'level', 'wbs_code', 'node_no', 'activity_id', 'name',
         'company', 'trade', 'crew_text', 'crew_size', 'crew_roles', 'equipment', 'status', 'ehs', 'manhours', 'days',
         'planned_start', 'planned_end', 'preds', 'float_days', 'is_critical', 'late_start', 'late_end',
-        'planned_cost', 'progress', 'sort_order', 'company_id', 'site_id', 'source', 'payload',
+        'planned_cost', 'progress', 'committed_week', 'incomplete_reason', 'sort_order', 'company_id', 'site_id', 'source', 'payload',
     ];
 
     protected function casts(): array

@@ -1239,6 +1239,8 @@
       getProcurement: (projectId) => gsRun('api_getProcurement', [projectId], { success: false, items: [] }),
       updateProcurement: (projectId, wbsCode, patch) => gsRun('api_updateProcurement', [projectId, wbsCode, patch || {}], { success: false }),
       getWbsLabor: (wbsId) => gsRun('api_getWbsLabor', [wbsId], { success: false }),
+      getWeeklyPlan: (projectId) => gsRun('api_getWeeklyPlan', [projectId], { success: false, weeks: [] }),
+      toggleWeekCommit: (wbsId) => gsRun('api_toggleWeekCommit', [wbsId], { success: false }),
       assignSafetySigner: (sigId, employeeId) => gsRun('api_assignSafetySigner', [sigId, employeeId], { success: false }),
       getAssignableEmployees: (date) => gsRun('api_getAssignableEmployees', [date || null], []),
       getToolTransactions: () => gsRun('api_getToolTransactions', [], []),
@@ -10211,8 +10213,13 @@
             return;
           }
 
-          // 순서가 곧 우선순위다: 오늘 할 일 → 숫자 3개 → 공정표.
-          pageContainer.innerHTML = headerHtml + sumWarnHtml + wbsOpsBlock(todayRes, procureRes) + kpiHtml + viewToggle +
+          // 주간 계획(LPS) — 접혀 있다가 펼치면 그때 불러온다(화면 한 장 원칙 유지).
+          var weeklyHtml = '<details id="wbs-weekly" style="margin:10px 0;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-surface)" ontoggle="if(this.open) window.loadWeeklyPlan(\'' + projectId + '\')">' +
+            '<summary style="cursor:pointer;padding:10px 14px;font-size:13px;font-weight:700;color:var(--text-primary)">📅 주간 계획 — 3주 선행 · 이번 주 약속(PPC)</summary>' +
+            '<div id="wbs-weekly-body" style="padding:0 14px 12px;font-size:12px;color:var(--text-secondary)">불러오는 중…</div></details>';
+
+          // 순서가 곧 우선순위다: 오늘 할 일 → 숫자 3개 → 주간 계획(접힘) → 공정표.
+          pageContainer.innerHTML = headerHtml + sumWarnHtml + wbsOpsBlock(todayRes, procureRes) + kpiHtml + weeklyHtml + viewToggle +
             '<div id="wbs-view-gantt"' + (vm === 'gantt' ? '' : ' style="display:none"') + '>' + ganttHtml + '</div>' +
             '<div id="wbs-view-tree"' + (vm === 'tree' ? '' : ' style="display:none"') + '>' + panelsHtml + treePanel + '</div>';
 
@@ -10237,6 +10244,77 @@
           });
         }
         renderWbs();
+      };
+
+      // ── 주간 계획(LPS) 패널 ─────────────────────────────────────────
+      // 3주 선행 뷰: 주별 작업 + 시작 가능(ready)/제약, 이번 주 약속 토글, 지난주 PPC.
+      window.loadWeeklyPlan = async function(projectId) {
+        var body = document.getElementById('wbs-weekly-body');
+        if (!body || body.dataset.loaded === projectId) return;
+        body.dataset.loaded = projectId;
+        try {
+          var res = await window.API.getWeeklyPlan(projectId);
+          if (!res || res.success === false) { body.textContent = (res && res.error) || '주간 계획을 불러오지 못했습니다.'; return; }
+
+          var html = '';
+          if (res.ppc) {
+            var ppcColor = res.ppc.ppc >= 80 ? '#16a34a' : (res.ppc.ppc >= 60 ? '#f59e0b' : '#ef4444');
+            html += '<div style="margin:8px 0;padding:8px 10px;background:var(--bg-base);border-radius:8px">' +
+              '<b style="color:' + ppcColor + '">지난주 약속 이행률 ' + res.ppc.ppc + '%</b> — ' + res.ppc.done + '/' + res.ppc.committed + '건 완료' +
+              (res.ppc.missed || []).map(function(m) {
+                var opts = '<option value="">사유 선택…</option>' + Object.keys(res.reasons || {}).map(function(code) {
+                  return '<option value="' + code + '"' + (m.reason === code ? ' selected' : '') + '>' + res.reasons[code] + '</option>';
+                }).join('');
+                return '<div style="margin-top:3px;color:var(--text-tertiary);display:flex;gap:6px;align-items:center">· 미완료: <span style="color:var(--text-primary)">' + m.name + '</span>' +
+                  '<select onchange="window.setMissReason(\'' + m.wbs_id + '\', this.value, \'' + projectId + '\')" style="font-size:11px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);padding:1px 4px">' + opts + '</select></div>';
+              }).join('') + '</div>';
+          } else {
+            html += '<div style="margin:8px 0;color:var(--text-tertiary)">지난주 약속 기록이 없습니다. 월요일 아침에 자동으로 제안되고, 아래에서 직접 넣을 수도 있습니다.</div>';
+          }
+
+          (res.weeks || []).forEach(function(w) {
+            html += '<div style="margin:10px 0 4px;font-weight:700;color:var(--text-primary)">' + w.week +
+              ' <span style="font-weight:400;color:var(--text-tertiary)">시작가능 ' + w.readyCount + ' · 막힘 ' + w.blockedCount + '</span></div>';
+            (w.items || []).forEach(function(it) {
+              var chip = it.ready
+                ? '<span style="color:#16a34a;font-weight:700">시작가능</span>'
+                : '<span style="color:#ef4444" title="' + (it.constraints || []).join(', ') + '">막힘: ' + (it.constraints || []).join(' · ') + '</span>';
+              html += '<div style="display:flex;gap:8px;align-items:center;padding:3px 0;border-bottom:1px dashed var(--border-color)">' +
+                (w.week === res.thisWeek
+                  ? '<button onclick="window.toggleWeekCommitRow(\'' + it.wbs_id + '\', \'' + projectId + '\')" style="border:1px solid var(--border-color);border-radius:6px;background:' + (it.committed ? '#FEE500' : 'transparent') + ';color:' + (it.committed ? 'rgba(0,0,0,.85)' : 'var(--text-secondary)') + ';font-size:11px;padding:2px 8px;cursor:pointer">' + (it.committed ? '약속됨' : '약속') + '</button>'
+                  : '') +
+                '<span style="flex:1;color:var(--text-primary)">' + (it.isCritical ? '<span style="color:#ef4444">★</span> ' : '') + it.name + '</span>' +
+                '<span style="color:var(--text-tertiary)">' + (it.start || '') + '~' + (it.end || '') + '</span>' + chip + '</div>';
+            });
+          });
+          if (!(res.weeks || []).length) html += '<div style="color:var(--text-tertiary)">앞으로 3주 안에 걸린 작업이 없습니다.</div>';
+          body.innerHTML = html;
+        } catch (e) {
+          body.textContent = '주간 계획 로딩 오류: ' + e.message;
+        }
+      };
+
+      // 미완료 사유 저장 — 표준 코드라 통계가 된다("왜 매주 늦는가"의 답).
+      window.setMissReason = async function(wbsId, code, projectId) {
+        var res = await window.API.updateWbsRow(wbsId, { '미완료사유': code });
+        if (res && res.success) {
+          if (window.apiCache) Object.keys(window.apiCache).forEach(function(k) { if (k.indexOf('api_getWeeklyPlan') >= 0) delete window.apiCache[k]; });
+          if (window.showToast) window.showToast('사유를 기록했습니다.', false);
+        } else if (window.showToast) {
+          window.showToast((res && res.error) || '사유 저장에 실패했습니다.', true);
+        }
+      };
+
+      window.toggleWeekCommitRow = async function(wbsId, projectId) {
+        var res = await window.API.toggleWeekCommit(wbsId);
+        if (res && res.success) {
+          var body = document.getElementById('wbs-weekly-body');
+          if (body) body.dataset.loaded = '';
+          if (window.apiCache) Object.keys(window.apiCache).forEach(function(k) { if (k.indexOf('api_getWeeklyPlan') >= 0) delete window.apiCache[k]; });
+          window.loadWeeklyPlan(projectId);
+        } else if (window.showToast) {
+          window.showToast((res && res.error) || '약속 변경에 실패했습니다.', true);
+        }
       };
 
       window.openWbsManualFolder = function() {

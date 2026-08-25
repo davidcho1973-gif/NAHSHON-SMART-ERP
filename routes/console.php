@@ -67,6 +67,9 @@ Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18
 // 매일 새벽에 돌려도 멱등이라 안전하고, 월중에 등록된 장비도 그 달치가 잡힌다.
 Schedule::command('finance:accrue-rentals')->dailyAt(Org::time('schedule.rental_accrual_at', '05:30'));
 
+// 주간 리듬(LPS) — 월요일 아침, 지난주 약속 이행률(PPC) 집계 + 이번 주 약속 제안 + 방 요약.
+Schedule::command('wbs:weekly-plan')->weeklyOn(1, Org::time('schedule.weekly_plan_at', '05:00'));
+
 // 공정 CPM 안전망 — 평소에는 편집 순간마다 재계산되므로 바꿀 게 없어야 정상.
 // 다른 경로로 어긋난 여유·주공정·예상 준공을 하루 안에 스스로 바로잡는다.
 Schedule::command('wbs:recompute-cpm')->dailyAt(Org::time('schedule.cpm_recompute_at', '04:30'));
