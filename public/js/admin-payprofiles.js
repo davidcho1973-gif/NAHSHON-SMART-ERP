@@ -185,6 +185,9 @@
         { name: 'per_diem_rate', label: '일비 (Per Diem)', type: 'number', group: '단가',
           value: row && row.perDiem !== null ? row.perDiem : '',
           hint: '출장·숙박 수당. 없으면 비워 두세요.' },
+        { name: 'fringe_rate', label: 'Fringe (시간당)', type: 'number', group: '단가',
+          value: row && row.fringeRate ? row.fringeRate : '',
+          hint: '인증임금(Davis-Bacon) 현장의 복리후생 요율. WH-347 Fringe 열에 찍힙니다. 대상이 아니면 비워 두세요.' },
 
         { name: 'trade', label: '직종', group: '분류', value: row ? row.trade : '',
           hint: '배관 · 전기 · 용접처럼 인증임금(WH-347) 에 찍히는 이름' },

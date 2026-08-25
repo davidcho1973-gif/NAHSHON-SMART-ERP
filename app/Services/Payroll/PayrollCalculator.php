@@ -179,7 +179,7 @@ class PayrollCalculator
 
         return $employees->map(function (Employee $employee) use ($hours, $profiles): array {
             $profile = $profiles->get($employee->id);
-            $h = $hours->get($employee->id, ['regHours' => 0.0, 'otHours' => 0.0, 'openDays' => 0]);
+            $h = $hours->get($employee->id, ['regHours' => 0.0, 'otHours' => 0.0, 'openDays' => 0, 'workedDays' => 0, 'sites' => []]);
 
             $earn = $this->grossForEmployee($profile, $h['regHours'], $h['otHours'], 0.0);
 
@@ -192,6 +192,8 @@ class PayrollCalculator
                 'regHours' => (float) $h['regHours'],
                 'otHours' => (float) $h['otHours'],
                 'openDays' => (int) $h['openDays'],
+                'workedDays' => (int) ($h['workedDays'] ?? 0),
+                'sites' => (array) ($h['sites'] ?? []),
                 'basis' => $earn['basis'],
                 'displayRate' => $earn['displayRate'],
                 'gross' => $earn['gross'],
@@ -364,7 +366,11 @@ class PayrollCalculator
                     'overtime_hours' => $row['otHours'],
                     'applied_rate' => $earn['appliedRate'],
                     'gross_pay' => $earn['gross'],
-                    'per_diem' => (float) ($profile->per_diem_rate ?? 0) * $row['openDays'],
+                    // per diem × "실제 일한 날". 예전엔 openDays(퇴근 누락 이상 카운트)를
+                    // 곱해 출장비가 결근·정상근무와 무관한 숫자가 됐다.
+                    'per_diem' => (float) ($profile->per_diem_rate ?? 0) * ($row['workedDays'] ?? 0),
+                    // Davis-Bacon fringe — 시간당 요율 × 전체 근무시간. 요율 0(비대상)이면 0.
+                    'fringe_pay' => round((float) ($profile->fringe_rate ?? 0) * ($row['regHours'] + $row['otHours']), 2),
                     'fed_tax' => $ded['fedTax'],
                     'state_tax' => $ded['stateTax'],
                     'fica' => $ded['fica'],
@@ -447,6 +453,7 @@ class PayrollCalculator
                 'totalHours' => round((float) $ps->regular_hours + (float) $ps->overtime_hours, 2),
                 'rate' => (float) $ps->applied_rate,
                 'gross' => (float) $ps->gross_pay,
+                'fringe' => (float) $ps->fringe_pay,
                 'fica' => (float) $ps->fica,
                 'medicare' => (float) $ps->medicare,
                 'fedTax' => (float) $ps->fed_tax,
@@ -461,7 +468,7 @@ class PayrollCalculator
 
     // ───────────────────────── internals ─────────────────────────
 
-    /** @return Collection<int, array{regHours: float, otHours: float, openDays: int}> */
+    /** @return Collection<int, array{regHours: float, otHours: float, openDays: int, workedDays: int, sites: array<int|string, array{regHours: float, otHours: float}>}> */
     private function timesheetTotals(array $employeeIds, Carbon $start, Carbon $end): Collection
     {
         if ($employeeIds === [] || ! Schema::hasTable('payroll_timesheets')) {
@@ -472,12 +479,22 @@ class PayrollCalculator
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
             ->where('status', '!=', 'rejected')
-            ->get(['employee_id', 'regular_minutes', 'overtime_minutes', 'check_in_at', 'check_out_at'])
+            ->get(['employee_id', 'site_id', 'work_date', 'regular_minutes', 'overtime_minutes', 'check_in_at', 'check_out_at'])
             ->groupBy('employee_id')
             ->map(fn (Collection $sheets): array => [
                 'regHours' => round($sheets->sum('regular_minutes') / 60, 2),
                 'otHours' => round($sheets->sum('overtime_minutes') / 60, 2),
                 'openDays' => $sheets->filter(fn ($s) => $s->check_in_at && ! $s->check_out_at)->count(),
+                // 실근무일 — per diem 의 곱수. openDays(퇴근 누락 이상 카운트)와 다르다.
+                'workedDays' => $sheets->filter(fn ($s) => ((int) $s->regular_minutes + (int) $s->overtime_minutes) > 0)
+                    ->unique(fn ($s) => (string) $s->work_date)->count(),
+                // 현장별 분해 — 타임시트는 날짜마다 현장을 안다. 이걸 버리면 노무비가
+                // "입사 때 현장" 한 덩어리로 굳는다(연계 점검 A·⑪).
+                'sites' => $sheets->groupBy(fn ($s) => $s->site_id ?? 0)
+                    ->map(fn (Collection $g): array => [
+                        'regHours' => round($g->sum('regular_minutes') / 60, 2),
+                        'otHours' => round($g->sum('overtime_minutes') / 60, 2),
+                    ])->all(),
             ]);
     }
 
@@ -515,28 +532,62 @@ class PayrollCalculator
 
     private function writeLines(Payslip $payslip, array $row, float $rate, ?EmployeePayrollProfile $profile): void
     {
-        $siteId = $profile->site_id ?? null;
+        $otRate = $rate * (float) ($profile->overtime_multiplier ?? 1.5);
 
-        if ($row['regHours'] > 0) {
-            $payslip->lines()->create([
-                'site_id' => $siteId,
-                'hour_type' => 'REG',
-                'hours' => $row['regHours'],
-                'rate_applied' => $rate,
-                'amount' => round($row['regHours'] * $rate, 2),
-            ]);
+        // 현장 귀속: 타임시트가 날짜마다 아는 현장으로 나눠 적는다. 예전에는 프로필의
+        // "입사 때 현장" 하나로 전부 적혀, 시간은 맞는 현장·돈은 틀린 현장이 됐다
+        // (연계 점검 A·⑪ — 현장별 인건비를 엑셀로 재계산하던 원인).
+        $sites = (array) ($row['sites'] ?? []);
+        if ($sites === []) {
+            $sites = [($profile->site_id ?? 0) => ['regHours' => $row['regHours'], 'otHours' => $row['otHours']]];
         }
 
-        if ($row['otHours'] > 0) {
-            $otRate = $rate * (float) ($profile->overtime_multiplier ?? 1.5);
-            $payslip->lines()->create([
-                'site_id' => $siteId,
-                'hour_type' => 'OT',
-                'hours' => $row['otHours'],
-                'rate_applied' => $otRate,
-                'amount' => round($row['otHours'] * $otRate, 2),
-            ]);
+        foreach ($sites as $siteKey => $hours) {
+            $siteId = ((int) $siteKey) ?: ($profile->site_id ?? null);
+
+            if (($hours['regHours'] ?? 0) > 0) {
+                $payslip->lines()->create([
+                    'site_id' => $siteId,
+                    'project_id' => $this->projectForSite($siteId),
+                    'hour_type' => 'REG',
+                    'hours' => $hours['regHours'],
+                    'rate_applied' => $rate,
+                    'amount' => round($hours['regHours'] * $rate, 2),
+                ]);
+            }
+
+            if (($hours['otHours'] ?? 0) > 0) {
+                $payslip->lines()->create([
+                    'site_id' => $siteId,
+                    'project_id' => $this->projectForSite($siteId),
+                    'hour_type' => 'OT',
+                    'hours' => $hours['otHours'],
+                    'rate_applied' => $otRate,
+                    'amount' => round($hours['otHours'] * $otRate, 2),
+                ]);
+            }
         }
+    }
+
+    /** @var array<int, int|null> */
+    private array $siteProjectCache = [];
+
+    /**
+     * 현장 → 프로젝트 귀속. 그 현장에 프로젝트가 정확히 하나일 때만 잇는다 —
+     * 여럿이면 어느 것인지 코드가 판단하지 않는다(틀린 귀속은 빈 귀속보다 나쁘다).
+     */
+    private function projectForSite(?int $siteId): ?int
+    {
+        if ($siteId === null || $siteId === 0) {
+            return null;
+        }
+
+        if (! array_key_exists($siteId, $this->siteProjectCache)) {
+            $ids = \App\Models\Project::query()->where('site_id', $siteId)->limit(2)->pluck('id');
+            $this->siteProjectCache[$siteId] = $ids->count() === 1 ? (int) $ids->first() : null;
+        }
+
+        return $this->siteProjectCache[$siteId];
     }
 
     /** @param Collection<int, array<string,mixed>> $rows */

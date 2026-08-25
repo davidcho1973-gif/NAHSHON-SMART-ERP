@@ -24,6 +24,7 @@ class EmployeePayrollProfile extends Model
         'visa_type',
         'pay_currency',
         'per_diem_rate',
+        'fringe_rate',
         'fed_filing_status',
         'withholding_state',
         'retirement_pct',

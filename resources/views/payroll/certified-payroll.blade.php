@@ -63,6 +63,7 @@
                     <th colspan="{{ count($dates) }}">Hours by day</th>
                     <th rowspan="2">Total</th>
                     <th rowspan="2">Rate</th>
+                    <th rowspan="2">Fringe</th>
                     <th rowspan="2">Gross</th>
                     <th rowspan="2">FICA</th>
                     <th rowspan="2">Medicare</th>
@@ -88,6 +89,7 @@
                         @endforeach
                         <td class="r">{{ number_format($row['totalHours'], 1) }}</td>
                         <td class="r">${{ $fmt($row['rate']) }}</td>
+                        <td class="r">{{ ($row['fringe'] ?? 0) > 0 ? '$'.$fmt($row['fringe']) : '-' }}</td>
                         <td class="r">${{ $fmt($row['gross']) }}</td>
                         <td class="r">{{ $fmt($row['fica']) }}</td>
                         <td class="r">{{ $fmt($row['medicare']) }}</td>
@@ -97,7 +99,7 @@
                         <td class="r"><b>${{ $fmt($row['net']) }}</b></td>
                     </tr>
                 @empty
-                    <tr><td colspan="{{ count($dates) + 11 }}" style="padding:20px;color:#64748b">이 기간에 산출된 급여 데이터가 없습니다.</td></tr>
+                    <tr><td colspan="{{ count($dates) + 12 }}" style="padding:20px;color:#64748b">이 기간에 산출된 급여 데이터가 없습니다.</td></tr>
                 @endforelse
             </tbody>
             <tfoot>
