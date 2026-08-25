@@ -12,6 +12,7 @@ class MobileExpense extends Model
 
     protected $fillable = [
         'company_id',
+        'vendor_id',
         'site_id',
         'project_id',
         'wbs_code',

@@ -760,6 +760,11 @@ class SmartCompanyData
                     ->whereIn('status', ['approved', 'paid'])
                     ->sum(fn (MobileExpense $e): float => (float) $e->amount);
 
+                // 승인대기 합계 — 자동 계상(임대료·자재 입고·급여 등 커넥터가 만든 pending)이
+                // 확정 숫자에서 빠지는 건 맞지만, "빠져 있다"는 사실이 보여야 한다.
+                // 승인을 안 누르면 누적 지출·계약 잔액이 조용히 틀려 보이던 구멍(점검 C).
+                $pendingTotal = (float) $pending->sum(fn (MobileExpense $e): float => (float) $e->amount);
+
                 // 총 수주 금액 — 계약 관리의 원청 수주 계약(receivable) 유효 금액 합.
                 // 사전예산(mtdBudget)을 "총 수주"로 보여주던 라벨-데이터 불일치의 교정값.
                 // draft(작성중)·under_review(미체결)·terminated(해지)는 수주로 세지 않는다.
@@ -859,8 +864,12 @@ class SmartCompanyData
                     'approvedExpenseAmount' => (float) $rows->where('status', 'approved')->sum(fn (MobileExpense $e): float => (float) $e->amount),
                     'budgetBalance' => $mtdBudget - $mtdTotal,
                     'totalSpend' => $totalSpend,
+                    // 승인대기(자동 계상 포함) — 확정 숫자에 안 들어간 지출이 얼마인지 표시용.
+                    'pendingSpend' => round($pendingTotal, 2),
                     'contractTotal' => $contractTotal,
                     'contractBalance' => $contractTotal - $totalSpend,
+                    // 승인대기까지 반영한 전망 잔액 — "승인 안 누르면 조용히 틀리던" 숫자의 예고편.
+                    'projectedBalance' => round($contractTotal - $totalSpend - $pendingTotal, 2),
                     // 기성 청구·수금 원장 지표 (§5.1) — 기존 키는 절대 불변, 여기부터 추가분
                     'billedTotal' => round($billedTotal, 2),
                     'submittedPending' => round($submittedPending, 2),

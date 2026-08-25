@@ -80,6 +80,7 @@ class DocumentExpenseConnector
 
         $attributes = [
             'company_id' => $document->company_id,
+            'vendor_id' => \App\Models\Vendor::matchByName($payee),
             'site_id' => $document->site_id,
             'project_id' => $document->project_id,
             'payment_type' => 'corporate',

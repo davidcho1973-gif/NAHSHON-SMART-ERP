@@ -22,6 +22,7 @@ class Vehicle extends Model
         'vehicle_type',
         'model',
         'vendor',
+        'monthly_rate',
         'rent_start',
         'rent_end',
         'insurance_expiry',

@@ -114,6 +114,47 @@ class IntegrationRepairR2Test extends TestCase
         $this->assertSame(150.0, (float) $run->payslips->first()->per_diem);
     }
 
+    public function test_차량_리스료가_매월_자동_계상된다(): void
+    {
+        \App\Models\Vendor::create(['name' => 'Enterprise Fleet', 'status' => 'active']);
+        \App\Models\Vehicle::create([
+            'company_id' => $this->company->id, 'site_id' => $this->siteA->id,
+            'vehicle_type' => 'truck', 'model' => 'F-150', 'plate_number' => 'AZ-1234',
+            'vendor' => 'Enterprise Fleet', 'monthly_rate' => 780,
+            'rent_start' => '2026-07-01', 'status' => 'active',
+        ]);
+
+        $counts = app(\App\Services\Finance\RentalExpenseConnector::class)->accrueMonth('2026-08');
+
+        $this->assertSame(1, $counts['created']);
+        $expense = MobileExpense::query()->where('source_ref', 'like', 'vehicle:%:2026-08')->first();
+        $this->assertNotNull($expense, '리스료가 시스템에 존재하지 않던 구멍(점검 F)');
+        $this->assertSame(780.0, (float) $expense->amount);
+        $this->assertSame('6205 Vehicle Lease & Rental', $expense->accounting_account);
+        $this->assertNotNull($expense->vendor_id, '벤더 연결(AP·1099 근거)이 붙어야 한다');
+        $this->assertSame('pending', $expense->status, '자동 계상은 사람이 승인해야 확정');
+
+        // 멱등 — 다시 돌려도 한 건.
+        app(\App\Services\Finance\RentalExpenseConnector::class)->accrueMonth('2026-08');
+        $this->assertSame(1, MobileExpense::query()->where('source_ref', 'like', 'vehicle:%')->count());
+    }
+
+    public function test_재무_요약에_승인대기_합계가_실린다(): void
+    {
+        MobileExpense::create([
+            'site_id' => $this->siteA->id, 'payment_type' => 'corporate',
+            'category' => '5401 Equipment Rental', 'description' => '[자동] 장비 임대료',
+            'amount' => 1200, 'expense_date' => '2026-08-15', 'status' => 'pending',
+        ]);
+        $admin = \App\Models\User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
+        $this->actingAs($admin);
+
+        $stats = \App\Support\SmartCompanyData::financeStats();
+
+        $this->assertSame(1200.0, $stats['pendingSpend'], '자동 계상이 확정 숫자에서 빠져 있다는 사실이 보여야 한다(점검 C)');
+        $this->assertArrayHasKey('projectedBalance', $stats);
+    }
+
     public function test_fringe_는_시간당_요율로_쌓여_WH347_에_실린다(): void
     {
         $this->sheet($this->siteA, '2026-08-10', 480, 120); // 8h + 2h OT

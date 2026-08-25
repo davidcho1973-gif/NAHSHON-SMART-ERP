@@ -5,6 +5,8 @@ namespace App\Services\Finance;
 use App\Models\Equipment;
 use App\Models\Housing;
 use App\Models\MobileExpense;
+use App\Models\Vehicle;
+use App\Models\Vendor;
 use Illuminate\Support\Carbon;
 
 /**
@@ -72,6 +74,36 @@ class RentalExpenseConnector
                         .($eq->vendor ? " · {$eq->vendor}" : ''),
                     'amount' => $amount,
                     'expense_date' => $to->toDateString(),
+                ], $counts);
+            });
+
+        // ── 차량: 월 리스료 (임대 기간과 이 달이 겹칠 때) ───────────────
+        // 요율 칼럼(monthly_rate)이 없어 리스료가 시스템에 존재하지 않던 구멍(점검 F).
+        Vehicle::query()
+            ->where('monthly_rate', '>', 0)
+            ->get()
+            ->each(function (Vehicle $v) use ($start, $end, $tag, &$counts): void {
+                if (in_array((string) $v->status, ['returned', 'sold', 'disposed', '반납', '매각'], true)) {
+                    return;
+                }
+                if ($v->rent_start && Carbon::parse($v->rent_start)->gt($end)) {
+                    return; // 리스가 아직 시작 전.
+                }
+                if ($v->rent_end && Carbon::parse($v->rent_end)->lt($start)) {
+                    return; // 리스가 이미 끝났다.
+                }
+
+                $label = trim(($v->model ?: $v->vehicle_type ?: '차량').' '.($v->plate_number ?: $v->vehicle_code));
+                $this->upsert("vehicle:{$v->id}:{$tag}", [
+                    'company_id' => $v->company_id,
+                    'vendor_id' => Vendor::matchByName($v->vendor),
+                    'site_id' => $v->site_id,
+                    'payment_type' => 'corporate',
+                    'category' => '6205 Vehicle Lease & Rental',
+                    'accounting_account' => '6205 Vehicle Lease & Rental',
+                    'description' => "[자동] 차량 {$label} 리스료 {$tag}".($v->vendor ? " · {$v->vendor}" : ''),
+                    'amount' => (float) $v->monthly_rate,
+                    'expense_date' => $end->toDateString(),
                 ], $counts);
             });
 

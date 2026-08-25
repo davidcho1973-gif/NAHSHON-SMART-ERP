@@ -42,6 +42,7 @@ class FinanceChartOfAccounts
             '6202 Repairs & Maintenance - Auto',
             '6203 Auto Insurance',
             '6204 Vehicle Registration & Taxes (MVD)',
+            '6205 Vehicle Lease & Rental',
             '6301 Rent or Lease - Office',
             '6302 Utilities (SRP/APS/Water)',
             '6303 Telephone & Internet',

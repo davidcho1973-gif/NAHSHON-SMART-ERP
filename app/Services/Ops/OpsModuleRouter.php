@@ -208,6 +208,7 @@ class OpsModuleRouter
 
         $expense = MobileExpense::create([
             'company_id' => $item->site_id ? Site::query()->whereKey($item->site_id)->value('company_id') : null,
+            'vendor_id' => \App\Models\Vendor::matchByName($vendor),
             'site_id' => $item->site_id,
             'employee_id' => null,
             'payment_type' => 'corporate',

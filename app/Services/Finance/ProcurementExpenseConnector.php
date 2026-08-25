@@ -56,6 +56,8 @@ class ProcurementExpenseConnector
             // 회사 스코프 계정(협력사 관리자)은 company_id 로 거른다 — 없으면 그 화면에서 자재비가 안 보인다.
             'company_id' => $project?->company_id
                 ?? ($item->site_id ? Site::query()->whereKey($item->site_id)->value('company_id') : null),
+            // AP·1099 의 근거 — 발주의 벤더 연결을 그대로, 없으면 이름 매칭(유일할 때만).
+            'vendor_id' => $item->vendor_id ?: \App\Models\Vendor::matchByName($item->vendor),
             'site_id' => $item->site_id,
             'project_id' => $project?->id,
             'wbs_code' => $item->wbs_code,

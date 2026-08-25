@@ -10,6 +10,22 @@ class Vendor extends Model
 {
     use HasFactory;
 
+    /**
+     * 이름 → 벤더 매칭. 정확히 한 곳일 때만 잇는다 — AP·1099 집계의 근거가 되므로
+     * 애매한 매칭은 안 하느니만 못하다.
+     */
+    public static function matchByName(?string $name): ?int
+    {
+        $name = trim((string) $name);
+        if ($name === '') {
+            return null;
+        }
+
+        $ids = self::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->limit(2)->pluck('id');
+
+        return $ids->count() === 1 ? (int) $ids->first() : null;
+    }
+
     protected $fillable = [
         'company_id',
         'name',
