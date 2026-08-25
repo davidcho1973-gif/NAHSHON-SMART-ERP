@@ -114,6 +114,12 @@ class DocumentIntelligenceService
                 report($e);
             }
             try {
+                // 들어오는 돈(입금 통지·발행 청구서) → 기성 수금 원장
+                app(\App\Services\Finance\BillingInflowConnector::class)->sync($document);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+            try {
                 // 장비 임대·구매 문서 → 장비 대장(자재/장비·렌탈 화면)
                 app(\App\Services\Equipment\DocumentEquipmentConnector::class)->sync($document);
             } catch (\Throwable $e) {

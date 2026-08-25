@@ -371,6 +371,8 @@ class PayrollCalculator
                     'per_diem' => (float) ($profile->per_diem_rate ?? 0) * ($row['workedDays'] ?? 0),
                     // Davis-Bacon fringe — 시간당 요율 × 전체 근무시간. 요율 0(비대상)이면 0.
                     'fringe_pay' => round((float) ($profile->fringe_rate ?? 0) * ($row['regHours'] + $row['otHours']), 2),
+                    // 개인카드 경비 환급 미리보기 — 지급 시점(payPayroll)에 확정·정산된다.
+                    'reimbursement' => $this->reimbursableFor($row['employeeId'], $period['end']),
                     'fed_tax' => $ded['fedTax'],
                     'state_tax' => $ded['stateTax'],
                     'fica' => $ded['fica'],
@@ -567,6 +569,25 @@ class PayrollCalculator
                 ]);
             }
         }
+    }
+
+    /**
+     * 이 직원에게 환급할 개인카드 경비(승인됨·미정산) 합계 — 기간 말일까지 발생분.
+     * 예전엔 승인까지만 되고 급여로 안 넘어가 사장이 따로 송금했다(연계 점검 돈-J).
+     */
+    private function reimbursableFor(int $employeeId, Carbon $periodEnd): float
+    {
+        if (! Schema::hasTable('mobile_expenses')) {
+            return 0.0;
+        }
+
+        return round((float) \App\Models\MobileExpense::query()
+            ->where('employee_id', $employeeId)
+            ->where('payment_type', 'personal')
+            ->where('status', 'approved')
+            ->whereNull('payroll_run_id')
+            ->where('expense_date', '<=', $periodEnd->toDateString())
+            ->sum('amount'), 2);
     }
 
     /** @var array<int, int|null> */

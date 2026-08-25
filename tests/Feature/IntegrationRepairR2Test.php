@@ -167,4 +167,98 @@ class IntegrationRepairR2Test extends TestCase
         $certified = app(PayrollCalculator::class)->certifiedPayrollData($run);
         $this->assertSame(50.0, $certified['rows'][0]['fringe']);
     }
+
+    public function test_개인카드_환급이_급여에_실리고_지급과_함께_정산된다(): void
+    {
+        $this->sheet($this->siteA, '2026-08-10', 480);
+        $expense = MobileExpense::create([
+            'employee_id' => $this->worker->id, 'site_id' => $this->siteA->id,
+            'payment_type' => 'personal', 'category' => '5403 Small Tools & Consumables',
+            'description' => '개인카드 공구 구매', 'amount' => 89.5,
+            'expense_date' => '2026-08-11', 'status' => 'approved',
+        ]);
+
+        $run = app(PayrollCalculator::class)->runPayroll('2026-08-09', 'ALL');
+        $this->assertSame(89.5, (float) $run->payslips->first()->reimbursement, '명세서에 환급이 미리 보인다');
+
+        // 지급 확정 — 경비가 이 급여 대장으로 정산된다. 사장이 따로 송금할 일이 없다.
+        $run->update(['status' => 'paid']);
+        app(PayrollExpenseConnector::class)->settleReimbursements($run->fresh('payslips'));
+        app(PayrollExpenseConnector::class)->syncExpense($run->fresh());
+
+        $expense->refresh();
+        $this->assertSame('paid', $expense->status);
+        $this->assertSame($run->id, $expense->payroll_run_id);
+        $this->assertStringContainsString('PAYROLL', (string) $expense->payment_reference);
+        $this->assertNotNull($expense->paid_at);
+
+        // 커넥터의 재생성(delete-recreate)이 환급 실물 경비를 지우면 안 된다.
+        app(PayrollExpenseConnector::class)->syncExpense($run->fresh());
+        $this->assertNotNull(MobileExpense::find($expense->id));
+    }
+
+    public function test_입금_통지_문서가_수금_매칭대기로_기록된다(): void
+    {
+        $them = Company::create(['code' => 'GC', 'name' => 'GC', 'status' => 'active']);
+        $contract = \App\Models\ProjectContract::create([
+            'company_id' => $this->company->id, 'counterparty_company_id' => $them->id,
+            'site_id' => $this->siteA->id, 'title' => '수주 계약', 'direction' => 'receivable',
+            'status' => 'active', 'original_amount' => 500000,
+        ]);
+
+        $document = \App\Models\IntelligentDocument::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(), 'original_file_name' => 'remit.pdf', 'file_path' => 'docs/remit.pdf', 'stored_file_name' => 'remit.pdf', 'file_size' => 1000, 'mime_type' => 'application/pdf', 'sha256' => hash('sha256', 'remit1'),
+            'title' => '8월 기성 입금 안내', 'document_type' => 'other', 'site_id' => $this->siteA->id,
+            'ai_status' => 'ready', 'document_date' => '2026-08-20',
+            'ai_payload' => ['money' => ['flow' => 'in', 'amount' => 45000, 'paid_on' => '2026-08-20', 'payee' => '자사', 'purpose' => '기성 1회차']],
+        ]);
+
+        app(\App\Services\Finance\BillingInflowConnector::class)->sync($document);
+
+        $receipt = \App\Models\BillingReceipt::query()->where('source_ref', "document:{$document->id}")->first();
+        $this->assertNotNull($receipt, '입금 통지를 손으로 재입력하던 구멍(점검 G)');
+        $this->assertSame($contract->id, $receipt->project_contract_id);
+        $this->assertNull($receipt->pay_application_id, '회차 배정은 사람이 한다(매칭 대기)');
+        $this->assertSame(45000.0, (float) $receipt->amount);
+        $this->assertSame('2026-08-20', $receipt->received_on->toDateString());
+
+        // 재분석해도 한 건.
+        app(\App\Services\Finance\BillingInflowConnector::class)->sync($document->fresh());
+        $this->assertSame(1, \App\Models\BillingReceipt::query()->count());
+    }
+
+    public function test_계약을_특정하지_못한_입금_문서는_기록_대신_알림을_남긴다(): void
+    {
+        $document = \App\Models\IntelligentDocument::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(), 'original_file_name' => 'remit2.pdf', 'file_path' => 'docs/remit2.pdf', 'stored_file_name' => 'remit2.pdf', 'file_size' => 1000, 'mime_type' => 'application/pdf', 'sha256' => hash('sha256', 'remit2'),
+            'title' => '입금 안내', 'document_type' => 'other',
+            'ai_status' => 'ready', 'document_date' => '2026-08-20',
+            'ai_payload' => ['money' => ['flow' => 'in', 'amount' => 9000]],
+        ]);
+
+        app(\App\Services\Finance\BillingInflowConnector::class)->sync($document);
+
+        $this->assertSame(0, \App\Models\BillingReceipt::query()->count(), '틀린 계약에 앉은 입금은 없는 입금보다 나쁘다');
+        $this->assertSame(1, \App\Models\UnifiedAlert::query()->where('event_type', 'billing_inflow_unmatched')->count());
+    }
+
+    public function test_공정_요약에_계획원가_대비_원장_실적이_실린다(): void
+    {
+        $project = Project::create(['project_code' => 'COST-01', 'name' => '원가 프로젝트', 'construction_type' => 'equipment_setting', 'site_id' => $this->siteB->id]);
+        $stage = \App\Models\WbsItem::create(['project_code' => 'COST-01', 'level' => 'stage', 'wbs_code' => 'COST-01-S-1', 'name' => 'S', 'sort_order' => 0]);
+        $task = \App\Models\WbsItem::create(['project_code' => 'COST-01', 'level' => 'task', 'parent_id' => $stage->id, 'wbs_code' => 'COST-01-T-1', 'name' => 'T', 'sort_order' => 0]);
+        \App\Models\WbsItem::create(['project_code' => 'COST-01', 'level' => 'subtask', 'parent_id' => $task->id,
+            'wbs_code' => 'COST-01-W-A', 'name' => '작업', 'planned_cost' => 10000, 'status' => '검수완료', 'sort_order' => 1]);
+
+        MobileExpense::create(['project_id' => $project->id, 'site_id' => $this->siteB->id, 'payment_type' => 'corporate',
+            'category' => '5201 Job Materials', 'description' => '자재', 'amount' => 4200, 'expense_date' => '2026-08-15', 'status' => 'approved']);
+        MobileExpense::create(['project_id' => $project->id, 'site_id' => $this->siteB->id, 'payment_type' => 'corporate',
+            'category' => '5401 Equipment Rental', 'description' => '임대', 'amount' => 800, 'expense_date' => '2026-08-15', 'status' => 'pending']);
+
+        $sum = app(\App\Services\Wbs\WbsService::class)->progressSummary('COST-01');
+
+        $this->assertSame(10000.0, $sum['cost']['planned']);
+        $this->assertSame(4200.0, $sum['cost']['actual'], '원가 귀속 칸(project_id)을 읽는 첫 집계(점검 H)');
+        $this->assertSame(800.0, $sum['cost']['pending']);
+    }
 }

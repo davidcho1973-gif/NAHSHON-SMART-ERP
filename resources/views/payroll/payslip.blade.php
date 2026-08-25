@@ -55,6 +55,9 @@
             @if ((float) $payslip->per_diem > 0)
                 <tr><td>Per Diem (비과세)</td><td class="r"></td><td class="r">{{ $fmt($payslip->per_diem) }}</td></tr>
             @endif
+            @if ((float) $payslip->reimbursement > 0)
+                <tr><td>경비 환급 (비과세 · Reimbursement)</td><td class="r"></td><td class="r">{{ $fmt($payslip->reimbursement) }}</td></tr>
+            @endif
             <tr><td><b>총지급 (Gross)</b></td><td></td><td class="r"><b>{{ $fmt($payslip->gross_pay) }}</b></td></tr>
         </table>
 

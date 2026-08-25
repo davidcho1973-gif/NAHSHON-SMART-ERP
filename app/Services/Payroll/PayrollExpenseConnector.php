@@ -22,9 +22,17 @@ class PayrollExpenseConnector
     {
         DB::transaction(function () use ($run): void {
             // 1. Idempotency: Clean up any existing expense records for this run.
-            MobileExpense::where('payroll_run_id', $run->id)->delete();
+            //    개인카드 환급분(payment_type=personal)은 이 커넥터가 만든 게 아니라
+            //    직원이 올린 실물 경비다 — 지우면 안 되고, 지급 취소 시 정산만 푼다.
+            MobileExpense::where('payroll_run_id', $run->id)
+                ->where('payment_type', '!=', 'personal')->delete();
 
             if ($run->status !== 'paid') {
+                // 지급 취소(롤백) — 환급 정산을 풀어 다음 급여에 다시 실리게 한다.
+                MobileExpense::where('payroll_run_id', $run->id)
+                    ->where('payment_type', 'personal')
+                    ->update(['payroll_run_id' => null, 'status' => 'approved', 'paid_at' => null, 'payment_reference' => null]);
+
                 return;
             }
 
@@ -162,10 +170,49 @@ class PayrollExpenseConnector
     }
 
     /**
+     * 개인카드 환급 정산 — 지급 확정 순간, 그 기간까지 승인된 개인 경비를 급여에 태운다.
+     *
+     * 명세서에는 환급(비과세) 금액이 실리고, 경비는 이 급여 대장 번호로 '지급' 처리된다.
+     * 예전엔 승인까지만 되고 여기서 끊겨 사장이 따로 송금했다(연계 점검 돈-J).
+     */
+    public function settleReimbursements(PayrollRun $run): void
+    {
+        foreach ($run->payslips as $payslip) {
+            $expenses = MobileExpense::query()
+                ->where('employee_id', $payslip->employee_id)
+                ->where('payment_type', 'personal')
+                ->where('status', 'approved')
+                ->whereNull('payroll_run_id')
+                ->where('expense_date', '<=', $run->period_end->toDateString())
+                ->get();
+
+            $total = round((float) $expenses->sum('amount'), 2);
+
+            MobileExpense::query()->whereIn('id', $expenses->pluck('id'))->update([
+                'payroll_run_id' => $run->id,
+                'status' => 'paid',
+                'paid_at' => now(),
+                'payment_reference' => 'PAYROLL '.$run->code,
+            ]);
+
+            // 명세서의 환급 금액은 실제로 정산된 합으로 확정한다(계산 시점과 지급 시점
+            // 사이에 승인이 더 붙었을 수 있다 — 지급 순간이 정본).
+            if ((float) $payslip->reimbursement !== $total) {
+                $payslip->update(['reimbursement' => $total]);
+            }
+        }
+    }
+
+    /**
      * Clean up all synchronized expenses if a PayrollRun is deleted or rolled back from paid status.
      */
     public function removeExpense(int $payrollRunId): void
     {
-        MobileExpense::where('payroll_run_id', $payrollRunId)->delete();
+        MobileExpense::where('payroll_run_id', $payrollRunId)
+            ->where('payment_type', '!=', 'personal')->delete();
+        // 환급분은 지우지 않고 정산만 푼다 — 실물 경비 기록이다.
+        MobileExpense::where('payroll_run_id', $payrollRunId)
+            ->where('payment_type', 'personal')
+            ->update(['payroll_run_id' => null, 'status' => 'approved', 'paid_at' => null, 'payment_reference' => null]);
     }
 }

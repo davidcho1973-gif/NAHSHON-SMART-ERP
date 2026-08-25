@@ -10062,7 +10062,9 @@
           var kpiHtml = '<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">' +
             '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">전체 진척률</div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
             '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div>' +
-            '<div class="kpi-meta"><span style="color:var(--text-secondary)">작업 ' + (sum.completedCount || 0) + '/' + totalSubTasks + ' 완료</span></div></div>' +
+            '<div class="kpi-meta"><span style="color:var(--text-secondary)">작업 ' + (sum.completedCount || 0) + '/' + totalSubTasks + ' 완료' +
+            (sum.cost && sum.cost.planned > 0 ? ' · 원가 $' + Number(sum.cost.actual).toLocaleString() + ' / 계획 $' + Number(sum.cost.planned).toLocaleString() + (sum.cost.pending > 0 ? ' (대기 $' + Number(sum.cost.pending).toLocaleString() + ')' : '') : '') +
+            '</span></div></div>' +
             '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">준공을 쥔 작업 (임계경로)</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (sum.projectedEnd ? '예상 준공 ' + sum.projectedEnd + ' — 이 작업이 늦으면 그대로 밀립니다' : '이 작업이 늦으면 준공일이 그대로 밀립니다') + '</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건 — 서명해야 시작됩니다' : '오늘 계획됨') + '</span></div></div>' +
             '</div>';

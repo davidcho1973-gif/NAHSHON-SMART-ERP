@@ -1622,6 +1622,9 @@ class SmartCompanyData
                 // Update associated payslips status
                 $run->payslips()->update(['status' => 'paid']);
 
+                // 개인카드 환급 정산 — 승인된 개인 경비를 이 급여에 태우고 지급 처리.
+                app(PayrollExpenseConnector::class)->settleReimbursements($run->fresh('payslips'));
+
                 // Synchronize into the accounting system (generate mobile expenses)
                 app(PayrollExpenseConnector::class)->syncExpense($run);
             });

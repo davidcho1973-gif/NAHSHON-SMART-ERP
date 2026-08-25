@@ -83,6 +83,9 @@ class WbsService
             // 예상 준공 = 마지막 작업의 계획 종료일. CPM 엔진이 일정을 최신으로 유지하므로
             // 이 최대값이 곧 "지금 이대로 가면 언제 끝나는가"다.
             'projectedEnd' => $subtasks->map(fn (WbsItem $i) => $i->planned_end?->toDateString())->filter()->max(),
+            // 프로젝트 원가 대조 — 계획(배분원가 합) vs 실적(원장의 project_id 귀속 지출).
+            // 원가 귀속 칸을 읽는 집계가 0건이라 프로젝트 수지를 엑셀로 내던 구멍(점검 H).
+            'cost' => $this->costSummary($projectCode, $subtasks),
             'totalWbsCount' => $subtasks->count(),
             'completedCount' => $subtasks->where('status', WbsItem::STATUS_DONE)->count(),
             'inProgressCount' => $subtasks->where('status', WbsItem::STATUS_IN_PROGRESS)->count(),
@@ -834,6 +837,41 @@ class WbsService
         $weighted = $subtasks->sum(fn (WbsItem $s) => $weight($s) * $s->effectiveProgress());
 
         return (int) round($weighted / $totalWeight);
+    }
+
+    /**
+     * 계획원가 vs 원장 실적. 실적은 경비 원장(mobile_expenses)의 project_id 귀속분 —
+     * 자재(조달 커넥터)·노무(급여 커넥터)·기타가 전부 이 한 칸으로 모인다.
+     *
+     * @return array{planned: float, actual: float, pending: float}|null
+     */
+    private function costSummary(string $projectCode, Collection $subtasks): ?array
+    {
+        try {
+            $planned = round((float) $subtasks->sum(fn (WbsItem $i) => (float) $i->planned_cost), 2);
+            $projectId = Project::query()->where('project_code', $projectCode)->value('id');
+            if ($projectId === null) {
+                return $planned > 0 ? ['planned' => $planned, 'actual' => 0.0, 'pending' => 0.0] : null;
+            }
+
+            $byStatus = \App\Models\MobileExpense::query()
+                ->where('project_id', $projectId)
+                ->whereIn('status', ['pending', 'approved', 'paid'])
+                ->selectRaw("case when status = 'pending' then 'pending' else 'actual' end as bucket, sum(amount) as total")
+                ->groupBy('bucket')
+                ->pluck('total', 'bucket');
+
+            $actual = round((float) ($byStatus['actual'] ?? 0), 2);
+            $pending = round((float) ($byStatus['pending'] ?? 0), 2);
+
+            return ($planned > 0 || $actual > 0 || $pending > 0)
+                ? ['planned' => $planned, 'actual' => $actual, 'pending' => $pending]
+                : null;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**
