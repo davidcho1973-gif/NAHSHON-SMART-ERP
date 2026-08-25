@@ -377,6 +377,7 @@
     var actions = '';
     if (state.canManage) {
       actions = u.primaryButton('새 회차', 'window.AdminBilling.openForm()', 'plus') +
+        u.rowButton('공정률로 초안', 'window.AdminBilling.draftFromProgress()') +
         u.rowButton('수금 입력 (미배정 포함)', 'window.AdminBilling.openReceipt()');
     }
 
@@ -483,6 +484,24 @@
 
   function findApp(id) {
     return ((state.detail && state.detail.rows) || []).filter(function (r) { return r.id === id; })[0];
+  }
+
+  // 공정률 기준 자동 초안 — 서버가 Σ(배분원가×진척률)로 금회 시공분을 계산해
+  // draft 회차를 만들거나(이미 자동 초안이 있으면) 최신 공정률로 갱신한다.
+  function draftFromProgress() {
+    var u = ui();
+    var c = state.detail && state.detail.contract;
+    if (!c) return;
+    call('api_draftBillingFromProgress', [c.id]).then(function (res) {
+      if (res.success === false) {
+        u.toast(res.error || '초안을 만들지 못했습니다.', 'error');
+        return;
+      }
+      u.toast('회차 #' + res.applicationNo + ' 초안' + (res.updated ? '을 최신 공정률로 갱신했습니다' : '을 만들었습니다') +
+        ' — 진척 ' + res.progressPct + '% · 금회 $' + Number(res.thisPeriod).toLocaleString() +
+        ' · 청구액 $' + Number(res.amountDue).toLocaleString() + '. 검토 후 제출하세요.');
+      return afterWrite();
+    }).catch(function (e) { u.toast(e.message || '초안을 만들지 못했습니다.', 'error'); });
   }
 
   function assignableAppOptions() {
@@ -811,6 +830,7 @@
     backToList: backToList,
     toggleReceipts: toggleReceipts,
     openForm: openForm,
+    draftFromProgress: draftFromProgress,
     submitApp: submitApp,
     withdrawApp: withdrawApp,
     openApprove: openApprove,

@@ -226,6 +226,7 @@ class SmartCompanyData
             'api_getBillings' => app(BillingAdminService::class)->getBillings((int) ($args[0] ?? 0)),
             'api_getBillingOptions' => app(BillingAdminService::class)->getBillingOptions(),
             'api_saveBilling' => app(BillingAdminService::class)->saveBilling(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_draftBillingFromProgress' => app(\App\Services\Finance\ProgressBillingDrafter::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),
             'api_setBillingStatus' => app(BillingAdminService::class)->setBillingStatus(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteBilling' => app(BillingAdminService::class)->deleteBilling((int) ($args[0] ?? 0)),
             'api_saveBillingReceipt' => app(BillingAdminService::class)->saveBillingReceipt(is_array($args[0] ?? null) ? $args[0] : []),
