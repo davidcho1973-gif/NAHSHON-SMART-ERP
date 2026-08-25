@@ -1144,7 +1144,19 @@ class SmartCompanyData
         $company->company_type = $type;
         $company->save();
 
-        return ['success' => true, 'id' => $company->id, 'type' => $type, 'typeLabel' => $company->companyTypeLabel()];
+        // 이미 소속된 직원의 고용형태 백필 — 분류 전에 등록된 인원은 스키마 기본값
+        // 'direct'(시급 직영)로 남아 급여 대상에 잘못 오른다(연계 점검 ②).
+        // 사람이 개별로 다르게 정한 값일 수 있는 것은 건드리지 않는다: 기본값(direct)
+        // 이거나 빈 값일 때만 회사 분류에서 파생한 형태로 맞춘다.
+        $backfilled = 0;
+        if (($derived = $company->employmentType()) !== null && $derived !== Employee::TYPE_DIRECT) {
+            $backfilled = Employee::query()
+                ->where('company_id', $company->id)
+                ->where(fn ($q) => $q->whereNull('employment_type')->orWhere('employment_type', Employee::TYPE_DIRECT))
+                ->update(['employment_type' => $derived]);
+        }
+
+        return ['success' => true, 'id' => $company->id, 'type' => $type, 'typeLabel' => $company->companyTypeLabel(), 'backfilled' => $backfilled];
     }
 
     public static function setMySiteGeofence(mixed $lat, mixed $lng, mixed $radius, mixed $siteId = null): array

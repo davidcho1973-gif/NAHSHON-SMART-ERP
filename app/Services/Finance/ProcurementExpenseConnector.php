@@ -5,6 +5,8 @@ namespace App\Services\Finance;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\Project;
+use App\Models\Site;
+use App\Support\FinanceChartOfAccounts;
 
 /**
  * 입고된 자재의 발주 금액을 원가(경비 원장)로 넘긴다.
@@ -44,13 +46,22 @@ class ProcurementExpenseConnector
         $currencyNote = ($item->currency && strtoupper((string) $item->currency) !== 'USD')
             ? " ({$item->currency})" : '';
 
+        // 계정과목은 정본(FinanceChartOfAccounts)을 지나서 넣는다 — 목록에 없는 문구를
+        // 직접 적으면 같은 자재비가 화면·집계에서 다른 칸으로 갈라진다.
+        $account = FinanceChartOfAccounts::normalize('5201 Job Materials', (string) $item->vendor);
+
+        $project = Project::query()->where('project_code', $item->project_code)->first();
+
         $attributes = [
+            // 회사 스코프 계정(협력사 관리자)은 company_id 로 거른다 — 없으면 그 화면에서 자재비가 안 보인다.
+            'company_id' => $project?->company_id
+                ?? ($item->site_id ? Site::query()->whereKey($item->site_id)->value('company_id') : null),
             'site_id' => $item->site_id,
-            'project_id' => Project::query()->where('project_code', $item->project_code)->value('id'),
+            'project_id' => $project?->id,
             'wbs_code' => $item->wbs_code,
             'payment_type' => 'corporate',
-            'category' => '5201 Materials & Supplies',
-            'accounting_account' => '5201 Materials & Supplies',
+            'category' => $account,
+            'accounting_account' => $account,
             'description' => "[자동] 자재 입고 · {$label}"
                 .($item->vendor ? " · {$item->vendor}" : '')
                 .($item->po_no ? " · PO {$item->po_no}" : '')

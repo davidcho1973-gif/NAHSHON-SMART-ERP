@@ -90,7 +90,7 @@ class DocumentMoneyRoutingTest extends TestCase
         $expense = MobileExpense::query()->where('source_ref', "document:{$doc->id}")->firstOrFail();
         $this->assertSame($site->id, $expense->site_id);
         $this->assertSame($project->id, $expense->project_id);
-        $this->assertSame('5201 Materials & Supplies', $expense->category);
+        $this->assertSame('5201 Job Materials', $expense->category); // 계정과목 정본(FinanceChartOfAccounts) 문구
     }
 
     // ── 돈이 아닌/들어오는 문서는 건드리지 않는가 ──────────────────────

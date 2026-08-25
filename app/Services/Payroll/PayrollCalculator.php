@@ -198,7 +198,48 @@ class PayrollCalculator
             ];
         })->filter(fn (array $r) => $r['regHours'] > 0 || $r['otHours'] > 0 || $r['gross'] > 0 || $r['openDays'] > 0)
             ->sortByDesc('gross')
-            ->values();
+            ->values()
+            ->tap(fn (Collection $rows) => $this->alertZeroRates($rows, $employees, $start));
+    }
+
+    /**
+     * 시급 0원 감시 — 일은 했는데 임금이 0원으로 계산되는 사람을 알림 센터에 올린다.
+     *
+     * 임금 프로필은 0원으로 태어난다(사람이 나중에 채우는 설계). 채우는 걸 잊으면
+     * $0 명세서가 조용히 발행된다 — 숫자가 틀린 게 아니라 "비어 있는" 것이라
+     * 화면만 봐서는 알아채기 어렵다(연계 점검 ⑫). 멱등: 같은 사람·같은 급여기간은 한 건.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  Collection<int, Employee>  $employees
+     */
+    private function alertZeroRates(Collection $rows, Collection $employees, Carbon $start): void
+    {
+        try {
+            $alerts = app(\App\Services\Alerts\UnifiedAlertService::class);
+            $byId = $employees->keyBy('id');
+
+            $rows->filter(fn (array $r) => ($r['regHours'] > 0 || $r['otHours'] > 0)
+                    && (float) $r['gross'] <= 0 && (float) $r['displayRate'] <= 0)
+                ->each(function (array $r) use ($alerts, $byId, $start): void {
+                    $employee = $byId->get($r['employeeId']);
+                    $alerts->emit("payroll-zero-rate:{$r['employeeId']}:{$start->toDateString()}", [
+                        'company_id' => $employee?->company_id,
+                        'site_id' => $employee?->site_id,
+                        'employee_id' => $r['employeeId'],
+                        'source_module' => 'PAYROLL',
+                        'source_type' => Employee::class,
+                        'source_id' => (string) $r['employeeId'],
+                        'event_type' => 'payroll_zero_rate',
+                        'severity' => 'critical',
+                        'title' => "시급 미설정: {$r['name']}",
+                        'content' => sprintf('이번 급여기간에 %.1f시간 일했는데 임금이 $0 입니다. 임금 프로필에서 시급을 입력하세요.',
+                            (float) $r['regHours'] + (float) $r['otHours']),
+                        'action_url' => '/admin/pay-profiles',
+                    ]);
+                });
+        } catch (\Throwable $e) {
+            report($e); // 알림 실패가 급여 화면을 막으면 안 된다.
+        }
     }
 
     /**

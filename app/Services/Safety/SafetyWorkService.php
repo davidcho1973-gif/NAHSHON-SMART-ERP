@@ -252,9 +252,25 @@ class SafetyWorkService
             $model = $item->signatures()->where('sort_order', $index)->first()
                 ?? new SafetyWorkSignature(['sort_order' => $index]);
 
-            $model->name = (string) ($sig['name'] ?? '');
+            $name = (string) ($sig['name'] ?? '');
             $model->role = $sig['role'] ?? null;
             $model->signed = (bool) ($sig['signed'] ?? false);
+
+            // 서명 ↔ 직원 연결(employee_id). 이 칸이 비면 "공정별 실투입 인원"이 항상
+            // 0으로 나온다 — 칼럼과 화면은 있는데 채우는 곳이 없던 구멍(연계 점검 ⑦).
+            //  - 화면이 employeeId 를 보내면 그대로 쓴다(인원 배정 모달 경로).
+            //  - 안 보냈어도 이름이 그대로면 기존 연결을 지킨다(왕복 저장이 배정을 지우면 안 된다).
+            //  - 이름만 있으면(TBM 판에서 이름 입력) 재직자 중 같은 이름이 정확히 한 명일 때 잇는다.
+            $sentEmployeeId = $sig['employeeId'] ?? $sig['employee_id'] ?? null;
+            if (is_numeric($sentEmployeeId) && (int) $sentEmployeeId > 0) {
+                $model->employee_id = (int) $sentEmployeeId;
+            } elseif ($model->employee_id !== null && $name !== (string) $model->name) {
+                $model->employee_id = $this->matchEmployeeByName($name, $item); // 이름이 바뀌면 다시 찾는다
+            } elseif ($model->employee_id === null && $name !== '') {
+                $model->employee_id = $this->matchEmployeeByName($name, $item);
+            }
+
+            $model->name = $name;
 
             // Server is the source of truth for the legal sign-off timestamp.
             if ($model->signed && $model->signed_at === null) {
@@ -268,6 +284,35 @@ class SafetyWorkService
         }
 
         $item->signatures()->where('sort_order', '>=', count($signatures))->delete();
+    }
+
+    /**
+     * 이름 → 재직 직원 매칭. 확실할 때만 잇는다 — 동명이인이면 null(틀린 연결보다 빈 연결이 낫다).
+     * 같은 현장 소속이 정확히 한 명이면 그 사람, 아니면 전체 재직자 중 유일할 때만.
+     */
+    private function matchEmployeeByName(string $name, SafetyWorkItem $item): ?int
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+
+        $candidates = \App\Models\Employee::query()
+            ->where('name', $name)
+            ->where('employment_status', 'active')
+            ->get(['id', 'site_id']);
+
+        if ($candidates->count() === 1) {
+            return (int) $candidates->first()->id;
+        }
+        if ($item->site_id !== null) {
+            $onSite = $candidates->where('site_id', $item->site_id);
+            if ($onSite->count() === 1) {
+                return (int) $onSite->first()->id;
+            }
+        }
+
+        return null;
     }
 
     /**

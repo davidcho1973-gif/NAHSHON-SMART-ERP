@@ -49,11 +49,21 @@ class EmployeeBadgeQrToken extends Model
 
     public static function activeForToken(string $token): ?self
     {
-        return self::query()
+        $row = self::query()
             ->with(['employee.company', 'employee.site', 'employee.team'])
             ->where('token_hash', self::hashToken($token))
             ->where('status', 'active')
             ->first();
+
+        // 재직 검사 — 배지 토큰이 살아 있어도 사람이 퇴사했으면 무효다. 이 검사가 없으면
+        // 퇴사자 배지로 팀 출퇴근이 찍히고, 배지 화면이 인증 없이 퇴사자 신원을 노출한다.
+        // (퇴사 캐스케이드가 배지를 폐기하지만, 그 이전에 발급된 기록·복제본까지 막으려면
+        //  읽는 쪽에서도 재직을 봐야 한다 — 문과 열쇠 둘 다 잠근다.)
+        if ($row !== null && $row->employee?->employment_status !== 'active') {
+            return null;
+        }
+
+        return $row;
     }
 
     public static function activeForEmployee(Employee $employee, ?int $createdById = null): self

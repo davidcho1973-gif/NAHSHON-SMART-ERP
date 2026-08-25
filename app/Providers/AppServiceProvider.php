@@ -12,6 +12,7 @@ use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
+use App\Observers\EmployeeOffboardingObserver;
 use App\Observers\EmployeePayrollProfileObserver;
 use App\Observers\LinkedDocumentFilingObserver;
 use App\Observers\MobileExpenseReceiptObserver;
@@ -47,6 +48,9 @@ class AppServiceProvider extends ServiceProvider
     {
         // Provision a payroll wage profile whenever a new employee is created.
         Employee::observe(EmployeePayrollProfileObserver::class);
+
+        // 퇴사·비활성 전환 시 계정·배지·기기·채팅방·푸시를 한 번에 닫는다(열쇠 회수).
+        Employee::observe(EmployeeOffboardingObserver::class);
 
         // 재무관리 영수증 등록 → 문서함 "자재·구매" 폴더 자동 편철.
         MobileExpense::observe(MobileExpenseReceiptObserver::class);

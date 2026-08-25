@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
+use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Support\Facades\Storage;
 
@@ -30,18 +31,22 @@ use Illuminate\Support\Facades\Storage;
  */
 class DocumentExpenseConnector
 {
-    /** AI 의 분류 힌트 → 계정. 모르는 값은 기타로 — 계정을 지어내지 않는다. */
+    /**
+     * AI 의 분류 힌트 → 계정. 모르는 값은 검토 대기로 — 계정을 지어내지 않는다.
+     *
+     * 값은 반드시 계정과목 정본(FinanceChartOfAccounts::accounts)에 있는 문구여야 한다.
+     * 예전엔 여기 적힌 문구 5개가 정본에 없거나(5601·5900) 다른 계정이었고(fuel→5502 는
+     * 안전용품 계정), 그래서 같은 지출이 화면·집계에서 다른 칸으로 갈라졌다.
+     */
     private const CATEGORY_MAP = [
         'payroll' => '5101 Gross Wages - Field',
-        'materials' => '5201 Materials & Supplies',
+        'materials' => '5201 Job Materials',
         'equipment' => '5401 Equipment Rental',
         'lodging' => '5503 Crew Lodging & Housing',
-        'fuel' => '5502 Vehicle & Fuel',
-        'meals' => '5504 Meals & Per Diem',
-        'utilities' => '5601 Utilities & Communications',
+        'fuel' => '5402 Fuel - Equipment',
+        'meals' => '5504 Jobsite Meals',
+        'utilities' => '6302 Utilities (SRP/APS/Water)',
     ];
-
-    private const FALLBACK_CATEGORY = '5900 Other Expenses';
 
     /** 돈이 나간 문서가 아니면 아무것도 하지 않는다. */
     public function sync(IntelligentDocument $document): void
@@ -63,10 +68,13 @@ class DocumentExpenseConnector
         }
 
         $hint = strtolower(trim((string) ($money['category_hint'] ?? '')));
-        $account = self::CATEGORY_MAP[$hint] ?? self::FALLBACK_CATEGORY;
-
         $payee = trim((string) ($money['payee'] ?? '')) ?: trim((string) $document->sender);
         $purpose = trim((string) ($money['purpose'] ?? ''));
+
+        // 힌트가 표에 없으면 수취인·용도 문맥으로 정본의 추론 규칙에 맡긴다.
+        // 그래도 모르면 9999 검토 대기 — 틀린 계정에 앉는 것보다 낫다.
+        $account = self::CATEGORY_MAP[$hint]
+            ?? FinanceChartOfAccounts::normalize($hint, $payee.' '.$purpose.' '.(string) $document->title);
         $paidOn = (string) ($money['paid_on'] ?? '');
         $currency = strtoupper(trim((string) ($money['currency'] ?? '')));
 

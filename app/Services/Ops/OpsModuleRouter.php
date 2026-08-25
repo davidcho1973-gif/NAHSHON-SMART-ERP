@@ -9,6 +9,8 @@ use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\OpsIntakeItem as Item;
 use App\Models\OpsLaborReport;
+use App\Models\Site;
+use App\Support\FinanceChartOfAccounts;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -187,17 +189,37 @@ class OpsModuleRouter
 
         $batch = $item->ops_intake_batch_id ? OpsIntakeBatch::find($item->ops_intake_batch_id) : null;
 
+        // 멱등 규약(다른 커넥터와 동일): source_ref 가 같으면 두 번 만들지 않는다.
+        // 이 경로만 빠져 있어서, 같은 영수증을 문서함과 상황실 양쪽에서 등록하거나
+        // 되돌렸다 다시 반영하면 원장이 이중으로 잡혔다.
+        $sourceRef = "ops:{$item->id}";
+        if ($existing = MobileExpense::query()->where('source_ref', $sourceRef)->first()) {
+            $item->update(['status' => 'applied', 'applied_at' => now(), 'result_note' => '재무(지출) 등록 #'.$existing->id.' (기존 건)']);
+
+            return ['success' => true, 'expenseId' => $existing->id, 'amount' => (float) $existing->amount];
+        }
+
+        $vendor = trim((string) ($proposed['vendor'] ?? ''));
+        // 계정과목은 정본을 지난다 — 자유 문구('자재비')는 계정별 집계에 안 잡힌다.
+        $account = FinanceChartOfAccounts::normalize(
+            trim((string) ($proposed['category'] ?? '')),
+            $vendor.' '.$item->summary,
+        );
+
         $expense = MobileExpense::create([
+            'company_id' => $item->site_id ? Site::query()->whereKey($item->site_id)->value('company_id') : null,
             'site_id' => $item->site_id,
             'employee_id' => null,
-            'payment_type' => 'company_card',
-            'category' => trim((string) ($proposed['category'] ?? '')) ?: '자재비',
-            'description' => trim((string) ($proposed['vendor'] ?? '')).' '.$item->summary,
+            'payment_type' => 'corporate',
+            'category' => $account,
+            'accounting_account' => $account,
+            'description' => trim($vendor.' '.$item->summary),
             'amount' => $amount,
             'expense_date' => ($proposed['spent_on'] ?? null)
                 ? Carbon::parse((string) $proposed['spent_on'])->toDateString()
                 : Carbon::parse($batch?->created_at ?? now())->toDateString(),
             'status' => 'pending',
+            'source_ref' => $sourceRef,
             'ocr_data' => ['source' => 'ops-room', 'batch_id' => $item->ops_intake_batch_id, 'item_id' => $item->id],
         ]);
 
