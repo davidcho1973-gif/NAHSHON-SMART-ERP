@@ -3,6 +3,7 @@
 namespace App\Services\Wbs;
 
 use App\Models\Employee;
+use App\Models\EmployeePayrollProfile;
 use App\Models\PayrollTimesheet;
 use App\Models\SafetyWorkItem;
 use App\Models\SafetyWorkSignature;
@@ -86,6 +87,9 @@ class WbsLaborService
 
         $actualHours = array_sum(array_column($days, 'hours'));
         $plannedHours = (float) $item->manhours;
+        // 공정별 노무원가 — 실인시 × 그 사람의 급여 단가. 계획원가(planned_cost)와
+        // 나란히 두면 "이 공정에 돈이 얼마나 들어갔나"가 자재(경비 원장)+노무로 완성된다.
+        $actualCost = round(array_sum(array_column($days, 'cost')), 2);
 
         return [
             'success' => true,
@@ -96,8 +100,29 @@ class WbsLaborService
             'actualHours' => round($actualHours, 1),
             // 계획 대비 실적. 100% 초과면 예상보다 인시가 더 들어갔다는 뜻.
             'consumedPct' => $plannedHours > 0 ? (int) round($actualHours / $plannedHours * 100) : null,
+            'plannedCost' => $item->planned_cost !== null ? (float) $item->planned_cost : null,
+            'actualLaborCost' => $actualCost,
             'days' => $days,
         ];
+    }
+
+    /**
+     * 프로젝트 전체의 공정별 실노무원가 합 — 프로젝트 원가 집계(projectCost)가 부른다.
+     */
+    public function actualLaborCostFor(string $projectCode): float
+    {
+        $codes = WbsItem::query()
+            ->where('project_code', $projectCode)
+            ->where('level', WbsItem::LEVEL_SUBTASK)
+            ->pluck('wbs_code');
+
+        $total = 0.0;
+        foreach ($codes as $code) {
+            $labor = $this->laborFor((string) $code);
+            $total += (float) ($labor['actualLaborCost'] ?? 0);
+        }
+
+        return round($total, 2);
     }
 
     /**
@@ -111,9 +136,12 @@ class WbsLaborService
 
         $signed = $card->signatures->filter(fn (SafetyWorkSignature $s) => $s->signed && $s->employee_id !== null);
         $timesheets = $this->timesheetsFor($signed->pluck('employee_id')->all(), $date);
+        $rates = $this->hourlyRatesFor($signed->pluck('employee_id')->all());
 
-        $people = $signed->map(function (SafetyWorkSignature $s) use ($timesheets): array {
+        $people = $signed->map(function (SafetyWorkSignature $s) use ($timesheets, $rates): array {
             $ts = $timesheets->get($s->employee_id);
+            $hours = $ts ? round((int) $ts->payable_minutes / 60, 1) : null;
+            $rate = $rates->get($s->employee_id);
 
             return [
                 'employeeId' => $s->employee_id,
@@ -121,8 +149,10 @@ class WbsLaborService
                 'role' => $s->role,
                 // 타임시트는 분 단위로 기록된다(payable_minutes = 정규 + 초과).
                 // 출퇴근 기록이 아직 없으면 null — 0 으로 뭉개면 "일 안 했다"로 오독된다.
-                'hours' => $ts ? round((int) $ts->payable_minutes / 60, 1) : null,
+                'hours' => $hours,
                 'timesheetStatus' => $ts?->status,
+                // 노무원가: 실근무 × 시간당 단가. 단가 미설정(0원)은 null — R1 의 0원 감시가 따로 잡는다.
+                'cost' => ($hours !== null && $rate !== null) ? round($hours * $rate, 2) : null,
             ];
         })->values()->all();
 
@@ -134,7 +164,36 @@ class WbsLaborService
             'slotCount' => $card->signatures->count(),
             'people' => $people,
             'hours' => round(array_sum(array_filter(array_column($people, 'hours'))), 1),
+            'cost' => round(array_sum(array_filter(array_column($people, 'cost'))), 2),
         ];
+    }
+
+    /**
+     * 직원별 시간당 단가. 급여 방식이 달라도 시간 단가로 환산한다
+     * (시급=그대로 · 일당=÷8h · 연봉=÷2080h — PayrollCalculator 와 같은 환산).
+     *
+     * @param  array<int, int>  $employeeIds
+     * @return Collection<int, float>  employee_id => 시간당 단가 (미설정·0원은 제외)
+     */
+    private function hourlyRatesFor(array $employeeIds): Collection
+    {
+        if ($employeeIds === []) {
+            return collect();
+        }
+
+        return EmployeePayrollProfile::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->get(['employee_id', 'pay_type', 'base_rate'])
+            ->mapWithKeys(function (EmployeePayrollProfile $p): array {
+                $rate = match ($p->pay_type) {
+                    'daily' => (float) $p->base_rate / 8,
+                    'salary' => (float) $p->base_rate / 2080,
+                    default => (float) $p->base_rate,
+                };
+
+                return [$p->employee_id => $rate > 0 ? round($rate, 4) : null];
+            })
+            ->filter(fn ($v) => $v !== null);
     }
 
     /**
