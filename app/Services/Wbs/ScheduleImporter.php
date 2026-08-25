@@ -373,10 +373,15 @@ class ScheduleImporter
             }
         });
 
+        // 수입 직후 CPM 재계산 — 시트에 여유(LS/LF/Float)가 없어도 선행관계만 있으면 채워진다.
+        // 기준 간격을 시트의 날짜 그대로 포착하므로 계획 날짜는 움직이지 않는다.
+        $cpm = app(CpmEngine::class)->recompute($projectCode);
+
         return $counts + [
             'milestones' => count($milestones),
             'activities' => count($activities),
-            'warnings' => $warnings,
+            'warnings' => array_merge($warnings, is_array($cpm['warnings'] ?? null) ? $cpm['warnings'] : []),
+            'cpm' => $cpm,
         ];
     }
 
@@ -769,10 +774,14 @@ class ScheduleImporter
             }
         });
 
+        // 수입 직후 CPM 재계산 — persistBySection 과 동일한 이유(위 주석 참고).
+        $cpm = app(CpmEngine::class)->recompute($projectCode);
+
         return $counts + [
             'milestones' => count($milestones),
             'activities' => count($activities),
-            'warnings' => $warnings,
+            'warnings' => array_merge($warnings, is_array($cpm['warnings'] ?? null) ? $cpm['warnings'] : []),
+            'cpm' => $cpm,
         ];
     }
 

@@ -607,16 +607,26 @@ class OpsIntakeService
             return ['success' => false, 'error' => $res['error'] ?? '반영에 실패했습니다.', 'gated' => $res['gated'] ?? false];
         }
 
+        // CPM 엔진이 이 편집의 파급(후속 이동·예상 준공)을 함께 알려준다 — 결과 메모에 남긴다.
+        $cpm = is_array($res['cpm'] ?? null) ? $res['cpm'] : null;
+        $note = '공정표 반영 완료';
+        if ($cpm !== null && ! ($cpm['skipped'] ?? true) && (int) ($cpm['movedCount'] ?? 0) > 0) {
+            $note .= ' · 후속 '.$cpm['movedCount'].'건 일정 이동';
+            if (! empty($cpm['projectedEnd'])) {
+                $note .= ' · 예상 준공 '.$cpm['projectedEnd'];
+            }
+        }
+
         $item->update([
             'status' => 'applied',
             'previous' => $previous,
             'proposed' => $patch,
             'applied_at' => now(),
             'applied_by_id' => $userId,
-            'result_note' => '공정표 반영 완료',
+            'result_note' => mb_substr($note, 0, 300),
         ]);
 
-        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
+        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean, 'cpm' => $cpm];
     }
 
     /**

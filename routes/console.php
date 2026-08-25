@@ -67,6 +67,10 @@ Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18
 // 매일 새벽에 돌려도 멱등이라 안전하고, 월중에 등록된 장비도 그 달치가 잡힌다.
 Schedule::command('finance:accrue-rentals')->dailyAt(Org::time('schedule.rental_accrual_at', '05:30'));
 
+// 공정 CPM 안전망 — 평소에는 편집 순간마다 재계산되므로 바꿀 게 없어야 정상.
+// 다른 경로로 어긋난 여유·주공정·예상 준공을 하루 안에 스스로 바로잡는다.
+Schedule::command('wbs:recompute-cpm')->dailyAt(Org::time('schedule.cpm_recompute_at', '04:30'));
+
 // "AI 분석 중"에서 멈춘 문서 되살리기 — 작업 프로세스가 죽으면 상태를 되돌릴 사람이 없다.
 // 한 번은 자동 재시도, 그래도 멈추면 실패로 표시해 사용자가 알 수 있게 한다.
 Schedule::command('docs:reap-stuck')->everyTenMinutes();

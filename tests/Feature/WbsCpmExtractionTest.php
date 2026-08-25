@@ -83,18 +83,26 @@ class WbsCpmExtractionTest extends TestCase
         $this->assertSame('A010', $a010->activity_id);
         $this->assertSame('GC', $a010->trade);
         $this->assertNull($a010->company);                       // 협력사는 사람이 나중에 배정
-        $this->assertTrue($a010->is_critical);
         $this->assertSame('2026-08-03', $a010->planned_start->toDateString());
         $this->assertSame('2026-08-10', $a010->planned_end->toDateString());
-        $this->assertSame(0, $a010->float_days);
         $this->assertSame('2 carpenters + 3 laborers', $a010->crew_text);
         $this->assertSame(5.0, (float) $a010->crew_size);        // CrewParser: 2 + 3
 
+        // 여유·주공정은 문서의 값을 복사하지 않고 사내 CPM 엔진이 재계산한다(정본 하나 원칙).
+        // A020 종료(08-18)와 A030 시작(09-10) 사이 23일 버퍼가 있으므로 A010·A020 은
+        // 그만큼 밀려도 준공(09-15)이 안 움직인다 — 주공정은 A030 뿐이다.
+        $this->assertFalse($a010->is_critical);
+        $this->assertSame(23, $a010->float_days);
+
         $a020 = WbsItem::where('wbs_code', 'CPMX-01-W-A020')->first();
         $this->assertSame(['A010'], $a020->preds);               // 선행관계 보존
-        $this->assertSame(3, $a020->float_days);
+        $this->assertSame(22, $a020->float_days);
         $this->assertFalse($a020->is_critical);
         $this->assertSame('ELEC', $a020->trade);
+
+        $a030 = WbsItem::where('wbs_code', 'CPMX-01-W-A030')->first();
+        $this->assertTrue($a030->is_critical);
+        $this->assertSame(0, $a030->float_days);
     }
 
     public function test_activities_are_phased_by_milestone(): void

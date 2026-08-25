@@ -77,7 +77,7 @@ class ScheduleImportTest extends TestCase
         $this->assertEqualsCanonicalizing(['GC', 'ELEC'], $tasks);
     }
 
-    public function test_preserves_cpm_predecessors_float_and_critical_path(): void
+    public function test_preserves_predecessors_and_recomputes_float_critical_path(): void
     {
         $this->import();
 
@@ -86,10 +86,16 @@ class ScheduleImportTest extends TestCase
         $this->assertSame(0, $a030->float_days);
         $this->assertTrue($a030->is_critical);
 
+        // 여유·LS/LF 는 엑셀 값을 복사하지 않고 사내 CPM 엔진이 재계산한다(정본 하나 원칙).
+        // A020(종료 08-14)은 A030 시작(08-17) 전날인 08-16 까지 밀려도 준공이 안 움직인다 → 여유 2일.
         $a020 = WbsItem::where('activity_id', 'A020')->first();
-        $this->assertSame(5, $a020->float_days);
+        $this->assertSame(2, $a020->float_days);
         $this->assertFalse($a020->is_critical);
-        $this->assertSame('2026-08-21', $a020->late_end->toDateString());
+        $this->assertSame('2026-08-16', $a020->late_end->toDateString());
+
+        // 날짜 자체는 시트 그대로다 — 엔진은 수입 시 날짜를 옮기지 않는다.
+        $this->assertSame('2026-08-10', $a020->planned_start->toDateString());
+        $this->assertSame('2026-08-14', $a020->planned_end->toDateString());
     }
 
     public function test_parses_crew_into_headcount_and_equipment(): void

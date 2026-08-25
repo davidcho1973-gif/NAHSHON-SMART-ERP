@@ -80,6 +80,9 @@ class WbsService
             'success' => true,
             'projectId' => $projectCode,
             'progress' => $this->weightedProgress($subtasks),
+            // 예상 준공 = 마지막 작업의 계획 종료일. CPM 엔진이 일정을 최신으로 유지하므로
+            // 이 최대값이 곧 "지금 이대로 가면 언제 끝나는가"다.
+            'projectedEnd' => $subtasks->map(fn (WbsItem $i) => $i->planned_end?->toDateString())->filter()->max(),
             'totalWbsCount' => $subtasks->count(),
             'completedCount' => $subtasks->where('status', WbsItem::STATUS_DONE)->count(),
             'inProgressCount' => $subtasks->where('status', WbsItem::STATUS_IN_PROGRESS)->count(),
@@ -107,7 +110,10 @@ class WbsService
         $this->syncProgressToStatus($item);
         $item->save();
 
-        return ['success' => true, 'wbs_id' => $wbsCode, 'status' => $status, 'progress' => $item->progress];
+        // 상태 변화는 CPM 의 고정/이동 판정을 바꾼다(진행중·완료는 날짜가 실적으로 굳는다).
+        $cpm = $item->wasChanged('status') ? $this->recomputeCpm($item) : null;
+
+        return ['success' => true, 'wbs_id' => $wbsCode, 'status' => $status, 'progress' => $item->progress, 'cpm' => $cpm];
     }
 
     /**
@@ -198,7 +204,23 @@ class WbsService
 
         $item->save();
 
-        return ['success' => true, 'wbs_id' => $wbsCode];
+        $datesEdited = $item->wasChanged(['planned_start', 'planned_end']);
+        $needsCpm = $datesEdited || $item->wasChanged(['days', 'status']);
+
+        // 사람이 이 행의 날짜를 직접 정했다 — CPM 기준선(시작일·선행 간격)을 새 날짜로 다시 포착하게 한다.
+        if ($datesEdited) {
+            $payload = (array) $item->payload;
+            if (array_key_exists('cpm_baseline', $payload)) {
+                unset($payload['cpm_baseline']);
+                $item->payload = $payload ?: null;
+                $item->save();
+            }
+        }
+
+        // 일정·공기·상태가 바뀌면 후속 공정과 준공일을 즉시 다시 계산한다.
+        $cpm = $needsCpm ? $this->recomputeCpm($item) : null;
+
+        return ['success' => true, 'wbs_id' => $wbsCode, 'cpm' => $cpm];
     }
 
     /**
@@ -469,7 +491,10 @@ class WbsService
             ]);
         });
 
-        return ['success' => true, 'wbs_code' => $created->wbs_code, 'node_no' => $created->node_no];
+        // 새 행이 끼어들었다 — 여유·주공정을 최신으로 맞춘다(선행이 없으면 엔진이 알아서 생략).
+        $cpm = $this->recomputeCpm($created);
+
+        return ['success' => true, 'wbs_code' => $created->wbs_code, 'node_no' => $created->node_no, 'cpm' => $cpm];
     }
 
     /**
@@ -809,6 +834,22 @@ class WbsService
         $weighted = $subtasks->sum(fn (WbsItem $s) => $weight($s) * $s->effectiveProgress());
 
         return (int) round($weighted / $totalWeight);
+    }
+
+    /**
+     * 프로젝트 CPM 재계산. 실패해도 편집 자체를 막지 않는다 — 다음 편집 때 다시 돈다.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function recomputeCpm(WbsItem $item): ?array
+    {
+        try {
+            return app(CpmEngine::class)->recompute((string) $item->project_code);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**

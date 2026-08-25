@@ -10063,7 +10063,7 @@
             '<div class="kpi-card" style="border-left:3px solid #7c3aed"><div class="kpi-label">전체 진척률</div><div class="kpi-value" style="color:#7c3aed">' + (sum.progress || 0) + '%</div>' +
             '<div style="height:4px;background:var(--bg-base);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:' + (sum.progress || 0) + '%;background:linear-gradient(90deg,#7c3aed,#2563eb)"></div></div>' +
             '<div class="kpi-meta"><span style="color:var(--text-secondary)">작업 ' + (sum.completedCount || 0) + '/' + totalSubTasks + ' 완료</span></div></div>' +
-            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">준공을 쥔 작업 (임계경로)</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">이 작업이 늦으면 준공일이 그대로 밀립니다</span></div></div>' +
+            '<div class="kpi-card" style="border-left:3px solid #ef4444"><div class="kpi-label">준공을 쥔 작업 (임계경로)</div><div class="kpi-value" style="color:#ef4444">' + criticalDone + '<span style="font-size:15px;color:var(--text-tertiary)"> / ' + criticalCount + '</span></div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + (sum.projectedEnd ? '예상 준공 ' + sum.projectedEnd + ' — 이 작업이 늦으면 그대로 밀립니다' : '이 작업이 늦으면 준공일이 그대로 밀립니다') + '</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">오늘 안전카드</div><div class="kpi-value" style="color:' + (cardsToday > 0 ? '#3b82f6' : 'var(--text-tertiary)') + '">' + cardsToday + '</div><div class="kpi-meta"><span style="color:' + (tbmGatedCount > 0 ? '#f59e0b' : 'var(--text-secondary)') + '">' + (tbmGatedCount > 0 ? 'TBM 대기 ' + tbmGatedCount + '건 — 서명해야 시작됩니다' : '오늘 계획됨') + '</span></div></div>' +
             '</div>';
 
@@ -10241,6 +10241,16 @@
         window.open('https://drive.google.com/drive/folders/1rC8RSb966nL3H_vaqKD-LkDLWsNdfnl3', '_blank');
       };
 
+      // CPM 파급 알림 — 이 편집으로 후속 공정이 움직였으면 몇 건이, 준공이 언제로 바뀌는지 말해준다.
+      // 조용히 바뀌면 "왜 날짜가 달라졌지?"가 되므로, 바뀐 순간에 말하는 것이 원칙이다.
+      window.wbsCpmNotice = function(res) {
+        var cpm = res && res.cpm;
+        if (!cpm || cpm.skipped || !(Number(cpm.movedCount) > 0)) return;
+        var msg = '일정 연동: 후속 ' + cpm.movedCount + '건이 함께 이동했습니다';
+        if (cpm.projectedEnd) msg += ' · 예상 준공 ' + cpm.projectedEnd;
+        if (window.showToast) window.showToast(msg, false);
+      };
+
       // 빠른 상태 전환 (시작/완료/되돌리기) — TBM 게이트는 서버가 판정.
       window.toggleWbsComplete = async function(wbsId, newStatus) {
         if (window.apiCache) {
@@ -10259,6 +10269,7 @@
         try {
           var res = await window.API.markWbsStatus(wbsId, newStatus);
           if (res && res.success) {
+            window.wbsCpmNotice(res);
             renderWbs();
           } else {
             alert((res && res.error) || '상태 변경에 실패했습니다.');
@@ -10729,6 +10740,7 @@
           try {
             var res = await window.API.updateWbsRow(wbsId, updates);
             if (res.success) {
+              window.wbsCpmNotice(res);
               modal.remove();
               window.refreshWbs();
             } else {
