@@ -406,6 +406,7 @@
             chipReview: '확인 필요', chipAuto: '자동', chipHand: '직접',
             more: '그 밖에', messages: '메시지', messagesSub: '현장 채팅방과 공지',
             opsRoom: '현장 상황실', opsRoomSub: '오늘 한 일 · 자재 · 이슈 올리기',
+            receipts: '영수증 내기', receiptsSub: '사진 한 장으로 경비 접수 · 환급 확인',
             weekRegular: '이번 주 정규', ot: '연장', regular: '정규', byDay: '일자별',
             unsettled: '미확정', inProgress: '진행 중', noWeek: '이번 주 기록이 아직 없습니다.',
             liveNote: '오늘 줄은 지금까지 일한 시간입니다. 연장 구분과 확정은 하루가 끝날 때 계산됩니다.',
@@ -445,6 +446,7 @@
             chipReview: 'Review', chipAuto: 'Auto', chipHand: 'Manual',
             more: 'More', messages: 'Messages', messagesSub: 'Site chats and notices',
             opsRoom: 'Ops room', opsRoomSub: 'Report work · materials · issues',
+            receipts: 'Receipts', receiptsSub: 'Submit expenses with one photo · check reimbursements',
             weekRegular: 'Regular this week', ot: 'OT', regular: 'Regular', byDay: 'By day',
             unsettled: 'Pending', inProgress: 'In progress', noWeek: 'No records this week yet.',
             liveNote: "Today's row is time worked so far. Overtime split is calculated at day close.",
@@ -484,6 +486,7 @@
             chipReview: 'Revisar', chipAuto: 'Auto', chipHand: 'Manual',
             more: 'Más', messages: 'Mensajes', messagesSub: 'Chats y avisos del sitio',
             opsRoom: 'Sala de obra', opsRoomSub: 'Reportar trabajo · materiales · problemas',
+            receipts: 'Recibos', receiptsSub: 'Envíe gastos con una foto · vea reembolsos',
             weekRegular: 'Regular esta semana', ot: 'Extra', regular: 'Regular', byDay: 'Por día',
             unsettled: 'Pendiente', inProgress: 'En curso', noWeek: 'Sin registros esta semana.',
             liveNote: 'La fila de hoy es el tiempo trabajado hasta ahora. Las horas extra se calculan al cierre del día.',
@@ -657,6 +660,8 @@
             (UNREAD ? ' · ' + UNREAD : '') + '</b><span>' + T.messagesSub + '</span></div><span class="go">›</span></a>' +
             '<a class="link" href="{{ route('attendance-app.ops-room') }}"><div><b>' + T.opsRoom + '</b>' +
             '<span>' + T.opsRoomSub + '</span></div><span class="go">›</span></a>' +
+            '<a class="link" href="{{ route('expense-app.index') }}"><div><b>🧾 ' + T.receipts + '</b>' +
+            '<span>' + T.receiptsSub + '</span></div><span class="go">›</span></a>' +
             '</div>';
         return h;
     }

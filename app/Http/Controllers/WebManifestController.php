@@ -52,6 +52,20 @@ class WebManifestController extends Controller
         );
     }
 
+    /** 영수증 앱 — 직원 폰의 경비 접수 전용. */
+    public function expense(): JsonResponse
+    {
+        return $this->manifest(
+            id: 'expense-app',
+            name: '영수증 · '.Org::name(),
+            shortName: '영수증',
+            start: route('expense-app.index'),
+            scope: route('expense-app.index'),
+            theme: '#FEE500',
+            background: '#FFFFFF',
+        );
+    }
+
     /** 관리자 ERP 본체. 정적 파일이었는데 고객사 이름이 박혀 있어 라우트로 옮겼다. */
     public function erp(): JsonResponse
     {

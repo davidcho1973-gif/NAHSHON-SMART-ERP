@@ -191,6 +191,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/home', [AttendanceAppController::class, 'home'])->name('attendance-app.home');
     Route::post('/attendance-app/punch', [AttendanceAppController::class, 'punch'])->name('attendance-app.punch');
     Route::post('/attendance-app/correction', [AttendanceAppController::class, 'requestCorrection'])->name('attendance-app.correction');
+
+    // 영수증 앱 — 사진 한 장으로 경비 접수(ERP 등록과 같은 판독·원장·승인 회로).
+    Route::get('/expense-app', [\App\Http\Controllers\ExpenseAppController::class, 'index'])->name('expense-app.index');
+    Route::post('/expense-app/submit', [\App\Http\Controllers\ExpenseAppController::class, 'submit'])->name('expense-app.submit');
+    Route::get('/expense-app/list', [\App\Http\Controllers\ExpenseAppController::class, 'list'])->name('expense-app.list');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
     Route::post('/ops-api/photo', [OpsPhotoController::class, 'store'])->name('ops.photo');
 
@@ -267,6 +272,7 @@ Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('s
 // 설치가 조용히 실패한다 — 안에는 아이콘 주소와 화면 이름뿐이라 감출 것이 없다.
 Route::get('/gate/{site}/manifest.webmanifest', [WebManifestController::class, 'gate'])->name('gate.manifest');
 Route::get('/worker-app.webmanifest', [WebManifestController::class, 'worker'])->name('worker-app.manifest');
+Route::get('/expense-app.webmanifest', [WebManifestController::class, 'expense'])->name('expense-app.manifest');
 Route::get('/erp.webmanifest', [WebManifestController::class, 'erp'])->name('erp.manifest');
 
 // 고객사 로고 그림. 로그인 화면과 게이트 화면이 쓰기 때문에 로그인 없이 열린다 —
