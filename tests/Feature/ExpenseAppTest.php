@@ -124,6 +124,67 @@ class ExpenseAppTest extends TestCase
         $this->assertSame(30.0, (float) $res->json('claimable'), '승인된 개인카드 = 다음 급여 환급 예정');
     }
 
+    public function test_수기_현장_메모가_경비를_그_현장으로_귀속시킨다(): void
+    {
+        $hff = Site::create(['code' => 'HFF-02', 'name' => '수소충전소 2호', 'status' => 'active']);
+        $project = \App\Models\Project::create(['project_code' => 'HFF-P', 'name' => 'HFF 공사', 'construction_type' => 'equipment_setting', 'site_id' => $hff->id]);
+
+        $this->fakeOcr([
+            'vendor_name' => 'Graybar', 'amount' => 210.0, 'date' => '2026-08-25',
+            'accounting_account' => '5201 Job Materials', 'category' => '5201 Job Materials',
+            'description' => 'conduit', 'handwritten_notes' => 'HFF-02 현장 배관자재', 'site_hint' => 'HFF-02',
+            'subtotal' => 195.0, 'tax' => 15.0, 'tip' => 0,
+        ]);
+
+        $this->submit()->assertOk()->assertJsonPath('analyzed.siteMatched', 'HFF-02');
+
+        $expense = MobileExpense::query()->first();
+        $this->assertSame($hff->id, $expense->site_id, '수기 메모의 현장이 소속 현장을 이긴다 — 원가가 맞는 현장에 앉는다');
+        $this->assertSame($project->id, $expense->project_id, '그 현장의 유일한 프로젝트까지 귀속');
+        $this->assertSame(15.0, (float) $expense->ocr_data['tax'], '세액이 분리 저장된다');
+    }
+
+    public function test_같은_돈이_두번_들어오면_중복_의심이_표시된다(): void
+    {
+        // 다른 입구(문서함 등)로 이미 들어와 있던 같은 영수증.
+        MobileExpense::create([
+            'site_id' => $this->employee->site_id, 'payment_type' => 'corporate',
+            'category' => '5201 Job Materials', 'description' => '[문서함] Home Depot · 자재',
+            'amount' => 84.2, 'expense_date' => '2026-08-24', 'status' => 'pending',
+            'ocr_data' => ['vendor_name' => 'Home Depot'],
+        ]);
+
+        $this->fakeOcr([
+            'vendor_name' => 'Home Depot', 'amount' => 84.2, 'date' => '2026-08-24',
+            'accounting_account' => '5201 Job Materials', 'category' => '5201 Job Materials',
+            'description' => 'PVC pipe', 'handwritten_notes' => '', 'site_hint' => '',
+        ]);
+
+        $this->submit()->assertOk()->assertJsonPath('analyzed.duplicateSuspect', true);
+
+        $mine = MobileExpense::query()->orderByDesc('id')->first();
+        $this->assertStringContainsString('중복 의심', $mine->description, '승인 목록에서 바로 보여야 한다');
+        $this->assertSame('pending', $mine->status, '막지 않는다 — 판단은 승인하는 사람이 한다');
+    }
+
+    public function test_거래처가_다르면_같은_금액이라도_의심하지_않는다(): void
+    {
+        // 오탐은 신뢰를 깎는다 — 금액·날짜가 같아도 거래처가 다르면 조용해야 한다.
+        MobileExpense::create([
+            'site_id' => $this->employee->site_id, 'payment_type' => 'corporate',
+            'category' => '5201 Job Materials', 'description' => '[문서함] Home Depot · 자재',
+            'amount' => 84.2, 'expense_date' => '2026-08-24', 'status' => 'pending',
+            'ocr_data' => ['vendor_name' => 'Home Depot'],
+        ]);
+        $this->fakeOcr([
+            'vendor_name' => 'Lowes', 'amount' => 84.2, 'date' => '2026-08-24',
+            'accounting_account' => '5201 Job Materials', 'category' => '5201 Job Materials',
+            'description' => 'other stuff', 'handwritten_notes' => '', 'site_hint' => '',
+        ]);
+
+        $this->submit()->assertOk()->assertJsonPath('analyzed.duplicateSuspect', false);
+    }
+
     public function test_앱_화면과_매니페스트가_열린다(): void
     {
         $this->actingAs($this->user)->get(route('expense-app.index'))->assertOk()->assertSee('영수증');

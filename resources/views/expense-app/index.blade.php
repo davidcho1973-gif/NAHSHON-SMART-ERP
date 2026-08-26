@@ -188,7 +188,7 @@
         ko: { title: '영수증', tabSend: '영수증 내기', tabMine: '내 영수증',
             shoot: '영수증 사진 찍기', shootMore: '한 장 더 찍기', album: '앨범에서 여러 장 고르기',
             readyToSend: '제출 대기', itemNeedAmount: '금액을 못 읽었습니다 — 금액을 적어 주세요',
-            doneCount: '{n}건 접수', doneNote: '재무 승인 대기로 들어갔습니다.',
+            doneCount: '{n}건 접수', doneNote: '재무 승인 대기로 들어갔습니다.', dupWarn: '중복 의심 — 이미 낸 영수증일 수 있습니다',
             stillNeed: '{n}장은 금액 입력 후 다시 제출해 주세요.', failedNote: '{n}장은 실패했습니다 — 다시 시도해 주세요.',
             payType: '누구 돈으로 냈나요?', personal: '내 카드 (환급받기)', corporate: '회사 카드',
             personalHint: '승인되면 급여에 환급으로 함께 지급됩니다.', corporateHint: '회사 카드 지출로 접수됩니다.',
@@ -202,7 +202,7 @@
         en: { title: 'Receipts', tabSend: 'Submit', tabMine: 'My receipts',
             shoot: 'Take a photo of the receipt', shootMore: 'Take another photo', album: 'Pick multiple from album',
             readyToSend: 'Ready to submit', itemNeedAmount: 'Could not read the amount — please enter it',
-            doneCount: '{n} submitted', doneNote: 'Sent for finance approval.',
+            doneCount: '{n} submitted', doneNote: 'Sent for finance approval.', dupWarn: 'Possible duplicate — may already be submitted',
             stillNeed: '{n} photo(s) need an amount — enter and submit again.', failedNote: '{n} photo(s) failed — please retry.',
             payType: 'Whose money was used?', personal: 'My card (reimburse me)', corporate: 'Company card',
             personalHint: 'Once approved, it is reimbursed with your paycheck.', corporateHint: 'Filed as a company-card expense.',
@@ -216,7 +216,7 @@
         es: { title: 'Recibos', tabSend: 'Enviar', tabMine: 'Mis recibos',
             shoot: 'Tomar foto del recibo', shootMore: 'Tomar otra foto', album: 'Elegir varias del álbum',
             readyToSend: 'Listo para enviar', itemNeedAmount: 'No se pudo leer el monto — ingréselo',
-            doneCount: '{n} enviados', doneNote: 'Enviado para aprobación de finanzas.',
+            doneCount: '{n} enviados', doneNote: 'Enviado para aprobación de finanzas.', dupWarn: 'Posible duplicado — quizá ya fue enviado',
             stillNeed: '{n} foto(s) necesitan monto — ingrese y envíe de nuevo.', failedNote: '{n} foto(s) fallaron — reintente.',
             payType: '¿Con qué dinero se pagó?', personal: 'Mi tarjeta (reembolso)', corporate: 'Tarjeta de la empresa',
             personalHint: 'Al aprobarse, se reembolsa con su pago.', corporateHint: 'Se registra como gasto de la empresa.',
@@ -378,7 +378,9 @@
                 ' · $' + total.toLocaleString(undefined, {minimumFractionDigits: 2}) + '</div>' +
                 '<div class="meta">' + doneNow.map(function (q) {
                     return '· ' + (q.result.vendor || q.file.name || '') + ' — $' +
-                        Number(q.result.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+                        Number(q.result.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2}) +
+                        (q.result.siteMatched ? ' <span style="color:var(--info)">📍' + q.result.siteMatched + '</span>' : '') +
+                        (q.result.duplicateSuspect ? ' <b style="color:var(--warn)">' + T.dupWarn + '</b>' : '');
                 }).join('<br>') + '</div>' +
                 '<div class="meta" style="margin-top:6px;font-weight:700">' + T.doneNote +
                 (stillNeed ? '<br>' + T.stillNeed.replace('{n}', stillNeed) : '') +

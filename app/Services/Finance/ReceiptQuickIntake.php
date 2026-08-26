@@ -73,10 +73,33 @@ class ReceiptQuickIntake
         $date = (string) ($ocr['date'] ?? '');
         $expenseDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : now()->toDateString();
 
+        // ① 수기 메모의 현장 힌트 → 현장·프로젝트 귀속. 확실할 때만 소속 현장을 덮는다 —
+        //    "HFF 현장" 이라고 쓴 영수증이 그 현장 원가로 앉는다.
+        $siteId = $employee->site_id;
+        $projectId = null;
+        $hint = app(ReceiptHintResolver::class)->resolve(
+            (string) ($ocr['site_hint'] ?? ''),
+            (string) ($ocr['handwritten_notes'] ?? ''),
+        );
+        if ($hint !== null) {
+            $siteId = $hint['site_id'];
+            $projectId = $hint['project_id'];
+        }
+
+        // ④ 중복 의심 — 다른 입구(문서함·ERP)로 이미 들어온 같은 돈일 수 있다.
+        //    막지 않고 표시한다: 판단은 승인하는 사람이 한다.
+        $vendorId = \App\Models\Vendor::matchByName($vendor);
+        $sentry = app(DuplicateExpenseSentry::class);
+        $suspect = $sentry->findSuspect(round($amount, 2), $expenseDate, $vendorId, $vendor);
+        if ($suspect !== null) {
+            $description .= $sentry->note($suspect);
+        }
+
         $expense = MobileExpense::create([
             'company_id' => $employee->company_id,
-            'vendor_id' => \App\Models\Vendor::matchByName($vendor),
-            'site_id' => $employee->site_id,
+            'vendor_id' => $vendorId,
+            'site_id' => $siteId,
+            'project_id' => $projectId,
             'employee_id' => $employee->id,
             'payment_type' => $paymentType === 'corporate' ? 'corporate' : 'personal',
             'category' => $account,
@@ -89,7 +112,11 @@ class ReceiptQuickIntake
             'receipt_file' => ReceiptFilePayload::encode((string) Storage::disk('public')->get($path)),
             'receipt_mime_type' => $photo->getMimeType() ?: 'image/jpeg',
             'receipt_original_name' => $photo->getClientOriginalName() ?: basename($path),
-            'ocr_data' => $ocr + ['source' => 'expense-app'],
+            'ocr_data' => $ocr + array_filter([
+                'source' => 'expense-app',
+                'site_attributed' => $hint['matched'] ?? null,
+                'duplicate_suspect_id' => $suspect?->id,
+            ]),
             'status' => 'pending',
         ]);
 
@@ -101,6 +128,9 @@ class ReceiptQuickIntake
                 'amount' => (float) $expense->amount,
                 'account' => $account,
                 'date' => $expenseDate,
+                'tax' => (float) ($ocr['tax'] ?? 0),
+                'siteMatched' => $hint['matched'] ?? null,
+                'duplicateSuspect' => $suspect !== null,
                 'ocrWorked' => $ocr !== [] && is_numeric($ocr['amount'] ?? null),
             ],
         ];

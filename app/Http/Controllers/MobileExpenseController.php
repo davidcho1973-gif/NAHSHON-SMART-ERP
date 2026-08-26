@@ -179,6 +179,19 @@ class MobileExpenseController extends Controller
             data_get($ocrData, 'handwritten_notes')
         );
 
+        // 중복 의심 — 다른 입구(영수증앱·문서함)로 이미 들어온 같은 돈일 수 있다.
+        // 막지 않고 설명란에 표시만 한다: 판단은 승인하는 사람이 한다.
+        $sentry = app(\App\Services\Finance\DuplicateExpenseSentry::class);
+        $suspect = $sentry->findSuspect(
+            (float) $request->input('amount'),
+            (string) $request->input('expense_date'),
+            null,
+            (string) data_get($ocrData, 'vendor_name', ''),
+        );
+        if ($suspect !== null) {
+            $description .= $sentry->note($suspect);
+        }
+
         $receiptPath = $request->input('receipt_path');
         $receiptStoragePath = $this->publicReceiptPath($receiptPath);
         $receiptFile = $this->storedReceiptFile($receiptStoragePath);

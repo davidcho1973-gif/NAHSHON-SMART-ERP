@@ -45,11 +45,15 @@ Do not guess missing values. If a value is completely missing, return an empty s
 Fields to extract:
 - vendor_name: Name of the store, merchant, or supplier.
 - amount: The total price/amount paid (decimal/float).
+- subtotal: Pre-tax subtotal if printed (decimal). 0 if not visible.
+- tax: Sales tax amount if printed (decimal). 0 if not visible. Never guess or compute it.
+- tip: Tip/gratuity amount if printed or handwritten (decimal). 0 if none.
 - date: Transaction date in YYYY-MM-DD format (if visible, otherwise empty string).
 - accounting_account: Choose the best accounting account from the chart below. Return the exact code and name.
 - category: Return the same exact value as accounting_account for ERP compatibility.
 - description: Brief details of items bought.
 - handwritten_notes: Any handwritten memo visible on the receipt, including job/site notes, purpose, initials, added totals, or short comments. Return an empty string if none is visible.
+- site_hint: If the receipt (printed or handwritten) names a job site, project, building, or work area (e.g. "LGES", "HFF-02", "B동 현장"), return that name/code exactly as written. Empty string if none.
 PROMPT
             . "\n\nChart of accounts:\n"
             . FinanceChartOfAccounts::promptList();
@@ -65,11 +69,15 @@ PROMPT
             'properties' => [
                 'vendor_name' => ['type' => 'string'],
                 'amount' => ['type' => 'number'],
+                'subtotal' => ['type' => 'number'],
+                'tax' => ['type' => 'number'],
+                'tip' => ['type' => 'number'],
                 'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD format or empty string'],
                 'category' => ['type' => 'string'],
                 'accounting_account' => ['type' => 'string'],
                 'description' => ['type' => 'string'],
                 'handwritten_notes' => ['type' => 'string'],
+                'site_hint' => ['type' => 'string'],
             ],
             'required' => ['vendor_name', 'amount', 'date', 'category', 'accounting_account', 'description', 'handwritten_notes'],
         ];
@@ -92,11 +100,18 @@ PROMPT
         return [
             'vendor_name' => trim((string) ($data['vendor_name'] ?? '')),
             'amount' => is_numeric($data['amount'] ?? null) ? (float) $data['amount'] : 0.0,
+            // 세금·팁·소계 — 총액 하나만 뽑으면 세액 집계·식대 공제 판정이 안 된다.
+            // 안 보이면 0 — 추측한 세액은 없는 세액보다 나쁘다.
+            'subtotal' => is_numeric($data['subtotal'] ?? null) ? (float) $data['subtotal'] : 0.0,
+            'tax' => is_numeric($data['tax'] ?? null) ? (float) $data['tax'] : 0.0,
+            'tip' => is_numeric($data['tip'] ?? null) ? (float) $data['tip'] : 0.0,
             'date' => $this->normalizeDate($data['date'] ?? null),
             'category' => $accountingAccount,
             'accounting_account' => $accountingAccount,
             'description' => trim((string) ($data['description'] ?? '')),
             'handwritten_notes' => trim((string) ($data['handwritten_notes'] ?? '')),
+            // 현장 힌트 — 수기 메모의 "HFF 현장" 한 줄이 경비의 현장 귀속이 된다.
+            'site_hint' => trim((string) ($data['site_hint'] ?? '')),
             'model' => $model,
         ];
     }

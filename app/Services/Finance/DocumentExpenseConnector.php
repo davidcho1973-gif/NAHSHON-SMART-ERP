@@ -107,6 +107,15 @@ class DocumentExpenseConnector
         // 목록에 사진 버튼이 안 떠서, 승인하는 사람이 근거를 못 보고 승인하게 된다.
         $attributes += $this->receiptCopy($document);
 
+        // 중복 의심 — 같은 영수증이 영수증앱·ERP 로 이미 들어왔을 수 있다. 문서함의
+        // 멱등 키(document:{id})는 같은 문서의 재분석만 막지, 입구가 다르면 못 잡는다.
+        // 내용(금액·날짜·거래처)으로 대조해 표시만 한다 — 판단은 승인하는 사람이 한다.
+        $sentry = app(DuplicateExpenseSentry::class);
+        $suspect = $sentry->findSuspect($amount, (string) $attributes['expense_date'], $attributes['vendor_id'] ?? null, $payee, $existing?->id);
+        if ($suspect !== null) {
+            $attributes['description'] .= $sentry->note($suspect);
+        }
+
         if (! $existing) {
             MobileExpense::query()->create($attributes + ['source_ref' => $sourceRef, 'status' => 'pending']);
 
