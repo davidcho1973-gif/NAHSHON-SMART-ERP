@@ -432,6 +432,9 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 // 대화방의 AI 도우미(@AI). 꺼져 있으면 참여자 목록에도, 입력창에도
                 // 나타나지 않는다 — 불러도 답이 없는 이름을 만들지 않기 위해서다.
                 'chat_assistant' => $anthropic,
+                // 영수증 앱(/expense-app). 이 값이 안 보이는 배포는 그 커밋 이전이다 —
+                // "새 화면이 404" 가 코드 문제인지 배포 지연인지 여기서 갈린다.
+                'expense_app' => true,
             ];
         })(),
         // 알림이 실제로 나갈 수 있는가. 열쇠(VAPID)가 없으면 화면은 알림 버튼을 감추고,
