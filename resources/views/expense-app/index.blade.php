@@ -54,10 +54,25 @@
         .card { background: var(--card); border-radius: 12px; border: 1px solid var(--line); padding: 16px; margin-bottom: 10px; }
 
         .shoot { display: block; width: 100%; border: none; border-radius: 12px; background: var(--kakao); color: var(--label);
-            padding: 26px 16px; font-size: 18px; font-weight: 800; cursor: pointer; text-align: center; }
+            padding: 22px 16px; font-size: 17px; font-weight: 800; cursor: pointer; text-align: center; }
         .shoot:active { background: var(--kakao-2); }
-        .shoot .big { font-size: 34px; display: block; margin-bottom: 6px; }
-        .preview { width: 100%; border-radius: 12px; margin-top: 10px; display: none; max-height: 300px; object-fit: contain; background: #fafafa; }
+        .shoot .big { font-size: 30px; display: block; margin-bottom: 4px; }
+        .album { display: block; width: 100%; border: 1px dashed rgba(0,0,0,.25); border-radius: 12px; background: #FFFDF0;
+            color: var(--ink-2); padding: 12px; font-size: 13.5px; font-weight: 700; cursor: pointer; text-align: center; margin-top: 8px; }
+
+        /* 올릴 사진 줄 — 장수만큼 쌓인다. 각 줄이 경비 한 건이 된다. */
+        .queue { margin-top: 10px; }
+        .q-item { display: flex; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--line);
+            border-radius: 12px; padding: 8px; margin-bottom: 8px; }
+        .q-item img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; background: #fafafa; flex: none; }
+        .q-item .q-body { flex: 1; min-width: 0; }
+        .q-item .q-name { font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .q-item .q-state { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+        .q-item .q-state.err { color: var(--bad); font-weight: 700; }
+        .q-item .q-state.ok { color: var(--ok); font-weight: 700; }
+        .q-item input.q-amount { margin-top: 6px; padding: 8px 10px; font-size: 14px; }
+        .q-item .q-x { flex: none; border: none; background: var(--paper); color: var(--ink-2); width: 30px; height: 30px;
+            border-radius: 999px; font-size: 15px; font-weight: 800; cursor: pointer; }
 
         .row { margin-top: 12px; }
         .row label { display: block; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 5px; }
@@ -127,8 +142,12 @@
         <button class="shoot" id="shoot">
             <span class="big">📷</span><span data-t="shoot">영수증 사진 찍기</span>
         </button>
-        <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
-        <img id="preview" class="preview" alt="">
+        <button class="album" id="album">🖼 <span data-t="album">앨범에서 여러 장 고르기</span></button>
+        {{-- 카메라는 한 장씩(찍을 때마다 줄에 쌓임), 앨범은 한 번에 여러 장. --}}
+        <input type="file" id="file-cam" accept="image/*" capture="environment" style="display:none">
+        <input type="file" id="file-album" accept="image/*" multiple style="display:none">
+
+        <div class="queue" id="queue"></div>
 
         <div class="card">
             <div class="row">
@@ -139,13 +158,8 @@
                 </div>
                 <div class="hint" id="pt-hint" data-t="personalHint">승인되면 급여에 환급으로 함께 지급됩니다.</div>
             </div>
-            <div class="row" id="amount-row" style="display:none">
-                <label data-t="amount">금액 ($)</label>
-                <input type="number" id="amount" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00">
-                <div class="hint" data-t="amountHint">사진이 흐려 금액을 못 읽었을 때만 입력하면 됩니다.</div>
-            </div>
             <div class="row">
-                <label data-t="memo">메모 (선택)</label>
+                <label data-t="memo">메모 (선택 · 이번에 올리는 전체에 적용)</label>
                 <input type="text" id="memo" maxlength="300" data-p="memoPh" placeholder="무엇에 쓴 돈인지 한 줄">
             </div>
             <button class="go" id="go" disabled data-t="send">제출</button>
@@ -172,7 +186,10 @@
     // ── 언어: 작업자앱과 같은 키를 공유한다 — 한 번 고르면 두 앱 모두 그 말로.
     var DICT = {
         ko: { title: '영수증', tabSend: '영수증 내기', tabMine: '내 영수증',
-            shoot: '영수증 사진 찍기', reshoot: '다른 사진으로 다시 찍기',
+            shoot: '영수증 사진 찍기', shootMore: '한 장 더 찍기', album: '앨범에서 여러 장 고르기',
+            readyToSend: '제출 대기', itemNeedAmount: '금액을 못 읽었습니다 — 금액을 적어 주세요',
+            doneCount: '{n}건 접수', doneNote: '재무 승인 대기로 들어갔습니다.',
+            stillNeed: '{n}장은 금액 입력 후 다시 제출해 주세요.', failedNote: '{n}장은 실패했습니다 — 다시 시도해 주세요.',
             payType: '누구 돈으로 냈나요?', personal: '내 카드 (환급받기)', corporate: '회사 카드',
             personalHint: '승인되면 급여에 환급으로 함께 지급됩니다.', corporateHint: '회사 카드 지출로 접수됩니다.',
             amount: '금액 ($)', amountHint: '사진이 흐려 금액을 못 읽었을 때만 입력하면 됩니다.',
@@ -183,7 +200,10 @@
             needPhoto: '먼저 영수증 사진을 찍어 주세요.',
             noEmp: '계정에 직원 정보가 연결되어 있지 않습니다.', noEmpHint: '관리자(인원관리)에게 연결을 요청하세요.' },
         en: { title: 'Receipts', tabSend: 'Submit', tabMine: 'My receipts',
-            shoot: 'Take a photo of the receipt', reshoot: 'Retake with another photo',
+            shoot: 'Take a photo of the receipt', shootMore: 'Take another photo', album: 'Pick multiple from album',
+            readyToSend: 'Ready to submit', itemNeedAmount: 'Could not read the amount — please enter it',
+            doneCount: '{n} submitted', doneNote: 'Sent for finance approval.',
+            stillNeed: '{n} photo(s) need an amount — enter and submit again.', failedNote: '{n} photo(s) failed — please retry.',
             payType: 'Whose money was used?', personal: 'My card (reimburse me)', corporate: 'Company card',
             personalHint: 'Once approved, it is reimbursed with your paycheck.', corporateHint: 'Filed as a company-card expense.',
             amount: 'Amount ($)', amountHint: 'Only needed if the photo is unclear.',
@@ -194,7 +214,10 @@
             needPhoto: 'Please take a photo of the receipt first.',
             noEmp: 'No employee record is linked to this account.', noEmpHint: 'Ask your manager to link it.' },
         es: { title: 'Recibos', tabSend: 'Enviar', tabMine: 'Mis recibos',
-            shoot: 'Tomar foto del recibo', reshoot: 'Tomar otra foto',
+            shoot: 'Tomar foto del recibo', shootMore: 'Tomar otra foto', album: 'Elegir varias del álbum',
+            readyToSend: 'Listo para enviar', itemNeedAmount: 'No se pudo leer el monto — ingréselo',
+            doneCount: '{n} enviados', doneNote: 'Enviado para aprobación de finanzas.',
+            stillNeed: '{n} foto(s) necesitan monto — ingrese y envíe de nuevo.', failedNote: '{n} foto(s) fallaron — reintente.',
             payType: '¿Con qué dinero se pagó?', personal: 'Mi tarjeta (reembolso)', corporate: 'Tarjeta de la empresa',
             personalHint: 'Al aprobarse, se reembolsa con su pago.', corporateHint: 'Se registra como gasto de la empresa.',
             amount: 'Monto ($)', amountHint: 'Solo si la foto no es clara.',
@@ -217,7 +240,12 @@
         if (ptHint) ptHint.textContent = personal ? T.personalHint : T.corporateHint;
     }
     document.querySelectorAll('.langs button').forEach(function (b) {
-        b.addEventListener('click', function () { lang = b.dataset.lang; try { localStorage.setItem('workerAppLang', lang); } catch (e) {} applyLang(); loadMine(); });
+        b.addEventListener('click', function () {
+            lang = b.dataset.lang;
+            try { localStorage.setItem('workerAppLang', lang); } catch (e) {}
+            applyLang();
+            if (hasEmployee) { renderQueue(); loadMine(); }
+        });
     });
 
     function toast(msg) {
@@ -241,18 +269,48 @@
     tabSend.addEventListener('click', function () { show('send'); });
     tabMine.addEventListener('click', function () { show('mine'); });
 
-    // ── 사진
-    var fileInput = document.getElementById('file'), picked = null;
-    document.getElementById('shoot').addEventListener('click', function () { fileInput.click(); });
-    fileInput.addEventListener('change', function () {
-        picked = fileInput.files && fileInput.files[0];
-        if (!picked) return;
-        var img = document.getElementById('preview');
-        img.src = URL.createObjectURL(picked); img.style.display = 'block';
-        document.querySelector('#shoot [data-t]').textContent = T.reshoot;
-        document.getElementById('go').disabled = false;
-        document.getElementById('result-card').style.display = 'none';
-    });
+    // ── 사진 줄(queue) — 찍거나 골라서 쌓는다. 한 장 = 경비 한 건.
+    var queue = []; // {file, url, state: 'ready'|'sending'|'done'|'need_amount'|'error', msg, amount, result}
+    var camInput = document.getElementById('file-cam');
+    var albumInput = document.getElementById('file-album');
+    document.getElementById('shoot').addEventListener('click', function () { camInput.click(); });
+    document.getElementById('album').addEventListener('click', function () { albumInput.click(); });
+
+    function addFiles(list) {
+        Array.prototype.forEach.call(list || [], function (f) {
+            queue.push({ file: f, url: URL.createObjectURL(f), state: 'ready', msg: '', amount: '' });
+        });
+        renderQueue();
+    }
+    camInput.addEventListener('change', function () { addFiles(camInput.files); camInput.value = ''; });
+    albumInput.addEventListener('change', function () { addFiles(albumInput.files); albumInput.value = ''; });
+
+    function renderQueue() {
+        var box = document.getElementById('queue');
+        var pending = queue.filter(function (q) { return q.state !== 'done'; });
+        box.innerHTML = pending.map(function (q) {
+            var i = queue.indexOf(q);
+            var state = '';
+            if (q.state === 'sending') state = '<div class="q-state">⏳ ' + T.reading + '</div>';
+            else if (q.state === 'need_amount') state = '<div class="q-state err">' + T.itemNeedAmount + '</div>' +
+                '<input class="q-amount" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="$ 0.00" ' +
+                'value="' + (q.amount || '') + '" oninput="window._qAmount(' + i + ', this.value)">';
+            else if (q.state === 'error') state = '<div class="q-state err">' + (q.msg || '') + '</div>';
+            else state = '<div class="q-state">' + T.readyToSend + '</div>';
+
+            return '<div class="q-item"><img src="' + q.url + '" alt="">' +
+                '<div class="q-body"><div class="q-name">' + (q.file.name || 'photo') + '</div>' + state + '</div>' +
+                (q.state === 'sending' ? '' : '<button class="q-x" onclick="window._qRemove(' + i + ')">✕</button>') +
+                '</div>';
+        }).join('');
+
+        var go = document.getElementById('go');
+        go.disabled = pending.length === 0 || queue.some(function (q) { return q.state === 'sending'; });
+        go.textContent = pending.length > 1 ? T.send + ' (' + pending.length + ')' : T.send;
+        document.querySelector('#shoot [data-t]').textContent = pending.length ? T.shootMore : T.shoot;
+    }
+    window._qRemove = function (i) { if (queue[i]) { queue.splice(i, 1); renderQueue(); } };
+    window._qAmount = function (i, v) { if (queue[i]) queue[i].amount = v; };
 
     // ── 결제 수단
     var personal = true;
@@ -265,54 +323,77 @@
     document.getElementById('pt-personal').addEventListener('click', function () { setPt(true); });
     document.getElementById('pt-corporate').addEventListener('click', function () { setPt(false); });
 
-    // ── 제출: 사진을 보내면 서버가 ERP 와 같은 AI 로 읽는다. 흐리면 금액만 물어본다.
+    // ── 제출: 줄에 쌓인 사진을 한 장씩 차례로 보낸다(한 요청 한 장 — 용량 제한을
+    //    사실상 없앤다). 각 장을 서버가 ERP 와 같은 AI 로 읽고, 흐린 장만 남아서
+    //    금액을 물어본다 — 잘 읽힌 장들은 이미 접수된 뒤다.
     var go = document.getElementById('go');
+
+    async function submitOne(q) {
+        var fd = new FormData();
+        fd.append('receipt', q.file);
+        fd.append('payment_type', personal ? 'personal' : 'corporate');
+        fd.append('lang', lang);
+        if (q.amount) fd.append('amount', q.amount);
+        var memo = document.getElementById('memo').value;
+        if (memo) fd.append('memo', memo);
+
+        var res = await fetch(@json(route('expense-app.submit')), {
+            method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }, body: fd
+        });
+        var j = await res.json().catch(function () { return {}; });
+
+        if (j.success) { q.state = 'done'; q.result = j.analyzed || {}; }
+        else if (j.code === 'need_amount') { q.state = 'need_amount'; q.msg = j.message || ''; }
+        else { q.state = 'error'; q.msg = j.message || (j.errors ? Object.values(j.errors)[0][0] : 'error'); }
+    }
+
     go.addEventListener('click', async function () {
-        if (!picked) { toast(T.needPhoto); return; }
-        go.disabled = true; go.textContent = T.sending;
-        try {
-            var fd = new FormData();
-            fd.append('receipt', picked);
-            fd.append('payment_type', personal ? 'personal' : 'corporate');
-            fd.append('lang', lang);
-            var amount = document.getElementById('amount').value;
-            if (amount) fd.append('amount', amount);
-            var memo = document.getElementById('memo').value;
-            if (memo) fd.append('memo', memo);
+        var pending = queue.filter(function (q) { return q.state !== 'done' && q.state !== 'sending'; });
+        if (!pending.length) { toast(T.needPhoto); return; }
+        go.disabled = true;
 
-            var res = await fetch(@json(route('expense-app.submit')), {
-                method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }, body: fd
-            });
-            var j = await res.json().catch(function () { return {}; });
-
-            if (j.success) {
-                var a = j.analyzed || {};
-                var rc = document.getElementById('result-card');
-                rc.className = 'card done';
-                rc.innerHTML = '<div class="amt">$' + Number(a.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2}) + '</div>' +
-                    '<div class="meta">' + (a.vendor ? T.vendor + ': ' + a.vendor + '<br>' : '') +
-                    T.date + ': ' + (a.date || '') + '<br>' + T.account + ': ' + (a.account || '') + '</div>' +
-                    '<div class="meta" style="margin-top:6px;font-weight:700">' + j.message + '</div>';
-                rc.style.display = 'block';
-                // 초기화 — 다음 장을 바로 찍을 수 있게.
-                picked = null; fileInput.value = '';
-                document.getElementById('preview').style.display = 'none';
-                document.getElementById('amount').value = ''; document.getElementById('memo').value = '';
-                document.getElementById('amount-row').style.display = 'none';
-                document.querySelector('#shoot [data-t]').textContent = T.shoot;
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else if (j.code === 'need_amount') {
-                document.getElementById('amount-row').style.display = '';
-                document.getElementById('amount').focus();
-                toast(j.message || '');
-            } else {
-                toast(j.message || (j.errors ? Object.values(j.errors)[0][0] : '')); // validation 등
+        var doneNow = [];
+        for (var i = 0; i < pending.length; i++) {
+            var q = pending[i];
+            q.state = 'sending'; renderQueue();
+            go.disabled = true;
+            go.textContent = T.sending + ' ' + (i + 1) + '/' + pending.length;
+            try {
+                await submitOne(q);
+            } catch (e) {
+                q.state = 'error'; q.msg = e.message;
             }
-        } catch (e) {
-            toast(e.message);
-        } finally {
-            go.textContent = T.send; go.disabled = !picked;
+            if (q.state === 'done') doneNow.push(q);
+            renderQueue(); go.disabled = true;
         }
+
+        // 결과 요약 — 몇 건이 얼마로 접수됐고, 몇 장이 확인을 기다리는지.
+        var stillNeed = queue.filter(function (q) { return q.state === 'need_amount'; }).length;
+        var failed = queue.filter(function (q) { return q.state === 'error'; }).length;
+        if (doneNow.length) {
+            var total = doneNow.reduce(function (s, q) { return s + Number(q.result.amount || 0); }, 0);
+            var rc = document.getElementById('result-card');
+            rc.className = 'card done';
+            rc.innerHTML = '<div class="amt">' + T.doneCount.replace('{n}', doneNow.length) +
+                ' · $' + total.toLocaleString(undefined, {minimumFractionDigits: 2}) + '</div>' +
+                '<div class="meta">' + doneNow.map(function (q) {
+                    return '· ' + (q.result.vendor || q.file.name || '') + ' — $' +
+                        Number(q.result.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+                }).join('<br>') + '</div>' +
+                '<div class="meta" style="margin-top:6px;font-weight:700">' + T.doneNote +
+                (stillNeed ? '<br>' + T.stillNeed.replace('{n}', stillNeed) : '') +
+                (failed ? '<br>' + T.failedNote.replace('{n}', failed) : '') + '</div>';
+            rc.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (stillNeed) {
+            toast(T.stillNeed.replace('{n}', stillNeed));
+        }
+
+        // 접수된 장은 줄에서 사라진다(썸네일 메모리도 반환).
+        queue.filter(function (q) { return q.state === 'done'; }).forEach(function (q) { try { URL.revokeObjectURL(q.url); } catch (e) {} });
+        queue = queue.filter(function (q) { return q.state !== 'done'; });
+        if (!queue.length) document.getElementById('memo').value = '';
+        renderQueue();
     });
 
     // ── 내 영수증
