@@ -1,0 +1,1602 @@
+[
+ {
+  "equipment_code": "703K-001",
+  "equipment_type": "냉장 응축유닛",
+  "name_en": "COOLER CONDENSING UNIT (VERIFY LOCATION)",
+  "model": "American Panel BCH0020MCACYC0017",
+  "vendor": "American Panel",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 10844,
+  "payload": {
+   "item_no": "001",
+   "source": "11 40 00 §4.3 Item 001",
+   "note": null,
+   "rom_unit_price_usd": 10844
+  }
+ },
+ {
+  "equipment_code": "703K-002",
+  "equipment_type": "냉동 응축유닛",
+  "name_en": "FREEZER CONDENSING UNIT (VERIFY LOCATION)",
+  "model": "American Panel BCH0045LCACYC0547",
+  "vendor": "American Panel",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 16993,
+  "payload": {
+   "item_no": "002",
+   "source": "11 40 00 §4.3 Item 002",
+   "note": null,
+   "rom_unit_price_usd": 16993
+  }
+ },
+ {
+  "equipment_code": "703K-003",
+  "equipment_type": "워크인 냉장/냉동실",
+  "name_en": "WALK IN COOLER/ FREEZER ASSEMBLY",
+  "model": "American Panel Custom, 2실(-10F/35F), Type II 바닥",
+  "vendor": "American Panel Custom",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 104881,
+  "payload": {
+   "item_no": "003",
+   "source": "11 40 00 §4.3 Item 003",
+   "note": null,
+   "rom_unit_price_usd": 104881
+  }
+ },
+ {
+  "equipment_code": "703K-004",
+  "equipment_type": "유닛쿨러(냉동)",
+  "name_en": "UNIT COOLER (FREEZER)",
+  "model": "American Panel BEL0065BY6EEAG0212",
+  "vendor": "American Panel",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 5644,
+  "payload": {
+   "item_no": "004",
+   "source": "11 40 00 §4.3 Item 004",
+   "note": "Item 002에 포함—중복계상 주의",
+   "rom_unit_price_usd": 5644
+  }
+ },
+ {
+  "equipment_code": "703K-005",
+  "equipment_type": "유닛쿨러(냉장)",
+  "name_en": "UNIT COOLER (COOLER)",
+  "model": "American Panel BEL0060BY6AMAG0212",
+  "vendor": "American Panel",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 4863,
+  "payload": {
+   "item_no": "005",
+   "source": "11 40 00 §4.3 Item 005",
+   "note": "Item 001에 포함—중복계상 주의",
+   "rom_unit_price_usd": 4863
+  }
+ },
+ {
+  "equipment_code": "703K-006",
+  "equipment_type": "이동식 냉장/냉동 선반",
+  "name_en": "MOBILE COOLER/FREEZER SHELVING",
+  "model": "Metro Metromax Q (MQ74UPE)",
+  "vendor": "Metro Metromax Q",
+  "quantity": 22,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1150,
+  "payload": {
+   "item_no": "006",
+   "source": "11 40 00 §4.3 Item 006",
+   "note": null,
+   "rom_unit_price_usd": 1150
+  }
+ },
+ {
+  "equipment_code": "703K-007",
+  "equipment_type": "이동식 건식창고 선반",
+  "name_en": "MOBILE DRY STORAGE SHELVING",
+  "model": "Metro Metromax Q (MQ74UPE)",
+  "vendor": "Metro Metromax Q",
+  "quantity": 10,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1150,
+  "payload": {
+   "item_no": "007",
+   "source": "11 40 00 §4.3 Item 007",
+   "note": null,
+   "rom_unit_price_usd": 1150
+  }
+ },
+ {
+  "equipment_code": "703K-008",
+  "equipment_type": "대걸레·빗자루 걸이",
+  "name_en": "MOP AND BROOM RACK WITH SHELF",
+  "model": "Advance Tabco K-245",
+  "vendor": "Advance Tabco",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 355,
+  "payload": {
+   "item_no": "008",
+   "source": "11 40 00 §4.3 Item 008",
+   "note": null,
+   "rom_unit_price_usd": 355
+  }
+ },
+ {
+  "equipment_code": "703K-009",
+  "equipment_type": "수전(벽부형)",
+  "name_en": "FAUCET (WALL MOUNTED)",
+  "model": "T&S Brass B-0665-BSTP",
+  "vendor": "T&S Brass",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 675,
+  "payload": {
+   "item_no": "009",
+   "source": "11 40 00 §4.3 Item 009",
+   "note": null,
+   "rom_unit_price_usd": 675
+  }
+ },
+ {
+  "equipment_code": "703K-010",
+  "equipment_type": "청소용 싱크",
+  "name_en": "JANITOR SINK",
+  "model": "John Boos PBMS2016-6",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1470,
+  "payload": {
+   "item_no": "010",
+   "source": "11 40 00 §4.3 Item 010",
+   "note": null,
+   "rom_unit_price_usd": 1470
+  }
+ },
+ {
+  "equipment_code": "703K-013",
+  "equipment_type": "에어커튼(비가열)",
+  "name_en": "AIR CURTAIN (UNHEATED)",
+  "model": "Mars Air Systems HV240-1UA-TS",
+  "vendor": "Mars Air Systems",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3175,
+  "payload": {
+   "item_no": "013",
+   "source": "11 40 00 §4.3 Item 013",
+   "note": null,
+   "rom_unit_price_usd": 3175
+  }
+ },
+ {
+  "equipment_code": "703K-016",
+  "equipment_type": "손세정대",
+  "name_en": "HAND SINK WITH SOAP AND TOWEL DISPENSER",
+  "model": "Advance Tabco 7-PS-87",
+  "vendor": "Advance Tabco",
+  "quantity": 3,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1173,
+  "payload": {
+   "item_no": "016",
+   "source": "11 40 00 §4.3 Item 016",
+   "note": null,
+   "rom_unit_price_usd": 1173
+  }
+ },
+ {
+  "equipment_code": "703K-017",
+  "equipment_type": "이동식 리치인 냉장고",
+  "name_en": "MOBILE REACH-IN REFRIGERATOR",
+  "model": "Continental 2RENHD",
+  "vendor": "Continental",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 8200,
+  "payload": {
+   "item_no": "017",
+   "source": "11 40 00 §4.3 Item 017",
+   "note": null,
+   "rom_unit_price_usd": 8200
+  }
+ },
+ {
+  "equipment_code": "703K-018",
+  "equipment_type": "바닥 트렌치·그레이팅",
+  "name_en": "FLOOR TROUGH AND GRATE",
+  "model": "BSI FT-1248",
+  "vendor": "BSI",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2600,
+  "payload": {
+   "item_no": "018",
+   "source": "11 40 00 §4.3 Item 018",
+   "note": "치수 도면 확인",
+   "rom_unit_price_usd": 2600
+  }
+ },
+ {
+  "equipment_code": "703K-019",
+  "equipment_type": "제빙기(489lbs)",
+  "name_en": "ICE MAKER (489 LBS.)",
+  "model": "Hoshizaki IM-500SAB 공랭식",
+  "vendor": "Hoshizaki",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 6493,
+  "payload": {
+   "item_no": "019",
+   "source": "11 40 00 §4.3 Item 019",
+   "note": null,
+   "rom_unit_price_usd": 6493
+  }
+ },
+ {
+  "equipment_code": "703K-020",
+  "equipment_type": "얼음 저장빈",
+  "name_en": "ICE BIN",
+  "model": "Hoshizaki B-700SF",
+  "vendor": "Hoshizaki",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3150,
+  "payload": {
+   "item_no": "020",
+   "source": "11 40 00 §4.3 Item 020",
+   "note": null,
+   "rom_unit_price_usd": 3150
+  }
+ },
+ {
+  "equipment_code": "703K-021",
+  "equipment_type": "정수필터",
+  "name_en": "WATER FILTER",
+  "model": "Everpure EV932401",
+  "vendor": "Everpure",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1249,
+  "payload": {
+   "item_no": "021",
+   "source": "11 40 00 §4.3 Item 021",
+   "note": null,
+   "rom_unit_price_usd": 1249
+  }
+ },
+ {
+  "equipment_code": "703K-022",
+  "equipment_type": "벽선반",
+  "name_en": "WALL SHELF",
+  "model": "John Boos BHS1296-16/304, 약 8'",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 999,
+  "payload": {
+   "item_no": "022",
+   "source": "11 40 00 §4.3 Item 022",
+   "note": null,
+   "rom_unit_price_usd": 999
+  }
+ },
+ {
+  "equipment_code": "703K-023",
+  "equipment_type": "2조 싱크",
+  "name_en": "2 COMPARTMENT SINK",
+  "model": "John Boos 2PB204-2D30",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3888,
+  "payload": {
+   "item_no": "023",
+   "source": "11 40 00 §4.3 Item 023",
+   "note": null,
+   "rom_unit_price_usd": 3888
+  }
+ },
+ {
+  "equipment_code": "703K-024",
+  "equipment_type": "이동식 저장 선반",
+  "name_en": "MOBILE STORAGE SHELVING",
+  "model": "Metro Metromax Q (MQ74UPE)",
+  "vendor": "Metro Metromax Q",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1150,
+  "payload": {
+   "item_no": "024",
+   "source": "11 40 00 §4.3 Item 024",
+   "note": null,
+   "rom_unit_price_usd": 1150
+  }
+ },
+ {
+  "equipment_code": "703K-025",
+  "equipment_type": "호스릴(스프레이)",
+  "name_en": "HOSE REEL WITH SPRAY",
+  "model": "Fisher 29801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2583,
+  "payload": {
+   "item_no": "025",
+   "source": "11 40 00 §4.3 Item 025",
+   "note": null,
+   "rom_unit_price_usd": 2583
+  }
+ },
+ {
+  "equipment_code": "703K-025.1",
+  "equipment_type": "호스릴 컨트롤 캐비닛",
+  "name_en": "HOSE REEL CONTROL CABINET",
+  "model": "Fisher 1801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1949,
+  "payload": {
+   "item_no": "025.1",
+   "source": "11 40 00 §4.3 Item 025.1",
+   "note": null,
+   "rom_unit_price_usd": 1949
+  }
+ },
+ {
+  "equipment_code": "703K-026",
+  "equipment_type": "2조 싱크",
+  "name_en": "2 COMPARTMENT SINK",
+  "model": "John Boos 2PB204-2D30",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3888,
+  "payload": {
+   "item_no": "026",
+   "source": "11 40 00 §4.3 Item 026",
+   "note": null,
+   "rom_unit_price_usd": 3888
+  }
+ },
+ {
+  "equipment_code": "703K-027",
+  "equipment_type": "벽선반",
+  "name_en": "WALL SHELF",
+  "model": "John Boos BHS1296-16/304, 약 8'",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 999,
+  "payload": {
+   "item_no": "027",
+   "source": "11 40 00 §4.3 Item 027",
+   "note": null,
+   "rom_unit_price_usd": 999
+  }
+ },
+ {
+  "equipment_code": "703K-028",
+  "equipment_type": "2조 싱크",
+  "name_en": "2 COMPARTMENT SINK",
+  "model": "John Boos 2PB204-2D30",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3888,
+  "payload": {
+   "item_no": "028",
+   "source": "11 40 00 §4.3 Item 028",
+   "note": null,
+   "rom_unit_price_usd": 3888
+  }
+ },
+ {
+  "equipment_code": "703K-029",
+  "equipment_type": "벽선반",
+  "name_en": "WALL SHELF",
+  "model": "John Boos BHS1296-16/304, 약 8'",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 999,
+  "payload": {
+   "item_no": "029",
+   "source": "11 40 00 §4.3 Item 029",
+   "note": null,
+   "rom_unit_price_usd": 999
+  }
+ },
+ {
+  "equipment_code": "703K-032",
+  "equipment_type": "STS 벽면 플래싱",
+  "name_en": "STAINLESS STEEL WALL FLASHING",
+  "model": "Custom Fabricate, 후드 036 배면",
+  "vendor": "Custom Fabricate, 후드",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2898,
+  "payload": {
+   "item_no": "032",
+   "source": "11 40 00 §4.3 Item 032",
+   "note": "길이 도면 실측 필요",
+   "rom_unit_price_usd": 2898
+  }
+ },
+ {
+  "equipment_code": "703K-033",
+  "equipment_type": "벽선반",
+  "name_en": "WALL SHELF",
+  "model": "John Boos BHS1296-16/304, 약 8'",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 999,
+  "payload": {
+   "item_no": "033",
+   "source": "11 40 00 §4.3 Item 033",
+   "note": null,
+   "rom_unit_price_usd": 999
+  }
+ },
+ {
+  "equipment_code": "703K-034",
+  "equipment_type": "2조 싱크",
+  "name_en": "TWO COMPARTMENT SINK",
+  "model": "John Boos 2PB204-2D30",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3888,
+  "payload": {
+   "item_no": "034",
+   "source": "11 40 00 §4.3 Item 034",
+   "note": null,
+   "rom_unit_price_usd": 3888
+  }
+ },
+ {
+  "equipment_code": "703K-035",
+  "equipment_type": "소화설비(후드용)",
+  "name_en": "FIRE SUPPRESSION SYSTEM",
+  "model": "Ansul R-102 WET",
+  "vendor": "Ansul",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 8246,
+  "payload": {
+   "item_no": "035",
+   "source": "11 40 00 §4.3 Item 035",
+   "note": null,
+   "rom_unit_price_usd": 8246
+  }
+ },
+ {
+  "equipment_code": "703K-036",
+  "equipment_type": "배기후드(타입-1)",
+  "name_en": "EXHAUST HOOD (TYPE-1)",
+  "model": "Halton KVE, HCL 조명 3개",
+  "vendor": "Halton KVE, HCL",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 19710,
+  "payload": {
+   "item_no": "036",
+   "source": "11 40 00 §4.3 Item 036",
+   "note": "길이 도면 기준",
+   "rom_unit_price_usd": 19710
+  }
+ },
+ {
+  "equipment_code": "703K-036.1",
+  "equipment_type": "KCD 디퓨저",
+  "name_en": "KCD DIFFUSER",
+  "model": "Halton KCD",
+  "vendor": "Halton KCD",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1990,
+  "payload": {
+   "item_no": "036.1",
+   "source": "11 40 00 §4.3 Item 036.1",
+   "note": null,
+   "rom_unit_price_usd": 1990
+  }
+ },
+ {
+  "equipment_code": "703K-037",
+  "equipment_type": "밥솥(라이스쿠커)",
+  "name_en": "RICE COOKER",
+  "model": "Thunder Group RER55ASN, 가스",
+  "vendor": "Thunder Group",
+  "quantity": 4,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1844,
+  "payload": {
+   "item_no": "037",
+   "source": "11 40 00 §4.3 Item 037",
+   "note": null,
+   "rom_unit_price_usd": 1844
+  }
+ },
+ {
+  "equipment_code": "703K-038",
+  "equipment_type": "이동식 장비 받침대",
+  "name_en": "MOBILE EQUIPMENT STAND",
+  "model": "John Boos EES8-3096SSK",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3198,
+  "payload": {
+   "item_no": "038",
+   "source": "11 40 00 §4.3 Item 038",
+   "note": null,
+   "rom_unit_price_usd": 3198
+  }
+ },
+ {
+  "equipment_code": "703K-039",
+  "equipment_type": "호스릴(스프레이)",
+  "name_en": "HOSE REEL WITH SPRAY",
+  "model": "Fisher 29801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2583,
+  "payload": {
+   "item_no": "039",
+   "source": "11 40 00 §4.3 Item 039",
+   "note": null,
+   "rom_unit_price_usd": 2583
+  }
+ },
+ {
+  "equipment_code": "703K-039.1",
+  "equipment_type": "호스릴 컨트롤 캐비닛",
+  "name_en": "HOSE REEL CONTROL CABINET",
+  "model": "Fisher 1801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1949,
+  "payload": {
+   "item_no": "039.1",
+   "source": "11 40 00 §4.3 Item 039.1",
+   "note": null,
+   "rom_unit_price_usd": 1949
+  }
+ },
+ {
+  "equipment_code": "703K-040",
+  "equipment_type": "STS 벽면 플래싱",
+  "name_en": "STAINLESS STEEL WALL FLASHING",
+  "model": "Custom Fabricate, 후드 044 배면",
+  "vendor": "Custom Fabricate, 후드",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2898,
+  "payload": {
+   "item_no": "040",
+   "source": "11 40 00 §4.3 Item 040",
+   "note": "길이 도면 실측 필요",
+   "rom_unit_price_usd": 2898
+  }
+ },
+ {
+  "equipment_code": "703K-041",
+  "equipment_type": "스톡팟 렌지",
+  "name_en": "STOCK POT RANGE",
+  "model": "Atosa ATSP-18-1, 도시가스",
+  "vendor": "Atosa",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1446,
+  "payload": {
+   "item_no": "041",
+   "source": "11 40 00 §4.3 Item 041",
+   "note": null,
+   "rom_unit_price_usd": 1446
+  }
+ },
+ {
+  "equipment_code": "703K-042",
+  "equipment_type": "바닥 트렌치·그레이팅",
+  "name_en": "FLOOR TROUGH AND GRATE",
+  "model": "BSI FT-3060",
+  "vendor": "BSI",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 4147,
+  "payload": {
+   "item_no": "042",
+   "source": "11 40 00 §4.3 Item 042",
+   "note": "치수 도면 확인",
+   "rom_unit_price_usd": 4147
+  }
+ },
+ {
+  "equipment_code": "703K-043",
+  "equipment_type": "브레이징팬(40갤런)",
+  "name_en": "BRAISING PAN (40 GAL.)",
+  "model": "Cleveland SEL40T1, 전동틸팅",
+  "vendor": "Cleveland",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 38987,
+  "payload": {
+   "item_no": "043",
+   "source": "11 40 00 §4.3 Item 043",
+   "note": null,
+   "rom_unit_price_usd": 38987
+  }
+ },
+ {
+  "equipment_code": "703K-044",
+  "equipment_type": "급기일체형 배기후드",
+  "name_en": "EXHAUST HOOD WITH MAKE-UP AIR (TYPE-1)",
+  "model": "Halton KVE, HCL 조명 6개",
+  "vendor": "Halton KVE, HCL",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 40988,
+  "payload": {
+   "item_no": "044",
+   "source": "11 40 00 §4.3 Item 044",
+   "note": "길이 도면 기준",
+   "rom_unit_price_usd": 40988
+  }
+ },
+ {
+  "equipment_code": "703K-045",
+  "equipment_type": "소화설비(후드용)",
+  "name_en": "FIRE SUPPRESSION SYSTEM",
+  "model": "Ansul R-102 WET",
+  "vendor": "Ansul",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 9747,
+  "payload": {
+   "item_no": "045",
+   "source": "11 40 00 §4.3 Item 045",
+   "note": null,
+   "rom_unit_price_usd": 9747
+  }
+ },
+ {
+  "equipment_code": "703K-049",
+  "equipment_type": "이동식 컨벡션오븐(2단)",
+  "name_en": "MOBILE CONVECTION OVEN (DOUBLE STACKED)",
+  "model": "Southbend PCE15S/TC",
+  "vendor": "Southbend",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 16202,
+  "payload": {
+   "item_no": "049",
+   "source": "11 40 00 §4.3 Item 049",
+   "note": null,
+   "rom_unit_price_usd": 16202
+  }
+ },
+ {
+  "equipment_code": "703K-050",
+  "equipment_type": "STS 벽면 플래싱",
+  "name_en": "STAINLESS STEEL WALL FLASHING",
+  "model": "Custom Fabricate, 후드 053 배면",
+  "vendor": "Custom Fabricate, 후드",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2898,
+  "payload": {
+   "item_no": "050",
+   "source": "11 40 00 §4.3 Item 050",
+   "note": "길이 도면 실측 필요",
+   "rom_unit_price_usd": 2898
+  }
+ },
+ {
+  "equipment_code": "703K-051",
+  "equipment_type": "콤비오븐(스탠드 포함)",
+  "name_en": "COMBI OVEN WITH STAND",
+  "model": "Alto-Shaam 10-10G PRO, 가스, 스탠드 5016089",
+  "vendor": "Alto-Shaam",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 35944,
+  "payload": {
+   "item_no": "051",
+   "source": "11 40 00 §4.3 Item 051",
+   "note": null,
+   "rom_unit_price_usd": 35944
+  }
+ },
+ {
+  "equipment_code": "703K-052",
+  "equipment_type": "정수필터",
+  "name_en": "WATER FILTER",
+  "model": "3M SGLP200-CL-BP",
+  "vendor": "3M",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1285,
+  "payload": {
+   "item_no": "052",
+   "source": "11 40 00 §4.3 Item 052",
+   "note": null,
+   "rom_unit_price_usd": 1285
+  }
+ },
+ {
+  "equipment_code": "703K-053",
+  "equipment_type": "급기일체형 배기후드",
+  "name_en": "EXHAUST HOOD WITH MAKE-UP AIR (TYPE-1)",
+  "model": "Halton KVE, HCL 조명 6개",
+  "vendor": "Halton KVE, HCL",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 40988,
+  "payload": {
+   "item_no": "053",
+   "source": "11 40 00 §4.3 Item 053",
+   "note": "길이 도면 기준",
+   "rom_unit_price_usd": 40988
+  }
+ },
+ {
+  "equipment_code": "703K-054",
+  "equipment_type": "소화설비(후드용)",
+  "name_en": "FIRE SUPPRESSION SYSTEM",
+  "model": "Ansul R-102 WET",
+  "vendor": "Ansul",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 9747,
+  "payload": {
+   "item_no": "054",
+   "source": "11 40 00 §4.3 Item 054",
+   "note": null,
+   "rom_unit_price_usd": 9747
+  }
+ },
+ {
+  "equipment_code": "703K-055",
+  "equipment_type": "가스 튀김기",
+  "name_en": "FRYER, GAS",
+  "model": "Vulcan 1GR45M, 유량 45-50lbs",
+  "vendor": "Vulcan",
+  "quantity": 4,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3194,
+  "payload": {
+   "item_no": "055",
+   "source": "11 40 00 §4.3 Item 055",
+   "note": null,
+   "rom_unit_price_usd": 3194
+  }
+ },
+ {
+  "equipment_code": "703K-056",
+  "equipment_type": "이동식 프라이 덤프 스테이션",
+  "name_en": "MOBILE FRY DUMP STATION",
+  "model": "Vulcan Frymate VX15",
+  "vendor": "Vulcan Frymate",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1744,
+  "payload": {
+   "item_no": "056",
+   "source": "11 40 00 §4.3 Item 056",
+   "note": "Item 055 튀김기 일식 구성",
+   "rom_unit_price_usd": 1744
+  }
+ },
+ {
+  "equipment_code": "703K-057",
+  "equipment_type": "STS 벽면 플래싱",
+  "name_en": "STAINLESS STEEL WALL FLASHING",
+  "model": "Custom Fabricate, 후드 062 배면",
+  "vendor": "Custom Fabricate, 후드",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2898,
+  "payload": {
+   "item_no": "057",
+   "source": "11 40 00 §4.3 Item 057",
+   "note": "길이 도면 실측 필요",
+   "rom_unit_price_usd": 2898
+  }
+ },
+ {
+  "equipment_code": "703K-058",
+  "equipment_type": "이동식 6구 렌지(오븐 포함)",
+  "name_en": "MOBILE 6 (OB) RANGE WITH OVEN",
+  "model": "Vulcan 36S-6BN, 가스",
+  "vendor": "Vulcan",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 5800,
+  "payload": {
+   "item_no": "058",
+   "source": "11 40 00 §4.3 Item 058",
+   "note": null,
+   "rom_unit_price_usd": 5800
+  }
+ },
+ {
+  "equipment_code": "703K-060",
+  "equipment_type": "이동식 장비 받침대",
+  "name_en": "MOBILE EQUIPMENT STAND",
+  "model": "Vulcan VSC36",
+  "vendor": "Vulcan",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2145,
+  "payload": {
+   "item_no": "060",
+   "source": "11 40 00 §4.3 Item 060",
+   "note": null,
+   "rom_unit_price_usd": 2145
+  }
+ },
+ {
+  "equipment_code": "703K-061",
+  "equipment_type": "그리들(카운터탑)",
+  "name_en": "GRIDDLE (COUNTERTOP)",
+  "model": "Vulcan VCCG36-AC, 가스",
+  "vendor": "Vulcan",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 4550,
+  "payload": {
+   "item_no": "061",
+   "source": "11 40 00 §4.3 Item 061",
+   "note": null,
+   "rom_unit_price_usd": 4550
+  }
+ },
+ {
+  "equipment_code": "703K-062",
+  "equipment_type": "배기후드(타입-1)",
+  "name_en": "EXHAUST HOOD (TYPE-1)",
+  "model": "Halton KVE, HCL 조명 6개",
+  "vendor": "Halton KVE, HCL",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 28000,
+  "payload": {
+   "item_no": "062",
+   "source": "11 40 00 §4.3 Item 062",
+   "note": "길이 도면 기준",
+   "rom_unit_price_usd": 28000
+  }
+ },
+ {
+  "equipment_code": "703K-062.1",
+  "equipment_type": "KCD 디퓨저",
+  "name_en": "KCD DIFFUSER",
+  "model": "Halton KCD",
+  "vendor": "Halton KCD",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1990,
+  "payload": {
+   "item_no": "062.1",
+   "source": "11 40 00 §4.3 Item 062.1",
+   "note": null,
+   "rom_unit_price_usd": 1990
+  }
+ },
+ {
+  "equipment_code": "703K-063",
+  "equipment_type": "소화설비(후드용)",
+  "name_en": "FIRE SUPPRESSION SYSTEM",
+  "model": "Ansul R-102 WET",
+  "vendor": "Ansul",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 9487,
+  "payload": {
+   "item_no": "063",
+   "source": "11 40 00 §4.3 Item 063",
+   "note": null,
+   "rom_unit_price_usd": 9487
+  }
+ },
+ {
+  "equipment_code": "703K-067",
+  "equipment_type": "이동식 리치인 냉동고",
+  "name_en": "MOBILE REACH-IN FREEZER",
+  "model": "Continental 2FENHD",
+  "vendor": "Continental",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 9349,
+  "payload": {
+   "item_no": "067",
+   "source": "11 40 00 §4.3 Item 067",
+   "note": null,
+   "rom_unit_price_usd": 9349
+  }
+ },
+ {
+  "equipment_code": "703K-068",
+  "equipment_type": "이동식 작업대",
+  "name_en": "MOBILE WORKTABLE",
+  "model": "John Boos ST6-3060SSK-X",
+  "vendor": "John Boos",
+  "quantity": 5,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1873,
+  "payload": {
+   "item_no": "068",
+   "source": "11 40 00 §4.3 Item 068",
+   "note": null,
+   "rom_unit_price_usd": 1873
+  }
+ },
+ {
+  "equipment_code": "703K-069",
+  "equipment_type": "이동식 쓰레기통",
+  "name_en": "MOBILE TRASH RECEPTACLES",
+  "model": "Rubbermaid FG263200GRAY",
+  "vendor": "Rubbermaid",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 95,
+  "payload": {
+   "item_no": "069",
+   "source": "11 40 00 §4.3 Item 069",
+   "note": null,
+   "rom_unit_price_usd": 95
+  }
+ },
+ {
+  "equipment_code": "703K-070",
+  "equipment_type": "이동식 팬랙",
+  "name_en": "MOBILE PAN RACK",
+  "model": "John Boos ABPR-1820-3KD",
+  "vendor": "John Boos",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 574,
+  "payload": {
+   "item_no": "070",
+   "source": "11 40 00 §4.3 Item 070",
+   "note": null,
+   "rom_unit_price_usd": 574
+  }
+ },
+ {
+  "equipment_code": "703K-071",
+  "equipment_type": "호스릴(스프레이)",
+  "name_en": "HOSE REEL WITH SPRAY",
+  "model": "Fisher 29801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2583,
+  "payload": {
+   "item_no": "071",
+   "source": "11 40 00 §4.3 Item 071",
+   "note": null,
+   "rom_unit_price_usd": 2583
+  }
+ },
+ {
+  "equipment_code": "703K-071.1",
+  "equipment_type": "호스릴 컨트롤 캐비닛",
+  "name_en": "HOSE REEL CONTROL CABINET",
+  "model": "Fisher 1801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1949,
+  "payload": {
+   "item_no": "071.1",
+   "source": "11 40 00 §4.3 Item 071.1",
+   "note": null,
+   "rom_unit_price_usd": 1949
+  }
+ },
+ {
+  "equipment_code": "703K-072",
+  "equipment_type": "조리기구 걸이선반",
+  "name_en": "UTENSIL RACK WITH SHELF",
+  "model": "John Boos BHS1672PR-16/304, 약 6'",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1375,
+  "payload": {
+   "item_no": "072",
+   "source": "11 40 00 §4.3 Item 072",
+   "note": null,
+   "rom_unit_price_usd": 1375
+  }
+ },
+ {
+  "equipment_code": "703K-073",
+  "equipment_type": "3조 싱크",
+  "name_en": "3 COMPARTMENT SINK",
+  "model": "John Boos 3B244-2D24",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 4800,
+  "payload": {
+   "item_no": "073",
+   "source": "11 40 00 §4.3 Item 073",
+   "note": null,
+   "rom_unit_price_usd": 4800
+  }
+ },
+ {
+  "equipment_code": "703K-077",
+  "equipment_type": "이동식 솥·팬 선반",
+  "name_en": "MOBILE POT SHELVING",
+  "model": "Metro Metromax Q (MQ74UPE)",
+  "vendor": "Metro Metromax Q",
+  "quantity": 2,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1150,
+  "payload": {
+   "item_no": "077",
+   "source": "11 40 00 §4.3 Item 077",
+   "note": null,
+   "rom_unit_price_usd": 1150
+  }
+ },
+ {
+  "equipment_code": "703K-078",
+  "equipment_type": "세안기(온도조절 혼합밸브)",
+  "name_en": "EYE WASH STATION WITH THERMOSTATIC MIXING VALVE",
+  "model": "T&S Brass EW-7360B-TMV",
+  "vendor": "T&S Brass",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2249,
+  "payload": {
+   "item_no": "078",
+   "source": "11 40 00 §4.3 Item 078",
+   "note": null,
+   "rom_unit_price_usd": 2249
+  }
+ },
+ {
+  "equipment_code": "703K-079",
+  "equipment_type": "손세정대",
+  "name_en": "HAND SINK WITH SOAP AND TOWEL DISPENSER",
+  "model": "Advance Tabco 7-PS-87",
+  "vendor": "Advance Tabco",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1173,
+  "payload": {
+   "item_no": "079",
+   "source": "11 40 00 §4.3 Item 079",
+   "note": null,
+   "rom_unit_price_usd": 1173
+  }
+ },
+ {
+  "equipment_code": "703K-080",
+  "equipment_type": "호스릴(스프레이)",
+  "name_en": "HOSE REEL WITH SPRAY",
+  "model": "Fisher 29801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 2583,
+  "payload": {
+   "item_no": "080",
+   "source": "11 40 00 §4.3 Item 080",
+   "note": null,
+   "rom_unit_price_usd": 2583
+  }
+ },
+ {
+  "equipment_code": "703K-080.1",
+  "equipment_type": "호스릴 컨트롤 캐비닛",
+  "name_en": "HOSE REEL CONTROL CABINET",
+  "model": "Fisher 1801",
+  "vendor": "Fisher",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1949,
+  "payload": {
+   "item_no": "080.1",
+   "source": "11 40 00 §4.3 Item 080.1",
+   "note": "일람표엔 081.1로 오기 — §4.4는 080.1",
+   "rom_unit_price_usd": 1949
+  }
+ },
+ {
+  "equipment_code": "703K-081",
+  "equipment_type": "3조 싱크",
+  "name_en": "3 COMPARTMENT SINK",
+  "model": "John Boos 3B244-2D24",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 4800,
+  "payload": {
+   "item_no": "081",
+   "source": "11 40 00 §4.3 Item 081",
+   "note": null,
+   "rom_unit_price_usd": 4800
+  }
+ },
+ {
+  "equipment_code": "703K-082",
+  "equipment_type": "조리기구 걸이선반",
+  "name_en": "UTENSIL RACK WITH SHELF",
+  "model": "John Boos BHS1672PR-16/304, 약 6'",
+  "vendor": "John Boos",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1375,
+  "payload": {
+   "item_no": "082",
+   "source": "11 40 00 §4.3 Item 082",
+   "note": null,
+   "rom_unit_price_usd": 1375
+  }
+ },
+ {
+  "equipment_code": "703K-083",
+  "equipment_type": "이동식 글라스랙 돌리",
+  "name_en": "MOBILE GLASS RACK DOLLY",
+  "model": "John Boos D2020-GT-X",
+  "vendor": "John Boos",
+  "quantity": 3,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 410,
+  "payload": {
+   "item_no": "083",
+   "source": "11 40 00 §4.3 Item 083",
+   "note": null,
+   "rom_unit_price_usd": 410
+  }
+ },
+ {
+  "equipment_code": "703K-084",
+  "equipment_type": "이동식 쓰레기통",
+  "name_en": "MOBILE TRASH RECEPTACLES",
+  "model": "Rubbermaid FG263200GRAY",
+  "vendor": "Rubbermaid",
+  "quantity": 3,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 95,
+  "payload": {
+   "item_no": "084",
+   "source": "11 40 00 §4.3 Item 084",
+   "note": null,
+   "rom_unit_price_usd": 95
+  }
+ },
+ {
+  "equipment_code": "703K-085",
+  "equipment_type": "분류 선반",
+  "name_en": "SORTING SHELF",
+  "model": "John Boos PB-SRW-42",
+  "vendor": "John Boos",
+  "quantity": 4,
+  "is_bulk": true,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 1118,
+  "payload": {
+   "item_no": "085",
+   "source": "11 40 00 §4.3 Item 085",
+   "note": null,
+   "rom_unit_price_usd": 1118
+  }
+ },
+ {
+  "equipment_code": "703K-086",
+  "equipment_type": "롤러 클린테이블",
+  "name_en": "ROLLER CLEAN TABLE",
+  "model": "Bi-Line GRS21, 약 8'-8\"",
+  "vendor": "Bi-Line",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 7603,
+  "payload": {
+   "item_no": "086",
+   "source": "11 40 00 §4.3 Item 086",
+   "note": null,
+   "rom_unit_price_usd": 7603
+  }
+ },
+ {
+  "equipment_code": "703K-087",
+  "equipment_type": "바닥 트렌치·그레이팅",
+  "name_en": "FLOOR TROUGH AND GRATE",
+  "model": "BSI FT-1272",
+  "vendor": "BSI",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 3250,
+  "payload": {
+   "item_no": "087",
+   "source": "11 40 00 §4.3 Item 087",
+   "note": "치수 도면 확인",
+   "rom_unit_price_usd": 3250
+  }
+ },
+ {
+  "equipment_code": "703K-088",
+  "equipment_type": "식기세척기(부스터히터, 무배기형)",
+  "name_en": "DISHWASHER WITH BOOSTER HEATER (VENTLESS)",
+  "model": "Champion 66 PRO VHR-ELECTRIC (R-L)",
+  "vendor": "Champion",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 81388,
+  "payload": {
+   "item_no": "088",
+   "source": "11 40 00 §4.3 Item 088",
+   "note": null,
+   "rom_unit_price_usd": 81388
+  }
+ },
+ {
+  "equipment_code": "703K-089",
+  "equipment_type": "오물 디시테이블 조립체",
+  "name_en": "SOILED DISHTABLE ASSEMBLY",
+  "model": "Custom Fabricate, 약 10'x2'-6\"",
+  "vendor": "Custom Fabricate, 약",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 11102,
+  "payload": {
+   "item_no": "089",
+   "source": "11 40 00 §4.3 Item 089",
+   "note": "치수 도면 확인",
+   "rom_unit_price_usd": 11102
+  }
+ },
+ {
+  "equipment_code": "703K-090",
+  "equipment_type": "디스포저(컨트롤 포함)",
+  "name_en": "DISPOSER WITH CONTROLS",
+  "model": "Salvajor 200-SA-MSS-LD, 208V/3ph",
+  "vendor": "Salvajor",
+  "quantity": 1,
+  "is_bulk": false,
+  "category_group": "equipment",
+  "trade": "general",
+  "acquisition_type": "소유",
+  "status": "대기중",
+  "asset_value": 6450,
+  "payload": {
+   "item_no": "090",
+   "source": "11 40 00 §4.3 Item 090",
+   "note": null,
+   "rom_unit_price_usd": 6450
+  }
+ }
+]

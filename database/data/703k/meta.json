@@ -1,0 +1,61 @@
+{
+  "client_company": {
+    "code": "HEC-AMERICA",
+    "name": "Hyundai Engineering America",
+    "legal_name": "Hyundai Engineering America, Inc.",
+    "company_type": "client"
+  },
+  "site": {
+    "code": "703K",
+    "name": "GA 배터리공장 703K 주방동 (Savannah Area)",
+    "country": "US",
+    "timezone": "America/New_York",
+    "address": "10484 Highway 280 East, Ellabell, Bryan County, GA 31308",
+    "status": "active"
+  },
+  "project": {
+    "project_code": "703K-KITCHEN",
+    "name": "703K Commercial Kitchen 신축(리노베이션) 공사",
+    "construction_type": "equipment_setting",
+    "project_stage": "estimate",
+    "state": "GA",
+    "contract_amount": 3301927,
+    "payload": {
+      "scope": "Building 703K Commercial Kitchen — 4,855SF, LGES-HMG JV EV Battery Plant",
+      "designer": "Gresham Smith (46266.00)",
+      "kitchen_consultant": "Clevenger Associates",
+      "estimate_class": "AACE Class 4 ROM (-20%~+30%), 2026-08-26",
+      "direct_cost": 2218590,
+      "discipline_breakdown": {
+        "01_토목": 316295,
+        "02_구조": 63782,
+        "03_건축마감": 272156,
+        "04_소방": 55759,
+        "05_배관": 246159,
+        "06_기계HVAC": 306589,
+        "07_전기": 138749,
+        "08_주방기기": 819101
+      },
+      "markups": {
+        "general_conditions": 0.1,
+        "bond_insurance": 0.025,
+        "ohp": 0.1,
+        "contingency": 0.2
+      },
+      "docs_folder": "ERP 문서함(문서지능허브)에 도면 42·대장 3·RFI 3 업로드됨"
+    }
+  },
+  "contract": {
+    "contract_number": "703K-ROM-2026",
+    "title": "703K 주방동 공사 수주계약 (예상견적 단계)",
+    "direction": "receivable",
+    "counterparty_role": "general_contractor",
+    "contract_type": "subcontract",
+    "status": "draft",
+    "original_amount": 3301927,
+    "currency": "USD",
+    "retainage_percent": 10,
+    "scope_of_work": "703K Commercial Kitchen 토목·구조·건축·소방·배관·HVAC·전기·주방기기 일식 (ROM 기준, 계약 확정 전)",
+    "notes": "AACE Class 4 예상견적($3,301,927) 기준의 임시 등록 — 실계약 체결 시 금액·조건 갱신 필요. 근거: 703K_예상견적서_공정별.xlsx"
+  }
+}
