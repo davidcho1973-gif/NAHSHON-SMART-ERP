@@ -25,6 +25,7 @@ class BoqItem extends Model
         'company_id', 'site_id', 'project_id',
         'seq', 'discipline_code', 'discipline', 'name_kr', 'name_en', 'spec',
         'unit', 'qty', 'qty_basis', 'unit_price', 'amount', 'source', 'note', 'flagged',
+        'wbs_activity_id',
     ];
 
     protected function casts(): array

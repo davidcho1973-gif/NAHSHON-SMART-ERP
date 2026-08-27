@@ -32,8 +32,9 @@ class WbsItem extends Model
     protected $fillable = [
         'project_id', 'project_code', 'parent_id', 'level', 'wbs_code', 'node_no', 'activity_id', 'name',
         'company', 'trade', 'crew_text', 'crew_size', 'crew_roles', 'equipment', 'status', 'ehs', 'manhours', 'days',
-        'planned_start', 'planned_end', 'preds', 'float_days', 'is_critical', 'late_start', 'late_end',
-        'planned_cost', 'progress', 'committed_week', 'incomplete_reason', 'sort_order', 'company_id', 'site_id', 'source', 'payload',
+        'planned_start', 'planned_end', 'actual_start', 'actual_end', 'preds', 'float_days', 'is_critical', 'late_start', 'late_end',
+        'planned_cost', 'progress', 'hold_point', 'hold_released', 'hold_note', 'submittal_seqs',
+        'committed_week', 'incomplete_reason', 'sort_order', 'company_id', 'site_id', 'source', 'payload',
     ];
 
     protected function casts(): array
@@ -45,8 +46,13 @@ class WbsItem extends Model
             'sort_order' => 'integer',
             'planned_start' => 'date',
             'planned_end' => 'date',
+            'actual_start' => 'date',
+            'actual_end' => 'date',
             'late_start' => 'date',
             'late_end' => 'date',
+            'hold_point' => 'boolean',
+            'hold_released' => 'boolean',
+            'submittal_seqs' => 'array',
             'preds' => 'array',
             'float_days' => 'integer',
             'is_critical' => 'boolean',
@@ -194,7 +200,14 @@ class WbsItem extends Model
             'isProcurement' => $this->looksLikeProcurement(),
             'plannedStart' => $this->planned_start?->toDateString(),
             'plannedEnd' => $this->planned_end?->toDateString(),
+            'actualStart' => $this->actual_start?->toDateString(),
+            'actualEnd' => $this->actual_end?->toDateString(),
             'progress' => $this->effectiveProgress(),
+            // 검측 게이트 — hold_released 전에는 '완료' 전환이 서비스에서 막힌다.
+            'holdPoint' => (bool) $this->hold_point,
+            'holdReleased' => (bool) $this->hold_released,
+            'holdNote' => $this->hold_note,
+            'submittalSeqs' => $this->submittal_seqs ?? [],
             // CPM
             'preds' => $this->preds ?? [],
             'floatDays' => $this->float_days,

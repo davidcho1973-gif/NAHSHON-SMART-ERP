@@ -156,6 +156,7 @@ class ProjectRegisterService
             'source' => $b->source,
             'note' => $b->note,
             'flagged' => $b->flagged,
+            'wbsActivityId' => $b->wbs_activity_id,
         ])->values()->all();
 
         $byDiscipline = [];
@@ -214,6 +215,7 @@ class ProjectRegisterService
             'qty_basis' => $basis,
             'unit_price' => $price,
             'note' => trim((string) ($data['note'] ?? '')) ?: null,
+            'wbs_activity_id' => strtoupper(trim((string) ($data['wbsActivityId'] ?? ''))) ?: null,
         ])->save();
 
         return ['success' => true, 'id' => $row->id, 'amount' => (float) $row->amount];

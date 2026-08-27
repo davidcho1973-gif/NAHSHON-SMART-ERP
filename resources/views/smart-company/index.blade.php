@@ -10660,8 +10660,10 @@
       window.openWbsEditModal = function(wbsId) {
         var sub = (window._wbsSubIndex || {})[wbsId] || {};
         var statuses = ['AI생성', '검수완료', '진행중', '완료', '보류'];
+        // 내부 용어를 그대로 보여주면 "시작도 안 했는데 검수완료?"가 된다 — 화면 표기와 같은 말로 접는다.
+        var statusModalLabel = { 'AI생성': '대기 (AI생성)', '검수완료': '대기 (확정)', '진행중': '진행중', '완료': '완료', '보류': '보류' };
         var statusOptions = statuses.map(function(s) {
-          return '<option value="' + s + '"' + (s === sub.status ? ' selected' : '') + '>' + s + '</option>';
+          return '<option value="' + s + '"' + (s === sub.status ? ' selected' : '') + '>' + (statusModalLabel[s] || s) + '</option>';
         }).join('');
         var companySet = {};
         Object.keys(window._wbsSubIndex || {}).forEach(function(k) {
@@ -10745,6 +10747,30 @@
           '<div><label style="' + LBL + '">종료예정</label>' +
           '<input type="date" id="wbs-edit-end" class="wbs-edit-field" value="' + wbsEsc(sub.plannedEnd || '') + '"></div>' +
           '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">실적 시작 <span style="' + HINT + '">(진행중 전환 시 자동 기록)</span></label>' +
+          '<input type="date" id="wbs-edit-astart" class="wbs-edit-field" value="' + wbsEsc(sub.actualStart || '') + '"></div>' +
+          '<div><label style="' + LBL + '">실적 완료 <span style="' + HINT + '">(완료 전환 시 자동 기록)</span></label>' +
+          '<input type="date" id="wbs-edit-aend" class="wbs-edit-field" value="' + wbsEsc(sub.actualEnd || '') + '"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="' + LBL + '">선행작업 <span style="' + HINT + '">(액티비티 ID, 쉼표 구분)</span></label>' +
+          '<input type="text" id="wbs-edit-preds" class="wbs-edit-field" value="' + wbsEsc((sub.preds || []).join(', ')) + '" placeholder="예: A020, C020">' +
+          '<div id="wbs-preds-warn" style="display:none;margin-top:6px;font-size:12px;color:#f59e0b;line-height:1.5"></div></div>' +
+          '<div><label style="' + LBL + '">배분원가 (USD)</label>' +
+          '<input type="number" step="100" min="0" id="wbs-edit-cost" class="wbs-edit-field" value="' + (sub.plannedCost !== null && sub.plannedCost !== undefined ? sub.plannedCost : '') + '" placeholder="이 작업 몫의 직접비"></div>' +
+          '</div>' +
+          '<div style="border:1px solid var(--border-default);border-radius:10px;padding:12px;display:grid;gap:9px">' +
+          '<label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-primary);cursor:pointer;font-weight:600">' +
+          '<input type="checkbox" id="wbs-edit-hold"' + (sub.holdPoint ? ' checked' : '') + ' style="width:15px;height:15px"> 검측 홀드포인트' +
+          '<span style="' + HINT + '">(검측·시험 통과 전에는 완료 불가 — 예: 누기시험, 수분시험)</span></label>' +
+          '<label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-primary);cursor:pointer">' +
+          '<input type="checkbox" id="wbs-edit-holdrel"' + (sub.holdReleased ? ' checked' : '') + ' style="width:15px;height:15px"> 홀드 해제' +
+          '<span style="' + HINT + '">(검측 통과 후 체크하면 완료가 열립니다)</span></label>' +
+          '<input type="text" id="wbs-edit-holdnote" class="wbs-edit-field" value="' + wbsEsc(sub.holdNote || '') + '" placeholder="예: 그리스덕트 누기시험 — 은폐 전 발주자 입회">' +
+          '</div>' +
+          '<div><label style="' + LBL + '">제출물 대장 연결 <span style="' + HINT + '">(대장 번호, 쉼표 — 문서 ▸ 제출물 대장)</span></label>' +
+          '<input type="text" id="wbs-edit-submittals" class="wbs-edit-field" value="' + wbsEsc((sub.submittalSeqs || []).join(', ')) + '" placeholder="예: 158, 159"></div>' +
           '</div>' +
           '';
         }
@@ -10786,6 +10812,39 @@
         modal.querySelector('#wbs-edit-cancel').addEventListener('click', function() { modal.remove(); });
         modal.querySelector('#wbs-edit-cancel-x').addEventListener('click', function() { modal.remove(); });
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+        // 선행-날짜 불일치 경고 — 저장을 막지는 않는다(저장하면 CPM 이 다시 계산해 준다).
+        (function() {
+          var predsEl = document.getElementById('wbs-edit-preds');
+          var startEl = document.getElementById('wbs-edit-start');
+          var warn = document.getElementById('wbs-preds-warn');
+          if (!predsEl || !startEl || !warn) return;
+          var byAct = {};
+          Object.keys(window._wbsSubIndex || {}).forEach(function(k) {
+            var s = window._wbsSubIndex[k];
+            if (s && s.activity_id) byAct[s.activity_id] = s;
+          });
+          function check() {
+            var toks = predsEl.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+            var maxEnd = '', maxTok = '', unknown = [];
+            toks.forEach(function(t) {
+              var p = byAct[t];
+              if (!p) { if (t !== sub.activity_id) unknown.push(t); return; }
+              if (p.plannedEnd && p.plannedEnd > maxEnd) { maxEnd = p.plannedEnd; maxTok = t; }
+            });
+            var msgs = [];
+            if (toks.indexOf(sub.activity_id) !== -1) msgs.push('자기 자신(' + sub.activity_id + ')을 선행으로 걸 수 없습니다.');
+            if (unknown.length) msgs.push('이 공정표에 없는 선행 ID: ' + unknown.join(', '));
+            if (maxEnd && startEl.value && startEl.value <= maxEnd) {
+              msgs.push('시작예정(' + startEl.value + ')이 선행 ' + maxTok + ' 종료(' + maxEnd + ')보다 빠릅니다 — 저장하면 CPM 이 후속 일정을 다시 계산합니다.');
+            }
+            warn.style.display = msgs.length ? 'block' : 'none';
+            warn.textContent = msgs.join(' · ');
+          }
+          predsEl.addEventListener('input', check);
+          startEl.addEventListener('input', check);
+          check();
+        })();
+
         modal.querySelector('#wbs-edit-save').addEventListener('click', async function() {
           var name = document.getElementById('wbs-edit-name').value.trim();
           if (!name) { alert('작업명은 비울 수 없습니다.'); return; }
@@ -10804,7 +10863,15 @@
             '일수': elv('wbs-edit-days', String(parseInt(sub.days, 10) || 0)),
             '진척률': elv('wbs-edit-progress', String(parseInt(sub.progress, 10) || 0)),
             '시작예정': elv('wbs-edit-start', sub.plannedStart || ''),
-            '종료예정': elv('wbs-edit-end', sub.plannedEnd || '')
+            '종료예정': elv('wbs-edit-end', sub.plannedEnd || ''),
+            '실적시작': elv('wbs-edit-astart', sub.actualStart || ''),
+            '실적종료': elv('wbs-edit-aend', sub.actualEnd || ''),
+            '선행작업': elv('wbs-edit-preds', (sub.preds || []).join(', ')).trim(),
+            '배분원가': elv('wbs-edit-cost', sub.plannedCost !== null && sub.plannedCost !== undefined ? String(sub.plannedCost) : ''),
+            '홀드포인트': (function() { var el = document.getElementById('wbs-edit-hold'); return el ? (el.checked ? '1' : '0') : (sub.holdPoint ? '1' : '0'); })(),
+            '홀드해제': (function() { var el = document.getElementById('wbs-edit-holdrel'); return el ? (el.checked ? '1' : '0') : (sub.holdReleased ? '1' : '0'); })(),
+            '홀드메모': elv('wbs-edit-holdnote', sub.holdNote || '').trim(),
+            '제출물': elv('wbs-edit-submittals', (sub.submittalSeqs || []).join(', ')).trim()
           };
           var original = {
             '작업명': sub.sub_name || '',
@@ -10818,7 +10885,15 @@
             '일수': String(parseInt(sub.days, 10) || 0),
             '진척률': String(parseInt(sub.progress, 10) || 0),
             '시작예정': sub.plannedStart || '',
-            '종료예정': sub.plannedEnd || ''
+            '종료예정': sub.plannedEnd || '',
+            '실적시작': sub.actualStart || '',
+            '실적종료': sub.actualEnd || '',
+            '선행작업': (sub.preds || []).join(', '),
+            '배분원가': sub.plannedCost !== null && sub.plannedCost !== undefined ? String(sub.plannedCost) : '',
+            '홀드포인트': sub.holdPoint ? '1' : '0',
+            '홀드해제': sub.holdReleased ? '1' : '0',
+            '홀드메모': sub.holdNote || '',
+            '제출물': (sub.submittalSeqs || []).join(', ')
           };
           var updates = {};
           Object.keys(current).forEach(function(k) {
@@ -10827,6 +10902,7 @@
           // 숫자 입력이 비어 있으면(잘못된 입력) 조용히 되돌리지 말고 무시.
           if (updates['공수'] === '') delete updates['공수'];
           if (updates['일수'] === '') delete updates['일수'];
+          if (updates['배분원가'] === '') delete updates['배분원가'];
           if (Object.keys(updates).length === 0) { modal.remove(); return; }
           try {
             var res = await window.API.updateWbsRow(wbsId, updates);

@@ -301,7 +301,8 @@
               return '<strong style="font-variant-numeric:tabular-nums">' + money(r.amount) + '</strong>';
             } },
           { key: 'source', label: '산출근거', width: '150px', render: function (r) {
-              return r.source ? '<div style="font-size:11px;color:var(--text-tertiary);white-space:normal">' + u.esc(r.source) + '</div>' : '';
+              return (r.wbsActivityId ? '<div style="margin-bottom:3px">' + u.badge('WBS ' + r.wbsActivityId, 'ok') + '</div>' : '') +
+                (r.source ? '<div style="font-size:11px;color:var(--text-tertiary);white-space:normal">' + u.esc(r.source) + '</div>' : '');
             } },
           { key: '_act', label: '', width: '70px', align: 'right', render: function (r) {
               return canManage ? u.rowButton('수정', 'window.AdminRegisters.openBoqItem(' + r.id + ')') : '';
@@ -347,6 +348,8 @@
           options: ['문서확정', '도면판독', '개산추정', '미확정'], value: row.qtyBasis,
           hint: '실측으로 채웠으면 "도면판독" 이상으로 올리세요.' },
         { name: 'unitPrice', label: '단가 (USD)', type: 'number', required: true, group: '수량 · 단가', value: row.unitPrice },
+        { name: 'wbsActivityId', label: 'WBS 액티비티', group: '수량 · 단가', value: row.wbsActivityId || '',
+          hint: '공정관리의 액티비티 ID (예: S020) — 이 라인의 돈이 어느 작업 몫인지. 기성 SOV 분해의 근거가 됩니다.' },
         { name: 'note', label: '메모', type: 'textarea', colSpan: 2, group: '수량 · 단가', value: row.note || '' },
       ],
       onSave: function (v) {

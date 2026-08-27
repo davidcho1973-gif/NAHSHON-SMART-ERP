@@ -108,9 +108,13 @@ class WbsService
         if ($gate = $this->tbmGate($item, $status)) {
             return ['success' => false, 'error' => $gate, 'gated' => true];
         }
+        if ($gate = $this->holdGate($item, $status, $item->hold_point, $item->hold_released)) {
+            return ['success' => false, 'error' => $gate, 'gated' => true];
+        }
 
         $item->status = $status;
         $this->syncProgressToStatus($item);
+        $this->touchActuals($item);
         $item->save();
 
         // 상태 변화는 CPM 의 고정/이동 판정을 바꾼다(진행중·완료는 날짜가 실적으로 굳는다).
@@ -138,6 +142,15 @@ class WbsService
             return ['success' => false, 'error' => $gate, 'gated' => true];
         }
 
+        // 검측(홀드포인트) 게이트 — 이 저장으로 바뀔 홀드 값 기준으로 판정한다.
+        // (홀드 지정과 완료 전환을 한 번에 보내도 새 의도가 이긴다.)
+        $holdPoint = $this->truthy($updates['홀드포인트'] ?? $item->hold_point);
+        $holdReleased = $this->truthy($updates['홀드해제'] ?? $item->hold_released);
+        if ($targetStatus !== '' && $targetStatus !== $item->status
+            && ($gate = $this->holdGate($item, $targetStatus, $holdPoint, $holdReleased))) {
+            return ['success' => false, 'error' => $gate, 'gated' => true];
+        }
+
         $map = [
             '상태' => 'status', 'status' => 'status',
             '담당사' => 'company', 'company' => 'company',
@@ -152,11 +165,19 @@ class WbsService
             '장비' => 'equipment', 'equipment' => 'equipment',
             '진척률' => 'progress', 'progress' => 'progress',
             '미완료사유' => 'incomplete_reason', 'incomplete_reason' => 'incomplete_reason',
+            '선행작업' => 'preds', 'preds' => 'preds',
+            '실적시작' => 'actual_start', 'actual_start' => 'actual_start',
+            '실적종료' => 'actual_end', 'actual_end' => 'actual_end',
+            '배분원가' => 'planned_cost', 'planned_cost' => 'planned_cost',
+            '홀드포인트' => 'hold_point', 'hold_point' => 'hold_point',
+            '홀드해제' => 'hold_released', 'hold_released' => 'hold_released',
+            '홀드메모' => 'hold_note', 'hold_note' => 'hold_note',
+            '제출물' => 'submittal_seqs', 'submittal_seqs' => 'submittal_seqs',
         ];
 
         // 빈 값은 기본적으로 "변경 없음"이지만, 배정 해제가 의미 있는 컬럼은 명시적 클리어로 처리.
         // (HTTP 경로에서는 ConvertEmptyStringsToNull 미들웨어가 '' 를 null 로 바꿔 도달하므로 둘 다 클리어로 본다.)
-        $clearable = ['company', 'planned_start', 'planned_end'];
+        $clearable = ['company', 'planned_start', 'planned_end', 'actual_start', 'actual_end', 'hold_note', 'preds', 'submittal_seqs'];
 
         foreach ($updates as $key => $value) {
             $column = $map[$key] ?? null;
@@ -198,6 +219,38 @@ class WbsService
 
                 continue;
             }
+            // 선행작업: 쉼표 구분 activity_id 토큰 → 배열. 비우면 선행 해제.
+            if ($column === 'preds') {
+                $tokens = is_array($value)
+                    ? $value
+                    : array_values(array_filter(array_map('trim', explode(',', (string) $value))));
+                $item->preds = $tokens ?: null;
+
+                continue;
+            }
+            // 제출물 대장 연결: 쉼표 구분 번호 → 정수 배열. 비우면 해제.
+            if ($column === 'submittal_seqs') {
+                $seqs = is_array($value) ? $value : explode(',', (string) $value);
+                $seqs = array_values(array_unique(array_filter(array_map('intval', $seqs))));
+                $item->submittal_seqs = $seqs ?: null;
+
+                continue;
+            }
+            // 홀드포인트 체크박스: '1'/'0'·true/false 를 불리언으로.
+            if ($column === 'hold_point' || $column === 'hold_released') {
+                $item->{$column} = $this->truthy($value);
+
+                continue;
+            }
+            // 배분원가: 빈 값이면 변경 없음(0 으로 오해하지 않게), 숫자만.
+            if ($column === 'planned_cost') {
+                if ($value === '' || $value === null) {
+                    continue;
+                }
+                $item->planned_cost = max(0, (float) preg_replace('/[^0-9.\-]/', '', (string) $value));
+
+                continue;
+            }
 
             if ($value === '' || $value === null) {
                 if (in_array($column, $clearable, true)) {
@@ -212,11 +265,12 @@ class WbsService
         if (array_key_exists('상태', $updates) || array_key_exists('status', $updates)) {
             $this->syncProgressToStatus($item);
         }
+        $this->touchActuals($item);
 
         $item->save();
 
         $datesEdited = $item->wasChanged(['planned_start', 'planned_end']);
-        $needsCpm = $datesEdited || $item->wasChanged(['days', 'status']);
+        $needsCpm = $datesEdited || $item->wasChanged(['days', 'status', 'preds']);
 
         // 사람이 이 행의 날짜를 직접 정했다 — CPM 기준선(시작일·선행 간격)을 새 날짜로 다시 포착하게 한다.
         if ($datesEdited) {
@@ -911,5 +965,46 @@ class WbsService
             WbsItem::STATUS_IN_PROGRESS => max((int) $item->progress, 10),
             default => 0,
         };
+    }
+
+    /**
+     * 검측(홀드포인트) 게이트 — 검측·시험을 통과(해제)하기 전에는 '완료'로 못 간다.
+     *
+     * TBM 게이트가 "오늘 일해도 되는가"라면, 이것은 "이 일을 끝났다고 해도 되는가"다.
+     * 그리스덕트 누기시험(은폐 전)·바닥 수분시험(양생 후) 같은 시방 명문 게이트용.
+     */
+    private function holdGate(WbsItem $item, string $targetStatus, bool $holdPoint, bool $holdReleased): ?string
+    {
+        if ($targetStatus !== WbsItem::STATUS_DONE || ! $holdPoint || $holdReleased) {
+            return null;
+        }
+
+        $note = $item->hold_note ? ' ('.$item->hold_note.')' : '';
+
+        return '검측 홀드포인트가 걸린 작업입니다'.$note.'. 검측·시험 통과 후 "홀드 해제"를 먼저 체크해야 완료할 수 있습니다.';
+    }
+
+    /**
+     * 상태 변화에 맞춰 실적 일자를 자동 기록 — 비어 있을 때만 채우고, 사람이 넣은 값은 건드리지 않는다.
+     */
+    private function touchActuals(WbsItem $item): void
+    {
+        if ($item->status === WbsItem::STATUS_IN_PROGRESS && $item->actual_start === null) {
+            $item->actual_start = now()->toDateString();
+        }
+        if ($item->status === WbsItem::STATUS_DONE) {
+            $item->actual_start ??= now()->toDateString();
+            $item->actual_end ??= now()->toDateString();
+        }
+    }
+
+    /** 체크박스류 입력('1'/'0'·true/false·'true')을 불리언으로. */
+    private function truthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'on', 'yes'], true);
     }
 }
