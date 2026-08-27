@@ -26,6 +26,10 @@ class DocumentTextExtractor
             return null;
         }
 
+        // 어떤 추출기가 됐든 깨진 바이트는 여기서 걷어낸다 — json_encode·Postgres 공통 방어선.
+        $text = (string) mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text) ?? $text;
+
         $text = html_entity_decode($text, ENT_QUOTES | ENT_XML1, 'UTF-8');
         $text = preg_replace('/[ \t]+/', ' ', $text) ?? $text;
         $text = preg_replace('/\R{3,}/', "\n\n", $text) ?? $text;

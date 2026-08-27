@@ -24,12 +24,31 @@ final class PdfText
             return null;
         }
 
+        // CAD 출력 PDF 는 페이지 하나가 수십만 오퍼레이션짜리 콘텐츠 스트림이라 파서가
+        // 기본 memory_limit(128M)을 뚫는다 — Fatal 은 catch 로 못 잡으니 한도를 먼저 올린다.
+        // (703K 컷시트북 09of15 Halton 시트에서 실사고. 실패해도 vision 폴백이 있으니 과감히.)
+        $prevLimit = (string) ini_get('memory_limit');
+        $bumped = false;
+        if ($prevLimit !== '-1' && (int) $prevLimit < 512) {
+            $bumped = @ini_set('memory_limit', '512M') !== false;
+        }
+
         try {
             $parser = new Parser();
             $text = (string) $parser->parseContent($bytes)->getText();
         } catch (\Throwable $e) {
             return null;
+        } finally {
+            if ($bumped) {
+                @ini_set('memory_limit', $prevLimit);
+            }
         }
+
+        // 서브셋 폰트(ToUnicode 누락) PDF — CAD 출력물이 흔히 그렇다 — 는 깨진 바이트를 뱉는다.
+        // 그대로 두면 AI 요청 json_encode('Malformed UTF-8')와 Postgres 저장이 모두 죽으므로
+        // 유효한 UTF-8 만 남기고 제어문자를 걷어낸다. (703K 컷시트북 Halton 시트에서 실사고)
+        $text = (string) mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text) ?? $text;
 
         // 공백 정리(과도한 개행/스페이스 축약) — 토큰 절약 + 파싱 안정.
         $text = preg_replace('/[ \t]+/', ' ', $text) ?? $text;
