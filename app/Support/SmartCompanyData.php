@@ -34,6 +34,7 @@ use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\OrgSettingService;
 use App\Services\Admin\ItemMasterService;
 use App\Services\Admin\PayProfileService;
+use App\Services\Admin\ProjectRegisterService;
 use App\Services\Admin\SiteAdminService;
 use App\Services\Admin\UserAccessService;
 use App\Services\Alerts\UnifiedAlertService;
@@ -194,6 +195,12 @@ class SmartCompanyData
             'api_saveItemCategory' => app(ItemMasterService::class)->saveCategory(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteItem' => app(ItemMasterService::class)->deleteItem((int) ($args[0] ?? 0)),
             'api_deleteItemCategory' => app(ItemMasterService::class)->deleteCategory((int) ($args[0] ?? 0)),
+
+            // 제출물 대장 + 물량/BOQ — 시방·도면에서 뽑은 계약 요구 추적 (703K 에서 시작).
+            'api_getSubmittals' => app(ProjectRegisterService::class)->listSubmittals((($args[0] ?? null) !== null) ? (int) $args[0] : null),
+            'api_saveSubmittal' => app(ProjectRegisterService::class)->saveSubmittal(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null),
+            'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
 
             // 조직 설정 — 이 배포가 누구의 것인지. 고객사 관리자가 직접 고친다.
             'api_getOrgSettings' => app(OrgSettingService::class)->load(),

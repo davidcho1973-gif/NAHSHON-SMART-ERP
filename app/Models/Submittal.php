@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * 제출물 대장 한 행 — 시방·도면이 요구하는 제출물/QA/시험 항목 하나.
+ *
+ * title 에 원문 조항이 병기되어 있고, gate=true 는 시방에 금지·실격·입회 등
+ * 강제 조항이 걸린 우선관리 항목이다. 상태만 현장에서 갱신한다.
+ */
+class Submittal extends Model
+{
+    public const STATUS_OPTIONS = [
+        '미착수' => '미착수',
+        '작성중' => '작성중',
+        '제출' => '제출',
+        '승인' => '승인',
+        '조건부승인' => '조건부승인',
+        '반려' => '반려',
+        '재제출' => '재제출',
+    ];
+
+    public const CATEGORY_OPTIONS = [
+        'Action 제출물' => 'Action 제출물',
+        'Informational 제출물' => 'Informational 제출물',
+        'Closeout 제출물' => 'Closeout 제출물',
+        '품질보증(QA)' => '품질보증(QA)',
+        '시험·검사' => '시험·검사',
+    ];
+
+    protected $fillable = [
+        'company_id', 'site_id', 'project_id',
+        'seq', 'csi', 'section', 'category', 'title', 'gate',
+        'status', 'assignee', 'planned_on', 'submitted_on', 'approved_on', 'notes',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'gate' => 'boolean',
+            'planned_on' => 'date',
+            'submitted_on' => 'date',
+            'approved_on' => 'date',
+        ];
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+}

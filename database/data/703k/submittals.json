@@ -1,0 +1,2210 @@
+[
+ {
+  "seq": 1,
+  "csi": "07 2100.1",
+  "section": "단열",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 각 제품 유형별 제출 (유리섬유 블랭킷 내부 칸막이 단열재)",
+  "gate": false
+ },
+ {
+  "seq": 2,
+  "csi": "07 2100.1",
+  "section": "단열",
+  "category": "Informational 제출물",
+  "title": "제품 시험성적서(Product Test Reports) — 각 제품별, 공인 시험기관(qualified testing agency)이 수행한 시험 결과 (ASTM C665 Type I, ASTM E84 화염확산 25/연기발생 50 이하, ASTM E136 연소특성 관련)",
+  "gate": false
+ },
+ {
+  "seq": 3,
+  "csi": "08 3800",
+  "section": "고성능 트래픽도어",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 각 도어 조립체별 제조사 기술자료, 코어 구성(core composition)·금속 게이지(metal gauges)·방향성 결(grain) 밀 마감 상세 명기",
+  "gate": false
+ },
+ {
+  "seq": 4,
+  "csi": "08 3800",
+  "section": "고성능 트래픽도어",
+  "category": "Action 제출물",
+  "title": "제작도면(Shop Drawings) — 입면도(elevations), 개구부 골조 치수(rough opening dimensions), Type II-B 불연 금속스터드 칸막이벽에 대한 앵커리지 상세(anchorage details) 표기",
+  "gate": false
+ },
+ {
+  "seq": 5,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 각 하드웨어 세트(hardware set)별 제출",
+  "gate": false
+ },
+ {
+  "seq": 6,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Action 제출물",
+  "title": "제작도면(Shop Drawings) — 건물 전체 도어 및 하드웨어 세트, 도어별 설치 제품 유형(product type for each door) 포함",
+  "gate": false
+ },
+ {
+  "seq": 7,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Action 제출물",
+  "title": "키잉 스케줄(Keying Schedule) — 발주처(Owner) 감독 하에 작성한 별도 스케줄; 키잉 시스템 설명, 도어 번호, 키 세트 기호(key set symbols), 하드웨어 세트 번호, 특기사항을 서면으로 포함; 영구 실린더(permanent cylinders) 발주 전 발주처 승인 필수",
+  "gate": false
+ },
+ {
+  "seq": 8,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Closeout 제출물",
+  "title": "운영·유지관리 매뉴얼(Operating and Maintenance Manuals) — 도어하드웨어 설치 전체를 구성하는 각 품목별, Division 01 Closeout Submittals 요구 수량; 제조사 명칭·주소·연락처 및 최인접 서비스 대리점 정보 포함; 최종본에는 설치·시운전·인수 과정의 '준공 반영(as built)' 수정사항 포함",
+  "gate": false
+ },
+ {
+  "seq": 9,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Closeout 제출물",
+  "title": "특별보증서 및 유지관리 계약(Special Warranties and Maintenance Agreements) — 본 절에 규정된 특별보증(모티스 락 10년, 패닉 엑시트 하드웨어 5년, 수동 표면형 도어클로저 5년, 중하중 플로어클로저 10년; 표준 1년)",
+  "gate": false
+ },
+ {
+  "seq": 10,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Closeout 제출물",
+  "title": "유지관리 자료(Maintenance Data) — 각 도어하드웨어 유형별, 유지관리 매뉴얼에 수록",
+  "gate": false
+ },
+ {
+  "seq": 11,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Closeout 제출물",
+  "title": "최종 스케줄(Schedules) — 최종 도어하드웨어 스케줄 및 키잉 스케줄(final door hardware and keying schedule)",
+  "gate": false
+ },
+ {
+  "seq": 12,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "Closeout 제출물",
+  "title": "전용 공구 및 유지관리 지침(Maintenance Tools and Instructions) — 발주처의 지속적 조정·유지관리·탈착 교체를 위한 특수 공구 일습 및 지침서 제공",
+  "gate": false
+ },
+ {
+  "seq": 13,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "품질보증(QA)",
+  "title": "단일 공급원 책임(Single Source Responsibility) — 각 하드웨어 유형(락·래치세트, 힌지, 클로저 등)은 단일 제조사에서 조달",
+  "gate": false
+ },
+ {
+  "seq": 14,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "품질보증(QA)",
+  "title": "공급업체 자격(Supplier Qualifications) — 공인 건축 도어하드웨어 공급업체로서 현장 인근에 창고시설(warehousing facilities in Project's vicinity) 보유, 유사 규모·유형·품질의 납품 실적 보유, 공사 기간 중 발주처·설계자·시공사가 상시 자문 가능한 공인 건축하드웨어 컨설턴트(AHC, Architectural Hardware Consultant) 고용",
+  "gate": false
+ },
+ {
+  "seq": 15,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "시험·검사",
+  "title": "전수 조정·작동 확인(Adjusting and Checking) — 모든 하드웨어 작동 품목과 도어 각각에 대해 정상 작동 확인, 조정 불가 품목은 교체; 도어클로저 스윕 속도는 장애인접근성(accessibility) 기준 및 관할기관 요구 준수",
+  "gate": true
+ },
+ {
+  "seq": 16,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "시험·검사",
+  "title": "하드웨어 공동 인수검수(Joint Inventory) — 하드웨어 공급업체와 설치업체 대표가 합동으로 수량 확인 완료 시까지 인벤토리 실시",
+  "gate": false
+ },
+ {
+  "seq": 17,
+  "csi": "08 7100.1",
+  "section": "도어하드웨어",
+  "category": "시험·검사",
+  "title": "시연·교육(Demonstration) — 발주처 인원에게 도어하드웨어 및 마감의 적정 조정·유지관리 방법 교육",
+  "gate": false
+ },
+ {
+  "seq": 18,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 지정된 탄성 바닥재(VCT, 걸레받이, 리듀싱 스트립) 각 제품 (1.5.A)",
+  "gate": false
+ },
+ {
+  "seq": 19,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "Action 제출물",
+  "title": "샘플(Samples) — 시방서에 지정되지 않은 대체 탄성 바닥재를 쓰는 경우 해당 재료 샘플 제출 (1.5.B)",
+  "gate": false
+ },
+ {
+  "seq": 20,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "Informational 제출물",
+  "title": "시험성적서(Test Report) — 정전기 전도성 바닥(static-conductive flooring) 설치가 Quality Assurance 조항의 전기저항 요건에 적합함을 입증하는 성적서 (1.5.C)",
+  "gate": false
+ },
+ {
+  "seq": 21,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "Closeout 제출물",
+  "title": "유지관리 자료(Maintenance Data) — 탄성 바닥재의 관리·청소 방법, Division 01 요건에 따라 제출 (1.5.D)",
+  "gate": false
+ },
+ {
+  "seq": 22,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "Closeout 제출물",
+  "title": "보증서(Warranty) — 시공자(Applicator) 서면 보증서, Owner 명의로 서명·발행, 준공(Substantial Performance)일로부터 15년, 과도한 마모 및 재료 결함 보증 (1.10)",
+  "gate": false
+ },
+ {
+  "seq": 23,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "Closeout 제출물",
+  "title": "여분자재(Extra Materials) — 바닥타일: 설치된 타입·색상·패턴별로 50박스당 1박스, 걸레받이·액세서리: 타입·색상·패턴·규격별로 설치 500LF당 최소 10LF, 보호포장·내용물 라벨 부착 (1.9)",
+  "gate": false
+ },
+ {
+  "seq": 24,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "품질보증(QA)",
+  "title": "착수전 회의(Preinstallation Meeting) — 착공 전 현장회의, 시공사(Contractor) 주재, Consultant·하도급·제조사 대리인 참석; 표면처리, 콘크리트 RH/pH/모세관수분 시험, 설치, 타공종 조정 협의 (1.4.B)",
+  "gate": false
+ },
+ {
+  "seq": 25,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "품질보증(QA)",
+  "title": "화재위험등급(Fire Hazard Classification) — Critical Radiant Flux Class I(0.45 W/sq.cm 이상), ASTM E648 또는 NFPA 253, 공인 시험기관(qualified testing agency) 시험 (1.6.A)",
+  "gate": false
+ },
+ {
+  "seq": 26,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "품질보증(QA)",
+  "title": "정전기 소산형 타일(Static-Dissipative Tile) 전기저항 특성 — ASTM F150(100V) 또는 ANSI/ESDSTM-7.1 기준 1~1000메그옴, 정전기 발생 300V 미만(AATCC-134), 정전기 감쇠 0.25초 미만(FED-STD-101C/4046.1) (1.6.B)",
+  "gate": false
+ },
+ {
+  "seq": 27,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "품질보증(QA)",
+  "title": "정전기 전도형 타일(Static-Conductive Tile) 전기저항 특성 — NFPA 99 Annex E 또는 UL 779 기준, 정전기 발생 100V 미만, 감쇠 0.01초 미만(MIL-SD-3010) (1.6.C)",
+  "gate": false
+ },
+ {
+  "seq": 28,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "품질보증(QA)",
+  "title": "시험기관(Testing Agency) — 발주처 승인(Owner-approved) 시험기관을 고용하여 설치된 정전기 전도성 바닥의 전기저항 시험 수행 (1.6.D)",
+  "gate": false
+ },
+ {
+  "seq": 29,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "시험·검사",
+  "title": "상대습도 시험(RH Testing) — 콘크리트 타설 28일 경과 후 염화칼슘 시험(ASTM F1869) 및 in-situ 프로브 RH 시험(ASTM F2170); 최초 1000sf당 각 방법 3회+추가 1000sf당 1회; 수분방출 5 lbs/1000sf/24hr 이하 또는 RH 85% 이하; 결과와 시험위치 도면을 설치 전 Consultant에 제출 (3.1.C.1)",
+  "gate": false
+ },
+ {
+  "seq": 30,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "시험·검사",
+  "title": "알칼리도 시험(Alkalinity/pH Testing) — 타설 28일 경과 후, 최초 1000sf당 최소 3회+추가 1000sf당 1회; pH 9.0 초과 시 Consultant/Contractor/Owner 보고 후 중화·재시험 (3.1.C.2)",
+  "gate": false
+ },
+ {
+  "seq": 31,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "시험·검사",
+  "title": "모세관 수분 시험(Capillary Moisture Testing) — ASTM D4263, 제조사 협의 하 시행, 결과를 Consultant에 보고하고 제조사 대리인 승인 후 진행 (3.1.C.3)",
+  "gate": false
+ },
+ {
+  "seq": 32,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "시험·검사",
+  "title": "전체 시험결과 제출 — 수분·알칼리·모세관수분 시험 위치 도면 포함, 설치 착수 전 Consultant에 제출; 결과 제출·승인 전 작업 진행 금지 (3.1.C.4, 3.2.G)",
+  "gate": true
+ },
+ {
+  "seq": 33,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "시험·검사",
+  "title": "전기저항 시험 — 발주처 승인 시험기관이 설치된 정전기 전도성 바닥에 대해 수행 (1.6.D)",
+  "gate": false
+ },
+ {
+  "seq": 34,
+  "csi": "09 6519.1",
+  "section": "비닐타일 바닥",
+  "category": "시험·검사",
+  "title": "현장품질관리(Site Quality Control) — 수축 또는 접착 불량이 나타난 걸레받이 제거·교체 (3.6)",
+  "gate": false
+ },
+ {
+  "seq": 35,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 각 제품별, 제조사 기술자료·시공지침·각 구성재별 권장사항 포함 (1.3.A)",
+  "gate": false
+ },
+ {
+  "seq": 36,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Action 제출물",
+  "title": "친환경 설계 제출물(Sustainable Design Submittals) — 환경성적표지(EPD), 패치·충전재 포함 프로젝트 사용 전 구성재·바닥시스템 대상 (1.3.B)",
+  "gate": false
+ },
+ {
+  "seq": 37,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Action 제출물",
+  "title": "제품 일람표(Product Schedule) — Part 2의 바닥재 지정기호와 도면의 실별 지정 사용 (1.3.C)",
+  "gate": false
+ },
+ {
+  "seq": 38,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Action 제출물",
+  "title": "설치자 인증서(Installer Certificates) — 설치자가 규정 요건에 적합함을 제조사가 서명·인증 (1.3.D)",
+  "gate": false
+ },
+ {
+  "seq": 39,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Action 제출물",
+  "title": "샘플(Samples) — 각 수지계 바닥시스템별, 지정된 색상·질감별 (1.3.E)",
+  "gate": false
+ },
+ {
+  "seq": 40,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Informational 제출물",
+  "title": "자재 인증서(Material Certificates) (1.4.A)",
+  "gate": false
+ },
+ {
+  "seq": 41,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Informational 제출물",
+  "title": "자재 시험성적서(Material Test Reports) (1.4.B)",
+  "gate": false
+ },
+ {
+  "seq": 42,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Closeout 제출물",
+  "title": "유지관리 자료(Maintenance Data) (1.5.A)",
+  "gate": false
+ },
+ {
+  "seq": 43,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "Closeout 제출물",
+  "title": "보증서(Warranty) — 재료·시공을 모두 포괄하는 단일 서면보증, 준공일로부터 1년; 견적서(bid package)에 보증서 견본(sample warranty letter) 미포함 시 입찰 실격 가능 (1.7)",
+  "gate": true
+ },
+ {
+  "seq": 44,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "품질보증(QA)",
+  "title": "대체품 제한 — 지정된 바닥시스템의 재료 계열(generic type) 변경 불가; 대체 요청은 입찰일 10일 전 제출분만 검토 (1.6.A)",
+  "gate": true
+ },
+ {
+  "seq": 45,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "품질보증(QA)",
+  "title": "설치자 자격(Installer Qualifications) — 유사 규모·난이도 수지계 바닥 시공 경험 보유, 제조사가 서면으로 승인·교육(approved and trained in writing)한 설치자, 유사 규모 프로젝트 10건 이상 완료 실적 (1.6.B)",
+  "gate": false
+ },
+ {
+  "seq": 46,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "품질보증(QA)",
+  "title": "착수전 회의(Preinstallation Conference) — 착공 최소 30일 전 GC가 소집; 참석: GC, 건축가/발주처 대리인, 제조사/설치사 대리인, 시공 하도급사 (1.2)",
+  "gate": false
+ },
+ {
+  "seq": 47,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "시험·검사",
+  "title": "자재 샘플링(Material Sampling) — 발주처(Owner)가 시공 중 수시·무제한으로 사용 자재 샘플 시험 요구 가능; 발주처가 독립 시험기관(independent testing agency) 고용, 샘플은 시공자 입회 하에 채취·식별·봉인·인증 (3.3.A)",
+  "gate": true
+ },
+ {
+  "seq": 48,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "시험·검사",
+  "title": "시험기관 적합성 시험 — 참조 시험절차 또는 제조사 제품자료 기재 절차로 샘플 시험 (3.3.B)",
+  "gate": false
+ },
+ {
+  "seq": 49,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "시험·검사",
+  "title": "불합격 시 조치 — 시험 결과 부적합 시 시공자가 시험비 부담, 부적합 자재 제거, 표면 재처리 후 재시공 (3.3.C)",
+  "gate": false
+ },
+ {
+  "seq": 50,
+  "csi": "09 6723.1",
+  "section": "수지계 바닥재",
+  "category": "시험·검사",
+  "title": "코어 샘플링(Core Sampling) — 발주처 지시·지정 위치에서 1000sf당 1개 코어 채취로 두께 확인; 부적합 샘플당 추가 2개 채취; 코어링 손상부 보수 및 결함부 시정 (3.3.D)",
+  "gate": false
+ },
+ {
+  "seq": 51,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "Informational 제출물",
+  "title": "제품자료(Product Data) — 본 절 각 제품별 제조사 제품자료 시트 (1.5.B; 본 절은 별도 ACTION SUBMITTALS 조항 없이 'INFORMATION SUBMITTALS' 조항에 포함)",
+  "gate": false
+ },
+ {
+  "seq": 52,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "Informational 제출물",
+  "title": "시공도면(Shop Drawings) — 카탈로그 컷 형식, 구성품·표면마감·하드웨어·고정장치 설명 포함하여 지정 자재를 완전히 도해 (1.5.C)",
+  "gate": false
+ },
+ {
+  "seq": 53,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "Closeout 제출물",
+  "title": "운영·유지관리 자료(Operation and Maintenance Data) — Division 01 요건에 따른 유지관리 지침 (1.6.A)",
+  "gate": false
+ },
+ {
+  "seq": 54,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "Closeout 제출물",
+  "title": "제조사 문헌 2부(2 sets) — 프로젝트 사용 각 품목의 기술자료 시트(Technical Data Sheets), 서비스·부품 매뉴얼(Service and Parts Manuals), 현장 서비스·상담용 지역 대리점 연락처 (1.6.B)",
+  "gate": false
+ },
+ {
+  "seq": 55,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "Closeout 제출물",
+  "title": "만능키(Universal Keys) — 액세서리 내부 접근·보급용, 최소 6개를 발주처 대리인(Owner's representative)에게 인도 (2.12.H, Fabrication 조항)",
+  "gate": false
+ },
+ {
+  "seq": 56,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "품질보증(QA)",
+  "title": "ADA 적합성 — 전 화장실 액세서리 및 설치 위치가 ADA-ABA Accessibility Guidelines 및 ICC A117.1 적용 조항 준수 (1.2.A.3, 1.4.A)",
+  "gate": false
+ },
+ {
+  "seq": 57,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "품질보증(QA)",
+  "title": "현장 실측(Field Measurements) — 정확한 설치를 위한 현장 실측 및 인접 공종과 정보 교환; 설치 전 모든 액세서리 위치를 발주처(Owner)와 확인 (1.4.B)",
+  "gate": false
+ },
+ {
+  "seq": 58,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "품질보증(QA)",
+  "title": "단일 제조사·동일키 — 본 절 제품은 1개 제조사 제품으로 하고 가능한 범위에서 keyed alike (2.1.B)",
+  "gate": false
+ },
+ {
+  "seq": 59,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "시험·검사",
+  "title": "현장품질관리(Site Quality Control) — 보수·복원·청소로 회복 불가한 손상 작업은 발주처 무상으로 Consultant가 만족할 때까지 교체 (3.3)",
+  "gate": true
+ },
+ {
+  "seq": 60,
+  "csi": "10 2813.1",
+  "section": "화장실 액세서리",
+  "category": "시험·검사",
+  "title": "조정·시험(Adjusting) — 개폐장치·힌지·잠금장치·래치의 원활한 작동 시험·조정, 손상·결함품 교체 (3.4)",
+  "gate": false
+ },
+ {
+  "seq": 61,
+  "csi": "09 2900.1",
+  "section": "석고보드",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 모든 제품 유형별 제출 (1.3.A)",
+  "gate": false
+ },
+ {
+  "seq": 62,
+  "csi": "09 2900.1",
+  "section": "석고보드",
+  "category": "품질보증(QA)",
+  "title": "내화등급 조립체(Fire-Resistance-Rated Assemblies) — 독립시험기관(independent testing agency)이 ASTM E 119로 시험한 조립체와 동일한 자재·구법 적용 의무 (2.1.A)",
+  "gate": false
+ },
+ {
+  "seq": 63,
+  "csi": "09 2900.1",
+  "section": "석고보드",
+  "category": "품질보증(QA)",
+  "title": "차음등급 조립체(STC-Rated Assemblies) — 독립시험기관이 ASTM E 90 시험·ASTM E 413 분류한 조립체와 동일한 자재·구법 적용 의무 (2.1.B)",
+  "gate": false
+ },
+ {
+  "seq": 64,
+  "csi": "09 2900.1",
+  "section": "석고보드",
+  "category": "품질보증(QA)",
+  "title": "충격저항 석고보드 — ASTM C 1629/C 1629M Level 2 이상(표면마모·압입·연질/경질체 충격), 곰팡이저항 ASTM D 3273 점수 10 (2.3.B)",
+  "gate": false
+ },
+ {
+  "seq": 65,
+  "csi": "09 2900.1",
+  "section": "석고보드",
+  "category": "시험·검사",
+  "title": "설치 전 바탕 검사(Examination) — 용접 철제문틀·지지 프레임 포함 바탕을 설치자(Installer) 입회 하에 검사, 불합격 조건 시정 후 착수 (3.1.A)",
+  "gate": true
+ },
+ {
+  "seq": 66,
+  "csi": "09 2900.1",
+  "section": "석고보드",
+  "category": "시험·검사",
+  "title": "패널 사전 검사 — 습윤·수분손상·곰팡이 손상 패널 거부 및 설치된 손상 패널 제거·교체 (3.1.B, 3.7.C)",
+  "gate": false
+ },
+ {
+  "seq": 67,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 천장 그리드 시스템 및 기본입찰(base bid) 자재를 대체하는 흡음 타일·패널에 한해 제출; 제조사 카탈로그 제출 시 사용 예정 품목을 명확히 표시 (1.3.A)",
+  "gate": false
+ },
+ {
+  "seq": 68,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "Action 제출물",
+  "title": "샘플(Samples) — 대체 제안하는 흡음 타일·패널의 6인치 각 샘플 (1.3.B)",
+  "gate": false
+ },
+ {
+  "seq": 69,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "Closeout 제출물",
+  "title": "유지관리 지침(Maintenance Instructions) — 타일·패널·트림의 권장 세척자재·방법, 유해 세척제 성분·사용 주의사항 포함, Section 017823에 따라 발주자(Owner)에게 제출 (1.3.C)",
+  "gate": false
+ },
+ {
+  "seq": 70,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "Closeout 제출물",
+  "title": "유지관리 여분자재(Maintenance Materials) — 설치된 각 유형·패턴별 타일/패널의 2% 이상(전체 카톤 단위 반올림)을 발주자에게 인도 (1.4.A)",
+  "gate": false
+ },
+ {
+  "seq": 71,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "품질보증(QA)",
+  "title": "설치자 자격(Installer Qualifications) — 본 공사와 유사한 자재·설계·규모의 흡음패널 천장 시공 실적과 성공적 사용 이력을 갖춘 숙련 설치자 (1.2.A)",
+  "gate": false
+ },
+ {
+  "seq": 72,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "품질보증(QA)",
+  "title": "단일 공급원 제한(Source Limitations) — 흡음 천장패널·현수 시스템 각각 단일 공급원, 패널과 현수 시스템은 동일 제조사에서 조달 (1.2.B~C, 2.1.B)",
+  "gate": false
+ },
+ {
+  "seq": 73,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "품질보증(QA)",
+  "title": "표면연소 특성(Surface-Burning Characteristics) — 공인시험기관(qualified testing agency)의 ASTM E84 시험, ASTM E1264 Class A 화염확산지수, 연기발생지수 450 이하 (1.2.D)",
+  "gate": false
+ },
+ {
+  "seq": 74,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "품질보증(QA)",
+  "title": "내진 기준(Seismic Standard) — ASCE/SEI 7에 따른 지진력 저항 (1.2.D)",
+  "gate": false
+ },
+ {
+  "seq": 75,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "시험·검사",
+  "title": "은폐 전 검사 홀드포인트 — 흡음천장 뒤/내부의 기계·전기 등 검사 대상 품목은 발주자 대리인(Owner's Representative)의 검사·승인 전 은폐 작업 착수 금지 (1.6.B.2)",
+  "gate": true
+ },
+ {
+  "seq": 76,
+  "csi": "09 5100.1",
+  "section": "흡음천장",
+  "category": "시험·검사",
+  "title": "준공 전 최종 점검(Adjusting & Cleaning) — 내부 마감 실질 완료 후 흡음천장 전수 점검, 파손·이탈 부위 교체·재설치·터치업, 발주자 대리인이 수용하는 청결 상태로 인도 (3.5.A)",
+  "gate": false
+ },
+ {
+  "seq": 77,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 패널·그리드 부재·내진 안전클립의 제조사 데이터시트, 허용하중(load limits), 정확한 모델번호 (1.3.A)",
+  "gate": false
+ },
+ {
+  "seq": 78,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Action 제출물",
+  "title": "위임설계 제출물(Delegated Design Submittal) — 구조계산서, 횡방향 브레이싱 상세, 구조 앵커링 구성; 도면에 조지아주 등록 전문기술사(P.E.)의 날인·서명 필수 (1.3.B)",
+  "gate": false
+ },
+ {
+  "seq": 79,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Action 제출물",
+  "title": "샘플(Samples) — 6\"×6\" FRP 패널 및 공장부착 개스킷 플랜지가 보이는 8\" 길이 백색 알루미늄 메인티 검증 샘플 (1.3.C)",
+  "gate": false
+ },
+ {
+  "seq": 80,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Informational 제출물",
+  "title": "인증서(Certificates) — Class A 방화성능, SDC C(내진설계범주 C) 기준, FDA/NSF 식품안전 요건, ASTM C920 적합성을 입증하는 시험소 문서(laboratory documentation) (1.3.D — 조항상 ACTION SUBMITTALS 항목 내에 위치)",
+  "gate": false
+ },
+ {
+  "seq": 81,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Informational 제출물",
+  "title": "조정 도면(Coordination Drawings) — 축척 도면으로 관통부·부착 방법·간섭 품목·이격거리 표기 (1.3.E — 단, 원문이 '지붕 액세서리(roof accessories)' 내용으로 타 섹션 잔재로 보이는 편집 오류)",
+  "gate": false
+ },
+ {
+  "seq": 82,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Informational 제출물",
+  "title": "견본 보증서(Sample Warranties) — 제조사 특별보증서 견본 (1.3.F)",
+  "gate": false
+ },
+ {
+  "seq": 83,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Closeout 제출물",
+  "title": "패널 제조사 보증서(Panel Manufacturer Warranty) — 실질준공일로부터 10년, 변색·표면 박리(delamination)·부식(rotting)·구조적 뒤틀림 포함 재료·시공 결함 패널 교체 서면보증 (1.4.A)",
+  "gate": false
+ },
+ {
+  "seq": 84,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Closeout 제출물",
+  "title": "그리드 현수 시스템 보증서(Grid Suspension Warranty) — 완전 개스킷 시스템으로 설치 시 실질준공일로부터 25년, 구조적 처짐·부식·도장 결함 부재 교체 서면보증 (1.4.B)",
+  "gate": false
+ },
+ {
+  "seq": 85,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "Closeout 제출물",
+  "title": "시공사 설치 보증서(Contractor Installation Warranty) — 실질준공일로부터 2년, 전체 조립체의 구조적 처짐·패널 이탈·둘레 실링 파손 보증 (1.4.C)",
+  "gate": false
+ },
+ {
+  "seq": 86,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "품질보증(QA)",
+  "title": "위임설계 기술자 자격(Delegated Design) — 조지아주 면허 보유·현재 등록된 전문 구조기술사(qualified professional structural engineer)를 시공사가 선임하여 현수 천장 시스템 종합 구조해석·설계 수행 (1.2.A)",
+  "gate": false
+ },
+ {
+  "seq": 87,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "품질보증(QA)",
+  "title": "구조 성능 의도(Structural Intent) — 고정하중·고압세척 하중·내진력을 오픈 스틸 바 조이스트 본구조로 전달, 단부 이격 한계 준수 (1.2.B)",
+  "gate": false
+ },
+ {
+  "seq": 88,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "품질보증(QA)",
+  "title": "위생 인증 — USDA/FSIS 상업 식품조리구역 승인 패널, NSF/ANSI 51·FDA 21 CFR 177.2600 인증 실런트 (2.1.G, 2.4.B)",
+  "gate": false
+ },
+ {
+  "seq": 89,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "시험·검사",
+  "title": "선행공정 검사 확인 — 천장 그리드 설치 전 상부 배관·기계 덕트·전기 전선관·주방 후드 트랙의 러프인 완료 및 검사(inspected) 확인 (3.1.B)",
+  "gate": false
+ },
+ {
+  "seq": 90,
+  "csi": "09 5113",
+  "section": "FRP 천장패널",
+  "category": "시험·검사",
+  "title": "구조 바탕 확인 — 오픈 스틸 바 조이스트의 구조 건전성·수평 상태 및 앵커·내진 와이어 연결 준비 상태 검증 (3.1.A)",
+  "gate": false
+ },
+ {
+  "seq": 91,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 혼화제(Admixtures)",
+  "gate": false
+ },
+ {
+  "seq": 92,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 양생제(Curing Compounds)",
+  "gate": false
+ },
+ {
+  "seq": 93,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 바닥·슬래브 표면처리재(Floor and Slab Treatments)",
+  "gate": false
+ },
+ {
+  "seq": 94,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 접착증강제(Bonding Agents)",
+  "gate": false
+ },
+ {
+  "seq": 95,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 접착제(Adhesives)",
+  "gate": false
+ },
+ {
+  "seq": 96,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 방습필름(Vapor Retarders)",
+  "gate": false
+ },
+ {
+  "seq": 97,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 보수재료(Repair Materials)",
+  "gate": false
+ },
+ {
+  "seq": 98,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 후시공 앵커(Post-installed Anchors)",
+  "gate": false
+ },
+ {
+  "seq": 99,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "콘크리트 배합설계(Design Mixtures) — 프로젝트의 콘크리트 등급(class)별 제출; 재료 특성·현장조건·기후·시험결과 변동 시 대체 배합도 제출",
+  "gate": false
+ },
+ {
+  "seq": 100,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "배합설계 부속 — 현장에서 후첨가할 배합수량 명시(amounts of mixing water to be withheld)",
+  "gate": false
+ },
+ {
+  "seq": 101,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "배합설계 부속 — 슬래브온그레이드용 방수 혼화제(Waterproofing Admixture): 접착식 바닥마감재 제조사 요구와 호환성 확인, 기록용(record) 제출",
+  "gate": false
+ },
+ {
+  "seq": 102,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "철근 시공상세도(Concrete Reinforcement Shop Drawings / Placing Drawings) — 가공·굽힘·배근 상세, 바 크기·간격·길이·재질·등급, 바 스케줄, 스터럽 간격, 이음·정착, 기계식 커플러, 개구부 보강근 포함",
+  "gate": false
+ },
+ {
+  "seq": 103,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "시공이음 배치도(Construction Joint Layout) — 시공이음·수축이음 평면도; 시공이음 위치는 건축사(Architect) 승인 대상",
+  "gate": false
+ },
+ {
+  "seq": 104,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Action 제출물",
+  "title": "매입물 평면도 — 개구부·슬리브 관통부·매입 전선관(Openings, Sleeve Penetrations, Conduit) 표시 도면",
+  "gate": false
+ },
+ {
+  "seq": 105,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "자격증빙(Qualification Data) — 시공자(Installer) 및 제조사(Manufacturer)",
+  "gate": false
+ },
+ {
+  "seq": 106,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "용접 자격증명서(Welding Certificates)",
+  "gate": false
+ },
+ {
+  "seq": 107,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "재료 인증서(Material Certificates) — 제조사 서명: 시멘트계 재료, 혼화제, 거푸집 재료·박리제, 철근·부속재, 양생제, 바닥·슬래브 표면처리재, 접착증강제, 접착제, 방습필름, 반강성 줄눈충전재(Semirigid Joint Filler), 줄눈충전 스트립, 보수재료, 기계식 철근이음(Mechanical Splices) — 13개 품목 각각",
+  "gate": false
+ },
+ {
+  "seq": 108,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "제조사 확인서(Letter of Certification) — 양생제가 후속 마감재 접착에 영향 없음 확인",
+  "gate": false
+ },
+ {
+  "seq": 109,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "제조사 확인서(Letter of Certification) — 거푸집 박리제(Form Release Agent)가 방수재·바닥재 등 접착 제품의 부착에 영향 없음 확인",
+  "gate": false
+ },
+ {
+  "seq": 110,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "재료 시험성적서(Material Test Reports) — 골재: 알칼리-골재 반응성(Alkali Aggregate Reactivity)에 의한 유해 팽창 부재 확인 (공인 시험기관 발행)",
+  "gate": false
+ },
+ {
+  "seq": 111,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "거푸집 시공상세도(Formwork Shop Drawings) — 자격 있는 구조기술사(Licensed Structural Engineer) 작성/감독; 동바리·백쇼어링·리쇼어링(Shoring/Backshoring/Reshoring) 해체 순서·일정 포함 (ACI 117, ACI 347 준수)",
+  "gate": false
+ },
+ {
+  "seq": 112,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "타설 계획서(Placement Schedule) — 타설 순서, 시공이음 위치, 포어 스트립(Pour Strips) 표시",
+  "gate": false
+ },
+ {
+  "seq": 113,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "용접 자격증명서 사본 — 용접절차 및 용접사, 기록용(record) 제출",
+  "gate": false
+ },
+ {
+  "seq": 114,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "바닥 평탄도·수평도 측정결과(Floor Flatness/Levelness Measurements) — 허용오차 준수 증빙; 도면 및 발주자 지정 요구사항(Owner Specified Requirements)과 연계",
+  "gate": false
+ },
+ {
+  "seq": 115,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "현장 품질관리 보고서(Field Quality-Control Reports)",
+  "gate": false
+ },
+ {
+  "seq": 116,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "착수전 회의록(Minutes of Preinstallation Conference)",
+  "gate": false
+ },
+ {
+  "seq": 117,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "경량콘크리트 기건밀도-생콘크리트 밀도 상관자료(Data Correlating Air-Dry Density to Fresh Bulk Density)",
+  "gate": false
+ },
+ {
+  "seq": 118,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "Informational 제출물",
+  "title": "서중·한중 콘크리트 타설 계획서(Plan for Hot Weather and Cold Weather Concreting)",
+  "gate": false
+ },
+ {
+  "seq": 119,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "모든 콘크리트 공사는 ACI 318(Building Code Requirements for Reinforced Concrete) 준수",
+  "gate": false
+ },
+ {
+  "seq": 120,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "현장사무실에 ACI Manual SP-15 최신판 비치 의무(Field Reference Manual)",
+  "gate": false
+ },
+ {
+  "seq": 121,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "철근공사는 CRSI Manual of Standard Practice 및 ACI 315 준수",
+  "gate": false
+ },
+ {
+  "seq": 122,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "시공자 자격(Installer Qualifications) — ACI 인증 평판마감 기능공(ACI-certified Flatwork Technician and Finisher) 현장 배치 + ACI 인증 감독자(supervisor) 보유",
+  "gate": false
+ },
+ {
+  "seq": 123,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "제조사 자격(Manufacturer Qualifications) — ASTM C94 준수 레미콘 제조 경험 업체; NRMCA 레미콘 생산시설 인증(Certification of Ready Mixed Concrete Production Facilities)",
+  "gate": false
+ },
+ {
+  "seq": 124,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "용접 자격(Welding Qualifications) — AWS D1.4에 따른 절차·인원 인증",
+  "gate": false
+ },
+ {
+  "seq": 125,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "목업(Mock-Ups) — 표면마감 등급(Surface Finish Classification)별 시공: SF-2.0·SF-3.0은 외관·질감 목업 필수(SF-1.0은 불요); 목업 완료 7일 전 건축사 통보; 승인된 목업은 준공 시까지 손상 없으면 본공사 일부로 인정 가능",
+  "gate": false
+ },
+ {
+  "seq": 126,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "품질보증(QA)",
+  "title": "착수전 회의(Preinstallation Conference) — 배합설계 제출 전 현장 개최(01 3100 준거); 현장소장·시험기관·레미콘사·콘크리트 하도급사·건축사·엔지니어·Special/Threshold Inspector·특수마감 하도급사 참석 의무; 시공사가 의제(agenda)를 7일 전 전 참석자에게 배포",
+  "gate": false
+ },
+ {
+  "seq": 127,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "시험·검사",
+  "title": "현장 품질관리(Field Quality Control) — 01 4533 구조 시험 및 검사(Structural Tests and Inspection) 섹션에 따라 검사·시험 수행 (본 섹션은 전면 위임)",
+  "gate": false
+ },
+ {
+  "seq": 128,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "시험·검사",
+  "title": "바닥 평탄도·수평도(Floor Flatness/Levelness) 측정 — 규정 허용오차 준수 확인 후 결과 제출",
+  "gate": false
+ },
+ {
+  "seq": 129,
+  "csi": "03 3000",
+  "section": "현장타설콘크리트",
+  "category": "시험·검사",
+  "title": "미마감면 검사 — 바닥·슬래브 표면 허용오차 검측, 배수구배면은 경사 템플릿으로 구배·평활도 확인(3.13.D)",
+  "gate": false
+ },
+ {
+  "seq": 130,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Action 제출물",
+  "title": "시공상세도(Shop Drawings) — 철골부재 제작도: 전 부재 크기·위치, 절단·접합·이음·캠버·홀 상세, 타 공종 설치용 앵커로드 매입도(Embedment Drawings)·템플릿·설치지침 포함",
+  "gate": false
+ },
+ {
+  "seq": 131,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Action 제출물",
+  "title": "시공상세도 부속 — 용접은 AWS 표준기호로 공장/현장용접 구분 표기, 크기·길이·종류 명기; 제거할 백킹바 및 존치 백킹바의 보강 필릿용접 표기",
+  "gate": false
+ },
+ {
+  "seq": 132,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Action 제출물",
+  "title": "시공상세도 부속 — 볼트 종류·크기·길이, 공장/현장볼트 구분, 프리텐션·슬립크리티컬(Slip-Critical) 고력볼트 접합부 식별",
+  "gate": false
+ },
+ {
+  "seq": 133,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Action 제출물",
+  "title": "시공상세도 부속 — 표면처리 및 마감(Surface Preparations and Finishes); 모든 현장용접은 조립도(Erection Drawings)에 표기",
+  "gate": false
+ },
+ {
+  "seq": 134,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Action 제출물",
+  "title": "용접절차서(WPS) 및 절차검정기록서(PQR) — AWS D1.1에 따라 용접이음별 제출(사전인정·시험검정 불문); 전원(정전류/정전압), 요구내진용접(Demand Critical Welds)의 용접봉 제조사·상품명 포함",
+  "gate": false
+ },
+ {
+  "seq": 135,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Action 제출물",
+  "title": "위임설계 제출물(Delegated-Design Submittal) — 도면에 완전 설계되지 않은 철골 접합부: 전문기술사(Specialty Engineer) 서명·날인 해석자료 + 시공상세도가 접합부 설계에 부합함을 확인하는 서명·날인 확인서(letter) 제출",
+  "gate": false
+ },
+ {
+  "seq": 136,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "LEED 제출물 — MR Credit 4: 재활용 원자재 함유 제품의 포스트컨슈머/프리컨슈머 중량비 및 제품별 비용 명세",
+  "gate": false
+ },
+ {
+  "seq": 137,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "LEED 제출물 — IEQ Credit 4.2: 프라이머의 캘리포니아 공중보건국(CDPH) VOC 방출시험 적합 시험성적서(Laboratory Test Reports)",
+  "gate": false
+ },
+ {
+  "seq": 138,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "자격증빙(Qualification Data) — 설치자(Installer/Erector) 및 제작자(Fabricator)",
+  "gate": false
+ },
+ {
+  "seq": 139,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "용접사별 용접 자격증명서(Welding Certificates for each welder)",
+  "gate": false
+ },
+ {
+  "seq": 140,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "밀시트(Mill Test Reports) — 구조용 강재의 화학적·물리적 특성",
+  "gate": false
+ },
+ {
+  "seq": 141,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "제품 시험성적서(Product Test Reports) — 볼트·너트·와셔(기계적 특성·화학분석), 직접장력지시와셔(Direct-Tension Indicators), 장력제어 고력볼트 조립체(Tension-Control Assemblies), 시어스터드(Shear Stud Connectors), 공장 프라이머(Shop Primers)",
+  "gate": false
+ },
+ {
+  "seq": 142,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "기존 조건 측량성과(Survey of Existing Conditions) — 공인 철골 설치자 입회 하 지지면·앵커로드·베어링플레이트·매입물의 치수·위치·각도·레벨 인증 측량(Certified Survey)",
+  "gate": true
+ },
+ {
+  "seq": 143,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "Informational 제출물",
+  "title": "적합 확인서(Certificate of Compliance) — 제작자가 관할당국(Authority Having Jurisdiction)에 승인 시공문서대로 작업 수행하였음을 확인",
+  "gate": false
+ },
+ {
+  "seq": 144,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "제작자 자격(Fabricator Qualifications) — 관할당국(AHJ) 승인 + AISC 품질인증 프로그램 참여, AISC 인증공장(Certified Plant) Category STD, 유사 규모 프로젝트 경력 5년 이상",
+  "gate": false
+ },
+ {
+  "seq": 145,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "설치자 자격(Installer Qualifications) — AISC 인증 철골설치업체(Certified Erector) Category CSE, 유사 규모 프로젝트 경력 5년 이상",
+  "gate": false
+ },
+ {
+  "seq": 146,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "접합부 설계 전문기술사 자격(Specialty Engineer Qualifications) — 프로젝트 소재 주(州) 등록 구조기술사, 유사 규모 경력 5년 이상",
+  "gate": false
+ },
+ {
+  "seq": 147,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "용접 자격(Welding Qualifications) — AWS D1.1(Structural Welding Code - Steel)에 따른 절차·인원 인증",
+  "gate": false
+ },
+ {
+  "seq": 148,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "AISC 303(Code of Standard Practice) 및 AISC 360(주석·보충 포함) 준수",
+  "gate": false
+ },
+ {
+  "seq": 149,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "특별검사 인지 확인서(Special Inspection Acknowledgement) — 풍하중·지진 저항 부재에 대한 특별검사(Special Inspection) 요구사항 인지 서한 제출",
+  "gate": false
+ },
+ {
+  "seq": 150,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "품질보증(QA)",
+  "title": "착수전 회의(Preinstallation Conference) — 현장에서 개최",
+  "gate": false
+ },
+ {
+  "seq": 151,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "시험·검사",
+  "title": "현장 품질관리(Field Quality Control) — 계약문서의 구조 시험 및 검사(Structural Tests and Inspections) 규정에 따름 (본 섹션은 전면 위임)",
+  "gate": false
+ },
+ {
+  "seq": 152,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "시험·검사",
+  "title": "설치 전 검측(Examination) — 공인 철골 설치자 입회 하에 콘크리트·조적 지지면 레벨, 앵커로드·베어링플레이트·매입물 위치 적합성 확인 및 인증 측량 작성",
+  "gate": true
+ },
+ {
+  "seq": 153,
+  "csi": "05 1200",
+  "section": "철골",
+  "category": "시험·검사",
+  "title": "고력볼트 재포장 시 발주자 시험·검사기관(Owner's Testing and Inspecting Agency) 입회 관찰 및 재밀봉 필수; ASTM F1852 볼트는 재윤활 후 재시험(Retesting) 요구",
+  "gate": true
+ },
+ {
+  "seq": 154,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 계약 후·구매 전 제출, 제본 전자 PDF 형식 의무: 하드커버·표지·인덱스(품목번호/수량/설명/구분: fabricated·manufactured·by Owner·by GC)·품목별 타이핑 리드시트(품번, 수량, 제조사, 모델, 옵션·마감·부속, 소요 유틸리티, 특기사항)·제조사 사양서. 형식 미준수 시 반려(1.10.B)",
+  "gate": true
+ },
+ {
+  "seq": 155,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "도면 제출 일반(Drawing Submittals) — 제본 전자 PDF, 평면도 축척 1/4\"=1'-0\"(1:50) (1.10.C)",
+  "gate": false
+ },
+ {
+  "seq": 156,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "설비인입 도면(Rough-In Drawings) — 치수 기입, 환기·바닥/벽 슬리브·급배수·가스·스팀·전기 접속 표기(발주자 지급품 포함), 콘크리트 패드 치수·바닥 침하부 포함. 품목별 장비평면/스케줄·위생·전기·건축공사·환기·냉동/음료 계통을 각각 별도 시트로 작성. 슬래브 타설 전 기계·전기·환기 인입 및 슬리브/전선관 위치 검증 의무(1.10.D)",
+  "gate": false
+ },
+ {
+  "seq": 157,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "벽체 보강 도면(Wall Backing Drawings) — 벽부착 기기 지지용 백킹의 위치·크기 표기, 벽체 마감 전 설치 가능하도록 적기 제출·GC 송부(1.10.E)",
+  "gate": false
+ },
+ {
+  "seq": 158,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "제작도(Shop Drawings) — 모든 특수 제작품 대상, 입면 최소 3/4\"(1:20)·단면 1-1/2\"(1:10) 축척, 전체 치수·시공 상세·인접 공사와의 관계·보강 및 앵커리지 표기(1.10.F)",
+  "gate": false
+ },
+ {
+  "seq": 159,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "냉동설비 도면(Refrigeration Drawings) — 착수 전 제조사 도면·사양서 승인 제출: 실제 배관 관경·계통 배분, 증발기·압축기·응축기·밸브류 포함, 모델·계통·전기특성·BTU 부하 명기한 제본 세트(1.10.G)",
+  "gate": false
+ },
+ {
+  "seq": 160,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "배기후드 제작도/제출물(Exhaust Hood Shop Drawings) — 후드 제조사가 컴퓨터 작성 제출도 제공: 덕트 칼라 치수, 덕트 크기, CFM·정압(캐노피 길이 1ft 단위 정밀도), 단면·입면·평면도에 실제 지정 장비 블록·품번 표기(제네릭 블록 불가), 리스팅·승인·배선·배관 정보 포함(2.3.G.15)",
+  "gate": true
+ },
+ {
+  "seq": 161,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "콜드룸 천장패널 지지시스템 상세 및 구조계산서(Ceiling Panel Support Details & Structural Calculations) — 제작 전 엔지니어 승인, 승인본 사본 발주자·설계자 송부(2.8.F.1)",
+  "gate": false
+ },
+ {
+  "seq": 162,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "내진 요구사항(Seismic Requirements) — 적용 시 모든 제출물에 표기하고 관할기관에 요청 자료 제출(1.6.E)",
+  "gate": false
+ },
+ {
+  "seq": 163,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "대체품 제안(Substitutions) — 입찰일 전 승인 제출: 제조사·모델·일러스트·사양·용량·운전 데이터 및 대체 시 유틸리티/건축 조건 변경 목록 첨부(1.7)",
+  "gate": false
+ },
+ {
+  "seq": 164,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "로드센터 배선도(Wiring Schematic incl. Circuit Breaker Diagram) — 제작 기기 로드센터용, Division 26 에 제공(2.4.A)",
+  "gate": false
+ },
+ {
+  "seq": 165,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Action 제출물",
+  "title": "검토 후 배포본 — 지정 부수의 배포용 도면 및 최대 10부의 수정 제품자료집 공급(1.10.K.2)",
+  "gate": false
+ },
+ {
+  "seq": 166,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "배기후드 성능시험 보고서(Exhaust Hood Performance Test Report) — 준공·발주자 인수 후 10 근무일 이내 서면 제출: 후드별 설계요구치와 실측 운전값 대비(2.3.G.14)",
+  "gate": false
+ },
+ {
+  "seq": 167,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "배기·급기(MUA) 풍량 측정 보고서(Air Volume Report) — 설치·접속 후 각 덕트 풍량 실측치 발주자 서면 제출, 부적합 풍량은 조정 후 재측정(3.2.G, Item 036/044/053/062)",
+  "gate": false
+ },
+ {
+  "seq": 168,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "소방설비 시험 인증서(Fire Suppression Certificates) — 관할당국 및 화재보험요율기구(Fire Insurance Rating Bureau) 인증서 취득·발주자 제출(3.2.F)",
+  "gate": false
+ },
+ {
+  "seq": 169,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "현장 부적합 통지서(Site Verification Notice) — 설치에 부적합한 현장조건 발견 시 설계자·발주자·GC 에 서면 통지(1.12.F)",
+  "gate": false
+ },
+ {
+  "seq": 170,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "원격 응축기 위치 부적합/추가 환기 필요 시 서면 의견서 — 발주자·설계자에 서한 제출 후 지시 대기(1.12.G.3, 3.1.M.9)",
+  "gate": false
+ },
+ {
+  "seq": 171,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "냉동배관 압력시험·진공(Evacuation) 사전 통지 — 시험·진공 개시 전 발주자/설계자 통지(입회·절차 확인용)(3.1.O.1, 3.1.P.1)",
+  "gate": true
+ },
+ {
+  "seq": 172,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "보증기간 중 서비스콜·점검 보고서 사본 — 발주자 및 건물운영기술자에게 우송(3.3.B)",
+  "gate": false
+ },
+ {
+  "seq": 173,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Informational 제출물",
+  "title": "RFI — General Conditions 또는 이메일(eric@clevengerassoc.com / PM 직접)로 제출(1.10.J)",
+  "gate": false
+ },
+ {
+  "seq": 174,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "준공도면(Record Drawings) — 공사 종료 시·기성 최종지급 전 CAD 디스크 + 하드카피 1부: MEP 인입, 특수제작품, 배기후드·냉동 등 엔지니어드 시스템 변경사항 반영(1.10.H)",
+  "gate": false
+ },
+ {
+  "seq": 175,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "부품·서비스 매뉴얼(Parts and Service Manuals) — 제본 2부: 전 품목 부품·서비스 공급처 디렉토리 포함, 시운전·시연 전 제출. 매뉴얼 미제출 시 발주자 최종 인수 불가. 준공도면 전자 PDF(CD) 동봉(1.11)",
+  "gate": true
+ },
+ {
+  "seq": 176,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "유지관리 일정표(Maintenance Schedule) — 최종 인수 전 3부 제출(3.2.B)",
+  "gate": false
+ },
+ {
+  "seq": 177,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "냉동설비 준공도(Refrigeration As-Built Drawings) — 설치 완료 시 냉매배관 경로·배선도 포함, 복제 가능한 세피아 형식 제출(3.2.C.7)",
+  "gate": false
+ },
+ {
+  "seq": 178,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "냉동 스케줄·평면도 액자 게시(Framed Refrigeration Schedule & Floor Plan) — 유리 액자로 제작, EPR/CRT/CDA·솔레노이드 밸브 등 제어기기 위치 표기, 발주자 지정 위치 설치(3.2.C.6)",
+  "gate": false
+ },
+ {
+  "seq": 179,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "보증서(Warranty) — 전 기기 1년(최종 인수일 기산), 반밀폐 압축기 추가 4년, 냉동시스템 1년간 규정온도 유지관리(냉매 포함) 책임(1.9); Item 017/067 리치인 냉장·냉동고 7년 parts & labor, Item 060 3년+압축기 2년 추가",
+  "gate": false
+ },
+ {
+  "seq": 180,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "Closeout 제출물",
+  "title": "여분자재(Maintenance Materials) — 필터 카트리지 추가 2세트(Item 021, 052), 오븐랙 여분(Item 049/051/058), 프라이바스켓 2세트+휴대용 여과기(Item 055), 식기랙 Flat 4+Peg 4(Item 088), 콤비오븐 세척제·디라이밍제 각 1(Item 051)",
+  "gate": false
+ },
+ {
+  "seq": 181,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "인증·규격 요건 — UL 라벨, NSF(NSF-7 포함) 라벨, ASME 스탬프, AGA, NEMA, NEC, NFPA-96, OSHA, HACCP, ADA, 연방 에너지자립안보법 HR6 준수(1.6)",
+  "gate": false
+ },
+ {
+  "seq": 182,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "제작 기기 단일 제조업체 원칙 — 모든 특수 제작품은 설계자·발주자가 승인한 1개 제작사 제작(2.5.A)",
+  "gate": false
+ },
+ {
+  "seq": 183,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "콜드룸 단일 제조·공장감독 설치 — 프리팹 콜드룸은 1개 제조사 제작, 공장 감독(factory supervised) 설치자가 시공(2.8.B, 3.1.L.1)",
+  "gate": false
+ },
+ {
+  "seq": 184,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "원격 냉동시스템 단일 계약자 시공(2.9.B)",
+  "gate": false
+ },
+ {
+  "seq": 185,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "단열패널 인증 — 독립시험기관 인증 'Class 1-Insulated Panel' 라벨, ASTM E84 화염확산 25 이하, NFPA 101(2.8.D.1.c)",
+  "gate": false
+ },
+ {
+  "seq": 186,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "배기후드 — UL/ETL 리스팅(UL 710), NFPA-96·IMC 적합, ASTM F1704/F2474 기반 풍량 엔지니어링, 그리스 제거효율 93% 이상(ASTM 2519), 제어반 UL 508A/NEMA 1(2.3.G)",
+  "gate": false
+ },
+ {
+  "seq": 187,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "소방설비 — UL 300·NFPA 17A/96 적합 UL 리스티드 습식 시스템(Ansul R-102)(Item 035 등)",
+  "gate": false
+ },
+ {
+  "seq": 188,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "제출도서 작성 자격 — 도면은 KEC 자체 양식·자체 인력으로 작성, 설계자 도면 복사/짜깁기 반려. 승인(체킹) 완료 전 장비 발주·제작 착수 금지(1.10.I)",
+  "gate": true
+ },
+ {
+  "seq": 189,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "검토(Checking)의 한계 — 설계자 검토는 디자인 개념 확인일 뿐, 계약문서 적합성·유틸리티 검증·치수 확인 책임은 KEC 에 존치(1.10.I.1)",
+  "gate": false
+ },
+ {
+  "seq": 190,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "품질보증(QA)",
+  "title": "시운전 입회·교육 — 시운전 시 유자격 서비스 대리인 입회, 발주자 직원 사용·유지관리 교육 및 유지관리 일정 수립(3.2.B); 냉동시스템은 운전 첫날 최소 8시간 서비스맨 상주(3.2.C.8)",
+  "gate": true
+ },
+ {
+  "seq": 191,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "냉동배관 압력·누설시험(Refrigeration Piping Pressure Test) — R-404A 기준 고압측 300psi·저압측 150psi, 질소 가압 후 할라이드 토치 또는 전자식 검지기로 전 조인트 누설 검사, 발주자/설계자 사전 통지·시험 승인(3.1.O)",
+  "gate": false
+ },
+ {
+  "seq": 192,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "브레이징 질소 퍼지 검증 — 용접 중 질소 통과 의무, 발주자/설계자가 최대 3개 용접부 절단 검사 가능, 스케일 발견 시 KEC 비용으로 교체(3.1.M.4)",
+  "gate": false
+ },
+ {
+  "seq": 193,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "냉동시스템 진공시험(Evacuation) — 고·저압측 500 미크론 → 냉매 파괴 → 100 미크론 재진공, 지정 진공펌프·미크론 게이지 사용, 개시 전 통지·절차 점검(3.1.P)",
+  "gate": false
+ },
+ {
+  "seq": 194,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "냉동시스템 시운전(Start-Up) — 규정 냉매 충전, 냉동 스케줄 온도로 전 계통·제어 세팅 확인, 압축기 오일레벨 점검(Suniso 3G), Division 26 회로 점검 공조(3.2.C)",
+  "gate": false
+ },
+ {
+  "seq": 195,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "냉동고 바닥 콘크리트 양생·단계 강온 — 28일(최소 7일) 양생 후 가동, 40°F 24시간 → 20°F 24시간 → 규정온도 단계 인하(3.2.D)",
+  "gate": false
+ },
+ {
+  "seq": 196,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "소방설비 현장시험(Fire Suppression Test) — 허가 취득 후 발주자(Contracting Officer)·관할당국 입회 시험, 인증서 취득(3.2.F, Item 035/045/054/063.h)",
+  "gate": true
+ },
+ {
+  "seq": 197,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "배기후드 성능시험(Hood Performance Test) — 전 후드·조리기기 정상운전 상태에서 제조사 공장인증 대리인이 풍량·댐퍼·스위치·DCV·운전 시퀀스 실측 시험(2.3.G.14)",
+  "gate": false
+ },
+ {
+  "seq": 198,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "배기·MUA 풍량 검증 — 설치·접속 후 각 덕트 풍량 실측, 부적합 시 기계설비업체 조정 후 재측정(3.2.G)",
+  "gate": false
+ },
+ {
+  "seq": 199,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "보증기간 정기점검 — 90일마다 운전·서비스 점검, 보증만료 30일 전 최종점검, 만료 전 하자 처리 완료(3.3.A)",
+  "gate": false
+ },
+ {
+  "seq": 200,
+  "csi": "11 40 00",
+  "section": "주방기기",
+  "category": "시험·검사",
+  "title": "소음 검사 — 모든 주방·냉동기기 정숙운전 요건, 이상 소음 기기는 제거 또는 수리(1.12.C)",
+  "gate": false
+ },
+ {
+  "seq": 201,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "Action 제출물",
+  "title": "제품자료(Product Data) — 각 제품 유형별; UL 인증 그리스 덕트의 구조 상세(construction details), 재료 설명, 개별 구성품 치수·프로파일, 마감 포함",
+  "gate": false
+ },
+ {
+  "seq": 202,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "Action 제출물",
+  "title": "시공상세도(Shop Drawings) — UL 인증 공장제작 그리스 덕트: 평면·입면·단면·부착 상세(plans, elevations, sections, attachment details)",
+  "gate": false
+ },
+ {
+  "seq": 203,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "Action 제출물",
+  "title": "시공상세도(Shop Drawings) — 장비 조립 상세(details of equipment assemblies): 치수, 중량, 하중, 필요 이격거리, 현장조립 방법, 구성품, 현장 연결부 위치·크기 표기",
+  "gate": false
+ },
+ {
+  "seq": 204,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "Action 제출물",
+  "title": "행거·내진 구속장치 제작 및 조립 상세(details of fabrication and assembly of hangers and seismic restraints)",
+  "gate": false
+ },
+ {
+  "seq": 205,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "Informational 제출물",
+  "title": "용접 자격증명서(Welding Certificates)",
+  "gate": false
+ },
+ {
+  "seq": 206,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "품질보증(QA)",
+  "title": "용접 자격인정(Welding Qualifications) — AWS D1.1/D1.1M 및 AWS D9.1/D9.1M에 따른 용접절차·용접인원 자격 인정",
+  "gate": false
+ },
+ {
+  "seq": 207,
+  "csi": "23 3533",
+  "section": "주방 배기덕트",
+  "category": "시험·검사",
+  "title": "공기 누기시험(Air Leakage Test) — 그리스 덕트 어느 부분이라도 은폐(concealment) 전에 발주자 대리인(Owner's Representative) 입회 하에 수행",
+  "gate": true
+ },
+ {
+  "seq": 208,
+  "csi": "F",
+  "section": "소방 도면",
+  "category": "Action 제출물",
+  "title": "스프링클러 시스템 시공상세도(Sprinkler Shop Drawings) — NFPA 13 요건에 따라 작성·제출, 설치 전 서면 승인(approved in writing prior to installation) 필수 (General Note 7)",
+  "gate": false
+ },
+ {
+  "seq": 209,
+  "csi": "F",
+  "section": "소방 도면",
+  "category": "Action 제출물",
+  "title": "수리계산서(Hydraulic Calculations) — 모든 최종 배관 구경은 수리계산으로 결정 (General Note 4)",
+  "gate": false
+ },
+ {
+  "seq": 210,
+  "csi": "F",
+  "section": "소방 도면",
+  "category": "Action 제출물",
+  "title": "소유주/벤더 공급장비 반입 시 추가 소방설비 별도 제출물(separate submittals) — 저장랙·오븐·공정장비 등에 대한 인랙 스프링클러, 특수소화설비(special hazard systems), 추가 호스접속구 등 (General Note 1)",
+  "gate": false
+ },
+ {
+  "seq": 211,
+  "csi": "F",
+  "section": "소방 도면",
+  "category": "품질보증(QA)",
+  "title": "내진 보호(seismic protection) — 내진설계범주 B, NFPA 13·조지아주 채택 IBC·ASCE 7에 따라 지진 피해로부터 시스템 보호, 상세는 S00-001 참조 (General Note 8)",
+  "gate": false
+ },
+ {
+  "seq": 212,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "Action 제출물",
+  "title": "내진 브레이싱 계산서 및 시스템 설계(seismic bracing calculations and system design) — 해당 주(州) 등록기술자(registered engineer)가 수행, 시방 220547 추가요건 참조; 부품 중요도계수(component importance factor) 1.5 적용 (Seismic Notes A.1)",
+  "gate": false
+ },
+ {
+  "seq": 213,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "Action 제출물",
+  "title": "배관·전선관 전 유형 및 조인트에 대한 브레이싱 상세·스케줄·노트(bracing details, schedules, and notes) 제공 (Seismic Notes B.1)",
+  "gate": false
+ },
+ {
+  "seq": 214,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "Informational 제출물",
+  "title": "장비 제조사 내진 가동성 인증 서한(manufacturer's letter) — 설계지진 후 가동 유지가 요구되는 능동형 기계·전기 장비에 대해 ASCE 7-05 13.2.5 진동대시험(shake table testing) 또는 13.2.6 경험·이력 데이터 기반 가동성 인증 (Seismic Notes C.3)",
+  "gate": false
+ },
+ {
+  "seq": 215,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "품질보증(QA)",
+  "title": "배관 분야 전문자격을 갖춘 배관공(competent plumber)의 전체 작업 감독 (General Note 7)",
+  "gate": false
+ },
+ {
+  "seq": 216,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "품질보증(QA)",
+  "title": "발견된 도면·시방 상충 시 시공 전 엔지니어에게 통지하고 해석(clarification) 득할 것 (General Note 4)",
+  "gate": false
+ },
+ {
+  "seq": 217,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "시험·검사",
+  "title": "위생배관 수두압시험(sanitary piping test) — IPC에 따라 10피트 수두(120인치 W.C.)로 전체 시험 (General Note 17)",
+  "gate": false
+ },
+ {
+  "seq": 218,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "시험·검사",
+  "title": "위생배관 전수 카메라 검사(camera inspection in full) — 인계(turnover)·검사 시점에 균열·파단 없는 시스템 건전성 확인 (General Note 18)",
+  "gate": false
+ },
+ {
+  "seq": 219,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "시험·검사",
+  "title": "그리스 인터셉터 — 시스템 가동 전 청수 충수(fill with clean water prior to start-up) (Grease Interceptor Detail Note 9)",
+  "gate": false
+ },
+ {
+  "seq": 220,
+  "csi": "P",
+  "section": "배관 도면",
+  "category": "시험·검사",
+  "title": "지하수위 검증 — 설계/실제 수위가 가정치(지표 하 3'-6\")보다 높으면 검토기술자(reviewing engineer)에게 통지 (Grease Interceptor Note 5)",
+  "gate": false
+ },
+ {
+  "seq": 221,
+  "csi": "M",
+  "section": "기계 도면",
+  "category": "Action 제출물",
+  "title": "그리스 덕트 최종 치수 — 덕트 제조사와 협의·확정(final duct sizes to be coordinated with duct manufacturer) (Grease Duct General Note 5)",
+  "gate": false
+ },
+ {
+  "seq": 222,
+  "csi": "M",
+  "section": "기계 도면",
+  "category": "Action 제출물",
+  "title": "HVAC 시스템 정지·중단 시 소유주 서면 승인(written consent/approval) 사본을 예정 작업일 전 건축가/엔지니어에게 제출 (Demolition Note DM-3)",
+  "gate": false
+ },
+ {
+  "seq": 223,
+  "csi": "M",
+  "section": "기계 도면",
+  "category": "품질보증(QA)",
+  "title": "그리스 덕트 인증 — Type I 후드용 이중벽 공장제작 그리스 덕트, NFPA 96 적합, ETL/UL 1978·UL 2221 인증(listed), 연속 500°F·간헐 2000°F 등급, 0인치 가연물 이격 인증 (Grease Duct General Notes 1~4)",
+  "gate": false
+ },
+ {
+  "seq": 224,
+  "csi": "M",
+  "section": "기계 도면",
+  "category": "품질보증(QA)",
+  "title": "덕트 시공 — SMACNA 'HVAC Duct Construction Standards-Metal and Flexible' 최신판 및 Seal Class A(전 종·횡방향 이음 및 피팅 밀봉) 준수 (General Note 5)",
+  "gate": false
+ },
+ {
+  "seq": 225,
+  "csi": "M",
+  "section": "기계 도면",
+  "category": "품질보증(QA)",
+  "title": "배관의 방화벽 관통부는 UL 시험 어셈블리(tested UL-assembly)로 시공, 방화·방연댐퍼 덕트 관통부는 제조사 인증(listing)대로 설치 (Insulation/Penetration Notes)",
+  "gate": false
+ },
+ {
+  "seq": 226,
+  "csi": "M",
+  "section": "기계 도면",
+  "category": "시험·검사",
+  "title": "덕트 누기시험(duct test) — 모든 급기·환기·배기 덕트를 Seal Class A로 시공하고 지시된 바에 따라 전 덕트 시험(test all ducts as indicated) (General Note 5.C)",
+  "gate": false
+ },
+ {
+  "seq": 227,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "Informational 제출물",
+  "title": "도면·공사시방서(Project Manual) 간 불일치 발견 시 설계자(Design Professional) 서면 통지 — PROJECT GENERAL NOTES G01",
+  "gate": false
+ },
+ {
+  "seq": 228,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "품질보증(QA)",
+  "title": "도면과 프로젝트 매뉴얼 전 요구사항 준수·비교검토 의무(comply with drawings and Project Manual; carefully study and compare) — G01",
+  "gate": false
+ },
+ {
+  "seq": 229,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "품질보증(QA)",
+  "title": "공사 전 단계에서 피난동선(exit egress) 유지 — 기존 계단·피난통로의 접근성과 구획(partition) 무결성 유지 — G02",
+  "gate": false
+ },
+ {
+  "seq": 230,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "품질보증(QA)",
+  "title": "기존 건물 외피(building envelope)를 방수·기밀·공조상태(water-tight, weather-tight, conditioned)로 상시 유지, 필요 시 가설 인클로저 및 이동식 냉난방기로 점유공간 화씨 70도 유지 — G03",
+  "gate": false
+ },
+ {
+  "seq": 231,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "품질보증(QA)",
+  "title": "실·공간 번호부여체계(numbering/naming convention)는 라벨링 전에 발주자(Owner)와 직접 확인·조정 — 전기판넬, 기계장비, 화재경보, 사인, 통신·보안시스템에 적용 — G04",
+  "gate": false
+ },
+ {
+  "seq": 232,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "품질보증(QA)",
+  "title": "건축도면상 구조부재 형상·치수는 '개략(DIAGRAMMATIC ONLY)' — G05",
+  "gate": false
+ },
+ {
+  "seq": 233,
+  "csi": "G",
+  "section": "일반·코드정보",
+  "category": "품질보증(QA)",
+  "title": "기존 철골의 손상·누락된 뿜칠내화피복(spray fire proofing)은 원상태 내화등급으로 보수(UL 디자인 준거) — G06",
+  "gate": false
+ },
+ {
+  "seq": 234,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "Action 제출물",
+  "title": "노출구조체 도장(fog paint) 색상 — 건축가가 제조사 전체 색상범위(manufacturer's full range of colors)에서 선정하도록 색상자료 제출 필요(RCP 노트 3)",
+  "gate": false
+ },
+ {
+  "seq": 235,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "Action 제출물",
+  "title": "마감 선정이 계약문서에 명확치 않은 항목은 인테리어 디자이너에게 통지 후 선정 받을 것(notify the Interior Designer of items requiring finish selections) — 인테리어 일반노트",
+  "gate": false
+ },
+ {
+  "seq": 236,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "Informational 제출물",
+  "title": "기존 지붕 멤브레인 보증 유지에 대한 제조사 확인서 제출(SUBMIT MANUFACTURER'S VERIFICATION EXISTING ROOFING MEMBRANE WARRANTY TO REMAIN) — 루프커브 상세(A01-02 detail 2), 카운터플래싱은 제조사 표준상세(per manuf.'s standard details)로 완전접착 시공",
+  "gate": false
+ },
+ {
+  "seq": 237,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "피난계획도(Life Safety Plan)는 '개략(diagrammatic only)' — 시공은 시방·시공도서(Construction Documents) 기준, 누락된 피난요소 발견 시 즉시 건축가 통지 — G201·G202",
+  "gate": false
+ },
+ {
+  "seq": 238,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "각 벽/구획/배리어(wall/partition/barrier) 등급을 천장 마감 위 양면에 붉은 글자로 스텐실 표기 — G204",
+  "gate": false
+ },
+ {
+  "seq": 239,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "액세스판넬은 벽·천장 내화등급과 동일한 내화형(fire rated type), 자동폐쇄·키잠금형 — 평면 일반노트 8",
+  "gate": false
+ },
+ {
+  "seq": 240,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "화장실 습식구역은 5/8인치 Type 'X' 유리섬유매트 무지(paperless) 석고보드 — 그린보드(water-resistant gypsum board) 사용 금지 — 평면 일반노트 9",
+  "gate": true
+ },
+ {
+  "seq": 241,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "16제곱인치 초과 발주자 가구·장비의 내화·방연 배리어 매입 금지, 발주자 장비벤더와 사전 조정(coordinate with Owner's equipment vendors) — 평면 일반노트 14",
+  "gate": true
+ },
+ {
+  "seq": 242,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "외벽 금속스터드 벽체 실내측 5/8\" Type X 보드를 상부구조체까지 연장, 기밀(air-tight)·차음(sound-tight) 밀봉 — 평면 일반노트 17",
+  "gate": false
+ },
+ {
+  "seq": 243,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "지붕공-배관공 간 슬로프 조정(coordination between roofing and plumbing contractors) — 전 지붕면 최소 1/4\":12 구배로 루프드레인 저점 유지 — G253",
+  "gate": false
+ },
+ {
+  "seq": 244,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "루프에지 10피트 이내·30인치 초과 높이에 정비대상 장비 위치 시 추락방지 가드(guards) 설치 — G254",
+  "gate": false
+ },
+ {
+  "seq": 245,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "내화 지붕/천장 관통부는 승인·시험된 관통부 방화시스템(through-penetration firestop system)/내화조인트시스템으로 보호 — G255",
+  "gate": false
+ },
+ {
+  "seq": 246,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "노출 지붕설비·배관 도장(알루미늄·스테인리스 제외) 색상은 건축가 선정 — G257",
+  "gate": false
+ },
+ {
+  "seq": 247,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "충격보호 월시트(impact wall protection sheets)는 항균 접착제 시공, 노출 파스너 금지 — 인테리어 노트",
+  "gate": true
+ },
+ {
+  "seq": 248,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "품질보증(QA)",
+  "title": "바닥 도장마감은 미끄럼저항(skid resistance) 접근성기준 충족 — 인테리어 도장 노트 1",
+  "gate": false
+ },
+ {
+  "seq": 249,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "시험·검사",
+  "title": "각 비상구 유도등(exit sign)의 시인성(visibility)이 피난방향에서 감소 없이 확보되는지 현장 확인(field verifying) — G203",
+  "gate": false
+ },
+ {
+  "seq": 250,
+  "csi": "A",
+  "section": "건축 도면",
+  "category": "시험·검사",
+  "title": "지정형(specified type) 액세스판넬이 벽체 및 '비접근형' 천장에 설치되었는지 시공자 확인(verify) — 평면 일반노트 8A",
+  "gate": false
+ },
+ {
+  "seq": 251,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Action 제출물",
+  "title": "조명기구 제출물(Lighting Submittals) 필수 — 기구 모델번호, 액세서리, 광원 컷시트(source cutsheet) 포함, 부분 제출(partial submittals) 불인정 — E001 일반노트 F",
+  "gate": false
+ },
+ {
+  "seq": 252,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Action 제출물",
+  "title": "대체 제조사(alternate manufacturers) 조명 사용 시 엔지니어 승인 필요 — 실별 점대점 조도계산서(point-to-point calculations: 평균/최대/최소 fc, max/min, avg/min, LLF, 계산면 높이, 설치높이, 기구 사양) 입찰 최소 4주 전 제출, 일반·비상 계산 별도 파일 — E001 일반노트 E",
+  "gate": false
+ },
+ {
+  "seq": 253,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Action 제출물",
+  "title": "화재경보 공급업체(fire alarm supplier)의 설치도면 일체(complete set of installation drawings: 평면도, 라이저 다이어그램, 기기 결선) 제출 — E001 화재경보 노트 F",
+  "gate": false
+ },
+ {
+  "seq": 254,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Action 제출물",
+  "title": "주방후드 소화설비 Ansul 시스템 샵드로잉(approved Ansul shop drawings) — 최종 작동시퀀스·인터록·장비셧다운은 승인된 샵드로잉으로 확정 — E601",
+  "gate": false
+ },
+ {
+  "seq": 255,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Action 제출물",
+  "title": "발전기 샵드로잉(generator shop drawings)으로 최종 전기정보 확인 후 설치 — 000-E013 키노트 1(참조용 시트)",
+  "gate": false
+ },
+ {
+  "seq": 256,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Informational 제출물",
+  "title": "내진 인증서 — 각 장비 제조사로부터 설계지진 후 작동성 유지 증명서한(letter from each equipment manufacturer) 제출: ASCE 7-05 13.2.5 진동대시험(shake table testing) 또는 13.2.6 경험·이력데이터 기반 인증 — E001 내진 노트 D.3",
+  "gate": false
+ },
+ {
+  "seq": 257,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Informational 제출물",
+  "title": "화재경보 배터리 용량계산서(battery calculations) — 공급업체 작성, 표시 기기 지원용 추가용량 포함 — E001 화재경보 노트 M",
+  "gate": false
+ },
+ {
+  "seq": 258,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Informational 제출물",
+  "title": "내진 브레이싱 상세·스케줄·노트(bracing details, schedules, notes) — 전 배관·전선관·조인트 유형 대상 — E001 내진 노트 C.1",
+  "gate": false
+ },
+ {
+  "seq": 259,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "Closeout 제출물",
+  "title": "화재경보 준공도면(complete record drawings) — 신설+기존 시스템, 전 기기 위치, 배선/전선관 경로, 수신반(FACP)·표시반(annunciator) 변경사항 반영 — E001 화재경보 노트 I",
+  "gate": false
+ },
+ {
+  "seq": 260,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "전기도면은 개략(diagrammatic) — 전기시공자(EC)는 턴키(turn-key) 완전설치 책임: 명시되지 않아도 암시된 전선관·배선·제어배선·단말처리 일체 포함 — 부지 일반노트 E",
+  "gate": false
+ },
+ {
+  "seq": 261,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "화재경보시스템 ADA 적합, 벤더 프로그래밍·신규 하드웨어 비용 등 전 수수료를 입찰가에 포함, 입찰 전 벤더와 비용 확인 — 화재경보 노트 A",
+  "gate": false
+ },
+ {
+  "seq": 262,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "착공 전 화재경보 벤더와 현장 회의(meet with the vendor on site prior to the start of any construction)로 시스템 기능·상태 확인·기록, 벤더 입회 없이 시스템 차단 금지 — 화재경보 노트 B",
+  "gate": true
+ },
+ {
+  "seq": 263,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "화재경보 개조·설치는 벤더가 직접 수행 또는 감독(provided or supervised by fire alarm vendor) — 화재경보 노트 D",
+  "gate": false
+ },
+ {
+  "seq": 264,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "화재경보 배선은 제조사 지침·UL 리스팅 요건 준수, 전선관 내 설치 또는 플레넘등급 — 화재경보 노트 H·J",
+  "gate": false
+ },
+ {
+  "seq": 265,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "클린/드라이룸 구역은 알루미늄 강제전선관(aluminum rigid conduit) 사용, 지지물 현장도장, 아연도금 자재 금지 — 조명·동력 일반노트",
+  "gate": true
+ },
+ {
+  "seq": 266,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "알루미늄 도체는 조지아파워 변전소-UT동 간 주 인입 외 사용 불가 — 부지 일반노트 G",
+  "gate": true
+ },
+ {
+  "seq": 267,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "장비 접속 전 발주자와 조정(coordinate all equipment connections with Owner prior to rough-in), 설계값 변경 필요 시 즉시 EOR 통지 — E321/E322 일반노트 A",
+  "gate": false
+ },
+ {
+  "seq": 268,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "바닥설치 장비는 3/8\" 앵커볼트 고정(구조도면의 볼트형식·매입깊이 준수), 방진장치·앵커는 IBC/ASCE 7 Ch.13 내진력 설계 — 내진 노트 D",
+  "gate": false
+ },
+ {
+  "seq": 269,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "비상등은 실제 정전 시 상시 점등, 최소 90분 런타임, 정상(녹색)/비상(적색) 표시등 부착 — 일반노트 C·L",
+  "gate": false
+ },
+ {
+  "seq": 270,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "품질보증(QA)",
+  "title": "쿨러·프리저 조명기구와 제어는 장비공급자 지급-전기시공자 설치(provided by equipment supplier and installed by EC) — E201 키노트 1",
+  "gate": false
+ },
+ {
+  "seq": 271,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "시험·검사",
+  "title": "부지 굴착 전 GPR 탐사(GPR testing) 수행 및 굴착신고(dig ticket)로 지하매설물 확인 — 000-E013 일반노트 A",
+  "gate": false
+ },
+ {
+  "seq": 272,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "시험·검사",
+  "title": "전압강하 계산·검증 — 피더 2% 이하, 분기회로 3% 이하 EC가 확인(verify) — 701-E701 노트 F, E001 조명·동력 노트",
+  "gate": false
+ },
+ {
+  "seq": 273,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "시험·검사",
+  "title": "화재경보: 공사 착수 전 이 공사의 영향을 받는 전 스트로브·혼·배선 시험, 문제점 발주자 통지; 준공 후 영향받은 전 스트로브·스피커회로·배선·프로그래밍 재시험 — E001 화재경보 노트 L",
+  "gate": false
+ },
+ {
+  "seq": 274,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "시험·검사",
+  "title": "비상대응 무전통신 커버리지(Emergency Responder Radio Coverage) 시험을 기본입찰(base bid)에 포함 — 준공 시 수행, 옥상 안테나 경로(pathway) 기본 포함, 시스템 설치는 애드옵션(add option) — 화재경보 노트 N",
+  "gate": false
+ },
+ {
+  "seq": 275,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "시험·검사",
+  "title": "기존 RTU-703-R701 덕트감지기(duct smoke detector)의 FACP 연결 여부 확인(verify) — E401 키노트 1",
+  "gate": false
+ },
+ {
+  "seq": 276,
+  "csi": "E",
+  "section": "전기 도면",
+  "category": "시험·검사",
+  "title": "화재경보 작동시퀀스 매트릭스(sequence of operation)에 따른 기능 확인 — 풀스테이션·감지기·덕트감지기·스프링클러 스위치·Ansul 작동 시 경보·감시·트러블 조건, 통보장치, 도어해제, 감시국 전송 등 — E601",
+  "gate": false
+ }
+]

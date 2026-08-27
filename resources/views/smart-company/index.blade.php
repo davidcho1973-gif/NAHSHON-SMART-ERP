@@ -21,6 +21,7 @@
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-billing.js') }}?v={{ filemtime(public_path('js/admin-billing.js')) }}" defer></script>
@@ -206,6 +207,9 @@
               <li class="nav-item nav-child" data-view="item-master" id="nav-item-master">
                 <i class="ph ph-list-bullets"></i><span>품목 · 분류</span>
               </li>
+              <li class="nav-item nav-child" data-view="boq" id="nav-boq">
+                <i class="ph ph-calculator"></i><span>물량 / BOQ</span>
+              </li>
               <li class="nav-item nav-child" data-view="vendors" id="nav-vendors">
                 <i class="ph ph-shopping-cart"></i><span>구매 / 렌트</span>
               </li>
@@ -236,6 +240,9 @@
               </li>
               <li class="nav-item nav-child" data-view="contract-admin" id="nav-contract-admin">
                 <i class="ph ph-file-text"></i><span>원청 계약 · 서류</span>
+              </li>
+              <li class="nav-item nav-child" data-view="submittals" id="nav-submittals">
+                <i class="ph ph-clipboard-text"></i><span>제출물 대장</span>
               </li>
             </ul>
             </ul>
@@ -324,6 +331,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-sliders"></i><span>임금 프로필</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재 · 장비</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-list-bullets"></i><span>품목 · 분류</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="boq"><i class="ph ph-calculator"></i><span>물량 / BOQ</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-shopping-cart"></i><span>구매 / 렌트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vehicle"><i class="ph ph-truck"></i><span>차량 관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="housing"><i class="ph ph-house-line"></i><span>숙소 관리</span></button>
@@ -331,6 +339,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="document-hub"><i class="ph ph-files"></i><span>문서함</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="docs"><i class="ph ph-folders"></i><span>문서통합관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약 · 서류</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="submittals"><i class="ph ph-clipboard-text"></i><span>제출물 대장</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear"></i><span>조직 설정</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="messenger"><i class="ph ph-chat-circle-text"></i><span>메신저</span></button>
@@ -1400,6 +1409,8 @@
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
+        'submittals': { title: '제출물 대장', render: function () { return window.AdminRegisters.renderSubmittals(); } },
+        'boq': { title: '물량 / BOQ', render: function () { return window.AdminRegisters.renderBoq(); } },
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
         'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
         'site-admin': { title: '현장 · 프로젝트', render: function () { return window.AdminSites.render(); } },
