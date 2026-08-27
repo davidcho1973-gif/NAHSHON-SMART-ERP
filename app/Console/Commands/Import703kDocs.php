@@ -83,6 +83,20 @@ class Import703kDocs extends Command
         $missing = [];
         $badHash = [];
         foreach ($manifest as $m) {
+            // 이미 등록된 행이면(매니페스트 sha256 기준) 파일 없이도 disk 오기록만 보정
+            $existing = IntelligentDocument::query()
+                ->where('sha256', $m['sha256'])
+                ->where('company_id', $own->id)
+                ->first();
+            if ($existing) {
+                if ($existing->disk !== $disk) {
+                    $existing->forceFill(['disk' => $disk])->save();
+                }
+                $skipped++;
+
+                continue;
+            }
+
             $stageKey = self::PREFIX.$m['name'];
             if (! $storage->exists($stageKey)) {
                 $missing[] = $m['name'];
@@ -103,17 +117,6 @@ class Import703kDocs extends Command
                 continue;
             }
 
-            $exists = IntelligentDocument::query()
-                ->where('sha256', $sha)
-                ->where('company_id', $own->id)
-                ->exists();
-            if ($exists) {
-                $skipped++;
-                $storage->delete($stageKey);
-
-                continue;
-            }
-
             $uuid = (string) Str::uuid();
             $safeName = $m['name']; // 원문 이름 유지 — uuid 디렉터리라 충돌 없음
             $finalKey = "document-intelligence/inbox/{$uuid}/{$safeName}";
@@ -121,6 +124,7 @@ class Import703kDocs extends Command
 
             IntelligentDocument::query()->create([
                 'uuid' => $uuid,
+                'disk' => $disk,
                 'company_id' => $own->id,
                 'site_id' => $site->id,
                 'project_id' => $project->id,
