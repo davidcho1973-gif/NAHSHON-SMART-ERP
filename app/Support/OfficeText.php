@@ -122,6 +122,44 @@ final class OfficeText
         if ($bytes === '') {
             return [];
         }
+
+        $viaExt = self::readWithZipArchive($bytes, fn (string $n): bool => (bool) preg_match($regex, $n));
+        if ($viaExt !== []) {
+            return $viaExt;
+        }
+
+        // ext-zip 이 없거나(서버리스 런타임) 임시파일을 못 만드는 환경 폴백 — 순수 PHP 파서.
+        return self::readWithPurePhp($bytes, fn (string $n): bool => (bool) preg_match($regex, $n));
+    }
+
+    private static function readZipEntry(string $bytes, string $entry): ?string
+    {
+        if ($bytes === '') {
+            return null;
+        }
+
+        $viaExt = self::readWithZipArchive($bytes, fn (string $n): bool => $n === $entry);
+        if (isset($viaExt[$entry])) {
+            return $viaExt[$entry];
+        }
+
+        $pure = self::readWithPurePhp($bytes, fn (string $n): bool => $n === $entry);
+
+        return $pure[$entry] ?? null;
+    }
+
+    /**
+     * ZipArchive 경로 — 확장이 있으면 가장 견고하다. 실패는 조용히 빈 배열.
+     *
+     * @param callable(string): bool $want
+     * @return array<string, string>
+     */
+    private static function readWithZipArchive(string $bytes, callable $want): array
+    {
+        if (! class_exists(ZipArchive::class)) {
+            return [];
+        }
+        // ZipArchive 는 파일 경로가 필요하므로 임시 파일로 받는다.
         $tmp = tempnam(sys_get_temp_dir(), 'ofc');
         if ($tmp === false) {
             return [];
@@ -136,7 +174,7 @@ final class OfficeText
             $out = [];
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $entry = (string) $zip->getNameIndex($i);
-                if (preg_match($regex, $entry)) {
+                if ($want($entry)) {
                     $content = $zip->getFromIndex($i);
                     if ($content !== false && $content !== '') {
                         $out[$entry] = $content;
@@ -153,32 +191,52 @@ final class OfficeText
         }
     }
 
-    private static function readZipEntry(string $bytes, string $entry): ?string
+    /**
+     * 순수 PHP zip 리더 — 중앙 디렉터리를 직접 걷고 deflate 는 gzinflate 로 푼다.
+     * ext-zip·임시파일 없이 메모리에서만 동작한다. OOXML 처럼 표준적인 zip 만 감당하면 된다.
+     *
+     * @param callable(string): bool $want
+     * @return array<string, string>
+     */
+    private static function readWithPurePhp(string $bytes, callable $want): array
     {
-        if ($bytes === '') {
-            return null;
-        }
-
-        // ZipArchive 는 파일 경로가 필요하므로 임시 파일로 받는다.
-        $tmp = tempnam(sys_get_temp_dir(), 'ofc');
-        if ($tmp === false) {
-            return null;
-        }
-
         try {
-            file_put_contents($tmp, $bytes);
-            $zip = new ZipArchive();
-            if ($zip->open($tmp) !== true) {
-                return null;
+            $eocd = strrpos($bytes, "PK\x05\x06");
+            if ($eocd === false) {
+                return [];
             }
-            $xml = $zip->getFromName($entry);
-            $zip->close();
+            $count = unpack('v', substr($bytes, $eocd + 10, 2))[1] ?? 0;
+            $cd = unpack('V', substr($bytes, $eocd + 16, 4))[1] ?? 0;
 
-            return $xml === false || $xml === '' ? null : $xml;
+            $out = [];
+            $p = $cd;
+            for ($i = 0; $i < $count; $i++) {
+                if (substr($bytes, $p, 4) !== "PK\x01\x02") {
+                    break;
+                }
+                $method = unpack('v', substr($bytes, $p + 10, 2))[1];
+                $csize = unpack('V', substr($bytes, $p + 20, 4))[1];
+                $nlen = unpack('v', substr($bytes, $p + 28, 2))[1];
+                $elen = unpack('v', substr($bytes, $p + 30, 2))[1];
+                $clen = unpack('v', substr($bytes, $p + 32, 2))[1];
+                $lho = unpack('V', substr($bytes, $p + 42, 4))[1];
+                $name = substr($bytes, $p + 46, $nlen);
+
+                if ($want($name)) {
+                    $lnlen = unpack('v', substr($bytes, $lho + 26, 2))[1];
+                    $lelen = unpack('v', substr($bytes, $lho + 28, 2))[1];
+                    $data = substr($bytes, $lho + 30 + $lnlen + $lelen, $csize);
+                    $content = $method === 8 ? @gzinflate($data) : ($method === 0 ? $data : false);
+                    if ($content !== false && $content !== '') {
+                        $out[$name] = $content;
+                    }
+                }
+                $p += 46 + $nlen + $elen + $clen;
+            }
+
+            return $out;
         } catch (Throwable) {
-            return null;
-        } finally {
-            @unlink($tmp);
+            return [];
         }
     }
 
