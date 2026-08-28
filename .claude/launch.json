@@ -2,46 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "laravel",
+      "name": "erp-local",
       "runtimeExecutable": "php",
-      "runtimeArgs": ["artisan", "serve", "--port=8000"],
-      "port": 8000
-    },
-    {
-      "name": "field-app",
-      "runtimeExecutable": "php",
-      "runtimeArgs": ["artisan", "serve", "--port=8001"],
-      "port": 8001
-    },
-    {
-      "name": "daily-site",
-      "runtimeExecutable": "powershell",
-      "runtimeArgs": [
-        "-NoProfile",
-        "-Command",
-        "Set-Location 'C:\\Users\\handy\\OneDrive\\Desktop\\DAILY-SITE-APP'; php artisan serve --port=8040"
-      ],
-      "port": 8040
-    },
-    {
-      "name": "daily-closing",
-      "runtimeExecutable": "powershell",
-      "runtimeArgs": [
-        "-NoProfile",
-        "-Command",
-        "Set-Location 'C:\\Users\\handy\\OneDrive\\Desktop\\DAILY-CLOSING-APP'; php artisan serve --port=8025"
-      ],
-      "port": 8025
-    },
-    {
-      "name": "dasol",
-      "runtimeExecutable": "powershell",
-      "runtimeArgs": [
-        "-NoProfile",
-        "-Command",
-        "Set-Location 'C:\\Users\\handy\\OneDrive\\Desktop\\DASOL-USA-PORTAL'; php artisan serve --port=8030"
-      ],
-      "port": 8030
+      "runtimeArgs": ["artisan", "serve", "--host=127.0.0.1", "--port=8010"],
+      "port": 8010
     }
   ]
 }

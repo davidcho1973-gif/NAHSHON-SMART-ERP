@@ -54,6 +54,15 @@ Route::get('/ops/snap-login', function (\Illuminate\Http\Request $request) {
         : '/?view='.((string) $request->query('view') ?: 'dashboard'));
 })->name('ops.snap-login');
 
+// 로컬 개발 전용 자동 로그인 — 헤드리스 스크린샷이 서명 링크 없이도 화면을 열 수 있게 한다.
+// local 환경이 아니면 403. artisan serve 는 127.0.0.1 에만 바인딩되므로 외부 노출이 없다.
+Route::get('/ops/snap-local/{view}', function (string $view) {
+    abort_unless(app()->environment('local'), 403);
+    $user = \App\Models\User::query()->where('access_role', 'super_admin')->orderBy('id')->firstOrFail();
+    \Illuminate\Support\Facades\Auth::login($user);
+    return $view === 'document-hub' ? redirect('/document-hub') : redirect('/?view='.$view);
+})->where('view', '[a-z0-9-]+');
+
 Route::get('/debug-routes-sec', function () {
     $routes = collect(Route::getRoutes())->map(fn ($r) => [
         'uri' => $r->uri(),
