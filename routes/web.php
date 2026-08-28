@@ -40,6 +40,19 @@ Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('aut
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
 
+// 스크린샷 자동화용 서명 로그인 — erp:snap-links 가 발급한 10분짜리 서명 URL 로만 진입 가능.
+// 구글 OAuth 뿐인 이 앱에서 헤드리스 브라우저가 화면을 찍을 수 있는 유일한 통로다. 감사 로그를 남긴다.
+Route::get('/ops/snap-login', function (\Illuminate\Http\Request $request) {
+    abort_unless($request->hasValidSignature(), 403);
+    $user = \App\Models\User::query()->where('email', $request->query('email'))->firstOrFail();
+    \Illuminate\Support\Facades\Auth::login($user);
+    \Illuminate\Support\Facades\Log::info('ops.snap-login', ['email' => $user->email, 'view' => $request->query('view')]);
+    $path = (string) $request->query('path', '');
+    return redirect($path !== '' && str_starts_with($path, '/') && ! str_starts_with($path, '//')
+        ? $path
+        : '/?view='.((string) $request->query('view') ?: 'dashboard'));
+})->name('ops.snap-login');
+
 Route::get('/debug-routes-sec', function () {
     $routes = collect(Route::getRoutes())->map(fn ($r) => [
         'uri' => $r->uri(),
