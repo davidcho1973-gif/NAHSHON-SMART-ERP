@@ -3,6 +3,7 @@
 namespace App\Services\Communication;
 
 use App\Models\AttendanceLog;
+use App\Models\BoqItem;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Models\Equipment;
@@ -10,6 +11,7 @@ use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\Site;
+use App\Models\Submittal;
 use App\Models\User;
 use App\Models\WbsItem;
 use App\Support\AccessPolicy;
@@ -43,8 +45,10 @@ class ChatFactFinder
         'procurement' => ['자재', '발주', '납품', '납기', '입고', '구매', '주문', 'po', 'eta', 'material', 'delivery'],
         'equipment' => ['장비', '렌탈', '임대', '중장비', '크레인', '리프트', '지게차', 'equipment', 'rental'],
         'attendance' => ['출근', '퇴근', '출역', '인원', '몇 명', '몇명', '근태', '출퇴근', 'attendance', 'headcount'],
-        'money' => ['비용', '경비', '영수증', '지출', '금액', '얼마', '예산', '급여', '인건비', '단가', '정산', 'cost', 'expense', 'payroll'],
+        'money' => ['비용', '경비', '영수증', '지출', '금액', '얼마', '예산', '급여', '인건비', '정산', 'cost', 'expense', 'payroll'],
         'documents' => ['문서', '도면', '계약서', '서류', '스펙', '사양', 'drawing', 'document', 'spec'],
+        'boq' => ['물량', '수량', '몇 개', '몇개', '몇 장', '몇장', '몇 본', '몇본', '단가', '산출', '내역', 'boq', 'quantity', 'takeoff'],
+        'submittals' => ['제출물', '샵드로잉', '제작도', '컷시트', '배합설계', '승인', 'submittal', 'shop drawing'],
     ];
 
     /** 한 종류당 몇 줄까지 실어 보낼 것인가. 길어지면 AI 가 핵심을 놓친다. */
@@ -79,7 +83,9 @@ class ChatFactFinder
                 'equipment' => $facts['장비'] = $this->equipment($site, $asker),
                 'attendance' => $this->attendance($site, $asker, $facts, $denied),
                 'money' => $this->money($site, $asker, $facts, $denied),
-                'documents' => $facts['최근 문서'] = $this->documents($site, $asker),
+                'documents' => $facts['문서함'] = $this->documents($site, $asker, $question),
+                'boq' => $facts['물량/BOQ'] = $this->boq($site, $asker, $question),
+                'submittals' => $facts['제출물 대장'] = $this->submittals($site, $asker, $question),
                 default => null,
             };
         }
@@ -306,21 +312,230 @@ class ChatFactFinder
         ], fn ($v): bool => $v !== 0 && $v !== 0.0);
     }
 
-    /** 최근 문서 — AI 가 이미 읽어 둔 핵심 사실만. 원문을 다시 실어 보내지 않는다. */
-    private function documents(?Site $site, User $asker): array
+    /**
+     * 문서함 — 질문의 낱말로 문서를 <b>검색</b>해서, 걸린 문서는 본문 발췌까지 실어 보낸다.
+     *
+     * "계약서에 뭐라고 써 있어?" 는 요약 200자로는 답이 안 나온다. 제목·파일명·본문
+     * 색인(search_text)을 뒤져 맞는 문서를 찾고, 낱말이 등장하는 자리 주변을 잘라
+     * 보낸다. 아무것도 안 걸리면 예전처럼 최근 문서 목록으로 물러선다.
+     */
+    private function documents(?Site $site, User $asker, string $question): array
     {
-        $query = IntelligentDocument::query()->latest('id')->limit(6);
+        $query = IntelligentDocument::query();
 
         if ($site) {
             $query->where('site_id', $site->id);
         }
         AccessPolicy::applyCompanyLock($query, $asker);
 
-        return $query->get()->map(fn (IntelligentDocument $d): array => array_filter([
+        $terms = $this->searchTerms($question);
+
+        $meta = fn (IntelligentDocument $d): array => array_filter([
             '이름' => $d->title ?: $d->original_file_name,
             '종류' => $d->document_type,
             '문서일' => $d->document_date?->toDateString(),
             '요약' => filled($d->summary) ? mb_substr((string) $d->summary, 0, 200) : null,
-        ]))->filter()->values()->all();
+        ]);
+
+        if ($terms !== []) {
+            $matched = (clone $query)
+                ->where(function ($q) use ($terms): void {
+                    foreach ($terms as $t) {
+                        // ilike — 이 앱은 로컬·클라우드 모두 PostgreSQL 이다.
+                        $q->orWhere('title', 'ilike', "%{$t}%")
+                            ->orWhere('original_file_name', 'ilike', "%{$t}%")
+                            ->orWhere('search_text', 'ilike', "%{$t}%");
+                    }
+                })
+                ->latest('id')
+                ->limit(4)
+                ->get();
+
+            if ($matched->isNotEmpty()) {
+                return [
+                    '검색어' => implode(', ', $terms),
+                    '검색된 문서' => $matched->map(fn (IntelligentDocument $d): array => array_filter($meta($d) + [
+                        '핵심 사실' => is_array($d->key_facts) ? array_slice($d->key_facts, 0, 5) : null,
+                        '본문 발췌' => $this->excerpt((string) ($d->search_text ?: $d->extracted_text), $terms),
+                    ]))->values()->all(),
+                ];
+            }
+        }
+
+        $recent = (clone $query)->latest('id')->limit(6)->get();
+
+        return $recent->isEmpty() ? [] : [
+            '안내' => $terms === [] ? null : '검색어와 일치하는 문서 없음 — 최근 문서만 제공',
+            '최근 문서' => $recent->map($meta)->filter()->values()->all(),
+        ];
+    }
+
+    /**
+     * 물량/BOQ — 수량 질문의 정답지. 질문에 나온 품명으로 대장을 직접 검색한다.
+     *
+     * "석고 수량 파악해줘" 의 답은 대화가 아니라 437행짜리 물량 대장에 있다.
+     */
+    private function boq(?Site $site, User $asker, string $question): array
+    {
+        $query = BoqItem::query();
+        if ($site) {
+            $query->where('site_id', $site->id);
+        }
+        AccessPolicy::applyCompanyLock($query, $asker);
+
+        $total = (clone $query)->count();
+        if ($total === 0) {
+            return [];
+        }
+
+        $terms = $this->searchTerms($question);
+        $rows = collect();
+
+        if ($terms !== []) {
+            $rows = (clone $query)
+                ->where(function ($q) use ($terms): void {
+                    foreach ($terms as $t) {
+                        $q->orWhere('name_kr', 'ilike', "%{$t}%")
+                            ->orWhere('name_en', 'ilike', "%{$t}%")
+                            ->orWhere('spec', 'ilike', "%{$t}%");
+                    }
+                })
+                ->orderBy('seq')
+                ->limit(self::ROWS)
+                ->get();
+        }
+
+        return array_filter([
+            '전체 행수' => $total,
+            '직접비 합계($)' => (float) (clone $query)->sum('amount'),
+            '검색어' => $terms === [] ? null : implode(', ', $terms),
+            '해당 품목' => $rows->isEmpty()
+                ? ($terms === [] ? null : '일치하는 품목 없음 — 품명을 바꿔 다시 물어봐 달라고 답할 것')
+                : $rows->map(fn (BoqItem $b): array => array_filter([
+                    '공정' => $b->discipline,
+                    '품명' => $b->name_kr,
+                    '규격' => filled($b->spec) ? mb_substr((string) $b->spec, 0, 120) : null,
+                    '수량' => rtrim(rtrim((string) $b->qty, '0'), '.').' '.$b->unit,
+                    '수량 근거' => $b->qty_basis,
+                    '단가($)' => (float) $b->unit_price,
+                    '금액($)' => (float) $b->amount,
+                    '출처 도면' => $b->source,
+                    '검토 필요' => $b->flagged ? '예(단가 편차)' : null,
+                ]))->values()->all(),
+        ], fn ($v): bool => $v !== null);
+    }
+
+    /** 제출물 대장 — 상태 집계와, 질문에 걸린 항목. 게이트(정지 조항)는 항상 눈에 띄게. */
+    private function submittals(?Site $site, User $asker, string $question): array
+    {
+        $query = Submittal::query();
+        if ($site) {
+            $query->where('site_id', $site->id);
+        }
+        AccessPolicy::applyCompanyLock($query, $asker);
+
+        $total = (clone $query)->count();
+        if ($total === 0) {
+            return [];
+        }
+
+        $byStatus = (clone $query)
+            ->selectRaw('status, count(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status')
+            ->all();
+
+        $terms = $this->searchTerms($question);
+        $rows = collect();
+
+        if ($terms !== []) {
+            $rows = (clone $query)
+                ->where(function ($q) use ($terms): void {
+                    foreach ($terms as $t) {
+                        $q->orWhere('title', 'ilike', "%{$t}%")
+                            ->orWhere('section', 'ilike', "%{$t}%")
+                            ->orWhere('csi', 'ilike', "%{$t}%");
+                    }
+                })
+                ->orderByDesc('gate')
+                ->orderBy('seq')
+                ->limit(self::ROWS)
+                ->get();
+        }
+
+        return array_filter([
+            '전체 건수' => $total,
+            '상태별' => $byStatus,
+            '정지 게이트(★) 건수' => (clone $query)->where('gate', true)->count(),
+            '검색어' => $terms === [] ? null : implode(', ', $terms),
+            '해당 항목' => $rows->isEmpty() ? null : $rows->map(fn (Submittal $s): array => array_filter([
+                '번호' => $s->seq,
+                '공종' => trim($s->csi.' '.$s->section),
+                '구분' => $s->category,
+                '제목' => mb_substr((string) $s->title, 0, 160),
+                '상태' => $s->status,
+                '게이트' => $s->gate ? '★ 정지 조항(승인 전 발주·시공 금지 등)' : null,
+                '담당' => $s->assignee,
+                '제출 예정' => $s->planned_on?->toDateString(),
+            ]))->values()->all(),
+        ], fn ($v): bool => $v !== null);
+    }
+
+    /**
+     * 질문에서 검색할 낱말을 고른다 — 멘션·요청 상투어를 걷어내고 남는 명사들.
+     *
+     * "석고 수량 파악해줘" → [석고]. 조사가 붙은 낱말(석고보드의)은 자른 변형도
+     * 함께 넣는다 — OR 검색이라 후보가 늘어도 해가 없다.
+     */
+    private function searchTerms(string $question): array
+    {
+        $q = preg_replace('/@\s*(ai|에이아이)/iu', ' ', mb_strtolower($question)) ?? $question;
+
+        $stop = [
+            '물량', '수량', '몇개', '개수', '단가', '산출', '내역', 'boq', '제출물', '승인', '문서', '도면', '서류',
+            '파악', '알려줘', '알려주세요', '알려', '확인', '해줘', '해주세요', '해봐', '좀', '지금', '현재',
+            '현황', '상태', '목록', '리스트', '전체', '검색', '찾아줘', '찾아', '얼마나', '얼마', '어디', '뭐야',
+            '무엇', '어떻게', '있어', '있나', '필요', 'the', 'of', 'is', 'what',
+        ];
+
+        $tokens = preg_split('/[^\p{L}\p{N}"×\.\-\/]+/u', $q) ?: [];
+        $terms = [];
+
+        foreach ($tokens as $t) {
+            $t = trim($t, '-./"');
+            if (mb_strlen($t) < 2 || in_array($t, $stop, true)) {
+                continue;
+            }
+            $terms[] = $t;
+
+            // 조사 하나 떼어 본 변형 — 3자 이상일 때만 (2자를 자르면 낱말이 사라진다).
+            $last = mb_substr($t, -1);
+            if (mb_strlen($t) >= 3 && in_array($last, ['은', '는', '이', '가', '을', '를', '의', '도', '만', '에'], true)) {
+                $terms[] = mb_substr($t, 0, mb_strlen($t) - 1);
+            }
+        }
+
+        return array_slice(array_values(array_unique($terms)), 0, 5);
+    }
+
+    /** 본문에서 낱말이 처음 나오는 자리의 앞뒤를 잘라 온다 — 원문 전체는 싣지 않는다. */
+    private function excerpt(string $text, array $terms): ?string
+    {
+        if ($text === '') {
+            return null;
+        }
+
+        $lower = mb_strtolower($text);
+        foreach ($terms as $t) {
+            $pos = mb_strpos($lower, mb_strtolower($t));
+            if ($pos !== false) {
+                $start = max(0, $pos - 200);
+                $slice = mb_substr($text, $start, 500);
+
+                return ($start > 0 ? '…' : '').trim(preg_replace('/\s+/u', ' ', $slice) ?? $slice).'…';
+            }
+        }
+
+        return null;
     }
 }

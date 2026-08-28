@@ -186,7 +186,7 @@
                         <div class="hint">사진·영수증·도면을 올리면 AI 가 읽고 재무·장비·문서함으로 보냅니다.</div>
                     @endif
                     @if($aiAvailable)
-                        <div class="hint">[AI] 를 누르고 물어보세요 — 공정·자재·장비를 대신 찾아 답합니다(볼 수 있는 것만).</div>
+                        <div class="hint">[AI] 를 누르고 물어보세요 — 공정·물량·제출물·자재·장비·문서를 대신 찾아 답합니다(볼 수 있는 것만).</div>
                     @endif
                 </form>
             @else

@@ -63,11 +63,16 @@ class CommunicationMessage extends Model
         static::creating(function (self $message): void {
             $message->sent_at ??= Carbon::now();
 
-            if (! $message->sender_user_id && auth()->check()) {
+            // 시스템(로봇) 글은 발신자를 채우지 않는다. AI 답글이 afterResponse 로
+            // 질문자의 세션 안에서 만들어지는데, 여기서 auth() 로 채워 버리면 답글이
+            // 질문자 명의가 되어 본인 글로 취급된다(삭제 버튼 노출 사고의 원인).
+            $isSystem = $message->kind === self::KIND_SYSTEM;
+
+            if (! $message->sender_user_id && ! $isSystem && auth()->check()) {
                 $message->sender_user_id = auth()->id();
             }
 
-            if (! $message->sender_employee_id && auth()->user()?->employee_id) {
+            if (! $message->sender_employee_id && ! $isSystem && auth()->user()?->employee_id) {
                 $message->sender_employee_id = auth()->user()->employee_id;
             }
 

@@ -370,6 +370,12 @@ class CommunicationService
             return false;
         }
 
+        // 로봇(AI·시스템) 글은 근거 기록이다 — 실수 클릭 한 번에 사라지면 안 되므로
+        // 최고 관리자만 내릴 수 있다. (canEdit 는 이미 전면 금지)
+        if ($message->kind === CommunicationMessage::KIND_SYSTEM) {
+            return in_array($user->access_role, ['super_admin', 'admin'], true);
+        }
+
         return (int) $message->sender_user_id === (int) $user->id
             || in_array($user->access_role, ['super_admin', 'admin', 'site_manager'], true);
     }
