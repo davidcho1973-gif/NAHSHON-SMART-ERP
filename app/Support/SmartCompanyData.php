@@ -286,6 +286,16 @@ class SmartCompanyData
             'api_insertWbsRow' => app(WbsService::class)->insertAfter((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
 
+            // 손님 전용 링크 — 로그인 없이 현장 공정 현황만 보는 열람 토큰. 발급·회수는
+            // 관리자·현장소장만(서비스 안에서 검사) — api_get 접두사의 열람 전용 통과와 별개다.
+            'api_getGuestLinks' => app(\App\Services\Admin\GuestLinkService::class)->list((string) ($args[0] ?? $siteId)),
+            'api_createGuestLink' => app(\App\Services\Admin\GuestLinkService::class)->create(
+                (string) ($args[0] ?? ''),
+                ($args[1] ?? null) !== null ? (string) $args[1] : null,
+                is_numeric($args[2] ?? null) ? (int) $args[2] : null,
+            ),
+            'api_revokeGuestLink' => app(\App\Services\Admin\GuestLinkService::class)->revoke((int) ($args[0] ?? 0)),
+
             // 조달 관리 (공정관리 하위 — 발주·조달성 공정의 납기 추적)
             'api_getProcurement' => app(ProcurementService::class)->list((string) ($args[0] ?? ''), $siteId),
             'api_updateProcurement' => app(ProcurementService::class)->update(

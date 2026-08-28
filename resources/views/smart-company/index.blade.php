@@ -18,6 +18,7 @@
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-photos.js') }}?v={{ filemtime(public_path('js/wbs-photos.js')) }}" defer></script>
+  <script src="{{ asset('js/guest-links.js') }}?v={{ filemtime(public_path('js/guest-links.js')) }}" defer></script>
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
@@ -8401,6 +8402,7 @@
           '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.runWbsAiAnalysis()"><i class="ph ph-robot"></i> AI 메뉴얼 분석</button>' +
           '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.openWbsScheduleReplace()" title="엑셀 공정표로 갈아끼우기 — 기존 진행 기록이 교체됩니다"><i class="ph ph-microsoft-excel-logo"></i> 공정표 교체</button>' +
           '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.openWbsManualFolder()"><i class="ph ph-folder-open"></i> 메뉴얼 폴더</button>' +
+          '<button class="btn-secondary" style="justify-content:flex-start" onclick="window.openGuestLinkModal()" title="손님(발주처)이 로그인 없이 공정 현황만 보는 링크"><i class="ph ph-link"></i> 손님 링크</button>' +
           '</div></details>' +
           '</div></div>';
       }

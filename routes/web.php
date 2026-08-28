@@ -11,6 +11,7 @@ use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
 use App\Http\Controllers\IntegratedDocumentController;
 use App\Http\Controllers\MemberRegistrationController;
@@ -247,6 +248,9 @@ Route::middleware('auth')->group(function (): void {
     // 작업자에게 링크를 "보내는" 화면 — 복사·QR·문자 문구. 인쇄 카드와 목적이 다르다.
     Route::get('/attendance-app/employee/{employee}/share', [AttendanceAppController::class, 'shareLink'])->name('attendance-app.employee.share');
 
+    // 손님 링크 QR 인쇄 카드 — 발급한 사람이 손님에게 건네는 종이/화면.
+    Route::get('/guest-link/{link}/qr', [GuestViewController::class, 'qr'])->name('guest-link.qr');
+
     // W-9 인쇄 — 직원 관리에서 바로 뽑는다. 제출 전이면 아는 칸이 채워진 종이가 나오고,
     // 제출 후면 보관용 사본(1099 신고의 근거 서류)이 나온다.
     // 빈 양식 — 현장에 챙겨 가는 종이. {employee} 보다 먼저 와야 'blank' 가 직원 ID 로 읽히지 않는다.
@@ -270,6 +274,13 @@ Route::middleware('auth')->group(function (): void {
 Route::get('/print/qr/{site}', [QrPrintController::class, 'sheet'])
     ->middleware(['auth'])
     ->name('qr-print.sheet');
+
+// 손님 전용 현황 — 회수 가능한 토큰 하나가 열쇠다(공개). 그 현장의 공정 현황만
+// 보이고, 돈·사람 데이터는 화면을 만드는 단계에서 아예 뽑지 않는다.
+// throttle: 토큰은 40자 난수라 추측이 사실상 불가능하지만, 시도 자체를 느리게 해 둔다.
+Route::get('/guest/{token}', [GuestViewController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->name('guest.view');
 
 // 간편 작업자 등록 — 현장 QR 스캔 → 최소 정보 입력 → 즉시 활성 작업자 등록 (공개)
 Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])->name('worker-join.qr');
