@@ -43,7 +43,11 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 
 // 스크린샷 자동화용 서명 로그인 — erp:snap-links 가 발급한 10분짜리 서명 URL 로만 진입 가능.
 // 구글 OAuth 뿐인 이 앱에서 헤드리스 브라우저가 화면을 찍을 수 있는 유일한 통로다. 감사 로그를 남긴다.
+//
+// 운영에는 열지 않는다 — 화면 캡처는 로컬 리허설 환경에서 하고, 로그인 우회 통로를
+// 운영에 남겨 둘 이유가 없다(서명이 필요해도 표면은 없는 편이 낫다).
 Route::get('/ops/snap-login', function (\Illuminate\Http\Request $request) {
+    abort_unless(app()->environment('local'), 403);
     abort_unless($request->hasValidSignature(), 403);
     $user = \App\Models\User::query()->where('email', $request->query('email'))->firstOrFail();
     \Illuminate\Support\Facades\Auth::login($user);
