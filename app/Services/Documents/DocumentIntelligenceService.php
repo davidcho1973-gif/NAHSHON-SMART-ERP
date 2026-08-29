@@ -42,7 +42,7 @@ class DocumentIntelligenceService
             $data['verification'] = $verification;
         }
 
-        return DB::transaction(function () use ($document, $analysis, $data, $confidence): IntelligentDocument {
+        $fresh = DB::transaction(function () use ($document, $analysis, $data, $confidence): IntelligentDocument {
             $projectId = $document->project_id ?: $this->resolveProjectId($document, (string) ($data['project_code'] ?? ''));
             $category = $this->option((string) ($data['category'] ?? ''), IntelligentDocument::CATEGORY_OPTIONS, 'general');
             $documentType = $this->option((string) ($data['document_type'] ?? ''), IntelligentDocument::TYPE_OPTIONS, 'other');
@@ -139,6 +139,16 @@ class DocumentIntelligenceService
 
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });
+
+        // 지식 창고 수확 — 임베딩(외부 호출)이 있어 트랜잭션 밖에서 돈다.
+        // 실패해도 분석 결과는 이미 저장됐다: erp:harvest-knowledge 로 다시 수확하면 된다.
+        try {
+            app(KnowledgeKeeper::class)->harvest($fresh);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $fresh;
     }
 
     /** @param array<int, mixed> $items */

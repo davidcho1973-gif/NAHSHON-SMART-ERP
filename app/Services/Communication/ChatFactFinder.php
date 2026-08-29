@@ -76,6 +76,14 @@ class ChatFactFinder
             ];
         }
 
+        // 지식 창고는 주제와 무관하게 항상 본다 — 축적된 지식은 어떤 질문에든
+        // 걸릴 수 있고, 아무 주제에도 안 걸린 질문의 마지막 그물이기도 하다.
+        $knowledge = app(\App\Services\Documents\KnowledgeKeeper::class)
+            ->search($site, $asker, $this->searchTerms($question), $question);
+        if ($knowledge !== []) {
+            $facts['지식 창고(문서에서 축적)'] = $knowledge;
+        }
+
         foreach ($topics as $topic) {
             match ($topic) {
                 'wbs' => $facts['공정'] = $this->wbs($site, $asker),
