@@ -33,6 +33,7 @@ class WebManifestController extends Controller
             scope: $url,
             theme: '#FEE500',
             background: '#FEE500',
+            icon: 'attendance',
         );
     }
 
@@ -49,6 +50,7 @@ class WebManifestController extends Controller
             // 번쩍였다가 노란 화면이 뜨면 잘못 눌린 것처럼 보인다.
             theme: '#FEE500',
             background: '#FFFFFF',
+            icon: 'attendance',
         );
     }
 
@@ -63,6 +65,7 @@ class WebManifestController extends Controller
             scope: route('expense-app.index'),
             theme: '#FEE500',
             background: '#FFFFFF',
+            icon: 'upload',
         );
     }
 
@@ -86,6 +89,7 @@ class WebManifestController extends Controller
         string $scope,
         string $theme = '#17160F',
         string $background = '#17160F',
+        string $icon = 'worker',
     ): JsonResponse {
         return response()->json([
             'id' => $id,
@@ -101,12 +105,14 @@ class WebManifestController extends Controller
             'theme_color' => $theme,
             'lang' => 'ko',
             'dir' => 'ltr',
+            // 앱마다 다른 아이콘을 쓴다 — 예전에는 넷이 같은 그림이라 홈 화면에 두 개를
+            // 깔면 어느 것이 출퇴근인지 알 수 없었다.
             'icons' => [
-                ['src' => asset('images/worker-icon-192.png'), 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any'],
-                ['src' => asset('images/worker-icon-512.png'), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
+                ['src' => asset("images/{$icon}-icon-192.png"), 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any'],
+                ['src' => asset("images/{$icon}-icon-512.png"), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
                 // maskable 을 따로 두는 이유 — 안드로이드가 아이콘을 원·사각·눈물방울로
                 // 깎는다. 'any' 만 주면 깎이면서 시계가 잘린다.
-                ['src' => asset('images/worker-icon-maskable-512.png'), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
+                ['src' => asset("images/{$icon}-icon-maskable-512.png"), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
             ],
         ], 200, [
             'Content-Type' => 'application/manifest+json',

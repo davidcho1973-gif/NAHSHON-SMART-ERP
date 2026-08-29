@@ -18,7 +18,7 @@
     <title>영수증 · {{ \App\Support\Org::name() }}</title>
 
     <link rel="manifest" href="{{ route('expense-app.manifest') }}">
-    <link rel="apple-touch-icon" href="{{ asset('images/apple-touch-icon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/upload-apple-touch.png') }}">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="영수증">
@@ -396,6 +396,12 @@
         queue = queue.filter(function (q) { return q.state !== 'done'; });
         if (!queue.length) document.getElementById('memo').value = '';
         renderQueue();
+
+        // 한 장이라도 실제로 올려 본 다음에 앱 설치를 권한다 — 쓸모를 모르는 채로
+        // 받는 설치 권유는 그냥 닫힌다(출퇴근앱도 첫 타각 뒤에 권한다).
+        if (window.AppInstall) {
+            setTimeout(function () { window.AppInstall.offer(); }, 1400);
+        }
     });
 
     // ── 내 영수증
@@ -430,5 +436,9 @@
     applyLang();
 })();
 </script>
+
+{{-- 홈 화면에 앱 버튼을 만드는 안내 — 안드로이드는 버튼 한 번, 아이폰은 3단계 그림.
+     서비스워커 등록도 이 안에서 한다(없으면 크롬이 설치 권한 자체를 안 준다). --}}
+@include('partials.install-app')
 </body>
 </html>
