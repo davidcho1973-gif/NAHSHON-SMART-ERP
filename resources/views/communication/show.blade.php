@@ -139,6 +139,9 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center">
+                    {{-- 새 글이 오면 소리로 알린다. 앱을 보고 있을 때만 울리는 소리다 —
+                         꺼져 있을 때의 알림음은 휴대폰 설정이 정한다(웹은 못 바꾼다). --}}
+                    <button class="peo" type="button" id="btn-sound" title="알림 소리">🔔</button>
                     <button class="peo" type="button" id="btn-members">참여자</button>
                     @if($canManageRoom)
                         {{-- 대화가 오간 방은 지워지지 않고 보관으로 내려간다 — 기록이 증거이기 때문이다. --}}
@@ -418,8 +421,105 @@
     // ── 받아오기 ───────────────────────────────────────────────────
     function schedule(ms) { clearTimeout(timer); timer = setTimeout(poll, Math.max(2000, ms || 5000)); }
 
+        /* ── 알림 소리 ────────────────────────────────────────────────────────
+         * 앱을 보고 있을 때 새 글이 오면 "깨똑깨똑" 하고 알린다.
+         *
+         * 소리를 두 갈래로 둔 이유: 휴대폰에 한국어 음성이 깔려 있으면 실제로
+         * "깨똑깨똑" 이라고 말하고, 없으면 나무 두드리는 소리 두 번으로 대신한다.
+         * 음성이 없는 기기에서 아무 소리도 안 나면 "알림이 고장났다" 가 된다.
+         *
+         * 브라우저는 사용자가 화면을 한 번 만지기 전에는 소리를 막는다(자동재생 정책).
+         * 그래서 첫 터치에서 오디오를 깨워 둔다 — 이게 없으면 "소리를 켰는데 안 난다".
+         */
+        window.ChatChime = (function () {
+            var KEY = 'chat-sound';
+            var on = (function () { try { return localStorage.getItem(KEY) !== 'off'; } catch (e) { return true; } })();
+            var ctx = null;
+
+            function unlock() {
+                try {
+                    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (ctx.state === 'suspended') ctx.resume();
+                } catch (e) {}
+            }
+
+            /** 나무 두드리는 소리 두 번 — 음성이 없을 때의 대역. */
+            function knock() {
+                try {
+                    if (!ctx) unlock();
+                    if (!ctx) return;
+                    [0, 0.17].forEach(function (delay, i) {
+                        var t = ctx.currentTime + delay;
+                        var osc = ctx.createOscillator();
+                        var gain = ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(i ? 780 : 660, t);
+                        osc.frequency.exponentialRampToValueAtTime(i ? 520 : 440, t + 0.11);
+                        gain.gain.setValueAtTime(0.0001, t);
+                        gain.gain.exponentialRampToValueAtTime(0.28, t + 0.012);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+                        osc.connect(gain); gain.connect(ctx.destination);
+                        osc.start(t); osc.stop(t + 0.15);
+                    });
+                } catch (e) {}
+            }
+
+            function speak() {
+                try {
+                    if (!('speechSynthesis' in window)) return false;
+                    var voices = window.speechSynthesis.getVoices() || [];
+                    var ko = voices.filter(function (v) { return (v.lang || '').toLowerCase().indexOf('ko') === 0; })[0];
+                    if (!ko) return false;                       // 한국어 음성이 없으면 소리로 대신한다
+                    var u = new SpeechSynthesisUtterance('깨똑깨똑');
+                    u.voice = ko; u.lang = 'ko-KR'; u.rate = 1.15; u.volume = 0.9;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(u);
+                    return true;
+                } catch (e) { return false; }
+            }
+
+            function paint() {
+                var b = document.getElementById('btn-sound');
+                if (b) { b.textContent = on ? '🔔' : '🔕'; b.title = on ? '알림 소리 켜짐' : '알림 소리 꺼짐'; }
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                paint();
+                var b = document.getElementById('btn-sound');
+                if (b) {
+                    b.addEventListener('click', function () {
+                        on = !on;
+                        try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) {}
+                        paint();
+                        if (on) { unlock(); ring(1); }           // 켜는 순간 한 번 들려준다
+                    });
+                }
+                ['touchstart', 'click', 'keydown'].forEach(function (ev) {
+                    document.addEventListener(ev, unlock, { once: true, passive: true });
+                });
+                // 음성 목록은 늦게 채워지는 브라우저가 있다 — 미리 한 번 깨워 둔다.
+                try { window.speechSynthesis && window.speechSynthesis.getVoices(); } catch (e) {}
+            });
+
+            return {
+                ring: function (count) {
+                    if (!on) return;
+                    if (!speak()) knock();
+                    // 다른 화면을 보고 있으면 제목에도 표시해 둔다.
+                    if (document.hidden) {
+                        document.title = '(' + count + ') ' + document.title.replace(/^\(\d+\)\s*/, '');
+                    }
+                },
+            };
+        })();
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) document.title = document.title.replace(/^\(\d+\)\s*/, '');
+        });
+
     function poll() {
         if (document.hidden) { schedule(15000); return; }
+
 
         fetch(streamUrl + '?after=' + lastId, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (r) { return r.ok ? r.json() : null; })
@@ -427,8 +527,17 @@
                 if (!data) { schedule(30000); return; }
 
                 var atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 140);
+
+                // 새로 도착한 남의 글만 센다 — 첫 진입의 과거 글이나 내 글, 수정으로 인한
+                // 재그리기에 소리가 나면 그날로 음소거된다.
+                var fresh = (data.messages || []).filter(function (m) {
+                    return lastId > 0 && !m.mine && !document.getElementById('message-' + m.id);
+                }).length;
+
                 (data.messages || []).forEach(render);
                 paintMembers(data.members, data.onlineCount);
+
+                if (fresh > 0) { window.ChatChime && window.ChatChime.ring(fresh); }
 
                 if (data.messages && data.messages.length && (atBottom || lastId === 0)) {
                     window.scrollTo(0, document.body.scrollHeight);

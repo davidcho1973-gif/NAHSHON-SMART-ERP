@@ -12,7 +12,7 @@
   'use strict';
 
   var A = null;
-  var state = { rooms: [], messages: [], options: null, canManage: false, limit: 0, tab: 'rooms' };
+  var state = { rooms: [], messages: [], options: null, canManage: false, limit: 0, tab: 'rooms', showArchived: false, archivedCount: 0 };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -92,14 +92,24 @@
           render: function (r) {
             if (!state.canManage) return '';
             var html = '';
-            // 관리 화면에서 방을 보고도 들어갈 길이 없었다 — 그래서 아무도 채팅을 찾지 못했다.
-            html += u.rowButton('열기', 'window.AdminMessenger.enterRoom(' + r.id + ')') + ' ';
-            if (r.canSyncMembers) {
-              html += u.rowButton('직원 동기화', 'window.AdminMessenger.syncMembers(' + r.id + ')') + ' ';
+            var archived = r.status !== 'active';
+            // 보관한 방은 직원 화면에서 내려가 있어 열리지 않는다 — 눌러서 403 을 보느니
+            // 왜 못 여는지 알려 주는 편이 낫다.
+            if (archived) {
+              html += u.rowButton('보관 해제', "window.AdminMessenger.setArchived(" + r.id + ",false)") + ' ';
+            } else {
+              html += u.rowButton('열기', 'window.AdminMessenger.enterRoom(' + r.id + ')') + ' ';
+              if (r.canSyncMembers) {
+                html += u.rowButton('직원 동기화', 'window.AdminMessenger.syncMembers(' + r.id + ')') + ' ';
+              }
             }
             html += u.rowButton('수정', 'window.AdminMessenger.openRoom(' + r.id + ')');
             if (!r.messageCount) {
+              // 오간 대화가 없는 방은 지워도 잃을 기록이 없다.
               html += ' ' + u.rowButton('삭제', 'window.AdminMessenger.removeRoom(' + r.id + ')', 'danger');
+            } else if (!archived) {
+              // 대화가 쌓인 방은 지우지 않고 치운다 — 기록은 남고 목록에서만 사라진다.
+              html += ' ' + u.rowButton('보관', "window.AdminMessenger.setArchived(" + r.id + ",true)");
             }
             return html;
           },
@@ -160,6 +170,17 @@
     });
   }
 
+  /** 보관한 방을 꺼내 보는 줄 — 평소에는 목록이 깨끗해야 한다. */
+  function archivedToggle() {
+    if (!state.archivedCount && !state.showArchived) return '';
+    return '<div style="margin-bottom:10px;font-size:13px;color:var(--text-secondary)">' +
+      '<label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer">' +
+      '<input type="checkbox" onchange="window.AdminMessenger.toggleArchived()"' +
+      (state.showArchived ? ' checked' : '') + '>' +
+      '보관한 방도 보기 <span style="color:var(--text-tertiary)">(' + state.archivedCount + '개)</span>' +
+      '</label></div>';
+  }
+
   function render() {
     var u = ui();
     var onRooms = state.tab === 'rooms';
@@ -169,6 +190,7 @@
       notes.push(state.rooms.length + '개 방');
       var empty = state.rooms.filter(function (r) { return !r.memberCount; }).length;
       if (empty) notes.push(empty + '개 구성원 없음');
+      if (state.archivedCount) notes.push('보관 ' + state.archivedCount + '개');
     } else {
       notes.push('최근 ' + state.messages.length + '건');
       if (state.limit && state.messages.length >= state.limit) notes.push('최신 ' + state.limit + '건만 표시');
@@ -186,7 +208,7 @@
         ? '현장 방과 구성원을 관리합니다. 나중에 합류한 직원은 "직원 동기화" 로 넣어 주세요. — ' + notes.join(' · ')
         : '올라간 글을 확인하고 정리합니다. — ' + notes.join(' · '),
       action
-    ) + tabs() + (onRooms ? roomsTable() : messagesTable());
+    ) + tabs() + (onRooms ? (archivedToggle() + roomsTable()) : messagesTable());
   }
 
   function paint(html) {
@@ -200,7 +222,7 @@
   }
 
   function reload() {
-    return call('api_getCommunicationAdmin').then(function (res) {
+    return call('api_getCommunicationAdmin', [{ includeArchived: state.showArchived }]).then(function (res) {
       if (res.success === false) {
         paint('<div style="padding:40px;text-align:center;color:var(--text-secondary)">' +
           ui().esc(res.error || '목록을 불러오지 못했습니다.') + '</div>');
@@ -210,8 +232,34 @@
       state.messages = res.messages || [];
       state.canManage = !!res.canManage;
       state.limit = res.messageLimit || 0;
+      state.archivedCount = res.archivedCount || 0;
       draw();
     });
+  }
+
+  /** 보관함 보기 토글 — 치운 방을 다시 꺼내 볼 때. */
+  function toggleArchived() {
+    state.showArchived = !state.showArchived;
+    reload();
+  }
+
+  /** 방을 치우거나 되돌린다. 지우지 않으므로 대화 기록은 그대로 남는다. */
+  function setArchived(id, archived) {
+    var u = ui();
+    var r = state.rooms.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+
+    call('api_saveCommunicationRoom', [{
+      id: id, name: r.name, type: r.type, description: r.description,
+      siteId: r.siteId, teamId: r.teamId, isReadOnly: r.isReadOnly,
+      status: archived ? 'archived' : 'active',
+    }]).then(function (res) {
+      if (res.success === false) { u.toast(res.error || '바꾸지 못했습니다.', 'error'); return; }
+      u.toast(archived
+        ? '"' + r.name + '" 을 보관했습니다. 직원 화면에서는 사라지고 기록은 남습니다.'
+        : '"' + r.name + '" 을 다시 열었습니다.');
+      return reload();
+    }).catch(function (e) { u.toast(e.message || '바꾸지 못했습니다.', 'error'); });
   }
 
   function loadOptions(force) {
@@ -398,6 +446,8 @@
     openRoom: openRoom,
     syncMembers: syncMembers,
     removeRoom: removeRoom,
+    setArchived: setArchived,
+    toggleArchived: toggleArchived,
     openMessage: openMessage,
     removeMessage: removeMessage,
     _state: state,

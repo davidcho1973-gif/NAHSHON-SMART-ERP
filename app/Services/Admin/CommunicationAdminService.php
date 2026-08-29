@@ -53,13 +53,23 @@ class CommunicationAdminService
     /**
      * @return array<string, mixed>
      */
-    public function list(): array
+    /**
+     * @param  array<string, mixed>  $filters  includeArchived: 보관한 방까지 볼 것인가
+     */
+    public function list(array $filters = []): array
     {
         if (! $this->canView()) {
             return ['success' => false, 'error' => '메신저 관리를 볼 권한이 없습니다.'];
         }
 
+        // 보관한 방은 기본으로 감춘다 — 안 쓰는 방을 목록에서 치우는 것이 "없앤다" 의
+        // 현실적인 뜻이다. 방을 진짜로 지우면 그 안의 지시·확인 기록이 함께 사라지는데,
+        // 그건 나중에 "그때 뭐라고 했나" 를 따질 유일한 근거인 경우가 많다.
+        $includeArchived = (bool) ($filters['includeArchived'] ?? false);
+        $archivedCount = CommunicationRoom::query()->where('status', 'archived')->count();
+
         $rooms = CommunicationRoom::query()
+            ->when(! $includeArchived, fn ($q) => $q->where('status', 'active'))
             ->with(['site:id,code', 'team:id,name'])
             ->withCount(['members', 'messages'])
             ->orderByRaw('last_message_at desc nulls last')
@@ -112,6 +122,8 @@ class CommunicationAdminService
             'messages' => $messages,
             'messageLimit' => self::MESSAGE_LIMIT,
             'canManage' => $this->canManage(),
+            'archivedCount' => $archivedCount,
+            'includeArchived' => $includeArchived,
         ];
     }
 

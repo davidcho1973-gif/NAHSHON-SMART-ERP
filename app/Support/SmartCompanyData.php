@@ -180,7 +180,9 @@ class SmartCompanyData
             'api_deleteProjectAdmin' => app(SiteAdminService::class)->deleteProject((int) ($args[0] ?? 0)),
 
             // 메신저 방 · 메시지 관리 (Filament CommunicationRoom/Message 를 SPA 로 옮긴 것).
-            'api_getCommunicationAdmin' => app(CommunicationAdminService::class)->list(),
+            'api_getCommunicationAdmin' => app(CommunicationAdminService::class)->list(
+                is_array($args[0] ?? null) ? $args[0] : []
+            ),
             'api_getCommunicationAdminOptions' => app(CommunicationAdminService::class)->options(),
             'api_saveCommunicationRoom' => app(CommunicationAdminService::class)->saveRoom(is_array($args[0] ?? null) ? $args[0] : []),
             'api_syncCommunicationRoomMembers' => app(CommunicationAdminService::class)->syncRoomMembers((int) ($args[0] ?? 0)),
