@@ -47,6 +47,7 @@ class SimpleWorkerRegistrationController extends Controller
             'site' => $site,
             'companies' => $this->companyOptions(),
             'roles' => $this->tradeOptions($site),
+            'positions' => Employee::POSITIONS,
             'done' => false,
             'returning' => false,
             // 이미 붙어 있는 예전 QR(?type=direct|indirect) — 회사가 미분류일 때만 쓰이는 보조 값.
@@ -254,6 +255,9 @@ class SimpleWorkerRegistrationController extends Controller
             // 공정도 마찬가지로 자유 입력을 받는다. 다만 아래에서 기존 공정명과 대소문자·공백만
             // 다른 값은 기존 이름으로 맞춘다 — 안 그러면 집계가 'Piping' 과 'piping' 으로 갈린다.
             'role' => ['required', 'string', 'max:60'],
+            // 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가). 급여의 관리자
+            // 구분이 여기서 정해지므로, 자사 직영이면 반드시 받는다.
+            'position' => ['nullable', Rule::in(array_keys(Employee::POSITIONS))],
             // 이메일은 선택이다. 현장에서 이메일을 안 쓰거나 주소가 기억나지 않는 사람이
             // 여기서 막히면 등록 자체를 못 하고, 그러면 그날 그 사람은 명단에 없는 채로
             // 일한다 — 없는 사람은 출퇴근도 안전서명도 남지 않는다. 신원은 전화번호가
@@ -310,6 +314,7 @@ class SimpleWorkerRegistrationController extends Controller
             'role' => $data['role'],
             'trade' => $data['role'],
             'preferred_language' => $lang,
+            'position' => $data['position'] ?? null,
             'company_id' => $data['company_id'],
             'site_id' => $site->id,
             'identity_status' => 'pending',
@@ -322,7 +327,16 @@ class SimpleWorkerRegistrationController extends Controller
         ]);
 
         $employee = $registration->syncEmployee();
-        $employee->forceFill(['employment_type' => $type, 'preferred_language' => $lang])->save();
+        $employee->forceFill([
+            'employment_type' => $type,
+            'preferred_language' => $lang,
+            'position' => $data['position'] ?? null,
+            // 오늘부터 일한다 — 급여 기간을 가르는 값인데, 스스로 등록한 사람에게는
+            // 아무도 나중에 물어보지 않아 비어 있는 채로 남는다.
+            'start_date' => $employee->start_date ?: now()->toDateString(),
+        ])->save();
+
+        $this->alertIfPayrollSetupMissing($employee);
 
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
         $deviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
@@ -365,6 +379,50 @@ class SimpleWorkerRegistrationController extends Controller
         );
     }
 
+    /**
+     * 자사 직영이 임금률 없이 들어왔으면 지금 알린다.
+     *
+     * 간편등록으로 들어온 자사 직원은 그 순간부터 급여 대상이다(시급 정산). 그런데
+     * 임금 프로필은 0원으로 태어나므로, 아무도 채우지 않으면 급여를 돌리는 날에야
+     * $0 명세서로 드러난다 — 그때는 이미 2주치가 지나 있다. 등록하는 자리에서 알린다.
+     *
+     * 임금률을 작업자에게 묻지는 않는다. 얼마를 줄지는 회사가 정하는 것이고, 본인이
+     * 적어 넣게 하면 그 숫자가 그대로 급여가 된다.
+     */
+    private function alertIfPayrollSetupMissing(Employee $employee): void
+    {
+        try {
+            if (! $employee->isHourly()) {
+                return;
+            }
+
+            $rate = (float) ($employee->payrollProfile?->base_rate ?? 0);
+            if ($rate > 0) {
+                return;
+            }
+
+            app(\App\Services\Alerts\UnifiedAlertService::class)->emit("payroll-setup-missing:{$employee->id}", [
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'employee_id' => $employee->id,
+                'source_module' => 'PAYROLL',
+                'source_type' => Employee::class,
+                'source_id' => (string) $employee->id,
+                'event_type' => 'payroll_setup_missing',
+                'severity' => 'warning',
+                'title' => "임금률 미설정: {$employee->name}",
+                'content' => sprintf(
+                    '%s 님이 현장 QR 로 자사 직영(시급)으로 등록됐습니다. 임금률이 없으면 $0 명세서가 발행됩니다 — 급여 마감 전에 임금 프로필에서 시급을 입력하세요.%s',
+                    $employee->name,
+                    $employee->positionLabel() ? ' (직책: '.$employee->positionLabel().')' : '',
+                ),
+                'action_url' => '/admin/pay-profiles',
+            ]);
+        } catch (\Throwable $e) {
+            report($e); // 알림 실패가 등록을 막으면 안 된다.
+        }
+    }
+
     /** 등록·재등록 완료 화면. 두 경우가 같은 화면을 쓰되 문구만 갈린다. */
     private function doneView(Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning): View
     {
@@ -379,6 +437,7 @@ class SimpleWorkerRegistrationController extends Controller
             'site' => $site,
             'companies' => collect(),
             'roles' => [],
+            'positions' => Employee::POSITIONS,
             'done' => true,
             'returning' => $returning,
             'lockedType' => null,

@@ -93,6 +93,56 @@ class WorkerJoinReturningTest extends TestCase
         $this->assertSame('terminated', Employee::query()->where('name', 'Miguel Torres')->value('employment_status'));
     }
 
+    public function test_자사_직영으로_들어오면_급여_대상이_되고_직책이_남는다(): void
+    {
+        $own = Company::create(['code' => 'OWN', 'name' => '자사', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
+
+        $this->join($this->site, ['company_id' => $own->id, 'position' => 'foreman'])->assertOk();
+
+        $employee = Employee::query()->where('name', 'Miguel Torres')->firstOrFail();
+        $this->assertSame(Employee::TYPE_DIRECT, $employee->employment_type);
+        $this->assertTrue($employee->isHourly(), '자사 직영은 출퇴근 시간이 그대로 급여가 된다');
+        $this->assertSame('foreman', $employee->position, '직책은 공정과 따로 남는다');
+        $this->assertSame('Piping', $employee->role, '공정은 공정 칸에 그대로');
+        $this->assertSame(now()->toDateString(), $employee->start_date?->toDateString(), '급여 기간을 가르는 값이라 비워 두지 않는다');
+    }
+
+    public function test_자사_직영인데_임금률이_없으면_그_자리에서_알린다(): void
+    {
+        // 임금 프로필은 0원으로 태어난다. 아무도 안 채우면 급여를 돌리는 날에야
+        // $0 명세서로 드러나는데, 그때는 이미 2주치가 지나 있다.
+        $own = Company::create(['code' => 'OWN', 'name' => '자사', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
+
+        $this->join($this->site, ['company_id' => $own->id, 'position' => 'worker'])->assertOk();
+
+        $employee = Employee::query()->where('name', 'Miguel Torres')->firstOrFail();
+        $this->assertDatabaseHas('unified_alerts', [
+            'fingerprint' => "payroll-setup-missing:{$employee->id}",
+            'event_type' => 'payroll_setup_missing',
+        ]);
+    }
+
+    public function test_협력사는_급여_알림을_만들지_않는다(): void
+    {
+        // 게이트를 쓰는 사람 대부분이다. 그들에게 임금률 알림을 띄우면 그 목록이
+        // 매일 쌓여서 정작 봐야 할 자사 직원 알림을 덮는다.
+        $this->join($this->site, ['position' => 'worker'])->assertOk();
+
+        $this->assertDatabaseMissing('unified_alerts', ['event_type' => 'payroll_setup_missing']);
+    }
+
+    public function test_직책이_급여의_관리자_구분을_정한다(): void
+    {
+        // 예전에는 공정 글자에서 'foreman' 을 찾아 짐작했다 — "Piping" 이라고 적은
+        // 반장은 작업자로 계산됐다.
+        $own = Company::create(['code' => 'OWN', 'name' => '자사', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
+        $this->join($this->site, ['company_id' => $own->id, 'position' => 'foreman'])->assertOk();
+
+        $employee = Employee::query()->where('name', 'Miguel Torres')->firstOrFail();
+        $this->assertContains($employee->position, Employee::SUPERVISORY_POSITIONS);
+        $this->assertSame('반장', $employee->positionLabel());
+    }
+
     public function test_관리자_기록은_공개_폼이_건드리지_못한다(): void
     {
         // 이름과 번호를 아는 사람이 남의 소속 현장을 옮겨 버리는 길을 열어 두지 않는다.

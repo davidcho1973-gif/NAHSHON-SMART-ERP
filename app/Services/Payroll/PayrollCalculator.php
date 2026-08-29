@@ -659,6 +659,13 @@ class PayrollCalculator
             return $profile->worker_division;
         }
 
+        // 직책을 받아 두었으면 그것으로 정한다 — 짐작할 필요가 없다.
+        if (filled($employee->position)) {
+            return in_array($employee->position, Employee::SUPERVISORY_POSITIONS, true) ? '관리자' : '외국인';
+        }
+
+        // 직책이 없는 옛 기록은 예전처럼 공정 글자에서 낱말을 찾는다. 틀릴 수 있지만
+        // (Piping 이라고 적은 반장은 못 잡는다) 아무 근거도 없는 것보다는 낫다.
         $role = mb_strtolower((string) $employee->role);
         foreach (['foreman', 'engineer', 'manager', 'supervisor', 'superintendent', 'inspector', 'pm', '관리'] as $needle) {
             if ($role !== '' && str_contains($role, $needle)) {

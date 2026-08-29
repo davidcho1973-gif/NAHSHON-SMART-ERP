@@ -39,6 +39,7 @@ class MemberRegistration extends Model
         'emergency_contact_name',
         'emergency_contact_phone',
         'role',
+        'position',
         'trade',
         'start_date',
         'end_date',
@@ -532,6 +533,9 @@ class MemberRegistration extends Model
             'badge_analysis_payload' => $this->badge_analysis_payload,
             'nationality' => $this->nationality,
             'role' => $role,
+            // 직책은 등록서류에서 그대로 따라온다. 비어 있으면 직원 쪽 값을 지운다는
+            // 뜻이 아니라 "모른다"이므로, 이미 있는 값을 덮지 않는다.
+            'position' => $this->position ?: $employee->position,
             'start_date' => $startDate,
             'employment_status' => $employee->exists && $employee->employment_status === 'active'
                 ? 'active'

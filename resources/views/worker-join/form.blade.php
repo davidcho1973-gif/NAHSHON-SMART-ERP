@@ -20,6 +20,9 @@
             background: var(--kakao); color: var(--ink);
         }
         * { -webkit-tap-highlight-color: transparent; }
+        /* 한글은 기본값이 글자 단위로 끊어져 "작업자 / 등록" 처럼 단어 한가운데가 갈라진다.
+           낱말 단위로 넘긴다 — 좁은 폰 화면에서 매번 그랬다. */
+        h1, .brand, .done p, .note, label, .device, .shared, .payroll { word-break: keep-all; }
         body { margin: 0; padding: 20px; display: flex; justify-content: center; background: var(--kakao); }
         .card { width: min(100%, 460px); background: #fff; border: 0; border-radius: 20px; padding: 26px 22px; box-sizing: border-box; }
         .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -46,10 +49,13 @@
         .device { margin-top: 16px; background: #E8F5EA; border: 0; color: #1E8E3E; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; }
         .shared { margin-top: 16px; background: #FFF4E0; border: 0; color: #B26A00; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; text-align: left; }
         .next { display: block; margin-top: 12px; padding: 15px; font-size: 1rem; font-weight: 800; color: var(--label); background: var(--paper); border-radius: 12px; text-decoration: none; }
+        /* 자사 직영 안내 — 급여가 걸리는 갈림길이라 노란 판으로 세운다(고용 구분 칸과 같은 규격). */
+        .payroll { margin-top: 14px; background: var(--kakao); border-radius: 14px; padding: 13px 15px; font-size: .85rem; line-height: 1.6; color: var(--label); }
         .type { display: inline-block; border-radius: 999px; padding: 6px 15px; font-size: .82rem; font-weight: 800; margin-bottom: 12px; }
         .type-direct { background: var(--label); color: #fff; }
         .type-indirect { background: var(--paper); color: var(--ink-2); }
         .type-client, .type-staff { background: var(--paper); color: var(--ink-2); }
+        .type-position { background: var(--kakao); color: var(--label); margin-left: 5px; }
         .note { font-size: .78rem; color: var(--ink-2); margin-top: 6px; line-height: 1.5; }
         .note.on-direct { color: var(--ink); font-weight: 700; }
         .note.on-indirect { color: var(--ink); font-weight: 700; }
@@ -69,7 +75,11 @@
                 <div class="check">✓</div>
                 <p class="brand">{{ \App\Support\Org::name() }} · {{ $site->code }} {{ $site->name }}</p>
                 <h1 id="t-doneTitle"></h1>
+                {{-- 고용 구분과 직책을 함께 보여 준다 — 잘못 골랐으면 이 자리에서 알아채야 한다. --}}
                 <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
+                @if ($employee?->positionLabel())
+                    <div class="type type-position">{{ $employee->positionLabel() }}</div>
+                @endif
                 <p><b>{{ $workerName }}</b><span id="t-doneBody"></span></p>
                 @if (!empty($employee?->employee_number))
                     <div class="badge"><span id="t-doneBadge"></span> {{ $employee->employee_number }}</div>
@@ -199,6 +209,23 @@
                 </datalist>
                 <div class="note" id="t-tradeHint"></div>
 
+                {{-- 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가).
+                     자사 직영은 이 값이 급여의 관리자 구분을 정하므로 반드시 받는다. --}}
+                <label id="t-position"></label>
+                <select name="position" id="f-position">
+                    <option value="" id="opt-position-blank"></option>
+                    @foreach ($positions as $code => $label)
+                        <option value="{{ $code }}" @selected(old('position') === $code)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <div class="note" id="t-positionHint"></div>
+
+                {{-- 자사 직영으로 등록되는 순간부터 급여 대상이다. 그 사실을 등록하는
+                     자리에서 알려 준다 — 나중에 "왜 급여가 나오지 / 왜 안 나오지" 가 된다. --}}
+                <div class="payroll" id="payroll-note" style="display:none">
+                    <b id="t-payrollTitle"></b><br><span id="t-payrollBody"></span>
+                </div>
+
                 {{-- 전화번호가 신원이다(같은 이름 + 같은 번호 = 같은 사람). 그래서 이메일보다
                      위에 두고, 반드시 받는다. --}}
                 <label id="t-phone"></label>
@@ -222,6 +249,8 @@
                     var T = DICT[lang] || DICT.ko;
 
                     var sel = document.getElementById('company');
+                    var posSel = document.getElementById('f-position');
+                    var payrollNote = document.getElementById('payroll-note');
                     var nameInput = document.getElementById('company-name');
                     var note = document.getElementById('company-note');
                     var ask = document.getElementById('ask-type');
@@ -238,6 +267,13 @@
                         text('t-trade', T.trade); text('t-tradeHint', T.tradeHint);
                         text('t-email', T.email); text('t-phone', T.phone);
                         text('t-emailHint', T.emailHint); text('t-phoneHint', T.phoneHint);
+                        text('t-position', T.position); text('t-positionHint', T.positionHint);
+                        text('opt-position-blank', T.positionPlaceholder);
+                        text('t-payrollTitle', T.payrollTitle); text('t-payrollBody', T.payrollBody);
+                        // 직책 이름도 언어를 따라간다. 값(코드)은 그대로 두고 보이는 글자만 바꾼다.
+                        Array.prototype.forEach.call(posSel.options, function (o) {
+                            if (o.value && T.positions && T.positions[o.value]) { o.textContent = T.positions[o.value]; }
+                        });
                         text('t-submit', T.submit); text('t-errors', T.errors);
                         text('t-askTitle', T.askTitle);
                         text('opt-blank', T.companyPlaceholder);
@@ -255,11 +291,21 @@
                         syncCompany();
                     }
 
+                    // 자사 직영이면 급여 대상이다 — 그 사실을 알리고 직책을 반드시 받는다.
+                    // (직책이 급여의 관리자 구분을 정한다. 비어 있으면 그 판정이 짐작이 된다.)
+                    function syncPayroll(etype) {
+                        var direct = etype === 'direct'
+                            || (ask.style.display !== 'none' && (document.querySelector('input[name=employment_type]:checked') || {}).value === 'direct');
+                        payrollNote.style.display = direct ? 'block' : 'none';
+                        posSel.required = direct;
+                    }
+
                     function syncCompany() {
                         var opt = sel.options[sel.selectedIndex];
                         // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
                         var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
                         var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient };
+                        syncPayroll(etype);
 
                         // 목록에 없는 회사 — 이름을 받고, 자사인지 협력사인지 물어본다.
                         // 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
@@ -293,6 +339,8 @@
                     }
 
                     sel.addEventListener('change', syncCompany);
+                    // 목록에 없는 회사라 "누가 급여를 주나요?" 를 직접 고른 경우도 같이 본다.
+                    radios.forEach(function (r) { r.addEventListener('change', function () { syncCompany(); }); });
                     Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
                         b.addEventListener('click', function () {
                             var code = b.getAttribute('data-lang');

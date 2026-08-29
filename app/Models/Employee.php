@@ -72,6 +72,37 @@ class Employee extends Model
         return $this->attendancePolicy() === self::POLICY_HOURLY;
     }
 
+    /**
+     * 직책 — 현장에서 어떤 자리인가. 공정(role, 무슨 일을 하는가)과 다르다.
+     *
+     * 코드로 저장한다. 화면은 세 언어로 보여 주지만 저장값이 언어마다 달라지면
+     * 급여·집계가 같은 직책을 다른 것으로 읽게 된다.
+     */
+    public const POSITIONS = [
+        'worker' => '작업자',
+        'foreman' => '반장',
+        'engineer' => '기사 · 엔지니어',
+        'superintendent' => '현장소장',
+        'safety' => '안전관리자',
+        'office' => '사무 · 관리',
+    ];
+
+    /**
+     * 급여에서 "관리자" 구분으로 보는 직책.
+     *
+     * 예전에는 공정 글자에서 'foreman' 같은 낱말을 찾아 짐작했다. 그래서 "Piping"
+     * 이라고 적은 반장은 작업자로 계산됐고, 공정 이름에 그 낱말이 우연히 들어가면
+     * 반대로 관리자가 됐다. 직책을 따로 받으면 짐작할 일이 없다.
+     *
+     * @var array<int, string>
+     */
+    public const SUPERVISORY_POSITIONS = ['foreman', 'engineer', 'superintendent', 'safety', 'office'];
+
+    public function positionLabel(): ?string
+    {
+        return self::POSITIONS[$this->position] ?? ($this->position ?: null);
+    }
+
     protected $fillable = [
         'company_id',
         'site_id',
@@ -93,6 +124,7 @@ class Employee extends Model
         'nationality',
         'preferred_language',
         'role',
+        'position',
         'start_date',
         'employment_status',
         'employment_type',
