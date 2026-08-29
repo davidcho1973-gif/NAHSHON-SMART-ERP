@@ -181,6 +181,43 @@ class AttendanceGeoService
         ];
     }
 
+    /** 현장 안이 확인됨 — 현장 WiFi/망이 맞거나 GPS 가 반경 안이다. */
+    public const ON_SITE = 'on_site';
+
+    /** 현장 밖이 확인됨 — 위치를 읽었고 반경(+완충)을 벗어났다. */
+    public const OFF_SITE = 'off_site';
+
+    /**
+     * 확인할 수 없음 — 현장에 좌표·WiFi 가 등록되지 않았거나, 위치를 못 읽었거나,
+     * 정확도가 너무 낮거나, 완충구간이다. <b>"밖"이 아니라 "모른다"</b>이다.
+     */
+    public const UNVERIFIED = 'unverified';
+
+    /**
+     * 이 신호가 말하는 것 — 현장 안인가, 밖인가, 알 수 없는가.
+     *
+     * 근태 기록을 만드는 모든 입구(작업자 앱·게이트 QR)가 이 한 줄을 지나게 해서
+     * "어디에 있었는가" 의 판정이 한 벌만 존재하게 한다. 규칙이 두 벌이면 언젠가
+     * 어긋나고, 그때 같은 사람의 같은 위치가 입구에 따라 다르게 판정된다.
+     *
+     * 처분(승인할지 보류할지)은 여기서 정하지 않는다 — 그건 입구마다 사정이 달라서
+     * 각 서비스가 정한다. 여기가 답하는 것은 사실 하나뿐이다: 어디에 있었는가.
+     *
+     * @param  array<string, mixed>  $signal  lat,lng,accuracy,bssid,ip
+     */
+    public function verdict(Site $site, array $signal): string
+    {
+        $probe = $this->probe($site, $signal);
+
+        if ($probe['network'] || $probe['gps'] === 'in') {
+            return self::ON_SITE;
+        }
+
+        // 완충구간(in_loose)은 밖이라고 단정하지 않는다 — GPS 는 건물 안에서 수십 미터
+        // 씩 튄다. 확실히 벗어난 것만 밖으로 본다.
+        return $probe['gps'] === 'out' ? self::OFF_SITE : self::UNVERIFIED;
+    }
+
     /**
      * 신호 하나를 읽어 "지금 이 현장에 있다고 볼 수 있는가"를 판정한다. 상태는 바꾸지 않는다.
      *

@@ -345,7 +345,8 @@ Route::get('/erp.webmanifest', [WebManifestController::class, 'erp'])->name('erp
 // 회사가 명함과 간판에 이미 붙여 둔 그림이라 감출 것이 없다.
 Route::get('/org/logo', [OrgLogoController::class, 'show'])->name('org.logo');
 
-// 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
+// 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 전화번호 뒷 4자리로 본인 확인 → 출근/퇴근
+// (공개, 앱 불필요)
 //
 // throttle: 이 경로는 로그인이 없어 직원 번호를 훑거나 남의 출퇴근을 대신 찍는 시도가
 // 가능하다. 근태는 임금 기록이므로 속도를 묶어 자동화를 무디게 한다. 한도는 아침 러시를
@@ -353,6 +354,9 @@ Route::get('/org/logo', [OrgLogoController::class, 'show'])->name('org.logo');
 // 조이다가 출근 줄을 세우는 쪽이 더 큰 사고다.
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');
 Route::get('/gate/{site}', [GateAttendanceController::class, 'show'])->name('gate.show');
+// 뒷 4자리는 만 가지뿐이라, 이름 검색보다 조인다 — 한 사람이 아침에 한두 번 쓰는 길이다.
+Route::post('/gate/{site}/identify', [GateAttendanceController::class, 'identify'])
+    ->middleware('throttle:60,1')->name('gate.identify');
 Route::post('/gate/{site}/search', [GateAttendanceController::class, 'search'])
     ->middleware('throttle:240,1')->name('gate.search');
 Route::post('/gate/{site}/punch', [GateAttendanceController::class, 'punch'])

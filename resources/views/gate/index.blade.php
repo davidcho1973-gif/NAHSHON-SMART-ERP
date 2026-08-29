@@ -42,20 +42,29 @@
             background: var(--kakao); color: var(--ink);
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { min-height: 100vh; margin: 0; display: grid; place-items: start center; padding: 18px; background: var(--kakao); }
-        .sheet { width: min(100%, 460px); background: #fff; border-radius: 20px; padding: 24px; }
+        body { min-height: 100dvh; margin: 0; display: grid; place-items: start center; padding: 18px; background: var(--kakao); box-sizing: border-box; }
+        /* 흰 판이 화면을 채운다. 예전에는 내용이 위쪽에만 몰리고 아래 3분의 2가 노랑이라
+           덜 만들어진 페이지처럼 보였다 — 벽에 붙는 포스터는 노랑이 맞지만 이건 손에
+           들고 보는 화면이다. */
+        .sheet { width: min(100%, 460px); min-height: calc(100dvh - 36px); background: #fff; border-radius: 20px; padding: 24px; box-sizing: border-box; }
         .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
         .brand { margin: 0 0 4px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); font-weight: 800; }
         /* 올린 그림 로고. 작업자가 출입구에서 보는 화면이라 회사 표시가 크게 도움이 된다. */
         .brand-logo { display: block; max-height: 34px; max-width: 150px; object-fit: contain; margin: 0 0 8px; }
-        h1 { margin: 0 0 2px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
+        /* keep-all: 한글은 기본값이 글자 단위로 끊어져 "현장 출 / 퇴근" 처럼 단어
+           한가운데가 갈라진다. 언어 버튼 셋이 위쪽을 차지하는 좁은 폭에서 매번 그랬다. */
+        h1 { margin: 0 0 2px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; word-break: keep-all; }
+        .top > div:first-child { min-width: 0; }
         .site { margin: 0 0 16px; color: var(--ink-2); font-size: .95rem; font-weight: 700; }
         .langs { display: flex; gap: 4px; flex-shrink: 0; }
         .langs button { border: 1px solid var(--rule); background: #fff; color: var(--ink-2); border-radius: 999px; padding: 7px 11px; font-size: .74rem; font-weight: 800; font-family: inherit; cursor: pointer; }
         .langs button.on { background: var(--label); border-color: transparent; color: #fff; }
         label { display: block; font-size: .8rem; color: var(--ink-2); margin: 0 0 6px; font-weight: 700; }
-        input[type=text] { width: 100%; padding: 15px; font-size: 1.1rem; font-family: inherit; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); }
-        input[type=text]:focus { outline: 2px solid var(--kakao); outline-offset: -2px; background: #fff; }
+        input[type=text], input[type=tel] { width: 100%; padding: 15px; font-size: 1.1rem; font-family: inherit; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); box-sizing: border-box; }
+        input[type=text]:focus, input[type=tel]:focus { outline: 2px solid var(--kakao); outline-offset: -2px; background: #fff; }
+        /* 네 자리는 크게 — 장갑 낀 손으로 햇빛 아래에서 누르는 칸이다. */
+        .pin { text-align: center; font-size: 2rem !important; font-weight: 800; letter-spacing: .5em; padding: 18px 15px 18px 25px !important; }
+        .hint { color: var(--ink-2); font-size: .85rem; margin: 8px 0 0; text-align: center; }
         .results { margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
         .worker { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px 16px; border: 1px solid var(--rule); border-radius: 12px; background: #fff; cursor: pointer; }
         .worker:active { background: var(--paper); }
@@ -81,6 +90,8 @@
         .ok .msg { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 2px; }
         .ok .time { color: var(--ink-2); }
         .remembered { color: #1E8E3E; font-weight: 800; font-size: .86rem; margin-top: 12px; }
+        /* 공용 폰이라 기억하지 않았다는 안내 — 좋은 소식이 아니므로 초록이 아니다. */
+        .remembered.shared { color: #B26A00; }
         .hidden { display: none; }
         .spin { color: var(--ink-3); text-align: center; padding: 10px; }
     </style>
@@ -108,11 +119,23 @@
             <div class="spin">···</div>
         </section>
 
-        {{-- 1) 이름으로 찾기(기억되지 않은 기기) --}}
+        {{-- 1) 전화번호 뒷 4자리로 본인 확인(기억되지 않은 기기) — 게이트의 기본 통로.
+             이름 고르기는 확인이 아니었다(남의 이름도 고를 수 있고 명단이 통째로 열렸다). --}}
+        <section id="screen-id" class="hidden">
+            <label id="t-idLabel"></label>
+            <input type="tel" id="last4" inputmode="numeric" autocomplete="off" maxlength="4"
+                   pattern="[0-9]*" class="pin">
+            <p class="hint" id="t-idHint"></p>
+            <div class="results" id="id-results"></div>
+            <button type="button" class="ghost" id="to-search"></button>
+        </section>
+
+        {{-- 2) 이름으로 찾기 — 번호가 등록되지 않은 사람을 위한 예비 통로. --}}
         <section id="screen-search" class="hidden">
             <label id="t-searchLabel"></label>
             <input type="text" id="q" inputmode="text" autocomplete="off">
             <div class="results" id="results"></div>
+            <button type="button" class="ghost" id="to-id"></button>
         </section>
 
         {{-- 2) 본인 확인 + 출근/퇴근 --}}
@@ -144,6 +167,7 @@
 
     <script>
         var URLS = {
+            identify: @json(route('gate.identify', ['site' => $site])),
             search: @json(route('gate.search', ['site' => $site])),
             punch: @json(route('gate.punch', ['site' => $site])),
             me: @json(route('gate.me', ['site' => $site])),
@@ -155,9 +179,11 @@
         var TOKEN_KEY = 'dasolWorkerDevice';
         var LANG_KEY = 'dasolWorkerLang';
 
-        var geo = { lat: null, lng: null };
+        var geo = { lat: null, lng: null, accuracy: null };
         var selected = null;
         var recognized = false;   // 기억된 기기로 인식됐는가
+        var identifiedBy = null;  // 'device' | 'phone4' | 'name' — 무엇으로 본인을 확인했나
+        var LAST_PERSON_KEY = 'workerGateLastPerson';
         var lang = @json($lang);
         var T = DICT[lang];
 
@@ -174,7 +200,11 @@
 
         // 위치는 있으면 참고용으로만 받는다(없어도 동작).
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function (p) { geo.lat = p.coords.latitude; geo.lng = p.coords.longitude; }, function () {}, { enableHighAccuracy: true, timeout: 8000 });
+            navigator.geolocation.getCurrentPosition(function (p) {
+                geo.lat = p.coords.latitude; geo.lng = p.coords.longitude;
+                // 정확도를 함께 보낸다 — 오차가 반경보다 크면 서버가 "밖" 이라고 단정하지 않는다.
+                geo.accuracy = p.coords.accuracy;
+            }, function () {}, { enableHighAccuracy: true, timeout: 8000 });
         }
 
         function setLang(code, remember) {
@@ -194,6 +224,11 @@
         function paint() {
             document.getElementById('t-title').textContent = T.title;
             document.getElementById('t-searchLabel').textContent = T.searchLabel;
+            document.getElementById('t-idLabel').textContent = T.idLabel;
+            document.getElementById('t-idHint').textContent = T.idHint;
+            document.getElementById('to-search').textContent = T.idFallback;
+            document.getElementById('to-id').textContent = T.idBack;
+            document.getElementById('last4').placeholder = '0000';
             document.getElementById('q').placeholder = T.searchPlaceholder;
             document.getElementById('back-btn').textContent = recognized ? T.notMe : T.other;
             document.getElementById('done-back').textContent = T.home;
@@ -212,10 +247,57 @@
         }
 
         function show(id) {
-            ['screen-boot', 'screen-search', 'screen-worker', 'screen-done'].forEach(function (s) {
+            ['screen-boot', 'screen-id', 'screen-search', 'screen-worker', 'screen-done'].forEach(function (s) {
                 document.getElementById(s).classList.toggle('hidden', s !== id);
             });
+            if (id === 'screen-id') { setTimeout(function () { last4.focus(); }, 50); }
         }
+
+        // ── 전화번호 뒷 4자리 — 기본 통로.
+        var last4 = document.getElementById('last4');
+        var idResults = document.getElementById('id-results');
+
+        last4.addEventListener('input', function () {
+            var v = last4.value.replace(/\D/g, '').slice(0, 4);
+            if (v !== last4.value) { last4.value = v; }
+            idResults.innerHTML = '';
+            // 네 자리가 채워지면 스스로 찾아본다 — 확인 버튼을 하나 더 누르게 하지 않는다.
+            if (v.length === 4) { doIdentify(v); }
+        });
+
+        function doIdentify(v) {
+            idResults.innerHTML = '<div class="spin">' + T.searching + '</div>';
+            post(URLS.identify, { last4: v })
+                .then(function (d) {
+                    var ws = (d && d.workers) || [];
+                    if (!ws.length) { idResults.innerHTML = '<div class="muted">' + T.idNoMatch + '</div>'; return; }
+                    // 한 사람이면 곧장 넘어간다. 뒷자리가 겹치는 경우에만 고르게 한다.
+                    if (ws.length === 1) { pick(ws[0], false, 'phone4'); return; }
+                    idResults.innerHTML = '<div class="muted">' + T.idMany + '</div>';
+                    renderWorkers(ws, idResults, 'phone4');
+                })
+                .catch(function () { idResults.innerHTML = '<div class="muted">' + T.searchError + '</div>'; });
+        }
+
+        function renderWorkers(ws, host, how) {
+            ws.forEach(function (w) {
+                var el = document.createElement('div');
+                el.className = 'worker';
+                el.innerHTML = '<div><div class="nm"></div><div class="co"></div></div><div class="pick"></div>';
+                el.querySelector('.nm').textContent = w.name;
+                el.querySelector('.co').textContent = [w.company, w.role].filter(Boolean).join(' · ');
+                el.lastElementChild.textContent = T.pick;
+                el.addEventListener('click', function () { pick(w, false, how); });
+                host.appendChild(el);
+            });
+        }
+
+        document.getElementById('to-search').addEventListener('click', function () {
+            q.value = ''; results.dataset.filled = ''; paint(); show('screen-search');
+        });
+        document.getElementById('to-id').addEventListener('click', function () {
+            last4.value = ''; idResults.innerHTML = ''; show('screen-id');
+        });
 
         var q = document.getElementById('q');
         var results = document.getElementById('results');
@@ -223,7 +305,12 @@
         q.addEventListener('input', function () {
             clearTimeout(timer);
             var term = q.value.trim();
-            if (term.length < 1) { results.dataset.filled = ''; results.innerHTML = '<div class="muted">' + T.searchEmpty + '</div>'; return; }
+            // 두 글자 미만은 보내지 않는다 — 한 글자로 명단을 훑는 길을 열지 않는다(서버도 막는다).
+            if (term.length < 2) {
+                results.dataset.filled = '';
+                results.innerHTML = '<div class="muted">' + (term.length ? T.searchShort : T.searchEmpty) + '</div>';
+                return;
+            }
             timer = setTimeout(function () { doSearch(term); }, 220);
         });
 
@@ -235,23 +322,15 @@
                     var ws = (d && d.workers) || [];
                     if (!ws.length) { results.innerHTML = '<div class="muted">' + T.noMatch + '</div>'; return; }
                     results.innerHTML = '';
-                    ws.forEach(function (w) {
-                        var el = document.createElement('div');
-                        el.className = 'worker';
-                        el.innerHTML = '<div><div class="nm"></div><div class="co"></div></div><div class="pick"></div>';
-                        el.querySelector('.nm').textContent = w.name;
-                        el.querySelector('.co').textContent = [w.company, w.role].filter(Boolean).join(' · ');
-                        el.lastElementChild.textContent = T.pick;
-                        el.addEventListener('click', function () { pick(w, false); });
-                        results.appendChild(el);
-                    });
+                    renderWorkers(ws, results, 'name');
                 })
                 .catch(function () { results.innerHTML = '<div class="muted">' + T.searchError + '</div>'; });
         }
 
-        function pick(w, isRecognized) {
+        function pick(w, isRecognized, how) {
             selected = w;
             recognized = !!isRecognized;
+            identifiedBy = isRecognized ? 'device' : (how || 'name');
             paintWorker();
             paint();
             show('screen-worker');
@@ -287,16 +366,16 @@
             try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
             if (saved && DICT[saved]) { setLang(saved, false); } else { setLang(lang, false); }
 
-            if (!token) { show('screen-search'); return; }
+            if (!token) { show('screen-id'); return; }
 
             post(URLS.me, { device_token: token })
                 .then(function (d) {
-                    if (!d || !d.recognized) { setDeviceToken(''); show('screen-search'); return; }
+                    if (!d || !d.recognized) { setDeviceToken(''); show('screen-id'); return; }
                     // 본인의 등록 언어로 화면을 맞춘다.
                     if (d.lang && DICT[d.lang]) { setLang(d.lang, true); }
                     pick({ id: d.employee.id, name: d.employee.name, company: d.employee.company, role: d.employee.role, lastEvent: d.lastEvent, lastAt: d.lastAt, next: d.next }, true);
                 })
-                .catch(function () { show('screen-search'); });
+                .catch(function () { show('screen-id'); });
         })();
 
         Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
@@ -310,15 +389,16 @@
                 setDeviceToken('');
                 if (token) { post(URLS.forget, { device_token: token }).catch(function () {}); }
             }
-            selected = null; recognized = false;
+            selected = null; recognized = false; identifiedBy = null;
             results.dataset.filled = ''; q.value = '';
+            last4.value = ''; idResults.innerHTML = '';
             paint();
-            show('screen-search');
+            show('screen-id');
         });
 
         document.getElementById('done-back').addEventListener('click', function () {
             if (recognized && selected) { show('screen-worker'); return; }
-            q.value = ''; results.dataset.filled = ''; paint(); show('screen-search');
+            last4.value = ''; idResults.innerHTML = ''; paint(); show('screen-id');
         });
 
         document.getElementById('remember-btn').addEventListener('click', function () {
@@ -342,17 +422,48 @@
             btn.disabled = true;
             var orig = btn.textContent;
             btn.textContent = T.working;
-            post(URLS.punch, { employee_id: selected.id, lat: geo.lat, lng: geo.lng })
+            post(URLS.punch, { employee_id: selected.id, lat: geo.lat, lng: geo.lng, accuracy: geo.accuracy, identified_by: identifiedBy })
                 .then(function (d) {
                     btn.disabled = false; btn.textContent = orig;
                     if (!d || d.success === false) { alert((d && d.error) || T.failed); return; }
                     var isOut = d.event === 'clock_out';
-                    document.getElementById('done-mark').textContent = d.ignored ? '⏱️' : (isOut ? '👋' : '✅');
-                    document.getElementById('done-msg').textContent = d.ignored ? T.alreadyDone : (d.name + ' — ' + (isOut ? T.doneOut : T.doneIn));
-                    document.getElementById('done-time').textContent = (d.at ? d.at + ' ' + T.recorded : '') + (d.withinSite === false ? ' ' + T.offSite : '');
+                    // 현장 확인이 안 돼 보류된 기록은 완료처럼 보이면 안 된다 — 그 사람은
+                    // 찍혔다고 믿고 가는데 급여에는 아직 안 들어가 있다.
+                    document.getElementById('done-mark').textContent = d.ignored ? '⏱️' : (d.pending ? '⏳' : (isOut ? '👋' : '✅'));
+                    document.getElementById('done-msg').textContent = d.ignored
+                        ? T.alreadyDone
+                        : (d.pending ? (isOut ? T.pendingOut : T.pendingIn) : (d.name + ' — ' + (isOut ? T.doneOut : T.doneIn)));
+                    // 날짜를 함께 적는다 — 자정을 넘기는 야간 작업에서 어느 날로 찍혔는지 알아야 한다.
+                    document.getElementById('done-time').textContent =
+                        (d.at ? (d.date ? d.date + ' ' : '') + d.at + ' ' + T.recorded : '')
+                        + (d.withinSite === false ? ' ' + T.offSite : '');
+
+                    // 이 휴대폰을 기억한다 — 포스터가 "한 번 등록하면 다음부터 자동" 이라고
+                    // 적어 두었는데, 실제로는 회색 버튼을 눌러야만 켜져서 아무도 안 켰다.
+                    //
+                    // 두 조건에서만 기억한다:
+                    //  · 번호 뒷자리로 확인된 경우만(이름으로 고른 것은 확인이 아니다)
+                    //  · 이 폰으로 다른 사람을 찍은 적이 없을 때(반장 폰이면 남의 출근이 찍힌다)
+                    var autoRemembered = false, sharedPhone = false;
+                    if (!d.ignored && identifiedBy === 'phone4' && !recognized) {
+                        var prev = null;
+                        try { prev = localStorage.getItem(LAST_PERSON_KEY); } catch (e) {}
+                        sharedPhone = !!prev && prev !== String(selected.id);
+                        if (sharedPhone) {
+                            setDeviceToken('');
+                        } else {
+                            post(URLS.remember, { employee_id: selected.id })
+                                .then(function (r) { if (r && r.success) { setDeviceToken(r.device_token); recognized = true; } })
+                                .catch(function () {});
+                            autoRemembered = true;
+                        }
+                    }
+                    try { if (!d.ignored) { localStorage.setItem(LAST_PERSON_KEY, String(selected.id)); } } catch (e) {}
+
                     var rem = document.getElementById('done-remembered');
-                    rem.textContent = T.remembered;
-                    rem.classList.toggle('hidden', !recognized);
+                    rem.textContent = sharedPhone ? T.sharedPhone : (autoRemembered ? T.autoRemembered : T.remembered);
+                    rem.classList.toggle('shared', sharedPhone);
+                    rem.classList.toggle('hidden', !(recognized || autoRemembered || sharedPhone));
                     // 다음 화면에서 출근↔퇴근이 뒤집히도록 상태를 갱신한다.
                     selected.lastEvent = d.event;
                     selected.lastAt = d.at || selected.lastAt;

@@ -123,10 +123,23 @@ class GateAttendanceTest extends TestCase
         $this->worker('김철수');
         $this->worker('이민준', $this->otherSite);
 
-        $res = $this->postJson(route('gate.search', ['site' => $this->site]), ['q' => '']);
+        $res = $this->postJson(route('gate.search', ['site' => $this->site]), ['q' => '김철']);
         $res->assertStatus(200);
         $names = collect($res->json('workers'))->pluck('name');
         $this->assertTrue($names->contains('김철수'));
         $this->assertFalse($names->contains('이민준'));
+    }
+
+    public function test_search_refuses_to_hand_out_the_roster(): void
+    {
+        // 예전에는 빈 값·한 글자로 현장 명단이 통째로 나왔다. 이 화면은 주소만 알면
+        // 누구나 열 수 있으므로, 그건 명단을 벽에 붙여 둔 것과 같다.
+        $this->worker('김철수');
+
+        foreach (['', '김'] as $q) {
+            $res = $this->postJson(route('gate.search', ['site' => $this->site]), ['q' => $q]);
+            $res->assertStatus(200)->assertJsonPath('tooShort', true);
+            $this->assertSame([], $res->json('workers'), "'{$q}' 로 명단이 나오면 안 된다");
+        }
     }
 }

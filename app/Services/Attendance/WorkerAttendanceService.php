@@ -510,8 +510,6 @@ class WorkerAttendanceService
      */
     private function verifyOnSite(Site $site, array $signal): bool
     {
-        $probe = $this->geo->probe($site, $signal);
-
-        return $probe['network'] || $probe['gps'] === 'in';
+        return $this->geo->verdict($site, $signal) === AttendanceGeoService::ON_SITE;
     }
 }

@@ -40,10 +40,30 @@ class GateAttendanceController extends Controller
         ]);
     }
 
-    /** 이름/소속 자동완성. */
+    /** 전화번호 뒷 4자리로 본인 찾기 — 게이트의 기본 확인 방법. */
+    public function identify(Request $request, Site $site): JsonResponse
+    {
+        $last4 = (string) $request->input('last4', '');
+
+        return response()->json([
+            'success' => true,
+            'workers' => $this->service->identify($site, $last4)->all(),
+        ]);
+    }
+
+    /**
+     * 이름/소속 자동완성 — 번호가 등록되지 않은 사람을 위한 예비 통로.
+     *
+     * 두 글자 미만은 받지 않는다. 한 글자를 허용하면 알파벳을 돌려가며 현장 명단을
+     * 통째로 훑을 수 있고, 그 명단은 이 화면을 열 수 있는 누구에게나 열려 있다.
+     */
     public function search(Request $request, Site $site): JsonResponse
     {
-        $q = (string) $request->query('q', $request->input('q', ''));
+        $q = trim((string) $request->query('q', $request->input('q', '')));
+
+        if (mb_strlen($q) < 2) {
+            return response()->json(['success' => true, 'workers' => [], 'tooShort' => true]);
+        }
 
         return response()->json(['success' => true, 'workers' => $this->service->search($site, $q)->all()]);
     }
@@ -105,6 +125,10 @@ class GateAttendanceController extends Controller
             'employee_id' => ['required', 'integer'],
             'lat' => ['nullable', 'numeric'],
             'lng' => ['nullable', 'numeric'],
+            'accuracy' => ['nullable', 'numeric'],
+            // 어떤 방법으로 본인을 확인했는지 — 기록에 남겨 두면 나중에 "이 출근은
+            // 어떻게 확인된 것인가" 를 되짚을 수 있다.
+            'identified_by' => ['nullable', 'in:phone4,name,device'],
         ]);
 
         $employee = Employee::query()->where('id', $data['employee_id'])->where('site_id', $site->id)->first();
@@ -112,9 +136,10 @@ class GateAttendanceController extends Controller
             return response()->json(['success' => false, 'error' => '작업자를 찾을 수 없습니다.'], 404);
         }
 
-        $lat = isset($data['lat']) && is_numeric($data['lat']) ? (float) $data['lat'] : null;
-        $lng = isset($data['lng']) && is_numeric($data['lng']) ? (float) $data['lng'] : null;
+        // 폰이 보낸 ip 는 믿지 않는다 — 서버가 본 주소로 넣는다(작업자 앱과 같은 규칙).
+        // 현장 WiFi/망이 등록돼 있으면 이 값만으로도 현장 확인이 된다.
+        $data['ip'] = $request->ip();
 
-        return response()->json($this->service->punch($employee, $site, $lat, $lng));
+        return response()->json($this->service->punch($employee, $site, $data));
     }
 }
