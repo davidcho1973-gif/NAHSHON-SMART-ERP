@@ -149,7 +149,7 @@ class OpsPhotoAsyncTest extends TestCase
         {
             public function __construct() {}
 
-            public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = []): array
+            public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = []): array
             {
                 return [[
                     'category' => 'progress', 'summary' => '천장 배관 60%', 'raw_text' => $text,
@@ -176,7 +176,7 @@ class OpsPhotoAsyncTest extends TestCase
         {
             public function __construct() {}
 
-            public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = []): array
+            public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = []): array
             {
                 throw new \RuntimeException('Gemini 응답 없음');
             }
@@ -208,7 +208,7 @@ class OpsPhotoAsyncTest extends TestCase
         {
             public function __construct(public &$seen) {}
 
-            public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = []): array
+            public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = []): array
             {
                 $this->seen = $images;
 

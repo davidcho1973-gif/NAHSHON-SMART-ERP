@@ -317,7 +317,9 @@
         'style="width:100%;padding:10px;font-size:12.5px;border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary)">' +
         '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button type="button" id="pin-copy" class="btn-primary" style="padding:8px 14px;font-size:13px">링크 복사</button>' +
-        '<a href="sms:?&body=' + encodeURIComponent('[NAHSHON] 출퇴근 앱 번호 설정: ' + res.url) + '" ' +
+        // 회사 이름은 배포마다 다르다. 문구에 박아 두면 다음 고객의 작업자에게
+        // 남의 회사 이름으로 문자가 나간다.
+        '<a href="sms:?&body=' + encodeURIComponent('[' + (window.ORG_NAME || 'ERP') + '] 출퇴근 앱 번호 설정: ' + res.url) + '" ' +
         'class="btn-secondary" style="padding:8px 14px;font-size:13px;text-decoration:none">문자로 보내기</a>' +
         '</div>';
 
