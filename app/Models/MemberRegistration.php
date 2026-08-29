@@ -677,9 +677,29 @@ class MemberRegistration extends Model
         return false;
     }
 
+    /** 이 등록이 로그인 없이 열리는 공개 QR 폼에서 왔는가. */
+    private function fromPublicQuickForm(): bool
+    {
+        return data_get($this->payload, 'invite.source') === 'worker-quick-qr';
+    }
+
     private function syncAccessUser(Employee $employee): ?User
     {
         if (! $this->email) {
+            return null;
+        }
+
+        // 공개 QR 간편등록은 <b>인력 등록</b>이지 계정 발급이 아니다.
+        //
+        // 이 폼은 현장 벽에 붙은 QR 로 누구나 열 수 있고 이메일은 검증되지 않은 자유
+        // 입력이다. 그런데 로그인은 "그 이메일의 활성 계정이 있는가"만 보므로, 여기서
+        // 계정을 만들면 인터넷의 누구든 자기 구글 주소를 적어 ERP 로그인 계정을 스스로
+        // 발급받게 된다. 그래서 계정은 관리자가 승인할 때만 생긴다 — 정식 입사지원서
+        // 경로가 이미 그렇게 동작한다(승인 전에는 계정이 없다).
+        //
+        // 등록·Employee·서류·출퇴근은 그대로다. 현장 출퇴근은 게이트 QR(로그인 불필요)로
+        // 굴러가므로 이 차단이 현장 업무를 멈추지 않는다.
+        if ($this->fromPublicQuickForm() && $this->approved_by_id === null) {
             return null;
         }
 
@@ -688,6 +708,18 @@ class MemberRegistration extends Model
         $accessUser = User::query()->where('employee_id', $employee->id)->first()
             ?? User::query()->where('email', $email)->first()
             ?? new User;
+
+        // 공개 폼에서 온 등록은 <b>기존 계정을 절대 흡수하지 않는다.</b> 아래 일반 규칙은
+        // "이미 다른 직원에 묶인 계정"만 막는데, 시드·초기 구축으로 만든 최고관리자는
+        // employee_id 가 비어 있어 그 그물을 빠져나간다 — 사장 이메일을 적으면 관리자
+        // 계정의 이름이 폼 입력값으로 바뀌고 가짜 직원에 묶인다. 그 문을 여기서 닫는다.
+        if ($this->fromPublicQuickForm() && $accessUser->exists) {
+            report(new \RuntimeException(
+                "공개 등록 이메일 {$email} 이 기존 계정과 같아 계정 연결을 건너뜁니다 (registration {$this->id})."
+            ));
+
+            return null;
+        }
 
         // 공개 QR 폼의 이메일은 검증되지 않은 자유 입력이다. 그 이메일이 이미 다른
         // 사람(다른 직원, 혹은 관리자 계정)에 붙어 있으면 그 계정을 이쪽으로 갈아타지

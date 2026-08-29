@@ -2667,11 +2667,16 @@ class SmartCompanyData
                 return collect();
             }
 
-            return Employee::query()
+            $query = Employee::query()
                 ->with(['company', 'site', 'team'])
-                ->when($siteId !== 'ALL', fn ($query) => $query->whereHas('site', fn ($siteQuery) => $siteQuery->where('code', $siteId)))
-                ->orderBy('name')
-                ->get();
+                ->when($siteId !== 'ALL', fn ($q) => $q->whereHas('site', fn ($siteQuery) => $siteQuery->where('code', $siteId)));
+
+            // 협력사 계정은 자기 회사 사람만 본다 — 인사 화면·직원 관리에는 이미
+            // 걸려 있던 울타리인데 이 조회에만 빠져 있었다. 협력사가 아닌 역할에는
+            // 아무 영향이 없다(applyCompanyLock 이 곧바로 반환한다).
+            AccessPolicy::applyCompanyLock($query, auth()->user());
+
+            return $query->orderBy('name')->get();
         } catch (\Throwable) {
             return collect();
         }

@@ -300,9 +300,17 @@ Route::get('/guest/{token}', [GuestViewController::class, 'show'])
     ->name('guest.view');
 
 // 간편 작업자 등록 — 현장 QR 스캔 → 최소 정보 입력 → 즉시 활성 작업자 등록 (공개)
-Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])->name('worker-join.qr');
-Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])->name('worker-join.form');
-Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])->name('worker-join.store');
+//
+// 로그인 없이 열리는 폼이라 자동화로 인원·회사 행을 대량 생성할 수 있었다. 현장에서
+// 한 사람이 1분에 스무 번 등록할 일은 없으므로 그 선에서 묶는다(등록이 사라지는 게
+// 아니라 잠시 뒤 다시 되는 정도). 이 폼은 계정을 만들지 않는다 — MemberRegistration
+// 이 공개 출처를 알아보고 계정 발급을 관리자 승인 뒤로 미룬다.
+Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
+    ->middleware('throttle:60,1')->name('worker-join.qr');
+Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])
+    ->middleware('throttle:60,1')->name('worker-join.form');
+Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])
+    ->middleware('throttle:20,1')->name('worker-join.store');
 
 // W-9 작성 — 간편 등록 완료 화면에서 서명된 링크로 진입(공개, 서명 URL 이 본인 확인을 대신).
 // 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
