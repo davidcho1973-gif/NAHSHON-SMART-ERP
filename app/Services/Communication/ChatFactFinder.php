@@ -364,15 +364,17 @@ class ChatFactFinder
                             ->orWhere('search_text', 'ilike', "%{$t}%");
                     }
                 })
-                ->latest('id')
-                ->limit(4)
+                ->orderByRaw($this->relevanceSql($terms).' DESC', $this->relevanceBindings($terms))
+                ->orderByDesc('document_date')
+                ->orderByDesc('id')
+                ->limit(5)
                 ->get();
 
             if ($matched->isNotEmpty()) {
                 return [
                     '검색어' => implode(', ', $terms),
                     '검색된 문서' => $matched->map(fn (IntelligentDocument $d): array => array_filter($meta($d) + [
-                        '핵심 사실' => is_array($d->key_facts) ? array_slice($d->key_facts, 0, 5) : null,
+                        '핵심 사실' => is_array($d->key_facts) ? array_slice($d->key_facts, 0, 6) : null,
                         '본문 발췌' => $this->excerpt((string) ($d->search_text ?: $d->extracted_text), $terms),
                     ]))->values()->all(),
                 ];
@@ -513,6 +515,9 @@ class ChatFactFinder
             '파악', '알려줘', '알려주세요', '알려', '확인', '해줘', '해주세요', '해봐', '좀', '지금', '현재',
             '현황', '상태', '목록', '리스트', '전체', '검색', '찾아줘', '찾아', '얼마나', '얼마', '어디', '뭐야',
             '무엇', '어떻게', '있어', '있나', '필요', 'the', 'of', 'is', 'what',
+            // "써도 되나" 류 — 물음의 형식일 뿐 찾을 대상이 아니다.
+            '써도', '쓰면', '쓸수', '해도', '되나', '되나요', '되냐', '괜찮', '괜찮나', '가능', '가능한가',
+            '맞나', '맞아', '인가', '인가요', '아닌가', '어떤', '무슨',
         ];
 
         $tokens = preg_split('/[^\p{L}\p{N}"×\.\-\/]+/u', $q) ?: [];
@@ -533,6 +538,45 @@ class ChatFactFinder
         }
 
         return array_slice(array_values(array_unique($terms)), 0, 5);
+    }
+
+    /**
+     * 관련도 점수 — 최신순으로 고르면 규정의 정답지가 밀린다.
+     *
+     * 문서가 몇십 건만 돼도 "트래픽도어" 는 시방서·주문서·대장에 전부 걸린다.
+     * 그때 최신순으로 자르면 방금 올린 엑셀이 시방서 원본을 밀어낸다 — 실제로
+     * 그렇게 답이 틀어졌다. 그래서 <b>어디에</b> 걸렸는지로 점수를 준다:
+     * 제목 > 파일명 > 핵심 사실 > 요약 > 본문. 규정을 담은 문서 종류(시방·도면·
+     * 계약)는 가산점을 얹는다 — "써도 되나" 류 질문의 답은 거기에 있다.
+     */
+    private function relevanceSql(array $terms): string
+    {
+        $parts = [];
+
+        foreach ($terms as $_) {
+            $parts[] = 'CASE WHEN title ILIKE ? THEN 5 ELSE 0 END';
+            $parts[] = 'CASE WHEN original_file_name ILIKE ? THEN 4 ELSE 0 END';
+            $parts[] = "CASE WHEN COALESCE(CAST(key_facts AS TEXT), '') ILIKE ? THEN 3 ELSE 0 END";
+            $parts[] = "CASE WHEN COALESCE(summary, '') ILIKE ? THEN 2 ELSE 0 END";
+            $parts[] = "CASE WHEN COALESCE(search_text, '') ILIKE ? THEN 1 ELSE 0 END";
+        }
+
+        $parts[] = "CASE WHEN document_type IN ('specification', 'drawing', 'submittal', 'contract', 'change_order') THEN 4 ELSE 0 END";
+
+        return '('.implode(' + ', $parts).')';
+    }
+
+    /** relevanceSql 의 물음표 순서에 맞춘 바인딩 — 낱말당 5개. */
+    private function relevanceBindings(array $terms): array
+    {
+        $bindings = [];
+
+        foreach ($terms as $t) {
+            $like = "%{$t}%";
+            $bindings = array_merge($bindings, [$like, $like, $like, $like, $like]);
+        }
+
+        return $bindings;
     }
 
     /** 본문에서 낱말이 처음 나오는 자리의 앞뒤를 잘라 온다 — 원문 전체는 싣지 않는다. */
