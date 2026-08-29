@@ -31,9 +31,38 @@ class KnowledgeKeeper
         'receipt', 'invoice', 'pay_application', 'payroll_record', 'lien_waiver', 'purchase_order',
     ];
 
+    /**
+     * 창고가 준비됐는가 — 마이그레이션 전 배포 순서 꼬임에도 채팅이 죽지 않게.
+     * 스키마 조회는 요청당 한 번이면 충분하다.
+     */
+    private static ?bool $ready = null;
+
+    public static function ready(): bool
+    {
+        return self::$ready ??= \Illuminate\Support\Facades\Schema::hasTable('knowledge_facts');
+    }
+
+    /** 이 문서의 카드가 최신인가 — 분석 이후에 수확된 카드가 있으면 다시 할 일이 없다. */
+    public function isFresh(IntelligentDocument $document): bool
+    {
+        if (! self::ready() || $document->analyzed_at === null) {
+            return false;
+        }
+
+        $newest = KnowledgeFact::query()
+            ->where('intelligent_document_id', $document->id)
+            ->max('created_at');
+
+        return $newest !== null && \Illuminate\Support\Carbon::parse($newest)->gte($document->analyzed_at);
+    }
+
     /** 분석이 끝난 문서에서 지식 카드를 수확한다. 재분석하면 그 문서 카드는 갈아엎는다. */
     public function harvest(IntelligentDocument $document): int
     {
+        if (! self::ready()) {
+            return 0;
+        }
+
         $facts = array_values(array_filter(
             is_array($document->key_facts) ? $document->key_facts : [],
             fn ($f): bool => is_string($f) && mb_strlen(trim($f)) >= 5,
@@ -84,6 +113,10 @@ class KnowledgeKeeper
      */
     public function search(?Site $site, User $asker, array $terms, string $question, int $limit = 8): array
     {
+        if (! self::ready()) {
+            return [];
+        }
+
         $base = KnowledgeFact::query()->active();
         if ($site) {
             $base->where('site_id', $site->id);

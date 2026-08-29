@@ -14,7 +14,9 @@ use Illuminate\Console\Command;
  */
 class HarvestKnowledge extends Command
 {
-    protected $signature = 'erp:harvest-knowledge {--limit=0 : 0 이면 전부}';
+    protected $signature = 'erp:harvest-knowledge
+        {--limit=0 : 0 이면 전부}
+        {--force : 이미 최신인 문서도 다시 수확(재임베딩)}';
 
     protected $description = '분석 완료 문서의 key_facts 를 지식 창고로 일괄 수확 (임베딩 포함)';
 
@@ -32,10 +34,18 @@ class HarvestKnowledge extends Command
 
         $docs = 0;
         $cards = 0;
+        $skipped = 0;
         $failed = 0;
+        $force = (bool) $this->option('force');
 
         foreach ($query->cursor() as $document) {
             try {
+                // 이미 최신인 문서는 건너뛴다 — 매일 스케줄로 돌아도 임베딩 호출이 늘지 않는다.
+                if (! $force && $keeper->isFresh($document)) {
+                    $skipped++;
+
+                    continue;
+                }
                 $n = $keeper->harvest($document);
                 $docs++;
                 $cards += $n;
@@ -46,7 +56,7 @@ class HarvestKnowledge extends Command
             }
         }
 
-        $this->info("수확 완료 — 문서 {$docs}건 · 지식 카드 {$cards}장 · 실패 {$failed}건");
+        $this->info("수확 완료 — 문서 {$docs}건 · 지식 카드 {$cards}장 · 최신이라 건너뜀 {$skipped}건 · 실패 {$failed}건");
 
         return self::SUCCESS;
     }

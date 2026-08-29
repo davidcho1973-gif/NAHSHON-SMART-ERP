@@ -80,3 +80,8 @@ Schedule::command('wbs:recompute-cpm')->dailyAt(Org::time('schedule.cpm_recomput
 // "AI 분석 중"에서 멈춘 문서 되살리기 — 작업 프로세스가 죽으면 상태를 되돌릴 사람이 없다.
 // 한 번은 자동 재시도, 그래도 멈추면 실패로 표시해 사용자가 알 수 있게 한다.
 Schedule::command('docs:reap-stuck')->everyTenMinutes();
+
+// 지식 창고 안전망 — 새 문서는 분석 직후 자동 수확되지만, 수확이 실패했거나
+// 이 기능 이전에 분석된 문서를 매일 새벽 한 번 쓸어 담는다. 최신 문서는
+// 건너뛰므로(isFresh) 임베딩 호출이 헛돌지 않는다.
+Schedule::command('erp:harvest-knowledge')->dailyAt('03:10');
