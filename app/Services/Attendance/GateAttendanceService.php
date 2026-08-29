@@ -180,12 +180,21 @@ class GateAttendanceService
         $verdict = $this->geo->verdict($site, $signal);
         $offSite = $verdict === AttendanceGeoService::OFF_SITE;
 
-        // 처분: 현장 밖인 것이 확인되면 보류한다 — 급여의 근거가 될 기록이라 사람이 한 번 본다.
+        // 처분: 보류는 <b>임금이 걸린 기록</b>에만 건다.
         //
-        // 확인이 <b>안 되는</b> 경우(현장에 좌표·WiFi 미등록, 위치 거부)는 보류하지 않는다.
-        // 게이트는 출입구에 붙은 종이이고, 확인 수단이 없는 현장에서 전원을 보류로 돌리면
-        // 그 목록은 매일 전원이 쌓여 아무도 안 보게 된다 — 그러면 진짜 이상한 기록도 묻힌다.
-        // 현장 좌표를 넣는 순간부터 그 현장은 걸러지기 시작한다.
+        // 게이트를 쓰는 사람 대부분은 협력사 인원과 방문자다. 그들의 임금은 소속사가
+        // 주고, 우리 원장은 인원 집계(일일 출역·공정)만 한다 — 실제로 타임시트조차
+        // 만들지 않는다(AttendanceTimesheetSync 와 같은 기준을 쓴다). 돈이 움직이지
+        // 않는 기록을 사람이 승인하게 하면 아무것도 사지 못하면서, 매일 쌓이는 그 목록이
+        // 진짜 봐야 할 기록을 덮는다. 그들은 스스로 찍고 그대로 지나간다.
+        //
+        // 확인이 <b>안 되는</b> 경우(현장에 좌표·WiFi 미등록, 위치 거부)도 보류하지 않는다.
+        // "밖"이 아니라 "모른다"이기 때문이다. 현장 좌표를 넣는 순간부터 걸러지기 시작한다.
+        //
+        // 보류하지 않은 기록에도 판정은 그대로 남는다(verified_on_site) — 현장 밖에서
+        // 찍힌 협력사 인원이 오늘 출역 인원에 섞여 있으면 그것도 틀린 숫자다.
+        $hold = $offSite && $employee->isHourly();
+
         AttendanceLog::create([
             'employee_id' => $employee->id,
             'company_id' => $employee->company_id,
@@ -194,7 +203,7 @@ class GateAttendanceService
             'event_type' => $event,
             'event_at' => $now,
             'source' => 'gate_qr',
-            'status' => $offSite ? 'pending' : 'approved',
+            'status' => $hold ? 'pending' : 'approved',
             'payload' => [
                 'gate' => true,
                 'lat' => $signal['lat'] ?? null,
@@ -219,7 +228,7 @@ class GateAttendanceService
             'at' => $now->format('H:i'),
             'date' => $workDate,
             'verdict' => $verdict,
-            'pending' => $offSite,
+            'pending' => $hold,
             'withinSite' => $verdict === AttendanceGeoService::ON_SITE ? true : ($offSite ? false : null),
         ];
     }

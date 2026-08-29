@@ -35,13 +35,14 @@ class GateIdentityAndSiteCheckTest extends TestCase
         ]);
     }
 
-    private function worker(string $name, ?string $phone = null, ?Site $site = null): Employee
+    private function worker(string $name, ?string $phone = null, ?Site $site = null, ?string $type = null): Employee
     {
-        return Employee::create([
+        // employment_type 은 NOT NULL(기본 direct) — 지정할 때만 넘긴다.
+        return Employee::create(array_filter([
             'company_id' => $this->company->id, 'site_id' => ($site ?? $this->site)->id,
             'name' => $name, 'first_name' => $name, 'last_name' => '',
-            'phone' => $phone, 'employment_status' => 'active',
-        ]);
+            'phone' => $phone, 'employment_status' => 'active', 'employment_type' => $type,
+        ], fn ($v) => $v !== null));
     }
 
     // ── 누구인가 ────────────────────────────────────────────────────────
@@ -106,8 +107,29 @@ class GateIdentityAndSiteCheckTest extends TestCase
         $res->assertOk()->assertJsonPath('success', true)->assertJsonPath('pending', true);
 
         $log = AttendanceLog::query()->where('employee_id', $kim->id)->firstOrFail();
+        $this->assertTrue($kim->isHourly(), '이 사람은 이 기록이 임금이 되는 사람이다');
         $this->assertSame('pending', $log->status, '현장 밖 기록이 그대로 승인되면 급여가 그 위에 얹힌다');
         $this->assertFalse($log->payload['verified_on_site'], '작업자 앱과 같은 칸 이름으로 남는다');
+    }
+
+    public function test_협력사_방문자는_현장_밖이어도_스스로_찍고_지나간다(): void
+    {
+        // 게이트를 쓰는 사람 대부분이다. 임금은 소속사가 주고 우리 원장은 인원 집계만
+        // 한다 — 돈이 움직이지 않는 기록을 사람이 승인하게 하면, 매일 쌓이는 그 목록이
+        // 정작 봐야 할 기록(임금이 걸린 것)을 덮는다.
+        foreach ([Employee::TYPE_INDIRECT, Employee::TYPE_CLIENT] as $i => $type) {
+            $w = $this->worker('협력'.$i, '480-555-010'.$i, null, $type);
+
+            $res = $this->postJson(route('gate.punch', ['site' => $this->site]), [
+                'employee_id' => $w->id, 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 20,
+            ]);
+
+            $res->assertOk()->assertJsonPath('pending', false);
+            $log = AttendanceLog::query()->where('employee_id', $w->id)->firstOrFail();
+            $this->assertSame('approved', $log->status, "{$type} 는 승인 없이 스스로 출퇴근한다");
+            // 그래도 판정은 남는다 — 현장 밖 인원이 오늘 출역 숫자에 섞이면 그것도 틀렸다.
+            $this->assertFalse($log->payload['verified_on_site']);
+        }
     }
 
     public function test_현장_안에서_찍으면_바로_승인된다(): void
