@@ -236,6 +236,20 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'last_login_at' => 'datetime',
+            'pin_set_at' => 'datetime',
+            'pin_locked_until' => 'datetime',
         ];
+    }
+
+    /** 이 사람이 PIN 을 정해 두었는가 — 관리자 화면은 이 사실만 보고 값은 못 본다. */
+    public function hasPin(): bool
+    {
+        return filled($this->pin_hash);
+    }
+
+    /** 로그인 가능한 기기(폰). PIN 은 기기 없이는 열쇠가 되지 않는다. */
+    public function loginDevices(): HasMany
+    {
+        return $this->hasMany(LoginDevice::class);
     }
 }

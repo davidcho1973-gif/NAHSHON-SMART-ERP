@@ -31,6 +31,7 @@ use App\Http\Controllers\W9FormController;
 use App\Http\Controllers\WebManifestController;
 use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\OrgLogoController;
+use App\Http\Controllers\PinAuthController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Models\SystemHeartbeat;
@@ -40,6 +41,22 @@ Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+// PIN 로그인 — 구글 계정이 없는 현장 인력이 자기 폰으로 들어오는 두 번째 문.
+//
+// 관문이 둘이다: 기억된 폰(가진 것) + 4자리 번호(아는 것). 폰이 등록되어 있지 않으면
+// 번호 입력창 자체가 뜨지 않으므로, 링크 없이 번호만 대보는 공격은 성립하지 않는다.
+// throttle 은 그 위에 한 겹 더 — 4자리는 만 가지뿐이라 속도를 묶어 두어야 한다.
+Route::get('/auth/pin/setup/{token}', [PinAuthController::class, 'setupForm'])
+    ->middleware('throttle:30,1')->name('pin.setup');
+Route::post('/auth/pin/setup/{token}', [PinAuthController::class, 'setupStore'])
+    ->middleware('throttle:10,1')->name('pin.setup.store');
+Route::post('/auth/pin/who', [PinAuthController::class, 'who'])
+    ->middleware('throttle:60,1')->name('pin.who');
+Route::post('/auth/pin/login', [PinAuthController::class, 'login'])
+    ->middleware('throttle:10,1')->name('pin.login');
+Route::post('/auth/pin/forget', [PinAuthController::class, 'forget'])
+    ->middleware('throttle:30,1')->name('pin.forget');
 
 // 스크린샷 자동화용 서명 로그인 — erp:snap-links 가 발급한 10분짜리 서명 URL 로만 진입 가능.
 // 구글 OAuth 뿐인 이 앱에서 헤드리스 브라우저가 화면을 찍을 수 있는 유일한 통로다. 감사 로그를 남긴다.

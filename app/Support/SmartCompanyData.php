@@ -216,6 +216,11 @@ class SmartCompanyData
                 (int) ($args[0] ?? 0),
                 is_array($args[1] ?? null) ? $args[1] : []
             ),
+            // PIN 초대·재설정 링크 발급 — 관리자에게 나가는 것은 링크뿐, 번호는 본인만 정한다.
+            'api_issuePinLink' => app(EmployeeAdminService::class)->issuePinLink(
+                (int) ($args[0] ?? 0),
+                (string) ($args[1] ?? 'invite')
+            ),
 
             // 원청 계약 · 서류 (Filament ProjectContractResource 를 SPA 로 옮긴 것).
             // 서류 업로드만 multipart 라 별도 라우트(admin.contract-document.upload)를 쓴다.

@@ -150,6 +150,8 @@ class EmployeeAdminService
                 'qrScope' => $e->attendance_app_scope,
                 // 로그인 계정이 있는지 — 없으면 이 사람은 앱에 못 들어온다.
                 'hasAccount' => $e->user !== null,
+                // 번호를 정했는지 <b>여부만</b> 내려보낸다 — 값은 관리자도 볼 수 없다.
+                'hasPin' => $e->user?->hasPin() ?? false,
                 // 로그인에 실제로 쓰는 주소. 직원 정보의 이메일과 다를 수 있는데,
                 // 다르면 링크를 받은 작업자가 자기 것이 아닌 주소로 로그인하라는
                 // 안내를 받게 된다 — 화면이 멀쩡해 보여서 아무도 모른다.
@@ -221,6 +223,51 @@ class EmployeeAdminService
      * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      */
+    /**
+     * PIN 초대·재설정 링크를 발급한다 — <b>값이 아니라 링크</b>다.
+     *
+     * 관리자가 남의 번호를 정해 주는 기능은 이 클래스에 없다. 출퇴근이 급여의 근거인
+     * 이상, 관리자가 남의 열쇠를 알면 그 기록은 임금 분쟁에서 회사를 방어하지 못한다.
+     * 여기서 나가는 것은 본인만 열 수 있는 링크뿐이고, 값은 본인 폰에서만 정해진다.
+     *
+     * @return array<string, mixed>
+     */
+    public function issuePinLink(int $employeeId, string $purpose = 'invite'): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '직원 관리 권한이 없습니다.'];
+        }
+
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'error' => '직원을 찾을 수 없습니다.'];
+        }
+        if (! $this->inScope($employee)) {
+            return ['success' => false, 'error' => '다른 현장의 직원에게는 발급할 수 없습니다.'];
+        }
+
+        $user = $employee->user;
+        if (! $user) {
+            return ['success' => false, 'error' => '먼저 [계정 만들기]로 로그인 계정을 만들어 주세요.'];
+        }
+
+        $pins = app(\App\Services\Auth\PinAuthService::class);
+        if (! $pins->eligibleForPin($user)) {
+            return ['success' => false, 'error' => 'PIN 은 현장 인력(작업자·반장) 계정에만 발급합니다. 관리자 계정은 구글 로그인을 쓰세요.'];
+        }
+
+        $purpose = $purpose === 'reset' ? 'reset' : 'invite';
+        $url = $pins->issueSetupLink($user, $purpose, auth()->user());
+
+        return [
+            'success' => true,
+            'url' => $url,
+            'purpose' => $purpose,
+            'name' => $employee->name,
+            'expiresIn' => $purpose === 'reset' ? '30분' : '3일',
+        ];
+    }
+
     public function grantAccount(int $employeeId, array $input): array
     {
         if (! $this->canManage()) {

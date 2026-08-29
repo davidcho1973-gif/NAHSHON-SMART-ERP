@@ -509,12 +509,81 @@
         <span>Continue with Google</span>
       </a>
 
-      <div class="divider">or</div>
+      {{-- 기억된 휴대폰에서만 나타나는 PIN 문. 등록되지 않은 기기에서는 입력창 자체를
+           띄우지 않는다 — 4자리만으로 들어올 수 있는 화면을 만들지 않기 위해서다.
+           (예전의 'Sign in with password' 는 /admin 화면과 함께 사라진 죽은 링크였다.) --}}
+      <div id="pin-block" style="display:none">
+        <div class="divider">or</div>
+        <div style="border:1px solid #d8dee4;border-radius:12px;padding:16px 15px;background:#fff">
+          <div id="pin-name" style="font-size:13.5px;font-weight:700;color:#2b5d9e;margin-bottom:9px"></div>
+          <input id="pin-input" type="tel" inputmode="numeric" maxlength="4" autocomplete="one-time-code"
+                 placeholder="••••"
+                 style="width:100%;font-size:26px;letter-spacing:12px;text-align:center;padding:12px;
+                        border:2px solid #d8dee4;border-radius:9px;font-family:monospace">
+          <button id="pin-go" type="button"
+                  style="width:100%;margin-top:11px;padding:13px;font-size:15.5px;font-weight:700;color:#fff;
+                         background:#22303c;border:0;border-radius:9px">PIN 으로 들어가기</button>
+          <div id="pin-err" style="display:none;margin-top:10px;font-size:13px;color:#b3372e;line-height:1.5"></div>
+          <div style="margin-top:9px;text-align:center">
+            <a href="#" id="pin-forget" style="font-size:12px;color:#5b6b7a">이 휴대폰 기억 해제</a>
+          </div>
+        </div>
+      </div>
 
-      <a class="password-button" href="{{ url('/admin/login') }}">
-        <span class="lock-mark" aria-hidden="true"></span>
-        <span>Sign in with password</span>
-      </a>
+      <script>
+      (function () {
+        var KEY = 'erp_login_device';
+        var token = '';
+        try { token = localStorage.getItem(KEY) || ''; } catch (e) {}
+        if (!token) return;
+
+        var block = document.getElementById('pin-block');
+        var nameEl = document.getElementById('pin-name');
+        var input = document.getElementById('pin-input');
+        var go = document.getElementById('pin-go');
+        var err = document.getElementById('pin-err');
+        var CSRF = @json(csrf_token());
+
+        function post(url, body) {
+          return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            body: JSON.stringify(body)
+          }).then(function (r) { return r.json(); });
+        }
+        function show(m) { err.textContent = m; err.style.display = 'block'; }
+
+        post(@json(route('pin.who')), { device_token: token }).then(function (d) {
+          if (!d.known) return;                       // 서버가 모르는 폰이면 조용히 감춘다
+          nameEl.textContent = d.name || '';
+          block.style.display = 'block';
+          input.focus();
+        }).catch(function () {});
+
+        input.addEventListener('input', function () {
+          input.value = input.value.replace(/\D/g, '').slice(0, 4);
+          if (input.value.length === 4) go.click();   // 4자리 채우면 바로 시도
+        });
+
+        go.addEventListener('click', function () {
+          if (input.value.length !== 4) return;
+          err.style.display = 'none';
+          go.disabled = true;
+          post(@json(route('pin.login')), { device_token: token, pin: input.value }).then(function (d) {
+            if (!d.success) { show(d.error || 'Error'); input.value = ''; go.disabled = false; input.focus(); return; }
+            location.href = d.redirect || '/';
+          }).catch(function () { show('Network error'); go.disabled = false; });
+        });
+
+        document.getElementById('pin-forget').addEventListener('click', function (e) {
+          e.preventDefault();
+          post(@json(route('pin.forget')), { device_token: token }).then(function () {
+            try { localStorage.removeItem(KEY); } catch (e) {}
+            block.style.display = 'none';
+          });
+        });
+      })();
+      </script>
 
       @unless ($googleConfigured)
         <p class="setup-note">Google OAuth 환경변수가 아직 설정되지 않았습니다. Laravel Cloud와 로컬 `.env`에 client ID, secret, callback URL을 추가해 주세요.</p>

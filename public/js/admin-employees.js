@@ -137,6 +137,9 @@
             if (r.hasAccount) {
               // 보내기(문자·QR)와 인쇄 카드는 쓰임이 다르다. 대개 보내기를 먼저 쓴다.
               html += u.rowButton('링크 보내기', "window.open('/attendance-app/employee/" + r.id + "/share','_blank')") + ' ';
+              // 구글 계정이 없는 현장 인력은 이 링크로 자기 번호를 정하고 폰을 기억시킨다.
+              html += u.rowButton(r.hasPin ? 'PIN 재설정' : 'PIN 초대',
+                "window.AdminEmployees.pinLink(" + r.id + ",'" + (r.hasPin ? 'reset' : 'invite') + "')") + ' ';
               html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
             }
             // 버튼을 권한으로 감추지 않는다. 감추면 "왜 안 보이지" 를 아무도 답할 수 없다 —
@@ -295,6 +298,45 @@
     }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
   }
 
+  // PIN 초대·재설정 — 관리자에게 나가는 것은 링크뿐이다. 번호는 본인 폰에서만 정해지고
+  // 관리자는 영원히 모른다(그래야 출퇴근 기록이 급여의 근거로 남는다).
+  function pinLink(id, purpose) {
+    var u = ui();
+    var r = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+
+    call('api_issuePinLink', [id, purpose || 'invite']).then(function (res) {
+      if (res.success === false) { u.toast(res.error || '발급하지 못했습니다.', 'error'); return; }
+
+      var isReset = res.purpose === 'reset';
+      var body =
+        '<p style="margin:0 0 12px;font-size:13.5px;line-height:1.6;color:var(--text-secondary)">' +
+        '<b>' + (res.name || '') + '</b> 님께 아래 링크를 보내세요. 본인이 열어 <b>4자리 번호</b>를 직접 정합니다.<br>' +
+        '유효 시간 <b>' + (res.expiresIn || '') + '</b> · 한 번 쓰면 사라집니다. 관리자는 그 번호를 알 수 없습니다.</p>' +
+        '<input id="pin-link-box" readonly value="' + res.url + '" ' +
+        'style="width:100%;padding:10px;font-size:12.5px;border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary)">' +
+        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button type="button" id="pin-copy" class="btn-primary" style="padding:8px 14px;font-size:13px">링크 복사</button>' +
+        '<a href="sms:?&body=' + encodeURIComponent('[NAHSHON] 출퇴근 앱 번호 설정: ' + res.url) + '" ' +
+        'class="btn-secondary" style="padding:8px 14px;font-size:13px;text-decoration:none">문자로 보내기</a>' +
+        '</div>';
+
+      u.modal({ title: isReset ? 'PIN 재설정 링크' : 'PIN 초대 링크', body: body, width: 520 });
+
+      setTimeout(function () {
+        var btn = document.getElementById('pin-copy');
+        var box = document.getElementById('pin-link-box');
+        if (!btn || !box) return;
+        btn.addEventListener('click', function () {
+          box.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          if (navigator.clipboard) { navigator.clipboard.writeText(box.value).catch(function () {}); }
+          u.toast('링크를 복사했습니다.');
+        });
+      }, 60);
+    }).catch(function (e) { u.toast(e.message || '발급하지 못했습니다.', 'error'); });
+  }
+
   function grantAccount(id) {
     var u = ui();
     var r = state.rows.filter(function (x) { return x.id === id; })[0];
@@ -357,6 +399,7 @@
     applyFilters: applyFilters,
     openForm: openForm,
     grantAccount: grantAccount,
+    pinLink: pinLink,
     remove: remove,
     _state: state,
   };
