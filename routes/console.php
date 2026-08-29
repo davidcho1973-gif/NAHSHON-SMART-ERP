@@ -82,6 +82,7 @@ Schedule::command('wbs:recompute-cpm')->dailyAt(Org::time('schedule.cpm_recomput
 Schedule::command('docs:reap-stuck')->everyTenMinutes();
 
 // 지식 창고 안전망 — 새 문서는 분석 직후 자동 수확되지만, 수확이 실패했거나
-// 이 기능 이전에 분석된 문서를 매일 새벽 한 번 쓸어 담는다. 최신 문서는
-// 건너뛰므로(isFresh) 임베딩 호출이 헛돌지 않는다.
-Schedule::command('erp:harvest-knowledge')->dailyAt('03:10');
+// 이 기능 이전에 분석된 문서를 매시간 쓸어 담는다. 최신 문서는 isFresh 로
+// 건너뛰므로 평소에는 문서당 조회 한 번으로 끝난다 — 임베딩 호출이 헛돌지 않는다.
+// (매시간인 이유: 배포 후 첫 축적을 사람이 콘솔 없이 한 시간 안에 받게 하려고.)
+Schedule::command('erp:harvest-knowledge')->hourly();

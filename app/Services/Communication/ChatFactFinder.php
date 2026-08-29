@@ -98,6 +98,15 @@ class ChatFactFinder
             };
         }
 
+        // 마지막 그물 — 아무 주제에도 안 걸린 질문("코어에 합판 써도 돼?")은
+        // 문서 본문 검색이 받아낸다. 시방·계약 조항 질문은 낱말 표로 다 못 잡는다.
+        if ($topics === [] && ! isset($facts['문서함'])) {
+            $fallback = $this->documents($site, $asker, $question);
+            if ($fallback !== []) {
+                $facts['문서함'] = $fallback;
+            }
+        }
+
         return [
             'site' => $site,
             'facts' => array_filter($facts, fn ($v): bool => $v !== [] && $v !== null),
