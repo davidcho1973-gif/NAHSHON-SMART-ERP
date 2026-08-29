@@ -20,7 +20,7 @@
     h1 { margin: 0; font-size: 2.1rem; line-height: 1.15; font-weight: 800; letter-spacing: -.02em; }
     .site { margin: 14px 0 2px; font-size: 1.35rem; font-weight: 800; }
     .addr { margin: 0; color: var(--ink-2); font-size: .98rem; }
-        .qr { width: min(78vw, 300px); height: min(78vw, 300px); border: 1px solid var(--rule); border-radius: 16px; padding: 14px; background: #fff; }
+    .qr { width: min(78vw, 300px); height: min(78vw, 300px); border: 1px solid var(--rule); border-radius: 16px; padding: 14px; background: #fff; }
     .alt-titles { margin: 4px 0 0; color: var(--ink-2); font-size: 1.02rem; font-weight: 700; }
     .alt-titles span { white-space: nowrap; }
     .alt-titles span + span::before { content: ' · '; color: var(--ink-3); }
