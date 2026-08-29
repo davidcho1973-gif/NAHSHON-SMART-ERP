@@ -22,6 +22,15 @@ use App\Support\GeminiEmbedder;
  */
 class KnowledgeKeeper
 {
+    /**
+     * 돈·개인정보가 실리는 문서 종류 — 이 문서에서 나온 지식 카드는
+     * 재무 권한자(canManageMoney)에게만 검색된다. 영수증 금액과 급여 내역이
+     * 대화방에서 아무에게나 새어 나가면 채팅이 재무 화면의 뒷문이 된다.
+     */
+    private const MONEY_DOC_TYPES = [
+        'receipt', 'invoice', 'pay_application', 'payroll_record', 'lien_waiver', 'purchase_order',
+    ];
+
     /** 분석이 끝난 문서에서 지식 카드를 수확한다. 재분석하면 그 문서 카드는 갈아엎는다. */
     public function harvest(IntelligentDocument $document): int
     {
@@ -80,6 +89,20 @@ class KnowledgeKeeper
             $base->where('site_id', $site->id);
         }
         AccessPolicy::applyCompanyLock($base, $asker);
+
+        // 돈 문서 카드는 재무 권한자만 — 화면(money 토픽)과 같은 선을 지킨다.
+        if (! AccessPolicy::canManageMoney($asker)) {
+            $base->where(function ($q): void {
+                $q->whereNull('document_type')->orWhereNotIn('document_type', self::MONEY_DOC_TYPES);
+            });
+        }
+
+        // 기밀 표시 문서의 카드는 시스템 관리자만 — 출처 문서의 등급을 따라간다.
+        if (! AccessPolicy::canManageSystem($asker)) {
+            $base->whereHas('document', function ($q): void {
+                $q->whereIn('confidentiality', ['public', 'internal']);
+            });
+        }
 
         if ((clone $base)->count() === 0) {
             return [];
