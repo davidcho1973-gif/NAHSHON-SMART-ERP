@@ -25,9 +25,9 @@ class W9FormController extends Controller
         return view('w9.form', [
             'employee' => $employee,
             'existing' => $employee->w9Form,
-            'action' => URL::signedRoute('w9.store', ['employee' => $employee->id]),
+            'action' => URL::temporarySignedRoute('w9.store', now()->addDays(30), ['employee' => $employee->id]),
             // 쿼리를 바꾸면 서명이 깨지므로, 재작성 링크도 서명해서 내려준다.
-            'resubmitUrl' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
+            'resubmitUrl' => URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
             'classifications' => W9Form::TAX_CLASSIFICATIONS,
             'done' => $request->boolean('done') && $employee->w9Form !== null,
             // 아직 안 냈으면 아는 것은 미리 채워 준다 — 남는 것은 TIN 과 서명 두 칸이다.
@@ -96,7 +96,7 @@ class W9FormController extends Controller
             // 대신 아무나 못 뽑는다(위의 역할 제한).
             'tin' => $form && ! $request->boolean('mask') ? $form->tin : null,
             'maskedTin' => $form?->maskedTin(),
-            'signUrl' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
+            'signUrl' => URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
             'blank' => false,
         ]);
     }
@@ -145,6 +145,6 @@ class W9FormController extends Controller
             ]
         );
 
-        return redirect()->to(URL::signedRoute('w9.show', ['employee' => $employee->id, 'done' => 1]));
+        return redirect()->to(URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id, 'done' => 1]));
     }
 }

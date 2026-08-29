@@ -67,7 +67,11 @@ Route::get('/ops/snap-local/{view}', function (string $view) {
     return $view === 'document-hub' ? redirect('/document-hub') : redirect('/?view='.$view);
 })->where('view', '[a-z0-9-]+');
 
+// 라우트 점검용 — 익명에게 열어 두면 공격 표면 지도를 그대로 넘겨주는 셈이라
+// 로그인 + 시스템 관리자만 본다(바로 아래 /debug-logs-sec 와 같은 기준).
 Route::get('/debug-routes-sec', function () {
+    abort_unless(\App\Support\AccessPolicy::canManageSystem(auth()->user()), 403);
+
     $routes = collect(Route::getRoutes())->map(fn ($r) => [
         'uri' => $r->uri(),
         'methods' => $r->methods(),
@@ -80,7 +84,7 @@ Route::get('/debug-routes-sec', function () {
         'field_app_routes' => $routes->filter(fn ($r) => str_contains($r['uri'], 'field-app'))->values(),
         'sample_routes' => $routes->pluck('uri')->take(30),
     ]);
-});
+})->middleware('auth');
 // 예전 관리자 패널(/admin)은 없어졌다 — 관리 화면은 전부 ERP 안으로 들어왔다.
 // 북마크와 예전 링크가 404 를 만나지 않도록 홈으로 보낸다. 하위 경로(/admin/sites 등)도
 // 함께 받는다.
@@ -317,13 +321,22 @@ Route::get('/erp.webmanifest', [WebManifestController::class, 'erp'])->name('erp
 Route::get('/org/logo', [OrgLogoController::class, 'show'])->name('org.logo');
 
 // 게이트 QR 출퇴근 — 현장 출입구 QR 스캔 → 이름으로 본인 확인 → 출근/퇴근 (공개, 앱 불필요)
+//
+// throttle: 이 경로는 로그인이 없어 직원 번호를 훑거나 남의 출퇴근을 대신 찍는 시도가
+// 가능하다. 근태는 임금 기록이므로 속도를 묶어 자동화를 무디게 한다. 한도는 아침 러시를
+// 기준으로 넉넉히 잡았다 — 현장 와이파이처럼 여러 사람이 같은 IP 를 쓰면 합산되므로,
+// 조이다가 출근 줄을 세우는 쪽이 더 큰 사고다.
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');
 Route::get('/gate/{site}', [GateAttendanceController::class, 'show'])->name('gate.show');
-Route::post('/gate/{site}/search', [GateAttendanceController::class, 'search'])->name('gate.search');
-Route::post('/gate/{site}/punch', [GateAttendanceController::class, 'punch'])->name('gate.punch');
+Route::post('/gate/{site}/search', [GateAttendanceController::class, 'search'])
+    ->middleware('throttle:240,1')->name('gate.search');
+Route::post('/gate/{site}/punch', [GateAttendanceController::class, 'punch'])
+    ->middleware('throttle:240,1')->name('gate.punch');
 // 기억된 휴대폰으로 본인 자동 인식 — 이름 검색을 건너뛴다.
-Route::post('/gate/{site}/me', [GateAttendanceController::class, 'me'])->name('gate.me');
-Route::post('/gate/{site}/remember', [GateAttendanceController::class, 'remember'])->name('gate.remember');
+Route::post('/gate/{site}/me', [GateAttendanceController::class, 'me'])
+    ->middleware('throttle:240,1')->name('gate.me');
+Route::post('/gate/{site}/remember', [GateAttendanceController::class, 'remember'])
+    ->middleware('throttle:60,1')->name('gate.remember');
 Route::post('/gate/{site}/forget', [GateAttendanceController::class, 'forget'])->name('gate.forget');
 
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');

@@ -255,7 +255,9 @@ class SimpleWorkerRegistrationController extends Controller
 
         return view('worker-join.form', [
             // 등록 직후 이 화면에서만 노출되는 서명 링크 — W-9(1099 지급 전제)를 바로 이어서 작성한다.
-            'w9Url' => URL::signedRoute('w9.show', ['employee' => $employee->id]),
+            // 만료를 둔다 — W-9 은 납세자번호를 적는 화면이라 링크가 무기한 살아 있으면
+            // 문자·카톡에 남은 링크가 그대로 열쇠가 된다. 관리자 화면에서 재발급할 수 있다.
+            'w9Url' => URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
             'site' => $site,
             'companies' => collect(),
             'roles' => [],
