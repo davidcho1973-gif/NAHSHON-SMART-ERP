@@ -44,6 +44,8 @@
         .done p { color: var(--ink-2); line-height: 1.6; }
         .badge { display: inline-block; background: var(--paper); color: var(--ink); font-weight: 700; border-radius: 8px; padding: 6px 12px; margin-top: 6px; font-family: monospace; }
         .device { margin-top: 16px; background: #E8F5EA; border: 0; color: #1E8E3E; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; }
+        .shared { margin-top: 16px; background: #FFF4E0; border: 0; color: #B26A00; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; text-align: left; }
+        .next { display: block; margin-top: 12px; padding: 15px; font-size: 1rem; font-weight: 800; color: var(--label); background: var(--paper); border-radius: 12px; text-decoration: none; }
         .type { display: inline-block; border-radius: 999px; padding: 6px 15px; font-size: .82rem; font-weight: 800; margin-bottom: 12px; }
         .type-direct { background: var(--label); color: #fff; }
         .type-indirect { background: var(--paper); color: var(--ink-2); }
@@ -73,6 +75,12 @@
                     <div class="badge"><span id="t-doneBadge"></span> {{ $employee->employee_number }}</div>
                 @endif
                 <div class="device" id="t-doneDevice"></div>
+                {{-- 한 폰으로 여러 사람을 등록한 경우 — 그 폰을 누구의 것으로도 기억하지 않는다. --}}
+                <div class="shared" id="t-shared" style="display:none">
+                    <b id="t-sharedTitle"></b><br><span id="t-sharedBody"></span>
+                </div>
+                {{-- 반장이 팀원을 연달아 등록하는 흐름 — 회사·공정은 다음 사람에게 그대로 이어진다. --}}
+                <a class="next" id="t-next" href="{{ route('worker-join.form', ['site' => $site]) }}"></a>
 
                 @if (!empty($w9Url))
                     {{-- 1099 지급 전제조건 — 등록에 이어 바로 작성하게 해 종이 수거 행정을 없앤다. --}}
@@ -89,15 +97,44 @@
                     var DICT = @json($dict, JSON_UNESCAPED_UNICODE);
                     var lang = @json($lang);
                     var T = DICT[lang] || DICT.ko;
-                    document.getElementById('t-doneTitle').textContent = T.doneTitle;
-                    document.getElementById('t-doneBody').textContent = T.doneBody;
-                    document.getElementById('t-doneDevice').textContent = T.doneDevice;
+                    var returning = @json($returning ?? false);
+                    var myId = String(@json($employee?->id));
+
+                    document.getElementById('t-doneTitle').textContent = returning ? T.againTitle : T.doneTitle;
+                    document.getElementById('t-doneBody').textContent = returning ? T.againBody : T.doneBody;
+                    document.getElementById('t-sharedTitle').textContent = T.sharedTitle;
+                    document.getElementById('t-sharedBody').textContent = T.sharedBody;
+                    document.getElementById('t-next').textContent = T.nextPerson;
                     var badge = document.getElementById('t-doneBadge');
                     if (badge) badge.textContent = T.doneBadge;
+
+                    // 이 휴대폰이 누구의 것인가.
+                    //
+                    // 한 대로 한 사람만 등록했으면 그 사람의 폰이다 — 기억해 두면 다음부터
+                    // 게이트에서 이름을 찾지 않아도 된다. 그런데 반장이 자기 폰으로 팀원을
+                    // 여러 명 등록하는 일이 잦다. 그때 마지막 사람으로 기억해 버리면 반장이
+                    // 게이트에 폰을 댈 때마다 그 팀원의 출근이 찍힌다 — 남의 근무시간이
+                    // 만들어지는 것이고, 아무도 원인을 모른 채 급여까지 간다.
+                    //
+                    // 그래서 두 사람 이상이 등록된 폰은 누구의 것으로도 기억하지 않는다.
+                    // (지운 토큰은 어디에도 남지 않으므로 그 자리에서 쓸 수 없게 된다.)
+                    var shared = false;
                     try {
-                        localStorage.setItem('dasolWorkerDevice', @json($deviceToken));
+                        var prev = localStorage.getItem('workerJoinLastPerson');
+                        shared = !!prev && prev !== myId;
+
+                        if (shared) {
+                            localStorage.removeItem('dasolWorkerDevice');
+                        } else {
+                            localStorage.setItem('dasolWorkerDevice', @json($deviceToken));
+                        }
+                        localStorage.setItem('workerJoinLastPerson', myId);
                         localStorage.setItem('dasolWorkerLang', lang);
                     } catch (e) {}
+
+                    document.getElementById('t-doneDevice').textContent = T.doneDevice;
+                    document.getElementById('t-doneDevice').style.display = shared ? 'none' : '';
+                    document.getElementById('t-shared').style.display = shared ? '' : 'none';
                 })();
             </script>
         @else
@@ -162,11 +199,17 @@
                 </datalist>
                 <div class="note" id="t-tradeHint"></div>
 
-                <label id="t-email"></label>
-                <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com" required>
-
+                {{-- 전화번호가 신원이다(같은 이름 + 같은 번호 = 같은 사람). 그래서 이메일보다
+                     위에 두고, 반드시 받는다. --}}
                 <label id="t-phone"></label>
-                <input type="tel" name="phone" value="{{ old('phone') }}" placeholder="480-555-0100" required>
+                <input type="tel" name="phone" id="f-phone" value="{{ old('phone') }}" placeholder="480-555-0100" required>
+                <div class="note" id="t-phoneHint"></div>
+
+                {{-- 이메일은 선택. 현장에서 이메일이 없거나 기억나지 않는 사람이 여기서 막히면
+                     그날 그 사람은 명단에 없는 채로 일하게 된다. --}}
+                <label id="t-email"></label>
+                <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com">
+                <div class="note" id="t-emailHint"></div>
 
                 <button type="submit" id="t-submit"></button>
             </form>
@@ -194,6 +237,7 @@
                         text('t-name', T.name); text('t-company', T.company);
                         text('t-trade', T.trade); text('t-tradeHint', T.tradeHint);
                         text('t-email', T.email); text('t-phone', T.phone);
+                        text('t-emailHint', T.emailHint); text('t-phoneHint', T.phoneHint);
                         text('t-submit', T.submit); text('t-errors', T.errors);
                         text('t-askTitle', T.askTitle);
                         text('opt-blank', T.companyPlaceholder);
@@ -259,10 +303,21 @@
                         });
                     });
 
+                    // 반장이 자기 폰으로 팀원을 연달아 등록하는 일이 잦다. 같은 회사를
+                    // 사람마다 다시 고르게 하지 않는다 — 마지막에 고른 회사를 채워 두고,
+                    // 다르면 바꾸면 된다. (목록에 없는 값이면 브라우저가 무시하므로 안전하다.)
+                    document.querySelector('form').addEventListener('submit', function () {
+                        try { localStorage.setItem('workerJoinCompany', sel.value || ''); } catch (e) {}
+                    });
+
                     // 처음 열 때: 저장된 언어 → 없으면 브라우저 언어 → 없으면 서버 기본값.
                     (function initial() {
-                        var saved = null;
-                        try { saved = localStorage.getItem('dasolWorkerLang'); } catch (e) {}
+                        var saved = null, savedCompany = null;
+                        try {
+                            saved = localStorage.getItem('dasolWorkerLang');
+                            savedCompany = localStorage.getItem('workerJoinCompany');
+                        } catch (e) {}
+                        if (savedCompany && !sel.value) { sel.value = savedCompany; }
                         var browser = (navigator.language || '').slice(0, 2);
                         var pick = (saved && DICT[saved]) ? saved : (DICT[browser] ? browser : lang);
                         lang = pick; T = DICT[pick];

@@ -15,6 +15,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -47,6 +48,7 @@ class SimpleWorkerRegistrationController extends Controller
             'companies' => $this->companyOptions(),
             'roles' => $this->tradeOptions($site),
             'done' => false,
+            'returning' => false,
             // 이미 붙어 있는 예전 QR(?type=direct|indirect) — 회사가 미분류일 때만 쓰이는 보조 값.
             'lockedType' => QrPosters::legacyEmploymentType($request->query('type')),
             'lang' => WorkerLang::resolve($request->query('lang')),
@@ -179,6 +181,58 @@ class SimpleWorkerRegistrationController extends Controller
         return $role;
     }
 
+    /**
+     * 이미 등록된 사람인가 — 같은 이름 + 같은 전화번호면 같은 사람으로 본다.
+     *
+     * 현장에서 QR 은 몇 번이고 다시 찍힌다(등록한 걸 잊었거나, 다른 현장에서 또 찍으라는
+     * 말을 듣거나). 그때마다 새 직원이 생기면 한 사람이 명단에 서너 줄로 쌓이고 인원
+     * 집계가 그만큼 부풀어 오른다. 이메일을 선택 입력으로 바꾼 뒤에는 이 판정이 더
+     * 중요해졌다 — 예전엔 이메일이 같으면 알아봤지만 이제 이메일이 없을 수 있다.
+     *
+     * 번호만으로는 잡지 않는다. 남의 번호를 적어 넣으면 그 사람의 기록(이름·소속)이
+     * 통째로 덮이기 때문이다. 이름까지 같아야 같은 사람으로 본다 — 이름에 오타가 나면
+     * 한 줄이 더 생길 뿐이고, 그건 나중에 합칠 수 있다. 남의 신원이 덮이는 건 되돌릴 수 없다.
+     */
+    private function returningWorker(string $name, string $phone): ?Employee
+    {
+        $digits = $this->phoneKey($phone);
+        if ($digits === null) {
+            return null;
+        }
+
+        $candidates = Employee::query()
+            ->whereRaw('lower(trim(name)) = ?', [mb_strtolower(trim(preg_replace('/\s+/u', ' ', $name) ?? $name))])
+            ->whereNotNull('phone')
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if ($this->phoneKey((string) $candidate->phone) !== $digits) {
+                continue;
+            }
+
+            // 관리자·사무직 계정에 붙은 기록은 공개 폼이 건드리지 않는다. 이름과 번호를
+            // 아는 사람이 남의 소속 현장을 옮겨 버리는 길을 열어 두지 않는다.
+            $elevated = \App\Models\User::query()
+                ->where('employee_id', $candidate->id)
+                ->whereNotIn('access_role', ['worker', 'foreman'])
+                ->exists();
+
+            if (! $elevated) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /** 번호 비교용 열쇠 — 표기(하이픈·괄호·국가번호)가 달라도 같은 번호는 같게 읽힌다. */
+    private function phoneKey(string $phone): ?string
+    {
+        $digits = preg_replace('/\D/', '', $phone) ?: '';
+
+        return strlen($digits) >= 10 ? substr($digits, -10) : null;
+    }
+
     /** 즉시 등록 — MemberRegistration 생성 후 곧바로 활성 Employee 로 동기화. */
     public function store(Request $request, Site $site): View
     {
@@ -200,7 +254,11 @@ class SimpleWorkerRegistrationController extends Controller
             // 공정도 마찬가지로 자유 입력을 받는다. 다만 아래에서 기존 공정명과 대소문자·공백만
             // 다른 값은 기존 이름으로 맞춘다 — 안 그러면 집계가 'Piping' 과 'piping' 으로 갈린다.
             'role' => ['required', 'string', 'max:60'],
-            'email' => ['required', 'email', 'max:160'],
+            // 이메일은 선택이다. 현장에서 이메일을 안 쓰거나 주소가 기억나지 않는 사람이
+            // 여기서 막히면 등록 자체를 못 하고, 그러면 그날 그 사람은 명단에 없는 채로
+            // 일한다 — 없는 사람은 출퇴근도 안전서명도 남지 않는다. 신원은 전화번호가
+            // 맡는다(현장에서 반드시 받아 두는 값이고, 같은 번호면 같은 사람이다).
+            'email' => ['nullable', 'email', 'max:160'],
             'phone' => ['required', 'string', 'max:40'],
             'employment_type' => [$mustAsk ? 'required' : 'nullable', Rule::in(self::ASKABLE_TYPES)],
             'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
@@ -222,6 +280,22 @@ class SimpleWorkerRegistrationController extends Controller
 
         $lang = WorkerLang::resolve($data['preferred_language'] ?? null);
 
+        // 다시 온 사람 — 새로 만들지 않고 오늘의 소속만 갱신한다.
+        $returning = $this->returningWorker((string) $data['full_name'], (string) $data['phone']);
+
+        if ($returning !== null) {
+            // 퇴사·비활성 기록은 스스로 되살아나지 않는다. QR 한 번으로 복직이 되면
+            // 내보낸 사람이 다음 날 다시 명단에 서 있게 된다 — 그 판단은 사람이 한다.
+            if ($returning->employment_status !== 'active') {
+                throw ValidationException::withMessages([
+                    'phone' => '등록 기록이 있으나 활성 상태가 아닙니다. 현장 관리자에게 문의해 주세요.'
+                        .' / Your record is not active — please see the site manager.',
+                ]);
+            }
+
+            return $this->welcomeBack($request, $site, $returning, $data, $type, $lang);
+        }
+
         $parts = preg_split('/\s+/', trim($data['full_name'])) ?: [];
         $firstName = $parts[0] ?? $data['full_name'];
         $lastName = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
@@ -231,7 +305,7 @@ class SimpleWorkerRegistrationController extends Controller
             'full_name' => $data['full_name'],
             'first_name' => $firstName,
             'last_name' => $lastName,
-            'email' => Str::lower($data['email']),
+            'email' => filled($data['email'] ?? null) ? Str::lower((string) $data['email']) : null,
             'phone' => $data['phone'],
             'role' => $data['role'],
             'trade' => $data['role'],
@@ -253,15 +327,60 @@ class SimpleWorkerRegistrationController extends Controller
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
         $deviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
 
+        return $this->doneView($site, $employee, $lang, $deviceToken, (string) $data['full_name'], false);
+    }
+
+    /**
+     * 다시 온 사람 — 명단에 한 줄 더 만들지 않고 오늘의 소속(현장·회사·공정)만 갱신한다.
+     *
+     * 이름은 덮지 않는다. 이미 명단에 있는 표기가 정본이고, 다시 적으면서 생긴 표기 차이
+     * (띄어쓰기·영문/한글)로 그 사람의 이름이 바뀌면 출퇴근 기록과 서명이 다른 이름으로 갈린다.
+     */
+    private function welcomeBack(Request $request, Site $site, Employee $employee, array $data, ?string $type, string $lang): View
+    {
+        $email = filled($data['email'] ?? null) ? Str::lower((string) $data['email']) : null;
+
+        // 이메일이 이미 다른 직원의 것이면 옮기지 않는다 — employees.email 은 유니크다.
+        if ($email !== null && Employee::query()->where('email', $email)->whereKeyNot($employee->getKey())->exists()) {
+            $email = null;
+        }
+
+        $employee->forceFill(array_filter([
+            'site_id' => $site->id,
+            'company_id' => $data['company_id'],
+            'role' => $data['role'],
+            'phone' => $data['phone'],
+            'employment_type' => $type,
+            'preferred_language' => $lang,
+            'email' => $email ?: $employee->email,
+        ], fn ($v) => $v !== null))->save();
+
+        return $this->doneView(
+            $site,
+            $employee,
+            $lang,
+            WorkerDevice::issueFor($employee, $request->userAgent()),
+            (string) $employee->name,
+            true,
+        );
+    }
+
+    /** 등록·재등록 완료 화면. 두 경우가 같은 화면을 쓰되 문구만 갈린다. */
+    private function doneView(Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning): View
+    {
         return view('worker-join.form', [
             // 등록 직후 이 화면에서만 노출되는 서명 링크 — W-9(1099 지급 전제)를 바로 이어서 작성한다.
             // 만료를 둔다 — W-9 은 납세자번호를 적는 화면이라 링크가 무기한 살아 있으면
             // 문자·카톡에 남은 링크가 그대로 열쇠가 된다. 관리자 화면에서 재발급할 수 있다.
-            'w9Url' => URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
+            // 다시 온 사람에게는 내밀지 않는다 — 이미 낸 서류를 또 요구하는 화면이 된다.
+            'w9Url' => $returning
+                ? null
+                : URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
             'site' => $site,
             'companies' => collect(),
             'roles' => [],
             'done' => true,
+            'returning' => $returning,
             'lockedType' => null,
             'lang' => $lang,
             'langOptions' => WorkerLang::OPTIONS,
@@ -270,7 +389,7 @@ class SimpleWorkerRegistrationController extends Controller
             'employmentType' => $employee->employment_type,
             'typeLabel' => $employee->employmentTypeLabel(),
             'employee' => $employee,
-            'workerName' => $data['full_name'],
+            'workerName' => $workerName,
         ]);
     }
 }

@@ -103,8 +103,14 @@ class SimpleWorkerRegistrationTest extends TestCase
     {
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
 
+        // 이메일은 선택이지만, 적었는데 형식이 틀리면 잡는다.
         $this->post('/join/w/'.$site->id, ['full_name' => '', 'email' => 'bad'])
             ->assertSessionHasErrors(['full_name', 'company_id', 'role', 'email', 'phone']);
+
+        // 비워 두는 것은 오류가 아니다 — 신원은 전화번호가 맡는다.
+        $this->post('/join/w/'.$site->id, ['full_name' => '', 'email' => ''])
+            ->assertSessionHasErrors(['full_name', 'phone'])
+            ->assertSessionDoesntHaveErrors('email');
     }
 
     public function test_public_registration_cannot_rebind_someone_elses_account(): void
