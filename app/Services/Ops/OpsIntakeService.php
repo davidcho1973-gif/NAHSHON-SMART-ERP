@@ -8,7 +8,9 @@ use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
+use App\Models\Submittal;
 use App\Models\WbsItem;
+use App\Services\Admin\ProjectRegisterService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
@@ -33,6 +35,8 @@ class OpsIntakeService
 
     private const CATEGORIES = [
         'progress', 'plan', 'procurement', 'labor', 'expense', 'issue',
+        // 검사·검측 일정 — 제출물 대장의 계획일로 간다(공정 계획인 plan 과 구분).
+        'inspection',
         // 공정·자재·인원 어디에도 안 들어가는 것들 — 액션 아이템으로 간다.
         'request', 'approval', 'decision', 'todo',
         'noise',
@@ -62,18 +66,20 @@ class OpsIntakeService
 
         $activities = $this->activityContext($site);
         $purchases = $this->purchaseContext($site);
+        $inspections = $this->inspectionContext($site);
         $today = Carbon::today()->toDateString();
 
         try {
             // 지금까지 축적된 현장 용어·오판 사례를 함께 넘긴다 — 쓸수록 정확해진다.
             $learned = $this->learning->promptBlock($site?->id);
-            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned, [], $this->specContext($site)->all());
+            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned, [], $this->specContext($site)->all(), $inspections->all());
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => 'AI 판독에 실패했습니다: '.$e->getMessage()];
         }
 
         $validCodes = $activities->pluck('code')->filter()->all();
         $validPos = $purchases->pluck('po')->filter()->all();
+        $validSeqs = $inspections->pluck('seq')->filter()->all();
 
         // 붙여넣은 원문 전체를 근거로 보관한다 — 나중에 "왜 이렇게 반영됐지?"를 되짚을 수 있게.
         $batch = OpsIntakeBatch::create([
@@ -87,7 +93,7 @@ class OpsIntakeService
 
         $saved = [];
         foreach ($raw as $r) {
-            $item = $this->persist($r, $site, $userId, $source, $messageId, $validCodes, $validPos, $text, $batch->id);
+            $item = $this->persist($r, $site, $userId, $source, $messageId, $validCodes, $validPos, $text, $batch->id, $validSeqs);
             if ($item !== null) {
                 $saved[] = $item;
             }
@@ -178,6 +184,7 @@ class OpsIntakeService
 
             $activities = $this->activityContext($site);
             $purchases = $this->purchaseContext($site);
+            $inspections = $this->inspectionContext($site);
             $specs = $this->specContext($site);
             $learned = $this->learning->promptBlock($site?->id);
 
@@ -195,16 +202,18 @@ class OpsIntakeService
                 $learned,
                 $photoKinds,
                 $specs->all(),
+                $inspections->all(),
             );
 
             $validCodes = $activities->pluck('code')->filter()->all();
             $validPos = $purchases->pluck('po')->filter()->all();
+            $validSeqs = $inspections->pluck('seq')->filter()->all();
 
             $saved = [];
             $autoLabor = 0;
             $autoAction = 0;
             foreach ($raw as $r) {
-                $item = $this->persist($r, $site, $batch->created_by_id, $batch->source, $batch->communication_message_id, $validCodes, $validPos, $text, $batch->id);
+                $item = $this->persist($r, $site, $batch->created_by_id, $batch->source, $batch->communication_message_id, $validCodes, $validPos, $text, $batch->id, $validSeqs);
                 if ($item === null) {
                     continue;
                 }
@@ -513,6 +522,14 @@ class OpsIntakeService
     private const PROC_FIELDS = ['eta', 'status', 'vendor', 'po_no', 'amount', 'ordered_on'];
 
     /**
+     * 제출물 대장(검사·검측 포함)에 반영을 허용하는 필드.
+     *
+     * 조항 내용(title·csi·category)은 임포트가 정본이라 여기 없다 — 대화로 시방 문구가
+     * 바뀌는 일은 없어야 한다.
+     */
+    private const SUBMITTAL_FIELDS = ['planned_on', 'status', 'assignee', 'submitted_on', 'approved_on', 'notes'];
+
+    /**
      * 제안을 실제 공정표·조달에 반영한다.
      *
      * 반영 전 값을 함께 저장해 되돌릴 수 있게 한다. TBM 게이트 등 기존 업무 규칙에 걸리면
@@ -544,9 +561,11 @@ class OpsIntakeService
             return $this->modules->applyExpense($item, $userId);
         }
 
-        return $item->target_type === 'procurement'
-            ? $this->applyProcurement($item, $patch, $userId)
-            : $this->applyWbs($item, $patch, $userId);
+        return match ($item->target_type) {
+            'procurement' => $this->applyProcurement($item, $patch, $userId),
+            'submittal' => $this->applySubmittal($item, $patch, $userId),
+            default => $this->applyWbs($item, $patch, $userId),
+        };
     }
 
     /**
@@ -704,6 +723,117 @@ class OpsIntakeService
     }
 
     /**
+     * 제출물 대장 반영 — 주로 검사·검측 계획일이 여기로 온다.
+     *
+     * "다음 주 화요일 앵커 검사 입회" 같은 말이 시방 제출물의 계획일이 되는 자리다.
+     * 조항 내용은 건드리지 않고(임포트가 정본) 상태·담당·날짜·메모만 갱신한다.
+     *
+     * <b>부분 갱신 주의:</b> saveSubmittal 은 넘기지 않은 키를 null 로 덮는다. 그래서
+     * 현재 값을 먼저 읽어 채운 뒤 바뀌는 것만 얹는다 — 계획일 하나 넣으려다 담당자와
+     * 제출일이 지워지면 안 된다.
+     *
+     * @param  array<string, mixed>  $patch
+     * @param  bool  $allowClear  되돌리기 전용 — 빈 값을 "원래대로 비우기"로 받아들인다.
+     *                            검사 계획일은 원래 비어 있는 것이 정상이라, 이걸 막으면
+     *                            "계획일을 넣은 뒤 되돌리기"가 영원히 안 된다.
+     * @return array<string, mixed>
+     */
+    private function applySubmittal(OpsIntakeItem $item, array $patch, ?int $userId, bool $allowClear = false): array
+    {
+        // seq 는 프로젝트 안에서만 유일하다 — 현장으로 좁혀 남의 프로젝트 행을 집지 않는다.
+        $row = Submittal::query()
+            ->where('seq', (int) $item->target_code)
+            ->when($item->site_id, fn ($q) => $q->where('site_id', $item->site_id))
+            ->orderBy('id')
+            ->first();
+
+        if (! $row) {
+            return ['success' => false, 'error' => '제출물 항목을 찾을 수 없습니다: #'.$item->target_code];
+        }
+
+        $clean = [];
+        $previous = [];
+        foreach ($patch as $key => $value) {
+            if (! in_array($key, self::SUBMITTAL_FIELDS, true)) {
+                continue;
+            }
+            $clearing = ($value === null || $value === '');
+            // 상태는 비울 수 없다(제출물은 항상 어떤 상태에 있다).
+            if ($clearing && (! $allowClear || $key === 'status')) {
+                continue;
+            }
+            $previous[$key] = $this->currentSubmittalValue($row, $key);
+            if ($clearing) {
+                $clean[$key] = null;
+
+                continue;
+            }
+
+            if (in_array($key, ['planned_on', 'submitted_on', 'approved_on'], true)) {
+                $d = $this->safeDate((string) $value);
+                if ($d === null) {
+                    continue;
+                }
+                $clean[$key] = $d;
+
+                continue;
+            }
+            if ($key === 'status' && ! array_key_exists((string) $value, Submittal::STATUS_OPTIONS)) {
+                continue; // 정의된 제출물 상태가 아니면 무시
+            }
+            $clean[$key] = $value;
+        }
+
+        if ($clean === []) {
+            return ['success' => false, 'error' => '반영 가능한 항목이 없습니다.'];
+        }
+
+        // 현재 값을 바탕에 깔고 바뀌는 것만 덮는다(saveSubmittal 이 전량 덮어쓰기라서).
+        // array_key_exists 로 봐야 "null 로 비우기"가 기존 값으로 되돌아가지 않는다.
+        $pick = fn (string $key, mixed $current): mixed => array_key_exists($key, $clean) ? $clean[$key] : $current;
+
+        $payload = [
+            'id' => $row->id,
+            'status' => $clean['status'] ?? $row->status,
+            'assignee' => $pick('assignee', $row->assignee),
+            'plannedOn' => $pick('planned_on', $row->planned_on?->toDateString()),
+            'submittedOn' => $pick('submitted_on', $row->submitted_on?->toDateString()),
+            'approvedOn' => $pick('approved_on', $row->approved_on?->toDateString()),
+            'notes' => $pick('notes', $row->notes),
+        ];
+
+        $res = app(ProjectRegisterService::class)->saveSubmittal($payload);
+        if (! ($res['success'] ?? false)) {
+            $item->update(['result_note' => mb_substr((string) ($res['error'] ?? '반영 실패'), 0, 300)]);
+
+            return ['success' => false, 'error' => $res['error'] ?? '반영에 실패했습니다.'];
+        }
+
+        // 시방이 정지·실격을 명문화한 항목(gate)은 반영 사실을 눈에 띄게 남긴다.
+        $note = '제출물 반영 완료';
+        if (isset($clean['planned_on'])) {
+            $note .= ' · 계획일 '.$clean['planned_on'];
+        }
+        if ($row->gate) {
+            $note .= ' · ★ 정지 조항 항목(통과 전 다음 공정 금지)';
+        }
+
+        $item->update([
+            'status' => 'applied',
+            'previous' => $previous,
+            'proposed' => $patch,
+            'applied_at' => now(),
+            'applied_by_id' => $userId,
+            'result_note' => mb_substr($note, 0, 300),
+        ]);
+
+        app(\App\Services\Communication\DecisionReplyConnector::class)
+            ->intakeApplied($item, "{$note} — #{$row->seq} ".mb_substr((string) $row->title, 0, 80));
+
+        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
+    }
+
+    /**
      * 확신도가 높고 대상이 확실한 제안을 한 번에 반영한다(확인 필요 항목은 건너뛴다).
      *
      * @return array<string, mixed>
@@ -747,9 +877,12 @@ class OpsIntakeService
             return ['success' => false, 'error' => '되돌릴 이전 값이 없습니다.'];
         }
 
-        $res = $item->target_type === 'procurement'
-            ? $this->applyProcurement($item, $previous, $userId)
-            : $this->applyWbs($item, $previous, $userId);
+        $res = match ($item->target_type) {
+            'procurement' => $this->applyProcurement($item, $previous, $userId),
+            // allowClear=true — 원래 비어 있던 값(계획일 미등록)으로 되돌리려면 비울 수 있어야 한다.
+            'submittal' => $this->applySubmittal($item, $previous, $userId, true),
+            default => $this->applyWbs($item, $previous, $userId),
+        };
 
         if (! ($res['success'] ?? false)) {
             return $res;
@@ -775,6 +908,20 @@ class OpsIntakeService
             'days' => $w->days,
             'manhours' => $w->manhours,
             'name' => (string) $w->name,
+            default => null,
+        };
+    }
+
+    /** 되돌리기용 현재값 — 날짜는 문자열로 내야 previous 를 그대로 patch 로 되먹일 수 있다. */
+    private function currentSubmittalValue(Submittal $s, string $key): mixed
+    {
+        return match ($key) {
+            'planned_on' => $s->planned_on?->toDateString(),
+            'submitted_on' => $s->submitted_on?->toDateString(),
+            'approved_on' => $s->approved_on?->toDateString(),
+            'status' => (string) $s->status,
+            'assignee' => $s->assignee,
+            'notes' => $s->notes,
             default => null,
         };
     }
@@ -816,8 +963,9 @@ class OpsIntakeService
      * @param  array<string, mixed>  $r
      * @param  array<int, string>  $validCodes
      * @param  array<int, string>  $validPos
+     * @param  array<int, string>  $validSeqs  등록된 검사·제출물 번호
      */
-    private function persist(array $r, ?Site $site, ?int $userId, string $source, ?int $messageId, array $validCodes, array $validPos, string $fallbackText, ?int $batchId = null): ?OpsIntakeItem
+    private function persist(array $r, ?Site $site, ?int $userId, string $source, ?int $messageId, array $validCodes, array $validPos, string $fallbackText, ?int $batchId = null, array $validSeqs = []): ?OpsIntakeItem
     {
         $category = (string) ($r['category'] ?? 'noise');
         if (! in_array($category, self::CATEGORIES, true)) {
@@ -830,9 +978,11 @@ class OpsIntakeService
         // AI 가 목록에 없는 코드를 지어냈으면 버린다(잘못된 대상에 반영되는 사고 방지).
         $hallucinated = false;
         if ($targetCode !== '') {
-            $known = $targetType === 'procurement'
-                ? in_array($targetCode, $validPos, true)
-                : in_array($targetCode, $validCodes, true);
+            $known = match ($targetType) {
+                'procurement' => in_array($targetCode, $validPos, true),
+                'submittal' => in_array($targetCode, $validSeqs, true),
+                default => in_array($targetCode, $validCodes, true),
+            };
             if (! $known) {
                 $hallucinated = true;
                 $targetCode = '';
@@ -846,7 +996,7 @@ class OpsIntakeService
         $proposed = is_array($r['proposed'] ?? null) ? $r['proposed'] : [];
         $question = trim((string) ($r['question'] ?? ''));
         if ($hallucinated && $question === '') {
-            $question = '어느 작업/발주 건인지 확인해 주세요. (AI 가 대상을 특정하지 못했습니다)';
+            $question = '어느 작업/발주/검사 항목인지 확인해 주세요. (AI 가 대상을 특정하지 못했습니다)';
         }
 
         // 확정된 것과 어긋나는가. AI 가 찾은 것(도면 사양 대조)과 코드가 확실히 아는 것
@@ -954,6 +1104,36 @@ class OpsIntakeService
                 'status' => (string) $w->status,
                 'start' => $w->planned_start?->toDateString() ?? '',
                 'end' => $w->planned_end?->toDateString() ?? '',
+            ]);
+    }
+
+    /**
+     * AI 에게 넘길 검사·시험 후보 — 대화 속 "앵커 검사" 를 제출물 대장의 번호로 잇는다.
+     *
+     * 시방이 요구하는 시험·검사가 정본이다(제출물 대장 category='시험·검사'). 목록에
+     * 없는 검사를 AI 가 지어내면 persist 의 환각 차단이 버린다.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function inspectionContext(?Site $site): Collection
+    {
+        return Submittal::query()
+            ->when($site, fn ($q) => $q->where('site_id', $site->id))
+            ->where(function ($q): void {
+                $q->where('category', '시험·검사')
+                    ->orWhere('title', 'ilike', '%검사%')
+                    ->orWhere('title', 'ilike', '%시험%');
+            })
+            ->orderByDesc('gate')
+            ->orderBy('seq')
+            ->limit(150)->get()
+            ->map(fn (Submittal $s) => [
+                'seq' => (string) $s->seq,
+                'section' => trim($s->csi.' '.$s->section),
+                'title' => mb_substr((string) $s->title, 0, 110),
+                'planned_on' => $s->planned_on?->toDateString() ?? '',
+                'status' => (string) $s->status,
+                'gate' => $s->gate ? 'Y' : '',
             ]);
     }
 

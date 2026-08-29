@@ -8651,6 +8651,11 @@
         labor:       { label: '인력·출역',     color: '#a855f7', icon: 'ph-users-three' },
         expense:     { label: '지출·영수증',   color: '#16a34a', icon: 'ph-receipt' },
         issue:       { label: '이슈·안전',     color: '#ef4444', icon: 'ph-warning-circle' },
+        inspection:  { label: '검사·검측',     color: '#0ea5e9', icon: 'ph-magnifying-glass' },
+        request:     { label: '지시·요청',     color: '#f59e0b', icon: 'ph-hand-pointing' },
+        approval:    { label: '승인',          color: '#0d9488', icon: 'ph-seal-check' },
+        decision:    { label: '의사결정',      color: '#7c3aed', icon: 'ph-scales' },
+        todo:        { label: '준비·조치',     color: '#64748b', icon: 'ph-check-square' },
         noise:       { label: '잡담',          color: '#94a3b8', icon: 'ph-chat-dots' }
       };
 
@@ -9207,7 +9212,7 @@
                 ? '<span style="font-size:11.5px;font-weight:700;color:#22c55e;align-self:center"><i class="ph ph-check-circle"></i> 반영됨' + (it.appliedAt ? ' · ' + opsEsc(it.appliedAt) : '') + '</span>' +
                   '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsRevert(' + it.id + ')"><i class="ph ph-arrow-counter-clockwise"></i> 되돌리기</button>'
                 : ((it.targetCode && Object.keys(it.proposed || {}).length)
-                    ? '<button class="btn-primary" style="padding:5px 13px;font-size:11.5px;font-weight:700" onclick="window.opsApply(' + it.id + ')"><i class="ph ph-check"></i> 공정표에 반영</button>'
+                    ? '<button class="btn-primary" style="padding:5px 13px;font-size:11.5px;font-weight:700" onclick="window.opsApply(' + it.id + ')"><i class="ph ph-check"></i> ' + (it.targetType === 'submittal' ? '제출물 대장에 반영' : (it.targetType === 'procurement' ? '조달에 반영' : '공정표에 반영')) + '</button>'
                     : '<span style="font-size:11px;color:var(--text-tertiary);align-self:center">대상·변경안이 없어 반영할 수 없습니다</span>') +
                   '<button class="btn-secondary" style="padding:5px 11px;font-size:11.5px" onclick="window.opsDismiss(' + it.id + ')"><i class="ph ph-x"></i> 무시</button>') +
               '</div>' : '') +
@@ -9217,7 +9222,9 @@
 
       var OPS_FIELD = {
         progress: '진행률(%)', status: '상태', planned_start: '시작일', planned_end: '종료일',
-        crew_size: '인원', eta: '납기(ETA)', name: '작업명'
+        crew_size: '인원', eta: '납기(ETA)', name: '작업명',
+        planned_on: '검사 계획일', submitted_on: '제출일', approved_on: '승인일',
+        assignee: '담당·입회', notes: '메모'
       };
 
       // 상황실 응답 캐시 무효화 — gsRun 이 60초 캐시하므로, 변경 후엔 반드시 비워야

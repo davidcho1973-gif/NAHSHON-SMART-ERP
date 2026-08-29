@@ -18,6 +18,7 @@ class OpsIntakeItem extends Model
         'labor' => '인력·출역',
         'expense' => '지출·영수증',
         'issue' => '이슈·안전',
+        'inspection' => '검사·검측',
         'request' => '지시·요청',
         'approval' => '승인',
         'decision' => '의사결정',

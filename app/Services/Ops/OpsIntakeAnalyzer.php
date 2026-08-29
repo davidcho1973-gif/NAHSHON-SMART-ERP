@@ -26,9 +26,9 @@ class OpsIntakeAnalyzer
      * @param  array<int, array{data: string, mime_type: string}>  $images
      * @return array<int, array<string, mixed>>
      */
-    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = []): array
+    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = []): array
     {
-        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== [], $photoKinds, $specs).$learned;
+        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== [], $photoKinds, $specs, $inspections).$learned;
 
         $result = $images !== []
             ? $this->ocr->analyze($images, $prompt, $this->schema())['data'] ?? []
@@ -43,7 +43,7 @@ class OpsIntakeAnalyzer
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false, array $photoKinds = [], array $specs = []): string
+    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false, array $photoKinds = [], array $specs = [], array $inspections = []): string
     {
         $kindLine = $photoKinds === [] ? '' : ("\n[첨부 사진 종류(자동 판별)]\n".collect($photoKinds)
             ->map(fn (array $k, int $i) => sprintf('- %d번째 사진: %s%s', $i + 1, $k['label'] ?? '', ($k['summary'] ?? '') !== '' ? ' — '.$k['summary'] : ''))
@@ -66,15 +66,27 @@ class OpsIntakeAnalyzer
 - **글이 비어 있어도 사진만으로 판독하세요.** 사진이 곧 보고 내용입니다. 빈 결과를 돌려주지 마세요.
 P : '';
 
-        return $this->body($text, $activities, $purchases, $today, $specs).$kindLine.$photoRule;
+        return $this->body($text, $activities, $purchases, $today, $specs, $inspections).$kindLine.$photoRule;
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
+     * @param  array<int, array<string, mixed>>  $inspections
      */
-    private function body(string $text, array $activities, array $purchases, string $today, array $specs = []): string
+    private function body(string $text, array $activities, array $purchases, string $today, array $specs = [], array $inspections = []): string
     {
+        // 검사·시험 후보 — "앵커 검사" 같은 말을 제출물 대장 번호로 잇게 한다.
+        $inspList = collect($inspections)->take(150)->map(
+            fn (array $s) => sprintf(
+                '- [%s] %s — %s (계획일:%s, 상태:%s%s)',
+                $s['seq'] ?? '', $s['section'] ?? '', $s['title'] ?? '',
+                ($s['planned_on'] ?? '') !== '' ? $s['planned_on'] : '미등록',
+                $s['status'] ?? '-',
+                ($s['gate'] ?? '') === 'Y' ? ', ★정지조항' : '',
+            ),
+        )->implode("\n") ?: '(등록된 검사·시험 항목 없음)';
+
         $actList = collect($activities)->take(200)->map(
             fn (array $a) => sprintf(
                 '- [%s] %s (상태:%s, 예정:%s~%s)',
@@ -114,6 +126,9 @@ P : '';
 [등록된 발주 목록]
 {$poList}
 
+[등록된 검사·시험 항목 — 검사 일정은 반드시 이 중에서 고르세요]
+{$inspList}
+
 [이미 확정된 사양 — 도면·문서에서 읽은 것]
 {$specList}
 
@@ -126,6 +141,10 @@ P : '';
 - procurement : 자재 발주·납기·입고. ("화요일 도착", "발주 넣었다")
 - labor    : **출역 인원 보고**. ("한빛전기 3명 나왔습니다", "오늘 전기 5명", "김씨 오늘 못 나옴")
              이 현장의 핵심 보고다. 업체별로 나뉘면 업체마다 별도 item 으로 만들 것.
+- inspection : **검사·검측·입회·시험 일정**. ("다음 주 화요일 앵커 특별검사 입회", "수분시험 목요일 오전",
+             "카운티 인스펙션 9/10 잡혔습니다") 제3자(검사기관·감리·발주처·관할기관)가 와서 보는 일정이
+             여기다. 우리끼리 하는 작업 계획은 plan 이다. target_type="submittal", target_code 는
+             위 [등록된 검사·시험 항목]의 번호를 그대로 쓸 것.
 - expense  : 지출·영수증·구매 비용.
 - issue    : 사고·안전·하자·민원·작업중단 사유.
 - request  : **누가 누구에게 시킨 일·요청**. ("화기작업 승인 받으세요", "작업사진 송부 부탁드립니다",
@@ -173,6 +192,10 @@ P : '';
   · is_blocker: 이게 안 되면 다른 작업이 막히는 경우 true (예: 화기작업 승인 없으면 커팅 불가)
   · approved : approval 일 때만. 승인됐으면 true, 아직이면 false
 - 발주ETA:{"eta": "2026-07-29"}
+- 검사 일정(inspection): {"planned_on": "2026-09-08"}
+  (필요하면 {"assignee": "검사기관/입회자", "notes": "오전 9시, 21일 전 통보 완료"} 를 함께.
+   날짜는 **반드시 YYYY-MM-DD** 로 환산할 것 — "다음 주 화요일" 을 그대로 쓰면 버려집니다.
+   검사가 끝났다는 보고면 {"status": "승인"} 처럼 상태를 함께 넣으세요.)
 대화에서 확실히 읽히는 항목만 넣고, 나머지 키는 아예 넣지 마세요.
 
 ## 반환 항목 (items 배열)
@@ -181,8 +204,8 @@ P : '';
 - category     : 위 분류 중 하나
 - confidence   : 0~100 (대상·내용 확신도)
 - summary      : 한국어 한 줄 요약(관리자가 읽을 문장)
-- target_type  : "wbs" | "procurement" | "" (대상 없으면 빈 문자열)
-- target_code  : 위 목록의 code/PO번호 그대로. 확신 없으면 빈 문자열
+- target_type  : "wbs" | "procurement" | "submittal" | "" (대상 없으면 빈 문자열)
+- target_code  : 위 목록의 code/PO번호/검사항목번호 그대로. 확신 없으면 빈 문자열
 - target_name  : 대상의 이름(표시용)
 - occurred_on  : 이 내용이 해당하는 날짜(YYYY-MM-DD). 모르면 빈 문자열
 - proposed     : 위 형식의 변경안 객체. 없으면 빈 객체 {}
