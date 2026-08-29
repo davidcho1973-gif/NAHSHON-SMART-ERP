@@ -49,6 +49,7 @@ class ChatFactFinder
         'documents' => ['문서', '도면', '계약서', '서류', '스펙', '사양', 'drawing', 'document', 'spec'],
         'boq' => ['물량', '수량', '몇 개', '몇개', '몇 장', '몇장', '몇 본', '몇본', '단가', '산출', '내역', 'boq', 'quantity', 'takeoff'],
         'submittals' => ['제출물', '샵드로잉', '제작도', '컷시트', '배합설계', '승인', 'submittal', 'shop drawing'],
+        'inspection' => ['검사', '검측', '인스펙션', '입회', '시험', '시운전', '특별검사', '홀드포인트', '기한', '마감기한', 'inspection', 'testing', 'witness', 'hold point'],
     ];
 
     /** 한 종류당 몇 줄까지 실어 보낼 것인가. 길어지면 AI 가 핵심을 놓친다. */
@@ -94,6 +95,7 @@ class ChatFactFinder
                 'documents' => $facts['문서함'] = $this->documents($site, $asker, $question),
                 'boq' => $facts['물량/BOQ'] = $this->boq($site, $asker, $question),
                 'submittals' => $facts['제출물 대장'] = $this->submittals($site, $asker, $question),
+                'inspection' => $facts['검사·검측'] = $this->inspection($site, $asker, $question),
                 default => null,
             };
         }
@@ -538,6 +540,104 @@ class ChatFactFinder
         }
 
         return array_slice(array_values(array_unique($terms)), 0, 5);
+    }
+
+    /**
+     * 검사·검측 — "인스펙션 언제야?" 의 답이 될 수 있는 것을 한자리에 모은다.
+     *
+     * 검사 일정은 한 곳에 없다. 시방이 요구하는 시험 항목은 제출물 대장에,
+     * 통과해야 넘어가는 관문은 공정표의 홀드포인트에, 문서에서 뽑은 기한은
+     * 액션 아이템에 흩어져 있다. 셋을 함께 실어야 AI 가 제대로 답한다.
+     *
+     * <b>날짜가 비어 있으면 비었다고 말한다.</b> 일정이 아직 안 잡힌 것과
+     * 조회를 못 한 것은 완전히 다른 이야기인데, 조용히 빼면 AI 가 그 둘을
+     * 구별하지 못하고 "확인되지 않습니다" 로 뭉뚱그린다.
+     */
+    private function inspection(?Site $site, User $asker, string $question): array
+    {
+        $out = [];
+
+        // 1) 시방이 요구하는 시험·검사 (제출물 대장)
+        $tests = Submittal::query()
+            ->when($site, fn ($q) => $q->where('site_id', $site->id))
+            ->where(function ($q): void {
+                $q->where('category', '시험·검사')
+                    ->orWhere('title', 'ilike', '%검사%')
+                    ->orWhere('title', 'ilike', '%시험%');
+            });
+        AccessPolicy::applyCompanyLock($tests, $asker);
+
+        $total = (clone $tests)->count();
+        if ($total > 0) {
+            $terms = $this->searchTerms($question);
+            $rows = (clone $tests)
+                ->when($terms !== [], function ($q) use ($terms): void {
+                    $q->where(function ($w) use ($terms): void {
+                        foreach ($terms as $t) {
+                            $w->orWhere('title', 'ilike', "%{$t}%")->orWhere('section', 'ilike', "%{$t}%");
+                        }
+                    });
+                })
+                ->orderByDesc('gate')
+                ->orderBy('seq')
+                ->limit(self::ROWS)
+                ->get();
+
+            $out['시방 요구 시험·검사'] = array_filter([
+                '전체 건수' => $total,
+                '계획일이 등록된 건' => (clone $tests)->whereNotNull('planned_on')->count(),
+                '목록' => ($rows->isEmpty() ? (clone $tests)->orderByDesc('gate')->orderBy('seq')->limit(6)->get() : $rows)
+                    ->map(fn (Submittal $s): array => array_filter([
+                        '공종' => trim($s->csi.' '.$s->section),
+                        '항목' => mb_substr((string) $s->title, 0, 140),
+                        '계획일' => $s->planned_on?->toDateString() ?? '미등록',
+                        '상태' => $s->status,
+                        '게이트' => $s->gate ? '★ 통과 전 다음 공정 금지' : null,
+                    ]))->values()->all(),
+            ]);
+        }
+
+        // 2) 공정표의 검측 관문(홀드포인트)
+        if ($site) {
+            $holds = WbsItem::query()->where('site_id', $site->id)->where('hold_point', true);
+            AccessPolicy::applyCompanyLock($holds, $asker);
+
+            $holdRows = (clone $holds)->orderBy('planned_end')->limit(self::ROWS)->get();
+            $out['공정표 검측 관문(홀드포인트)'] = $holdRows->isEmpty()
+                ? '공정표에 홀드포인트로 표시된 작업이 아직 없습니다(기능은 있으나 미지정).'
+                : $holdRows->map(fn (WbsItem $w): array => array_filter([
+                    '코드' => $w->wbs_code,
+                    '작업' => $w->name,
+                    '계획' => $w->planned_start?->toDateString().'~'.$w->planned_end?->toDateString(),
+                    '검측' => $w->hold_released ? '통과' : '대기(미통과 시 완료 처리 잠김)',
+                    '메모' => $w->hold_note,
+                ]))->values()->all();
+        }
+
+        // 3) 문서에서 AI 가 뽑아 둔 기한·검사 액션
+        $actions = \App\Models\DocumentActionItem::query()
+            ->when($site, fn ($q) => $q->where('site_id', $site->id))
+            ->whereIn('action_type', ['deadline', 'quality', 'compliance', 'inspection', 'response'])
+            ->orderByRaw('due_at IS NULL')
+            ->orderBy('due_at')
+            ->limit(self::ROWS);
+        AccessPolicy::applyCompanyLock($actions, $asker);
+
+        $actionRows = $actions->get();
+        if ($actionRows->isNotEmpty()) {
+            $out['문서에서 뽑은 검사·기한 항목'] = $actionRows->map(fn ($a): array => array_filter([
+                '종류' => $a->action_type,
+                '내용' => mb_substr((string) ($a->title ?: $a->details), 0, 140),
+                '기한' => $a->due_at?->toDateString() ?? '문서에 날짜 명시 없음',
+                '조치' => filled($a->recommended_action) ? mb_substr((string) $a->recommended_action, 0, 120) : null,
+            ]))->values()->all();
+        }
+
+        if ($out !== []) {
+            $out['안내'] = '검사 실시 일자는 별도로 등록해야 확정됩니다 — 위 계획일이 "미등록"이면 아직 일정이 잡히지 않은 것이지, 조회가 안 된 것이 아닙니다.';
+        }
+
+        return $out;
     }
 
     /**
