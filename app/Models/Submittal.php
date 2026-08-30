@@ -35,6 +35,8 @@ class Submittal extends Model
         'company_id', 'site_id', 'project_id',
         'seq', 'csi', 'section', 'category', 'title', 'gate',
         'status', 'assignee', 'planned_on', 'submitted_on', 'approved_on', 'notes',
+        // 소통 상대 — 자료를 주는 업체와 자료를 최종 받는 원청·감리.
+        'vendor_name', 'vendor_email', 'vendor_phone', 'recipient_name', 'recipient_email',
         // 시방 추출로 들어온 줄이 달고 오는 것들
         'confidence', 'needs_review', 'review_reason', 'source_document_id', 'extracted_by', 'source_excerpt',
     ];
@@ -74,6 +76,18 @@ class Submittal extends Model
         return $this->belongsToMany(IntelligentDocument::class, 'submittal_documents')
             ->withPivot('kind')
             ->withTimestamps();
+    }
+
+    /** 소통 이력 — 요청·연결·전달·승인이 시간순으로 남는다. */
+    public function events(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SubmittalEvent::class)->orderBy('created_at')->orderBy('id');
+    }
+
+    /** 마지막 소통 한 줄 — 목록이 "지금 어디까지 왔나" 를 보여줄 때 쓴다. */
+    public function lastEvent(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SubmittalEvent::class)->latestOfMany();
     }
 
     public function company(): BelongsTo

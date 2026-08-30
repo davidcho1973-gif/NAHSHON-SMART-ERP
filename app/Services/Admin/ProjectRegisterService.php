@@ -53,7 +53,7 @@ class ProjectRegisterService
         $projectId = $this->resolveProject($projectId, $projects);
 
         $q = Submittal::query()
-            ->with(['sourceDocument:id,title,original_file_name,extension', 'documents:id,title,original_file_name'])
+            ->with(['sourceDocument:id,title,original_file_name,extension', 'documents:id,title,original_file_name', 'lastEvent'])
             ->orderBy('seq');
         $this->applyScope($q);
 
@@ -95,6 +95,14 @@ class ProjectRegisterService
                 'id' => $d->id,
                 'label' => $d->title ?: $d->original_file_name,
             ])->values()->all(),
+            // 소통 상대와 마지막 소통 — 목록만 봐도 "누구와 어디까지 왔는지" 보이게.
+            'vendorName' => $s->vendor_name,
+            'vendorEmail' => $s->vendor_email,
+            'recipientName' => $s->recipient_name,
+            'recipientEmail' => $s->recipient_email,
+            'lastComm' => $s->lastEvent
+                ? (\App\Models\SubmittalEvent::KIND_LABELS[$s->lastEvent->kind] ?? $s->lastEvent->kind).' · '.$s->lastEvent->created_at?->format('m-d')
+                : null,
         ])->values()->all();
 
         $byStatus = [];
@@ -221,6 +229,36 @@ class ProjectRegisterService
 
         return app(\App\Services\Takeoff\SubmittalResearchService::class)
             ->fileCandidate($row, $index, auth()->id());
+    }
+
+    /**
+     * 제출물 소통 — 담당자 저장·요청 발송·자료 연결·원청 전달·이력 조회를 한 문으로.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    public function submittalComms(string $action, int $submittalId, array $args = []): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '제출물 대장 수정 권한이 없습니다.'];
+        }
+
+        $row = Submittal::query()->find($submittalId);
+        if (! $row) {
+            return ['success' => false, 'error' => '해당 항목이 없습니다.'];
+        }
+
+        $comms = app(\App\Services\Takeoff\SubmittalCommsService::class);
+        $userId = auth()->id();
+
+        return match ($action) {
+            'overview' => $comms->overview($row),
+            'contacts' => $comms->saveContacts($row, is_array($args['data'] ?? null) ? $args['data'] : [], (bool) ($args['applyToCsi'] ?? false)),
+            'request' => $comms->sendRequest($row, $userId),
+            'link' => $comms->linkDocuments($row, is_array($args['documentIds'] ?? null) ? $args['documentIds'] : [], (string) ($args['kind'] ?? 'received'), $userId),
+            'transmit' => $comms->sendTransmit($row, $userId),
+            default => ['success' => false, 'error' => '알 수 없는 동작입니다: '.$action],
+        };
     }
 
     /**

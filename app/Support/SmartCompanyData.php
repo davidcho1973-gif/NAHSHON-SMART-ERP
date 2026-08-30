@@ -207,6 +207,12 @@ class SmartCompanyData
                 (int) ($args[0] ?? 0),
                 isset($args[1]) ? (string) $args[1] : null
             ),
+            // 제출물 소통 — 담당자·요청 메일·자료 연결·원청 전달·이력
+            'api_submittalComms' => app(ProjectRegisterService::class)->submittalComms(
+                (string) ($args[0] ?? ''),
+                (int) ($args[1] ?? 0),
+                is_array($args[2] ?? null) ? $args[2] : [],
+            ),
             // 제품 자료 AI 웹 조사 → 후보 중 고른 것을 문서함에 편철·연결
             'api_researchSubmittal' => app(ProjectRegisterService::class)->researchSubmittal((int) ($args[0] ?? 0)),
             'api_fileSubmittalResearch' => app(ProjectRegisterService::class)->fileSubmittalResearch((int) ($args[0] ?? 0), (int) ($args[1] ?? -1)),

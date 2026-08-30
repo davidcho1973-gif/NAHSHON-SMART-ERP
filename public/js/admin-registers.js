@@ -167,21 +167,28 @@
                   }).join('') + '</div>' : '');
             } },
           { key: 'status', label: '상태', width: '120px', render: statusCell },
-          { key: 'assignee', label: '담당 · 일정', width: '150px', render: function (r) {
+          { key: 'assignee', label: '담당 · 일정', width: '170px', render: function (r) {
               var lines = [];
+              if (r.vendorName || r.vendorEmail) lines.push('업체 ' + u.esc(r.vendorName || r.vendorEmail));
+              if (r.recipientName || r.recipientEmail) lines.push('수신 ' + u.esc(r.recipientName || r.recipientEmail));
               if (r.assignee) lines.push(u.esc(r.assignee));
               if (r.plannedOn) lines.push('계획 ' + r.plannedOn);
               if (r.submittedOn) lines.push('제출 ' + r.submittedOn);
               if (r.approvedOn) lines.push('승인 ' + r.approvedOn);
+              // 마지막 소통 — 목록만 봐도 어디까지 왔는지 보인다.
+              if (r.lastComm) lines.push('<span style="color:var(--brand-primary)">' + u.esc(r.lastComm) + '</span>');
               return lines.length ? '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6">' + lines.join('<br>') + '</div>' : '';
             } },
-          { key: '_act', label: '', width: '210px', align: 'right', render: function (r) {
+          { key: '_act', label: '', width: '170px', align: 'right', render: function (r) {
               if (!canManage) return '';
               // 제품 자료는 제조사가 웹에 공개해 둔다 — AI 가 찾고, 사람이 고르고, 편철된다.
-              return u.rowButton('🌐 AI 조사', 'window.AdminRegisters.researchSubmittal(' + r.id + ')') + ' ' +
+              return '<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end">' +
+                u.rowButton('📮 소통', 'window.AdminRegisters.openComms(' + r.id + ')') +
+                u.rowButton('🌐 AI 조사', 'window.AdminRegisters.researchSubmittal(' + r.id + ')') +
                 // 조항을 읽고 업체에 보낼 요청서를 매번 손으로 쓰던 일 — 그 편지를 대신 쓴다.
-                u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') + ' ' +
-                u.rowButton('기록', 'window.AdminRegisters.openSubmittal(' + r.id + ')');
+                u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') +
+                u.rowButton('기록', 'window.AdminRegisters.openSubmittal(' + r.id + ')') +
+                '</div>';
             } },
         ],
         rows: rows,
@@ -305,6 +312,183 @@
       var body = wrap.querySelector('#reg-research-body');
       if (body) body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger,#dc2626);font-size:13px">' + u.esc(e.message) + '</div>';
     });
+  }
+
+  /**
+   * 소통 창 — 담당자·요청·받기·전달·승인이 한 화면에.
+   * 원칙: 단계가 상태를 움직인다(요청→작성중, 전달→제출, 승인본→승인).
+   * 화면에서 상태만 바꾸는 것도 되지만, 소통으로 움직인 상태는 기록이 함께 남는다.
+   */
+  function openComms(id) {
+    var u = ui();
+    var row = (state.sub.rows || []).filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.5);display:flex;' +
+      'align-items:center;justify-content:center;padding:20px';
+    wrap.innerHTML = '<div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;' +
+      'width:min(880px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:15px 18px;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;gap:12px;align-items:flex-start">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text-primary)">📮 제출물 소통 — #' + row.seq + '</div>' +
+          '<div style="font-size:11.5px;color:var(--text-tertiary);margin-top:3px;word-break:keep-all">' +
+            u.esc((row.csi ? '[' + row.csi + '] ' : '') + row.title.slice(0, 120)) + '</div>' +
+        '</div>' +
+        '<button type="button" data-x="close" style="padding:7px 13px;border-radius:8px;border:1px solid var(--border-default);' +
+          'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;cursor:pointer;flex-shrink:0">닫기</button>' +
+      '</div>' +
+      '<div id="reg-comms-body" style="flex:1;overflow:auto;padding:16px 18px">' +
+        '<div style="text-align:center;padding:30px;color:var(--text-tertiary)">불러오는 중…</div>' +
+      '</div></div>';
+
+    function close() { wrap.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    wrap.addEventListener('click', function (e) {
+      if (e.target === wrap || (e.target.getAttribute && e.target.getAttribute('data-x') === 'close')) close();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+
+    var inputStyle = 'width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);' +
+      'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;box-sizing:border-box';
+    var btnStyle = 'padding:8px 14px;border-radius:8px;border:none;background:var(--brand-primary);color:#fff;' +
+      'font-size:12.5px;font-weight:600;cursor:pointer';
+    var btn2Style = 'padding:8px 14px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);' +
+      'color:var(--text-primary);font-size:12.5px;cursor:pointer';
+
+    function act(action, args, btn) {
+      if (btn) btn.disabled = true;
+      return call('api_submittalComms', [action, id, args || {}]).then(function (res) {
+        if (res.success === false) { u.toast(res.error || '실패했습니다.', 'error'); return null; }
+        if (res.message) u.toast(res.message);
+        // 메일 서버가 없으면 사장님 메일앱으로 — 보낼 내용은 이미 채워져 있다.
+        if (res.mailto) window.location.href = res.mailto;
+        reloadSubmittals().then(drawSubmittals);
+        return res;
+      }).catch(function (e) { u.toast(e.message, 'error'); return null; })
+        .finally(function () { if (btn) btn.disabled = false; });
+    }
+
+    function render(d) {
+      var body = wrap.querySelector('#reg-comms-body');
+      if (!body) return;
+      var c = d.contacts || {};
+      var field = function (label, name, value, type) {
+        return '<div><label style="display:block;font-size:10.5px;font-weight:700;color:var(--text-tertiary);margin-bottom:4px">' + label + '</label>' +
+          '<input data-c="' + name + '" type="' + (type || 'text') + '" value="' + u.esc(value || '') + '" style="' + inputStyle + '"></div>';
+      };
+      var mailNote = d.mailReady ? '' :
+        '<div style="font-size:11px;color:var(--warning,#b45309);margin-top:6px;word-break:keep-all">' +
+        '메일 서버가 아직 없어, 보내기를 누르면 <b>사장님 메일앱</b>이 내용이 채워진 채 열립니다. 환경변수에 MAIL 설정을 넣으면 ERP 가 직접 보냅니다.</div>';
+
+      body.innerHTML =
+        // ── 담당자 ──
+        '<div style="border:1px solid var(--border-default);border-radius:10px;padding:14px;margin-bottom:12px">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px">담당자</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+            field('자료 제공 업체', 'vendorName', c.vendorName) +
+            field('업체 이메일', 'vendorEmail', c.vendorEmail, 'email') +
+            field('업체 전화', 'vendorPhone', c.vendorPhone) +
+            field('최종 수신 (원청·감리)', 'recipientName', c.recipientName) +
+            field('수신 이메일', 'recipientEmail', c.recipientEmail, 'email') +
+            '<div style="display:flex;align-items:flex-end;gap:8px">' +
+              '<label style="display:flex;gap:5px;align-items:center;font-size:11px;color:var(--text-secondary);cursor:pointer;white-space:nowrap">' +
+                '<input type="checkbox" id="comms-apply-csi">같은 공종 전체 적용</label>' +
+              '<button type="button" id="comms-save" style="' + btnStyle + '">저장</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        // ── 진행 단계 ──
+        '<div style="border:1px solid var(--border-default);border-radius:10px;padding:14px;margin-bottom:12px">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px">진행 — 현재 상태: ' +
+            '<span style="color:var(--brand-primary)">' + u.esc(d.status || '') + '</span></div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
+            '<button type="button" id="comms-request" style="' + btnStyle + '"' + (c.vendorEmail ? '' : ' disabled title="업체 이메일을 먼저 넣으세요"') + '>① 업체에 요청 메일</button>' +
+            '<button type="button" id="comms-link-received" style="' + btn2Style + '">② 받은 자료 연결</button>' +
+            '<button type="button" id="comms-transmit" style="' + btnStyle + '"' + (c.recipientEmail ? '' : ' disabled title="수신 이메일을 먼저 넣으세요"') + '>③ 원청에 전달 (자료 첨부)</button>' +
+            '<button type="button" id="comms-link-approval" style="' + btn2Style + '">④ 승인본 연결</button>' +
+          '</div>' + mailNote +
+        '</div>' +
+        // ── 연결 후보 (기본 접힘) ──
+        '<div id="comms-picker" style="display:none;border:1px solid var(--brand-primary);border-radius:10px;padding:14px;margin-bottom:12px">' +
+          '<div style="font-size:12.5px;font-weight:700;color:var(--text-primary);margin-bottom:8px" id="comms-picker-title"></div>' +
+          ((d.linkable || []).length
+            ? (d.linkable || []).map(function (doc) {
+                return '<label style="display:flex;gap:7px;align-items:center;font-size:12px;color:var(--text-primary);padding:5px 2px;cursor:pointer">' +
+                  '<input type="checkbox" class="comms-pick" value="' + doc.id + '">' +
+                  '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + u.esc(doc.label) + '</span>' +
+                  '<span style="color:var(--text-tertiary);font-size:10.5px;flex-shrink:0">' + u.esc(doc.receivedAt || '') + '</span></label>';
+              }).join('')
+            : '<div style="font-size:11.5px;color:var(--text-tertiary)">이 프로젝트에 연결할 만한 최근 문서가 없습니다. 업체가 보낸 파일을 먼저 문서함에 올려 주세요.</div>') +
+          '<div style="margin-top:10px"><button type="button" id="comms-picker-go" style="' + btnStyle + '">연결</button></div>' +
+        '</div>' +
+        // ── 연결된 자료 ──
+        ((d.documents || []).length
+          ? '<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:5px">' + d.documents.map(function (doc) {
+              return '<button type="button" onclick="window.AdminRegisters.openSource(' + doc.id + ')" ' +
+                'style="border:1px solid var(--border-default);background:var(--bg-base);border-radius:999px;padding:4px 11px;' +
+                'font-size:11px;color:var(--text-primary);cursor:pointer">' + (doc.kind === 'approval' ? '✅ ' : '📎 ') + u.esc(doc.label) + '</button>';
+            }).join('') + '</div>'
+          : '') +
+        // ── 타임라인 ──
+        '<div style="border:1px solid var(--border-default);border-radius:10px;padding:14px">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px">소통 이력</div>' +
+          ((d.events || []).length
+            ? d.events.map(function (ev) {
+                return '<div style="display:flex;gap:9px;font-size:11.5px;padding:5px 0;border-bottom:1px dashed var(--border-default)">' +
+                  '<span style="color:var(--text-tertiary);flex-shrink:0">' + u.esc(ev.at || '') + '</span>' +
+                  '<span style="font-weight:700;color:var(--text-primary);flex-shrink:0">' + u.esc(ev.label) + '</span>' +
+                  '<span style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                    u.esc(ev.to || ev.document || ev.subject || '') +
+                    (ev.channel === 'mailto' ? ' (메일앱에서 작성)' : '') + '</span></div>';
+              }).join('')
+            : '<div style="font-size:11.5px;color:var(--text-tertiary)">아직 소통 기록이 없습니다. 담당자를 넣고 ① 부터 시작하세요.</div>') +
+        '</div>';
+
+      // ── 동작 연결 ──
+      var pickerKind = 'received';
+      body.querySelector('#comms-save').onclick = function () {
+        var data = {};
+        body.querySelectorAll('input[data-c]').forEach(function (el) { data[el.getAttribute('data-c')] = el.value; });
+        act('contacts', { data: data, applyToCsi: body.querySelector('#comms-apply-csi').checked }, this)
+          .then(function (res) { if (res) { u.toast('담당자를 저장했습니다' + (res.applied > 1 ? ' — 같은 공종 ' + res.applied + '줄' : '') + '.'); refresh(); } });
+      };
+      body.querySelector('#comms-request').onclick = function () {
+        act('request', {}, this).then(function (res) { if (res) refresh(); });
+      };
+      body.querySelector('#comms-transmit').onclick = function () {
+        act('transmit', {}, this).then(function (res) { if (res) refresh(); });
+      };
+      function showPicker(kind, title) {
+        pickerKind = kind;
+        var p = body.querySelector('#comms-picker');
+        p.style.display = 'block';
+        body.querySelector('#comms-picker-title').textContent = title;
+        p.scrollIntoView({ block: 'nearest' });
+      }
+      body.querySelector('#comms-link-received').onclick = function () {
+        showPicker('received', '받은 자료로 연결할 문서를 고르세요 (문서함 최근 문서)');
+      };
+      body.querySelector('#comms-link-approval').onclick = function () {
+        showPicker('approval', '승인본으로 연결할 문서를 고르세요 — 연결하면 상태가 「승인」이 됩니다');
+      };
+      body.querySelector('#comms-picker-go').onclick = function () {
+        var ids = Array.from(body.querySelectorAll('.comms-pick:checked')).map(function (x) { return parseInt(x.value, 10); });
+        if (!ids.length) { u.toast('문서를 먼저 고르세요.', 'error'); return; }
+        act('link', { documentIds: ids, kind: pickerKind }, this)
+          .then(function (res) { if (res) { u.toast('자료 ' + res.linked + '건을 연결했습니다.'); refresh(); } });
+      };
+    }
+
+    function refresh() {
+      call('api_submittalComms', ['overview', id, {}]).then(render).catch(function (e) {
+        var body = wrap.querySelector('#reg-comms-body');
+        if (body) body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--danger,#dc2626)">' + u.esc(e.message) + '</div>';
+      });
+    }
+
+    refresh();
   }
 
   function reloadSubmittals() {
@@ -604,6 +788,7 @@
     openSubmittal: openSubmittal,
     requestVendorData: requestVendorData,
     researchSubmittal: researchSubmittal,
+    openComms: openComms,
     openSource: openSource,
     setBoqProject: setBoqProject,
     toggleReviewOnly: toggleReviewOnly,
