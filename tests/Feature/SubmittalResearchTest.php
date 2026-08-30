@@ -36,7 +36,11 @@ class SubmittalResearchTest extends TestCase
         Storage::fake('local');
     }
 
-    public function test_research_returns_candidates_from_claude_web_search(): void
+    /**
+     * 조사는 접수(번호표) 방식이다 — 요청 안에서 기다리면 게이트웨이가 504 로 끊는다.
+     * 접수 → 번호표 → 상태 조회에서 결과를 받는 흐름을 그대로 검증한다.
+     */
+    public function test_research_returns_candidates_via_job_ticket(): void
     {
         [$admin, $row] = $this->fixture();
         $this->fakeClaude([
@@ -44,11 +48,20 @@ class SubmittalResearchTest extends TestCase
             ['maker' => 'Knauf', 'product' => 'EcoBatt', 'url' => 'https://www.example-knauf.com/ecobatt', 'file' => 'page', 'why' => '규격 동일, 페이지에서 PDF 제공'],
         ]);
 
-        $data = $this->actingAs($admin)
+        $ticket = $this->actingAs($admin)
             ->postJson('/smart-company-api/api_researchSubmittal', ['args' => [$row->id]])
             ->assertOk()->json();
+        $this->assertTrue($ticket['success']);
+        $this->assertIsInt($ticket['jobId']);
 
-        $this->assertTrue($data['success']);
+        // afterResponse 로 접수된 작업은 응답 종료 시 실행됐다 — 번호표로 결과를 받는다.
+        $status = $this->actingAs($admin)
+            ->postJson('/smart-company-api/api_getAiJob', ['args' => [$ticket['jobId']]])
+            ->assertOk()->json();
+
+        $this->assertTrue($status['done']);
+        $this->assertSame('done', $status['status']);
+        $data = $status['result'];
         $this->assertSame('claude', $data['engine']);
         $this->assertCount(2, $data['candidates']);
         $this->assertSame('Owens Corning', $data['candidates'][0]['maker']);
@@ -122,11 +135,17 @@ class SubmittalResearchTest extends TestCase
         [, $row] = $this->fixture();
         $viewer = $this->user('payroll');
 
-        $data = $this->actingAs($viewer)
+        // 접수는 되지만(번호표 방식), 작업은 접수한 사람의 권한으로 돌므로 실패로 남는다.
+        $ticket = $this->actingAs($viewer)
             ->postJson('/smart-company-api/api_researchSubmittal', ['args' => [$row->id]])
             ->assertOk()->json();
 
-        $this->assertFalse($data['success']);
+        $status = $this->actingAs($viewer)
+            ->postJson('/smart-company-api/api_getAiJob', ['args' => [$ticket['jobId']]])
+            ->assertOk()->json();
+
+        $this->assertSame('failed', $status['status']);
+        $this->assertStringContainsString('권한', $status['error']);
     }
 
     public function test_without_any_api_key_the_error_says_so(): void
@@ -134,12 +153,16 @@ class SubmittalResearchTest extends TestCase
         config(['services.anthropic.api_key' => '']);
         [$admin, $row] = $this->fixture();
 
-        $data = $this->actingAs($admin)
+        $ticket = $this->actingAs($admin)
             ->postJson('/smart-company-api/api_researchSubmittal', ['args' => [$row->id]])
             ->assertOk()->json();
 
-        $this->assertFalse($data['success']);
-        $this->assertStringContainsString('API 키', $data['error']);
+        $status = $this->actingAs($admin)
+            ->postJson('/smart-company-api/api_getAiJob', ['args' => [$ticket['jobId']]])
+            ->assertOk()->json();
+
+        $this->assertSame('failed', $status['status']);
+        $this->assertStringContainsString('API 키', $status['error']);
     }
 
     /** @param list<array<string, string>> $candidates */

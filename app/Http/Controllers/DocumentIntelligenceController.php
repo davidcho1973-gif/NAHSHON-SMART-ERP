@@ -335,6 +335,38 @@ class DocumentIntelligenceController extends Controller
     }
 
     /**
+     * 문서 정보 수정 — 사람이 AI 분류를 바로잡는 창구.
+     *
+     * AI 작업 번호표 리팩터링 때 실수로 지워졌던 메서드다 — 라우트는 남아 있는데
+     * 메서드가 없어 수정 저장이 전부 500 으로 죽었다. 그대로 복원한다.
+     */
+    public function review(Request $request, IntelligentDocument $document): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'category' => ['required', 'string', 'in:'.implode(',', array_keys(IntelligentDocument::CATEGORY_OPTIONS))],
+            'document_type' => ['required', 'string', 'in:'.implode(',', array_keys(IntelligentDocument::TYPE_OPTIONS))],
+            'discipline' => ['nullable', 'string', 'max:80'],
+            'document_number' => ['nullable', 'string', 'max:120'],
+            'revision' => ['nullable', 'string', 'max:40'],
+            'document_date' => ['nullable', 'date'],
+            'response_due_on' => ['nullable', 'date'],
+            'expires_on' => ['nullable', 'date'],
+        ]);
+
+        $document->update([
+            ...$data,
+            'ai_status' => 'ready',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+        ]);
+
+        return response()->json(['success' => true, 'document' => $this->documentRow($document->fresh())]);
+    }
+
+    /**
      * 문서 삭제 — 레코드와 원본 파일을 함께 지운다.
      *
      * 잘못 올린 문서, 중복 스캔, 폐기된 개정본은 목록에 남아 있으면 그 자체가 오정보다.

@@ -171,9 +171,17 @@ class DocumentIntelligenceHubTest extends TestCase
             'search_text' => 'Hilti restricted other site',
             'ai_status' => 'ready',
         ]);
+        // MIME 이 text/plain 인 가짜 docx — 변환은 실패해도 MIME 폴백으로 텍스트 미리보기가 된다.
         $officeDocument = $this->document($admin, $company, $site, $project, 'method-statement.docx', 'PK office document', [
             'title' => 'Method Statement',
             'search_text' => 'Method statement for permitted work',
+            'ai_status' => 'ready',
+        ]);
+        // 확장자·파일명·MIME 셋 다 알아볼 수 없는 형식 — 이것만 415 가 맞다.
+        $archive = $this->document($admin, $company, $site, $project, 'photos.zip', 'PK archive', [
+            'title' => 'Photo Archive',
+            'mime_type' => 'application/zip',
+            'extension' => 'zip',
             'ai_status' => 'ready',
         ]);
         $siteManager = $this->user('site_manager', 'site', $site->id);
@@ -192,7 +200,12 @@ class DocumentIntelligenceHubTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('X-Content-Type-Options', 'nosniff');
-        $this->get(route('document-intelligence.preview', $officeDocument))->assertStatus(415);
+        // 예전에는 확장자 컬럼만 보고 415 로 밀어냈다 — 지금은 파일명·MIME 까지 보고
+        // 알아볼 수 있으면 열어 준다(임포트 문서는 확장자 칸이 비어 있었다).
+        $this->get(route('document-intelligence.preview', $officeDocument))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
+        $this->get(route('document-intelligence.preview', $archive))->assertStatus(415);
         $this->get(route('document-intelligence.download', $blocked))->assertNotFound();
     }
 
