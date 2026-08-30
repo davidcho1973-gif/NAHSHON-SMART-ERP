@@ -381,7 +381,10 @@
       if (!ok) return;
       return call('api_deleteEmployeeAdmin', [id]).then(function (res) {
         if (res.success === false) { u.toast(res.error || '삭제하지 못했습니다.', 'error'); return; }
-        u.toast('직원을 삭제했습니다.');
+        // 근무 기록까지 지워졌으면 그 사실을 그냥 넘기지 않는다 — 되돌릴 수 없는 일이다.
+        u.toast(res.removedLogs
+          ? '직원을 삭제했습니다. 출퇴근 기록 ' + res.removedLogs + '건도 함께 지워졌습니다.'
+          : '직원을 삭제했습니다.');
         return reload();
       });
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });

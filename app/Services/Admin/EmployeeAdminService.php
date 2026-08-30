@@ -514,16 +514,42 @@ class EmployeeAdminService
             return ['success' => false, 'error' => '직원을 찾을 수 없습니다.'];
         }
 
-        // 출퇴근 기록이 남아 있으면 지우지 않는다. 지우면 그 사람의 근무 사실과
-        // 급여 근거가 함께 사라진다.
-        $logs = $row->attendanceLogs()->count();
-        if ($logs > 0) {
-            return ['success' => false, 'error' => "출퇴근 기록이 {$logs}건 있습니다. 삭제 대신 상태를 \"퇴사\" 로 두세요."];
+        $isSuper = $actor->access_role === 'super_admin';
+
+        // 급여명세가 나간 사람은 <b>누구도</b> 지우지 않는다 — 최고관리자도 마찬가지다.
+        // 지급 기록은 세무·노동 기록이라 회사가 몇 년을 보관해야 하는 종류이고,
+        // 직원 행이 사라지면 명세도 함께 지워진다(payslips 가 cascade 다).
+        $payslips = \Illuminate\Support\Facades\Schema::hasTable('payslips')
+            ? \Illuminate\Support\Facades\DB::table('payslips')->where('employee_id', $row->id)->count()
+            : 0;
+        if ($payslips > 0) {
+            return ['success' => false, 'error' => "급여명세가 {$payslips}건 발행된 직원입니다. 지급 기록은 보관해야 하므로 삭제할 수 없습니다 — 상태를 \"퇴사\" 로 두세요."];
         }
 
+        // 출퇴근 기록이 남아 있으면 보통은 지우지 않는다 — 그 사람의 근무 사실과
+        // 급여 근거가 함께 사라지기 때문이다. 다만 잘못 등록한 사람을 치우는 일은
+        // 실제로 필요하므로, 그 판단은 최고관리자에게만 맡긴다.
+        $logs = $row->attendanceLogs()->count();
+        if ($logs > 0 && ! $isSuper) {
+            return ['success' => false, 'error' => "출퇴근 기록이 {$logs}건 있습니다. 삭제 대신 상태를 \"퇴사\" 로 두세요. (최고관리자만 삭제할 수 있습니다)"];
+        }
+
+        $name = (string) $row->name;
         $row->delete();
 
-        return ['success' => true];
+        // 지웠다는 사실을 남긴다 — 기록이 사라진 뒤에 "왜 없어졌나" 를 물을 때
+        // 답할 수 있어야 한다.
+        if ($logs > 0) {
+            \App\Models\AuthEvent::record(
+                'employee_deleted',
+                actor: $actor,
+                method: 'admin',
+                request: request(),
+                note: "{$name}(#{$id}) 삭제 — 출퇴근 {$logs}건 함께 삭제됨",
+            );
+        }
+
+        return ['success' => true, 'removedLogs' => $logs];
     }
 
     private function applyScope($query): void
