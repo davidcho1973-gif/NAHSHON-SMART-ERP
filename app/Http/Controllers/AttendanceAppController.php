@@ -166,7 +166,17 @@ class AttendanceAppController extends Controller
             'accuracy' => ['nullable', 'numeric'],
             // 화면에서 고른 언어 — 응답 문구를 그 언어로 만든다.
             'lang' => ['nullable', 'in:ko,en,es'],
+            // 스캔한 현장 QR. 앱의 출퇴근은 이제 버튼이 아니라 이 스캔으로만 일어난다.
+            'gate_site' => ['required', 'integer'],
         ]);
+
+        // 남의 현장 QR 로는 찍히지 않는다 — 찍었으면 그 사람은 거기 없었다.
+        if ((int) $data['gate_site'] !== (int) $employee->site_id) {
+            return response()->json([
+                'success' => false,
+                'error' => '이 현장의 QR 이 아닙니다. 배정된 현장의 출입구 QR 을 스캔해 주세요.',
+            ], 422);
+        }
 
         // 폰이 보낸 ip 는 믿지 않는다 — 서버가 본 주소로 넣는다.
         $data['ip'] = $request->ip();

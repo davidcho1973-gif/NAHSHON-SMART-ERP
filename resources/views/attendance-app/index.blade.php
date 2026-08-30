@@ -125,6 +125,38 @@
             border-radius: 16px; padding: 20px;
             position: relative; overflow: hidden;
         }
+        /* ── 현장 QR 스캔 ─────────────────────────────────────────
+           카메라 위에 얹히는 화면이라 바탕은 검정이다. 노란 테두리 하나만 두어
+           "여기에 QR 을 맞추라"는 것을 말없이 알린다. */
+        .scan {
+            position: fixed; inset: 0; z-index: 90; background: #000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .scan video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .scan-frame {
+            position: relative; width: min(72vw, 280px); aspect-ratio: 1;
+            border: 3px solid var(--kakao); border-radius: 20px;
+            box-shadow: 0 0 0 100vmax rgba(0,0,0,.55);
+        }
+        .scan-hint {
+            position: absolute; left: 0; right: 0; bottom: calc(18% + env(safe-area-inset-bottom));
+            margin: 0; padding: 0 24px; text-align: center;
+            color: #fff; font-size: 15px; font-weight: 700; line-height: 1.6; word-break: keep-all;
+        }
+        .scan-cancel {
+            position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px;
+            width: 44px; height: 44px; border: none; border-radius: 50%;
+            background: rgba(255,255,255,.9); color: #191919; font-size: 20px; font-weight: 800; cursor: pointer;
+        }
+
+        /* ── 전체공지 ───────────────────────────────────────────── */
+        .notice { padding: 13px 15px; border-top: 1px solid var(--rule); }
+        .notice:first-child { border-top: 0; }
+        .notice.pin { background: #FFFCE6; }
+        .notice-h { display: flex; gap: 8px; align-items: baseline; font-size: 14px; font-weight: 800; word-break: keep-all; }
+        .notice-h span { margin-left: auto; flex: none; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+        .notice-b { margin-top: 4px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; word-break: keep-all; }
+
         .slab.is-working { background: var(--kakao); color: var(--label); }
         .slab.is-manual  { background: var(--card); }
         .slab.is-offline { background: var(--card); }
@@ -330,6 +362,14 @@
         <div class="slab is-waiting"><div class="meta">불러오는 중…</div></div>
     </main>
 
+    {{-- 현장 QR 스캔 — 출퇴근은 이 화면을 지나야만 찍힌다. --}}
+    <div class="scan" id="scan-box" style="display:none">
+        <video id="scan-video" playsinline muted></video>
+        <div class="scan-frame"></div>
+        <p class="scan-hint" id="scan-hint"></p>
+        <button type="button" class="scan-cancel" id="scan-cancel">✕</button>
+    </div>
+
     <nav class="tabs" id="tabs" aria-label="화면 이동">
         <button class="tab" data-tab="home" aria-selected="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.2V12l3.1 2"/></svg>
@@ -376,6 +416,11 @@
     var CSRF = document.querySelector('meta[name="csrf-token"]').content;
     var QR_TPL = document.getElementById('qr-tpl');
     var UNREAD = {{ (int) ($messageUnreadCount ?? 0) }};
+    // 스캔한 QR 이 어느 현장인지 읽는다. 게이트 QR 은 .../gate/{현장} 주소 하나뿐이다.
+    function gateSiteFrom(text) {
+        var m = String(text || '').match(/\/gate\/(\d+)(?:[\/?#]|$)/);
+        return m ? Number(m[1]) : null;
+    }
 
     var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: 'home', lang: 'ko', tick: 0 };
     var watchId = null;
@@ -394,6 +439,14 @@
             offlineBar: '오프라인 · 내 QR 을 반장에게 보여 주세요',
             h: '시간', m: '분', clockInAt: '출근', noSite: '현장 미배정', radius: '반경',
             btnOut: '퇴근하기', btnIn: '출근 누르기', btnInAnyway: '그래도 직접 누르기',
+            btnScanIn: '📷 현장 QR 찍고 출근', btnScanOut: '📷 현장 QR 찍고 퇴근',
+            noteScan: '출입구에 붙은 현장 QR 을 찍어야 기록됩니다. 현장에 있는 것이 확인되면 바로, 확인이 안 되면 <b>반장 승인</b>을 거칩니다.',
+            scanHint: '출입구의 현장 QR 을 네모 안에 맞춰 주세요.',
+            scanNotGate: '현장 QR 이 아닙니다. 출입구에 붙은 QR 을 찍어 주세요.',
+            scanWrongSite: '다른 현장의 QR 입니다. 배정된 현장의 QR 을 찍어 주세요.',
+            scanDenied: '카메라를 열지 못했습니다. 브라우저 설정에서 카메라를 허용해 주세요.',
+            scanUnsupported: '이 폰은 앱 안에서 QR 을 못 읽습니다. 휴대폰 기본 카메라로 현장 QR 을 찍으면 출퇴근 화면이 열립니다.',
+            notices: '전체공지', noticeUntitled: '공지',
             btnPerm: '위치 권한 켜기', btnQr: '내 QR 보여주기',
             noteAuto: '현장을 벗어나고 10분이 지나면 <b>자동으로 퇴근 처리</b>됩니다. 안 눌러도 됩니다.',
             notePunch: '현장에 있는 것이 확인되면 바로 기록됩니다. 확인이 안 되면 <b>반장 승인</b>을 거칩니다.',
@@ -434,6 +487,14 @@
             offlineBar: 'Offline · Show your QR to the foreman',
             h: 'h', m: 'm', clockInAt: 'In', noSite: 'No site assigned', radius: 'radius',
             btnOut: 'Clock out', btnIn: 'Clock in', btnInAnyway: 'Clock in anyway',
+            btnScanIn: '📷 Scan site QR to clock in', btnScanOut: '📷 Scan site QR to clock out',
+            noteScan: 'You must scan the site QR at the gate. Recorded right away if you are on site; otherwise it waits for <b>foreman approval</b>.',
+            scanHint: 'Line up the gate QR inside the square.',
+            scanNotGate: 'That is not a site QR. Please scan the one posted at the gate.',
+            scanWrongSite: 'That QR belongs to another site. Scan the QR of your assigned site.',
+            scanDenied: 'Could not open the camera. Please allow camera access in your browser settings.',
+            scanUnsupported: 'This phone cannot read QR inside the app. Use your normal camera app on the site QR — it opens the clock-in screen.',
+            notices: 'Announcements', noticeUntitled: 'Notice',
             btnPerm: 'Enable location', btnQr: 'Show my QR',
             noteAuto: 'Leaving the site for 10 minutes <b>clocks you out automatically</b>. No need to press.',
             notePunch: 'Recorded right away if you are on site. Otherwise it waits for <b>foreman approval</b>.',
@@ -474,6 +535,14 @@
             offlineBar: 'Sin conexión · Muestre su QR al capataz',
             h: 'h', m: 'm', clockInAt: 'Entrada', noSite: 'Sin sitio asignado', radius: 'radio',
             btnOut: 'Marcar salida', btnIn: 'Marcar entrada', btnInAnyway: 'Marcar de todos modos',
+            btnScanIn: '📷 Escanear QR para entrada', btnScanOut: '📷 Escanear QR para salida',
+            noteScan: 'Debe escanear el QR de la obra en la entrada. Se registra al instante si está en el sitio; si no, espera <b>aprobación del capataz</b>.',
+            scanHint: 'Alinee el QR de la entrada dentro del cuadro.',
+            scanNotGate: 'Ese no es un QR de obra. Escanee el que está en la entrada.',
+            scanWrongSite: 'Ese QR es de otra obra. Escanee el de su obra asignada.',
+            scanDenied: 'No se pudo abrir la cámara. Permita el acceso a la cámara en su navegador.',
+            scanUnsupported: 'Este teléfono no puede leer QR dentro de la app. Use la cámara normal sobre el QR de la obra — abrirá la pantalla de registro.',
+            notices: 'Avisos', noticeUntitled: 'Aviso',
             btnPerm: 'Activar ubicación', btnQr: 'Mostrar mi QR',
             noteAuto: 'Al salir del sitio por 10 minutos <b>la salida se marca sola</b>. No necesita presionar.',
             notePunch: 'Se registra al instante si está en el sitio. Si no, espera <b>aprobación del capataz</b>.',
@@ -619,20 +688,35 @@
                 ? T.clockInAt + ' ' + esc(d.firstEnterAt) + (d.site ? ' · ' + esc(d.site.code) : '')
                 : (d.site ? esc(d.site.code) + (d.site.radius ? ' · ' + T.radius + ' ' + d.site.radius + 'm' : '') : T.noSite)) + '</div>';
 
+        // 출퇴근은 현장 QR 을 스캔해야만 찍힌다. 누르기만 하면 되는 버튼은 어디서든
+        // 눌리고, 그 기록이 그대로 급여가 된다 — 출입구에 붙은 QR 앞까지 와야 한다.
         if (working) {
-            h += '<button class="btn stop" data-act="out">' + T.btnOut + '</button>' +
+            h += '<button class="btn stop" data-act="scan" data-dir="out">' + T.btnScanOut + '</button>' +
                  '<div class="note">' + T.noteAuto + '</div>';
         } else {
             h += '<div class="why">' + v.why + '</div>';
             if (v.fix) h += '<button class="btn stop" data-act="perm">' + T.btnPerm + '</button>';
             if (v.tier === 'manual' || v.tier === 'waiting') {
-                h += '<button class="btn ' + (v.tier === 'manual' ? 'go' : 'quiet') + '" data-act="in">' +
-                     (v.tier === 'manual' ? T.btnIn : T.btnInAnyway) + '</button>' +
-                     '<div class="note">' + T.notePunch + '</div>';
+                h += '<button class="btn go" data-act="scan" data-dir="in">' + T.btnScanIn + '</button>' +
+                     '<div class="note">' + T.noteScan + '</div>';
             }
             if (v.tier === 'qr') h += '<button class="btn go" data-act="goqr">' + T.btnQr + '</button>';
         }
         h += '</div>';
+
+        // 전체공지 — 출퇴근 바로 아래. 공지방까지 들어가는 사람은 없다.
+        var notices = d.notices || [];
+        if (notices.length) {
+            h += '<div class="sec"><div class="sec-h">' + T.notices + '</div><div class="panel">' +
+                notices.map(function (n) {
+                    return '<div class="notice' + (n.pinned ? ' pin' : '') + '">' +
+                        '<div class="notice-h">' + (n.pinned ? '📌 ' : '') + esc(n.title || T.noticeUntitled) +
+                        '<span>' + esc(n.at || '') + '</span></div>' +
+                        (n.body ? '<div class="notice-b">' + esc(n.body) + '</div>' : '') +
+                        '</div>';
+                }).join('') +
+                '</div></div>';
+        }
 
         h += '<div class="sec"><div class="sec-h">' + T.todayLog + '</div><div class="panel">';
         h += (d.logs || []).length
@@ -937,12 +1021,68 @@
         } catch (err) { /* 일시 오류는 넘어간다 — 다음 신호가 곧 온다 */ }
     }
 
-    async function punch(direction) {
+    /**
+     * 현장 QR 을 스캔해 출퇴근을 찍는다.
+     *
+     * 카메라로 QR 을 읽는 기능(BarcodeDetector)은 안드로이드 크롬에는 있고 아이폰
+     * 사파리에는 없다. 없는 폰에서는 <b>기본 카메라 앱</b>으로 찍으라고 안내한다 —
+     * 게이트 QR 은 주소이므로 기본 카메라로 찍으면 게이트 화면이 열리고 거기서 찍힌다.
+     * 라이브러리를 하나 더 싣는 것보다, 이미 있는 길을 알려 주는 편이 덜 깨진다.
+     */
+    async function scanAndPunch(direction) {
+        if (AS) { toast(T.viewOnly); return; }
+        var site = (state.data || {}).site;
+
+        if (!('BarcodeDetector' in window)) {
+            toast(T.scanUnsupported);
+            return;
+        }
+
+        var box = document.getElementById('scan-box');
+        var video = document.getElementById('scan-video');
+        var stream = null, timer = null, done = false;
+
+        function stop() {
+            if (timer) clearInterval(timer);
+            if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+            box.style.display = 'none';
+        }
+        document.getElementById('scan-cancel').onclick = stop;
+
+        try {
+            var detector = new BarcodeDetector({ formats: ['qr_code'] });
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            video.srcObject = stream;
+            await video.play();
+            box.style.display = 'flex';
+            document.getElementById('scan-hint').textContent = T.scanHint;
+
+            timer = setInterval(async function () {
+                if (done) return;
+                var codes = [];
+                try { codes = await detector.detect(video); } catch (e) { return; }
+                if (!codes.length) return;
+
+                var scanned = gateSiteFrom(codes[0].rawValue);
+                if (scanned === null) { document.getElementById('scan-hint').textContent = T.scanNotGate; return; }
+                if (site && site.id && scanned !== site.id) { document.getElementById('scan-hint').textContent = T.scanWrongSite; return; }
+
+                done = true;
+                stop();
+                punch(direction, scanned);
+            }, 600);
+        } catch (err) {
+            stop();
+            toast(T.scanDenied);
+        }
+    }
+
+    async function punch(direction, gateSite) {
         if (AS) { toast(T.viewOnly); return; }
 
         if (state.busy) return;
         state.busy = true;
-        var body = { direction: direction, lang: state.lang };
+        var body = { direction: direction, lang: state.lang, gate_site: gateSite };
         if (state.coords) {
             body.lat = state.coords.latitude;
             body.lng = state.coords.longitude;
@@ -991,7 +1131,7 @@
         if (!el) return;
         ev.preventDefault();
         var act = el.getAttribute('data-act');
-        if (act === 'in' || act === 'out') return punch(act);
+        if (act === 'scan') return scanAndPunch(el.getAttribute('data-dir'));
         if (act === 'fixtime') return requestFix();
         if (act === 'perm') { state.permission = 'unknown'; startWatch(); return render(); }
         if (act === 'install') return window.AppInstall.show();

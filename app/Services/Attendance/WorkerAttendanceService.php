@@ -4,6 +4,8 @@ namespace App\Services\Attendance;
 
 use App\Models\AttendanceLog;
 use App\Models\AttendanceSession;
+use App\Models\CommunicationMessage;
+use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Models\EmployeePayrollProfile;
 use App\Models\PayrollTimesheet;
@@ -71,6 +73,8 @@ class WorkerAttendanceService
                 'lang' => $employee->preferred_language ?: 'ko',
             ],
             'site' => $site ? [
+                // 스캔한 QR 이 내 현장의 것인지 화면이 그 자리에서 판단할 수 있게.
+                'id' => $site->id,
                 'code' => $site->code,
                 'name' => $site->name,
                 'radius' => $site->radius_meters ? (int) $site->radius_meters : null,
@@ -94,7 +98,60 @@ class WorkerAttendanceService
                 : null,
             'week' => $this->week($employee, $tz),
             'pay' => $this->pay($employee),
+            'notices' => $this->notices($employee, $site, $tz),
         ];
+    }
+
+    /**
+     * 전체공지 — 현장 공지방에 올라온 글을 앱 첫 화면에 그대로 띄운다.
+     *
+     * 지금까지 공지는 메시지 화면에 들어가야만 보였다. 작업자가 앱을 여는 이유는
+     * 출퇴근이고, 그 화면에서 공지방까지 두 번 더 눌러 들어가는 사람은 없다. 그래서
+     * "전달했다" 는 기록만 남고 실제로는 아무도 못 읽는 공지가 쌓였다.
+     *
+     * 오래된 것은 보여 주지 않는다(2주). 벽보가 계속 붙어 있으면 아무도 안 읽는다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function notices(Employee $employee, ?Site $site, string $tz): array
+    {
+        if (! $site) {
+            return [];
+        }
+
+        try {
+            $roomIds = CommunicationRoom::query()
+                ->where('type', CommunicationRoom::TYPE_SITE_ANNOUNCEMENT)
+                ->where('status', 'active')
+                ->where(fn ($q) => $q->where('site_id', $site->id)
+                    // 전사 공지 — 특정 현장에 매이지 않은 공지방.
+                    ->orWhereNull('site_id'))
+                ->pluck('id');
+
+            if ($roomIds->isEmpty()) {
+                return [];
+            }
+
+            return CommunicationMessage::query()
+                ->whereIn('communication_room_id', $roomIds)
+                ->where('kind', CommunicationMessage::KIND_ANNOUNCEMENT)
+                ->whereNull('parent_id')
+                ->whereNull('removed_at')
+                ->where('created_at', '>=', Carbon::now()->subDays(14))
+                ->orderByDesc('is_pinned')
+                ->orderByDesc('created_at')
+                ->limit(5)
+                ->get(['id', 'title', 'body', 'is_pinned', 'created_at'])
+                ->map(fn (CommunicationMessage $m): array => [
+                    'id' => $m->id,
+                    'title' => (string) $m->title,
+                    'body' => (string) $m->body,
+                    'pinned' => (bool) $m->is_pinned,
+                    'at' => $m->created_at?->timezone($tz)->format('m/d H:i'),
+                ])->values()->all();
+        } catch (\Throwable) {
+            return []; // 공지를 못 읽는다고 출퇴근 화면이 막히면 안 된다.
+        }
     }
 
     /**
@@ -356,6 +413,11 @@ class WorkerAttendanceService
                 'lng' => $signal['lng'] ?? null,
                 'accuracy' => $signal['accuracy'] ?? null,
                 'ip' => $signal['ip'] ?? null,
+                // 현장 QR 을 스캔해 찍었다는 사실. QR 은 벽에 붙은 종이라 사진으로도
+                // 찍힐 수 있으므로 "현장에 있었다" 의 증거로 쓰지는 않는다 — 승인 여부는
+                // 위치·WiFi(verified_on_site)가 정한다. 다만 어떤 길로 들어온 기록인지는
+                // 남겨 둔다.
+                'gate_scanned' => isset($signal['gate_site']) ? (int) $signal['gate_site'] : null,
             ],
         ]);
 

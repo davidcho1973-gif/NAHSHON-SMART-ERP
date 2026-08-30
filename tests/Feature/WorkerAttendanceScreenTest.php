@@ -135,7 +135,8 @@ class WorkerAttendanceScreenTest extends TestCase
     {
         // 화면이 초를 세려면 "지금까지 몇 초"가 한 숫자로 와야 한다.
         $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
-            'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
+            'direction' => 'in',
+            'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
         ]);
 
         Carbon::setTestNow(Carbon::parse('2026-08-10 09:30:00'));   // 출근 07:00 기준 2시간 30분
@@ -236,7 +237,8 @@ class WorkerAttendanceScreenTest extends TestCase
     {
         $this->actingAs($this->user)
             ->postJson(route('attendance-app.punch'), [
-                'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 12,
+                'direction' => 'in',
+                'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 12,
             ])
             ->assertOk()
             ->assertJsonPath('success', true)
@@ -253,7 +255,8 @@ class WorkerAttendanceScreenTest extends TestCase
         // 집에서 눌러도 막지는 않는다. 다만 반장이 한 번 본다.
         $this->actingAs($this->user)
             ->postJson(route('attendance-app.punch'), [
-                'direction' => 'in', 'lat' => 33.9, 'lng' => -112.9, 'accuracy' => 12,
+                'direction' => 'in',
+                'gate_site' => $this->site->id, 'lat' => 33.9, 'lng' => -112.9, 'accuracy' => 12,
             ])
             ->assertOk()
             ->assertJsonPath('verified', false);
@@ -265,7 +268,7 @@ class WorkerAttendanceScreenTest extends TestCase
     {
         // 위치 권한을 껐거나 실내라 안 잡히는 경우. 확인할 방법이 없으면 승인 대기다.
         $this->actingAs($this->user)
-            ->postJson(route('attendance-app.punch'), ['direction' => 'in'])
+            ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
             ->assertJsonPath('verified', false);
 
         $this->assertDatabaseHas('attendance_logs', ['event_type' => 'clock_in', 'status' => 'pending']);
@@ -282,7 +285,7 @@ class WorkerAttendanceScreenTest extends TestCase
 
         $this->actingAs($this->user)
             ->withServerVariables(['REMOTE_ADDR' => '203.0.113.44'])
-            ->postJson(route('attendance-app.punch'), ['direction' => 'in'])
+            ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
             ->assertJsonPath('verified', true);
 
         $this->assertDatabaseHas('attendance_logs', ['event_type' => 'clock_in', 'status' => 'approved']);
@@ -293,17 +296,18 @@ class WorkerAttendanceScreenTest extends TestCase
         // 좌표는 현장 한가운데인데 오차가 900m 다. 자동 판정과 같은 규칙을 써야 한다.
         $this->actingAs($this->user)
             ->postJson(route('attendance-app.punch'), [
-                'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 900,
+                'direction' => 'in',
+                'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 900,
             ])
             ->assertJsonPath('verified', false);
     }
 
     public function test_you_cannot_clock_in_twice(): void
     {
-        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), ['direction' => 'in']);
+        $this->actingAs($this->user)->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id]);
 
         $this->actingAs($this->user)
-            ->postJson(route('attendance-app.punch'), ['direction' => 'in'])
+            ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
             ->assertJsonPath('success', false);
 
         $this->assertSame(1, AttendanceLog::where('event_type', 'clock_in')->count());
@@ -312,7 +316,7 @@ class WorkerAttendanceScreenTest extends TestCase
     public function test_you_cannot_clock_out_before_clocking_in(): void
     {
         $this->actingAs($this->user)
-            ->postJson(route('attendance-app.punch'), ['direction' => 'out'])
+            ->postJson(route('attendance-app.punch'), ['direction' => 'out', 'gate_site' => $this->site->id])
             ->assertJsonPath('success', false);
 
         $this->assertSame(0, AttendanceLog::count());
@@ -321,12 +325,14 @@ class WorkerAttendanceScreenTest extends TestCase
     public function test_clocking_out_closes_the_day(): void
     {
         $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
-            'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
+            'direction' => 'in',
+            'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
         ]);
 
         Carbon::setTestNow(Carbon::parse('2026-08-10 16:30:00'));
         $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
-            'direction' => 'out', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
+            'direction' => 'out',
+            'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 10,
         ])->assertJsonPath('success', true);
 
         $res = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json();
@@ -469,6 +475,7 @@ class WorkerAttendanceScreenTest extends TestCase
     {
         $response = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
             'direction' => 'in',
+            'gate_site' => $this->site->id,
             'lat' => self::SITE_LAT,
             'lng' => self::SITE_LNG,
             'accuracy' => 10,
@@ -486,7 +493,8 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->employee->update(['employment_status' => 'terminated']);
 
         $response = $this->actingAs($this->user)->postJson(route('attendance-app.punch'), [
-            'direction' => 'in', 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG,
+            'direction' => 'in',
+            'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG,
         ]);
 
         $this->assertFalse($response->json('success'));
