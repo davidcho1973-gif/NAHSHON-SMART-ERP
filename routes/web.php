@@ -517,11 +517,41 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
         'ai' => (function (): array {
             $gemini = trim((string) config('services.gemini.api_key')) !== '';
             $anthropic = trim((string) config('services.anthropic.api_key')) !== '';
+            $openai = trim((string) config('services.openai.api_key')) !== '';
             $crossCheckOn = (bool) config('document-intelligence.cross_check.enabled', true);
+
+            // 최근 30일 AI 사용액 — 엔진이 셋이 되면 어디서 돈이 새는지 봐야 한다.
+            $spend = (function (): array {
+                try {
+                    if (! \Illuminate\Support\Facades\Schema::hasTable('ai_usage_logs')) {
+                        return ['ready' => false];
+                    }
+                    $rows = \Illuminate\Support\Facades\DB::table('ai_usage_logs')
+                        ->where('occurred_at', '>=', now()->subDays(30))
+                        ->selectRaw('engine, count(*) as calls, sum(cost_usd) as usd')
+                        ->groupBy('engine')->get();
+
+                    return [
+                        'ready' => true,
+                        'days' => 30,
+                        'total_usd' => round((float) $rows->sum('usd'), 4),
+                        'by_engine' => $rows->mapWithKeys(fn ($r) => [
+                            $r->engine => ['calls' => (int) $r->calls, 'usd' => round((float) $r->usd, 4)],
+                        ])->all(),
+                    ];
+                } catch (\Throwable) {
+                    return ['ready' => false];
+                }
+            })();
 
             return [
                 'gemini' => $gemini,
                 'anthropic' => $anthropic,
+                'openai' => $openai,
+                // 판독 엔진이 몇 개나 살아 있는가 — 셋이어야 3자 대조가 가능하다.
+                'engines_live' => (int) $gemini + (int) $anthropic + (int) $openai,
+                'ocr_engine' => strtolower(trim((string) config('services.ai_ocr.engine', 'gemini'))) ?: 'gemini',
+                'spend_30d' => $spend,
                 // 문서 분석의 1차 판독. 이게 false 면 문서함이 아무것도 못 읽는다.
                 'document_analysis' => $gemini,
                 // 도면 판독은 Claude 전용 — 키가 없으면 규칙 기반으로 후퇴한다.

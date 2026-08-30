@@ -50,6 +50,7 @@ class ClaudeOcrEngine implements OcrEngine
         }
         $content[] = ['type' => 'text', 'text' => $prompt];
 
+        $startedAt = microtime(true);
         $response = $this->http
             ->timeout((int) config('services.anthropic.timeout', 180))
             ->withHeaders([
@@ -60,15 +61,20 @@ class ClaudeOcrEngine implements OcrEngine
             ->post($endpoint, [
                 'model' => $model,
                 'max_tokens' => 8000,
-                'output_config' => ['format' => ['type' => 'json_schema', 'schema' => $this->toStrictSchema($schema)]],
+                'output_config' => ['format' => ['type' => 'json_schema', 'schema' => JsonSchemaNormalizer::strict($schema)]],
                 'messages' => [['role' => 'user', 'content' => $content]],
             ]);
 
+        $ms = (int) round((microtime(true) - $startedAt) * 1000);
+
         if ($response->failed()) {
+            \App\Support\AiMeter::record('claude', 'ocr', $model, durationMs: $ms, ok: false, error: 'HTTP '.$response->status());
+
             throw new RuntimeException('Anthropic API returned status ' . $response->status() . ': ' . $response->body());
         }
 
         $json = $response->json();
+        \App\Support\AiMeter::record('claude', 'ocr', (string) ($json['model'] ?? $model), is_array($json['usage'] ?? null) ? $json['usage'] : [], $ms);
 
         if (($json['stop_reason'] ?? null) === 'refusal') {
             throw new RuntimeException('Claude 가 이미지/문서 분석을 거부했습니다(refusal).');
@@ -91,34 +97,6 @@ class ClaudeOcrEngine implements OcrEngine
         }
 
         return ['data' => $decoded, 'model' => $model];
-    }
-
-    /**
-     * Anthropic structured outputs 는 모든 object 에 additionalProperties:false 를 요구한다.
-     * Gemini 형식 스키마를 재귀적으로 변환한다(속성 이름/타입은 유지).
-     *
-     * @param  array<string, mixed>  $schema
-     * @return array<string, mixed>
-     */
-    private function toStrictSchema(array $schema): array
-    {
-        if (($schema['type'] ?? null) === 'object' && isset($schema['properties']) && is_array($schema['properties'])) {
-            $schema['additionalProperties'] = false;
-            if (! isset($schema['required'])) {
-                $schema['required'] = array_keys($schema['properties']);
-            }
-            foreach ($schema['properties'] as $key => $prop) {
-                if (is_array($prop)) {
-                    $schema['properties'][$key] = $this->toStrictSchema($prop);
-                }
-            }
-        }
-
-        if (($schema['type'] ?? null) === 'array' && isset($schema['items']) && is_array($schema['items'])) {
-            $schema['items'] = $this->toStrictSchema($schema['items']);
-        }
-
-        return $schema;
     }
 
     private function stripJsonFence(string $text): string

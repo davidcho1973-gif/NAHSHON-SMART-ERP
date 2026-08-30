@@ -21,6 +21,7 @@ use App\Services\Documents\IntelligentToIntegratedBridge;
 use App\Services\Ocr\ClaudeOcrEngine;
 use App\Services\Ocr\GeminiOcrEngine;
 use App\Services\Ocr\OcrEngine;
+use App\Services\Ocr\OpenAiOcrEngine;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -35,9 +36,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(OcrEngine::class, function ($app): OcrEngine {
             $engine = strtolower(trim((string) config('services.ai_ocr.engine', 'gemini')));
 
-            return $engine === 'claude'
-                ? $app->make(ClaudeOcrEngine::class)
-                : $app->make(GeminiOcrEngine::class);
+            return match ($engine) {
+                'claude' => $app->make(ClaudeOcrEngine::class),
+                'openai', 'gpt' => $app->make(OpenAiOcrEngine::class),
+                default => $app->make(GeminiOcrEngine::class),
+            };
         });
     }
 

@@ -52,6 +52,7 @@ class GeminiOcrEngine implements OcrEngine
                 $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com'), '/')
                     . "/v1beta/models/{$model}:generateContent";
 
+                $startedAt = microtime(true);
                 $response = $this->http
                     ->timeout((int) config('services.gemini.timeout', 30))
                     ->withHeaders(['x-goog-api-key' => $apiKey, 'Content-Type' => 'application/json'])
@@ -63,9 +64,16 @@ class GeminiOcrEngine implements OcrEngine
                         ],
                     ]);
 
+                $ms = (int) round((microtime(true) - $startedAt) * 1000);
+
                 if ($response->failed()) {
+                    \App\Support\AiMeter::record('gemini', 'ocr', $model, durationMs: $ms, ok: false, error: 'HTTP '.$response->status());
+
                     throw new RuntimeException('Gemini API returned status ' . $response->status() . ': ' . $response->body());
                 }
+
+                // 모델 폴백이 있어 여러 번 부를 수 있다 — 실제로 돈이 나간 호출마다 적는다.
+                \App\Support\AiMeter::record('gemini', 'ocr', $model, is_array($response->json('usageMetadata')) ? $response->json('usageMetadata') : [], $ms);
 
                 $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
                 if (! is_string($text) || trim($text) === '') {
