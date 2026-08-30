@@ -44,6 +44,12 @@ class DocumentIntelligenceController extends Controller
     {
         $this->authorizeView($request->user());
 
+        // 화면이 고른 현장. ERP 안에 얹혀 있는 화면이라 상단 전환기의 현장을 그대로
+        // 따라야 한다 — 예전에는 이 값을 아예 받지 않아, 애리조나를 띄워 놓고도 조지아
+        // 문서가 목록과 통계에 그대로 떴다.
+        $siteFilter = $request->integer('site_id') ?: null;
+        $onSite = fn (Builder $b) => $b->when($siteFilter, fn (Builder $q) => $q->where('site_id', $siteFilter));
+
         $query = IntelligentDocument::query()
             ->visibleTo($request->user())
             ->with(['company:id,name,code', 'site:id,name,code', 'project:id,name,project_code'])
@@ -51,6 +57,7 @@ class DocumentIntelligenceController extends Controller
                 'actionItems as open_actions_count' => fn (Builder $actionQuery) => $actionQuery->whereIn('status', ['open', 'in_progress']),
             ])
             ->search($request->string('q')->toString())
+            ->tap($onSite)
             ->when($request->filled('category'), fn (Builder $builder) => $builder->where('category', $request->string('category')))
             ->when($request->filled('project_id'), fn (Builder $builder) => $builder->where('project_id', $request->integer('project_id')))
             ->when($request->filled('ai_status'), fn (Builder $builder) => $builder->where('ai_status', $request->string('ai_status')))
@@ -58,7 +65,9 @@ class DocumentIntelligenceController extends Controller
             ->orderByDesc('id');
 
         $documents = $query->paginate(min(100, max(10, $request->integer('per_page', 30))));
-        $scope = IntelligentDocument::query()->visibleTo($request->user());
+        // 위쪽 숫자 카드도 같은 스코프를 본다 — 목록은 걸러졌는데 합계만 전체면
+        // "80건인데 3건만 보인다" 가 되어 사람이 화면을 믿지 않게 된다.
+        $scope = IntelligentDocument::query()->visibleTo($request->user())->tap($onSite);
 
         return response()->json([
             'success' => true,

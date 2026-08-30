@@ -198,17 +198,21 @@ class SiteIsolationTest extends TestCase
         $this->assertFalse($codes->contains('GA-H1'), '남의 현장 숙소가 보인다');
     }
 
-    public function test_미배정_자산은_어느_현장에서나_보인다(): void
+    public function test_미배정_자산은_현장_화면에_섞이지_않는다(): void
     {
-        // 본사 차고에 서 있는 차는 어느 현장에서든 "지금 쓸 수 있는가" 를 보고 배정하는
-        // 대상이다. 감추면 현장에서는 있는 줄도 모르고 새로 빌린다.
+        // 현장 화면의 숫자는 그 현장의 진실이어야 한다 — 미배정을 섞으면 현장별로
+        // 더할 때 겹치고, "우리 현장 차가 몇 대냐" 에 답할 수 없다.
         \App\Models\Vehicle::create(['site_id' => null, 'plate_number' => 'POOL-CAR', 'model' => 'Transit', 'status' => '대기']);
 
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
         $this->actingAs($admin);
 
-        $plates = collect(SmartCompanyData::vehicleList('AZ-01'))->pluck('plate')->filter()->values();
-        $this->assertTrue($plates->contains('POOL-CAR'));
+        $onSite = collect(SmartCompanyData::vehicleList('AZ-01'))->pluck('plate')->filter()->values();
+        $this->assertFalse($onSite->contains('POOL-CAR'));
+
+        // 미배정 자산은 '전체 현장' 에서 본다 — 어디에서도 안 보이면 잊힌다.
+        $all = collect(SmartCompanyData::vehicleList('ALL'))->pluck('plate')->filter()->values();
+        $this->assertTrue($all->contains('POOL-CAR'));
     }
 
     public function test_인원_목록은_상단_현장을_따르되_화면_선택이_이긴다(): void
@@ -229,6 +233,36 @@ class SiteIsolationTest extends TestCase
         $names = collect($this->post('/smart-company-api/api_getEmployeeAdminList',
             ['args' => [['siteId' => $this->ga->id]], 'siteId' => 'AZ-01'])->json('rows'))->pluck('name');
         $this->assertTrue($names->contains('조지아사람'));
+    }
+
+    // ── 문서함도 현장을 따른다 ────────────────────────────────────────
+
+    public function test_문서함이_남의_현장_문서를_보여주지_않는다(): void
+    {
+        // ERP 안에 얹혀 열리는 화면이라 상단 전환기의 현장을 아예 받지 않았다.
+        // 애리조나를 띄워 놓고도 조지아 문서가 목록과 위쪽 숫자에 그대로 떴다.
+        foreach ([[$this->az, '애리조나 발주서'], [$this->ga, '조지아 주방 조달계획']] as [$site, $title]) {
+            \App\Models\IntelligentDocument::create([
+                'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                'site_id' => $site->id, 'title' => $title,
+                'original_file_name' => $title.'.pdf', 'stored_file_name' => uniqid().'.pdf',
+                'file_path' => 'docs/'.uniqid().'.pdf', 'sha256' => hash('sha256', $title),
+                'ai_status' => 'ready', 'received_at' => now(),
+            ]);
+        }
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+
+        $res = $this->actingAs($admin)->getJson(route('document-intelligence.documents', ['site_id' => $this->az->id]));
+
+        $res->assertOk();
+        $titles = collect($res->json('documents'))->pluck('title');
+        $this->assertTrue($titles->contains('애리조나 발주서'));
+        $this->assertFalse($titles->contains('조지아 주방 조달계획'), '남의 현장 문서가 보인다');
+
+        // 위쪽 숫자도 같은 스코프여야 한다 — 목록은 걸러졌는데 합계만 전체면
+        // "80건인데 3건만 보인다" 가 되어 사람이 화면을 믿지 않는다.
+        $this->assertSame(1, $res->json('stats.total'));
     }
 
     // ── 본사 공통 규약(①안) ────────────────────────────────────────────

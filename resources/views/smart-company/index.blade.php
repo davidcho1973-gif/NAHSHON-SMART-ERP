@@ -466,6 +466,8 @@
     window.currentSiteId = 'ALL';
 
     window.SITE_NAMES = @json($siteNames ?? ['ALL' => 'Global']);
+    // 현장 코드 → 데이터베이스 id. ERP 안에 얹혀 열리는 화면(문서함)에 현장을 넘길 때 쓴다.
+    window.SITE_DB_IDS = @json(collect($siteOptions ?? [])->pluck('id', 'code'));
 
     function _siteId() {
       return (window.currentSiteId && window.currentSiteId !== '') ? window.currentSiteId : 'ALL';
@@ -1400,7 +1402,10 @@
         'document-hub': { title: 'AI 통합 문서함', render: function () {
           // 문서함은 별도 페이지지만, 통째로 이동하면 ERP 를 벗어난 느낌이 든다.
           // ERP 틀 안에 iframe 으로 얹는다 — embed=1 이면 문서함이 자기 사이드바를 숨긴다.
-          pageContainer.innerHTML = '<iframe src="/document-hub?embed=1" ' +
+          // 상단에서 고른 현장을 함께 실어 보낸다 — 안 보내면 문서함은 전체를 보여 주고,
+          // 애리조나를 띄워 놓고도 조지아 문서가 떴다. (현장을 바꾸면 화면이 다시 그려진다.)
+          var docSite = window.SITE_DB_IDS && window.SITE_DB_IDS[window.currentSiteId];
+          pageContainer.innerHTML = '<iframe src="/document-hub?embed=1' + (docSite ? '&site_id=' + docSite : '') + '" ' +
             'style="width:100%;height:calc(100vh - 150px);min-height:560px;border:1px solid var(--border-strong);border-radius:12px;background:#f3f6fb"></iframe>';
         } },
         'safety': { title: 'AI 작업안전관리', render: renderSafety },

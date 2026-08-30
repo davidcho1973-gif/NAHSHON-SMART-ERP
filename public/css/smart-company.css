@@ -266,7 +266,13 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
 .breadcrumbs {
     display: flex; align-items: center; gap: 8px;
     font-size: 13px; font-weight: 500; color: var(--text-tertiary);
+    /* 상단바가 좁아지면 이 칸이 눌리는데, 줄바꿈을 막지 않으면 글자가 한 자씩
+       세로로 쌓여 "통 합 문 서 함" 처럼 읽을 수 없게 된다. 좁으면 줄이고,
+       더 좁으면 아예 감춘다 — 이동경로는 없어도 화면을 쓰는 데 지장이 없다. */
+    min-width: 0; white-space: nowrap; overflow: hidden;
 }
+.breadcrumbs > span { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1100px) { .breadcrumbs { display: none; } }
 .breadcrumbs i { font-size:12px; }
 .active-crumb { color: var(--text-primary); }
 

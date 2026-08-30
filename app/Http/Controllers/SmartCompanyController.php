@@ -34,6 +34,10 @@ class SmartCompanyController extends Controller
                     ->get()
                     ->map(fn (Site $site): array => [
                         'code' => $site->code,
+                        // 문서함처럼 ERP 안에 얹혀 열리는 화면은 현장 코드가 아니라
+                        // id 로 거른다. 화면이 코드만 갖고 있으면 그 화면에는 현장을
+                        // 전달할 방법이 없다.
+                        'id' => $site->id,
                         'label' => trim($site->code.' - '.$site->name),
                         'setup_pending' => is_null($site->setup_completed_at),
                     ])

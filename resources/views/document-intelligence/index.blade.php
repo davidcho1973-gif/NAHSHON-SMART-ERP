@@ -192,7 +192,10 @@ function toast(message, error=false){const el=document.getElementById('toast');e
 async function jsonFetch(url, options={}){const response=await fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf,...(options.headers||{})},...options});const data=await response.json().catch(()=>({success:false,error:'응답을 읽을 수 없습니다.'}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||'요청 실패');return data}
 
 async function loadDocuments(){
+    // ERP 안에 얹혀 열릴 때 상단 전환기의 현장이 주소로 실려 온다. 그 현장 문서만 본다.
+    const embeddedSite=new URLSearchParams(location.search).get('site_id')||'';
     const params=new URLSearchParams({q:document.getElementById('search').value,category:document.getElementById('category-filter').value,project_id:document.getElementById('project-filter').value});
+    if(embeddedSite)params.set('site_id',embeddedSite);
     const list=document.getElementById('doc-list'); list.classList.add('loading');
     try{
         const data=await jsonFetch(endpoints.list+'?'+params.toString()); currentDocuments=data.documents||[]; renderRows();
