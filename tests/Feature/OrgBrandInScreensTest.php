@@ -129,7 +129,7 @@ class OrgBrandInScreensTest extends TestCase
 
     public function test_the_document_intelligence_screen(): void
     {
-        $this->actingAs($this->admin())->get(route('document-intelligence.index'))
+        $this->actingAs($this->admin())->get(route('document-intelligence.index', ['embed' => 1]))
             ->assertOk()->assertSee(self::NAME, false);
     }
 
@@ -156,7 +156,7 @@ class OrgBrandInScreensTest extends TestCase
             route('gate.show', ['site' => $this->site]),
             route('worker-join.form', ['site' => $this->site]),
             route('communication.index'),
-            route('document-intelligence.index'),
+            route('document-intelligence.index', ['embed' => 1]),
             route('erp.manifest'),
             route('worker-app.manifest'),
         ] as $url) {

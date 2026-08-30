@@ -1405,7 +1405,11 @@
           // 상단에서 고른 현장을 함께 실어 보낸다 — 안 보내면 문서함은 전체를 보여 주고,
           // 애리조나를 띄워 놓고도 조지아 문서가 떴다. (현장을 바꾸면 화면이 다시 그려진다.)
           var docSite = window.SITE_DB_IDS && window.SITE_DB_IDS[window.currentSiteId];
-          pageContainer.innerHTML = '<iframe src="/document-hub?embed=1' + (docSite ? '&site_id=' + docSite : '') + '" ' +
+          // 알림 링크(/document-hub?document=N)로 들어오면 서버가 이리로 돌려보내며
+          // document 번호를 실어 준다 — 첫 렌더 한 번만 그 문서를 자동으로 연다.
+          var openDoc = window.__docHubOpenDoc ? '&document=' + encodeURIComponent(window.__docHubOpenDoc) : '';
+          window.__docHubOpenDoc = null;
+          pageContainer.innerHTML = '<iframe src="/document-hub?embed=1' + (docSite ? '&site_id=' + docSite : '') + openDoc + '" ' +
             'style="width:100%;height:calc(100vh - 150px);min-height:560px;border:1px solid var(--border-strong);border-radius:12px;background:#f3f6fb"></iframe>';
         } },
         'safety': { title: 'AI 작업안전관리', render: renderSafety },
@@ -12802,6 +12806,8 @@
       pageContainer.style.transition = 'opacity 0.15s';
       const urlParams = new URLSearchParams(window.location.search);
       const requestedView = urlParams.get('view');
+      // 알림 링크가 실어 온 문서 번호 — 문서함 첫 렌더가 한 번 꺼내 쓴다.
+      window.__docHubOpenDoc = urlParams.get('document');
       const initialView = requestedView && routes[requestedView] ? requestedView : 'dashboard';
       navItems.forEach(function (item) {
         item.classList.toggle('active', item.getAttribute('data-view') === initialView);

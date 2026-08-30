@@ -32,6 +32,20 @@ class DocumentIntelligenceController extends Controller
     {
         $this->authorizeView($request->user());
 
+        // 문은 하나다 — 주소로 직접 오면(알림 링크·즐겨찾기) ERP 본체 안의 문서함으로
+        // 보낸다. 예전에는 독립 화면이 따로 떠서 왼쪽 메뉴가 두 벌이 됐다. embed=1
+        // (ERP 안 iframe)일 때만 이 페이지를 그대로 그린다. 문서함을 볼 수 있는
+        // 역할은 전부 ERP 가 홈이므로 돌려보내서 잃는 사람이 없다.
+        if (! $request->boolean('embed')) {
+            $params = array_filter([
+                'view' => 'document-hub',
+                'document' => $request->query('document'),
+                'site_id' => $request->query('site_id'),
+            ]);
+
+            return redirect('/?'.http_build_query($params));
+        }
+
         return view('document-intelligence.index', [
             'companies' => $this->companyOptions($request->user()),
             'sites' => $this->siteOptions($request->user()),

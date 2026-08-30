@@ -241,6 +241,24 @@ class DocumentIntelligenceHubTest extends TestCase
             ->assertForbidden();
     }
 
+    /**
+     * 문은 하나 — 주소로 직접 오면(알림 링크) ERP 본체의 문서함으로 돌려보낸다.
+     * 독립 화면이 따로 뜨면 왼쪽 메뉴가 두 벌이 된다. embed=1(ERP 안 iframe)만 그대로.
+     */
+    public function test_direct_visit_redirects_into_the_erp_shell(): void
+    {
+        $this->projectFixture();
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin)
+            ->get(route('document-intelligence.index', ['document' => 80]))
+            ->assertRedirect('/?view=document-hub&document=80');
+
+        $this->actingAs($admin)
+            ->get(route('document-intelligence.index', ['embed' => 1]))
+            ->assertOk();
+    }
+
     public function test_unified_alert_status_updates_the_source_action_and_is_scope_filtered(): void
     {
         [$company, $site, $project] = $this->projectFixture();
