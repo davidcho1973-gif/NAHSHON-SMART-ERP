@@ -470,6 +470,30 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 },
             ];
         })(),
+        // 배포된 코드가 기대하는 표가 실제로 있는가.
+        //
+        // 코드는 새 컬럼을 쓰는데 마이그레이션이 안 돌면, 그 화면만 500 으로 죽는다 —
+        // 배포는 초록불이고 다른 화면은 멀쩡해서 아무도 원인을 못 찾는다. 실제로
+        // 간편등록이 이렇게 하루를 잃었다(직책 컬럼 하나). 여기에 숫자로 세워 둔다.
+        'migrations' => (function (): array {
+            try {
+                $migrator = app('migrator');
+                $ran = $migrator->getRepository()->getRan();
+                $files = $migrator->getMigrationFiles($migrator->paths() + [database_path('migrations')]);
+                $pending = array_values(array_diff(array_keys($files), $ran));
+
+                return [
+                    'pending' => count($pending),
+                    'ok' => $pending === [],
+                    'names' => array_slice($pending, 0, 5),
+                    'message' => $pending === []
+                        ? '모든 마이그레이션이 적용되어 있습니다.'
+                        : count($pending).'개 마이그레이션이 아직 안 돌았습니다 — php artisan migrate --force 를 실행하세요. 그 표를 쓰는 화면은 지금 500 으로 죽습니다.',
+                ];
+            } catch (\Throwable $e) {
+                return ['pending' => null, 'ok' => null, 'message' => '확인 실패: '.$e->getMessage()];
+            }
+        })(),
         // 업로드 파일이 배포를 견디는 저장소에 있는가. local/public 이면 Laravel Cloud
         // 배포마다 문서 원본·현장 사진이 조용히 사라진다 — DB 기록은 남아서 화면에는
         // 멀쩡히 보이다가 열 때만 "파일 없음" 이 난다. 버킷을 붙이고도 환경변수
