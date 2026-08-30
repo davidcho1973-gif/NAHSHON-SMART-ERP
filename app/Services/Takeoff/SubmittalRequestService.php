@@ -138,7 +138,19 @@ class SubmittalRequestService
             .'.gate{border:1px solid #e5b4ae;background:#fdf3f2;border-radius:8px;padding:13px 15px;margin:16px 0;font-size:13.5px;color:#8c2f26}'
             .'.quote{margin-top:8px;padding:9px 11px;background:#fff;border-left:3px solid #c0574a;font-size:12.5px;color:#444;font-style:italic}'
             .'p{margin:0 0 12px;font-size:14px}.foot{margin-top:34px;padding-top:14px;border-top:1px solid #ddd;font-size:12.5px;color:#666}'
+            .'.navbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e5e5;margin:-38px -30px 26px;padding:11px 30px;display:flex;gap:9px;align-items:center}'
+            .'.navbar a,.navbar button{font:inherit;font-size:13px;padding:7px 14px;border-radius:8px;border:1px solid #d5d9de;background:#fff;color:#1a1a1a;text-decoration:none;cursor:pointer}'
+            .'.navbar a.home{background:#22303c;border-color:#22303c;color:#fff}'
+            // 인쇄할 때는 버튼 줄이 나오면 안 된다 — 업체에 보내는 서류다.
+            .'@media print{.navbar{display:none}body{padding:0}}'
             .'</style></head><body>'
+            // 이 문서는 ERP 밖에서 열리는 독립 파일이다 — 돌아갈 길을 안에 넣어 두지
+            // 않으면 사용자가 막힌다(뒤로가기를 아는 사람만 빠져나온다).
+            .'<div class="navbar">'
+                .'<a class="home" href="/document-hub">← 문서함</a>'
+                .'<button type="button" onclick="window.print()">🖨 인쇄 · PDF 저장</button>'
+                .'<a href="/">ERP 홈</a>'
+            .'</div>'
             .'<h1>제출자료 요청서</h1>'
             .'<p class="sub">Submittal Data Request · '.$e($org).'</p>'
             .'<table class="meta">'
