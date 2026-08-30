@@ -19,7 +19,7 @@ class AiJobQueue
      * @param  array<string, mixed>  $params
      * @return array<string, mixed>
      */
-    public static function push(string $kind, string $subjectType, int $subjectId, string $label, array $params = []): array
+    public static function push(string $kind, string $subjectType, int $subjectId, string $label, array $params = [], int $reuseMinutes = 30): array
     {
         // 같은 대상에 같은 작업이 이미 돌고 있으면 그 번호표를 준다 — 두 번 누른다고
         // AI 를 두 번 부르면 값이 두 배로 나간다.
@@ -34,6 +34,26 @@ class AiJobQueue
         if ($running) {
             return ['success' => true, 'jobId' => $running->id, 'status' => $running->status,
                 'label' => $running->label, 'reused' => true];
+        }
+
+        // 조금 전에 끝난 같은 작업이 있으면 그 결과를 그대로 준다.
+        //
+        // 결과 창을 닫으면 화면에서는 사라지지만 답은 서버에 남아 있다. 다시 눌렀을 때
+        // AI 를 또 부르면 같은 답을 사고 오는 셈이고(값이 두 배), 사용자는 아까 본 것을
+        // 다시 기다린다. 그래서 최근 것은 꺼내 준다.
+        if ($reuseMinutes > 0) {
+            $recent = AiJob::query()
+                ->where('kind', $kind)
+                ->where('subject_type', $subjectType)
+                ->where('subject_id', $subjectId)
+                ->where('status', 'done')
+                ->where('finished_at', '>=', now()->subMinutes($reuseMinutes))
+                ->latest('id')
+                ->first();
+
+            if ($recent) {
+                return $recent->toStatusArray() + ['reused' => true];
+            }
         }
 
         $job = AiJob::create([

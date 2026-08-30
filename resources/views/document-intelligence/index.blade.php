@@ -354,6 +354,12 @@ async function runExtract(id, kind, btn){
     // 끊어 504 가 뜬다 — 화면에는 무엇이 잘못됐는지도 남지 않는다.
     const job = await jsonFetch(endpoints.show+'/'+id+'/'+(isSpec?'submittals':'takeoff'),{method:'POST'});
     if (!job.jobId) { toast(job.message || '완료했습니다.'); return; }
+    if (job.done) {                                  // 조금 전에 끝난 작업이면 결과가 바로 온다
+      if (job.status === 'failed') throw new Error(job.error || 'AI 작업이 실패했습니다.');
+      const prev = job.result || {};
+      toast(prev.message || '이미 뽑아 둔 결과입니다.');
+      return;
+    }
 
     toast(isSpec ? '시방을 읽기 시작했습니다. 끝나면 알려 드립니다.' : '도면을 읽기 시작했습니다. 끝나면 알려 드립니다.');
 

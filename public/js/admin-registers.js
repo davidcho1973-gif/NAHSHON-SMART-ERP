@@ -40,6 +40,11 @@
     return call(method, args).then(function (res) {
       var jobId = res.jobId;
       if (!jobId) return res;                       // 접수 구조가 아니면 그대로 (구버전 호환)
+      // 조금 전에 끝난 같은 작업이면 서버가 결과를 바로 준다 — 기다릴 것이 없다.
+      if (res.done) {
+        if (res.status === 'failed') throw new Error(res.error || 'AI 작업이 실패했습니다.');
+        return res.result || {};
+      }
 
       var waited = 0;
       return new Promise(function (resolve, reject) {
@@ -286,7 +291,7 @@
       '<div id="reg-research-body" style="flex:1;overflow:auto;padding:16px 18px">' +
         '<div style="text-align:center;padding:44px 16px;color:var(--text-tertiary);font-size:13px;line-height:1.8">' +
           'AI 가 웹에서 제조사 자료를 찾고 있습니다…<br>규격(ASTM·Type)이 맞는 제품만 고르느라 시간이 걸립니다.' +
-          '<div style="margin-top:10px;font-size:12px">경과 <b class="reg-wait-sec">0초</b> · 이 창을 닫아도 작업은 계속됩니다.</div></div>' +
+          '<div style="margin-top:10px;font-size:12px">경과 <b class="reg-wait-sec">0초</b> · 닫아도 작업은 계속되며, 다시 누르면 그 결과가 바로 나옵니다.</div></div>' +
       '</div></div>';
 
     function close() { wrap.remove(); document.removeEventListener('keydown', onKey); }
