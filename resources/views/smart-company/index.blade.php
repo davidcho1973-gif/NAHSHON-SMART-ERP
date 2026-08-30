@@ -5242,7 +5242,13 @@
           }
 
           pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">재무 / 비용 관리</h1><p class="page-subtitle">비용 제출 내역 · 승인 대기 · 청구 현황</p></div>' +
+            // 현장을 골랐을 때 이 숫자에 본사 공통(현장 미지정)이 섞여 있다는 사실을 말한다.
+            // 규약은 그대로 두되 침묵하지 않는다 — 표시가 없으면 현장 소장은 이 숫자를
+            // "우리 현장 것" 으로 읽고, 현장 둘의 숫자를 더해 본사 공통을 두 번 세게 된다.
+            '<div class="header-section"><div><h1 class="page-title">재무 / 비용 관리</h1><p class="page-subtitle">비용 제출 내역 · 승인 대기 · 청구 현황' +
+            (stats.includesHqCommon
+              ? ' · <span title="현장을 고르면 그 현장 것에 본사 공통(현장 미지정)이 함께 계산됩니다. 그래서 현장별 숫자를 서로 더하면 공통분이 겹칩니다 — 전체 합계는 「전체 현장」으로 보세요." style="color:var(--brand-primary);font-weight:600;cursor:help">본사 공통 포함</span>'
+              : '') + '</p></div>' +
             '<div class="action-row" style="flex-wrap: wrap; gap: 8px;">' +
             '  <a href="/mobile-expense/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-receipt" style="font-size:16px"></i> 비용/영수증 목록</a>' +
             '  <a href="/expense-pre-approval/index" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;height:38px;padding:0 14px;border-radius:6px;"><i class="ph ph-hand-coins" style="font-size:16px"></i> 사전 예산 승인</a>' +

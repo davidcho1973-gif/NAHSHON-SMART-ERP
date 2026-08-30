@@ -78,22 +78,23 @@ class SimpleWorkerRegistrationController extends Controller
     }
 
     /**
-     * 공정(Trade) 선택지 — 공정관리(WBS)에서 실제로 쓰이는 공종을 추출한다.
-     * 현장 WBS 우선, 없으면 전체 WBS, 그것도 없으면 기본 직군.
-     * 작업자는 반드시 이 목록에서 골라야 한다(자유 입력 금지) — 인원체크 집계가 공정 단위로 묶이기 때문.
+     * 공정(Trade) 선택지 — <b>이 현장</b>의 공정표(WBS)에서 실제로 쓰이는 공종.
+     *
+     * 예전에는 이 현장에 공정표가 없으면 <b>전체 현장</b>의 공종을 대신 보여 줬다.
+     * 현장이 하나일 때는 "빈 목록보다 낫다"였지만, 현장이 둘이 되는 순간 새로 연
+     * 현장의 첫 작업자에게 남의 현장 공종 이름이 뜬다. 주가 다르면 공종 체계 자체가
+     * 다를 수도 있고, 그렇게 들어온 이름은 그 현장 인원 집계의 칸이 되어 남는다.
+     *
+     * 이 현장 것이 없으면 기본 직군을 보여 준다 — 남의 현장을 빌려오지 않는다.
+     * 목록에 없는 공정은 어차피 직접 적을 수 있다(협력사는 매일 오는 사람이 다르다).
      *
      * @return array<int, string>
      */
     private function tradeOptions(Site $site): array
     {
-        $trades = WbsItem::query()->where('site_id', $site->id)
-            ->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade');
-
-        if ($trades->isEmpty()) {
-            $trades = WbsItem::query()->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade');
-        }
-
-        $list = $trades->map(fn ($t) => trim((string) $t))->filter()->unique()->sort()->values()->all();
+        $list = WbsItem::query()->where('site_id', $site->id)
+            ->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade')
+            ->map(fn ($t) => trim((string) $t))->filter()->unique()->sort()->values()->all();
 
         return $list !== [] ? $list : array_values(MemberRegistration::roleOptions());
     }

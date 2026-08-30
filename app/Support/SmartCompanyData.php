@@ -268,8 +268,10 @@ class SmartCompanyData
             'api_saveSiteWifi' => app(SiteWifiService::class)->save((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
             'api_deleteSiteWifi' => app(SiteWifiService::class)->delete((int) ($args[0] ?? 0)),
             'api_getConstructionCommandCenter' => self::commandCenter($siteId),
-            'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? 'HFF-02'), $siteId),
-            'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? 'HFF-02'), $siteId),
+            // 프로젝트 코드는 화면이 넘긴다. 없으면 그 사실을 말한다 — 예전에는 특정
+            // 고객사의 프로젝트 코드로 넘어가서, 새 현장 화면에 남의 공정표가 뜰 수 있었다.
+            'api_getProjectWbsTree' => self::wbsTree((string) ($args[0] ?? ''), $siteId),
+            'api_getProjectProgressSummary' => self::projectProgressSummary((string) ($args[0] ?? ''), $siteId),
             'api_markWbsStatus' => app(WbsService::class)->markStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
             'api_createSafetyCardForWbs' => app(WbsService::class)->createSafetyCard(
                 (string) ($args[0] ?? ''),
@@ -291,7 +293,7 @@ class SmartCompanyData
             'api_updateWbsRow' => app(WbsService::class)->updateRow((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : []),
             // 기준 행 바로 뒤에 같은 레벨의 행을 끼워 넣는다 — 계획 중간에 빠진 작업을 넣기 위해.
             'api_insertWbsRow' => app(WbsService::class)->insertAfter((string) ($args[0] ?? ''), is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
-            'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? 'HFF-02'), $siteId),
+            'api_processWbsManual' => self::processWbsManual((string) ($args[0] ?? ''), $siteId),
 
             // 손님 전용 링크 — 로그인 없이 현장 공정 현황만 보는 열람 토큰. 발급·회수는
             // 관리자·현장소장만(서비스 안에서 검사) — api_get 접두사의 열람 전용 통과와 별개다.
@@ -426,14 +428,14 @@ class SmartCompanyData
                 (string) ($expense['id'] ?? ('EXP-'.md5(json_encode($expense)))),
                 (string) ($expense['vendor'] ?? $expense['vendor_name'] ?? $expense['detail'] ?? $expense['description'] ?? $expense['category'] ?? 'Expense'),
                 $expense['category'] ?? $expense['account'] ?? 'Other',
-                $expense['site'] ?? 'HFF-02',
+                $expense['site'] ?? 'ALL',
                 $expense['status'] ?? 'pending',
                 $expense['amount'] ?? null,
                 $expense
             );
         }
         foreach (self::alerts('all') as $alert) {
-            $records[] = self::record('safety', $alert['id'], $alert['title'], $alert['type'], $alert['site'] ?? 'HFF-02', $alert['status'], null, $alert);
+            $records[] = self::record('safety', $alert['id'], $alert['title'], $alert['type'], $alert['site'] ?? 'ALL', $alert['status'], null, $alert);
         }
         foreach (self::vendors() as $vendor) {
             $records[] = self::record('vendors', $vendor['id'], $vendor['name'], $vendor['category'], $vendor['site'] ?? 'ALL', $vendor['contractStatus'] ?? 'Active', null, $vendor);
@@ -908,13 +910,18 @@ class SmartCompanyData
                     // 수금률(%): receivedTotal ÷ billedTotal × 100 — 0 나눗셈 가드. 예: 332,000/403,000 → 82.4
                     'collectionRate' => $billedTotal > 0 ? round($receivedTotal / $billedTotal * 100, 1) : 0.0,
                     'byCategory' => $byCategory,
+                    // 이 숫자에 본사 공통(현장 미지정)이 섞여 있다는 사실을 화면이 말할 수
+                    // 있게 한다. 규약은 유지하되(applyFinanceSiteScope) 침묵하지 않는다 —
+                    // 표시가 없으면 현장 소장은 이 숫자를 "우리 현장 것" 으로 읽고,
+                    // 현장 둘의 숫자를 더해서 본사 공통을 두 번 세게 된다.
+                    'includesHqCommon' => self::resolveSiteId($siteId) !== null,
                 ];
             }
         } catch (\Throwable) {
             // Fall back to empty totals when the table is not ready.
         }
 
-        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'billedTotal' => 0, 'submittedPending' => 0, 'receivedTotal' => 0, 'arOutstanding' => 0, 'disputedDeductions' => 0, 'retainageHeld' => 0, 'collectionRate' => 0, 'byCategory' => []];
+        return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'billedTotal' => 0, 'submittedPending' => 0, 'receivedTotal' => 0, 'arOutstanding' => 0, 'disputedDeductions' => 0, 'retainageHeld' => 0, 'collectionRate' => 0, 'byCategory' => [], 'includesHqCommon' => false];
     }
 
     public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true): array
@@ -2100,8 +2107,10 @@ class SmartCompanyData
     public static function createRental(array $payload): array
     {
         try {
-            $siteCode = $payload['siteId'] ?? 'HFF-02';
-            $siteId = Site::where('code', $siteCode)->value('id');
+            // 현장이 안 왔으면 미지정으로 둔다. 예전에는 특정 고객사 현장 코드가
+            // 기본값이라, 현장을 안 고른 임대 장비가 남의 현장 자산으로 앉았다.
+            $siteCode = trim((string) ($payload['siteId'] ?? ''));
+            $siteId = $siteCode !== '' ? Site::where('code', $siteCode)->value('id') : null;
 
             $equipment = Equipment::create([
                 'site_id' => $siteId,
@@ -2238,6 +2247,10 @@ class SmartCompanyData
     public static function wbsTree(string $projectId, string $siteId = 'ALL'): array
     {
         try {
+            if (trim($projectId) === '') {
+                return ['success' => false, 'projectId' => '', 'stages' => [], 'error' => '프로젝트를 먼저 선택하세요.'];
+            }
+
             if (! Schema::hasTable('wbs_items')) {
                 return ['success' => true, 'projectId' => $projectId, 'stages' => []];
             }
@@ -2251,6 +2264,10 @@ class SmartCompanyData
     public static function projectProgressSummary(string $projectId, string $siteId = 'ALL'): array
     {
         try {
+            if (trim($projectId) === '') {
+                return ['success' => false, 'projectId' => '', 'progress' => 0, 'stages' => [], 'error' => '프로젝트를 먼저 선택하세요.'];
+            }
+
             if (! Schema::hasTable('wbs_items')) {
                 return ['success' => true, 'projectId' => $projectId, 'progress' => 0, 'totalWbsCount' => 0, 'completedCount' => 0, 'inProgressCount' => 0, 'stages' => []];
             }
@@ -2264,6 +2281,10 @@ class SmartCompanyData
     public static function processWbsManual(string $projectId, string $siteId = 'ALL'): array
     {
         try {
+            if (trim($projectId) === '') {
+                return ['success' => false, 'processed' => 0, 'results' => [], 'error' => '프로젝트를 먼저 선택하세요.'];
+            }
+
             return self::wbsAiAnalyzer()->processManual($projectId, $siteId);
         } catch (\Throwable $e) {
             return ['success' => false, 'processed' => 0, 'results' => [], 'error' => $e->getMessage()];
