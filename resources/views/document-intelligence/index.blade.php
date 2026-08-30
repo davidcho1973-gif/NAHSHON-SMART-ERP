@@ -456,7 +456,12 @@ function openViewer(){
     bg.classList.add('open');document.getElementById('viewer-title').textContent=fileName||'문서';document.getElementById('viewer-dl').href=downloadUrl;
     if(!VIEWER_INLINE.includes(ext)){body.innerHTML=viewerFallback(ext,downloadUrl);return}
     // sandbox: 업로드된 내용은 남이 만든 것 — 스크립트로 살아나면 안 된다(서버 CSP 와 이중 잠금).
-    body.innerHTML=`<iframe src="${esc(previewUrl)}" title="${esc(fileName||'문서')}" sandbox="allow-same-origin"></iframe>`;
+    // iframe 에 sandbox 를 걸지 않는다 — 크롬 내장 PDF 뷰어는 샌드박스 프레임에서
+    // 실행을 거부해 "This page has been blocked by Chrome" 만 떴다. 업로드 내용이
+    // 스크립트로 살아날 수 있는 건 오피스→HTML 변환뿐이고, 그 방어는 서버 응답의
+    // CSP(OfficePreview::safeHeaders — default-src 'none' + sandbox)가 이미 한다.
+    // 보호는 위험이 있는 곳(서버 변환 응답)에 두지, 모든 미리보기를 깨는 곳에 두지 않는다.
+    body.innerHTML=`<iframe src="${esc(previewUrl)}" title="${esc(fileName||'문서')}"></iframe>`;
 }
 function viewerFallback(ext,downloadUrl){return `<div class="viewer-msg">이 형식(.${esc(ext||'?')})은 화면 미리보기를 지원하지 않습니다.<br>원본을 내려받아 확인해 주세요.<br><br><a class="btn primary" href="${esc(downloadUrl)}">원본 다운로드</a></div>`}
 document.getElementById('viewer-close').onclick=closeViewer;
