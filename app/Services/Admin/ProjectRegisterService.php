@@ -157,6 +157,12 @@ class ProjectRegisterService
             'note' => $b->note,
             'flagged' => $b->flagged,
             'wbsActivityId' => $b->wbs_activity_id,
+            // 도면 판독으로 들어온 줄 — 애매한 것만 사람이 본다.
+            'confidence' => $b->confidence,
+            'needsReview' => (bool) $b->needs_review,
+            'reviewReason' => $b->review_reason,
+            'sourceDocumentId' => $b->source_document_id,
+            'extractedBy' => $b->extracted_by,
         ])->values()->all();
 
         $byDiscipline = [];
@@ -178,6 +184,8 @@ class ProjectRegisterService
                 'byDiscipline' => array_values($byDiscipline),
                 'unresolved' => count(array_filter($rows, fn ($r) => $r['qtyBasis'] === '미확정')),
                 'flagged' => count(array_filter($rows, fn ($r) => $r['flagged'])),
+                // 도면 판독이 자신 없어 한 줄 — 여기만 사람이 보면 된다.
+                'needsReview' => count(array_filter($rows, fn ($r) => $r['needsReview'])),
             ],
         ];
     }

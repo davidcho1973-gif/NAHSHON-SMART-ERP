@@ -26,6 +26,8 @@ class BoqItem extends Model
         'seq', 'discipline_code', 'discipline', 'name_kr', 'name_en', 'spec',
         'unit', 'qty', 'qty_basis', 'unit_price', 'amount', 'source', 'note', 'flagged',
         'wbs_activity_id',
+        // 도면 판독으로 들어온 줄이 달고 오는 것들
+        'confidence', 'needs_review', 'review_reason', 'source_document_id', 'extracted_by',
     ];
 
     protected function casts(): array
@@ -35,6 +37,8 @@ class BoqItem extends Model
             'unit_price' => 'decimal:2',
             'amount' => 'decimal:2',
             'flagged' => 'boolean',
+            'needs_review' => 'boolean',
+            'confidence' => 'integer',
         ];
     }
 

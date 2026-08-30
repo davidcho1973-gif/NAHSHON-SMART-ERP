@@ -17,7 +17,7 @@
     // submittals
     sub: null, subProjectId: null, subF: { csi: '', category: '', status: '', gateOnly: false },
     // boq
-    boq: null, boqProjectId: null, boqTab: '',
+    boq: null, boqProjectId: null, boqTab: '', boqReviewOnly: false,
   };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
@@ -251,8 +251,15 @@
 
   function boqRows() {
     return (state.boq.rows || []).filter(function (r) {
+      if (state.boqReviewOnly && !r.needsReview) return false;
       return !state.boqTab || r.disciplineCode === state.boqTab;
     });
+  }
+
+  /** 도면 판독이 자신 없어 한 줄만 걸러 본다 — 사람이 볼 곳은 여기뿐이다. */
+  function toggleReviewOnly() {
+    state.boqReviewOnly = !state.boqReviewOnly;
+    drawBoq();
   }
 
   function drawBoq() {
@@ -270,6 +277,13 @@
         chip('표시 범위 합계', money(shown)) +
         chip('실측 필요(LS)', t.unresolved || 0, 'danger') +
         chip('검토 플래그 ⚑', t.flagged || 0, 'danger') +
+        // 도면에서 뽑은 줄은 바로 대장에 들어간다. 그중 확신이 낮았던 것만 여기 모인다.
+        (t.needsReview ? '<button type="button" onclick="window.AdminRegisters.toggleReviewOnly()" ' +
+          'style="border:1px solid ' + (state.boqReviewOnly ? 'var(--brand-primary)' : 'var(--border-default)') +
+          ';background:' + (state.boqReviewOnly ? 'var(--brand-primary)' : 'transparent') +
+          ';color:' + (state.boqReviewOnly ? '#fff' : 'var(--text-primary)') +
+          ';border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">' +
+          '🔍 확인 필요 ' + t.needsReview + '</button>' : '') +
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">' +
         projectSelect(d.projects, d.projectId, 'window.AdminRegisters.setBoqProject(this.value)') +
@@ -284,7 +298,12 @@
           { key: 'nameKr', label: '품명', render: function (r) {
               return '<div style="font-size:12.5px;white-space:normal;min-width:220px">' +
                 (r.flagged ? '<span style="color:var(--danger,#dc2626)">⚑ </span>' : '') + u.esc(r.nameKr) + '</div>' +
-                (r.nameEn ? '<div style="font-size:11px;color:var(--text-tertiary);white-space:normal">' + u.esc(r.nameEn) + '</div>' : '');
+                (r.nameEn ? '<div style="font-size:11px;color:var(--text-tertiary);white-space:normal">' + u.esc(r.nameEn) + '</div>' : '') +
+                // 왜 확인해야 하는지를 그 줄에 바로 적는다 — 다시 물어볼 일이 없게.
+                (r.needsReview ? '<div style="font-size:11px;color:var(--danger,#dc2626);white-space:normal;margin-top:3px">🔍 ' +
+                  u.esc(r.reviewReason || '확인 필요') + '</div>' : '') +
+                (r.extractedBy ? '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' +
+                  u.esc(r.extractedBy) + ' 판독' + (r.confidence != null ? ' · 확신도 ' + r.confidence : '') + '</div>' : '');
             } },
           { key: 'spec', label: '규격 · 사양', render: function (r) {
               return r.spec ? '<div style="font-size:11.5px;color:var(--text-secondary);white-space:normal;min-width:180px;line-height:1.5">' + u.esc(r.spec) + '</div>' : '';
@@ -370,6 +389,7 @@
     quickStatus: quickStatus,
     openSubmittal: openSubmittal,
     setBoqProject: setBoqProject,
+    toggleReviewOnly: toggleReviewOnly,
     setBoqTab: setBoqTab,
     openBoqItem: openBoqItem,
     _state: state,
