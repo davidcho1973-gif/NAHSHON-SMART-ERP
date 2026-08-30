@@ -118,7 +118,8 @@ class AppInstallTest extends TestCase
         $this->get(route('gate.show', ['site' => $site]))
             ->assertOk()
             ->assertSee(route('gate.manifest', ['site' => $site]), false)
-            ->assertSee('apple-touch-icon.png', false)
+            // 앱마다 아이콘이 다르다 — 홈 화면에서 출퇴근과 영수증이 구분되어야 한다.
+            ->assertSee('attendance-apple-touch.png', false)
             ->assertSee('apple-mobile-web-app-capable', false);
     }
 
@@ -190,7 +191,7 @@ class AppInstallTest extends TestCase
             ->get(route('attendance-app.index'))
             ->assertOk()
             ->assertSee(route('worker-app.manifest'), false)
-            ->assertSee('apple-touch-icon.png', false)
+            ->assertSee('attendance-apple-touch.png', false)
             // 스페인어 사용자로 등록됐으면 설치 안내도 스페인어로 시작해야 한다.
             ->assertSee('"es"', false);
     }
