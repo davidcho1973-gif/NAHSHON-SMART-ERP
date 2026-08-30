@@ -4,6 +4,7 @@ namespace App\Services\Takeoff;
 
 use App\Models\BoqItem;
 use App\Models\IntelligentDocument;
+use App\Models\Project;
 use App\Services\Ocr\OcrEngine;
 use App\Support\AiMeter;
 use Illuminate\Support\Facades\Storage;
@@ -47,6 +48,14 @@ class DrawingTakeoffService
             return ['success' => false, 'error' => '도면 원본을 찾을 수 없습니다.'];
         }
 
+        // 넣을 곳부터 정한다. 물량 대장은 <b>프로젝트</b>로 갈라져 있어서, 프로젝트가
+        // 없는 줄은 어느 화면에서도 보이지 않는다 — 넣었다고 말해 놓고 찾을 수 없는
+        // 것이 가장 나쁘다. 그래서 보이지 않을 곳에는 아예 넣지 않는다.
+        $project = TakeoffTarget::resolve($document);
+        if ($project === null) {
+            return ['success' => false, 'error' => TakeoffTarget::reason($document)];
+        }
+
         $startedAt = microtime(true);
         try {
             $result = $this->engine->analyze(
@@ -69,17 +78,17 @@ class DrawingTakeoffService
                 'error' => '이 도면에서는 수량을 읽어내지 못했습니다.'];
         }
 
-        return $this->persist($document, $items, (string) ($result['model'] ?? ''));
+        return $this->persist($document, $items, (string) ($result['model'] ?? ''), $project);
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $items
      * @return array{success: bool, created: int, review: int, rows: array<int, array<string, mixed>>}
      */
-    private function persist(IntelligentDocument $document, array $items, string $model): array
+    private function persist(IntelligentDocument $document, array $items, string $model, Project $project): array
     {
         $nextSeq = (int) BoqItem::query()
-            ->where('project_id', $document->project_id)
+            ->where('project_id', $project->id)
             ->max('seq');
 
         $created = 0;
@@ -110,7 +119,7 @@ class DrawingTakeoffService
 
             // 같은 프로젝트에 같은 품목이 이미 있는데 수량이 다르면 이중 계상 위험이 있다.
             $twin = BoqItem::query()
-                ->where('project_id', $document->project_id)
+                ->where('project_id', $project->id)
                 ->where('name_kr', $name)
                 ->first();
             if ($twin && abs((float) $twin->qty - $qty) > 0.01) {
@@ -119,8 +128,9 @@ class DrawingTakeoffService
 
             $row = BoqItem::create([
                 'company_id' => $document->company_id,
-                'site_id' => $document->site_id,
-                'project_id' => $document->project_id,
+                // 대장은 프로젝트·현장으로 갈라 보므로 둘 다 목적지 기준으로 맞춘다.
+                'site_id' => $project->site_id ?: $document->site_id,
+                'project_id' => $project->id,
                 'seq' => ++$nextSeq,
                 'discipline_code' => (string) ($raw['discipline_code'] ?? ''),
                 'discipline' => (string) ($raw['discipline'] ?? ''),
@@ -153,7 +163,7 @@ class DrawingTakeoffService
         }
 
         return ['success' => true, 'created' => $created, 'review' => $review, 'rows' => $rows,
-            'model' => $model];
+            'model' => $model, 'project' => $project->name, 'projectCode' => $project->project_code];
     }
 
     private function fileOf(IntelligentDocument $document): ?string

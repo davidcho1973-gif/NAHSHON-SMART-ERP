@@ -3,6 +3,7 @@
 namespace App\Services\Takeoff;
 
 use App\Models\IntelligentDocument;
+use App\Models\Project;
 use App\Models\Submittal;
 use App\Services\Ocr\OcrEngine;
 use App\Support\AiMeter;
@@ -45,6 +46,12 @@ class SpecSubmittalService
             return ['success' => false, 'error' => '시방서 원본을 찾을 수 없습니다.'];
         }
 
+        // 제출물 대장도 프로젝트로 갈라 본다 — 목적지를 못 정하면 넣지 않는다.
+        $project = TakeoffTarget::resolve($document);
+        if ($project === null) {
+            return ['success' => false, 'error' => TakeoffTarget::reason($document)];
+        }
+
         $startedAt = microtime(true);
         try {
             $result = $this->engine->analyze(
@@ -67,16 +74,16 @@ class SpecSubmittalService
                 'error' => '이 문서에서는 제출물 요구를 찾지 못했습니다. 시방서가 맞는지 확인해 주세요.'];
         }
 
-        return $this->persist($document, $items);
+        return $this->persist($document, $items, $project);
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $items
      * @return array{success: bool, created: int, review: int, gates: int, rows: array<int, array<string, mixed>>}
      */
-    private function persist(IntelligentDocument $document, array $items): array
+    private function persist(IntelligentDocument $document, array $items, Project $project): array
     {
-        $nextSeq = (int) Submittal::query()->where('project_id', $document->project_id)->max('seq');
+        $nextSeq = (int) Submittal::query()->where('project_id', $project->id)->max('seq');
 
         $created = 0;
         $review = 0;
@@ -112,8 +119,8 @@ class SpecSubmittalService
 
             $row = Submittal::create([
                 'company_id' => $document->company_id,
-                'site_id' => $document->site_id,
-                'project_id' => $document->project_id,
+                'site_id' => $project->site_id ?: $document->site_id,
+                'project_id' => $project->id,
                 'seq' => ++$nextSeq,
                 'csi' => Str::limit((string) ($raw['csi'] ?? ''), 18, ''),
                 'section' => Str::limit((string) ($raw['section'] ?? ''), 90, ''),
@@ -144,7 +151,8 @@ class SpecSubmittalService
             ];
         }
 
-        return ['success' => true, 'created' => $created, 'review' => $review, 'gates' => $gates, 'rows' => $rows];
+        return ['success' => true, 'created' => $created, 'review' => $review, 'gates' => $gates, 'rows' => $rows,
+            'project' => $project->name, 'projectCode' => $project->project_code];
     }
 
     private function fileOf(IntelligentDocument $document): ?string

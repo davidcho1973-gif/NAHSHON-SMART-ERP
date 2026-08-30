@@ -255,9 +255,13 @@ class DocumentIntelligenceController extends Controller
             'created' => $created,
             'review' => $review,
             'rows' => $result['rows'] ?? [],
+            'project' => $result['project'] ?? null,
+            // 어느 대장에 넣었는지 함께 말한다 — 화면은 프로젝트를 골라 보므로,
+            // 목적지를 안 알려 주면 넣어 놓고도 못 찾는다.
             'message' => $created === 0
                 ? ($result['error'] ?? '이 도면에서는 수량을 읽어내지 못했습니다.')
-                : "물량 {$created}줄을 대장에 넣었습니다.".($review > 0 ? " 그중 {$review}줄은 확인이 필요합니다." : ' 모두 확신도가 높습니다.'),
+                : "물량 {$created}줄을 '".($result['projectCode'] ?? '')." ".($result['project'] ?? '')."' 물량대장에 넣었습니다."
+                    .($review > 0 ? " 그중 {$review}줄은 확인이 필요합니다." : ' 모두 확신도가 높습니다.'),
         ]);
     }
 
@@ -283,9 +287,10 @@ class DocumentIntelligenceController extends Controller
             'review' => $review,
             'gates' => $gates,
             'rows' => $result['rows'] ?? [],
+            'project' => $result['project'] ?? null,
             'message' => $created === 0
                 ? ($result['error'] ?? '제출물 요구를 찾지 못했습니다.')
-                : "제출물 {$created}건을 대장에 넣었습니다. 정지 조항 {$gates}건"
+                : "제출물 {$created}건을 '".($result['projectCode'] ?? '')." ".($result['project'] ?? '')."' 대장에 넣었습니다. 정지 조항 {$gates}건"
                     .($review > 0 ? " · 확인 필요 {$review}건" : '').'.',
         ]);
     }
