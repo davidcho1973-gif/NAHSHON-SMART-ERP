@@ -224,6 +224,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/document-hub/api/documents', [DocumentIntelligenceController::class, 'documents'])->name('document-intelligence.documents');
     Route::post('/document-hub/api/upload', [DocumentIntelligenceController::class, 'upload'])->name('document-intelligence.upload');
     Route::get('/document-hub/api/index.csv', [DocumentIntelligenceController::class, 'exportIndex'])->name('document-intelligence.export-index');
+    // 현장이 비어 있는 문서 정리 — 목록·제안은 GET, 일괄 적용은 POST.
+    Route::get('/document-hub/api/unassigned', [DocumentIntelligenceController::class, 'unassigned'])->name('document-intelligence.unassigned');
+    Route::post('/document-hub/api/assign-site', [DocumentIntelligenceController::class, 'assignSite'])->name('document-intelligence.assign-site');
     Route::get('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'show'])->name('document-intelligence.show');
     Route::post('/document-hub/api/documents/{document}/reanalyze', [DocumentIntelligenceController::class, 'reanalyze'])->name('document-intelligence.reanalyze');
     Route::post('/document-hub/api/reanalyze-stuck', [DocumentIntelligenceController::class, 'reanalyzeStuck'])->name('document-intelligence.reanalyze-stuck');

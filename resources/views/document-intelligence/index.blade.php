@@ -29,7 +29,7 @@
         .stats{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:12px;margin-bottom:18px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 16px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
         .stat span{font-size:11px;color:var(--muted);font-weight:700}.stat strong{font-size:25px;display:block;margin-top:3px}.stat.danger{border-left:3px solid var(--red)}.stat.warn{border-left:3px solid var(--amber)}
         .workspace{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:17px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 20px rgba(15,23,42,.035);overflow:hidden}
-        .panel-head{display:flex;justify-content:space-between;align-items:center;padding:15px 18px;border-bottom:1px solid var(--line)}.panel-head h2{font-size:15px;margin:0}.panel-head p{font-size:11px;color:var(--muted);margin:2px 0 0}
+        .panel-head{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:15px 18px;border-bottom:1px solid var(--line)}.panel-head .btn{white-space:nowrap}.panel-head h2{font-size:15px;margin:0}.panel-head p{font-size:11px;color:var(--muted);margin:2px 0 0}
         .drop-panel{padding:16px}.scope-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:11px}.field label{display:block;font-size:10px;font-weight:800;color:var(--muted);margin:0 0 5px}
         .field select,.field input{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:9px 10px;color:var(--text);outline:none}.field select:focus,.field input:focus{border-color:#7ca5fb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
         .dropzone{min-height:180px;border:2px dashed #a8bce0;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#f6f3ff);display:grid;place-items:center;text-align:center;padding:25px;transition:.2s}
@@ -38,7 +38,8 @@
         .queue.show{display:block}.queue-row{display:flex;justify-content:space-between;gap:8px;padding:5px 3px;font-size:11px}.progress{height:5px;background:#e8edf5;border-radius:10px;overflow:hidden;margin-top:7px}.progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--blue),var(--violet));transition:.25s}
         .memory-list{padding:8px 16px 16px}.memory-item{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-top:8px}.memory-item.critical{background:var(--red-soft);border-color:#fecaca}.memory-item.warning{background:var(--amber-soft);border-color:#fde0a7}
         .memory-item strong{display:block;font-size:12px}.memory-item p{font-size:11px;color:var(--muted);margin:4px 0}.memory-meta{display:flex;gap:7px;align-items:center;font-size:10px;color:var(--muted)}
-        .searchbar{display:grid;grid-template-columns:minmax(240px,1fr) 180px 180px auto;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);background:#fbfcfe}.searchbar input,.searchbar select{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text)}
+        {{-- 칸이 넷에서 다섯(현장)으로 늘면서 고정 폭 그리드로는 좁은 화면에서 검색 버튼이 잘렸다. 남는 폭을 나눠 갖고 모자라면 줄을 바꾼다. --}}
+        .searchbar{display:flex;flex-wrap:wrap;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);background:#fbfcfe}.searchbar input,.searchbar select{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text);min-width:0}.searchbar #search{flex:2 1 190px}.searchbar select{flex:1 1 118px}.searchbar .btn{flex:0 0 auto}
         .doc-table{width:100%;border-collapse:collapse}.doc-table th{text-align:left;padding:10px 12px;font-size:10px;letter-spacing:.03em;color:var(--muted);background:#f8fafc;border-bottom:1px solid var(--line)}.doc-table td{padding:11px 12px;border-bottom:1px solid #edf1f6;vertical-align:middle}.doc-table tr:hover td{background:#fafcff}
         .doc-title{font-weight:750;font-size:12px;max-width:360px}.doc-sub{color:var(--muted);font-size:10px;margin-top:2px}.badge{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800;background:#eef2f7;color:#53637a}.badge.ready{background:var(--green-soft);color:var(--green)}.badge.analyzing,.badge.queued{background:var(--blue-soft);color:var(--blue)}.badge.review_required{background:var(--amber-soft);color:var(--amber)}.badge.failed{background:var(--red-soft);color:var(--red)}
         .action-count{color:var(--red);font-weight:800}.empty{padding:55px 20px;text-align:center;color:var(--muted)}.loading{opacity:.55;pointer-events:none}
@@ -55,6 +56,12 @@
         .viewer-pre{white-space:pre-wrap;word-break:break-word;padding:24px;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;color:#1f2937}
         .xls-wrap{padding:14px}.xls-wrap table{border-collapse:collapse;font-size:12px;background:#fff}.xls-wrap td,.xls-wrap th{border:1px solid #d0d7e2;padding:4px 8px;white-space:nowrap;max-width:360px;overflow:hidden;text-overflow:ellipsis;vertical-align:top}.xls-wrap tr:first-child td{background:#f1f5fb;font-weight:700}
         .viewer-msg,.viewer-spin{padding:56px 24px;text-align:center;color:var(--muted);line-height:1.7}
+        .tidy-bg{display:none;position:fixed;inset:0;background:rgba(2,8,23,.62);z-index:250;padding:22px}.tidy-bg.open{display:grid;place-items:center}
+        .tidy{width:min(1020px,96vw);max-height:90vh;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
+        .tidy-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:15px 18px;border-bottom:1px solid var(--line)}.tidy-head h2{font-size:16px;margin:0}.tidy-head p{font-size:11px;color:var(--muted);margin:5px 0 0;line-height:1.65;max-width:640px;word-break:keep-all}
+        .tidy-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:11px 18px;border-bottom:1px solid var(--line);background:#fbfcfe}.tidy-bar select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;color:var(--text);min-width:190px}.tidy-bar .grow{flex:1}
+        .tidy-body{overflow:auto;flex:1}.tidy-note{font-size:11px;color:var(--muted)}
+        .src{display:inline-block;margin-left:6px;font-size:9px;font-weight:800;color:var(--muted)}
         @media(max-width:1100px){.app{grid-template-columns:78px 1fr}.brand div,.nav-link span,.nav-label,.sidebar-note{display:none}.brand{padding-left:3px}.sidebar{padding:18px 12px}.nav-link{justify-content:center}.workspace{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
         @media(max-width:700px){.app{display:block}.sidebar{display:none}.topbar{padding:0 14px}.content{padding:17px 12px}.hero{align-items:flex-start}.stats{grid-template-columns:repeat(2,1fr)}.scope-grid,.searchbar{grid-template-columns:1fr}.doc-table th:nth-child(3),.doc-table td:nth-child(3),.doc-table th:nth-child(4),.doc-table td:nth-child(4){display:none}.detail-grid{grid-template-columns:repeat(2,1fr)}}
     </style>
@@ -116,9 +123,10 @@
 
             <div class="workspace">
                 <section class="panel">
-                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><div style="display:flex;gap:6px"><button class="btn small" id="unstick-btn" title="AI 분석 중에서 멈춘 문서를 다시 분석합니다">⟳ 멈춘 분석 재시도</button><button class="btn small" id="refresh-btn">↻ 새로고침</button></div></div>
+                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><div style="display:flex;gap:6px"><button class="btn small" id="tidy-btn" style="display:none" title="현장이 비어 있는 문서에 현장을 한 번에 붙입니다">⚑ 현장 정리</button><button class="btn small" id="unstick-btn" title="AI 분석 중에서 멈춘 문서를 다시 분석합니다">⟳ 멈춘 분석 재시도</button><button class="btn small" id="refresh-btn">↻ 새로고침</button></div></div>
                     <div class="searchbar">
                         <input id="search" placeholder="예: RFI-023, backcharge, cable tray, 30일 notice…">
+                        <select id="site-filter"><option value="">전체 현장</option><option value="none">현장 미지정</option>@foreach($sites as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
                         <select id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
                         <select id="project-filter"><option value="">전체 PROJECT</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
                         <button class="btn primary" id="search-btn">검색</button>
@@ -157,6 +165,28 @@
 <div class="drawer-bg" id="drawer-bg"><div class="drawer"><div class="drawer-head"><div><h2 id="detail-title">문서 상세</h2><div class="doc-sub" id="detail-file"></div></div><button class="btn" id="drawer-close">닫기</button></div><div class="drawer-body" id="drawer-body"></div></div></div>
 <div class="toast" id="toast"></div>
 
+{{-- 현장 미지정 문서 일괄 정리 --}}
+<div class="tidy-bg" id="tidy-bg">
+  <div class="tidy">
+    <div class="tidy-head">
+      <div>
+        <h2>현장 미지정 문서 정리 <span class="tidy-note" id="tidy-total"></span></h2>
+        <p>현장이 비어 있는 문서는 현장 화면 어디에도 뜨지 않습니다. PROJECT가 붙어 있으면 그 PROJECT의 현장을, 없으면 제목·파일명에서 현장 코드를 찾아 제안합니다. 확실하지 않으면 제안하지 않습니다 — 현장을 직접 골라 주세요.</p>
+      </div>
+      <button class="btn" id="tidy-close">닫기</button>
+    </div>
+    <div class="tidy-bar">
+      <select id="tidy-site"><option value="">제안대로 (문서마다 다름)</option></select>
+      <button class="btn primary" id="tidy-apply">선택한 문서에 적용</button>
+      <span class="grow"></span>
+      <button class="btn small" id="tidy-all">전체 선택</button>
+      <button class="btn small" id="tidy-suggested">제안 있는 것만</button>
+      <button class="btn small" id="tidy-none">선택 해제</button>
+    </div>
+    <div class="tidy-body"><table class="doc-table"><thead><tr><th style="width:38px"></th><th>문서</th><th style="width:110px">접수일</th><th style="width:180px">제안 현장</th></tr></thead><tbody id="tidy-list"><tr><td colspan="4" class="empty">불러오는 중…</td></tr></tbody></table></div>
+  </div>
+</div>
+
 <div class="viewer-bg" id="viewer-bg">
   <div class="viewer">
     <div class="viewer-head">
@@ -179,6 +209,8 @@ const endpoints = {
     reanalyzeStuck: @json(route('document-intelligence.reanalyze-stuck')),
     show: @json(url('/document-hub/api/documents')),
     actions: @json(url('/document-hub/api/actions')),
+    unassigned: @json(route('document-intelligence.unassigned')),
+    assignSite: @json(route('document-intelligence.assign-site')),
 };
 const CATEGORY_OPTIONS = @json(collect(\App\Models\IntelligentDocument::CATEGORY_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 const TYPE_OPTIONS = @json(collect(\App\Models\IntelligentDocument::TYPE_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
@@ -193,15 +225,65 @@ async function jsonFetch(url, options={}){const response=await fetch(url,{creden
 
 async function loadDocuments(){
     // ERP 안에 얹혀 열릴 때 상단 전환기의 현장이 주소로 실려 온다. 그 현장 문서만 본다.
+    // 그때는 이 화면의 현장 선택기를 숨긴다 — 현장을 고르는 곳이 두 군데면 어느 쪽이
+    // 이겼는지 화면만 봐서는 알 수 없다.
     const embeddedSite=new URLSearchParams(location.search).get('site_id')||'';
+    const siteSel=document.getElementById('site-filter');
+    if(embeddedSite)siteSel.style.display='none';
+    const site=embeddedSite||siteSel.value;
     const params=new URLSearchParams({q:document.getElementById('search').value,category:document.getElementById('category-filter').value,project_id:document.getElementById('project-filter').value});
-    if(embeddedSite)params.set('site_id',embeddedSite);
+    if(site)params.set('site_id',site);
     const list=document.getElementById('doc-list'); list.classList.add('loading');
     try{
         const data=await jsonFetch(endpoints.list+'?'+params.toString()); currentDocuments=data.documents||[]; renderRows();
         const s=data.stats||{};document.getElementById('stat-total').textContent=s.total||0;document.getElementById('stat-analyzing').textContent=s.analyzing||0;document.getElementById('stat-review').textContent=s.review_required||0;document.getElementById('stat-actions').textContent=s.open_actions||0;document.getElementById('stat-critical').textContent=s.critical_actions||0;
+        // 정리할 문서가 있을 때만 정리 버튼이 나온다 — 할 일이 없으면 버튼도 없다.
+        const tidyBtn=document.getElementById('tidy-btn');
+        if(tidyBtn&&canManage){const n=s.unassigned||0;tidyBtn.style.display=n>0?'':'none';tidyBtn.textContent='⚑ 현장 미지정 '+n+'건 정리'}
         clearTimeout(pollTimer); if((s.analyzing||0)>0)pollTimer=setTimeout(loadDocuments,5000);
     }catch(e){list.innerHTML='<tr><td colspan="6" class="empty">'+esc(e.message)+'</td></tr>'}finally{list.classList.remove('loading')}
+}
+
+let tidyRows=[];
+async function openTidy(){
+    document.getElementById('tidy-bg').classList.add('open');
+    const list=document.getElementById('tidy-list');
+    list.innerHTML='<tr><td colspan="4" class="empty">불러오는 중…</td></tr>';
+    try{
+        const data=await jsonFetch(endpoints.unassigned);
+        tidyRows=data.rows||[];
+        const sel=document.getElementById('tidy-site');
+        sel.innerHTML='<option value="">제안대로 (문서마다 다름)</option>'+(data.sites||[]).map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('');
+        document.getElementById('tidy-total').textContent='· 전체 '+(data.total||0)+'건 중 '+tidyRows.length+'건 표시 · 제안 '+(data.suggested||0)+'건';
+        renderTidy();
+    }catch(e){list.innerHTML='<tr><td colspan="4" class="empty">'+esc(e.message)+'</td></tr>'}
+}
+function renderTidy(){
+    const list=document.getElementById('tidy-list');
+    if(!tidyRows.length){list.innerHTML='<tr><td colspan="4" class="empty">현장이 비어 있는 문서가 없습니다.</td></tr>';return}
+    list.innerHTML=tidyRows.map(r=>`<tr>
+      <td><input type="checkbox" class="tidy-pick" value="${r.id}"${r.suggestedSiteId?' checked':''}></td>
+      <td><div class="doc-title">${esc(r.title)}</div><div class="doc-sub">${esc(r.fileName||'')}${r.project?' · '+esc(r.project):''}${r.documentNumber?' · No. '+esc(r.documentNumber):''}</div></td>
+      <td><div class="doc-sub">${esc(r.receivedAt||'-')}</div></td>
+      <td>${r.suggestedSite?`<span class="badge ready">${esc(r.suggestedSite)}</span><span class="src">${r.suggestedFrom==='project'?'PROJECT 근거':'이름에서 찾음'}</span>`:'<span class="badge">제안 없음</span>'}</td></tr>`).join('');
+}
+function tidyPicked(){return Array.from(document.querySelectorAll('.tidy-pick:checked')).map(c=>parseInt(c.value,10))}
+function tidySelect(mode){
+    document.querySelectorAll('.tidy-pick').forEach(c=>{
+        const row=tidyRows.find(r=>String(r.id)===c.value);
+        c.checked=mode==='all'?true:mode==='none'?false:!!(row&&row.suggestedSiteId);
+    });
+}
+async function applyTidy(){
+    const ids=tidyPicked();
+    if(!ids.length){toast('문서를 먼저 선택하세요.',true);return}
+    const siteId=document.getElementById('tidy-site').value;
+    const btn=document.getElementById('tidy-apply');btn.disabled=true;
+    try{
+        const data=await jsonFetch(endpoints.assignSite,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids,site_id:siteId?parseInt(siteId,10):null})});
+        toast(data.message);
+        await openTidy(); loadDocuments();
+    }catch(e){toast(e.message,true)}finally{btn.disabled=false}
 }
 function renderRows(){
     const list=document.getElementById('doc-list');
@@ -316,7 +398,16 @@ async function uploadFiles(files){
 if(canManage){const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
 document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
 document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
-if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;}else{const ub=document.getElementById('unstick-btn');if(ub)ub.style.display='none';}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;
+if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;}else{const ub=document.getElementById('unstick-btn');if(ub)ub.style.display='none';}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;document.getElementById('site-filter').onchange=loadDocuments;
+if(canManage){
+    document.getElementById('tidy-btn').onclick=openTidy;
+    document.getElementById('tidy-close').onclick=()=>document.getElementById('tidy-bg').classList.remove('open');
+    document.getElementById('tidy-bg').addEventListener('click',e=>{if(e.target.id==='tidy-bg')e.currentTarget.classList.remove('open')});
+    document.getElementById('tidy-apply').onclick=applyTidy;
+    document.getElementById('tidy-all').onclick=()=>tidySelect('all');
+    document.getElementById('tidy-suggested').onclick=()=>tidySelect('suggested');
+    document.getElementById('tidy-none').onclick=()=>tidySelect('none');
+}
 /* ===== 원본 뷰어 — 올린 형식 그대로 화면에서 보기 =====
    변환은 전부 서버(OfficePreview)가 한다: 엑셀→표(색·병합 유지), 워드→문서, PPT→슬라이드,
    PDF/이미지/텍스트는 그대로. 화면은 preview URL 을 iframe 으로 띄우기만 한다.

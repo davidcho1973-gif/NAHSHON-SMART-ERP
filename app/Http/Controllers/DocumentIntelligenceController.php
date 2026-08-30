@@ -11,6 +11,7 @@ use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
 use App\Services\Documents\DocumentIntake;
+use App\Services\Documents\DocumentSiteAssigner;
 use App\Services\Documents\StuckAnalysisReaper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -47,8 +48,13 @@ class DocumentIntelligenceController extends Controller
         // 화면이 고른 현장. ERP 안에 얹혀 있는 화면이라 상단 전환기의 현장을 그대로
         // 따라야 한다 — 예전에는 이 값을 아예 받지 않아, 애리조나를 띄워 놓고도 조지아
         // 문서가 목록과 통계에 그대로 떴다.
-        $siteFilter = $request->integer('site_id') ?: null;
-        $onSite = fn (Builder $b) => $b->when($siteFilter, fn (Builder $q) => $q->where('site_id', $siteFilter));
+        // 'none' 은 현장이 비어 있는 문서만 — 일괄 정리 화면이 쓰는 값이다.
+        $rawSite = trim((string) $request->query('site_id', ''));
+        $unassignedOnly = $rawSite === 'none';
+        $siteFilter = $unassignedOnly ? null : ($request->integer('site_id') ?: null);
+        $onSite = fn (Builder $b) => $b
+            ->when($unassignedOnly, fn (Builder $q) => $q->whereNull('site_id'))
+            ->when($siteFilter, fn (Builder $q) => $q->where('site_id', $siteFilter));
 
         $query = IntelligentDocument::query()
             ->visibleTo($request->user())
@@ -90,8 +96,62 @@ class DocumentIntelligenceController extends Controller
                     ->whereIn('status', ['open', 'in_progress'])
                     ->whereIn('severity', ['critical', 'high'])
                     ->count(),
+                // 현장이 비어 있는 문서는 어느 현장 화면에도 뜨지 않는다. 그래서 이
+                // 숫자만은 고른 현장과 무관하게 전체를 센다 — 안 그러면 정리해야 할
+                // 문서가 있다는 사실 자체가 화면에서 사라진다.
+                'unassigned' => IntelligentDocument::query()
+                    ->visibleTo($request->user())
+                    ->whereNull('site_id')
+                    ->count(),
             ],
         ]);
+    }
+
+    /** 현장이 비어 있는 문서 목록 + 제안 — 일괄 정리 화면이 연다. */
+    public function unassigned(Request $request, DocumentSiteAssigner $assigner): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+
+        return response()->json([
+            'success' => true,
+            'sites' => collect($this->siteOptions($request->user()))
+                ->map(fn (string $label, int $id): array => ['id' => $id, 'label' => $label])
+                ->values()->all(),
+            ...$assigner->pending($request->user(), $request->integer('limit', 200)),
+        ]);
+    }
+
+    /**
+     * 고른 문서에 현장을 한 번에 붙인다.
+     *
+     * site_id 를 주면 그 현장으로, 안 주면 문서마다의 제안대로. 이미 현장이 있는
+     * 문서는 서비스가 걸러 낸다 — 일괄 작업이 멀쩡한 귀속을 덮으면 안 된다.
+     */
+    public function assignSite(Request $request, DocumentSiteAssigner $assigner): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+            'site_id' => ['nullable', 'integer', 'exists:sites,id'],
+        ]);
+
+        $r = $assigner->assign($request->user(), $data['ids'], $data['site_id'] ?? null);
+
+        $parts = [];
+        if ($r['unmatched'] > 0) {
+            $parts[] = "현장을 찾지 못한 {$r['unmatched']}건은 그대로 두었습니다";
+        }
+        if ($r['skipped'] > 0) {
+            $parts[] = "손대지 않은 문서 {$r['skipped']}건";
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $r['assigned'] === 0
+                ? '현장을 붙인 문서가 없습니다.'.($parts ? ' '.implode(' · ', $parts).'.' : '')
+                : "문서 {$r['assigned']}건에 현장을 붙였습니다.".($parts ? ' '.implode(' · ', $parts).'.' : ''),
+        ] + $r);
     }
 
     public function show(Request $request, IntelligentDocument $document): JsonResponse
