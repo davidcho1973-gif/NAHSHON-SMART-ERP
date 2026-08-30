@@ -156,7 +156,15 @@
                   u.esc(r.sourceDocument) + (r.extractedBy ? ' · ' + u.esc(r.extractedBy) + ' 판독' : '') +
                   (r.confidence != null ? ' · 확신도 ' + r.confidence : '') + '</div>' : '') +
                 (r.needsReview ? '<div style="font-size:11px;color:var(--danger,#dc2626);white-space:normal;margin-top:3px">🔍 ' +
-                  u.esc(r.reviewReason || '확인 필요') + '</div>' : '');
+                  u.esc(r.reviewReason || '확인 필요') + '</div>' : '') +
+                // 이 조항을 채우려고 받아 둔 자료 — 대장이 곧 서류철이다.
+                ((r.documents || []).length ? '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">' +
+                  r.documents.map(function (doc) {
+                    return '<button type="button" onclick="window.AdminRegisters.openSource(' + doc.id + ')" ' +
+                      'style="border:1px solid var(--border-default);background:var(--bg-base);border-radius:999px;' +
+                      'padding:3px 10px;font-size:10.5px;color:var(--text-primary);cursor:pointer;max-width:260px;' +
+                      'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ' + u.esc(doc.label) + '</button>';
+                  }).join('') + '</div>' : '');
             } },
           { key: 'status', label: '상태', width: '120px', render: statusCell },
           { key: 'assignee', label: '담당 · 일정', width: '150px', render: function (r) {
@@ -167,10 +175,12 @@
               if (r.approvedOn) lines.push('승인 ' + r.approvedOn);
               return lines.length ? '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6">' + lines.join('<br>') + '</div>' : '';
             } },
-          { key: '_act', label: '', width: '150px', align: 'right', render: function (r) {
+          { key: '_act', label: '', width: '210px', align: 'right', render: function (r) {
               if (!canManage) return '';
-              // 조항을 읽고 업체에 보낼 요청서를 매번 손으로 쓰던 일 — 그 편지를 대신 쓴다.
-              return u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') + ' ' +
+              // 제품 자료는 제조사가 웹에 공개해 둔다 — AI 가 찾고, 사람이 고르고, 편철된다.
+              return u.rowButton('🌐 AI 조사', 'window.AdminRegisters.researchSubmittal(' + r.id + ')') + ' ' +
+                // 조항을 읽고 업체에 보낼 요청서를 매번 손으로 쓰던 일 — 그 편지를 대신 쓴다.
+                u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') + ' ' +
                 u.rowButton('기록', 'window.AdminRegisters.openSubmittal(' + r.id + ')');
             } },
         ],
@@ -206,6 +216,94 @@
           return { success: true };
         });
       },
+    });
+  }
+
+  /**
+   * 제품 자료 AI 웹 조사 — 후보를 보여 주고, 사람이 고른 것만 받아 편철한다.
+   * AI 가 찾은 것은 후보다: 틀린 모델의 스팩을 제출하면 반려로 끝나지 않는다.
+   */
+  function researchSubmittal(id) {
+    var u = ui();
+    var row = (state.sub.rows || []).filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.5);display:flex;' +
+      'align-items:center;justify-content:center;padding:20px';
+    wrap.innerHTML = '<div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;' +
+      'width:min(860px,95vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:16px 18px;border-bottom:1px solid var(--border-default)">' +
+        '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">' +
+          '<div style="min-width:0">' +
+            '<div style="font-size:15px;font-weight:700;color:var(--text-primary)">🌐 AI 자료 조사</div>' +
+            '<div style="font-size:11.5px;color:var(--text-tertiary);margin-top:3px;word-break:keep-all">' +
+              u.esc((row.csi ? '[' + row.csi + '] ' : '') + row.title.slice(0, 140)) + '</div>' +
+          '</div>' +
+          '<button type="button" data-x="close" style="padding:7px 13px;border-radius:8px;border:1px solid var(--border-default);' +
+            'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;cursor:pointer;flex-shrink:0">닫기</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="reg-research-body" style="flex:1;overflow:auto;padding:16px 18px">' +
+        '<div style="text-align:center;padding:44px 16px;color:var(--text-tertiary);font-size:13px;line-height:1.8">' +
+          'AI 가 웹에서 제조사 자료를 찾고 있습니다…<br>규격(ASTM·Type)이 맞는 제품만 고르느라 30초쯤 걸립니다.</div>' +
+      '</div></div>';
+
+    function close() { wrap.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    wrap.addEventListener('click', function (e) {
+      if (e.target === wrap || (e.target.getAttribute && e.target.getAttribute('data-x') === 'close')) close();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+
+    call('api_researchSubmittal', [id]).then(function (res) {
+      var body = wrap.querySelector('#reg-research-body');
+      if (!body) return;
+      var list = res.candidates || [];
+      if (!list.length) {
+        body.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--text-tertiary);font-size:13px;line-height:1.8">' +
+          '규격이 맞는 자료를 찾지 못했습니다.<br>「📨 자료요청」으로 업체에 직접 요청하는 것이 빠릅니다.</div>';
+        return;
+      }
+      body.innerHTML =
+        '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:12px;word-break:keep-all">' +
+          u.esc(res.engine || 'AI') + ' 가 찾은 후보 ' + list.length + '개 — <b>규격이 조항과 맞는지 확인한 뒤</b> 받으세요. ' +
+          'PDF 직링크는 바로 편철되고, 웹페이지는 열어서 직접 받아야 합니다.</div>' +
+        list.map(function (c, i) {
+          return '<div style="border:1px solid var(--border-default);border-radius:10px;padding:12px 14px;margin-bottom:9px">' +
+            '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+              '<div style="min-width:0">' +
+                '<div style="font-size:13px;font-weight:700;color:var(--text-primary);word-break:keep-all">' +
+                  u.esc(c.maker || '제조사 미상') + ' — ' + u.esc(c.product || '') + '</div>' +
+                (c.why ? '<div style="font-size:11.5px;color:var(--text-secondary);margin-top:4px;line-height:1.6;word-break:keep-all">' + u.esc(c.why) + '</div>' : '') +
+                '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px">' + u.esc(c.url) + '</div>' +
+              '</div>' +
+              '<div style="display:flex;gap:6px;flex-shrink:0;flex-direction:column">' +
+                '<a href="' + u.esc(c.url) + '" target="_blank" rel="noopener noreferrer" style="padding:6px 12px;border-radius:7px;' +
+                  'border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:11.5px;text-decoration:none;text-align:center">페이지 열기</a>' +
+                (c.file === 'pdf'
+                  ? '<button type="button" data-i="' + i + '" style="padding:6px 12px;border-radius:7px;border:none;background:var(--brand-primary);' +
+                    'color:#fff;font-size:11.5px;font-weight:600;cursor:pointer">받아서 편철</button>'
+                  : '') +
+              '</div>' +
+            '</div></div>';
+        }).join('');
+
+      body.querySelectorAll('button[data-i]').forEach(function (btn) {
+        btn.onclick = function () {
+          btn.disabled = true; btn.textContent = '받는 중…';
+          call('api_fileSubmittalResearch', [id, parseInt(btn.getAttribute('data-i'), 10)]).then(function (r2) {
+            if (r2.success === false) { u.toast(r2.error || '편철 실패', 'error'); btn.disabled = false; btn.textContent = '받아서 편철'; return; }
+            u.toast(r2.message || '편철했습니다.');
+            btn.textContent = '✓ 편철됨';
+            reloadSubmittals().then(drawSubmittals);
+          }).catch(function (e) { u.toast(e.message, 'error'); btn.disabled = false; btn.textContent = '받아서 편철'; });
+        };
+      });
+    }).catch(function (e) {
+      var body = wrap.querySelector('#reg-research-body');
+      if (body) body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger,#dc2626);font-size:13px">' + u.esc(e.message) + '</div>';
     });
   }
 
@@ -505,6 +603,7 @@
     quickStatus: quickStatus,
     openSubmittal: openSubmittal,
     requestVendorData: requestVendorData,
+    researchSubmittal: researchSubmittal,
     openSource: openSource,
     setBoqProject: setBoqProject,
     toggleReviewOnly: toggleReviewOnly,

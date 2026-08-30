@@ -52,7 +52,9 @@ class ProjectRegisterService
         $projects = $this->projectOptions($siteKey);
         $projectId = $this->resolveProject($projectId, $projects);
 
-        $q = Submittal::query()->with('sourceDocument:id,title,original_file_name,extension')->orderBy('seq');
+        $q = Submittal::query()
+            ->with(['sourceDocument:id,title,original_file_name,extension', 'documents:id,title,original_file_name'])
+            ->orderBy('seq');
         $this->applyScope($q);
 
         // 물량 대장과 같은 규칙 — 고른 현장에 프로젝트가 없으면 남의 것을 보여 주지 않는다.
@@ -88,6 +90,11 @@ class ProjectRegisterService
             'needsReview' => (bool) $s->needs_review,
             'reviewReason' => $s->review_reason,
             'extractedBy' => $s->extracted_by,
+            // 이 조항을 채우려고 받아 둔 자료들 — 대장에서 바로 열린다.
+            'documents' => $s->documents->map(fn (IntelligentDocument $d): array => [
+                'id' => $d->id,
+                'label' => $d->title ?: $d->original_file_name,
+            ])->values()->all(),
         ])->values()->all();
 
         $byStatus = [];
@@ -175,6 +182,45 @@ class ProjectRegisterService
             'documentId' => $result['documentId'],
             'message' => "요청서를 만들어 문서함에 넣었습니다 — 요청 항목 {$result['items']}개. 문서함에서 열어 확인·발송하세요.",
         ];
+    }
+
+    /**
+     * 제품 제출물 자료를 AI 웹 조사로 찾는다 — 후보만 돌려주고, 편철은 사람이 고른 뒤에.
+     *
+     * @return array<string, mixed>
+     */
+    public function researchSubmittal(int $submittalId): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '제출물 대장 수정 권한이 없습니다.'];
+        }
+
+        $row = Submittal::query()->find($submittalId);
+        if (! $row) {
+            return ['success' => false, 'error' => '해당 항목이 없습니다.'];
+        }
+
+        return app(\App\Services\Takeoff\SubmittalResearchService::class)->research($row);
+    }
+
+    /**
+     * 조사 후보 하나를 받아 문서함에 편철하고 제출물에 연결한다.
+     *
+     * @return array<string, mixed>
+     */
+    public function fileSubmittalResearch(int $submittalId, int $index): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '제출물 대장 수정 권한이 없습니다.'];
+        }
+
+        $row = Submittal::query()->find($submittalId);
+        if (! $row) {
+            return ['success' => false, 'error' => '해당 항목이 없습니다.'];
+        }
+
+        return app(\App\Services\Takeoff\SubmittalResearchService::class)
+            ->fileCandidate($row, $index, auth()->id());
     }
 
     /**

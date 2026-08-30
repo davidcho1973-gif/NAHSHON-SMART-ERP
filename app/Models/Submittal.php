@@ -68,6 +68,14 @@ class Submittal extends Model
         return $this->belongsTo(IntelligentDocument::class, 'source_document_id');
     }
 
+    /** 이 조항을 채우는 자료들 — 제품자료·시험성적·승인본. 출처(시방)와는 다른 방향이다. */
+    public function documents(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(IntelligentDocument::class, 'submittal_documents')
+            ->withPivot('kind')
+            ->withTimestamps();
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

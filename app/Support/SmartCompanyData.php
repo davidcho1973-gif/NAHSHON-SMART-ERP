@@ -207,6 +207,9 @@ class SmartCompanyData
                 (int) ($args[0] ?? 0),
                 isset($args[1]) ? (string) $args[1] : null
             ),
+            // 제품 자료 AI 웹 조사 → 후보 중 고른 것을 문서함에 편철·연결
+            'api_researchSubmittal' => app(ProjectRegisterService::class)->researchSubmittal((int) ($args[0] ?? 0)),
+            'api_fileSubmittalResearch' => app(ProjectRegisterService::class)->fileSubmittalResearch((int) ($args[0] ?? 0), (int) ($args[1] ?? -1)),
             'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
             // 대장 한 줄 → 그 줄을 뽑아 온 원본 문서. 대장과 근거가 한 화면에 있게.
