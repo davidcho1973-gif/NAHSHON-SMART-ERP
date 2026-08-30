@@ -202,6 +202,11 @@ class SmartCompanyData
             // 대장은 현장의 것이다 — 화면이 고른 현장을 그대로 넘긴다.
             'api_getSubmittals' => app(ProjectRegisterService::class)->listSubmittals((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveSubmittal' => app(ProjectRegisterService::class)->saveSubmittal(is_array($args[0] ?? null) ? $args[0] : []),
+            // 조항 → 업체 자료 요청서(문서함 편철)
+            'api_requestVendorData' => app(ProjectRegisterService::class)->requestVendorData(
+                (int) ($args[0] ?? 0),
+                isset($args[1]) ? (string) $args[1] : null
+            ),
             'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
 

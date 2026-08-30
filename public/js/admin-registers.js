@@ -152,8 +152,11 @@
               if (r.approvedOn) lines.push('승인 ' + r.approvedOn);
               return lines.length ? '<div style="font-size:11px;color:var(--text-secondary);line-height:1.6">' + lines.join('<br>') + '</div>' : '';
             } },
-          { key: '_act', label: '', width: '70px', align: 'right', render: function (r) {
-              return canManage ? u.rowButton('기록', 'window.AdminRegisters.openSubmittal(' + r.id + ')') : '';
+          { key: '_act', label: '', width: '150px', align: 'right', render: function (r) {
+              if (!canManage) return '';
+              // 조항을 읽고 업체에 보낼 요청서를 매번 손으로 쓰던 일 — 그 편지를 대신 쓴다.
+              return u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') + ' ' +
+                u.rowButton('기록', 'window.AdminRegisters.openSubmittal(' + r.id + ')');
             } },
         ],
         rows: rows,
@@ -161,6 +164,34 @@
 
     paint(html);
     u.bindSearch('sub-tbl');
+  }
+
+  /**
+   * 조항 → 업체 자료 요청서 → 문서함 편철.
+   * 업체명은 선택이다 — 아직 업체가 안 정해졌어도 요청서 틀은 미리 만들어 둘 수 있다.
+   */
+  function requestVendorData(id) {
+    var u = ui();
+    var row = (state.sub.rows || []).filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+
+    u.formModal({
+      title: '업체 자료 요청서 만들기',
+      subtitle: (row.csi ? '[' + row.csi + '] ' : '') + (row.section || '') +
+        ' — 이 조항이 요구하는 자료를 낱개로 정리해 요청서를 쓰고 문서함에 넣습니다.',
+      saveLabel: '만들기',
+      fields: [
+        { name: 'vendor', label: '수신 업체 (선택)', colSpan: 2, value: '',
+          hint: '비워 두면 "(업체명)" 으로 두고 나중에 채울 수 있습니다.' },
+      ],
+      onSave: function (v) {
+        return call('api_requestVendorData', [id, v.vendor || null]).then(function (res) {
+          if (res.success === false) return res;
+          u.toast(res.message || '요청서를 만들었습니다.');
+          return { success: true };
+        });
+      },
+    });
   }
 
   function reloadSubmittals() {
@@ -388,6 +419,7 @@
     setSubFilter: setSubFilter,
     quickStatus: quickStatus,
     openSubmittal: openSubmittal,
+    requestVendorData: requestVendorData,
     setBoqProject: setBoqProject,
     toggleReviewOnly: toggleReviewOnly,
     setBoqTab: setBoqTab,

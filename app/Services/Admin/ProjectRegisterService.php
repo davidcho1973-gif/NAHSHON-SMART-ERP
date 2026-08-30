@@ -132,6 +132,40 @@ class ProjectRegisterService
         return ['success' => true, 'id' => $row->id, 'status' => $row->status];
     }
 
+    /**
+     * 제출물 조항으로 업체 자료 요청서를 만들어 문서함에 넣는다.
+     *
+     * 제품자료·제작도는 AI 가 만들 수 없다(제조사가 발급한다). 대신 "이 조항 때문에
+     * 이런 자료가 필요하다" 고 업체에 요청하는 편지는 지금 사람이 조항을 읽고 매번
+     * 손으로 쓴다 — 276건이면 276번이다. 그 편지를 대신 쓴다.
+     *
+     * @return array<string, mixed>
+     */
+    public function requestVendorData(int $submittalId, ?string $vendorName = null): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '제출물 대장 수정 권한이 없습니다.'];
+        }
+
+        $row = Submittal::query()->find($submittalId);
+        if (! $row) {
+            return ['success' => false, 'error' => '해당 항목이 없습니다.'];
+        }
+
+        $result = app(\App\Services\Takeoff\SubmittalRequestService::class)
+            ->build($row, $vendorName !== null && trim($vendorName) !== '' ? trim($vendorName) : null);
+
+        if (! ($result['success'] ?? false)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'documentId' => $result['documentId'],
+            'message' => "요청서를 만들어 문서함에 넣었습니다 — 요청 항목 {$result['items']}개. 문서함에서 열어 확인·발송하세요.",
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function listBoq(?int $projectId = null, string $siteId = 'ALL'): array
     {
