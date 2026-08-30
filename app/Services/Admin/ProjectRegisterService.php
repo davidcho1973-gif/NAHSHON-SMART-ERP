@@ -301,6 +301,29 @@ class ProjectRegisterService
         ];
     }
 
+    /**
+     * 이 조항과 관련된 도면을 찾아 준다 — "이게 어느 도면 얘기지?"
+     *
+     * AI 를 부르지 않는다. 물량 대장(어느 도면에서 세었는지)·도면 제목·본문·공종을
+     * 합치면 답이 나온다. 값도 시간도 들지 않고, 근거를 댈 수 있다.
+     *
+     * @return array<string, mixed>
+     */
+    public function relatedDrawings(int $submittalId): array
+    {
+        if (! $this->canView()) {
+            return ['success' => false, 'error' => '제출물 대장 열람 권한이 없습니다.'];
+        }
+
+        $row = Submittal::query()->find($submittalId);
+        if (! $row) {
+            return ['success' => false, 'error' => '해당 항목이 없습니다.'];
+        }
+
+        return app(\App\Services\Takeoff\RelatedDrawingFinder::class)->find($row)
+            + ['submittal' => trim(($row->csi ?: '').' '.($row->section ?: ''))];
+    }
+
     /** @return array<string, mixed> */
     public function listBoq(?int $projectId = null, string $siteId = 'ALL'): array
     {

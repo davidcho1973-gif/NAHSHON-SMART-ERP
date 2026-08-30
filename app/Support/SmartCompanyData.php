@@ -201,6 +201,8 @@ class SmartCompanyData
             // 제출물 대장 + 물량/BOQ — 시방·도면에서 뽑은 계약 요구 추적 (703K 에서 시작).
             // 대장은 현장의 것이다 — 화면이 고른 현장을 그대로 넘긴다.
             'api_getSubmittals' => app(ProjectRegisterService::class)->listSubmittals((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
+            // 조항 → 관련 도면 찾기(AI 미사용 — 대장·본문·공종 신호로)
+            'api_relatedDrawings' => app(ProjectRegisterService::class)->relatedDrawings((int) ($args[0] ?? 0)),
             'api_saveSubmittal' => app(ProjectRegisterService::class)->saveSubmittal(is_array($args[0] ?? null) ? $args[0] : []),
             // 조항 → 업체 자료 요청서(문서함 편철)
             'api_requestVendorData' => \App\Services\Takeoff\AiJobQueue::push(

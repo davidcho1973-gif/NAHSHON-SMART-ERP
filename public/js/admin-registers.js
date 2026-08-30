@@ -223,7 +223,7 @@
                 u.rowButton('📮 소통', 'window.AdminRegisters.openComms(' + r.id + ')') +
                 u.rowButton('🌐 AI 조사', 'window.AdminRegisters.researchSubmittal(' + r.id + ')') +
                 // 조항을 읽고 업체에 보낼 요청서를 매번 손으로 쓰던 일 — 그 편지를 대신 쓴다.
-                u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') +
+                u.rowButton('📐 관련 도면', 'window.AdminRegisters.relatedDrawings(' + r.id + ')') + ' ' + u.rowButton('📨 자료요청', 'window.AdminRegisters.requestVendorData(' + r.id + ')') +
                 u.rowButton('기록', 'window.AdminRegisters.openSubmittal(' + r.id + ')') +
                 '</div>';
             } },
@@ -239,6 +239,86 @@
    * 조항 → 업체 자료 요청서 → 문서함 편철.
    * 업체명은 선택이다 — 아직 업체가 안 정해졌어도 요청서 틀은 미리 만들어 둘 수 있다.
    */
+  /**
+   * 이 조항이 어느 도면 얘기인지 찾아 보여 준다.
+   *
+   * 목록만 주면 사람이 하나하나 열어 봐야 하므로 <b>왜 이 도면인지</b>를 함께 적는다.
+   * 도면을 누르면 기존 원문 뷰어가 그대로 열린다.
+   */
+  function relatedDrawings(id) {
+    var u = ui();
+    var row = (state.sub.rows || []).filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.5);display:flex;' +
+      'align-items:center;justify-content:center;padding:20px';
+    wrap.innerHTML = '<div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;' +
+      'width:min(820px,95vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:16px 18px;border-bottom:1px solid var(--border-default);display:flex;' +
+        'justify-content:space-between;gap:12px;align-items:flex-start">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text-primary)">📐 관련 도면</div>' +
+          '<div style="font-size:11.5px;color:var(--text-tertiary);margin-top:3px;word-break:keep-all">' +
+            u.esc((row.csi ? '[' + row.csi + '] ' : '') + String(row.title || '').slice(0, 130)) + '</div>' +
+        '</div>' +
+        '<button type="button" data-x="close" style="padding:7px 13px;border-radius:8px;border:1px solid var(--border-default);' +
+          'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;cursor:pointer;flex-shrink:0">닫기</button>' +
+      '</div>' +
+      '<div id="reg-rel-body" style="flex:1;overflow:auto;padding:16px 18px">' +
+        '<div style="text-align:center;padding:36px;color:var(--text-tertiary);font-size:13px">도면을 찾는 중…</div>' +
+      '</div></div>';
+
+    function close() { wrap.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    wrap.addEventListener('click', function (e) {
+      if (e.target === wrap || (e.target.getAttribute && e.target.getAttribute('data-x') === 'close')) close();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+
+    call('api_relatedDrawings', [id]).then(function (res) {
+      var body = wrap.querySelector('#reg-rel-body');
+      if (!body) return;
+      var list = res.rows || [];
+
+      if (!list.length) {
+        body.innerHTML = '<div style="text-align:center;padding:34px 16px;color:var(--text-tertiary);font-size:13px;line-height:1.8">' +
+          '이 조항과 이어지는 도면을 찾지 못했습니다.<br>' +
+          '문서함에서 도면을 올리고 「📐 물량 뽑기」를 돌리면 이어집니다.' +
+          (res.terms && res.terms.length ? '<div style="margin-top:10px;font-size:11.5px">찾은 낱말: ' + u.esc(res.terms.join(', ')) + '</div>' : '') +
+          '</div>';
+        return;
+      }
+
+      body.innerHTML =
+        '<div style="font-size:11.5px;color:var(--text-tertiary);margin-bottom:12px;word-break:keep-all">' +
+          '«' + u.esc((res.terms || []).join(', ')) + '» 로 찾은 도면 ' + list.length + '건 — 눌러서 바로 볼 수 있습니다.</div>' +
+        list.map(function (d) {
+          return '<button type="button" onclick="window.AdminRegisters.openSource(' + d.id + ')" ' +
+            'style="display:block;width:100%;text-align:left;border:1px solid var(--border-default);border-radius:10px;' +
+            'padding:12px 14px;margin-bottom:9px;background:var(--bg-base);cursor:pointer">' +
+            '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+              '<div style="min-width:0">' +
+                '<div style="font-size:13px;font-weight:700;color:var(--text-primary);word-break:keep-all">' +
+                  u.esc(d.title) + '</div>' +
+                (d.number ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;font-family:ui-monospace,monospace">' + u.esc(d.number) + '</div>' : '') +
+              '</div>' +
+              '<span style="flex-shrink:0;font-size:11px;color:var(--brand-primary);font-weight:700">열기 →</span>' +
+            '</div>' +
+            (d.why && d.why.length
+              ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:7px;line-height:1.6;word-break:keep-all">' +
+                  d.why.map(function (w) { return '· ' + u.esc(w); }).join('<br>') + '</div>'
+              : '') +
+            '</button>';
+        }).join('');
+    }).catch(function (e) {
+      var body = wrap.querySelector('#reg-rel-body');
+      if (body) body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--status-danger);font-size:13px">' +
+        u.esc(e.message || '도면을 찾지 못했습니다.') + '</div>';
+    });
+  }
+
   function requestVendorData(id) {
     var u = ui();
     var row = (state.sub.rows || []).filter(function (r) { return r.id === id; })[0];
@@ -828,6 +908,7 @@
     quickStatus: quickStatus,
     openSubmittal: openSubmittal,
     requestVendorData: requestVendorData,
+    relatedDrawings: relatedDrawings,
     researchSubmittal: researchSubmittal,
     openComms: openComms,
     openSource: openSource,
