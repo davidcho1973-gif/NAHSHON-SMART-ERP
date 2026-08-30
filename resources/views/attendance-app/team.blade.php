@@ -31,6 +31,7 @@
     </style>
 </head>
 <body>
+    @include('partials.erp-home')
     <div class="app">
         <header>
             <p class="eyebrow">Attendance QR</p>

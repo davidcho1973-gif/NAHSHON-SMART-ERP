@@ -50,6 +50,7 @@
     </style>
 </head>
 <body>
+    @include('partials.erp-home')
     <div class="app">
         <header>
             <p class="eyebrow">Foreman / Safety Mode</p>

@@ -49,6 +49,7 @@
     </style>
 </head>
 <body>
+    @include('partials.erp-home')
     <div class="app">
         <header>
             <a class="back" href="{{ route('attendance-app.index') }}">← 홈</a>

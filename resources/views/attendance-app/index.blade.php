@@ -337,6 +337,7 @@
 </head>
 <body>
 <div class="app">
+    @include('partials.erp-home')
     <div class="offline" id="offline" hidden>오프라인 · 내 QR 을 반장에게 보여 주세요</div>
 @isset($viewingAs)
     @if ($viewingAs)

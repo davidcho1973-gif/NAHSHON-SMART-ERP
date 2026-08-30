@@ -115,6 +115,7 @@
     </style>
 </head>
 <body>
+@include('partials.erp-home')
 <div class="wrap">
     <div class="band">
         <div class="langs">
