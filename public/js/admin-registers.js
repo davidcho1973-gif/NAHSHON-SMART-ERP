@@ -64,10 +64,19 @@
 
   /* ══════════════════════ 제출물 대장 ══════════════════════ */
 
-  function catBadge(cat) {
+  function catBadge(row) {
     var u = ui();
+    var cat = row.category;
     var kind = cat === 'Action 제출물' ? 'warn' : cat === 'Closeout 제출물' ? 'ok' : cat === '시험·검사' ? 'danger' : '';
-    return u.badge(cat, kind);
+    var badge = u.badge(cat, kind);
+
+    // 근거가 있는 줄은 구분 배지가 곧 원문으로 가는 문이다. 추출할 때 AI 가 어느
+    // 문서의 어느 문장인지 적어 두었으므로, 여기서 되찾을 필요 없이 바로 연다.
+    if (!row.sourceDocumentId) return badge;
+    return '<button type="button" title="시방 원문 보기" ' +
+      'onclick="window.AdminRegisters.openSource(' + row.sourceDocumentId + ', \'submittal\', ' + row.id + ')" ' +
+      'style="border:none;background:none;padding:0;cursor:pointer;text-align:left;display:block">' +
+      badge + '<span style="display:block;font-size:10.5px;color:var(--brand-primary);margin-top:3px">🔗 원문 보기</span></button>';
   }
 
   function statusBadgeKind(s) {
@@ -138,10 +147,16 @@
               return '<div style="font-family:ui-monospace,monospace;font-size:12px">' + u.esc(r.csi) + '</div>' +
                 '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.section) + '</div>';
             } },
-          { key: 'category', label: '구분', width: '130px', render: function (r) { return catBadge(r.category); } },
+          { key: 'category', label: '구분', width: '130px', render: catBadge },
           { key: 'title', label: '제출물 · 요구사항', render: function (r) {
               return '<div style="font-size:12.5px;line-height:1.55;white-space:normal;min-width:340px">' +
-                (r.gate ? '<span style="color:var(--danger,#dc2626);font-weight:700">★ </span>' : '') + u.esc(r.title) + '</div>';
+                (r.gate ? '<span style="color:var(--danger,#dc2626);font-weight:700">★ </span>' : '') + u.esc(r.title) + '</div>' +
+                // 근거가 어느 문서인지 그 줄에 적는다 — 눌러서 확인할 것인지 사람이 바로 판단한다.
+                (r.sourceDocument ? '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px;white-space:normal">📄 ' +
+                  u.esc(r.sourceDocument) + (r.extractedBy ? ' · ' + u.esc(r.extractedBy) + ' 판독' : '') +
+                  (r.confidence != null ? ' · 확신도 ' + r.confidence : '') + '</div>' : '') +
+                (r.needsReview ? '<div style="font-size:11px;color:var(--danger,#dc2626);white-space:normal;margin-top:3px">🔍 ' +
+                  u.esc(r.reviewReason || '확인 필요') + '</div>' : '');
             } },
           { key: 'status', label: '상태', width: '120px', render: statusCell },
           { key: 'assignee', label: '담당 · 일정', width: '150px', render: function (r) {
@@ -255,6 +270,72 @@
     });
   }
 
+  /* ══════════════════════ 근거 원문 보기 ══════════════════════
+   * 대장의 한 줄과 그 줄이 나온 시방·도면을 같은 화면에 둔다.
+   * ERP 밖으로 나가지 않는다 — 문서함을 새 창으로 열어 파일명을 다시 찾게 하면
+   * 대장과 근거가 두 화면으로 갈라지고, 사람은 둘을 눈으로 맞춰야 한다.
+   */
+
+  function sourceRow(kind, id) {
+    var list = kind === 'boq' ? (state.boq.rows || []) : (state.sub.rows || []);
+    return list.filter(function (r) { return r.id === id; })[0] || null;
+  }
+
+  function openSource(documentId, kind, rowId) {
+    var u = ui();
+    var row = sourceRow(kind, rowId);
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;' +
+      'align-items:center;justify-content:center;padding:20px';
+    wrap.innerHTML = '<div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;' +
+      'width:min(1180px,96vw);height:min(88vh,900px);display:flex;flex-direction:column;overflow:hidden">' +
+      '<div id="reg-src-head" style="padding:16px 18px;border-bottom:1px solid var(--border-default);flex-shrink:0">' +
+      '<div style="color:var(--text-tertiary);font-size:13px">원문을 여는 중…</div></div>' +
+      '<div id="reg-src-body" style="flex:1;overflow:auto;background:var(--bg-base)"></div></div>';
+
+    function close() { wrap.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    wrap.addEventListener('click', function (e) {
+      if (e.target === wrap || (e.target.getAttribute && e.target.getAttribute('data-x') === 'close')) close();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+
+    call('api_getSourceDocument', [documentId]).then(function (d) {
+      var head = wrap.querySelector('#reg-src-head');
+      var body = wrap.querySelector('#reg-src-body');
+      head.innerHTML =
+        '<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start">' +
+          '<div style="min-width:0">' +
+            '<div style="font-size:15px;font-weight:700;color:var(--text-primary);word-break:keep-all">' + u.esc(d.title) + '</div>' +
+            '<div style="font-size:11.5px;color:var(--text-tertiary);margin-top:3px">' + u.esc(d.fileName || '') +
+              (d.documentNumber ? ' · No. ' + u.esc(d.documentNumber) : '') +
+              (d.revision ? ' · Rev ' + u.esc(d.revision) : '') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-shrink:0">' +
+            '<a href="' + u.esc(d.downloadUrl) + '" style="padding:7px 13px;border-radius:8px;border:1px solid var(--border-default);' +
+              'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;text-decoration:none">원본 다운로드</a>' +
+            '<button type="button" data-x="close" style="padding:7px 13px;border-radius:8px;border:1px solid var(--border-default);' +
+              'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;cursor:pointer">닫기</button>' +
+          '</div>' +
+        '</div>' +
+        // 대장의 그 줄이 어느 문장에서 나왔는지 — 원문 옆에 나란히 둔다.
+        (row && row.sourceExcerpt
+          ? '<div style="margin-top:12px;padding:10px 12px;border-left:3px solid var(--brand-primary);background:var(--bg-base);' +
+            'border-radius:0 8px 8px 0;font-size:12px;line-height:1.65;color:var(--text-secondary);white-space:pre-wrap;' +
+            'max-height:132px;overflow:auto">' + u.esc(row.sourceExcerpt) + '</div>'
+          : '');
+      body.innerHTML = '<iframe src="' + u.esc(d.previewUrl) + '" title="' + u.esc(d.title) +
+        '" style="width:100%;height:100%;border:0;background:#fff"></iframe>';
+    }).catch(function (e) {
+      wrap.querySelector('#reg-src-head').innerHTML =
+        '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">' +
+        '<div style="color:var(--danger,#dc2626);font-size:13px">' + u.esc(e.message) + '</div>' +
+        '<button type="button" data-x="close" style="padding:7px 13px;border-radius:8px;border:1px solid var(--border-default);' +
+        'background:var(--bg-base);color:var(--text-primary);font-size:12.5px;cursor:pointer">닫기</button></div>';
+    });
+  }
+
   /* ══════════════════════ 물량 / BOQ ══════════════════════ */
 
   function basisBadge(basis) {
@@ -334,7 +415,11 @@
                 (r.needsReview ? '<div style="font-size:11px;color:var(--danger,#dc2626);white-space:normal;margin-top:3px">🔍 ' +
                   u.esc(r.reviewReason || '확인 필요') + '</div>' : '') +
                 (r.extractedBy ? '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px">' +
-                  u.esc(r.extractedBy) + ' 판독' + (r.confidence != null ? ' · 확신도 ' + r.confidence : '') + '</div>' : '');
+                  u.esc(r.extractedBy) + ' 판독' + (r.confidence != null ? ' · 확신도 ' + r.confidence : '') +
+                  // 판독의 근거 도면을 그 자리에서 연다 — 수량이 미심쩍으면 원문으로 확인한다.
+                  (r.sourceDocumentId ? ' · <button type="button" onclick="window.AdminRegisters.openSource(' +
+                    r.sourceDocumentId + ', \'boq\', ' + r.id + ')" style="border:none;background:none;padding:0;cursor:pointer;' +
+                    'color:var(--brand-primary);font-size:10.5px">🔗 원문 보기</button>' : '') + '</div>' : '');
             } },
           { key: 'spec', label: '규격 · 사양', render: function (r) {
               return r.spec ? '<div style="font-size:11.5px;color:var(--text-secondary);white-space:normal;min-width:180px;line-height:1.5">' + u.esc(r.spec) + '</div>' : '';
@@ -420,6 +505,7 @@
     quickStatus: quickStatus,
     openSubmittal: openSubmittal,
     requestVendorData: requestVendorData,
+    openSource: openSource,
     setBoqProject: setBoqProject,
     toggleReviewOnly: toggleReviewOnly,
     setBoqTab: setBoqTab,

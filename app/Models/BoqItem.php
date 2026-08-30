@@ -53,4 +53,10 @@ class BoqItem extends Model
     {
         return $this->belongsTo(Project::class);
     }
+
+    /** 이 물량을 뽑아 온 원본 도면 — 대장에서 근거를 바로 열 수 있게. */
+    public function sourceDocument(): BelongsTo
+    {
+        return $this->belongsTo(IntelligentDocument::class, 'source_document_id');
+    }
 }

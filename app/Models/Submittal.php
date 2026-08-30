@@ -56,6 +56,18 @@ class Submittal extends Model
         return $this->belongsTo(Project::class);
     }
 
+    /**
+     * 이 줄을 뽑아 온 원본 문서 — 시방서·도면.
+     *
+     * 추출할 때 AI 가 이미 어느 문서의 어느 문장인지 적어 두었다(source_excerpt).
+     * 나중에 검색으로 되찾는 것은 추측이지만 이것은 기록이다 — 대장에서 조항을
+     * 누르면 그 문서로 바로 갈 수 있어야 한다.
+     */
+    public function sourceDocument(): BelongsTo
+    {
+        return $this->belongsTo(IntelligentDocument::class, 'source_document_id');
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

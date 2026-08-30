@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\BoqItem;
+use App\Models\IntelligentDocument;
 use App\Models\Project;
 use App\Models\Site;
 use App\Models\Submittal;
@@ -51,7 +52,7 @@ class ProjectRegisterService
         $projects = $this->projectOptions($siteKey);
         $projectId = $this->resolveProject($projectId, $projects);
 
-        $q = Submittal::query()->orderBy('seq');
+        $q = Submittal::query()->with('sourceDocument:id,title,original_file_name,extension')->orderBy('seq');
         $this->applyScope($q);
 
         // 물량 대장과 같은 규칙 — 고른 현장에 프로젝트가 없으면 남의 것을 보여 주지 않는다.
@@ -77,6 +78,16 @@ class ProjectRegisterService
             'submittedOn' => $s->submitted_on?->format('Y-m-d'),
             'approvedOn' => $s->approved_on?->format('Y-m-d'),
             'notes' => $s->notes,
+            // 어디서 나온 조항인지 — 추출할 때 이미 기록해 둔 것을 화면까지 내보낸다.
+            // 예전에는 DB 에만 있고 화면에는 없어서, 조항을 보고도 원문을 찾으려면
+            // 문서함을 따로 열어 파일명을 기억으로 뒤져야 했다.
+            'sourceDocumentId' => $s->source_document_id,
+            'sourceDocument' => $s->sourceDocument?->title ?: $s->sourceDocument?->original_file_name,
+            'sourceExcerpt' => $s->source_excerpt,
+            'confidence' => $s->confidence,
+            'needsReview' => (bool) $s->needs_review,
+            'reviewReason' => $s->review_reason,
+            'extractedBy' => $s->extracted_by,
         ])->values()->all();
 
         $byStatus = [];
@@ -166,6 +177,46 @@ class ProjectRegisterService
         ];
     }
 
+    /**
+     * 대장의 한 줄이 가리키는 원본 문서를 ERP 안에서 열기 위한 정보.
+     *
+     * 대장에서 조항을 눌렀는데 파일명만 알려 주고 끝나면, 사람은 문서함을 새로 열어
+     * 그 이름을 다시 찾아야 한다. 그러면 대장과 근거가 두 화면으로 갈라진다 —
+     * 여기서 미리보기 주소까지 돌려주어 같은 화면 위에서 원문을 편다.
+     *
+     * @return array<string, mixed>
+     */
+    public function sourceDocument(int $documentId): array
+    {
+        if (! $this->canView()) {
+            return ['success' => false, 'error' => '원본 문서 열람 권한이 없습니다.'];
+        }
+
+        $document = IntelligentDocument::query()
+            ->visibleTo(auth()->user())
+            ->whereKey($documentId)
+            ->first();
+
+        if (! $document) {
+            return ['success' => false, 'error' => '원본 문서를 찾을 수 없거나 열람 범위 밖입니다.'];
+        }
+
+        return [
+            'success' => true,
+            'id' => $document->id,
+            'title' => $document->displayTitle(),
+            'fileName' => $document->original_file_name,
+            'extension' => strtolower((string) $document->extension),
+            'category' => $document->category,
+            'documentNumber' => $document->document_number,
+            'revision' => $document->revision,
+            'summary' => $document->summary,
+            'previewUrl' => route('document-intelligence.preview', $document),
+            'downloadUrl' => route('document-intelligence.download', $document),
+            'hubUrl' => '/document-hub?q='.urlencode((string) $document->original_file_name),
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function listBoq(?int $projectId = null, string $siteId = 'ALL'): array
     {
@@ -177,7 +228,7 @@ class ProjectRegisterService
         $projects = $this->projectOptions($siteKey);
         $projectId = $this->resolveProject($projectId, $projects);
 
-        $q = BoqItem::query()->orderBy('seq');
+        $q = BoqItem::query()->with('sourceDocument:id,title,original_file_name,extension')->orderBy('seq');
         $this->applyScope($q);
 
         // 현장을 골랐는데 그 현장에 프로젝트가 없으면 <b>비어 있는 것이 맞다</b>.
@@ -212,6 +263,7 @@ class ProjectRegisterService
             'needsReview' => (bool) $b->needs_review,
             'reviewReason' => $b->review_reason,
             'sourceDocumentId' => $b->source_document_id,
+            'sourceDocument' => $b->sourceDocument?->title ?: $b->sourceDocument?->original_file_name,
             'extractedBy' => $b->extracted_by,
         ])->values()->all();
 

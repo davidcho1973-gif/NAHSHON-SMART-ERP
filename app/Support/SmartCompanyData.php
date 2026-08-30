@@ -209,6 +209,8 @@ class SmartCompanyData
             ),
             'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
+            // 대장 한 줄 → 그 줄을 뽑아 온 원본 문서. 대장과 근거가 한 화면에 있게.
+            'api_getSourceDocument' => app(ProjectRegisterService::class)->sourceDocument((int) ($args[0] ?? 0)),
 
             // 조직 설정 — 이 배포가 누구의 것인지. 고객사 관리자가 직접 고친다.
             'api_getOrgSettings' => app(OrgSettingService::class)->load(),
