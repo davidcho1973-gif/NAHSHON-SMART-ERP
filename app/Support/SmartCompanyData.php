@@ -203,9 +203,10 @@ class SmartCompanyData
             'api_getSubmittals' => app(ProjectRegisterService::class)->listSubmittals((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveSubmittal' => app(ProjectRegisterService::class)->saveSubmittal(is_array($args[0] ?? null) ? $args[0] : []),
             // 조항 → 업체 자료 요청서(문서함 편철)
-            'api_requestVendorData' => app(ProjectRegisterService::class)->requestVendorData(
-                (int) ($args[0] ?? 0),
-                isset($args[1]) ? (string) $args[1] : null
+            'api_requestVendorData' => \App\Services\Takeoff\AiJobQueue::push(
+                'vendor_request', 'submittal', (int) ($args[0] ?? 0),
+                '업체 자료요청서 작성',
+                ['vendor' => isset($args[1]) ? (string) $args[1] : null],
             ),
             // 제출물 소통 — 담당자·요청 메일·자료 연결·원청 전달·이력
             'api_submittalComms' => app(ProjectRegisterService::class)->submittalComms(
@@ -214,7 +215,11 @@ class SmartCompanyData
                 is_array($args[2] ?? null) ? $args[2] : [],
             ),
             // 제품 자료 AI 웹 조사 → 후보 중 고른 것을 문서함에 편철·연결
-            'api_researchSubmittal' => app(ProjectRegisterService::class)->researchSubmittal((int) ($args[0] ?? 0)),
+            'api_researchSubmittal' => \App\Services\Takeoff\AiJobQueue::push(
+                'research', 'submittal', (int) ($args[0] ?? 0), 'AI 자료 조사'
+            ),
+            // 번호표로 진행 상태를 묻는 곳 — 오래 걸리는 AI 작업은 전부 이 문을 쓴다.
+            'api_getAiJob' => \App\Services\Takeoff\AiJobQueue::status((int) ($args[0] ?? 0)),
             'api_fileSubmittalResearch' => app(ProjectRegisterService::class)->fileSubmittalResearch((int) ($args[0] ?? 0), (int) ($args[1] ?? -1)),
             'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),

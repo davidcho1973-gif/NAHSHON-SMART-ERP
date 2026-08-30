@@ -233,6 +233,8 @@ Route::middleware('auth')->group(function (): void {
     // 도면 → 물량, 시방 → 제출물. 결과는 대기줄이 아니라 대장으로 바로 간다.
     Route::post('/document-hub/api/documents/{document}/takeoff', [DocumentIntelligenceController::class, 'takeoff'])->name('document-intelligence.takeoff');
     Route::post('/document-hub/api/documents/{document}/submittals', [DocumentIntelligenceController::class, 'extractSubmittals'])->name('document-intelligence.submittals');
+    // 오래 걸리는 AI 작업의 진행 상태 — 화면이 번호표로 물어본다(504 를 막는 길).
+    Route::get('/document-hub/api/ai-jobs/{job}', [DocumentIntelligenceController::class, 'aiJob'])->name('document-intelligence.ai-job');
     Route::patch('/document-hub/api/documents/{document}/review', [DocumentIntelligenceController::class, 'review'])->name('document-intelligence.review');
     Route::delete('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'destroy'])->name('document-intelligence.destroy');
     Route::patch('/document-hub/api/actions/{action}', [DocumentIntelligenceController::class, 'updateAction'])->name('document-intelligence.action.update');

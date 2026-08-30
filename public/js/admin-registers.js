@@ -30,6 +30,38 @@
     });
   }
 
+  /**
+   * 오래 걸리는 AI 작업 — 접수하고 번호표로 기다린다.
+   *
+   * 요청 안에서 붙잡고 있으면 게이트웨이가 먼저 끊어 504 가 뜬다(실제로 그렇게
+   * 죽었다). 서버는 즉시 번호표를 주고, 여기서 2초마다 물어본다.
+   */
+  function runAiJob(method, args, onTick) {
+    return call(method, args).then(function (res) {
+      var jobId = res.jobId;
+      if (!jobId) return res;                       // 접수 구조가 아니면 그대로 (구버전 호환)
+
+      var waited = 0;
+      return new Promise(function (resolve, reject) {
+        (function poll() {
+          setTimeout(function () {
+            waited += 2;
+            call('api_getAiJob', [jobId]).then(function (st) {
+              if (onTick) onTick(waited, st);
+              if (!st.done) {
+                if (waited > 600) { reject(new Error('시간이 너무 오래 걸립니다. 잠시 뒤 다시 확인해 주세요.')); return; }
+                poll();
+                return;
+              }
+              if (st.status === 'failed') { reject(new Error(st.error || 'AI 작업이 실패했습니다.')); return; }
+              resolve(st.result || {});
+            }).catch(reject);
+          }, 2000);
+        })();
+      });
+    });
+  }
+
   function paint(html) { document.getElementById('page-container').innerHTML = html; }
 
   function money(v) {
@@ -217,7 +249,7 @@
           hint: '비워 두면 "(업체명)" 으로 두고 나중에 채울 수 있습니다.' },
       ],
       onSave: function (v) {
-        return call('api_requestVendorData', [id, v.vendor || null]).then(function (res) {
+        return runAiJob('api_requestVendorData', [id, v.vendor || null]).then(function (res) {
           if (res.success === false) return res;
           u.toast(res.message || '요청서를 만들었습니다.');
           return { success: true };
@@ -253,7 +285,8 @@
       '</div>' +
       '<div id="reg-research-body" style="flex:1;overflow:auto;padding:16px 18px">' +
         '<div style="text-align:center;padding:44px 16px;color:var(--text-tertiary);font-size:13px;line-height:1.8">' +
-          'AI 가 웹에서 제조사 자료를 찾고 있습니다…<br>규격(ASTM·Type)이 맞는 제품만 고르느라 30초쯤 걸립니다.</div>' +
+          'AI 가 웹에서 제조사 자료를 찾고 있습니다…<br>규격(ASTM·Type)이 맞는 제품만 고르느라 시간이 걸립니다.' +
+          '<div style="margin-top:10px;font-size:12px">경과 <b class="reg-wait-sec">0초</b> · 이 창을 닫아도 작업은 계속됩니다.</div></div>' +
       '</div></div>';
 
     function close() { wrap.remove(); document.removeEventListener('keydown', onKey); }
@@ -264,7 +297,10 @@
     document.addEventListener('keydown', onKey);
     document.body.appendChild(wrap);
 
-    call('api_researchSubmittal', [id]).then(function (res) {
+    runAiJob('api_researchSubmittal', [id], function (sec) {
+      var b = wrap.querySelector('#reg-research-body');
+      if (b) { var t = b.querySelector('.reg-wait-sec'); if (t) t.textContent = sec + '초'; }
+    }).then(function (res) {
       var body = wrap.querySelector('#reg-research-body');
       if (!body) return;
       var list = res.candidates || [];

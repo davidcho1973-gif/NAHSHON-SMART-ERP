@@ -2,49 +2,50 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 
+/**
+ * 오래 걸리는 AI 작업 한 건. 화면은 이 행을 물어보며 기다린다.
+ */
 class AiJob extends Model
 {
-    use HasFactory;
+    protected $table = 'ai_task_jobs';
 
     protected $fillable = [
-        'job_type',
-        'target_type',
-        'target_id',
-        'provider',
-        'model',
-        'status',
-        'attempts',
-        'queued_at',
-        'started_at',
-        'completed_at',
-        'error_message',
-        'input_payload',
-        'output_payload',
+        'user_id', 'company_id', 'kind', 'subject_type', 'subject_id',
+        'params', 'status', 'label', 'result', 'error', 'started_at', 'finished_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'queued_at' => 'datetime',
+            'params' => 'array',
+            'result' => 'array',
             'started_at' => 'datetime',
-            'completed_at' => 'datetime',
-            'input_payload' => 'array',
-            'output_payload' => 'array',
+            'finished_at' => 'datetime',
         ];
     }
 
-    public function target(): MorphTo
+    public function done(): bool
     {
-        return $this->morphTo();
+        return in_array($this->status, ['done', 'failed'], true);
     }
 
-    public function outputs(): HasMany
+    /** 화면이 그대로 쓰는 모양 — 상태와 결과를 한 봉투에 담는다. */
+    public function toStatusArray(): array
     {
-        return $this->hasMany(AiOutput::class);
+        return [
+            'success' => true,
+            'jobId' => $this->id,
+            'status' => $this->status,
+            'label' => $this->label,
+            'done' => $this->done(),
+            'result' => $this->result,
+            'error' => $this->error,
+            // 시작에서 끝까지 — 방향을 뒤집으면 음수가 나온다.
+            'elapsed' => $this->started_at
+                ? $this->started_at->diffInSeconds($this->finished_at ?? now())
+                : 0,
+        ];
     }
 }

@@ -211,6 +211,7 @@ const endpoints = {
     actions: @json(url('/document-hub/api/actions')),
     unassigned: @json(route('document-intelligence.unassigned')),
     assignSite: @json(route('document-intelligence.assign-site')),
+    aiJob: @json(url('/document-hub/api/ai-jobs')),
 };
 const CATEGORY_OPTIONS = @json(collect(\App\Models\IntelligentDocument::CATEGORY_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 const TYPE_OPTIONS = @json(collect(\App\Models\IntelligentDocument::TYPE_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
@@ -349,16 +350,42 @@ async function runExtract(id, kind, btn){
   const label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = isSpec ? '시방 읽는 중…' : '도면 읽는 중…'; }
   try{
-    const r = await jsonFetch(endpoints.show+'/'+id+'/'+(isSpec?'submittals':'takeoff'),{method:'POST'});
-    toast(r.message || '완료했습니다.');
+    // 접수만 하고 번호표를 받는다. 판독을 요청 안에서 기다리면 게이트웨이가 먼저
+    // 끊어 504 가 뜬다 — 화면에는 무엇이 잘못됐는지도 남지 않는다.
+    const job = await jsonFetch(endpoints.show+'/'+id+'/'+(isSpec?'submittals':'takeoff'),{method:'POST'});
+    if (!job.jobId) { toast(job.message || '완료했습니다.'); return; }
+
+    toast(isSpec ? '시방을 읽기 시작했습니다. 끝나면 알려 드립니다.' : '도면을 읽기 시작했습니다. 끝나면 알려 드립니다.');
+
+    const r = await pollAiJob(job.jobId, function (sec) {
+      if (btn) btn.textContent = (isSpec ? '시방 읽는 중… ' : '도면 읽는 중… ') + sec + '초';
+    });
+
+    toast(r.message || (isSpec ? '제출물을 뽑았습니다.' : '물량을 뽑았습니다.'));
     if (r.review) {
-      // 확인할 줄이 있으면 어디로 가야 하는지 알려 준다 — 알림만 띄우고 끝내면 아무도 안 본다.
       setTimeout(function(){
         toast((isSpec?'제출물':'물량')+' 대장에서 "확인 필요"를 눌러 '+r.review+'건을 봐 주세요.');
       }, 2600);
     }
   }catch(e){ toast(e.message, true); }
   finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+}
+
+/* 번호표로 진행 상태를 묻는다 — 2초마다, 최대 10분.
+   창을 닫아도 서버 쪽 작업은 계속되고, 결과는 대장에 남는다. */
+async function pollAiJob(jobId, onTick){
+  let waited = 0;
+  for(;;){
+    await new Promise(function(r){ setTimeout(r, 2000); });
+    waited += 2;
+    const st = await jsonFetch(endpoints.aiJob + '/' + jobId, {});
+    if (onTick) onTick(waited);
+    if (st.done) {
+      if (st.status === 'failed') throw new Error(st.error || 'AI 작업이 실패했습니다.');
+      return st.result || {};
+    }
+    if (waited > 600) throw new Error('시간이 너무 오래 걸립니다. 잠시 뒤 대장을 확인해 주세요.');
+  }
 }
 function openEdit(){const f=document.getElementById('edit-form');if(f)f.style.display=f.style.display==='none'?'block':'none'}
 async function saveEdit(id){

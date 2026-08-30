@@ -300,29 +300,26 @@ class DocumentIntelligenceController extends Controller
         $this->authorizeManage($request->user());
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
 
-        $result = app(\App\Services\Takeoff\DrawingTakeoffService::class)
-            ->extract($document, $request->string('discipline')->toString() ?: null);
+        // 판독은 수십 초에서 몇 분이 걸린다 — 요청 안에서 붙잡고 있으면 게이트웨이가
+        // 먼저 끊어 504 가 된다. 접수만 하고 번호표를 준다.
+        return response()->json(\App\Services\Takeoff\AiJobQueue::push(
+            'takeoff', 'document', $document->id,
+            '도면 물량 뽑기 — '.($document->document_number ?: $document->title ?: $document->original_file_name),
+            ['discipline' => $request->string('discipline')->toString() ?: null],
+        ), 202);
+    }
 
-        if (! ($result['success'] ?? false)) {
-            return response()->json(['success' => false, 'error' => $result['error'] ?? '물량을 뽑지 못했습니다.'], 422);
-        }
+    /**
+     * 오래 걸리는 AI 작업의 진행 상태 — 화면이 번호표로 물어본다.
+     *
+     * 도면 판독은 몇 분이 걸릴 수 있어 요청 안에서 기다릴 수 없다(게이트웨이가 끊어
+     * 504 가 된다). 접수 때 받은 번호표로 여기에 물으면 끝났는지, 결과가 무엇인지 준다.
+     */
+    public function aiJob(Request $request, int $job): JsonResponse
+    {
+        $this->authorizeManage($request->user());
 
-        $created = (int) ($result['created'] ?? 0);
-        $review = (int) ($result['review'] ?? 0);
-
-        return response()->json([
-            'success' => true,
-            'created' => $created,
-            'review' => $review,
-            'rows' => $result['rows'] ?? [],
-            'project' => $result['project'] ?? null,
-            // 어느 대장에 넣었는지 함께 말한다 — 화면은 프로젝트를 골라 보므로,
-            // 목적지를 안 알려 주면 넣어 놓고도 못 찾는다.
-            'message' => $created === 0
-                ? ($result['error'] ?? '이 도면에서는 수량을 읽어내지 못했습니다.')
-                : "물량 {$created}줄을 '".($result['projectCode'] ?? '')." ".($result['project'] ?? '')."' 물량대장에 넣었습니다."
-                    .($review > 0 ? " 그중 {$review}줄은 확인이 필요합니다." : ' 모두 확신도가 높습니다.'),
-        ]);
+        return response()->json(\App\Services\Takeoff\AiJobQueue::status($job));
     }
 
     /** 시방서에서 제출물 요구를 전수로 뽑아 제출물 대장에 바로 넣는다. */
@@ -331,54 +328,10 @@ class DocumentIntelligenceController extends Controller
         $this->authorizeManage($request->user());
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
 
-        $result = app(\App\Services\Takeoff\SpecSubmittalService::class)->extract($document);
-
-        if (! ($result['success'] ?? false)) {
-            return response()->json(['success' => false, 'error' => $result['error'] ?? '제출물을 뽑지 못했습니다.'], 422);
-        }
-
-        $created = (int) ($result['created'] ?? 0);
-        $review = (int) ($result['review'] ?? 0);
-        $gates = (int) ($result['gates'] ?? 0);
-
-        return response()->json([
-            'success' => true,
-            'created' => $created,
-            'review' => $review,
-            'gates' => $gates,
-            'rows' => $result['rows'] ?? [],
-            'project' => $result['project'] ?? null,
-            'message' => $created === 0
-                ? ($result['error'] ?? '제출물 요구를 찾지 못했습니다.')
-                : "제출물 {$created}건을 '".($result['projectCode'] ?? '')." ".($result['project'] ?? '')."' 대장에 넣었습니다. 정지 조항 {$gates}건"
-                    .($review > 0 ? " · 확인 필요 {$review}건" : '').'.',
-        ]);
-    }
-
-    public function review(Request $request, IntelligentDocument $document): JsonResponse
-    {
-        $this->authorizeManage($request->user());
-        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'string', 'in:'.implode(',', array_keys(IntelligentDocument::CATEGORY_OPTIONS))],
-            'document_type' => ['required', 'string', 'in:'.implode(',', array_keys(IntelligentDocument::TYPE_OPTIONS))],
-            'discipline' => ['nullable', 'string', 'max:80'],
-            'document_number' => ['nullable', 'string', 'max:120'],
-            'revision' => ['nullable', 'string', 'max:40'],
-            'document_date' => ['nullable', 'date'],
-            'response_due_on' => ['nullable', 'date'],
-            'expires_on' => ['nullable', 'date'],
-        ]);
-
-        $document->update([
-            ...$data,
-            'ai_status' => 'ready',
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-        ]);
-
-        return response()->json(['success' => true, 'document' => $this->documentRow($document->fresh())]);
+        return response()->json(\App\Services\Takeoff\AiJobQueue::push(
+            'spec_submittals', 'document', $document->id,
+            '시방 제출물 뽑기 — '.($document->title ?: $document->original_file_name),
+        ), 202);
     }
 
     /**
