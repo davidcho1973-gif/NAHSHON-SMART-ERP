@@ -435,10 +435,13 @@ class DocumentIntelligenceController extends Controller
 
         // 엑셀은 표로, 워드는 문서로 — 브라우저가 못 그리는 형식은 서버가 HTML 로
         // 바꿔 보여준다. 예전에는 여기서 415 로 밀어내서 화면이 추출 텍스트로 후퇴했다.
-        if (\App\Support\OfficePreview::supports((string) $document->extension)) {
+        // 여기서도 확장자 칸이 비었으면 파일 이름을 본다.
+        $ext = (string) ($document->extension ?: pathinfo((string) $document->original_file_name, PATHINFO_EXTENSION));
+
+        if (\App\Support\OfficePreview::supports($ext)) {
             $html = \App\Support\OfficePreview::html(
                 (string) $disk->get($document->file_path),
-                (string) $document->extension,
+                $ext,
                 (string) ($document->title ?: $document->original_file_name),
             );
             if ($html !== null) {
@@ -457,7 +460,26 @@ class DocumentIntelligenceController extends Controller
             'txt' => 'text/plain; charset=UTF-8',
             'csv' => 'text/csv; charset=UTF-8',
         ];
+        // 확장자 칸을 믿을 수 없다 — 일괄 임포트로 들어온 문서는 이 칸이 비어 있어
+        // PDF 인데도 415 로 막혔다(703K 도면·시방 전부가 그랬다). 그래서 파일 이름과
+        // MIME 까지 함께 본다. 셋 중 하나라도 알아보면 열어 준다.
         $extension = strtolower((string) $document->extension);
+        if (! isset($previewTypes[$extension])) {
+            $fromName = strtolower((string) pathinfo((string) $document->original_file_name, PATHINFO_EXTENSION));
+            if (isset($previewTypes[$fromName])) {
+                $extension = $fromName;
+            } else {
+                $byMime = array_search(
+                    strtolower(trim(explode(';', (string) $document->mime_type)[0])),
+                    array_map(fn (string $t): string => strtolower(trim(explode(';', $t)[0])), $previewTypes),
+                    true,
+                );
+                if (is_string($byMime)) {
+                    $extension = $byMime;
+                }
+            }
+        }
+
         abort_unless(isset($previewTypes[$extension]), 415, '브라우저 미리보기를 지원하지 않는 형식입니다. 다운로드해서 확인해 주세요.');
 
         return $disk->response($document->file_path, $document->original_file_name, [
