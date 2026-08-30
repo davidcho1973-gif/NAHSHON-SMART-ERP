@@ -80,6 +80,101 @@ class SiteIsolationTest extends TestCase
         $this->assertStringNotContainsString("?? 'HFF-02'", $body);
     }
 
+    // ── 대장(물량·제출물)은 그 현장의 것이다 ──────────────────────────
+
+    public function test_애리조나_현장에서_조지아_물량이_보이지_않는다(): void
+    {
+        // 실제로 겪은 것: 현장 전환기는 애리조나인데 화면에는 조지아 주방 물량이 떴다.
+        // 대장 조회가 "선택한 현장" 을 아예 받지 않아, 프로젝트가 안 정해지면 전체에서
+        // 첫 번째(코드순)로 넘어갔기 때문이다.
+        $azProject = \App\Models\Project::create([
+            'project_code' => 'ZZ-AZ', 'name' => '애리조나 공사',
+            'construction_type' => 'equipment_setting', 'site_id' => $this->az->id,
+        ]);
+        $gaProject = \App\Models\Project::create([
+            'project_code' => 'AA-GA', 'name' => '조지아 공사',   // 코드순으로 먼저 온다
+            'construction_type' => 'equipment_setting', 'site_id' => $this->ga->id,
+        ]);
+
+        foreach ([[$azProject, $this->az, '애리조나 배관'], [$gaProject, $this->ga, '조지아 주방 오수관']] as [$p, $site, $name]) {
+            \App\Models\BoqItem::create([
+                'site_id' => $site->id, 'project_id' => $p->id, 'seq' => 1,
+                'discipline_code' => '05', 'discipline' => '배관', 'name_kr' => $name,
+                'unit' => 'LF', 'qty' => 100, 'unit_price' => 10,
+            ]);
+        }
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
+        $this->actingAs($admin);
+
+        $names = collect(app(\App\Services\Admin\ProjectRegisterService::class)->listBoq(null, 'AZ-01')['rows'])
+            ->pluck('nameKr');
+
+        $this->assertTrue($names->contains('애리조나 배관'));
+        $this->assertFalse($names->contains('조지아 주방 오수관'), '남의 현장 물량이 그대로 보인다');
+    }
+
+    public function test_그_현장에_프로젝트가_없으면_비어_있는_것이_맞다(): void
+    {
+        // 조지아에만 프로젝트가 있고 애리조나에는 없다. 예전에는 이때 조지아 대장이 떴다.
+        $ga = \App\Models\Project::create([
+            'project_code' => 'GA-P', 'name' => '조지아', 'construction_type' => 'equipment_setting',
+            'site_id' => $this->ga->id,
+        ]);
+        \App\Models\BoqItem::create([
+            'site_id' => $this->ga->id, 'project_id' => $ga->id, 'seq' => 1,
+            'discipline_code' => '05', 'discipline' => '배관', 'name_kr' => '조지아 오수관',
+            'unit' => 'LF', 'qty' => 10, 'unit_price' => 1,
+        ]);
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
+        $res = $this->actingAs($admin)->postJson('/smart-company-api/api_getBoq', ['args' => [], 'siteId' => 'AZ-01']);
+
+        $res->assertOk();
+        $this->assertSame([], $res->json('rows'));
+        $this->assertSame([], $res->json('projects'), '고를 수 있는 프로젝트도 그 현장 것뿐이어야 한다');
+    }
+
+    public function test_제출물_대장도_같은_규칙을_따른다(): void
+    {
+        // 두 대장이 같은 구조라 구멍도 같았다. 한쪽만 고치면 다음에 또 갈라진다.
+        $ga = \App\Models\Project::create([
+            'project_code' => 'GA-S', 'name' => '조지아', 'construction_type' => 'equipment_setting',
+            'site_id' => $this->ga->id,
+        ]);
+        \App\Models\Submittal::create([
+            'site_id' => $this->ga->id, 'project_id' => $ga->id, 'seq' => 1,
+            'csi' => '22 13 16', 'section' => '위생기구', 'category' => '자재승인', 'title' => '조지아 자재승인원',
+            'status' => array_key_first(\App\Models\Submittal::STATUS_OPTIONS),
+        ]);
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
+        $rows = $this->actingAs($admin)
+            ->postJson('/smart-company-api/api_getSubmittals', ['args' => [], 'siteId' => 'AZ-01'])
+            ->assertOk()->json('rows');
+
+        $this->assertSame([], $rows);
+    }
+
+    public function test_전체_현장에서는_모두_보인다(): void
+    {
+        $ga = \App\Models\Project::create([
+            'project_code' => 'GA-A', 'name' => '조지아', 'construction_type' => 'equipment_setting',
+            'site_id' => $this->ga->id,
+        ]);
+        \App\Models\BoqItem::create([
+            'site_id' => $this->ga->id, 'project_id' => $ga->id, 'seq' => 1,
+            'discipline_code' => '05', 'discipline' => '배관', 'name_kr' => '조지아 오수관',
+            'unit' => 'LF', 'qty' => 10, 'unit_price' => 1,
+        ]);
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
+        $this->actingAs($admin);
+
+        $rows = app(\App\Services\Admin\ProjectRegisterService::class)->listBoq(null, 'ALL')['rows'];
+        $this->assertCount(1, $rows, '전체를 보면 그대로 다 보여야 한다');
+    }
+
     // ── 본사 공통 규약(①안) ────────────────────────────────────────────
 
     public function test_현장을_고르면_본사_공통이_섞였다고_말한다(): void

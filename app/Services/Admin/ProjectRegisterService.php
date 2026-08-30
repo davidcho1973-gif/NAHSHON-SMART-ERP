@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\BoqItem;
 use App\Models\Project;
+use App\Models\Site;
 use App\Models\Submittal;
 use App\Models\User;
 use App\Support\CurrentCompany;
@@ -40,17 +41,24 @@ class ProjectRegisterService
     }
 
     /** @return array<string, mixed> */
-    public function listSubmittals(?int $projectId = null): array
+    public function listSubmittals(?int $projectId = null, string $siteId = 'ALL'): array
     {
         if (! $this->canView()) {
             return ['success' => false, 'error' => '제출물 대장 열람 권한이 없습니다.'];
         }
 
-        $projects = $this->projectOptions();
+        $siteKey = $this->siteKey($siteId);
+        $projects = $this->projectOptions($siteKey);
         $projectId = $this->resolveProject($projectId, $projects);
 
         $q = Submittal::query()->orderBy('seq');
         $this->applyScope($q);
+
+        // 물량 대장과 같은 규칙 — 고른 현장에 프로젝트가 없으면 남의 것을 보여 주지 않는다.
+        if ($siteKey !== null && ! $projectId) {
+            $q->whereRaw('1 = 0');
+        }
+
         if ($projectId) {
             $q->where('project_id', $projectId);
         }
@@ -125,17 +133,25 @@ class ProjectRegisterService
     }
 
     /** @return array<string, mixed> */
-    public function listBoq(?int $projectId = null): array
+    public function listBoq(?int $projectId = null, string $siteId = 'ALL'): array
     {
         if (! $this->canView()) {
             return ['success' => false, 'error' => '물량/BOQ 열람 권한이 없습니다.'];
         }
 
-        $projects = $this->projectOptions();
+        $siteKey = $this->siteKey($siteId);
+        $projects = $this->projectOptions($siteKey);
         $projectId = $this->resolveProject($projectId, $projects);
 
         $q = BoqItem::query()->orderBy('seq');
         $this->applyScope($q);
+
+        // 현장을 골랐는데 그 현장에 프로젝트가 없으면 <b>비어 있는 것이 맞다</b>.
+        // 예전에는 여기서 조건 없이 전체 대장을 훑어, 남의 현장 물량이 그대로 떴다.
+        if ($siteKey !== null && ! $projectId) {
+            $q->whereRaw('1 = 0');
+        }
+
         if ($projectId) {
             $q->where('project_id', $projectId);
         }
@@ -230,14 +246,36 @@ class ProjectRegisterService
     }
 
     /** @return list<array{id:int, label:string}> */
-    private function projectOptions(): array
+    /**
+     * 고를 수 있는 프로젝트 — 현장을 골랐으면 그 현장 것만.
+     *
+     * 예전에는 현장을 전혀 보지 않았다. 그래서 애리조나 현장을 띄워 놓고도 프로젝트가
+     * 지정되지 않으면 전체에서 첫 번째(코드순)로 넘어가, 조지아 현장의 물량 대장이
+     * 애리조나 화면에 그대로 떴다. 대장은 현장의 것이지 회사 전체의 것이 아니다.
+     *
+     * @return list<array{id:int, label:string}>
+     */
+    private function projectOptions(?int $siteId = null): array
     {
         $q = Project::query()->orderBy('project_code');
         $this->applyScope($q);
+        if ($siteId !== null) {
+            $q->where('site_id', $siteId);
+        }
 
         return $q->get(['id', 'project_code', 'name'])
             ->map(fn (Project $p): array => ['id' => $p->id, 'label' => $p->project_code.' — '.$p->name])
             ->values()->all();
+    }
+
+    /** 화면이 고른 현장 코드를 id 로. 'ALL'·빈 값이면 null(전체). */
+    private function siteKey(string $siteId): ?int
+    {
+        $siteId = trim($siteId);
+
+        return ($siteId === '' || $siteId === 'ALL')
+            ? null
+            : Site::query()->where('code', $siteId)->value('id');
     }
 
     /** @param list<array{id:int, label:string}> $projects */

@@ -199,9 +199,10 @@ class SmartCompanyData
             'api_deleteItemCategory' => app(ItemMasterService::class)->deleteCategory((int) ($args[0] ?? 0)),
 
             // 제출물 대장 + 물량/BOQ — 시방·도면에서 뽑은 계약 요구 추적 (703K 에서 시작).
-            'api_getSubmittals' => app(ProjectRegisterService::class)->listSubmittals((($args[0] ?? null) !== null) ? (int) $args[0] : null),
+            // 대장은 현장의 것이다 — 화면이 고른 현장을 그대로 넘긴다.
+            'api_getSubmittals' => app(ProjectRegisterService::class)->listSubmittals((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveSubmittal' => app(ProjectRegisterService::class)->saveSubmittal(is_array($args[0] ?? null) ? $args[0] : []),
-            'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null),
+            'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
 
             // 조직 설정 — 이 배포가 누구의 것인지. 고객사 관리자가 직접 고친다.
