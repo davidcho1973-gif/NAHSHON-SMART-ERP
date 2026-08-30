@@ -228,7 +228,7 @@ function renderDetail(d){
     const actions=(d.actions||[]).map(a=>`<div class="action-card ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.details||'')}</p>${a.recommendedAction?`<p><b>권고:</b> ${esc(a.recommendedAction)}</p>`:''}${a.sourceExcerpt?`<div class="doc-sub">근거: “${esc(a.sourceExcerpt)}”</div>`:''}<div class="action-foot"><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'명시 기한 없음'} · 신뢰도 ${esc(a.confidence||0)}%</span>${canManage&&!['completed','ignored'].includes(a.status)?`<button class="btn small" onclick="completeAction(${a.id},${d.id})">처리완료</button>`:`<span class="badge ${a.status==='completed'?'ready':''}">${esc(a.status)}</span>`}</div></div>`).join('')||'<p>AI가 발견한 필수 후속조치가 없습니다.</p>';
     document.getElementById('drawer-body').innerHTML=`
       <div class="detail-grid"><div class="detail-chip"><span>분류</span><b>${esc(d.categoryLabel)}</b></div><div class="detail-chip"><span>문서유형</span><b>${esc(d.documentTypeLabel)}</b></div><div class="detail-chip"><span>문서번호 / Revision</span><b>${esc(d.documentNumber||'-')} / ${esc(d.revision||'-')}</b></div><div class="detail-chip"><span>AI 신뢰도</span><b>${esc(d.aiConfidence||0)}%</b></div></div>
-      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<button class="btn primary" onclick="openViewer()">바로 보기</button><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
+      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<button class="btn primary" onclick="openViewer()">바로 보기</button><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" style="border-color:#c7d2fe;color:#3730a3" onclick="runExtract(${d.id},'takeoff',this)" title="이 도면에서 수량을 뽑아 물량대장에 넣습니다">📐 물량 뽑기</button><button class="btn" style="border-color:#c7d2fe;color:#3730a3" onclick="runExtract(${d.id},'submittals',this)" title="이 시방서에서 제출물 요구를 뽑아 제출물대장에 넣습니다">📋 제출물 뽑기</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
       ${canManage?`<div class="section" id="edit-form" style="display:none"><h3>문서 정보 수정</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
           <div class="field" style="grid-column:1/-1"><label>제목</label><input id="ed-title" value="${esc(d.title||'')}"></div>
@@ -253,6 +253,28 @@ function renderDetail(d){
 }
 async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
 async function reanalyze(id){try{await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast('AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+
+/* 도면 → 물량, 시방 → 제출물.
+   결과는 승인 대기줄이 아니라 대장으로 바로 간다 — 확신이 서는 줄은 그냥 들어가고
+   애매한 줄만 표시된다. 그래서 끝나고 나서 "몇 줄 넣었고 몇 줄을 봐야 하는지" 를 알린다.
+   판독은 수십 초가 걸리므로 버튼을 잠그고 진행 중임을 보여 준다(두 번 눌러 두 배로
+   들어가는 사고를 막는다). */
+async function runExtract(id, kind, btn){
+  const isSpec = kind === 'submittals';
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = isSpec ? '시방 읽는 중…' : '도면 읽는 중…'; }
+  try{
+    const r = await jsonFetch(endpoints.show+'/'+id+'/'+(isSpec?'submittals':'takeoff'),{method:'POST'});
+    toast(r.message || '완료했습니다.');
+    if (r.review) {
+      // 확인할 줄이 있으면 어디로 가야 하는지 알려 준다 — 알림만 띄우고 끝내면 아무도 안 본다.
+      setTimeout(function(){
+        toast((isSpec?'제출물':'물량')+' 대장에서 "확인 필요"를 눌러 '+r.review+'건을 봐 주세요.');
+      }, 2600);
+    }
+  }catch(e){ toast(e.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+}
 function openEdit(){const f=document.getElementById('edit-form');if(f)f.style.display=f.style.display==='none'?'block':'none'}
 async function saveEdit(id){
     const v=x=>{const el=document.getElementById(x);return el?el.value.trim():''};

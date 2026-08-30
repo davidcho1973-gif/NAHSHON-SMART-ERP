@@ -220,6 +220,67 @@ class DocumentIntelligenceController extends Controller
         return response()->json(['success' => true, 'message' => 'AI 재분석을 시작했습니다.'], 202);
     }
 
+    /**
+     * 도면에서 물량을 뽑아 BOQ 대장에 바로 넣는다.
+     *
+     * 승인 대기줄은 없다 — 확신이 서는 줄은 그냥 들어가고 애매한 줄만 표시된다.
+     * 그래서 결과 문구가 "몇 줄 넣었고 그중 몇 줄을 봐야 하는지" 를 말한다.
+     */
+    public function takeoff(Request $request, IntelligentDocument $document): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+
+        $result = app(\App\Services\Takeoff\DrawingTakeoffService::class)
+            ->extract($document, $request->string('discipline')->toString() ?: null);
+
+        if (! ($result['success'] ?? false)) {
+            return response()->json(['success' => false, 'error' => $result['error'] ?? '물량을 뽑지 못했습니다.'], 422);
+        }
+
+        $created = (int) ($result['created'] ?? 0);
+        $review = (int) ($result['review'] ?? 0);
+
+        return response()->json([
+            'success' => true,
+            'created' => $created,
+            'review' => $review,
+            'rows' => $result['rows'] ?? [],
+            'message' => $created === 0
+                ? ($result['error'] ?? '이 도면에서는 수량을 읽어내지 못했습니다.')
+                : "물량 {$created}줄을 대장에 넣었습니다.".($review > 0 ? " 그중 {$review}줄은 확인이 필요합니다." : ' 모두 확신도가 높습니다.'),
+        ]);
+    }
+
+    /** 시방서에서 제출물 요구를 전수로 뽑아 제출물 대장에 바로 넣는다. */
+    public function extractSubmittals(Request $request, IntelligentDocument $document): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+
+        $result = app(\App\Services\Takeoff\SpecSubmittalService::class)->extract($document);
+
+        if (! ($result['success'] ?? false)) {
+            return response()->json(['success' => false, 'error' => $result['error'] ?? '제출물을 뽑지 못했습니다.'], 422);
+        }
+
+        $created = (int) ($result['created'] ?? 0);
+        $review = (int) ($result['review'] ?? 0);
+        $gates = (int) ($result['gates'] ?? 0);
+
+        return response()->json([
+            'success' => true,
+            'created' => $created,
+            'review' => $review,
+            'gates' => $gates,
+            'rows' => $result['rows'] ?? [],
+            'message' => $created === 0
+                ? ($result['error'] ?? '제출물 요구를 찾지 못했습니다.')
+                : "제출물 {$created}건을 대장에 넣었습니다. 정지 조항 {$gates}건"
+                    .($review > 0 ? " · 확인 필요 {$review}건" : '').'.',
+        ]);
+    }
+
     public function review(Request $request, IntelligentDocument $document): JsonResponse
     {
         $this->authorizeManage($request->user());

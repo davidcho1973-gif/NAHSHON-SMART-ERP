@@ -35,12 +35,16 @@ class Submittal extends Model
         'company_id', 'site_id', 'project_id',
         'seq', 'csi', 'section', 'category', 'title', 'gate',
         'status', 'assignee', 'planned_on', 'submitted_on', 'approved_on', 'notes',
+        // 시방 추출로 들어온 줄이 달고 오는 것들
+        'confidence', 'needs_review', 'review_reason', 'source_document_id', 'extracted_by', 'source_excerpt',
     ];
 
     protected function casts(): array
     {
         return [
             'gate' => 'boolean',
+            'needs_review' => 'boolean',
+            'confidence' => 'integer',
             'planned_on' => 'date',
             'submitted_on' => 'date',
             'approved_on' => 'date',
