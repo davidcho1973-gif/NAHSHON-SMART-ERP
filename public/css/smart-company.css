@@ -2079,3 +2079,40 @@ button { font-family:inherit; cursor:pointer; border:none; outline:none; }
     .dash-triage { grid-template-columns: 1fr !important; }
     .dash-ops2 { grid-template-columns: 1fr !important; }
 }
+
+/* ── 현장 전환기 ────────────────────────────────────────────────────────
+   색을 인라인에 박아 두면 테마 하나가 바뀔 때 여기만 남는다. 실제로 선택 목록
+   배경이 어두운 색으로 고정돼 있어서, 밝은 테마에서 열면 어두운 바탕에 어두운
+   글자가 겹쳐 아무것도 안 보였다. 두 테마 모두 변수로 따라간다. */
+.site-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 5px 10px;
+}
+.site-switcher > span {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+.site-switcher select {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+    font-family: inherit;
+    padding: 0 4px;
+    max-width: 200px;
+}
+/* 펼친 목록은 운영체제가 그린다 — 바탕과 글자를 함께 정해야 한 쪽만 바뀌지 않는다. */
+.site-switcher select option {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+}

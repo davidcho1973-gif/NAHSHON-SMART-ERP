@@ -353,14 +353,15 @@
     <main class="main-content">
       <header class="topbar">
         <div class="topbar-left" style="display:flex;align-items:center;gap:0;">
-          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:5px 10px;">
-            <span style="font-size:12px;color:var(--text-tertiary);font-weight:500;white-space:nowrap;">📍 현장</span>
-            <select id="project-context-switcher"
-              onchange="window.setProjectContext(this.value)"
-              style="background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:700;cursor:pointer;outline:none;font-family:inherit;padding:0 4px;max-width:200px;">
-               <option value="ALL" selected style="background:#1e2030;">Global</option>
+          {{-- 현장 전환기. 색을 코드에 박지 않고 테마 변수를 쓴다 — 예전에는 선택
+               목록 배경이 어두운 색으로 고정돼 있어서, 밝은 테마에서 열면 어두운 바탕에
+               어두운 글자가 겹쳐 아무것도 안 보였다(테두리·바탕도 어두운 상단바 기준이었다). --}}
+          <div class="site-switcher">
+            <span>📍 현장</span>
+            <select id="project-context-switcher" onchange="window.setProjectContext(this.value)">
+               <option value="ALL" selected>Global</option>
                @foreach (($siteOptions ?? []) as $site)
-                 <option value="{{ $site['code'] }}" data-setup-pending="{{ ($site['setup_pending'] ?? false) ? 'true' : 'false' }}" style="background:#1e2030;">{{ $site['label'] }}</option>
+                 <option value="{{ $site['code'] }}" data-setup-pending="{{ ($site['setup_pending'] ?? false) ? 'true' : 'false' }}">{{ $site['label'] }}</option>
                @endforeach
             </select>
           </div>

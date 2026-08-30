@@ -175,6 +175,62 @@ class SiteIsolationTest extends TestCase
         $this->assertCount(1, $rows, '전체를 보면 그대로 다 보여야 한다');
     }
 
+    // ── 자산(차량·장비·숙소)도 현장을 따른다 ──────────────────────────
+
+    public function test_차량_장비_숙소가_남의_현장_것을_보여주지_않는다(): void
+    {
+        // 이 목록들은 상단 현장 전환기를 아예 받지 않아, 애리조나를 띄워 놓고도
+        // 조지아 차량·숙소가 함께 떴다. 현장이 하나일 때는 티가 안 났다.
+        \App\Models\Vehicle::create(['site_id' => $this->ga->id, 'plate_number' => 'GA-CAR', 'model' => 'F-150', 'status' => '운행중']);
+        \App\Models\Vehicle::create(['site_id' => $this->az->id, 'plate_number' => 'AZ-CAR', 'model' => 'F-150', 'status' => '운행중']);
+        \App\Models\Housing::create(['site_id' => $this->ga->id, 'code' => 'GA-H1', 'name' => '조지아 숙소', 'beds' => 4, 'occupied' => 0]);
+        \App\Models\Housing::create(['site_id' => $this->az->id, 'code' => 'AZ-H1', 'name' => '애리조나 숙소', 'beds' => 4, 'occupied' => 0]);
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($admin);
+
+        $plates = collect(SmartCompanyData::vehicleList('AZ-01'))->pluck('plate')->filter()->values();
+        $this->assertTrue($plates->contains('AZ-CAR'));
+        $this->assertFalse($plates->contains('GA-CAR'), '남의 현장 차량이 보인다');
+
+        $codes = collect(SmartCompanyData::housingList('AZ-01'))->pluck('id');   // 숙소 목록의 id 는 숙소 코드다
+        $this->assertTrue($codes->contains('AZ-H1'));
+        $this->assertFalse($codes->contains('GA-H1'), '남의 현장 숙소가 보인다');
+    }
+
+    public function test_미배정_자산은_어느_현장에서나_보인다(): void
+    {
+        // 본사 차고에 서 있는 차는 어느 현장에서든 "지금 쓸 수 있는가" 를 보고 배정하는
+        // 대상이다. 감추면 현장에서는 있는 줄도 모르고 새로 빌린다.
+        \App\Models\Vehicle::create(['site_id' => null, 'plate_number' => 'POOL-CAR', 'model' => 'Transit', 'status' => '대기']);
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($admin);
+
+        $plates = collect(SmartCompanyData::vehicleList('AZ-01'))->pluck('plate')->filter()->values();
+        $this->assertTrue($plates->contains('POOL-CAR'));
+    }
+
+    public function test_인원_목록은_상단_현장을_따르되_화면_선택이_이긴다(): void
+    {
+        \App\Models\Employee::create(['site_id' => $this->az->id, 'name' => '애리조나사람', 'employment_status' => 'active']);
+        \App\Models\Employee::create(['site_id' => $this->ga->id, 'name' => '조지아사람', 'employment_status' => 'active']);
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($admin);
+
+        // 상단에서 애리조나를 고르면 그것을 따른다.
+        $names = collect($this->post('/smart-company-api/api_getEmployeeAdminList', ['args' => [[]], 'siteId' => 'AZ-01'])
+            ->json('rows'))->pluck('name');
+        $this->assertTrue($names->contains('애리조나사람'));
+        $this->assertFalse($names->contains('조지아사람'));
+
+        // 화면에서 직접 조지아를 고르면 그게 이긴다 — 자동이 사람의 선택을 덮지 않는다.
+        $names = collect($this->post('/smart-company-api/api_getEmployeeAdminList',
+            ['args' => [['siteId' => $this->ga->id]], 'siteId' => 'AZ-01'])->json('rows'))->pluck('name');
+        $this->assertTrue($names->contains('조지아사람'));
+    }
+
     // ── 본사 공통 규약(①안) ────────────────────────────────────────────
 
     public function test_현장을_고르면_본사_공통이_섞였다고_말한다(): void

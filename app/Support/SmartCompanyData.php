@@ -115,8 +115,8 @@ class SmartCompanyData
             'api_setupSite' => self::setupSite($args[0] ?? null, $args[1] ?? []),
             'api_getSetupWizardAssets' => self::getSetupWizardAssets(),
 
-            'api_getEquipmentStats' => self::equipmentStats(),
-            'api_getEquipmentList' => self::equipmentList(),
+            'api_getEquipmentStats' => self::equipmentStats($siteId),
+            'api_getEquipmentList' => self::equipmentList($siteId),
             'api_getToolStats' => self::toolStats(),
             'api_getToolList' => self::toolList(),
             'api_getToolTransactions' => self::toolTransactions(),
@@ -210,7 +210,11 @@ class SmartCompanyData
             'api_saveOrgSettings' => app(OrgSettingService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
 
             // 직원 등록 · 수정 (Filament EmployeeResource 를 SPA 로 옮긴 것).
-            'api_getEmployeeAdminList' => app(EmployeeAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            // 화면 자체 현장 필터가 비어 있으면 상단 전환기를 따른다 — 화면에서 직접
+            // 고른 값이 있으면 그게 이긴다(사람이 고른 것이 자동보다 우선).
+            'api_getEmployeeAdminList' => app(EmployeeAdminService::class)->list(
+                self::withSiteDefault(is_array($args[0] ?? null) ? $args[0] : [], $siteId),
+            ),
             'api_getEmployeeAdminOptions' => app(EmployeeAdminService::class)->options(),
             'api_saveEmployeeAdmin' => app(EmployeeAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteEmployeeAdmin' => app(EmployeeAdminService::class)->delete((int) ($args[0] ?? 0)),
@@ -227,7 +231,9 @@ class SmartCompanyData
 
             // 원청 계약 · 서류 (Filament ProjectContractResource 를 SPA 로 옮긴 것).
             // 서류 업로드만 multipart 라 별도 라우트(admin.contract-document.upload)를 쓴다.
-            'api_getContracts' => app(ContractAdminService::class)->list(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getContracts' => app(ContractAdminService::class)->list(
+                self::withSiteDefault(is_array($args[0] ?? null) ? $args[0] : [], $siteId),
+            ),
             'api_getContractOptions' => app(ContractAdminService::class)->options(),
             'api_getContractDocuments' => app(ContractAdminService::class)->documents((int) ($args[0] ?? 0)),
             'api_saveContract' => app(ContractAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
@@ -379,14 +385,14 @@ class SmartCompanyData
             'api_createDocFolder' => app(IntegratedDocumentService::class)->createFolder((string) ($args[0] ?? ''), ($args[1] ?? null) !== '' ? ($args[1] ?? null) : null, auth()->id()),
             'api_deleteDocFolder' => app(IntegratedDocumentService::class)->deleteFolder((string) ($args[0] ?? '')),
 
-            'api_getVehicleList' => self::vehicleList(),
+            'api_getVehicleList' => self::vehicleList($siteId),
             'api_getVehicleStats' => self::vehicleStats(),
-            'api_getRentalList' => self::rentalList(),
-            'api_getRentalStats' => self::rentalStats(),
+            'api_getRentalList' => self::rentalList($siteId),
+            'api_getRentalStats' => self::rentalStats($siteId),
             'api_createRental' => self::createRental($args[0] ?? []),
             'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
-            'api_getHousingList' => self::housingList(),
-            'api_getHousingStats' => self::housingStats(),
+            'api_getHousingList' => self::housingList($siteId),
+            'api_getHousingStats' => self::housingStats($siteId),
             'api_getVendorList' => self::vendors(),
             'api_getCompanyList' => Company::query()->where('status', 'active')->orderBy('name')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all(),
             'api_getWbsCompanyOptions' => self::wbsCompanyOptions($siteId),
@@ -1304,6 +1310,51 @@ class SmartCompanyData
         return ['success' => true, 'canManage' => (bool) $canManage, 'mySiteId' => $mySiteId, 'sites' => $sites];
     }
 
+    /**
+     * 자산 목록(차량·장비·숙소)의 현장 스코프 — "그 현장 + 미배정".
+     *
+     * 예전에는 이 목록들이 상단 현장 전환기를 <b>아예 받지 않아</b>, 애리조나 현장을
+     * 띄워 놓고도 조지아 차량·숙소가 함께 떴다. 현장이 하나일 때는 티가 안 났다.
+     *
+     * 미배정(site_id NULL)을 함께 보여 주는 이유: 본사 차고에 서 있는 차, 아직 배정하지
+     * 않은 숙소는 어느 현장에서든 "지금 쓸 수 있는가" 를 보고 배정하는 대상이다.
+     * 감추면 현장에서는 있는 줄도 모르고 새로 빌린다. 재무의 본사 공통 규약과 같은 방향이다.
+     * 대가도 같다 — 현장별 숫자를 서로 더하면 미배정분이 겹친다. 합계는 '전체 현장'으로 본다.
+     */
+    /**
+     * 화면 필터에 현장이 비어 있으면 상단 전환기의 현장을 채워 준다.
+     *
+     * 목록 화면마다 자기 현장 드롭다운이 따로 있는데, 상단에서 현장을 바꿔도 그 값이
+     * 전달되지 않아 두 곳이 서로 다른 말을 했다. 사람이 화면에서 직접 고른 값이 있으면
+     * 그게 이긴다 — 자동이 사람의 선택을 덮으면 안 된다.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private static function withSiteDefault(array $filters, string $siteId): array
+    {
+        if (filled($filters['siteId'] ?? null)) {
+            return $filters;
+        }
+
+        $resolved = self::resolveSiteId($siteId);
+        if ($resolved !== null) {
+            $filters['siteId'] = $resolved;
+        }
+
+        return $filters;
+    }
+
+    private static function applyAssetSiteScope($query, string $siteId): void
+    {
+        $resolved = self::resolveSiteId($siteId);
+        if ($resolved === null) {
+            return;
+        }
+
+        $query->where(fn ($q) => $q->where('site_id', $resolved)->orWhereNull('site_id'));
+    }
+
     private static function resolveSiteId(string $siteId): ?int
     {
         $siteId = trim($siteId);
@@ -1333,12 +1384,14 @@ class SmartCompanyData
         return null;
     }
 
-    public static function equipmentStats(): array
+    public static function equipmentStats(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Equipment::class) && Schema::hasTable('equipments')) {
                 $user = auth()->user();
-                $all = Equipment::query()->visibleTo($user)->get();
+                $allQuery = Equipment::query()->visibleTo($user);
+                self::applyAssetSiteScope($allQuery, $siteId);
+                $all = $allQuery->get();
 
                 return [
                     'total' => $all->count(),
@@ -1355,15 +1408,16 @@ class SmartCompanyData
         return ['total' => 0, 'operable' => 0, 'inoperable' => 0, 'todayInspections' => 0];
     }
 
-    public static function equipmentList(): array
+    public static function equipmentList(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Equipment::class) && Schema::hasTable('equipments')) {
                 $user = auth()->user();
 
-                return Equipment::query()
-                    ->visibleTo($user)
-                    ->with('site')
+                $query = Equipment::query()->visibleTo($user)->with('site');
+                self::applyAssetSiteScope($query, $siteId);
+
+                return $query
                     ->orderByDesc('id')
                     ->get()
                     ->map(function ($eq) {
@@ -1917,13 +1971,16 @@ class SmartCompanyData
         return ['total' => 0, 'active' => 0, 'available' => 0, 'maintenance' => 0, 'rentExpiringSoon' => 0];
     }
 
-    public static function vehicleList(): array
+    public static function vehicleList(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('vehicles')) {
-                return Vehicle::query()
+                $query = Vehicle::query()
                     ->with(['activeRental.employee'])
-                    ->visibleTo(auth()->user())
+                    ->visibleTo(auth()->user());
+                self::applyAssetSiteScope($query, $siteId);
+
+                return $query
                     ->get()
                     ->map(fn (Vehicle $v): array => [
                         'id' => $v->vehicle_code,
@@ -1954,11 +2011,12 @@ class SmartCompanyData
         return [];
     }
 
-    public static function rentalStats(): array
+    public static function rentalStats(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
                 $query = Equipment::query()->visibleTo(auth()->user());
+                self::applyAssetSiteScope($query, $siteId);
                 // 렌탈 통계는 임대·리스분만 — 구매(소유) 장비가 섞이면 "임대 몇 대" 숫자가
                 // 부풀어 임대료 검증이 틀어진다(연계 점검: rentalStats 소유 장비 혼입).
                 // acquisition_type 미기재(null)는 스키마 기본값 규칙대로 임대로 본다.
@@ -1997,13 +2055,16 @@ class SmartCompanyData
         return ['total' => 0, 'active' => 0, 'available' => 0, 'byCompany' => []];
     }
 
-    public static function rentalList(): array
+    public static function rentalList(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('equipments')) {
-                return Equipment::query()
+                $query = Equipment::query()
                     ->with(['company', 'team', 'employee', 'site', 'project', 'purchasedForSite'])
-                    ->visibleTo(auth()->user())
+                    ->visibleTo(auth()->user());
+                self::applyAssetSiteScope($query, $siteId);
+
+                return $query
                     ->get()
                     ->map(fn (Equipment $e): array => [
                         'id' => $e->equipment_code,
@@ -2045,11 +2106,13 @@ class SmartCompanyData
         return [];
     }
 
-    public static function housingStats(): array
+    public static function housingStats(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('housings')) {
-                $rows = Housing::query()->get();
+                $housingQuery = Housing::query();
+                self::applyAssetSiteScope($housingQuery, $siteId);
+                $rows = $housingQuery->get();
                 $total = $rows->count();
                 $occupied = $rows->filter(fn (Housing $h): bool => (int) $h->beds > 0 && (int) $h->occupied >= (int) $h->beds)->count();
                 $maintenance = $rows->where('status', 'maintenance')->count();
@@ -2069,12 +2132,14 @@ class SmartCompanyData
         return ['total' => 0, 'occupied' => 0, 'available' => 0, 'maintenance' => 0, 'occupancyRate' => 0];
     }
 
-    public static function housingList(): array
+    public static function housingList(string $siteId = 'ALL'): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('housings')) {
-                return Housing::query()
-                    ->with('site')
+                $query = Housing::query()->with('site');
+                self::applyAssetSiteScope($query, $siteId);
+
+                return $query
                     ->orderBy('code')
                     ->get()
                     ->map(fn (Housing $h): array => [
