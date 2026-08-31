@@ -519,6 +519,53 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 'durable' => ! $volatile($docs) && ! $volatile($filed) && ! $volatile($photos),
             ];
         })(),
+        // 메일이 진짜로 나가는 상태인가. AI 키와 똑같은 함정이 있다 — 넣었다고 믿었는데
+        // 실은 안 들어간 경우가 화면에서 전혀 안 드러난다. 더 나쁜 것은 라라벨의 기본
+        // 메일러가 `log` 라서, 설정이 없어도 발송이 <b>예외 없이 성공</b>한다는 점이다.
+        // 로그 파일에만 쌓이고 원청은 영원히 못 받는데 화면에는 "발송했습니다" 가 뜬다.
+        //
+        // 값은 절대 내보내지 않는다 — 이 주소는 로그인 없이 열리므로 비밀번호는 물론이고
+        // 발신 주소도 통째로는 안 적고 도메인만 적는다.
+        'mail' => (function (): array {
+            $mailer = (string) config('mail.default', 'log');
+            $from = trim((string) config('mail.from.address', ''));
+            $host = trim((string) config('mail.mailers.smtp.host', ''));
+            $ready = \App\Support\MailReady::ok();
+
+            // 설정이 됐어도 받을 사람이 없으면 아무 데도 안 간다. 이 둘은 다른 문제라
+            // 따로 세어 둔다 — 안 그러면 "메일 설정은 초록불인데 왜 안 오지" 가 된다.
+            $recipients = (function (): ?int {
+                try {
+                    return \Illuminate\Support\Facades\Schema::hasTable('report_recipients')
+                        ? \App\Models\ReportRecipient::where('active', true)->count()
+                        : null;
+                } catch (\Throwable) {
+                    return null;
+                }
+            })();
+
+            return [
+                'ready' => $ready,
+                'mailer' => $mailer,
+                'host_set' => $host !== '' && ! in_array(strtolower($host), ['127.0.0.1', 'localhost'], true),
+                'port' => (int) config('mail.mailers.smtp.port', 0),
+                'username_set' => trim((string) config('mail.mailers.smtp.username', '')) !== '',
+                'password_set' => trim((string) config('mail.mailers.smtp.password', '')) !== '',
+                // 발신 주소는 도메인만. 이 도메인이 SPF/DKIM 인증된 도메인과 달라야 하는
+                // 경우는 없으므로, 여기만 봐도 대부분의 반송 원인을 짚을 수 있다.
+                'from_domain' => str_contains($from, '@') ? substr($from, strpos($from, '@') + 1) : null,
+                'from_is_placeholder' => $from === '' || str_ends_with(strtolower($from), '@example.com'),
+                'daily_report_recipients' => $recipients,
+                'message' => match (true) {
+                    $ready && ($recipients ?? 0) > 0 => '메일 발송 준비 완료. 일일 보고가 자동으로 나갑니다.',
+                    $ready && $recipients === 0 => '메일은 나갈 수 있지만 수신처가 0명입니다 — [일일 보고 > 수신처 관리] 에서 받는 사람을 등록하세요.',
+                    $ready => '메일 발송 준비 완료.',
+                    default => '메일이 아직 나가지 않습니다 — '.\App\Support\MailReady::why()
+                        .' 지금은 [발송] 이 메일앱을 여는 것으로 대체되고, 정해진 시각 자동 발송은 아무것도 하지 않습니다.',
+                },
+            ];
+        })(),
+
         // 어떤 AI 가 살아 있는가. 키를 넣었다고 믿었는데 실은 안 들어간 경우가 화면에서는
         // 전혀 드러나지 않는다 — 분석이 조용히 실패하거나(문서함), 기능이 조용히 사라진다
         // (도면 판독·교차검증). 값은 절대 내보내지 않고 "켜졌는가" 만 적는다.
