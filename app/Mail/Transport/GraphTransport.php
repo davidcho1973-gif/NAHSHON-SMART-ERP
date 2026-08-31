@@ -42,7 +42,7 @@ class GraphTransport extends AbstractTransport
         private readonly string $tenantId,
         private readonly string $clientId,
         private readonly string $clientSecret,
-        /** 이 사서함의 이름으로 나간다. 예: erp@nahshonmep.com */
+        /** 이 사서함의 이름으로 나간다. 예: erp@example.com */
         private readonly string $sender,
         private readonly bool $saveToSentItems = true,
     ) {

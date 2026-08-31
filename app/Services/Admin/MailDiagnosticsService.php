@@ -125,12 +125,12 @@ class MailDiagnosticsService
 
         try {
             Mail::raw(
-                "NAHSHON ERP 메일 설정 테스트입니다.\n\n"
+                \App\Support\Org::name()." ERP 메일 설정 테스트입니다.\n\n"
                 ."이 메일이 도착했다면 발송 설정이 정상입니다.\n"
                 ."일일 작업계획서와 마감보고서가 원청에 나갈 수 있습니다.\n\n"
                 ."발송 시각: {$stamp}\n"
                 ."메일러: ".config('mail.default').' / '.config('mail.mailers.smtp.host'),
-                fn ($m) => $m->to($to)->subject('[NAHSHON ERP] 메일 설정 테스트 — '.$stamp),
+                fn ($m) => $m->to($to)->subject('['.\App\Support\Org::name().' ERP] 메일 설정 테스트 — '.$stamp),
             );
         } catch (\Throwable $e) {
             report($e);

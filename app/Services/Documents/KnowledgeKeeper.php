@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\AccessPolicy;
 use App\Support\GeminiEmbedder;
+use App\Support\SensitiveDocuments;
 
 /**
  * 지식 창고지기 — 문서 분석의 결과를 축적하고, 개정되면 은퇴시키고, 질문이 오면 찾아 준다.
@@ -28,13 +29,13 @@ class KnowledgeKeeper
      * 대화방에서 아무에게나 새어 나가면 채팅이 재무 화면의 뒷문이 된다.
      */
     /**
-     * 목록의 정본은 AppSupportSensitiveDocuments 에 있다.
+     * 목록의 정본은 App\Support\SensitiveDocuments 에 있다.
      *
      * 예전에는 이 목록이 여기에만 있었고, 그래서 채팅 AI 는 급여를 인용하지 않는데
      * 문서함 검색은 같은 문서의 본문을 그대로 돌려주고 있었다(열람 전용 원청 계정으로
      * 재현됨). 규칙이 한 곳에만 있으면 다른 곳은 규칙이 없는 것과 같다.
      */
-    private const MONEY_DOC_TYPES = AppSupportSensitiveDocuments::MONEY_TYPES;
+    private const MONEY_DOC_TYPES = SensitiveDocuments::MONEY_TYPES;
 
     /**
      * 창고가 준비됐는가 — 마이그레이션 전 배포 순서 꼬임에도 채팅이 죽지 않게.
