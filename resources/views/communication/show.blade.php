@@ -33,6 +33,11 @@
             --line: #edeef0;
         }
         * { -webkit-tap-highlight-color: transparent; }
+        /* hidden 을 붙였는데도 보이던 것들 — 브라우저 기본값 [hidden]{display:none} 은
+           우리가 클래스에 display 를 쓰면 곧바로 진다(작성자 규칙이 이긴다). 그래서
+           답장 대상 칸(.replying, display:flex)이 빈 채로 늘 떠 있었고, 접속 표시
+           점(.dot, display:inline-block)도 항상 켜져 있었다. 규칙을 여기서 되돌린다. */
+        [hidden] { display: none !important; }
         body { margin: 0; background: var(--kakao-bg); color: #191919; }
         .app { min-height: 100vh; max-width: 640px; margin: 0 auto; background: var(--kakao-bg); display: flex; flex-direction: column; }
 
