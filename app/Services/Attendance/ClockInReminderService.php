@@ -154,7 +154,7 @@ class ClockInReminderService
         }
 
         $ledger = AttendanceReminder::query()->firstOrCreate(
-            ['employee_id' => $employee->id, 'work_date' => $today],
+            ['employee_id' => $employee->id, 'work_date' => $today, 'kind' => AttendanceReminder::KIND_CLOCK_IN],
         );
 
         if ($ledger->sent_count >= self::MAX_PER_DAY) {
@@ -252,6 +252,7 @@ class ClockInReminderService
         AttendanceReminder::query()
             ->where('employee_id', $employee->id)
             ->where('work_date', $workDate)
+            ->where('kind', AttendanceReminder::KIND_CLOCK_IN)
             ->update([
                 'sent_count' => \Illuminate\Support\Facades\DB::raw('sent_count + 1'),
                 'last_sent_at' => $now,

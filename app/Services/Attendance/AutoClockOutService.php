@@ -40,6 +40,8 @@ class AutoClockOutService
         $closed = 0;
         $pendingDirect = 0;
         $dateArg = $date;
+        /** @var array<int, array<int, Employee>> $unclosed 현장별 미마감 직영 인원 */
+        $unclosed = [];
 
         foreach (Site::query()->where('status', 'active')->get() as $site) {
             $tz = $site->timezone ?: config('app.timezone');
@@ -57,6 +59,7 @@ class AutoClockOutService
                 if ($emp->employment_type !== Employee::TYPE_INDIRECT) {
                     // 직접고용 등은 자동 마감하지 않는다(임금 왜곡 방지) — 관리자 확인 대상.
                     $pendingDirect++;
+                    $unclosed[$site->id][] = $emp;
 
                     continue;
                 }
@@ -76,11 +79,60 @@ class AutoClockOutService
             }
         }
 
+        // 알림을 무시한 사람은 여기서 걸린다 — 자동 마감이 없는 시급 직영은 이 명단이
+        // 유일한 안전망이다. 이름을 적어 올린다: 숫자만 있으면 누구를 물어봐야 할지 모른다.
+        foreach ($unclosed as $siteId => $people) {
+            $this->alertUnclosed($siteId, $people, ($dateArg ?? Carbon::now())->toDateString());
+        }
+
         return [
             'closed' => $closed,
             'pendingDirect' => $pendingDirect,
             'date' => ($dateArg ?? Carbon::now())->toDateString(),
         ];
+    }
+
+    /**
+     * 퇴근이 안 찍힌 시급 인원을 관리자에게 올린다.
+     *
+     * 푸시는 폰이 꺼져 있거나 알림을 안 켠 사람에게는 닿지 않는다. 닿았어도 무시할
+     * 수 있다. 그 경우 이 기록은 급여 마감날 기억에 의존해 채워지는데, 그것이
+     * 분쟁이 된다. 그날 안에 사람이 볼 수 있게 명단으로 남긴다.
+     *
+     * @param  array<int, Employee>  $people
+     */
+    private function alertUnclosed(int $siteId, array $people, string $workDate): void
+    {
+        if ($people === []) {
+            return;
+        }
+
+        $names = collect($people)->map(fn (Employee $e): string => $e->name)->implode(', ');
+        $site = Site::query()->find($siteId);
+
+        try {
+            app(\App\Services\Alerts\UnifiedAlertService::class)->emit(
+                "attendance-unclosed:{$siteId}:{$workDate}",
+                [
+                    'company_id' => $people[0]->company_id,
+                    'site_id' => $siteId,
+                    'source_module' => 'ATT',
+                    'source_type' => Site::class,
+                    'source_id' => (string) $siteId,
+                    'event_type' => 'attendance_unclosed',
+                    'severity' => 'warning',
+                    'title' => sprintf('%s 퇴근 미기록 %d명 (%s)', $site?->code ?: '현장', count($people), $workDate),
+                    'content' => sprintf(
+                        "%s\n\n시급 정산 대상이라 자동 마감하지 않았습니다 — 실제 퇴근 시각을 확인해 채워 주세요. "
+                        .'비워 두면 급여 마감날 기억으로 채우게 되고, 그것이 분쟁이 됩니다.',
+                        $names,
+                    ),
+                    'action_url' => '/?view=attendance-logs',
+                ],
+            );
+        } catch (\Throwable $e) {
+            report($e); // 알림 실패가 자동 마감 자체를 멈추면 안 된다.
+        }
     }
 
     /**

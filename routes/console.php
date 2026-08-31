@@ -61,6 +61,13 @@ Schedule::command('docs:alert-expiring')->dailyAt(Org::time('schedule.docs_expir
 // 밖에서는 아무것도 하지 않고, 하루 2번을 넘지 않는다.
 Schedule::command('attendance:remind-clockin')->everyTenMinutes();
 
+// 퇴근 알림 — "아직 퇴근이 안 찍혔습니다".
+//
+// 출근보다 이쪽이 돈에 더 가깝다. 시급 직영은 자동 마감을 하지 않으므로(임금 왜곡
+// 방지) 퇴근을 안 찍으면 미마감으로 남고, 급여 마감날 기억으로 채워진다. 같은 규칙
+// (기록에서 배운 시각 · 하루 2번 · 시간대 밖에서는 아무것도 안 함)으로 그날 저녁에 묻는다.
+Schedule::command('attendance:remind-clockout')->everyTenMinutes();
+
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
 Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18:00'));
 
