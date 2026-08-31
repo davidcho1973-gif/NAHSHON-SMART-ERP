@@ -43,9 +43,20 @@ class ReportMail extends Mailable
      */
     public function headers(): Headers
     {
+        // In-Reply-To 는 <b>직전 한 통</b>을 가리키는 값이고, References 는 실타래 전체다.
+        // 라라벨 Headers 에 전용 인자가 없어서 빠뜨리기 쉬운데, 대부분의 메일 클라이언트가
+        // 회신을 묶을 때 먼저 보는 것이 이쪽이다. 이게 없으면 원청 받은편지함에서
+        // 우리 서신이 한 덩어리로 안 묶이고 낱장으로 흩어진다.
+        // end() 는 배열을 참조로 받아 내부 포인터를 옮기는데, readonly 속성에는 그럴 수 없다
+        // ("Cannot indirectly modify readonly property"). 그래서 마지막 키로 직접 집는다.
+        $parent = $this->references === []
+            ? null
+            : $this->references[array_key_last($this->references)];
+
         return new Headers(
             messageId: $this->messageId,
             references: $this->references,
+            text: $parent === null ? [] : ['In-Reply-To' => '<'.trim($parent, '<>').'>'],
         );
     }
 
