@@ -34,10 +34,28 @@ final class MailReady
             }
         }
 
+        // Microsoft 365(Graph) — 세 값이 다 있어야 토큰을 받을 수 있다.
+        // 하나라도 비면 발송 순간에 인증 실패로 죽으므로 미리 막는다.
+        if ($mailer === 'graph' && ! self::graphConfigured()) {
+            return false;
+        }
+
         $from = Str::lower((string) config('mail.from.address', ''));
 
         // 보내는 주소가 없거나 예제 주소면 대부분의 메일 서버가 거절한다.
         return $from !== '' && ! Str::endsWith($from, '@example.com');
+    }
+
+    /** Graph 발송에 필요한 값이 다 있는가. */
+    public static function graphConfigured(): bool
+    {
+        foreach (['tenant_id', 'client_id', 'client_secret', 'sender'] as $k) {
+            if (trim((string) config("mail.mailers.graph.{$k}", '')) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -56,6 +74,17 @@ final class MailReady
         }
         if ($mailer === 'smtp' && Str::lower((string) config('mail.mailers.smtp.host', '')) === '') {
             return 'SMTP 주소가 비어 있습니다.';
+        }
+        if ($mailer === 'graph' && ! self::graphConfigured()) {
+            $missing = [];
+            foreach (['tenant_id' => '테넌트 ID', 'client_id' => '클라이언트 ID',
+                'client_secret' => '클라이언트 비밀값', 'sender' => '발신 사서함'] as $k => $label) {
+                if (trim((string) config("mail.mailers.graph.{$k}", '')) === '') {
+                    $missing[] = $label;
+                }
+            }
+
+            return 'Microsoft 365 설정이 덜 됐습니다 — '.implode(', ', $missing).'가 비어 있습니다.';
         }
 
         return '보내는 사람 주소(MAIL_FROM_ADDRESS)가 설정되지 않았습니다.';

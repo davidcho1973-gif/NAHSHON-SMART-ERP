@@ -51,6 +51,13 @@ class MailDiagnosticsService
         $driverOk = $this->driverInstalled($mailer);
         $ready = MailReady::ok() && $schemeOk && $driverOk;
 
+        // Microsoft 365(Graph) 는 SMTP 와 보는 값이 완전히 다르다. 같은 표를 그대로 쓰면
+        // 호스트·포트가 «비어 있음» 으로 빨갛게 뜨는데 그건 사실 문제가 아니다 —
+        // 잘못된 경고는 진짜 경고를 무디게 만든다.
+        if ($mailer === 'graph') {
+            return $this->graphStatus();
+        }
+
         return [
             'success' => true,
             'ready' => $ready,
@@ -140,6 +147,46 @@ class MailDiagnosticsService
             'success' => true,
             'message' => $to.' 로 테스트 메일을 보냈습니다. 받은편지함(스팸함도)을 확인해 주세요.',
             'sentAt' => $stamp,
+        ];
+    }
+
+    /**
+     * Microsoft 365(Graph) 상태.
+     *
+     * 비밀값은 «설정됨/비어 있음» 만 낸다. 테넌트 ID·클라이언트 ID 는 비밀이 아니지만
+     * 앞 8자만 보여 준다 — 오타를 눈으로 잡기에는 충분하고, 화면 캡처가 돌아다녀도
+     * 그것만으로는 아무것도 못 한다.
+     *
+     * @return array<string, mixed>
+     */
+    private function graphStatus(): array
+    {
+        $g = fn (string $k): string => trim((string) config("mail.mailers.graph.{$k}", ''));
+        $ready = MailReady::ok();
+        $sender = $g('sender');
+
+        return [
+            'success' => true,
+            'ready' => $ready,
+            'canSendTest' => $this->canManage(),
+            'testTo' => (string) (Auth::user()?->email ?: ''),
+            'rows' => [
+                $this->row('발송 방식', 'Microsoft 365 (Graph API)', true,
+                    'SMTP 비밀번호 방식은 마이크로소프트가 폐지하는 중이라(2026-12 기본 비활성화) 쓰지 않습니다.'),
+                $this->row('테넌트 ID', $g('tenant_id') !== '' ? substr($g('tenant_id'), 0, 8).'…' : '비어 있음', $g('tenant_id') !== ''),
+                $this->row('클라이언트 ID', $g('client_id') !== '' ? substr($g('client_id'), 0, 8).'…' : '비어 있음', $g('client_id') !== ''),
+                $this->row('클라이언트 비밀값', $g('client_secret') !== '' ? '설정됨' : '비어 있음', $g('client_secret') !== '',
+                    $g('client_secret') !== '' ? '만료일이 있습니다 — Entra ID 에서 확인하세요.' : null),
+                $this->row('발신 사서함', $sender !== '' ? $sender : '비어 있음', $sender !== '',
+                    $sender !== '' ? '이 사서함의 «보낸 편지함» 에도 남습니다.' : 'Exchange Online 라이선스가 붙은 실제 사서함이어야 합니다.'),
+                $this->row('설정 캐시', file_exists(base_path('bootstrap/cache/config.php')) ? '캐시됨' : '캐시 없음', true,
+                    file_exists(base_path('bootstrap/cache/config.php')) ? '환경변수를 바꿨다면 재배포해야 반영됩니다.' : null),
+                $this->row('일일 보고 수신처', $this->recipientCount().'명', ($this->recipientCount() ?? 0) > 0,
+                    ($this->recipientCount() ?? 0) > 0 ? null : '받을 사람이 없으면 설정이 맞아도 아무 데도 안 갑니다.'),
+            ],
+            'message' => $ready
+                ? '설정은 정상입니다. 실제로 나가는지는 아래 테스트 발송으로 확인하세요 — 토큰과 권한은 보내 봐야 압니다.'
+                : MailReady::why(),
         ];
     }
 

@@ -1,67 +1,110 @@
-# 메일 설정 (Mail Setup)
+# 메일 설정 (Mail Setup) — nahshonmep.com
 
-ERP 가 실제로 메일을 보내려면 Laravel Cloud 에 메일 제공자를 설정해야 합니다.
-설정하기 전까지 발송 버튼은 <b>보낸 척하지 않고</b> 메일앱을 여는 `mailto:` 로 대체됩니다.
+> **이 회사는 Microsoft 365 를 씁니다.** Gmail 이 아닙니다.
+> 2026-08-30 DNS 조회로 확인:
+> `MX → nahshonmep-com.mail.protection.outlook.com`,
+> `SPF → v=spf1 include:spf.protection.outlook.com -all`,
+> DKIM `selector1/2` 설정됨(GoDaddy 판매 M365 테넌트), DMARC 없음.
 
-> **주의 — 라라벨의 기본 메일러는 `log` 입니다.**
-> 설정이 없어도 발송은 예외 없이 "성공" 하고, 메일은 로그 파일에만 쌓입니다.
-> 그래서 화면에는 "발송했습니다" 가 뜨는데 받는 사람은 영원히 못 받습니다.
-> 설정한 뒤에는 반드시 아래 **확인** 절차를 거치세요.
+## 왜 SMTP 비밀번호 방식을 쓰지 않는가
 
-## Gmail (앱 비밀번호)
+마이크로소프트가 SMTP 클라이언트 제출의 **기본 인증(아이디·비밀번호)을 폐지하는 중**입니다.
 
-```env
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=your-account@gmail.com
-MAIL_PASSWORD=your-16-char-app-password
-MAIL_FROM_ADDRESS=your-account@gmail.com
-MAIL_FROM_NAME="NAHSHON ERP"
+| 시점 | 일어나는 일 |
+|---|---|
+| 2026-04-30 | 모든 테넌트에서 **일부 발송을 거절하기 시작** |
+| 2026-12 말 | 기존 테넌트에서 **기본값 비활성화**(관리자가 다시 켤 수는 있음) |
+| 2027 이후 | 완전 제거 예정 |
+
+지금(2026-08) 아이디·비밀번호로 붙이면 **간헐적으로 실패하고 연말에 멈춥니다.**
+원청에 매일 나가야 하는 보고서를 그런 토대에 올릴 수 없습니다.
+
+또 하나 — **회사 SPF 가 `-all` 하드 페일**입니다. Gmail SMTP 나 Resend 로 보내면서
+발신 주소를 `@nahshonmep.com` 으로 두면 받는 쪽이 **거절하거나 스팸으로 버립니다.**
+ERP 는 "발송했습니다" 라고 하고 원청은 영원히 못 받는 상태가 됩니다.
+
+## 그래서 Graph API 로 보냅니다
+
+- **OAuth** 라 만료되는 비밀번호가 없습니다.
+- **고정 IP 가 필요 없습니다** — Laravel Cloud 는 서버리스라 IP 가 매번 바뀌어서
+  SMTP 릴레이 커넥터 방식을 쓸 수 없습니다.
+- 마이크로소프트가 보내므로 **SPF·DKIM 이 그대로 통과**합니다.
+- **DNS 를 하나도 안 건드립니다.** 회사 메일은 아무 영향이 없습니다.
+- 보낸 메일이 그 사서함의 **«보낸 편지함»에도 남습니다** — 아웃룩에서도 확인됩니다.
+
+---
+
+## 설정 절차 (관리자)
+
+> 클라이언트 비밀값·비밀번호를 **채팅이나 문서에 붙여넣지 마세요.** 대화·스크린샷에 남으면 유출입니다.
+> Laravel Cloud 환경변수 화면에 직접 입력하세요.
+
+### 1. 발신용 사서함 준비
+
+Microsoft 365 관리 센터에서 **Exchange Online 라이선스가 붙은 사서함**을 하나 정합니다.
+새로 만들어도 되고 기존 것을 써도 됩니다. 예: `erp@nahshonmep.com`
+
+이 주소가 원청 화면에 **보내는 사람**으로 뜹니다. 공유 사서함(Shared Mailbox)도 됩니다.
+
+### 2. 앱 등록 (Entra ID)
+
+`entra.microsoft.com` → **애플리케이션 › 앱 등록 › 새 등록**
+
+1. 이름: `NAHSHON ERP Mail` (아무거나)
+2. 지원되는 계정 유형: **이 조직 디렉터리의 계정만**
+3. 리디렉션 URI: **비워 둠** (앱이 사람 로그인 없이 도는 방식이라 필요 없습니다)
+4. 등록 후 **개요** 화면에서 두 값을 복사합니다:
+   - **애플리케이션(클라이언트) ID**
+   - **디렉터리(테넌트) ID**
+
+### 3. 권한 주기
+
+같은 앱에서 **API 권한 › 권한 추가 › Microsoft Graph › 애플리케이션 권한**
+
+- `Mail.Send` 를 선택하고 추가
+- 그다음 **«〈조직〉에 대한 관리자 동의 허용»** 을 반드시 누릅니다.
+  이걸 안 누르면 상태가 «부여되지 않음» 으로 남고 발송이 403 으로 실패합니다.
+
+> **위험 — 반드시 읽으세요.**
+> `Mail.Send` 응용 프로그램 권한은 기본적으로 **테넌트의 모든 사서함으로 보낼 수 있습니다.**
+> 아래 4번으로 한 사서함에만 묶으세요.
+
+### 4. 한 사서함으로 묶기 (권장)
+
+Exchange Online PowerShell 에서:
+
+```powershell
+New-ApplicationAccessPolicy -AppId <클라이언트ID> -PolicyScopeGroupId erp@nahshonmep.com -AccessRight RestrictAccess -Description "NAHSHON ERP mail only"
 ```
 
-### 반드시 지킬 것
+이걸 하면 앱이 **그 사서함으로만** 보낼 수 있습니다. 하지 않으면 열쇠 하나가 새는 순간
+회사 누구 이름으로든 메일이 나갈 수 있습니다.
 
-- **`MAIL_SCHEME` 은 넣지 마세요.** 비워 두면 587 포트에서 STARTTLS 가 자동으로 걸립니다.
-  값을 넣어야 한다면 허용되는 것은 `smtp` 와 `smtps` **둘뿐**입니다.
-  `MAIL_SCHEME=tls` 는 흔한 오해인데, 넣는 순간 발송이 통째로 죽습니다:
-  `The "tls" scheme is not supported; supported schemes for mailer "smtp" are: "smtp", "smtps".`
-  더 나쁜 것은 <b>설정 점검이 초록불로 보인다</b>는 점입니다 — 값이 다 채워져 있으니까요.
-  (465 포트를 쓴다면 `MAIL_SCHEME=smtps`.)
-- **`MAIL_ENCRYPTION` 은 효과가 없습니다.** `config/mail.php` 에 그 키가 없습니다. 넣어도 무시됩니다.
-- **`MAIL_FROM_ADDRESS` 를 `MAIL_USERNAME` 과 같은 주소로 맞추세요.** Gmail 은 인증한 계정과
-  다른 주소로 보내는 것을 거절합니다.
-- **`MAIL_PASSWORD` 는 Gmail 로그인 비밀번호가 아니라 앱 비밀번호(16자)** 입니다.
-  구글 계정 → 보안 → 2단계 인증 → 앱 비밀번호에서 만듭니다. 표시될 때 들어가는 공백은 빼고 붙여넣으세요.
+### 5. 클라이언트 비밀값 만들기
 
-## Resend (도메인 발송 — 운영 권장)
+앱의 **인증서 및 암호 › 새 클라이언트 암호**
 
-Gmail SMTP 는 하루 발송 한도가 있고, 받는 쪽에서 스팸으로 분류될 확률이 높습니다.
-일일 보고를 원청에 매일 보낼 것이라면 도메인 발송이 맞습니다.
+- 만료: 조직 정책에 맞게(최대 24개월). **만료일을 달력에 적어 두세요** — 만료되면 조용히 멈춥니다.
+- 만든 직후에만 값이 보입니다. 그 자리에서 Laravel Cloud 에 붙여넣으세요.
+
+### 6. Laravel Cloud 환경변수
 
 ```env
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.resend.com
-MAIL_PORT=587
-MAIL_USERNAME=resend
-MAIL_PASSWORD=re_xxxxxxxxxxxx
-MAIL_FROM_ADDRESS=ops@your-domain.com
+MAIL_MAILER=graph
+MAIL_FROM_ADDRESS=erp@nahshonmep.com
 MAIL_FROM_NAME="NAHSHON ERP"
+
+GRAPH_MAIL_TENANT_ID=<디렉터리(테넌트) ID>
+GRAPH_MAIL_CLIENT_ID=<애플리케이션(클라이언트) ID>
+GRAPH_MAIL_CLIENT_SECRET=<클라이언트 암호 값>
+GRAPH_MAIL_SENDER=erp@nahshonmep.com
 ```
 
-- `MAIL_FROM_ADDRESS` 의 도메인은 Resend 에서 **인증(SPF/DKIM)** 을 마친 도메인이어야 합니다.
-  인증 전에는 발송이 거절되거나 전부 스팸으로 갑니다.
-- `MAIL_MAILER=resend` 로 두는 방법도 있지만 그러면 `resend/resend-laravel` 패키지가
-  설치돼 있어야 합니다. 위처럼 **SMTP 로 쓰면 패키지 없이 됩니다.**
+- `MAIL_SCHEME`·`MAIL_HOST`·`MAIL_PORT`·`MAIL_USERNAME`·`MAIL_PASSWORD` 는 **넣지 마세요.** Graph 는 안 씁니다.
+- 넣은 뒤 **반드시 재배포**합니다. 배포 스크립트가 설정을 캐시하므로 저장만 하면 반영되지 않습니다.
+- 운영과 스테이징은 **별개 앱**이라 환경변수가 공유되지 않습니다.
 
-## Laravel Cloud 절차
-
-1. Laravel Cloud 프로젝트를 엽니다.
-2. Environment(또는 Variables)로 갑니다.
-3. 위 값을 넣습니다.
-4. **반드시 재배포합니다.** 배포 스크립트가 설정을 캐시하므로, 값만 저장하고 재배포하지 않으면
-   서버는 계속 옛 설정으로 돕니다.
-5. 운영과 스테이징은 **별개 앱**이라 환경변수가 공유되지 않습니다. 둘 다 쓸 것이면 양쪽에 넣으세요.
+---
 
 ## 확인 — 두 단계로
 
@@ -73,34 +116,60 @@ MAIL_FROM_NAME="NAHSHON ERP"
 https://<우리 주소>/build-version
 ```
 
-`mail` 블록의 `message` 한 줄이 결론입니다. `scheme_ok` 가 `false` 면 `MAIL_SCHEME` 값이
-잘못된 것이고, 그 상태로는 발송이 100% 실패합니다(다른 칸이 다 초록이어도).
+`mail` 블록의 `message` 한 줄이 결론입니다.
 
 ### 2단계 · 진짜로 나가는가
 
-값이 채워진 것과 실제로 나가는 것은 다릅니다 — 비밀번호가 틀렸는지, 포트가 막혔는지,
-도메인 인증이 끝났는지는 한 통 보내 봐야 압니다.
-
 **[조직 설정] → [메일 진단] → [나에게 테스트 메일 보내기]**
 
-로그인한 본인 주소로 한 통이 갑니다. 실패하면 서버가 받은 오류 메시지를 그대로 보여 줍니다.
+값이 채워진 것과 실제로 나가는 것은 다릅니다. 토큰이 발급되는지, 권한 동의가 됐는지,
+사서함이 실재하는지는 **한 통 보내 봐야** 압니다. 실패하면 원인을 한국어로 짚어 줍니다.
 
-### 흔한 오류와 원인
+### 흔한 오류
 
-| 오류 메시지에 보이는 것 | 실제 원인 |
+| 화면에 보이는 것 | 원인 |
 |---|---|
-| `"tls" scheme is not supported` | `MAIL_SCHEME=tls` — 지우세요 |
-| `Failed to authenticate ... 535` | 비밀번호가 틀렸거나 앱 비밀번호가 아님 |
-| `Connection could not be established` | 포트가 막혔거나 호스트 오타 |
-| `550 ... not verified` / 전부 스팸함 | 발신 도메인 SPF/DKIM 미인증 |
-| `Class "Resend" not found` | `MAIL_MAILER=resend` 인데 패키지 없음 → SMTP 방식으로 바꾸세요 |
-| 오류는 없는데 안 옴 | `MAIL_MAILER=log` 이거나 `failover` 가 log 로 떨어짐 |
+| `403` / `ErrorAccessDenied` | `Mail.Send` 관리자 동의를 안 눌렀습니다 (3번) |
+| `401` | 클라이언트 비밀값이 틀렸거나 만료됐습니다 |
+| 사서함을 찾을 수 없음 | `GRAPH_MAIL_SENDER` 가 실제 사서함이 아니거나 라이선스가 없습니다 |
+| 설정이 덜 됐다는 안내 | 네 값 중 하나가 비었습니다. 화면이 어느 것인지 알려 줍니다 |
+| 메일이 너무 크다 | Graph 는 큰 첨부를 못 싣습니다. 사진을 줄이거나 문서함 링크로 보내세요 |
+
+---
+
+## 첨부 크기 — 알고 계셔야 할 제약
+
+Graph 로는 **약 3MB** 까지만 실을 수 있습니다. 일일 마감보고서에 사진을 12장 붙이면
+넘을 수 있습니다. 넘으면 **조용히 실패하지 않고** 무엇을 해야 하는지 화면에 말해 줍니다.
+
+사진을 많이 보내야 하면 방법은 둘입니다 — 첨부 대신 문서함 링크를 본문에 넣거나,
+사진 전용으로 외부 발송 제공자를 서브도메인(`erp.nahshonmep.com`)에 따로 붙이는 것입니다.
+후자는 회사 SPF 를 건드리지 않으므로 안전하지만 DNS 작업이 필요합니다.
+
+---
+
+## 절대 건드리지 말 것
+
+회사 메일이 멈춥니다.
+
+- 루트 도메인의 **MX 레코드** (`nahshonmep-com.mail.protection.outlook.com`)
+- 루트 도메인의 **SPF TXT** (`v=spf1 include:spf.protection.outlook.com -all`)
+- `selector1/2._domainkey` **DKIM CNAME**
+- `autodiscover` CNAME
+
+Graph 방식은 이 중 **아무것도 필요로 하지 않습니다.**
+
+## 나중에 (2단계 · 회신 받기)
+
+원청이 [답장]을 눌렀을 때 ERP 로 들어오게 하려면 **서브도메인**에 별도 MX 가 필요합니다.
+`erp.nahshonmep.com` 과 `mail.nahshonmep.com` 은 현재 비어 있어 그대로 쓸 수 있고,
+서브도메인 MX 는 루트 MX 와 완전히 독립이라 **회사 메일에 영향이 없습니다.**
 
 ## 설정 전 동작 (폴백)
 
 메일 설정이 없으면 발송 버튼은 실패하지 않고 `mailto:` 링크를 돌려줍니다.
-사장님 메일앱이 열리고 수신자·제목·본문이 채워지며, [보내기]만 누르면 됩니다.
-이력에는 `channel=mailto` 로 남아 <b>보낸 척하지 않습니다.</b>
+메일앱이 열리고 수신자·제목·본문이 채워지며, [보내기]만 누르면 됩니다.
+서신 원장에는 `channel=mailto` 로 남아 **보낸 척하지 않습니다.**
 
-다만 **정해진 시각 자동 발송(일일 계획서 08:30 / 마감 18:30)은 아무것도 하지 않습니다** —
+다만 **정해진 시각 자동 발송(계획서 08:30 / 마감 18:30)은 아무것도 하지 않습니다** —
 그 자리에는 메일앱을 열어 줄 사람이 없기 때문입니다.

@@ -37,6 +37,27 @@ return [
 
     'mailers' => [
 
+        /*
+         * Microsoft 365 — SMTP 가 아니라 Graph API 로 보낸다.
+         *
+         * 마이크로소프트가 SMTP 클라이언트 제출의 기본 인증을 폐지하는 중이라(2026-04-30 부터
+         * 일부 거절, 2026년 12월 말 기본 비활성화) 아이디·비밀번호 방식은 토대가 못 된다.
+         * Graph 는 OAuth 라 만료되는 비밀번호가 없고, 고정 IP 도 필요 없다.
+         *
+         * 회사 도메인의 SPF 가 `-all` 하드 페일이라 마이크로소프트 외의 경로로 보내면
+         * 받는 쪽이 거절한다 — 이 방식은 마이크로소프트가 보내는 것이므로 SPF·DKIM 이
+         * 그대로 통과하고, <b>DNS 를 하나도 안 건드린다.</b>
+         */
+        'graph' => [
+            'transport' => 'graph',
+            'tenant_id' => env('GRAPH_MAIL_TENANT_ID'),
+            'client_id' => env('GRAPH_MAIL_CLIENT_ID'),
+            'client_secret' => env('GRAPH_MAIL_CLIENT_SECRET'),
+            // 이 사서함의 이름으로 나가고, 이 사서함의 «보낸 편지함» 에도 남는다.
+            'sender' => env('GRAPH_MAIL_SENDER', env('MAIL_FROM_ADDRESS')),
+            'save_to_sent_items' => (bool) env('GRAPH_MAIL_SAVE_SENT', true),
+        ],
+
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),

@@ -49,6 +49,21 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Microsoft 365 발송기 등록 — MAIL_MAILER=graph 로 쓴다.
+        //
+        // 라라벨에 없는 발송기라 여기서 붙인다. 설정이 비어 있어도 등록 자체는 해 둔다 —
+        // 그래야 진단 화면이 "값이 비었다" 고 말할 수 있다. 등록을 조건부로 하면
+        // 사용자에게는 그냥 "알 수 없는 메일러" 라는 라라벨 오류만 뜬다.
+        \Illuminate\Support\Facades\Mail::extend('graph', function (array $config) {
+            return new \App\Mail\Transport\GraphTransport(
+                (string) ($config['tenant_id'] ?? ''),
+                (string) ($config['client_id'] ?? ''),
+                (string) ($config['client_secret'] ?? ''),
+                (string) ($config['sender'] ?? ''),
+                (bool) ($config['save_to_sent_items'] ?? true),
+            );
+        });
+
         // Provision a payroll wage profile whenever a new employee is created.
         Employee::observe(EmployeePayrollProfileObserver::class);
 
