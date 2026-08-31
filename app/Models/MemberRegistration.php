@@ -682,9 +682,16 @@ class MemberRegistration extends Model
     }
 
     /** 이 등록이 로그인 없이 열리는 공개 QR 폼에서 왔는가. */
+    /**
+     * 벽에 붙은 QR 로 누구나 열 수 있는 공개 폼에서 들어왔는가.
+     *
+     * 출처를 낱개 문자열로 비교하면, 새 QR 문(관리자용 등)이 생길 때마다 이 방어를
+     * 조용히 빠져나간다 — 실제로 관리자 등록을 붙이면서 그 일이 날 뻔했다. 그래서
+     * 접미사로 본다: '-quick-qr' 로 끝나는 출처는 전부 공개 폼이다.
+     */
     private function fromPublicQuickForm(): bool
     {
-        return data_get($this->payload, 'invite.source') === 'worker-quick-qr';
+        return str_ends_with((string) data_get($this->payload, 'invite.source'), '-quick-qr');
     }
 
     private function syncAccessUser(Employee $employee): ?User

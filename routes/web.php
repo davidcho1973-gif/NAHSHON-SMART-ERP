@@ -337,6 +337,16 @@ Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form']
 Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])
     ->middleware('throttle:20,1')->name('worker-join.store');
 
+// 관리자 등록 — 현장소장·공정별 팀장·기사·안전관리자. 작업자와 문을 나눈다:
+// 이메일과 직책이 필수이고(로그인과 결재선이 거기서 나온다), 공종은 관리자에게도 있다.
+// 이 문으로 들어와도 ERP 권한은 생기지 않는다 — QR 은 복사·촬영되므로 계정은 승인 뒤에.
+Route::get('/join/m/{site}/qr', [SimpleWorkerRegistrationController::class, 'managerQr'])
+    ->middleware('throttle:60,1')->name('manager-join.qr');
+Route::get('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerForm'])
+    ->middleware('throttle:60,1')->name('manager-join.form');
+Route::post('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerStore'])
+    ->middleware('throttle:20,1')->name('manager-join.store');
+
 // W-9 작성 — 간편 등록 완료 화면에서 서명된 링크로 진입(공개, 서명 URL 이 본인 확인을 대신).
 // 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
 Route::get('/w9/{employee}', [W9FormController::class, 'show'])->middleware('signed')->name('w9.show');

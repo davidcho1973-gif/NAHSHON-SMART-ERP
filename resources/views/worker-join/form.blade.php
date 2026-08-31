@@ -89,8 +89,11 @@
                 <div class="shared" id="t-shared" style="display:none">
                     <b id="t-sharedTitle"></b><br><span id="t-sharedBody"></span>
                 </div>
-                {{-- 반장이 팀원을 연달아 등록하는 흐름 — 회사·공정은 다음 사람에게 그대로 이어진다. --}}
-                <a class="next" id="t-next" href="{{ route('worker-join.form', ['site' => $site]) }}"></a>
+                {{-- 반장이 팀원을 연달아 등록하는 흐름 — 회사·공정은 다음 사람에게 그대로 이어진다.
+                     들어온 문(작업자/관리자)으로 돌아간다. 안 그러면 관리자 등록을 마친 사람이
+                     다음 사람을 작업자로 넣는다. --}}
+                @php($doneKind = ($kind ?? 'worker') === 'manager')
+                <a class="next" id="t-next" href="{{ $doneKind ? route('manager-join.form', ['site' => $site]) : route('worker-join.form', ['site' => $site]) }}"></a>
 
                 @if (!empty($w9Url))
                     {{-- 1099 지급 전제조건 — 등록에 이어 바로 작성하게 해 종이 수거 행정을 없앤다. --}}
@@ -165,7 +168,9 @@
                 <div class="err"><span id="t-errors"></span><ul>@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
             @endif
 
-            <form method="POST" action="{{ route('worker-join.store', ['site' => $site]) }}">
+            {{-- 두 문(작업자·관리자)이 같은 화면을 쓰되 보내는 곳과 필수 칸이 갈린다. --}}
+            @php($isManager = ($kind ?? 'worker') === 'manager')
+            <form method="POST" action="{{ $isManager ? route('manager-join.store', ['site' => $site]) : route('worker-join.store', ['site' => $site]) }}">
                 @csrf
                 @if ($lockedType)
                     {{-- 예전에 인쇄해 붙여 둔 고용 형태별 QR 로 들어온 경우 — 그 값을 그대로 지킨다. --}}
@@ -212,7 +217,8 @@
                 {{-- 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가).
                      자사 직영은 이 값이 급여의 관리자 구분을 정하므로 반드시 받는다. --}}
                 <label id="t-position"></label>
-                <select name="position" id="f-position">
+                {{-- 관리자는 자리가 반드시 정해져야 한다 — 결재선과 급여 구분이 여기서 갈린다. --}}
+                <select name="position" id="f-position" @if($isManager) required @endif>
                     <option value="" id="opt-position-blank"></option>
                     @foreach ($positions as $code => $label)
                         <option value="{{ $code }}" @selected(old('position') === $code)>{{ $label }}</option>
@@ -232,11 +238,22 @@
                 <input type="tel" name="phone" id="f-phone" value="{{ old('phone') }}" placeholder="480-555-0100" required>
                 <div class="note" id="t-phoneHint"></div>
 
-                {{-- 이메일은 선택. 현장에서 이메일이 없거나 기억나지 않는 사람이 여기서 막히면
-                     그날 그 사람은 명단에 없는 채로 일하게 된다. --}}
+                {{-- 작업자에게 이메일은 선택. 현장에서 이메일이 없거나 기억나지 않는 사람이
+                     여기서 막히면 그날 그 사람은 명단에 없는 채로 일하게 된다.
+                     관리자에게는 필수다 — 로그인 계정과 업무 서신이 그 주소로 간다. --}}
                 <label id="t-email"></label>
-                <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com">
+                <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com"
+                       @if($isManager) required @endif>
                 <div class="note" id="t-emailHint"></div>
+
+                @if($isManager)
+                    {{-- 등록과 권한은 다른 일이다. 벽에 붙은 QR 은 촬영·복사되므로,
+                         스캔했다는 사실만으로 ERP 권한을 주면 그 사진이 곧 열쇠가 된다. --}}
+                    <div class="payroll" style="display:block">
+                        <b>등록하면 바로 출퇴근할 수 있습니다.</b><br>
+                        ERP 로그인 권한은 관리자가 본인 확인 후 열어 드립니다.
+                    </div>
+                @endif
 
                 <button type="submit" id="t-submit"></button>
             </form>
@@ -246,7 +263,31 @@
                     var DICT = @json($dict, JSON_UNESCAPED_UNICODE);
                     var lang = @json($lang);
                     var locked = @json($lockedType);
-                    var T = DICT[lang] || DICT.ko;
+                    var isManager = @json($isManager);
+                    // 관리자 문은 제목과 안내만 갈린다 — 나머지 문구(이름·회사·공정)는 그대로다.
+                    // 공종을 묻는 것도 같다: 공정별 팀장이 곧 관리자다.
+                    var MGR = {
+                        ko: { eyebrow: '관리자 등록', title: '관리자 등록',
+                              email: '이메일', submit: '관리자로 등록하기',
+                              positionHint: '맡으신 자리를 골라 주세요. (필수)',
+                              emailHint: '로그인과 업무 연락이 이 주소로 갑니다. (필수)',
+                              tradeHint: '담당하시는 공정을 적어 주세요 — 공정별 팀장도 이 칸을 채웁니다.' },
+                        en: { eyebrow: 'Manager Sign-Up', title: 'Manager Registration',
+                              email: 'Email', submit: 'Register as manager',
+                              positionHint: 'Choose your position. (required)',
+                              emailHint: 'Login and work correspondence go to this address. (required)',
+                              tradeHint: 'Enter the trade you are responsible for — trade foremen fill this too.' },
+                        es: { eyebrow: 'Registro de supervisor', title: 'Registro de supervisor',
+                              email: 'Correo electrónico', submit: 'Registrarme como supervisor',
+                              positionHint: 'Elija su cargo. (obligatorio)',
+                              emailHint: 'El acceso y la correspondencia van a esta dirección. (obligatorio)',
+                              tradeHint: 'Indique el oficio que supervisa — los capataces también llenan esto.' },
+                    };
+                    function dict(code) {
+                        var base = DICT[code] || DICT.ko;
+                        return isManager ? Object.assign({}, base, MGR[code] || MGR.ko) : base;
+                    }
+                    var T = dict(lang);
 
                     var sel = document.getElementById('company');
                     var posSel = document.getElementById('f-position');
@@ -345,7 +386,7 @@
                         b.addEventListener('click', function () {
                             var code = b.getAttribute('data-lang');
                             if (!DICT[code]) return;
-                            lang = code; T = DICT[code];
+                            lang = code; T = dict(code);
                             try { localStorage.setItem('dasolWorkerLang', code); } catch (e) {}
                             paint();
                         });
@@ -368,7 +409,7 @@
                         if (savedCompany && !sel.value) { sel.value = savedCompany; }
                         var browser = (navigator.language || '').slice(0, 2);
                         var pick = (saved && DICT[saved]) ? saved : (DICT[browser] ? browser : lang);
-                        lang = pick; T = DICT[pick];
+                        lang = pick; T = dict(pick);
                         paint();
                     })();
                 })();

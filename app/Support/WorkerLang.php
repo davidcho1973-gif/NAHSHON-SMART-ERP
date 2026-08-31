@@ -257,6 +257,37 @@ final class WorkerLang
                     ],
                 ],
             ],
+            // 관리자용 — 현장소장·공정별 팀장·기사·안전관리자. 작업자 QR 과 나누는 이유는
+            // 필요한 것이 다르기 때문이다(이메일·직책은 필수, 공종은 관리자에게도 있다).
+            'join-manager' => [
+                'ko' => [
+                    'title' => '관리자 등록',
+                    'hint' => '현장소장 · 공정별 팀장 · 기사 · 안전관리자용입니다. 작업자는 옆의 작업자 QR 을 쓰세요.',
+                    'steps' => [
+                        '휴대폰 카메라로 QR 코드를 스캔합니다.',
+                        '이름·회사·담당 공정·직책·이메일·전화번호를 입력합니다.',
+                        '등록 완료 — 출퇴근은 바로 되고, ERP 로그인 권한은 관리자 승인 후 열립니다.',
+                    ],
+                ],
+                'en' => [
+                    'title' => 'Manager Sign-Up',
+                    'hint' => 'For superintendents, trade foremen, engineers and safety managers. Workers: use the worker QR.',
+                    'steps' => [
+                        'Scan the QR code with your phone camera.',
+                        'Enter your name, company, trade, position, email and phone.',
+                        'Done — you can clock in right away. ERP login access opens after an admin approves.',
+                    ],
+                ],
+                'es' => [
+                    'title' => 'Registro de supervisor',
+                    'hint' => 'Para superintendentes, capataces de oficio, ingenieros y encargados de seguridad. Trabajadores: usen el QR de trabajador.',
+                    'steps' => [
+                        'Escanee el código QR con la cámara.',
+                        'Ingrese nombre, empresa, oficio, cargo, correo y teléfono.',
+                        'Listo — puede registrar entrada de inmediato. El acceso al ERP se abre tras la aprobación del administrador.',
+                    ],
+                ],
+            ],
             'apply' => [
                 'ko' => [
                     'title' => '입사 지원서',

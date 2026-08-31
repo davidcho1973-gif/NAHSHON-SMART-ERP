@@ -17,14 +17,24 @@ final class QrPosters
     /** 출입구 출퇴근 QR. */
     public const GATE = 'gate';
 
+    /**
+     * 관리자 간편 등록 QR — 현장소장·공정별 팀장·기사·안전관리자.
+     *
+     * 작업자 QR 과 나누는 이유: 필요한 것이 다르다. 관리자는 이메일이 있어야 하고
+     * (로그인·서신이 그리로 간다) 어떤 자리인지가 반드시 정해져야 한다. 반대로 관리자
+     * 에게도 <b>공종은 있다</b> — 공정별 팀장이 곧 관리자다. 그래서 공종은 그대로 묻는다.
+     */
+    public const MANAGER = 'join-manager';
+
     /** 정식 입사지원서 QR. */
     public const APPLY = 'apply';
 
-    public const ORDER = [self::GATE, self::JOIN, self::APPLY];
+    public const ORDER = [self::GATE, self::JOIN, self::MANAGER, self::APPLY];
 
     public const LABELS = [
         self::GATE => '게이트 출퇴근 QR',
         self::JOIN => '작업자 간편 등록 QR',
+        self::MANAGER => '관리자 간편 등록 QR',
         self::APPLY => '정식 입사지원서 QR',
     ];
 
@@ -46,6 +56,7 @@ final class QrPosters
         $url = match ($key) {
             self::GATE => route('gate.show', ['site' => $site]),
             self::JOIN => route('worker-join.form', ['site' => $site]),
+            self::MANAGER => route('manager-join.form', ['site' => $site]),
             self::APPLY => route('member-registration.site.show', ['site' => $site]),
             default => throw new \InvalidArgumentException("Unknown QR poster [{$key}]."),
         };

@@ -31,6 +31,17 @@ class SimpleWorkerRegistrationController extends Controller
     /** 작업자가 답할 수 있는 고용 형태(미분류 회사일 때만 노출). */
     private const ASKABLE_TYPES = [Employee::TYPE_DIRECT, Employee::TYPE_INDIRECT];
 
+    /**
+     * 등록의 두 갈래 — 작업자와 관리자.
+     *
+     * 문을 나누는 이유는 <b>필요한 것이 다르기</b> 때문이다. 관리자는 이메일이 있어야
+     * 하고(로그인과 서신이 그리로 간다) 어떤 자리인지가 반드시 정해져야 한다. 반면
+     * 관리자에게도 공종은 있다 — 공정별 팀장이 곧 관리자다. 그래서 공종은 양쪽 모두 묻는다.
+     */
+    private const KIND_WORKER = 'worker';
+
+    private const KIND_MANAGER = 'manager';
+
     /** 인쇄용 QR 포스터 — 스캔하면 간편 등록 폼이 열린다. (현장당 한 장) */
     public function qr(Site $site): View
     {
@@ -40,23 +51,57 @@ class SimpleWorkerRegistrationController extends Controller
         ]);
     }
 
+    /** 관리자용 인쇄 포스터 — 작업자 QR 과 다른 종이다(현장 사무실에 붙인다). */
+    public function managerQr(Site $site): View
+    {
+        return view('worker-join.qr', [
+            'site' => $site,
+            'poster' => QrPosters::make($site, QrPosters::MANAGER),
+        ]);
+    }
+
     /** 간편 등록 폼(모바일). */
     public function form(Request $request, Site $site): View
     {
+        return $this->formView($request, $site, self::KIND_WORKER);
+    }
+
+    /** 관리자 등록 폼 — 같은 화면이 이메일·직책을 필수로 바꾼다. */
+    public function managerForm(Request $request, Site $site): View
+    {
+        return $this->formView($request, $site, self::KIND_MANAGER);
+    }
+
+    private function formView(Request $request, Site $site, string $kind): View
+    {
+        $manager = $kind === self::KIND_MANAGER;
+
         return view('worker-join.form', [
             'site' => $site,
+            'kind' => $kind,
             'companies' => $this->companyOptions(),
             'roles' => $this->tradeOptions($site),
-            'positions' => Employee::POSITIONS,
+            // 관리자는 감독하는 자리만 고른다 — 관리자 문으로 들어와 '작업자' 를 고르면
+            // 어느 쪽도 아닌 기록이 남는다.
+            'positions' => $manager ? $this->supervisoryPositions() : Employee::POSITIONS,
             'done' => false,
             'returning' => false,
             // 이미 붙어 있는 예전 QR(?type=direct|indirect) — 회사가 미분류일 때만 쓰이는 보조 값.
-            'lockedType' => QrPosters::legacyEmploymentType($request->query('type')),
+            'lockedType' => $manager ? null : QrPosters::legacyEmploymentType($request->query('type')),
             'lang' => WorkerLang::resolve($request->query('lang')),
             'langOptions' => WorkerLang::OPTIONS,
             'dict' => WorkerLang::join(),
             'deviceToken' => null,
         ]);
+    }
+
+    /** @return array<string, string> */
+    private function supervisoryPositions(): array
+    {
+        return array_intersect_key(
+            Employee::POSITIONS,
+            array_flip(Employee::SUPERVISORY_POSITIONS),
+        );
     }
 
     /**
@@ -238,15 +283,31 @@ class SimpleWorkerRegistrationController extends Controller
     /** 즉시 등록 — MemberRegistration 생성 후 곧바로 활성 Employee 로 동기화. */
     public function store(Request $request, Site $site): View
     {
+        return $this->register($request, $site, self::KIND_WORKER);
+    }
+
+    /** 관리자 등록 — 이메일·직책이 필수이고, 고용 형태는 관리직으로 고정된다. */
+    public function managerStore(Request $request, Site $site): View
+    {
+        return $this->register($request, $site, self::KIND_MANAGER);
+    }
+
+    private function register(Request $request, Site $site, string $kind): View
+    {
+        $manager = $kind === self::KIND_MANAGER;
+
         // 목록에서 고른 회사, 없으면 작업자가 적어 넣은 이름과 같은 회사(있으면).
         // 여기서는 아직 만들지 않는다 — 검증을 통과하지 못한 등록이 회사만 남기면 안 된다.
         $company = $this->matchCompany($request);
-        $locked = QrPosters::legacyEmploymentType($request->query('type', $request->input('qr_type')));
+        $locked = $manager
+            ? null
+            : QrPosters::legacyEmploymentType($request->query('type', $request->input('qr_type')));
 
         // 회사로도 QR 로도 정해지지 않을 때만 작업자의 답을 요구한다.
         // 처음 보는 회사 이름을 적어 넣었으면 당연히 여기에 걸린다 — 그 회사가 자사인지
         // 협력사인지는 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
-        $mustAsk = $company?->employmentType() === null && $locked === null;
+        // 관리자는 묻지 않는다 — 어느 회사 소속이든 관리직이다.
+        $mustAsk = ! $manager && $company?->employmentType() === null && $locked === null;
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:120'],
@@ -258,12 +319,17 @@ class SimpleWorkerRegistrationController extends Controller
             'role' => ['required', 'string', 'max:60'],
             // 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가). 급여의 관리자
             // 구분이 여기서 정해지므로, 자사 직영이면 반드시 받는다.
-            'position' => ['nullable', Rule::in(array_keys(Employee::POSITIONS))],
+            // 관리자는 자리가 반드시 정해져야 한다 — 결재선과 급여 구분이 여기서 갈린다.
+            // 그리고 감독하는 자리만 고를 수 있다(관리자 문으로 들어와 '작업자' 는 없다).
+            'position' => $manager
+                ? ['required', Rule::in(Employee::SUPERVISORY_POSITIONS)]
+                : ['nullable', Rule::in(array_keys(Employee::POSITIONS))],
             // 이메일은 선택이다. 현장에서 이메일을 안 쓰거나 주소가 기억나지 않는 사람이
             // 여기서 막히면 등록 자체를 못 하고, 그러면 그날 그 사람은 명단에 없는 채로
             // 일한다 — 없는 사람은 출퇴근도 안전서명도 남지 않는다. 신원은 전화번호가
             // 맡는다(현장에서 반드시 받아 두는 값이고, 같은 번호면 같은 사람이다).
-            'email' => ['nullable', 'email', 'max:160'],
+            // 관리자에게는 이메일이 필수다 — 로그인 계정과 결재·서신이 그 주소로 간다.
+            'email' => $manager ? ['required', 'email', 'max:160'] : ['nullable', 'email', 'max:160'],
             'phone' => ['required', 'string', 'max:40'],
             'employment_type' => [$mustAsk ? 'required' : 'nullable', Rule::in(self::ASKABLE_TYPES)],
             'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
@@ -271,6 +337,9 @@ class SimpleWorkerRegistrationController extends Controller
             'employment_type.required' => '소속 구분을 선택해 주세요. / Please choose who pays your wages.',
             'company_id.required_without' => '회사를 선택하거나 직접 입력해 주세요. / Pick your company or type it in.',
             'company_name.required_without' => '회사를 선택하거나 직접 입력해 주세요. / Pick your company or type it in.',
+            'email.required' => '관리자는 이메일이 필요합니다 — 로그인과 업무 연락이 이 주소로 갑니다.'
+                .' / Managers need an email — login and correspondence go there.',
+            'position.required' => '직책을 선택해 주세요. / Please choose your position.',
         ]);
 
         // 검증을 통과했으니 이제 만들어도 된다.
@@ -278,10 +347,12 @@ class SimpleWorkerRegistrationController extends Controller
         $data['company_id'] = $company->getKey();
         $data['role'] = $this->normalizeTrade($site, (string) $data['role']);
 
-        // 회사 분류가 최우선이다 — 관리자가 유지하는 데이터라 "어느 종이를 스캔했나" 보다 믿을 만하다.
-        $type = $company?->employmentType()
-            ?? $locked
-            ?? $data['employment_type'];
+        // 관리자 문으로 들어오면 관리직이다 — 회사가 자사든 협력사든 하는 일이 관리다.
+        // (출퇴근 정책이 여기서 갈린다: 관리직은 출석 확인, 시급 직영은 정밀 시간관리.)
+        // 작업자는 회사 분류가 최우선 — 관리자가 유지하는 데이터라 "어느 종이를 스캔했나" 보다 믿을 만하다.
+        $type = $manager
+            ? Employee::TYPE_STAFF
+            : ($company?->employmentType() ?? $locked ?? $data['employment_type']);
 
         $lang = WorkerLang::resolve($data['preferred_language'] ?? null);
 
@@ -298,7 +369,7 @@ class SimpleWorkerRegistrationController extends Controller
                 ]);
             }
 
-            return $this->welcomeBack($request, $site, $returning, $data, $type, $lang);
+            return $this->welcomeBack($request, $site, $returning, $data, $type, $lang, $kind);
         }
 
         $parts = preg_split('/\s+/', trim($data['full_name'])) ?: [];
@@ -323,7 +394,11 @@ class SimpleWorkerRegistrationController extends Controller
             'onboarding_status' => 'active',
             'submitted_at' => now(),
             'payload' => [
-                'invite' => ['source' => 'worker-quick-qr', 'site_id' => $site->id, 'site_code' => $site->code],
+                'invite' => [
+                    'source' => $manager ? 'manager-quick-qr' : 'worker-quick-qr',
+                    'site_id' => $site->id,
+                    'site_code' => $site->code,
+                ],
             ],
         ]);
 
@@ -338,11 +413,49 @@ class SimpleWorkerRegistrationController extends Controller
         ])->save();
 
         $this->alertIfPayrollSetupMissing($employee);
+        if ($manager) {
+            $this->alertManagerNeedsAccount($employee, $site);
+        }
 
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
         $deviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
 
-        return $this->doneView($site, $employee, $lang, $deviceToken, (string) $data['full_name'], false);
+        return $this->doneView($site, $employee, $lang, $deviceToken, (string) $data['full_name'], false, $kind);
+    }
+
+    /**
+     * 관리자가 스스로 등록했다 — 계정은 사람이 연다.
+     *
+     * QR 은 벽에 붙는 종이라 촬영·복사된다. 그 종이를 스캔한 것만으로 ERP 권한이
+     * 생기면, 관리자 QR 사진 한 장이 곧 열쇠가 된다. 그래서 등록(명단·출퇴근)까지는
+     * 즉시 되지만 <b>로그인 권한은 승인 뒤</b>다 — 대신 승인해야 할 일이 있다는 것을
+     * 알림으로 올려서, 새로 온 소장이 며칠씩 기다리는 일이 없게 한다.
+     */
+    private function alertManagerNeedsAccount(Employee $employee, Site $site): void
+    {
+        try {
+            app(\App\Services\Alerts\UnifiedAlertService::class)->emit("manager-account-pending:{$employee->id}", [
+                'company_id' => $employee->company_id,
+                'site_id' => $site->id,
+                'employee_id' => $employee->id,
+                'source_module' => 'HR',
+                'source_type' => Employee::class,
+                'source_id' => (string) $employee->id,
+                'event_type' => 'manager_account_pending',
+                'severity' => 'warning',
+                'title' => "관리자 계정 승인 대기: {$employee->name}",
+                'content' => sprintf(
+                    '%s 님이 관리자 QR 로 등록했습니다 (%s · %s%s). 출퇴근은 바로 되지만 ERP 로그인 권한은 아직 없습니다 — 본인이 맞는지 확인한 뒤 직원 목록에서 계정을 만들어 주세요.',
+                    $employee->name,
+                    $site->code,
+                    $employee->positionLabel() ?: '관리직',
+                    $employee->role ? ' · '.$employee->role : '',
+                ),
+                'action_url' => '/?view=employee-admin',
+            ]);
+        } catch (\Throwable $e) {
+            report($e); // 알림 실패가 등록을 막으면 안 된다 — 사람은 이미 현장에 서 있다.
+        }
     }
 
     /**
@@ -351,7 +464,7 @@ class SimpleWorkerRegistrationController extends Controller
      * 이름은 덮지 않는다. 이미 명단에 있는 표기가 정본이고, 다시 적으면서 생긴 표기 차이
      * (띄어쓰기·영문/한글)로 그 사람의 이름이 바뀌면 출퇴근 기록과 서명이 다른 이름으로 갈린다.
      */
-    private function welcomeBack(Request $request, Site $site, Employee $employee, array $data, ?string $type, string $lang): View
+    private function welcomeBack(Request $request, Site $site, Employee $employee, array $data, ?string $type, string $lang, string $kind = self::KIND_WORKER): View
     {
         $email = filled($data['email'] ?? null) ? Str::lower((string) $data['email']) : null;
 
@@ -377,6 +490,7 @@ class SimpleWorkerRegistrationController extends Controller
             WorkerDevice::issueFor($employee, $request->userAgent()),
             (string) $employee->name,
             true,
+            $kind,
         );
     }
 
@@ -425,7 +539,7 @@ class SimpleWorkerRegistrationController extends Controller
     }
 
     /** 등록·재등록 완료 화면. 두 경우가 같은 화면을 쓰되 문구만 갈린다. */
-    private function doneView(Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning): View
+    private function doneView(Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER): View
     {
         return view('worker-join.form', [
             // 등록 직후 이 화면에서만 노출되는 서명 링크 — W-9(1099 지급 전제)를 바로 이어서 작성한다.
@@ -436,6 +550,7 @@ class SimpleWorkerRegistrationController extends Controller
                 ? null
                 : URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
             'site' => $site,
+            'kind' => $kind,
             'companies' => collect(),
             'roles' => [],
             'positions' => Employee::POSITIONS,
