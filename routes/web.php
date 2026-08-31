@@ -544,9 +544,32 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 }
             })();
 
+            // 스킴이 틀리면 <b>다른 칸이 전부 초록이어도 한 통도 안 나간다.</b>
+            // Symfony 가 받는 값은 smtp / smtps 둘뿐인데, MAIL_SCHEME=tls 라고 적는 것이
+            // 흔한 오해다(우리 MAIL_SETUP.md 도 2026-08-30 까지 그렇게 적고 있었다).
+            // 그 상태에서 MailReady 는 true 를 내고 발송 순간에 UnsupportedSchemeException
+            // 으로 죽는다 — 점검이 초록불인데 메일이 안 가는 가장 나쁜 조합이라 따로 본다.
+            $scheme = strtolower(trim((string) config('mail.mailers.smtp.scheme', '')));
+            $schemeOk = $scheme === '' || in_array($scheme, ['smtp', 'smtps'], true);
+
+            // 드라이버 패키지가 실제로 깔려 있는가. mailer 이름만 바꾸고 패키지를 안 넣으면
+            // "Class not found" 로 죽는데, 설정 값만 보면 멀쩡해 보인다.
+            $driverOk = match ($mailer) {
+                'resend' => class_exists(\Resend\Laravel\ResendServiceProvider::class),
+                'postmark' => class_exists(\Symfony\Component\Mailer\Bridge\Postmark\Transport\PostmarkApiTransport::class),
+                'mailgun' => class_exists(\Symfony\Component\Mailer\Bridge\Mailgun\Transport\MailgunApiTransport::class),
+                'ses', 'ses-v2' => class_exists(\Aws\Ses\SesClient::class),
+                default => true,
+            };
+
             return [
-                'ready' => $ready,
+                'ready' => $ready && $schemeOk && $driverOk,
                 'mailer' => $mailer,
+                // 설정을 바꾸고 재배포를 안 하면 서버는 계속 옛 값으로 돈다.
+                'config_cached' => file_exists(base_path('bootstrap/cache/config.php')),
+                'scheme' => $scheme === '' ? '(비어 있음 — 정상)' : $scheme,
+                'scheme_ok' => $schemeOk,
+                'driver_installed' => $driverOk,
                 'host_set' => $host !== '' && ! in_array(strtolower($host), ['127.0.0.1', 'localhost'], true),
                 'port' => (int) config('mail.mailers.smtp.port', 0),
                 'username_set' => trim((string) config('mail.mailers.smtp.username', '')) !== '',
@@ -557,9 +580,12 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                 'from_is_placeholder' => $from === '' || str_ends_with(strtolower($from), '@example.com'),
                 'daily_report_recipients' => $recipients,
                 'message' => match (true) {
-                    $ready && ($recipients ?? 0) > 0 => '메일 발송 준비 완료. 일일 보고가 자동으로 나갑니다.',
-                    $ready && $recipients === 0 => '메일은 나갈 수 있지만 수신처가 0명입니다 — [일일 보고 > 수신처 관리] 에서 받는 사람을 등록하세요.',
-                    $ready => '메일 발송 준비 완료.',
+                    // 스킴 오류를 가장 먼저 짚는다 — 다른 칸이 다 채워져 있어서 사람이 절대 못 찾는다.
+                    ! $schemeOk => "MAIL_SCHEME 값 «{$scheme}» 은 쓸 수 없습니다. 이 상태로는 다른 설정이 다 맞아도 한 통도 못 나갑니다 — 그 값을 지우세요(587 포트면 비워 두는 것이 정답, 465 포트면 smtps).",
+                    ! $driverOk => "메일러 «{$mailer}» 의 드라이버 패키지가 설치돼 있지 않습니다. SMTP 방식으로 바꾸면 패키지 없이 됩니다.",
+                    $ready && ($recipients ?? 0) > 0 => '설정은 정상입니다. 실제로 나가는지는 [조직 설정 > 메일 진단]에서 테스트 발송으로 확인하세요.',
+                    $ready && $recipients === 0 => '메일은 나갈 수 있지만 일일 보고 수신처가 0명입니다 — [일일 보고 > 수신처 관리] 에서 받는 사람을 등록하세요.',
+                    $ready => '설정은 정상입니다. 실제로 나가는지는 [조직 설정 > 메일 진단]에서 확인하세요.',
                     default => '메일이 아직 나가지 않습니다 — '.\App\Support\MailReady::why()
                         .' 지금은 [발송] 이 메일앱을 여는 것으로 대체되고, 정해진 시각 자동 발송은 아무것도 하지 않습니다.',
                 },

@@ -124,6 +124,7 @@ class DailyReportMailer
 
         $sent = 0;
         $failed = [];
+        $firstError = null;
         $ccEmails = $cc->pluck('email')->all();
 
         foreach ($to as $r) {
@@ -138,9 +139,14 @@ class DailyReportMailer
             } catch (\Throwable $e) {
                 report($e);
                 $failed[] = $r->email;
+                $firstError ??= $e->getMessage();
                 $this->log($report, $kind, 'mail', $r, $composed['subject'], $document?->id, $userId, 'failed', $e->getMessage());
             }
         }
+
+        $note = $sent > 0
+            ? sprintf('%d명에게 발송했습니다%s.', $sent, $failed !== [] ? ' ('.count($failed).'명 실패)' : '')
+            : '발송에 실패했습니다: '.implode(', ', $failed);
 
         return [
             'success' => $sent > 0,
@@ -149,9 +155,13 @@ class DailyReportMailer
             'channel' => 'mail',
             'documentId' => $document?->id,
             'photos' => count($files),
-            'message' => $sent > 0
-                ? sprintf('%d명에게 발송했습니다%s.', $sent, $failed !== [] ? ' ('.count($failed).'명 실패)' : '')
-                : '발송에 실패했습니다: '.implode(', ', $failed),
+            'message' => $note,
+            // 실패했을 때 화면은 `error` 만 읽는다. 이게 없으면 사유가 message 에만 남아
+            // 사용자에게는 "요청이 거부되었습니다." 라는 아무 말도 아닌 문구만 뜬다.
+            // 원문에 자격증명이 섞일 수 있어 진단 서비스의 마스킹을 그대로 태운다.
+            'error' => $sent > 0 ? null : trim($note.' — '.\Illuminate\Support\Str::limit(
+                (string) preg_replace('#(\w+://)[^:/@\s]+:[^@\s]+@#', '$1***:***@', (string) $firstError), 300,
+            )),
         ];
     }
 
@@ -377,7 +387,15 @@ class DailyReportMailer
             ->first();
 
         if (! $report) {
-            return ['success' => true, 'rows' => [], 'mailReady' => MailReady::ok()];
+            // mailNote 를 빠뜨리면 그날 보고서 행이 없는 날에는 미설정인데도 화면의
+            // 경고 띠가 안 뜬다 — 화면은 이 값 하나로 띠를 그린다. 아래 정상 경로와
+            // 반드시 같은 모양이어야 한다.
+            return [
+                'success' => true,
+                'rows' => [],
+                'mailReady' => MailReady::ok(),
+                'mailNote' => MailReady::ok() ? null : MailReady::why(),
+            ];
         }
 
         return [

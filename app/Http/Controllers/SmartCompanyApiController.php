@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Admin\EmployeeAdminService;
+use App\Services\Admin\MailDiagnosticsService;
 use App\Support\AccessPolicy;
 use App\Support\SmartCompanyData;
 use Illuminate\Http\JsonResponse;
@@ -42,6 +43,12 @@ class SmartCompanyApiController extends Controller
         'api_getAttendanceDetailed' => EmployeeAdminService::VIEW_ROLES,
         'api_getDailyTeamMatrix' => EmployeeAdminService::VIEW_ROLES,
         'api_getDailyAttendanceDetail' => EmployeeAdminService::VIEW_ROLES,
+
+        // [메일] 설정 상태에는 호스트·발신 주소가 들어간다. 조직 설정과 같은 문을 쓴다.
+        // 테스트 발송은 이름이 api_get* 이 아니라 열람 전용에서 이미 막히지만,
+        // 이름 규칙 하나에만 기대지 않는다 — 밖으로 나가는 동작이라 두 겹으로 잠근다.
+        'api_getMailStatus' => MailDiagnosticsService::MANAGE_ROLES,
+        'api_sendTestMail' => MailDiagnosticsService::MANAGE_ROLES,
     ];
 
     /**

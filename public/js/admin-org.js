@@ -14,7 +14,7 @@
   'use strict';
 
   var A = null;
-  var state = { fields: [], readOnly: [], logo: null, canManage: false, dirty: false, busy: false };
+  var state = { fields: [], readOnly: [], logo: null, canManage: false, dirty: false, busy: false, mail: null };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -172,6 +172,84 @@
       }).join('') + '</div>';
   }
 
+  /**
+   * 메일 진단 — 설정이 채워졌는지와, 진짜로 나가는지는 다른 문제다.
+   *
+   * 라라벨의 기본 메일러가 `log` 라서 설정이 없어도 발송이 예외 없이 "성공" 한다.
+   * 화면에는 «발송했습니다» 가 뜨고 원청은 영원히 못 받는다. 그래서 여기서 한 통을
+   * 진짜로 보내 보고 서버가 뱉은 오류를 그대로 읽는다 — 그것만이 답이 된다.
+   */
+  function mailBlock() {
+    var u = ui();
+    var m = state.mail;
+    if (!m) return '';
+
+    var tone = m.ready ? 'var(--status-success,#16a34a)' : 'var(--status-warning,#f59e0b)';
+
+    var rows = (m.rows || []).map(function (r) {
+      return '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--border-default);' +
+        'font-size:13px;flex-wrap:wrap;align-items:baseline">' +
+        '<div style="min-width:120px;color:var(--text-secondary)">' + u.esc(r.label) + '</div>' +
+        '<div style="font-family:var(--font-mono,monospace);color:' +
+        (r.ok ? 'var(--text-primary)' : 'var(--status-warning,#f59e0b)') + ';word-break:break-all">' +
+        (r.ok ? '' : '⚠ ') + u.esc(r.value || '—') + '</div>' +
+        (r.note ? '<div style="flex:1 1 100%;font-size:11.5px;color:var(--text-tertiary);line-height:1.6">' +
+          u.esc(r.note) + '</div>' : '') +
+        '</div>';
+    }).join('');
+
+    return '<div style="margin-top:28px;padding:16px;border:1px solid var(--border-default);border-radius:12px;' +
+      'background:var(--bg-surface)">' +
+      '<div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:4px">메일 진단</div>' +
+      '<div style="padding:10px 12px;margin:10px 0 4px;border-radius:8px;border-left:3px solid ' + tone + ';' +
+      'background:var(--bg-panel);font-size:12.5px;color:var(--text-primary);line-height:1.6">' +
+      (m.ready ? '✓ ' : '⚠ ') + u.esc(m.message || '') + '</div>' +
+      rows +
+      '<div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+      u.primaryButton('나에게 테스트 메일 보내기', 'window.AdminOrg.sendTestMail()', 'paper-plane-tilt') +
+      '<span style="font-size:11.5px;color:var(--text-tertiary)">' +
+      (m.testTo ? u.esc(m.testTo) + ' 로 한 통 갑니다.' : '내 계정에 이메일 주소가 없습니다.') +
+      ' 주소는 고를 수 없습니다 — 본인에게만 갑니다.</span></div>' +
+      '<div id="org-mail-result"></div>' +
+      '</div>';
+  }
+
+  function sendTestMail() {
+    var u = ui();
+    var box = document.getElementById('org-mail-result');
+    if (box) {
+      box.innerHTML = '<div style="margin-top:12px;font-size:12px;color:var(--text-tertiary)">보내는 중…</div>';
+    }
+
+    global.gsRun('api_sendTestMail', [], null).then(function (res) {
+      res = res || {};
+      if (!box) return;
+
+      if (res.success) {
+        u.toast('테스트 메일을 보냈습니다.', 'success');
+        box.innerHTML = '<div style="margin-top:12px;padding:11px 13px;border-radius:8px;' +
+          'background:var(--bg-panel);border-left:3px solid var(--status-success,#16a34a);' +
+          'font-size:12.5px;color:var(--text-primary);line-height:1.7">✓ ' + u.esc(res.message) +
+          '<br><span style="color:var(--text-tertiary);font-size:11.5px">' +
+          '안 오면 스팸함을 보세요. 스팸으로 갔다면 발신 도메인 인증(SPF/DKIM)이 필요합니다.</span></div>';
+        return;
+      }
+
+      u.toast(res.error || '보내지 못했습니다.', 'error');
+      // 서버가 받은 오류 원문을 자르지 않고 보여준다 — 잘라 내면 원인을 못 짚는다.
+      box.innerHTML = '<div style="margin-top:12px;padding:11px 13px;border-radius:8px;' +
+        'background:var(--bg-panel);border-left:3px solid var(--status-danger,#dc2626);' +
+        'font-size:12.5px;color:var(--text-primary);line-height:1.7">✕ ' + u.esc(res.error || '') +
+        (res.hint ? '<div style="margin-top:7px;color:var(--status-warning,#f59e0b)">→ ' + u.esc(res.hint) + '</div>' : '') +
+        (res.detail ? '<pre style="margin:8px 0 0;padding:9px;background:var(--bg-base);border-radius:6px;' +
+          'font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--text-secondary)">' +
+          u.esc(res.detail) + '</pre>' : '') +
+        '</div>';
+    }).catch(function (e) {
+      u.toast(e.message || '보내지 못했습니다.', 'error');
+    });
+  }
+
   function render() {
     var u = ui();
     if (!state.canManage) {
@@ -189,6 +267,7 @@
       logoBlock() +
       state.fields.map(field).join('') +
       readOnlyBlock() +
+      mailBlock() +
       '</div>';
   }
 
@@ -251,8 +330,13 @@
   }
 
   function reload() {
-    return call('api_getOrgSettings', []).then(function (res) {
-      applyLoad(res);
+    // 메일 상태를 함께 부른다. 실패해도 조직 설정 화면은 떠야 하므로 조용히 넘긴다.
+    return Promise.all([
+      call('api_getOrgSettings', []),
+      global.gsRun('api_getMailStatus', [], null).catch(function () { return null; }),
+    ]).then(function (r) {
+      applyLoad(r[0]);
+      state.mail = (r[1] && r[1].success) ? r[1] : null;
       paint(render());
     });
   }
@@ -272,6 +356,7 @@
     touch: touch,
     syncColor: syncColor,
     uploadLogo: uploadLogo,
+    sendTestMail: sendTestMail,
     removeLogo: removeLogo,
     _state: state,
   };

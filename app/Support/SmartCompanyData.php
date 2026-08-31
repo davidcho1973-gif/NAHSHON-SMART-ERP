@@ -50,6 +50,7 @@ use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Inventory\InventoryService;
+use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\ReportRecipientService;
 use App\Services\Ops\DailyClosingService;
 use App\Services\Ops\DailyPlanService;
@@ -384,6 +385,12 @@ class SmartCompanyData
             ),
             'api_getDailyClosing' => app(DailyClosingService::class)->show((int) ($args[0] ?? 0)),
             'api_getDailyClosings' => app(DailyClosingService::class)->recent(self::resolveSiteId($siteId)),
+
+            // 메일 진단 — "설정했다" 와 "실제로 나간다" 는 다르다. 테스트 발송만이 답한다.
+            // 수신자는 인자로 받지 않는다(서비스가 로그인한 본인 주소로 고정한다) —
+            // 주소를 받는 순간 이 창구가 아무 데나 메일을 쏘는 통로가 된다.
+            'api_getMailStatus' => app(MailDiagnosticsService::class)->status(),
+            'api_sendTestMail' => app(MailDiagnosticsService::class)->sendTest(),
 
             // ── 일일 보고: ERP 안에서 쓰고, 정해진 사람에게 보낸다.
             // 아침 작업계획서 — 열면 이미 절반이 채워져 있다(안전 작업카드·장비·전날 마감).
