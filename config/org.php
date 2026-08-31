@@ -114,6 +114,11 @@ return [
         'docs_expiry_alert_at' => env('ORG_DOCS_ALERT_AT', '07:00'),
         'ops_digest_at' => env('ORG_OPS_DIGEST_AT', '18:00'),
         'rental_accrual_at' => env('ORG_ACCRUAL_AT', '05:30'),
+
+        // 원청 정기 보고. 아침은 TBM 이 끝난 뒤, 저녁은 마감이 끝난 뒤여야 한다 —
+        // 마감(18:00)보다 앞서면 빈 보고서가 나간다.
+        'daily_plan_send_at' => env('ORG_DAILY_PLAN_SEND_AT', '08:30'),
+        'daily_report_send_at' => env('ORG_DAILY_REPORT_SEND_AT', '18:30'),
     ],
 
 ];

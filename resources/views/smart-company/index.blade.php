@@ -31,6 +31,7 @@
     <script src="{{ asset('js/admin-sites.js') }}?v={{ filemtime(public_path('js/admin-sites.js')) }}" defer></script>
     <script src="{{ asset('js/admin-org.js') }}?v={{ filemtime(public_path('js/admin-org.js')) }}" defer></script>
     <script src="{{ asset('js/admin-messenger.js') }}?v={{ filemtime(public_path('js/admin-messenger.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-dailyreport.js') }}?v={{ filemtime(public_path('js/admin-dailyreport.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
   {{-- 대표 색은 고객이 화면(조직 설정)에서 고른다. 파일에 박아 두면 고객마다
@@ -156,6 +157,9 @@
             <ul class="nav-sub" data-sub="g-site">
               <li class="nav-item nav-child" data-view="opsroom" id="nav-opsroom">
                 <i class="ph ph-broadcast" style="color:#22c55e"></i><span>현장 상황실</span>
+              </li>
+              <li class="nav-item nav-child" data-view="daily-report" id="nav-daily-report">
+                <i class="ph ph-paper-plane-tilt" style="color:#0ea5e9"></i><span>일일 보고</span>
               </li>
             </ul>
               <li class="nav-item" data-view="safety" id="nav-safety">
@@ -1417,6 +1421,7 @@
         'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: '공정 관리', render: renderWbs },
         'opsroom': { title: '현장 상황실', render: renderOpsRoom },
+        'daily-report': { title: '일일 보고', render: function () { return window.AdminDailyReport.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },

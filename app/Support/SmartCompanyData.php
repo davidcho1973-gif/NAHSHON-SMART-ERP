@@ -50,7 +50,10 @@ use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Inventory\InventoryService;
+use App\Services\Admin\ReportRecipientService;
 use App\Services\Ops\DailyClosingService;
+use App\Services\Ops\DailyPlanService;
+use App\Services\Ops\DailyReportMailer;
 use App\Services\Ops\OpsActionService;
 use App\Services\Ops\OpsDigestService;
 use App\Services\Ops\OpsIntakeService;
@@ -381,6 +384,41 @@ class SmartCompanyData
             ),
             'api_getDailyClosing' => app(DailyClosingService::class)->show((int) ($args[0] ?? 0)),
             'api_getDailyClosings' => app(DailyClosingService::class)->recent(self::resolveSiteId($siteId)),
+
+            // ── 일일 보고: ERP 안에서 쓰고, 정해진 사람에게 보낸다.
+            // 아침 작업계획서 — 열면 이미 절반이 채워져 있다(안전 작업카드·장비·전날 마감).
+            'api_getDailyPlan' => app(DailyPlanService::class)->get(
+                self::resolveSiteId($siteId), ($args[0] ?? null) ? (string) $args[0] : null,
+            ),
+            'api_saveDailyPlan' => app(DailyPlanService::class)->save(
+                self::resolveSiteId($siteId),
+                ($args[1] ?? null) ? (string) $args[1] : null,
+                is_array($args[0] ?? null) ? $args[0] : [],
+                auth()->id(),
+                (bool) ($args[2] ?? false),
+            ),
+            // 보내기 전에 눈으로 보는 자리 — 화면과 메일이 같은 HTML 을 쓴다.
+            'api_getDailyReportPreview' => app(DailyReportMailer::class)->preview(
+                self::resolveSiteId($siteId),
+                ($args[1] ?? null) ? (string) $args[1] : null,
+                (string) ($args[0] ?? 'closing'),
+            ),
+            'api_sendDailyReport' => app(DailyReportMailer::class)->send(
+                self::resolveSiteId($siteId),
+                ($args[1] ?? null) ? (string) $args[1] : null,
+                (string) ($args[0] ?? 'closing'),
+                auth()->id(),
+            ),
+            'api_getReportDispatches' => app(DailyReportMailer::class)->history(
+                self::resolveSiteId($siteId), ($args[0] ?? null) ? (string) $args[0] : null,
+            ),
+
+            // 수신처 — 원청·감리·본사는 받는 문서가 서로 다르다.
+            'api_getReportRecipients' => app(ReportRecipientService::class)->list(self::resolveSiteId($siteId)),
+            'api_saveReportRecipient' => app(ReportRecipientService::class)->save(
+                is_array($args[0] ?? null) ? $args[0] : [], auth()->id(),
+            ),
+            'api_deleteReportRecipient' => app(ReportRecipientService::class)->delete((int) ($args[0] ?? 0)),
 
             // 오늘 한 일 · 내일 할 일 — 공정·자재·인원 어디에도 안 들어가는 것들의 종착지.
             'api_getOpsActions' => app(OpsActionService::class)->board(

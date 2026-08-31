@@ -38,7 +38,15 @@ class DailyClosingReport extends Model
         'weather', 'temperature', 'trades', 'work_title', 'work_today', 'work_tomorrow',
         'progress_rate', 'tbm_completed', 'safety_checks', 'safety_notes',
         'field_status', 'field_submitted_at',
+
+        // 아침 작업계획서 — 같은 날 같은 현장이니 같은 줄에 있다.
+        'plan', 'plan_status', 'plan_submitted_at', 'plan_by_id',
     ];
+
+    /** 아침 계획서 상태 — 마감 상태(`status`)와도, 현장 제출 상태(`field_status`)와도 다르다. */
+    public const PLAN_DRAFT = 'draft';
+
+    public const PLAN_SUBMITTED = 'submitted';
 
     protected function casts(): array
     {
@@ -51,7 +59,30 @@ class DailyClosingReport extends Model
             'safety_checks' => 'array',
             'tbm_completed' => 'boolean',
             'field_submitted_at' => 'datetime',
+            'plan' => 'array',
+            'plan_submitted_at' => 'datetime',
         ];
+    }
+
+    /** 아침 계획서를 쓰긴 했는가 — 빈 껍데기를 "계획서 있음" 으로 세지 않기 위해. */
+    public function hasPlan(): bool
+    {
+        $plan = $this->plan ?: [];
+
+        return filled($plan['workScope'] ?? null)
+            || ! empty($plan['crews'] ?? [])
+            || ! empty($plan['equipment'] ?? [])
+            || ! empty($plan['hazards'] ?? []);
+    }
+
+    public function dispatches(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ReportDispatch::class)->latest('id');
+    }
+
+    public function planBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'plan_by_id');
     }
 
     /**

@@ -5,10 +5,15 @@ namespace App\Services\Ops;
 use App\Jobs\WriteDailyClosingReportJob;
 use App\Models\DailyClosingReport;
 use App\Models\DailyCrewReport;
+use App\Models\Equipment;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\OpsLaborReport;
+use App\Models\SafetyPermit;
+use App\Models\SafetyWorkIssue;
+use App\Models\SafetyWorkItem;
 use App\Models\Site;
+use App\Models\WbsPhoto;
 use App\Services\Attendance\DailyHeadcountService;
 use App\Services\Ocr\OcrEngine;
 use Illuminate\Support\Carbon;
@@ -112,6 +117,27 @@ class DailyClosingService
 
         $actual = $this->headcount->today($siteId, $date);
         $reportedTotal = (int) $reports->sum('headcount');
+
+        // 상황실 인원 보고가 없는 날이면 <b>아침 작업계획서</b>의 투입 인원을 쓴다.
+        // 계획서에 "나손 전기 6명" 이라고 적고 저녁 보고서에 "0명" 이 찍히면
+        // 원청은 그 보고서를 못 믿는다. 같은 것을 두 번 입력시키지 않는 것이
+        // 이 시스템의 원칙이므로, 아침에 쓴 것이 저녁에 자동으로 흘러가야 한다.
+        if ($reportedByCompany === [] && $report && ($report->plan['crews'] ?? []) !== []) {
+            foreach ($report->plan['crews'] as $c) {
+                $head = (int) ($c['headcount'] ?? 0);
+                if ($head <= 0) {
+                    continue;
+                }
+                $reportedByCompany[] = [
+                    'company' => (string) ($c['company'] ?? ''),
+                    'trade' => (string) ($c['trade'] ?? ''),
+                    'headcount' => $head,
+                    // 어디서 온 숫자인지 밝힌다 — 출처가 없는 숫자는 나중에 설명하지 못한다.
+                    'source' => '작업계획서',
+                ];
+                $reportedTotal += $head;
+            }
+        }
         $actualTotal = (int) ($actual['direct']['count'] + $actual['indirect']['count'] + $actual['other']['count']);
 
         $crew = $this->crewSummary($siteId, $date);
@@ -179,10 +205,118 @@ class DailyClosingService
             // 이게 곧 "오늘 한 일 / 내일 할 일" 이다.
             'actions' => $this->actionSummary($siteId, $date),
 
+            // ── 원청 제출용으로 새로 붙인 세 블록. 예전 보고서에는 없다.
+            // 마감 화면만 볼 때는 없어도 그만이었지만, 원청에 내는 일보에는
+            // 장비·안전·사진이 빠지면 반려된다.
+            'equipment' => $this->equipmentSummary($siteId),
+            'safety' => $this->safetySummary($siteId, $date),
+            'photos' => $this->photoSummary($siteId, $date),
+
             // 현장소장이 현장앱에서 직접 쓴 것. 날씨·오늘 한 일·내일 할 일·진도율·TBM.
             // 사람이 본 것이라 이 보고서에서 가장 1차 사실에 가깝고, AI 서술은 이걸
             // 다시 쓰는 게 아니라 근거로 삼는다.
             'field' => $report && $report->hasFieldReport() ? $report->fieldReport() : null,
+        ];
+    }
+
+    /**
+     * 그날 가동한 장비 — <b>'사용중' 인 것만</b> 표로 낸다.
+     *
+     * 장비에는 날짜별 가동 기록이 없다(대장에 현장 배치와 상태만 있다). 그래서
+     * 처음에는 현장에 있는 장비를 전부 실었는데, 703K 처럼 143대가 있는 현장에서는
+     * 일보에 40줄이 붙어 나갔다. 원청이 묻는 것은 "오늘 무엇이 돌았나" 이지
+     * "창고에 무엇이 있나" 가 아니다 — 대기 중인 장비까지 «가동 장비» 로 적어
+     * 보내는 것은 사실과 다르다.
+     *
+     * 그래서 표에는 사용중인 것만 넣고, 현장 보유 대수는 숫자로만 함께 낸다.
+     *
+     * @return array<string, mixed>
+     */
+    private function equipmentSummary(?int $siteId): array
+    {
+        if (! $siteId) {
+            return ['count' => 0, 'onSite' => 0, 'rows' => []];
+        }
+
+        $all = Equipment::query()
+            ->where('site_id', $siteId)
+            ->orderBy('equipment_type')
+            ->get(['equipment_code', 'equipment_type', 'model', 'status']);
+
+        $inUse = $all->where('status', '사용중');
+
+        return [
+            'count' => $inUse->count(),
+            'onSite' => $all->where('status', '<>', '정비중')->count(),
+            'maintenance' => $all->where('status', '정비중')->count(),
+            'rows' => $inUse->take(30)->map(fn (Equipment $e): array => [
+                'name' => trim((string) $e->equipment_type.' '.(string) $e->model),
+                'code' => (string) $e->equipment_code,
+                'status' => (string) $e->status,
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * 그날의 안전 집계 — TBM 이 몇 건 중 몇 건 끝났는지, 허가서와 지적사항은 몇 건인지.
+     *
+     * 현장이 체크한 `safety_checks` 원문만으로는 원청이 못 믿는다. "오늘 작업카드
+     * 7건 중 7건 TBM 완료" 같은 수치가 있어야 안전 보고가 성립한다.
+     *
+     * @return array<string, mixed>
+     */
+    private function safetySummary(?int $siteId, string $date): array
+    {
+        $cards = SafetyWorkItem::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            ->whereDate('work_date', $date)
+            ->get(['id', 'tbm_status']);
+
+        $permits = SafetyPermit::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            ->whereDate('valid_from', '<=', $date)
+            ->where(fn ($q) => $q->whereNull('valid_to')->orWhereDate('valid_to', '>=', $date))
+            ->whereNotIn('status', ['취소', '만료'])
+            ->count();
+
+        $issues = $cards->isEmpty() ? 0 : SafetyWorkIssue::query()
+            ->whereIn('safety_work_item_id', $cards->pluck('id'))
+            ->where('status', '<>', '완료')
+            ->count();
+
+        return [
+            'cards' => $cards->count(),
+            'tbmDone' => $cards->where('tbm_status', '완료')->count(),
+            'permits' => $permits,
+            'issues' => $issues,
+        ];
+    }
+
+    /**
+     * 그날 올라온 작업 사진 — 보고서에 첨부할 원본이 몇 장 있는지.
+     *
+     * 상황실 사진은 판독 후 지워지므로 여기서 세지 않는다. 남는 것은 공정별로
+     * 쌓이는 `wbs_photos` 뿐이고, 원청에 보낼 사진도 그것이다.
+     *
+     * @return array<string, mixed>
+     */
+    private function photoSummary(?int $siteId, string $date): array
+    {
+        if (! $siteId) {
+            return ['count' => 0, 'captions' => []];
+        }
+
+        $rows = WbsPhoto::query()
+            ->where('site_id', $siteId)
+            ->whereDate('photo_date', $date)
+            ->orderBy('id')
+            ->limit(30)
+            ->get(['caption', 'wbs_code']);
+
+        return [
+            'count' => $rows->count(),
+            'captions' => $rows->map(fn (WbsPhoto $p): string => (string) ($p->caption ?: $p->wbs_code))
+                ->filter()->unique()->take(8)->values()->all(),
         ];
     }
 

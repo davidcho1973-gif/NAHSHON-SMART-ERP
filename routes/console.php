@@ -63,6 +63,12 @@ Schedule::command('attendance:remind-clockin')->everyTenMinutes();
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
 Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18:00'));
 
+// 원청 정기 보고 — 아침 작업계획서, 저녁 마감보고서.
+// 사람이 제출한 것만 나간다(미제출이면 조용히 보류). 메일 설정이 없으면 아무것도 안 한다 —
+// 자동 발송 자리에는 메일앱을 열어 줄 사람이 없으므로 mailto 폴백이 소용없다.
+Schedule::command('reports:send-daily plan')->dailyAt(Org::time('schedule.daily_plan_send_at', '08:30'));
+Schedule::command('reports:send-daily closing')->dailyAt(Org::time('schedule.daily_report_send_at', '18:30'));
+
 // 아침 브리핑 — "오늘 가장 위험한 3가지"를 영향도 순으로. 위험이 없으면 조용하다.
 Schedule::command('ops:morning-brief')->dailyAt(Org::time('schedule.morning_brief_at', '06:30'));
 

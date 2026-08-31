@@ -48,6 +48,12 @@ class SafetyWorkItem extends Model
         return $this->hasMany(SafetyWorkIssue::class)->orderBy('sort_order');
     }
 
+    /** 이 작업을 하는 회사. 일일 작업계획서가 "업체별 투입 인원" 을 뽑는 지점. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function site(): BelongsTo
     {
         return $this->belongsTo(Site::class);

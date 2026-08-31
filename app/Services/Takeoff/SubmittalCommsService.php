@@ -411,28 +411,16 @@ class SubmittalCommsService
             ])->values()->all();
     }
 
+    // 판정 규칙은 App\Support\MailReady 한 곳에만 둔다. 예전에는 같은 조건이
+    // 여기와 지원자 초대 서비스에 각각 복사돼 있었고, 한쪽만 고치면 규칙이 갈라졌다.
     private function mailReady(): bool
     {
-        $mailer = (string) config('mail.default', 'log');
-        if (in_array($mailer, ['log', 'array'], true)) {
-            return false;
-        }
-        if ($mailer === 'smtp') {
-            $host = Str::lower((string) config('mail.mailers.smtp.host', ''));
-            if ($host === '' || in_array($host, ['127.0.0.1', 'localhost'], true)) {
-                return false;
-            }
-        }
-        $from = Str::lower((string) config('mail.from.address', ''));
-
-        return $from !== '' && ! Str::endsWith($from, '@example.com');
+        return \App\Support\MailReady::ok();
     }
 
     private function mailto(string $to, string $subject, string $body): string
     {
-        return 'mailto:'.rawurlencode($to).'?'.http_build_query(
-            ['subject' => $subject, 'body' => $body], '', '&', PHP_QUERY_RFC3986,
-        );
+        return \App\Support\MailReady::mailto($to, $subject, $body);
     }
 
     private function log(
