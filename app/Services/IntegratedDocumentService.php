@@ -9,6 +9,7 @@ use App\Models\IntegratedDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
+use App\Support\SensitiveDocuments;
 use App\Models\Site;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Support\Carbon;
@@ -153,7 +154,9 @@ class IntegratedDocumentService
      */
     public function dashboard(?int $siteId): array
     {
-        $base = IntegratedDocument::query()->when($siteId, fn ($q) => $q->where('site_id', $siteId));
+        $base = SensitiveDocuments::scope(
+            IntegratedDocument::query()->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+        );
 
         $total = (clone $base)->count();
         $weekAgo = Carbon::now()->subDays(7);
@@ -227,7 +230,7 @@ class IntegratedDocumentService
      */
     public function browse(?int $siteId, string $folderCode): array
     {
-        $docs = IntegratedDocument::query()
+        $docs = SensitiveDocuments::scope(IntegratedDocument::query())
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->where('folder_code', $folderCode)
             ->latest()->limit(200)->get()
@@ -250,6 +253,11 @@ class IntegratedDocumentService
         $d = IntegratedDocument::query()
             ->with(['site', 'uploadedBy', 'duplicateOf', 'procurementItem', 'employee', 'company'])->find($id);
         if (! $d) {
+            return null;
+        }
+
+        // 목록에서 가려도 상세 주소를 직접 치면 열리면 아무 의미가 없다.
+        if (! SensitiveDocuments::allows($d->document_type)) {
             return null;
         }
 
@@ -305,7 +313,11 @@ class IntegratedDocumentService
     public function search(?int $siteId, string $query): array
     {
         $q = trim($query);
-        $builder = IntegratedDocument::query()->when($siteId, fn ($b) => $b->where('site_id', $siteId));
+        // 금전·개인정보 문서는 권한 있는 사람에게만. 예전에는 이 가리개가 없어서
+        // 열람 전용 원청 계정이 «주급» 으로 검색하면 급여 명세 본문이 스니펫으로 나왔다.
+        $builder = SensitiveDocuments::scope(
+            IntegratedDocument::query()->when($siteId, fn ($b) => $b->where('site_id', $siteId))
+        );
 
         if ($q !== '') {
             $like = '%'.$q.'%';
