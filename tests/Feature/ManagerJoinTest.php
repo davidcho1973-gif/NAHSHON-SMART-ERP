@@ -119,6 +119,39 @@ class ManagerJoinTest extends TestCase
         $this->assertStringContainsString('value="worker"', $worker);
     }
 
+    /**
+     * 등록을 마치면 홈 화면 추가로 이어진다 — 지금이 가장 잘 먹히는 순간이다.
+     *
+     * 설치되는 것은 <b>출퇴근 화면</b>이어야지 등록 폼이면 안 된다(아이폰은 보고 있는
+     * 페이지를 담는다). 그래서 게이트로 보내고 그쪽에서 안내가 뜬다.
+     */
+    public function test_finishing_registration_offers_the_home_screen_app(): void
+    {
+        foreach ([
+            'manager' => fn () => $this->submit(),
+            'worker' => fn () => $this->post(route('worker-join.store', ['site' => $this->site]), [
+                'full_name' => 'Miguel Torres', 'company_name' => 'Sun Valley Mechanical',
+                'role' => 'Insulation', 'phone' => '480-555-0100', 'employment_type' => 'indirect',
+            ]),
+        ] as $door => $submit) {
+            $body = $submit()->assertOk()->getContent();
+            $this->assertStringContainsString(
+                route('gate.show', ['site' => $this->site]).'?install=1',
+                $body,
+                "{$door} 등록 완료 화면에 홈 화면 추가가 없습니다",
+            );
+        }
+    }
+
+    public function test_the_gate_shows_the_install_sheet_when_arriving_from_registration(): void
+    {
+        // 게이트가 설치 안내를 품고 있고, 등록에서 온 표시(install=1)를 알아본다.
+        $gate = $this->get(route('gate.show', ['site' => $this->site]).'?install=1')->assertOk()->getContent();
+        $this->assertStringContainsString('app-install', $gate);
+        $this->assertStringContainsString("install=1", $gate);
+        $this->assertStringContainsString(route('gate.manifest', ['site' => $this->site]), $gate);
+    }
+
     public function test_each_door_has_its_own_printable_qr(): void
     {
         $managerPoster = $this->get(route('manager-join.qr', ['site' => $this->site]))->assertOk();

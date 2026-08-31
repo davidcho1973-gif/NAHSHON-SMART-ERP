@@ -378,6 +378,20 @@
                 .catch(function () { show('screen-id'); });
         })();
 
+        // 등록을 막 마치고 넘어온 경우(?install=1) — 그 자리에서 홈 화면 추가를 권한다.
+        //
+        // 등록 화면에서 바로 띄우지 않는 이유: 아이폰의 "홈 화면에 추가" 는 보고 있는
+        // 페이지를 담고, 안드로이드도 매니페스트 범위 밖에서는 설치를 권하지 않는다.
+        // 그래서 올바른 페이지(이 게이트)로 옮긴 뒤 여기서 안내한다.
+        (function installIntent() {
+            if (location.search.indexOf('install=1') === -1) { return; }
+            // 주소에서 지운다 — 새로고침할 때마다 같은 안내가 다시 뜨면 앱을 미워하게 된다.
+            try { history.replaceState(null, '', location.pathname); } catch (e) {}
+            if (!window.AppInstall) { return; }
+            // 사람이 스스로 온 길이라 "닫은 적 있음" 을 무시하고 보여 준다(show).
+            setTimeout(function () { window.AppInstall.show(); }, 700);
+        })();
+
         Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
             b.addEventListener('click', function () { setLang(b.getAttribute('data-lang'), true); });
         });

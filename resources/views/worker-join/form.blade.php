@@ -48,6 +48,8 @@
         .badge { display: inline-block; background: var(--paper); color: var(--ink); font-weight: 700; border-radius: 8px; padding: 6px 12px; margin-top: 6px; font-family: monospace; }
         .device { margin-top: 16px; background: #E8F5EA; border: 0; color: #1E8E3E; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; }
         .shared { margin-top: 16px; background: #FFF4E0; border: 0; color: #B26A00; border-radius: 12px; padding: 12px 14px; font-size: .85rem; line-height: 1.55; font-weight: 700; text-align: left; }
+        /* 등록 직후의 주동작 — 홈 화면에 추가. 노란 판은 이 화면에서 하나뿐이어야 한다. */
+        .install-cta { display: block; margin-top: 18px; padding: 16px; font-size: 1.02rem; font-weight: 800; color: var(--label); background: var(--kakao); border-radius: 12px; text-decoration: none; text-align: center; }
         .next { display: block; margin-top: 12px; padding: 15px; font-size: 1rem; font-weight: 800; color: var(--label); background: var(--paper); border-radius: 12px; text-decoration: none; }
         /* 자사 직영 안내 — 급여가 걸리는 갈림길이라 노란 판으로 세운다(고용 구분 칸과 같은 규격). */
         .payroll { margin-top: 14px; background: var(--kakao); border-radius: 14px; padding: 13px 15px; font-size: .85rem; line-height: 1.6; color: var(--label); }
@@ -89,6 +91,15 @@
                 <div class="shared" id="t-shared" style="display:none">
                     <b id="t-sharedTitle"></b><br><span id="t-sharedBody"></span>
                 </div>
+                {{-- 홈 화면에 추가 — 등록을 막 마친 지금이 가장 잘 먹히는 순간이다.
+                     여기서 직접 설치를 띄우지 않고 게이트 화면으로 보내는 이유가 있다:
+                     설치되는 것은 <b>출퇴근 화면</b>이어야지 이 등록 폼이면 안 된다.
+                     아이폰의 "홈 화면에 추가" 는 <b>지금 보고 있는 페이지</b>를 담고,
+                     안드로이드도 매니페스트 범위(scope) 밖 페이지에서는 설치를 권하지 않는다.
+                     그래서 올바른 페이지로 옮긴 뒤 그 자리에서 안내한다(?install=1). --}}
+                <a class="install-cta" id="t-install" href="{{ route('gate.show', ['site' => $site]) }}?install=1"></a>
+                <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
+
                 {{-- 반장이 팀원을 연달아 등록하는 흐름 — 회사·공정은 다음 사람에게 그대로 이어진다.
                      들어온 문(작업자/관리자)으로 돌아간다. 안 그러면 관리자 등록을 마친 사람이
                      다음 사람을 작업자로 넣는다. --}}
@@ -118,6 +129,15 @@
                     document.getElementById('t-sharedTitle').textContent = T.sharedTitle;
                     document.getElementById('t-sharedBody').textContent = T.sharedBody;
                     document.getElementById('t-next').textContent = T.nextPerson;
+                    var inst = document.getElementById('t-install');
+                    if (inst) { inst.textContent = T.installApp; }
+                    var instHint = document.getElementById('t-installHint');
+                    if (instHint) { instHint.textContent = T.installHint; }
+                    // 이미 홈 화면에서 열고 있으면 권할 이유가 없다 — 같은 안내를 두 번 보면 앱을 미워하게 된다.
+                    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+                        if (inst) inst.hidden = true;
+                        if (instHint) instHint.hidden = true;
+                    }
                     var badge = document.getElementById('t-doneBadge');
                     if (badge) badge.textContent = T.doneBadge;
 
@@ -346,6 +366,26 @@
                         // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
                         var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
                         var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient };
+
+                        // 관리자는 고용 형태를 묻지 않는다 — 어느 회사 소속이든 관리직이고,
+                        // 서버도 그 값을 요구하지 않는다. 화면만 계속 물으면 <b>보낼 수 없는
+                        // 폼</b>이 된다(라디오가 required 인데 칸은 논리상 필요 없는 상태).
+                        // 급여 안내도 뜨면 안 된다 — 관리직은 시급 정산이 아니다.
+                        if (isManager) {
+                            ask.style.display = 'none';
+                            radios.forEach(function (r) { r.required = false; r.checked = false; });
+                            payrollNote.style.display = 'none';
+                            posSel.required = true;   // 직책은 관리자에게 언제나 필수
+                            var otherM = sel.value === '__other__';
+                            nameInput.style.display = otherM ? 'block' : 'none';
+                            nameInput.required = otherM;
+                            if (!otherM) { nameInput.value = ''; }
+                            note.textContent = otherM ? T.companyOtherHint : (etype ? LABEL[etype] + T.suffixRegistered : T.companyHint);
+                            note.className = 'note';
+
+                            return;
+                        }
+
                         syncPayroll(etype);
 
                         // 목록에 없는 회사 — 이름을 받고, 자사인지 협력사인지 물어본다.
