@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MemberRegistration;
+use App\Support\MailReady;
 use App\Support\Org;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -82,34 +83,23 @@ class ApplicantInvitationService
     }
 
     /**
+     * 메일이 실제로 나갈 수 있는 상태인가 — 판정은 {@see MailReady} 한 곳에서만 한다.
+     *
+     * 예전에는 이 메서드가 같은 규칙을 <b>자기만의 사본</b>으로 갖고 있었다(log/array 거부,
+     * smtp 호스트 확인, 발신 주소 확인). 사본이 위험한 이유는 원본이 자라도 사본은 그대로라서다 —
+     * 실제로 2026-08 에 Microsoft 365(Graph) 발송이 들어왔을 때, 이 사본만 `graph` 를 몰라서
+     * <b>Graph 설정이 반쯤 비어 있어도 «설정 완료» 로 판정</b>하고 발송 순간 인증 실패로 죽는
+     * 상태가 됐다. MailReady 는 그 경우 네 값(tenant/client/secret/sender)을 다 확인한다.
+     *
+     * 그래서 규칙을 지우고 정본에 위임한다. 던지는 동작은 그대로 둔다 — 부르는 쪽이 예외를
+     * 기대하고 있고, 그쪽 계약까지 바꾸면 이 수술의 범위가 넘친다.
+     *
      * @throws RuntimeException
      */
     public function ensureRealMailerConfigured(): void
     {
-        $mailer = (string) config('mail.default', 'log');
-
-        if (in_array($mailer, ['log', 'array'], true)) {
-            throw new RuntimeException(
-                '실제 메일 발송 설정이 없습니다. Laravel Cloud 환경변수에 MAIL_MAILER=smtp 와 SMTP 계정 정보를 먼저 설정해야 합니다.',
-            );
-        }
-
-        if ($mailer === 'smtp') {
-            $host = (string) config('mail.mailers.smtp.host', '');
-
-            if ($host === '' || in_array(Str::lower($host), ['127.0.0.1', 'localhost'], true)) {
-                throw new RuntimeException(
-                    'SMTP 서버가 설정되지 않았습니다. MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD를 Laravel Cloud 환경변수에 넣어 주세요.',
-                );
-            }
-        }
-
-        $fromAddress = (string) config('mail.from.address', '');
-
-        if ($fromAddress === '' || Str::endsWith(Str::lower($fromAddress), '@example.com')) {
-            throw new RuntimeException(
-                '발신 이메일 주소가 설정되지 않았습니다. MAIL_FROM_ADDRESS를 실제 발신 주소로 설정해 주세요.',
-            );
+        if (! MailReady::ok()) {
+            throw new RuntimeException(MailReady::why());
         }
     }
 
