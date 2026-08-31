@@ -46,12 +46,23 @@ class DocumentIntelligenceController extends Controller
             return redirect('/?'.http_build_query($params));
         }
 
+        // 드롭존 기본 소속 — ERP 상단에서 고른 현장(site_id 파라미터)이 최우선이고,
+        // 없으면 소속 규칙(현장 사람은 자기 현장, 수퍼관리자·고위관리자·회계는 Global).
+        $defaultSiteId = $request->integer('site_id') ?: \App\Support\DefaultScope::siteId($request->user());
+        $defaultCompanyId = $defaultSiteId
+            ? (int) Site::query()->whereKey($defaultSiteId)->value('company_id')
+            : \App\Support\DefaultScope::companyId($request->user());
+        $defaultProjectId = \App\Support\DefaultScope::projectId($request->user(), $defaultSiteId);
+
         return view('document-intelligence.index', [
             'companies' => $this->companyOptions($request->user()),
             'sites' => $this->siteOptions($request->user()),
             'projects' => $this->projectOptions($request->user()),
             'canManage' => $this->canManage($request->user()),
             'maxUploadMb' => round((int) config('document-intelligence.max_upload_kb', 51200) / 1024),
+            'defaultCompanyId' => $defaultCompanyId,
+            'defaultSiteId' => $defaultSiteId,
+            'defaultProjectId' => $defaultProjectId,
         ]);
     }
 

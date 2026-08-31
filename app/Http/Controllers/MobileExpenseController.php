@@ -64,8 +64,10 @@ class MobileExpenseController extends Controller
     public function wizard(Request $request): View
     {
         $user = auth()->user();
-        $employee = $user->employee;
-        $selectedSiteId = $this->requestedSiteId($request) ?: ($employee?->site_id ?? $user->allowed_site_id);
+        // 사람이 방금 고른 값(주소 파라미터)이 언제나 이긴다. 없으면 소속 규칙:
+        // 현장 사람은 자기 현장, 수퍼관리자·고위관리자·회계는 Global 이 기본이다 —
+        // 전체를 보는 사람의 경비를 아무 현장에나 자동으로 앉히면 그게 더 큰 오류다.
+        $selectedSiteId = $this->requestedSiteId($request) ?: \App\Support\DefaultScope::siteId($user);
 
         return view('mobile-expense.wizard', [
             'sites' => $this->siteOptions($selectedSiteId),

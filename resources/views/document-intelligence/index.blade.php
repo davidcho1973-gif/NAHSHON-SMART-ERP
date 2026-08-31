@@ -126,7 +126,7 @@
                     <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><div style="display:flex;gap:6px"><button class="btn small" id="tidy-btn" style="display:none" title="현장이 비어 있는 문서에 현장을 한 번에 붙입니다">⚑ 현장 정리</button><button class="btn small" id="unstick-btn" title="AI 분석 중에서 멈춘 문서를 다시 분석합니다">⟳ 멈춘 분석 재시도</button><button class="btn small" id="refresh-btn">↻ 새로고침</button></div></div>
                     <div class="searchbar">
                         <input id="search" placeholder="예: RFI-023, backcharge, cable tray, 30일 notice…">
-                        <select id="site-filter"><option value="">전체 현장</option><option value="none">현장 미지정</option>@foreach($sites as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
+                        <select id="site-filter"><option value="">전체 현장</option><option value="none">현장 미지정</option>@foreach($sites as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultSiteId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select>
                         <select id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
                         <select id="project-filter"><option value="">전체 PROJECT</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
                         <button class="btn primary" id="search-btn">검색</button>
@@ -140,9 +140,10 @@
                         <div class="panel-head"><div><h2>AI 문서 드롭존</h2><p>최대 50개 파일을 한 번에 올릴 수 있습니다.</p></div></div>
                         <div class="drop-panel">
                             <div class="scope-grid">
-                                <div class="field"><label>회사</label><select id="upload-company"><option value="">자동/Global</option>@foreach($companies as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select></div>
-                                <div class="field"><label>현장</label><select id="upload-site"><option value="">자동/공통</option>@foreach($sites as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select></div>
-                                <div class="field"><label>PROJECT</label><select id="upload-project"><option value="">AI 확인</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select></div>
+                                {{-- 기본 소속: ERP 에서 고른 현장 > 본인 소속 현장 > Global(수퍼관리자·고위관리자·회계). 바꾸고 싶으면 바꾸면 된다 — 시작점만 맞춰 둔다. --}}
+                                <div class="field"><label>회사</label><select id="upload-company"><option value="">자동/Global</option>@foreach($companies as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultCompanyId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
+                                <div class="field"><label>현장</label><select id="upload-site"><option value="">자동/공통</option>@foreach($sites as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultSiteId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
+                                <div class="field"><label>PROJECT</label><select id="upload-project"><option value="">AI 확인</option>@foreach($projects as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultProjectId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
                             </div>
                             <div class="dropzone" id="dropzone">
                                 <div><div class="drop-icon">⇧</div><strong>문서를 여기에 끌어다 놓으세요</strong><p>또는 버튼을 눌러 여러 파일을 선택하세요.</p><button class="btn primary" id="pick-files">파일 선택</button><small>PDF · Word · Excel · CSV · TXT · 이미지 · EML / 파일당 최대 {{ $maxUploadMb }}MB</small></div>
