@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\MailDiagnosticsService;
+use App\Services\Admin\ReportRecipientService;
 use App\Support\AccessPolicy;
 use App\Support\SmartCompanyData;
 use Illuminate\Http\JsonResponse;
@@ -55,6 +56,13 @@ class SmartCompanyApiController extends Controller
         // 원청 계정에는 열지 않는다(자기 앞으로 온 것만 보는 창구는 2단계에서 따로).
         'api_getCorrespondence' => CorrespondenceService::VIEW_ROLES,
         'api_getCorrespondenceThread' => CorrespondenceService::VIEW_ROLES,
+
+        // [일일 보고 수신처] 이 표에 한 줄을 넣는 것은 «매일 08:30·18:30 에 우리 현장
+        // 보고와 사진을 자동으로 받는 권한» 을 주는 일이다. 그 뒤로 사람이 다시 승인하는
+        // 자리가 없어서, 등록 자체가 결재다. 서비스 안에도 같은 검사를 두고 여기에도 건다.
+        'api_getReportRecipients' => ReportRecipientService::MANAGE_ROLES,
+        'api_saveReportRecipient' => ReportRecipientService::MANAGE_ROLES,
+        'api_deleteReportRecipient' => ReportRecipientService::MANAGE_ROLES,
     ];
 
     /**
