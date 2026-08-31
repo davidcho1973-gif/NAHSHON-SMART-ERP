@@ -211,23 +211,22 @@ class DailyReportComposer
         }
 
         // ── 장비·안전은 집계에 새로 들어온 블록이라 없을 수도 있다(예전 보고서).
+        // 가동한 장비가 있을 때만 낸다. "0대 가동 / 80대 보유" 는 원청에게 아무것도
+        // 알려 주지 않고, 현장마다 장비 대장이 담는 것이 달라(703K 는 설치할 주방기구다)
+        // 보유 대수를 «장비» 로 내보내면 오히려 틀린 말이 된다.
         $equipment = $m['equipment'] ?? [];
-        if (($equipment['onSite'] ?? 0) > 0 || ($equipment['rows'] ?? []) !== []) {
-            $body .= $this->section('장비', 'Equipment');
-            $body .= $this->kv([
-                '금일 가동 In Use' => ($equipment['count'] ?? 0).'대',
-                '현장 보유 On Site' => ($equipment['onSite'] ?? 0).'대',
-                '정비 중 Maintenance' => ($equipment['maintenance'] ?? 0) ? $equipment['maintenance'].'대' : '',
-            ]);
-            if (($equipment['rows'] ?? []) !== []) {
-                $body .= $this->table(
-                    ['장비 Equipment', '번호 No.', '상태 Status'],
-                    array_map(fn ($e): array => [
-                        (string) ($e['name'] ?? ''),
-                        (string) ($e['code'] ?? ''),
-                        (string) ($e['status'] ?? ''),
-                    ], $equipment['rows']),
-                );
+        if (($equipment['rows'] ?? []) !== []) {
+            $body .= $this->section('장비 가동', 'Equipment in Operation');
+            $body .= $this->table(
+                ['장비 Equipment', '번호 No.', '상태 Status'],
+                array_map(fn ($e): array => [
+                    (string) ($e['name'] ?? ''),
+                    (string) ($e['code'] ?? ''),
+                    (string) ($e['status'] ?? ''),
+                ], $equipment['rows']),
+            );
+            if ((int) ($equipment['maintenance'] ?? 0) > 0) {
+                $body .= $this->kv(['정비 중 Maintenance' => $equipment['maintenance'].'대']);
             }
         }
 

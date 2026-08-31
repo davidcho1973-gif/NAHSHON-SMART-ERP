@@ -120,27 +120,26 @@ class DailyPlanService
                 'status' => (string) $p->status,
             ])->values()->all();
 
-        // ── 오늘 쓸 장비: 지금 '사용중' 인 것을 먼저 제안한다.
-        //    현장에 있는 장비를 전부 채우면 안 된다 — 703K 는 143대라 계획서가
-        //    장비 목록으로 뒤덮인다. 실제로 돌고 있는 것만 올리고 나머지는 사람이 더한다.
-        $onSite = Equipment::query()
+        // ── 오늘 쓸 장비: <b>지금 '사용중' 으로 표시된 것만</b> 제안한다.
+        //
+        //    처음에는 현장에 있는 장비를 채웠는데, 703K 에서 계획서가 «2조 싱크»,
+        //    «3조 싱크» 로 뒤덮였다. 이 현장의 장비 대장에는 건설 장비가 아니라
+        //    <b>설치할 주방기구 143대</b>가 들어 있기 때문이다. 대장이 무엇을 담고
+        //    있는지는 현장마다 다르므로, 기계가 넘겨짚지 않고 «오늘 돌고 있다» 고
+        //    표시된 것만 올린다. 없으면 빈 표를 주고 사람이 적는다 — 엉뚱한 것이
+        //    적힌 계획서보다 빈 칸이 낫다.
+        $equipment = Equipment::query()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
-            ->where('status', '<>', '정비중')
+            ->where('status', '사용중')
             ->orderBy('equipment_type')
-            ->get(['equipment_code', 'equipment_type', 'model', 'status']);
-
-        $picked = $onSite->where('status', '사용중');
-        // 상태를 아무도 안 바꿔 둔 현장도 있다. 그럴 때는 빈 표보다 몇 대라도 보여 준다.
-        if ($picked->isEmpty()) {
-            $picked = $onSite->take(8);
-        }
-
-        $equipment = $picked->take(20)->map(fn (Equipment $e): array => [
-            'name' => trim((string) $e->equipment_type.' '.(string) $e->model),
-            'code' => (string) $e->equipment_code,
-            'use' => '',
-            'status' => (string) $e->status,
-        ])->values()->all();
+            ->limit(20)
+            ->get(['equipment_code', 'equipment_type', 'model', 'status'])
+            ->map(fn (Equipment $e): array => [
+                'name' => trim((string) $e->equipment_type.' '.(string) $e->model),
+                'code' => (string) $e->equipment_code,
+                'use' => '',
+                'status' => (string) $e->status,
+            ])->values()->all();
 
         // ── 어제 마감이 남긴 "내일 할 일" — 오늘 계획의 출발점이다.
         $prev = DailyClosingReport::query()
