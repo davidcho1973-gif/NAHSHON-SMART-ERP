@@ -53,16 +53,22 @@ class GraphTransport extends AbstractTransport
     {
         $mime = $message->toString();
 
-        if (strlen($mime) > self::MAX_MIME_BYTES) {
+        // 실제로 나가는 것은 MIME 이 아니라 <b>그것을 base64 로 감싼 요청 본문</b>이다.
+        // base64 는 약 1.37배로 커지므로, 원본 크기로 재면 3MB 를 통과한 메일이
+        // 요청 본문 4.1MB 로 나가 Graph 에서 거절당한다. 나가는 크기로 잰다.
+        $body = base64_encode($mime);
+
+        if (strlen($body) > self::MAX_MIME_BYTES) {
             throw new TransportException(sprintf(
-                'Graph 로 보내기에 메일이 너무 큽니다 (%.1fMB). 첨부를 줄이거나 문서함 링크로 대체하세요. '
-                .'(Microsoft Graph sendMail 은 큰 첨부를 받지 않습니다)',
-                strlen($mime) / 1024 / 1024,
+                'Graph 로 보내기에 메일이 너무 큽니다 (요청 본문 %.1fMB, 상한 %.1fMB). '
+                .'첨부를 줄이거나 문서함 링크로 대체하세요.',
+                strlen($body) / 1024 / 1024,
+                self::MAX_MIME_BYTES / 1024 / 1024,
             ));
         }
 
         $response = Http::withToken($this->token())
-            ->withBody(base64_encode($mime), 'text/plain')
+            ->withBody($body, 'text/plain')
             ->timeout(60)
             ->post(sprintf(
                 'https://graph.microsoft.com/v1.0/users/%s/sendMail',

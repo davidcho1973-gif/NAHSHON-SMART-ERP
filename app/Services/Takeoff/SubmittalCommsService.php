@@ -7,6 +7,7 @@ use App\Models\IntelligentDocument;
 use App\Models\Submittal;
 use App\Models\SubmittalEvent;
 use App\Services\Mail\OutboundMailer;
+use App\Support\MailReady;
 use App\Support\Org;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -33,8 +34,8 @@ class SubmittalCommsService
         private readonly OutboundMailer $outbound,
     ) {}
 
-    /** 첨부 한도 — 이보다 크면 메일이 반송되므로 목록만 적고 첨부는 뺀다. */
-    private const MAX_ATTACH_BYTES = 18 * 1024 * 1024;
+    // 첨부 한도는 MailReady::attachmentBudget() 이 정본이다 — 메일러마다 다르다.
+    // 이보다 크면 메일이 반송되므로 목록만 적고 첨부는 뺀다(아래 tooBig).
 
     /* ─── 담당자 ────────────────────────────────────────────────────────── */
 
@@ -382,7 +383,7 @@ class SubmittalCommsService
 
                 continue;
             }
-            if ($total + strlen($data) > self::MAX_ATTACH_BYTES) {
+            if ($total + strlen($data) > MailReady::attachmentBudget()) {
                 $tooBig[] = $label;
 
                 continue;

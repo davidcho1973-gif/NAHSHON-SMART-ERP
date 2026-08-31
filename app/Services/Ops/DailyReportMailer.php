@@ -34,8 +34,9 @@ use Illuminate\Support\Str;
  */
 class DailyReportMailer
 {
-    /** 첨부 총량 상한. 메일 서버 대부분이 25MB 에서 막고, 여유를 둔다. */
-    private const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024;
+    // 첨부 총량 상한은 여기서 정하지 않는다 — MailReady::attachmentBudget() 이 정본이다.
+    // 메일러마다 상한이 다르고(Graph 는 SMTP 보다 훨씬 작다), 여기에 숫자를 두면
+    // 메일 방식을 바꾼 날 이 파일만 모른 채 조용히 실패한다.
 
     /** 한 통에 붙일 사진 수. 다 붙이면 메일이 안 열린다. */
     private const MAX_PHOTOS = 12;
@@ -100,7 +101,28 @@ class DailyReportMailer
         }
 
         $document = $this->file($report, $kind, $composed, $to->pluck('name')->all());
-        $files = $kind === ReportRecipient::CLOSING ? $this->photos($report) : [];
+
+        $files = [];
+        if ($kind === ReportRecipient::CLOSING) {
+            $available = $this->photoCount($report);
+            $files = $this->photos($report);
+
+            // 용량 때문에 빠진 사진이 있으면 <b>본문에 그렇게 적는다.</b>
+            // 본문은 "N장 첨부" 라고 말하는데 실제로는 그보다 적게 도착하면, 받는 쪽은
+            // 우리가 사진을 숨겼다고 읽는다. 빠진 것을 빠졌다고 적는 편이 언제나 낫다.
+            $dropped = max(0, $available - count($files));
+            if ($dropped > 0) {
+                $composed['html'] .= sprintf(
+                    '<p style="margin:16px 0 0;padding:10px 12px;background:#FBF0E2;'
+                    .'border-left:3px solid #A85A08;font-size:13px;color:#5a4a2a">'
+                    .'사진 %d장 중 %d장만 첨부했습니다 — 메일 용량 제한 때문입니다. '
+                    .'나머지 %d장은 ERP 문서함에서 확인하실 수 있습니다.'
+                    .'<br><span style="color:#8a7a5a">Only %d of %d photos attached due to mail size limits; '
+                    .'the rest are available in the ERP document hub.</span></p>',
+                    $available, count($files), $dropped, count($files), $available,
+                );
+            }
+        }
 
         // 발송은 OutboundMailer 한 문으로만 나간다 — 그 문이 서신 원장을 채운다.
         // 여기서 Mail::to 를 직접 부르면 이 발송만 원장에서 빠지고, 그런 구멍은
@@ -224,6 +246,20 @@ class DailyReportMailer
      *
      * @return list<array{data: string, name: string, mime: string}>
      */
+    /** 그날 그 현장에 사진이 몇 장 있는가 — 첨부한 수와 비교해 «몇 장이 빠졌나» 를 센다. */
+    private function photoCount(DailyClosingReport $report): int
+    {
+        if (! $report->site_id) {
+            return 0;
+        }
+
+        return (int) WbsPhoto::query()
+            ->where('site_id', $report->site_id)
+            ->whereDate('photo_date', $report->report_date->toDateString())
+            ->limit(self::MAX_PHOTOS)
+            ->count();
+    }
+
     private function photos(DailyClosingReport $report): array
     {
         if (! $report->site_id) {
@@ -249,7 +285,9 @@ class DailyReportMailer
                 }
                 $data = (string) $disk->get($path);
                 $total += strlen($data);
-                if ($total > self::MAX_ATTACHMENT_BYTES) {
+                // 상한은 메일러가 정한다 — Graph 는 SMTP 보다 훨씬 작다.
+                // 여기서 하드코딩하면 메일 방식을 바꾼 날 조용히 실패한다.
+                if ($total > MailReady::attachmentBudget()) {
                     break;
                 }
 
