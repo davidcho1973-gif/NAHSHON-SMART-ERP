@@ -18,6 +18,8 @@ class ReportDispatch extends Model
         'daily_closing_report_id', 'kind', 'channel',
         'to_email', 'to_name', 'subject', 'status', 'error',
         'intelligent_document_id', 'created_by_id', 'sent_at',
+        // 서신 원장의 어느 봉투인가. fillable 에 없으면 대량할당이 조용히 버린다.
+        'mail_message_id',
     ];
 
     protected function casts(): array

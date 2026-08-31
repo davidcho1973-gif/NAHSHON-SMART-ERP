@@ -24,6 +24,9 @@ class SubmittalEvent extends Model
     protected $fillable = [
         'submittal_id', 'kind', 'channel', 'to_name', 'to_email', 'subject',
         'intelligent_document_id', 'created_by',
+        // 서신 원장의 어느 봉투인가. 이 칸을 fillable 에 안 넣으면 대량할당이
+        // 예외 없이 조용히 버려서, 연결이 끊긴 줄 아무도 모른다.
+        'mail_message_id',
     ];
 
     public function submittal(): BelongsTo

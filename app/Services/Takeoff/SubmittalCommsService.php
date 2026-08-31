@@ -6,6 +6,7 @@ use App\Mail\SubmittalMail;
 use App\Models\IntelligentDocument;
 use App\Models\Submittal;
 use App\Models\SubmittalEvent;
+use App\Services\Mail\OutboundMailer;
 use App\Support\Org;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,11 @@ use Illuminate\Support\Str;
  */
 class SubmittalCommsService
 {
+
+    public function __construct(
+        private readonly OutboundMailer $outbound,
+    ) {}
+
     /** 첨부 한도 — 이보다 크면 메일이 반송되므로 목록만 적고 첨부는 뺀다. */
     private const MAX_ATTACH_BYTES = 18 * 1024 * 1024;
 
@@ -124,17 +130,27 @@ class SubmittalCommsService
         $subject = $this->requestSubject($submittal);
         $html = $this->requestHtml($submittal);
 
-        if ($this->mailReady()) {
-            Mail::to($submittal->vendor_email, $submittal->vendor_name ?: null)
-                ->send(new SubmittalMail($subject, $html));
-            $channel = 'email';
-            $message = ($submittal->vendor_name ?: $submittal->vendor_email).' 에게 요청 메일을 보냈습니다.';
-        } else {
-            $channel = 'mailto';
-            $message = '메일 서버가 없어 메일앱으로 엽니다 — 보내기를 누르면 발송됩니다.';
-        }
+        // 발송은 OutboundMailer 한 문으로만 나간다 — 그래야 서신 원장이 저절로 채워진다.
+        // 예전에는 여기서 Mail::to 를 직접 불러서, 무엇을 보냈는지 본문이 어디에도 안 남았다.
+        $thread = $this->outbound->threadFor(
+            $submittal, $subject, $submittal->vendor_email, $submittal->vendor_name,
+            $submittal->site_id, $submittal->company_id, $submittal->project_id,
+        );
 
-        $this->log($submittal, 'request_sent', $channel, $submittal->vendor_name, $submittal->vendor_email, $subject, null, $userId);
+        $result = $this->outbound->send(
+            $thread,
+            [['email' => $submittal->vendor_email, 'name' => $submittal->vendor_name ?: null]],
+            [],
+            $subject, $html, $this->requestText($submittal),
+            fn (?string $mid, array $refs) => new SubmittalMail($subject, $html, [], $mid, $refs),
+        );
+
+        $channel = ($result['channel'] ?? 'mail') === 'mailto' ? 'mailto' : 'email';
+        $message = $channel === 'email'
+            ? ($submittal->vendor_name ?: $submittal->vendor_email).' 에게 요청 메일을 보냈습니다. ('.$thread->ref_code.')'
+            : '메일 서버가 없어 메일앱으로 엽니다 — 보내기를 누르면 발송됩니다.';
+
+        $this->log($submittal, 'request_sent', $channel, $submittal->vendor_name, $submittal->vendor_email, $subject, null, $userId, $result['messageId'] ?? null);
 
         if ($submittal->status === '미착수') {
             $submittal->forceFill(['status' => '작성중'])->save();
@@ -143,7 +159,8 @@ class SubmittalCommsService
         return [
             'success' => true,
             'sent' => $channel === 'email',
-            'mailto' => $channel === 'mailto' ? $this->mailto($submittal->vendor_email, $subject, $this->requestText($submittal)) : null,
+            'mailto' => $result['mailto'] ?? null,
+            'refCode' => $thread->ref_code,
             'message' => $message,
         ];
     }
@@ -199,9 +216,22 @@ class SubmittalCommsService
         [$files, $tooBig] = $this->collectAttachments($materials);
         $html = $this->transmitHtml($submittal, $materials, $tooBig);
 
-        if ($this->mailReady()) {
-            Mail::to($submittal->recipient_email, $submittal->recipient_name ?: null)
-                ->send(new SubmittalMail($subject, $html, $files));
+        $thread = $this->outbound->threadFor(
+            $submittal, $subject, $submittal->recipient_email, $submittal->recipient_name,
+            $submittal->site_id, $submittal->company_id, $submittal->project_id,
+        );
+
+        $result = $this->outbound->send(
+            $thread,
+            [['email' => $submittal->recipient_email, 'name' => $submittal->recipient_name ?: null]],
+            [],
+            $subject, $html, $this->transmitText($submittal, $materials),
+            fn (?string $mid, array $refs) => new SubmittalMail($subject, $html, $files, $mid, $refs),
+            $materials->pluck('id')->all(),
+            count($files),
+        );
+
+        if (($result['channel'] ?? 'mail') !== 'mailto') {
             $channel = 'email';
             $message = ($submittal->recipient_name ?: $submittal->recipient_email).' 에게 전달했습니다 — 자료 '.$materials->count().'건'
                 .($tooBig !== [] ? ' (용량 초과 '.count($tooBig).'건은 목록만 적었습니다)' : '').'.';
@@ -210,7 +240,7 @@ class SubmittalCommsService
             $message = '메일 서버가 없어 메일앱으로 엽니다. 자료 파일은 문서함에서 내려받아 직접 첨부해 주세요.';
         }
 
-        $this->log($submittal, 'transmitted', $channel, $submittal->recipient_name, $submittal->recipient_email, $subject, null, $userId);
+        $this->log($submittal, 'transmitted', $channel, $submittal->recipient_name, $submittal->recipient_email, $subject, null, $userId, $result['messageId'] ?? null);
         $submittal->forceFill([
             'status' => '제출',
             'submitted_on' => $submittal->submitted_on ?: now()->toDateString(),
@@ -219,7 +249,8 @@ class SubmittalCommsService
         return [
             'success' => true,
             'sent' => $channel === 'email',
-            'mailto' => $channel === 'mailto' ? $this->mailto($submittal->recipient_email, $subject, $this->transmitText($submittal, $materials)) : null,
+            'mailto' => $result['mailto'] ?? null,
+            'refCode' => $thread->ref_code,
             'message' => $message,
         ];
     }
@@ -432,6 +463,8 @@ class SubmittalCommsService
         ?string $subject,
         ?int $documentId,
         ?int $userId,
+        // 원장의 어느 봉투인가. 제출물 이벤트와 서신 원장이 같은 발송을 가리키게 한다.
+        ?int $mailMessageId = null,
     ): void {
         SubmittalEvent::create([
             'submittal_id' => $submittal->id,
@@ -441,6 +474,7 @@ class SubmittalCommsService
             'to_email' => $toEmail,
             'subject' => $subject ? Str::limit($subject, 250, '') : null,
             'intelligent_document_id' => $documentId,
+            'mail_message_id' => $mailMessageId,
             'created_by' => $userId,
         ]);
     }

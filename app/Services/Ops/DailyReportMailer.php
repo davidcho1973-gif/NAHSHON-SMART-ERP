@@ -9,10 +9,10 @@ use App\Models\ReportDispatch;
 use App\Models\ReportRecipient;
 use App\Models\Site;
 use App\Models\WbsPhoto;
+use App\Services\Mail\OutboundMailer;
 use App\Support\MailReady;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -42,6 +42,7 @@ class DailyReportMailer
 
     public function __construct(
         private readonly DailyReportComposer $composer,
+        private readonly OutboundMailer $outbound,
     ) {}
 
     /**
@@ -101,67 +102,61 @@ class DailyReportMailer
         $document = $this->file($report, $kind, $composed, $to->pluck('name')->all());
         $files = $kind === ReportRecipient::CLOSING ? $this->photos($report) : [];
 
-        if (! MailReady::ok()) {
-            // 보내지 않았다. 사장님 메일앱을 열어 사람 손으로 보내게 한다.
-            foreach ($to as $r) {
-                $this->log($report, $kind, 'mailto', $r, $composed['subject'], $document?->id, $userId, 'skipped', MailReady::why());
-            }
+        // 발송은 OutboundMailer 한 문으로만 나간다 — 그 문이 서신 원장을 채운다.
+        // 여기서 Mail::to 를 직접 부르면 이 발송만 원장에서 빠지고, 그런 구멍은
+        // 나중에 "왜 이건 기록이 없지" 로 돌아온다.
+        $thread = $this->outbound->threadFor(
+            $report,
+            $composed['subject'],
+            $to->first()?->email,
+            $to->first()?->name,
+            $report->site_id,
+            null,
+            null,
+        );
 
-            return [
-                'success' => true,
-                'sent' => 0,
-                'channel' => 'mailto',
-                'mailto' => MailReady::mailto(
-                    $to->pluck('email')->all(),
-                    $composed['subject'],
-                    $composed['text'],
-                    $cc->pluck('email')->all(),
-                ),
-                'documentId' => $document?->id,
-                'message' => MailReady::why().' 대신 메일앱을 엽니다 — 내용이 채워지면 확인하고 보내 주세요.',
-            ];
-        }
+        $result = $this->outbound->send(
+            $thread,
+            $to->map(fn (ReportRecipient $r): array => ['email' => $r->email, 'name' => $r->name])->all(),
+            $cc->map(fn (ReportRecipient $r): array => ['email' => $r->email, 'name' => $r->name])->all(),
+            $composed['subject'],
+            $composed['html'],
+            $composed['text'],
+            fn (?string $mid, array $refs) => new ReportMail(
+                $composed['subject'], $composed['html'], $files,
+                $cc->pluck('email')->all(), $mid, $refs,
+            ),
+            $document ? [$document->id] : [],
+            count($files),
+        );
 
-        $sent = 0;
-        $failed = [];
-        $firstError = null;
-        $ccEmails = $cc->pluck('email')->all();
+        // 수신자별 이력은 그대로 남긴다 — 일일 보고 화면이 이 표를 쓴다.
+        // 원장의 봉투 번호를 함께 적어 두 기록이 같은 발송을 가리키게 한다.
+        $channel = (string) ($result['channel'] ?? 'mail');
+        $failed = (array) ($result['failed'] ?? []);
 
         foreach ($to as $r) {
-            try {
-                Mail::to($r->email, $r->name)->send(
-                    new ReportMail($composed['subject'], $composed['html'], $files, $ccEmails),
-                );
-                $sent++;
-                $this->log($report, $kind, 'mail', $r, $composed['subject'], $document?->id, $userId, 'sent');
-                // 참조는 첫 통에만 싣는다 — 안 그러면 참조자가 같은 메일을 수신자 수만큼 받는다.
-                $ccEmails = [];
-            } catch (\Throwable $e) {
-                report($e);
-                $failed[] = $r->email;
-                $firstError ??= $e->getMessage();
-                $this->log($report, $kind, 'mail', $r, $composed['subject'], $document?->id, $userId, 'failed', $e->getMessage());
-            }
+            $ok = $channel === 'mail' && ! in_array($r->email, $failed, true);
+            $this->log(
+                $report, $kind, $channel, $r, $composed['subject'], $document?->id, $userId,
+                $channel === 'mailto' ? 'skipped' : ($ok ? 'sent' : 'failed'),
+                $ok ? null : ($result['error'] ?? MailReady::why()),
+                $result['messageId'] ?? null,
+            );
         }
 
-        $note = $sent > 0
-            ? sprintf('%d명에게 발송했습니다%s.', $sent, $failed !== [] ? ' ('.count($failed).'명 실패)' : '')
-            : '발송에 실패했습니다: '.implode(', ', $failed);
-
         return [
-            'success' => $sent > 0,
-            'sent' => $sent,
+            'success' => (bool) ($result['success'] ?? false),
+            'sent' => (int) ($result['sent'] ?? 0),
             'failed' => $failed,
-            'channel' => 'mail',
+            'channel' => $channel,
+            'mailto' => $result['mailto'] ?? null,
             'documentId' => $document?->id,
             'photos' => count($files),
-            'message' => $note,
-            // 실패했을 때 화면은 `error` 만 읽는다. 이게 없으면 사유가 message 에만 남아
-            // 사용자에게는 "요청이 거부되었습니다." 라는 아무 말도 아닌 문구만 뜬다.
-            // 원문에 자격증명이 섞일 수 있어 진단 서비스의 마스킹을 그대로 태운다.
-            'error' => $sent > 0 ? null : trim($note.' — '.\Illuminate\Support\Str::limit(
-                (string) preg_replace('#(\w+://)[^:/@\s]+:[^@\s]+@#', '$1***:***@', (string) $firstError), 300,
-            )),
+            'refCode' => $thread->ref_code,
+            'message' => $result['message'] ?? '',
+            // 실패했을 때 화면은 error 만 읽는다. 없으면 "요청이 거부되었습니다." 만 뜬다.
+            'error' => $result['error'] ?? null,
         ];
     }
 
@@ -356,6 +351,7 @@ class DailyReportMailer
         ?int $userId,
         string $status,
         ?string $error = null,
+        ?int $mailMessageId = null,
     ): void {
         ReportDispatch::create([
             'daily_closing_report_id' => $report->id,
@@ -368,6 +364,7 @@ class DailyReportMailer
             'error' => $error,
             'intelligent_document_id' => $documentId,
             'created_by_id' => $userId,
+            'mail_message_id' => $mailMessageId,
             'sent_at' => $status === 'sent' ? now() : null,
         ]);
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Support\AccessPolicy;
@@ -49,6 +50,11 @@ class SmartCompanyApiController extends Controller
         // 이름 규칙 하나에만 기대지 않는다 — 밖으로 나가는 동작이라 두 겹으로 잠근다.
         'api_getMailStatus' => MailDiagnosticsService::MANAGE_ROLES,
         'api_sendTestMail' => MailDiagnosticsService::MANAGE_ROLES,
+
+        // [서신] 우리가 다른 업체에 보낸 서신까지 한 목록에 있다. 내부 전용이다 —
+        // 원청 계정에는 열지 않는다(자기 앞으로 온 것만 보는 창구는 2단계에서 따로).
+        'api_getCorrespondence' => CorrespondenceService::VIEW_ROLES,
+        'api_getCorrespondenceThread' => CorrespondenceService::VIEW_ROLES,
     ];
 
     /**

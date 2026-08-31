@@ -6,6 +6,7 @@ use Illuminate\Mail\Attachment;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 
 /**
  * 제출물 소통 메일 — 업체 자료 요청과 원청 전달이 같은 봉투를 쓴다.
@@ -23,7 +24,28 @@ class SubmittalMail extends Mailable
         // Mailable 부모가 $html 을 이미 갖고 있어 다른 이름을 쓴다.
         public readonly string $bodyHtml,
         public readonly array $files = [],
+        /** 우리가 발급한 Message-ID. 회신을 되짚는 열쇠라 발송하는 쪽이 정한다. */
+        public readonly ?string $messageId = null,
+        /** @var list<string> 같은 실타래의 앞선 Message-ID 들 */
+        public readonly array $references = [],
     ) {}
+
+/**
+     * 우리가 발급한 Message-ID 를 봉투에 박는다.
+     *
+     * 이게 없으면 상대가 답장을 눌러도 그 회신이 <b>어느 서신의 답인지</b> 알 방법이 없다.
+     * 메일 클라이언트는 회신에 In-Reply-To / References 로 이 값을 그대로 되돌려 주므로,
+     * 이 한 줄이 2단계(수신)에서 회신을 실타래에 꽂는 유일한 열쇠가 된다.
+     *
+     * 라라벨이 스스로 만드는 Message-ID 는 우리가 알 수 없어서 기록할 수도, 되짚을 수도 없다.
+     */
+    public function headers(): Headers
+    {
+        return new Headers(
+            messageId: $this->messageId,
+            references: $this->references,
+        );
+    }
 
     public function envelope(): Envelope
     {

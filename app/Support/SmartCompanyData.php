@@ -50,6 +50,7 @@ use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Inventory\InventoryService;
+use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\ReportRecipientService;
 use App\Services\Ops\DailyClosingService;
@@ -385,6 +386,12 @@ class SmartCompanyData
             ),
             'api_getDailyClosing' => app(DailyClosingService::class)->show((int) ($args[0] ?? 0)),
             'api_getDailyClosings' => app(DailyClosingService::class)->recent(self::resolveSiteId($siteId)),
+
+            // 서신 원장 — 우리가 무엇을 언제 누구에게 보냈는가. 다툼이 났을 때 내미는 기록.
+            'api_getCorrespondence' => app(CorrespondenceService::class)->threads(
+                self::resolveSiteId($siteId), is_array($args[0] ?? null) ? $args[0] : [],
+            ),
+            'api_getCorrespondenceThread' => app(CorrespondenceService::class)->thread((int) ($args[0] ?? 0)),
 
             // 메일 진단 — "설정했다" 와 "실제로 나간다" 는 다르다. 테스트 발송만이 답한다.
             // 수신자는 인자로 받지 않는다(서비스가 로그인한 본인 주소로 고정한다) —
