@@ -40,6 +40,9 @@
         .mic { width: 100%; border: 0; border-radius: 16px; padding: 26px 20px; background: var(--info); color: #fff;
                cursor: pointer; text-align: center; font-family: inherit; box-shadow: 0 6px 18px rgba(62,107,224,.26); }
         .mic:disabled { opacity: .6; }
+        /* 꺼져 있을 때 — 눌러도 되는 것처럼 보이면 안 된다. */
+        .mic.off { background: var(--card); color: var(--ink-2); box-shadow: none; cursor: default; }
+        .mic.off .label { color: var(--ink); }
         .mic .icon { font-size: 40px; line-height: 1; display: block; margin-bottom: 8px; }
         .mic .label { font-size: 20px; font-weight: 800; display: block; }
         .mic .hint { font-size: 12.5px; opacity: .88; display: block; margin-top: 5px; }
@@ -134,12 +137,22 @@
 
         <main>
             <section id="compose">
-                {{-- ① 말하기 — 이 화면의 주인공. 현장에서 제일 빠른 길이다. --}}
-                <button class="mic" id="mic" type="button">
-                    <span class="icon" id="mic-icon">🎤</span>
-                    <span class="label" id="mic-label">눌러서 말하기</span>
-                    <span class="hint" id="mic-hint">오늘 한 일을 말씀하세요. 글자로 바꿔 드립니다.</span>
-                </button>
+                {{-- ① 말하기 — 이 화면의 주인공. 현장에서 제일 빠른 길이다.
+                     아직 안 켜졌으면 그렇게 적어 둔다. 눌러 보고 나서 실패를 아는 것보다
+                     누르기 전에 아는 편이 낫다. --}}
+                @if ($voiceReady)
+                    <button class="mic" id="mic" type="button">
+                        <span class="icon" id="mic-icon">🎤</span>
+                        <span class="label" id="mic-label">눌러서 말하기</span>
+                        <span class="hint" id="mic-hint">오늘 한 일을 말씀하세요. 글자로 바꿔 드립니다.</span>
+                    </button>
+                @else
+                    <div class="mic off">
+                        <span class="icon">🎤</span>
+                        <span class="label">음성이 아직 안 켜졌습니다</span>
+                        <span class="hint">아래 「글로 쓰기」로 적어 주세요. (관리자: AI 키 설정 필요)</span>
+                    </div>
+                @endif
 
                 {{-- ② 두 번째 길 — 글로 쓰기, 그리고 사진(증거) --}}
                 <div class="two">
@@ -205,6 +218,7 @@
         var CAN_MANAGE = @json($canManage);
         var SITE_SCOPE = @json($siteScope);
         var TODAY = @json($today);
+        var VOICE_READY = @json($voiceReady);
         // 한글을 \uXXXX 로 바꾸지 않는다 — 본문이 작아지고, 화면에 실려 나간 내용을
         // 사람이 그대로 읽을 수 있다.
         var BATCHES = @json($batches, JSON_UNESCAPED_UNICODE);
@@ -272,7 +286,9 @@
             try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
         }
 
-        el('mic').addEventListener('click', function () {
+        // 음성이 꺼져 있으면 마이크 버튼 자체가 없다 — 없는 것에 손을 대면 화면이 죽는다.
+        var micBtn = el('mic');
+        if (micBtn) micBtn.addEventListener('click', function () {
             if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || pickMime() === null) {
@@ -650,6 +666,10 @@
                 reload();
             });
         }
+
+        // 음성이 꺼져 있으면 글쓰기 칸을 처음부터 열어 둔다 — 화면을 열자마자
+        // 할 수 있는 일이 보여야 한다.
+        if (!VOICE_READY) { openWriter(); }
 
         render();
     </script>

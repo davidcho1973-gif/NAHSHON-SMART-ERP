@@ -55,6 +55,10 @@ class MobileOpsRoomController extends Controller
             // 오늘 날짜(현장 기준) — 화면이 «오늘 올린 것» 과 지난 기록을 가르는 기준.
             // 반장에게 중요한 것은 오늘이고, 지난 것은 접어 둔다.
             'today' => Carbon::now($user?->employee?->site?->timezone ?: config('app.timezone'))->toDateString(),
+            // 음성이 켜져 있는가 — 눌러 보고 나서 실패를 아는 것보다, 누르기 전에
+            // 아는 편이 낫다. 여기서는 키가 있는지만 본다(바깥 호출 없이 즉시).
+            // 키는 있는데 모델이 막힌 경우까지는 `php artisan ops:voice-check` 가 본다.
+            'voiceReady' => trim((string) config('services.gemini.api_key')) !== '',
         ]);
     }
 

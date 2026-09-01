@@ -86,10 +86,25 @@ class MobileOpsRoomTest extends TestCase
     public function test_the_screen_says_what_to_do_before_anything_else(): void
     {
         // 화면을 여는 순간 «지금 뭘 해야 하나» 가 읽혀야 한다.
+        config(['services.gemini.api_key' => 'test-key']);
+
         $this->actingAs($this->user('admin'))->get('/attendance-app/ops-room')
             ->assertStatus(200)
             ->assertSee('눌러서 말하기')
             ->assertSee('글로 쓰기');
+    }
+
+    public function test_when_voice_is_off_the_screen_says_so_instead_of_offering_it(): void
+    {
+        // 눌러 보고 나서 «옮기지 못했습니다» 를 아는 것보다, 누르기 전에 아는 편이 낫다.
+        config(['services.gemini.api_key' => '']);
+
+        $this->actingAs($this->user('admin'))->get('/attendance-app/ops-room')
+            ->assertStatus(200)
+            ->assertSee('음성이 아직 안 켜졌습니다')
+            // 누를 수 있는 버튼 자체가 없어야 한다(안내 문구는 JS 안에도 남아 있으므로
+            // 글자가 아니라 버튼의 존재로 확인한다).
+            ->assertDontSee('id="mic"', false);
     }
 
     public function test_home_links_to_the_ops_room(): void

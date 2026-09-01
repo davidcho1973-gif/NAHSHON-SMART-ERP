@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Support\GeminiModelResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -22,7 +21,7 @@ class CheckVoiceReady extends Command
 
     protected $description = '음성 보고(말로 하는 보고)가 쓸 수 있는 상태인지 확인한다';
 
-    public function handle(GeminiModelResolver $resolver): int
+    public function handle(): int
     {
         $this->newLine();
         $this->line('  <options=bold>음성 보고 점검</>');
@@ -70,14 +69,20 @@ class CheckVoiceReady extends Command
 
         $this->line(sprintf('  ✅ 이 키로 쓸 수 있는 모델 %d개 확인', count($models)));
 
-        config(['services.gemini.model' => $wanted]);
-        $candidates = $resolver->candidates();
-
-        if ($candidates[0] === $wanted) {
+        // 모델 판정도 방금 받아 온 목록으로 직접 한다.
+        //
+        // 모델 결정기를 부르면 <b>같은 조회를 한 번 더</b> 하게 된다(새 컨테이너에는
+        // 캐시가 비어 있다). 점검 하나에 바깥 호출이 둘이면 그만큼 멈춰 설 자리가
+        // 늘어난다 — 점검은 빨리 끝나고 답을 주는 것이 일이다.
+        if (in_array($wanted, $models, true)) {
             $this->line(sprintf('  ✅ 음성용 모델 <options=bold>%s</> 을(를) 씁니다 (빠른 쪽).', $wanted));
         } else {
-            $this->line(sprintf('  ⚠️  바라던 음성용 모델(%s)이 없어 <options=bold>%s</> 로 갑니다.', $wanted, $candidates[0]));
-            $this->line('     느릴 수 있습니다. 필요하면 GEMINI_VOICE_MODEL 을 위 목록의 flash 모델로 바꾸세요.');
+            $flash = array_values(array_filter($models, fn (string $m): bool => str_contains($m, 'flash')));
+            $this->line(sprintf('  ⚠️  바라던 음성용 모델(%s)이 이 키에는 없습니다.', $wanted));
+            $this->line($flash !== []
+                ? '     대신 쓸 만한 빠른 모델: '.implode(', ', array_slice($flash, 0, 3))
+                    .' — GEMINI_VOICE_MODEL 을 이 중 하나로 바꾸세요.'
+                : '     빠른(flash) 모델이 없어 느릴 수 있습니다. 그래도 음성은 됩니다.');
         }
 
         $this->newLine();
@@ -98,7 +103,10 @@ class CheckVoiceReady extends Command
             .'/v1beta/models';
 
         try {
-            $res = Http::timeout(20)
+            // 전체 제한과 <b>연결</b> 제한을 따로 건다. 연결 제한이 없으면 바깥으로
+            // 나가는 길이 막힌 망에서 TCP 가 붙을 때까지 그냥 매달려 있는다 —
+            // 화면에는 «진행 중» 만 계속 뜬다.
+            $res = Http::connectTimeout(8)->timeout(20)
                 ->withHeaders(['x-goog-api-key' => $key])
                 ->get($endpoint, ['pageSize' => 1000]);
         } catch (\Throwable $e) {
