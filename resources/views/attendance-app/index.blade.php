@@ -303,6 +303,28 @@
             display: grid; place-items: center; font-size: 12px; font-weight: 800;
         }
 
+        /* ── 현장에서 하는 나머지 일 (네 칸) ─────────────────────────
+           손가락이 닿는 자리에 크게. 글자 링크 세 줄로 아래에 숨겨 두었을 때는
+           «앱이 따로따로» 처럼 느껴졌다. */
+        .quick { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+        .tile {
+            position: relative; background: var(--card); border-radius: 14px; padding: 15px 14px 13px;
+            text-decoration: none; color: var(--ink); display: block; min-height: 96px;
+        }
+        .tile:active { background: #F7F8F9; }
+        .tile-i {
+            display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+            background: var(--paper); color: var(--ink); margin-bottom: 9px;
+        }
+        .tile-i svg { width: 20px; height: 20px; display: block; }
+        .tile b { display: block; font-size: 14.5px; font-weight: 800; line-height: 1.3; }
+        .tile-s { display: block; font-size: 11.5px; color: var(--ink-2); line-height: 1.4; margin-top: 2px; }
+        .tile-dot {
+            position: absolute; top: 11px; right: 11px; min-width: 19px; height: 19px; padding: 0 6px;
+            border-radius: 999px; background: #FF3B30; color: #fff; font-size: 11px; font-weight: 800;
+            display: grid; place-items: center;
+        }
+
         /* ── 아래 탭 ──────────────────────────────────────────────── */
         .tabs {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -459,6 +481,10 @@
             todayLog: '오늘 내 기록', clockIn: '출근', clockOut: '퇴근', noLogs: '아직 기록이 없습니다.',
             chipReview: '확인 필요', chipAuto: '자동', chipHand: '직접',
             more: '그 밖에', messages: '메시지', messagesSub: '현장 채팅방과 공지',
+            qReport: '오늘 보고', qReportSub: '말하면 정리됩니다',
+            qReceipt: '영수증', qReceiptSub: '사진 한 장으로',
+            qDoc: '문서 올리기', qDocSub: '도면 · 계약 · 시방',
+            qChat: '메시지', qChatSub: '현장 채팅 · 공지',
             opsRoom: '현장 상황실', opsRoomSub: '오늘 한 일 · 자재 · 이슈 올리기',
             receipts: '영수증 내기', receiptsSub: '사진 한 장으로 경비 접수 · 환급 확인',
             weekRegular: '이번 주 정규', ot: '연장', regular: '정규', byDay: '일자별',
@@ -507,6 +533,10 @@
             todayLog: 'Today', clockIn: 'Clock in', clockOut: 'Clock out', noLogs: 'No records yet.',
             chipReview: 'Review', chipAuto: 'Auto', chipHand: 'Manual',
             more: 'More', messages: 'Messages', messagesSub: 'Site chats and notices',
+            qReport: "Today's report", qReportSub: 'Speak, we tidy it up',
+            qReceipt: 'Receipts', qReceiptSub: 'One photo is enough',
+            qDoc: 'Upload a file', qDocSub: 'Drawings · contracts · specs',
+            qChat: 'Messages', qChatSub: 'Site chats · notices',
             opsRoom: 'Ops room', opsRoomSub: 'Report work · materials · issues',
             receipts: 'Receipts', receiptsSub: 'Submit expenses with one photo · check reimbursements',
             weekRegular: 'Regular this week', ot: 'OT', regular: 'Regular', byDay: 'By day',
@@ -555,6 +585,10 @@
             todayLog: 'Hoy', clockIn: 'Entrada', clockOut: 'Salida', noLogs: 'Sin registros todavía.',
             chipReview: 'Revisar', chipAuto: 'Auto', chipHand: 'Manual',
             more: 'Más', messages: 'Mensajes', messagesSub: 'Chats y avisos del sitio',
+            qReport: 'Reporte de hoy', qReportSub: 'Hable y lo ordenamos',
+            qReceipt: 'Recibos', qReceiptSub: 'Basta una foto',
+            qDoc: 'Subir archivo', qDocSub: 'Planos · contratos · especificaciones',
+            qChat: 'Mensajes', qChatSub: 'Chats · avisos del sitio',
             opsRoom: 'Sala de obra', opsRoomSub: 'Reportar trabajo · materiales · problemas',
             receipts: 'Recibos', receiptsSub: 'Envíe gastos con una foto · vea reembolsos',
             weekRegular: 'Regular esta semana', ot: 'Extra', regular: 'Regular', byDay: 'Por día',
@@ -705,6 +739,18 @@
         }
         h += '</div>';
 
+        // ── 현장에서 하는 나머지 일 — 출퇴근 바로 아래에 큰 칸으로 둔다.
+        //
+        // 예전에는 보고·영수증·메시지가 화면 맨 아래 글자 링크 세 줄이었다. 하루에도
+        // 몇 번씩 쓰는 것들인데 스크롤을 내려야 보였고, 그래서 «앱이 따로따로» 처럼
+        // 느껴졌다. 폰에서 손가락이 닿는 자리에 네 칸으로 모은다.
+        h += '<div class="quick">' +
+            tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, d.reportBadge) +
+            tile('{{ route('expense-app.index') }}', ICON.receipt, T.qReceipt, T.qReceiptSub, '') +
+            tile('{{ route('attendance-app.docs') }}', ICON.doc, T.qDoc, T.qDocSub, '') +
+            tile('{{ route('communication.index') }}', ICON.chat, T.qChat, T.qChatSub, UNREAD ? String(UNREAD) : '') +
+            '</div>';
+
         // 전체공지 — 출퇴근 바로 아래. 공지방까지 들어가는 사람은 없다.
         var notices = d.notices || [];
         if (notices.length) {
@@ -740,16 +786,23 @@
         }
         h += '</div>';
 
-        h += '<div class="sec"><div class="sec-h">' + T.more + '</div>' +
-            '<a class="link" href="{{ route('communication.index') }}"><div><b>' + T.messages +
-            (UNREAD ? ' · ' + UNREAD : '') + '</b><span>' + T.messagesSub + '</span></div><span class="go">›</span></a>' +
-            '<a class="link" href="{{ route('attendance-app.ops-room') }}"><div><b>' + T.opsRoom + '</b>' +
-            '<span>' + T.opsRoomSub + '</span></div><span class="go">›</span></a>' +
-            '<a class="link" href="{{ route('expense-app.index') }}"><div><b>🧾 ' + T.receipts + '</b>' +
-            '<span>' + T.receiptsSub + '</span></div><span class="go">›</span></a>' +
-            '</div>';
         return h;
     }
+
+    /* 네 칸 그리드 한 칸. 아이콘 · 이름 · 한 줄 설명 · (필요하면) 빨간 숫자. */
+    function tile(href, icon, name, sub, badge) {
+        return '<a class="tile" href="' + href + '">' +
+            (badge ? '<span class="tile-dot">' + esc(badge) + '</span>' : '') +
+            '<span class="tile-i">' + icon + '</span>' +
+            '<b>' + esc(name) + '</b><span class="tile-s">' + esc(sub) + '</span></a>';
+    }
+
+    var ICON = {
+        report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z"/><path d="M9.5 3.2h5v2.4h-5z"/><path d="M9 11h6M9 14.6h4"/></svg>',
+        receipt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.6h12v16.8l-2.4-1.5-2.4 1.5-2.4-1.5-2.4 1.5L6 18.9z"/><path d="M9.2 8.4h5.6M9.2 12.2h5.6"/></svg>',
+        doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 3.5H7.6a1.6 1.6 0 0 0-1.6 1.6v13.8a1.6 1.6 0 0 0 1.6 1.6h8.8a1.6 1.6 0 0 0 1.6-1.6V8.1z"/><path d="M13.4 3.5V8h4.6"/><path d="M12 17v-5.4M9.8 13.6 12 11.4l2.2 2.2"/></svg>',
+        chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.2c0 3.7-3.6 6.7-8 6.7-.9 0-1.8-.13-2.6-.36L4.8 20l.9-3.2C4.6 15.6 4 14 4 12.2c0-3.7 3.6-6.7 8-6.7s8 3 8 6.7z"/></svg>',
+    };
 
     function tabWork(d) {
         var w = d.week || { regularHours: 0, overtimeHours: 0, days: [] };

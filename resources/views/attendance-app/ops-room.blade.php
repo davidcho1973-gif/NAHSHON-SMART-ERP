@@ -6,93 +6,104 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>오늘 보고</title>
     <style>
-        :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f6f7f9; color: #111827; }
-        * { box-sizing: border-box; }
+        /* 앱의 다른 화면과 같은 규격 — 문이 여럿이어도 한 앱으로 보여야 한다. */
+        :root {
+            color-scheme: light;
+            --paper: #F2F3F5; --card: #FFFFFF;
+            --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0;
+            --ok: #1E8E3E; --warn: #B26A00; --bad: #D94C4C; --info: #3E6BE0;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         [hidden] { display: none !important; }
-        body { margin: 0; min-height: 100vh; background: #f6f7f9; }
-        .app { min-height: 100vh; max-width: 520px; margin: 0 auto; background: #fff; display: flex; flex-direction: column; }
-        header { padding: 18px 20px 14px; border-bottom: 1px solid #e5e7eb; }
-        .back { display: inline-block; color: #2563eb; font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 8px; }
-        .eyebrow { margin: 0 0 4px; color: #16a34a; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-        h1 { margin: 0; font-size: 24px; line-height: 1.2; }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            margin: 0; min-height: 100dvh; background: var(--paper); color: var(--ink);
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+            font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+        }
+        .app { min-height: 100dvh; max-width: 520px; margin: 0 auto; background: var(--paper); display: flex; flex-direction: column; }
+        header { padding: 16px 18px 15px; background: var(--card); border-bottom: 1px solid var(--rule); }
+        .back { display: inline-block; color: var(--info); font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 7px; }
+        .eyebrow { margin: 0 0 4px; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+        h1 { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.25; }
 
         /* 상태 한 줄 — 화면을 열자마자 «지금 어디까지 왔나» 를 말해 준다. */
-        .state { margin: 8px 0 0; font-size: 14px; line-height: 1.5; font-weight: 700; color: #374151; }
-        .state.done { color: #15803d; }
-        .state.todo { color: #b45309; }
-        .state-sub { margin: 4px 0 0; font-size: 12.5px; color: #6b7280; line-height: 1.5; }
+        .state { margin: 8px 0 0; font-size: 14px; line-height: 1.5; font-weight: 700; color: var(--ink); }
+        .state.done { color: var(--ok); }
+        .state.todo { color: var(--warn); }
+        .state-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
 
-        main { padding: 18px 20px 40px; flex: 1; }
+        main { padding: 14px 16px 40px; flex: 1; }
 
         /* ── 제일 큰 것 하나: 말하기 ─────────────────────────────────
            현장은 장갑을 끼고 손이 더럽다. 타자보다 말이 빠르다. */
-        .mic { width: 100%; border: 0; border-radius: 18px; padding: 26px 20px; background: #145fff; color: #fff;
-               cursor: pointer; text-align: center; box-shadow: 0 6px 18px rgba(20,95,255,.28); }
+        .mic { width: 100%; border: 0; border-radius: 16px; padding: 26px 20px; background: var(--info); color: #fff;
+               cursor: pointer; text-align: center; font-family: inherit; box-shadow: 0 6px 18px rgba(62,107,224,.26); }
         .mic:disabled { opacity: .6; }
         .mic .icon { font-size: 40px; line-height: 1; display: block; margin-bottom: 8px; }
         .mic .label { font-size: 20px; font-weight: 800; display: block; }
         .mic .hint { font-size: 12.5px; opacity: .88; display: block; margin-top: 5px; }
-        .mic.rec { background: #dc2626; box-shadow: 0 6px 18px rgba(220,38,38,.3); animation: pulse 1.4s ease-in-out infinite; }
+        .mic.rec { background: var(--bad); box-shadow: 0 6px 18px rgba(217,76,76,.3); animation: pulse 1.4s ease-in-out infinite; }
         @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.015); } }
         @media (prefers-reduced-motion: reduce) { .mic.rec { animation: none; } }
 
         .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
 
-        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #d1d5db;
-               background: #fff; color: #374151; border-radius: 12px; padding: 14px 12px; font-size: 15px; font-weight: 700;
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0;
+               background: var(--card); color: var(--ink); border-radius: 12px; padding: 15px 12px; font-size: 15px; font-weight: 700;
                cursor: pointer; font-family: inherit; }
-        .btn.primary { background: #145fff; border-color: #145fff; color: #fff; }
-        .btn.danger { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+        .btn.primary { background: var(--info); color: #fff; }
+        .btn.danger { color: var(--bad); background: #FDECEC; }
         .btn.full { width: 100%; }
         .btn:disabled { opacity: .55; }
-        .btn.on { border-color: #145fff; color: #145fff; background: #eff4ff; }
+        .btn.on { color: var(--info); background: #ECF1FE; }
         .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 
         .writer { margin-top: 14px; }
-        textarea { width: 100%; min-height: 130px; border: 1px solid #d1d5db; border-radius: 12px; padding: 12px;
-                   font-size: 16px; font-family: inherit; resize: vertical; background: #fff; color: #111827; line-height: 1.6; }
-        .heard { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 10px;
+        textarea { width: 100%; min-height: 130px; border: 0; border-radius: 12px; padding: 13px;
+                   font-size: 16px; font-family: inherit; resize: vertical; background: var(--card); color: var(--ink); line-height: 1.6; }
+        .heard { background: #ECF1FE; color: var(--info); border-radius: 10px;
                  padding: 9px 11px; font-size: 12.5px; margin-bottom: 8px; line-height: 1.5; font-weight: 700; }
 
         .shots { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
-        .shot { position: relative; width: 62px; height: 62px; border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb; }
+        .shot { position: relative; width: 62px; height: 62px; border-radius: 10px; overflow: hidden; background: var(--card); }
         .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .shot button { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%;
                        border: 0; background: rgba(0,0,0,.62); color: #fff; font-size: 13px; line-height: 1; cursor: pointer; padding: 0; }
 
-        .msg { font-size: 13px; color: #6b7280; margin-top: 10px; line-height: 1.55; }
-        .msg.warn { color: #b45309; font-weight: 700; }
-        .msg.ok { color: #15803d; font-weight: 700; }
+        .msg { font-size: 13px; color: var(--ink-2); margin-top: 12px; line-height: 1.55; }
+        .msg.warn { color: var(--warn); font-weight: 700; }
+        .msg.ok { color: var(--ok); font-weight: 700; }
 
         /* ── 오늘 올린 것 ───────────────────────────────────────── */
-        .sec-title { font-size: 14px; font-weight: 800; margin: 26px 0 8px; color: #111827; }
-        .item { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; margin-bottom: 9px; background: #fff; cursor: pointer; }
+        .sec-title { font-size: 13px; font-weight: 800; margin: 24px 0 8px; color: var(--ink-2); }
+        .item { border: 0; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; background: var(--card); cursor: pointer; }
         .meta { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; margin-bottom: 5px; font-size: 11.5px; }
-        .time { color: #6b7280; font-family: ui-monospace, Menlo, monospace; }
-        .who { color: #374151; font-weight: 700; }
+        .time { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+        .who { color: var(--ink); font-weight: 700; }
         .chip { border-radius: 999px; padding: 2px 8px; font-weight: 800; font-size: 10.5px; }
         .chip.work { background: #eef2ff; color: #3730a3; }
         .chip.photo { background: #ecfdf5; color: #047857; }
         .chip.edited { background: #fffbeb; color: #b45309; }
         .chip.applied { background: #ecfdf5; color: #047857; }
-        .preview { font-size: 13.5px; color: #4b5563; line-height: 1.55; }
-        .empty { color: #6b7280; font-size: 13.5px; padding: 18px 0; text-align: center; line-height: 1.6; }
-        .more { display: block; width: 100%; text-align: center; background: none; border: 0; color: #2563eb;
+        .preview { font-size: 13.5px; color: var(--ink-2); line-height: 1.55; }
+        .empty { color: var(--ink-2); font-size: 13px; padding: 18px 0; text-align: center; line-height: 1.6; }
+        .more { display: block; width: 100%; text-align: center; background: none; border: 0; color: var(--info);
                 font-size: 13px; font-weight: 700; padding: 10px; cursor: pointer; font-family: inherit; }
 
         /* ── 제출 ─────────────────────────────────────────────── */
-        .submit-box { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e5e7eb; }
-        .finish-hint { margin: 0 0 8px; font-size: 12.5px; color: #6b7280; text-align: center; }
-        .btn.finish { background: #15803d; border-color: #15803d; color: #fff; padding: 16px 12px; font-size: 16px; }
-        .reflected { color: #15803d; font-weight: 700; font-size: 12.5px; margin-top: 8px; line-height: 1.5; }
-        .reopened { color: #b45309; font-weight: 700; font-size: 12.5px; margin-top: 8px; line-height: 1.5; }
+        .submit-box { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rule); }
+        .finish-hint { margin: 0 0 8px; font-size: 12.5px; color: var(--ink-2); text-align: center; }
+        .btn.finish { background: var(--ok); color: #fff; padding: 17px 12px; font-size: 16px; font-weight: 800; }
+        .reflected { color: var(--ok); font-weight: 700; font-size: 12.5px; margin-top: 8px; line-height: 1.5; }
+        .reopened { color: var(--warn); font-weight: 700; font-size: 12.5px; margin-top: 8px; line-height: 1.5; }
 
-        pre.raw { white-space: pre-wrap; word-break: break-word; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; font-size: 13.5px; line-height: 1.6; margin: 0 0 12px; font-family: inherit; color: #111827; }
-        details summary { font-size: 12.5px; color: #6b7280; font-weight: 700; cursor: pointer; margin-bottom: 8px; }
+        pre.raw { white-space: pre-wrap; word-break: break-word; background: var(--card); border-radius: 10px; padding: 12px; font-size: 13.5px; line-height: 1.6; margin: 0 0 12px; font-family: inherit; color: var(--ink); }
+        details summary { font-size: 12.5px; color: var(--ink-2); font-weight: 700; cursor: pointer; margin: 8px 0; }
         .edited-note { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 10px; line-height: 1.5; }
         .warnbox { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 10px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 10px; line-height: 1.5; }
-        .parsed { font-size: 12.5px; color: #374151; border-top: 1px solid #eef0f3; padding: 9px 0; }
-        .parsed b { color: #111827; }
+        .parsed { font-size: 12.5px; color: var(--ink-2); border-top: 1px solid var(--rule); padding: 9px 0; }
+        .parsed b { color: var(--ink); }
     </style>
 </head>
 <body>
@@ -138,8 +149,14 @@
                 <input type="file" id="photos" accept="image/*" multiple capture="environment" hidden>
 
                 <div class="writer" id="writer" hidden>
-                    <p class="heard" id="heard" hidden>말씀하신 내용입니다. 틀린 곳이 있으면 고치고 보내 주세요.</p>
+                    <p class="heard" id="heard" hidden>말씀하신 내용을 보고 문장으로 정리했습니다. 틀린 곳은 고치고 보내 주세요.</p>
                     <textarea id="raw" placeholder="예)&#10;3층 천장 배관 20개 중 12개 했습니다&#10;그레이바 자재 화요일 도착&#10;내일 전기 3명 투입"></textarea>
+                    {{-- 정리 전에 무슨 말을 했는지 — 다듬은 문장이 내 말과 다르면
+                         여기서 확인한다. 정리는 도움이지 대체가 아니다. --}}
+                    <details id="heard-raw" hidden>
+                        <summary>내가 말한 그대로 보기</summary>
+                        <pre class="raw" id="heard-text"></pre>
+                    </details>
                 </div>
 
                 <div class="shots" id="shots"></div>
@@ -324,8 +341,15 @@
                     el('heard').hidden = false;
                     var box = el('raw');
                     box.value = (box.value ? box.value.replace(/\s+$/, '') + '\n' : '') + d.text;
+
+                    // 다듬기 전 말도 함께 둔다 — 정리된 문장이 내 말과 다르면 여기서 본다.
+                    if (d.heard && d.heard !== d.text) {
+                        el('heard-text').textContent = d.heard;
+                        el('heard-raw').hidden = false;
+                    }
+
                     syncSend();
-                    say('옮겼습니다. 틀린 곳을 고치고 <b>보내기</b>를 눌러 주세요.', 'ok');
+                    say('보고 문장으로 정리했습니다. 틀린 곳을 고치고 <b>보내기</b>를 눌러 주세요.', 'ok');
                     box.focus();
                 })
                 .catch(function () {
@@ -347,6 +371,7 @@
             else if (el('raw').value.trim() === '') {
                 el('writer').hidden = true;
                 el('heard').hidden = true;
+                el('heard-raw').hidden = true;
                 this.classList.remove('on');
                 syncSend();
             }
@@ -422,6 +447,7 @@
                     if (!d || d.success === false) { throw new Error((d && d.error) || '보내지 못했습니다.'); }
                     el('raw').value = '';
                     el('heard').hidden = true;
+                    el('heard-raw').hidden = true;
                     photos = [];
                     drawShots();
                     syncSend();

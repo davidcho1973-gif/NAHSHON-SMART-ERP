@@ -15,6 +15,7 @@ use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
 use App\Http\Controllers\IntegratedDocumentController;
 use App\Http\Controllers\MemberRegistrationController;
+use App\Http\Controllers\MobileDocumentController;
 use App\Http\Controllers\MobileEquipmentController;
 use App\Http\Controllers\MobileExpenseController;
 use App\Http\Controllers\MobileOpsRoomController;
@@ -280,6 +281,8 @@ Route::middleware('auth')->group(function (): void {
 
     // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
     Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
+    // 폰으로 문서 올리기 — 현장에서 손에 들어온 도면·계약서를 그 자리에서 문서함으로.
+    Route::get('/attendance-app/docs', [MobileDocumentController::class, 'index'])->name('attendance-app.docs');
     // 공종별 오늘 보고 — 반장이 자기 몫을 확정한다(현황판은 ERP 쪽 api_tradeReportBoard).
     Route::post('/ops-api/trade-report/submit', [MobileOpsRoomController::class, 'submitTradeReport'])
         ->name('ops.trade-report.submit');
