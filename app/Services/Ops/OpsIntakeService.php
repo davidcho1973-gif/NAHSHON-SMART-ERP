@@ -48,6 +48,7 @@ class OpsIntakeService
         private readonly OpsPhotoRouter $photoRouter,
         private readonly OpsModuleRouter $modules,
         private readonly IntegratedDocumentService $documents,
+        private readonly TradeReportService $tradeReports,
     ) {}
 
     /**
@@ -90,6 +91,10 @@ class OpsIntakeService
             'raw_text' => $text,
             'image_count' => count($images),
         ]);
+
+        // 그날 그 공종의 보고에 묶는다 — 반장에게 "어느 보고에 넣을까요" 를 묻지
+        // 않는다. 그 답은 이미 알고 있다(올린 사람의 공종, 오늘 날짜).
+        $this->tradeReports->attach($batch);
 
         $saved = [];
         foreach ($raw as $r) {
@@ -148,6 +153,8 @@ class OpsIntakeService
             'photo_disk' => $photoPaths !== [] ? OpsPhotoController::disk() : null,
             'photo_paths' => $photoPaths ?: null,
         ]);
+
+        $this->tradeReports->attach($batch);
 
         AnalyzeOpsIntakeJob::dispatch($batch->id)->afterResponse();
 

@@ -363,6 +363,16 @@ class SmartCompanyData
             'api_getDocExpiring' => app(DocumentExpiryService::class)->overview(self::resolveSiteId($siteId), (int) ($args[0] ?? 60)),
             // 현장 상황실 — 자유 형식 글/카톡 붙여넣기 판독
             // 판독 예약 — 사진이 많아도 요청은 즉시 끝나고, 실제 판독은 응답 후에 돈다(504 방지).
+            // 공종별 오늘 보고 현황판 — 소장이 "누가 아직 안 냈나" 를 본다.
+            'api_tradeReportBoard' => app(\App\Services\Ops\TradeReportService::class)->board(
+                (int) (\App\Models\Site::query()->where('code', $siteId)->value('id') ?? 0),
+                isset($args[0]) ? (string) $args[0] : null,
+            ),
+            'api_tradeReportReopen' => app(\App\Services\Ops\TradeReportService::class)->reopen(
+                (int) ($args[0] ?? 0),
+                (string) ($args[1] ?? ''),
+                auth()->user(),
+            ),
             'api_opsIngest' => app(OpsIntakeService::class)->queue(
                 (string) ($args[0] ?? ''),
                 self::resolveSiteId($siteId) ? Site::find(self::resolveSiteId($siteId)) : null,

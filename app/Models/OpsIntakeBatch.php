@@ -16,6 +16,9 @@ class OpsIntakeBatch extends Model
         'raw_text', 'original_text', 'edited_by_id', 'edited_at',
         'image_count', 'parsed_count', 'actionable_count', 'noise_count',
         'status', 'error', 'analyzed_at', 'photo_disk', 'photo_paths', 'photo_kinds', 'auto_applied', 'evidence_filed',
+        // 그날 그 공종의 보고. fillable 에 없으면 대량할당이 예외 없이 조용히 버려서,
+        // 보고에 안 묶인 기록이 생기고 아무도 그 사실을 모른다.
+        'daily_trade_report_id',
     ];
 
     protected function casts(): array

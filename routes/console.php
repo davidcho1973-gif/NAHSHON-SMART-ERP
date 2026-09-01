@@ -68,6 +68,11 @@ Schedule::command('attendance:remind-clockin')->everyTenMinutes();
 // (기록에서 배운 시각 · 하루 2번 · 시간대 밖에서는 아무것도 안 함)으로 그날 저녁에 묻는다.
 Schedule::command('attendance:remind-clockout')->everyTenMinutes();
 
+// 공종별 오늘 보고 — 마감 한 시간 전부터 안 낸 공종의 반장에게 묻고, 마감이 지나면
+// 소장에게 명단으로 올린다. 빠진 공종이 있는 채로 종합보고서가 원청에 나가면
+// 그 사실을 아무도 모른다.
+Schedule::command('ops:remind-trade-report')->everyTenMinutes();
+
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
 Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18:00'));
 

@@ -257,6 +257,9 @@ Route::middleware('auth')->group(function (): void {
 
     // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
     Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
+    // 공종별 오늘 보고 — 반장이 자기 몫을 확정한다(현황판은 ERP 쪽 api_tradeReportBoard).
+    Route::post('/ops-api/trade-report/submit', [MobileOpsRoomController::class, 'submitTradeReport'])
+        ->name('ops.trade-report.submit');
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
     Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
     Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');

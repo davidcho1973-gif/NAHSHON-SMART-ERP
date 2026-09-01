@@ -17,6 +17,9 @@
         .sub { margin: 6px 0 0; color: #6b7280; font-size: 13px; line-height: 1.5; }
         main { padding: 16px 20px 40px; flex: 1; }
         .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 16px; background: #fafafa; }
+        /* 오늘 내 몫 — 이 화면에서 제일 먼저 눈에 들어와야 하는 칸이다. */
+        .card.mine { background: #fffbea; border-color: #f2d675; }
+        .msg.reopened { color: #b45309; font-weight: 700; }
         .card h2 { font-size: 15px; margin: 0 0 10px; }
         textarea { width: 100%; min-height: 120px; border: 1px solid #d1d5db; border-radius: 10px; padding: 11px; font-size: 15px; font-family: inherit; resize: vertical; background: #fff; color: #111827; }
         input[type=file] { font-size: 13px; margin-top: 10px; max-width: 100%; }
@@ -59,6 +62,32 @@
         </header>
 
         <main>
+            @if ($myTrade)
+                {{-- 오늘 내 몫 — 반장이 자기 공종의 보고를 확정하는 자리.
+                     이 신호가 없으면 소장은 "덕트가 아직 안 냈다" 를 알 수 없고,
+                     빠진 공종이 있는 채로 마감보고서가 원청에 나간다. --}}
+                <section class="card mine" id="mine-card">
+                    <h2>오늘 내 보고 — {{ $myTrade }}</h2>
+                    <p class="msg" id="mine-msg">
+                        @if ($reportStatus === 'submitted')
+                            ✅ 제출 완료 — 오늘 몫은 끝났습니다. 더 올리면 그대로 보고에 들어갑니다.
+                        @else
+                            올린 기록 {{ $reportEntries }}건. 오늘 한 일을 다 올리셨으면 아래를 눌러 주세요.
+                        @endif
+                    </p>
+                    @if ($reopenReason)
+                        {{-- 소장이 되돌린 이유 — 무엇을 더 올려야 하는지 알아야 다시 낸다. --}}
+                        <p class="msg reopened">↩ 소장이 되돌렸습니다: {{ $reopenReason }}</p>
+                    @endif
+                    <div class="row">
+                        <button class="btn primary full" id="submit-report"
+                                @if ($reportStatus === 'submitted') disabled @endif>
+                            {{ $reportStatus === 'submitted' ? '제출 완료' : '오늘 보고 제출' }}
+                        </button>
+                    </div>
+                </section>
+            @endif
+
             {{-- 새로 올리기 --}}
             <section class="card">
                 <h2>현장 이야기 올리기</h2>
@@ -117,6 +146,33 @@
             document.getElementById('list-screen').classList.toggle('hidden', which !== 'list');
             document.getElementById('detail-screen').classList.toggle('hidden', which !== 'detail');
             window.scrollTo(0, 0);
+        }
+
+        // 오늘 보고 제출 — 확정 신호. 되돌리기는 소장이 ERP 현황판에서 한다.
+        var submitBtn = document.getElementById('submit-report');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function () {
+                var msg = document.getElementById('mine-msg');
+                submitBtn.disabled = true;
+                fetch(@json(route('ops.trade-report.submit')), {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || d.success === false) {
+                            if (msg) { msg.textContent = (d && d.error) || '제출하지 못했습니다.'; }
+                            submitBtn.disabled = false;
+                            return;
+                        }
+                        submitBtn.textContent = '제출 완료';
+                        if (msg) { msg.textContent = '✅ ' + (d.message || '제출했습니다.'); }
+                    })
+                    .catch(function () {
+                        if (msg) { msg.textContent = '연결에 실패했습니다. 잠시 뒤 다시 눌러 주세요.'; }
+                        submitBtn.disabled = false;
+                    });
+            });
         }
 
         // 사진은 원본 그대로 들고 있다가 한 장씩 올린다 — 요청 하나가 작아 크기 제한이 사라지고,
