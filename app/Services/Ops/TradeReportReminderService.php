@@ -4,9 +4,11 @@ namespace App\Services\Ops;
 
 use App\Models\DailyTradeReport;
 use App\Models\Employee;
+use App\Models\OpsIntakeItem;
 use App\Models\PushSubscription;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Alerts\UnifiedAlertService;
 use App\Services\Push\WebPushSender;
 use Illuminate\Support\Carbon;
 
@@ -31,8 +33,14 @@ class TradeReportReminderService
         private readonly TradeReportService $reports,
     ) {}
 
+    /** 반영 도중 프로세스가 끊겨 잡아 둔 자리에 갇힌 항목을 이만큼 지나면 놓아준다(분). */
+    private const CLAIM_STALE_MINUTES = 15;
+
+    /** 제출한 지 이만큼 지났는데 반영이 확정 안 됐으면 다시 건다(분). */
+    private const REFLECT_STALE_MINUTES = 10;
+
     /**
-     * @return array{checked: int, sent: int, escalated: int}
+     * @return array{checked: int, sent: int, escalated: int, resumed: int}
      */
     public function run(?Carbon $now = null): array
     {
@@ -40,6 +48,9 @@ class TradeReportReminderService
         $checked = 0;
         $sent = 0;
         $escalated = 0;
+
+        // 못 끝낸 반영을 먼저 다시 건다.
+        $resumed = $this->resumeStalledReflections($now);
 
         foreach (Site::query()->where('status', 'active')->get() as $site) {
             $tz = $site->timezone ?: config('app.timezone');
@@ -70,7 +81,52 @@ class TradeReportReminderService
             $escalated += $this->escalate($site, $workDate, $missing) ? 1 : 0;
         }
 
-        return ['checked' => $checked, 'sent' => $sent, 'escalated' => $escalated];
+        return ['checked' => $checked, 'sent' => $sent, 'escalated' => $escalated, 'resumed' => $resumed];
+    }
+
+    /**
+     * 제출은 됐는데 반영이 확정되지 않은 보고를 다시 돌린다.
+     *
+     * 반영은 응답을 보낸 뒤 같은 프로세스에서 돈다. 그 사이에 배포 재시작이나
+     * 메모리 초과로 프로세스가 끊기면 예외가 아니라 <b>죽음</b>이라, 잡의 failed()
+     * 조차 호출되지 않는다. 그러면 보고는 제출된 채 reflected_at 이 비어 있고,
+     * 항목 일부만 ERP 에 들어간 상태로 아무도 다시 보지 않는다 — 미제출 알림은
+     * 제출된 보고를 쳐다보지 않기 때문이다.
+     *
+     * 반영은 멱등에 가깝게 만들어 두었으므로(이미 반영된 항목은 건너뛴다) 다시
+     * 거는 것이 안전하다.
+     */
+    private function resumeStalledReflections(Carbon $now): int
+    {
+        // 반영 중이던 항목이 «처리 중» 자리에 갇혀 있으면 확인 대기 목록에서도
+        // 사라진다 — 아무도 다시 손댈 수 없는 상태다. 먼저 풀어 준다.
+        OpsIntakeItem::query()
+            ->where('status', 'applying')
+            ->where('updated_at', '<=', $now->copy()->subMinutes(self::CLAIM_STALE_MINUTES))
+            ->update(['status' => 'pending']);
+
+        $cutoff = $now->copy()->subMinutes(self::REFLECT_STALE_MINUTES);
+
+        $stalled = DailyTradeReport::query()
+            ->where('status', DailyTradeReport::STATUS_SUBMITTED)
+            ->whereNull('reflected_at')
+            ->where('submitted_at', '<=', $cutoff)
+            // 어제 것까지만 본다. 더 오래된 것은 다시 돌려 봤자 그날의 사실이 아니다.
+            ->where('submitted_at', '>=', $now->copy()->subDays(2))
+            ->limit(20)
+            ->get();
+
+        $done = 0;
+        foreach ($stalled as $report) {
+            try {
+                app(TradeReportReflector::class)->reflect($report);
+                $done++;
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return $done;
     }
 
     /**
@@ -133,7 +189,7 @@ class TradeReportReminderService
     private function escalate(Site $site, string $workDate, array $trades): bool
     {
         try {
-            app(\App\Services\Alerts\UnifiedAlertService::class)->emit(
+            app(UnifiedAlertService::class)->emit(
                 "trade-report-missing:{$site->id}:{$workDate}",
                 [
                     'company_id' => $site->company_id,

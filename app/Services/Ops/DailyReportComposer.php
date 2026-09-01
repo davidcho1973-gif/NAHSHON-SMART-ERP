@@ -163,10 +163,19 @@ class DailyReportComposer
             $headcount = $labor['reported'].'명 (현장 보고 기준)';
         }
 
+        // 공정률이 둘일 수 있다: 현장이 손으로 적은 것과, 공정표에서 계산된 것.
+        // 하나로 합치지 않는다 — 어긋나는 순간이 곧 관리 포인트이고, 합쳐 버리면
+        // 그 어긋남이 보이지 않는다.
+        $schedule = $m['schedule'] ?? [];
+        $scheduleRate = $schedule['rate'] ?? null;
+
         $body .= $this->kv([
             '날씨 Weather' => trim((string) (($f['weather'] ?? '').' '.($f['temperature'] ?? ''))),
             '금일 출역 Manpower' => $headcount,
             '진도율 Progress' => isset($f['progressRate']) && $f['progressRate'] > 0 ? $f['progressRate'].'%' : '',
+            '공정표 기준 Schedule' => $scheduleRate !== null
+                ? sprintf('%d%% (작업 %d건 중 %d건 완료)', (int) $scheduleRate, (int) ($schedule['tasks'] ?? 0), (int) ($schedule['done'] ?? 0))
+                : '',
             'TBM' => array_key_exists('tbmCompleted', $f) ? ($f['tbmCompleted'] ? '실시 Completed' : '미실시 NOT DONE') : '',
         ]);
 
@@ -188,6 +197,37 @@ class DailyReportComposer
                 '차이 Gap' => (($labor['gap'] ?? 0) === 0 ? '없음' : sprintf('%+d명 — 출역 확인 필요', $labor['gap'])),
                 '최종 확정 Final' => ($labor['final'] ?? 0).'명',
             ]);
+        }
+
+        // ── 공종별 보고: 오늘 누가 무엇을 냈는가. 이 표가 없으면 보고서에 숫자만 남고
+        // "이 60% 는 누가 본 겁니까" 에 답할 사람이 없다. 안 낸 공종은 안 낸 채로 적는다 —
+        // 빠진 줄을 감추면 원청은 그 공종이 오늘 쉰 줄 안다.
+        $trades = $m['tradeReports'] ?? [];
+        if (($trades['rows'] ?? []) !== []) {
+            $rows = array_map(fn (array $t): array => [
+                (string) ($t['trade'] ?? ''),
+                ($t['submitted'] ?? false)
+                    ? '제출 '.trim((string) ($t['submittedAt'] ?? ''))
+                    : '미제출 NOT SUBMITTED',
+                ((int) ($t['headcount'] ?? 0)).'명',
+                (string) ($t['submittedBy'] ?? ''),
+                implode("\n", array_slice((array) ($t['highlights'] ?? []), 0, 4)),
+            ], $trades['rows']);
+
+            $body .= $this->section('공종별 보고', 'Reports by Trade — '
+                .(int) ($trades['submitted'] ?? 0).'/'.(int) ($trades['total'] ?? 0));
+            $body .= $this->table(
+                ['공종 Trade', '제출 Status', '인원', '보고자 Reported by', '보고 내용 Contents'],
+                $rows,
+                ['110px', '120px', '52px', '110px', null],
+            );
+
+            if (($trades['missingTrades'] ?? []) !== []) {
+                $body .= $this->kv([
+                    '미제출 공종 Missing' => implode(', ', $trades['missingTrades'])
+                        .' — 해당 공종의 금일 실적은 이 보고서에 포함되지 않았습니다.',
+                ]);
+            }
         }
 
         // ── 오늘 한 일: 현장이 쓴 것이 먼저, AI 가 집계에서 찾아낸 것이 뒤.
@@ -279,7 +319,7 @@ class DailyReportComposer
         return [
             'subject' => $subject,
             'html' => $this->wrap('일일 작업보고서', 'DAILY CONSTRUCTION REPORT', $siteName, $date, $body, $report, 'DCR'),
-            'text' => $this->plainClosing($n, $f, $labor, $siteName, $date),
+            'text' => $this->plainClosing($n, $f, $labor, $siteName, $date, $trades, $schedule),
         ];
     }
 
@@ -439,8 +479,10 @@ class DailyReportComposer
      * @param  array<string, mixed>  $n
      * @param  array<string, mixed>  $f
      * @param  array<string, mixed>  $labor
+     * @param  array<string, mixed>  $trades
+     * @param  array<string, mixed>  $schedule
      */
-    private function plainClosing(array $n, array $f, array $labor, string $siteName, string $date): string
+    private function plainClosing(array $n, array $f, array $labor, string $siteName, string $date, array $trades = [], array $schedule = []): string
     {
         $out = ["[{$siteName}] 일일 작업보고서 — {$date}", ''];
 
@@ -453,7 +495,29 @@ class DailyReportComposer
         if (($f['progressRate'] ?? 0) > 0) {
             $out[] = '■ 진도율: '.$f['progressRate'].'%';
         }
+        if (($schedule['rate'] ?? null) !== null) {
+            $out[] = '■ 공정표 기준: '.(int) $schedule['rate'].'%';
+        }
         $out[] = '';
+
+        // 공종별 보고 — HTML 본문과 같은 내용이어야 한다. 평문만 보는 사람에게
+        // 미제출 공종이 안 보이면 그 사람에게는 빠진 줄이 없는 보고서가 된다.
+        if (($trades['rows'] ?? []) !== []) {
+            $out[] = sprintf('■ 공종별 보고 (%d/%d 제출)',
+                (int) ($trades['submitted'] ?? 0), (int) ($trades['total'] ?? 0));
+            foreach ($trades['rows'] as $t) {
+                $out[] = sprintf('- %s: %s%s%s',
+                    (string) ($t['trade'] ?? ''),
+                    ($t['submitted'] ?? false) ? '제출' : '미제출',
+                    ($t['submittedBy'] ?? '') ? ' ('.$t['submittedBy'].')' : '',
+                    ((array) ($t['highlights'] ?? [])) !== [] ? ' — '.implode('; ', array_slice((array) $t['highlights'], 0, 3)) : '',
+                );
+            }
+            if (($trades['missingTrades'] ?? []) !== []) {
+                $out[] = '  ※ 미제출: '.implode(', ', $trades['missingTrades']);
+            }
+            $out[] = '';
+        }
 
         foreach ([['done', '금일 작업 실적'], ['issues', '이슈'], ['tomorrow', '익일 계획']] as [$k, $label]) {
             $list = array_filter((array) ($n[$k] ?? []), fn ($v): bool => is_string($v) && trim($v) !== '');

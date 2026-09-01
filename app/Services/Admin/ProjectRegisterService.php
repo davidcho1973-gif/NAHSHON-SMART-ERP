@@ -7,7 +7,12 @@ use App\Models\IntelligentDocument;
 use App\Models\Project;
 use App\Models\Site;
 use App\Models\Submittal;
+use App\Models\SubmittalEvent;
 use App\Models\User;
+use App\Services\Takeoff\RelatedDrawingFinder;
+use App\Services\Takeoff\SubmittalCommsService;
+use App\Services\Takeoff\SubmittalRequestService;
+use App\Services\Takeoff\SubmittalResearchService;
 use App\Support\CurrentCompany;
 
 /**
@@ -101,7 +106,7 @@ class ProjectRegisterService
             'recipientName' => $s->recipient_name,
             'recipientEmail' => $s->recipient_email,
             'lastComm' => $s->lastEvent
-                ? (\App\Models\SubmittalEvent::KIND_LABELS[$s->lastEvent->kind] ?? $s->lastEvent->kind).' · '.$s->lastEvent->created_at?->format('m-d')
+                ? (SubmittalEvent::KIND_LABELS[$s->lastEvent->kind] ?? $s->lastEvent->kind).' · '.$s->lastEvent->created_at?->format('m-d')
                 : null,
         ])->values()->all();
 
@@ -127,12 +132,18 @@ class ProjectRegisterService
     /**
      * 상태·담당·날짜·메모만 갱신한다 — 조항 내용(title/csi/category)은 임포트가 정본.
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    public function saveSubmittal(array $data): array
+    /**
+     * @param  User|null  $actor  누구의 권한으로 고치는가. 화면에서 부를 때는 로그인한
+     *                            사람이지만, 반장의 보고 제출이 백그라운드에서 반영될
+     *                            때는 세션이 없다 — 그때 auth() 만 보면 언제나 권한
+     *                            없음이 되어, 그 길로는 아무것도 반영되지 않는다.
+     */
+    public function saveSubmittal(array $data, ?User $actor = null): array
     {
-        if (! $this->canManage()) {
+        if (! $this->canManage($actor)) {
             return ['success' => false, 'error' => '제출물 대장 수정 권한이 없습니다.'];
         }
 
@@ -178,7 +189,7 @@ class ProjectRegisterService
             return ['success' => false, 'error' => '해당 항목이 없습니다.'];
         }
 
-        $result = app(\App\Services\Takeoff\SubmittalRequestService::class)
+        $result = app(SubmittalRequestService::class)
             ->build($row, $vendorName !== null && trim($vendorName) !== '' ? trim($vendorName) : null);
 
         if (! ($result['success'] ?? false)) {
@@ -208,7 +219,7 @@ class ProjectRegisterService
             return ['success' => false, 'error' => '해당 항목이 없습니다.'];
         }
 
-        return app(\App\Services\Takeoff\SubmittalResearchService::class)->research($row);
+        return app(SubmittalResearchService::class)->research($row);
     }
 
     /**
@@ -227,7 +238,7 @@ class ProjectRegisterService
             return ['success' => false, 'error' => '해당 항목이 없습니다.'];
         }
 
-        return app(\App\Services\Takeoff\SubmittalResearchService::class)
+        return app(SubmittalResearchService::class)
             ->fileCandidate($row, $index, auth()->id());
     }
 
@@ -248,7 +259,7 @@ class ProjectRegisterService
             return ['success' => false, 'error' => '해당 항목이 없습니다.'];
         }
 
-        $comms = app(\App\Services\Takeoff\SubmittalCommsService::class);
+        $comms = app(SubmittalCommsService::class);
         $userId = auth()->id();
 
         return match ($action) {
@@ -320,7 +331,7 @@ class ProjectRegisterService
             return ['success' => false, 'error' => '해당 항목이 없습니다.'];
         }
 
-        return app(\App\Services\Takeoff\RelatedDrawingFinder::class)->find($row)
+        return app(RelatedDrawingFinder::class)->find($row)
             + ['submittal' => trim(($row->csi ?: '').' '.($row->section ?: ''))];
     }
 
@@ -402,7 +413,7 @@ class ProjectRegisterService
     /**
      * 수량·수량근거·단가·메모만 갱신 — 금액은 모델이 재계산한다.
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public function saveBoqItem(array $data): array

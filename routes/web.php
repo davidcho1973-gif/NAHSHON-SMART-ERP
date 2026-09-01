@@ -4,10 +4,10 @@ use App\Http\Controllers\AdminUploadController;
 use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
-use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\EquipmentApiController;
+use App\Http\Controllers\ExpenseAppController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GoogleAuthController;
@@ -19,23 +19,40 @@ use App\Http\Controllers\MobileEquipmentController;
 use App\Http\Controllers\MobileExpenseController;
 use App\Http\Controllers\MobileOpsRoomController;
 use App\Http\Controllers\OpsPhotoController;
+use App\Http\Controllers\OrgLogoController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PinAuthController;
 use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\ProjectContractDocumentController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QrPrintController;
 use App\Http\Controllers\SimpleWorkerRegistrationController;
 use App\Http\Controllers\SmartCompanyApiController;
 use App\Http\Controllers\SmartCompanyController;
 use App\Http\Controllers\VehicleApiController;
 use App\Http\Controllers\W9FormController;
-use App\Http\Controllers\WebManifestController;
 use App\Http\Controllers\WbsManualController;
-use App\Http\Controllers\OrgLogoController;
-use App\Http\Controllers\PinAuthController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
+use App\Http\Controllers\WebManifestController;
+use App\Models\OrgSetting;
+use App\Models\PushSubscription;
+use App\Models\ReportRecipient;
 use App\Models\SystemHeartbeat;
+use App\Models\User;
+use App\Support\AccessPolicy;
+use App\Support\MailReady;
+use App\Support\Org;
+use Aws\Ses\SesClient;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+use Resend\Laravel\ResendServiceProvider;
+use Symfony\Component\Mailer\Bridge\Mailgun\Transport\MailgunApiTransport;
+use Symfony\Component\Mailer\Bridge\Postmark\Transport\PostmarkApiTransport;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
@@ -63,13 +80,14 @@ Route::post('/auth/pin/forget', [PinAuthController::class, 'forget'])
 //
 // 운영에는 열지 않는다 — 화면 캡처는 로컬 리허설 환경에서 하고, 로그인 우회 통로를
 // 운영에 남겨 둘 이유가 없다(서명이 필요해도 표면은 없는 편이 낫다).
-Route::get('/ops/snap-login', function (\Illuminate\Http\Request $request) {
+Route::get('/ops/snap-login', function (Request $request) {
     abort_unless(app()->environment('local'), 403);
     abort_unless($request->hasValidSignature(), 403);
-    $user = \App\Models\User::query()->where('email', $request->query('email'))->firstOrFail();
-    \Illuminate\Support\Facades\Auth::login($user);
-    \Illuminate\Support\Facades\Log::info('ops.snap-login', ['email' => $user->email, 'view' => $request->query('view')]);
+    $user = User::query()->where('email', $request->query('email'))->firstOrFail();
+    Auth::login($user);
+    Log::info('ops.snap-login', ['email' => $user->email, 'view' => $request->query('view')]);
     $path = (string) $request->query('path', '');
+
     return redirect($path !== '' && str_starts_with($path, '/') && ! str_starts_with($path, '//')
         ? $path
         : '/?view='.((string) $request->query('view') ?: 'dashboard'));
@@ -79,15 +97,16 @@ Route::get('/ops/snap-login', function (\Illuminate\Http\Request $request) {
 // local 환경이 아니면 403. artisan serve 는 127.0.0.1 에만 바인딩되므로 외부 노출이 없다.
 Route::get('/ops/snap-local/{view}', function (string $view) {
     abort_unless(app()->environment('local'), 403);
-    $user = \App\Models\User::query()->where('access_role', 'super_admin')->orderBy('id')->firstOrFail();
-    \Illuminate\Support\Facades\Auth::login($user);
+    $user = User::query()->where('access_role', 'super_admin')->orderBy('id')->firstOrFail();
+    Auth::login($user);
+
     return $view === 'document-hub' ? redirect('/document-hub') : redirect('/?view='.$view);
 })->where('view', '[a-z0-9-]+');
 
 // 라우트 점검용 — 익명에게 열어 두면 공격 표면 지도를 그대로 넘겨주는 셈이라
 // 로그인 + 시스템 관리자만 본다(바로 아래 /debug-logs-sec 와 같은 기준).
 Route::get('/debug-routes-sec', function () {
-    abort_unless(\App\Support\AccessPolicy::canManageSystem(auth()->user()), 403);
+    abort_unless(AccessPolicy::canManageSystem(auth()->user()), 403);
 
     $routes = collect(Route::getRoutes())->map(fn ($r) => [
         'uri' => $r->uri(),
@@ -249,9 +268,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/attendance-app/correction', [AttendanceAppController::class, 'requestCorrection'])->name('attendance-app.correction');
 
     // 영수증 앱 — 사진 한 장으로 경비 접수(ERP 등록과 같은 판독·원장·승인 회로).
-    Route::get('/expense-app', [\App\Http\Controllers\ExpenseAppController::class, 'index'])->name('expense-app.index');
-    Route::post('/expense-app/submit', [\App\Http\Controllers\ExpenseAppController::class, 'submit'])->name('expense-app.submit');
-    Route::get('/expense-app/list', [\App\Http\Controllers\ExpenseAppController::class, 'list'])->name('expense-app.list');
+    Route::get('/expense-app', [ExpenseAppController::class, 'index'])->name('expense-app.index');
+    Route::post('/expense-app/submit', [ExpenseAppController::class, 'submit'])->name('expense-app.submit');
+    Route::get('/expense-app/list', [ExpenseAppController::class, 'list'])->name('expense-app.list');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
     Route::post('/ops-api/photo', [OpsPhotoController::class, 'store'])->name('ops.photo');
 
@@ -260,6 +279,9 @@ Route::middleware('auth')->group(function (): void {
     // 공종별 오늘 보고 — 반장이 자기 몫을 확정한다(현황판은 ERP 쪽 api_tradeReportBoard).
     Route::post('/ops-api/trade-report/submit', [MobileOpsRoomController::class, 'submitTradeReport'])
         ->name('ops.trade-report.submit');
+    // 제출한 것이 ERP 로 넘어갔는지 — 반영은 응답 뒤에 돌기 때문에 화면이 잠깐 물어본다.
+    Route::get('/ops-api/trade-report/status', [MobileOpsRoomController::class, 'tradeReportStatus'])
+        ->name('ops.trade-report.status');
     Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
     Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
     Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
@@ -405,7 +427,7 @@ Route::post('/member/site/{site}/apply', [MemberRegistrationController::class, '
  *
  * 기본은 마지막 300줄만 준다. 휴대폰에서 열어 마지막 오류를 확인하는 것이 이 화면의 용도다.
  */
-Route::get('/debug-logs-sec-53298bfd9a', function (\Illuminate\Http\Request $request) {
+Route::get('/debug-logs-sec-53298bfd9a', function (Request $request) {
     abort_unless(in_array($request->user()?->access_role, ['super_admin', 'admin'], true), 403);
 
     $path = storage_path('logs/laravel.log');
@@ -432,7 +454,7 @@ Route::get('/debug-logs-sec-53298bfd9a', function (\Illuminate\Http\Request $req
  * 로그인 없이 열리지만 커밋 해시와 기능 유무만 보여준다 — 배포가 됐는지 확인하는 데
  * 로그인을 요구하면, 정작 배포가 깨져 로그인이 안 될 때 쓸 수 없다.
  */
-Route::get('/build-version', function (\Illuminate\Http\Request $request) {
+Route::get('/build-version', function (Request $request) {
     $path = public_path('build/version.json');
     $version = is_readable($path)
         ? (json_decode((string) file_get_contents($path), true) ?: [])
@@ -455,10 +477,10 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
         // 새 고객 배포가 기본값(우리 회사 이름) 그대로 서 있는 것이다 — 화면은
         // 멀쩡하고, 고객 눈에만 남의 회사 이름이 보인다.
         'org' => [
-            'name' => \App\Support\Org::name(),
-            'code' => \App\Support\Org::code(),
+            'name' => Org::name(),
+            'code' => Org::code(),
             'configured' => (bool) config('org.configured'),
-            'customized_keys' => \App\Models\OrgSetting::query()->pluck('key')->all(),
+            'customized_keys' => OrgSetting::query()->pluck('key')->all(),
         ],
         // 도메인이 절반만 바뀌는 사고가 흔하다 — 새 주소로 열리는데 APP_URL 은 옛 주소면,
         // QR·설치 카드·매니페스트가 전부 옛 주소를 가리킨다. 화면은 멀쩡해 보인다.
@@ -511,7 +533,7 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                         ? '모든 마이그레이션이 적용되어 있습니다.'
                         : count($pending).'개 마이그레이션이 아직 안 돌았습니다 — php artisan migrate --force 를 실행하세요. 그 표를 쓰는 화면은 지금 500 으로 죽습니다.',
                 ];
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 return ['pending' => null, 'ok' => null, 'message' => '확인 실패: '.$e->getMessage()];
             }
         })(),
@@ -543,16 +565,16 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
             $mailer = (string) config('mail.default', 'log');
             $from = trim((string) config('mail.from.address', ''));
             $host = trim((string) config('mail.mailers.smtp.host', ''));
-            $ready = \App\Support\MailReady::ok();
+            $ready = MailReady::ok();
 
             // 설정이 됐어도 받을 사람이 없으면 아무 데도 안 간다. 이 둘은 다른 문제라
             // 따로 세어 둔다 — 안 그러면 "메일 설정은 초록불인데 왜 안 오지" 가 된다.
             $recipients = (function (): ?int {
                 try {
-                    return \Illuminate\Support\Facades\Schema::hasTable('report_recipients')
-                        ? \App\Models\ReportRecipient::where('active', true)->count()
+                    return Schema::hasTable('report_recipients')
+                        ? ReportRecipient::where('active', true)->count()
                         : null;
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     return null;
                 }
             })();
@@ -568,10 +590,10 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
             // 드라이버 패키지가 실제로 깔려 있는가. mailer 이름만 바꾸고 패키지를 안 넣으면
             // "Class not found" 로 죽는데, 설정 값만 보면 멀쩡해 보인다.
             $driverOk = match ($mailer) {
-                'resend' => class_exists(\Resend\Laravel\ResendServiceProvider::class),
-                'postmark' => class_exists(\Symfony\Component\Mailer\Bridge\Postmark\Transport\PostmarkApiTransport::class),
-                'mailgun' => class_exists(\Symfony\Component\Mailer\Bridge\Mailgun\Transport\MailgunApiTransport::class),
-                'ses', 'ses-v2' => class_exists(\Aws\Ses\SesClient::class),
+                'resend' => class_exists(ResendServiceProvider::class),
+                'postmark' => class_exists(PostmarkApiTransport::class),
+                'mailgun' => class_exists(MailgunApiTransport::class),
+                'ses', 'ses-v2' => class_exists(SesClient::class),
                 default => true,
             };
 
@@ -599,7 +621,7 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                     $ready && ($recipients ?? 0) > 0 => '설정은 정상입니다. 실제로 나가는지는 [조직 설정 > 메일 진단]에서 테스트 발송으로 확인하세요.',
                     $ready && $recipients === 0 => '메일은 나갈 수 있지만 일일 보고 수신처가 0명입니다 — [일일 보고 > 수신처 관리] 에서 받는 사람을 등록하세요.',
                     $ready => '설정은 정상입니다. 실제로 나가는지는 [조직 설정 > 메일 진단]에서 확인하세요.',
-                    default => '메일이 아직 나가지 않습니다 — '.\App\Support\MailReady::why()
+                    default => '메일이 아직 나가지 않습니다 — '.MailReady::why()
                         .' 지금은 [발송] 이 메일앱을 여는 것으로 대체되고, 정해진 시각 자동 발송은 아무것도 하지 않습니다.',
                 },
             ];
@@ -617,10 +639,10 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
             // 최근 30일 AI 사용액 — 엔진이 셋이 되면 어디서 돈이 새는지 봐야 한다.
             $spend = (function (): array {
                 try {
-                    if (! \Illuminate\Support\Facades\Schema::hasTable('ai_usage_logs')) {
+                    if (! Schema::hasTable('ai_usage_logs')) {
                         return ['ready' => false];
                     }
-                    $rows = \Illuminate\Support\Facades\DB::table('ai_usage_logs')
+                    $rows = DB::table('ai_usage_logs')
                         ->where('occurred_at', '>=', now()->subDays(30))
                         ->selectRaw('engine, count(*) as calls, sum(cost_usd) as usd')
                         ->groupBy('engine')->get();
@@ -633,7 +655,7 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
                             $r->engine => ['calls' => (int) $r->calls, 'usd' => round((float) $r->usd, 4)],
                         ])->all(),
                     ];
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     return ['ready' => false];
                 }
             })();
@@ -672,8 +694,8 @@ Route::get('/build-version', function (\Illuminate\Http\Request $request) {
 
             return [
                 'configured' => $ready,
-                'devices' => $ready && \Illuminate\Support\Facades\Schema::hasTable('push_subscriptions')
-                    ? \App\Models\PushSubscription::query()->count()
+                'devices' => $ready && Schema::hasTable('push_subscriptions')
+                    ? PushSubscription::query()->count()
                     : 0,
             ];
         })(),

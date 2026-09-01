@@ -35,8 +35,17 @@ class OpsIntakeItem extends Model
         'category', 'confidence', 'summary',
         'target_type', 'target_code', 'target_name',
         'proposed', 'previous', 'question', 'conflict',
-        'status', 'applied_at', 'applied_by_id', 'result_note',
+        'status', 'applied_at', 'applied_by_id', 'result_note', 'applied_via',
     ];
+
+    /** 상황실에서 사람이 「반영」을 눌렀다. */
+    public const VIA_MANUAL = 'manual';
+
+    /** 반장이 「오늘 보고 제출」을 눌러 자동으로 넘어갔다. */
+    public const VIA_REPORT = 'report';
+
+    /** 판독 직후 바로 모듈로 갔다(인원 보고·액션 아이템). */
+    public const VIA_AUTO = 'auto';
 
     protected function casts(): array
     {

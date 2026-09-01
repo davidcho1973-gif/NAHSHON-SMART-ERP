@@ -21,6 +21,7 @@ class DailyTradeReport extends Model
     protected $fillable = [
         'site_id', 'work_date', 'trade', 'status',
         'submitted_by_id', 'submitted_at', 'reopen_reason',
+        'applied_count', 'held_count', 'reflected_at', 'reflection_note',
     ];
 
     protected function casts(): array
@@ -28,6 +29,9 @@ class DailyTradeReport extends Model
         return [
             'work_date' => 'date',
             'submitted_at' => 'datetime',
+            'reflected_at' => 'datetime',
+            'applied_count' => 'integer',
+            'held_count' => 'integer',
         ];
     }
 

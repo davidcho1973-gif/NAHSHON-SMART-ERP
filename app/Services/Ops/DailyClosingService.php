@@ -5,6 +5,7 @@ namespace App\Services\Ops;
 use App\Jobs\WriteDailyClosingReportJob;
 use App\Models\DailyClosingReport;
 use App\Models\DailyCrewReport;
+use App\Models\DailyTradeReport;
 use App\Models\Equipment;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
@@ -13,10 +14,13 @@ use App\Models\SafetyPermit;
 use App\Models\SafetyWorkIssue;
 use App\Models\SafetyWorkItem;
 use App\Models\Site;
+use App\Models\WbsItem;
 use App\Models\WbsPhoto;
 use App\Services\Attendance\DailyHeadcountService;
 use App\Services\Ocr\OcrEngine;
+use App\Services\Wbs\WbsService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -143,9 +147,18 @@ class DailyClosingService
         $crew = $this->crewSummary($siteId, $date);
 
         // ── 상황실 활동
+        //
+        // 날짜 경계를 현장 시간대로 잡는다. created_at 은 앱 시간대의 벽시계로 저장되고
+        // $date 는 현장 로컬 날짜라, whereDate 로 그냥 비교하면 시차가 있는 현장에서
+        // 하루가 통째로 어긋난다 — 그날 올라온 보고가 마감 집계에서 사라지고,
+        // 진척 목록의 «누가 말했는가» 도 함께 비어 버린다.
+        [$from, $to] = $this->localDayWindow($site, $date);
+
         $batches = OpsIntakeBatch::query()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
-            ->whereDate('created_at', $date)->get();
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<', $to)
+            ->get();
 
         $items = OpsIntakeItem::query()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
@@ -153,6 +166,11 @@ class DailyClosingService
             ->get();
 
         $byCategory = $items->groupBy('category')->map->count();
+
+        // 공종별 일일보고 — 마감의 뼈대. 각 반장이 낸 것이 여기 모이고, 안 낸 공종은
+        // 안 낸 채로 드러난다. 이 블록이 없으면 마감보고서는 "누가 무엇을 말했는지"
+        // 없이 숫자만 남고, 빠진 공종이 있어도 알 방법이 없다.
+        $trades = $this->tradeReportSummary($siteId, $date, $batches, $items);
 
         return [
             'date' => $date,
@@ -186,6 +204,9 @@ class DailyClosingService
                 'summary' => $i->summary,
                 'proposed' => $i->proposed,
                 'status' => $i->status,
+                // 누가 말한 숫자인지 붙인다. 출처 없는 진척률은 나중에 아무도 설명하지 못한다.
+                'trade' => $trades['byBatch'][$i->ops_intake_batch_id]['trade'] ?? null,
+                'reportedBy' => $trades['byBatch'][$i->ops_intake_batch_id]['by'] ?? null,
             ])->values()->all(),
             'procurement' => $items->where('category', 'procurement')->map(fn (OpsIntakeItem $i): array => [
                 'target' => $i->target_name ?: $i->target_code,
@@ -205,6 +226,14 @@ class DailyClosingService
             // 이게 곧 "오늘 한 일 / 내일 할 일" 이다.
             'actions' => $this->actionSummary($siteId, $date),
 
+            // ── 공종별 일일보고. 각 반장이 자기 몫으로 낸 것과, 안 낸 공종.
+            'tradeReports' => $trades['board'],
+
+            // 현장 공정률 — 공정표에서 계산한 값(진척률의 정본 산식). 현장이 손으로 적은
+            // field.progressRate 와 <b>나란히</b> 둔다. 둘을 하나로 합치지 않는 이유는
+            // 어긋날 때가 곧 관리 포인트이기 때문이다(보고 70% / 공정표 55%).
+            'schedule' => $this->scheduleProgress($siteId),
+
             // ── 원청 제출용으로 새로 붙인 세 블록. 예전 보고서에는 없다.
             // 마감 화면만 볼 때는 없어도 그만이었지만, 원청에 내는 일보에는
             // 장비·안전·사진이 빠지면 반려된다.
@@ -217,6 +246,172 @@ class DailyClosingService
             // 다시 쓰는 게 아니라 근거로 삼는다.
             'field' => $report && $report->hasFieldReport() ? $report->fieldReport() : null,
         ];
+    }
+
+    /**
+     * 공종별 일일보고를 마감으로 끌어온다.
+     *
+     * 반장이 낸 보고는 하루 종일 상황실로 들어오지만, 그것이 "누가 낸 무엇" 인지는
+     * 공종별 보고(daily_trade_reports)에만 있다. 마감이 그걸 안 읽으면 보고서에는
+     * 숫자만 남고 출처가 사라진다 — 원청이 "이 60% 는 누가 본 겁니까" 라고 물으면
+     * 답할 사람이 없다.
+     *
+     * 함께 돌려주는 byBatch 는 판독 항목 → 공종·보고자 되짚기용 색인이다. 항목마다
+     * 관계를 타고 올라가면 쿼리가 항목 수만큼 늘어난다.
+     *
+     * @param  Collection<int, OpsIntakeBatch>  $batches
+     * @param  Collection<int, OpsIntakeItem>  $items
+     * @return array{board: array<string, mixed>, byBatch: array<int, array{trade: string, by: ?string}>}
+     */
+    private function tradeReportSummary(?int $siteId, string $date, $batches, $items): array
+    {
+        $board = $this->tradeBoard($siteId, $date);
+
+        if ($board['rows'] === [] && $board['total'] === 0) {
+            return ['board' => $board, 'byBatch' => []];
+        }
+
+        // 배치 → 공종·보고자. 그날 그 현장의 보고만 대상이라 색인이 작다.
+        $reports = DailyTradeReport::query()
+            ->where('site_id', $siteId)
+            ->where('work_date', $date)
+            ->with('submittedBy.employee:id,name')
+            ->get()
+            ->keyBy('id');
+
+        $byBatch = [];
+        foreach ($batches as $batch) {
+            $report = $reports->get($batch->daily_trade_report_id);
+            if (! $report) {
+                continue;
+            }
+            $byBatch[$batch->id] = [
+                'trade' => (string) $report->trade,
+                'by' => $report->submittedBy?->employee?->name ?: $report->submittedBy?->name,
+            ];
+        }
+
+        return ['board' => $board, 'byBatch' => $byBatch];
+    }
+
+    /**
+     * 그날 그 현장의 공종별 보고 현황 — 마감이 싣는 모양으로.
+     *
+     * @return array<string, mixed>
+     */
+    private function tradeBoard(?int $siteId, string $date): array
+    {
+        $empty = [
+            'total' => 0, 'submitted' => 0, 'missing' => 0,
+            'missingTrades' => [], 'applied' => 0, 'held' => 0, 'rows' => [],
+        ];
+
+        // 현장을 고르지 않은 마감(전 현장 합산)에는 공종별 보고가 성립하지 않는다 —
+        // 공종은 현장 안에서만 뜻이 있다.
+        if (! $siteId) {
+            return $empty;
+        }
+
+        try {
+            $board = app(TradeReportService::class)->board($siteId, $date);
+        } catch (\Throwable $e) {
+            report($e); // 공종 블록을 못 만들어도 마감 자체는 나가야 한다.
+
+            return $empty;
+        }
+
+        if ($board['noSite'] ?? false) {
+            return $empty;
+        }
+
+        return [
+            'total' => (int) $board['total'],
+            'submitted' => (int) $board['submitted'],
+            'missing' => (int) $board['missing'],
+            'missingTrades' => $board['missingTrades'] ?? [],
+            'applied' => (int) ($board['applied'] ?? 0),
+            'held' => (int) ($board['held'] ?? 0),
+            'rows' => array_map(fn (array $r): array => [
+                'trade' => $r['trade'],
+                'submitted' => $r['submitted'],
+                'submittedBy' => $r['submittedBy'],
+                'submittedAt' => $r['submittedAt'],
+                'headcount' => $r['headcount'],
+                'entries' => $r['entries'],
+                'photos' => $r['photos'],
+                'applied' => $r['applied'],
+                'held' => $r['held'],
+                // 반영 결과 한 줄. 여기서 빠뜨리면 「사진 판독 중」 같은 유일한
+                // 경고가 마감에도 AI 프롬프트에도 도달하지 않는다 — 제출은 됐는데
+                // 내용이 빈 공종이 아무 설명 없이 원청 보고서에 실린다.
+                'note' => $r['note'] ?? null,
+                'highlights' => $r['highlights'],
+            ], $board['rows']),
+        ];
+    }
+
+    /**
+     * 그 현장의 하루가 시작하고 끝나는 순간 — 앱 시간대 기준으로.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function localDayWindow(?Site $site, string $date): array
+    {
+        $siteTz = $site?->timezone ?: config('app.timezone');
+        $appTz = config('app.timezone');
+
+        $from = Carbon::parse($date, $siteTz)->startOfDay();
+
+        return [
+            $from->copy()->setTimezone($appTz),
+            $from->copy()->addDay()->setTimezone($appTz),
+        ];
+    }
+
+    /**
+     * 공정표에서 계산한 현장 공정률.
+     *
+     * 산식은 하나뿐이다 — WbsService::weightedProgress(공수 → 공기 → 균등). 마감이
+     * 자기 식으로 다시 계산하면 같은 현장에 진척률이 두 개 생기고, 두 개가 되는 순간
+     * 둘 다 못 믿는다.
+     *
+     * @return array<string, mixed>
+     */
+    private function scheduleProgress(?int $siteId): array
+    {
+        if (! $siteId) {
+            return ['rate' => null, 'tasks' => 0, 'done' => 0];
+        }
+
+        try {
+            $subtasks = WbsItem::query()
+                // 안전 작업카드의 실측 물량이 진척률의 일부다. 미리 읽지 않으면
+                // WbsItem::effectiveProgress 가 <b>지연 로딩이 아니라 빈 컬렉션</b>으로
+                // 폴백해 현장 실측이 통째로 빠진다 — 정본 경로(WbsService::itemsFor)와
+                // 다른 숫자가 나오고, 그 차이를 원청 보고서가 «확인 필요» 로 적는다.
+                ->with('safetyWorkItems.signatures')
+                // 현장 스코프도 정본과 같아야 한다. 임포트에서 현장이 안 잡힌 행은
+                // site_id 가 null 로 들어오는데, 정본은 그것을 일부러 포함한다.
+                ->where(fn ($q) => $q->whereNull('site_id')->orWhere('site_id', $siteId))
+                ->where('level', WbsItem::LEVEL_SUBTASK)
+                ->get();
+
+            if ($subtasks->isEmpty()) {
+                return ['rate' => null, 'tasks' => 0, 'done' => 0];
+            }
+
+            return [
+                'rate' => app(WbsService::class)->weightedProgress($subtasks),
+                'tasks' => $subtasks->count(),
+                'done' => $subtasks->where('status', WbsItem::STATUS_DONE)->count(),
+                // 어디서 온 숫자인지 밝힌다 — 출처가 없는 숫자는 나중에 설명하지 못한다.
+                'source' => '공정표(가중 진척률)',
+            ];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['rate' => null, 'tasks' => 0, 'done' => 0];
+        }
     }
 
     /**
@@ -423,6 +618,20 @@ class DailyClosingService
    - `field.tbmCompleted` 가 false 이거나 `field.safetyChecks` 에 false 가 있으면
      attention 에 넣으세요 — 안전점검 미완은 그날 안에 확인해야 합니다.
    - `field` 가 null 이면 현장 보고가 아직 없다는 뜻입니다. 그 사실을 attention 에 쓰세요.
+3-2. `tradeReports` 는 **공종별 반장이 오늘 직접 낸 보고**입니다. 이 보고서의 뼈대입니다.
+   - `tradeReports.rows[].highlights` 가 그 공종이 오늘 보고한 내용입니다. done(오늘 한 일)에
+     **공종 이름을 붙여** 반영하세요(예: "배관 — 3층 천장 배관 12/20 완료").
+   - `tradeReports.missingTrades` 가 비어 있지 않으면 attention 에 **반드시** 쓰세요.
+     그 공종은 사람이 나와서 일했는데 보고가 없습니다. 이 보고서에는 그 공종의 실적이
+     빠져 있다는 사실을 명시하세요 — 없는 것을 있는 것처럼 쓰면 안 됩니다.
+   - `tradeReports.held` 가 0 이 아니면 attention 에 쓰세요(사람 확인을 기다리는 항목).
+   - 어떤 행의 `note` 에 「사진 판독 중」이 들어 있으면 그 공종은 <b>제출은 했지만 내용이
+     아직 안 읽힌</b> 상태입니다. attention 에 그 사실을 쓰세요 — 그 공종의 highlights 가
+     비어 있는 것은 일을 안 해서가 아닙니다. 「판독 실패」가 들어 있으면 사진을 다시
+     올려야 한다고 쓰세요.
+3-3. `schedule.rate` 는 **공정표에서 계산된** 현장 공정률이고, `field.progressRate` 는
+   현장이 손으로 적은 진도율입니다. 둘 다 있으면 progressNote 에 **둘 다** 쓰고,
+   차이가 크면(10%p 이상) 그 사실을 짚으세요. 둘을 평균 내거나 하나만 고르지 마세요.
 3-1. `actions` 는 공정·자재·인원 어디에도 안 들어가는 실무 항목입니다(원청 지시, 승인,
    의사결정, 준비물). **여기 있는 내용을 반드시 보고서에 반영하세요.**
    - `actions.doneToday`  → done 배열(오늘 한 일)에 넣으세요
@@ -500,10 +709,47 @@ PROMPT;
             'date' => $report->report_date->toDateString(),
             'closedBy' => $report->closedBy?->name,
             'closedAt' => $report->closed_at?->format('Y-m-d H:i'),
-            'metrics' => $report->metrics ?: [],
+            'metrics' => $this->withLiveTradeReports($report),
             'narrative' => $report->narrative ?: [],
             'field' => $report->hasFieldReport() ? $report->fieldReport() : null,
         ];
+    }
+
+    /**
+     * 저장된 집계에 <b>공종별 보고만</b> 지금 값으로 갈아 끼운다.
+     *
+     * 마감 집계는 소장이 버튼을 누른 순간에 얼어붙는다. 그런데 공종별 보고는
+     * 그 뒤에도 들어온다 — 마감 시각이 17시인데 마감을 16시 20분에 눌렀다면,
+     * 16시 50분에 낸 덕트 반장의 보고는 얼어붙은 사진에 없다. 18시 30분에
+     * 원청으로 나가는 메일에는 그 공종이 「미제출」로 찍히고, 「해당 공종의
+     * 금일 실적은 이 보고서에 포함되지 않았습니다」까지 붙는다. 실적은 ERP 에
+     * 들어 있고 반장은 제출했는데도.
+     *
+     * 미제출을 드러내려던 장치가 정반대로, 없는 미제출을 만들어 내는 셈이라
+     * 이 블록만은 얼리지 않는다(board() 한 번이라 비용도 거의 없다).
+     *
+     * @return array<string, mixed>
+     */
+    public function withLiveTradeReports(DailyClosingReport $report): array
+    {
+        $metrics = $report->metrics ?: [];
+
+        // 옛 보고서에는 이 블록 자체가 없다. 그때는 건드리지 않는다 — 지난 보고서에
+        // 오늘 계산한 값을 끼워 넣으면 그건 기록이 아니라 재구성이다.
+        if (! array_key_exists('tradeReports', $metrics)) {
+            return $metrics;
+        }
+
+        try {
+            $metrics['tradeReports'] = $this->tradeBoard(
+                $report->site_id,
+                $report->report_date->toDateString(),
+            );
+        } catch (\Throwable $e) {
+            report($e); // 갈아 끼우기에 실패해도 저장된 집계로 보고서는 나가야 한다.
+        }
+
+        return $metrics;
     }
 
     /**

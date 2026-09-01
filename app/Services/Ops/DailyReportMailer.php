@@ -12,6 +12,7 @@ use App\Models\WbsPhoto;
 use App\Services\Mail\OutboundMailer;
 use App\Support\MailReady;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -45,6 +46,31 @@ class DailyReportMailer
         private readonly DailyReportComposer $composer,
         private readonly OutboundMailer $outbound,
     ) {}
+
+    /**
+     * 나가기 직전에 공종별 보고만 지금 값으로 갈아 끼운다.
+     *
+     * 마감 집계는 소장이 버튼을 누른 순간에 얼어붙는데, 메일은 그보다 몇 시간 뒤에
+     * 나간다. 그 사이에 낸 반장의 보고가 원청 문서에 「미제출」로 찍히면, 실적은
+     * ERP 에 있고 반장은 제출했는데도 그가 보고를 안 낸 것으로 간다. 미제출을
+     * 드러내려던 표가 없는 미제출을 만들어 내면 안 된다.
+     *
+     * 저장된 집계 자체는 건드리지 않는다(그날 마감의 기록은 기록대로 남는다) —
+     * 조립에 넘길 사본에만 얹는다.
+     */
+    private function freshenTrades(DailyClosingReport $report): DailyClosingReport
+    {
+        try {
+            $fresh = clone $report;
+            $fresh->metrics = app(DailyClosingService::class)->withLiveTradeReports($report);
+
+            return $fresh;
+        } catch (\Throwable $e) {
+            report($e); // 갈아 끼우기에 실패해도 보고서는 나가야 한다.
+
+            return $report;
+        }
+    }
 
     /**
      * 보고서 한 통을 보낸다.
@@ -89,7 +115,7 @@ class DailyReportMailer
 
         $composed = $kind === ReportRecipient::PLAN
             ? $this->composer->plan($report)
-            : $this->composer->closing($report);
+            : $this->composer->closing($this->freshenTrades($report));
 
         $to = $recipients->where('is_cc', false);
         $cc = $recipients->where('is_cc', true);
@@ -187,7 +213,7 @@ class DailyReportMailer
      *
      * @return array<string, mixed>|null
      */
-    private function guard(DailyClosingReport $report, string $kind, bool $auto): array|null
+    private function guard(DailyClosingReport $report, string $kind, bool $auto): ?array
     {
         if ($kind === ReportRecipient::PLAN) {
             if (! $report->hasPlan()) {
@@ -217,9 +243,9 @@ class DailyReportMailer
     /**
      * 이 현장의 수신처. 현장 전용 + 전 현장 공통을 합친다.
      *
-     * @return \Illuminate\Support\Collection<int, ReportRecipient>
+     * @return Collection<int, ReportRecipient>
      */
-    public function recipients(?int $siteId, string $kind): \Illuminate\Support\Collection
+    public function recipients(?int $siteId, string $kind): Collection
     {
         return ReportRecipient::query()
             ->where('active', true)
@@ -466,7 +492,7 @@ class DailyReportMailer
 
         $composed = $kind === ReportRecipient::PLAN
             ? $this->composer->plan($report)
-            : $this->composer->closing($report);
+            : $this->composer->closing($this->freshenTrades($report));
 
         return [
             'success' => true,

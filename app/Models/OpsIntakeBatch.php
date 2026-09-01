@@ -52,6 +52,12 @@ class OpsIntakeBatch extends Model
         return $this->belongsTo(User::class, 'created_by_id');
     }
 
+    /** 이 기록이 들어간 그날 그 공종의 보고. 묶이지 않은 기록(관리자 직접 입력 등)은 null. */
+    public function tradeReport(): BelongsTo
+    {
+        return $this->belongsTo(DailyTradeReport::class, 'daily_trade_report_id');
+    }
+
     /** 목록에 보여줄 짧은 미리보기. */
     public function preview(int $len = 90): string
     {

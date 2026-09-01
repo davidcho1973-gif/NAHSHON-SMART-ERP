@@ -4,13 +4,17 @@ namespace App\Services\Ops;
 
 use App\Http\Controllers\OpsPhotoController;
 use App\Jobs\AnalyzeOpsIntakeJob;
+use App\Models\FieldDrawing;
+use App\Models\IntelligentDocument;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\Submittal;
+use App\Models\User;
 use App\Models\WbsItem;
 use App\Services\Admin\ProjectRegisterService;
+use App\Services\Communication\DecisionReplyConnector;
 use App\Services\IntegratedDocumentService;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
@@ -244,9 +248,45 @@ class OpsIntakeService
             ]);
 
             $this->discardPhotos($batch, $photoKinds);
+
+            // 제출한 뒤에 올린 사진이 이제야 읽혔다.
+            //
+            // 사진 판독은 몇 분씩 걸린다. 반장이 사진을 올리자마자 「오늘 보고 제출」을
+            // 누르면, 제출 시점에는 아직 항목이 하나도 없어서 반영에서 통째로 빠진다.
+            // 여기서 이어 넘기지 않으면 그 보고는 영원히 «확인 대기» 로 남고, 반장은
+            // 올렸으니 됐다고 생각한다 — 아무도 틀렸다고 말해 주지 않는 상태가 된다.
+            $this->reflectIfSubmitted($batch);
         } catch (\Throwable $e) {
             report($e);
             $batch->update(['status' => 'failed', 'error' => $e->getMessage(), 'analyzed_at' => now()]);
+
+            // 판독이 실패해도 보고의 결과 줄은 다시 써야 한다. 안 그러면 제출 때 적힌
+            // 「사진 판독 중 — 끝나면 이어서 반영됩니다」가 그대로 굳어, 반장은 폰에서
+            // 오지 않을 것을 계속 기다린다.
+            $this->reflectIfSubmitted($batch, restampOnly: true);
+        }
+    }
+
+    /**
+     * 판독이 끝난 기록이 <b>이미 제출된</b> 보고에 속하면 그 자리에서 반영을 이어 돌린다.
+     *
+     * TradeReportReflector 는 이 서비스를 쓰므로 생성자 주입을 하면 순환이 된다.
+     * 필요한 순간에만 꺼내 쓴다.
+     *
+     * @param  bool  $restampOnly  판독 실패 뒤처리 — 반영은 하지 않고 결과 줄만 다시 센다.
+     */
+    public function reflectIfSubmitted(OpsIntakeBatch $batch, bool $restampOnly = false): void
+    {
+        try {
+            $report = $batch->tradeReport;
+            if (! $report || ! $report->isSubmitted()) {
+                return;
+            }
+
+            $reflector = app(TradeReportReflector::class);
+            $restampOnly ? $reflector->restamp($report) : $reflector->reflect($report);
+        } catch (\Throwable $e) {
+            report($e); // 이어붙이기 실패가 판독 결과를 잃게 만들면 안 된다.
         }
     }
 
@@ -543,9 +583,11 @@ class OpsIntakeService
      * 그 사유를 그대로 돌려주고 반영하지 않는다(규칙을 우회하지 않는다).
      *
      * @param  array<string, mixed>|null  $overrides  사람이 값을 고쳐서 적용할 때
+     * @param  string  $via  어떤 경로로 반영됐는가(OpsIntakeItem::VIA_*). 나중에 숫자를
+     *                       되짚을 때 "사람이 눌렀나, 보고 제출로 넘어갔나" 를 가른다.
      * @return array<string, mixed>
      */
-    public function apply(int $id, ?array $overrides = null, ?int $userId = null): array
+    public function apply(int $id, ?array $overrides = null, ?int $userId = null, string $via = OpsIntakeItem::VIA_MANUAL): array
     {
         $item = OpsIntakeItem::find($id);
         if (! $item) {
@@ -563,25 +605,94 @@ class OpsIntakeService
             return ['success' => false, 'error' => '반영 대상이 지정되지 않았습니다. 대상을 먼저 지정하세요.'];
         }
 
-        // 지출은 공정·조달과 달리 전용 경로로 — 재무(MobileExpense)에 등록된다.
-        if ($item->category === 'expense') {
-            return $this->modules->applyExpense($item, $userId);
+        // 두 경로가 같은 항목을 동시에 반영하지 못하게 자리를 먼저 잡는다.
+        //
+        // 위의 `status === 'applied'` 검사만으로는 막지 못한다 — 읽고 나서 쓰기까지
+        // 사이가 비어 있어, 그 틈에 다른 요청이 같은 검사를 통과한다. 값 자체는
+        // 두 번 써도 같지만 <b>previous 는 다르다</b>: 두 번째가 «이미 반영된 값» 을
+        // 되돌리기 근거로 저장해 버려, 그 뒤의 되돌리기는 성공을 돌려주면서 아무것도
+        // 되돌리지 않는다. 자동 반영이 붙은 뒤로 이 경쟁은 예외가 아니라 일상이다
+        // (제출 잡 · 사진 판독 이어달리기 · 상황실의 사람 클릭이 겹친다).
+        $claimed = OpsIntakeItem::query()
+            ->whereKey($id)
+            ->whereIn('status', ['pending', 'needs_input'])
+            ->update(['status' => 'applying']);
+
+        if ($claimed === 0) {
+            return ['success' => false, 'error' => '이미 반영됐거나 다른 곳에서 처리 중인 항목입니다.'];
         }
 
-        return match ($item->target_type) {
-            'procurement' => $this->applyProcurement($item, $patch, $userId),
-            'submittal' => $this->applySubmittal($item, $patch, $userId),
-            default => $this->applyWbs($item, $patch, $userId),
-        };
+        $before = (string) $item->status;
+        $item->status = 'applying';
+
+        try {
+            // 지출은 공정·조달과 달리 전용 경로로 — 재무(MobileExpense)에 등록된다.
+            $res = $item->category === 'expense'
+                ? $this->modules->applyExpense($item, $userId, $via)
+                : match ($item->target_type) {
+                    'procurement' => $this->applyProcurement($item, $patch, $userId, $via),
+                    'submittal' => $this->applySubmittal($item, $patch, $userId, false, $via),
+                    default => $this->applyWbs($item, $patch, $userId, $via),
+                };
+        } catch (\Throwable $e) {
+            $this->releaseClaim($id, $before);
+
+            throw $e;
+        }
+
+        // 실패했으면 자리를 놓아준다 — 'applying' 인 채로 남으면 그 항목은
+        // 확인 대기 목록에서도 사라져 아무도 다시 손대지 못한다.
+        if (! ($res['success'] ?? false)) {
+            $this->releaseClaim($id, $before);
+        }
+
+        return $res;
+    }
+
+    /** 반영에 실패한 항목을 원래 상태로 되돌린다(잡아 둔 자리 반납). */
+    private function releaseClaim(int $id, string $status): void
+    {
+        OpsIntakeItem::query()->whereKey($id)->where('status', 'applying')->update(['status' => $status]);
+    }
+
+    /**
+     * 「이 현장 것, 또는 현장이 안 붙은 본사 공통」으로 좁힌다.
+     *
+     * 공정표·조달 정본(WbsService::itemsFor)이 쓰는 것과 같은 규칙이다. 현장을 아예
+     * 안 거는 것은 위험하고(po_no 에는 유일 제약이 없어 남의 현장 발주를 집는다),
+     * 현장만 정확히 거는 것은 너무 좁다 — 임포트에서 현장이 안 잡힌 행은 site_id 가
+     * null 로 들어오고, ERP 의 다른 화면들은 그 행을 일부러 포함한다.
+     *
+     * 정확히 맞는 행을 먼저 준다 — 순서를 정하지 않으면 같은 코드에 현장 행과 공통
+     * 행이 함께 있을 때 apply 와 revert 가 서로 다른 행을 집을 수 있다.
+     *
+     * @template T of \Illuminate\Database\Eloquent\Builder
+     *
+     * @param  T  $query
+     * @return T
+     */
+    private static function scopeToSite($query, ?int $siteId)
+    {
+        if ($siteId === null) {
+            return $query;
+        }
+
+        return $query
+            ->where(fn ($q) => $q->whereNull('site_id')->orWhere('site_id', $siteId))
+            ->orderByRaw('case when site_id = ? then 0 else 1 end', [$siteId])
+            ->orderBy('id');
     }
 
     /**
      * @param  array<string, mixed>  $patch
      * @return array<string, mixed>
      */
-    private function applyWbs(OpsIntakeItem $item, array $patch, ?int $userId): array
+    private function applyWbs(OpsIntakeItem $item, array $patch, ?int $userId, string $via = OpsIntakeItem::VIA_MANUAL): array
     {
-        $wbs = WbsItem::query()->where('wbs_code', $item->target_code)->first();
+        // 현장으로 좁힌다. wbs_code 는 전역 유일이라 지금은 결과가 같지만, 좁히지 않으면
+        // 「이 현장 것이 맞나」를 코드가 확인하지 않는다는 뜻이 된다 — 조달(po_no)에서는
+        // 그 확인이 없어서 실제로 남의 현장 행을 집을 수 있었다.
+        $wbs = self::scopeToSite(WbsItem::query()->where('wbs_code', $item->target_code), $item->site_id)->first();
         if (! $wbs) {
             return ['success' => false, 'error' => '공정을 찾을 수 없습니다: '.$item->target_code];
         }
@@ -649,12 +760,18 @@ class OpsIntakeService
             'proposed' => $patch,
             'applied_at' => now(),
             'applied_by_id' => $userId,
+            'applied_via' => $via,
             'result_note' => mb_substr($note, 0, 300),
         ]);
 
         // 보고가 올라온 그 메시지에 결과를 붙인다 — "반영됐나요?"를 묻지 않게.
-        app(\App\Services\Communication\DecisionReplyConnector::class)
-            ->intakeApplied($item, "공정표 반영 완료 — {$item->target_name}".mb_substr(str_replace('공정표 반영 완료', '', $note), 0, 200));
+        // 소통 회로가 막혀도 반영은 이미 끝났다 — 여기서 터지면 반영이 실패한 것처럼 보인다.
+        try {
+            app(DecisionReplyConnector::class)
+                ->intakeApplied($item, "공정표 반영 완료 — {$item->target_name}".mb_substr(str_replace('공정표 반영 완료', '', $note), 0, 200));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return ['success' => true, 'target' => $item->target_code, 'applied' => $clean, 'cpm' => $cpm];
     }
@@ -663,10 +780,15 @@ class OpsIntakeService
      * @param  array<string, mixed>  $patch
      * @return array<string, mixed>
      */
-    private function applyProcurement(OpsIntakeItem $item, array $patch, ?int $userId): array
+    private function applyProcurement(OpsIntakeItem $item, array $patch, ?int $userId, string $via = OpsIntakeItem::VIA_MANUAL): array
     {
         // 제안의 대상 코드는 PO 번호다 — 실제 갱신은 project_code + wbs_code 로 이뤄진다.
-        $po = ProcurementItem::query()->where('po_no', $item->target_code)->first();
+        //
+        // 현장으로 좁히는 것이 중요하다. po_no 에는 유일 제약이 없고(유일한 것은
+        // project_code+wbs_code 뿐이다), 같은 번호가 두 현장에 있으면 ->first() 가
+        // 남의 현장 발주를 집는다. 판독 단계에서 후보를 현장별로 걸렀더라도
+        // 반영 단계에서 그 현장을 다시 확인하지 않으면 격리가 성립하지 않는다.
+        $po = self::scopeToSite(ProcurementItem::query()->where('po_no', $item->target_code), $item->site_id)->first();
         if (! $po) {
             return ['success' => false, 'error' => '발주 건을 찾을 수 없습니다: '.$item->target_code];
         }
@@ -717,14 +839,19 @@ class OpsIntakeService
             'proposed' => $patch,
             'applied_at' => now(),
             'applied_by_id' => $userId,
+            'applied_via' => $via,
             'result_note' => '조달 반영 완료',
         ]);
 
         // "그 자재 언제 와요?"의 답이 방으로 돌아간다 — 특히 입고완료가 그렇다.
         $summary = isset($clean['status']) ? "상태 {$clean['status']}" : '';
         $summary .= isset($clean['eta']) ? ($summary ? ' · ' : '')."ETA {$clean['eta']}" : '';
-        app(\App\Services\Communication\DecisionReplyConnector::class)
-            ->intakeApplied($item, "조달 반영 완료 — PO {$item->target_code}".($summary ? " ({$summary})" : ''));
+        try {
+            app(DecisionReplyConnector::class)
+                ->intakeApplied($item, "조달 반영 완료 — PO {$item->target_code}".($summary ? " ({$summary})" : ''));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
     }
@@ -745,7 +872,7 @@ class OpsIntakeService
      *                            "계획일을 넣은 뒤 되돌리기"가 영원히 안 된다.
      * @return array<string, mixed>
      */
-    private function applySubmittal(OpsIntakeItem $item, array $patch, ?int $userId, bool $allowClear = false): array
+    private function applySubmittal(OpsIntakeItem $item, array $patch, ?int $userId, bool $allowClear = false, string $via = OpsIntakeItem::VIA_MANUAL): array
     {
         // seq 는 프로젝트 안에서만 유일하다 — 현장으로 좁혀 남의 프로젝트 행을 집지 않는다.
         $row = Submittal::query()
@@ -809,7 +936,12 @@ class OpsIntakeService
             'notes' => $pick('notes', $row->notes),
         ];
 
-        $res = app(ProjectRegisterService::class)->saveSubmittal($payload);
+        // 누구의 권한으로 고치는지 명시한다. 보고 제출로 반영될 때는 세션이 없어서,
+        // auth() 에만 기대면 그 길로는 검사 일정이 영영 반영되지 않는다.
+        $res = app(ProjectRegisterService::class)->saveSubmittal(
+            $payload,
+            $userId ? User::find($userId) : null,
+        );
         if (! ($res['success'] ?? false)) {
             $item->update(['result_note' => mb_substr((string) ($res['error'] ?? '반영 실패'), 0, 300)]);
 
@@ -831,11 +963,16 @@ class OpsIntakeService
             'proposed' => $patch,
             'applied_at' => now(),
             'applied_by_id' => $userId,
+            'applied_via' => $via,
             'result_note' => mb_substr($note, 0, 300),
         ]);
 
-        app(\App\Services\Communication\DecisionReplyConnector::class)
-            ->intakeApplied($item, "{$note} — #{$row->seq} ".mb_substr((string) $row->title, 0, 80));
+        try {
+            app(DecisionReplyConnector::class)
+                ->intakeApplied($item, "{$note} — #{$row->seq} ".mb_substr((string) $row->title, 0, 80));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
     }
@@ -1175,7 +1312,7 @@ class OpsIntakeService
         try {
             if (Schema::hasTable('field_drawings')) {
                 $specs = $specs->merge(
-                    \App\Models\FieldDrawing::query()
+                    FieldDrawing::query()
                         ->when($site, fn ($q) => $q->where('site_id', $site->id))
                         ->where('status', 'analyzed')
                         ->latest('analyzed_at')
@@ -1191,7 +1328,7 @@ class OpsIntakeService
 
             if (Schema::hasTable('intelligent_documents')) {
                 $specs = $specs->merge(
-                    \App\Models\IntelligentDocument::query()
+                    IntelligentDocument::query()
                         ->when($site, fn ($q) => $q->where('site_id', $site->id))
                         ->whereIn('document_type', ['drawing', 'specification', 'submittal', 'contract', 'change_order'])
                         ->where('ai_status', 'ready')

@@ -42,5 +42,12 @@ class AnalyzeOpsIntakeJob implements ShouldQueue
             'error' => $e->getMessage(),
             'analyzed_at' => now(),
         ]);
+
+        // 이 기록이 이미 제출된 보고에 묶여 있으면 그 보고의 결과 줄을 다시 센다.
+        // 그러지 않으면 「사진 판독 중 — 끝나면 이어서 반영됩니다」가 영원히 남는다.
+        $batch = OpsIntakeBatch::find($this->batchId);
+        if ($batch) {
+            app(OpsIntakeService::class)->reflectIfSubmitted($batch, restampOnly: true);
+        }
     }
 }

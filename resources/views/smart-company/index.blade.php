@@ -8955,6 +8955,34 @@
             '<td style="padding:6px 0;text-align:right;font-size:12.5px;font-weight:700">' + c.headcount + '명</td></tr>';
         }).join('');
 
+        // ── 공종별 보고. 반장이 낸 것이 여기 모이고, 안 낸 공종은 안 낸 채로 보인다.
+        // 옛 보고서에는 이 블록이 없다(키가 없으면 아무것도 안 그린다).
+        var tr = m.tradeReports || {};
+        function tradeBlock() {
+          if (!tr.rows || !tr.rows.length) return '';
+          var rows = tr.rows.map(function (t) {
+            var ok = t.submitted;
+            var badge = ok
+              ? '<span style="color:var(--status-success);font-weight:700">✓ 제출</span>'
+              : '<span style="color:var(--status-danger);font-weight:700">미제출</span>';
+            var said = (t.highlights || []).slice(0, 3).map(opsEsc).join(' · ');
+            return '<tr style="border-bottom:1px solid var(--border-subtle)' + (ok ? '' : ';background:rgba(239,68,68,.06)') + '">' +
+              '<td style="padding:7px 0;font-size:12px;font-weight:700;white-space:nowrap">' + opsEsc(t.trade) + '</td>' +
+              '<td style="padding:7px 8px;font-size:12px;white-space:nowrap">' + badge +
+                (t.submittedAt ? ' <span style="color:var(--text-tertiary)">' + opsEsc(t.submittedAt) + '</span>' : '') + '</td>' +
+              '<td style="padding:7px 8px;font-size:12px;color:var(--text-secondary);white-space:nowrap">' +
+                (t.headcount || 0) + '명' + (t.submittedBy ? ' · ' + opsEsc(t.submittedBy) : '') + '</td>' +
+              '<td style="padding:7px 8px;font-size:12px;color:var(--text-secondary);white-space:nowrap">' +
+                (t.applied ? '반영 ' + t.applied : '') + (t.held ? ' · <span style="color:#b45309">확인 ' + t.held + '</span>' : '') + '</td>' +
+              '<td style="padding:7px 0;font-size:11.5px;color:var(--text-tertiary);line-height:1.6">' + said + '</td></tr>';
+          }).join('');
+          return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:5px">' +
+            '공종별 보고 <span style="font-weight:400;color:var(--text-tertiary)">' +
+            (tr.submitted || 0) + ' / ' + (tr.total || 0) + ' 제출' +
+            (tr.missingTrades && tr.missingTrades.length ? ' · 미제출 ' + tr.missingTrades.map(opsEsc).join(', ') : '') +
+            '</span></div><table style="width:100%;border-collapse:collapse">' + rows + '</table></div>';
+        }
+
         document.getElementById('ops-result').innerHTML =
           '<div class="panel" style="margin-bottom:16px;border-left:3px solid #0f766e">' +
           '<div class="panel-header"><div class="panel-title" style="color:#0f766e"><i class="ph ph-clipboard-text"></i> 일일 마감 보고서 · ' + opsEsc(d.date) + '</div>' +
@@ -8969,11 +8997,17 @@
           stat('차이', (labor.gap > 0 ? '+' : '') + (labor.gap || 0), labor.gap ? '확인 필요' : '일치', labor.gap ? 'var(--status-danger)' : 'var(--status-success)') +
           stat('직접고용 근무', (labor.directHours || 0) + 'h', '평균 ' + (labor.directAvgHours || 0) + 'h', '#4338ca') +
           stat('상황실 접수', (ops.batches || 0) + '건', '사진 ' + (ops.photos || 0) + '장', 'var(--text-primary)') +
+          // 공정표에서 계산한 진척률(정본 산식). 현장이 손으로 적은 진도율과 나란히 두면
+          // 어긋나는 날이 곧 관리 포인트다 — 합치면 그 어긋남이 보이지 않는다.
+          ((m.schedule && m.schedule.rate !== null && m.schedule.rate !== undefined)
+            ? stat('공정표 기준', m.schedule.rate + '%', (m.schedule.done || 0) + '/' + (m.schedule.tasks || 0) + ' 완료', '#0f766e') : '') +
           '</div>' +
 
           fieldBlock() +
 
           (n.summary ? '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-line;margin-bottom:6px">' + opsEsc(n.summary) + '</div>' : '') +
+
+          tradeBlock() +
 
           (byCompany ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:5px">업체별 출역</div>' +
             '<table style="width:100%;border-collapse:collapse">' + byCompany + '</table></div>' : '') +

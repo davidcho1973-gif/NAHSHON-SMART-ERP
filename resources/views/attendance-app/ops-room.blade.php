@@ -20,6 +20,10 @@
         /* 오늘 내 몫 — 이 화면에서 제일 먼저 눈에 들어와야 하는 칸이다. */
         .card.mine { background: #fffbea; border-color: #f2d675; }
         .msg.reopened { color: #b45309; font-weight: 700; }
+        /* ERP 로 넘어간 결과. [hidden] 이 .msg 의 display 를 이기도록 !important 를 둔다 —
+           안 그러면 빈 칸이 늘 보인다(채팅 화면에서 같은 함정을 이미 한 번 밟았다). */
+        .msg.reflected { color: #15803d; font-weight: 700; }
+        [hidden] { display: none !important; }
         .card h2 { font-size: 15px; margin: 0 0 10px; }
         textarea { width: 100%; min-height: 120px; border: 1px solid #d1d5db; border-radius: 10px; padding: 11px; font-size: 15px; font-family: inherit; resize: vertical; background: #fff; color: #111827; }
         input[type=file] { font-size: 13px; margin-top: 10px; max-width: 100%; }
@@ -75,6 +79,13 @@
                             올린 기록 {{ $reportEntries }}건. 오늘 한 일을 다 올리셨으면 아래를 눌러 주세요.
                         @endif
                     </p>
+                    {{-- 제출한 것이 ERP 로 넘어갔는지. 이걸 안 보여 주면 반장은 «올리긴 했는데
+                         반영은 됐나» 를 알 방법이 없고, 모르면 같은 것을 다시 올린다. --}}
+                    @if ($reflectionNote)
+                        <p class="msg reflected" id="mine-reflect">↳ {{ $reflectionNote }}</p>
+                    @else
+                        <p class="msg reflected" id="mine-reflect" hidden></p>
+                    @endif
                     @if ($reopenReason)
                         {{-- 소장이 되돌린 이유 — 무엇을 더 올려야 하는지 알아야 다시 낸다. --}}
                         <p class="msg reopened">↩ 소장이 되돌렸습니다: {{ $reopenReason }}</p>
@@ -96,7 +107,7 @@
                 <div class="row">
                     <button class="btn primary full" id="send">AI 판독 요청</button>
                 </div>
-                <p class="msg" id="send-msg">잡담은 자동으로 걸러집니다. 공정표 반영은 PC 상황실에서 확인 후 진행합니다.</p>
+                <p class="msg" id="send-msg">잡담은 자동으로 걸러집니다. 「오늘 보고 제출」을 누르면 진척·자재는 ERP 에 자동 반영되고, 금액·승인은 관리자 확인 뒤에 반영됩니다.</p>
             </section>
 
             {{-- 목록 --}}
@@ -130,6 +141,7 @@
         var API = @json(url('/smart-company-api'));
         var CSRF = document.querySelector('meta[name=csrf-token]').getAttribute('content');
         var CAN_MANAGE = @json($canManage);
+        var SITE_SCOPE = @json($siteScope);
         var photos = [];
         var STATUS = { pending: '확인 대기', applied: '반영됨', dismissed: '무시함', needs_input: '확인 필요' };
 
@@ -137,7 +149,10 @@
             return fetch(API + '/' + method, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ args: args || [], siteId: 'ALL' })
+                // 자기 현장으로 올린다. 'ALL' 로 보내면 기록이 현장 없이 저장돼
+                // 그날 그 공종의 보고에 묶이지 않는다(그리고 판독 후보로 남의 현장
+                // 공정 코드까지 딸려 들어온다).
+                body: JSON.stringify({ args: args || [], siteId: SITE_SCOPE })
             }).then(function (r) { return r.json(); });
         }
 
@@ -146,6 +161,35 @@
             document.getElementById('list-screen').classList.toggle('hidden', which !== 'list');
             document.getElementById('detail-screen').classList.toggle('hidden', which !== 'detail');
             window.scrollTo(0, 0);
+        }
+
+        // 반영 결과 물어보기 — 제출은 즉시 끝나지만 ERP 반영은 응답 뒤에 돈다
+        // (공정표를 고치면 CPM 이 후속 공정을 다시 계산해서 몇 초에서 몇십 초가 걸린다).
+        // 결과를 안 보여 주면 반장은 «반영은 됐나» 를 모르고, 모르면 같은 것을 다시 올린다.
+        // 30초 안에 안 끝나면 묻기를 그만둔다 — 끝없이 도는 폴링이 배터리를 먹는다.
+        function pollReflection(tries) {
+            tries = tries || 0;
+            var box = document.getElementById('mine-reflect');
+            if (!box) return;
+            if (tries === 0) { box.hidden = false; box.textContent = '↳ ERP 에 반영하는 중…'; }
+            if (tries > 15) {
+                box.textContent = '↳ 반영에 시간이 걸리고 있습니다. 잠시 뒤 새로고침해 주세요.';
+                return;
+            }
+            setTimeout(function () {
+                fetch(@json(route('ops.trade-report.status')), {
+                    credentials: 'same-origin', headers: { 'Accept': 'application/json' },
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d && d.success && d.reflected) {
+                            box.textContent = '↳ ' + (d.note || 'ERP 반영을 마쳤습니다.');
+                            return;
+                        }
+                        pollReflection(tries + 1);
+                    })
+                    .catch(function () { box.hidden = true; });
+            }, 2000);
         }
 
         // 오늘 보고 제출 — 확정 신호. 되돌리기는 소장이 ERP 현황판에서 한다.
@@ -167,6 +211,7 @@
                         }
                         submitBtn.textContent = '제출 완료';
                         if (msg) { msg.textContent = '✅ ' + (d.message || '제출했습니다.'); }
+                        if (d.reflecting) { pollReflection(); }
                     })
                     .catch(function () {
                         if (msg) { msg.textContent = '연결에 실패했습니다. 잠시 뒤 다시 눌러 주세요.'; }

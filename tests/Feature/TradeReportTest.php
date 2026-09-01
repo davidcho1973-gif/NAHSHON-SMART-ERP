@@ -116,7 +116,7 @@ class TradeReportTest extends TestCase
         $this->clockIn($piping);
         $user = $this->userFor($piping);
 
-        $report = $this->service->forUser($user, '2026-08-31');
+        $report = $this->service->forUserOrCreate($user, '2026-08-31');
         $this->assertNotNull($report);
         $this->entry($report);
 
@@ -129,6 +129,8 @@ class TradeReportTest extends TestCase
         $this->assertTrue($board['rows'][0]['submitted']);
         $this->assertSame('김반장', $board['rows'][0]['submittedBy']);
         $this->assertSame(2, $board['rows'][0]['photos']);
+        // 화면의 「되돌리기」가 이 번호로 걸린다 — 없으면 되돌릴 방법이 없다.
+        $this->assertSame($report->id, $board['rows'][0]['reportId']);
     }
 
     public function test_an_empty_report_cannot_be_submitted(): void
@@ -153,8 +155,8 @@ class TradeReportTest extends TestCase
         $this->clockIn($a);
         $this->clockIn($b);
 
-        $ra = $this->service->forUser($this->userFor($a), '2026-08-31');
-        $rb = $this->service->forUser($this->userFor($b), '2026-08-31');
+        $ra = $this->service->forUserOrCreate($this->userFor($a), '2026-08-31');
+        $rb = $this->service->forUserOrCreate($this->userFor($b), '2026-08-31');
 
         $this->assertSame($ra->id, $rb->id);
         $this->assertSame(1, DailyTradeReport::query()->count());
@@ -168,7 +170,7 @@ class TradeReportTest extends TestCase
             'name' => '사무원', 'employment_status' => 'active',
         ]);
 
-        $this->assertNull($this->service->forUser($this->userFor($office), '2026-08-31'));
+        $this->assertNull($this->service->forUserOrCreate($this->userFor($office), '2026-08-31'));
     }
 
     public function test_reopening_requires_a_reason_and_reverts_the_status(): void
@@ -176,7 +178,7 @@ class TradeReportTest extends TestCase
         $piping = $this->worker('김반장', 'Piping');
         $this->clockIn($piping);
         $user = $this->userFor($piping);
-        $report = $this->service->forUser($user, '2026-08-31');
+        $report = $this->service->forUserOrCreate($user, '2026-08-31');
         $this->entry($report);
         $this->service->submit($user, '2026-08-31');
 
@@ -202,7 +204,7 @@ class TradeReportTest extends TestCase
         $this->clockIn($duct);
 
         $user = $this->userFor($piping);
-        $report = $this->service->forUser($user, '2026-08-31');
+        $report = $this->service->forUserOrCreate($user, '2026-08-31');
         $this->entry($report);
         $this->service->submit($user, '2026-08-31');
 

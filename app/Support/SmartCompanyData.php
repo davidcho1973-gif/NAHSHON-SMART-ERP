@@ -17,6 +17,7 @@ use App\Models\PayApplication;
 use App\Models\PayrollRun;
 use App\Models\Project;
 use App\Models\ProjectContract;
+use App\Models\SafetyPermit;
 use App\Models\Site;
 use App\Models\SiteContractor;
 use App\Models\SmartRecord;
@@ -30,11 +31,15 @@ use App\Services\Admin\AttendanceLogAdminService;
 use App\Services\Admin\BillingAdminService;
 use App\Services\Admin\CommunicationAdminService;
 use App\Services\Admin\ContractAdminService;
+use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\EmployeeAdminService;
-use App\Services\Admin\OrgSettingService;
+use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
+use App\Services\Admin\MailDiagnosticsService;
+use App\Services\Admin\OrgSettingService;
 use App\Services\Admin\PayProfileService;
 use App\Services\Admin\ProjectRegisterService;
+use App\Services\Admin\ReportRecipientService;
 use App\Services\Admin\SiteAdminService;
 use App\Services\Admin\UserAccessService;
 use App\Services\Alerts\UnifiedAlertService;
@@ -46,13 +51,11 @@ use App\Services\CommandCenter\ConstructionCommandCenterService;
 use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
 use App\Services\Finance\ExpenseReviewService;
+use App\Services\Finance\ProgressBillingDrafter;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Inventory\InventoryService;
-use App\Services\Admin\CorrespondenceService;
-use App\Services\Admin\MailDiagnosticsService;
-use App\Services\Admin\ReportRecipientService;
 use App\Services\Ops\DailyClosingService;
 use App\Services\Ops\DailyPlanService;
 use App\Services\Ops\DailyReportMailer;
@@ -60,16 +63,19 @@ use App\Services\Ops\OpsActionService;
 use App\Services\Ops\OpsDigestService;
 use App\Services\Ops\OpsIntakeService;
 use App\Services\Ops\OpsLaborService;
+use App\Services\Ops\TradeReportService;
 use App\Services\Payroll\PayrollCalculator;
 use App\Services\Payroll\PayrollExpenseConnector;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Safety\SafetyPermitService;
 use App\Services\Safety\SafetyWorkService;
+use App\Services\Takeoff\AiJobQueue;
 use App\Services\Wbs\ClaudeWbsAnalyzer;
 use App\Services\Wbs\GeminiWbsAnalyzer;
 use App\Services\Wbs\LaborAllocationService;
 use App\Services\Wbs\WbsLaborService;
 use App\Services\Wbs\WbsService;
+use App\Services\Wbs\WeeklyPlanService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -210,7 +216,7 @@ class SmartCompanyData
             'api_relatedDrawings' => app(ProjectRegisterService::class)->relatedDrawings((int) ($args[0] ?? 0)),
             'api_saveSubmittal' => app(ProjectRegisterService::class)->saveSubmittal(is_array($args[0] ?? null) ? $args[0] : []),
             // 조항 → 업체 자료 요청서(문서함 편철)
-            'api_requestVendorData' => \App\Services\Takeoff\AiJobQueue::push(
+            'api_requestVendorData' => AiJobQueue::push(
                 'vendor_request', 'submittal', (int) ($args[0] ?? 0),
                 '업체 자료요청서 작성',
                 ['vendor' => isset($args[1]) ? (string) $args[1] : null],
@@ -222,11 +228,11 @@ class SmartCompanyData
                 is_array($args[2] ?? null) ? $args[2] : [],
             ),
             // 제품 자료 AI 웹 조사 → 후보 중 고른 것을 문서함에 편철·연결
-            'api_researchSubmittal' => \App\Services\Takeoff\AiJobQueue::push(
+            'api_researchSubmittal' => AiJobQueue::push(
                 'research', 'submittal', (int) ($args[0] ?? 0), 'AI 자료 조사'
             ),
             // 번호표로 진행 상태를 묻는 곳 — 오래 걸리는 AI 작업은 전부 이 문을 쓴다.
-            'api_getAiJob' => \App\Services\Takeoff\AiJobQueue::status((int) ($args[0] ?? 0)),
+            'api_getAiJob' => AiJobQueue::status((int) ($args[0] ?? 0)),
             'api_fileSubmittalResearch' => app(ProjectRegisterService::class)->fileSubmittalResearch((int) ($args[0] ?? 0), (int) ($args[1] ?? -1)),
             'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
@@ -275,7 +281,7 @@ class SmartCompanyData
             'api_getBillings' => app(BillingAdminService::class)->getBillings((int) ($args[0] ?? 0)),
             'api_getBillingOptions' => app(BillingAdminService::class)->getBillingOptions(),
             'api_saveBilling' => app(BillingAdminService::class)->saveBilling(is_array($args[0] ?? null) ? $args[0] : []),
-            'api_draftBillingFromProgress' => app(\App\Services\Finance\ProgressBillingDrafter::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),
+            'api_draftBillingFromProgress' => app(ProgressBillingDrafter::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),
             'api_setBillingStatus' => app(BillingAdminService::class)->setBillingStatus(is_array($args[0] ?? null) ? $args[0] : []),
             'api_deleteBilling' => app(BillingAdminService::class)->deleteBilling((int) ($args[0] ?? 0)),
             'api_saveBillingReceipt' => app(BillingAdminService::class)->saveBillingReceipt(is_array($args[0] ?? null) ? $args[0] : []),
@@ -319,8 +325,8 @@ class SmartCompanyData
             ),
             'api_getWbsLabor' => app(WbsLaborService::class)->laborFor((string) ($args[0] ?? '')),
             // 주간 리듬(LPS): 3주 선행 뷰 + 지난주 PPC / 이번 주 약속 토글.
-            'api_getWeeklyPlan' => app(\App\Services\Wbs\WeeklyPlanService::class)->lookahead((string) ($args[0] ?? ''), $siteId),
-            'api_toggleWeekCommit' => app(\App\Services\Wbs\WeeklyPlanService::class)->toggleCommit((string) ($args[0] ?? '')),
+            'api_getWeeklyPlan' => app(WeeklyPlanService::class)->lookahead((string) ($args[0] ?? ''), $siteId),
+            'api_toggleWeekCommit' => app(WeeklyPlanService::class)->toggleCommit((string) ($args[0] ?? '')),
             'api_getAssignableEmployees' => self::assignableEmployees($siteId, ($args[0] ?? null) ? (string) $args[0] : null),
             'api_getTodayWbsWork' => app(WbsService::class)->todayWork((string) ($args[0] ?? ''), $siteId),
             'api_getWbsPickList' => app(WbsService::class)->pickList((string) ($args[0] ?? ''), $siteId, ($args[1] ?? null) ? (string) $args[1] : null),
@@ -332,13 +338,13 @@ class SmartCompanyData
 
             // 손님 전용 링크 — 로그인 없이 현장 공정 현황만 보는 열람 토큰. 발급·회수는
             // 관리자·현장소장만(서비스 안에서 검사) — api_get 접두사의 열람 전용 통과와 별개다.
-            'api_getGuestLinks' => app(\App\Services\Admin\GuestLinkService::class)->list((string) ($args[0] ?? $siteId)),
-            'api_createGuestLink' => app(\App\Services\Admin\GuestLinkService::class)->create(
+            'api_getGuestLinks' => app(GuestLinkService::class)->list((string) ($args[0] ?? $siteId)),
+            'api_createGuestLink' => app(GuestLinkService::class)->create(
                 (string) ($args[0] ?? ''),
                 ($args[1] ?? null) !== null ? (string) $args[1] : null,
                 is_numeric($args[2] ?? null) ? (int) $args[2] : null,
             ),
-            'api_revokeGuestLink' => app(\App\Services\Admin\GuestLinkService::class)->revoke((int) ($args[0] ?? 0)),
+            'api_revokeGuestLink' => app(GuestLinkService::class)->revoke((int) ($args[0] ?? 0)),
 
             // 조달 관리 (공정관리 하위 — 발주·조달성 공정의 납기 추적)
             'api_getProcurement' => app(ProcurementService::class)->list((string) ($args[0] ?? ''), $siteId),
@@ -364,11 +370,17 @@ class SmartCompanyData
             // 현장 상황실 — 자유 형식 글/카톡 붙여넣기 판독
             // 판독 예약 — 사진이 많아도 요청은 즉시 끝나고, 실제 판독은 응답 후에 돈다(504 방지).
             // 공종별 오늘 보고 현황판 — 소장이 "누가 아직 안 냈나" 를 본다.
-            'api_tradeReportBoard' => app(\App\Services\Ops\TradeReportService::class)->board(
-                (int) (\App\Models\Site::query()->where('code', $siteId)->value('id') ?? 0),
+            'api_tradeReportBoard' => app(TradeReportService::class)->board(
+                // 일일보고는 현장의 것이다. 상단에서 고른 현장이 최우선이고, '전체' 이면
+                // 보는 사람의 소속 현장으로 떨어진다(현장 사람은 대개 자기 현장을 본다).
+                // 둘 다 없으면 board() 가 "현장을 먼저 고르세요" 라고 말한다 — 현장을
+                // 안 골랐을 뿐인데 "출근 기록이 없습니다" 라고 하면 그건 거짓말이다.
+                (int) (Site::query()->where('code', $siteId)->value('id')
+                    ?: DefaultScope::siteId(auth()->user())
+                    ?: 0),
                 isset($args[0]) ? (string) $args[0] : null,
             ),
-            'api_tradeReportReopen' => app(\App\Services\Ops\TradeReportService::class)->reopen(
+            'api_tradeReportReopen' => app(TradeReportService::class)->reopen(
                 (int) ($args[0] ?? 0),
                 (string) ($args[1] ?? ''),
                 auth()->user(),
@@ -1165,14 +1177,14 @@ class SmartCompanyData
 
         // 협력사 관리자는 범위를 아무리 넓게 줘도 자기 회사 밖을 못 본다 —
         // 역할이 범위를 이긴다. 남의 회사 인건비가 보이면 그것만으로 사고다.
-        if (\App\Support\AccessPolicy::lockedCompanyId($user) !== null) {
-            \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+        if (AccessPolicy::lockedCompanyId($user) !== null) {
+            AccessPolicy::applyCompanyLock($query, $user);
 
             return;
         }
 
         if (
-            \App\Support\AccessPolicy::canManageMoney($user)
+            AccessPolicy::canManageMoney($user)
             || $user->access_scope === 'all_sites'
         ) {
             return;
@@ -1721,7 +1733,7 @@ class SmartCompanyData
     {
         try {
             if (Schema::hasTable('safety_permits')) {
-                return \App\Models\SafetyPermit::query()
+                return SafetyPermit::query()
                     ->orderByDesc('id')
                     ->limit(20)
                     ->get()

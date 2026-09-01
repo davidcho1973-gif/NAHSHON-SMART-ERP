@@ -10,6 +10,7 @@ use App\Models\OpsIntakeItem;
 use App\Models\OpsIntakeItem as Item;
 use App\Models\OpsLaborReport;
 use App\Models\Site;
+use App\Models\Vendor;
 use App\Support\FinanceChartOfAccounts;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -101,7 +102,10 @@ class OpsModuleRouter
             ],
         );
 
-        $item->update(['status' => 'applied', 'applied_at' => now(), 'result_note' => '인원 보고 반영']);
+        $item->update([
+            'status' => 'applied', 'applied_at' => now(),
+            'applied_via' => Item::VIA_AUTO, 'result_note' => '인원 보고 반영',
+        ]);
 
         return true;
     }
@@ -150,6 +154,7 @@ class OpsModuleRouter
         $item->update([
             'status' => 'applied',
             'applied_at' => now(),
+            'applied_via' => Item::VIA_AUTO,
             'result_note' => '액션 아이템 등록'.($approved ? ' (승인 완료)' : ''),
         ]);
 
@@ -179,7 +184,7 @@ class OpsModuleRouter
      *
      * @return array<string, mixed>
      */
-    public function applyExpense(OpsIntakeItem $item, ?int $userId = null): array
+    public function applyExpense(OpsIntakeItem $item, ?int $userId = null, string $via = Item::VIA_MANUAL): array
     {
         $proposed = (array) ($item->proposed ?? []);
         $amount = (float) ($proposed['amount'] ?? 0);
@@ -208,7 +213,7 @@ class OpsModuleRouter
 
         $expense = MobileExpense::create([
             'company_id' => $item->site_id ? Site::query()->whereKey($item->site_id)->value('company_id') : null,
-            'vendor_id' => \App\Models\Vendor::matchByName($vendor),
+            'vendor_id' => Vendor::matchByName($vendor),
             'site_id' => $item->site_id,
             'employee_id' => null,
             'payment_type' => 'corporate',
@@ -227,6 +232,8 @@ class OpsModuleRouter
         $item->update([
             'status' => 'applied',
             'applied_at' => now(),
+            'applied_by_id' => $userId,
+            'applied_via' => $via,
             'result_note' => '재무(지출) 등록 #'.$expense->id,
         ]);
 
