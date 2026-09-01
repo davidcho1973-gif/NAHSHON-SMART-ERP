@@ -28,11 +28,22 @@ class OpsIntakeAnalyzer
      */
     public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = []): array
     {
-        $prompt = $this->prompt($text, $activities, $purchases, $today, $images !== [], $photoKinds, $specs, $inspections).$learned;
+        // 사람이 한 말이 없으면 판독하지 않는다.
+        //
+        // 예전에는 사진만 올려도 "사진이 곧 보고 내용" 이라며 읽게 했다. 그런데 사진에는
+        // 맥락이 없다 — 배관 사진 한 장은 «배관이 있다» 만 말할 뿐, 그것이 3층인지,
+        // 20개 중 12개인지, 오늘 한 것인지 알려 주지 않는다. 그 빈칸을 AI 가 그럴듯하게
+        // 채우면서 현장이 하지 않은 말이 보고가 됐다(사장님 지적).
+        //
+        // 맥락은 사진이 아니라 <b>사람</b>에게 있다. 그래서 이제 판독의 재료는 말(적었든
+        // 말했든)뿐이고, 사진은 그 말의 증거로만 따라간다.
+        if (trim($text) === '') {
+            return [];
+        }
 
-        $result = $images !== []
-            ? $this->ocr->analyze($images, $prompt, $this->schema())['data'] ?? []
-            : $this->generate($prompt, $this->schema());
+        $prompt = $this->prompt($text, $activities, $purchases, $today, $photoKinds, $specs, $inspections).$learned;
+
+        $result = $this->generate($prompt, $this->schema());
 
         $items = $result['items'] ?? [];
 
@@ -43,30 +54,20 @@ class OpsIntakeAnalyzer
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function prompt(string $text, array $activities, array $purchases, string $today, bool $withImages = false, array $photoKinds = [], array $specs = [], array $inspections = []): string
+    private function prompt(string $text, array $activities, array $purchases, string $today, array $photoKinds = [], array $specs = [], array $inspections = []): string
     {
-        $kindLine = $photoKinds === [] ? '' : ("\n[첨부 사진 종류(자동 판별)]\n".collect($photoKinds)
+        // 사진은 «무엇이 함께 왔는지» 만 알려 준다. 판독의 재료가 아니라 배경 설명이다.
+        //
+        // 종류(영수증·납품서·시공 사진)는 코드가 따로 가려낸 사실이라 알려 줘도 안전하지만,
+        // 그 종류에서 진행률이나 인원수를 <b>끌어내지는 말라</b>고 못 박는다. 사진에서
+        // 수치를 세는 순간 그것은 사람이 하지 않은 말이 된다.
+        $kindLine = $photoKinds === [] ? '' : ("\n[함께 올라온 사진 (참고용, 판독 대상 아님)]\n".collect($photoKinds)
             ->map(fn (array $k, int $i) => sprintf('- %d번째 사진: %s%s', $i + 1, $k['label'] ?? '', ($k['summary'] ?? '') !== '' ? ' — '.$k['summary'] : ''))
-            ->implode("\n")."\n");
+            ->implode("\n")
+            ."\n※ 사진은 위 글의 증거로만 첨부됐습니다. 사진에서 진행률·인원수·금액을 끌어내지 마세요.\n"
+            ."  글에 없는 내용은 사진에 보이더라도 항목으로 만들지 마세요.\n");
 
-        $photoRule = $withImages ? <<<'P'
-
-## 첨부 사진 판독 (사진이 함께 왔습니다)
-- 사진에 **실제로 보이는 시공 상태**로 진행 정도를 판단하세요(예: 트레이 3구간 중 2구간 포설 완료 → 약 66%).
-- 영수증 사진이면 category=expense 로, 상호·금액을 summary 에 적으세요.
-- 자재 납품/송장 사진이면 category=procurement 로 보세요.
-- 안전 위험(개구부·추락·정리불량·PPE 미착용)이 보이면 category=issue 로 잡으세요.
-- 글에 대상 작업이 적혀 있으면 **그 작업을 우선**하고, 사진은 상태 판정에만 쓰세요.
-- 사진만으로 대상을 확신할 수 없으면 target_code 를 비우고 question 에 되물으세요.
-- 출역 명부·인원 명단 사진이면 category=labor 로, proposed 에 {"headcount": 인원수, "company": "업체명"} 을
-  넣으세요. 업체별로 나뉘어 있으면 **업체마다 별도 item** 으로 만드세요.
-- 사람이 찍힌 작업 사진이면 **보이는 인원수를 세어** category=labor 로 넣되 confidence 를 낮추고
-  question 에 "사진에 N명 보입니다. 맞나요?" 라고 되물으세요.
-- 사진에서 **확인되지 않는 수치는 만들지 마세요.**
-- **글이 비어 있어도 사진만으로 판독하세요.** 사진이 곧 보고 내용입니다. 빈 결과를 돌려주지 마세요.
-P : '';
-
-        return $this->body($text, $activities, $purchases, $today, $specs, $inspections).$kindLine.$photoRule;
+        return $this->body($text, $activities, $purchases, $today, $specs, $inspections).$kindLine;
     }
 
     /**

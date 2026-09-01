@@ -19,6 +19,7 @@ use App\Http\Controllers\MobileEquipmentController;
 use App\Http\Controllers\MobileExpenseController;
 use App\Http\Controllers\MobileOpsRoomController;
 use App\Http\Controllers\OpsPhotoController;
+use App\Http\Controllers\OpsVoiceController;
 use App\Http\Controllers\OrgLogoController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PinAuthController;
@@ -273,6 +274,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/expense-app/list', [ExpenseAppController::class, 'list'])->name('expense-app.list');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
     Route::post('/ops-api/photo', [OpsPhotoController::class, 'store'])->name('ops.photo');
+    // 말한 것을 글자로 — 장갑 낀 손으로 타자를 치지 않아도 되게. 녹음은 보관하지 않는다.
+    Route::post('/ops-api/voice', [OpsVoiceController::class, 'store'])
+        ->middleware('throttle:30,1')->name('ops.voice');
 
     // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
     Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');

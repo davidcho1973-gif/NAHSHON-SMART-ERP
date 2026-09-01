@@ -330,6 +330,11 @@ class OpsIntakeService
             'actionable' => $items->where('category', '!=', 'noise')->count(),
             'noise' => $items->where('category', 'noise')->count(),
             'needsInput' => $items->where('status', 'needs_input')->count(),
+            // 사진만 올린 경우. 사진은 보고에 붙었지만 «무슨 일이 있었는지» 는
+            // 아무도 말해 주지 않았다 — 그 사실을 그대로 알린다. 예전에는 AI 가
+            // 사진을 보고 그럴듯한 이야기를 지어내 그 자리를 채웠다.
+            'photoOnly' => trim((string) $batch->raw_text) === '' && (int) $batch->image_count > 0,
+            'evidenceFiled' => (int) $batch->evidence_filed,
             'items' => $items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
     }

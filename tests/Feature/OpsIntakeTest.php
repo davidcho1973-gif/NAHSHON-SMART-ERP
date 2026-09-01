@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Company;
 use App\Models\CommunicationRoom;
+use App\Models\Company;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
@@ -346,20 +346,25 @@ class OpsIntakeTest extends TestCase
         ], $over);
     }
 
-    public function test_photo_only_input_is_accepted(): void
+    public function test_a_photo_alone_is_kept_but_invents_no_report(): void
     {
+        // 사진에는 맥락이 없다. 배관 사진 한 장은 «배관이 있다» 만 말할 뿐,
+        // 그것이 3층인지 20개 중 12개인지 오늘 한 것인지 알려 주지 않는다.
+        // 예전에는 AI 가 그 빈칸을 그럴듯하게 채워, 현장이 하지 않은 말이 보고가 됐다.
         $this->fakeAi([$this->photoItem()]);
 
         $r = $this->service()->ingest('', $this->site, null, [
             ['data' => 'aGVsbG8=', 'mime_type' => 'image/jpeg'],
         ]);
 
-        $this->assertTrue($r['success'], '사진만 올려도 판독돼야 한다.');
-        $this->assertSame(66, OpsIntakeItem::firstOrFail()->proposed['progress']);
+        $this->assertTrue($r['success'], '사진은 증거로 받아 둔다.');
+        $this->assertSame(0, $r['parsed'], '말이 없으면 지어내지 않는다.');
+        $this->assertSame(0, OpsIntakeItem::query()->count());
     }
 
-    public function test_photo_is_sent_to_the_vision_engine_as_inline_data(): void
+    public function test_the_photo_is_never_the_thing_being_read(): void
     {
+        // 판독의 재료는 <b>사람이 한 말</b>뿐이다. 사진은 그 말의 증거로만 따라간다.
         $this->fakeAi([$this->photoItem()]);
 
         $this->service()->ingest('2층 트레이 사진입니다', $this->site, null, [
@@ -368,11 +373,11 @@ class OpsIntakeTest extends TestCase
 
         Http::assertSent(function ($request): bool {
             $parts = data_get($request->data(), 'contents.0.parts', []);
-            $hasImage = collect($parts)->contains(fn ($p) => isset($p['inline_data']['data']));
             $prompt = json_encode($parts, JSON_UNESCAPED_UNICODE);
 
-            // 사진이 실려 나가고, 사진 판독 지침도 프롬프트에 붙어야 한다.
-            return $hasImage && str_contains((string) $prompt, '첨부 사진 판독');
+            // 사람이 한 말은 실려 나가고, 사진 픽셀은 판독 요청에 실리지 않는다.
+            return str_contains((string) $prompt, '2층 트레이 사진입니다')
+                && ! collect($parts)->contains(fn ($p) => isset($p['inline_data']['data']));
         });
     }
 
@@ -380,7 +385,7 @@ class OpsIntakeTest extends TestCase
     {
         $this->fakeAi([$this->photoItem()]);
 
-        $r = $this->service()->ingest('', $this->site, null, [
+        $r = $this->service()->ingest('트레이 포설했습니다', $this->site, null, [
             ['data' => 'data:image/png;base64,iVBORw0KGgo=', 'mime_type' => ''],
         ]);
 

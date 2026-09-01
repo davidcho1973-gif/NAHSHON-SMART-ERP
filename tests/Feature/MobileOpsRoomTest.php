@@ -67,9 +67,9 @@ class MobileOpsRoomTest extends TestCase
         $res = $this->actingAs($this->user('site_manager'))->get('/attendance-app/ops-room');
 
         $res->assertStatus(200);
-        $res->assertSee('천장 배관 12개 완료');
+        $res->assertSee('천장 배관 12개 완료', false);   // 목록은 화면이 그린다(JSON 으로 실려 나간다)
         $res->assertSee('Arizona Site');
-        $res->assertSee('원문 기록');
+        $res->assertSee('현장 기록');
     }
 
     public function test_manager_gets_edit_controls_and_others_do_not(): void
@@ -83,10 +83,13 @@ class MobileOpsRoomTest extends TestCase
             ->assertStatus(200)->assertSee('var CAN_MANAGE = false;', false);
     }
 
-    public function test_empty_state_is_shown(): void
+    public function test_the_screen_says_what_to_do_before_anything_else(): void
     {
+        // 화면을 여는 순간 «지금 뭘 해야 하나» 가 읽혀야 한다.
         $this->actingAs($this->user('admin'))->get('/attendance-app/ops-room')
-            ->assertStatus(200)->assertSee('아직 기록이 없습니다');
+            ->assertStatus(200)
+            ->assertSee('눌러서 말하기')
+            ->assertSee('글로 쓰기');
     }
 
     public function test_home_links_to_the_ops_room(): void

@@ -7,6 +7,7 @@ use App\Services\Ops\OpsIntakeService;
 use App\Services\Ops\TradeReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 /**
@@ -51,6 +52,9 @@ class MobileOpsRoomController extends Controller
             'reopenReason' => $report?->reopen_reason,
             // 제출한 것이 ERP 로 넘어갔는지 — 페이지를 다시 열어도 결과가 남아 있어야 한다.
             'reflectionNote' => $report?->isSubmitted() ? $report->reflection_note : null,
+            // 오늘 날짜(현장 기준) — 화면이 «오늘 올린 것» 과 지난 기록을 가르는 기준.
+            // 반장에게 중요한 것은 오늘이고, 지난 것은 접어 둔다.
+            'today' => Carbon::now($user?->employee?->site?->timezone ?: config('app.timezone'))->toDateString(),
         ]);
     }
 
