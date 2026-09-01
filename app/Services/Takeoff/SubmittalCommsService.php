@@ -147,6 +147,25 @@ class SubmittalCommsService
         );
 
         $channel = ($result['channel'] ?? 'mail') === 'mailto' ? 'mailto' : 'email';
+
+        // <b>나갔는지를 채널 이름이 아니라 결과로 판정한다.</b>
+        // OutboundMailer 는 발송이 실패해도 channel='mail' 을 돌려준다(채널은 «어느 길로
+        // 시도했나» 이지 «나갔나» 가 아니다). 예전에는 그 둘을 같은 것으로 보고 무조건
+        // 성공으로 적었다 — 메일이 안 나갔는데 화면에는 초록 토스트가 뜨고 제출물 상태가
+        // 앞으로 나아갔다. 703K 처럼 정지 조항이 걸린 현장에서 그건 버그가 아니라
+        // 준수 기록의 위조다.
+        if ($channel === 'email' && ! ($result['success'] ?? false)) {
+            $this->log($submittal, 'request_failed', 'email', $submittal->vendor_name,
+                $submittal->vendor_email, $subject, null, $userId, $result['messageId'] ?? null);
+
+            return [
+                'success' => false,
+                'error' => ($submittal->vendor_email ?: '거래처').' 로 보내지 못했습니다 — '
+                    .($result['error'] ?? '알 수 없는 실패').' (서신 원장 '.$thread->ref_code.' 에 실패로 남았습니다)',
+                'refCode' => $thread->ref_code,
+            ];
+        }
+
         $message = $channel === 'email'
             ? ($submittal->vendor_name ?: $submittal->vendor_email).' 에게 요청 메일을 보냈습니다. ('.$thread->ref_code.')'
             : '메일 서버가 없어 메일앱으로 엽니다 — 보내기를 누르면 발송됩니다.';
@@ -232,14 +251,30 @@ class SubmittalCommsService
             count($files),
         );
 
-        if (($result['channel'] ?? 'mail') !== 'mailto') {
-            $channel = 'email';
-            $message = ($submittal->recipient_name ?: $submittal->recipient_email).' 에게 전달했습니다 — 자료 '.$materials->count().'건'
-                .($tooBig !== [] ? ' (용량 초과 '.count($tooBig).'건은 목록만 적었습니다)' : '').'.';
-        } else {
-            $channel = 'mailto';
-            $message = '메일 서버가 없어 메일앱으로 엽니다. 자료 파일은 문서함에서 내려받아 직접 첨부해 주세요.';
+        $channel = ($result['channel'] ?? 'mail') === 'mailto' ? 'mailto' : 'email';
+
+        // <b>나가지 않았으면 «제출» 로 만들지 않는다.</b> 여기가 특히 위험한 자리다 —
+        // 상태를 «제출» 로 바꾸고 submitted_on 에 오늘 날짜를 박는데, 그 날짜가 곧
+        // "우리가 언제 냈는가" 의 근거가 된다. 실제로 나가지 않은 전달에 그 날짜가
+        // 남으면 나중에 원청과 다툴 때 우리가 대는 증거가 거짓이 된다.
+        if ($channel === 'email' && ! ($result['success'] ?? false)) {
+            $this->log($submittal, 'transmit_failed', 'email', $submittal->recipient_name,
+                $submittal->recipient_email, $subject, null, $userId, $result['messageId'] ?? null);
+
+            return [
+                'success' => false,
+                'error' => ($submittal->recipient_email ?: '수신처').' 로 전달하지 못했습니다 — '
+                    .($result['error'] ?? '알 수 없는 실패')
+                    .' 제출물 상태는 그대로 두었습니다(나가지 않은 것을 «제출» 로 적지 않습니다). '
+                    .'서신 원장 '.$thread->ref_code.' 에 실패로 남았습니다.',
+                'refCode' => $thread->ref_code,
+            ];
         }
+
+        $message = $channel === 'email'
+            ? ($submittal->recipient_name ?: $submittal->recipient_email).' 에게 전달했습니다 — 자료 '.$materials->count().'건'
+                .($tooBig !== [] ? ' (용량 초과 '.count($tooBig).'건은 목록만 적었습니다)' : '').'.'
+            : '메일 서버가 없어 메일앱으로 엽니다. 자료 파일은 문서함에서 내려받아 직접 첨부해 주세요.';
 
         $this->log($submittal, 'transmitted', $channel, $submittal->recipient_name, $submittal->recipient_email, $subject, null, $userId, $result['messageId'] ?? null);
         $submittal->forceFill([
