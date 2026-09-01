@@ -137,11 +137,14 @@ class OpsPhotoAsyncTest extends TestCase
         $user = $this->user();
         WbsItem::create(['project_code' => 'P1', 'level' => 'subtask', 'wbs_code' => 'P1-A1', 'name' => '천장 배관', 'status' => '진행중', 'site_id' => $this->site->id]);
 
+        // 현장을 고른 상태로 올린다. 「전체」로 올리면 공정 후보가 아예 없어
+        // 대상이 붙지 않는다(다른 현장 공정표에 반영되는 사고를 막는 규칙 —
+        // OpsIntakeSiteScopeTest 참고).
         $batchId = $this->actingAs($user)->postJson('/smart-company-api/api_opsIngest', [
-            'args' => ['천장 배관 12개 완료', []], 'siteId' => 'ALL',
+            'args' => ['천장 배관 12개 완료', []], 'siteId' => 'AZ-01',
         ])->json('batchId');
 
-        $this->actingAs($user)->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batchId], 'siteId' => 'ALL'])
+        $this->actingAs($user)->postJson('/smart-company-api/api_getOpsJob', ['args' => [$batchId], 'siteId' => 'AZ-01'])
             ->assertStatus(200)->assertJson(['status' => 'analyzing']);
 
         // 백그라운드 판독을 직접 돌린다(afterResponse 는 테스트에서 실행되지 않는다).

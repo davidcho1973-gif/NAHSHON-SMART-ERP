@@ -9420,7 +9420,15 @@
       };
 
       window.opsApplyAll = async function () {
-        if (!confirm('확인 대기 중인 제안을 한 번에 공정표·조달에 반영할까요?\n(확인 필요 항목은 건너뜁니다. 되돌릴 수 있습니다.)')) return;
+        // 어느 현장에 반영되는지 이름으로 먼저 보여 준다. 일괄 작업은 그 범위를
+        // 사람이 눈으로 보고 있을 때만 성립한다 — 「전체」 상태에서는 서버가 막는다.
+        var scope = window.currentSiteId || 'ALL';
+        if (scope === 'ALL' || scope === '') {
+          alert('현장을 먼저 고른 뒤에 일괄 반영하세요.\n「전체」 상태에서는 어느 현장에 반영되는지 화면에서 확인할 수 없습니다.');
+          return;
+        }
+        var scopeName = (window.SITE_NAMES && window.SITE_NAMES[scope]) || scope;
+        if (!confirm(scopeName + ' 현장의 확인 대기 제안을 한 번에 공정표·조달에 반영할까요?\n(확인 필요 항목은 건너뜁니다. 되돌릴 수 있습니다.)')) return;
         var r = await gsRun('api_applyAllOpsItems', [], { success: false });
         if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
         var msg = r.applied + '건 반영' + (r.failed ? ', ' + r.failed + '건 실패' : '');

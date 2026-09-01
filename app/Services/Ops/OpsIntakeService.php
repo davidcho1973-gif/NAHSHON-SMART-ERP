@@ -20,6 +20,7 @@ use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
 use App\Support\ImageDownscale;
 use App\Support\ImageParts;
+use App\Support\SiteFromText;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -68,6 +69,8 @@ class OpsIntakeService
         if ($text === '' && $images === []) {
             return ['success' => false, 'error' => '판독할 내용이 없습니다.'];
         }
+
+        $site = $this->resolveSite($site, $text);
 
         $activities = $this->activityContext($site);
         $purchases = $this->purchaseContext($site);
@@ -145,6 +148,8 @@ class OpsIntakeService
         if ($text === '' && $photoPaths === []) {
             return ['success' => false, 'error' => '판독할 내용이 없습니다.'];
         }
+
+        $site = $this->resolveSite($site, $text);
 
         $batch = OpsIntakeBatch::create([
             'site_id' => $site?->id,
@@ -984,8 +989,19 @@ class OpsIntakeService
      */
     public function applyAll(?int $siteId = null, ?int $userId = null): array
     {
+        // 현장을 안 고르면 «전체 반영» 은 전 현장·전 회사의 대기 항목을 한 번에
+        // 반영해 버린다. 되돌리기는 항목 하나씩뿐이라 원상복구가 사실상 불가능하다.
+        // 일괄 작업은 그 범위를 사람이 눈으로 보고 있을 때만 성립한다.
+        if (! $siteId) {
+            return [
+                'success' => false,
+                'error' => '현장을 먼저 고른 뒤에 일괄 반영하세요. 「전체」 상태에서는 어느 현장에 반영되는지 화면에서 확인할 수 없습니다.',
+                'needsSite' => true,
+            ];
+        }
+
         $rows = OpsIntakeItem::query()
-            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            ->where('site_id', $siteId)
             ->where('status', 'pending')
             ->where('category', '!=', 'noise')
             ->whereNotNull('target_code')
@@ -1100,6 +1116,27 @@ class OpsIntakeService
     }
 
     // ───────────────────────── 내부 ─────────────────────────
+
+    /**
+     * 현장 없는 판독을 어떻게 다루는가.
+     *
+     * 화면 위쪽 현장이 «전체» 이면 여기 오는 $site 가 null 이다. 예전에는 그 상태에서
+     * <b>전 현장의 공정 코드</b>가 AI 후보 목록으로 들어갔다. 그러면 AI 가 남의 현장
+     * 코드를 골라도 «지어낸 코드» 검사를 통과하고, 그 항목은 현장이 안 붙은 채
+     * 저장돼(site_id=null) 반영 단계의 현장 확인도 통과한다 — A현장 소장이 붙여넣은
+     * 카톡이 B현장(다른 회사) 공정표를 고칠 수 있었다.
+     *
+     * 이제 두 단계로 막는다.
+     *   1. 글자에서 현장을 찾아본다 — "HFF-02 3층 배관 끝" 이면 HFF-02 로 붙인다.
+     *      (영수증·문서함과 같은 판단 규칙 한 벌을 쓴다. 애매하면 붙이지 않는다.)
+     *   2. 그래도 모르면 후보 목록을 <b>비운다</b>. 대상을 못 찾은 항목은 «어느 현장·
+     *      어느 작업인지 확인해 주세요» 로 남는다. 사람에게 한 번 묻는 편이,
+     *      틀린 현장에 조용히 반영되는 것보다 낫다.
+     */
+    private function resolveSite(?Site $site, string $text): ?Site
+    {
+        return $site ?? SiteFromText::match($text);
+    }
 
     /**
      * AI 결과 1건을 검증해 저장한다. 지어낸 대상 코드는 버리고 되물음으로 돌린다.
@@ -1236,9 +1273,14 @@ class OpsIntakeService
      */
     private function activityContext(?Site $site): Collection
     {
+        // 현장을 모르면 후보를 주지 않는다 — 아래 «현장 없는 판독» 주석 참고.
+        if (! $site) {
+            return collect();
+        }
+
         return WbsItem::query()
             ->where('level', WbsItem::LEVEL_SUBTASK)
-            ->when($site, fn ($q) => $q->where('site_id', $site->id))
+            ->where(fn ($q) => $q->whereNull('site_id')->orWhere('site_id', $site->id))
             ->where('status', '!=', WbsItem::STATUS_DONE)
             ->orderByRaw('planned_start is null, planned_start')
             ->limit(200)->get()
@@ -1261,8 +1303,12 @@ class OpsIntakeService
      */
     private function inspectionContext(?Site $site): Collection
     {
+        if (! $site) {
+            return collect();
+        }
+
         return Submittal::query()
-            ->when($site, fn ($q) => $q->where('site_id', $site->id))
+            ->where(fn ($q) => $q->whereNull('site_id')->orWhere('site_id', $site->id))
             ->where(function ($q): void {
                 $q->where('category', '시험·검사')
                     ->orWhere('title', 'ilike', '%검사%')
@@ -1286,8 +1332,12 @@ class OpsIntakeService
      */
     private function purchaseContext(?Site $site): Collection
     {
+        if (! $site) {
+            return collect();
+        }
+
         return ProcurementItem::query()
-            ->when($site, fn ($q) => $q->where('site_id', $site->id))
+            ->where(fn ($q) => $q->whereNull('site_id')->orWhere('site_id', $site->id))
             ->whereNotNull('po_no')->where('po_no', '!=', '')
             ->latest()->limit(100)->get()
             ->map(fn (ProcurementItem $p) => [
@@ -1308,6 +1358,11 @@ class OpsIntakeService
     private function specContext(?Site $site): Collection
     {
         $specs = collect();
+
+        // 남의 현장 도면 사양으로 우리 현장 보고를 «어긋났다» 고 지적하면 안 된다.
+        if (! $site) {
+            return $specs;
+        }
 
         try {
             if (Schema::hasTable('field_drawings')) {
