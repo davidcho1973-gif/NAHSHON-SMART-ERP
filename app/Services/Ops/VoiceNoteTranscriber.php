@@ -62,6 +62,8 @@ class VoiceNoteTranscriber
             return ['success' => false, 'error' => '음성 인식이 아직 켜져 있지 않습니다. 글로 적어 주세요.'];
         }
 
+        $restore = $this->tuneForSpeech();
+
         try {
             $result = app(GeminiOcrEngine::class)->analyze(
                 [['data' => base64_encode($bytes), 'mime_type' => $mime]],
@@ -72,6 +74,8 @@ class VoiceNoteTranscriber
             Log::warning('현장 음성 받아쓰기 실패: '.$e->getMessage());
 
             return ['success' => false, 'error' => '말씀을 옮기지 못했습니다. 다시 녹음하거나 글로 적어 주세요.'];
+        } finally {
+            $restore();
         }
 
         $heard = trim((string) ($result['data']['heard'] ?? ''));
@@ -86,6 +90,37 @@ class VoiceNoteTranscriber
         }
 
         return ['success' => true, 'text' => $text, 'heard' => $heard];
+    }
+
+    /**
+     * 받아쓰기 한 번 동안만 AI 설정을 바꾼다. 돌려주는 함수를 부르면 원래대로 돌아간다.
+     *
+     * 두 가지를 손본다.
+     *
+     * <b>시간.</b> 기본 제한은 30초인데, 1~3분짜리 녹음은 그보다 오래 걸릴 수 있다.
+     * 게다가 모델을 못 쓰면 후보를 여섯 개까지 차례로 시도하므로, 30초씩 여섯 번이면
+     * 3분이다 — 반장은 그 전에 화면을 닫는다.
+     *
+     * <b>모델.</b> 기본 순서는 정확도 우선이라 pro 가 앞이지만, 받아쓰기는 pro 가
+     * 필요한 일이 아니고 반장은 현장에 서서 기다린다. 빠른 쪽(flash)을 앞에 둔다.
+     * 그 모델이 실제로 없으면 기존 순서로 알아서 되돌아간다(모델 결정기가 «있을 때만
+     * 믿는다» 규칙을 이미 갖고 있다).
+     *
+     * @return callable(): void
+     */
+    private function tuneForSpeech(): callable
+    {
+        $before = [
+            'services.gemini.timeout' => config('services.gemini.timeout'),
+            'services.gemini.model' => config('services.gemini.model'),
+        ];
+
+        config([
+            'services.gemini.timeout' => max(90, (int) config('services.gemini.timeout')),
+            'services.gemini.model' => (string) config('services.gemini.voice_model', 'gemini-2.5-flash'),
+        ]);
+
+        return fn () => config($before);
     }
 
     /**
