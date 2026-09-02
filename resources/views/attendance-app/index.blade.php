@@ -325,6 +325,20 @@
             display: grid; place-items: center;
         }
 
+        /* ── 내 직원 정보 만들기 (관리자 자가 연결) ───────────────── */
+        .panel.padded { padding: 14px; }
+        .link-why { font-size: 13px; color: var(--ink-2); line-height: 1.6; margin-bottom: 12px; }
+        .link-why b { color: var(--ink); }
+        .fld { display: block; margin-bottom: 10px; }
+        .fld > span { display: block; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 5px; }
+        .fld > span em { font-style: normal; font-weight: 400; color: var(--ink-3); }
+        .fld input, .fld select {
+            width: 100%; border: 1px solid var(--rule); border-radius: 10px; padding: 12px;
+            font-size: 16px; font-family: inherit; background: var(--paper); color: var(--ink);
+        }
+        .fld-note { font-size: 11.5px; color: var(--ink-2); line-height: 1.5; margin: 2px 0 12px; }
+        .fld-note b { color: var(--ink); }
+
         /* ── 아래 탭 ──────────────────────────────────────────────── */
         .tabs {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -922,6 +936,7 @@
             document.getElementById('nm').textContent = (d && d.email) ? d.email : '작업자';
             document.getElementById('tag').textContent = '··';
             document.getElementById('sb').textContent = (d && d.code === 'no_employee') ? '연결 대기 중' : '';
+            bindSelfLink();
             paintTabs();
             return;
         }
@@ -962,23 +977,106 @@
             '계정과 작업자를 이어 주면 이 화면이 채워집니다.</div>' +
             '</div>';
 
-        h += '<div class="sec"><div class="sec-h">' + (d.canManage ? '연결하는 법' : '요청하는 법') + '</div>' +
-            '<div class="panel">' + (d.canManage
-                ? step(1, 'ERP 인원관리 화면을 엽니다')
-                  + step(2, '이 사람 줄에서 <b>계정 만들기</b> 를 누릅니다')
-                  + step(3, '이메일을 <b>' + esc(who || '이 계정 주소') + '</b> 로 맞춥니다')
-                : step(1, '현장 관리자에게 이 화면을 보여 주세요')
-                  + step(2, '<b>' + esc(who || '내 계정') + '</b> 을 내 이름과 이어 달라고 하면 됩니다')) +
-            '</div></div>';
+        // 인원을 관리할 수 있는 사람은 여기서 바로 만든다.
+        //
+        // 앱 관리를 겸하는 소장에게 «ERP 로 가세요» 나 «남에게 부탁하세요» 라고
+        // 말하는 화면은 틀렸다 — 그 사람이 바로 그 «남» 이고, 그 사람도 출퇴근을
+        // 찍고 보고를 올리고 영수증을 낸다.
+        if (d.canSelfLink && d.selfLink) {
+            h += selfLinkForm(d.selfLink);
+        } else {
+            h += '<div class="sec"><div class="sec-h">' + (d.canManage ? '연결하는 법' : '요청하는 법') + '</div>' +
+                '<div class="panel">' + (d.canManage
+                    ? step(1, 'ERP 인원관리 화면을 엽니다')
+                      + step(2, '이 사람 줄에서 <b>계정 만들기</b> 를 누릅니다')
+                      + step(3, '이메일을 <b>' + esc(who || '이 계정 주소') + '</b> 로 맞춥니다')
+                    : step(1, '현장 관리자에게 이 화면을 보여 주세요')
+                      + step(2, '<b>' + esc(who || '내 계정') + '</b> 을 내 이름과 이어 달라고 하면 됩니다')) +
+                '</div></div>';
+        }
 
-        h += '<div class="sec"><div class="sec-h">English · Español</div><div class="panel">' +
-            '<div class="row"><div class="row-m"><div class="row-b">This account is not linked to a worker yet.</div>' +
-            '<div class="row-a">Ask your site manager to link it.</div></div></div>' +
-            '<div class="row"><div class="row-m"><div class="row-b">Esta cuenta aún no está vinculada a un trabajador.</div>' +
-            '<div class="row-a">Pida a su supervisor que la vincule.</div></div></div>' +
-            '</div></div>';
+        // «관리자에게 부탁하세요» 는 부탁할 데가 있는 사람에게만 하는 말이다.
+        // 스스로 만들 수 있는 사람에게 이걸 붙이면 방금 준 길을 도로 지운다.
+        if (!d.canSelfLink) {
+            h += '<div class="sec"><div class="sec-h">English · Español</div><div class="panel">' +
+                '<div class="row"><div class="row-m"><div class="row-b">This account is not linked to a worker yet.</div>' +
+                '<div class="row-a">Ask your site manager to link it.</div></div></div>' +
+                '<div class="row"><div class="row-m"><div class="row-b">Esta cuenta aún no está vinculada a un trabajador.</div>' +
+                '<div class="row-a">Pida a su supervisor que la vincule.</div></div></div>' +
+                '</div></div>';
+        }
 
         return h;
+    }
+
+    /**
+     * 내 직원 정보를 여기서 만든다 — 관리자도 현장 사람이다.
+     *
+     * 묻는 것을 넷으로 줄였다. 나머지(회사·고용형태)는 고른 현장에서 따라오거나
+     * 관리직으로 정해진다. 폰에서 첫 화면에 뜨는 양식은 짧아야 채워진다.
+     */
+    function selfLinkForm(o) {
+        var sites = (o.sites || []).map(function (s) {
+            return '<option value="' + s.id + '">' + esc(s.label) + '</option>';
+        }).join('');
+        var positions = (o.positions || []).map(function (p) {
+            return '<option value="' + esc(p.key) + '"' + (p.key === 'superintendent' ? ' selected' : '') + '>' + esc(p.label) + '</option>';
+        }).join('');
+
+        return '<div class="sec"><div class="sec-h">내 직원 정보 만들기</div>' +
+            '<div class="panel padded">' +
+            '<div class="link-why">앱을 관리한다고 현장 사람이 아닌 것은 아닙니다. ' +
+            '아래를 채우면 <b>출퇴근 · 오늘 보고 · 영수증</b>을 바로 쓸 수 있습니다.</div>' +
+            '<label class="fld"><span>이름</span>' +
+            '<input id="sl-name" type="text" value="' + esc(o.name || '') + '" placeholder="홍길동"></label>' +
+            '<label class="fld"><span>현장</span>' +
+            '<select id="sl-site"><option value="">— 고르세요 —</option>' + sites + '</select></label>' +
+            '<label class="fld"><span>직책</span><select id="sl-pos">' + positions + '</select></label>' +
+            '<label class="fld"><span>공종 <em>(선택)</em></span>' +
+            '<input id="sl-trade" type="text" placeholder="예) Piping · Electrical"></label>' +
+            '<div class="fld-note">공종을 넣으면 「오늘 보고」에 <b>내 몫</b>이 생깁니다. ' +
+            '공정을 맡지 않으시면 비워 두세요.</div>' +
+            '<button type="button" class="btn go" id="sl-go">내 직원 정보 만들기</button>' +
+            '<div class="fld-note" id="sl-msg"></div>' +
+            '</div></div>';
+    }
+
+    function bindSelfLink() {
+        var go = document.getElementById('sl-go');
+        if (!go) return;
+        go.addEventListener('click', function () {
+            var msg = document.getElementById('sl-msg');
+            go.disabled = true;
+            msg.textContent = '만드는 중…';
+            fetch(@json(route('attendance-app.self-link')), {
+                method: 'POST', credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').getAttribute('content'),
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: document.getElementById('sl-name').value,
+                    siteId: document.getElementById('sl-site').value,
+                    position: document.getElementById('sl-pos').value,
+                    trade: document.getElementById('sl-trade').value,
+                }),
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d || !d.success) {
+                        go.disabled = false;
+                        msg.textContent = (d && d.error) || '만들지 못했습니다.';
+                        return;
+                    }
+                    msg.textContent = d.message + ' 화면을 새로 불러옵니다…';
+                    setTimeout(function () { location.reload(); }, 700);
+                })
+                .catch(function () {
+                    go.disabled = false;
+                    msg.textContent = '연결에 실패했습니다. 다시 눌러 주세요.';
+                });
+        });
     }
 
     /**

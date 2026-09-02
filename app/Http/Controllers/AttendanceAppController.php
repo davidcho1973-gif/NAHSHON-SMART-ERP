@@ -6,12 +6,13 @@ use App\Models\AttendanceLog;
 use App\Models\AttendanceQrCode;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
+use App\Models\User;
 use App\Services\Admin\PayProfileService;
 use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
-use App\Models\User;
+use App\Services\Hr\SelfEmployeeLink;
 use App\Support\QrSvg;
 use App\Support\WorkerLang;
 use Illuminate\Contracts\View\View;
@@ -129,6 +130,13 @@ class AttendanceAppController extends Controller
                 // 엉뚱한 것으로 로그인해 놓고 원인을 못 찾는다.
                 'email' => $user?->email,
                 'canManage' => in_array($user?->access_role, self::SETUP_ROLES, true),
+                // 인원을 관리할 수 있는 사람은 여기서 바로 자기 직원 정보를 만든다.
+                // 앱 관리를 겸하는 소장에게 «남에게 부탁하라» 고 말하는 화면은 틀렸다 —
+                // 그 사람이 바로 그 «남» 이다.
+                'canSelfLink' => $user instanceof User && app(SelfEmployeeLink::class)->allowed($user),
+                'selfLink' => $user instanceof User && app(SelfEmployeeLink::class)->allowed($user)
+                    ? app(SelfEmployeeLink::class)->options($user)
+                    : null,
                 'error' => '이 계정은 아직 작업자와 연결되지 않았습니다.',
             ], 422);
         }
@@ -137,6 +145,25 @@ class AttendanceAppController extends Controller
             // 화면이 "지금 남의 것을 보고 있다" 고 말할 수 있게.
             'viewingAs' => $viewingAs ? ['id' => $viewingAs->getKey(), 'name' => $viewingAs->name] : null,
         ]);
+    }
+
+    /**
+     * 내 직원 정보를 스스로 만들어 이 계정에 잇는다.
+     *
+     * 인원을 관리할 수 있는 역할에게만 열린다 — 그 사람은 어차피 ERP 에서 같은 일을
+     * 할 수 있으므로 새로 열리는 권한은 없고, 화면을 옮겨 다닐 필요가 없어질 뿐이다.
+     */
+    public function selfLink(Request $request, SelfEmployeeLink $link): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+
+        return response()->json($link->create($user, [
+            'name' => $request->input('name'),
+            'siteId' => $request->input('siteId'),
+            'trade' => $request->input('trade'),
+            'position' => $request->input('position'),
+        ]));
     }
 
     /**

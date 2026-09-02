@@ -266,6 +266,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
     // 작업자 홈이 쓰는 두 개. 화면은 이 둘만 보고 자동 → 직접 → QR 로 내려간다.
     Route::get('/attendance-app/home', [AttendanceAppController::class, 'home'])->name('attendance-app.home');
+    // 관리자가 자기 직원 정보를 스스로 만들어 잇는다 — 앱 관리를 겸하는 소장에게
+    // «남에게 부탁하라» 고 말하는 화면은 틀렸다. 그 사람이 바로 그 «남» 이다.
+    Route::post('/attendance-app/self-link', [AttendanceAppController::class, 'selfLink'])
+        ->name('attendance-app.self-link');
     Route::post('/attendance-app/punch', [AttendanceAppController::class, 'punch'])->name('attendance-app.punch');
     Route::post('/attendance-app/correction', [AttendanceAppController::class, 'requestCorrection'])->name('attendance-app.correction');
 
