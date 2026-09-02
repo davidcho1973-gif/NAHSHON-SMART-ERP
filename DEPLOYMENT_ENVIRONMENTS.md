@@ -1,7 +1,7 @@
 # 배포 환경
 
 코드는 한 벌(`davidcho1973-gif/NAHSHON-SMART-ERP`), 배포는 고객마다 하나.
-아래 두 개 말고 다른 배포를 만들지 않는다.
+아래 적힌 것 말고 다른 배포를 만들지 않는다.
 
 새 고객을 세우는 절차는 `docs/새-고객-배포.md`, 도메인을 붙이는 절차는
 `docs/도메인-전환.md` 에 있다. 이 문서는 **지금 서 있는 것**만 적는다.
@@ -58,21 +58,30 @@
 
 ## 지금 있는 배포
 
-| | **운영** | **스테이징** |
-|---|---|---|
-| 누구 것 | **DASOL USA** — 우리 회사. 원본 | **KSR** — 첫 시험 고객 (무상) |
-| Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp-staging` |
-| 환경 이름 | `main` | `main` |
-| 브랜치 | `main` | `staging` |
-| 주소 | **`https://erp.dasolusa.com`** | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
-| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | — |
-| `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `KSR` |
-| `ORG_CODE` | `DASOLUSA` | — |
-| 데이터 | 거의 비어 있음 | **실제 데이터** |
+| | **DASOL (원본)** | **NAHSHON MEP** | **스테이징** |
+|---|---|---|---|
+| 누구 것 | **DASOL USA** — 우리 회사. 원본 | **NAHSHON MEP** | **KSR** — 첫 시험 고객 (무상) |
+| Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp` | `nahshon-smart-erp-staging` |
+| 환경 이름 | `main` | **`nahshon-mep`** | `main` |
+| 브랜치 | `main` | `main` | `staging` |
+| 주소 | **`https://erp.dasolusa.com`** | **`https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud`** | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
+| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | — | — |
+| `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `"NAHSHON MEP"` | `KSR` |
+| `ORG_CODE` | `DASOLUSA` | — | — |
+| 데이터 | 거의 비어 있음 | 쓰는 중 | **실제 데이터** |
 
-> **두 앱 모두 환경 이름이 `main` 이다.** 화면 위쪽 파란 네모만 보면 구별이 안 된다.
-> 그 왼쪽의 **앱 이름에 `-staging` 이 붙었는지**로 가린다. 여기서 헷갈리면 KSR 의
-> 실제 데이터를 건드리게 된다.
+> **같은 앱 안에 환경이 둘이다(`main`, `nahshon-mep`).** 그리고 스테이징 앱의 환경
+> 이름도 `main` 이라, 화면 위쪽 파란 네모만 보면 셋이 구별되지 않는다. 가리는 법:
+>
+> - 파란 네모가 **`NAHSHON MEP`** → 나손 앱
+> - 파란 네모가 `main` 인데 앱 이름에 **`-staging` 이 붙음** → KSR (실제 데이터)
+> - 파란 네모가 `main` 이고 앱 이름이 그냥 `nahshon-smart-erp` → DASOL 원본
+>
+> 여기서 헷갈리면 KSR 의 실제 데이터를 건드리게 된다.
+
+> **앱 이름과 회사 이름이 다르다.** `nahshon-smart-erp` 는 코드 저장소에서 온 이름이고,
+> 그 앱의 `main` 환경은 DASOL 것이다. 이름만 보고 «나손 = main» 이라고 읽으면 틀린다
+> (2026-09-01 에 실제로 이 착각으로 잘못된 주소를 안내한 적이 있다).
 
 KSR 은 "연습용"이 아니라 실제로 쓰는 첫 고객이다. 화면에 "연습용" 같은 띠를 붙이지
 않는 이유이고, 데이터를 함부로 비우지 않는 이유이기도 하다.
