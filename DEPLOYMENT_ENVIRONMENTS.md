@@ -63,7 +63,7 @@
 | 누구 것 | **DASOL USA** — 우리 회사. 원본 | **NAHSHON MEP** | **KSR** — 첫 시험 고객 (무상) |
 | Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp` | `nahshon-smart-erp-staging` |
 | 환경 이름 | `main` | **`nahshon-mep`** | `main` |
-| 브랜치 | `main` | `main` | `staging` |
+| 브랜치 | `main` | `main` 또는 `staging` (아래 참고) | `staging` |
 | 주소 | **`https://erp.dasolusa.com`** | **`https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud`** | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
 | 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | — | — |
 | `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `"NAHSHON MEP"` | `KSR` |
@@ -82,6 +82,25 @@
 > **앱 이름과 회사 이름이 다르다.** `nahshon-smart-erp` 는 코드 저장소에서 온 이름이고,
 > 그 앱의 `main` 환경은 DASOL 것이다. 이름만 보고 «나손 = main» 이라고 읽으면 틀린다
 > (2026-09-01 에 실제로 이 착각으로 잘못된 주소를 안내한 적이 있다).
+
+### 나손 환경이 어느 브랜치를 보는가
+
+`nahshon-mep` <b>이라는 브랜치는 저장소에 없다.</b> 그러니 그 환경은 `main` 아니면
+`staging` 중 하나를 본다. 배포할 때 <b>둘 다에 같은 커밋을 올리므로</b> 어느 쪽이든
+코드는 간다 — 그래서 이 칸이 비어 있어도 지금까지 문제가 되지 않았다.
+
+다만 «배포했다» 고 말하려면 어느 쪽인지 알아야 한다. 확인하는 법:
+Laravel Cloud → `nahshon-smart-erp` → **NAHSHON MEP** → Settings → 소스 브랜치.
+확인되면 이 칸을 짐작이 아니라 **확인된 값**으로 바꾼다.
+
+### 어디부터 확인하는가 — 나손이 먼저다 (David 지시 2026-09-01)
+
+> "현재 모든 작업은 여기에 배포해줘 우선적으로"
+
+새 작업이 실제로 도는지 보는 곳은 **NAHSHON MEP** 이다. 화면 확인·문제 보고가
+거기서 나오므로, 배포 뒤 «어디를 보시라» 고 안내할 주소도 그곳이다.
+
+  https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud
 
 KSR 은 "연습용"이 아니라 실제로 쓰는 첫 고객이다. 화면에 "연습용" 같은 띠를 붙이지
 않는 이유이고, 데이터를 함부로 비우지 않는 이유이기도 하다.

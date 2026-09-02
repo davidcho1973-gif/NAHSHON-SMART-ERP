@@ -171,6 +171,12 @@
 - **공식 테스트 흐름은 Staging 배포 방식입니다.** 코드 수정 후 가능한 범위에서 로컬 서버, 로컬 DB, `php artisan test`, `npm run build` 등으로 먼저 확인한 뒤 `staging` 브랜치/Laravel Cloud staging 환경에 배포해 David가 실제 화면과 DB 흐름을 검증합니다.
 - **Staging은 테스트용 원격 환경입니다.** David가 "배포", "테스트 배포", "staging 배포"를 요청하면 `staging`에 배포해도 됩니다. 배포 후에는 변경 내용, 테스트 결과, staging 확인 주소를 작업 로그에 남깁니다.
 - **Production(main)도 함께 배포합니다 (David 지시 2026-08-18: "메인에도 배포해 앞으로").**
+- **확인은 나손(NAHSHON MEP) 환경에서 먼저 합니다 (David 지시 2026-09-01: "현재 모든 작업은
+  여기에 배포해줘 우선적으로").** 배포 뒤 "어디를 보시라" 고 안내할 주소는
+  `https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud` 입니다.
+  같은 앱(`nahshon-smart-erp`) 안의 별도 환경이고, 그 앱의 `main` 환경은 DASOL 것입니다 —
+  앱 이름만 보고 «나손 = main» 으로 읽지 마세요(`DEPLOYMENT_ENVIRONMENTS.md`).
+  `staging` 과 `main` 에 같은 커밋을 올리는 지금 절차면 나손에도 코드가 갑니다.
   staging 검증(전체 테스트 통과)이 끝난 작업은 `staging` 푸시 후 `main` 에도 반영한다.
   방법: staging 을 main 으로 병합(트리 = staging 트리, 되감기 없음). 시험이 하나라도
   깨진 상태로는 main 에 올리지 않는다 — 그 전 규칙("별도 승인 필요")은 이 지시로 폐기.
