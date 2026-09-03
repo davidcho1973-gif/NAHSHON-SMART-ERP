@@ -61,7 +61,19 @@ class OutboundMailer
         }
 
         $messageId = $this->newMessageId();
-        $references = $thread->messages()->whereNotNull('rfc_message_id')
+
+        // <b>세상에 나간 적 있는 봉투만 참조한다.</b>
+        //
+        // rfc_message_id 는 발송을 시도하기 <b>전에</b> 적힌다(먼저 원장에 적고 보내는
+        // 순서라서). 그래서 메일 설정이 없어 mailto 로 넘긴 봉투도, 발송이 실패한 봉투도
+        // 전부 ID 를 갖고 있다. 그 ID 를 References 에 실으면 <b>상대가 본 적 없는 편지의
+        // 답장인 척</b>하는 메일이 나간다 — 받는 쪽 메일함에서 우리 서신이 한 덩어리로
+        // 안 묶이고 낱장으로 흩어진다.
+        //
+        // 메일을 켜는 날 첫 발송에서 바로 터진다. 그 전까지 쌓인 봉투가 전부 skipped 라서.
+        $references = $thread->messages()
+            ->whereNotNull('rfc_message_id')
+            ->whereIn('status', [MailMessage::SENT, 'delivered', 'received'])
             ->orderBy('occurred_at')->pluck('rfc_message_id')->all();
         $inReplyTo = $references === [] ? null : end($references);
 
