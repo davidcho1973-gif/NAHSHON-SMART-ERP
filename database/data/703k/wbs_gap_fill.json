@@ -1,0 +1,1070 @@
+{
+ "source": "원청 공정표 R2(우현ENG 260902) 대조 — 우리 표 구멍 12건",
+ "generated": "2026-09-03",
+ "notes": "검토 지적 18건을 전부 반영했다 — 저장 gap 리셋은 이 스키마에 gaps 필드가 없어 «preds 가 바뀌는 기존 활동마다 modify 한 곳에 최종 preds + start_hint(=선행 끝+1)» 로 표현하고 basis 에 «저장 gap 전부 1로 리셋» 을 명시했으며, repoint 는 적용 순서에 따라 아직 없는 id 를 참조해 무시될 위험이 있어 쓰지 않고 ops 를 참조 id 가 먼저 존재하도록 배열했다(스크립트로 확인: 68활동, 순환 0, 고아 0, 12건 전부 조작 있음). 후드 사슬은 K050 21일·K060 56일·M050(UL 그리스덕트) 42일로 현실화하고 B030 에서 K020 을 떼어 B120(후드구역 그리드)으로 분리, B090·M020 의 M010 의존을 풀고 M010←S060 을 연결해 재계산하면 준공 12/30(원 1/2 → 3일 단축)이며, 이 +2일은 E080 주방기기 결선을 K030 뒤로 정직하게 둔 결과다(엔진이 gap 0 을 허용하면 E080 을 K030 마지막 날로 당겨 12/28). K040 저온실 28일 양생 조항은 시방 11 40 00 ITEM 003 «Cold Storage Rooms (Type II Floor)» 확인 결과 프리팹 바닥이라 비해당 — gap 1 을 유지하고 단계 강하 기록만 hold_note 에 넣었다. T-8-4 전기 태스크 신설·태스크 명칭 변경은 활동 조작만 다루는 이 스키마로 불가해 E040·E050·E070·E080 은 49, M030·M040 은 46 아래 유지 — 골격 조정은 별도 요청. 주공정은 A010→A020→C010→C020→P010→S070→S020→S030→B040→B050→B070/K010→E040/K030→E080→T030→T040 이고 후드 사슬 여유 2일·철골 사슬 23일·급탕기 사슬 28일이며, 특별검사 21일 규칙은 A100 통보 활동을 S060·S070 선행에 두어 논리로 표현했다.",
+ "ops": [
+  {
+   "gap": 1,
+   "op": "add",
+   "activity_id": "A030",
+   "name": "벽 백킹(보강판) 도면 제출 — 원청 스터드(AB18 9/18) 전",
+   "name_en": "Wall Backing Drawings Submitted (before GC studs)",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [],
+   "start_hint": "2026-09-10",
+   "hold_point": true,
+   "hold_note": "원청(현대ENG) 수령 확인 서면 전 완료 금지 — 미제출 시 원청이 9/18 임의 위치로 보강판을 넣는다",
+   "submittal_sections": [
+    "11 40 00 1.10.E",
+    "10 2813.1 3.2.A"
+   ],
+   "basis": "구멍1 — 11 40 00 1.10.E «벽 닫기 전 백킹 설치되도록 GC에 제때 제출», 10 2813.1 3.2.A 그랩바 500lb 보강; 벽부 품목 벽선반4·걸이선반2·핸드싱크6·세안기·호스릴4·벽부수전3·화장실 액세서리 11종; 원청 AB18(9/18)·AC26(9/20) 스터드보다 앞서야 하므로 A010(9/15~24)에서 떼어 9/10 이정표로. B010 preds 는 B010 modify 에 명시"
+  },
+  {
+   "gap": 12,
+   "op": "add",
+   "activity_id": "A040",
+   "name": "트레이드 퍼밋 신청·발급(배관·기계·전기·가스)",
+   "name_en": "Trade Permits Applied & Issued (P/M/E/Gas)",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 10,
+   "preds": [],
+   "start_hint": "2026-09-08",
+   "hold_point": true,
+   "hold_note": "퍼밋 카드 수령·검사 예약 계정 확인 전 완료 금지; 빌딩 허가(원청 P6 8/26 «예정») 발급 여부부터 확인 — 허가 없이 슬래브 밑 배관·전선관을 묻으면 검사 자체가 안 된다",
+   "basis": "구멍12 — ERP 전체 «인허가/permit» 0건, C010 에 굴착신고만; 원청 J6 MISSING «기계·배관·가스·전기 트레이드 허가 접수 항목 없음»; 검토 반영: 보건소 플랜리뷰는 A110 으로 분리, 퍼밋은 신청→발급 리드타임 10일(9/8→9/17, 일반 관행)로. P010·C050·P020·E010·E020·E060 의 선행 — 각 활동의 modify/add 에 명시"
+  },
+  {
+   "gap": 12,
+   "op": "add",
+   "activity_id": "A110",
+   "name": "보건소(Bryan County EH) 식품시설 플랜리뷰 제출·승인",
+   "name_en": "Health Dept (Bryan County EH) Plan Review Submitted & Approved",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 30,
+   "preds": [],
+   "start_hint": "2026-09-04",
+   "hold_point": true,
+   "hold_note": "보건소 도면 승인서 수령 전 완료 금지 — 승인 없이 주방기기 세팅(K030)·최종 검사(T030) 진행 금지",
+   "basis": "구멍12(검토 반영) — 조지아 DPH 511-6-1-.10 식품시설 신·개축 «착공 전 도면 승인», 심사 통상 30일(주 규정·일반 관행, 우리 문서에 없음); 원청 J6 MISSING «보건소 도면 심사 접수 없음»; 9/4 접수 → 10/3 승인; K030·T030 의 선행(각 modify 에 명시)"
+  },
+  {
+   "gap": 6,
+   "op": "add",
+   "activity_id": "A050",
+   "name": "RFI: 팽창탱크·TMV 사양(스케줄 미수록) 회신",
+   "name_en": "RFI Response: Expansion Tank & TMV Schedule",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [],
+   "start_hint": "2026-09-10",
+   "basis": "구멍6 — 배관 BOQ «팽창탱크 'SEE SCHEDULE' 스케줄 미수록», «TMV 'SEE SCHEDULE' 미수록»; 원청 O46·AF46 MISSING «팽창탱크·TMV RFI 회신 없음» — 급탕기 패키지 발주(P040)의 선행"
+  },
+  {
+   "gap": 6,
+   "op": "add",
+   "activity_id": "P040",
+   "name": "급탕기 패키지(WH-01·재순환펌프·팽창탱크·TMV·조정기·동심벤트) 제출·승인·발주·입고(장납기 8주)",
+   "name_en": "Water Heater Package Submittal, Approval, Order & Delivery (long lead)",
+   "trade": "배관",
+   "parent_task_id": 43,
+   "days": 56,
+   "preds": [
+    "A050"
+   ],
+   "start_hint": "2026-09-11",
+   "basis": "구멍6(검토 반영) — 500MBH 상용 급탕기 납기 6~10주(일반 관행, 우리 문서에 없음)를 후드·트래픽도어와 같은 기준으로 days 로 표현; RFI(A050) 회신 뒤 제출 9/11 → 승인 2주 → 제작·입고 11/5; P030 의 선행"
+  },
+  {
+   "gap": 3,
+   "op": "modify",
+   "activity_id": "S010",
+   "name": "슬래브 절단·트렌치·데크 개구",
+   "rename_to": "슬래브 절단·트렌치 굴착",
+   "name_en": "Slab Cutting & Trench Excavation",
+   "trade": "구조",
+   "new_days": 5,
+   "preds": [
+    "A020"
+   ],
+   "start_hint": "2026-09-30",
+   "basis": "구멍3 — 데크 개구 7EA 는 보강 프레임(C6x8.2 80LF)을 조이스트에 먼저 용접한 뒤 그 안쪽을 절단해야 하므로 S060 으로 이동; S010 은 SOG 톱절단 350LF·트렌치 인필 65LF·신설 트렌치 16LF 만 남김; 저장 gap {A020:1} 유지"
+  },
+  {
+   "gap": 3,
+   "op": "add",
+   "activity_id": "S040",
+   "name": "철골 보강 샵드로잉·WPS/PQR·위임설계(연결부)·용접자격 제출·EOR 승인",
+   "name_en": "Misc. Steel Shop Dwgs, WPS & Delegated Design Approval",
+   "trade": "구조",
+   "parent_task_id": 33,
+   "days": 21,
+   "preds": [],
+   "start_hint": "2026-09-08",
+   "submittal_sections": [
+    "05 1200 1.5.A",
+    "05 1200 1.5.B",
+    "05 1200 1.5.C",
+    "05 1200 1.6.C"
+   ],
+   "basis": "구멍3 — 05 1200 1.5.A 샵드로잉, 1.5.B WPS/PQR, 1.5.C 위임설계(PE 날인), 1.6.C 용접 자격; 제출물 24건(게이트 3) 있으나 공정 없음; 검토 반영: AISC 제작사 샵드로잉+위임설계+EOR 검토 = 3주(9/8→9/28)로 현실화; 원청 V14 발주(9/6)·Y14 시공(9/12)은 샵드로잉 없이 불가"
+  },
+  {
+   "gap": 3,
+   "op": "add",
+   "activity_id": "S050",
+   "name": "철골 보강재 제작·입고(AISC 인증 제작사)",
+   "name_en": "Steel Fabrication & Delivery (AISC fabricator)",
+   "trade": "구조",
+   "parent_task_id": 33,
+   "days": 14,
+   "preds": [
+    "S040"
+   ],
+   "start_hint": "2026-09-29",
+   "submittal_sections": [
+    "05 1200 1.7.A"
+   ],
+   "basis": "구멍3 — 05 1200 1.7.A AISC 인증 제작사; 물량 C6x8.2 80LF·보조 앵글 70LF·조이스트 보강 96LF·윈드포스트 1EA — 소량이라 제작 2주(9/29→10/12)"
+  },
+  {
+   "gap": 10,
+   "op": "add",
+   "activity_id": "A060",
+   "name": "착수 전 회의: 철골 보강(05 1200 1.4.A)",
+   "name_en": "Pre-Installation Meeting: Structural Steel",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [
+    "S040"
+   ],
+   "start_hint": "2026-09-29",
+   "submittal_sections": [
+    "05 1200 1.4.A"
+   ],
+   "basis": "구멍10 — 05 1200 1.4.A 착수 전 회의; 샵드로잉 승인(S040) 뒤·설치(S060) 전 이정표; S060 preds 에 포함"
+  },
+  {
+   "gap": 9,
+   "op": "add",
+   "activity_id": "A100",
+   "name": "특별검사 기관 통보(접착앵커 상주검사·구조용접) — HEC 박재훈 경유",
+   "name_en": "Special Inspection Agency Notification (adhesive anchors, structural welding) via HEC",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [],
+   "start_hint": "2026-09-15",
+   "hold_point": true,
+   "hold_note": "검사기관·통보 양식·리드타임(01 4533 미수령 — HEC 박재훈 확인)과 통보 접수 확인 전 완료 금지; 이 활동 완료일이 S060·S070 의 21일 규칙 기산점",
+   "submittal_sections": [
+    "05 1200 1.7.F",
+    "03 3000 1.4.C"
+   ],
+   "basis": "구멍9(검토 반영) — 접착앵커 상주검사 통보 21일 규칙·구조용접 특별검사(05 1200 1.7.F)는 «통보» 활동이 있어야 논리로 표현된다; S060(10/13)·S070(10/21)의 선행으로 두면 기준선 gap 이 각각 28일·36일로 잡혀 21일 규칙이 논리에 들어간다; S060·S070 hold_note 의 리드타임 문구는 «A100 기준(HEC 확인)»으로 통일"
+  },
+  {
+   "gap": 3,
+   "op": "add",
+   "activity_id": "S060",
+   "name": "지붕 개구 보강 프레임·조이스트 보강·윈드포스트 설치·데크 개구 7EA (특별검사 입회)",
+   "name_en": "Roof Opening Reinforcement, Joist Reinf. & Deck Openings (Special Insp.)",
+   "trade": "구조",
+   "parent_task_id": 33,
+   "days": 7,
+   "preds": [
+    "S050",
+    "A020",
+    "A060",
+    "A100"
+   ],
+   "start_hint": "2026-10-13",
+   "hold_point": true,
+   "hold_note": "구조 용접 특별검사(05 1200 1.7.F; 통보는 A100 기준, 기관·리드타임 HEC 확인) 합격 보고서·개구부 임시 방수 확인 전 완료 금지; 핫워크 허가·화기감시자 필요; 루프커브 설치 → 원청 TPO 플래싱(AQ16) → 팬 설치(M020) 3단계 조정",
+   "submittal_sections": [
+    "05 1200 1.7.F"
+   ],
+   "basis": "구멍3 — 구조 BOQ 데크 개구 7EA·보강 프레임 80LF·조이스트 보강 96LF·윈드포스트 1EA; 05 1200 1.7.F 특별검사 인지서; 원청 Y14 MISSING «샵드로잉 승인·특별검사·핫워크·임시 방수 셀 없음»; 검토 반영: S040 21일에 맞춰 10/13~19 로, M010(그리스덕트 라이저)·M020(루프커브·팬)의 선행"
+  },
+  {
+   "gap": 5,
+   "op": "add",
+   "activity_id": "K050",
+   "name": "배기후드 4식(Halton, Ansul 프리파이프·덕트 칼라) 샵드로잉 제출·설계자 검토·승인",
+   "name_en": "Exhaust Hood Shop Drawings Submittal, Review & Approval",
+   "trade": "주방",
+   "parent_task_id": 60,
+   "days": 21,
+   "preds": [],
+   "start_hint": "2026-09-04",
+   "submittal_sections": [
+    "11 40 00 2.3",
+    "11 40 00 1.10.I.3",
+    "23 3533 3.2.I.2"
+   ],
+   "basis": "구멍5 — 11 40 00 2.3 후드는 Ansul 프리파이프·덕트 칼라 포함 제작품; 23 3533 3.2.I.2 덕트–후드 이음; 원청 V48 MISSING «후드 샵드로잉 제출·승인 없음»; 검토 반영: Halton 제작도 작성 1~2주 + 설계자 체크(11 40 00 1.10.I) 2주 = 21일(9/4→9/24); 칼라 위치·높이가 확정돼야 그리스덕트 조달(M050)·설치(M010) 가능 — M050·M010 의 선행"
+  },
+  {
+   "gap": 5,
+   "op": "add",
+   "activity_id": "K060",
+   "name": "배기후드 발주·제작·입고(장납기 8주, 승인 후 발주)",
+   "name_en": "Hood Order, Fabrication & Delivery (long lead)",
+   "trade": "주방",
+   "parent_task_id": 60,
+   "days": 56,
+   "preds": [
+    "K050"
+   ],
+   "start_hint": "2026-09-25",
+   "submittal_sections": [
+    "11 40 00 1.10.I.3"
+   ],
+   "basis": "구멍5 — 11 40 00 1.10.I.3 승인 전 발주 금지; Halton 제작 납기 8주(우리 문서에 없음 — 일반 관행) → 9/25 발주 → 11/19 입고; K020 의 선행"
+  },
+  {
+   "gap": 5,
+   "op": "add",
+   "activity_id": "M050",
+   "name": "UL 등재 공장제작 그리스덕트(이중벽 2h) 샵드로잉 제출·EOR 승인·발주·입고",
+   "name_en": "UL-Listed Factory Grease Duct Shop Dwgs, EOR Approval, Order & Delivery",
+   "trade": "기계",
+   "parent_task_id": 46,
+   "days": 42,
+   "preds": [
+    "K050"
+   ],
+   "start_hint": "2026-09-25",
+   "submittal_sections": [
+    "23 3533 1.4.B",
+    "23 3533 2.1"
+   ],
+   "basis": "구멍5(검토 반영) — 23 3533 2.1 «UL 등재 공장제작 이중벽 2시간 내화 덕트», 1.4.B 샵드로잉; 후드와 같은 장납기 조달품인데 사슬이 없었음; 원청 V48 «EOR 승인·발주 9/6» 을 별도 행으로 둠; 후드 칼라 확정(K050) 뒤 제출 9/25 → 승인 2주 + 제작 4주(일반 관행) → 11/5 입고; M010 의 선행"
+  },
+  {
+   "gap": 11,
+   "op": "add",
+   "activity_id": "B130",
+   "name": "HM 문틀(용접형) 제출·승인·발주·입고",
+   "name_en": "HM Door Frames Submittal, Approval, Order & Delivery",
+   "trade": "건축",
+   "parent_task_id": 38,
+   "days": 35,
+   "preds": [],
+   "start_hint": "2026-09-15",
+   "submittal_sections": [
+    "08 7100",
+    "09 2900.1"
+   ],
+   "basis": "구멍11(검토 반영) — 용접 HM 문틀은 제출·승인·제작 4~6주(일반 관행, 우리 문서에 없음)라 NTP 3주 뒤 설치 불가; 트래픽도어(B100)와 같은 기준으로 조달 사슬 신설 9/15 → 10/19 입고; B140 의 선행"
+  },
+  {
+   "gap": 11,
+   "op": "add",
+   "activity_id": "B100",
+   "name": "트래픽도어 4개소(SS304) 제작도 제출·승인·발주·제작(승인 전 발주 금지, 납기 6~10주)",
+   "name_en": "Traffic Door Shop Dwg Approval, Order & Fabrication (long lead)",
+   "trade": "건축",
+   "parent_task_id": 38,
+   "days": 63,
+   "preds": [],
+   "start_hint": "2026-09-15",
+   "submittal_sections": [
+    "08 3800"
+   ],
+   "basis": "구멍11 — 제출물 08 3800 «제작도면 제출 — 승인 전 발주 금지»; 도어스케줄 4개소(D-1 양개 x3, D-2 편개 x1); 제출 9/15 → 승인 2주 → 제작 7주 = 11/16 입고(제작 납기 6~10주는 우리 문서에 없음 — 일반 관행); 기존 B020 10/17 설치는 불가"
+  },
+  {
+   "gap": 4,
+   "op": "modify",
+   "activity_id": "B010",
+   "name": "경량스터드·석고보드 벽체",
+   "rename_to": "경량스터드·백킹 보강판 세우기",
+   "name_en": "Metal Studs & Backing Plates",
+   "trade": "건축",
+   "new_days": 5,
+   "preds": [
+    "S010",
+    "A030"
+   ],
+   "start_hint": "2026-10-05",
+   "hold_point": true,
+   "hold_note": "백킹·캐리어 위치 검사(11 40 00 1.10.E, 10 2813.1 3.2.A 그랩바 500lb) 합격 전 완료 금지 — 합격 후 P020·E010·F010 러프인·B140 문틀 착수",
+   "basis": "구멍4(+1·2·11) — 09 2900 3.2.J «차음 블랭킷은 석고 전», 11 40 00 1.10.D.3 «유틸리티 벽 스터브아웃»; 원청 AD24 프레임(9/22)→AG18 석고(9/28) 순서가 맞음. 원 12일을 스터드 5일 + 석고(B090) 8일로 분리; 검토 반영: HM 문틀은 조달(B130) 뒤 B140 으로 떼어냄; 저장 gap {S010:1} 유지, A030 gap 1"
+  },
+  {
+   "gap": 11,
+   "op": "add",
+   "activity_id": "B140",
+   "name": "HM 문틀 세우기·용접 (석고 전, 09 2900.1 바탕검사)",
+   "name_en": "Set & Weld HM Frames (before gypsum, substrate inspection)",
+   "trade": "건축",
+   "parent_task_id": 38,
+   "days": 2,
+   "preds": [
+    "B010",
+    "B130"
+   ],
+   "start_hint": "2026-10-20",
+   "hold_point": true,
+   "hold_note": "문틀 용접·앵커·수직수평 바탕검사(09 2900.1 «설치 전 바탕 검사 — 용접 철제문틀 포함») 합격 전 완료 금지 — 합격 전 석고(B090) 착수 금지",
+   "submittal_sections": [
+    "09 2900.1",
+    "08 7100"
+   ],
+   "basis": "구멍11(+4, 검토 반영) — 09 2900.1 은 문틀이 석고 전에 서 있어야 한다는 뜻; 원청 AD24 프레임(9/22)→석고(9/28) 순서와 일치; 문틀 입고(B130 10/19) 뒤 10/20~21; B090·B020 의 선행"
+  },
+  {
+   "gap": 8,
+   "op": "modify",
+   "activity_id": "E010",
+   "name": "전선관·배선 러프인·판넬",
+   "rename_to": "전선관·배선 러프인(벽·천장)",
+   "name_en": "Electrical Rough-in (walls & overhead)",
+   "trade": "전기",
+   "new_days": 10,
+   "preds": [
+    "B010",
+    "A040"
+   ],
+   "start_hint": "2026-10-10",
+   "hold_point": true,
+   "hold_note": "AHJ 전기 러프인 검사 합격 전 완료 금지 — 합격 전 석고(B090)·천장 그리드(B030) 착수 금지",
+   "basis": "구멍8(+4·9) — 전기 BOQ 144항목 중 벽·천장 러프인만 남김(간선 E020·판넬 E030·마감 E040·FA E050·장비결선 E070/E080·슬래브하부 E060 분리); 원청 AD68 MISSING «벽 닫기(9/28) 전 전기 러프인 검사(AHJ) 행 없음»; 검토 반영: 슬래브 하부 전선관 문구는 E060 으로 이관해 삭제; 저장 gap {B010:1} 유지, A040 gap 1, start 10/10"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "P020",
+   "name": "벽체·천장 배관, 가스배관",
+   "name_en": "In-wall/Overhead Piping & Gas",
+   "trade": "배관",
+   "new_days": 10,
+   "preds": [
+    "B010",
+    "A040"
+   ],
+   "start_hint": "2026-10-10",
+   "hold_point": true,
+   "hold_note": "급수 수압시험·가스 기압시험(질소, 검사관 입회)·AHJ 배관/가스 러프 검사 합격 전 완료 금지 — 합격 전 석고(B090) 착수 금지",
+   "basis": "구멍9(+4·12) — 원청 AK52 수압(10/6)·AK58 기압(10/6)이 석고(9/28) 뒤 — 순서 틀림, AX58 AHJ 만 있고 러프 가스 검사 없음; 11 40 00 1.10.D.3; 퍼밋(A040) 선행 추가; 저장 gap {B010:1} 유지, A040 gap 1, start 10/10 (B010 5일 뒤)"
+  },
+  {
+   "gap": 4,
+   "op": "add",
+   "activity_id": "B090",
+   "name": "차음 단열(5,200SF)·석고보드 취부·이음 마감 (러프인 검사·문틀 후)",
+   "name_en": "Insulation & Gypsum Board (after rough-in inspections & frames)",
+   "trade": "건축",
+   "parent_task_id": 38,
+   "days": 8,
+   "preds": [
+    "P020",
+    "E010",
+    "B140"
+   ],
+   "start_hint": "2026-10-22",
+   "submittal_sections": [
+    "09 2900",
+    "09 2900.1",
+    "07 2100"
+   ],
+   "basis": "구멍4 — 건축 BOQ 칸막이 단열재 5,200SF(09 2900 3.2.J 단열은 패널 전); 선행 P020·E010 은 수압/기압·AHJ 러프 홀드, B140 은 문틀 바탕검사 홀드; 검토 반영: M010(그리스덕트)은 선행에서 제외 — 관통부는 개구를 남기고 파이어스탑은 M010 홀드에서 확인, 석고가 11월 덕트 입고를 기다리지 않게 함; 원청 AG18(9/28)·AH26(9/30)은 우리 러프인 완료 뒤로 밀어야 함"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E060",
+   "name": "슬래브 하부 전선관·박스 매입(타설 전 검측)",
+   "name_en": "Under-Slab Conduit & Boxes (pre-pour inspection)",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 2,
+   "preds": [
+    "S010",
+    "A040"
+   ],
+   "start_hint": "2026-10-13",
+   "hold_point": true,
+   "hold_note": "AHJ 전기 지하 전선관 검사 합격 전 완료 금지 — 합격 전 S070 타설 전 검측·S020 타설 금지",
+   "basis": "구멍8(+9, 검토 반영) — 원청 AD68 MISSING «슬래브 전 바닥 전선관 매입 없음»; 기존 E010 은 스터드 뒤 벽·천장 러프인이라 슬래브 밑 전선관과 무관했음 — 별도 활동으로 S070 의 선행에 넣어 전선관 없이 타설되는 것을 논리로 막음; P010 트렌치와 병행 10/13~14"
+  },
+  {
+   "gap": 10,
+   "op": "add",
+   "activity_id": "A070",
+   "name": "착수 전 회의: 콘크리트(03 3000 1.3.A.2, 아젠다 7일 전 배포; 시험기관·특별검사원 참석)·배합설계 승인 확인",
+   "name_en": "Pre-Installation Meeting: Concrete (agenda 7 days prior) & Mix Design Approval",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [
+    "A020"
+   ],
+   "start_hint": "2026-10-09",
+   "submittal_sections": [
+    "03 3000 1.3.A.2",
+    "03 3000 1.4.C"
+   ],
+   "basis": "구멍10 — 03 3000 1.3.A.2 착수 전 회의(아젠다 7일 전), 1.4.C 배합설계 승인; 원청 V42·AB12 MISSING «착수전 회의·배합 승인 없음»; 타설(S020 10/24) 2주 전, S070 의 선행"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "P010",
+   "name": "지중 배관·수압시험",
+   "name_en": "Underground Plumbing & Test",
+   "trade": "배관",
+   "new_days": 8,
+   "preds": [
+    "C020",
+    "S010",
+    "A040"
+   ],
+   "start_hint": "2026-10-13",
+   "hold_point": true,
+   "hold_note": "위생배관 수두압 10ft·카메라 검사·카운티 지하배관 검사·되메움 다짐 검측 합격 전 완료 금지 — 합격 전 S070 착수 금지; 검사 요청 24~48h 전(카운티)",
+   "basis": "구멍9(+12) — P 배관 도면 제출물(수두압시험 10ft·카메라 검사), 11 40 00 1.10.D.4 «타설 전 러프인·슬리브 위치 검증»; 원청 AA38·AR38 MISSING «수두시험·카운티 검사·되메움 검측 없음»; 퍼밋(A040) 선행 추가; 저장 gap {C020:1, S010:9}→ 전부 1로 리셋(start 10/13 = C020 끝+1)"
+  },
+  {
+   "gap": 9,
+   "op": "add",
+   "activity_id": "S070",
+   "name": "도웰(에폭시 300EA)·증기지연막·철근 배근 + 타설 전 검측(접착앵커 상주 특별검사·카운티 철근검사)",
+   "name_en": "Dowels, Vapor Retarder, Rebar & Pre-Pour Inspection",
+   "trade": "구조",
+   "parent_task_id": 33,
+   "days": 3,
+   "preds": [
+    "S010",
+    "P010",
+    "A070",
+    "E060",
+    "A100"
+   ],
+   "start_hint": "2026-10-21",
+   "hold_point": true,
+   "hold_note": "접착앵커 상주 특별검사(통보는 A100 기준·21일 규칙, 기관·양식 HEC 박재훈 확인)·카운티 철근검사·매설 배관/전선관·증기지연막(10mil) 검사 합격 전 타설(S020) 금지; 카운티 검사 요청은 24~48h 전",
+   "submittal_sections": [
+    "03 3000 3.7",
+    "03 3000 1.4.C"
+   ],
+   "basis": "구멍9 — 03 3000 3.7 «매설물·검사 완료 후 타설»; 구조 BOQ 에폭시 도웰 300EA; 원청 X12·AB12·V42 MISSING «도웰·증기지연막·카운티 검사·특별검사 통보 없음»; 원 S020 5일을 S070 3일 + S020 2일로 분리(총 기간 유지); 검토 반영: E060(슬래브 하부 전선관)·A100(특별검사 통보) 선행 추가, 21일 vs 24~48h 모순은 «통보=A100, 카운티 요청=24~48h» 로 정리"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "S020",
+   "name": "SOG 인필·옥외 장비패드 타설",
+   "rename_to": "SOG 인필·옥외 장비패드 타설·양생제",
+   "name_en": "SOG Infill & Equipment Pad Pour, Curing Compound",
+   "trade": "구조",
+   "new_days": 2,
+   "preds": [
+    "S070"
+   ],
+   "start_hint": "2026-10-24",
+   "basis": "구멍9 — 도웰·철근·검측을 S070 으로 분리한 뒤 남는 타설 범위(SOG 인필 300SF·옥외 장비 슬래브 110SF, 4,500psi); 저장 gap {S010:17, P010:1} 폐기 → preds [S070] gap 1, start 10/24"
+  },
+  {
+   "gap": 12,
+   "op": "modify",
+   "activity_id": "C050",
+   "name": "상수·가스 인입 (핫탭)",
+   "name_en": "Water & Gas Services (Hot Tap)",
+   "trade": "토목",
+   "new_days": 7,
+   "preds": [
+    "C010",
+    "A040"
+   ],
+   "start_hint": "2026-10-03",
+   "basis": "구멍12(+6) — 트레이드 퍼밋(가스) 없이 핫탭·가스 인입 불가; 검토 반영: C050 에 후행이 없어 가스 서비스 없이 급탕기가 «완료»될 수 있었음 → P030 의 선행으로 연결(P030 preds 에 명시); 저장 gap {C010:1} 유지, A040 gap 1"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E020",
+   "name": "간선 인입 SRP-04→KIT-1H/2H 220LF×2·인클로즈드 브레이커·발주자 정전 작업허가(PTW)",
+   "name_en": "Main Feeder from SRP-04 & Owner Shutdown Permit",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 5,
+   "preds": [
+    "C010",
+    "A040"
+   ],
+   "start_hint": "2026-10-03",
+   "hold_point": true,
+   "hold_note": "간선 메거 시험·발주자 정전/수전(에너자이징) 서면 승인 확인 전 완료 금지 — 정전 승인은 HVAC 정지 승인(M 도면 «소유주 서면 승인 사본»)과 같은 절차로 사전 신청(우리 문서에 없음 — 일반 관행)",
+   "basis": "구멍8 — 전기 BOQ 간선 220LF×2(250KCMIL), 인클로즈드 브레이커 400AF/250AT; 원청 AG64(9/28) MISSING «정전·작업허가, 굴착신고·지장물 탐사, 전기 트렌치 행 없음»; C010 굴착신고·GPR 뒤, 퍼밋(A040) 뒤"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E030",
+   "name": "분전반 4면·변압기 3대 설치·간선 결선·수전(에너자이징)",
+   "name_en": "Panels, Transformers, Feeder Terminations & Energizing",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 6,
+   "preds": [
+    "E010",
+    "E020",
+    "B090"
+   ],
+   "start_hint": "2026-10-30",
+   "hold_point": true,
+   "hold_note": "토크 확인·상순서·메거 기록, 발주자 수전 승인 전 완료 금지 (원청 AP74 MISSING «수전 승인·에너자이징·시험 행 없음»)",
+   "basis": "구멍8 — 전기 BOQ 분전반 4면·변압기 3대; 원청 AL70 MISSING «판넬 입고·제출물 승인 행 없음, 벽 마감과 선후 미정» → 석고(B090) 뒤 설치; 검토 반영: 장비 전원(팬·MUA·급탕기·실외기)은 장비가 놓인 뒤라야 하므로 E070 으로 분리 — E030 은 판넬·변압기·간선·수전만"
+  },
+  {
+   "gap": 5,
+   "op": "modify",
+   "activity_id": "M020",
+   "name": "HVAC 덕트·배기팬·MUA 설치",
+   "name_en": "HVAC Ducts, Fans & MUA",
+   "trade": "기계",
+   "new_days": 10,
+   "preds": [
+    "B010",
+    "S060"
+   ],
+   "start_hint": "2026-10-20",
+   "basis": "구멍5(+3, 검토 반영) — 기존 preds [M010] 은 별개 계통(그리스덕트)이라 제거해 HVAC 이 11월 덕트 입고를 기다리지 않게 함; 배기팬·MUA 는 S060 지붕 개구·루프커브(10/19) 뒤, 원청 TPO(AQ16) 플래싱 뒤 «커브→TPO→팬» 순서; 저장 gap {M010:1} 폐기 → B010·S060 gap 1, start 10/20"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "M010",
+   "name": "그리스덕트 설치·누기시험 (은폐 전)",
+   "name_en": "Grease Duct & Leak Test (before concealment)",
+   "trade": "기계",
+   "new_days": 8,
+   "preds": [
+    "B010",
+    "K050",
+    "S060",
+    "M050"
+   ],
+   "start_hint": "2026-11-06",
+   "hold_point": true,
+   "hold_note": "그리스덕트 구간 누기시험(소유주 입회, 23 3533 3.3.A)·파이어스탑·관통부 확인 전 완료 금지 — 합격 전 은폐 금지(후드 접속부는 M030 에서 재시험); 후드 행거 트랙(구조 매달기)은 이 단계에 후드구역을 열어 둔 채 선시공",
+   "basis": "구멍9(+5·3, 검토 반영) — 23 3533 3.3.A; 원청 AM48 MISSING «누기시험(소유주 입회)·파이어스탑 없음»; 선행에 후드 칼라 확정(K050)·지붕 데크 개구(S060, 23 3533 3.2.A 루프커브·관통부 조정)·UL 덕트 입고(M050 11/5) 추가 → 11/6~13; 저장 gap {B010:1} 유지, 신규 선행 gap 1"
+  },
+  {
+   "gap": 5,
+   "op": "modify",
+   "activity_id": "K020",
+   "name": "배기후드·Ansul 소화 설치",
+   "rename_to": "배기후드 걸기·덕트 칼라 접속·Ansul 설치 (천장 은폐 전)",
+   "name_en": "Hang Hoods, Duct Collar Connection & Ansul (before ceiling)",
+   "trade": "주방",
+   "new_days": 6,
+   "preds": [
+    "M010",
+    "M020",
+    "K060"
+   ],
+   "start_hint": "2026-11-20",
+   "basis": "구멍5 — K020 은 B070(FRP 천장) «앞»이어야 한다: 덕트–후드 이음 용접·누기시험은 은폐 전(23 3533 3.3.A), 후드 행거는 천장 위 구조, FRP 는 후드 둘레로 재단, MUA 플레넘은 M020 과 접속; 기존 preds M020·B070(저장 gap {M020:37, B070:1}) 폐기 → M010·M020·K060 gap 1, start 11/20 (K060 입고 11/19 다음 날)"
+  },
+  {
+   "gap": 5,
+   "op": "add",
+   "activity_id": "M030",
+   "name": "그리스덕트–후드 접속부 누기시험(소유주 입회, 은폐 전)",
+   "name_en": "Duct-to-Hood Joint Leak Test (owner witness, before concealment)",
+   "trade": "기계",
+   "parent_task_id": 46,
+   "days": 2,
+   "preds": [
+    "K020"
+   ],
+   "start_hint": "2026-11-26",
+   "hold_point": true,
+   "hold_note": "접속부 누기시험 합격·소유주 입회 기록 전 완료 금지 — 합격 전 B120 후드구역 그리드 마감·B070 FRP 천장 착수 금지",
+   "submittal_sections": [
+    "23 3533 3.3.A",
+    "23 3533 3.2.I.2"
+   ],
+   "basis": "구멍5(+9) — 23 3533 3.3.A «은폐 전 누기시험»; M010 구간시험만으로는 후드 이음이 빠지므로 후드 접속 후 재시험; 원청 AM48 MISSING «누기시험(소유주 입회) 없음»; 검토 반영: 게이트를 노트가 아니라 논리로 — B120·B070 preds 에 M030 명시"
+  },
+  {
+   "gap": 7,
+   "op": "add",
+   "activity_id": "M040",
+   "name": "LG 카세트 실내기(AC-703-01)·실외기(CU-703-01) 설치·냉매배관 65LF(R32)·질소가압·진공·충전",
+   "name_en": "Split AC Units, Refrigerant Piping, Pressure Test, Evacuation & Charge",
+   "trade": "기계",
+   "parent_task_id": 46,
+   "days": 5,
+   "preds": [
+    "M020",
+    "S020",
+    "E030"
+   ],
+   "start_hint": "2026-11-05",
+   "hold_point": true,
+   "hold_note": "질소 가압 누설시험·진공 500미크론 유지 기록·소유주 사전 통지 확인 전 냉매 충전·완료 금지 (원청 AP56 MISSING 질소시험·통지); 기동·시운전은 E070 장비 전원 결선 뒤 T010 단계에서",
+   "basis": "구멍7 — HVAC BOQ «냉매 배관(라인셋) 65LF, R32», «실내기 1·실외기 1»; M020 은 덕트·팬·MUA 만, K040 은 워크인 냉동용; 실외기는 S020 옥외 장비패드 위, 분전반(E030) 뒤 설치, 최종 전원 결선은 E070; 검토 반영: «시운전»을 이름에서 빼 E070 과의 선후 모순 제거; 원청 AL46·AN56·AP56 과 맞춤"
+  },
+  {
+   "gap": 6,
+   "op": "add",
+   "activity_id": "P030",
+   "name": "급탕기 WH-01(AO Smith 500MBH·120gal)·재순환펌프·팽창탱크·TMV·가스조정기·동심벤트 지붕관통 설치",
+   "name_en": "Water Heater WH-01 & Accessories, Concentric Vent",
+   "trade": "배관",
+   "parent_task_id": 43,
+   "days": 5,
+   "preds": [
+    "P020",
+    "A050",
+    "P040",
+    "C050"
+   ],
+   "start_hint": "2026-11-06",
+   "hold_point": true,
+   "hold_note": "가스 최종검사(AHJ)·통수·TMV 온도 세팅·벤트 지붕 관통부 방수(원청 TPO 와 조정) 확인 전 완료 금지; 전원 결선은 E070",
+   "basis": "구멍6 — 배관 BOQ 8항목(WH-01·재순환펌프·조정기·동심벤트·팽창탱크·TMV 등); 원청 AF46 온수기 9/26 MISSING «벤트 지붕 관통·방수, RPBP 이설, 제출물 승인 없음»; 검토 반영: 패키지 입고(P040 11/5)·가스 서비스(C050) 선행 추가 → 11/6~10"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E070",
+   "name": "장비 전원 최종 결선(배기팬·MUA·급탕기·실외기·후드/Ansul 전원)",
+   "name_en": "Equipment Power Final Connections (fans, MUA, WH, CU, hood/Ansul)",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 4,
+   "preds": [
+    "E030",
+    "M020",
+    "K020",
+    "P030",
+    "M040"
+   ],
+   "start_hint": "2026-11-26",
+   "hold_point": true,
+   "hold_note": "각 장비 회전방향·D/S·과전류 세팅 기록, 장비 제조사 기동 확인 전 완료 금지 — T010 TAB·후드 성능시험의 선행",
+   "basis": "구멍8(검토 반영) — E030 에 있던 «장비 전원» 은 급탕기(P030)·실외기(M040)가 놓이기 전에 결선되는 모순이라 분리; 장비가 전부 놓인 뒤(K020 11/25) 11/26~29; 전기 BOQ 장비 D/S·결선 항목"
+  },
+  {
+   "gap": 10,
+   "op": "add",
+   "activity_id": "A080",
+   "name": "착수 전 회의: 수지바닥 Ucrete(09 6723.1 1.2.A, 착수 30일 전, GC 소집 — 우리가 날짜 제안)",
+   "name_en": "Pre-Installation Meeting: Resinous Flooring (30 days prior, GC convenes)",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [
+    "A020"
+   ],
+   "start_hint": "2026-10-26",
+   "submittal_sections": [
+    "09 6723.1 1.2.A"
+   ],
+   "basis": "구멍10 — 09 6723.1 1.2.A 착공 30일 전 회의(GC 소집); B050 11/26 착수 기준 10/26; 원청 AG28 9/28 은 이미 기한 경과 — 우리가 날짜 제안; B050 의 선행"
+  },
+  {
+   "gap": 10,
+   "op": "add",
+   "activity_id": "A090",
+   "name": "착수 전 회의: VCT(09 6519 1.4.B)",
+   "name_en": "Pre-Installation Meeting: VCT",
+   "trade": "GC",
+   "parent_task_id": 20,
+   "days": 1,
+   "preds": [
+    "A020"
+   ],
+   "start_hint": "2026-11-20",
+   "submittal_sections": [
+    "09 6519 1.4.B"
+   ],
+   "basis": "구멍10 — 09 6519 1.4.B 착수 전 회의; B060 12/2 착수 전, 09 6519 3.2.A «도장·천장 후 VCT» 순서 확인; B060 의 선행"
+  },
+  {
+   "gap": 10,
+   "op": "modify",
+   "activity_id": "B050",
+   "name": "수지바닥(Ucrete)·코브베이스",
+   "name_en": "Resinous Flooring & Cove",
+   "trade": "건축",
+   "new_days": 6,
+   "preds": [
+    "B040",
+    "A080"
+   ],
+   "start_hint": "2026-11-26",
+   "basis": "구멍10 — 착수 전 회의(A080) 선행 추가; 저장 gap {B040:1} 유지, A080 gap 1"
+  },
+  {
+   "gap": 10,
+   "op": "modify",
+   "activity_id": "B060",
+   "name": "VCT·에폭시라이닝·도장",
+   "name_en": "VCT, Epoxy Lining & Paint",
+   "trade": "건축",
+   "new_days": 6,
+   "preds": [
+    "B050",
+    "A090"
+   ],
+   "start_hint": "2026-12-02",
+   "basis": "구멍10 — 착수 전 회의(A090) 선행 추가; 저장 gap {B050:1} 유지, A090 gap 1"
+  },
+  {
+   "gap": 4,
+   "op": "modify",
+   "activity_id": "B030",
+   "name": "천장 그리드 (P.E. 승인 후)",
+   "rename_to": "천장 그리드 — 일반구역 (P.E. 승인 후, 후드구역 제외)",
+   "name_en": "Ceiling Grids — General Areas (after PE approval, hood zone open)",
+   "trade": "건축",
+   "new_days": 8,
+   "preds": [
+    "B090",
+    "M020",
+    "E010",
+    "F010"
+   ],
+   "start_hint": "2026-10-30",
+   "basis": "구멍4(+5·9, 검토 반영) — 09 5113 3.1.B «상부 배관·덕트·전선관·후드 트랙 러프인 완료·검사 후 그리드»: 스프링클러(F010) 선행 추가, 후드 «본체»는 선행이 아니므로 K020 제거하고 후드구역은 B120 에서 마감 — 후드 사슬(K050 21일·K060 56일)이 그리드 전체를 밀지 않게 함; 저장 gap {B010:19, M020:1, E010:7} 폐기 → 전부 1, start 10/30 (B090 끝 10/29 +1)"
+  },
+  {
+   "gap": 5,
+   "op": "add",
+   "activity_id": "B120",
+   "name": "천장 그리드 후드구역 마감 (M030 누기시험 합격 후)",
+   "name_en": "Ceiling Grid Closeout at Hood Zone (after M030 leak test)",
+   "trade": "건축",
+   "parent_task_id": 38,
+   "days": 2,
+   "preds": [
+    "B030",
+    "M030"
+   ],
+   "start_hint": "2026-11-28",
+   "basis": "구멍5(검토 반영) — 후드 4식 둘레 그리드·행거는 후드 걸기(K020)·접속부 누기시험(M030) 뒤에만 닫을 수 있음(23 3533 3.3.A 은폐 전 시험, 09 5113 3.1.B 후드 트랙); M030 게이트를 논리로 표현; B070 의 선행"
+  },
+  {
+   "gap": 5,
+   "op": "modify",
+   "activity_id": "B070",
+   "name": "FRP천장·SST 월패널·부속",
+   "name_en": "FRP Ceilings, SST Panels & Accessories",
+   "trade": "건축",
+   "new_days": 8,
+   "preds": [
+    "B030",
+    "B120",
+    "B050",
+    "M030"
+   ],
+   "start_hint": "2026-12-02",
+   "basis": "구멍5(+9) — FRP 천장은 후드구역 그리드 마감(B120)·접속부 누기시험(M030) 뒤(23 3533 3.3.A 은폐 전 시험); 저장 gap {B030:21, B050:1} → 전부 1 로 리셋(B030:21 이 살아 있으면 B070 이 1/6 로 밀려 재배치 무효), start 12/2 = B050 끝 12/1 +1"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E040",
+   "name": "마감기구·조명(외부조명 제어 포함)·D/S·GFCI 14 설치",
+   "name_en": "Finish Devices, Lighting, Disconnects & GFCI",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 8,
+   "preds": [
+    "E030",
+    "B070",
+    "B060"
+   ],
+   "start_hint": "2026-12-10",
+   "basis": "구멍8 — 전기 BOQ 조명·마감기구·GFCI 14·외부조명 제어; 원청 AL72 마감기구(10/8)가 천장재(11/6)·FRP 벽(10/16)·도장(11/14)보다 앞 — 순서 역전 → 천장(B070)·도장(B060) 뒤; 검토 반영: 주방기기 결선은 K030 과 논리로 묶기 위해 E080 으로 분리"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E050",
+   "name": "화재경보 개조·설치·시험(유수검지·탬퍼·Ansul 감시·FACP 연동)",
+   "name_en": "Fire Alarm Mods, Devices & Acceptance Test",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 4,
+   "preds": [
+    "E030",
+    "B070",
+    "F010",
+    "K020"
+   ],
+   "start_hint": "2026-12-10",
+   "hold_point": true,
+   "hold_note": "FA 시험 성적서·AHJ 확인 전 완료 금지 — T020 Ansul 합동시험(AHJ 입회)의 선행",
+   "basis": "구멍8(+9) — 전기 BOQ 화재경보 항목; 원청 AT60 MISSING «FS/TS 감시 접속·FACP 결선 확인 없음», AW60 MISSING «Ansul 검사 없음»; 천장 기기라 B070 뒤; 검토 반영: Ansul 감시 접점은 K020(Ansul 설치) 뒤라야 하므로 K020 선행 추가"
+  },
+  {
+   "gap": 12,
+   "op": "modify",
+   "activity_id": "K030",
+   "name": "조리·세척 라인 기기 세팅",
+   "name_en": "Cooking & Warewash Line Setting",
+   "trade": "주방",
+   "new_days": 8,
+   "preds": [
+    "K010",
+    "B060",
+    "A110"
+   ],
+   "start_hint": "2026-12-10",
+   "basis": "구멍12(검토 반영) — 보건소 플랜리뷰 승인(A110) 없이 기기 세팅 불가 → 선행 추가; 저장 gap {K010:1, B060:3} → 전부 1 로 리셋, start 12/10 = K010 끝 12/9 +1"
+  },
+  {
+   "gap": 8,
+   "op": "add",
+   "activity_id": "E080",
+   "name": "주방기기 최종 결선·D/S(80품목)",
+   "name_en": "Kitchen Equipment Final Connections & Disconnects",
+   "trade": "전기",
+   "parent_task_id": 49,
+   "days": 2,
+   "preds": [
+    "E040",
+    "K030",
+    "P030"
+   ],
+   "start_hint": "2026-12-18",
+   "basis": "구멍8(검토 반영) — 기기가 놓인 뒤(K030 12/17) 결선이라야 하므로 E040 에서 분리해 K030 선행으로 묶음; T030 보건소·최종검사의 선행; 정직하게 T030 이 12/20 으로 밀려 준공 12/30(+2일)"
+  },
+  {
+   "gap": 2,
+   "op": "add",
+   "activity_id": "P050",
+   "name": "화장실 위생기구 7점(양변기2·소변기2·세면기2·몹싱크1) 세팅·급배수 최종 접속·통수",
+   "name_en": "Restroom Fixture Setting, Final Connections & Flush Test",
+   "trade": "배관",
+   "parent_task_id": 64,
+   "days": 2,
+   "preds": [
+    "B060",
+    "B090",
+    "P020"
+   ],
+   "start_hint": "2026-12-08",
+   "hold_point": true,
+   "hold_note": "급수 소독·통수·누수 확인·AHJ 배관 최종검사 전 완료 금지 — T030 보건소 검사 선행",
+   "basis": "구멍2(검토 반영) — 배관 BOQ Zurn 기구 7점은 배관 공종이라 원가·인력 추적을 위해 건축 B080 에서 분리; 바닥설치형 양변기(Z5665)·몹싱크는 EP-3 에폭시 바닥(B060) 뒤, 벽 속 배관(P020)·석고(B090) 뒤; 원청 AZ26 기구(11/4)가 BA28 바닥(11/6)보다 앞 — 순서 역전"
+  },
+  {
+   "gap": 2,
+   "op": "add",
+   "activity_id": "B080",
+   "name": "화장실 액세서리 11종 설치(2실)·ADA 높이·위치 확인",
+   "name_en": "Restroom Accessories (2 rooms) & ADA Check",
+   "trade": "건축",
+   "parent_task_id": 54,
+   "days": 2,
+   "preds": [
+    "B060",
+    "B090",
+    "P050"
+   ],
+   "start_hint": "2026-12-10",
+   "hold_point": true,
+   "hold_note": "그랩바(500lb 백킹 확인)·액세서리 ADA 높이·기구 위치 확인 전 완료 금지 — T030 보건소 검사 선행",
+   "submittal_sections": [
+    "10 2813",
+    "10 2813.1"
+   ],
+   "basis": "구멍2 — 제출물 10 2813·10 2813.1 11건, 건축 BOQ «화장실 액세서리 일습 2실»; 우리 공정에 «화장실» 0건; 검토 반영: 위생기구는 P050(배관)으로 분리, 석고(B090) 선행 추가, ADA 확인은 기구 세팅(P050) 뒤"
+  },
+  {
+   "gap": 11,
+   "op": "modify",
+   "activity_id": "B020",
+   "name": "HM문·트래픽도어·하드웨어",
+   "rename_to": "HM 문짝·하드웨어 설치(도장 후)",
+   "name_en": "HM Door Leaves & Hardware (after paint)",
+   "trade": "건축",
+   "new_days": 3,
+   "preds": [
+    "B060",
+    "B140"
+   ],
+   "start_hint": "2026-12-08",
+   "basis": "구멍11(+4) — 08 7100 3.3.B 마감(도장) 후 하드웨어; 원청 BB24 문짝(11/8)이 도장 BE20(11/14)보다 앞 — 위반; HM 문틀은 B140, 트래픽도어는 B100/B110 으로 분리; 검토 반영: 문틀(B140) 선행을 넣어 문틀 없이 문짝이 달리는 논리 제거; 원 5일 → 3일; 저장 gap {B010:1} 폐기 → B060·B140 gap 1"
+  },
+  {
+   "gap": 11,
+   "op": "add",
+   "activity_id": "B110",
+   "name": "트래픽도어 4개소 설치(바닥 마감·SST 월패널 후)",
+   "name_en": "Traffic Door Installation (after floors & SST panels)",
+   "trade": "건축",
+   "parent_task_id": 38,
+   "days": 2,
+   "preds": [
+    "B100",
+    "B060",
+    "B070"
+   ],
+   "start_hint": "2026-12-10",
+   "submittal_sections": [
+    "08 3800"
+   ],
+   "basis": "구멍11 — 스테인리스 제작품(문짝+틀 세트)은 Ucrete·코브(B050)·에폭시(B060)·SST 월패널(B070) 뒤 12월 초 설치; 원청 AD24 «트래픽도어 제작도 승인·납품» 선행 표기 없음; T030 의 선행"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "T010",
+   "name": "풍량측정·후드 성능시험",
+   "name_en": "Air Balance & Hood Performance Test",
+   "trade": "기계",
+   "new_days": 4,
+   "preds": [
+    "M030",
+    "B070",
+    "E070"
+   ],
+   "start_hint": "2026-12-10",
+   "hold_point": true,
+   "hold_note": "TAB 보고서·후드 포집 성능 시험 결과 승인·AC 기동 확인 전 완료 금지 — T020 Ansul 합동시험의 선행",
+   "basis": "구멍9(+8) — 원청 AQ46 시운전(10/18) MISSING «TAB 항목 없음, 디퓨저(10/24)가 시운전 뒤»; 우리 T010 에 통과 게이트 없었음; 검토 반영: 선행을 M030(후드 접속 시험, K020·M020 은 M030 경유)·B070(천장 은폐)·E070(장비 전원)로; 저장 gap {K020:1, M020:43} 폐기 → 전부 1, start 12/10 = B070 끝 12/9 +1"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "T020",
+   "name": "Ansul 인터록 합동시험 (AHJ 입회)",
+   "name_en": "Ansul Interlock Test (AHJ witness)",
+   "trade": "소방",
+   "new_days": 3,
+   "preds": [
+    "T010",
+    "E050",
+    "F010"
+   ],
+   "start_hint": "2026-12-14",
+   "basis": "구멍9(+8) — E010 대신 FA 수락시험(E050)을 선행으로; 저장 gap {T010:1, E010:53, F010:59} → 전부 1 로 리셋, start 12/14 = T010·E050 끝 12/13 +1"
+  },
+  {
+   "gap": 12,
+   "op": "modify",
+   "activity_id": "T030",
+   "name": "보건소·최종 검사",
+   "name_en": "Health Dept & Final Inspections",
+   "trade": "GC",
+   "new_days": 3,
+   "preds": [
+    "T020",
+    "K030",
+    "B080",
+    "P050",
+    "P030",
+    "B020",
+    "B110",
+    "E080",
+    "A110"
+   ],
+   "start_hint": "2026-12-20",
+   "basis": "구멍12(+2·6·8·11) — 보건소 검사는 플랜리뷰 승인(A110)·화장실 기구(P050)·액세서리(B080)·급탕기(P030)·문(B020·B110)·기기 결선(E080)이 끝나야 가능; 저장 gap {T020:1, K030:6} → 전부 1 로 리셋, start 12/20 = E080 끝 12/19 +1"
+  },
+  {
+   "gap": 9,
+   "op": "modify",
+   "activity_id": "T040",
+   "name": "펀치리스트·O&M·교육·인수",
+   "name_en": "Punch, O&M, Training & Turnover",
+   "trade": "GC",
+   "new_days": 8,
+   "preds": [
+    "T030",
+    "K040"
+   ],
+   "start_hint": "2026-12-23",
+   "basis": "구멍9(검토 반영: 저장 gap 리셋) — preds 변경 없음이나 저장 gap {K040:12} 가 살아 있으면 T040 이 12/26 으로 밀려 준공 1/2 그대로 → {T030:1, K040:1} 로 리셋, start 12/23 = T030 끝 12/22 +1 → 준공 12/30"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "C020",
+   "name": "오수관·그리스 인터셉터 2기 설치",
+   "trade": "토목",
+   "hold_point": true,
+   "hold_note": "인터셉터 하부 GAB 8in 다짐 검측(테라콘)·인버트(SITE-C535K 64.84~66.00) 확인·15in 본관 접속 검사 합격 전 완료 금지",
+   "basis": "구멍9 — 원청 AO36 MISSING «인터셉터 하부 GAB 다짐 검측이 검측 행에 없음», AR38 MISSING «15in 본관 접속·카운티 검사 없음»; 토목 BOQ 2,500gal 프리캐스트 2기; preds·gap 변경 없음"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "C060",
+   "name": "폐격납피트 폐쇄·되메움",
+   "trade": "토목",
+   "hold_point": true,
+   "hold_note": "층별 되메움 다짐 검측 95%(수정프록터 ASTM D1557, 테라콘) 합격 전 완료 금지 — 검측 기관·양식·리드타임은 HEC 확인(01 4533 미수령)",
+   "basis": "구멍9 — 원청 AD34·AH42 MISSING «층별 다짐 검측 반복 없음, 매립 후 포장 전 최종 검측 없음»; C조 NOTES «C060·C030·C070 에 검측 홀드포인트 없음»; preds·gap 변경 없음"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "C030",
+   "name": "도로 절단·복구 (Bryan County)",
+   "trade": "토목",
+   "hold_point": true,
+   "hold_note": "되메움·기층(GAB) 다짐 검측·아스팔트 검측(카운티 도로점용 조건) 합격 전 완료 금지",
+   "basis": "구멍9 — 원청 AP40·AP42 MISSING «기층 다짐 검측 없음, 되메움(10/28)이 포장(10/16)보다 뒤 — 순서 오류»; preds·gap 변경 없음"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "C070",
+   "name": "쓰레기 마당 포장·펜스·게이트",
+   "trade": "토목",
+   "hold_point": true,
+   "hold_note": "컴팩터 야드 포장 기층 다짐 검측(테라콘) 합격 전 완료 금지",
+   "basis": "구멍9 — C조 NOTES «C060·C030·C070 검측 홀드포인트 보완»; 원청 AP40 MISSING «컴팩터 게이트·스크린펜스·볼라드 항목 없음(우리 C070)»; preds·gap 변경 없음"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "F010",
+   "name": "스프링클러 개조 (샵드로잉 승인 후)",
+   "trade": "소방",
+   "preds": [
+    "B010"
+   ],
+   "start_hint": "2026-10-10",
+   "hold_point": true,
+   "hold_note": "수압시험(200psi 2h)·메인드레인 시험·FS/TS 신호 확인·AHJ 러프 검사 합격 전 완료 금지 — 합격 전 천장 그리드(B030) 착수 금지; 워크인 드라이헤드 구간은 K010 뒤 12월 재시험·최종 소방검사 별도",
+   "basis": "구멍9(+4) — 원청 AT60 TEST·AW60 AHJ Inspection 은 있으나 MISSING «FS/TS 감시 접속·12월 재시험·최종 소방검사 없음»; 우리 F010 에는 시험 자체가 없음; preds [B010]·gap 1 유지, B010 5일로 줄어 start 10/10 (B030·E050·T020 선행)"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "B040",
+   "name": "바닥 수분·알칼리 시험 (양생 후)",
+   "trade": "건축",
+   "hold_point": true,
+   "hold_note": "RH·pH 시험 결과 제조사 한계 이내 서면 승인 전 완료 금지 — 합격 전 B050 Ucrete/B060 VCT·에폭시 착수 금지",
+   "basis": "구멍9 — 09 6519 3.1.C «타설 28일 이후 수분·pH 시험», 09 6723.1 제조사 서면 지침; 원청 AG28·AK28 MISSING «수분·알칼리 시험 없음»; preds·gap 변경 없음"
+  },
+  {
+   "gap": 9,
+   "op": "hold",
+   "activity_id": "K040",
+   "name": "냉동 압력·진공시험·냉매 충전",
+   "trade": "배관",
+   "hold_point": true,
+   "hold_note": "질소 가압 누설시험·진공 500미크론 유지 기록·소유주 사전 통지 확인 전 냉매 충전·완료 금지; 기동 후 단계 강하(40°F 24h → 20°F 24h → 설정온도) 기록 — 11 40 00 «저온실 내 콘크리트 28일 양생» 조항은 워크인이 Type II 프리팹 바닥(11 40 00 ITEM 003 «Cold Storage Rooms (Type II Floor)»)이라 비해당, K010 gap 1 유지",
+   "basis": "구멍9 — 원청 AP56 MISSING «질소 가압 누설시험·소유주 사전 통지 없음»; 우리 K040 에 통과 기준 없음; 검토 반영: 도면·시방 확인 결과 Type II 프리팹 바닥이라 28일/7일 양생 규칙 비해당(시방 ITEM 003), 단계 강하는 기록으로; preds·gap 변경 없음"
+  }
+ ]
+}
