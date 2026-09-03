@@ -296,6 +296,8 @@ class FillWbsGaps703k extends Command
             'payload' => [
                 'name_en' => $op['name_en'] ?? null,
                 'section' => $task->parent?->name,
+                // 양생·대기처럼 휴일에도 흐르는 «경과 시간» 활동 표식. 없으면 근무일 활동.
+                'calendar' => ! empty($op['elapsed']) ? 'elapsed' : null,
                 // 기준선을 여기서 정한다. 엔진은 후속 활동을 max(기준선 시작, 선행 종료+간격)에
                 // 놓는데, 기준선 시작을 비워 두면 순수하게 선행이 정하는 날짜에 놓인다 —
                 // 옛 날짜가 바닥으로 남아 새 선행이 밀어도 안 움직이는 일을 막는다.
@@ -365,6 +367,14 @@ class FillWbsGaps703k extends Command
         }
 
         $payload = (array) $item->payload;
+        // «경과 시간» 활동(양생·대기)은 휴일에도 흐른다 — 달력 엔진이 이 표식을 본다.
+        if (array_key_exists('elapsed', $op)) {
+            $payload['calendar'] = $op['elapsed'] ? 'elapsed' : 'work';
+            $changes[] = '달력 '.($op['elapsed'] ? '경과시간' : '근무일');
+        }
+        if (! empty($op['name_en'])) {
+            $payload['name_en'] = (string) $op['name_en'];
+        }
         $payload['gap_fix']['modified'][] = ['tag' => $tag, 'gap' => $gap, 'basis' => $op['basis'] ?? null, 'at' => now()->toDateString(), 'changes' => $changes];
         $item->payload = $payload;
         $item->save();

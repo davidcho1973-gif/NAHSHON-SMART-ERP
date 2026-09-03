@@ -3,6 +3,7 @@
 namespace App\Services\Wbs;
 
 use App\Models\WbsItem;
+use App\Support\WorkCalendar;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -387,20 +388,22 @@ class CpmEngine
 
         $es = [];
         $ef = [];
+        $cal = $this->calendar();
 
         foreach ($order as $key) {
             $node = $nodes[$key];
             $span = $this->spanOf($node);
             $ownStart = $node->planned_start?->toImmutable()->startOfDay();
+            $elapsed = $this->isElapsed($node);
 
             if ($this->isFixed($node) && $ownStart !== null) {
                 // 실적 — 저장된 날짜 그대로.
                 $es[$key] = $ownStart;
                 $ef[$key] = $node->planned_end?->toImmutable()->startOfDay() ?? $ownStart->addDays($span);
             } elseif (($in[$key] ?? []) === []) {
-                // 뿌리 — 자기 계획 시작에 닻을 내린다.
-                $es[$key] = $ownStart ?? $anchor;
-                $ef[$key] = $es[$key]->addDays($span);
+                // 뿌리 — 자기 계획 시작에 닻을 내린다(휴일이면 다음 근무일).
+                $es[$key] = $elapsed ? ($ownStart ?? $anchor) : $cal->nextWorkday($ownStart ?? $anchor);
+                $ef[$key] = $elapsed ? $es[$key]->addDays($span) : $cal->addWorkdays($es[$key], $span);
             } else {
                 // 후속 — max(기준선 시작일, 선행 종료 + 최소 간격). 버퍼가 지연을 흡수한다.
                 $base = $baselines[$key]['start'] ?? null;
@@ -411,8 +414,10 @@ class CpmEngine
                         $start = $candidate;
                     }
                 }
-                $es[$key] = $start;
-                $ef[$key] = $start->addDays($span);
+                // 근무일 활동은 휴일에 시작하지 않고 휴일을 건너뛰어 끝난다.
+                // 양생·대기(경과 시간)는 휴일에도 흐른다 — 콘크리트는 추수감사절에도 굳는다.
+                $es[$key] = $elapsed ? $start : $cal->nextWorkday($start);
+                $ef[$key] = $elapsed ? $es[$key]->addDays($span) : $cal->addWorkdays($es[$key], $span);
             }
         }
 
@@ -434,8 +439,12 @@ class CpmEngine
                     $limit = $candidate;
                 }
             }
-            $lf[$key] = $limit;
-            $ls[$key] = $limit->subDays($this->spanOf($nodes[$key]));
+            $elapsed = $this->isElapsed($nodes[$key]);
+            // 근무일 활동의 가장 늦은 종료는 휴일이 아니어야 하고, 폭도 근무일로 거슬러 센다.
+            $lf[$key] = $elapsed ? $limit : $cal->prevWorkday($limit);
+            $ls[$key] = $elapsed
+                ? $lf[$key]->subDays($this->spanOf($nodes[$key]))
+                : $cal->subWorkdays($lf[$key], $this->spanOf($nodes[$key]));
         }
 
         return ['es' => $es, 'ef' => $ef, 'ls' => $ls, 'lf' => $lf, 'projectEnd' => $projectEnd];
@@ -451,10 +460,34 @@ class CpmEngine
         $end = $node->planned_end?->toImmutable()->startOfDay();
 
         if ($start !== null && $end !== null && ! $end->lessThan($start)) {
-            return (int) $start->diffInDays($end);
+            if ($this->isElapsed($node)) {
+                return (int) $start->diffInDays($end);
+            }
+            // 근무일 활동의 폭은 근무일로 센다. 달력일로 세면 휴일을 건너뛴 종료일을 다음
+            // 재계산이 «폭이 늘었다» 로 읽어 한 번 돌 때마다 하루씩 늘어난다(톱니).
+            // 그리고 공기(days) 칸을 바닥으로 둔다 — 7일 달력으로 잡혔던 옛 날짜가 휴일을
+            // 끼고 있으면 근무일 폭이 공기보다 짧게 읽혀 작업이 조용히 하루씩 줄어든다.
+            // 사람이 날짜를 늘려 잡은 것은 그대로 지킨다(둘 중 큰 쪽).
+            $byDates = $this->calendar()->workdaySpan($start, $end);
+            $byDays = max(0, (int) $node->days - 1);
+
+            return (int) $node->days > 0 ? max($byDates, $byDays) : $byDates;
         }
 
         return max(0, ((int) $node->days ?: 1) - 1);
+    }
+
+    /** 양생·대기 — 휴일에도 흐르는 «경과 시간» 활동인가. payload.calendar === 'elapsed'. */
+    private function isElapsed(WbsItem $node): bool
+    {
+        return data_get($node->payload, 'calendar') === 'elapsed';
+    }
+
+    private ?WorkCalendar $calendar = null;
+
+    private function calendar(): WorkCalendar
+    {
+        return $this->calendar ??= new WorkCalendar();
     }
 
     private function isFixed(WbsItem $node): bool
