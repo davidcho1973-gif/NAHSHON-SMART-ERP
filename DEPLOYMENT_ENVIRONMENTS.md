@@ -64,8 +64,8 @@
 | Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp` | `nahshon-smart-erp-staging` |
 | 환경 이름 | `main` | **`nahshon-mep`** | `main` |
 | 브랜치 | `main` | `main` 또는 `staging` (아래 참고) | `staging` |
-| 주소 | **`https://erp.dasolusa.com`** | **`https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud`** | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
-| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | — | — |
+| 주소 | **`https://erp.dasolusa.com`** | **`https://erp.nahshonmep.com`** — 붙이는 중 (2026-09-03, 아래 참고) | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
+| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | `https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud` (도메인이 붙을 때까지는 이것) | — |
 | `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `"NAHSHON MEP"` | `KSR` |
 | `ORG_CODE` | `DASOLUSA` | — | — |
 | 데이터 | 거의 비어 있음 | 쓰는 중 | **실제 데이터** |
@@ -100,7 +100,30 @@ Laravel Cloud → `nahshon-smart-erp` → **NAHSHON MEP** → Settings → 소�
 새 작업이 실제로 도는지 보는 곳은 **NAHSHON MEP** 이다. 화면 확인·문제 보고가
 거기서 나오므로, 배포 뒤 «어디를 보시라» 고 안내할 주소도 그곳이다.
 
-  https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud
+  https://erp.nahshonmep.com                                   ← 도메인이 붙은 뒤
+  https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud   ← 붙을 때까지 (붙은 뒤에도 열림)
+
+### 나손 도메인 `erp.nahshonmep.com` — 붙이는 중 (David 지시 2026-09-03)
+
+> "이 주소를 nahshonmep.com 홈페이지 주소로 만들고 싶어. erp.nahshonmep.com 주소로 만들어줘"
+
+절차는 `docs/도메인-전환.md` 맨 아래 «나손에 붙일 때». 코드는 손댈 것이 없고(주소는 전부
+`APP_URL` 에서 나온다) 사람이 할 일이 네 가지다 — 전부 **`nahshon-mep` 환경**에서 한다.
+
+| # | 어디서 | 무엇 | 됐나 |
+|---|---|---|---|
+| 1 | Laravel Cloud → NAHSHON MEP → Domains | `erp.nahshonmep.com` 추가, 알려 주는 DNS 값 적기 | ☐ |
+| 2 | **Netlify** → nahshonmep.com → DNS | `erp` 레코드 한 줄 추가 (A 또는 CNAME) | ☐ |
+| 3 | Google Cloud 콘솔 → OAuth 클라이언트 | `https://erp.nahshonmep.com/auth/google/callback` 추가 | ☐ |
+| 4 | Laravel Cloud → NAHSHON MEP → 환경변수 | `APP_URL`, `GOOGLE_REDIRECT_URI` 를 새 주소로 → 재배포 | ☐ |
+
+확인: `https://erp.nahshonmep.com/build-version` 의 `domain.matches` 가 `true`, 그리고
+구글 로그인 한 번. 에이전트는 이 주소에 직접 닿지 못하므로 Actions 의 «Check production»
+버튼으로 대신 읽는다.
+
+**`nahshonmep.com` 의 DNS 는 Netlify 가 관리한다** (네임서버 `dns1~4.p03.nsone.net`,
+`MAIL_SETUP.md`). 루트의 MX·SPF·DKIM·`www` 는 회사 메일과 홈페이지가 쓰고 있으니
+건드리지 않는다 — `erp` 한 줄만 더한다.
 
 KSR 은 "연습용"이 아니라 실제로 쓰는 첫 고객이다. 화면에 "연습용" 같은 띠를 붙이지
 않는 이유이고, 데이터를 함부로 비우지 않는 이유이기도 하다.
@@ -147,6 +170,9 @@ KSR 은 "연습용"이 아니라 실제로 쓰는 첫 고객이다. 화면에 "�
 
 고객마다 주소가 하나씩 늘어난다. `erp.<고객도메인>` 또는 `<고객>.erp.dasolusa.com` 중
 하나로 규칙을 정해 두면 열 번째 고객에서 다시 정하지 않아도 된다.
+
+`nahshonmep.com` 은 규칙대로 `erp.nahshonmep.com` 이다. DNS 는 **Netlify** 에 있다
+(GoDaddy 화면에 레코드를 넣어도 효과가 없다). 레코드는 위와 같이 `erp` 한 줄.
 
 ---
 

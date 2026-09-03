@@ -3,6 +3,10 @@
 # 왜 있나: 대시보드에서 수동 배포를 누른 경우 CI 가 돌지 않아 "지금 운영이 어느
 # 커밋인가" 를 확인할 길이 없다. 에이전트 세션은 망 정책상 운영 도메인에 직접
 # 접속할 수 없어서, GitHub 러너가 대신 읽어 준다.
+#
+# 나손(NAHSHON MEP)도 함께 읽는다 — 확인은 나손이 먼저다(AGENTS.md §5). 자체 도메인
+# `erp.nahshonmep.com` 이 붙었는지도 여기서 본다: 붙기 전에는 "응답 없음", 붙은 뒤에는
+# `domain.matches` 가 true 여야 한다(false 면 APP_URL 이 아직 옛 주소).
 name: Check production
 
 on:
@@ -15,5 +19,11 @@ jobs:
     steps:
       - name: Fetch /build-version
         run: |
+          echo "== 나손 (erp.nahshonmep.com) =="
+          curl -sS -m 30 https://erp.nahshonmep.com/build-version | python3 -m json.tool || echo "나손 자체 도메인 응답 없음 — 아직 안 붙었거나 DNS 반영 전"
+          echo
+          echo "== 나손 (laravel.cloud 기본 주소) =="
+          curl -sS -m 30 https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud/build-version | python3 -m json.tool || echo "나손 응답 없음"
+          echo
           echo "== 운영 (erp.dasolusa.com) =="
           curl -sS -m 30 https://erp.dasolusa.com/build-version | python3 -m json.tool || echo "운영 응답 없음"

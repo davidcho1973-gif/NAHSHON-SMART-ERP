@@ -173,6 +173,7 @@
 - **Production(main)도 함께 배포합니다 (David 지시 2026-08-18: "메인에도 배포해 앞으로").**
 - **확인은 나손(NAHSHON MEP) 환경에서 먼저 합니다 (David 지시 2026-09-01: "현재 모든 작업은
   여기에 배포해줘 우선적으로").** 배포 뒤 "어디를 보시라" 고 안내할 주소는
+  `https://erp.nahshonmep.com` (도메인 붙이는 중, 2026-09-03 지시) 이고, 붙기 전까지는
   `https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud` 입니다.
   같은 앱(`nahshon-smart-erp`) 안의 별도 환경이고, 그 앱의 `main` 환경은 DASOL 것입니다 —
   앱 이름만 보고 «나손 = main» 으로 읽지 마세요(`DEPLOYMENT_ENVIRONMENTS.md`).
