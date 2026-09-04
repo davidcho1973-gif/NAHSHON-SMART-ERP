@@ -31,6 +31,7 @@ use App\Http\Controllers\QrPrintController;
 use App\Http\Controllers\SimpleWorkerRegistrationController;
 use App\Http\Controllers\SmartCompanyApiController;
 use App\Http\Controllers\SmartCompanyController;
+use App\Http\Controllers\SubmittalCoverController;
 use App\Http\Controllers\VehicleApiController;
 use App\Http\Controllers\W9FormController;
 use App\Http\Controllers\WbsManualController;
@@ -334,6 +335,10 @@ Route::middleware('auth')->group(function (): void {
     // 빈 양식 — 현장에 챙겨 가는 종이. {employee} 보다 먼저 와야 'blank' 가 직원 ID 로 읽히지 않는다.
     Route::get('/w9/blank/print', [W9FormController::class, 'blank'])->name('w9.blank');
     Route::get('/w9/{employee}/print', [W9FormController::class, 'printable'])->name('w9.print');
+
+    // SUBMITTAL 커버 — 제출물을 원청·EOR 에 보낼 때 맨 앞에 붙는 표지. 빈 양식을 화면에서
+    // 채워 인쇄하거나 그대로 뽑아 손으로 쓴다. 대장(submittals) 행을 얹는 것은 다음 단계.
+    Route::get('/submittal/cover/blank/print', [SubmittalCoverController::class, 'blank'])->name('submittal.cover.blank');
 
     // HR daily attendance status report — styled Excel (.xlsx) export
     Route::get('/hr/attendance/export', HrAttendanceExportController::class.'@export')
