@@ -461,7 +461,7 @@
           <img class="upload-preview" id="receiptUploadPreview" src="" alt="Receipt preview">
           <i class="ph ph-receipt-bold upload-icon" id="uploadAreaIcon"></i>
           <span class="upload-label" id="uploadAreaLabel">사진 촬영 또는 파일 올리기</span>
-          <span class="upload-sub" id="uploadAreaSub">JPG, PNG, PDF 최대 10MB</span>
+          <span class="upload-sub" id="uploadAreaSub">{{ \App\Support\ReceiptUpload::hint() }}</span>
           <input type="file" id="receiptFileInput" accept="image/*,application/pdf" style="display:none" onchange="handleReceiptUpload(event)">
         </div>
         <div class="analysis-card" id="receiptAnalysisCard" aria-live="polite">
@@ -708,12 +708,13 @@
         const response = await fetch("{{ route('mobile-expense.upload-receipt') }}", {
           method: 'POST',
           headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Accept': 'application/json'
           },
           body: formData
         });
 
-        const result = await response.json();
+        const result = await readReceiptResponse(response);
 
         if (result.success) {
           // Auto fill fields
@@ -749,7 +750,7 @@
           label.textContent = 'AI analysis complete';
           sub.textContent = 'Review the extracted result below, then tap Next.';
         } else {
-          alert('영수증 분석 실패: ' + result.error);
+          alert('영수증 분석 실패: ' + (result.error || result.message || '알 수 없는 오류'));
         }
       } catch (err) {
         alert('서버 오류: ' + err.message);
@@ -760,9 +761,29 @@
         icon.style.animation = 'none';
         if (!document.getElementById('receiptAnalysisCard').classList.contains('visible')) {
           label.textContent = 'Photo capture or file upload';
-          sub.textContent = 'JPG, PNG, PDF up to 10MB';
+          sub.textContent = @json(\App\Support\ReceiptUpload::hint());
         }
       }
+    }
+
+    // 서버가 JSON 이 아닌 것을 돌려줬을 때 «Unexpected token '<'» 대신 무슨 일인지 말한다.
+    // 서버는 이제 항상 JSON 을 주지만, 그 앞의 게이트웨이(413·502·504)와 만료된 세션(419)은
+    // 여전히 HTML 을 준다 — 그 경우가 사람에게 가장 헷갈리는 경우다.
+    async function readReceiptResponse(response) {
+      const type = (response.headers.get('content-type') || '').toLowerCase();
+      if (type.includes('application/json')) {
+        return response.json();
+      }
+      const status = response.status;
+      const why = {
+        413: '파일이 너무 큽니다. 사진을 다시 찍거나 더 작은 파일로 올려 주세요.',
+        419: '로그인 시간이 지났습니다. 화면을 새로고침한 뒤 다시 올려 주세요.',
+        401: '로그인이 풀렸습니다. 화면을 새로고침해 주세요.',
+        502: '분석 서버가 응답하지 않습니다. 잠시 후 다시 시도해 주세요.',
+        503: '서버가 배포 중입니다. 1~2분 뒤 다시 시도해 주세요.',
+        504: '분석에 시간이 너무 오래 걸렸습니다. 사진을 다시 찍어 올리거나 «영수증 없이 직접 입력하기» 를 눌러 주세요.'
+      }[status];
+      throw new Error(why || ('서버가 예상과 다른 응답을 보냈습니다 (HTTP ' + status + '). 화면을 새로고침한 뒤 다시 시도해 주세요.'));
     }
 
     function normalizeAccountingAccount(account, context = '') {

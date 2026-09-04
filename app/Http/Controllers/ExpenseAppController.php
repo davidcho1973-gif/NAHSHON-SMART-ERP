@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MobileExpense;
 use App\Services\Finance\ReceiptQuickIntake;
+use App\Support\ReceiptUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -57,13 +58,18 @@ class ExpenseAppController extends Controller
     public function submit(Request $request, ReceiptQuickIntake $intake): JsonResponse
     {
         $request->validate([
-            'receipt' => 'required|image|max:10240',
             'payment_type' => 'nullable|in:personal,corporate',
             'amount' => 'nullable|numeric|min:0.01',
             'memo' => 'nullable|string|max:300',
             'lang' => 'nullable|in:ko,en,es',
         ]);
         $lang = (string) $request->input('lang', 'ko');
+
+        // 파일 규칙은 세 화면이 공유한다(ReceiptUpload) — 아이폰 HEIC·PDF 를 받고, 못 받을 때는
+        // 이유를 그 사람의 언어로 돌려준다.
+        if ($problem = ReceiptUpload::problem($request)) {
+            return response()->json(['success' => false, 'code' => $problem, 'message' => ReceiptUpload::say($problem, $lang)], 422);
+        }
 
         $employee = $request->user()?->employee;
         if (! $employee) {

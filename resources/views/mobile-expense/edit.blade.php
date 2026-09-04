@@ -136,7 +136,7 @@
 
       <div class="field">
         <label for="receipt">영수증 이미지 교체</label>
-        <input id="receipt" name="receipt" type="file" accept="image/*">
+        <input id="receipt" name="receipt" type="file" accept="image/*,application/pdf">
         <span class="hint">이미지가 깨진 기존 항목은 여기서 원본 영수증을 다시 업로드하면 복구됩니다.</span>
       </div>
 

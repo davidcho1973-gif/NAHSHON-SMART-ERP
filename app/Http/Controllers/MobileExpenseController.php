@@ -9,6 +9,7 @@ use App\Services\Finance\ExpenseReviewService;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
+use App\Support\ReceiptUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -77,24 +78,32 @@ class MobileExpenseController extends Controller
         ]);
     }
 
+    /**
+     * 영수증 한 장을 받아 판독한다. 화면은 JSON 만 기다린다 — 어떤 경우에도 리다이렉트하지 않는다.
+     *
+     * 받을 수 없는 파일(형식·크기)은 422 에 이유를 사람 말로 담는다. 예전에는 «image|max:10240»
+     * 검증이 실패하면 입력 화면으로 되돌려 보냈고, 화면은 그 HTML 을 JSON 으로 읽으려다
+     * «Unexpected token '<'» 만 띄웠다. 규칙은 ReceiptUpload 한 곳에 있다.
+     */
     public function uploadReceipt(Request $request): JsonResponse
     {
-        $request->validate([
-            'receipt' => 'required|image|max:10240', // 10MB limit
-        ]);
+        if ($problem = ReceiptUpload::problem($request)) {
+            return response()->json([
+                'success' => false,
+                'code' => $problem,
+                'error' => ReceiptUpload::say($problem),
+            ], 422);
+        }
 
         try {
             $file = $request->file('receipt');
-            if (! $file) {
-                throw new RuntimeException('No file uploaded.');
-            }
 
             // Store in storage/app/public/receipts
             $path = $file->store('receipts', 'public');
             $absolutePath = Storage::disk('public')->path($path);
 
-            // Analyze receipt
-            $analysisResult = $this->receiptAnalyzer->analyze($absolutePath);
+            // Analyze receipt — 형식은 파일이 말하는 대로(PDF 는 PDF 로) 넘긴다.
+            $analysisResult = $this->receiptAnalyzer->analyze($absolutePath, $file->getMimeType() ?: null);
 
             return response()->json([
                 'success' => true,
@@ -104,7 +113,8 @@ class MobileExpenseController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage(),
+                'code' => 'analysis_failed',
+                'error' => '영수증을 읽지 못했습니다. 잠시 후 다시 시도하거나 «영수증 없이 직접 입력하기» 를 눌러 주세요. ('.Str::limit($e->getMessage(), 160).')',
             ], 400);
         }
     }
@@ -239,7 +249,7 @@ class MobileExpenseController extends Controller
             'site_id' => 'nullable|exists:sites,id',
             'expense_pre_approval_id' => 'nullable|exists:expense_pre_approvals,id',
             'status' => 'nullable|in:draft,pending,approved,rejected,paid',
-            'receipt' => 'nullable|image|max:10240',
+            'receipt' => ReceiptUpload::rule(required: false),
         ]);
 
         $preApprovalId = $this->validatedPreApprovalId($validated['expense_pre_approval_id'] ?? null, $expense->employee_id);

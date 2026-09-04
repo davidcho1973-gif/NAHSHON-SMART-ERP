@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\Ocr\OcrEngine;
 use App\Support\FinanceChartOfAccounts;
+use App\Support\ImageDownscale;
 use RuntimeException;
 
 /**
@@ -24,10 +25,36 @@ class GeminiReceiptAnalyzer
             throw new RuntimeException('Receipt image file is not readable.');
         }
 
+        return $this->analyzeBytes(
+            (string) file_get_contents($imagePath),
+            $mimeType ?: (mime_content_type($imagePath) ?: 'image/jpeg'),
+        );
+    }
+
+    /**
+     * 판독기에 넘기기 직전에 사진을 줄인다 — 원본은 그대로 보관하고, AI 에는 장변 1,600px 만 간다.
+     *
+     * 폰 사진 한 장(4000×3000, 3~8MB)을 그대로 보내면 요청 본문이 커져 전송에서 시간을
+     * 다 쓰고 게이트웨이 시간 안에 못 돌아온다. 그러면 사람은 «서버 오류» 한 줄만 본다.
+     * 판독 정확도는 줄여도 같다 — 비전 모델이 내부에서 어차피 그 크기로 다시 줄인다.
+     * PDF 와 GD 가 못 읽는 형식(HEIC)은 원본 그대로 간다.
+     *
+     * @return array<string, mixed>
+     */
+    public function analyzeBytes(string $bytes, string $mimeType): array
+    {
+        $mimeType = $mimeType !== '' ? $mimeType : 'image/jpeg';
+
+        if (! str_contains($mimeType, 'pdf')) {
+            $shrunk = ImageDownscale::shrink($bytes, $mimeType);
+            $bytes = $shrunk['data'];
+            $mimeType = $shrunk['mime'];
+        }
+
         $result = $this->engine->analyze(
             [[
-                'data' => base64_encode((string) file_get_contents($imagePath)),
-                'mime_type' => $mimeType ?: (mime_content_type($imagePath) ?: 'image/jpeg'),
+                'data' => base64_encode($bytes),
+                'mime_type' => $mimeType,
             ]],
             $this->prompt(),
             $this->schema(),
