@@ -44,6 +44,9 @@ class OpsIntakeService
         'inspection',
         // 공정·자재·인원 어디에도 안 들어가는 것들 — 액션 아이템으로 간다.
         'request', 'approval', 'decision', 'todo',
+        // 사무·관리자의 하루 — 일일보고는 모이는 곳이라 사무의 보고도 같은 장에 든다.
+        // submittal 은 제출물 대장으로 간다. 나머지는 마감 보고서의 «사무 업무» 에 실린다.
+        'submittal', 'billing', 'permit', 'hr', 'admin',
         'noise',
     ];
 
@@ -75,19 +78,20 @@ class OpsIntakeService
         $activities = $this->activityContext($site);
         $purchases = $this->purchaseContext($site);
         $inspections = $this->inspectionContext($site);
+        $submittals = $this->submittalContext($site);
         $today = Carbon::today()->toDateString();
 
         try {
             // 지금까지 축적된 현장 용어·오판 사례를 함께 넘긴다 — 쓸수록 정확해진다.
             $learned = $this->learning->promptBlock($site?->id);
-            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned, [], $this->specContext($site)->all(), $inspections->all());
+            $raw = $this->analyzer->read($text, $activities->all(), $purchases->all(), $today, $images, $learned, [], $this->specContext($site)->all(), $inspections->all(), $submittals->all());
         } catch (\Throwable $e) {
             return ['success' => false, 'error' => 'AI 판독에 실패했습니다: '.$e->getMessage()];
         }
 
         $validCodes = $activities->pluck('code')->filter()->all();
         $validPos = $purchases->pluck('po')->filter()->all();
-        $validSeqs = $inspections->pluck('seq')->filter()->all();
+        $validSeqs = $this->validSeqs($inspections, $submittals);
 
         // 붙여넣은 원문 전체를 근거로 보관한다 — 나중에 "왜 이렇게 반영됐지?"를 되짚을 수 있게.
         $batch = OpsIntakeBatch::create([
@@ -201,6 +205,7 @@ class OpsIntakeService
             $activities = $this->activityContext($site);
             $purchases = $this->purchaseContext($site);
             $inspections = $this->inspectionContext($site);
+            $submittals = $this->submittalContext($site);
             $specs = $this->specContext($site);
             $learned = $this->learning->promptBlock($site?->id);
 
@@ -219,11 +224,12 @@ class OpsIntakeService
                 $photoKinds,
                 $specs->all(),
                 $inspections->all(),
+                $submittals->all(),
             );
 
             $validCodes = $activities->pluck('code')->filter()->all();
             $validPos = $purchases->pluck('po')->filter()->all();
-            $validSeqs = $inspections->pluck('seq')->filter()->all();
+            $validSeqs = $this->validSeqs($inspections, $submittals);
 
             $saved = [];
             $autoLabor = 0;
@@ -1330,6 +1336,51 @@ class OpsIntakeService
                 'status' => (string) $s->status,
                 'gate' => $s->gate ? 'Y' : '',
             ]);
+    }
+
+    /**
+     * AI 에게 넘길 제출물 대장 — 사무관리자의 "샵드로잉 냈다·승인 받았다" 를 대장 번호로 잇는다.
+     *
+     * 검사 후보(inspectionContext)는 시험·검사만 담는다. 사무의 하루는 그 밖의 제출물
+     * (제품자료·제작도·마감자재 승인·준공 서류)에서 일어나므로, 아직 끝나지 않은
+     * 것을 먼저 싣고 승인이 끝난 것은 뒤로 보낸다 — 오늘 보고될 확률 순이다.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function submittalContext(?Site $site): Collection
+    {
+        if (! $site) {
+            return collect();
+        }
+
+        return Submittal::query()
+            ->where(fn ($q) => $q->whereNull('site_id')->orWhere('site_id', $site->id))
+            ->where('category', '!=', '시험·검사')
+            ->orderByRaw("case when status in ('승인', '조건부승인') then 1 else 0 end")
+            ->orderBy('seq')
+            ->limit(150)->get()
+            ->map(fn (Submittal $s) => [
+                'seq' => (string) $s->seq,
+                'section' => trim($s->csi.' '.$s->section),
+                'title' => mb_substr((string) $s->title, 0, 90),
+                'status' => (string) $s->status,
+                'planned_on' => $s->planned_on?->toDateString() ?? '',
+                'submitted_on' => $s->submitted_on?->toDateString() ?? '',
+                'gate' => $s->gate ? 'Y' : '',
+            ]);
+    }
+
+    /**
+     * AI 가 target_code 로 써도 되는 제출물 번호 — 검사 후보와 대장 후보의 합.
+     *
+     * @param  Collection<int, array<string, mixed>>  $inspections
+     * @param  Collection<int, array<string, mixed>>  $submittals
+     * @return array<int, string>
+     */
+    private function validSeqs(Collection $inspections, Collection $submittals): array
+    {
+        return $inspections->pluck('seq')->concat($submittals->pluck('seq'))
+            ->filter()->unique()->values()->all();
     }
 
     /**

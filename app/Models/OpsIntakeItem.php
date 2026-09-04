@@ -23,11 +23,22 @@ class OpsIntakeItem extends Model
         'approval' => '승인',
         'decision' => '의사결정',
         'todo' => '준비·조치',
+        'submittal' => '제출물·서류',
+        'billing' => '청구·기성',
+        'permit' => '인허가',
+        'hr' => '인사·노무',
+        'admin' => '사무·행정',
         'noise' => '잡담',
     ];
 
     /** 공정·자재·인원 어디에도 안 들어가고 액션 아이템으로 가는 분류. */
     public const ACTION_CATEGORIES = ['request', 'approval', 'decision', 'todo'];
+
+    /**
+     * 사무·관리자의 하루 — 일일보고는 모이는 곳이라 사무의 보고도 같은 장에 든다.
+     * submittal 은 제출물 대장으로 반영되고, 나머지는 마감 보고서의 «사무 업무» 에 실린다.
+     */
+    public const OFFICE_CATEGORIES = ['submittal', 'billing', 'permit', 'hr', 'admin'];
 
     protected $fillable = [
         'site_id', 'ops_intake_batch_id', 'project_code', 'source', 'communication_message_id', 'created_by_id',

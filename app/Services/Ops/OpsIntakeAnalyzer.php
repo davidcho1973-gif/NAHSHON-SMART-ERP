@@ -26,7 +26,7 @@ class OpsIntakeAnalyzer
      * @param  array<int, array{data: string, mime_type: string}>  $images
      * @return array<int, array<string, mixed>>
      */
-    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = []): array
+    public function read(string $text, array $activities, array $purchases, string $today, array $images = [], string $learned = '', array $photoKinds = [], array $specs = [], array $inspections = [], array $submittals = []): array
     {
         // 사람이 한 말이 없으면 판독하지 않는다.
         //
@@ -41,7 +41,7 @@ class OpsIntakeAnalyzer
             return [];
         }
 
-        $prompt = $this->prompt($text, $activities, $purchases, $today, $photoKinds, $specs, $inspections).$learned;
+        $prompt = $this->prompt($text, $activities, $purchases, $today, $photoKinds, $specs, $inspections, $submittals).$learned;
 
         $result = $this->generate($prompt, $this->schema());
 
@@ -54,7 +54,7 @@ class OpsIntakeAnalyzer
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      */
-    private function prompt(string $text, array $activities, array $purchases, string $today, array $photoKinds = [], array $specs = [], array $inspections = []): string
+    private function prompt(string $text, array $activities, array $purchases, string $today, array $photoKinds = [], array $specs = [], array $inspections = [], array $submittals = []): string
     {
         // 사진은 «무엇이 함께 왔는지» 만 알려 준다. 판독의 재료가 아니라 배경 설명이다.
         //
@@ -67,16 +67,28 @@ class OpsIntakeAnalyzer
             ."\n※ 사진은 위 글의 증거로만 첨부됐습니다. 사진에서 진행률·인원수·금액을 끌어내지 마세요.\n"
             ."  글에 없는 내용은 사진에 보이더라도 항목으로 만들지 마세요.\n");
 
-        return $this->body($text, $activities, $purchases, $today, $specs, $inspections).$kindLine;
+        return $this->body($text, $activities, $purchases, $today, $specs, $inspections, $submittals).$kindLine;
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $activities
      * @param  array<int, array<string, mixed>>  $purchases
      * @param  array<int, array<string, mixed>>  $inspections
+     * @param  array<int, array<string, mixed>>  $submittals
      */
-    private function body(string $text, array $activities, array $purchases, string $today, array $specs = [], array $inspections = []): string
+    private function body(string $text, array $activities, array $purchases, string $today, array $specs = [], array $inspections = [], array $submittals = []): string
     {
+        // 제출물 대장 후보 — 사무관리자의 "샵드로잉 냈다·승인 받았다" 를 대장 번호로 잇는다.
+        $submList = collect($submittals)->take(150)->map(
+            fn (array $s) => sprintf(
+                '- [%s] %s — %s (상태:%s%s%s)',
+                $s['seq'] ?? '', $s['section'] ?? '', $s['title'] ?? '',
+                $s['status'] ?? '-',
+                ($s['submitted_on'] ?? '') !== '' ? ', 제출일:'.$s['submitted_on'] : '',
+                ($s['gate'] ?? '') === 'Y' ? ', ★정지조항' : '',
+            ),
+        )->implode("\n") ?: '(등록된 제출물 없음)';
+
         // 검사·시험 후보 — "앵커 검사" 같은 말을 제출물 대장 번호로 잇게 한다.
         $inspList = collect($inspections)->take(150)->map(
             fn (array $s) => sprintf(
@@ -130,6 +142,9 @@ class OpsIntakeAnalyzer
 [등록된 검사·시험 항목 — 검사 일정은 반드시 이 중에서 고르세요]
 {$inspList}
 
+[등록된 제출물 대장 — 제출·승인·반려 보고는 반드시 이 중에서 고르세요]
+{$submList}
+
 [이미 확정된 사양 — 도면·문서에서 읽은 것]
 {$specList}
 
@@ -154,6 +169,16 @@ class OpsIntakeAnalyzer
 - decision : **결정이 필요한 사항**. ("29,000불 냈다는데 네고할까요?", "업체 선정 확정 필요")
              금액·업체·일정처럼 사람이 판단해야 하는 것.
 - todo     : 준비물·잡무. ("보안경 2-3 bag 준비", "용접가스 확보", "Pallet jack 필요")
+
+**사무·관리자의 보고도 같은 장에 모입니다.** 서류·발주·청구·인허가·인사·회의 같은 사무 업무는
+잡담이 아닙니다. 아래 분류로 잡고 절대 noise 로 버리지 마세요.
+- submittal : **제출물 대장의 상태 변화**. ("후드 샵드로잉 오늘 제출했습니다", "에폭시 제품자료 승인 회신 왔음",
+             "SST 월패널 반려됨 — 두께 재확인 요구") target_type="submittal", target_code 는
+             위 [등록된 제출물 대장]의 번호를 그대로 쓸 것. 검사·시험 **일정**은 inspection 이다.
+- billing  : **청구·기성·수금**. ("8월 기성 청구서 냈습니다 $120,000", "7월분 입금 확인", "유보금 해제 요청")
+- permit   : **인허가·관청**. ("카운티 빌딩 퍼밋 승인", "화기작업 허가서 갱신", "보건소 사전검토 접수")
+- hr       : **인사·노무**. ("용접공 2명 채용 확정, 월요일 출근", "김OO 퇴사 처리", "W-9 회수 3건")
+- admin    : **그 밖의 사무·행정**. ("원청 주간회의 참석 — 후드 납기 협의", "보험증서 갱신 발송", "도면 Rev.3 배포")
 - noise    : 업무와 무관한 잡담(인사, 식사, 날씨 한담 등). **반드시 noise 로 분류하고 무시되게 하세요.**
 
 ## 매우 중요한 규칙
@@ -197,6 +222,12 @@ class OpsIntakeAnalyzer
   (필요하면 {"assignee": "검사기관/입회자", "notes": "오전 9시, 21일 전 통보 완료"} 를 함께.
    날짜는 **반드시 YYYY-MM-DD** 로 환산할 것 — "다음 주 화요일" 을 그대로 쓰면 버려집니다.
    검사가 끝났다는 보고면 {"status": "승인"} 처럼 상태를 함께 넣으세요.)
+- 제출물(submittal): 냈으면 {"status": "제출", "submitted_on": "2026-09-04"},
+  승인 회신이면 {"status": "승인", "approved_on": "2026-09-04"} (조건부면 "조건부승인"),
+  반려면 {"status": "반려", "notes": "반려 사유 한 줄"}, 다시 냈으면 {"status": "재제출", "submitted_on": "..."}.
+  상태는 반드시 미착수/작성중/제출/승인/조건부승인/반려/재제출 중 하나. 날짜를 모르면 오늘.
+- 청구(billing): {"amount": 120000, "reference": "8월 기성", "status": "submitted"} — status 는 submitted/approved/paid.
+- 인허가·인사·사무(permit/hr/admin): {"title": "한 줄", "due_on": "2026-09-08"} — 날짜가 있을 때만 due_on.
 대화에서 확실히 읽히는 항목만 넣고, 나머지 키는 아예 넣지 마세요.
 
 ## 반환 항목 (items 배열)
@@ -206,7 +237,7 @@ class OpsIntakeAnalyzer
 - confidence   : 0~100 (대상·내용 확신도)
 - summary      : 한국어 한 줄 요약(관리자가 읽을 문장)
 - target_type  : "wbs" | "procurement" | "submittal" | "" (대상 없으면 빈 문자열)
-- target_code  : 위 목록의 code/PO번호/검사항목번호 그대로. 확신 없으면 빈 문자열
+- target_code  : 위 목록의 code/PO번호/검사항목번호/제출물번호 그대로. 확신 없으면 빈 문자열
 - target_name  : 대상의 이름(표시용)
 - occurred_on  : 이 내용이 해당하는 날짜(YYYY-MM-DD). 모르면 빈 문자열
 - proposed     : 위 형식의 변경안 객체. 없으면 빈 객체 {}

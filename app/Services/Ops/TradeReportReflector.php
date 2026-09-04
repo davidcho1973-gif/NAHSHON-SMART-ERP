@@ -56,7 +56,16 @@ class TradeReportReflector
     public const AUTO_CONFIDENCE = 75;
 
     /** 제출과 동시에 넘어가는 분류. 여기 없는 것은 사람이 누른다. */
-    private const AUTO_CATEGORIES = ['progress', 'procurement', 'inspection'];
+    private const AUTO_CATEGORIES = ['progress', 'procurement', 'inspection', 'submittal'];
+
+    /**
+     * 제출물 상태 가운데 사무관리자의 말만으로 넘어가는 것 — «우리가 한 일».
+     *
+     * 냈다·다시 냈다·쓰고 있다는 우리 쪽 행위라 그 사람이 1차 사실이다. 승인·조건부승인·
+     * 반려는 <b>상대의 회신</b>이고 회신 문서가 정본이다 — 말만 듣고 «승인» 으로 넘기면
+     * 그 뒤의 발주가 승인 없이 나간다. 그것은 사람이 문서를 보고 누른다.
+     */
+    private const AUTO_SUBMITTAL_STATUSES = ['작성중', '제출', '재제출'];
 
     /**
      * 분류별로 자동 반영을 허용하는 필드.
@@ -71,11 +80,14 @@ class TradeReportReflector
      *     없다). 완료 처리는 TBM 서명과 같은 종류의 «사람이 책임지는 선언» 이다.
      *   procurement.amount/vendor/po_no — 돈과 계약 상대. 사람이 확인한다.
      *   inspection.status/submitted_on/approved_on — 준수 기록. 서류가 정본이다.
+     *   submittal.approved_on — 승인은 회신 문서로 확인한다(AUTO_SUBMITTAL_STATUSES).
+     *     submitted_on 과 «제출» 상태는 우리가 한 일이라 낸 사람의 말이 1차 사실이다.
      */
     private const AUTO_FIELDS = [
         'progress' => ['progress'],
         'procurement' => ['eta', 'status', 'ordered_on'],
         'inspection' => ['planned_on', 'notes'],
+        'submittal' => ['status', 'submitted_on', 'notes'],
     ];
 
     /** 이 클래스가 스스로 올린 되물음임을 알아보는 표시 — 되돌리기 때 이것만 푼다. */
@@ -269,7 +281,7 @@ class TradeReportReflector
      */
     private function blocker(OpsIntakeItem $item): ?string
     {
-        if ($item->category === 'expense') {
+        if ($item->category === 'expense' || $item->category === 'billing') {
             return '금액이 걸린 항목이라 확인 뒤에 반영합니다.';
         }
 
@@ -278,7 +290,15 @@ class TradeReportReflector
         }
 
         if (blank($item->target_code)) {
-            return '어느 작업·발주·검사인지 특정되지 않았습니다.';
+            return '어느 작업·발주·검사·제출물인지 특정되지 않았습니다.';
+        }
+
+        // 승인·반려는 상대의 회신이다 — 말이 아니라 회신 문서를 보고 사람이 누른다.
+        if ($item->category === 'submittal') {
+            $status = (string) (((array) ($item->proposed ?? []))['status'] ?? '');
+            if ($status !== '' && ! in_array($status, self::AUTO_SUBMITTAL_STATUSES, true)) {
+                return sprintf('«%s» 은(는) 회신 문서를 확인한 뒤에 반영합니다.', $status);
+            }
         }
 
         if (! empty($item->conflict)) {
@@ -517,7 +537,7 @@ class TradeReportReflector
         $failed = $batchIds->isEmpty() ? 0 : $report->batches()->where('status', 'failed')->count();
 
         $parts = [];
-        $parts[] = $applied > 0 ? "공정·자재 {$applied}건 반영" : '공정·자재 반영 없음';
+        $parts[] = $applied > 0 ? "공정·자재·서류 {$applied}건 반영" : '공정·자재·서류 반영 없음';
         if ($routed > 0) {
             $parts[] = "인원·지시 {$routed}건 기록";
         }
@@ -623,6 +643,8 @@ class TradeReportReflector
             'eta' => '도착예정',
             'ordered_on' => '발주일',
             'planned_on' => '계획일',
+            'submitted_on' => '제출일',
+            'approved_on' => '승인일',
             'notes' => '메모',
             default => $field,
         };
