@@ -264,6 +264,51 @@ class TradeReportTest extends TestCase
         $this->assertSame(['사무'], $reminder->missingTrades($this->site->id, '2026-08-31'));
     }
 
+    public function test_the_office_manager_is_nudged_before_the_deadline_like_a_foreman(): void
+    {
+        // 알림은 사람이 아니라 «자리» 에 간다. 사무 자리의 사람은 직책으로 찾는다 —
+        // 공종 칸으로 찾으면 사무장에게는 영원히 아무 알림도 오지 않는다.
+        $office = $this->staff('사무장', 'office');
+        $this->clockIn($office);
+        $user = $this->userFor($office);
+        \App\Models\PushSubscription::create([
+            'user_id' => $user->id, 'endpoint' => 'https://p.example/office', 'endpoint_hash' => hash('sha256', 'office'),
+            'public_key' => 'pk', 'auth_token' => 'at',
+        ]);
+
+        $sent = [];
+        $sender = \Mockery::mock(\App\Services\Push\WebPushSender::class);
+        $sender->shouldReceive('available')->andReturn(true);
+        $sender->shouldReceive('sendToUsers')->andReturnUsing(function ($users, $payload) use (&$sent): int {
+            $sent[] = ['users' => collect($users)->pluck('id')->all(), 'payload' => $payload];
+
+            return count(collect($users)->all());
+        });
+        $this->app->instance(\App\Services\Push\WebPushSender::class, $sender);
+
+        // 마감(17시) 한 시간 전 — 아직 사람에게 올리지 않고 당사자에게 묻는다.
+        $result = app(TradeReportReminderService::class)->run(Carbon::parse('2026-08-31 16:10', 'America/Phoenix'));
+
+        $this->assertSame(1, $result['sent']);
+        $this->assertSame([$user->id], $sent[0]['users']);
+        $this->assertStringContainsString('사무 보고가 아직 없습니다', $sent[0]['payload']['title']);
+        $this->assertSame(0, UnifiedAlert::query()->where('event_type', 'trade_report_missing')->count());
+    }
+
+    public function test_after_the_deadline_the_escalation_names_the_office_too(): void
+    {
+        $this->clockIn($this->worker('최반장', 'Duct'));
+        $this->clockIn($this->staff('안전', 'safety'));
+
+        app(TradeReportReminderService::class)->run(Carbon::parse('2026-08-31 18:00', 'America/Phoenix'));
+
+        $alert = UnifiedAlert::query()->where('event_type', 'trade_report_missing')->sole();
+        $this->assertStringContainsString('Duct', $alert->title);
+        $this->assertStringContainsString('안전', $alert->title);
+        $this->assertStringContainsString('미제출 2건', $alert->title);
+        $this->assertStringContainsString('공종·부서', $alert->content);
+    }
+
     public function test_reopening_requires_a_reason_and_reverts_the_status(): void
     {
         $piping = $this->worker('김반장', 'Piping');

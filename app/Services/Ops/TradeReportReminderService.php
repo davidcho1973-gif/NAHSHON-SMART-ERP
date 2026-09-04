@@ -200,10 +200,11 @@ class TradeReportReminderService
                     'source_id' => (string) $site->id,
                     'event_type' => 'trade_report_missing',
                     'severity' => 'warning',
-                    'title' => sprintf('%s 오늘 보고 미제출 %d개 공종 (%s)', $site->code, count($trades), $workDate),
+                    'title' => sprintf('%s 오늘 보고 미제출 %d건 — %s (%s)', $site->code, count($trades), implode(', ', $trades), $workDate),
                     'content' => sprintf(
-                        "%s\n\n이 공종들은 오늘 사람이 나왔는데 보고가 없습니다. "
-                        .'이대로 마감하면 종합보고서에서 그 공종이 통째로 빠진 채 원청에 나갑니다.',
+                        "%s\n\n이 공종·부서는 오늘 사람이 나왔는데 보고가 없습니다. "
+                        .'이대로 마감하면 종합보고서에서 그 몫이 통째로 빠진 채 원청에 나갑니다 — '
+                        .'사무·안전의 보고가 빠지면 제출물·인허가가 어디까지 갔는지 아무도 모릅니다.',
                         implode(', ', $trades),
                     ),
                     'action_url' => '/?view=opsroom',
