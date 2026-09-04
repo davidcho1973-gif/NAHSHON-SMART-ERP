@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Services\Push\WebPushSender;
+use App\Support\ReportSlot;
 use Illuminate\Support\Carbon;
 
 /**
@@ -218,7 +219,9 @@ class TradeReportReminderService
     }
 
     /**
-     * 그 공종에서 보고를 낼 수 있는 사람 — 알림을 켠 사람만.
+     * 그 자리에서 보고를 낼 수 있는 사람 — 알림을 켠 사람만.
+     *
+     * 공종이면 그 공종의 반장·기사, 부서(사무·안전 등)면 그 직책의 관리자(ReportSlot).
      *
      * @return array<int, User>
      */
@@ -226,11 +229,13 @@ class TradeReportReminderService
     {
         $userIds = PushSubscription::query()->distinct()->pluck('user_id');
 
-        $employeeIds = Employee::query()
-            ->where('site_id', $siteId)
-            ->where('role', $trade)
-            ->where('employment_status', 'active')
-            ->pluck('id');
+        $employeeIds = ReportSlot::filter(
+            Employee::query()
+                ->where('site_id', $siteId)
+                ->where('employment_status', 'active')
+                ->get(),
+            $trade,
+        )->pluck('id');
 
         return User::query()
             ->whereIn('id', $userIds)

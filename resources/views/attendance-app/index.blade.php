@@ -1034,8 +1034,8 @@
             '<label class="fld"><span>직책</span><select id="sl-pos">' + positions + '</select></label>' +
             '<label class="fld"><span>공종 <em>(선택)</em></span>' +
             '<input id="sl-trade" type="text" placeholder="예) Piping · Electrical"></label>' +
-            '<div class="fld-note">공종을 넣으면 「오늘 보고」에 <b>내 몫</b>이 생깁니다. ' +
-            '공정을 맡지 않으시면 비워 두세요.</div>' +
+            '<div class="fld-note">「오늘 보고」의 <b>내 자리</b>는 공종이 정하고, 공종이 없으면 직책이 정합니다 ' +
+            '(사무 · 안전 · 현장소장 · 기사). 공정을 맡지 않으시면 비워 두세요.</div>' +
             '<button type="button" class="btn go" id="sl-go">내 직원 정보 만들기</button>' +
             '<div class="fld-note" id="sl-msg"></div>' +
             '</div></div>';

@@ -162,15 +162,106 @@ class TradeReportTest extends TestCase
         $this->assertSame(1, DailyTradeReport::query()->count());
     }
 
-    public function test_someone_without_a_trade_gets_no_report_slot(): void
+    public function test_a_worker_with_neither_trade_nor_position_gets_no_report_slot(): void
     {
-        // 사무·관리는 낼 보고가 없다. 만들면 현황판에 낼 수 없는 줄이 하나 생긴다.
-        $office = Employee::create([
+        // 공종도 직책도 없는 작업자 — 그 사람의 일은 반장의 보고에 실린다. 자리를
+        // 만들면 현황판에 낼 수 없는 줄이 하나 생긴다.
+        $nobody = Employee::create([
             'company_id' => $this->company->id, 'site_id' => $this->site->id,
-            'name' => '사무원', 'employment_status' => 'active',
+            'name' => '작업자', 'employment_status' => 'active',
         ]);
 
-        $this->assertNull($this->service->forUserOrCreate($this->userFor($office), '2026-08-31'));
+        $this->assertNull($this->service->forUserOrCreate($this->userFor($nobody), '2026-08-31'));
+    }
+
+    /** 공종 없는 관리자 — 직책이 자리를 정한다. */
+    private function staff(string $name, ?string $position): Employee
+    {
+        return Employee::create([
+            'company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'name' => $name, 'position' => $position, 'employment_status' => 'active',
+            'employment_type' => Employee::TYPE_STAFF,
+        ]);
+    }
+
+    public function test_an_office_manager_gets_a_slot_named_by_their_position(): void
+    {
+        // 일일보고는 쓰는 곳이 아니라 모이는 곳이다. 사무관리자가 앱에서 올린 하루도
+        // 같은 장에 모여야 한다 — 공종이 없다고 빠지면 반쪽 보고서다.
+        $office = $this->staff('사무장', 'office');
+        $safety = $this->staff('안전', 'safety');
+        $super = $this->staff('소장', 'superintendent');
+        $engineer = $this->staff('공무', 'engineer');
+        $untitled = $this->staff('관리직', null);   // 직책이 비어 있어도 관리직이면 사무
+
+        $this->assertSame('사무', $this->service->forUserOrCreate($this->userFor($office), '2026-08-31')?->trade);
+        $this->assertSame('안전', $this->service->forUserOrCreate($this->userFor($safety), '2026-08-31')?->trade);
+        $this->assertSame('현장관리', $this->service->forUserOrCreate($this->userFor($super), '2026-08-31')?->trade);
+        $this->assertSame('공무', $this->service->forUserOrCreate($this->userFor($engineer), '2026-08-31')?->trade);
+        $this->assertSame('사무', $this->service->forUserOrCreate($this->userFor($untitled), '2026-08-31')?->trade);
+
+        $report = DailyTradeReport::query()->where('trade', '사무')->first();
+        $this->assertSame(DailyTradeReport::KIND_OFFICE, $report->kind, '현황판이 공종 줄과 갈라 그릴 수 있어야 한다');
+        // 사무장과 직책 없는 관리직은 같은 «사무» 한 장을 나눠 쓴다 — 부서 하나에 보고 하나.
+        $this->assertSame(4, DailyTradeReport::query()->count());
+    }
+
+    public function test_a_trade_wins_over_a_position(): void
+    {
+        // 반장 직책에 공종이 있으면 공종이 자리다 — 반장은 «반장» 보고가 아니라 «배관» 보고를 낸다.
+        $foreman = Employee::create([
+            'company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'name' => '배관반장', 'role' => 'Piping', 'position' => 'foreman',
+            'employment_status' => 'active', 'employment_type' => Employee::TYPE_DIRECT,
+        ]);
+
+        $report = $this->service->forUserOrCreate($this->userFor($foreman), '2026-08-31');
+
+        $this->assertSame('Piping', $report->trade);
+        $this->assertSame(DailyTradeReport::KIND_TRADE, $report->kind);
+    }
+
+    public function test_office_staff_who_clocked_in_are_expected_after_the_trades(): void
+    {
+        $this->clockIn($this->worker('덕트', 'HVAC'));
+        $this->clockIn($this->worker('배관', 'Piping'));
+        $this->clockIn($this->staff('사무장', 'office'));
+        $this->clockIn($this->staff('안전', 'safety'));
+        $this->staff('안 나온 소장', 'superintendent');   // 출근 안 함 — 기대 목록에 없다
+
+        // 공종은 가나다, 부서는 정해진 순서(사무·안전·현장관리·공무)로 뒤에 선다.
+        $this->assertSame(['HVAC', 'Piping', '사무', '안전'], $this->service->expectedTrades($this->site->id, '2026-08-31'));
+    }
+
+    public function test_the_office_row_on_the_board_is_marked_as_office_and_counts_its_people(): void
+    {
+        $this->clockIn($this->worker('배관', 'Piping'));
+        $office = $this->staff('사무장', 'office');
+        $this->clockIn($office);
+        $this->clockIn($this->staff('경리', 'office'));
+
+        $user = $this->userFor($office);
+        $report = $this->service->forUserOrCreate($user, '2026-08-31');
+        $this->entry($report);
+        $this->assertTrue($this->service->submit($user, '2026-08-31')['success']);
+
+        $board = $this->service->board($this->site->id, '2026-08-31');
+        $rows = collect($board['rows'])->keyBy('trade');
+
+        $this->assertSame('trade', $rows['Piping']['kind']);
+        $this->assertSame('office', $rows['사무']['kind']);
+        $this->assertSame(2, $rows['사무']['headcount'], '사무 자리에 든 사람 수 — 공종 칸이 아니라 직책으로 센다');
+        $this->assertTrue($rows['사무']['submitted']);
+        $this->assertSame(['Piping'], $board['missingTrades']);
+    }
+
+    public function test_the_missing_list_names_office_staff_who_worked_but_did_not_submit(): void
+    {
+        $this->clockIn($this->staff('사무장', 'office'));
+
+        $reminder = app(TradeReportReminderService::class);
+
+        $this->assertSame(['사무'], $reminder->missingTrades($this->site->id, '2026-08-31'));
     }
 
     public function test_reopening_requires_a_reason_and_reverts_the_status(): void

@@ -18,8 +18,14 @@ class DailyTradeReport extends Model
 
     public const STATUS_SUBMITTED = 'submitted';
 
+    /** 공종 보고 — 반장·기사의 몫. */
+    public const KIND_TRADE = 'trade';
+
+    /** 부서 보고 — 사무·안전·현장관리·공무처럼 공종이 없는 관리자의 몫. */
+    public const KIND_OFFICE = 'office';
+
     protected $fillable = [
-        'site_id', 'work_date', 'trade', 'status',
+        'site_id', 'work_date', 'trade', 'kind', 'status',
         'submitted_by_id', 'submitted_at', 'reopen_reason',
         'applied_count', 'held_count', 'reflected_at', 'reflection_note',
     ];

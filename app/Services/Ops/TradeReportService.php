@@ -11,10 +11,15 @@ use App\Models\OpsIntakeItem;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\Org;
+use App\Support\ReportSlot;
 use Illuminate\Support\Carbon;
 
 /**
  * 공종별 일일보고 — 반장의 몫을 만들고, 소장에게 누가 냈는지 보여 준다.
+ *
+ * «공종별» 이라 부르지만 자리는 공종만이 아니다. 공종이 없는 관리자(사무·안전·
+ * 현장관리·공무)도 직책으로 자기 자리를 갖는다(ReportSlot). 일일보고는 쓰는 곳이
+ * 아니라 <b>모이는 곳</b>이고, 모이는 곳에 사무의 하루가 빠지면 반쪽이다.
  *
  * ── 설계의 중심: <b>기대 목록을 출퇴근에서 뽑는다</b> ────────────────────
  * "오늘 어느 공종이 보고해야 하는가" 를 사람이 관리하게 하면 곧 안 맞는다. 대신
@@ -32,11 +37,24 @@ class TradeReportService
     private const DUE_HOUR_KEY = 'ops.trade_report_due_hour';
 
     /**
-     * 오늘 이 현장에서 보고가 있어야 하는 공종 — 출근 기록이 정본.
+     * 오늘 이 현장에서 보고가 있어야 하는 자리 — 출근 기록이 정본.
+     *
+     * 공종만이 아니다. 오늘 출근한 사무·안전·현장관리·공무도 자기 자리가 있다
+     * (ReportSlot). 그들의 하루가 빠진 마감 보고서는 현장 절반의 보고서다.
      *
      * @return array<int, string>
      */
     public function expectedTrades(int $siteId, string $workDate): array
+    {
+        return ReportSlot::keysOf($this->clockedIn($siteId, $workDate));
+    }
+
+    /**
+     * 오늘 이 현장에 출근한 사람들.
+     *
+     * @return \Illuminate\Support\Collection<int, Employee>
+     */
+    private function clockedIn(int $siteId, string $workDate): \Illuminate\Support\Collection
     {
         $employeeIds = AttendanceLog::query()
             ->where('site_id', $siteId)
@@ -47,23 +65,10 @@ class TradeReportService
             ->pluck('employee_id');
 
         if ($employeeIds->isEmpty()) {
-            return [];
+            return collect();
         }
 
-        return Employee::query()
-            ->whereIn('id', $employeeIds)
-            ->whereNotNull('role')
-            ->where('role', '!=', '')
-            // 원청 소속은 우리 공종이 아니다 — 그들의 보고를 우리가 낼 수 없다.
-            ->where(fn ($q) => $q->whereNull('employment_type')->orWhere('employment_type', '!=', Employee::TYPE_CLIENT))
-            ->distinct()
-            ->orderBy('role')
-            ->pluck('role')
-            ->map(fn ($r): string => trim((string) $r))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+        return Employee::query()->whereIn('id', $employeeIds)->get();
     }
 
     /**
@@ -113,14 +118,17 @@ class TradeReportService
             fn (DailyTradeReport $r): bool => $r->isSubmitted() || (int) ($r->batches_count ?? 0) > 0,
         );
 
-        $trades = collect($expected)->concat($real->keys())->unique()->sort()->values();
+        $trades = collect(ReportSlot::sort(collect($expected)->concat($real->keys())->all()));
+        $clockedIn = $this->clockedIn($siteId, $workDate);
 
-        $rows = $trades->map(function (string $trade) use ($reports, $siteId, $workDate, $tz): array {
+        $rows = $trades->map(function (string $trade) use ($reports, $clockedIn, $tz): array {
             $report = $reports->get($trade);
             $photos = $report ? $this->photoCount($report) : 0;
 
             return [
                 'trade' => $trade,
+                // 공종 줄인가 부서(사무·안전 등) 줄인가 — 현황판과 보고서가 둘을 갈라 그린다.
+                'kind' => $report?->kind ?: ReportSlot::kindOf($trade),
                 // 되돌리기가 이 번호로 걸린다 — 없으면 화면에서 되돌릴 방법이 없다.
                 'reportId' => $report?->id,
                 'status' => $report?->status ?? DailyTradeReport::STATUS_OPEN,
@@ -130,7 +138,7 @@ class TradeReportService
                 // 현장에서는 사람을 직원 이름으로 안다 — 계정 이름은 회사 메일 표기일 수 있다.
                 'submittedBy' => $report?->submittedBy?->employee?->name ?: $report?->submittedBy?->name,
                 'submittedAt' => $report?->submitted_at?->timezone($tz)?->format('H:i'),
-                'headcount' => $this->headcount($siteId, $workDate, $trade),
+                'headcount' => ReportSlot::filter($clockedIn, $trade)->count(),
                 // 제출이 곧 반영이다 — 몇 건이 ERP 로 넘어갔고 몇 건이 사람을 기다리는가.
                 'applied' => (int) ($report->applied_count ?? 0),
                 'held' => (int) ($report->held_count ?? 0),
@@ -189,40 +197,41 @@ class TradeReportService
      * 무언가를 <b>올리거나 제출할 때만</b> 부른다. 그때는 그 사람이 오늘 일했다는
      * 사실이 이미 증명된 셈이라 장을 만들어도 거짓이 되지 않는다.
      *
-     * 공종이 없는 사람(사무·관리 등)에게는 만들지 않는다 — 현황판에 낼 수 없는
-     * 줄이 하나 생긴다.
+     * 자리가 없는 사람에게는 만들지 않는다 — 현황판에 낼 수 없는 줄이 하나 생긴다.
+     * 자리는 공종이 정하고, 공종이 없으면 직책(사무·안전·현장관리·공무)이 정한다
+     * (ReportSlot). 공종도 직책도 없는 작업자의 일은 반장의 보고에 실린다.
      */
     public function forUserOrCreate(User $user, ?string $workDate = null): ?DailyTradeReport
     {
-        [$siteId, $trade, $workDate] = $this->slotFor($user, $workDate);
+        [$siteId, $trade, $workDate, $kind] = $this->slotFor($user, $workDate);
         if ($siteId === null) {
             return null;
         }
 
         return DailyTradeReport::query()->firstOrCreate(
             ['site_id' => $siteId, 'work_date' => $workDate, 'trade' => $trade],
-            ['status' => DailyTradeReport::STATUS_OPEN],
+            ['status' => DailyTradeReport::STATUS_OPEN, 'kind' => $kind],
         );
     }
 
     /**
-     * 이 사람의 오늘 보고가 놓일 자리 — 현장·공종·날짜.
+     * 이 사람의 오늘 보고가 놓일 자리 — 현장·열쇠(공종 또는 부서)·날짜·종류.
      *
-     * @return array{0: ?int, 1: string, 2: string}
+     * @return array{0: ?int, 1: string, 2: string, 3: string}
      */
     private function slotFor(User $user, ?string $workDate): array
     {
         $employee = $user->employee;
         $siteId = $employee?->site_id;
-        $trade = trim((string) ($employee->role ?? ''));
+        $slot = ReportSlot::of($employee);
 
-        if (! $employee || ! $siteId || $trade === '') {
-            return [null, '', (string) $workDate];
+        if (! $employee || ! $siteId || $slot === null) {
+            return [null, '', (string) $workDate, DailyTradeReport::KIND_TRADE];
         }
 
         $tz = $employee->site?->timezone ?: config('app.timezone');
 
-        return [$siteId, $trade, $workDate ?? Carbon::now($tz)->toDateString()];
+        return [$siteId, $slot['key'], $workDate ?? Carbon::now($tz)->toDateString(), $slot['kind']];
     }
 
     /**
@@ -272,7 +281,7 @@ class TradeReportService
     {
         $report = $this->forUserOrCreate($user, $workDate);
         if (! $report) {
-            return ['success' => false, 'error' => '담당 공정이 지정되어 있지 않습니다. 관리자에게 공정 지정을 요청해 주세요.'];
+            return ['success' => false, 'error' => '보고 자리가 없습니다. 직원 정보에 공종, 또는 직책(사무·안전·현장소장·기사)이 있어야 합니다. 인원 담당자에게 요청해 주세요.'];
         }
 
         if ($report->isSubmitted()) {
@@ -359,23 +368,6 @@ class TradeReportService
     public function dueHour(): int
     {
         return Org::int(self::DUE_HOUR_KEY, 17);
-    }
-
-    /** 그 공종으로 오늘 출근한 인원 수 — 현황판에서 "몇 명이 일했는데 보고가 없다" 를 보여준다. */
-    private function headcount(int $siteId, string $workDate, string $trade): int
-    {
-        $employeeIds = AttendanceLog::query()
-            ->where('site_id', $siteId)
-            ->where('attendance_date', $workDate)
-            ->where('event_type', 'clock_in')
-            ->where('status', '!=', 'rejected')
-            ->distinct()
-            ->pluck('employee_id');
-
-        return Employee::query()
-            ->whereIn('id', $employeeIds)
-            ->where('role', $trade)
-            ->count();
     }
 
     private function photoCount(DailyTradeReport $report): int

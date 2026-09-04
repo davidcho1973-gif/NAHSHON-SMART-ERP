@@ -34,7 +34,8 @@ class MobileOpsRoomController extends Controller
         $user = $request->user();
         $siteId = $user?->employee?->site_id;
 
-        // 오늘 내 몫 — 공종이 있는 사람에게만 만들어진다(사무·관리는 낼 보고가 없다).
+        // 오늘 내 몫 — 공종이 있으면 공종, 없으면 직책(사무·안전·현장관리·공무)이 자리다.
+        // 일일보고는 모이는 곳이라, 사무의 하루도 여기로 들어와야 한다.
         $report = $user instanceof User ? $this->tradeReports->forUser($user) : null;
 
         return view('attendance-app.ops-room', [

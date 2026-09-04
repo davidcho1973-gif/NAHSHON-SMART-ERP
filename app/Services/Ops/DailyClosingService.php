@@ -333,6 +333,7 @@ class DailyClosingService
             'held' => (int) ($board['held'] ?? 0),
             'rows' => array_map(fn (array $r): array => [
                 'trade' => $r['trade'],
+                'kind' => $r['kind'] ?? 'trade',
                 'submitted' => $r['submitted'],
                 'submittedBy' => $r['submittedBy'],
                 'submittedAt' => $r['submittedAt'],
