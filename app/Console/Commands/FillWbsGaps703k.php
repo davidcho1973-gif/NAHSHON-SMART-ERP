@@ -39,6 +39,32 @@ class FillWbsGaps703k extends Command
     /** @var array<string, WbsItem> activity_id → 항목 (기존 + 이번에 추가) */
     private array $byAid = [];
 
+    /**
+     * 새 활동을 매달 태스크를 찾는다.
+     *
+     * parent_node_no («3.1» 같은 트리 번호)를 먼저 본다. 예전에는 parent_task_id(자동증가 id)만
+     * 받았는데, 그 값은 트리를 다시 적재하면 통째로 바뀐다 — 같은 목록이 어제는 되고 오늘은
+     * «태스크가 아님» 으로 막힌다. 번호는 트리의 구조에서 나오므로 다시 적재해도 그대로다.
+     * id 는 옛 목록을 위해 남겨 두되 뒤에서 본다.
+     */
+    private function parentTask(array $op, string $project): ?WbsItem
+    {
+        $no = $op['parent_node_no'] ?? null;
+        if (is_string($no) && $no !== '') {
+            $byNo = WbsItem::query()->where('project_code', $project)
+                ->where('level', WbsItem::LEVEL_TASK)->where('node_no', $no)->first();
+            if ($byNo) {
+                return $byNo;
+            }
+        }
+
+        $id = $op['parent_task_id'] ?? null;
+
+        return is_int($id)
+            ? WbsItem::query()->where('project_code', $project)->where('level', WbsItem::LEVEL_TASK)->find($id)
+            : null;
+    }
+
     public function handle(CpmEngine $engine): int
     {
         // 목록은 다른 703K 적재 자료와 같은 자리에 둔다 — 로컬에서 검증한 그 파일이 배포에 실려
@@ -72,7 +98,7 @@ class FillWbsGaps703k extends Command
         }
 
         // ── 1. 적용 전 검증 — 순환·고아 선행이 하나라도 있으면 아무것도 바꾸지 않는다.
-        $problems = $this->validate($ops);
+        $problems = $this->validate($ops, $project);
         if ($problems !== []) {
             $this->error('적용하지 않았습니다 — 목록에 문제가 있습니다:');
             foreach ($problems as $p) {
@@ -107,7 +133,7 @@ class FillWbsGaps703k extends Command
                 $cpm = $engine->recompute($project);
 
                 if ($dry) {
-                    throw new DryRunRollback();
+                    throw new DryRunRollback;
                 }
             });
         } catch (DryRunRollback) {
@@ -161,7 +187,7 @@ class FillWbsGaps703k extends Command
      * @param  array<int, array<string, mixed>>  $ops
      * @return array<int, string>
      */
-    private function validate(array $ops): array
+    private function validate(array $ops, string $project): array
     {
         $problems = [];
         $preds = [];
@@ -185,8 +211,8 @@ class FillWbsGaps703k extends Command
                     $problems[] = "#{$i}: 같은 코드를 두 번 추가 «{$aid}»";
                 } else {
                     $adding[$aid] = true;
-                    if (! is_int($op['parent_task_id'] ?? null) || ! WbsItem::query()->whereKey($op['parent_task_id'])->where('level', WbsItem::LEVEL_TASK)->exists()) {
-                        $problems[] = "#{$i} {$aid}: parent_task_id 가 태스크가 아님";
+                    if (! $this->parentTask($op, $project)) {
+                        $problems[] = "#{$i} {$aid}: 부모 태스크를 못 찾음 (parent_node_no «".($op['parent_node_no'] ?? '없음').'», parent_task_id «'.($op['parent_task_id'] ?? '없음').'»)';
                     }
                 }
                 $preds[$aid] = array_map('strtoupper', (array) ($op['preds'] ?? []));
@@ -261,7 +287,10 @@ class FillWbsGaps703k extends Command
             return;
         }
 
-        $task = WbsItem::query()->findOrFail((int) $op['parent_task_id']);
+        $task = $this->parentTask($op, $project);
+        if (! $task) {
+            throw new RuntimeException("{$aid}: 부모 태스크를 못 찾았습니다.");
+        }
         $siblings = WbsItem::query()->where('parent_id', $task->id)->count();
         $days = max(0, (int) ($op['days'] ?? 1));
         $preds = array_values(array_map('strtoupper', (array) ($op['preds'] ?? [])));
@@ -470,5 +499,4 @@ class FillWbsGaps703k extends Command
     }
 }
 
-/** dry-run 되돌림용 — 예외가 트랜잭션을 롤백한다. */
-final class DryRunRollback extends RuntimeException {}
+// dry-run 되돌림 신호는 DryRunRollback.php 한 자리에 있다.

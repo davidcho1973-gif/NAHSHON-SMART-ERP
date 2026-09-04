@@ -1,54 +1,102 @@
 {
-  "source": "원청 공정표 대조 — 바닥 양생을 구역별로 분할, K030 선행 교정 (2026-09-03)",
-  "basis": "시방 09 6723(수지바닥)은 대기일 없이 제조사 지침 위임 → Sika Ucrete: green concrete 7~10일 시공 가능. 시방 09 6519(VCT) 3.1.C «타설 28일 후 F1869·F2170·pH 시험». KCC Unipoxy 데이터시트 «28일 양생·수분 6% 미만». 신설 콘크리트는 SOG 인필 300SF·옥외 슬래브 110SF·트렌치 인필뿐이라 28일 시계는 그 밑에 새 콘크리트가 있는 실에서만 돈다.",
-  "ops": [
-    {
-      "gap": 101, "op": "modify", "activity_id": "S030",
-      "rename_to": "콘크리트 양생 — Ucrete 구역(주방 100·세척 109) 10일",
-      "name_en": "Concrete Cure — Ucrete Zone (10 d, green concrete per Sika)",
-      "trade": "구조", "new_days": 10, "preds": ["S020"], "elapsed": true,
-      "hold_point": true,
-      "hold_note": "Sika 조건 확인 전 완료 금지: 양생제 금지(습윤·시트 양생, 03 3000 3.11.E), 10일차 현장양생 공시체 ≥3,625 psi(바탕 4,500 psi + SCM 배합은 초기강도 느림), 수축 균열 확인(최소 3일), Sika 서면 승인, 사전회의(A080) 30일 전 완료",
-      "basis": "구역별 분할 — 시방 09 6723 대기일 없음·제조사 위임; Sika 공식 «green concrete 7~10일, 28일 불필요»; 주공정 위의 28일 중 Ucrete 구역은 과보수였다"
-    },
-    {
-      "gap": 101, "op": "add", "activity_id": "S080", "parent_task_id": 33,
-      "name": "콘크리트 양생 — 에폭시·VCT 구역(로비 110·화장실 106/107·사무실 108) 28일",
-      "name_en": "Concrete Cure — Epoxy/VCT Zones (28 d)",
-      "trade": "구조", "days": 28, "preds": ["S020"], "elapsed": true,
-      "hold_point": true,
-      "hold_note": "28일은 «신설 콘크리트가 있는 실» 에만 적용 — 로비·화장실·사무실 바닥이 기존 슬래브이고 인필 스트립이 없으면 도면 S01-01·P201 로 실별 확인 후 이 활동을 단축·해제할 수 있다. KCC Unipoxy: 28일 양생(20°C/<80% RH)·수분 6% 미만. VCT 09 6519 3.1.C: 타설 28일 후 시험",
-      "submittal_sections": ["09 6519", "09 6723.1"],
-      "basis": "구역별 분할 — KCC 데이터시트 28일 필수, 시방 09 6519 28일 강제; 우리 BOQ 에폭시 로비 1,497+화장실 137 SF, VCT 사무실 188 SF"
-    },
-    {
-      "gap": 101, "op": "modify", "activity_id": "B040",
-      "rename_to": "바탕 확인 — Ucrete 구역(수분계·강도 공시체·양생제 없음·Sika 서면 승인)",
-      "name_en": "Substrate Verification — Ucrete Zone",
-      "trade": "건축", "new_days": 1, "preds": ["S030"],
-      "hold_point": true,
-      "hold_note": "Sika 서면 승인·10일차 공시체 강도 보고서·표면 수분계(Tramex) 기록 확인 전 B050 착수 금지 — 28일 RH/pH 시험은 에폭시·VCT 구역(B150)의 것",
-      "basis": "구역별 분할 — Ucrete 는 F2170 100% 미만 허용(Sika), 28일 RH·pH 시험 요건은 09 6519(VCT)의 것이라 Ucrete 구역에 걸 이유가 없다"
-    },
-    {
-      "gap": 101, "op": "add", "activity_id": "B150", "parent_task_id": 54,
-      "name": "바닥 수분·알칼리 시험 — 에폭시·VCT 구역 (F1869·F2170·pH, 타설 28일 후)",
-      "name_en": "Floor Moisture & pH Testing — Epoxy/VCT Zones (28 d after placement)",
-      "trade": "건축", "days": 3, "preds": ["S080"],
-      "hold_point": true,
-      "hold_note": "09 6519 3.1.C: 염화칼슘(F1869) 1,000sf당 3회+, 프로브 RH(F2170) 85% 이하, pH 9.0 이하; 결과·위치도 Consultant 제출·승인(제출물 대장 #32, 게이트) 전 B060 착수 금지. 48시간 사용조건(HVAC 가동) 선행",
-      "submittal_sections": ["09 6519"],
-      "basis": "구역별 분할 — 시방 09 6519 3.1.C·3.1.C.4·3.2.G, 제출물 #32 «결과 승인 전 작업 금지»"
-    },
-    {
-      "gap": 101, "op": "modify", "activity_id": "B060",
-      "trade": "건축", "preds": ["B150", "A090"],
-      "basis": "구역별 분할 — VCT·에폭시(로비·화장실·사무실)는 주방 Ucrete(B050)와 다른 실이라 그것을 기다릴 이유가 없다; 자기 구역 시험(B150) 뒤에 온다"
-    },
-    {
-      "gap": 102, "op": "modify", "activity_id": "K030",
-      "trade": "주방", "preds": ["K010", "B050", "A110"],
-      "basis": "K030 선행 교정 — 조리·세척 라인 기기는 주방 바닥(Ucrete B050) 위에 놓인다. 사무실·로비 바닥(B060)을 기다리던 링크는 잘못 걸린 것"
-    }
-  ]
+ "source": "원청 공정표 대조 — 바닥 양생을 구역별로 분할, K030 선행 교정 (2026-09-03)",
+ "basis": "시방 09 6723(수지바닥)은 대기일 없이 제조사 지침 위임 → Sika Ucrete: green concrete 7~10일 시공 가능. 시방 09 6519(VCT) 3.1.C «타설 28일 후 F1869·F2170·pH 시험». KCC Unipoxy 데이터시트 «28일 양생·수분 6% 미만». 신설 콘크리트는 SOG 인필 300SF·옥외 슬래브 110SF·트렌치 인필뿐이라 28일 시계는 그 밑에 새 콘크리트가 있는 실에서만 돈다.",
+ "ops": [
+  {
+   "gap": 101,
+   "op": "modify",
+   "activity_id": "S030",
+   "rename_to": "콘크리트 양생 — Ucrete 구역(주방 100·세척 109) 10일",
+   "name_en": "Concrete Cure — Ucrete Zone (10 d, green concrete per Sika)",
+   "trade": "구조",
+   "new_days": 10,
+   "preds": [
+    "S020"
+   ],
+   "elapsed": true,
+   "hold_point": true,
+   "hold_note": "Sika 조건 확인 전 완료 금지: 양생제 금지(습윤·시트 양생, 03 3000 3.11.E), 10일차 현장양생 공시체 ≥3,625 psi(바탕 4,500 psi + SCM 배합은 초기강도 느림), 수축 균열 확인(최소 3일), Sika 서면 승인, 사전회의(A080) 30일 전 완료",
+   "basis": "구역별 분할 — 시방 09 6723 대기일 없음·제조사 위임; Sika 공식 «green concrete 7~10일, 28일 불필요»; 주공정 위의 28일 중 Ucrete 구역은 과보수였다"
+  },
+  {
+   "gap": 101,
+   "op": "add",
+   "activity_id": "S080",
+   "parent_task_id": 33,
+   "name": "콘크리트 양생 — 에폭시·VCT 구역(로비 110·화장실 106/107·사무실 108) 28일",
+   "name_en": "Concrete Cure — Epoxy/VCT Zones (28 d)",
+   "trade": "구조",
+   "days": 28,
+   "preds": [
+    "S020"
+   ],
+   "elapsed": true,
+   "hold_point": true,
+   "hold_note": "28일은 «신설 콘크리트가 있는 실» 에만 적용 — 로비·화장실·사무실 바닥이 기존 슬래브이고 인필 스트립이 없으면 도면 S01-01·P201 로 실별 확인 후 이 활동을 단축·해제할 수 있다. KCC Unipoxy: 28일 양생(20°C/<80% RH)·수분 6% 미만. VCT 09 6519 3.1.C: 타설 28일 후 시험",
+   "submittal_sections": [
+    "09 6519",
+    "09 6723.1"
+   ],
+   "basis": "구역별 분할 — KCC 데이터시트 28일 필수, 시방 09 6519 28일 강제; 우리 BOQ 에폭시 로비 1,497+화장실 137 SF, VCT 사무실 188 SF",
+   "parent_node_no": "3.1"
+  },
+  {
+   "gap": 101,
+   "op": "modify",
+   "activity_id": "B040",
+   "rename_to": "바탕 확인 — Ucrete 구역(수분계·강도 공시체·양생제 없음·Sika 서면 승인)",
+   "name_en": "Substrate Verification — Ucrete Zone",
+   "trade": "건축",
+   "new_days": 1,
+   "preds": [
+    "S030"
+   ],
+   "hold_point": true,
+   "hold_note": "Sika 서면 승인·10일차 공시체 강도 보고서·표면 수분계(Tramex) 기록 확인 전 B050 착수 금지 — 28일 RH/pH 시험은 에폭시·VCT 구역(B150)의 것",
+   "basis": "구역별 분할 — Ucrete 는 F2170 100% 미만 허용(Sika), 28일 RH·pH 시험 요건은 09 6519(VCT)의 것이라 Ucrete 구역에 걸 이유가 없다"
+  },
+  {
+   "gap": 101,
+   "op": "add",
+   "activity_id": "B150",
+   "parent_task_id": 54,
+   "name": "바닥 수분·알칼리 시험 — 에폭시·VCT 구역 (F1869·F2170·pH, 타설 28일 후)",
+   "name_en": "Floor Moisture & pH Testing — Epoxy/VCT Zones (28 d after placement)",
+   "trade": "건축",
+   "days": 3,
+   "preds": [
+    "S080"
+   ],
+   "hold_point": true,
+   "hold_note": "09 6519 3.1.C: 염화칼슘(F1869) 1,000sf당 3회+, 프로브 RH(F2170) 85% 이하, pH 9.0 이하; 결과·위치도 Consultant 제출·승인(제출물 대장 #32, 게이트) 전 B060 착수 금지. 48시간 사용조건(HVAC 가동) 선행",
+   "submittal_sections": [
+    "09 6519"
+   ],
+   "basis": "구역별 분할 — 시방 09 6519 3.1.C·3.1.C.4·3.2.G, 제출물 #32 «결과 승인 전 작업 금지»",
+   "parent_node_no": "6.1"
+  },
+  {
+   "gap": 101,
+   "op": "modify",
+   "activity_id": "B060",
+   "trade": "건축",
+   "preds": [
+    "B150",
+    "A090"
+   ],
+   "basis": "구역별 분할 — VCT·에폭시(로비·화장실·사무실)는 주방 Ucrete(B050)와 다른 실이라 그것을 기다릴 이유가 없다; 자기 구역 시험(B150) 뒤에 온다"
+  },
+  {
+   "gap": 102,
+   "op": "modify",
+   "activity_id": "K030",
+   "trade": "주방",
+   "preds": [
+    "K010",
+    "B050",
+    "A110"
+   ],
+   "basis": "K030 선행 교정 — 조리·세척 라인 기기는 주방 바닥(Ucrete B050) 위에 놓인다. 사무실·로비 바닥(B060)을 기다리던 링크는 잘못 걸린 것"
+  }
+ ]
 }
