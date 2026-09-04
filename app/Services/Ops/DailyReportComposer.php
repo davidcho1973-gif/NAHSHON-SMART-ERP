@@ -230,6 +230,30 @@ class DailyReportComposer
             }
         }
 
+        // ── 사무 업무: 제출물·청구·인허가·인사·행정. 현장 실적과 같은 무게로 싣는다 —
+        // 후드 샵드로잉이 안 나간 날은 «배관 60%» 보다 그것이 준공을 정한다.
+        $office = $m['office'] ?? [];
+        if (($office['items'] ?? []) !== []) {
+            $body .= $this->section('사무 업무', 'Office & Administration — '
+                .(int) ($office['total'] ?? 0).'건'
+                .((int) ($office['applied'] ?? 0) > 0 ? ' · 반영 '.(int) $office['applied'] : '')
+                .((int) ($office['held'] ?? 0) > 0 ? ' · 확인 대기 '.(int) $office['held'] : ''));
+            $body .= $this->table(
+                ['구분 Type', '내용 Item', '대상 Target', '상태 Status', '보고자 Reported by'],
+                array_map(fn (array $o): array => [
+                    (string) ($o['label'] ?? ''),
+                    (string) ($o['summary'] ?? ''),
+                    (string) ($o['target'] ?? ''),
+                    (string) ($o['state'] ?? ''),
+                    trim((string) ($o['dept'] ?? '').' '.(string) ($o['reportedBy'] ?? '')),
+                ], $office['items']),
+                ['90px', null, '120px', '70px', '110px'],
+            );
+            if (filled($n['officeNote'] ?? null)) {
+                $body .= $this->paragraph((string) $n['officeNote']);
+            }
+        }
+
         // ── 오늘 한 일: 현장이 쓴 것이 먼저, AI 가 집계에서 찾아낸 것이 뒤.
         $done = [];
         if (filled($f['workToday'] ?? null)) {
@@ -319,7 +343,7 @@ class DailyReportComposer
         return [
             'subject' => $subject,
             'html' => $this->wrap('일일 작업보고서', 'DAILY CONSTRUCTION REPORT', $siteName, $date, $body, $report, 'DCR'),
-            'text' => $this->plainClosing($n, $f, $labor, $siteName, $date, $trades, $schedule),
+            'text' => $this->plainClosing($n, $f, $labor, $siteName, $date, $trades, $schedule, $m['office'] ?? []),
         ];
     }
 
@@ -482,7 +506,7 @@ class DailyReportComposer
      * @param  array<string, mixed>  $trades
      * @param  array<string, mixed>  $schedule
      */
-    private function plainClosing(array $n, array $f, array $labor, string $siteName, string $date, array $trades = [], array $schedule = []): string
+    private function plainClosing(array $n, array $f, array $labor, string $siteName, string $date, array $trades = [], array $schedule = [], array $office = []): string
     {
         $out = ["[{$siteName}] 일일 작업보고서 — {$date}", ''];
 
@@ -515,6 +539,24 @@ class DailyReportComposer
             }
             if (($trades['missingTrades'] ?? []) !== []) {
                 $out[] = '  ※ 미제출: '.implode(', ', $trades['missingTrades']);
+            }
+            $out[] = '';
+        }
+
+        // 사무 업무 — HTML 본문과 같은 내용. 평문만 보는 사람에게도 제출물이 나갔는지 보여야 한다.
+        if (($office['items'] ?? []) !== []) {
+            $out[] = sprintf('■ 사무 업무 (%d건%s%s)', (int) ($office['total'] ?? 0),
+                (int) ($office['applied'] ?? 0) > 0 ? ' · 반영 '.(int) $office['applied'] : '',
+                (int) ($office['held'] ?? 0) > 0 ? ' · 확인 대기 '.(int) $office['held'] : '');
+            foreach ($office['items'] as $o) {
+                $out[] = sprintf('- [%s] %s%s (%s)',
+                    (string) ($o['label'] ?? ''),
+                    (string) ($o['summary'] ?? ''),
+                    ($o['target'] ?? '') ? ' — '.$o['target'] : '',
+                    (string) ($o['state'] ?? ''));
+            }
+            if (filled($n['officeNote'] ?? null)) {
+                $out[] = (string) $n['officeNote'];
             }
             $out[] = '';
         }

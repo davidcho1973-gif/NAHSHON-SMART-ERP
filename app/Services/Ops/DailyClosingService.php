@@ -229,6 +229,11 @@ class DailyClosingService
             // ── 공종별 일일보고. 각 반장이 자기 몫으로 낸 것과, 안 낸 공종.
             'tradeReports' => $trades['board'],
 
+            // ── 사무·관리자의 하루. 제출물·청구·인허가·인사·행정 — 현장의 «몇 % 했다» 와
+            // 나란히 놓여야 «오늘 무엇이 막혔는가» 가 보인다(후드 샵드로잉 미제출은
+            // 공정표의 K050 착수 위험이다). 이 블록이 없으면 보고서는 현장 절반이다.
+            'office' => $this->officeSummary($items, $trades['byBatch']),
+
             // 현장 공정률 — 공정표에서 계산한 값(진척률의 정본 산식). 현장이 손으로 적은
             // field.progressRate 와 <b>나란히</b> 둔다. 둘을 하나로 합치지 않는 이유는
             // 어긋날 때가 곧 관리 포인트이기 때문이다(보고 70% / 공정표 55%).
@@ -245,6 +250,54 @@ class DailyClosingService
             // 사람이 본 것이라 이 보고서에서 가장 1차 사실에 가깝고, AI 서술은 이걸
             // 다시 쓰는 게 아니라 근거로 삼는다.
             'field' => $report && $report->hasFieldReport() ? $report->fieldReport() : null,
+        ];
+    }
+
+    /**
+     * 사무·관리자가 오늘 올린 것 — 마감이 싣는 모양으로.
+     *
+     * 제출물 상태 변화는 ERP 로 넘어갔는지(반영)와 사람을 기다리는지(확인 대기)를
+     * 함께 적고, 회의·인허가·인사처럼 어느 표로도 가지 않는 것은 «참고» 로 남긴다.
+     * 어느 쪽이든 보고서에서 사라지면 안 된다 — 사무장이 올린 하루가 그것뿐이다.
+     *
+     * @param  Collection<int, OpsIntakeItem>  $items
+     * @param  array<int, array{trade: string, by: ?string}>  $byBatch
+     * @return array{total: int, applied: int, held: int, byCategory: array<string, int>, items: array<int, array<string, mixed>>}
+     */
+    private function officeSummary($items, array $byBatch): array
+    {
+        $office = $items->filter(fn (OpsIntakeItem $i): bool => in_array($i->category, OpsIntakeItem::OFFICE_CATEGORIES, true))
+            ->sortBy('id')->values();
+
+        $state = function (OpsIntakeItem $i): string {
+            if ($i->status === 'applied') {
+                return '반영';
+            }
+            // 제출물·청구는 사람이 눌러야 ERP 로 가는 것이 남아 있을 수 있다. 나머지는
+            // 애초에 반영 대상이 아니라 «확인 대기» 로 부르면 영원히 대기다.
+            if (in_array($i->category, ['submittal', 'billing'], true) && in_array($i->status, ['pending', 'needs_input'], true)) {
+                return '확인 대기';
+            }
+
+            return '참고';
+        };
+
+        $rows = $office->map(fn (OpsIntakeItem $i): array => [
+            'category' => $i->category,
+            'label' => $i->categoryLabel(),
+            'summary' => (string) $i->summary,
+            'target' => $i->target_name ?: $i->target_code,
+            'state' => $state($i),
+            'dept' => $byBatch[$i->ops_intake_batch_id]['trade'] ?? null,
+            'reportedBy' => $byBatch[$i->ops_intake_batch_id]['by'] ?? null,
+        ])->all();
+
+        return [
+            'total' => count($rows),
+            'applied' => count(array_filter($rows, fn (array $r): bool => $r['state'] === '반영')),
+            'held' => count(array_filter($rows, fn (array $r): bool => $r['state'] === '확인 대기')),
+            'byCategory' => $office->groupBy('category')->map->count()->all(),
+            'items' => $rows,
         ];
     }
 
@@ -633,6 +686,16 @@ class DailyClosingService
 3-3. `schedule.rate` 는 **공정표에서 계산된** 현장 공정률이고, `field.progressRate` 는
    현장이 손으로 적은 진도율입니다. 둘 다 있으면 progressNote 에 **둘 다** 쓰고,
    차이가 크면(10%p 이상) 그 사실을 짚으세요. 둘을 평균 내거나 하나만 고르지 마세요.
+3-4. `office` 는 **사무·관리자(사무·안전·현장관리·공무)가 오늘 올린 보고**입니다 — 제출물·
+   청구·인허가·인사·행정. 현장의 «몇 % 했다» 와 같은 무게로 다루세요.
+   - `office.items[]` 를 officeNote 에 한 문단으로 정리하세요(무엇을 냈고, 무엇이 회신을
+     기다리고, 무엇이 승인됐는가). 비어 있으면 "사무 보고 없음".
+   - `state` 가 «확인 대기» 인 항목(승인·반려 회신, 청구 금액)은 attention 에 쓰세요 —
+     사람이 문서를 보고 눌러야 ERP 에 들어갑니다.
+   - **현장과 사무를 한데 놓고 보세요.** 제출물이 안 나갔거나 반려됐으면 그것이 어느
+     공정을 막는지(`progress`·`actions.blockers` 와 대조) summary 와 issues 에 쓰세요.
+     예: "후드 샵드로잉 미제출 — K050 착수 위험". 이 연결이 이 보고서의 핵심 가치입니다.
+   - `office.total` 이 0 이면 그날 사무 보고가 없다는 뜻입니다. 억지로 만들지 마세요.
 3-1. `actions` 는 공정·자재·인원 어디에도 안 들어가는 실무 항목입니다(원청 지시, 승인,
    의사결정, 준비물). **여기 있는 내용을 반드시 보고서에 반영하세요.**
    - `actions.doneToday`  → done 배열(오늘 한 일)에 넣으세요
@@ -647,6 +710,7 @@ class DailyClosingService
 - summary     : 3~5문장 총평. 인원·진도·자재를 아우를 것
 - laborNote   : 인원에 대한 한 문단. gap 이 있으면 반드시 언급
 - progressNote: 공정 진행에 대한 한 문단. 없으면 "보고된 진도 없음"
+- officeNote  : 사무 업무(제출물·청구·인허가·인사·행정)에 대한 한 문단. 없으면 "사무 보고 없음"
 - issues      : 문자열 배열. 오늘의 이슈·위험·지연 요인. 없으면 빈 배열
 - tomorrow    : 문자열 배열. 내일 확인·조치가 필요한 일. 없으면 빈 배열
 - attention   : 문자열 배열. 관리자가 **오늘 안에** 확인해야 할 것(미퇴근, 미확인 인원, 대기 중인 반영 등)
@@ -660,6 +724,7 @@ PROMPT;
                 'summary' => ['type' => 'string'],
                 'laborNote' => ['type' => 'string'],
                 'progressNote' => ['type' => 'string'],
+                'officeNote' => ['type' => 'string'],
                 'issues' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'tomorrow' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'attention' => ['type' => 'array', 'items' => ['type' => 'string']],
@@ -682,6 +747,7 @@ PROMPT;
                 'summary' => '',
                 'laborNote' => '',
                 'progressNote' => '',
+                'officeNote' => '',
                 'issues' => [],
                 'tomorrow' => [],
                 'attention' => [],

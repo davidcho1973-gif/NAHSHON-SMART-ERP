@@ -8967,7 +8967,8 @@
               : '<span style="color:var(--status-danger);font-weight:700">미제출</span>';
             var said = (t.highlights || []).slice(0, 3).map(opsEsc).join(' · ');
             return '<tr style="border-bottom:1px solid var(--border-subtle)' + (ok ? '' : ';background:rgba(239,68,68,.06)') + '">' +
-              '<td style="padding:7px 0;font-size:12px;font-weight:700;white-space:nowrap">' + opsEsc(t.trade) + '</td>' +
+              '<td style="padding:7px 0;font-size:12px;font-weight:700;white-space:nowrap">' + opsEsc(t.trade) +
+                (t.kind === 'office' ? ' <span style="font-weight:400;color:var(--text-tertiary)">부서</span>' : '') + '</td>' +
               '<td style="padding:7px 8px;font-size:12px;white-space:nowrap">' + badge +
                 (t.submittedAt ? ' <span style="color:var(--text-tertiary)">' + opsEsc(t.submittedAt) + '</span>' : '') + '</td>' +
               '<td style="padding:7px 8px;font-size:12px;color:var(--text-secondary);white-space:nowrap">' +
@@ -8981,6 +8982,30 @@
             (tr.submitted || 0) + ' / ' + (tr.total || 0) + ' 제출' +
             (tr.missingTrades && tr.missingTrades.length ? ' · 미제출 ' + tr.missingTrades.map(opsEsc).join(', ') : '') +
             '</span></div><table style="width:100%;border-collapse:collapse">' + rows + '</table></div>';
+        }
+
+        // ── 사무 업무. 제출물·청구·인허가·인사·행정 — 현장 실적과 같은 무게로.
+        // 옛 보고서에는 이 블록이 없다(키가 없으면 아무것도 안 그린다).
+        var office = m.office || {};
+        function officeBlock() {
+          if (!office.items || !office.items.length) return '';
+          var stateColor = { '반영': 'var(--status-success)', '확인 대기': '#b45309', '참고': 'var(--text-tertiary)' };
+          var rows = office.items.map(function (o) {
+            return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
+              '<td style="padding:7px 0;font-size:12px;font-weight:700;white-space:nowrap">' + opsEsc(o.label || '') + '</td>' +
+              '<td style="padding:7px 8px;font-size:12px;color:var(--text-secondary);line-height:1.6">' + opsEsc(o.summary || '') +
+                (o.target ? ' <span style="color:var(--text-tertiary)">— ' + opsEsc(o.target) + '</span>' : '') + '</td>' +
+              '<td style="padding:7px 8px;font-size:12px;white-space:nowrap;font-weight:700;color:' + (stateColor[o.state] || 'var(--text-secondary)') + '">' + opsEsc(o.state || '') + '</td>' +
+              '<td style="padding:7px 0;font-size:11.5px;color:var(--text-tertiary);white-space:nowrap">' +
+                opsEsc([o.dept, o.reportedBy].filter(Boolean).join(' · ')) + '</td></tr>';
+          }).join('');
+          return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:5px">' +
+            '사무 업무 <span style="font-weight:400;color:var(--text-tertiary)">' + (office.total || 0) + '건' +
+            (office.applied ? ' · 반영 ' + office.applied : '') +
+            (office.held ? ' · <span style="color:#b45309">확인 대기 ' + office.held + '</span>' : '') +
+            '</span></div><table style="width:100%;border-collapse:collapse">' + rows + '</table>' +
+            (n.officeNote ? '<div style="font-size:12.5px;line-height:1.7;color:var(--text-secondary);margin-top:6px;white-space:pre-line">' + opsEsc(n.officeNote) + '</div>' : '') +
+            '</div>';
         }
 
         document.getElementById('ops-result').innerHTML =
@@ -9008,6 +9033,8 @@
           (n.summary ? '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-line;margin-bottom:6px">' + opsEsc(n.summary) + '</div>' : '') +
 
           tradeBlock() +
+
+          officeBlock() +
 
           (byCompany ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;margin-bottom:5px">업체별 출역</div>' +
             '<table style="width:100%;border-collapse:collapse">' + byCompany + '</table></div>' : '') +
