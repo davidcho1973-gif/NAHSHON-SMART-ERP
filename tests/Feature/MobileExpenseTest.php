@@ -709,6 +709,28 @@ class MobileExpenseTest extends TestCase
         Storage::disk('public')->assertMissing('receipts/delete-me.png');
     }
 
+    public function test_the_erp_finance_screen_gets_a_json_answer_when_it_deletes(): void
+    {
+        // ERP 재무 화면은 fetch 로 지운다. 리다이렉트를 돌려주면 fetch 가 그것을 따라가
+        // «목록 페이지» 의 결과를 삭제의 결과로 읽는다 — 그 페이지가 500 이면 삭제는 됐는데
+        // «실패» 가 뜨고, 다시 누르면 404 다(이미 없으니까). 삭제의 성패는 삭제만 말한다.
+        $expense = MobileExpense::create([
+            'company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'employee_id' => $this->employee->id, 'payment_type' => 'personal',
+            'category' => 'Office Supplies', 'description' => 'Printer paper',
+            'amount' => 45.99, 'expense_date' => '2026-06-21', 'status' => 'pending',
+        ]);
+
+        $res = $this->actingAs($this->user)->deleteJson(route('mobile-expense.destroy', $expense));
+
+        $res->assertOk()->assertJson(['success' => true, 'id' => $expense->id]);
+        $this->assertDatabaseMissing('mobile_expenses', ['id' => $expense->id]);
+
+        // 이미 지워진 것을 다시 지우면 404 도 JSON 으로 온다 — 화면이 HTML 을 읽다 죽지 않는다.
+        $this->actingAs($this->user)->deleteJson(route('mobile-expense.destroy', $expense->id))
+            ->assertNotFound()->assertHeader('content-type', 'application/json');
+    }
+
     public function test_employee_cannot_delete_another_employee_expense(): void
     {
         $otherEmployee = Employee::create([

@@ -305,7 +305,15 @@ class MobileExpenseController extends Controller
             ->with('success', 'Expense report updated successfully.');
     }
 
-    public function destroy(MobileExpense $expense)
+    /**
+     * 삭제. 화면(폼)이 부르면 목록으로 돌아가고, ERP 재무 화면(fetch)이 부르면 JSON 으로 답한다.
+     *
+     * 예전에는 누가 부르든 목록 페이지로 리다이렉트했다. fetch 는 리다이렉트를 따라가
+     * <b>목록 페이지의 결과</b>를 삭제의 결과로 읽는다 — 그 페이지가 500 이면 삭제는
+     * 이미 됐는데도 «삭제에 실패했습니다» 가 뜨고, 목록은 안 바뀌고, 다시 누르면 404
+     * (이미 없으니까). 2026-09-04 나손에서 실제로 난 일이다. 삭제의 성패는 삭제만 말해야 한다.
+     */
+    public function destroy(Request $request, MobileExpense $expense)
     {
         abort_unless($this->canModifyExpense($expense), 403);
 
@@ -315,6 +323,10 @@ class MobileExpenseController extends Controller
         }
 
         $expense->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => '삭제했습니다.', 'id' => $expense->id]);
+        }
 
         return redirect()->route('mobile-expense.index')
             ->with('success', 'Expense report deleted successfully.');
