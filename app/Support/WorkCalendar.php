@@ -26,15 +26,28 @@ class WorkCalendar
     /** @var array<string, true> */
     private array $holidays;
 
+    /**
+     * 회사가 휴일을 적어 두지 않았을 때 — 미국 현장 기본 휴일을 «물어본 해» 마다 만든다.
+     *
+     * 처음에는 «올해와 내년» 만 만들어 두었는데, 그러면 답이 오늘 날짜에 따라 달라진다.
+     * 2028년 공정표를 올해 세우면 2028년 노동절이 근무일로 잡히고, 같은 공정표를 내년에
+     * 다시 계산하면 하루가 밀린다. 시험도 마찬가지로 해가 바뀌면 깨졌다. 달력은 «언제
+     * 물었는가» 가 아니라 «어느 날인가» 만으로 답해야 한다.
+     *
+     * @var array<int, true> 이미 만든 해
+     */
+    private array $builtYears = [];
+
+    private bool $useDefaults;
+
     private int $workweek;
 
     public function __construct(?array $holidays = null, ?int $workweek = null)
     {
         $list = $holidays ?? config('org.holidays');
-        if (! is_array($list) || $list === []) {
-            $list = self::defaultUsHolidays((int) date('Y'), (int) date('Y') + 1);
-        }
-        $this->holidays = array_fill_keys(array_map(
+        $this->useDefaults = ! is_array($list) || $list === [];
+
+        $this->holidays = $this->useDefaults ? [] : array_fill_keys(array_map(
             fn ($d) => CarbonImmutable::parse((string) $d)->toDateString(),
             array_filter($list, fn ($d) => is_string($d) && trim($d) !== ''),
         ), true);
@@ -46,6 +59,7 @@ class WorkCalendar
     public function isWorkday(CarbonImmutable $d): bool
     {
         $d = $d->startOfDay();
+        $this->ensureYear($d->year);
         if (isset($this->holidays[$d->toDateString()])) {
             return false;
         }
@@ -152,13 +166,29 @@ class WorkCalendar
         return array_values(array_unique($out));
     }
 
-    /** @return list<string> */
+    /** @return list<string> 설정한 휴일 전부, 또는 기본 휴일이면 지금까지 물어본 해의 것(없으면 올해·내년). */
     public function holidays(): array
     {
+        if ($this->useDefaults && $this->builtYears === []) {
+            $this->ensureYear((int) date('Y'));
+            $this->ensureYear((int) date('Y') + 1);
+        }
+
         $h = array_keys($this->holidays);
         sort($h);
 
         return $h;
+    }
+
+    private function ensureYear(int $year): void
+    {
+        if (! $this->useDefaults || isset($this->builtYears[$year])) {
+            return;
+        }
+        $this->builtYears[$year] = true;
+        foreach (self::defaultUsHolidays($year, $year) as $date) {
+            $this->holidays[$date] = true;
+        }
     }
 
     public function workweek(): int

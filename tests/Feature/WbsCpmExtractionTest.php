@@ -91,12 +91,14 @@ class WbsCpmExtractionTest extends TestCase
         // 여유·주공정은 문서의 값을 복사하지 않고 사내 CPM 엔진이 재계산한다(정본 하나 원칙).
         // A020 종료(08-18)와 A030 시작(09-10) 사이 23일 버퍼가 있으므로 A010·A020 은
         // 그만큼 밀려도 준공(09-15)이 안 움직인다 — 주공정은 A030 뿐이다.
+        // 그 버퍼 안에 노동절(2026-09-07)이 있다. 근무일 활동은 휴일에 일하지 않으므로
+        // 뒤로 밀 수 있는 날은 달력일 23일이 아니라 그보다 하루 적다(WorkCalendar).
         $this->assertFalse($a010->is_critical);
-        $this->assertSame(23, $a010->float_days);
+        $this->assertSame(22, $a010->float_days);
 
         $a020 = WbsItem::where('wbs_code', 'CPMX-01-W-A020')->first();
         $this->assertSame(['A010'], $a020->preds);               // 선행관계 보존
-        $this->assertSame(22, $a020->float_days);
+        $this->assertSame(21, $a020->float_days);
         $this->assertFalse($a020->is_critical);
         $this->assertSame('ELEC', $a020->trade);
 
