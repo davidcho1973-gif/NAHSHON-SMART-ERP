@@ -232,17 +232,41 @@ class DeployReportTest extends TestCase
 
     public function test_a_full_length_token_points_somewhere_else(): void
     {
-        // 길이가 같은데도 튕기면 잘린 것이 아니다. 그때 «복사 버튼을 쓰세요» 라고 하면
-        // 사람이 같은 일을 반복하고 원인은 그대로 남는다.
+        // 길이가 같은데도 튕기면 잘린 것이 아니다. 그때 «복사 버튼을 쓰세요» 라고만 하면
+        // 사람이 같은 일을 반복하고 원인은 그대로 남는다 — 2026-09-05 에 실제로 그랬다.
+        // 이 저장소의 문서가 «토큰이 짧다» 고 적어 둔 탓인데, 재어 보니 잘 되는 훅도
+        // 토큰이 같은 길이였다. 길이로는 아무것도 알 수 없다.
         $base = 'https://cloud.laravel.com/deploy/123e4567-e89b-12d3-a456-426614174000/';
 
         $same = $this->diagnose([
-            'HOOK' => $base.str_repeat('a', 32),
-            'REFERENCE_HOOK' => $base.str_repeat('b', 32),
+            'HOOK' => $base.str_repeat('a', 16),
+            'REFERENCE_HOOK' => $base.str_repeat('b', 16),
         ]);
 
         $this->assertStringContainsString('잘려서 생긴 문제가 아닙니다', $same['out']);
+        // 남는 이유 셋을 다 짚고, 처방은 하나로 모아 준다 — 어느 쪽인지 가리려고
+        // 왕복하는 것보다 재생성 한 번이 빠르고 확실하다.
+        $this->assertStringContainsString('토글', $same['out']);
         $this->assertStringContainsString('재발급', $same['out']);
+        $this->assertStringContainsString('재생성', $same['out']);
+    }
+
+    public function test_the_doc_no_longer_claims_a_normal_token_is_truncated(): void
+    {
+        // 이 문서가 「마지막 토큰이 짧다」 고 적어 둔 탓에 하루를 잃었다. 정상 길이를
+        // 이상 징후로 적어 두면, 다음 사람도 같은 곳을 파게 된다.
+        $doc = (string) file_get_contents(base_path('DEPLOYMENT_ENVIRONMENTS.md'));
+
+        // 옛 문장은 «틀렸다» 는 정정문 안에 인용으로만 남아야 한다. 인용까지 지우면
+        // 왜 그렇게 판단했었는지가 사라져, 다음 사람이 같은 추론을 처음부터 다시 한다.
+        $this->assertStringContainsString('정상 모양', $doc, '정상 길이를 정상이라고 적어야 합니다');
+        $this->assertStringContainsString('잘 되는 훅도 토큰이 똑같이', $doc, '무엇을 재어 보고 정정했는지');
+        $this->assertStringContainsString('토글', $doc, '302 의 이유 셋을 적어 두어야 합니다');
+
+        $correction = strpos($doc, '이 문서가 틀린 진단을 적어 두어');
+        $claim = strpos($doc, '마지막 토큰이 짧다');
+        $this->assertNotFalse($correction, '정정문이 없습니다');
+        $this->assertGreaterThan($correction, $claim, '옛 진단이 정정문 밖에 그대로 서 있습니다');
     }
 
     public function test_the_diagnosis_never_prints_either_hook_value(): void

@@ -78,7 +78,10 @@ case "$last" in
   000) echo "::warning title=훅 연결 실패::${ENV_LABEL} — Deploy Hook 에 연결하지 못했습니다." ;;
   # 리다이렉트를 -L 로 따라가지 않는 이유: 따라가면 첫 화면 HTML 을 200 으로 받아
   # 배포가 성공한 것으로 오인하게 된다.
-  3*) echo "::warning title=훅이 로그인 화면으로 보냄::${ENV_LABEL} — 네 조합 모두 리다이렉트됐습니다. 입력칸에서 잘려 보이는 값을 복사하면 이렇게 됩니다. 복사 버튼으로 다시 복사하세요." ;;
+  # 302 는 «Laravel Cloud 가 이 주소를 모른다» 만 뜻한다. 잘린 값, 꺼진 토글, 재발급 —
+  # 셋 다 같은 응답을 준다. 하나로 단정하면 엉뚱한 데를 고치게 되므로(2026-09-05 에
+  # 실제로 그랬다) 아래 진단이 길이를 재서 갈라 준다.
+  3*) echo "::warning title=훅이 로그인 화면으로 보냄::${ENV_LABEL} — 네 조합 모두 리다이렉트됐습니다. Laravel Cloud 가 이 주소를 알아보지 못합니다(잘린 값·꺼진 토글·재발급 중 하나). 아래 진단을 보세요." ;;
   401|403) echo "::warning title=훅이 거부됨::${ENV_LABEL} — HTTP $last. 토큰이 만료됐거나 재발급된 것 같습니다." ;;
   404) echo "::warning title=훅을 찾을 수 없음::${ENV_LABEL} — HTTP $last. 주소 일부만 복사됐거나 훅이 삭제된 것 같습니다." ;;
   *)   echo "::warning title=훅 호출 실패::${ENV_LABEL} — HTTP $last. 어느 조합도 통하지 않았습니다." ;;
