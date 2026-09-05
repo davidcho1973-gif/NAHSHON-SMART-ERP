@@ -333,7 +333,7 @@ function renderDetail(d){
           <div class="field"><label>만료일</label><input type="date" id="ed-expires" value="${esc(d.expiresOn||'')}"></div>
           <div class="field"><label>PROJECT</label><select id="ed-project"><option value="">미지정 (GLOBAL)</option>${PROJECT_OPTIONS.map(o=>`<option value="${esc(o.value)}"${String(d.projectId||'')===o.value?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
           <div class="field"><label>현장</label><select id="ed-site"><option value="">PROJECT 따라감</option>${SITE_OPTIONS.map(o=>`<option value="${esc(o.value)}"${String(d.siteId||'')===o.value?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
-          <div class="field" style="grid-column:1/-1"><label>폴더 경로 <span style="font-weight:400;color:var(--muted)">— 비워 두면 PROJECT·분류에 맞춰 자동으로 다시 만듭니다</span></label><input id="ed-path" placeholder="자동 (예: NAHSHON / 703K-KITCHEN / 도면·시방서 / 시방서 / 2026)" value=""><small style="color:var(--muted)">현재: ${esc(d.virtualPath||'분류 대기')}</small></div>
+          <div class="field" style="grid-column:1/-1"><label>폴더 경로 <span style="font-weight:400;color:var(--muted)">— 비워 두면 PROJECT·분류에 맞춰 자동으로 다시 만듭니다</span></label><input id="ed-path" placeholder="자동 (예: 회사 / PROJECT / 도면·시방서 / 시방서 / 2026)" value=""><small style="color:var(--muted)">현재: ${esc(d.virtualPath||'분류 대기')}</small></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEdit(${d.id})">저장</button><button class="btn" onclick="document.getElementById('edit-form').style.display='none'">취소</button></div>
         <p style="font-size:11px;color:var(--muted);margin:9px 0 0">저장하면 이 문서는 "정리 완료(사람 검수)"로 표시됩니다 — AI 추정이 아니라 사람이 확정한 값이라는 뜻입니다.</p>
