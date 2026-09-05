@@ -170,3 +170,37 @@ jobs:
         env:
           BASE: ${{ vars.PRODUCTION_URL }}
         run: bash scripts/deploy/check-scheduler.sh
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 나손(NAHSHON MEP) — 배포는 못 시키고, 어디까지 갔는지 적기만 한다.
+  #
+  # 확인은 나손에서 먼저 한다(AGENTS.md §5). 그런데 CI 는 나손을 한 번도 보지 않았다 —
+  # 배포 훅이 없어 Laravel Cloud 의 «Push to deploy» 에만 기대고 있고, 그 경로는
+  # GitHub 에 아무 기록을 남기지 않는다. 그래서 「나손에 배포됐어?」 에 아무도 답할 수
+  # 없었고, 실제로 이틀 동안 옛 커밋에 멈춰 있었는데 아무도 몰랐다(2026-09-03~05).
+  #
+  # 훅 시크릿이 생기면 이 잡을 위의 둘과 같은 모양(훅 → verify-build.sh)으로 올리면 된다.
+  # 그전까지는 러너가 대신 읽어 요약에 적는다 — 사람도, 다음 세션도 여기서 본다.
+  #
+  # 실패시키지 않는다: 내가 일으키지 않은 배포가 늦다고 빨간 X 를 놓으면 사람은 곧
+  # 그 X 를 무시하는 법을 배우고, 그러면 진짜 실패도 함께 묻힌다.
+  report-nahshon:
+    name: Report NAHSHON
+    needs: tests
+    if: >-
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      ENV_LABEL: 나손(NAHSHON MEP)
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # 주소는 변수로 두되 기본값을 함께 적는다 — 변수를 안 넣었다고 이 확인이
+      # 조용히 꺼지면, 확인이 없던 예전 상태로 되돌아간다(그게 이 사고의 원인이었다).
+      # 도메인이 붙으면 Variables 의 NAHSHON_URL 만 바꾸면 된다.
+      - name: Read the deployed build
+        env:
+          BASE: ${{ vars.NAHSHON_URL || 'https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud' }}
+        run: bash scripts/deploy/report-build.sh

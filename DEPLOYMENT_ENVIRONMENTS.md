@@ -103,6 +103,34 @@ Laravel Cloud → `nahshon-smart-erp` → **NAHSHON MEP** → Settings → 소�
   https://erp.nahshonmep.com                                   ← 도메인이 붙은 뒤
   https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud   ← 붙을 때까지 (붙은 뒤에도 열림)
 
+### 나손이 어느 커밋을 돌고 있는가 — 이제 CI 가 매번 적는다 (2026-09-05)
+
+**「나손에 배포됐어?」 에 오랫동안 아무도 답할 수 없었다.** 나손은 배포 훅이 없어
+Laravel Cloud 의 `Push to deploy` 로만 나가고, 그 경로는 GitHub 에 아무 기록을 남기지
+않는다. 에이전트 세션은 망 정책상 그 주소에 닿지도 못한다. 그래서 사람이 대시보드를
+열어 보는 것 말고는 길이 없었고, 실제로 이틀 동안 나손이 `ff211f7` 에 멈춰 있는 동안
+그 위로 커밋 14개가 쌓였는데 아무도 몰랐다(2026-09-03~05).
+
+이제 `Tests` 워크플로에 **Report NAHSHON** 잡이 있다. main·staging 에 푸시할 때마다
+러너가 나손의 `/build-version` 을 읽어 실행 요약(Summary)에 적는다.
+
+| 요약에 적히는 것 | 뜻 |
+|---|---|
+| 「나손 — 최신입니다」 | 방금 올린 커밋이 나손에서 돌고 있다. 볼 것 없음 |
+| 「나손 — 옛 커밋에 멈춰 있습니다」 | 표에 나손 커밋과 방금 올린 커밋이 나란히 찍힌다. **Deploy 를 눌러야 한다** |
+| 「나손 — 응답 없음」 | 주소가 바뀌었거나 서버가 내려가 있다 |
+
+**이 잡은 배포를 시키지 않고, 실패시키지도 않는다.** 훅이 없어 시킬 수가 없고,
+내가 일으키지 않은 배포가 늦다고 빨간 X 를 놓으면 사람은 곧 그 X 를 무시하는 법을
+배운다 — 그러면 진짜 실패도 함께 묻힌다. 경고만 남기고 잡은 초록으로 끝난다.
+
+주소는 GitHub `Variables` 의 `NAHSHON_URL` 로 바꿀 수 있다(도메인이 붙으면 그때
+`https://erp.nahshonmep.com` 으로). 변수가 없으면 지금 기본 주소를 쓴다 — 변수를
+안 넣었다고 확인이 조용히 꺼지면, 확인이 없던 지금 상태로 되돌아가기 때문이다.
+
+**나손에 훅을 만들면** 이 잡을 위의 둘과 같은 모양(훅 호출 → `verify-build.sh`)으로
+올릴 수 있다. 그때는 시크릿 이름을 `LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON` 으로 둔다.
+
 ### 나손 도메인 `erp.nahshonmep.com` — 붙이는 중 (David 지시 2026-09-03)
 
 > "이 주소를 nahshonmep.com 홈페이지 주소로 만들고 싶어. erp.nahshonmep.com 주소로 만들어줘"

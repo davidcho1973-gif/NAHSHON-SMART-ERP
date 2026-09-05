@@ -178,6 +178,11 @@
   같은 앱(`nahshon-smart-erp`) 안의 별도 환경이고, 그 앱의 `main` 환경은 DASOL 것입니다 —
   앱 이름만 보고 «나손 = main» 으로 읽지 마세요(`DEPLOYMENT_ENVIRONMENTS.md`).
   `staging` 과 `main` 에 같은 커밋을 올리는 지금 절차면 나손에도 코드가 갑니다.
+  **다만 «갔다» 와 «배포됐다» 는 다릅니다.** 나손은 배포 훅이 없어 Laravel Cloud 의
+  `Push to deploy` 로만 나가고, 그것이 꺼져 있으면 푸시해도 아무 일이 없습니다.
+  푸시 뒤 `Tests` 실행의 **Report NAHSHON** 잡 요약을 보세요 — 나손이 어느 커밋을
+  돌고 있는지 러너가 읽어 적습니다. 「옛 커밋에 멈춰 있습니다」 가 뜨면 사람이
+  Laravel Cloud 에서 **Deploy** 를 눌러야 합니다(`DEPLOYMENT_ENVIRONMENTS.md`).
   staging 검증(전체 테스트 통과)이 끝난 작업은 `staging` 푸시 후 `main` 에도 반영한다.
   방법: staging 을 main 으로 병합(트리 = staging 트리, 되감기 없음). 시험이 하나라도
   깨진 상태로는 main 에 올리지 않는다 — 그 전 규칙("별도 승인 필요")은 이 지시로 폐기.
