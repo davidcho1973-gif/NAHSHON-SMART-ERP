@@ -25,6 +25,12 @@ class ProcurementDocAnalyzerTest extends TestCase
             {
                 return 'gemini';
             }
+
+            /** 시험 대역의 한도는 넉넉히 — 여기서 보는 것은 크기 정책이 아니라 판독 흐름이다. */
+            public function maxAttachmentBytes(): int
+            {
+                return 50 * 1024 * 1024;
+            }
         });
     }
 

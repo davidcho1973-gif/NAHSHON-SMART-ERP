@@ -64,6 +64,12 @@ class DocumentAnalyzerFallbackTest extends TestCase
             {
                 return 'test';
             }
+
+            /** 시험 대역의 한도는 넉넉히 — 여기서 보는 것은 크기 정책이 아니라 판독 흐름이다. */
+            public function maxAttachmentBytes(): int
+            {
+                return 50 * 1024 * 1024;
+            }
         };
 
         $result = $this->analyzer($engine, '배관 위생 시방 본문...')->analyze($this->document(), str_repeat('x', 1000));
@@ -86,6 +92,12 @@ class DocumentAnalyzerFallbackTest extends TestCase
             public function name(): string
             {
                 return 'test';
+            }
+
+            /** 시험 대역의 한도는 넉넉히 — 여기서 보는 것은 크기 정책이 아니라 판독 흐름이다. */
+            public function maxAttachmentBytes(): int
+            {
+                return 50 * 1024 * 1024;
             }
         };
 
