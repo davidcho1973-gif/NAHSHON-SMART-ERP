@@ -209,10 +209,14 @@ jobs:
           HOOK_NAME: LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON
         run: bash scripts/deploy/trigger-hook.sh
 
+      # 이미 잘 되는 훅을 비교용으로 함께 넘긴다 — 값은 어느 쪽도 출력되지 않고
+      # 길이만 나란히 찍힌다. 「토큰이 짧다」 가 추측이 아니라 비교가 된다.
       - name: Diagnose the hook URL shape
         if: steps.hook.outputs.ok != 'true'
         env:
           HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON }}
+          REFERENCE_HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION }}
+          REFERENCE_LABEL: 잘 되는 훅
         run: bash scripts/deploy/diagnose-hook.sh
 
       # 훅이 있으면 다른 둘과 같은 잣대로 판정한다 — 서버가 그 커밋으로 바뀌지 않으면 실패다.

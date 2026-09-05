@@ -193,6 +193,74 @@ class DeployReportTest extends TestCase
         $this->assertStringContainsString('verify-build.sh', $job, '서버가 실제로 바뀌었는지 확인해야 합니다');
     }
 
+    /**
+     * @param  array<string, string>  $env
+     * @return array{code: int, out: string}
+     */
+    private function diagnose(array $env): array
+    {
+        $process = new Process(
+            ['bash', base_path('scripts/deploy/diagnose-hook.sh')],
+            base_path(),
+            $env + ['PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
+        );
+        $process->setTimeout(30);
+        $process->run();
+
+        return ['code' => (int) $process->getExitCode(), 'out' => $process->getOutput().$process->getErrorOutput()];
+    }
+
+    public function test_a_short_token_is_proven_by_comparison_not_guessed(): void
+    {
+        // 「토큰이 짧으면 잘린 것」 이라고만 적어 두면 얼마가 짧은지 아무도 모른다.
+        // 2026-09-05 에 실제로 그랬다 — 훅이 튕기는데 그 길이가 원래 그런 것인지
+        // 잘린 것인지 가릴 근거가 없었다. 잘 되는 훅을 옆에 놓으면 비교가 된다.
+        $base = 'https://cloud.laravel.com/deploy/123e4567-e89b-12d3-a456-426614174000/';
+
+        $short = $this->diagnose([
+            'HOOK' => $base.str_repeat('a', 16),
+            'REFERENCE_HOOK' => $base.str_repeat('b', 32),
+            'REFERENCE_LABEL' => '잘 되는 훅',
+        ]);
+
+        $this->assertSame(0, $short['code']);
+        $this->assertStringContainsString('이 환경 16자', $short['out']);
+        $this->assertStringContainsString('잘 되는 훅 32자', $short['out']);
+        $this->assertStringContainsString('더 짧습니다', $short['out']);
+        $this->assertStringContainsString('복사 버튼', $short['out'], '무엇을 해야 하는지 말해야 합니다');
+    }
+
+    public function test_a_full_length_token_points_somewhere_else(): void
+    {
+        // 길이가 같은데도 튕기면 잘린 것이 아니다. 그때 «복사 버튼을 쓰세요» 라고 하면
+        // 사람이 같은 일을 반복하고 원인은 그대로 남는다.
+        $base = 'https://cloud.laravel.com/deploy/123e4567-e89b-12d3-a456-426614174000/';
+
+        $same = $this->diagnose([
+            'HOOK' => $base.str_repeat('a', 32),
+            'REFERENCE_HOOK' => $base.str_repeat('b', 32),
+        ]);
+
+        $this->assertStringContainsString('잘려서 생긴 문제가 아닙니다', $same['out']);
+        $this->assertStringContainsString('재발급', $same['out']);
+    }
+
+    public function test_the_diagnosis_never_prints_either_hook_value(): void
+    {
+        // 이 진단은 시크릿 둘을 손에 쥔다. 하나라도 로그에 찍히면 공개 저장소의
+        // 실행 기록에 배포 열쇠가 남는다 — 진단이 사고가 된다.
+        $mine = 'MINESECRETVALUE0000000000000001';
+        $theirs = 'THEIRSSECRETVALUE00000000000002';
+        $base = 'https://cloud.laravel.com/deploy/123e4567-e89b-12d3-a456-426614174000/';
+
+        $out = $this->diagnose(['HOOK' => $base.$mine, 'REFERENCE_HOOK' => $base.$theirs])['out'];
+
+        $this->assertStringNotContainsString($mine, $out);
+        $this->assertStringNotContainsString($theirs, $out);
+        // 그래도 쓸모는 있어야 한다 — 길이는 나온다.
+        $this->assertStringContainsString('토큰 길이:', $out);
+    }
+
     public function test_a_missing_hook_secret_is_told_apart_from_a_failing_one(): void
     {
         // 시크릿 이름을 잘못 넣으면 값이 조용히 비어 온다. «훅이 실패했다» 와 구별되지
