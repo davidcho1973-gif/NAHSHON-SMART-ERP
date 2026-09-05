@@ -8,14 +8,21 @@
 # 성패는 verify-build.sh 가 서버에 직접 물어서 판정한다.
 #
 # 필요한 환경변수: HOOK, GITHUB_SHA, ENV_LABEL, GITHUB_OUTPUT
+# 선택: HOOK_NAME — 시크릿 이름. 값이 비었을 때 «어느 이름을 찾고 있었는지» 를 말해 준다.
 set -euo pipefail
 
 echo "ok=false" >> "$GITHUB_OUTPUT"
 
 if [ -z "${HOOK:-}" ]; then
-  echo "::notice title=훅 없음::${ENV_LABEL} 훅 시크릿이 없어 건너뜁니다. Push to deploy 로 배포됐는지는 아래에서 확인합니다."
+  # has_hook 은 «호출이 성공했는가» 가 아니라 «시크릿이 있는가» 다. 둘은 다르다 —
+  # 시크릿을 잘못된 이름으로 넣으면 값이 조용히 비어 오는데, ok=false 만 보면
+  # «훅이 실패했다» 와 구별되지 않는다. 이름 오타는 가장 찾기 어려운 실패다.
+  echo "has_hook=false" >> "$GITHUB_OUTPUT"
+  echo "::warning title=훅 시크릿 없음::${ENV_LABEL} — ${HOOK_NAME:-훅} 시크릿이 비어 있습니다. 이름이 정확한지 확인하세요(대소문자·밑줄까지). 배포됐는지는 아래에서 확인합니다."
   exit 0
 fi
+
+echo "has_hook=true" >> "$GITHUB_OUTPUT"
 
 # commit_hash 를 붙여 "테스트를 통과한 그 커밋" 을 콕 집어 배포한다.
 # 안 붙이면 Laravel Cloud 가 호출 시점의 브랜치 최신 커밋을 가져가는데,

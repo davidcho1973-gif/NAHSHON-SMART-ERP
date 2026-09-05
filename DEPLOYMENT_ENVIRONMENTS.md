@@ -103,6 +103,20 @@ Laravel Cloud → `nahshon-smart-erp` → **NAHSHON MEP** → Settings → 소�
   https://erp.nahshonmep.com                                   ← 도메인이 붙은 뒤
   https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud   ← 붙을 때까지 (붙은 뒤에도 열림)
 
+### 나손이 배포 1순위다 (David 지시 2026-09-05)
+
+> "지금 내가 작업하는 것은 나손이고 앞으로 나손으로 배포해줘"
+
+훅이 들어왔다(`LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON`, 2026-09-05). 이제 나손도 다른 둘과
+같은 모양으로 돈다 — **시험 통과 → 그 커밋을 콕 집어 배포 → 서버가 실제로 바뀌었는지 확인.**
+바뀌지 않으면 잡이 빨개진다. 지금까지는 나손만 이 안전장치가 없어 조용히 뒤처졌다.
+
+`main` 에서만 돈다. `staging` 에도 같은 커밋을 올리므로 양쪽에서 돌리면 같은 커밋을 두 번
+배포하게 된다 — 빌드 시간만 쓰고 서버는 공연히 한 번 더 재시작한다.
+
+배포 절차 자체는 그대로다(staging 푸시 → main 푸시). 달라진 것은 **main 푸시가 나손까지
+책임진다**는 것이다.
+
 ### 나손이 어느 커밋을 돌고 있는가 — 이제 CI 가 매번 적는다 (2026-09-05)
 
 **「나손에 배포됐어?」 에 오랫동안 아무도 답할 수 없었다.** 나손은 배포 훅이 없어
@@ -111,8 +125,10 @@ Laravel Cloud 의 `Push to deploy` 로만 나가고, 그 경로는 GitHub 에 �
 열어 보는 것 말고는 길이 없었고, 실제로 이틀 동안 나손이 `ff211f7` 에 멈춰 있는 동안
 그 위로 커밋 14개가 쌓였는데 아무도 몰랐다(2026-09-03~05).
 
-이제 `Tests` 워크플로에 **Report NAHSHON** 잡이 있다. main·staging 에 푸시할 때마다
-러너가 나손의 `/build-version` 을 읽어 실행 요약(Summary)에 적는다.
+이제 `Tests` 워크플로에 **Deploy NAHSHON** 잡이 있다. 훅으로 배포를 걸고, 서버가 그
+커밋으로 바뀔 때까지 확인한다. 시크릿 이름이 틀려 값이 비어 오면 배포를 걸 수 없으므로
+그때만 «읽어서 적기» 로 물러선다(아래 표) — 내가 시키지도 못한 배포가 늦다고 빨간 X 를
+놓으면 사람은 곧 그 X 를 무시하는 법을 배우기 때문이다.
 
 | 요약에 적히는 것 | 뜻 |
 |---|---|
@@ -216,8 +232,19 @@ KSR 은 "연습용"이 아니라 실제로 쓰는 첫 고객이다. 화면에 "�
 
 | 배포 | 브랜치 | 시크릿 (Secrets 탭) | 주소 (Variables 탭) |
 |---|---|---|---|
+| **나손 (NAHSHON MEP)** | `main` | `LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON` | `NAHSHON_URL` (없으면 기본값) |
 | 운영 (DASOL USA) | `main` | `LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION` | `PRODUCTION_URL` |
 | 스테이징 (KSR) | `staging` | `LARAVEL_CLOUD_DEPLOY_HOOK_STAGING` | `STAGING_URL` |
+
+> **이름이 현실을 못 따라왔다.** `PRODUCTION` 은 «운영» 이 아니라 **DASOL 원본**이고,
+> `STAGING` 은 «시험» 이 아니라 **KSR 실제 데이터**다. 이 이름들은 나손을 세우기 전에
+> 붙었고, 지금 매일 쓰는 곳은 나손이다. 2026-09-05 에 David 가 시크릿 목록을 보고
+> «나손이 지금 PRODUCTION 아닌가?» 라고 물은 것이 그 증거다 — 업무 기준으로는 맞는
+> 읽기인데 이름이 다른 곳을 가리킨다.
+>
+> 고치려면 시크릿을 지우고 다시 만들어야 하고(이름 변경 불가), 그러면 훅 주소 두 개를
+> 다시 복사해 와야 한다. 그 복사가 예전에 반나절을 잡아먹은 자리라(아래 «잘라서 복사»)
+> 지금은 이름을 그대로 두고 **여기 적어 둔다.** 헷갈리면 이 표를 본다.
 
 `저장소 → Settings → Secrets and variables → Actions`. **Secrets 와 Variables 는 탭이 다르다.**
 

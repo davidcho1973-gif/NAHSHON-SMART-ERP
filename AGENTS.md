@@ -178,11 +178,13 @@
   같은 앱(`nahshon-smart-erp`) 안의 별도 환경이고, 그 앱의 `main` 환경은 DASOL 것입니다 —
   앱 이름만 보고 «나손 = main» 으로 읽지 마세요(`DEPLOYMENT_ENVIRONMENTS.md`).
   `staging` 과 `main` 에 같은 커밋을 올리는 지금 절차면 나손에도 코드가 갑니다.
-  **다만 «갔다» 와 «배포됐다» 는 다릅니다.** 나손은 배포 훅이 없어 Laravel Cloud 의
-  `Push to deploy` 로만 나가고, 그것이 꺼져 있으면 푸시해도 아무 일이 없습니다.
-  푸시 뒤 `Tests` 실행의 **Report NAHSHON** 잡 요약을 보세요 — 나손이 어느 커밋을
-  돌고 있는지 러너가 읽어 적습니다. 「옛 커밋에 멈춰 있습니다」 가 뜨면 사람이
-  Laravel Cloud 에서 **Deploy** 를 눌러야 합니다(`DEPLOYMENT_ENVIRONMENTS.md`).
+- **나손이 배포 1순위입니다 (David 지시 2026-09-05: "지금 내가 작업하는 것은 나손이고
+  앞으로 나손으로 배포해줘").** 2026-09-05 에 훅이 들어와, `main` 푸시가 나손 배포까지
+  책임집니다 — 시험 통과 → 그 커밋을 배포 → 서버가 실제로 바뀌었는지 확인, 안 바뀌면
+  잡이 빨개집니다(`Tests` 워크플로의 **Deploy NAHSHON**).
+- **시크릿 이름에 속지 마세요.** `..._HOOK_PRODUCTION` 은 DASOL 원본이고,
+  `..._HOOK_STAGING` 은 KSR 입니다. 나손은 `..._HOOK_NAHSHON` 입니다. 이름은 나손을
+  세우기 전에 붙은 것이라 현실과 어긋나 있습니다(`DEPLOYMENT_ENVIRONMENTS.md` 의 표).
   staging 검증(전체 테스트 통과)이 끝난 작업은 `staging` 푸시 후 `main` 에도 반영한다.
   방법: staging 을 main 으로 병합(트리 = staging 트리, 되감기 없음). 시험이 하나라도
   깨진 상태로는 main 에 올리지 않는다 — 그 전 규칙("별도 승인 필요")은 이 지시로 폐기.

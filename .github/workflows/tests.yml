@@ -172,35 +172,60 @@ jobs:
         run: bash scripts/deploy/check-scheduler.sh
 
   # ──────────────────────────────────────────────────────────────────────────
-  # 나손(NAHSHON MEP) — 배포는 못 시키고, 어디까지 갔는지 적기만 한다.
+  # 나손(NAHSHON MEP) — David 가 매일 쓰는 곳. 배포도 확인도 여기가 먼저다.
   #
-  # 확인은 나손에서 먼저 한다(AGENTS.md §5). 그런데 CI 는 나손을 한 번도 보지 않았다 —
-  # 배포 훅이 없어 Laravel Cloud 의 «Push to deploy» 에만 기대고 있고, 그 경로는
-  # GitHub 에 아무 기록을 남기지 않는다. 그래서 「나손에 배포됐어?」 에 아무도 답할 수
-  # 없었고, 실제로 이틀 동안 옛 커밋에 멈춰 있었는데 아무도 몰랐다(2026-09-03~05).
+  # > "지금 내가 작업하는 것은 나손이고 앞으로 나손으로 배포해줘" (David 2026-09-05)
   #
-  # 훅 시크릿이 생기면 이 잡을 위의 둘과 같은 모양(훅 → verify-build.sh)으로 올리면 된다.
-  # 그전까지는 러너가 대신 읽어 요약에 적는다 — 사람도, 다음 세션도 여기서 본다.
+  # 오랫동안 나손만 훅이 없어 Laravel Cloud 의 «Push to deploy» 에만 기대고 있었고,
+  # 그 경로는 GitHub 에 아무 기록을 남기지 않는다. 그래서 「나손에 배포됐어?」 에 아무도
+  # 답할 수 없었고, 실제로 이틀 동안 옛 커밋에 멈춰 있었는데 아무도 몰랐다(2026-09-03~05).
+  # 이제 훅이 있어 다른 둘과 같은 모양으로 돈다.
   #
-  # 실패시키지 않는다: 내가 일으키지 않은 배포가 늦다고 빨간 X 를 놓으면 사람은 곧
-  # 그 X 를 무시하는 법을 배우고, 그러면 진짜 실패도 함께 묻힌다.
-  report-nahshon:
-    name: Report NAHSHON
+  # 이름이 헷갈리는 자리라 한 번 더 적는다 — PRODUCTION 은 DASOL 원본이고,
+  # STAGING 은 KSR 이다. 나손은 이 잡이다(DEPLOYMENT_ENVIRONMENTS.md).
+  deploy-nahshon:
+    name: Deploy NAHSHON
     needs: tests
+    # main 에서만 돈다. staging 에도 같은 커밋을 올리므로 양쪽에서 돌리면 같은 커밋을
+    # 두 번 배포하게 된다 — 빌드 시간만 쓰고 서버는 공연히 한 번 더 재시작한다.
     if: >-
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') &&
+      github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     env:
       ENV_LABEL: 나손(NAHSHON MEP)
+      # 주소는 변수로 두되 기본값을 함께 적는다 — 변수를 안 넣었다고 확인이 조용히
+      # 꺼지면, 확인이 없던 예전 상태로 되돌아간다(그게 이 사고의 원인이었다).
+      # 자체 도메인이 붙으면 Variables 의 NAHSHON_URL 만 바꾸면 된다.
+      BASE: ${{ vars.NAHSHON_URL || 'https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud' }}
 
     steps:
       - uses: actions/checkout@v7
 
-      # 주소는 변수로 두되 기본값을 함께 적는다 — 변수를 안 넣었다고 이 확인이
-      # 조용히 꺼지면, 확인이 없던 예전 상태로 되돌아간다(그게 이 사고의 원인이었다).
-      # 도메인이 붙으면 Variables 의 NAHSHON_URL 만 바꾸면 된다.
-      - name: Read the deployed build
+      - name: Trigger Laravel Cloud deployment
+        id: hook
         env:
-          BASE: ${{ vars.NAHSHON_URL || 'https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud' }}
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON }}
+          HOOK_NAME: LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON
+        run: bash scripts/deploy/trigger-hook.sh
+
+      - name: Diagnose the hook URL shape
+        if: steps.hook.outputs.ok != 'true'
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_NAHSHON }}
+        run: bash scripts/deploy/diagnose-hook.sh
+
+      # 훅이 있으면 다른 둘과 같은 잣대로 판정한다 — 서버가 그 커밋으로 바뀌지 않으면 실패다.
+      - name: Verify the deployed build
+        if: always() && steps.hook.outputs.has_hook == 'true'
+        run: bash scripts/deploy/verify-build.sh
+
+      # 시크릿 이름이 틀려 값이 비어 온 경우. 이때 실패로 몰면 «내가 시키지도 못한 배포» 가
+      # 늦다고 빨간 X 가 뜬다 — 적어만 두고, 위의 경고가 이름을 확인하라고 말한다.
+      - name: Report the deployed build
+        if: always() && steps.hook.outputs.has_hook != 'true'
         run: bash scripts/deploy/report-build.sh
+
+      - name: Check the scheduler
+        if: always()
+        run: bash scripts/deploy/check-scheduler.sh

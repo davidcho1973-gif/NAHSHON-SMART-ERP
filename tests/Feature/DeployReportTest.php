@@ -143,7 +143,70 @@ class DeployReportTest extends TestCase
 
         $this->assertStringContainsString(self::SCRIPT, $workflow, '푸시 워크플로가 이 스크립트를 부르지 않습니다');
         $this->assertStringContainsString('ENV_LABEL', $workflow, '어느 환경인지 이름이 붙어야 요약을 읽을 수 있습니다');
-        // main 과 staging 둘 다에서 돈다 — 그 환경이 어느 쪽을 보는지 아직 확인되지 않았다.
-        $this->assertStringContainsString("refs/heads/main' || github.ref == 'refs/heads/staging", $workflow);
+    }
+
+    /**
+     * 배포 대상마다 훅과 주소가 짝을 이루는가.
+     *
+     * 짝이 어긋나면 «배포 성공» 이라고 뜨는데 확인은 엉뚱한 서버를 본다 — 배포가 실제로
+     * 됐는지 아무도 모르는 상태가 된다. 이 저장소는 시크릿 이름이 환경 이름과 어긋나
+     * 있어서(문서의 표를 볼 것) 더 쉽게 어긋난다.
+     *
+     * 이름을 여기 적지 않고 <b>짝이 맞는가</b>만 본다 — 시험 파일에 고객사 이름을 적으면
+     * 그것대로 다른 시험(OrgIdentityTest)에 걸린다.
+     */
+    public function test_every_deploy_target_has_its_own_hook_and_its_own_address(): void
+    {
+        $workflow = (string) file_get_contents(base_path('.github/workflows/tests.yml'));
+
+        preg_match_all('/LARAVEL_CLOUD_DEPLOY_HOOK_([A-Z]+)/', $workflow, $hooks);
+        preg_match_all('/vars\.([A-Z]+)_URL/', $workflow, $urls);
+
+        $hookNames = array_values(array_unique($hooks[1]));
+        $urlNames = array_values(array_unique($urls[1]));
+        sort($hookNames);
+        sort($urlNames);
+
+        $this->assertCount(3, $hookNames, '배포 대상은 셋입니다');
+        $this->assertSame($hookNames, $urlNames, '훅과 주소의 짝이 어긋나 있습니다 — 배포와 확인이 다른 서버를 봅니다');
+    }
+
+    public function test_the_target_we_work_on_deploys_from_one_branch_only(): void
+    {
+        // David 지시(2026-09-05): 매일 쓰는 그 환경이 배포 1순위다. 훅이 들어오면서
+        // «적기만 하던» 잡이 «배포하고 확인하는» 잡이 됐다.
+        //
+        // 그 잡은 한 브랜치에서만 돌아야 한다 — 배포 절차가 staging 과 main 에 같은 커밋을
+        // 올리므로, 양쪽에서 돌리면 한 커밋을 두 번 배포하고 서버를 공연히 두 번 재시작한다.
+        $workflow = (string) file_get_contents(base_path('.github/workflows/tests.yml'));
+
+        // 훅이 없을 때만 쓰는 «적기» 갈래를 가진 잡 = 이번에 옮겨 온 그 잡.
+        $pos = strpos($workflow, self::SCRIPT);
+        $this->assertNotFalse($pos, '적기 갈래가 사라졌습니다');
+
+        $job = substr($workflow, 0, $pos);
+        $job = substr($job, (int) strrpos($job, "\n  deploy-"));
+
+        $this->assertStringContainsString("github.ref == 'refs/heads/main' &&", $job, '한 브랜치에서만 돌아야 합니다');
+        $this->assertStringNotContainsString("refs/heads/staging", $job, '두 브랜치에서 돌면 같은 커밋을 두 번 배포합니다');
+        $this->assertStringContainsString('trigger-hook.sh', $job, '이제는 배포까지 겁니다');
+        $this->assertStringContainsString('verify-build.sh', $job, '서버가 실제로 바뀌었는지 확인해야 합니다');
+    }
+
+    public function test_a_missing_hook_secret_is_told_apart_from_a_failing_one(): void
+    {
+        // 시크릿 이름을 잘못 넣으면 값이 조용히 비어 온다. «훅이 실패했다» 와 구별되지
+        // 않으면, 이름 오타를 찾는 데 한나절이 든다(2026-08-08 에 실제로 그랬다).
+        $body = (string) file_get_contents(base_path('scripts/deploy/trigger-hook.sh'));
+
+        $this->assertStringContainsString('has_hook=false', $body);
+        $this->assertStringContainsString('has_hook=true', $body);
+        $this->assertStringContainsString('HOOK_NAME', $body, '어느 이름을 찾고 있었는지 말해 줘야 오타를 찾습니다');
+
+        // 그리고 그 구별이 실제로 갈래를 가르는 데 쓰여야 한다 — 훅이 없으면 적기만,
+        // 있으면 다른 둘과 같은 잣대로 판정한다.
+        $workflow = (string) file_get_contents(base_path('.github/workflows/tests.yml'));
+        $this->assertStringContainsString("steps.hook.outputs.has_hook == 'true'", $workflow);
+        $this->assertStringContainsString("steps.hook.outputs.has_hook != 'true'", $workflow);
     }
 }
