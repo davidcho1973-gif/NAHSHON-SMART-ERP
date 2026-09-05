@@ -191,6 +191,7 @@ class KnowledgeKeeper
         return $picked->map(fn (KnowledgeFact $f): array => array_filter([
             '사실' => $f->fact,
             '출처' => $f->doc_title,
+            '문서ID' => $f->intelligent_document_id,
             'Rev' => $f->revision,
             '문서일' => $f->document_date?->toDateString(),
         ]))->values()->all();

@@ -62,7 +62,19 @@ class ChatFactFinder
      */
     public function gather(string $question, CommunicationRoom $room, User $asker): array
     {
-        $site = $this->siteFor($room, $asker);
+        return $this->gatherFor($question, $this->siteFor($room, $asker), $asker);
+    }
+
+    /**
+     * 방 없이도 같은 조회 — 앱의 «물어보기» 화면이 쓴다.
+     *
+     * 대화방과 물어보기 화면이 서로 다른 조회 규칙을 가지면 언젠가 한쪽만 고쳐진다.
+     * 권한·주제 라우팅·문서 검색은 전부 이 한 벌이다.
+     *
+     * @return array{site: ?Site, facts: array<string, mixed>, denied: array<int, string>}
+     */
+    public function gatherFor(string $question, ?Site $site, User $asker): array
+    {
         $topics = $this->topicsIn($question);
 
         $facts = [];
@@ -141,8 +153,17 @@ class ChatFactFinder
      */
     private function siteFor(CommunicationRoom $room, User $asker): ?Site
     {
-        $siteId = $room->site_id ?: $asker->employee?->site_id;
+        return $this->siteById($room->site_id ?: $asker->employee?->site_id, $asker);
+    }
 
+    /** 물어본 사람 자신의 현장 — 방이 없을 때의 기준. */
+    public function siteOf(User $asker): ?Site
+    {
+        return $this->siteById($asker->employee?->site_id, $asker);
+    }
+
+    private function siteById(?int $siteId, User $asker): ?Site
+    {
         if (! $siteId) {
             return null;
         }
@@ -349,7 +370,10 @@ class ChatFactFinder
 
         $terms = $this->searchTerms($question);
 
+        // 문서ID 를 함께 싣는다 — 답에 «출처» 버튼을 달려면 AI 가 어느 문서를 근거로
+        // 삼았는지 번호로 돌려줄 수 있어야 한다. 이름만으로는 같은 제목의 개정본을 못 가린다.
         $meta = fn (IntelligentDocument $d): array => array_filter([
+            '문서ID' => $d->id,
             '이름' => $d->title ?: $d->original_file_name,
             '종류' => $d->document_type,
             '문서일' => $d->document_date?->toDateString(),

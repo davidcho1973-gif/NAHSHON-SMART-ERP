@@ -8,6 +8,7 @@ use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\ExpenseAppController;
+use App\Http\Controllers\MobileAskController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GoogleAuthController;
@@ -288,6 +289,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
     // 폰으로 문서 올리기 — 현장에서 손에 들어온 도면·계약서를 그 자리에서 문서함으로.
     Route::get('/attendance-app/docs', [MobileDocumentController::class, 'index'])->name('attendance-app.docs');
+    // 물어보기 — 도면·서류·대장에 대고 묻는다. 답은 물어본 사람만 본다.
+    Route::get('/attendance-app/ask', [MobileAskController::class, 'index'])->name('attendance-app.ask');
+    Route::post('/ask-api/question', [MobileAskController::class, 'question'])
+        ->middleware('throttle:30,1')->name('ask.question');
     // 공종별 오늘 보고 — 반장이 자기 몫을 확정한다(현황판은 ERP 쪽 api_tradeReportBoard).
     Route::post('/ops-api/trade-report/submit', [MobileOpsRoomController::class, 'submitTradeReport'])
         ->name('ops.trade-report.submit');

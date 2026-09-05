@@ -307,6 +307,7 @@
            손가락이 닿는 자리에 크게. 글자 링크 세 줄로 아래에 숨겨 두었을 때는
            «앱이 따로따로» 처럼 느껴졌다. */
         .quick { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+        .tile.wide { grid-column: 1 / -1; }
         .tile {
             position: relative; background: var(--card); border-radius: 14px; padding: 15px 14px 13px;
             text-decoration: none; color: var(--ink); display: block; min-height: 96px;
@@ -499,6 +500,7 @@
             qReceipt: '영수증', qReceiptSub: '사진 한 장으로',
             qDoc: '문서 올리기', qDocSub: '도면 · 계약 · 시방',
             qChat: '메시지', qChatSub: '현장 채팅 · 공지',
+            qAsk: '물어보기', qAskSub: '도면 · 서류 · 공정표에서 찾아 답합니다',
             opsRoom: '현장 상황실', opsRoomSub: '오늘 한 일 · 자재 · 이슈 올리기',
             receipts: '영수증 내기', receiptsSub: '사진 한 장으로 경비 접수 · 환급 확인',
             weekRegular: '이번 주 정규', ot: '연장', regular: '정규', byDay: '일자별',
@@ -551,6 +553,7 @@
             qReceipt: 'Receipts', qReceiptSub: 'One photo is enough',
             qDoc: 'Upload a file', qDocSub: 'Drawings · contracts · specs',
             qChat: 'Messages', qChatSub: 'Site chats · notices',
+            qAsk: 'Ask', qAskSub: 'Answers from drawings · specs · schedule',
             opsRoom: 'Ops room', opsRoomSub: 'Report work · materials · issues',
             receipts: 'Receipts', receiptsSub: 'Submit expenses with one photo · check reimbursements',
             weekRegular: 'Regular this week', ot: 'OT', regular: 'Regular', byDay: 'By day',
@@ -603,6 +606,7 @@
             qReceipt: 'Recibos', qReceiptSub: 'Basta una foto',
             qDoc: 'Subir archivo', qDocSub: 'Planos · contratos · especificaciones',
             qChat: 'Mensajes', qChatSub: 'Chats · avisos del sitio',
+            qAsk: 'Preguntar', qAskSub: 'Respuestas de planos · especificaciones · cronograma',
             opsRoom: 'Sala de obra', opsRoomSub: 'Reportar trabajo · materiales · problemas',
             receipts: 'Recibos', receiptsSub: 'Envíe gastos con una foto · vea reembolsos',
             weekRegular: 'Regular esta semana', ot: 'Extra', regular: 'Regular', byDay: 'Por día',
@@ -759,6 +763,8 @@
         // 몇 번씩 쓰는 것들인데 스크롤을 내려야 보였고, 그래서 «앱이 따로따로» 처럼
         // 느껴졌다. 폰에서 손가락이 닿는 자리에 네 칸으로 모은다.
         h += '<div class="quick">' +
+            // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
+            tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
             tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, d.reportBadge) +
             tile('{{ route('expense-app.index') }}', ICON.receipt, T.qReceipt, T.qReceiptSub, '') +
             tile('{{ route('attendance-app.docs') }}', ICON.doc, T.qDoc, T.qDocSub, '') +
@@ -804,14 +810,15 @@
     }
 
     /* 네 칸 그리드 한 칸. 아이콘 · 이름 · 한 줄 설명 · (필요하면) 빨간 숫자. */
-    function tile(href, icon, name, sub, badge) {
-        return '<a class="tile" href="' + href + '">' +
+    function tile(href, icon, name, sub, badge, wide) {
+        return '<a class="tile' + (wide ? ' wide' : '') + '" href="' + href + '">' +
             (badge ? '<span class="tile-dot">' + esc(badge) + '</span>' : '') +
             '<span class="tile-i">' + icon + '</span>' +
             '<b>' + esc(name) + '</b><span class="tile-s">' + esc(sub) + '</span></a>';
     }
 
     var ICON = {
+        ask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20 20"/><path d="M8.6 9.2a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.8.7-.8 1.3"/><path d="M10.5 14.2h.01"/></svg>',
         report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z"/><path d="M9.5 3.2h5v2.4h-5z"/><path d="M9 11h6M9 14.6h4"/></svg>',
         receipt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.6h12v16.8l-2.4-1.5-2.4 1.5-2.4-1.5-2.4 1.5L6 18.9z"/><path d="M9.2 8.4h5.6M9.2 12.2h5.6"/></svg>',
         doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 3.5H7.6a1.6 1.6 0 0 0-1.6 1.6v13.8a1.6 1.6 0 0 0 1.6 1.6h8.8a1.6 1.6 0 0 0 1.6-1.6V8.1z"/><path d="M13.4 3.5V8h4.6"/><path d="M12 17v-5.4M9.8 13.6 12 11.4l2.2 2.2"/></svg>',
