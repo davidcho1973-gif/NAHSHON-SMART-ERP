@@ -251,6 +251,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/document-hub/api/documents/{document}', [DocumentIntelligenceController::class, 'show'])->name('document-intelligence.show');
     Route::post('/document-hub/api/documents/{document}/reanalyze', [DocumentIntelligenceController::class, 'reanalyze'])->name('document-intelligence.reanalyze');
     Route::post('/document-hub/api/reanalyze-stuck', [DocumentIntelligenceController::class, 'reanalyzeStuck'])->name('document-intelligence.reanalyze-stuck');
+    Route::post('/document-hub/api/reanalyze-untranslated', [DocumentIntelligenceController::class, 'reanalyzeUntranslated'])->name('document-intelligence.reanalyze-untranslated');
     // 도면 → 물량, 시방 → 제출물. 결과는 대기줄이 아니라 대장으로 바로 간다.
     Route::post('/document-hub/api/documents/{document}/takeoff', [DocumentIntelligenceController::class, 'takeoff'])->name('document-intelligence.takeoff');
     Route::post('/document-hub/api/documents/{document}/submittals', [DocumentIntelligenceController::class, 'extractSubmittals'])->name('document-intelligence.submittals');

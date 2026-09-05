@@ -305,6 +305,50 @@ class DocumentIntelligenceController extends Controller
         ] + $r);
     }
 
+    /**
+     * 한글이 없는 옛 분석 결과를 한 번에 다시 분석한다.
+     *
+     * 왜 필요한가: 분석 결과는 한 번 만들어지면 굳는다. 요약·핵심사실·후속조치를 «영문 뒤에 한국어»로
+     * 내도록 규칙을 바꿔도, 그 전에 분석된 문서는 영문만 있는 옛 모습 그대로 남는다. 화면에서 어떤 줄은
+     * 한글이 있고 어떤 줄은 없으면 읽는 사람은 «왜 이건 없지»부터 묻는다.
+     * 문서 하나씩 누르는 재분석 단추는 수십 건에 쓸 수 없어서, 목록에서 한 번에 보낸다.
+     *
+     * 조심할 것: 분석은 건당 비용이 드는 바깥 호출이다. 그래서 한 번에 보내는 수를 막아 두고(최대 40),
+     * 남은 건수를 돌려줘 사람이 나눠 누르게 한다.
+     */
+    public function reanalyzeUntranslated(Request $request): JsonResponse
+    {
+        $this->authorizeManage($request->user());
+        $limit = min(40, max(1, (int) $request->integer('limit', 20)));
+
+        $this->authorizeView($request->user());
+        $q = IntelligentDocument::query()->visibleTo($request->user())
+            ->whereIn('ai_status', ['ready', 'review_required'])
+            // 요약에 한글이 한 글자도 없으면 옛 규칙으로 만들어진 결과다.
+            // '!~' 는 PostgreSQL 의 «정규식 불일치» — docs:reanalyze 명령과 같은 판정을 쓴다.
+            ->where(fn ($w) => $w->whereNull('summary')->orWhere('summary', '!~', '[가-힣]'));
+
+        $total = (clone $q)->count();
+        $ids = (clone $q)->orderBy('id')->limit($limit)->pluck('id');
+
+        foreach ($ids as $id) {
+            IntelligentDocument::whereKey($id)->update(['ai_status' => 'queued', 'ai_error' => null]);
+            AnalyzeIntelligentDocumentJob::dispatch($id);
+        }
+
+        $left = max(0, $total - $ids->count());
+
+        return response()->json([
+            'success' => true,
+            'queued' => $ids->count(),
+            'remaining' => $left,
+            'message' => $ids->isEmpty()
+                ? '한글이 빠진 문서가 없습니다.'
+                : "문서 {$ids->count()}건을 다시 분석합니다 — 요약·핵심사실·후속조치에 한국어가 붙습니다."
+                    .($left > 0 ? " 남은 {$left}건은 한 번 더 눌러 주십시오." : ''),
+        ], 202);
+    }
+
     public function reanalyze(Request $request, IntelligentDocument $document): JsonResponse
     {
         $this->authorizeManage($request->user());
