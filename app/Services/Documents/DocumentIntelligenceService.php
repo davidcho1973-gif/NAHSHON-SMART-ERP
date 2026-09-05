@@ -234,6 +234,37 @@ class DocumentIntelligenceService
         $document->update(['file_path' => $newPath, 'stored_file_name' => $fileName]);
     }
 
+    /**
+     * 사람이 프로젝트·분류를 고친 뒤 폴더를 같은 규칙으로 다시 만든다.
+     *
+     * 폴더는 AI 가 분석할 때 한 번 정해지고 그 뒤로 굳어 있었다. 그래서 «PROJECT 를
+     * 잘못 잡았다» 는 것을 나중에 알아도 문서는 계속 GLOBAL/GENERAL 밑에 남았다 —
+     * 목록에서 프로젝트를 바꿔도 폴더 경로는 옛 프로젝트를 가리켜, 어느 쪽이 맞는지
+     * 화면만 봐서는 알 수 없었다. 고친 값으로 폴더를 다시 만들어야 그 어긋남이 사라진다.
+     *
+     * AI 가 제안했던 하위 폴더(분류·유형 아래 단계)는 그대로 살린다 — 사람이 고친 것은
+     * «어느 프로젝트인가» 이지 «어떤 서랍에 넣을 것인가» 가 아니기 때문이다.
+     *
+     * @return array<int, string>
+     */
+    public function rebuildFolder(IntelligentDocument $document): array
+    {
+        // 프로젝트·현장을 방금 바꿨다면 관계가 옛 값을 물고 있다 — 다시 읽어야 한다.
+        $document->unsetRelation('company')->unsetRelation('site')->unsetRelation('project');
+        $document->loadMissing(['company:id,name,code', 'site:id,code', 'project:id,project_code']);
+
+        $aiParts = $document->ai_payload['folder_parts'] ?? [];
+
+        return $this->folderParts(
+            $document,
+            $document->project_id,
+            (string) $document->category,
+            (string) $document->document_type,
+            $document->document_date?->toDateString(),
+            $aiParts,
+        );
+    }
+
     /** @param mixed $aiParts @return array<int, string> */
     private function folderParts(
         IntelligentDocument $document,

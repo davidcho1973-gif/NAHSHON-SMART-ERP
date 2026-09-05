@@ -216,6 +216,9 @@ const endpoints = {
 };
 const CATEGORY_OPTIONS = @json(collect(\App\Models\IntelligentDocument::CATEGORY_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
 const TYPE_OPTIONS = @json(collect(\App\Models\IntelligentDocument::TYPE_OPTIONS)->map(fn($l,$v)=>['value'=>$v,'label'=>$l])->values());
+// 수정 폼에서 PROJECT·현장을 바꿀 수 있어야 잘못 잡힌 문서를 제자리로 돌린다. 목록은 위 필터와 같은 것을 쓴다.
+const PROJECT_OPTIONS = @json(collect($projects)->map(fn($l,$v)=>['value'=>(string)$v,'label'=>$l])->values());
+const SITE_OPTIONS = @json(collect($sites)->map(fn($l,$v)=>['value'=>(string)$v,'label'=>$l])->values());
 let currentDocuments = [];
 let currentDoc = null;
 let pollTimer = null;
@@ -327,6 +330,9 @@ function renderDetail(d){
           <div class="field"><label>문서일</label><input type="date" id="ed-date" value="${esc(d.documentDate||'')}"></div>
           <div class="field"><label>회신기한</label><input type="date" id="ed-due" value="${esc(d.responseDueOn||'')}"></div>
           <div class="field"><label>만료일</label><input type="date" id="ed-expires" value="${esc(d.expiresOn||'')}"></div>
+          <div class="field"><label>PROJECT</label><select id="ed-project"><option value="">미지정 (GLOBAL)</option>${PROJECT_OPTIONS.map(o=>`<option value="${esc(o.value)}"${String(d.projectId||'')===o.value?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="field"><label>현장</label><select id="ed-site"><option value="">PROJECT 따라감</option>${SITE_OPTIONS.map(o=>`<option value="${esc(o.value)}"${String(d.siteId||'')===o.value?' selected':''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="field" style="grid-column:1/-1"><label>폴더 경로 <span style="font-weight:400;color:var(--muted)">— 비워 두면 PROJECT·분류에 맞춰 자동으로 다시 만듭니다</span></label><input id="ed-path" placeholder="자동 (예: NAHSHON / 703K-KITCHEN / 도면·시방서 / 시방서 / 2026)" value=""><small style="color:var(--muted)">현재: ${esc(d.virtualPath||'분류 대기')}</small></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEdit(${d.id})">저장</button><button class="btn" onclick="document.getElementById('edit-form').style.display='none'">취소</button></div>
         <p style="font-size:11px;color:var(--muted);margin:9px 0 0">저장하면 이 문서는 "정리 완료(사람 검수)"로 표시됩니다 — AI 추정이 아니라 사람이 확정한 값이라는 뜻입니다.</p>
@@ -403,7 +409,9 @@ async function saveEdit(id){
         await jsonFetch(endpoints.show+'/'+id+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
             title:title,category:v('ed-category'),document_type:v('ed-type'),
             discipline:v('ed-discipline')||null,document_number:v('ed-number')||null,revision:v('ed-revision')||null,
-            document_date:v('ed-date')||null,response_due_on:v('ed-due')||null,expires_on:v('ed-expires')||null
+            document_date:v('ed-date')||null,response_due_on:v('ed-due')||null,expires_on:v('ed-expires')||null,
+            project_id:v('ed-project')?Number(v('ed-project')):null,site_id:v('ed-site')?Number(v('ed-site')):null,
+            virtual_path:v('ed-path')||null
         })});
         toast('문서 정보를 저장했습니다.');openDocument(id);loadDocuments()
     }catch(e){toast(e.message,true)}

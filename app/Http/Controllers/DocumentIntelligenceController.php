@@ -11,6 +11,7 @@ use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
 use App\Services\Documents\DocumentIntake;
+use App\Services\Documents\DocumentIntelligenceService;
 use App\Services\Documents\DocumentSiteAssigner;
 use App\Services\Documents\StuckAnalysisReaper;
 use Illuminate\Database\Eloquent\Builder;
@@ -379,14 +380,44 @@ class DocumentIntelligenceController extends Controller
             'document_date' => ['nullable', 'date'],
             'response_due_on' => ['nullable', 'date'],
             'expires_on' => ['nullable', 'date'],
+            // AI 가 프로젝트를 잘못 잡으면 문서가 엉뚱한 서랍에 들어간 채 굳었다 —
+            // 여기서 고칠 수 있어야 «GLOBAL / GENERAL» 로 남은 문서를 현장 문서로 되돌린다.
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'site_id' => ['nullable', 'integer', 'exists:sites,id'],
+            // 폴더는 규칙대로 다시 만드는 것이 기본이고, 규칙으로 안 되는 자리만 직접 적는다.
+            'virtual_path' => ['nullable', 'string', 'max:400'],
         ]);
+
+        // 남의 현장 문서를 자기 현장으로 끌어오지 못하게 — 업로드와 같은 잣대로 검사한다.
+        [$companyId, $siteId, $projectId] = $this->validatedScope(
+            $request->user(),
+            $document->company_id,
+            $request->integer('site_id') ?: null,
+            $request->integer('project_id') ?: null,
+        );
+
+        $manualPath = trim((string) ($data['virtual_path'] ?? ''));
+        unset($data['virtual_path'], $data['project_id'], $data['site_id']);
 
         $document->update([
             ...$data,
+            'company_id' => $companyId ?: $document->company_id,
+            'site_id' => $siteId,
+            'project_id' => $projectId,
             'ai_status' => 'ready',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
         ]);
+
+        // 프로젝트·분류가 바뀌면 폴더도 따라가야 한다. 직접 적은 경로가 있으면 그것을 쓴다.
+        $parts = $manualPath !== ''
+            ? array_values(array_filter(array_map('trim', preg_split('#\s*/\s*#', $manualPath) ?: [])))
+            : app(DocumentIntelligenceService::class)->rebuildFolder($document);
+
+        $document->forceFill([
+            'folder_structure' => $parts,
+            'virtual_path' => implode(' / ', $parts),
+        ])->save();
 
         return response()->json(['success' => true, 'document' => $this->documentRow($document->fresh())]);
     }
@@ -721,6 +752,9 @@ class DocumentIntelligenceController extends Controller
             'virtualPath' => $document->virtual_path,
             'company' => $document->company?->name,
             'site' => $document->site?->code,
+            // 화면의 수정 폼이 현재 값을 미리 골라 두려면 이름이 아니라 id 가 필요하다.
+            'siteId' => $document->site_id,
+            'projectId' => $document->project_id,
             'project' => $document->project?->project_code,
             'projectName' => $document->project?->name,
             'documentDate' => $document->document_date?->toDateString(),
