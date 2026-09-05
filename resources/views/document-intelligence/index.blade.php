@@ -36,6 +36,11 @@
         .dropzone.drag{border-color:var(--blue);background:var(--blue-soft);transform:scale(1.005)}.drop-icon{width:55px;height:55px;border-radius:17px;background:#fff;box-shadow:var(--shadow);display:grid;place-items:center;font-size:27px;margin:0 auto 11px}
         .dropzone strong{font-size:15px}.dropzone p{margin:5px 0 12px;color:var(--muted);font-size:12px}.dropzone small{display:block;color:#8b98ad;margin-top:9px}.queue{display:none;margin-top:11px;border:1px solid var(--line);border-radius:10px;padding:9px;background:#fafcff}
         .queue.show{display:block}.queue-row{display:flex;justify-content:space-between;gap:8px;padding:5px 3px;font-size:11px}.progress{height:5px;background:#e8edf5;border-radius:10px;overflow:hidden;margin-top:7px}.progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--blue),var(--violet));transition:.25s}
+        .queue-row .q-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.queue-row .q-state{flex:none;color:var(--muted)}.queue-row .q-state.good{color:var(--green);font-weight:800}.queue-row .q-state.warn{color:var(--amber);font-weight:800}.queue-row .q-state.bad{color:var(--red);font-weight:800}.queue-row .q-size{flex:none;color:#8b98ad}
+        /* 실패 이유에는 파일 이름이 들어가고, 도면 이름은 띄어쓰기 없이 길다.
+           줄바꿈을 허용하지 않으면 상자가 옆으로 늘어나 정작 이유가 화면 밖으로 나간다. */
+        #queue-summary{margin-top:8px;font-size:11px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere;word-break:break-word}#queue-summary.bad{color:var(--red)}
+        .queue{overflow-x:hidden}
         .memory-list{padding:8px 16px 16px}.memory-item{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-top:8px}.memory-item.critical{background:var(--red-soft);border-color:#fecaca}.memory-item.warning{background:var(--amber-soft);border-color:#fde0a7}
         .memory-item strong{display:block;font-size:12px}.memory-item p{font-size:11px;color:var(--muted);margin:4px 0}.memory-meta{display:flex;gap:7px;align-items:center;font-size:10px;color:var(--muted)}
         {{-- 칸이 넷에서 다섯(현장)으로 늘면서 고정 폭 그리드로는 좁은 화면에서 검색 버튼이 잘렸다. 남는 폭을 나눠 갖고 모자라면 줄을 바꾼다. --}}
@@ -149,7 +154,7 @@
                                 <div><div class="drop-icon">⇧</div><strong>문서를 여기에 끌어다 놓으세요</strong><p>또는 버튼을 눌러 여러 파일을 선택하세요.</p><button class="btn primary" id="pick-files">파일 선택</button><small>PDF · Word · Excel · CSV · TXT · 이미지 · EML / 파일당 최대 {{ $maxUploadMb }}MB</small></div>
                             </div>
                             <input id="file-input" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.eml">
-                            <div class="queue" id="upload-queue"><div id="queue-files"></div><div class="progress"><i id="upload-progress"></i></div></div>
+                            <div class="queue" id="upload-queue"><div id="queue-files"></div><div class="progress"><i id="upload-progress"></i></div><div id="queue-summary"></div></div>
                         </div>
                     </section>
                     @endif
@@ -204,6 +209,9 @@
 <script>
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const canManage = @json($canManage);
+// 파일 하나의 실제 한도 — 애플리케이션 설정·PHP 파일 한도·요청 본문 한도 중 가장 작은 것.
+// 화면이 서버와 다른 숫자를 믿으면 «된다고 했는데 안 된다» 가 된다.
+const MAX_UPLOAD_BYTES = @json($maxUploadBytes);
 const endpoints = {
     list: @json(route('document-intelligence.documents')),
     upload: @json(route('document-intelligence.upload')),
@@ -443,10 +451,114 @@ async function addKorean(){
     catch(e){toast(e.message,true)}
     finally{btn.disabled=false;btn.textContent=old}
 }
-async function uploadFiles(files){
-    if(!files.length)return;const queue=document.getElementById('upload-queue');queue.classList.add('show');document.getElementById('queue-files').innerHTML=[...files].map(f=>`<div class="queue-row"><span>${esc(f.name)}</span><span>${fmtBytes(f.size)}</span></div>`).join('');document.getElementById('upload-progress').style.width='25%';
-    const form=new FormData();[...files].forEach(f=>form.append('files[]',f));['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v)form.append(k+'_id',v)});
-    try{const data=await jsonFetch(endpoints.upload,{method:'POST',body:form});document.getElementById('upload-progress').style.width='100%';const dup=(data.duplicates||[]),fail=(data.failed||[]);let msg=data.message;if(dup.length)msg+=' · '+dup.map(d=>`${d.file}: ${d.reason||'이미 등록된 문서'}`).join(' / ');if(fail.length)msg+=' · 실패 '+fail.map(f=>`${f.file}: ${f.reason}`).join(' / ');toast(msg,fail.length>0);setTimeout(()=>{queue.classList.remove('show');document.getElementById('upload-progress').style.width='0';loadDocuments()},800)}catch(e){toast(e.message,true);document.getElementById('upload-progress').style.width='0'}
+// ── 올리기 ─────────────────────────────────────────────────────────────
+// <b>한 번에 한 파일씩 보낸다.</b> 예전에는 고른 파일을 전부 하나의 FormData 에 담아
+// 한 요청으로 보냈다. 그러면 화면에 적힌 「파일당 최대 50MB」가 거짓이 된다 — PHP 의
+// post_max_size 는 요청 <b>본문 전체</b>에 걸리므로 실제 한도는 «고른 것의 합계» 였다.
+// 2026-09-05 나손에서 사장이 도면 8장(합계 70.9MB)을 올렸을 때 이것이 터졌다.
+// 게다가 막대가 곧장 25% 로 뛴 뒤 응답이 올 때까지 꼼짝하지 않아, 올라가는 중인지
+// 죽은 것인지 화면만 봐서는 구별할 수 없었다. 사장이 본 것은 «멈춘 화면» 이었다.
+//
+// 한 파일씩 보내면 세 가지가 한꺼번에 풀린다.
+//   · 화면에 적힌 한도가 곧 실제 한도가 된다.
+//   · 한 장이 막혀도 나머지는 올라간다(예전에는 전부 함께 죽었다).
+//   · 어느 파일에서 막혔는지 그 줄에 적힌다.
+// 막대는 실제로 보낸 바이트를 따라 움직인다 — 움직이는 막대는 «멈췄나» 라는 질문 자체를 없앤다.
+
+// 서버가 JSON 을 주지 못하는 실패가 있다. 프록시의 413·504 는 HTML 을 돌려주는데,
+// 그것을 JSON 으로 읽으려다 «응답을 읽을 수 없습니다» 만 남기면 원인이 사라진다.
+const HTTP_SAYS={
+    401:'로그인이 풀렸습니다. 새로고침한 뒤 다시 올려 주세요.',
+    403:'이 문서를 올릴 권한이 없습니다.',
+    413:'파일이 너무 큽니다. 서버가 받을 수 있는 크기를 넘었습니다.',
+    419:'로그인 세션이 만료됐습니다. 새로고침한 뒤 다시 올려 주세요.',
+    500:'서버에서 오류가 났습니다. 잠시 뒤 다시 시도해 주세요.',
+    502:'서버가 응답하지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
+    503:'서버가 응답하지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
+    504:'서버가 처리 시간을 넘겼습니다. 파일을 조금씩 나눠 올려 주세요.',
+};
+
+// fetch 로는 «얼마나 보냈는지» 를 알 수 없다. 진행률을 주는 것은 XHR 뿐이다.
+function uploadOne(file, scope, onProgress){
+    return new Promise((resolve,reject)=>{
+        const form=new FormData();
+        form.append('files[]',file);
+        Object.entries(scope).forEach(([k,v])=>form.append(k,v));
+        const xhr=new XMLHttpRequest();
+        xhr.open('POST',endpoints.upload);
+        xhr.setRequestHeader('Accept','application/json');
+        xhr.setRequestHeader('X-CSRF-TOKEN',csrf);
+        xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded/e.total)};
+        xhr.onload=()=>{
+            let data=null;try{data=JSON.parse(xhr.responseText)}catch(_){}
+            if(xhr.status>=200&&xhr.status<300&&data&&data.success!==false)return resolve(data);
+            reject(new Error((data&&(data.error||data.message))||HTTP_SAYS[xhr.status]||('서버 오류 (HTTP '+xhr.status+')')));
+        };
+        xhr.onerror=()=>reject(new Error('연결이 끊겼습니다. 인터넷 상태를 확인한 뒤 다시 시도해 주세요.'));
+        xhr.onabort=()=>reject(new Error('업로드가 중단됐습니다.'));
+        xhr.send(form);
+    });
+}
+
+let uploading=false;
+async function uploadFiles(fileList){
+    const files=[...(fileList||[])];
+    if(!files.length||uploading)return;
+    uploading=true;
+    const queue=document.getElementById('upload-queue'),bar=document.getElementById('upload-progress'),summary=document.getElementById('queue-summary');
+    queue.classList.add('show');
+    summary.className='';summary.textContent='';
+    bar.style.width='0';
+    document.getElementById('queue-files').innerHTML=files.map((f,i)=>
+        `<div class="queue-row" id="q-${i}"><span class="q-name">${esc(f.name)}</span><span class="q-state">대기</span><span class="q-size">${fmtBytes(f.size)}</span></div>`).join('');
+    const setState=(i,text,kind='',title='')=>{const row=document.getElementById('q-'+i);if(!row)return;const cell=row.querySelector('.q-state');cell.textContent=text;cell.className='q-state'+(kind?' '+kind:'');cell.title=title||''};
+    const scope={};['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v)scope[k+'_id']=v});
+
+    let done=0,accepted=0,skipped=0;const problems=[];
+    for(let i=0;i<files.length;i++){
+        const f=files[i];
+        // 보내기 전에 거른다 — 22MB 를 다 올린 뒤에 «너무 큽니다» 를 듣는 것은 낭비다.
+        if(MAX_UPLOAD_BYTES&&f.size>MAX_UPLOAD_BYTES){
+            setState(i,'너무 큼','bad','최대 '+fmtBytes(MAX_UPLOAD_BYTES));
+            problems.push(`${f.name} — 너무 큽니다 (최대 ${fmtBytes(MAX_UPLOAD_BYTES)})`);
+        }else{
+            setState(i,'올리는 중 0%');
+            try{
+                const data=await uploadOne(f,scope,ratio=>{
+                    setState(i,'올리는 중 '+Math.round(ratio*100)+'%');
+                    bar.style.width=Math.round((done+ratio)/files.length*100)+'%';
+                });
+                const dup=(data.duplicates||[])[0],fail=(data.failed||[])[0];
+                if(fail){setState(i,'실패','bad',fail.reason||'');problems.push(`${f.name} — ${fail.reason||'실패'}`)}
+                else if(dup){setState(i,'이미 등록됨','warn',dup.reason||'');skipped++}
+                else{setState(i,'접수됨','good');accepted++}
+            }catch(e){
+                setState(i,'실패','bad',e.message);
+                problems.push(`${f.name} — ${e.message}`);
+            }
+        }
+        done++;
+        bar.style.width=Math.round(done/files.length*100)+'%';
+    }
+    uploading=false;
+
+    const parts=[];
+    if(accepted)parts.push(`${accepted}개 문서를 접수했고 AI 분석을 시작했습니다.`);
+    if(skipped)parts.push(`${skipped}개는 이미 등록된 문서입니다.`);
+    if(problems.length)parts.push(`${problems.length}개를 올리지 못했습니다.`);
+    const message=parts.join(' ')||'올린 문서가 없습니다.';
+    toast(message,problems.length>0);
+    if(accepted||skipped)loadDocuments();
+
+    // 문제가 있으면 목록을 <b>남겨 둔다</b> — 어느 파일이 왜 막혔는지 읽고 다시 올려야 한다.
+    // 예전에는 실패해도 상자가 그대로 떠 있기만 하고 아무 말이 없어, 멈춘 것처럼 보였다.
+    if(problems.length){
+        summary.className='bad';
+        summary.textContent=message+' · '+problems.join(' / ');
+    }else{
+        summary.textContent=message;
+        setTimeout(()=>{queue.classList.remove('show');bar.style.width='0';summary.textContent=''},1200);
+    }
 }
 if(canManage){const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
 document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});

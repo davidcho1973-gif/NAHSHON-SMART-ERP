@@ -14,13 +14,18 @@ use App\Services\Documents\DocumentIntake;
 use App\Services\Documents\DocumentIntelligenceService;
 use App\Services\Documents\DocumentSiteAssigner;
 use App\Services\Documents\StuckAnalysisReaper;
+use App\Services\Takeoff\AiJobQueue;
+use App\Support\DefaultScope;
+use App\Support\OfficePreview;
+use App\Support\Org;
+use App\Support\UploadLimits;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentIntelligenceController extends Controller
@@ -49,18 +54,21 @@ class DocumentIntelligenceController extends Controller
 
         // 드롭존 기본 소속 — ERP 상단에서 고른 현장(site_id 파라미터)이 최우선이고,
         // 없으면 소속 규칙(현장 사람은 자기 현장, 수퍼관리자·고위관리자·회계는 Global).
-        $defaultSiteId = $request->integer('site_id') ?: \App\Support\DefaultScope::siteId($request->user());
+        $defaultSiteId = $request->integer('site_id') ?: DefaultScope::siteId($request->user());
         $defaultCompanyId = $defaultSiteId
             ? (int) Site::query()->whereKey($defaultSiteId)->value('company_id')
-            : \App\Support\DefaultScope::companyId($request->user());
-        $defaultProjectId = \App\Support\DefaultScope::projectId($request->user(), $defaultSiteId);
+            : DefaultScope::companyId($request->user());
+        $defaultProjectId = DefaultScope::projectId($request->user(), $defaultSiteId);
 
         return view('document-intelligence.index', [
             'companies' => $this->companyOptions($request->user()),
             'sites' => $this->siteOptions($request->user()),
             'projects' => $this->projectOptions($request->user()),
             'canManage' => $this->canManage($request->user()),
-            'maxUploadMb' => round((int) config('document-intelligence.max_upload_kb', 51200) / 1024),
+            'maxUploadMb' => round(self::maxUploadBytes() / 1048576),
+            // 화면이 보내기 전에 스스로 걸러야 한다 — 22MB 를 다 올린 뒤에 «너무 큽니다»
+            // 라고 듣는 것은 회선이 느린 현장에서 몇 분을 버리는 일이다.
+            'maxUploadBytes' => self::maxUploadBytes(),
             'defaultCompanyId' => $defaultCompanyId,
             'defaultSiteId' => $defaultSiteId,
             'defaultProjectId' => $defaultProjectId,
@@ -216,10 +224,29 @@ class DocumentIntelligenceController extends Controller
         ]);
     }
 
+    /**
+     * 파일 하나가 실제로 통과할 수 있는 최대 크기(바이트).
+     *
+     * 셋 중 가장 작은 것이 진짜 한도다 — 애플리케이션 설정, PHP 의 파일 한도,
+     * 그리고 요청 본문 한도. 앞의 것만 화면에 적으면 지키지 못할 약속이 된다.
+     */
+    public static function maxUploadBytes(): int
+    {
+        $limits = array_filter([
+            (int) config('document-intelligence.max_upload_kb', 51200) * 1024,
+            UploadLimits::uploadMaxBytes(),
+            UploadLimits::postMaxBytes(),
+        ], fn (int $bytes) => $bytes > 0);
+
+        return $limits === [] ? 0 : (int) min($limits);
+    }
+
     public function upload(Request $request): JsonResponse
     {
         $this->authorizeManage($request->user());
 
+        // 본문이 post_max_size 를 넘긴 경우는 여기까지 오지 않는다 — Laravel 의
+        // ValidatePostSize 가 먼저 413 을 던지고, bootstrap/app.php 가 그것을 사람 말로 옮긴다.
         $request->validate([
             'files' => ['required', 'array', 'min:1', 'max:50'],
             'files.*' => ['required', 'file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
@@ -372,7 +399,7 @@ class DocumentIntelligenceController extends Controller
 
         // 판독은 수십 초에서 몇 분이 걸린다 — 요청 안에서 붙잡고 있으면 게이트웨이가
         // 먼저 끊어 504 가 된다. 접수만 하고 번호표를 준다.
-        return response()->json(\App\Services\Takeoff\AiJobQueue::push(
+        return response()->json(AiJobQueue::push(
             'takeoff', 'document', $document->id,
             '도면 물량 뽑기 — '.($document->document_number ?: $document->title ?: $document->original_file_name),
             ['discipline' => $request->string('discipline')->toString() ?: null],
@@ -389,7 +416,7 @@ class DocumentIntelligenceController extends Controller
     {
         $this->authorizeManage($request->user());
 
-        return response()->json(\App\Services\Takeoff\AiJobQueue::status($job));
+        return response()->json(AiJobQueue::status($job));
     }
 
     /** 시방서에서 제출물 요구를 전수로 뽑아 제출물 대장에 바로 넣는다. */
@@ -398,7 +425,7 @@ class DocumentIntelligenceController extends Controller
         $this->authorizeManage($request->user());
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
 
-        return response()->json(\App\Services\Takeoff\AiJobQueue::push(
+        return response()->json(AiJobQueue::push(
             'spec_submittals', 'document', $document->id,
             '시방 제출물 뽑기 — '.($document->title ?: $document->original_file_name),
         ), 202);
@@ -555,7 +582,7 @@ class DocumentIntelligenceController extends Controller
         ]);
     }
 
-    public function preview(Request $request, IntelligentDocument $document): \Symfony\Component\HttpFoundation\Response
+    public function preview(Request $request, IntelligentDocument $document): Response
     {
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
         abort_unless(
@@ -570,14 +597,14 @@ class DocumentIntelligenceController extends Controller
         // 여기서도 확장자 칸이 비었으면 파일 이름을 본다.
         $ext = (string) ($document->extension ?: pathinfo((string) $document->original_file_name, PATHINFO_EXTENSION));
 
-        if (\App\Support\OfficePreview::supports($ext)) {
-            $html = \App\Support\OfficePreview::html(
+        if (OfficePreview::supports($ext)) {
+            $html = OfficePreview::html(
                 (string) $disk->get($document->file_path),
                 $ext,
                 (string) ($document->title ?: $document->original_file_name),
             );
             if ($html !== null) {
-                return response($html, 200, \App\Support\OfficePreview::safeHeaders());
+                return response($html, 200, OfficePreview::safeHeaders());
             }
         }
 
@@ -657,7 +684,7 @@ class DocumentIntelligenceController extends Controller
                 ]);
             }
             fclose($stream);
-        }, \Illuminate\Support\Str::slug(\App\Support\Org::name()).'-document-index-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, Str::slug(Org::name()).'-document-index-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     private function scopedDocument(User $user, int $id): Builder

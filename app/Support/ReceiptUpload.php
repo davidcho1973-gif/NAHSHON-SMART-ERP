@@ -118,29 +118,9 @@ final class ReceiptUpload
         return 'JPG · PNG · HEIC · PDF, 최대 64MB';
     }
 
+    /** 한도 판정은 UploadLimits 한 곳에 있다 — 문서함 드롭존도 같은 숫자를 봐야 한다. */
     private static function bodyTooLarge(Request $request): bool
     {
-        $length = (int) $request->server('CONTENT_LENGTH', 0);
-        $limit = self::iniBytes((string) ini_get('post_max_size'));
-
-        return $length > 0 && $limit > 0 && $length > $limit;
-    }
-
-    private static function iniBytes(string $value): int
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return 0;
-        }
-
-        $unit = strtoupper(substr($value, -1));
-        $number = (int) $value;
-
-        return match ($unit) {
-            'G' => $number * 1024 * 1024 * 1024,
-            'M' => $number * 1024 * 1024,
-            'K' => $number * 1024,
-            default => $number,
-        };
+        return UploadLimits::bodyOverflowed($request);
     }
 }
