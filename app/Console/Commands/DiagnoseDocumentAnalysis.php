@@ -108,12 +108,13 @@ class DiagnoseDocumentAnalysis extends Command
         }
 
         // ── 5. 크기·형식으로 못 읽는 문서
-        $limit = (int) config('document-intelligence.native_max_bytes', 15728640);
+        // 한도는 엔진이 말하는 값을 그대로 쓴다 — 진단이 실제 동작과 다른 숫자를 말하면 안 된다.
+        $limit = app(\App\Services\Ocr\OcrEngine::class)->maxAttachmentBytes();
         $big = IntelligentDocument::query()->where('file_size', '>', $limit)
             ->whereIn('ai_status', ['queued', 'analyzing', 'failed'])->get(['original_file_name', 'file_size', 'ai_status']);
         $this->line('');
         $this->line('<options=bold>5. 크기 한도</>');
-        $this->line('   AI 직접 판독 한도  '.round($limit / 1048576, 1).'MB   (DOCUMENT_INTELLIGENCE_NATIVE_MAX_BYTES)');
+        $this->line('   AI 직접 판독 한도  '.round($limit / 1048576, 1).'MB   ('.$engine.' 엔진이 말하는 값)');
         $this->line('   한도 초과 미완료 문서  '.$big->count().'건');
         foreach ($big->take(5) as $d) {
             $this->line('     · '.mb_substr($d->original_file_name, 0, 44).'  '.round($d->file_size / 1048576, 1).'MB  ['.$d->ai_status.']');

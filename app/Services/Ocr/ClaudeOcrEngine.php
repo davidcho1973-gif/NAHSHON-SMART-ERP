@@ -21,6 +21,12 @@ class ClaudeOcrEngine implements OcrEngine
         return 'claude';
     }
 
+    /** 요청 본문에 base64 로 실어 보내므로 요청 크기에 묶인다. */
+    public function maxAttachmentBytes(): int
+    {
+        return (int) config('services.anthropic.max_attachment_bytes', 15 * 1024 * 1024);
+    }
+
     /**
      * @param  array<int, array{data: string, mime_type: string}>  $images
      * @param  array<string, mixed>  $schema

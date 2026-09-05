@@ -19,7 +19,10 @@ class DocumentIntelligenceAnalyzer
         $extractedText = $this->textExtractor->extract($bytes, $document->extension, $document->mime_type);
         $parts = [];
 
-        if ($this->supportsNativeVision($document) && strlen($bytes) <= (int) config('document-intelligence.native_max_bytes', 15728640)) {
+        // 한도는 엔진이 말한다 — 파일을 먼저 올려 두고 주소만 넘기는 엔진은 사실상 묶이지 않는다.
+        // 예전에는 설정 한 곳(native_max_bytes)에 15MB 로 박혀 있어, 큰 도면을 보낼 수 있는
+        // 엔진까지 «글자만» 경로로 밀려났다. 스캔 도면은 뽑을 글자가 없어 그대로 실패했다.
+        if ($this->supportsNativeVision($document) && strlen($bytes) <= $this->engine->maxAttachmentBytes()) {
             $parts[] = [
                 'data' => base64_encode($bytes),
                 'mime_type' => $document->mime_type ?: 'application/octet-stream',
@@ -27,7 +30,9 @@ class DocumentIntelligenceAnalyzer
         }
 
         if ($parts === [] && blank($extractedText)) {
-            throw new \RuntimeException('이 파일은 서버에서 본문을 추출할 수 없거나 AI 직접 판독 크기 제한을 초과했습니다. PDF로 변환하거나 15MB 이하로 분할해 다시 분석해 주세요.');
+            $mb = (int) round($this->engine->maxAttachmentBytes() / 1048576);
+
+            throw new \RuntimeException("이 파일은 서버에서 본문을 추출할 수 없고, AI 직접 판독 한도({$mb}MB)도 넘었습니다. PDF로 변환하거나 {$mb}MB 이하로 나눠 다시 분석해 주세요.");
         }
 
         $context = [

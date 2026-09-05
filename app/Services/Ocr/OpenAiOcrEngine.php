@@ -29,6 +29,12 @@ class OpenAiOcrEngine implements OcrEngine
         return 'openai';
     }
 
+    /** 요청 본문에 base64 로 실어 보내므로 요청 크기에 묶인다. */
+    public function maxAttachmentBytes(): int
+    {
+        return (int) config('services.openai.max_attachment_bytes', 15 * 1024 * 1024);
+    }
+
     public static function available(): bool
     {
         return filled(config('services.openai.api_key'));
