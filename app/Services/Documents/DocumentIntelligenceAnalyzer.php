@@ -109,6 +109,16 @@ class DocumentIntelligenceAnalyzer
 
 direction은 incoming/outgoing/internal, confidentiality는 public/internal/confidential/restricted 중 하나다.
 severity는 critical/high/warning/normal 중 하나다. confidence는 0~100 숫자다.
+
+<b>언어</b> — 원문이 영어라도 읽는 사람은 한국인 현장 관리자다. 영어만 적으면 화면에서 읽히지 않고,
+한국어만 적으면 원청·설계사에 그대로 인용할 수 없다. 그래서 다음 항목은 <b>영문 원문 뒤에 한국어를
+괄호로 덧붙여</b> 한 줄에 둘 다 담는다 — 형식은 «English sentence. (한국어 풀이)».
+ · summary · key_facts 의 각 줄
+ · action_items 의 title · details · recommended_action
+한국어는 번역투가 아니라 <b>현장에서 쓰는 말</b>로 쉽게 쓴다. 전문용어는 괄호 안에서 한 번 풀어 준다
+(예: "mock-up (실물 견본 시공)", "preinstallation conference (착수 전 회의)").
+source_excerpt 는 <b>원문 그대로</b> 두고 번역하지 않는다 — 근거 인용이라 손대면 안 된다.
+문서가 이미 한국어면 굳이 영문을 만들지 말고 한국어만 쓴다.
 PROMPT
             ."\n\n시스템 컨텍스트:\n".json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
             ."\n\n문서 추출 본문:\n".$sourceText;
