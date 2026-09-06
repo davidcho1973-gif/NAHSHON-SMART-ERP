@@ -6,8 +6,8 @@
 
     디자인의 기준은 현장이다. 애리조나 햇빛 아래에서 장갑 낀 손으로 보는 화면이라
     바탕은 밝게(햇빛에서는 밝은 화면이 더 잘 보인다), 손가락이 닿는 것은 크게 잡았다.
-    다만 상태 카드 하나만은 짙은 금속판처럼 두었다 — 오늘 몇 시간 일했는지가 이 화면의
-    전부이고, 그 숫자가 종이 위에 떠 있으면 눈이 어디를 봐야 할지 헤맨다.
+    근무 상태와 빠른 실행을 나누고, 본문과 하단 메뉴는 같은 폭을 사용한다.
+    상태는 작은 배지로, 주요 행동은 남색 버튼으로 강조한다.
 --}}
 <!DOCTYPE html>
 <html lang="ko">
@@ -15,7 +15,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#FEE500">
+    <meta name="theme-color" content="#F5F7FA">
     <title>내 출퇴근 · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
@@ -27,37 +27,23 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
-        /*
-            카카오 디자인 언어를 그대로 쓴다.
-
-            현장 작업자 대부분이 한국인이고 카카오톡을 매일 쓴다. 익숙한 색·모서리·간격을
-            그대로 쓰면 "이건 어떻게 쓰는 거냐" 는 질문이 줄어든다.
-
-            규격(카카오 브랜드 가이드):
-              노랑 #FEE500 (R255 G232 B18) · 라벨 rgba(0,0,0,.85) · 모서리 12px · 바탕 #F2F3F5
-              글자 #191919 / #767676 / #B0B8C1 · 구분선 #EDEEF0
-
-            카카오 가이드는 판(panel)을 흰 판·노란 판 두 가지로 두고, 어느 쪽이든 그 위의
-            글자와 아이콘은 <b>검정</b>으로 쓴다. 그 규칙을 그대로 따른다:
-              1. <b>면</b>  — 머리띠·QR 판·지금 일하는 중인 카드. 노란 바닥에 검정 글자.
-              2. <b>행동</b> — 지금 눌러야 할 버튼.
-              3. <b>동그라미</b> — 아이콘·번호를 담는 원형 배지. 안의 글자는 검정.
-            노란 면 위에 또 노란 것을 얹지 않는다(그때는 검정으로 뒤집는다). 목록처럼
-            오래 읽는 것은 흰 판 위에 둔다 — 노랑은 눈이 오래 머무는 색이 아니다.
-        */
+        /* One responsive shell keeps the fixed navigation aligned with the content.
+           Neutral surfaces separate information; color is reserved for actions and status. */
         :root {
             color-scheme: light;
 
             --kakao:    #FEE500;
-            --kakao-2:  #F6DC00;          /* 눌렀을 때 */
             --label:    rgba(0,0,0,.85);  /* 노랑 위 글자 — 카카오 규격 */
 
-            --paper:    #F2F3F5;
+            --paper:    #F5F7FA;
             --card:     #FFFFFF;
-            --ink:      #191919;
-            --ink-2:    #767676;
-            --ink-3:    #B0B8C1;
-            --rule:     #EDEEF0;
+            --ink:      #1C2B3D;
+            --ink-2:    #526174;
+            --ink-3:    #637184;
+            --rule:     #E3E8EF;
+            --accent:  #244B70;
+            --accent-bg: #EDF3F8;
+            --app-width: 960px;
 
             --ok:      #1E8E3E;  --ok-bg:   #E8F5EA;
             --warn:    #B26A00;  --warn-bg: #FFF4E0;
@@ -67,7 +53,7 @@
             /* 예전에는 라벨까지 고정폭 글꼴이었다 — 산업용 계기판처럼 보였다.
                카카오는 UI 글자에 고정폭을 쓰지 않는다. 숫자 정렬은 tabular-nums 가 맡는다. */
             --mono: inherit;
-            --tabh: 60px;
+            --tabh: 76px;
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { -webkit-text-size-adjust: 100%; }
@@ -76,7 +62,11 @@
             font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
             font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
         }
-        .app { max-width: 520px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--paper); }
+        .app { max-width: var(--app-width); margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--paper); }
+        .app > .erp-home { justify-content: flex-start; padding: 12px 24px; background: var(--paper); color: var(--ink-2); font-size: 12px; }
+        .app > .erp-home:active { background: var(--accent-bg); }
+        button, a { touch-action: manipulation; }
+        button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
         /* ── 머리 ─────────────────────────────────────────────────── */
         .offline {
@@ -89,40 +79,43 @@
             font-size: 12px; font-weight: 600;
         }
         .peek b { color: #fff; font-weight: 800; }
-        /* 머리띠 — 노랑 면. 브랜드가 서는 자리이고, 그 위 글자는 전부 검정이다. */
+        /* ── 프로필과 언어 ───────────────────────────────────────── */
         .top {
             position: sticky; top: 0; z-index: 20;
-            background: var(--kakao); color: var(--label);
-            display: flex; align-items: center; gap: 11px; padding: 13px 16px;
+            background: var(--paper); color: var(--ink);
+            display: flex; align-items: center; gap: 12px; padding: 16px 24px;
+            border-bottom: 1px solid var(--rule);
         }
-        /* 노랑 위의 동그라미는 반대로 검정 — 노랑 위 노랑은 보이지 않는다. */
         .tag {
-            width: 40px; height: 40px; border-radius: 50%; flex: none;
-            background: rgba(0,0,0,.85); color: var(--kakao);
+            width: 44px; height: 44px; border-radius: 14px; flex: none;
+            background: #E4EBF2; color: var(--accent);
             display: grid; place-items: center; font-weight: 800; font-size: 14px;
         }
         .who { flex: 1; min-width: 0; }
-        .who b { display: block; font-size: 16px; font-weight: 800; line-height: 1.3; color: var(--label); }
+        .who b { display: block; font-size: 17px; font-weight: 700; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
         .who span {
-            display: block; font-size: 12px; color: rgba(0,0,0,.55);
+            display: block; font-size: 12px; color: var(--ink-2); margin-top: 2px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .langs { display: flex; gap: 4px; flex: none; }
+        .langs { display: flex; gap: 2px; flex: none; padding: 3px; border: 1px solid var(--rule); border-radius: 12px; background: #EBEFF4; }
         .langs button {
-            font-size: 11px; font-weight: 700; padding: 6px 9px; border-radius: 999px;
-            border: 1px solid rgba(0,0,0,.1); background: rgba(255,255,255,.6); color: rgba(0,0,0,.6); cursor: pointer;
+            font-size: 11px; font-weight: 700; padding: 8px; min-width: 36px; min-height: 38px; border-radius: 8px;
+            border: none; background: transparent; color: var(--ink-2); cursor: pointer;
             font-family: inherit;
         }
-        .langs button[aria-pressed="true"] { background: rgba(0,0,0,.85); color: #fff; border-color: transparent; }
+        .langs button[aria-pressed="true"] { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px #1c2b3d12; }
 
-        main { flex: 1; padding: 14px 16px calc(var(--tabh) + env(safe-area-inset-bottom) + 20px); }
+        main { flex: 1; min-width: 0; padding: 24px 24px calc(var(--tabh) + env(safe-area-inset-bottom) + 24px); }
+        .home-overview { display: grid; gap: 20px; align-items: start; }
+        .slab-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
+        .slab-head h1 { font-size: 15px; font-weight: 700; margin: 0; }
+        .quick-heading { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 10px; }
 
-        /* ── 오늘 근무 카드 ────────────────────────────────────────
-           일하는 중일 때만 노랗다. 그 순간 이 화면에서 가장 중요한 것이 이 카드이고,
-           나머지는 전부 흰 종이로 물러난다. */
+        /* ── 오늘 근무 카드 ──────────────────────────────────────── */
         .slab {
             background: var(--card); color: var(--ink);
-            border-radius: 16px; padding: 20px;
+            border-radius: 20px; padding: 24px; border: 1px solid var(--rule);
+            box-shadow: 0 4px 18px #1c2b3d04;
             position: relative; overflow: hidden;
         }
         /* ── 현장 QR 스캔 ─────────────────────────────────────────
@@ -157,14 +150,15 @@
         .notice-h span { margin-left: auto; flex: none; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
         .notice-b { margin-top: 4px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; word-break: keep-all; }
 
-        .slab.is-working { background: var(--kakao); color: var(--label); }
+        .slab.is-working { background: var(--card); color: var(--ink); border-color: #BFD7CD; }
         .slab.is-manual  { background: var(--card); }
         .slab.is-offline { background: var(--card); }
         .slab.is-waiting { background: var(--card); }
-        .slab::before { content: none; }   /* 카카오는 카드 위 색 띠를 쓰지 않는다 */
+        .slab::before { content: none; }
 
-        .state { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
-        .slab.is-working .state { color: rgba(0,0,0,.62); }
+        .state { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--paper); padding: 5px 10px; border-radius: 8px; }
+        .slab.is-working .state { color: #24634E; background: #EAF4EF; }
+        .slab.is-manual .state { color: #855B24; background: #FBF3E7; }
         .state i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); display: block; flex: none; }
         .slab.is-working .state i { background: #1E8E3E; }
         .slab.is-manual  .state i { background: #B26A00; }
@@ -175,40 +169,41 @@
         @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
 
         .clock {
-            font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1.05;
-            font-variant-numeric: tabular-nums; margin: 10px 0 3px; color: inherit;
+            font-size: 50px; font-weight: 700; letter-spacing: -.035em; line-height: 1.15;
+            font-variant-numeric: tabular-nums; margin: 0 0 8px; color: inherit;
         }
-        .clock small { font-size: 19px; font-weight: 700; margin: 0 2px 0 3px; opacity: .5; }
+        .clock small { font-size: 16px; font-weight: 500; margin: 0 12px 0 4px; color: var(--ink-2); }
         .meta { font-size: 12.5px; color: var(--ink-2); }
-        .slab.is-working .meta { color: rgba(0,0,0,.6); }
+        .slab.is-working .meta { color: var(--ink-2); }
 
         .why {
-            margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--rule);
-            font-size: 14px; line-height: 1.55; color: var(--ink-2);
+            margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rule);
+            font-size: 13px; line-height: 1.7; color: var(--ink-2); word-break: keep-all; overflow-wrap: anywhere;
         }
         .slab.is-working .why { border-top-color: rgba(0,0,0,.12); color: rgba(0,0,0,.7); }
         .why b { color: var(--ink); font-weight: 700; }
         .slab.is-working .why b { color: var(--label); }
 
-        /* 버튼 — 카카오 규격: 모서리 12px, 굵은 라벨, 그림자 없음 */
+        /* 버튼은 넓게, 설명은 읽을 수 있는 대비로 유지한다. */
         .btn {
             width: 100%; margin-top: 13px; padding: 15px; border: none; border-radius: 12px;
             font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: -.01em;
             cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
             min-height: 52px;
         }
-        .btn.go    { background: var(--kakao); color: var(--label); }
+        .btn.go    { background: var(--accent); color: #fff; }
         .btn.stop  { background: var(--ink); color: #fff; }
         .btn.quiet { background: var(--card); color: var(--ink-2); border: 1px solid var(--rule); font-size: 15px; }
         .slab.is-working .btn.stop { background: rgba(0,0,0,.85); color: #fff; }
         .slab.is-working .btn.quiet { background: rgba(255,255,255,.5); border-color: rgba(0,0,0,.1); color: rgba(0,0,0,.7); }
-        .btn:active { background: var(--kakao-2); }
+        .btn.go:active { background: #193B5A; }
+        .btn svg { width: 20px; height: 20px; flex: none; }
         .btn.stop:active { opacity: .85; background: var(--ink); }
         .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
         .note { font-size: 12.5px; color: var(--ink-3); margin-top: 9px; line-height: 1.5; }
         .note b { color: var(--ink-2); font-weight: 700; }
-        .slab.is-working .note { color: rgba(0,0,0,.55); }
-        .slab.is-working .note b { color: rgba(0,0,0,.75); }
+        .slab.is-working .note { color: var(--ink-2); }
+        .slab.is-working .note b { color: var(--ink); }
 
         /* ── 목록·카드 ────────────────────────────────────────────── */
         .sec { margin-top: 24px; }
@@ -219,7 +214,7 @@
         }
         .sec-h em { font-style: normal; color: var(--ink-3); font-size: 12px; font-weight: 500; }
 
-        .panel { background: var(--card); border-radius: 14px; overflow: hidden; }
+        .panel { background: var(--card); border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; }
         .row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
         .row:last-child { border-bottom: none; }
         .row-k { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; color: var(--ink-2); }
@@ -243,14 +238,14 @@
         .stat-v { font-size: 28px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 2px; }
         .stat-v small { font-size: 14px; font-weight: 700; color: var(--ink-3); margin-left: 1px; }
 
-        /* 급여 — 노랑을 또 쓰지 않는다. 흰 카드에 숫자만 크게, 강조는 형광펜처럼. */
+        /* 급여는 흰 카드와 절제된 강조색으로 표시한다. */
         .money { background: var(--card); color: var(--ink); border-radius: 16px; padding: 20px; }
         .money .stat-k { color: var(--ink-2); }
         .money .amt {
             font-size: 38px; font-weight: 800; letter-spacing: -.035em;
             font-variant-numeric: tabular-nums; margin: 5px 0 2px;
         }
-        .money .amt em { font-style: normal; background: var(--kakao); border-radius: 6px; padding: 0 6px; }
+        .money .amt em { font-style: normal; background: var(--accent-bg); border-radius: 6px; padding: 0 6px; }
         .money .sub { font-size: 12.5px; color: var(--ink-3); }
         .money .line {
             display: flex; justify-content: space-between; gap: 12px;
@@ -260,9 +255,8 @@
         .money .line:first-of-type { margin-top: 14px; }
         .money .line b { color: var(--ink); font-weight: 700; }
 
-        /* QR 판 — 카카오 포스터 그대로. 노랑 바닥에 검정 코드.
-           인터넷이 끊겼을 때 반장에게 내미는 화면이라 멀리서도 한눈에 알아보여야 한다. */
-        .qr { background: var(--kakao); color: var(--label); border-radius: 16px; padding: 22px; text-align: center; }
+        /* 오프라인 배지 QR은 고대비를 유지한다. */
+        .qr { background: var(--card); color: var(--ink); border: 1px solid var(--rule); border-radius: 16px; padding: 22px; text-align: center; }
         .qr img { display: block; margin: 0 auto; width: 232px; height: 232px; max-width: 100%; }
         .qr-id { font-size: 16px; font-weight: 800; letter-spacing: .06em; margin-top: 12px; color: var(--label); }
         .qr-note { font-size: 12.5px; color: rgba(0,0,0,.6); margin-top: 8px; line-height: 1.5; }
@@ -275,10 +269,9 @@
         }
         .link b { font-size: 15px; font-weight: 700; display: block; letter-spacing: -.01em; }
         .link span { font-size: 12.5px; color: var(--ink-3); }
-        /* 화살표는 노랑 동그라미 안에 — 카카오가 아이콘을 담는 방식이다. */
         .link .go {
             width: 28px; height: 28px; border-radius: 50%; flex: none;
-            background: var(--kakao); color: var(--label);
+            background: var(--accent-bg); color: var(--accent);
             display: grid; place-items: center; font-size: 15px; font-weight: 800; line-height: 1;
         }
 
@@ -299,30 +292,34 @@
         .setup-who { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; word-break: break-all; }
         .step-n {
             width: 24px; height: 24px; border-radius: 50%; flex: none;
-            background: var(--kakao); color: var(--label);
+            background: var(--accent-bg); color: var(--accent);
             display: grid; place-items: center; font-size: 12px; font-weight: 800;
         }
 
         /* ── 현장에서 하는 나머지 일 (네 칸) ─────────────────────────
            손가락이 닿는 자리에 크게. 글자 링크 세 줄로 아래에 숨겨 두었을 때는
            «앱이 따로따로» 처럼 느껴졌다. */
-        .quick { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+        .quick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
         .tile.wide { grid-column: 1 / -1; }
         .tile {
-            position: relative; background: var(--card); border-radius: 14px; padding: 15px 14px 13px;
-            text-decoration: none; color: var(--ink); display: block; min-height: 96px;
+            position: relative; background: var(--card); border: 1px solid var(--rule); border-radius: 16px; padding: 16px;
+            text-decoration: none; color: var(--ink); display: flex; flex-direction: column; align-items: flex-start; min-height: 116px; min-width: 0;
         }
         .tile:active { background: #F7F8F9; }
         .tile-i {
             display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
-            background: var(--paper); color: var(--ink); margin-bottom: 9px;
+            background: var(--paper); color: var(--accent); margin-bottom: 10px;
         }
         .tile-i svg { width: 20px; height: 20px; display: block; }
-        .tile b { display: block; font-size: 14.5px; font-weight: 800; line-height: 1.3; }
-        .tile-s { display: block; font-size: 11.5px; color: var(--ink-2); line-height: 1.4; margin-top: 2px; }
+        .tile b { display: block; font-size: 14px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+        .tile-s { display: block; font-size: 12px; color: var(--ink-2); line-height: 1.5; margin-top: 4px; }
+        .tile.wide { flex-direction: row; align-items: center; gap: 12px; min-height: 88px; background: var(--accent-bg); border-color: #D8E3ED; }
+        .tile.wide .tile-i { flex: none; margin: 0; background: #fff; width: 40px; height: 40px; }
+        .tile-copy { min-width: 0; }
+        .tile.wide::after { content: '›'; margin-left: auto; font-size: 24px; font-weight: 400; color: var(--accent); }
         .tile-dot {
             position: absolute; top: 11px; right: 11px; min-width: 19px; height: 19px; padding: 0 6px;
-            border-radius: 999px; background: #FF3B30; color: #fff; font-size: 11px; font-weight: 800;
+            border-radius: 999px; background: #B44444; color: #fff; font-size: 11px; font-weight: 700;
             display: grid; place-items: center;
         }
 
@@ -342,20 +339,19 @@
 
         /* ── 아래 탭 ──────────────────────────────────────────────── */
         .tabs {
-            position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+            position: fixed; left: 50%; transform: translateX(-50%); width: 100%; max-width: var(--app-width); bottom: 0; z-index: 30;
             display: grid; grid-template-columns: repeat(4, 1fr);
             background: var(--card); border-top: 1px solid var(--rule);
-            padding-bottom: env(safe-area-inset-bottom);
+            padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 18px #1c2b3d04;
         }
-        .tabs > div { max-width: 520px; margin: 0 auto; width: 100%; display: contents; }
         .tab {
             background: none; border: none; cursor: pointer; font-family: inherit;
-            padding: 8px 0 10px; display: flex; flex-direction: column; align-items: center; gap: 3px;
-            font-size: 11px; font-weight: 600; color: var(--ink-3); position: relative;
+            padding: 9px 4px; min-height: 60px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+            font-size: 11px; font-weight: 600; color: var(--ink-2); position: relative;
         }
         .tab svg { width: 24px; height: 24px; display: block; }
-        /* 카카오는 고른 칸에 색 막대를 두지 않는다 — 글자와 아이콘이 진해질 뿐이다. */
-        .tab[aria-selected="true"] { color: var(--ink); font-weight: 700; }
+        .tab[aria-selected="true"] { color: var(--accent); background: var(--accent-bg); font-weight: 700; }
         .tab[aria-selected="true"]::before { content: none; }
         .tab .dot {
             position: absolute; top: 5px; right: calc(50% - 19px);
@@ -369,6 +365,28 @@
             transform: translateX(-50%); background: rgba(25,25,25,.92); color: #fff;
             padding: 13px 20px; border-radius: 999px; font-size: 14px; font-weight: 600;
             max-width: 88vw; text-align: center; z-index: 50;
+        }
+        @media (hover: hover) {
+            .tile:hover { border-color: #AABFD2; background: #F4F8FB; }
+            .btn.go:hover { background: #1D405F; }
+            .tab:hover { background: var(--paper); }
+        }
+        @media (min-width: 760px) {
+            .home-overview { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: 24px; }
+            .top { padding: 20px 24px; }
+            .slab { padding: 28px; }
+            .quick-heading { margin-top: 2px; }
+            .tabs { border: 1px solid var(--rule); border-bottom: 0; border-radius: 18px 18px 0 0; }
+        }
+        @media (max-width: 420px) {
+            .top { padding: 14px 16px; gap: 10px; flex-wrap: wrap; }
+            main { padding: 20px 16px calc(var(--tabh) + env(safe-area-inset-bottom) + 20px); }
+            .app > .erp-home { padding-left: 16px; }
+            .who { min-width: 110px; }
+            .slab { padding: 20px; }
+            .clock { font-size: 46px; }
+            .tile { padding: 14px; }
+            .langs { margin-left: auto; }
         }
     </style>
 </head>
@@ -473,11 +491,12 @@
      */
     var DICT = {
         ko: {
+            todayShift: '오늘의 근무', quickActions: '빠른 실행',
             working: '근무중', offline: '오프라인', outside: '현장 밖', noAuto: '자동 안 됨',
             offlineBar: '오프라인 · 내 QR 을 반장에게 보여 주세요',
             h: '시간', m: '분', clockInAt: '출근', noSite: '현장 미배정', radius: '반경',
             btnOut: '퇴근하기', btnIn: '출근 누르기', btnInAnyway: '그래도 직접 누르기',
-            btnScanIn: '📷 현장 QR 찍고 출근', btnScanOut: '📷 현장 QR 찍고 퇴근',
+            btnScanIn: '현장 QR 찍고 출근', btnScanOut: '현장 QR 찍고 퇴근',
             noteScan: '출입구에 붙은 현장 QR 을 찍어야 기록됩니다. 현장에 있는 것이 확인되면 바로, 확인이 안 되면 <b>반장 승인</b>을 거칩니다.',
             scanHint: '출입구의 현장 QR 을 네모 안에 맞춰 주세요.',
             scanNotGate: '현장 QR 이 아닙니다. 출입구에 붙은 QR 을 찍어 주세요.',
@@ -526,11 +545,12 @@
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
         en: {
+            todayShift: 'Today’s shift', quickActions: 'Quick actions',
             working: 'Working', offline: 'Offline', outside: 'Off site', noAuto: 'No auto',
             offlineBar: 'Offline · Show your QR to the foreman',
             h: 'h', m: 'm', clockInAt: 'In', noSite: 'No site assigned', radius: 'radius',
             btnOut: 'Clock out', btnIn: 'Clock in', btnInAnyway: 'Clock in anyway',
-            btnScanIn: '📷 Scan site QR to clock in', btnScanOut: '📷 Scan site QR to clock out',
+            btnScanIn: 'Scan site QR to clock in', btnScanOut: 'Scan site QR to clock out',
             noteScan: 'You must scan the site QR at the gate. Recorded right away if you are on site; otherwise it waits for <b>foreman approval</b>.',
             scanHint: 'Line up the gate QR inside the square.',
             scanNotGate: 'That is not a site QR. Please scan the one posted at the gate.',
@@ -579,11 +599,12 @@
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
         es: {
+            todayShift: 'Jornada de hoy', quickActions: 'Accesos rápidos',
             working: 'Trabajando', offline: 'Sin conexión', outside: 'Fuera del sitio', noAuto: 'Sin auto',
             offlineBar: 'Sin conexión · Muestre su QR al capataz',
             h: 'h', m: 'm', clockInAt: 'Entrada', noSite: 'Sin sitio asignado', radius: 'radio',
             btnOut: 'Marcar salida', btnIn: 'Marcar entrada', btnInAnyway: 'Marcar de todos modos',
-            btnScanIn: '📷 Escanear QR para entrada', btnScanOut: '📷 Escanear QR para salida',
+            btnScanIn: 'Escanear QR para entrada', btnScanOut: 'Escanear QR para salida',
             noteScan: 'Debe escanear el QR de la obra en la entrada. Se registra al instante si está en el sitio; si no, espera <b>aprobación del capataz</b>.',
             scanHint: 'Alinee el QR de la entrada dentro del cuadro.',
             scanNotGate: 'Ese no es un QR de obra. Escanee el que está en la entrada.',
@@ -768,8 +789,8 @@
         var label = working ? T.working : (v.tier === 'qr' ? T.offline : (v.tier === 'waiting' ? T.outside : T.noAuto));
         var secs = (d.elapsedSeconds || 0) + (working ? state.tick : 0);
 
-        var h = '<div class="slab is-' + tone + '">' +
-            '<div class="state"><i></i>' + label + '</div>' +
+        var h = '<div class="home-overview"><section class="slab is-' + tone + '">' +
+            '<div class="slab-head"><h1>' + T.todayShift + '</h1><div class="state"><i></i>' + label + '</div></div>' +
             '<div class="clock">' + hm(secs) + '</div>' +
             '<div class="meta">' + (working && d.firstEnterAt
                 ? T.clockInAt + ' ' + esc(d.firstEnterAt) + (d.site ? ' · ' + esc(d.site.code) : '')
@@ -778,32 +799,32 @@
         // 출퇴근은 현장 QR 을 스캔해야만 찍힌다. 누르기만 하면 되는 버튼은 어디서든
         // 눌리고, 그 기록이 그대로 급여가 된다 — 출입구에 붙은 QR 앞까지 와야 한다.
         if (working) {
-            h += '<button class="btn stop" data-act="scan" data-dir="out">' + T.btnScanOut + '</button>' +
+            h += '<button class="btn stop" data-act="scan" data-dir="out">' + ICON.scan + T.btnScanOut + '</button>' +
                  '<div class="note">' + T.noteAuto + '</div>';
         } else {
             h += '<div class="why">' + v.why + '</div>';
             if (v.fix) h += '<button class="btn stop" data-act="perm">' + T.btnPerm + '</button>';
             if (v.tier === 'manual' || v.tier === 'waiting') {
-                h += '<button class="btn go" data-act="scan" data-dir="in">' + T.btnScanIn + '</button>' +
+                h += '<button class="btn go" data-act="scan" data-dir="in">' + ICON.scan + T.btnScanIn + '</button>' +
                      '<div class="note">' + T.noteScan + '</div>';
             }
             if (v.tier === 'qr') h += '<button class="btn go" data-act="goqr">' + T.btnQr + '</button>';
         }
-        h += '</div>';
+        h += '</section>';
 
         // ── 현장에서 하는 나머지 일 — 출퇴근 바로 아래에 큰 칸으로 둔다.
         //
         // 예전에는 보고·영수증·메시지가 화면 맨 아래 글자 링크 세 줄이었다. 하루에도
         // 몇 번씩 쓰는 것들인데 스크롤을 내려야 보였고, 그래서 «앱이 따로따로» 처럼
         // 느껴졌다. 폰에서 손가락이 닿는 자리에 네 칸으로 모은다.
-        h += '<div class="quick">' +
+        h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
             tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
             tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, d.reportBadge) +
             tile('{{ route('expense-app.index') }}', ICON.receipt, T.qReceipt, T.qReceiptSub, '') +
             tile('{{ route('attendance-app.docs') }}', ICON.doc, T.qDoc, T.qDocSub, '') +
             tile('{{ route('communication.index') }}', ICON.chat, T.qChat, T.qChatSub, UNREAD ? String(UNREAD) : '') +
-            '</div>';
+            '</div></section></div>';
 
         // 전체공지 — 출퇴근 바로 아래. 공지방까지 들어가는 사람은 없다.
         var notices = d.notices || [];
@@ -848,10 +869,11 @@
         return '<a class="tile' + (wide ? ' wide' : '') + '" href="' + href + '">' +
             (badge ? '<span class="tile-dot">' + esc(badge) + '</span>' : '') +
             '<span class="tile-i">' + icon + '</span>' +
-            '<b>' + esc(name) + '</b><span class="tile-s">' + esc(sub) + '</span></a>';
+            '<span class="tile-copy"><b>' + esc(name) + '</b><span class="tile-s">' + esc(sub) + '</span></span></a>';
     }
 
     var ICON = {
+        scan: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H4a1 1 0 0 0-1 1v4m13-5h4a1 1 0 0 1 1 1v4M3 16v4a1 1 0 0 0 1 1h4m13-5v4a1 1 0 0 1-1 1h-4"/><path d="M7 7h3v3H7zm7 0h3v3h-3zM7 14h3v3H7zm7 0h3v3h-3z"/></svg>',
         ask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20 20"/><path d="M8.6 9.2a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.8.7-.8 1.3"/><path d="M10.5 14.2h.01"/></svg>',
         report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z"/><path d="M9.5 3.2h5v2.4h-5z"/><path d="M9 11h6M9 14.6h4"/></svg>',
         receipt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.6h12v16.8l-2.4-1.5-2.4 1.5-2.4-1.5-2.4 1.5L6 18.9z"/><path d="M9.2 8.4h5.6M9.2 12.2h5.6"/></svg>',
