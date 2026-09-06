@@ -94,7 +94,7 @@
         <header>
             <a class="back" href="{{ route('attendance-app.index') }}">← 홈</a>
             <h1>물어보기</h1>
-            <p class="sub">{{ $siteName ?: '현장' }} · 도면 · 시방 · 계약 · 제출물 · 공정표에서 찾아 답합니다. 답은 나만 봅니다.</p>
+            <p class="sub">{{ $siteName ?: '현장' }} · 작업자도 공정·시공·수량·도면·시방을 물어볼 수 있습니다. 답은 나만 봅니다. 회계·급여·단가·견적·계약금액은 재무 권한에 따라 제한됩니다.</p>
         </header>
 
         <main>
