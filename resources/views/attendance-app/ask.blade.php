@@ -5,31 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ __('물어보기') }}</title>
+    @include('partials.field-app-theme')
     <style>
         /* 앱의 다른 화면과 같은 규격 — 문이 여럿이어도 한 앱으로 보여야 한다. */
-        :root {
-            color-scheme: light;
-            --paper: #F2F3F5; --card: #FFFFFF;
-            --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0;
-            --ok: #1E8E3E; --ok-bg: #E8F5EA;
-            --warn: #B26A00; --warn-bg: #FFF4E0;
-            --bad: #D94C4C; --bad-bg: #FDECEC;
-            --info: #3E6BE0; --info-bg: #ECF1FE;
-        }
+
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         [hidden] { display: none !important; }
         html { -webkit-text-size-adjust: 100%; }
-        body {
-            margin: 0; background: var(--paper); color: var(--ink);
-            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
-            font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
-        }
-        .app { max-width: 520px; margin: 0 auto; min-height: 100dvh; background: var(--paper); }
-        header { background: var(--card); padding: 16px 18px 15px; border-bottom: 1px solid var(--rule); }
-        .back { display: inline-block; color: var(--info); font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 7px; }
-        h1 { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.25; }
+
         .sub { margin: 5px 0 0; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
-        main { padding: 14px 16px 40px; }
 
         .askbox { background: var(--card); border-radius: 16px; padding: 12px 12px 10px; }
         textarea {
@@ -88,16 +72,16 @@
         .off { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px 14px; font-size: 13px; font-weight: 700; }
     </style>
 </head>
-<body>
+<body class="field-app field-ask">
     @include('partials.erp-home')
-    <div class="app">
-        <header>
-            <a class="back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+    <div class="app field-shell">
+        <header class="field-header">
+            <a class="back field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
             <h1>{{ __('물어보기') }}</h1>
             <p class="sub">{{ $siteName ?: __('현장') }} · {{ __('작업자도 공정·시공·수량·도면·시방을 물어볼 수 있습니다. 답은 나만 봅니다. 회계·급여·단가·견적·계약금액은 재무 권한에 따라 제한됩니다.') }}</p>
         </header>
 
-        <main>
+        <main class="field-content">
             @if (! $available)
                 <div class="off">{{ __('AI 도우미가 이 서버에 켜져 있지 않습니다. 관리자에게 알려 주세요.') }}</div>
             @else
@@ -125,6 +109,7 @@
             <div class="sec-h">{{ __('최근 물어본 것') }}</div>
             <div id="recent"></div>
         </main>
+        @include('partials.field-app-nav')
     </div>
 
     <script>

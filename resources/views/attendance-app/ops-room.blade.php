@@ -5,35 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ __('오늘 보고') }}</title>
+    @include('partials.field-app-theme')
     <style>
         /* 앱의 다른 화면과 같은 규격 — 문이 여럿이어도 한 앱으로 보여야 한다. */
-        :root {
-            color-scheme: light;
-            --paper: #F2F3F5; --card: #FFFFFF;
-            --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0;
-            --ok: #1E8E3E; --warn: #B26A00; --bad: #D94C4C; --info: #3E6BE0;
-        }
+
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         [hidden] { display: none !important; }
         html { -webkit-text-size-adjust: 100%; }
-        body {
-            margin: 0; min-height: 100dvh; background: var(--paper); color: var(--ink);
-            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
-            font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
-        }
-        .app { min-height: 100dvh; max-width: 520px; margin: 0 auto; background: var(--paper); display: flex; flex-direction: column; }
-        header { padding: 16px 18px 15px; background: var(--card); border-bottom: 1px solid var(--rule); }
-        .back { display: inline-block; color: var(--info); font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 7px; }
+
         .eyebrow { margin: 0 0 4px; color: var(--ink-2); font-size: 12px; font-weight: 700; }
-        h1 { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.25; }
 
         /* 상태 한 줄 — 화면을 열자마자 «지금 어디까지 왔나» 를 말해 준다. */
         .state { margin: 8px 0 0; font-size: 14px; line-height: 1.5; font-weight: 700; color: var(--ink); }
         .state.done { color: var(--ok); }
         .state.todo { color: var(--warn); }
         .state-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
-
-        main { padding: 14px 16px 40px; flex: 1; }
 
         /* ── 제일 큰 것 하나: 말하기 ─────────────────────────────────
            현장은 장갑을 끼고 손이 더럽다. 타자보다 말이 빠르다. */
@@ -109,11 +95,11 @@
         .parsed b { color: var(--ink); }
     </style>
 </head>
-<body>
+<body class="field-app field-report">
     @include('partials.erp-home')
-    <div class="app">
-        <header>
-            <a class="back" href="{{ route('attendance-app.index') }}">← {{ __('홈') }}</a>
+    <div class="app field-shell">
+        <header class="field-header">
+            <a class="back field-back" href="{{ route('attendance-app.index') }}">← {{ __('홈') }}</a>
             <p class="eyebrow">{{ \App\Support\Org::name() }} · {{ $siteName ?: __('현장') }}</p>
             <h1>{{ $myTrade ? __('오늘 보고').' — '.$myTrade : __('현장 기록') }}</h1>
 
@@ -135,8 +121,8 @@
             @endif
         </header>
 
-        <main>
-            <section id="compose">
+        <main class="field-content field-columns">
+            <section id="compose" class="field-card">
                 {{-- ① 말하기 — 이 화면의 주인공. 현장에서 제일 빠른 길이다.
                      아직 안 켜졌으면 그렇게 적어 둔다. 눌러 보고 나서 실패를 아는 것보다
                      누르기 전에 아는 편이 낫다. --}}
@@ -210,6 +196,7 @@
 
             <section id="detail-screen" hidden></section>
         </main>
+        @include('partials.field-app-nav')
     </div>
 
     <script>

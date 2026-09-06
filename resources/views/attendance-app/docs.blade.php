@@ -5,31 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ __('문서 올리기') }}</title>
+    @include('partials.field-app-theme')
     <style>
         /* 앱의 다른 화면과 같은 규격을 쓴다 — 문이 여럿이어도 한 앱으로 보여야 한다. */
-        :root {
-            color-scheme: light;
-            --paper: #F2F3F5; --card: #FFFFFF;
-            --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1; --rule: #EDEEF0;
-            --ok: #1E8E3E; --ok-bg: #E8F5EA;
-            --warn: #B26A00; --warn-bg: #FFF4E0;
-            --bad: #D94C4C; --bad-bg: #FDECEC;
-            --info: #3E6BE0; --info-bg: #ECF1FE;
-        }
+
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         [hidden] { display: none !important; }
         html { -webkit-text-size-adjust: 100%; }
-        body {
-            margin: 0; background: var(--paper); color: var(--ink);
-            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
-            font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
-        }
-        .app { max-width: 520px; margin: 0 auto; min-height: 100dvh; background: var(--paper); }
-        header { background: var(--card); padding: 16px 18px 15px; border-bottom: 1px solid var(--rule); }
-        .back { display: inline-block; color: var(--info); font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 7px; }
-        h1 { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.25; }
+
         .sub { margin: 5px 0 0; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
-        main { padding: 14px 16px 40px; }
 
         .pick {
             width: 100%; border: 0; border-radius: 16px; padding: 24px 18px; background: var(--card);
@@ -75,16 +59,17 @@
         .empty { color: var(--ink-2); font-size: 13px; text-align: center; padding: 18px 0; line-height: 1.6; }
     </style>
 </head>
-<body>
+<body class="field-app field-docs">
     @include('partials.erp-home')
-    <div class="app">
-        <header>
-            <a class="back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+    <div class="app field-shell">
+        <header class="field-header">
+            <a class="back field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
             <h1>{{ __('문서 올리기') }}</h1>
             <p class="sub">{{ $siteName ?: __('현장') }} · {{ __('도면 · 계약서 · 시방서를 올리면 ERP 문서함에 자동으로 분류돼 들어갑니다.') }}</p>
         </header>
 
-        <main>
+        <main class="field-content field-columns">
+            <section class="field-card">
             <button class="pick" id="pick" type="button">
                 <span class="i">📄</span>
                 <b>{{ __('파일 고르기') }}</b>
@@ -98,9 +83,13 @@
 
             <p class="msg" id="msg">{{ __('사진으로 찍은 서류도 됩니다. 올리면 AI 가 종류를 보고 폴더를 정합니다.') }}</p>
 
+            </section>
+            <section>
             <div class="sec-h">{{ __('최근에 올린 것') }}</div>
             <div id="recent"></div>
+            </section>
         </main>
+        @include('partials.field-app-nav')
     </div>
 
     <script>
