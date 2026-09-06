@@ -141,6 +141,25 @@ class PurgeEquipmentTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_it_names_the_path_that_created_each_row(): void
+    {
+        // 치우기만 하고 통로를 못 막으면 다음 도면에서 또 쌓인다. 지우는 자리에서
+        // «무엇이 만들었나» 가 드러나야 고칠 자리를 찾을 수 있다.
+        $site = $this->site();
+
+        $fromDocument = $this->equipment('굴착기');
+        $fromDocument->update(['payload' => ['source' => 'document-hub', 'document_id' => 88]]);
+
+        $fromApp = $this->equipment('디스포저(컨트롤 포함)');
+        $fromApp->update(['payload' => null]);
+
+        $this->artisan('equipment:purge')
+            ->expectsOutputToContain('만든 경로별')
+            ->expectsOutputToContain('문서함 연결 (문서 #88)')
+            ->expectsOutputToContain('앱 일괄 등록')
+            ->assertExitCode(0);
+    }
+
     private function equipment(string $name, string $method = 'AI자동분석', ?Site $site = null): Equipment
     {
         $site ??= $this->site();

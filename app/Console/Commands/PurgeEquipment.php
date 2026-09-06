@@ -150,6 +150,14 @@ class PurgeEquipment extends Command
             $this->line(sprintf('  %-20s %4d줄', $label, $items->count()));
         }
 
+        // 무엇이 이 줄들을 만들었나. 치우기만 하고 통로를 못 막으면 다음 도면에서 또 쌓인다 —
+        // 지우는 자리가 원인을 확인하기에 가장 좋은 자리다(대상이 눈앞에 다 있다).
+        $this->line('');
+        $this->line('만든 경로별:');
+        foreach ($rows->groupBy(fn (Equipment $e): string => $this->originOf($e)) as $origin => $items) {
+            $this->line(sprintf('  %-30s %4d줄', $origin, $items->count()));
+        }
+
         $this->line('');
         $this->line('현장별:');
         $siteNames = Site::query()->pluck('name', 'id');
@@ -172,6 +180,32 @@ class PurgeEquipment extends Command
         if ($rows->count() > 20) {
             $this->line('  … 그리고 '.($rows->count() - 20).'줄 더 (전체는 아래 파일에)');
         }
+    }
+
+    /**
+     * 이 줄을 만든 경로. payload 에 남은 표식으로 가른다.
+     *
+     * 경로마다 고칠 자리가 다르다 — 문서함 연결이면 DocumentEquipmentConnector 이고,
+     * 앱 일괄 등록이면 MobileEquipmentController 다. 이름을 못 대면 엉뚱한 데를 고친다.
+     */
+    private function originOf(Equipment $equipment): string
+    {
+        $payload = is_array($equipment->payload) ? $equipment->payload : [];
+
+        if (($payload['source'] ?? null) === 'document-hub') {
+            return '문서함 연결 (문서 #'.($payload['document_id'] ?? '?').')';
+        }
+        if (str_starts_with((string) $equipment->equipment_code, 'DOC-')) {
+            return '문서함 연결 (코드 DOC-)';
+        }
+        if (array_key_exists('order_quantity', $payload)) {
+            return '계약서 판독 등록';
+        }
+        if ($payload === []) {
+            return '앱 일괄 등록 (payload 없음)';
+        }
+
+        return '기타 ('.implode('·', array_slice(array_keys($payload), 0, 3)).')';
     }
 
     /**
