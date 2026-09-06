@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $employee->name }} 배지 QR</title>
+    <title>{{ $employee->name }} {{ __('배지 QR') }}</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f1f5f9; color: #0f172a; }
         body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; }
@@ -36,13 +36,13 @@
 
     <main class="sheet">
         <p class="brand">{{ \App\Support\Org::name() }} SMART ERP</p>
-        <h1>작업자 배지 QR</h1>
+        <h1>{{ __('작업자 배지 QR') }}</h1>
 
         <section class="info">
-            <div class="row"><span>직원</span><strong>{{ $employee->name }}</strong></div>
+            <div class="row"><span>{{ __('직원') }}</span><strong>{{ $employee->name }}</strong></div>
             <div class="row"><span>Employee ID</span><strong>{{ $employee->employee_number }}</strong></div>
-            <div class="row"><span>기본 원청사</span><strong>{{ $employee->company?->name ?? '-' }}</strong></div>
-            <div class="row"><span>상태</span><strong>{{ $employee->employment_status }}</strong></div>
+            <div class="row"><span>{{ __('기본 원청사') }}</span><strong>{{ $employee->company?->name ?? '-' }}</strong></div>
+            <div class="row"><span>{{ __('상태') }}</span><strong>{{ $employee->employment_status }}</strong></div>
         </section>
 
         <div class="qr-wrap">
@@ -50,12 +50,12 @@
         </div>
 
         <p class="notice">
-            이 QR은 배지 뒷면에 부착하는 작업자 식별 QR입니다. 작업자가 휴대폰을 사용할 수 없을 때 작업반장/안전관리자가 팀 출퇴근 처리 화면에서 이 QR을 스캔합니다.
+            {{ __('이 QR은 배지 뒷면에 부착하는 작업자 식별 QR입니다. 작업자가 휴대폰을 사용할 수 없을 때 작업반장/안전관리자가 팀 출퇴근 처리 화면에서 이 QR을 스캔합니다.') }}
         </p>
 
         <div class="actions">
-            <button type="button" onclick="window.print()">인쇄</button>
-            <a href="{{ $badgeUrl }}" target="_blank" rel="noopener">테스트 열기</a>
+            <button type="button" onclick="window.print()">{{ __('인쇄') }}</button>
+            <a href="{{ $badgeUrl }}" target="_blank" rel="noopener">{{ __('테스트 열기') }}</a>
         </div>
     </main>
 </body>

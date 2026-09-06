@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>팀 QR 출퇴근</title>
+    <title>{{ __('팀 QR 출퇴근') }}</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f6f7f9; color: #111827; }
         body { margin: 0; background: #f6f7f9; }
@@ -35,7 +35,7 @@
     <div class="app">
         <header>
             <p class="eyebrow">Attendance QR</p>
-            <h1>{{ $qrCode->team?->name ?? 'Team' }} 출퇴근</h1>
+            <h1>{{ $qrCode->team?->name ?? 'Team' }} {{ __('출퇴근') }}</h1>
         </header>
 
         <main>
@@ -45,15 +45,15 @@
 
             @if($result)
                 <div class="alert {{ ($result['status'] ?? '') === 'pending' ? 'warning' : 'success' }}">
-                    <strong>{{ ($result['event_type'] ?? '') === 'clock_out' ? '퇴근' : '출근' }} {{ ($result['ignored'] ?? false) ? '중복 무시' : '기록 완료' }}</strong><br>
+                    <strong>{{ ($result['event_type'] ?? '') === 'clock_out' ? __('퇴근') : __('출근') }} {{ ($result['ignored'] ?? false) ? __('중복 무시') : __('기록 완료') }}</strong><br>
                     {{ $result['employee_name'] ?? '' }} · {{ $result['event_at'] ?? '' }} · {{ $result['status'] ?? '' }}
                 </div>
             @endif
 
             <section class="context">
-                <div class="row"><span>현장</span><strong>{{ $qrCode->site?->name ?? '-' }}</strong></div>
-                <div class="row"><span>원청사/계약</span><strong>{{ $qrCode->siteContractor?->company_name ?? $qrCode->team?->effectiveCompanyName() ?? '-' }}</strong></div>
-                <div class="row"><span>팀</span><strong>{{ $qrCode->team?->name ?? '-' }}</strong></div>
+                <div class="row"><span>{{ __('현장') }}</span><strong>{{ $qrCode->site?->name ?? '-' }}</strong></div>
+                <div class="row"><span>{{ __('원청사/계약') }}</span><strong>{{ $qrCode->siteContractor?->company_name ?? $qrCode->team?->effectiveCompanyName() ?? '-' }}</strong></div>
+                <div class="row"><span>{{ __('팀') }}</span><strong>{{ $qrCode->team?->name ?? '-' }}</strong></div>
             </section>
 
             <section class="person">
@@ -64,17 +64,17 @@
             <form method="POST" action="{{ route('attendance-app.team.record', ['token' => $token]) }}">
                 @csrf
                 <div class="actions">
-                    <button class="primary" type="submit" name="mode" value="auto">출근 / 퇴근 자동 기록</button>
-                    <button type="submit" name="mode" value="clock_in">출근</button>
-                    <button type="submit" name="mode" value="clock_out">퇴근</button>
+                    <button class="primary" type="submit" name="mode" value="auto">{{ __('출근 / 퇴근 자동 기록') }}</button>
+                    <button type="submit" name="mode" value="clock_in">{{ __('출근') }}</button>
+                    <button type="submit" name="mode" value="clock_out">{{ __('퇴근') }}</button>
                 </div>
             </form>
 
             @if($canProcessCrew)
-                <a class="button crew" href="{{ route('attendance-app.crew', ['token' => $token]) }}">작업자 배지 QR로 팀 출퇴근 처리</a>
+                <a class="button crew" href="{{ route('attendance-app.crew', ['token' => $token]) }}">{{ __('작업자 배지 QR로 팀 출퇴근 처리') }}</a>
             @endif
 
-            <p class="note">직원 기본 팀은 고정하지 않습니다. 오늘 실제 근무 현장/원청사/팀은 이 QR 기준으로 기록됩니다. 기본 소속과 다른 원청사 QR이면 승인대기로 저장됩니다.</p>
+            <p class="note">{{ __('직원 기본 팀은 고정하지 않습니다. 오늘 실제 근무 현장/원청사/팀은 이 QR 기준으로 기록됩니다. 기본 소속과 다른 원청사 QR이면 승인대기로 저장됩니다.') }}</p>
         </main>
     </div>
 </body>

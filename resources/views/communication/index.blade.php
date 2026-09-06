@@ -14,7 +14,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#FEE500">
-    <title>{{ \App\Support\Org::name() }} 메신저</title>
+    <title>{{ \App\Support\Org::name() }} {{ __('메신저') }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         :root {
@@ -81,8 +81,8 @@
         <header>
             <div class="top">
                 <div>
-                    <h1>채팅</h1>
-                    <div class="who">{{ $employee?->name ?? $user->name }} · {{ $employee?->site?->name ?? '현장 미지정' }}</div>
+                    <h1>{{ __('채팅') }}</h1>
+                    <div class="who">{{ $employee?->name ?? $user->name }} · {{ $employee?->site?->name ?? __('현장 미지정') }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:12px">
                     {{-- 알림 상태를 한눈에 — 켜짐 🔔 / 꺼짐 🔕. 눌러서 켜고 끈다. --}}
@@ -91,7 +91,7 @@
                         {{-- 방 만들기 — 폰에서 못 만들면 없는 기능이나 마찬가지다. --}}
                         <button type="button" id="btn-new-room" class="icon-btn" style="font-size:24px">＋</button>
                     @endif
-                    <a class="back" href="{{ route('attendance-app.index') }}">출석 홈</a>
+                    <a class="back" href="{{ route('attendance-app.index') }}">{{ __('출석 홈') }}</a>
                 </div>
             </div>
         </header>
@@ -102,12 +102,12 @@
             @if($notifications->isNotEmpty())
                 <div class="bell">
                     <div class="bell-head">
-                        <strong>알림</strong>
+                        <strong>{{ __('알림') }}</strong>
                         @if($notificationUnread > 0)
                             <span class="count">{{ $notificationUnread > 99 ? '99+' : $notificationUnread }}</span>
                             <form method="POST" action="{{ route('communication.notifications.read') }}">
                                 @csrf
-                                <button type="submit">모두 읽음</button>
+                                <button type="submit">{{ __('모두 읽음') }}</button>
                             </form>
                         @endif
                     </div>
@@ -160,7 +160,7 @@
                         </div>
                     </a>
                 @empty
-                    <div class="empty">참여 중인 채팅방이 아직 없습니다.<br>관리자에게 방 참여를 요청해 주세요.</div>
+                    <div class="empty">{{ __('참여 중인 채팅방이 아직 없습니다.') }}<br>{{ __('관리자에게 방 참여를 요청해 주세요.') }}</div>
                 @endforelse
             </section>
 
@@ -168,18 +168,18 @@
                 <div id="new-room" hidden style="margin:12px 16px;padding:14px;border:1px solid #e5e7eb;border-radius:14px;background:#fafbfc">
                     <form method="POST" action="{{ route('communication.room.store') }}" style="display:grid;gap:9px">
                         @csrf
-                        <b style="font-size:14px">새 대화방 만들기</b>
+                        <b style="font-size:14px">{{ __('새 대화방 만들기') }}</b>
                         <input name="name" maxlength="255" placeholder="방 이름 (예: 3층 배관팀)" required
                                style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
                         <select name="type" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
-                            <option value="site_chat">현장 채팅방</option>
-                            <option value="team">팀 채팅방</option>
-                            <option value="company">회사 채팅방</option>
-                            <option value="site_announcement">공지방 (관리자만 글쓰기)</option>
+                            <option value="site_chat">{{ __('현장 채팅방') }}</option>
+                            <option value="team">{{ __('팀 채팅방') }}</option>
+                            <option value="company">{{ __('회사 채팅방') }}</option>
+                            <option value="site_announcement">{{ __('공지방 (관리자만 글쓰기)') }}</option>
                         </select>
                         @if($siteOptions->isNotEmpty())
                             <select name="site_id" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
-                                <option value="">현장 지정 안 함</option>
+                                <option value="">{{ __('현장 지정 안 함') }}</option>
                                 @foreach($siteOptions as $option)
                                     <option value="{{ $option->id }}">{{ $option->code }} · {{ $option->name }}</option>
                                 @endforeach
@@ -188,15 +188,15 @@
                         <input name="description" maxlength="500" placeholder="어떤 이야기를 하는 방인지 한 줄 (선택)"
                                style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
                         <div style="display:flex;gap:8px;justify-content:flex-end">
-                            <button type="button" id="new-room-cancel" style="border:1px solid #e5e7eb;background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer">취소</button>
-                            <button type="submit" style="border:0;background:#fee500;color:#3c1e1e;border-radius:9px;padding:8px 16px;font-weight:800;font-size:13px;cursor:pointer">만들기</button>
+                            <button type="button" id="new-room-cancel" style="border:1px solid #e5e7eb;background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer">{{ __('취소') }}</button>
+                            <button type="submit" style="border:0;background:#fee500;color:#3c1e1e;border-radius:9px;padding:8px 16px;font-weight:800;font-size:13px;cursor:pointer">{{ __('만들기') }}</button>
                         </div>
                     </form>
                 </div>
             @endif
 
             @if($employee)
-                <div class="section-title">1:1 대화 시작</div>
+                <div class="section-title">{{ __('1:1 대화 시작') }}</div>
                 <form class="picker" method="GET" action="{{ route('communication.index') }}">
                     <input type="search" name="people" value="{{ $peopleSearch }}" placeholder="이름으로 검색…">
                     @foreach($dmCandidates as $candidate)
@@ -205,12 +205,12 @@
                             <form method="POST" action="{{ route('communication.direct.start') }}">
                                 @csrf
                                 <input type="hidden" name="employee_id" value="{{ $candidate->id }}">
-                                <button type="submit">대화</button>
+                                <button type="submit">{{ __('대화') }}</button>
                             </form>
                         </div>
                     @endforeach
                     @if($peopleSearch !== '' && $dmCandidates->isEmpty())
-                        <div class="cand"><small style="color:#9ca3af">검색 결과가 없습니다.</small></div>
+                        <div class="cand"><small style="color:#9ca3af">{{ __('검색 결과가 없습니다.') }}</small></div>
                     @endif
                 </form>
             @endif
@@ -224,6 +224,11 @@
     @endif
 
 <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
 (function () {
     var open = document.getElementById('btn-new-room');
     var box = document.getElementById('new-room');

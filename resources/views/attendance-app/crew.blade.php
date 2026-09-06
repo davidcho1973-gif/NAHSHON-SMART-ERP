@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>팀 출퇴근 및 일일 인원 마감</title>
+    <title>{{ __('팀 출퇴근 및 일일 인원 마감') }}</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f6f7f9; color: #111827; }
         body { margin: 0; background: #f6f7f9; }
@@ -54,7 +54,7 @@
     <div class="app">
         <header>
             <p class="eyebrow">Foreman / Safety Mode</p>
-            <h1>팀 출퇴근 및 일일 인원 마감</h1>
+            <h1>{{ __('팀 출퇴근 및 일일 인원 마감') }}</h1>
         </header>
 
         <main>
@@ -72,14 +72,14 @@
 
             @if($result)
                 <div class="alert {{ ($result['status'] ?? '') === 'pending' ? 'warning' : 'success' }}">
-                    <strong>{{ ($result['event_type'] ?? '') === 'clock_out' ? '퇴근' : '출근' }} {{ ($result['ignored'] ?? false) ? '중복 무시' : '처리 완료' }}</strong><br>
+                    <strong>{{ ($result['event_type'] ?? '') === 'clock_out' ? __('퇴근') : __('출근') }} {{ ($result['ignored'] ?? false) ? __('중복 무시') : __('처리 완료') }}</strong><br>
                     {{ $result['employee_name'] ?? '' }} · {{ $result['event_at'] ?? '' }} · {{ $result['status'] ?? '' }}
                 </div>
             @endif
 
             @if($dailyCrewResult)
                 <div class="alert success">
-                    <strong>일일 인원 마감 완료</strong><br>
+                    <strong>{{ __('일일 인원 마감 완료') }}</strong><br>
                     최종 {{ $dailyCrewResult['final_headcount'] ?? 0 }}명 · {{ $dailyCrewResult['closed_at'] ?? '' }}
                 </div>
             @endif
@@ -91,77 +91,77 @@
 
             <section class="panel">
                 <div class="panel-header">
-                    <h2>등록 작업자 QR 처리</h2>
-                    <div class="hint">급여와 연동되는 자사·등록 작업자의 배지 QR만 처리합니다.</div>
+                    <h2>{{ __('등록 작업자 QR 처리') }}</h2>
+                    <div class="hint">{{ __('급여와 연동되는 자사·등록 작업자의 배지 QR만 처리합니다.') }}</div>
                 </div>
 
                 <form id="crewForm" method="POST" action="{{ route('attendance-app.crew.record', ['token' => $token]) }}">
                     @csrf
                     <div class="mode">
-                        <label><input type="radio" name="mode" value="auto" checked> 자동</label>
-                        <label><input type="radio" name="mode" value="clock_in"> 출근</label>
-                        <label><input type="radio" name="mode" value="clock_out"> 퇴근</label>
+                        <label><input type="radio" name="mode" value="auto" checked> {{ __('자동') }}</label>
+                        <label><input type="radio" name="mode" value="clock_in"> {{ __('출근') }}</label>
+                        <label><input type="radio" name="mode" value="clock_out"> {{ __('퇴근') }}</label>
                     </div>
 
                     <input type="text" id="badgeToken" name="badge_token" placeholder="작업자 배지 QR 토큰 또는 URL" autocomplete="off" required>
                     <input type="text" name="reason" placeholder="사유 선택사항: worker_no_phone / phone_broken" style="margin-top: 10px;">
 
                     <div class="scanner-actions">
-                        <button type="button" id="startScan">카메라 스캔</button>
-                        <button type="button" id="stopScan">스캔 중지</button>
+                        <button type="button" id="startScan">{{ __('카메라 스캔') }}</button>
+                        <button type="button" id="stopScan">{{ __('스캔 중지') }}</button>
                     </div>
 
                     <div class="scanner" id="scanner">
                         <video id="preview" muted playsinline></video>
                     </div>
 
-                    <button class="primary" type="submit">등록 작업자 출퇴근 처리</button>
+                    <button class="primary" type="submit">{{ __('등록 작업자 출퇴근 처리') }}</button>
                 </form>
             </section>
 
             <section class="panel">
                 <div class="panel-header">
-                    <h2>{{ $dailyCrewSummary['work_date'] }} 일일 인원 마감</h2>
-                    <div class="hint">일일이 관리하지 않는 타사·방문 작업자는 인원수만 입력합니다. 급여에는 반영되지 않습니다.</div>
+                    <h2>{{ $dailyCrewSummary['work_date'] }} {{ __('일일 인원 마감') }}</h2>
+                    <div class="hint">{{ __('일일이 관리하지 않는 타사·방문 작업자는 인원수만 입력합니다. 급여에는 반영되지 않습니다.') }}</div>
                 </div>
 
                 <div class="metrics">
                     <div class="metric">
-                        <span>QR/출근 등록</span>
+                        <span>{{ __('QR/출근 등록') }}</span>
                         <strong id="scannedCount">{{ $dailyCrewSummary['scanned_headcount'] }}</strong>
                     </div>
                     <div class="metric">
-                        <span>미등록 외부</span>
+                        <span>{{ __('미등록 외부') }}</span>
                         <strong id="externalMetric">{{ old('external_headcount', $dailyCrewSummary['external_headcount']) }}</strong>
                     </div>
                     <div class="metric final">
-                        <span>최종 인원</span>
+                        <span>{{ __('최종 인원') }}</span>
                         <strong id="finalCount">{{ $dailyCrewSummary['final_headcount'] }}</strong>
                     </div>
                 </div>
 
-                <div class="formula">최종 인원 = 등록 작업자 + 미등록 외부 인원 + 수동 보정</div>
+                <div class="formula">{{ __('최종 인원 = 등록 작업자 + 미등록 외부 인원 + 수동 보정') }}</div>
 
                 <form method="POST" action="{{ route('attendance-app.crew.daily-close', ['token' => $token]) }}">
                     @csrf
                     <label class="field">
-                        <span>미등록 외부 인원</span>
+                        <span>{{ __('미등록 외부 인원') }}</span>
                         <input type="number" id="externalHeadcount" name="external_headcount" min="0" max="5000" value="{{ old('external_headcount', $dailyCrewSummary['external_headcount']) }}" required>
                     </label>
                     <label class="field">
-                        <span>수동 보정</span>
+                        <span>{{ __('수동 보정') }}</span>
                         <input type="number" id="manualAdjustment" name="manual_adjustment" min="-5000" max="5000" value="{{ old('manual_adjustment', $dailyCrewSummary['manual_adjustment']) }}">
                     </label>
                     <label class="field">
-                        <span>보정 사유</span>
+                        <span>{{ __('보정 사유') }}</span>
                         <input type="text" name="adjustment_reason" maxlength="500" value="{{ old('adjustment_reason', $dailyCrewSummary['report']?->adjustment_reason) }}" placeholder="누락 추가 또는 중복 제외 사유">
                     </label>
                     <label class="field">
-                        <span>주요 작업내용</span>
+                        <span>{{ __('주요 작업내용') }}</span>
                         <textarea name="work_description" maxlength="500" placeholder="예: 전기 배관 설치, 장비 반입">{{ old('work_description', $dailyCrewSummary['report']?->work_description) }}</textarea>
                     </label>
                     <label class="field">
-                        <span>특이사항 / 안전 메모</span>
+                        <span>{{ __('특이사항 / 안전 메모') }}</span>
                         <textarea name="notes" maxlength="2000" placeholder="사고, 지연, 교육 또는 기타 특이사항">{{ old('notes', $dailyCrewSummary['report']?->notes) }}</textarea>
                     </label>
 
@@ -180,10 +180,10 @@
                 @endif
             </section>
 
-            <p class="hint">카메라 QR 스캔이 지원되지 않는 휴대폰은 배지 QR 링크나 토큰을 직접 입력할 수 있습니다.</p>
+            <p class="hint">{{ __('카메라 QR 스캔이 지원되지 않는 휴대폰은 배지 QR 링크나 토큰을 직접 입력할 수 있습니다.') }}</p>
 
             <section class="logs">
-                <h2>최근 등록 작업자 처리</h2>
+                <h2>{{ __('최근 등록 작업자 처리') }}</h2>
                 @forelse($recentLogs as $log)
                     <div class="log">
                         <div>{{ $log->event_at?->format('h:i A') }}</div>
@@ -194,13 +194,18 @@
                         <span class="badge {{ $log->status === 'pending' ? 'pending' : '' }}">{{ $log->status }}</span>
                     </div>
                 @empty
-                    <p class="hint">아직 처리된 등록 작업자가 없습니다.</p>
+                    <p class="hint">{{ __('아직 처리된 등록 작업자가 없습니다.') }}</p>
                 @endforelse
             </section>
         </main>
     </div>
 
     <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
         const input = document.getElementById('badgeToken');
         const scanner = document.getElementById('scanner');
         const video = document.getElementById('preview');

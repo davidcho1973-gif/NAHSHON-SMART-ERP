@@ -169,25 +169,66 @@ class AppLocaleFollowsChoiceTest extends TestCase
         $this->assertStringContainsString('Sorting it out', $html, '화면 안 JS 문구도 같은 사전에서 나와야 한다.');
     }
 
-    public function test_every_phrase_the_site_log_uses_is_translated(): void
-    {
-        // 한 줄이라도 빠지면 그 자리만 한글로 남는다 — 반쯤 번역된 화면이 가장 나쁘다.
-        $blade = file_get_contents(resource_path('views/attendance-app/ops-room.blade.php'));
+    /** 번역을 켠 화면들 — 여기 없는 화면은 아직 한국어다. */
+    private const TRANSLATED_SCREENS = [
+        'attendance-app/ask',
+        'attendance-app/badge',
+        'attendance-app/badge-qr',
+        'attendance-app/crew',
+        'attendance-app/docs',
+        'attendance-app/install-card',
+        'attendance-app/ops-room',
+        'attendance-app/share',
+        'attendance-app/team',
+        'communication/index',
+        'communication/show',
+        'expense-app/index',
+    ];
 
-        preg_match_all("/__\\('([^']+)'[,)]/", $blade, $a);
-        preg_match_all("/(?<![\\w.])t\\('([^']+)'\\)/", $blade, $b);
-        $keys = array_values(array_filter(
-            array_unique(array_merge($a[1], $b[1])),
+    /** 한 줄이라도 빠지면 그 자리만 한글로 남는다 — 반쯤 번역된 화면이 가장 나쁘다. */
+    public function test_every_phrase_a_translated_screen_uses_is_in_both_dictionaries(): void
+    {
+        $dictionaries = [
+            'en' => array_keys(AppLocale::dictionary('en')),
+            'es' => array_keys(AppLocale::dictionary('es')),
+        ];
+
+        foreach (self::TRANSLATED_SCREENS as $screen) {
+            $keys = $this->phrasesIn($screen);
+            $this->assertNotEmpty($keys, $screen.' 에서 번역할 문구를 찾지 못했습니다.');
+
+            foreach ($dictionaries as $locale => $known) {
+                $missing = array_values(array_diff($keys, $known));
+                $this->assertSame([], $missing, $screen.' — '.$locale.' 사전에 빠짐: '.implode(' | ', array_slice($missing, 0, 3)));
+            }
+        }
+    }
+
+    /** @return array<int, string> */
+    private function phrasesIn(string $screen): array
+    {
+        $blade = (string) file_get_contents(resource_path('views/'.$screen.'.blade.php'));
+
+        preg_match_all("/__\\('((?:[^'\\\\]|\\\\.)*)'\\s*[,)]/", $blade, $a);
+        preg_match_all("/(?<![\\w.])t\\('((?:[^'\\\\]|\\\\.)*)'\\)/", $blade, $b);
+
+        return array_values(array_filter(
+            array_unique(array_map(
+                fn (string $k): string => str_replace("\\'", "'", $k),
+                array_merge($a[1], $b[1]),
+            )),
             fn (string $k): bool => preg_match('/[가-힣]/u', $k) === 1,
         ));
+    }
 
-        $this->assertNotEmpty($keys);
+    public function test_the_two_dictionaries_cover_the_same_phrases(): void
+    {
+        // 한쪽에만 있으면 그 언어에서만 한글이 튀어나온다.
+        $en = array_keys(AppLocale::dictionary('en'));
+        $es = array_keys(AppLocale::dictionary('es'));
 
-        foreach (['en', 'es'] as $locale) {
-            $dictionary = AppLocale::dictionary($locale);
-            $missing = array_values(array_diff($keys, array_keys($dictionary)));
-            $this->assertSame([], $missing, $locale.' 사전에 빠진 문구: '.implode(' | ', array_slice($missing, 0, 5)));
-        }
+        $this->assertSame([], array_values(array_diff($en, $es)), '스페인어 사전에 빠진 문구가 있습니다.');
+        $this->assertSame([], array_values(array_diff($es, $en)), '영어 사전에 빠진 문구가 있습니다.');
     }
 
     private function worker(string $lang, string $role = 'worker'): User

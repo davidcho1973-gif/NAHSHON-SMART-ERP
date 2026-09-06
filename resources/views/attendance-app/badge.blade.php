@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>작업자 배지 QR</title>
+    <title>{{ __('작업자 배지 QR') }}</title>
     <style>
         :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; background: #f6f7f9; color: #111827; }
         body { margin: 0; display: grid; min-height: 100vh; place-items: center; padding: 20px; background: #f6f7f9; }
@@ -19,13 +19,13 @@
 <body>
     <main class="card">
         <p class="eyebrow">Worker Badge QR</p>
-        <h1>작업자 식별 QR</h1>
+        <h1>{{ __('작업자 식별 QR') }}</h1>
         <div class="worker">
             <strong>{{ $employee?->name ?? 'Unknown worker' }}</strong>
             <span>{{ $employee?->company?->name ?? '소속 회사 미지정' }}</span>
         </div>
-        <p>이 QR은 작업자 본인 출퇴근용이 아니라, 작업반장/안전관리자가 팀 출퇴근 처리 화면에서 스캔하는 작업자 식별용입니다.</p>
-        <a href="{{ route('attendance-app.index') }}">QR 출퇴근 앱으로 이동</a>
+        <p>{{ __('이 QR은 작업자 본인 출퇴근용이 아니라, 작업반장/안전관리자가 팀 출퇴근 처리 화면에서 스캔하는 작업자 식별용입니다.') }}</p>
+        <a href="{{ route('attendance-app.index') }}">{{ __('QR 출퇴근 앱으로 이동') }}</a>
     </main>
 </body>
 </html>

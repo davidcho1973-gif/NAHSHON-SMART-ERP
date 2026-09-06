@@ -190,12 +190,12 @@
             @if ($myTrade)
                 <section class="submit-box">
                     @if ($reopenReason)
-                        <p class="reopened">↩ 소장이 되돌렸습니다: {{ $reopenReason }}</p>
+                        <p class="reopened">↩ {{ __('소장이 되돌렸습니다') }}: {{ $reopenReason }}</p>
                     @endif
                     {{-- 「보내기」와 색을 다르게 둔다. 하나는 올리는 일(여러 번), 하나는
                          오늘을 끝내는 일(하루 한 번)이라, 같은 파란 버튼 둘이 나란히 있으면
                          현장에서 헷갈린다. --}}
-                    <p class="finish-hint">오늘 올릴 것을 다 올리셨으면</p>
+                    <p class="finish-hint">{{ __('오늘 올릴 것을 다 올리셨으면') }}</p>
                     <button class="btn finish full" id="submit-report" type="button"
                             @if ($reportStatus === 'submitted') disabled @endif>
                         {{ $reportStatus === 'submitted' ? '✓ 제출 완료' : '오늘 보고 제출' }}
