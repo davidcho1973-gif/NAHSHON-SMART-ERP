@@ -177,6 +177,16 @@ class PurgeEquipmentTest extends TestCase
         $this->assertSame(6, Equipment::query()->count());
     }
 
+    public function test_it_says_the_backup_sits_on_a_disk_that_deploys_wipe(): void
+    {
+        // 되돌릴 근거라고 적어 두고 다음 배포에 같이 날아가면 근거가 없는 것과 같다.
+        $this->equipment('테스트로 넣은 굴착기');
+
+        $this->artisan('equipment:purge')
+            ->expectsOutputToContain('배포하면 사라지는 자리')
+            ->assertExitCode(0);
+    }
+
     private function equipment(string $name, string $method = 'AI자동분석', ?Site $site = null): Equipment
     {
         $site ??= $this->site();

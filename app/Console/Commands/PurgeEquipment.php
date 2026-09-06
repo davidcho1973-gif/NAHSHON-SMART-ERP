@@ -76,6 +76,13 @@ class PurgeEquipment extends Command
         $this->line('');
         $this->info('지울 줄을 파일에 적어 두었습니다: '.$backup);
 
+        // Laravel Cloud 의 로컬 디스크는 배포마다 초기화된다(이 저장소가 문서 원본으로
+        // 이미 겪은 일이다). 되돌릴 근거라고 적어 두고 다음 배포에 같이 날아가면
+        // 근거가 없는 것과 같다 — 그래서 «지금 내려받으라» 고 말해 둔다.
+        if (str_starts_with($backup, storage_path())) {
+            $this->line('  이 파일은 배포하면 사라지는 자리에 있습니다. 남겨야 하면 지금 내려받으세요.');
+        }
+
         if (! $this->option('apply')) {
             $this->line('');
             $this->warn('지금은 보기만 했습니다. 아무것도 지우지 않았습니다.');
