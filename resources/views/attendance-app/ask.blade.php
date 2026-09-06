@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>물어보기</title>
+    <title>{{ __('물어보기') }}</title>
     <style>
         /* 앱의 다른 화면과 같은 규격 — 문이 여럿이어도 한 앱으로 보여야 한다. */
         :root {
@@ -92,14 +92,14 @@
     @include('partials.erp-home')
     <div class="app">
         <header>
-            <a class="back" href="{{ route('attendance-app.index') }}">← 홈</a>
-            <h1>물어보기</h1>
-            <p class="sub">{{ $siteName ?: '현장' }} · 작업자도 공정·시공·수량·도면·시방을 물어볼 수 있습니다. 답은 나만 봅니다. 회계·급여·단가·견적·계약금액은 재무 권한에 따라 제한됩니다.</p>
+            <a class="back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+            <h1>{{ __('물어보기') }}</h1>
+            <p class="sub">{{ $siteName ?: __('현장') }} · {{ __('작업자도 공정·시공·수량·도면·시방을 물어볼 수 있습니다. 답은 나만 봅니다. 회계·급여·단가·견적·계약금액은 재무 권한에 따라 제한됩니다.') }}</p>
         </header>
 
         <main>
             @if (! $available)
-                <div class="off">AI 도우미가 이 서버에 켜져 있지 않습니다. 관리자에게 알려 주세요.</div>
+                <div class="off">{{ __('AI 도우미가 이 서버에 켜져 있지 않습니다. 관리자에게 알려 주세요.') }}</div>
             @else
                 <div class="askbox">
                     <textarea id="q" rows="3" placeholder="예) 주방 배기 덕트 두께가 얼마야?&#10;예) 에폭시 바닥 양생 며칠 걸려?&#10;예) 후드 샵드로잉 언제 냈어?"></textarea>
@@ -107,27 +107,32 @@
                         @if ($voiceReady)
                             <button class="mic" id="mic" type="button" aria-label="말로 묻기">🎤</button>
                         @endif
-                        <button class="go" id="go" type="button">찾아 줘</button>
+                        <button class="go" id="go" type="button">{{ __('찾아 줘') }}</button>
                     </div>
                 </div>
-                <p class="hint" id="hint">말하거나 적으세요. 등록된 문서에 없으면 없다고 말합니다.</p>
+                <p class="hint" id="hint">{{ __('말하거나 적으세요. 등록된 문서에 없으면 없다고 말합니다.') }}</p>
 
                 <div class="chips" id="chips">
-                    <button type="button">주방 바닥 양생 며칠이야?</button>
-                    <button type="button">후드 샵드로잉 상태 알려줘</button>
-                    <button type="button">검사 일정 뭐 잡혀 있어?</button>
-                    <button type="button">배관 진행률 어디까지야?</button>
+                    <button type="button">{{ __('주방 바닥 양생 며칠이야?') }}</button>
+                    <button type="button">{{ __('후드 샵드로잉 상태 알려줘') }}</button>
+                    <button type="button">{{ __('검사 일정 뭐 잡혀 있어?') }}</button>
+                    <button type="button">{{ __('배관 진행률 어디까지야?') }}</button>
                 </div>
 
                 <div id="answer"></div>
             @endif
 
-            <div class="sec-h">최근 물어본 것</div>
+            <div class="sec-h">{{ __('최근 물어본 것') }}</div>
             <div id="recent"></div>
         </main>
     </div>
 
     <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
         var CSRF = document.querySelector('meta[name=csrf-token]').getAttribute('content');
         var RECENT = @json($recent, JSON_UNESCAPED_UNICODE);
         var UPLOAD_URL = @json(route('attendance-app.docs'));
@@ -138,12 +143,12 @@
 
         function sourcesHtml(list) {
             if (!list || !list.length) return '';
-            return '<div class="src"><div class="src-h">출처</div>' + list.map(function (s) {
+            return t('<div class="src"><div class="src-h">출처</div>') + list.map(function (s) {
                 var meta = [s.type, s.revision, s.date].filter(Boolean).join(' · ');
                 if (s.can_open && s.url) {
                     return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener"><span>📄</span><span class="t">' + esc(s.title) + '</span><span class="m">' + esc(meta) + ' ›</span></a>';
                 }
-                return '<span class="lock"><span>🔒</span><span class="t">' + esc(s.title) + '</span><span class="m">열람 권한 없음</span></span>';
+                return '<span class="lock"><span>🔒</span><span class="t">' + esc(s.title) + t('</span><span class="m">열람 권한 없음</span></span>');
             }).join('') + '</div>';
         }
 
@@ -153,22 +158,22 @@
                 '<div class="a">' + esc(r.answer) + '</div>' +
                 sourcesHtml(r.sources);
             if (r.denied && r.denied.length) {
-                h += '<div class="denied">권한이 없어 보지 못한 것: ' + r.denied.map(esc).join(', ') + '</div>';
+                h += t('<div class="denied">권한이 없어 보지 못한 것: ') + r.denied.map(esc).join(', ') + '</div>';
             }
             if (!r.found) {
                 // 답이 없는 이유의 절반은 문서가 아직 안 올라간 것이다 — 올리는 문을 바로 옆에 둔다.
-                h += '<a class="upload" href="' + esc(UPLOAD_URL) + '">📄 관련 문서 올리기 →</a>';
+                h += '<a class="upload" href="' + esc(UPLOAD_URL) + t('">📄 관련 문서 올리기 →</a>');
             }
             return h + '</div>';
         }
 
         function ask(question) {
             question = (question || '').trim();
-            if (!question) { say('무엇을 찾을지 적어 주세요.', 'warn'); return; }
+            if (!question) { say(t('무엇을 찾을지 적어 주세요.'), 'warn'); return; }
             var go = el('go');
             go.disabled = true;
-            el('answer').innerHTML = '<div class="answer"><div class="q">' + esc(question) + '</div><div class="a thinking">문서를 뒤지는 중… 10초쯤 걸립니다.</div></div>';
-            say('찾는 중입니다.');
+            el('answer').innerHTML = '<div class="answer"><div class="q">' + esc(question) + t('</div><div class="a thinking">문서를 뒤지는 중… 10초쯤 걸립니다.</div></div>');
+            say(t('찾는 중입니다.'));
 
             fetch(@json(route('ask.question')), {
                 method: 'POST', credentials: 'same-origin',
@@ -181,18 +186,18 @@
                     var d = res.d || {};
                     if (!d.success) {
                         el('answer').innerHTML = '';
-                        say(d.error || (d.errors && Object.values(d.errors)[0][0]) || '답을 만들지 못했습니다.', 'bad');
+                        say(d.error || (d.errors && Object.values(d.errors)[0][0]) || t('답을 만들지 못했습니다.'), 'bad');
                         return;
                     }
                     el('answer').innerHTML = answerHtml(d);
                     RECENT.unshift(d);
                     drawRecent();
-                    say(d.found ? '등록된 문서에서 찾았습니다. 출처를 눌러 원문을 여세요.' : '등록된 문서에는 없었습니다. 문서를 올리면 다음엔 답할 수 있습니다.', d.found ? '' : 'warn');
+                    say(d.found ? t('등록된 문서에서 찾았습니다. 출처를 눌러 원문을 여세요.') : t('등록된 문서에는 없었습니다. 문서를 올리면 다음엔 답할 수 있습니다.'), d.found ? '' : 'warn');
                 })
                 .catch(function () {
                     go.disabled = false;
                     el('answer').innerHTML = '';
-                    say('연결이 끊겼습니다. 다시 눌러 주세요.', 'bad');
+                    say(t('연결이 끊겼습니다. 다시 눌러 주세요.'), 'bad');
                 });
         }
 
@@ -209,14 +214,14 @@
         function drawRecent() {
             var host = el('recent');
             if (!RECENT.length) {
-                host.innerHTML = '<div class="empty">아직 물어본 것이 없습니다.</div>';
+                host.innerHTML = t('<div class="empty">아직 물어본 것이 없습니다.</div>');
                 return;
             }
             host.innerHTML = RECENT.slice(0, 10).map(function (r, i) {
                 return '<div class="row" data-i="' + i + '"><div class="qq">' + esc(r.question) + '</div>' +
-                    '<div class="meta">' + (r.found ? '<span class="chip ok">찾음</span>' : '<span class="chip nf">문서에 없음</span>') +
+                    '<div class="meta">' + (r.found ? t('<span class="chip ok">찾음</span>') : t('<span class="chip nf">문서에 없음</span>')) +
                     (r.askedAt ? '<span>' + esc(r.askedAt) + '</span>' : '') +
-                    (r.sources && r.sources.length ? '<span>출처 ' + r.sources.length + '</span>' : '') + '</div>' +
+                    (r.sources && r.sources.length ? t('<span>출처 ') + r.sources.length + '</span>' : '') + '</div>' +
                     '<div class="aa" hidden>' + esc(r.answer) + '</div></div>';
             }).join('');
             Array.prototype.forEach.call(host.querySelectorAll('.row'), function (row) {
@@ -245,7 +250,7 @@
         if (micBtn) micBtn.addEventListener('click', function () {
             if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || pickMime() === null) {
-                say('이 폰에서는 녹음이 안 됩니다. 글로 적어 주세요.', 'warn');
+                say(t('이 폰에서는 녹음이 안 됩니다. 글로 적어 주세요.'), 'warn');
                 return;
             }
             navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
@@ -272,25 +277,25 @@
                         .then(function (r) { return r.json(); })
                         .then(function (d) {
                             micBtn.disabled = false; micBtn.textContent = '🎤';
-                            if (!d || !d.success) { say((d && d.error) || '말씀을 옮기지 못했습니다. 글로 적어 주세요.', 'warn'); return; }
+                            if (!d || !d.success) { say((d && d.error) || t('말씀을 옮기지 못했습니다. 글로 적어 주세요.'), 'warn'); return; }
                             var text = (d.heard || d.text || '').trim();
                             el('q').value = text;
                             if (text) ask(text);
                         })
-                        .catch(function () { micBtn.disabled = false; micBtn.textContent = '🎤'; say('연결이 끊겼습니다. 다시 말씀해 주세요.', 'bad'); });
+                        .catch(function () { micBtn.disabled = false; micBtn.textContent = '🎤'; say(t('연결이 끊겼습니다. 다시 말씀해 주세요.'), 'bad'); });
                 };
                 recorder.start();
                 recStart = Date.now();
                 micBtn.classList.add('rec');
                 micBtn.textContent = '⏹';
-                say('말씀하세요. 다 하시면 버튼을 한 번 더 누르세요.');
+                say(t('말씀하세요. 다 하시면 버튼을 한 번 더 누르세요.'));
                 recTimer = setInterval(function () {
                     var s = Math.round((Date.now() - recStart) / 1000);
-                    say('● 듣는 중 ' + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2) + ' — 다 하시면 버튼을 다시 누르세요.');
+                    say(t('● 듣는 중 ') + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2) + t(' — 다 하시면 버튼을 다시 누르세요.'));
                     if (s >= 60 && recorder && recorder.state === 'recording') { recorder.stop(); }
                 }, 500);
             }).catch(function () {
-                say('마이크를 쓸 수 없습니다. 폰 설정에서 마이크를 켜 주시거나, 글로 적어 주세요.', 'warn');
+                say(t('마이크를 쓸 수 없습니다. 폰 설정에서 마이크를 켜 주시거나, 글로 적어 주세요.'), 'warn');
             });
         });
     </script>

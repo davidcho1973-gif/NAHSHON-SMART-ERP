@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $employee->name }} — 앱 설치 안내</title>
+    <title>{{ $employee->name }} — {{ __('앱 설치 안내') }}</title>
     {{--
         직영 작업자 한 사람에게 건네는 종이 한 장.
 
@@ -136,10 +136,10 @@
             <div class="acct missing">
                 <div class="dot">!</div>
                 <div>
-                    <div class="lb">로그인 계정 없음 · No account yet</div>
+                    <div class="lb">{{ __('로그인 계정 없음 · No account yet') }}</div>
                     <div class="em">
-                        이 작업자에게는 아직 로그인 계정이 없습니다.
-                        인원관리에서 <b>계정 만들기</b> 를 먼저 하신 뒤 다시 인쇄하세요.
+                        {{ __('이 작업자에게는 아직 로그인 계정이 없습니다.
+                        인원관리에서') }} <b>{{ __('계정 만들기') }}</b> {{ __('를 먼저 하신 뒤 다시 인쇄하세요.') }}
                     </div>
                 </div>
             </div>
@@ -157,8 +157,8 @@
         <p class="url">{{ $url }}</p>
 
         <div class="actions">
-            <button type="button" onclick="window.print()">인쇄</button>
-            <a href="{{ $url }}" target="_blank" rel="noopener">화면 열어 보기</a>
+            <button type="button" onclick="window.print()">{{ __('인쇄') }}</button>
+            <a href="{{ $url }}" target="_blank" rel="noopener">{{ __('화면 열어 보기') }}</a>
         </div>
     </div>
 </main>

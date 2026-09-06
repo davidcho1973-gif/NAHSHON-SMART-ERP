@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#FEE500">
-    <title>{{ $employee->name }} — 앱 링크 보내기</title>
+    <title>{{ $employee->name }} — {{ __('앱 링크 보내기') }}</title>
     {{--
         작업자에게 링크를 "보내는" 화면.
 
@@ -140,18 +140,18 @@
             <b>{{ $employee->name }}</b>
             <span>{{ $employee->employee_number }}@if ($employee->site) · {{ $employee->site->code }}@endif</span>
         </div>
-        <div class="top-role">앱 링크 보내기</div>
+        <div class="top-role">{{ __('앱 링크 보내기') }}</div>
     </div>
 
     <main>
         {{-- 로그인할 계정이 이 화면의 핵심이다. 휴대폰에 구글 계정이 여러 개면 여기서 막힌다. --}}
-        <div class="sec-h">로그인할 구글 계정</div>
+        <div class="sec-h">{{ __('로그인할 구글 계정') }}</div>
         @if ($loginEmail)
             <div class="card">
                 <div class="acct">
                     <div class="dot">✓</div>
                     <div>
-                        <div class="lb">이 계정으로 로그인해야 합니다</div>
+                        <div class="lb">{{ __('이 계정으로 로그인해야 합니다') }}</div>
                         <div class="em">{{ $loginEmail }}</div>
                     </div>
                 </div>
@@ -160,9 +160,9 @@
                      원인을 찾지 못한다 — 어느 화면도 틀려 보이지 않기 때문이다. --}}
                 @if ($employeeEmail && mb_strtolower($employeeEmail) !== mb_strtolower($loginEmail))
                     <div class="warn-box">
-                        직원 정보의 이메일은 <b>{{ $employeeEmail }}</b> 입니다 — 위 계정과 다릅니다.<br>
-                        작업자가 쓰는 주소가 아래쪽이면, 인원관리 <b>수정</b> 에서 저장할 때
-                        "로그인 계정도 바꿀까요?" 에 <b>예</b> 를 누르세요.
+                        {{ __('직원 정보의 이메일은') }} <b>{{ $employeeEmail }}</b> {{ __('입니다 — 위 계정과 다릅니다.') }}<br>
+                        {{ __('작업자가 쓰는 주소가 아래쪽이면, 인원관리') }} <b>{{ __('수정') }}</b> {{ __('에서 저장할 때
+                        "로그인 계정도 바꿀까요?" 에') }} <b>{{ __('예') }}</b> {{ __('를 누르세요.') }}
                     </div>
                 @endif
             </div>
@@ -171,46 +171,46 @@
                 <div class="acct none">
                     <div class="dot">!</div>
                     <div>
-                        <div class="lb">계정 없음</div>
+                        <div class="lb">{{ __('계정 없음') }}</div>
                         <div class="em">
-                            아직 로그인 계정이 없습니다. 링크를 보내도 로그인에서 막힙니다.
-                            인원관리에서 <b>계정 만들기</b> 를 먼저 하세요.
+                            {{ __('아직 로그인 계정이 없습니다. 링크를 보내도 로그인에서 막힙니다.
+                            인원관리에서') }} <b>{{ __('계정 만들기') }}</b> {{ __('를 먼저 하세요.') }}
                         </div>
                     </div>
                 </div>
             </div>
         @endif
 
-        <div class="sec-h">같이 있을 때 — QR 을 보여 주세요</div>
+        <div class="sec-h">{{ __('같이 있을 때 — QR 을 보여 주세요') }}</div>
         <div class="card qr-card">
             <img class="qr" src="{{ $qrImage }}" alt="앱 링크 QR">
-            <div class="qr-note">작업자가 휴대폰 카메라로 이 화면을 스캔하면 앱이 열립니다.</div>
+            <div class="qr-note">{{ __('작업자가 휴대폰 카메라로 이 화면을 스캔하면 앱이 열립니다.') }}</div>
         </div>
 
-        <div class="sec-h">떨어져 있을 때 — 보내기</div>
+        <div class="sec-h">{{ __('떨어져 있을 때 — 보내기') }}</div>
         <div class="card">
             <div class="link" id="url">{{ $url }}</div>
-            <button type="button" class="big" data-copy="url">링크 복사</button>
+            <button type="button" class="big" data-copy="url">{{ __('링크 복사') }}</button>
             @if ($dial)
-                <div class="dial">받는 사람 · {{ $employee->phone }}</div>
+                <div class="dial">{{ __('받는 사람') }} · {{ $employee->phone }}</div>
             @else
-                <div class="dial none">전화번호가 없습니다 — 보낼 앱에서 받는 사람을 고르셔야 합니다.
-                    <b>수정</b> 에서 번호를 넣어 두면 다음부터 바로 열립니다.</div>
+                <div class="dial none">{{ __('전화번호가 없습니다 — 보낼 앱에서 받는 사람을 고르셔야 합니다.') }}
+                    <b>{{ __('수정') }}</b> {{ __('에서 번호를 넣어 두면 다음부터 바로 열립니다.') }}</div>
             @endif
             <div class="row-send">
-                <button type="button" id="share" hidden>공유하기</button>
-                <a class="btn" id="sms" href="#">문자로 보내기</a>
+                <button type="button" id="share" hidden>{{ __('공유하기') }}</button>
+                <a class="btn" id="sms" href="#">{{ __('문자로 보내기') }}</a>
                 <a class="btn" id="wa" href="#" target="_blank" rel="noopener">WhatsApp</a>
             </div>
         </div>
 
-        <div class="sec-h">보낼 문구 — 링크만 보내면 안 누릅니다</div>
+        <div class="sec-h">{{ __('보낼 문구 — 링크만 보내면 안 누릅니다') }}</div>
         <div class="card">
             @foreach ($messages as $code => $text)
                 <div class="lang-block">
                     <div class="msg-h">
-                        <b>{{ \App\Support\WorkerLang::OPTIONS[$code] ?? $code }}@if ($code === $lang)<span class="me">이 작업자의 언어</span>@endif</b>
-                        <button type="button" class="mini" data-copy="m-{{ $code }}">복사</button>
+                        <b>{{ \App\Support\WorkerLang::OPTIONS[$code] ?? $code }}@if ($code === $lang)<span class="me">{{ __('이 작업자의 언어') }}</span>@endif</b>
+                        <button type="button" class="mini" data-copy="m-{{ $code }}">{{ __('복사') }}</button>
                     </div>
                     <div class="msg" id="m-{{ $code }}">{{ $text }}</div>
                 </div>
@@ -222,6 +222,11 @@
 <div class="toast" id="toast" hidden></div>
 
 <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
 (function () {
     var toast = document.getElementById('toast');
     function say(m) {
@@ -232,11 +237,11 @@
     function copy(text) {
         // 오래된 브라우저에는 clipboard 가 없다. 그때는 선택해서 복사하게 둔다.
         if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(function () { say('복사했습니다'); },
-                function () { say('복사하지 못했습니다. 길게 눌러 복사해 주세요.'); });
+            navigator.clipboard.writeText(text).then(function () { say(t('복사했습니다')); },
+                function () { say(t('복사하지 못했습니다. 길게 눌러 복사해 주세요.')); });
             return;
         }
-        say('길게 눌러 복사해 주세요.');
+        say(t('길게 눌러 복사해 주세요.'));
     }
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (b) {

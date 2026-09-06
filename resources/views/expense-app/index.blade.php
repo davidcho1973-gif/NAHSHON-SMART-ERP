@@ -15,7 +15,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#FEE500">
-    <title>영수증 · {{ \App\Support\Org::name() }}</title>
+    <title>{{ __('영수증') }} · {{ \App\Support\Org::name() }}</title>
 
     <link rel="manifest" href="{{ route('expense-app.manifest') }}">
     <link rel="apple-touch-icon" href="{{ asset('images/upload-apple-touch.png') }}">
@@ -119,21 +119,21 @@
 <div class="wrap">
     <div class="band">
         <div class="langs">
-            <button data-lang="ko">한국어</button><button data-lang="en">EN</button><button data-lang="es">ES</button>
+            <button data-lang="ko">{{ __('한국어') }}</button><button data-lang="en">EN</button><button data-lang="es">ES</button>
         </div>
-        <h1>🧾 <span data-t="title">영수증</span></h1>
+        <h1>🧾 <span data-t="title">{{ __('영수증') }}</span></h1>
         <div class="who">{{ $employee?->name ?? $user?->name }} · {{ \App\Support\Org::name() }}</div>
     </div>
 
     @if (! $employee)
         <div class="card" style="border-left:4px solid var(--warn)">
-            <b data-t="noEmp">계정에 직원 정보가 연결되어 있지 않습니다.</b>
-            <div class="hint" data-t="noEmpHint">관리자(인원관리)에게 연결을 요청하세요.</div>
+            <b data-t="noEmp">{{ __('계정에 직원 정보가 연결되어 있지 않습니다.') }}</b>
+            <div class="hint" data-t="noEmpHint">{{ __('관리자(인원관리)에게 연결을 요청하세요.') }}</div>
         </div>
     @else
     <div class="tabs">
-        <button id="tab-send" class="on" data-t="tabSend">영수증 내기</button>
-        <button id="tab-mine" data-t="tabMine">내 영수증</button>
+        <button id="tab-send" class="on" data-t="tabSend">{{ __('영수증 내기') }}</button>
+        <button id="tab-mine" data-t="tabMine">{{ __('내 영수증') }}</button>
     </div>
 
     {{-- ── 제출 화면 ─────────────────────────────────────── --}}
@@ -141,9 +141,9 @@
         <div class="card" id="result-card" style="display:none"></div>
 
         <button class="shoot" id="shoot">
-            <span class="big">📷</span><span data-t="shoot">영수증 사진 찍기</span>
+            <span class="big">📷</span><span data-t="shoot">{{ __('영수증 사진 찍기') }}</span>
         </button>
-        <button class="album" id="album">🖼 <span data-t="album">앨범에서 여러 장 고르기</span></button>
+        <button class="album" id="album">🖼 <span data-t="album">{{ __('앨범에서 여러 장 고르기') }}</span></button>
         {{-- 카메라는 한 장씩(찍을 때마다 줄에 쌓임), 앨범은 한 번에 여러 장. --}}
         <input type="file" id="file-cam" accept="image/*" capture="environment" style="display:none">
         <input type="file" id="file-album" accept="image/*" multiple style="display:none">
@@ -152,54 +152,59 @@
 
         <div class="card">
             <div class="row">
-                <label data-t="payType">누구 돈으로 냈나요?</label>
+                <label data-t="payType">{{ __('누구 돈으로 냈나요?') }}</label>
                 <div class="seg">
-                    <button id="pt-personal" class="on" data-t="personal">내 카드 (환급받기)</button>
-                    <button id="pt-corporate" data-t="corporate">회사 카드</button>
+                    <button id="pt-personal" class="on" data-t="personal">{{ __('내 카드 (환급받기)') }}</button>
+                    <button id="pt-corporate" data-t="corporate">{{ __('회사 카드') }}</button>
                 </div>
-                <div class="hint" id="pt-hint" data-t="personalHint">승인되면 급여에 환급으로 함께 지급됩니다.</div>
+                <div class="hint" id="pt-hint" data-t="personalHint">{{ __('승인되면 급여에 환급으로 함께 지급됩니다.') }}</div>
             </div>
             <div class="row">
-                <label data-t="memo">메모 (선택 · 이번에 올리는 전체에 적용)</label>
+                <label data-t="memo">{{ __('메모 (선택 · 이번에 올리는 전체에 적용)') }}</label>
                 <input type="text" id="memo" maxlength="300" data-p="memoPh" placeholder="무엇에 쓴 돈인지 한 줄">
             </div>
-            <button class="go" id="go" disabled data-t="send">제출</button>
+            <button class="go" id="go" disabled data-t="send">{{ __('제출') }}</button>
         </div>
     </div>
 
     {{-- ── 내 영수증 ─────────────────────────────────────── --}}
     <div id="pane-mine" style="display:none">
         <div class="card claim" id="claim-card" style="display:none">
-            <div class="t" data-t="claimT">환급 예정 (승인됨 · 다음 급여에 실림)</div>
+            <div class="t" data-t="claimT">{{ __('환급 예정 (승인됨 · 다음 급여에 실림)') }}</div>
             <div class="v" id="claim-v">$0</div>
         </div>
-        <div class="card" id="mine-list"><div class="empty" data-t="loading">불러오는 중…</div></div>
+        <div class="card" id="mine-list"><div class="empty" data-t="loading">{{ __('불러오는 중…') }}</div></div>
     </div>
     @endif
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
 (function () {
     'use strict';
     var CSRF = document.querySelector('meta[name=csrf-token]').content;
 
     // ── 언어: 작업자앱과 같은 키를 공유한다 — 한 번 고르면 두 앱 모두 그 말로.
     var DICT = {
-        ko: { title: '영수증', tabSend: '영수증 내기', tabMine: '내 영수증',
-            shoot: '영수증 사진 찍기', shootMore: '한 장 더 찍기', album: '앨범에서 여러 장 고르기',
-            readyToSend: '제출 대기', itemNeedAmount: '금액을 못 읽었습니다 — 금액을 적어 주세요',
-            doneCount: '{n}건 접수', doneNote: '재무 승인 대기로 들어갔습니다.', dupWarn: '중복 의심 — 이미 낸 영수증일 수 있습니다',
-            stillNeed: '{n}장은 금액 입력 후 다시 제출해 주세요.', failedNote: '{n}장은 실패했습니다 — 다시 시도해 주세요.',
-            payType: '누구 돈으로 냈나요?', personal: '내 카드 (환급받기)', corporate: '회사 카드',
-            personalHint: '승인되면 급여에 환급으로 함께 지급됩니다.', corporateHint: '회사 카드 지출로 접수됩니다.',
-            amount: '금액 ($)', amountHint: '사진이 흐려 금액을 못 읽었을 때만 입력하면 됩니다.',
-            memo: '메모 (선택)', memoPh: '무엇에 쓴 돈인지 한 줄', send: '제출', sending: '읽는 중…',
-            claimT: '환급 예정 (승인됨 · 다음 급여에 실림)', loading: '불러오는 중…', none: '아직 낸 영수증이 없습니다.',
-            analyzed: '읽은 내용', vendor: '거래처', date: '날짜', account: '분류', pending: '승인대기',
-            approved: '승인됨', rejected: '반려됨', paid: '지급완료', paidPayroll: '급여로 환급됨',
-            needPhoto: '먼저 영수증 사진을 찍어 주세요.',
-            noEmp: '계정에 직원 정보가 연결되어 있지 않습니다.', noEmpHint: '관리자(인원관리)에게 연결을 요청하세요.' },
+        ko: { title: t('영수증'), tabSend: t('영수증 내기'), tabMine: t('내 영수증'),
+            shoot: t('영수증 사진 찍기'), shootMore: t('한 장 더 찍기'), album: t('앨범에서 여러 장 고르기'),
+            readyToSend: t('제출 대기'), itemNeedAmount: t('금액을 못 읽었습니다 — 금액을 적어 주세요'),
+            doneCount: t('{n}건 접수'), doneNote: t('재무 승인 대기로 들어갔습니다.'), dupWarn: t('중복 의심 — 이미 낸 영수증일 수 있습니다'),
+            stillNeed: t('{n}장은 금액 입력 후 다시 제출해 주세요.'), failedNote: t('{n}장은 실패했습니다 — 다시 시도해 주세요.'),
+            payType: t('누구 돈으로 냈나요?'), personal: t('내 카드 (환급받기)'), corporate: t('회사 카드'),
+            personalHint: t('승인되면 급여에 환급으로 함께 지급됩니다.'), corporateHint: t('회사 카드 지출로 접수됩니다.'),
+            amount: t('금액 ($)'), amountHint: t('사진이 흐려 금액을 못 읽었을 때만 입력하면 됩니다.'),
+            memo: t('메모 (선택)'), memoPh: t('무엇에 쓴 돈인지 한 줄'), send: t('제출'), sending: t('읽는 중…'),
+            claimT: t('환급 예정 (승인됨 · 다음 급여에 실림)'), loading: t('불러오는 중…'), none: t('아직 낸 영수증이 없습니다.'),
+            analyzed: t('읽은 내용'), vendor: t('거래처'), date: t('날짜'), account: t('분류'), pending: t('승인대기'),
+            approved: t('승인됨'), rejected: t('반려됨'), paid: t('지급완료'), paidPayroll: t('급여로 환급됨'),
+            needPhoto: t('먼저 영수증 사진을 찍어 주세요.'),
+            noEmp: t('계정에 직원 정보가 연결되어 있지 않습니다.'), noEmpHint: t('관리자(인원관리)에게 연결을 요청하세요.') },
         en: { title: 'Receipts', tabSend: 'Submit', tabMine: 'My receipts',
             shoot: 'Take a photo of the receipt', shootMore: 'Take another photo', album: 'Pick multiple from album',
             readyToSend: 'Ready to submit', itemNeedAmount: 'Could not read the amount — please enter it',

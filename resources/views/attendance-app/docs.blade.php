@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>문서 올리기</title>
+    <title>{{ __('문서 올리기') }}</title>
     <style>
         /* 앱의 다른 화면과 같은 규격을 쓴다 — 문이 여럿이어도 한 앱으로 보여야 한다. */
         :root {
@@ -79,31 +79,36 @@
     @include('partials.erp-home')
     <div class="app">
         <header>
-            <a class="back" href="{{ route('attendance-app.index') }}">← 홈</a>
-            <h1>문서 올리기</h1>
-            <p class="sub">{{ $siteName ?: '현장' }} · 도면 · 계약서 · 시방서를 올리면 ERP 문서함에 자동으로 분류돼 들어갑니다.</p>
+            <a class="back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+            <h1>{{ __('문서 올리기') }}</h1>
+            <p class="sub">{{ $siteName ?: __('현장') }} · {{ __('도면 · 계약서 · 시방서를 올리면 ERP 문서함에 자동으로 분류돼 들어갑니다.') }}</p>
         </header>
 
         <main>
             <button class="pick" id="pick" type="button">
                 <span class="i">📄</span>
-                <b>파일 고르기</b>
-                <span>PDF · 사진 · 워드 · 엑셀 · 캐드 (여러 개 가능)</span>
+                <b>{{ __('파일 고르기') }}</b>
+                <span>{{ __('PDF · 사진 · 워드 · 엑셀 · 캐드 (여러 개 가능)') }}</span>
             </button>
             <input type="file" id="files" multiple hidden
                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.pptx,.dwg,.dxf,.doc,.xls,.ppt,.hwp">
 
             <div class="queue" id="queue"></div>
-            <button class="btn" id="send" type="button" hidden>올리기</button>
+            <button class="btn" id="send" type="button" hidden>{{ __('올리기') }}</button>
 
-            <p class="msg" id="msg">사진으로 찍은 서류도 됩니다. 올리면 AI 가 종류를 보고 폴더를 정합니다.</p>
+            <p class="msg" id="msg">{{ __('사진으로 찍은 서류도 됩니다. 올리면 AI 가 종류를 보고 폴더를 정합니다.') }}</p>
 
-            <div class="sec-h">최근에 올린 것</div>
+            <div class="sec-h">{{ __('최근에 올린 것') }}</div>
             <div id="recent"></div>
         </main>
     </div>
 
     <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
         var CSRF = document.querySelector('meta[name=csrf-token]').getAttribute('content');
         var SITE_ID = @json($user?->employee?->site_id);
         var RECENT = @json($recent, JSON_UNESCAPED_UNICODE);
@@ -134,13 +139,13 @@
                 var x = document.createElement('button');
                 x.type = 'button';
                 x.textContent = '×';
-                x.setAttribute('aria-label', '빼기');
+                x.setAttribute('aria-label', t('빼기'));
                 x.addEventListener('click', function () { queue.splice(i, 1); drawQueue(); });
                 row.appendChild(x);
                 host.appendChild(row);
             });
             el('send').hidden = queue.length === 0;
-            el('send').textContent = queue.length > 1 ? queue.length + '개 올리기' : '올리기';
+            el('send').textContent = queue.length > 1 ? queue.length + t('개 올리기') : t('올리기');
         }
 
         // 한 번에 한 개씩 올린다 — 요청 하나가 작아야 현장 네트워크에서 끊기지 않고,
@@ -154,7 +159,7 @@
 
             queue.reduce(function (chain, f) {
                 return chain.then(function () {
-                    say('올리는 중 ' + (done + 1) + '/' + total + ' — ' + f.name);
+                    say(t('올리는 중 ') + (done + 1) + '/' + total + ' — ' + f.name);
                     var fd = new FormData();
                     fd.append('file', f);
                     if (SITE_ID) fd.append('site_id', SITE_ID);
@@ -164,7 +169,7 @@
                         body: fd
                     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
                       .then(function (res) {
-                          if (!res.d || res.d.success === false) { failed.push(f.name + ' — ' + ((res.d && res.d.error) || '실패')); return; }
+                          if (!res.d || res.d.success === false) { failed.push(f.name + ' — ' + ((res.d && res.d.error) || t('실패'))); return; }
                           done++;
                           if (res.d.document) {
                               RECENT.unshift({
@@ -172,11 +177,11 @@
                                   name: res.d.document.title || f.name,
                                   status: res.d.document.status || res.d.status || 'analyzing',
                                   folder: res.d.document.folder_code ? (res.d.document.folder_name || '') : '',
-                                  at: '방금',
+                                  at: t('방금'),
                               });
                           }
                       })
-                      .catch(function () { failed.push(f.name + ' — 연결 실패'); });
+                      .catch(function () { failed.push(f.name + t(' — 연결 실패')); });
                 });
             }, Promise.resolve()).then(function () {
                 queue = [];
@@ -184,9 +189,9 @@
                 btn.disabled = false;
                 drawRecent();
                 if (failed.length) {
-                    say(done + '개 올렸습니다. 안 된 것: ' + failed.join(' / '), 'bad');
+                    say(done + t('개 올렸습니다. 안 된 것: ') + failed.join(' / '), 'bad');
                 } else {
-                    say(done + '개를 문서함에 올렸습니다. 종류를 읽는 중이라 잠시 뒤 폴더가 정해집니다.', 'ok');
+                    say(done + t('개를 문서함에 올렸습니다. 종류를 읽는 중이라 잠시 뒤 폴더가 정해집니다.'), 'ok');
                 }
             });
         });
@@ -194,15 +199,15 @@
         function drawRecent() {
             var host = el('recent');
             if (!RECENT.length) {
-                host.innerHTML = '<div class="empty">아직 올린 것이 없습니다.<br>위에서 파일을 골라 주세요.</div>';
+                host.innerHTML = t('<div class="empty">아직 올린 것이 없습니다.<br>위에서 파일을 골라 주세요.</div>');
                 return;
             }
             host.innerHTML = RECENT.slice(0, 15).map(function (r) {
                 // analyzing / needs_review / confirmed / failed — 폰에서는 셋으로 줄여 보여 준다.
                 // 「확인 대기」와 「보관됨」의 차이는 문서함에서 관리자가 가리는 일이다.
                 var chip = r.status === 'analyzing'
-                    ? '<span class="chip wait">읽는 중</span>'
-                    : (r.status === 'failed' ? '<span class="chip bad">읽기 실패</span>' : '<span class="chip ok">보관됨</span>');
+                    ? t('<span class="chip wait">읽는 중</span>')
+                    : (r.status === 'failed' ? t('<span class="chip bad">읽기 실패</span>') : t('<span class="chip ok">보관됨</span>'));
                 return '<div class="row"><div class="nm">' + esc(r.name) + '</div>' +
                     '<div class="meta">' + chip +
                     (r.folder ? '<span>' + esc(r.folder) + '</span>' : '') +

@@ -140,21 +140,21 @@
                     <h1>{{ $roomLabel ?? $room->name }}</h1>
                     <div class="sub">
                         <span id="online-dot" class="dot" hidden></span>
-                        <span id="sub-text">{{ $typeLabel }} · {{ $membersCount }}명</span>
+                        <span id="sub-text">{{ $typeLabel }} · {{ __(':n명', ['n' => $membersCount]) }}</span>
                     </div>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center">
                     {{-- 새 글이 오면 소리로 알린다. 앱을 보고 있을 때만 울리는 소리다 —
                          꺼져 있을 때의 알림음은 휴대폰 설정이 정한다(웹은 못 바꾼다). --}}
                     <button class="peo" type="button" id="btn-sound" title="알림 소리">🔔</button>
-                    <button class="peo" type="button" id="btn-members">참여자</button>
+                    <button class="peo" type="button" id="btn-members">{{ __('참여자') }}</button>
                     @if($canManageRoom)
                         {{-- 대화가 오간 방은 지워지지 않고 보관으로 내려간다 — 기록이 증거이기 때문이다. --}}
                         <form method="POST" action="{{ route('communication.room.destroy', ['room' => $room]) }}"
                               onsubmit="return confirm('이 방을 정리할까요?\n대화가 오간 방은 삭제되지 않고 보관으로 내려갑니다(기록은 남습니다).')">
                             @csrf
                             @method('DELETE')
-                            <button class="peo" type="submit" style="color:#b91c1c">방 정리</button>
+                            <button class="peo" type="submit" style="color:#b91c1c">{{ __('방 정리') }}</button>
                         </form>
                     @endif
                 </div>
@@ -185,16 +185,16 @@
                         @endif
                         <textarea name="body" id="body" maxlength="4000" rows="1"
                                   placeholder="{{ $room->type === 'site_announcement' ? '공지 내용' : '메시지 입력' }}"></textarea>
-                        <button class="send" type="submit" id="btn-send">전송</button>
+                        <button class="send" type="submit" id="btn-send">{{ __('전송') }}</button>
                     </div>
                     <input type="file" name="files[]" id="files" multiple
                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
                     <div class="picked" id="picked"></div>
                     @if($room->type !== 'direct')
-                        <div class="hint">사진·영수증·도면을 올리면 AI 가 읽고 재무·장비·문서함으로 보냅니다.</div>
+                        <div class="hint">{{ __('사진·영수증·도면을 올리면 AI 가 읽고 재무·장비·문서함으로 보냅니다.') }}</div>
                     @endif
                     @if($aiAvailable)
-                        <div class="hint">[AI] 를 누르고 물어보세요 — 공정·물량·제출물·자재·장비·문서를 대신 찾아 답합니다(볼 수 있는 것만).</div>
+                        <div class="hint">{{ __('[AI] 를 누르고 물어보세요 — 공정·물량·제출물·자재·장비·문서를 대신 찾아 답합니다(볼 수 있는 것만).') }}</div>
                     @endif
                 </form>
             @else
@@ -212,12 +212,12 @@
                             <button class="aibtn" type="button" id="btn-ai" aria-label="AI 에게 묻기" title="AI 에게 묻기">AI</button>
                         @endif
                         <textarea name="body" id="body" maxlength="4000" rows="1" placeholder="공지의 [답글] 을 눌러 답을 남겨 주세요"></textarea>
-                        <button class="send" type="submit" id="btn-send">전송</button>
+                        <button class="send" type="submit" id="btn-send">{{ __('전송') }}</button>
                     </div>
                     <input type="file" name="files[]" id="files" multiple
                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
                     <div class="picked" id="picked"></div>
-                    <div class="hint">이 방은 공지 전용입니다 — 새 글은 관리자만 쓰고, 각 공지에는 누구나 답글을 달 수 있습니다.</div>
+                    <div class="hint">{{ __('이 방은 공지 전용입니다 — 새 글은 관리자만 쓰고, 각 공지에는 누구나 답글을 달 수 있습니다.') }}</div>
                 </form>
             @endif
         </section>
@@ -225,13 +225,18 @@
 
     <div class="sheet-back" id="sheet-back"></div>
     <div class="sheet" id="sheet">
-        <h2>참여자 <span id="sheet-count" style="color:#6b7280;font-weight:400"></span></h2>
+        <h2>{{ __('참여자') }} <span id="sheet-count" style="color:#6b7280;font-weight:400"></span></h2>
         <div id="sheet-list"></div>
     </div>
 
 <script>
+    // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
 /**
- * 대화 화면 — 서버가 주는 "메시지 목록" 만 받아 그린다.
+ * 대화 화면 — 서버가 주는 t('메시지 목록') 만 받아 그린다.
  *
  * 전송 방식(폴링/웹소켓)을 갈아타도 이 아래는 그대로다. 처음 그릴 때도 같은 통로를
  * 쓴다 — 화면을 두 벌(서버 렌더 + 실시간 렌더)로 만들면 언젠가 둘이 달라진다.
@@ -258,8 +263,8 @@
     function dayLabel(iso) {
         if (!iso) return '';
         var d = new Date(iso + 'T00:00:00');
-        var days = ['일', '월', '화', '수', '목', '금', '토'];
-        return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + days[d.getDay()] + '요일';
+        var days = [t('일'), t('월'), t('화'), t('수'), t('목'), t('금'), t('토')];
+        return (d.getMonth() + 1) + t('월 ') + d.getDate() + t('일 ') + days[d.getDay()] + t('요일');
     }
 
     function filesHtml(files) {
@@ -276,10 +281,10 @@
     function noticeHtml(m) {
         var ai = m.kind === 'system';
         return '<div class="notice-card ' + (ai ? 'ai' : '') + '" id="message-' + m.id + '">' +
-            '<b>' + esc(m.title || (ai ? '🤖 AI' : '공지')) + '</b>' +
+            '<b>' + esc(m.title || (ai ? '🤖 AI' : t('공지'))) + '</b>' +
             quoteHtml(m) + esc(m.body) + filesHtml(m.files) +
-            (m.removed ? '' : '<div class="tools" style="margin-top:8px"><button type="button" onclick="window.Chat.reply(' + m.id + ')">답글</button>' +
-                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + ')">삭제</button>' : '') + '</div>') +
+            (m.removed ? '' : '<div class="tools" style="margin-top:8px"><button type="button" onclick="window.Chat.reply(' + m.id + t(')">답글</button>') +
+                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + t(')">삭제</button>') : '') + '</div>') +
             '</div>';
     }
 
@@ -288,7 +293,7 @@
         if (!m.parentId) return '';
         var parent = byId[m.parentId];
         var who = parent ? parent.sender : '';
-        var text = parent ? (parent.body || '') : '(원본 메시지)';
+        var text = parent ? (parent.body || '') : t('(원본 메시지)');
         return '<div class="quote">↩ ' + esc(who ? who + ': ' : '') + esc(text.slice(0, 60)) + '</div>';
     }
 
@@ -296,13 +301,13 @@
         var tools = '';
         if (!m.removed) {
             tools = '<div class="tools">' +
-                '<button type="button" onclick="window.Chat.reply(' + m.id + ')">답글</button>' +
-                (m.canEdit ? '<button type="button" onclick="window.Chat.edit(' + m.id + ')">수정</button>' : '') +
-                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + ')">삭제</button>' : '') +
+                '<button type="button" onclick="window.Chat.reply(' + m.id + t(')">답글</button>') +
+                (m.canEdit ? '<button type="button" onclick="window.Chat.edit(' + m.id + t(')">수정</button>') : '') +
+                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + t(')">삭제</button>') : '') +
                 '</div>';
         }
 
-        var stamp = '<span class="stamp">' + (m.edited ? '<span class="edited">수정됨 </span>' : '') + esc(m.sentAt || '') + '</span>';
+        var stamp = '<span class="stamp">' + (m.edited ? t('<span class="edited">수정됨 </span>') : '') + esc(m.sentAt || '') + '</span>';
         var bubble = '<div class="bubble' + (m.removed ? ' gone' : '') + '">' + quoteHtml(m) + esc(m.body) + '</div>';
         var body = m.removed ? bubble : bubble + filesHtml(m.files);
 
@@ -341,25 +346,25 @@
         var sub = document.getElementById('sub-text');
         if (onlineCount > 0) {
             dot.hidden = false;
-            sub.textContent = '{{ $typeLabel }} · ' + membersCache.length + '명 · ' + onlineCount + '명 접속 중';
+            sub.textContent = '{{ $typeLabel }} · ' + membersCache.length + t('명 · ') + onlineCount + t('명 접속 중');
         } else {
             dot.hidden = true;
-            sub.textContent = '{{ $typeLabel }} · ' + membersCache.length + '명';
+            sub.textContent = '{{ $typeLabel }} · ' + membersCache.length + t('명');
         }
     }
 
     function openMembers() {
         var list = document.getElementById('sheet-list');
-        document.getElementById('sheet-count').textContent = membersCache.length + '명';
+        document.getElementById('sheet-count').textContent = membersCache.length + t('명');
         list.innerHTML = membersCache.map(function (m) {
             // AI 도 참여자 줄에 선다 — 목록에 없으면 부를 수 있는 줄 아무도 모른다.
             var face = m.bot ? '<div class="face bot">🤖</div>' : '<div class="face">' + esc(initials(m.name)) + '</div>';
             var right = m.bot
-                ? '<div class="st on">● ' + esc(m.lastSeen || '대기 중') + '</div>'
-                : '<div class="st ' + (m.online ? 'on' : '') + '">' + (m.online ? '● 접속 중' : esc(m.lastSeen || '접속 기록 없음')) + '</div>';
+                ? '<div class="st on">● ' + esc(m.lastSeen || t('대기 중')) + '</div>'
+                : '<div class="st ' + (m.online ? 'on' : '') + '">' + (m.online ? t('● 접속 중') : esc(m.lastSeen || t('접속 기록 없음'))) + '</div>';
 
             return '<div class="mem">' + face + '<div><div class="nm">' + esc(m.name) + '</div></div>' + right + '</div>';
-        }).join('') || '<div style="color:#6b7280;font-size:13px">아직 참여자가 없습니다. 관리 화면에서 "직원 동기화" 를 눌러 주세요.</div>';
+        }).join('') || t('<div style="color:#6b7280;font-size:13px">아직 참여자가 없습니다. 관리 화면에서 "직원 동기화" 를 눌러 주세요.</div>');
         document.getElementById('sheet').style.display = 'block';
         document.getElementById('sheet-back').style.display = 'block';
     }
@@ -427,14 +432,14 @@
     function schedule(ms) { clearTimeout(timer); timer = setTimeout(poll, Math.max(2000, ms || 5000)); }
 
         /* ── 알림 소리 ────────────────────────────────────────────────────────
-         * 앱을 보고 있을 때 새 글이 오면 "깨똑깨똑" 하고 알린다.
+         * 앱을 보고 있을 때 새 글이 오면 t('깨똑깨똑') 하고 알린다.
          *
          * 소리를 두 갈래로 둔 이유: 휴대폰에 한국어 음성이 깔려 있으면 실제로
-         * "깨똑깨똑" 이라고 말하고, 없으면 나무 두드리는 소리 두 번으로 대신한다.
-         * 음성이 없는 기기에서 아무 소리도 안 나면 "알림이 고장났다" 가 된다.
+         * t('깨똑깨똑') 이라고 말하고, 없으면 나무 두드리는 소리 두 번으로 대신한다.
+         * 음성이 없는 기기에서 아무 소리도 안 나면 t('알림이 고장났다') 가 된다.
          *
          * 브라우저는 사용자가 화면을 한 번 만지기 전에는 소리를 막는다(자동재생 정책).
-         * 그래서 첫 터치에서 오디오를 깨워 둔다 — 이게 없으면 "소리를 켰는데 안 난다".
+         * 그래서 첫 터치에서 오디오를 깨워 둔다 — 이게 없으면 t('소리를 켰는데 안 난다').
          */
         window.ChatChime = (function () {
             var KEY = 'chat-sound';
@@ -475,7 +480,7 @@
                     var voices = window.speechSynthesis.getVoices() || [];
                     var ko = voices.filter(function (v) { return (v.lang || '').toLowerCase().indexOf('ko') === 0; })[0];
                     if (!ko) return false;                       // 한국어 음성이 없으면 소리로 대신한다
-                    var u = new SpeechSynthesisUtterance('깨똑깨똑');
+                    var u = new SpeechSynthesisUtterance(t('깨똑깨똑'));
                     u.voice = ko; u.lang = 'ko-KR'; u.rate = 1.15; u.volume = 0.9;
                     window.speechSynthesis.cancel();
                     window.speechSynthesis.speak(u);
@@ -485,7 +490,7 @@
 
             function paint() {
                 var b = document.getElementById('btn-sound');
-                if (b) { b.textContent = on ? '🔔' : '🔕'; b.title = on ? '알림 소리 켜짐' : '알림 소리 꺼짐'; }
+                if (b) { b.textContent = on ? '🔔' : '🔕'; b.title = on ? t('알림 소리 켜짐') : t('알림 소리 꺼짐'); }
             }
 
             document.addEventListener('DOMContentLoaded', function () {

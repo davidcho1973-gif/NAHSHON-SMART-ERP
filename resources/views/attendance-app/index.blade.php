@@ -16,7 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#F5F7FA">
-    <title>내 출퇴근 · {{ \App\Support\Org::name() }}</title>
+    <title>{{ __('내 출퇴근') }} · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
     <link rel="manifest" href="{{ route('worker-app.manifest') }}">
@@ -397,7 +397,7 @@
 @isset($viewingAs)
     @if ($viewingAs)
         {{-- 남의 화면을 보고 있다는 사실이 한순간도 안 숨겨져야 한다. --}}
-        <div class="peek">보는 중 · {{ $viewingAs->name }} 화면 <b>기록은 남지 않습니다</b></div>
+        <div class="peek">{{ __('보는 중') }} · {{ $viewingAs->name }} {{ __('화면') }} <b>{{ __('기록은 남지 않습니다') }}</b></div>
     @endif
 @endisset
 
