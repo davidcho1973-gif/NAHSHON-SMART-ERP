@@ -7,8 +7,11 @@ use App\Models\KnowledgeFact;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\AccessPolicy;
+use App\Support\AiInformationAccess;
 use App\Support\GeminiEmbedder;
 use App\Support\SensitiveDocuments;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 지식 창고지기 — 문서 분석의 결과를 축적하고, 개정되면 은퇴시키고, 질문이 오면 찾아 준다.
@@ -45,7 +48,7 @@ class KnowledgeKeeper
 
     public static function ready(): bool
     {
-        return self::$ready ??= \Illuminate\Support\Facades\Schema::hasTable('knowledge_facts');
+        return self::$ready ??= Schema::hasTable('knowledge_facts');
     }
 
     /** 이 문서의 카드가 최신인가 — 분석 이후에 수확된 카드가 있으면 다시 할 일이 없다. */
@@ -59,7 +62,7 @@ class KnowledgeKeeper
             ->where('intelligent_document_id', $document->id)
             ->max('created_at');
 
-        return $newest !== null && \Illuminate\Support\Carbon::parse($newest)->gte($document->analyzed_at);
+        return $newest !== null && Carbon::parse($newest)->gte($document->analyzed_at);
     }
 
     /** 분석이 끝난 문서에서 지식 카드를 수확한다. 재분석하면 그 문서 카드는 갈아엎는다. */
@@ -123,7 +126,8 @@ class KnowledgeKeeper
             return [];
         }
 
-        $base = KnowledgeFact::query()->active();
+        $base = KnowledgeFact::query()->active()
+            ->whereIn('intelligent_document_id', AiInformationAccess::documents($asker, $site)->select('id'));
         if ($site) {
             $base->where('site_id', $site->id);
         }
@@ -131,6 +135,8 @@ class KnowledgeKeeper
 
         // 돈 문서 카드는 재무 권한자만 — 화면(money 토픽)과 같은 선을 지킨다.
         if (! AccessPolicy::canManageMoney($asker)) {
+            AiInformationAccess::withoutFinancialText($base, 'fact');
+            AiInformationAccess::withoutFinancialText($base, 'doc_title');
             $base->where(function ($q): void {
                 $q->whereNull('document_type')->orWhereNotIn('document_type', self::MONEY_DOC_TYPES);
             });
@@ -173,7 +179,7 @@ class KnowledgeKeeper
                     ->whereNotIn('id', $seen)
                     ->latest('id')
                     ->limit(2000) // 카드 수천 장까지는 PHP 내적으로 충분 — 넘어가면 pgvector 로 옮긴다
-                    ->get(['id', 'fact', 'doc_title', 'document_date', 'revision', 'embedding']);
+                    ->get(['id', 'intelligent_document_id', 'fact', 'doc_title', 'document_date', 'revision', 'embedding']);
 
                 $semantic = $candidates
                     ->map(function (KnowledgeFact $f) use ($queryVector): array {

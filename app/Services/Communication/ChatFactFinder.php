@@ -5,6 +5,7 @@ namespace App\Services\Communication;
 use App\Models\AttendanceLog;
 use App\Models\BoqItem;
 use App\Models\CommunicationRoom;
+use App\Models\DocumentActionItem;
 use App\Models\Employee;
 use App\Models\Equipment;
 use App\Models\IntelligentDocument;
@@ -14,7 +15,9 @@ use App\Models\Site;
 use App\Models\Submittal;
 use App\Models\User;
 use App\Models\WbsItem;
+use App\Services\Documents\KnowledgeKeeper;
 use App\Support\AccessPolicy;
+use App\Support\AiInformationAccess;
 
 /**
  * AI 가 대화방에서 질문을 받았을 때 <b>대신 조회해 주는</b> 자리.
@@ -45,7 +48,7 @@ class ChatFactFinder
         'procurement' => ['자재', '발주', '납품', '납기', '입고', '구매', '주문', 'po', 'eta', 'material', 'delivery'],
         'equipment' => ['장비', '렌탈', '임대', '중장비', '크레인', '리프트', '지게차', 'equipment', 'rental'],
         'attendance' => ['출근', '퇴근', '출역', '인원', '몇 명', '몇명', '근태', '출퇴근', 'attendance', 'headcount'],
-        'money' => ['비용', '경비', '영수증', '지출', '금액', '얼마', '예산', '급여', '인건비', '정산', 'cost', 'expense', 'payroll'],
+        'money' => ['비용', '경비', '영수증', '지출', '금액', '예산', '급여', '인건비', '정산', 'cost', 'expense', 'payroll'],
         'documents' => ['문서', '도면', '계약서', '서류', '스펙', '사양', 'drawing', 'document', 'spec'],
         'boq' => ['물량', '수량', '몇 개', '몇개', '몇 장', '몇장', '몇 본', '몇본', '단가', '산출', '내역', 'boq', 'quantity', 'takeoff'],
         'submittals' => ['제출물', '샵드로잉', '제작도', '컷시트', '배합설계', '승인', 'submittal', 'shop drawing'],
@@ -75,6 +78,15 @@ class ChatFactFinder
      */
     public function gatherFor(string $question, ?Site $site, User $asker): array
     {
+        if ($asker->account_status !== 'active' || ($site && ! AiInformationAccess::canUseSite($asker, $site))) {
+            return ['site' => null, 'facts' => [], 'denied' => ['이 현장 자료를 조회할 권한이 없습니다.']];
+        }
+        if (! $site && ! AccessPolicy::canManageSystem($asker)) {
+            return ['site' => null, 'facts' => [], 'denied' => ['담당 현장이 지정되지 않았습니다. 관리자에게 현장 배정을 요청해 주세요.']];
+        }
+        if (! AccessPolicy::canManageMoney($asker) && AiInformationAccess::financial($question)) {
+            return ['site' => $site, 'facts' => [], 'denied' => [AiInformationAccess::DENIED]];
+        }
         $topics = $this->topicsIn($question);
 
         $facts = [];
@@ -91,7 +103,7 @@ class ChatFactFinder
 
         // 지식 창고는 주제와 무관하게 항상 본다 — 축적된 지식은 어떤 질문에든
         // 걸릴 수 있고, 아무 주제에도 안 걸린 질문의 마지막 그물이기도 하다.
-        $knowledge = app(\App\Services\Documents\KnowledgeKeeper::class)
+        $knowledge = app(KnowledgeKeeper::class)
             ->search($site, $asker, $this->searchTerms($question), $question);
         if ($knowledge !== []) {
             $facts['지식 창고(문서에서 축적)'] = $knowledge;
@@ -114,7 +126,7 @@ class ChatFactFinder
 
         // 마지막 그물 — 아무 주제에도 안 걸린 질문("코어에 합판 써도 돼?")은
         // 문서 본문 검색이 받아낸다. 시방·계약 조항 질문은 낱말 표로 다 못 잡는다.
-        if ($topics === [] && ! isset($facts['문서함'])) {
+        if (! isset($facts['문서함'])) {
             $fallback = $this->documents($site, $asker, $question);
             if ($fallback !== []) {
                 $facts['문서함'] = $fallback;
@@ -123,7 +135,7 @@ class ChatFactFinder
 
         return [
             'site' => $site,
-            'facts' => array_filter($facts, fn ($v): bool => $v !== [] && $v !== null),
+            'facts' => array_filter(AccessPolicy::canManageMoney($asker) ? $facts : AiInformationAccess::technicalFacts($facts), fn ($v): bool => $v !== [] && $v !== null),
             'denied' => $denied,
         ];
     }
@@ -153,13 +165,13 @@ class ChatFactFinder
      */
     private function siteFor(CommunicationRoom $room, User $asker): ?Site
     {
-        return $this->siteById($room->site_id ?: $asker->employee?->site_id, $asker);
+        return $this->siteById($room->site_id ?: AiInformationAccess::siteId($asker), $asker);
     }
 
     /** 물어본 사람 자신의 현장 — 방이 없을 때의 기준. */
     public function siteOf(User $asker): ?Site
     {
-        return $this->siteById($asker->employee?->site_id, $asker);
+        return $this->siteById(AiInformationAccess::siteId($asker), $asker);
     }
 
     private function siteById(?int $siteId, User $asker): ?Site
@@ -171,7 +183,9 @@ class ChatFactFinder
         $query = Site::query()->whereKey($siteId);
         AccessPolicy::applyCompanyLock($query, $asker);
 
-        return $query->first();
+        $site = $query->first();
+
+        return $site && AiInformationAccess::canUseSite($asker, $site) ? $site : null;
     }
 
     /** 공정 — 진행 중인 것과 늦은 것. 100% 끝난 줄까지 실어 보내지 않는다. */
@@ -361,12 +375,7 @@ class ChatFactFinder
      */
     private function documents(?Site $site, User $asker, string $question): array
     {
-        $query = IntelligentDocument::query();
-
-        if ($site) {
-            $query->where('site_id', $site->id);
-        }
-        AccessPolicy::applyCompanyLock($query, $asker);
+        $query = AiInformationAccess::documents($asker, $site);
 
         $terms = $this->searchTerms($question);
 
@@ -452,7 +461,7 @@ class ChatFactFinder
 
         return array_filter([
             '전체 행수' => $total,
-            '직접비 합계($)' => (float) (clone $query)->sum('amount'),
+            '직접비 합계($)' => AccessPolicy::canManageMoney($asker) ? (float) (clone $query)->sum('amount') : null,
             '검색어' => $terms === [] ? null : implode(', ', $terms),
             '해당 품목' => $rows->isEmpty()
                 ? ($terms === [] ? null : '일치하는 품목 없음 — 품명을 바꿔 다시 물어봐 달라고 답할 것')
@@ -462,10 +471,10 @@ class ChatFactFinder
                     '규격' => filled($b->spec) ? mb_substr((string) $b->spec, 0, 120) : null,
                     '수량' => rtrim(rtrim((string) $b->qty, '0'), '.').' '.$b->unit,
                     '수량 근거' => $b->qty_basis,
-                    '단가($)' => (float) $b->unit_price,
-                    '금액($)' => (float) $b->amount,
+                    '단가($)' => AccessPolicy::canManageMoney($asker) ? (float) $b->unit_price : null,
+                    '금액($)' => AccessPolicy::canManageMoney($asker) ? (float) $b->amount : null,
                     '출처 도면' => $b->source,
-                    '검토 필요' => $b->flagged ? '예(단가 편차)' : null,
+                    '검토 필요' => AccessPolicy::canManageMoney($asker) && $b->flagged ? '예(단가 편차)' : null,
                 ]))->values()->all(),
         ], fn ($v): bool => $v !== null);
     }
@@ -639,7 +648,8 @@ class ChatFactFinder
         }
 
         // 3) 문서에서 AI 가 뽑아 둔 기한·검사 액션
-        $actions = \App\Models\DocumentActionItem::query()
+        $actions = DocumentActionItem::query()
+            ->whereIn('intelligent_document_id', AiInformationAccess::documents($asker, $site)->select('id'))
             ->when($site, fn ($q) => $q->where('site_id', $site->id))
             ->whereIn('action_type', ['deadline', 'quality', 'compliance', 'inspection', 'response'])
             ->orderByRaw('due_at IS NULL')
