@@ -233,7 +233,8 @@ class MobileAskTest extends TestCase
         foreach ([['document_type' => 'contract'], ['document_type' => 'payroll_record'],
             ['confidentiality' => 'confidential'], ['ai_status' => 'review_required'],
             ['search_text' => '양생 7일; subcontract price USD 974321.25'],
-            ['summary' => '주방 단가 974321.25'], ['document_type' => 'general']] as $changes) {
+            ['summary' => '주방 단가 974321.25'], ['key_facts' => ['양생 단가 974321.25']],
+            ['extracted_text' => '양생 금액 974321.25'], ['document_type' => 'general']] as $changes) {
             $doc = $this->spec();
             $doc->update($changes + ['title' => '주방 양생 비공개 '.$doc->id]);
             $hiddenIds[] = $doc->id;

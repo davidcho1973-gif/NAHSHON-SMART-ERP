@@ -78,7 +78,9 @@ final class AiInformationAccess
     public static function withoutFinancialText(Builder $query, string $column): void
     {
         // PostgreSQL uses \y for a word boundary; column names are application constants only.
-        $query->whereRaw("COALESCE(CAST({$column} AS TEXT), '') !~* ?", [str_replace('\\b', '\\y', self::MONEY_PATTERN)]);
+        // json preserves escaped Korean (\uXXXX); jsonb normalizes it before the text check.
+        $expression = $column === 'key_facts' ? 'CAST(key_facts AS JSONB)' : $column;
+        $query->whereRaw("COALESCE(CAST({$expression} AS TEXT), '') !~* ?", [str_replace('\\b', '\\y', self::MONEY_PATTERN)]);
     }
 
     /** Free-text operational fields can also contain a pasted price. Remove the whole affected field. */
