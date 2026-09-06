@@ -636,12 +636,39 @@
     var LANG_KEY = 'workerAppLang';
     var langChosen = false;   // 사람이 고른 적이 있으면 서버의 기본 언어가 못 덮는다
 
+    // 고른 언어를 서버도 알아야 한다. 예전에는 localStorage 에만 두어서, 첫 화면만
+    // 영어로 바뀌고 거기서 들어가는 화면(현장 기록·물어보기·문서 올리기)은 서버가
+    // 그리므로 계속 한국어였다 — 2026-09-06 에 사장이 그대로 겪었다.
+    //
+    // 쿠키는 즉시 걸어 둔다(다음 이동부터 바로 그 언어로 그려진다). 저장 요청은
+    // 폰을 바꿔도 따라오게 하려는 것이라 실패해도 화면을 막지 않는다.
+    function rememberLangOnServer(code) {
+        try {
+            document.cookie = 'app_locale=' + code + '; path=/; max-age=' + (60 * 60 * 24 * 365) + '; samesite=lax';
+        } catch (e) {}
+        try {
+            fetch(@json(route('attendance-app.language')), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': CSRF
+                },
+                body: JSON.stringify({ lang: code })
+            }).catch(function () {});
+        } catch (e) {}
+    }
+
     function setLang(code, remember) {
         if (!DICT[code]) return;
         state.lang = code;
         T = DICT[code];
         langChosen = langChosen || !!remember;
-        if (remember) { try { localStorage.setItem(LANG_KEY, code); } catch (e) {} }
+        if (remember) {
+            try { localStorage.setItem(LANG_KEY, code); } catch (e) {}
+            rememberLangOnServer(code);
+        }
         document.documentElement.setAttribute('lang', code);
         Array.prototype.forEach.call(document.querySelectorAll('#langs [data-lang]'), function (n) {
             n.setAttribute('aria-pressed', n.dataset.lang === code ? 'true' : 'false');
@@ -651,7 +678,14 @@
     (function () {
         var saved = null;
         try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
-        if (saved && DICT[saved]) { langChosen = true; setLang(saved, false); }
+        if (!saved || !DICT[saved]) return;
+
+        langChosen = true;
+        setLang(saved, false);
+
+        // 이 고침 이전에 고른 사람은 localStorage 에만 값이 있다. 쿠키가 비어 있으면
+        // 지금 심어 준다 — 안 그러면 다시 고르기 전까지 아래 화면들이 계속 한국어다.
+        if (document.cookie.indexOf('app_locale=') === -1) rememberLangOnServer(saved);
     })();
 
     /** 요일은 서버(한국어)가 아니라 날짜에서 그 언어로 만든다. */

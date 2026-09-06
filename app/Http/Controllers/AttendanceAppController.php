@@ -13,6 +13,7 @@ use App\Services\AttendanceQrService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
 use App\Services\Hr\SelfEmployeeLink;
+use App\Support\AppLocale;
 use App\Support\QrSvg;
 use App\Support\WorkerLang;
 use Illuminate\Contracts\View\View;
@@ -215,6 +216,33 @@ class AttendanceAppController extends Controller
      * 출근 시각 정정 요청 — "실제로는 더 일찍 왔다". 기록을 바로 고치지 않고
      * 확인 대기로 돌린다. 임금 기록은 본인 신고만으로 바뀌면 안 된다.
      */
+    /**
+     * 앱에서 고른 언어를 저장한다 — 쿠키(이 브라우저)와 직원 정보(이 사람) 양쪽에.
+     *
+     * 쿠키만 두면 서버가 그리는 화면은 따라오지만 폰을 바꾸면 사라진다. 직원 정보에만
+     * 두면 폰을 바꿔도 따라오지만 로그인 전 화면이 모른다. 그래서 둘 다 쓴다.
+     */
+    public function language(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lang' => ['required', 'string', 'in:'.implode(',', AppLocale::SUPPORTED)],
+        ]);
+
+        $locale = (string) $data['lang'];
+
+        // 다른 사람의 화면을 보는 중이면 그 사람의 언어를 바꾸지 않는다 — 쿠키만 바꾼다.
+        if (! $this->viewAsEmployee($request)) {
+            $employee = $request->user()?->employee;
+            if ($employee && $employee->preferred_language !== $locale) {
+                $employee->forceFill(['preferred_language' => $locale])->save();
+            }
+        }
+
+        return response()
+            ->json(['success' => true, 'lang' => $locale])
+            ->cookie(AppLocale::COOKIE, $locale, AppLocale::COOKIE_MINUTES);
+    }
+
     public function requestCorrection(Request $request, WorkerAttendanceService $worker): JsonResponse
     {
         if ($this->viewAsEmployee($request)) {

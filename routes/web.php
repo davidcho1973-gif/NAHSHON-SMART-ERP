@@ -275,6 +275,10 @@ Route::middleware('auth')->group(function (): void {
         ->name('attendance-app.self-link');
     Route::post('/attendance-app/punch', [AttendanceAppController::class, 'punch'])->name('attendance-app.punch');
     Route::post('/attendance-app/correction', [AttendanceAppController::class, 'requestCorrection'])->name('attendance-app.correction');
+    // 언어 선택을 서버에도 남긴다 — 쿠키만 두면 폰을 바꿀 때 다시 골라야 하고,
+    // 서버가 그리는 화면(현장 기록·물어보기·문서)은 첫 화면과 다른 말을 하게 된다.
+    Route::post('/attendance-app/language', [AttendanceAppController::class, 'language'])
+        ->middleware('throttle:60,1')->name('attendance-app.language');
 
     // 영수증 앱 — 사진 한 장으로 경비 접수(ERP 등록과 같은 판독·원장·승인 회로).
     Route::get('/expense-app', [ExpenseAppController::class, 'index'])->name('expense-app.index');

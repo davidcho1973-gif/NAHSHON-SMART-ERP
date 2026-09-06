@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>오늘 보고</title>
+    <title>{{ __('오늘 보고') }}</title>
     <style>
         /* 앱의 다른 화면과 같은 규격 — 문이 여럿이어도 한 앱으로 보여야 한다. */
         :root {
@@ -113,25 +113,25 @@
     @include('partials.erp-home')
     <div class="app">
         <header>
-            <a class="back" href="{{ route('attendance-app.index') }}">← 홈</a>
-            <p class="eyebrow">{{ \App\Support\Org::name() }} · {{ $siteName ?: '현장' }}</p>
-            <h1>{{ $myTrade ? '오늘 보고 — '.$myTrade : '현장 기록' }}</h1>
+            <a class="back" href="{{ route('attendance-app.index') }}">← {{ __('홈') }}</a>
+            <p class="eyebrow">{{ \App\Support\Org::name() }} · {{ $siteName ?: __('현장') }}</p>
+            <h1>{{ $myTrade ? __('오늘 보고').' — '.$myTrade : __('현장 기록') }}</h1>
 
             {{-- 화면을 여는 순간 «지금 뭘 해야 하나» 가 읽혀야 한다. --}}
             @if ($myTrade)
                 @if ($reportStatus === 'submitted')
-                    <p class="state done" id="state">✅ 오늘 보고 제출을 마쳤습니다</p>
-                    <p class="state-sub" id="state-sub">더 올리시면 그대로 오늘 보고에 들어갑니다.</p>
+                    <p class="state done" id="state">✅ {{ __('오늘 보고 제출을 마쳤습니다') }}</p>
+                    <p class="state-sub" id="state-sub">{{ __('더 올리시면 그대로 오늘 보고에 들어갑니다.') }}</p>
                 @elseif ($reportEntries > 0)
-                    <p class="state todo" id="state">아직 제출 전 — 올린 것 {{ $reportEntries }}건</p>
-                    <p class="state-sub" id="state-sub">더 없으시면 맨 아래 「오늘 보고 제출」을 눌러 주세요.</p>
+                    <p class="state todo" id="state">{{ __('아직 제출 전') }} — {{ __(':n건 올림', ['n' => $reportEntries]) }}</p>
+                    <p class="state-sub" id="state-sub">{{ __('더 없으시면 맨 아래 「오늘 보고 제출」을 눌러 주세요.') }}</p>
                 @else
-                    <p class="state todo" id="state">오늘 아직 아무것도 안 올리셨습니다</p>
-                    <p class="state-sub" id="state-sub">한 일을 말하거나 적어 주시면 됩니다. 1분이면 끝납니다.</p>
+                    <p class="state todo" id="state">{{ __('오늘 아직 아무것도 안 올리셨습니다') }}</p>
+                    <p class="state-sub" id="state-sub">{{ __('한 일을 말하거나 적어 주시면 됩니다. 1분이면 끝납니다.') }}</p>
                 @endif
             @else
-                <p class="state" id="state">현장에서 있었던 일을 남기는 곳입니다</p>
-                <p class="state-sub" id="state-sub">말하거나 적어 주시면 ERP 가 알아서 정리합니다.</p>
+                <p class="state" id="state">{{ __('현장에서 있었던 일을 남기는 곳입니다') }}</p>
+                <p class="state-sub" id="state-sub">{{ __('말하거나 적어 주시면 ERP 가 알아서 정리합니다.') }}</p>
             @endif
         </header>
 
@@ -143,31 +143,31 @@
                 @if ($voiceReady)
                     <button class="mic" id="mic" type="button">
                         <span class="icon" id="mic-icon">🎤</span>
-                        <span class="label" id="mic-label">눌러서 말하기</span>
-                        <span class="hint" id="mic-hint">오늘 한 일을 말씀하세요. 글자로 바꿔 드립니다.</span>
+                        <span class="label" id="mic-label">{{ __('눌러서 말하기') }}</span>
+                        <span class="hint" id="mic-hint">{{ __('오늘 한 일을 말씀하세요. 글자로 바꿔 드립니다.') }}</span>
                     </button>
                 @else
                     <div class="mic off">
                         <span class="icon">🎤</span>
-                        <span class="label">음성이 아직 안 켜졌습니다</span>
-                        <span class="hint">아래 「글로 쓰기」로 적어 주세요. (관리자: AI 키 설정 필요)</span>
+                        <span class="label">{{ __('음성이 아직 안 켜졌습니다') }}</span>
+                        <span class="hint">{{ __('아래 「글로 쓰기」로 적어 주세요. (관리자: AI 키 설정 필요)') }}</span>
                     </div>
                 @endif
 
                 {{-- ② 두 번째 길 — 글로 쓰기, 그리고 사진(증거) --}}
                 <div class="two">
-                    <button class="btn" id="write-toggle" type="button">⌨️ 글로 쓰기</button>
-                    <button class="btn" id="photo-btn" type="button">📷 사진 붙이기</button>
+                    <button class="btn" id="write-toggle" type="button">⌨️ {{ __('글로 쓰기') }}</button>
+                    <button class="btn" id="photo-btn" type="button">📷 {{ __('사진 붙이기') }}</button>
                 </div>
                 <input type="file" id="photos" accept="image/*" multiple capture="environment" hidden>
 
                 <div class="writer" id="writer" hidden>
-                    <p class="heard" id="heard" hidden>말씀하신 내용을 보고 문장으로 정리했습니다. 틀린 곳은 고치고 보내 주세요.</p>
-                    <textarea id="raw" placeholder="예)&#10;3층 천장 배관 20개 중 12개 했습니다&#10;그레이바 자재 화요일 도착&#10;내일 전기 3명 투입"></textarea>
+                    <p class="heard" id="heard" hidden>{{ __('말씀하신 내용을 보고 문장으로 정리했습니다. 틀린 곳은 고치고 보내 주세요.') }}</p>
+                    <textarea id="raw" placeholder="{{ __('예)') }}&#10;{{ __('3층 천장 배관 20개 중 12개 했습니다') }}&#10;{{ __('그레이바 자재 화요일 도착') }}&#10;{{ __('내일 전기 3명 투입') }}"></textarea>
                     {{-- 정리 전에 무슨 말을 했는지 — 다듬은 문장이 내 말과 다르면
                          여기서 확인한다. 정리는 도움이지 대체가 아니다. --}}
                     <details id="heard-raw" hidden>
-                        <summary>내가 말한 그대로 보기</summary>
+                        <summary>{{ __('내가 말한 그대로 보기') }}</summary>
                         <pre class="raw" id="heard-text"></pre>
                     </details>
                 </div>
@@ -175,14 +175,14 @@
                 <div class="shots" id="shots"></div>
 
                 <div class="row" id="send-row" hidden>
-                    <button class="btn primary full" id="send" type="button">보내기</button>
+                    <button class="btn primary full" id="send" type="button">{{ __('보내기') }}</button>
                 </div>
 
-                <p class="msg" id="msg">말하거나 적으시면 ERP 가 알아서 정리합니다. 사진은 증거로 함께 붙일 수 있습니다.</p>
+                <p class="msg" id="msg">{{ __('말하거나 적으시면 ERP 가 알아서 정리합니다. 사진은 증거로 함께 붙일 수 있습니다.') }}</p>
             </section>
 
             <section id="list-screen">
-                <div class="sec-title">오늘 올린 것 <span id="count"></span></div>
+                <div class="sec-title">{{ __('오늘 올린 것') }} <span id="count"></span></div>
                 <div id="list"></div>
                 <button class="more" id="more" type="button" hidden></button>
             </section>
@@ -213,6 +213,11 @@
     </div>
 
     <script>
+    // 화면 안의 글도 서버와 <b>같은 사전</b>을 읽는다. 블레이드는 __(), 여기서는 t().
+    // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다. 한국어는 파일이 없어도 열쇠가 곧 원문이다.
+    const TR = @json(\App\Support\AppLocale::dictionary());
+    function t(s) { return (TR && TR[s]) || s; }
+
         var API = @json(url('/smart-company-api'));
         var CSRF = document.querySelector('meta[name=csrf-token]').getAttribute('content');
         var CAN_MANAGE = @json($canManage);
@@ -222,7 +227,7 @@
         // 한글을 \uXXXX 로 바꾸지 않는다 — 본문이 작아지고, 화면에 실려 나간 내용을
         // 사람이 그대로 읽을 수 있다.
         var BATCHES = @json($batches, JSON_UNESCAPED_UNICODE);
-        var STATUS = { pending: '확인 대기', applied: '반영됨', dismissed: '무시함', needs_input: '확인 필요' };
+        var STATUS = { pending: t('확인 대기'), applied: t('반영됨'), dismissed: t('무시함'), needs_input: t('확인 필요') };
 
         var photos = [];       // 아직 안 올린 사진 파일
         var showAll = false;   // 지난 기록까지 펼쳤는가
@@ -293,7 +298,7 @@
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || pickMime() === null) {
                 openWriter();
-                say('이 폰에서는 녹음이 안 됩니다. 글로 적어 주세요.', 'warn');
+                say(t('이 폰에서는 녹음이 안 됩니다. 글로 적어 주세요.'), 'warn');
                 return;
             }
 
@@ -310,30 +315,30 @@
                 recorder.onstop = function () {
                     clearInterval(recTimer);
                     stopTracks(stream);
-                    micFace('⏳', '옮기는 중…', '조금만 기다려 주세요', false);
+                    micFace('⏳', t('옮기는 중…'), t('조금만 기다려 주세요'), false);
                     el('mic').disabled = true;
                     sendVoice(new Blob(chunks, { type: recMime }));
                 };
                 recorder.start();
                 recStart = Date.now();
-                micFace('⏹', '다 말했으면 누르세요', '● 듣는 중 0:00', true);
+                micFace('⏹', t('다 말했으면 누르세요'), t('● 듣는 중 0:00'), true);
                 recTimer = setInterval(function () {
                     var s = Math.round((Date.now() - recStart) / 1000);
-                    el('mic-hint').textContent = '● 듣는 중 ' + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+                    el('mic-hint').textContent = t('● 듣는 중 ') + Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
                     // 너무 길면 스스로 끊는다 — 3분이면 현장 보고 한 건은 충분하다.
                     if (s >= 180 && recorder && recorder.state === 'recording') { recorder.stop(); }
                 }, 500);
-                say('말씀하세요. 다 하시면 버튼을 한 번 더 누르면 됩니다.');
+                say(t('말씀하세요. 다 하시면 버튼을 한 번 더 누르면 됩니다.'));
             }).catch(function () {
                 openWriter();
-                say('마이크를 쓸 수 없습니다. 폰 설정에서 마이크를 켜 주시거나, 글로 적어 주세요.', 'warn');
+                say(t('마이크를 쓸 수 없습니다. 폰 설정에서 마이크를 켜 주시거나, 글로 적어 주세요.'), 'warn');
             });
         });
 
         function resetMic() {
             recorder = null;
             el('mic').disabled = false;
-            micFace('🎤', '눌러서 말하기', '오늘 한 일을 말씀하세요. 글자로 바꿔 드립니다.', false);
+            micFace('🎤', t('눌러서 말하기'), t('오늘 한 일을 말씀하세요. 글자로 바꿔 드립니다.'), false);
         }
 
         function sendVoice(blob) {
@@ -350,7 +355,7 @@
                     resetMic();
                     if (!d || !d.success) {
                         openWriter();
-                        say((d && d.error) || '말씀을 옮기지 못했습니다. 글로 적어 주세요.', 'warn');
+                        say((d && d.error) || t('말씀을 옮기지 못했습니다. 글로 적어 주세요.'), 'warn');
                         return;
                     }
                     openWriter();
@@ -365,13 +370,13 @@
                     }
 
                     syncSend();
-                    say('보고 문장으로 정리했습니다. 틀린 곳을 고치고 <b>보내기</b>를 눌러 주세요.', 'ok');
+                    say(t('보고 문장으로 정리했습니다. 틀린 곳을 고치고 <b>보내기</b>를 눌러 주세요.'), 'ok');
                     box.focus();
                 })
                 .catch(function () {
                     resetMic();
                     openWriter();
-                    say('연결이 끊겼습니다. 글로 적어 주세요.', 'warn');
+                    say(t('연결이 끊겼습니다. 글로 적어 주세요.'), 'warn');
                 });
         }
 
@@ -403,7 +408,7 @@
             drawShots();
             syncSend();
             if (el('raw').value.trim() === '') {
-                say('사진 ' + photos.length + '장 준비됨. <b>무슨 사진인지 한마디만</b> 말하거나 적어 주세요 — 사진만으로는 시스템이 맥락을 알 수 없습니다.', 'warn');
+                say(t('사진 ') + photos.length + t('장 준비됨. <b>무슨 사진인지 한마디만</b> 말하거나 적어 주세요 — 사진만으로는 시스템이 맥락을 알 수 없습니다.'), 'warn');
             }
         });
 
@@ -419,7 +424,7 @@
                 var x = document.createElement('button');
                 x.type = 'button';
                 x.textContent = '×';
-                x.setAttribute('aria-label', '사진 빼기');
+                x.setAttribute('aria-label', t('사진 빼기'));
                 x.addEventListener('click', function () { photos.splice(i, 1); drawShots(); syncSend(); });
                 wrap.appendChild(img); wrap.appendChild(x);
                 host.appendChild(wrap);
@@ -438,7 +443,7 @@
                         headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
                         body: fd
                     }).then(function (r) { return r.json(); }).then(function (d) {
-                        if (!d || !d.success) { throw new Error((d && d.error) || '사진 업로드 실패'); }
+                        if (!d || !d.success) { throw new Error((d && d.error) || t('사진 업로드 실패')); }
                         tokens.push(d.token);
                     });
                 });
@@ -449,18 +454,18 @@
         el('send').addEventListener('click', function () {
             var raw = el('raw').value.trim();
             var btn = this;
-            if (!raw && !photos.length) { say('말하거나 적어 주세요.', 'warn'); return; }
+            if (!raw && !photos.length) { say(t('말하거나 적어 주세요.'), 'warn'); return; }
 
             btn.disabled = true;
-            btn.textContent = photos.length ? '사진 올리는 중…' : '보내는 중…';
+            btn.textContent = photos.length ? t('사진 올리는 중…') : t('보내는 중…');
 
-            uploadPhotos(function (n, total) { say('사진 올리는 중 ' + n + '/' + total + '…'); })
+            uploadPhotos(function (n, total) { say(t('사진 올리는 중 ') + n + '/' + total + '…'); })
                 .then(function (tokens) {
-                    btn.textContent = raw ? '정리하는 중…' : '올리는 중…';
+                    btn.textContent = raw ? t('정리하는 중…') : t('올리는 중…');
                     return api('api_opsIngest', [raw, tokens]);
                 })
                 .then(function (d) {
-                    if (!d || d.success === false) { throw new Error((d && d.error) || '보내지 못했습니다.'); }
+                    if (!d || d.success === false) { throw new Error((d && d.error) || t('보내지 못했습니다.')); }
                     el('raw').value = '';
                     el('heard').hidden = true;
                     el('heard-raw').hidden = true;
@@ -469,10 +474,10 @@
                     syncSend();
                     return awaitJob(d.batchId);
                 })
-                .then(function () { btn.disabled = false; btn.textContent = '보내기'; reload(); })
+                .then(function () { btn.disabled = false; btn.textContent = t('보내기'); reload(); })
                 .catch(function (e) {
-                    btn.disabled = false; btn.textContent = '보내기';
-                    say((e && e.message) || '연결에 실패했습니다. 다시 눌러 주세요.', 'warn');
+                    btn.disabled = false; btn.textContent = t('보내기');
+                    say((e && e.message) || t('연결에 실패했습니다. 다시 눌러 주세요.'), 'warn');
                 });
         });
 
@@ -487,22 +492,22 @@
                         var elapsed = Math.round((Date.now() - started) / 1000);
                         api('api_getOpsJob', [batchId]).then(function (j) {
                             if (!j || !j.success || j.status === 'analyzing') {
-                                say('정리하는 중… ' + elapsed + '초');
+                                say(t('정리하는 중… ') + elapsed + t('초'));
                                 return tick();
                             }
-                            if (j.status === 'failed') { say('정리하지 못했습니다: ' + esc(j.error || ''), 'warn'); return resolve(); }
+                            if (j.status === 'failed') { say(t('정리하지 못했습니다: ') + esc(j.error || ''), 'warn'); return resolve(); }
                             if (j.photoOnly) {
                                 // 사진만 올렸다. 사진은 보고에 붙었지만 무슨 일이 있었는지는
                                 // 아무도 말해 주지 않았다 — 그 사실을 그대로 알린다.
-                                say('사진을 오늘 보고에 붙였습니다.' +
-                                    (j.evidenceFiled ? ' (증빙 ' + j.evidenceFiled + '건은 문서함에도 보관)' : '') +
-                                    ' <b>무슨 일이었는지 한마디만</b> 남겨 주시면 공정표까지 올라갑니다.', 'warn');
+                                say(t('사진을 오늘 보고에 붙였습니다.') +
+                                    (j.evidenceFiled ? t(' (증빙 ') + j.evidenceFiled + t('건은 문서함에도 보관)') : '') +
+                                    t(' <b>무슨 일이었는지 한마디만</b> 남겨 주시면 공정표까지 올라갑니다.'), 'warn');
                                 return resolve();
                             }
-                            say('올렸습니다 — 업무 ' + (j.actionable || 0) + '건 정리됨', 'ok');
+                            say(t('올렸습니다 — 업무 ') + (j.actionable || 0) + t('건 정리됨'), 'ok');
                             resolve();
                         }).catch(function () {
-                            say('정리하는 중… ' + elapsed + '초 (연결 재시도 중)');
+                            say(t('정리하는 중… ') + elapsed + t('초 (연결 재시도 중)'));
                             tick();
                         });
                     }, delay);
@@ -522,23 +527,23 @@
 
             var host = el('list');
             if (!rows.length) {
-                host.innerHTML = '<div class="empty">오늘 올린 것이 없습니다.<br>위에서 말하거나 적어 주세요.</div>';
+                host.innerHTML = t('<div class="empty">오늘 올린 것이 없습니다.<br>위에서 말하거나 적어 주세요.</div>');
             } else {
                 host.innerHTML = rows.map(function (b) {
                     return '<div class="item" data-id="' + b.id + '"><div class="meta">' +
                         '<span class="time">' + esc(String(b.at || '').slice(11)) + '</span>' +
                         (b.by ? '<span class="who">' + esc(b.by) + '</span>' : '') +
-                        (b.actionable ? '<span class="chip work">업무 ' + b.actionable + '건</span>' : '') +
+                        (b.actionable ? t('<span class="chip work">업무 ') + b.actionable + t('건</span>') : '') +
                         (b.imageCount ? '<span class="chip photo">📷 ' + b.imageCount + '</span>' : '') +
-                        (b.edited ? '<span class="chip edited">✎ 수정됨</span>' : '') +
-                        (b.applied ? '<span class="chip applied">반영 ' + b.applied + '건</span>' : '') +
+                        (b.edited ? t('<span class="chip edited">✎ 수정됨</span>') : '') +
+                        (b.applied ? t('<span class="chip applied">반영 ') + b.applied + t('건</span>') : '') +
                         '</div><div class="preview">' + esc(b.preview) + '</div></div>';
                 }).join('');
             }
 
             var more = el('more');
             more.hidden = older <= 0;
-            more.textContent = showAll ? '지난 기록 접기' : '지난 기록 ' + older + '건 보기';
+            more.textContent = showAll ? t('지난 기록 접기') : t('지난 기록 ') + older + t('건 보기');
 
             Array.prototype.forEach.call(document.querySelectorAll('.item'), function (node) {
                 node.addEventListener('click', function () { openDetail(node.getAttribute('data-id')); });
@@ -560,13 +565,13 @@
             tries = tries || 0;
             var box = el('mine-reflect');
             if (!box) return;
-            if (tries === 0) { box.hidden = false; box.textContent = '↳ ERP 에 반영하는 중…'; }
-            if (tries > 15) { box.textContent = '↳ 반영에 시간이 걸리고 있습니다. 잠시 뒤 새로고침해 주세요.'; return; }
+            if (tries === 0) { box.hidden = false; box.textContent = t('↳ ERP 에 반영하는 중…'); }
+            if (tries > 15) { box.textContent = t('↳ 반영에 시간이 걸리고 있습니다. 잠시 뒤 새로고침해 주세요.'); return; }
             setTimeout(function () {
                 fetch(@json(route('ops.trade-report.status')), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d && d.success && d.reflected) { box.textContent = '↳ ' + (d.note || 'ERP 반영을 마쳤습니다.'); return; }
+                        if (d && d.success && d.reflected) { box.textContent = '↳ ' + (d.note || t('ERP 반영을 마쳤습니다.')); return; }
                         pollReflection(tries + 1);
                     })
                     .catch(function () { box.hidden = true; });
@@ -585,18 +590,18 @@
                     .then(function (d) {
                         if (!d || d.success === false) {
                             el('state').className = 'state todo';
-                            el('state').textContent = (d && d.error) || '제출하지 못했습니다.';
+                            el('state').textContent = (d && d.error) || t('제출하지 못했습니다.');
                             submitBtn.disabled = false;
                             return;
                         }
-                        submitBtn.textContent = '✓ 제출 완료';
+                        submitBtn.textContent = t('✓ 제출 완료');
                         el('state').className = 'state done';
-                        el('state').textContent = '✅ 오늘 보고 제출을 마쳤습니다';
-                        el('state-sub').textContent = '더 올리시면 그대로 오늘 보고에 들어갑니다.';
+                        el('state').textContent = t('✅ 오늘 보고 제출을 마쳤습니다');
+                        el('state-sub').textContent = t('더 올리시면 그대로 오늘 보고에 들어갑니다.');
                         if (d.reflecting) { pollReflection(); }
                     })
                     .catch(function () {
-                        el('state').textContent = '연결에 실패했습니다. 잠시 뒤 다시 눌러 주세요.';
+                        el('state').textContent = t('연결에 실패했습니다. 잠시 뒤 다시 눌러 주세요.');
                         submitBtn.disabled = false;
                     });
             });
@@ -608,25 +613,25 @@
                 if (!d || d.success === false) { alert('원문을 불러오지 못했습니다.'); return; }
                 var host = el('detail-screen');
                 var manage = CAN_MANAGE
-                    ? '<div class="row"><button class="btn" id="edit-btn">✎ 수정</button><button class="btn danger" id="del-btn">🗑 삭제</button></div>'
+                    ? t('<div class="row"><button class="btn" id="edit-btn">✎ 수정</button><button class="btn danger" id="del-btn">🗑 삭제</button></div>')
                     : '';
                 host.innerHTML =
-                    '<div class="row" style="margin:0 0 12px"><button class="btn" id="back-btn">← 돌아가기</button></div>' +
+                    t('<div class="row" style="margin:0 0 12px"><button class="btn" id="back-btn">← 돌아가기</button></div>') +
                     '<div class="meta"><span class="time">' + esc(d.at) + '</span>' +
                     (d.by ? '<span class="who">' + esc(d.by) + '</span>' : '') +
                     (d.imageCount ? '<span class="chip photo">📷 ' + d.imageCount + '</span>' : '') + '</div>' +
-                    (d.editedAt ? '<div class="edited-note">✎ ' + esc(d.editedAt) + (d.editedBy ? ' · ' + esc(d.editedBy) : '') + ' 수정됨</div>' : '') +
-                    (d.appliedCount ? '<div class="warnbox">이 기록에서 <b>' + d.appliedCount + '건</b>이 이미 공정표에 반영됐습니다. 지우려면 PC 상황실에서 먼저 되돌리세요.</div>' : '') +
-                    '<pre class="raw">' + esc(d.raw || '(사진만 첨부 — 무슨 일이었는지는 적히지 않았습니다)') + '</pre>' +
-                    (d.originalText ? '<details><summary>최초 원문 (수정 전) 보기</summary><pre class="raw">' + esc(d.originalText) + '</pre></details>' : '') +
+                    (d.editedAt ? '<div class="edited-note">✎ ' + esc(d.editedAt) + (d.editedBy ? ' · ' + esc(d.editedBy) : '') + t(' 수정됨</div>') : '') +
+                    (d.appliedCount ? t('<div class="warnbox">이 기록에서 <b>') + d.appliedCount + t('건</b>이 이미 공정표에 반영됐습니다. 지우려면 PC 상황실에서 먼저 되돌리세요.</div>') : '') +
+                    '<pre class="raw">' + esc(d.raw || t('(사진만 첨부 — 무슨 일이었는지는 적히지 않았습니다)')) + '</pre>' +
+                    (d.originalText ? t('<details><summary>최초 원문 (수정 전) 보기</summary><pre class="raw">') + esc(d.originalText) + '</pre></details>' : '') +
                     manage +
-                    '<div style="margin-top:14px"><div class="sec-title" style="margin-top:0">정리된 항목 (' + (d.items || []).length + '건)</div>' +
+                    t('<div style="margin-top:14px"><div class="sec-title" style="margin-top:0">정리된 항목 (') + (d.items || []).length + t('건)</div>') +
                     ((d.items || []).length
                         ? d.items.map(function (it) {
                             return '<div class="parsed"><b>' + esc(it.targetName || it.targetCode || it.categoryLabel || it.category) + '</b> · ' + esc(STATUS[it.status] || it.status) +
                                 (it.summary ? '<br><span style="color:#6b7280">' + esc(it.summary) + '</span>' : '') + '</div>';
                         }).join('')
-                        : '<div class="empty">정리된 항목이 없습니다.</div>') +
+                        : t('<div class="empty">정리된 항목이 없습니다.</div>')) +
                     '</div>';
                 showScreen('detail');
 
@@ -641,19 +646,19 @@
         function openEdit(d) {
             var host = el('detail-screen');
             host.innerHTML =
-                '<div class="row" style="margin:0 0 12px"><button class="btn" id="cancel-btn">← 취소</button></div>' +
-                '<div class="sec-title" style="margin-top:0">원문 수정</div>' +
+                t('<div class="row" style="margin:0 0 12px"><button class="btn" id="cancel-btn">← 취소</button></div>') +
+                t('<div class="sec-title" style="margin-top:0">원문 수정</div>') +
                 '<textarea id="edit-text" style="min-height:220px"></textarea>' +
-                '<p class="msg">고치기 전 내용은 <b>최초 원문</b>으로 보관되고, 누가 언제 고쳤는지 남습니다. 이미 반영된 공정표 값은 바뀌지 않습니다.</p>' +
-                '<div class="row"><button class="btn primary full" id="save-btn">저장</button></div>';
+                t('<p class="msg">고치기 전 내용은 <b>최초 원문</b>으로 보관되고, 누가 언제 고쳤는지 남습니다. 이미 반영된 공정표 값은 바뀌지 않습니다.</p>') +
+                t('<div class="row"><button class="btn primary full" id="save-btn">저장</button></div>');
             el('edit-text').value = d.raw || '';
             el('cancel-btn').addEventListener('click', function () { openDetail(d.id); });
             el('save-btn').addEventListener('click', function () {
                 var btn = this;
-                btn.disabled = true; btn.textContent = '저장 중…';
+                btn.disabled = true; btn.textContent = t('저장 중…');
                 api('api_updateOpsBatch', [d.id, el('edit-text').value]).then(function (r) {
-                    btn.disabled = false; btn.textContent = '저장';
-                    if (!r || !r.success) { alert((r && r.error) || '수정에 실패했습니다.'); return; }
+                    btn.disabled = false; btn.textContent = t('저장');
+                    if (!r || !r.success) { alert((r && r.error) || t('수정에 실패했습니다.')); return; }
                     openDetail(d.id);
                 });
             });
@@ -662,7 +667,7 @@
         function removeBatch(id) {
             if (!confirm('이 기록을 지울까요?\n올린 원문과 그때 정리된 항목이 함께 지워집니다. (되돌릴 수 없습니다)')) return;
             api('api_deleteOpsBatch', [id]).then(function (r) {
-                if (!r || !r.success) { alert((r && r.error) || '삭제에 실패했습니다.'); return; }
+                if (!r || !r.success) { alert((r && r.error) || t('삭제에 실패했습니다.')); return; }
                 reload();
             });
         }
