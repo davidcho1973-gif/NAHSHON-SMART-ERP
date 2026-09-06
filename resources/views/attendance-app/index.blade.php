@@ -15,7 +15,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#F5F7FA">
     <title>{{ __('내 출퇴근') }} · {{ \App\Support\Org::name() }}</title>
 
     {{-- 홈 화면에 추가하면 앱이 된다. --}}
@@ -25,44 +24,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="내 출퇴근">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+    @include('partials.field-app-theme')
     <style>
         /* One responsive shell keeps the fixed navigation aligned with the content.
            Neutral surfaces separate information; color is reserved for actions and status. */
-        :root {
-            color-scheme: light;
-
-            --kakao:    #FEE500;
-            --label:    rgba(0,0,0,.85);  /* 노랑 위 글자 — 카카오 규격 */
-
-            --paper:    #F5F7FA;
-            --card:     #FFFFFF;
-            --ink:      #1C2B3D;
-            --ink-2:    #526174;
-            --ink-3:    #637184;
-            --rule:     #E3E8EF;
-            --accent:  #244B70;
-            --accent-bg: #EDF3F8;
-            --app-width: 960px;
-
-            --ok:      #1E8E3E;  --ok-bg:   #E8F5EA;
-            --warn:    #B26A00;  --warn-bg: #FFF4E0;
-            --bad:     #D94C4C;  --bad-bg:  #FDECEC;
-            --info:    #3E6BE0;  --info-bg: #ECF1FE;
-
-            /* 예전에는 라벨까지 고정폭 글꼴이었다 — 산업용 계기판처럼 보였다.
-               카카오는 UI 글자에 고정폭을 쓰지 않는다. 숫자 정렬은 tabular-nums 가 맡는다. */
-            --mono: inherit;
-            --tabh: 76px;
-        }
+        :root { --scan-frame: #FEE500; --mono: inherit; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { -webkit-text-size-adjust: 100%; }
-        body {
-            margin: 0; background: var(--paper); color: var(--ink);
-            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
-            font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
-        }
-        .app { max-width: var(--app-width); margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--paper); }
+
         .app > .erp-home { justify-content: flex-start; padding: 12px 24px; background: var(--paper); color: var(--ink-2); font-size: 12px; }
         .app > .erp-home:active { background: var(--accent-bg); }
         button, a { touch-action: manipulation; }
@@ -128,7 +97,7 @@
         .scan video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
         .scan-frame {
             position: relative; width: min(72vw, 280px); aspect-ratio: 1;
-            border: 3px solid var(--kakao); border-radius: 20px;
+            border: 3px solid var(--scan-frame); border-radius: 20px;
             box-shadow: 0 0 0 100vmax rgba(0,0,0,.55);
         }
         .scan-hint {
@@ -338,21 +307,7 @@
         .fld-note b { color: var(--ink); }
 
         /* ── 아래 탭 ──────────────────────────────────────────────── */
-        .tabs {
-            position: fixed; left: 50%; transform: translateX(-50%); width: 100%; max-width: var(--app-width); bottom: 0; z-index: 30;
-            display: grid; grid-template-columns: repeat(4, 1fr);
-            background: var(--card); border-top: 1px solid var(--rule);
-            padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
-            box-shadow: 0 -4px 18px #1c2b3d04;
-        }
-        .tab {
-            background: none; border: none; cursor: pointer; font-family: inherit;
-            padding: 9px 4px; min-height: 60px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-            font-size: 11px; font-weight: 600; color: var(--ink-2); position: relative;
-        }
-        .tab svg { width: 24px; height: 24px; display: block; }
-        .tab[aria-selected="true"] { color: var(--accent); background: var(--accent-bg); font-weight: 700; }
-        .tab[aria-selected="true"]::before { content: none; }
+
         .tab .dot {
             position: absolute; top: 5px; right: calc(50% - 19px);
             min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
@@ -376,7 +331,7 @@
             .top { padding: 20px 24px; }
             .slab { padding: 28px; }
             .quick-heading { margin-top: 2px; }
-            .tabs { border: 1px solid var(--rule); border-bottom: 0; border-radius: 18px 18px 0 0; }
+
         }
         @media (max-width: 420px) {
             .top { padding: 14px 16px; gap: 10px; flex-wrap: wrap; }
@@ -390,8 +345,8 @@
         }
     </style>
 </head>
-<body>
-<div class="app">
+<body class="field-app field-home">
+<div class="app field-shell">
     @include('partials.erp-home')
     <div class="offline" id="offline" hidden>오프라인 · 내 QR 을 반장에게 보여 주세요</div>
 @isset($viewingAs)
@@ -414,7 +369,7 @@
         </div>
     </header>
 
-    <main id="view">
+    <main class="field-content" id="view">
         <div class="slab is-waiting"><div class="meta">불러오는 중…</div></div>
     </main>
 
@@ -427,19 +382,19 @@
     </div>
 
     <nav class="tabs" id="tabs" aria-label="화면 이동">
-        <button class="tab" data-tab="home" aria-selected="true">
+        <button class="tab field-nav-item" data-tab="home" aria-selected="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.2V12l3.1 2"/></svg>
             출퇴근
         </button>
-        <button class="tab" data-tab="work" aria-selected="false">
+        <button class="tab field-nav-item" data-tab="work" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.8 7.5V5.6a1.6 1.6 0 0 1 1.6-1.6h3.2a1.6 1.6 0 0 1 1.6 1.6v1.9"/><path d="M3 12.6h18"/></svg>
             근무
         </button>
-        <button class="tab" data-tab="pay" aria-selected="false">
+        <button class="tab field-nav-item" data-tab="pay" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v17"/><path d="M16.2 7.4c0-1.5-1.9-2.6-4.2-2.6s-4.2 1.1-4.2 2.6 1.9 2.3 4.2 3 4.2 1.5 4.2 3-1.9 2.6-4.2 2.6-4.2-1.1-4.2-2.6"/></svg>
             급여
         </button>
-        <button class="tab" data-tab="me" aria-selected="false">
+        <button class="tab field-nav-item" data-tab="me" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8.2" r="3.9"/><path d="M4.8 20c0-3.4 3.2-6.1 7.2-6.1s7.2 2.7 7.2 6.1"/></svg>
             나
         </button>
@@ -478,7 +433,9 @@
         return m ? Number(m[1]) : null;
     }
 
-    var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: 'home', lang: 'ko', tick: 0 };
+    var initialTab = new URLSearchParams(window.location.search).get('tab');
+    if (['home', 'work', 'pay', 'me'].indexOf(initialTab) === -1) initialTab = 'home';
+    var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: initialTab, lang: 'ko', tick: 0 };
     var watchId = null;
 
     /*
@@ -491,6 +448,7 @@
      */
     var DICT = {
         ko: {
+            workPage: '근무 내역', payPage: '급여 내역', mePage: '내 정보',
             todayShift: '오늘의 근무', quickActions: '빠른 실행',
             working: '근무중', offline: '오프라인', outside: '현장 밖', noAuto: '자동 안 됨',
             offlineBar: '오프라인 · 내 QR 을 반장에게 보여 주세요',
@@ -545,6 +503,7 @@
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
         en: {
+            workPage: 'Work history', payPage: 'My pay', mePage: 'My profile',
             todayShift: 'Today’s shift', quickActions: 'Quick actions',
             working: 'Working', offline: 'Offline', outside: 'Off site', noAuto: 'No auto',
             offlineBar: 'Offline · Show your QR to the foreman',
@@ -599,6 +558,7 @@
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
         es: {
+            workPage: 'Historial de trabajo', payPage: 'Mi pago', mePage: 'Mi perfil',
             todayShift: 'Jornada de hoy', quickActions: 'Accesos rápidos',
             working: 'Trabajando', offline: 'Sin conexión', outside: 'Fuera del sitio', noAuto: 'Sin auto',
             offlineBar: 'Sin conexión · Muestre su QR al capataz',
@@ -885,7 +845,7 @@
         var w = d.week || { regularHours: 0, overtimeHours: 0, days: [] };
         var hasLive = (w.days || []).some(function (x) { return x.live; });
 
-        var h = '<div class="stats">' +
+        var h = '<h1 class="field-page-title">' + T.workPage + '</h1><div class="stats">' +
             '<div class="stat"><div class="stat-k">' + T.weekRegular + '</div><div class="stat-v">' + w.regularHours + '<small>' + T.h + '</small></div></div>' +
             '<div class="stat"><div class="stat-k">' + T.ot + ' ×' + (d.pay ? d.pay.multiplier : 1.5) + '</div><div class="stat-v">' + w.overtimeHours + '<small>' + T.h + '</small></div></div>' +
             '</div>';
@@ -919,7 +879,7 @@
     function tabPay(d) {
         var p = d.pay || {};
         var w = d.week || {};
-        var h = '';
+        var h = '<h1 class="field-page-title">' + T.payPage + '</h1><div class="personal-grid"><section>';
 
         if (!p.hasRate) {
             h += '<div class="slab is-manual"><div class="state"><i></i>' + T.noRate + '</div>' +
@@ -935,7 +895,7 @@
                 '<div class="note" style="color:var(--ink-3);margin-top:12px">' + T.payNote + '</div>';
         }
 
-        h += '<div class="sec"><div class="sec-h">' + T.pastSlips + '</div><div class="panel">';
+        h += '</section><div class="sec"><div class="sec-h">' + T.pastSlips + '</div><div class="panel">';
         h += (p.payslips || []).length
             ? p.payslips.map(function (s) {
                 return '<div class="row"><div class="row-m"><div class="row-a">' + money(s.net, p.currency) + '</div>' +
@@ -943,15 +903,15 @@
                     '<span class="chip ' + (s.status === 'paid' ? 'auto' : 'hand') + '">' + esc(s.status === 'paid' ? T.paid : s.status) + '</span></div>';
             }).join('')
             : '<div class="empty">' + T.noSlips + '</div>';
-        h += '</div></div>';
+        h += '</div></div></div>';
         return h;
     }
 
     function tabMe(d) {
         var e = d.employee || {};
-        var h = '<div class="sec" style="margin-top:0"><div class="sec-h">' + T.myQr + '</div>' + qrBlock() + '</div>';
+        var h = '<h1 class="field-page-title">' + T.mePage + '</h1><div class="personal-grid profile-grid"><div class="sec" style="margin-top:0"><div class="sec-h">' + T.myQr + '</div>' + qrBlock() + '</div>';
 
-        h += '<div class="sec"><div class="sec-h">' + T.myInfo + '</div><div class="panel">' +
+        h += '<div class="profile-details"><div class="sec"><div class="sec-h">' + T.myInfo + '</div><div class="panel">' +
             kv(T.name, e.name) + kv(T.number, e.number) + kv(T.trade, e.trade) +
             kv(T.site, d.site ? d.site.code + ' · ' + d.site.name : null) +
             '</div></div>';
@@ -976,7 +936,7 @@
             '<input type="hidden" name="_token" value="' + CSRF + '">' +
             '<button type="submit" class="link" style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +
             '<div><b style="color:var(--bad)">' + T.logout + '</b></div><span class="go">›</span></button>' +
-            '</form></div>';
+            '</form></div></div></div>';
         return h;
     }
 

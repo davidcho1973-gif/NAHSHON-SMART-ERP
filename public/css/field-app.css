@@ -1,0 +1,166 @@
+/* Shared visual contract for the field app. Page styles own only local layout/states. */
+:root {
+    color-scheme: light;
+    --paper: #F5F7FA;
+    --card: #FFFFFF;
+    --ink: #1C2B3D;
+    --ink-2: #526174;
+    --ink-3: #637184;
+    --label: #1C2B3D;
+    --rule: #E3E8EF;
+    --line: #E3E8EF;
+    --accent: #244B70;
+    --accent-bg: #EDF3F8;
+    --info: #244B70;
+    --info-bg: #EDF3F8;
+    --ok: #24634E;
+    --ok-bg: #EAF4EF;
+    --warn: #855B24;
+    --warn-bg: #FBF3E7;
+    --bad: #B44444;
+    --bad-bg: #FBEDED;
+    --app-width: 960px;
+    --tabh: 76px;
+}
+.field-app { margin: 0; min-height: 100dvh; background: var(--paper); color: var(--ink); font: 15px/1.6 "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; -webkit-font-smoothing: antialiased; }
+.field-app *, .field-app *::before, .field-app *::after { box-sizing: border-box; }
+.field-app [hidden] { display: none !important; }
+.field-shell { max-width: var(--app-width); width: 100%; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+.field-header { padding: 22px 24px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+.field-header h1, .field-page-title { margin: 0 0 8px; color: var(--ink); font-size: 24px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.field-header p { max-width: 68ch; }
+.field-page-title { margin-bottom: 20px; }
+.field-content { flex: 1; min-width: 0; padding: 24px 24px calc(var(--tabh) + env(safe-area-inset-bottom) + 32px); }
+.field-back { display: inline-flex; align-items: center; min-height: 36px; margin-bottom: 12px; color: var(--ink-2); font-size: 13px; font-weight: 600; text-decoration: none; }
+.field-app .erp-home { justify-content: flex-start; max-width: var(--app-width); margin: 0 auto; width: 100%; padding: 10px 24px; background: var(--paper); color: var(--ink-2); font-size: 12px; }
+.field-app .erp-home:active { background: var(--accent-bg); }
+.field-card { background: var(--card); border: 1px solid var(--rule); border-radius: 18px; padding: 22px; box-shadow: 0 4px 18px #1c2b3d04; min-width: 0; }
+.field-columns { display: grid; gap: 24px; align-items: start; align-content: start; }
+.field-section-title { font-size: 14px; font-weight: 700; margin: 0 0 14px; color: var(--ink); }
+.field-app button, .field-app input, .field-app textarea, .field-app select { font-family: inherit; }
+.field-app button, .field-app a { touch-action: manipulation; }
+.field-app button:focus-visible, .field-app a:focus-visible, .field-app input:focus-visible, .field-app textarea:focus-visible, .field-app select:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.field-app textarea, .field-app input:not([type=hidden]):not([type=file]) { border: 1px solid var(--rule); border-radius: 12px; color: var(--ink); background: var(--card); }
+.field-app textarea::placeholder, .field-app input::placeholder { color: var(--ink-3); }
+.field-app .field-icon { display: inline-block; width: 22px; height: 22px; vertical-align: middle; flex: none; }
+.field-icon svg { display: block; width: 100%; height: 100%; }
+:is(.field-nav, .field-home .tabs) { position: fixed; z-index: 30; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: var(--app-width); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); background: var(--card); border: 1px solid var(--rule); border-bottom: 0; box-shadow: 0 -4px 18px #1c2b3d04; }
+.field-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 60px; padding: 9px 4px; border: 0; border-radius: 12px; background: none; text-decoration: none; color: var(--ink-2); font-size: 11px; font-weight: 600; cursor: pointer; }
+.field-nav-item svg { width: 24px; height: 24px; }
+.field-nav-item[aria-selected=true], .field-nav-item[aria-current=page] { color: var(--accent); background: var(--accent-bg); font-weight: 700; }
+.field-subtle { color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+.field-home .stat, .field-home .money, .field-home .link { border: 1px solid var(--rule); border-radius: 18px; }
+.field-home .stat { padding: 22px; }
+.field-home .stat-v { font-size: 34px; font-weight: 700; }
+.field-home .money { padding: 26px; }
+.field-home .money .amt { overflow-wrap: anywhere; }
+.field-home .money .line { flex-wrap: wrap; }
+.field-home .personal-grid { display: grid; gap: 24px; align-items: start; }
+.field-home .personal-grid > .sec, .field-home .profile-details > .sec:first-child { margin-top: 0; }
+.field-home .qr { padding: 26px 18px; }
+.field-home .row-a { overflow-wrap: anywhere; }
+.field-home .sec-h { flex-wrap: wrap; }
+.field-report #compose { min-width: 0; }
+.field-report #list-screen .sec-title { margin-top: 0; }
+.field-report .submit-box { grid-column: 1 / -1; }
+.field-report #detail-screen { grid-column: 1 / -1; }
+.field-report .mic { padding: 24px 18px; box-shadow: none; border-radius: 16px; }
+.field-report .mic .icon { font-size: 28px; }
+.field-report .mic .label { font-size: 18px; font-weight: 700; }
+.field-report .btn { min-height: 48px; border: 1px solid var(--rule); }
+.field-report .item { border: 1px solid var(--rule); padding: 16px; border-radius: 16px; }
+.field-report .empty, .field-docs .empty { border: 1px solid var(--rule); background: var(--card); padding: 24px 16px; border-radius: 16px; }
+.field-docs .pick { border: 1px dashed #AABFD2; border-radius: 16px; padding: 26px 18px; background: var(--accent-bg); }
+.field-docs .pick .i { color: var(--accent); }
+.field-docs #recent .row { padding: 16px; border: 1px solid var(--rule); border-radius: 16px; }
+.field-docs .file { border: 1px solid var(--rule); }
+.field-docs .btn { min-height: 52px; }
+.field-docs .sec-h { margin-top: 0; }
+.field-receipts .receipt-content { padding-top: 20px; }
+.field-receipts .band h1 { display: block; margin: 0 0 8px; }
+.field-receipts .band .who { color: var(--ink-2); margin-top: 6px; }
+.field-receipts .langs { float: right; display: flex; gap: 2px; padding: 3px; background: #EBEFF4; border-radius: 12px; margin: 0 0 12px 12px; }
+.field-receipts .langs button { margin: 0; border: 0; border-radius: 8px; color: var(--ink-2); padding: 8px; min-height: 38px; }
+.field-receipts .langs button.on { background: var(--card); color: var(--accent); }
+.field-receipts .tabs { margin: 0 0 20px; padding: 4px; border: 1px solid var(--rule); background: #EBEFF4; border-radius: 14px; }
+.field-receipts .tabs button { background: transparent; border: 0; min-height: 44px; font-weight: 600; }
+.field-receipts .tabs button.on { color: var(--accent); background: var(--card); }
+.field-receipts .shoot { background: var(--accent); color: #fff; min-height: 140px; font-weight: 700; border-radius: 16px; }
+.field-receipts .shoot:active { background: #193B5A; }
+.field-receipts .album { background: var(--card); border: 1px solid var(--rule); min-height: 48px; }
+.field-receipts .seg button { min-height: 48px; padding: 10px; }
+.field-receipts .seg button.on { background: var(--accent-bg); color: var(--accent); border-color: #AABFD2; }
+.field-receipts .go { background: var(--accent); color: #fff; min-height: 52px; }
+.field-receipts .claim { background: var(--accent-bg); border: 1px solid var(--rule); }
+.field-receipts .card { border-radius: 18px; padding: 22px; }
+.field-receipts #pane-send > .card:first-child { grid-column: 1 / -1; }
+.field-receipts .toast { bottom: calc(var(--tabh) + env(safe-area-inset-bottom) + 16px); }
+.field-messages .top { flex-wrap: wrap; }
+.field-messages .who { color: var(--ink-2); }
+.field-messages .rooms { background: var(--card); border: 1px solid var(--rule); border-radius: 18px; overflow: hidden; }
+.field-messages .room { padding: 18px; border-bottom: 1px solid var(--rule); }
+.field-messages .room:last-child { border-bottom: 0; }
+.field-messages .face { background: var(--accent-bg); color: var(--accent); border-radius: 14px; }
+.field-messages .nm { flex-wrap: wrap; overflow-wrap: anywhere; }
+.field-messages .time, .field-messages .section-title, .field-messages .empty { color: var(--ink-3); }
+.field-messages .badge, .field-messages .count { background: var(--bad); }
+.field-messages .picker, .field-messages .pad { margin: 0; padding: 0; }
+.field-messages .section-title { padding: 24px 0 12px; }
+.field-messages .cand { padding: 14px 0; }
+.field-messages .cand button { background: var(--accent); color: #fff; padding: 10px 16px; min-height: 44px; }
+.field-messages .icon-btn { background: var(--accent-bg); border-radius: 10px; min-width: 40px; min-height: 40px; color: var(--accent); }
+.field-messages .bell { margin: 0 0 18px; }
+.field-chat .field-header { position: sticky; top: 0; z-index: 20; }
+.field-chat .field-header h1 { font-size: 18px; margin: 0; }
+.field-chat .field-header .top > div { min-width: 0; }
+.field-chat .field-header .top > div:last-child { flex-wrap: wrap; justify-content: flex-end; }
+.field-chat .sub { color: var(--ink-2); }
+.field-chat #thread { padding-bottom: calc(var(--composer-height, 240px) + 24px); }
+.field-chat .composer { width: 100%; max-width: var(--app-width); padding: 14px 24px calc(14px + env(safe-area-inset-bottom)); z-index: 25; }
+.field-chat .cbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+.field-chat .cbar:has(.aibtn) { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+.field-chat .plus, .field-chat .aibtn { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-bg); color: var(--accent); }
+.field-chat .send { background: var(--accent); min-height: 44px; }
+.field-chat textarea { border-radius: 12px; min-height: 44px; font-size: 16px; }
+.field-chat .row.mine .bubble { background: #DDEAF4; color: var(--ink); }
+.field-chat .bubble { border: 1px solid var(--rule); box-shadow: none; line-height: 1.65; padding: 12px 14px; }
+.field-chat .day span { background: #E4EAF1; color: var(--ink-2); }
+.field-chat .stamp .unread { color: var(--accent); }
+.field-chat .notice-card { border: 1px solid var(--rule); border-left: 3px solid var(--accent); max-width: 92%; padding: 18px; }
+.field-chat .notice-card.ai { border-left-color: var(--accent); }
+.field-chat .peo { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; min-height: 40px; }
+.field-chat .back { margin: 0; font-size: 26px; min-width: 28px; }
+.field-chat .sheet { width: 100%; max-width: var(--app-width); }
+.field-chat .mem .face { background: var(--accent-bg); color: var(--accent); }
+.field-chat .replying { border-left-color: var(--accent); }
+.field-chat .hint { color: var(--ink-2); font-size: 12px; }
+.field-ask .askbox { border: 1px solid var(--rule); padding: 18px; }
+.field-ask .row { border: 1px solid var(--rule); border-radius: 16px; padding: 16px; }
+.field-ask .chips button { min-height: 38px; border-radius: 10px; }
+.field-ask .answer { border: 1px solid var(--rule); border-left: 3px solid var(--accent); padding: 20px; }
+@media (min-width: 760px) {
+    .field-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    :is(.field-nav, .field-home .tabs) { border-radius: 18px 18px 0 0; }
+    .field-home .personal-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+    .field-home .profile-grid { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+}
+@media (max-width: 600px) {
+    .field-header { padding: 20px 16px; }
+    .field-content { padding: 20px 16px calc(var(--tabh) + env(safe-area-inset-bottom) + 24px); }
+    .field-header h1, .field-page-title { font-size: 22px; }
+    .field-app .erp-home { padding-left: 16px; padding-right: 16px; }
+    .field-card { padding: 18px; }
+    .field-chat .composer { padding-left: 12px; padding-right: 12px; }
+    .field-chat .field-header .top { grid-template-columns: auto minmax(0, 1fr); }
+    .field-chat .field-header .top > div:last-child { grid-column: 2; justify-content: flex-start; }
+    .field-chat .stack { max-width: 80%; min-width: 0; }
+    .field-chat .bundle { min-width: 0; }
+    .field-chat .bubble { min-width: 0; overflow-wrap: anywhere; }
+    .field-chat .cbar { gap: 6px; }
+    .field-chat .send { padding: 0 10px; }
+    .field-home .row { flex-wrap: wrap; }
+}
+@media (hover: hover) {
+    .field-nav-item:hover, .field-messages .room:hover { background: var(--accent-bg); }
+    .field-back:hover { color: var(--accent); }
+}

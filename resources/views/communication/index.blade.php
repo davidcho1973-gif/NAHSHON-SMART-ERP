@@ -4,7 +4,7 @@
     방마다 동그란 얼굴, 이름 굵게, 마지막 대화 한 줄, 오른쪽에 시간과 안 읽은 수.
     익숙한 모양이면 현장 사람들이 배우지 않고 바로 쓴다.
 
-    색은 카카오 브랜드 가이드를 따른다 — 머리띠는 노랑(#FEE500) 면에 검정 글자,
+    색은 카카오 브랜드 가이드를 따른다 — 머리띠는 노랑(#EDF3F8) 면에 검정 글자,
     방 얼굴은 노란 동그라미에 검정 글자. 목록 자체는 흰 종이 위에 둔다.
 --}}
 <!DOCTYPE html>
@@ -13,30 +13,20 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#FEE500">
     <title>{{ \App\Support\Org::name() }} {{ __('메신저') }}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+    @include('partials.field-app-theme')
     <style>
-        :root {
-            color-scheme: light;
-            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
-            --kakao: #FEE500;             /* R255 G232 B18 — 카카오 브랜드 노랑 */
-            --label: rgba(0,0,0,.85);     /* 노랑 위 글자 */
-            --rule: #EDEEF0;
-        }
+
         * { -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: #fff; color: #191919; }
-        .app { min-height: 100vh; max-width: 640px; margin: 0 auto; background: #fff; }
 
         /* 머리띠 — 노랑 면. 그 위의 글자·아이콘은 전부 검정이다. */
-        header { position: sticky; top: 0; z-index: 10; background: var(--kakao); color: var(--label); padding: 16px 16px 13px; }
+
         .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        h1 { margin: 0; font-size: 22px; font-weight: 800; color: var(--label); }
+
         .who { margin-top: 3px; font-size: 12px; color: rgba(0,0,0,.55); }
-        .back { color: var(--label); font-weight: 700; text-decoration: none; font-size: 13px; background: rgba(255,255,255,.6); border-radius: 999px; padding: 6px 12px; }
+
         .icon-btn { border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; padding: 2px; color: var(--label); }
 
-        main { padding: 0 0 40px; }
         .pad { padding: 12px 16px 0; }
 
         /* 알림(서류 만료 등) */
@@ -56,7 +46,7 @@
         .room:active { background: #f6f7f9; }
         /* 방 얼굴 — 노란 동그라미에 검정 글자. 종류는 색이 아니라 이름 옆 꼬리표로 구분한다
            (색은 여섯 가지가 되면 아무도 못 외우지만 "공지"·"현장" 이라는 글자는 바로 읽힌다). */
-        .face { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background: var(--kakao); color: var(--label); }
+        .face { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background: var(--accent-bg); color: var(--label); }
         .face.plain { background: #F2F3F5; color: #767676; }
         .mid { min-width: 0; }
         .nm { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
@@ -73,12 +63,12 @@
         .picker { margin: 0 16px 8px; }
         .picker input { width: 100%; box-sizing: border-box; border: 1px solid #e5e7eb; border-radius: 12px; padding: 11px 13px; font: inherit; font-size: 14px; background: #f7f8fa; }
         .cand { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px solid #f4f5f7; font-size: 14px; }
-        .cand button { border: 0; background: #fee500; color: #3c1e1e; border-radius: 9px; padding: 7px 12px; font-weight: 800; font-size: 12px; cursor: pointer; }
+        .cand button { border: 0; background: #EDF3F8; color: #3c1e1e; border-radius: 9px; padding: 7px 12px; font-weight: 800; font-size: 12px; cursor: pointer; }
     </style>
 </head>
-<body>
-    <div class="app">
-        <header>
+<body class="field-app field-messages">
+    <div class="app field-shell">
+        <header class="field-header">
             <div class="top">
                 <div>
                     <h1>{{ __('채팅') }}</h1>
@@ -91,12 +81,12 @@
                         {{-- 방 만들기 — 폰에서 못 만들면 없는 기능이나 마찬가지다. --}}
                         <button type="button" id="btn-new-room" class="icon-btn" style="font-size:24px">＋</button>
                     @endif
-                    <a class="back" href="{{ route('attendance-app.index') }}">{{ __('출석 홈') }}</a>
+                    <a class="back field-back" href="{{ route('attendance-app.index') }}">{{ __('출석 홈') }}</a>
                 </div>
             </div>
         </header>
 
-        <main>
+        <main class="field-content">
             <div class="pad">@include('partials.push-optin')</div>
 
             @if($notifications->isNotEmpty())
@@ -189,7 +179,7 @@
                                style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
                         <div style="display:flex;gap:8px;justify-content:flex-end">
                             <button type="button" id="new-room-cancel" style="border:1px solid #e5e7eb;background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer">{{ __('취소') }}</button>
-                            <button type="submit" style="border:0;background:#fee500;color:#3c1e1e;border-radius:9px;padding:8px 16px;font-weight:800;font-size:13px;cursor:pointer">{{ __('만들기') }}</button>
+                            <button type="submit" style="border:0;background:#EDF3F8;color:#3c1e1e;border-radius:9px;padding:8px 16px;font-weight:800;font-size:13px;cursor:pointer">{{ __('만들기') }}</button>
                         </div>
                     </form>
                 </div>
@@ -215,6 +205,7 @@
                 </form>
             @endif
         </main>
+        @include('partials.field-app-nav')
     </div>
 
     @if(session('success') || session('error'))
