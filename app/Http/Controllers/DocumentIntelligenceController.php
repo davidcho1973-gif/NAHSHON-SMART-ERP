@@ -12,9 +12,11 @@ use App\Models\UnifiedAlert;
 use App\Models\User;
 use App\Services\Documents\DocumentIntake;
 use App\Services\Documents\DocumentIntelligenceService;
+use App\Services\Documents\DocumentScope;
 use App\Services\Documents\DocumentSiteAssigner;
 use App\Services\Documents\StuckAnalysisReaper;
 use App\Services\Takeoff\AiJobQueue;
+use App\Support\CurrentCompany;
 use App\Support\DefaultScope;
 use App\Support\OfficePreview;
 use App\Support\Org;
@@ -24,7 +26,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -57,7 +58,7 @@ class DocumentIntelligenceController extends Controller
         $defaultSiteId = $request->integer('site_id') ?: DefaultScope::siteId($request->user());
         $defaultCompanyId = $defaultSiteId
             ? (int) Site::query()->whereKey($defaultSiteId)->value('company_id')
-            : DefaultScope::companyId($request->user());
+            : (CurrentCompany::id() ?: DefaultScope::companyId($request->user()));
         $defaultProjectId = DefaultScope::projectId($request->user(), $defaultSiteId);
 
         return view('document-intelligence.index', [
@@ -194,6 +195,11 @@ class DocumentIntelligenceController extends Controller
             ->with(['company:id,name,code', 'site:id,name,code', 'project:id,name,project_code', 'actionItems'])
             ->firstOrFail();
 
+        $payload = (array) $document->ai_payload;
+        if (! $this->duplicateDocumentId($document)) {
+            unset($payload['duplicate_document_id'], $payload['duplicate_target_scope']);
+        }
+
         return response()->json([
             'success' => true,
             'document' => [
@@ -203,8 +209,10 @@ class DocumentIntelligenceController extends Controller
                 'keywords' => $document->keywords ?: [],
                 'tags' => $document->tags ?: [],
                 'extractedText' => $document->extracted_text,
-                'aiError' => $document->ai_error,
-                'aiPayload' => $document->ai_payload,
+                'aiError' => str_contains((string) $document->ai_error, 'SQLSTATE[')
+                    ? '분석 결과를 저장하지 못했습니다. 기존 동일 문서 및 프로젝트 소속을 확인해 주세요.'
+                    : $document->ai_error,
+                'aiPayload' => $payload,
                 'downloadUrl' => route('document-intelligence.download', $document),
                 'previewUrl' => route('document-intelligence.preview', $document),
                 'actions' => $document->actionItems->map(fn (DocumentActionItem $item): array => [
@@ -257,7 +265,7 @@ class DocumentIntelligenceController extends Controller
 
         [$companyId, $siteId, $projectId] = $this->validatedScope(
             $request->user(),
-            $request->integer('company_id') ?: null,
+            $request->has('company_id') ? ($request->integer('company_id') ?: null) : CurrentCompany::id(),
             $request->integer('site_id') ?: null,
             $request->integer('project_id') ?: null,
         );
@@ -351,6 +359,7 @@ class DocumentIntelligenceController extends Controller
         $this->authorizeView($request->user());
         $q = IntelligentDocument::query()->visibleTo($request->user())
             ->whereIn('ai_status', ['ready', 'review_required'])
+            ->whereNull('ai_payload->duplicate_document_id')
             // 요약에 한글이 한 글자도 없으면 옛 규칙으로 만들어진 결과다.
             // '!~' 는 PostgreSQL 의 «정규식 불일치» — docs:reanalyze 명령과 같은 판정을 쓴다.
             ->where(fn ($w) => $w->whereNull('summary')->orWhere('summary', '!~', '[가-힣]'));
@@ -358,10 +367,7 @@ class DocumentIntelligenceController extends Controller
         $total = (clone $q)->count();
         $ids = (clone $q)->orderBy('id')->limit($limit)->pluck('id');
 
-        foreach ($ids as $id) {
-            IntelligentDocument::whereKey($id)->update(['ai_status' => 'queued', 'ai_error' => null]);
-            AnalyzeIntelligentDocumentJob::dispatch($id);
-        }
+        $ids = $ids->filter(fn (int $id): bool => AnalyzeIntelligentDocumentJob::requestReanalysis($id));
 
         $left = max(0, $total - $ids->count());
 
@@ -380,8 +386,15 @@ class DocumentIntelligenceController extends Controller
     {
         $this->authorizeManage($request->user());
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
-        $document->update(['ai_status' => 'queued', 'ai_error' => null]);
-        AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterResponse();
+        if (in_array($document->ai_status, ['queued', 'analyzing'], true)) {
+            return response()->json(['success' => true, 'message' => '이미 분석을 기다리거나 처리 중인 문서입니다.'], 202);
+        }
+        if ($this->duplicateDocumentId($document)) {
+            return response()->json(['success' => true, 'message' => '이미 등록된 동일 파일입니다. 기존 문서에서 결과를 확인하세요.'], 202);
+        }
+        if (! AnalyzeIntelligentDocumentJob::requestReanalysis($document->id)) {
+            return response()->json(['success' => true, 'message' => '이미 처리 중이거나 기존 동일 문서가 있는 요청입니다. 문서 상태를 확인해 주세요.'], 202);
+        }
 
         return response()->json(['success' => true, 'message' => 'AI 재분석을 시작했습니다.'], 202);
     }
@@ -441,6 +454,7 @@ class DocumentIntelligenceController extends Controller
     {
         $this->authorizeManage($request->user());
         $document = $this->scopedDocument($request->user(), $document->id)->firstOrFail();
+        abort_if($document->ai_status === 'analyzing', 409, '분석이 진행 중입니다. 완료 후 문서 정보를 수정해 주세요.');
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'category' => ['required', 'string', 'in:'.implode(',', array_keys(IntelligentDocument::CATEGORY_OPTIONS))],
@@ -470,15 +484,20 @@ class DocumentIntelligenceController extends Controller
         $manualPath = trim((string) ($data['virtual_path'] ?? ''));
         unset($data['virtual_path'], $data['project_id'], $data['site_id']);
 
-        $document->update([
-            ...$data,
-            'company_id' => $companyId ?: $document->company_id,
+        $document = app(DocumentScope::class)->saveResolved($document, [
+            'company_id' => $companyId,
             'site_id' => $siteId,
             'project_id' => $projectId,
+        ], [
+            ...$data,
             'ai_status' => 'ready',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
         ]);
+
+        if ($document->ai_payload['duplicate_document_id'] ?? null) {
+            return response()->json(['success' => true, 'document' => $this->documentRow($document)]);
+        }
 
         // 프로젝트·분류가 바뀌면 폴더도 따라가야 한다. 직접 적은 경로가 있으면 그것을 쓴다.
         $parts = $manualPath !== ''
@@ -697,44 +716,11 @@ class DocumentIntelligenceController extends Controller
     /** @return array{0: int|null, 1: int|null, 2: int|null} */
     private function validatedScope(User $user, ?int $companyId, ?int $siteId, ?int $projectId): array
     {
-        $project = $projectId ? Project::query()->findOrFail($projectId) : null;
-        $site = $project?->site ?: ($siteId ? Site::query()->findOrFail($siteId) : null);
+        $scope = app(DocumentScope::class)->normalize([
+            'company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId,
+        ], $user);
 
-        if ($project && $site && $project->site_id !== $site->id) {
-            throw ValidationException::withMessages(['project_id' => 'PROJECT와 현장이 일치하지 않습니다.']);
-        }
-        if ($site && $companyId && $site->company_id !== $companyId) {
-            throw ValidationException::withMessages(['company_id' => '회사와 현장이 일치하지 않습니다.']);
-        }
-
-        $siteId = $project?->site_id ?: $site?->id;
-        $companyId = $project?->company_id ?: $site?->company_id ?: $companyId;
-
-        if (in_array($user->access_role, ['super_admin', 'admin'], true) || $user->access_scope === 'all_sites') {
-            return [$companyId, $siteId, $projectId];
-        }
-
-        if ($user->access_scope === 'site' && $user->allowed_site_id) {
-            $site = Site::query()->findOrFail($user->allowed_site_id);
-            if ($projectId && ! Project::query()->whereKey($projectId)->where('site_id', $site->id)->exists()) {
-                throw ValidationException::withMessages(['project_id' => '허용된 현장의 PROJECT만 선택할 수 있습니다.']);
-            }
-
-            return [$site->company_id, $site->id, $projectId];
-        }
-
-        if ($user->access_scope === 'company' && $user->allowed_company_id) {
-            if ($siteId && ! Site::query()->whereKey($siteId)->where('company_id', $user->allowed_company_id)->exists()) {
-                throw ValidationException::withMessages(['site_id' => '허용된 회사의 현장만 선택할 수 있습니다.']);
-            }
-            if ($projectId && ! Project::query()->whereKey($projectId)->where('company_id', $user->allowed_company_id)->exists()) {
-                throw ValidationException::withMessages(['project_id' => '허용된 회사의 PROJECT만 선택할 수 있습니다.']);
-            }
-
-            return [$user->allowed_company_id, $siteId, $projectId];
-        }
-
-        throw ValidationException::withMessages(['files' => '문서를 업로드할 수 있는 회사·현장 범위가 없습니다.']);
+        return [$scope['company_id'], $scope['site_id'], $scope['project_id']];
     }
 
     /** @return array<int, string> */
@@ -832,9 +818,18 @@ class DocumentIntelligenceController extends Controller
             'responseDueOn' => $document->response_due_on?->toDateString(),
             'expiresOn' => $document->expires_on?->toDateString(),
             'aiStatus' => $document->ai_status,
+            'duplicateDocumentId' => $this->duplicateDocumentId($document),
             'aiConfidence' => $document->ai_confidence,
             'openActions' => (int) ($document->open_actions_count ?? $document->actionItems()->whereIn('status', ['open', 'in_progress'])->count()),
             'receivedAt' => $document->received_at?->toIso8601String(),
         ];
+    }
+
+    private function duplicateDocumentId(IntelligentDocument $document): ?int
+    {
+        $id = (int) ($document->ai_payload['duplicate_document_id'] ?? 0);
+
+        return $id && IntelligentDocument::query()->visibleTo(request()->user())->whereKey($id)->exists()
+            ? $id : null;
     }
 }

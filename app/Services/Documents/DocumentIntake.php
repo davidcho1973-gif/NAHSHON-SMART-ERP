@@ -4,7 +4,9 @@ namespace App\Services\Documents;
 
 use App\Jobs\AnalyzeIntelligentDocumentJob;
 use App\Models\IntelligentDocument;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -40,9 +42,8 @@ class DocumentIntake
             return $this->result('failed', null, '지원하지 않는 파일 형식입니다.');
         }
 
-        $companyId = $scope['company_id'] ?? null;
-        $siteId = $scope['site_id'] ?? null;
-        $projectId = $scope['project_id'] ?? null;
+        $scopes = app(DocumentScope::class);
+        $scope = $scopes->normalize($scope);
 
         // 디스크는 미리 열지 않는다 — 설정이 잘못돼 있으면 Storage::disk() 자체가
         // 예외를 던져 접수 전체가 죽고, 화면에는 이유 없는 실패만 남는다.
@@ -50,7 +51,7 @@ class DocumentIntake
         $safeName = $this->safeFileName($originalName);
         $sha256 = hash_file('sha256', $file->getRealPath());
 
-        $duplicate = $this->findDuplicate($sha256, $companyId, $siteId, $projectId);
+        $duplicate = $scopes->findDuplicate($sha256, $scope);
 
         if ($duplicate) {
             return $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
@@ -63,48 +64,56 @@ class DocumentIntake
             return $this->result('failed', null, $error ?: '파일 저장에 실패했습니다.');
         }
 
-        $document = IntelligentDocument::query()->create([
-            'uuid' => $uuid,
-            'company_id' => $companyId,
-            'site_id' => $siteId,
-            'project_id' => $projectId,
-            'uploaded_by' => $meta['uploaded_by'] ?? null,
-            'source' => $meta['source'] ?? 'dropzone',
-            'disk' => $usedDisk,
-            'file_path' => $path,
-            'original_file_name' => $originalName,
-            'stored_file_name' => $safeName,
-            'mime_type' => $file->getMimeType() ?: $file->getClientMimeType(),
-            'extension' => $extension,
-            'file_size' => $file->getSize() ?: 0,
-            'sha256' => $sha256,
-            'title' => pathinfo($originalName, PATHINFO_FILENAME),
-            'received_at' => now(),
-            'ai_status' => 'queued',
-        ]);
+        try {
+            $document = DB::transaction(fn () => IntelligentDocument::query()->create([
+                'uuid' => $uuid,
+                ...$scope,
+                'uploaded_by' => $meta['uploaded_by'] ?? null,
+                'source' => $meta['source'] ?? 'dropzone',
+                'disk' => $usedDisk,
+                'file_path' => $path,
+                'original_file_name' => $originalName,
+                'stored_file_name' => $safeName,
+                'mime_type' => $file->getMimeType() ?: $file->getClientMimeType(),
+                'extension' => $extension,
+                'file_size' => $file->getSize() ?: 0,
+                'sha256' => $sha256,
+                'title' => pathinfo($originalName, PATHINFO_FILENAME),
+                'received_at' => now(),
+                'ai_status' => 'queued',
+            ]));
+        } catch (UniqueConstraintViolationException $e) {
+            $duplicate = $scopes->findDuplicate($sha256, $scope);
+            if (! $duplicate) {
+                throw $e;
+            }
+            // Only this request's unreferenced temporary copy is removed. The winning
+            // record and all of its original/linked files remain untouched.
+            Storage::disk($usedDisk)->delete($path);
 
-        AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterResponse();
+            return $this->handleDuplicate($duplicate, $file, $safeName, $diskName);
+        }
+
+        AnalyzeIntelligentDocumentJob::dispatch($document->id)->afterCommit();
 
         return $this->result('created', $document);
     }
 
     // ── 중복·유실 처리 ─────────────────────────────────────────────────
 
-    private function findDuplicate(string $sha256, ?int $companyId, ?int $siteId, ?int $projectId): ?IntelligentDocument
-    {
-        $query = IntelligentDocument::query()->where('sha256', $sha256);
-
-        foreach (['company_id' => $companyId, 'site_id' => $siteId, 'project_id' => $projectId] as $column => $value) {
-            $value ? $query->where($column, $value) : $query->whereNull($column);
-        }
-
-        return $query->first();
-    }
-
     /**
      * @return array{status: string, document: IntelligentDocument|null, reason: string|null, requeued: bool}
      */
     private function handleDuplicate(IntelligentDocument $duplicate, UploadedFile $file, string $safeName, string $diskName): array
+    {
+        return DB::transaction(function () use ($duplicate, $file, $safeName, $diskName): array {
+            $duplicate = IntelligentDocument::query()->lockForUpdate()->findOrFail($duplicate->id);
+
+            return $this->restoreOrReuse($duplicate, $file, $safeName, $diskName);
+        });
+    }
+
+    private function restoreOrReuse(IntelligentDocument $duplicate, UploadedFile $file, string $safeName, string $diskName): array
     {
         // 원본이 유실된 기록(배포로 로컬 디스크가 초기화된 경우)은 "중복" 으로 거부하면
         // 안 된다 — 같은 파일을 다시 올릴 유일한 길을 막아 버린다.
@@ -127,7 +136,7 @@ class DocumentIntake
                 'ai_status' => 'queued',
                 'ai_error' => null,
             ]);
-            AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+            AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterCommit();
 
             return $this->result('restored', $duplicate->fresh());
         }
@@ -139,7 +148,7 @@ class DocumentIntake
         $requeued = false;
         if (in_array((string) $duplicate->ai_status, ['failed'], true)) {
             $duplicate->update(['ai_status' => 'queued', 'ai_error' => null]);
-            AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterResponse();
+            AnalyzeIntelligentDocumentJob::dispatch($duplicate->id)->afterCommit();
             $requeued = true;
         }
 

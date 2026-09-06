@@ -5,8 +5,13 @@ namespace App\Services\Documents;
 use App\Models\DocumentActionItem;
 use App\Models\IntelligentDocument;
 use App\Models\Project;
+use App\Models\ProjectContract;
 use App\Models\UnifiedAlert;
 use App\Services\Alerts\UnifiedAlertService;
+use App\Services\Communication\ChatDocumentReplyConnector;
+use App\Services\Equipment\DocumentEquipmentConnector;
+use App\Services\Finance\BillingInflowConnector;
+use App\Services\Finance\DocumentExpenseConnector;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +26,7 @@ class DocumentIntelligenceService
 
     public function process(IntelligentDocument $document): IntelligentDocument
     {
+        $runToken = $document->ai_payload['analysis_run_token'] ?? null;
         $document->loadMissing(['company', 'site', 'project']);
         $disk = Storage::disk($document->disk ?: config('document-intelligence.disk'));
 
@@ -28,10 +34,19 @@ class DocumentIntelligenceService
             throw new \RuntimeException('업로드된 원본 파일을 찾을 수 없습니다. 서버 배포로 저장소가 초기화됐을 수 있습니다 — 같은 파일을 다시 올리면 이 문서에 복원되어 분석이 재개됩니다.');
         }
 
-        $document->update(['ai_status' => 'analyzing', 'ai_error' => null]);
+        if ($runToken === null) {
+            $document->update(['ai_status' => 'analyzing', 'ai_error' => null]);
+        }
         $bytes = (string) $disk->get($document->file_path);
         $analysis = $this->analyzer->analyze($document, $bytes);
         $data = $analysis['data'];
+        // These are application state, never instructions supplied by the AI response.
+        unset($data['duplicate_document_id'], $data['duplicate_target_scope'], $data['duplicate_reason'], $data['scope_review_reason'], $data['analysis_run_token'], $data['stuck_requeues']);
+        foreach (['analysis_run_token', 'stuck_requeues'] as $key) {
+            if (array_key_exists($key, (array) $document->ai_payload)) {
+                $data[$key] = $document->ai_payload[$key];
+            }
+        }
         $confidence = $this->confidence($data['confidence'] ?? null);
 
         // 두 번째 눈 — 돈·장비처럼 틀리면 장부가 틀어지는 문서만, 회사가 다른 모델이
@@ -42,8 +57,21 @@ class DocumentIntelligenceService
             $data['verification'] = $verification;
         }
 
-        $fresh = DB::transaction(function () use ($document, $analysis, $data, $confidence): IntelligentDocument {
-            $projectId = $document->project_id ?: $this->resolveProjectId($document, (string) ($data['project_code'] ?? ''));
+        $superseded = false;
+        $fresh = DB::transaction(function () use ($document, $analysis, $data, $confidence, $runToken, &$superseded): IntelligentDocument {
+            $document = IntelligentDocument::query()->lockForUpdate()->findOrFail($document->id);
+            if ($runToken !== null && ($document->ai_status !== 'analyzing' || ($document->ai_payload['analysis_run_token'] ?? null) !== $runToken)) {
+                $superseded = true;
+
+                return $document;
+            }
+            $scopes = app(DocumentScope::class);
+            $resolution = $scopes->resolveForAnalysis($document, (string) ($data['project_code'] ?? ''));
+            $scope = $resolution['scope'];
+            $projectId = $scope['project_id'];
+            if ($resolution['review_reason']) {
+                $data['scope_review_reason'] = $resolution['review_reason'];
+            }
             $category = $this->option((string) ($data['category'] ?? ''), IntelligentDocument::CATEGORY_OPTIONS, 'general');
             $documentType = $this->option((string) ($data['document_type'] ?? ''), IntelligentDocument::TYPE_OPTIONS, 'other');
             $documentDate = $this->date($data['document_date'] ?? null);
@@ -55,8 +83,7 @@ class DocumentIntelligenceService
             $summary = $this->cleanText($data['summary'] ?? null);
             $extractedText = $analysis['extracted_text'];
 
-            $document->fill([
-                'project_id' => $projectId,
+            $attributes = [
                 // 계약 문서 ↔ 계약 모듈 자동 링크 — 죽은 칼럼(project_contract_id)을 살린다.
                 // 그 프로젝트의 계약이 하나일 때만: 애매하면 잇지 않는다(연계 점검: 계약서 자동 링크 없음).
                 'project_contract_id' => $document->project_contract_id
@@ -82,28 +109,36 @@ class DocumentIntelligenceService
                 'effective_on' => $this->date($data['effective_on'] ?? null),
                 'expires_on' => $this->date($data['expires_on'] ?? null),
                 'response_due_on' => $this->date($data['response_due_on'] ?? null),
-                'ai_status' => $confidence >= 70 ? 'ready' : 'review_required',
+                'ai_status' => $confidence >= 70 && ! $resolution['review_reason'] ? 'ready' : 'review_required',
                 'ai_engine' => $analysis['engine'],
                 'ai_model' => $analysis['model'],
                 'ai_confidence' => $confidence,
                 'ai_payload' => $data,
                 'ai_error' => null,
                 'analyzed_at' => now(),
-            ]);
+            ];
 
-            $document->search_text = implode("\n", array_filter([
+            $attributes['search_text'] = implode("\n", array_filter([
                 $title,
                 $document->original_file_name,
-                $document->document_number,
-                $document->revision,
-                $document->sender,
+                $attributes['document_number'],
+                $attributes['revision'],
+                $attributes['sender'],
                 $summary,
                 implode(' ', $keywords),
                 implode(' ', $tags),
                 implode("\n", $keyFacts),
                 $extractedText,
             ]));
-            $document->save();
+            $document = $scopes->saveResolved($document, $scope, $attributes);
+            $folderParts = $this->rebuildFolder($document);
+            $document->update(['folder_structure' => $folderParts, 'virtual_path' => implode(' / ', $folderParts)]);
+
+            // Preserve both originals and existing links. A duplicate/uncertain scope must
+            // not replace action items, create expenses, send replies or harvest knowledge.
+            if (! empty($document->ai_payload['duplicate_document_id']) || $resolution['review_reason']) {
+                return $document->fresh(['company', 'site', 'project', 'actionItems']);
+            }
 
             $this->organizeFile($document, $folderParts);
             $this->replaceActionItems($document, is_array($data['action_items'] ?? null) ? $data['action_items'] : []);
@@ -113,32 +148,36 @@ class DocumentIntelligenceService
             // 저장은 살아야 하므로 각각 삼킨다.
             try {
                 // 돈이 나간 문서(영수증·인보이스·급여 지급 내역) → 재무(경비)
-                app(\App\Services\Finance\DocumentExpenseConnector::class)->sync($document);
+                DB::transaction(fn () => app(DocumentExpenseConnector::class)->sync($document));
             } catch (\Throwable $e) {
                 report($e);
             }
             try {
                 // 들어오는 돈(입금 통지·발행 청구서) → 기성 수금 원장
-                app(\App\Services\Finance\BillingInflowConnector::class)->sync($document);
+                DB::transaction(fn () => app(BillingInflowConnector::class)->sync($document));
             } catch (\Throwable $e) {
                 report($e);
             }
             try {
                 // 장비 임대·구매 문서 → 장비 대장(자재/장비·렌탈 화면)
-                app(\App\Services\Equipment\DocumentEquipmentConnector::class)->sync($document);
+                DB::transaction(fn () => app(DocumentEquipmentConnector::class)->sync($document));
             } catch (\Throwable $e) {
                 report($e);
             }
             try {
                 // 채팅방에서 올라온 파일이면 그 자리에 결과를 알린다 — 결과가 보이지
                 // 않으면 사람들은 자동화를 믿지 않고 각 화면에 다시 입력한다.
-                app(\App\Services\Communication\ChatDocumentReplyConnector::class)->sync($document);
+                DB::transaction(fn () => app(ChatDocumentReplyConnector::class)->sync($document));
             } catch (\Throwable $e) {
                 report($e);
             }
 
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });
+
+        if ($superseded || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason'])) {
+            return $fresh;
+        }
 
         // 지식 창고 수확 — 임베딩(외부 호출)이 있어 트랜잭션 밖에서 돈다.
         // 실패해도 분석 결과는 이미 저장됐다: erp:harvest-knowledge 로 다시 수확하면 된다.
@@ -224,14 +263,25 @@ class DocumentIntelligenceService
             return;
         }
 
-        if (! $disk->move($document->file_path, $newPath)) {
-            if (! $disk->copy($document->file_path, $newPath)) {
-                throw new \RuntimeException('AI 분류 폴더로 원본을 이동하지 못했습니다.');
-            }
-            $disk->delete($document->file_path);
+        $oldPath = $document->file_path;
+        // Filesystem moves cannot roll back with PostgreSQL. Keep the original until all
+        // result/action writes commit so a later failure cannot leave a dangling file_path.
+        if (! $disk->copy($oldPath, $newPath)) {
+            throw new \RuntimeException('AI 분류 폴더에 원본 사본을 저장하지 못했습니다.');
         }
 
         $document->update(['file_path' => $newPath, 'stored_file_name' => $fileName]);
+        DB::afterCommit(function () use ($document, $disk, $oldPath, $newPath): void {
+            try {
+                if (IntelligentDocument::query()->whereKey($document->id)->value('file_path') === $newPath
+                    && ! $disk->delete($oldPath)) {
+                    throw new \RuntimeException('편철 완료 후 이전 원본 사본을 정리하지 못했습니다.');
+                }
+            } catch (\Throwable $e) {
+                // The committed new path is valid; cleanup failure must not undo analysis.
+                report($e);
+            }
+        });
     }
 
     /**
@@ -299,7 +349,7 @@ class DocumentIntelligenceService
         }
 
         try {
-            $ids = \App\Models\ProjectContract::query()
+            $ids = ProjectContract::query()
                 ->where('project_id', $projectId)
                 ->limit(2)
                 ->pluck('id');
@@ -308,23 +358,6 @@ class DocumentIntelligenceService
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    private function resolveProjectId(IntelligentDocument $document, string $projectCode): ?int
-    {
-        $projectCode = trim($projectCode);
-        if ($projectCode === '') {
-            return null;
-        }
-
-        return Project::query()
-            ->when($document->company_id, fn ($query) => $query->where('company_id', $document->company_id))
-            ->when($document->site_id, fn ($query) => $query->where('site_id', $document->site_id))
-            ->where(function ($query) use ($projectCode): void {
-                $query->where('project_code', 'ilike', $projectCode)
-                    ->orWhere('name', 'ilike', '%'.$projectCode.'%');
-            })
-            ->value('id');
     }
 
     /** @param array<string, mixed> $options */
