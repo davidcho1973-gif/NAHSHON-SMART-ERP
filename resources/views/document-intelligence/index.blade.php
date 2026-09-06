@@ -348,6 +348,7 @@ function renderDetail(d){
       </div>`:''}
       ${d.duplicateDocumentId?`<div class="section" style="border-color:#93c5fd;background:#eff6ff"><h3>이미 등록된 동일 파일</h3><p>기존 문서에서 분석 결과를 확인할 수 있습니다. 이번 접수 원본과 기록은 보존했습니다.</p><button class="btn primary" onclick="openDocument(${Number(d.duplicateDocumentId)})">기존 문서 열기</button></div>`:''}
       ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
+      ${d.aiStatus==='review_required'&&d.aiPayload?.scope_review_reason?`<div class="section" style="border-color:#fcd34d;background:#fffbeb"><h3>소속 확인 필요</h3><p>${esc(d.aiPayload.scope_review_reason)}</p><p>문서 내용과 현재 PROJECT·현장을 확인해 주세요. 수정 권한이 있으면 ‘정보 수정’에서 확인한 값을 저장할 수 있습니다.</p></div>`:''}
       <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
       <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
       <div class="section"><h3>위험·기한·후속조치</h3>${actions}</div>
