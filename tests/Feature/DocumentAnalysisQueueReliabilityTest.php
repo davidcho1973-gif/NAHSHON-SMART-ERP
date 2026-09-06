@@ -214,6 +214,7 @@ class DocumentAnalysisQueueReliabilityTest extends TestCase
         config(['queue.default' => 'sync', 'services.ai_ocr.engine' => 'gemini', 'services.gemini.api_key' => 'test-key']);
         $this->mock(OcrEngine::class)->shouldReceive('maxAttachmentBytes')->once()->andReturn(50 * 1048576);
         $this->persistJob($this->document(), 'documents');
+        $this->persistJob($this->document('ready'), 'default');
         DB::table('jobs')->insert([
             'queue' => 'default', 'payload' => json_encode(['displayName' => 'OtherJob']),
             'attempts' => 0, 'reserved_at' => null, 'available_at' => time(), 'created_at' => time(),
@@ -221,8 +222,11 @@ class DocumentAnalysisQueueReliabilityTest extends TestCase
 
         $this->artisan('docs:diagnose')
             ->expectsOutputToContain('문서 전용 연결  document-analysis')
-            ->expectsOutputToContain('문서 일감  1건')
-            ->expectsOutputToContain('queue:work document-analysis --queue=documents,default')
+            ->expectsOutputToContain('문서 일감  2건')
+            ->expectsOutputToContain('전용 documents 1건 / 이전 default 문서 1건')
+            ->expectsOutputToContain('queue:work document-analysis --queue=documents --sleep=3 --tries=1 --timeout=600')
+            ->expectsOutputToContain('공용 default 큐를 상시 추가하지 마세요.')
+            ->doesntExpectOutputToContain('--queue=documents,default')
             ->assertSuccessful();
     }
 
