@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Communication\ChatFactFinder;
 use App\Services\Documents\DocumentAsk;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,10 +22,11 @@ class MobileAskController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
+        abort_unless($user instanceof User && $user->account_status === 'active', 403);
 
         return view('attendance-app.ask', [
             'user' => $user,
-            'siteName' => $user?->employee?->site?->name,
+            'siteName' => app(ChatFactFinder::class)->siteOf($user)?->name,
             'available' => $this->ask->available(),
             // 음성은 Gemini 키가 있어야 — 마이크를 눌러 보고 나서 실패를 아는 것보다 낫다.
             'voiceReady' => trim((string) config('services.gemini.api_key')) !== '',
@@ -35,7 +37,7 @@ class MobileAskController extends Controller
     public function question(Request $request): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user instanceof User, 403);
+        abort_unless($user instanceof User && $user->account_status === 'active', 403);
 
         $data = $request->validate(['question' => ['required', 'string', 'max:600']]);
 

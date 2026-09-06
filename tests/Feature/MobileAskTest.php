@@ -2,12 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Models\BoqItem;
 use App\Models\Company;
 use App\Models\DocumentQuestion;
 use App\Models\Employee;
 use App\Models\IntelligentDocument;
+use App\Models\KnowledgeFact;
 use App\Models\Site;
 use App\Models\User;
+use App\Models\WbsItem;
+use App\Services\Communication\ChatFactFinder;
+use App\Services\Documents\DocumentAsk;
+use App\Support\AiInformationAccess;
 use App\Support\AnthropicChat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -58,7 +64,7 @@ class MobileAskTest extends TestCase
             'uuid' => (string) Str::uuid(), 'company_id' => $this->company->id, 'site_id' => $this->site->id,
             'source' => 'dropzone', 'disk' => 'local', 'file_path' => 'docs/spec.pdf',
             'original_file_name' => '09 6723 Resinous Flooring.pdf', 'stored_file_name' => 'spec.pdf',
-            'mime_type' => 'application/pdf', 'extension' => 'pdf', 'file_size' => 1000, 'sha256' => str_repeat('a', 64),
+            'mime_type' => 'application/pdf', 'extension' => 'pdf', 'file_size' => 1000, 'sha256' => hash('sha256', (string) Str::uuid()),
             'title' => '09 6723 수지 바닥재 시방', 'document_type' => 'specification', 'revision' => '2',
             'status' => 'received', 'ai_status' => 'ready',
             'summary' => 'Ucrete 주방 바닥 시방', 'key_facts' => ['양생 대기일 없음 — 제조사 지침에 위임'],
@@ -155,12 +161,17 @@ class MobileAskTest extends TestCase
     public function test_money_questions_from_someone_without_finance_rights_are_marked_denied(): void
     {
         $worker = $this->manager('worker');
-        $this->fakeClaude(['answer' => '권한이 없어 알려드릴 수 없습니다.', 'found' => false, 'sources' => []], $prompt);
+        $mock = \Mockery::mock(AnthropicChat::class);
+        $mock->shouldReceive('available')->andReturn(true);
+        $mock->shouldReceive('model')->andReturn('test');
+        $mock->shouldNotReceive('json');
+        $mock->shouldNotReceive('raw');
+        $this->app->instance(AnthropicChat::class, $mock);
 
         $res = $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '이번 달 경비 얼마 썼어?']);
 
         $this->assertNotEmpty($res->json('denied'));
-        $this->assertStringContainsString('권한으로는 볼 수 없어', $prompt);
+        $res->assertOk()->assertJson(['found' => false, 'answer' => AiInformationAccess::DENIED, 'sources' => []]);
     }
 
     public function test_recent_questions_are_mine_only(): void
@@ -168,7 +179,7 @@ class MobileAskTest extends TestCase
         $me = $this->manager();
         $other = $this->manager();
         DocumentQuestion::create(['user_id' => $other->id, 'question' => '남의 질문', 'answer' => 'x', 'found' => true]);
-        DocumentQuestion::create(['user_id' => $me->id, 'question' => '내 질문', 'answer' => 'y', 'found' => true]);
+        DocumentQuestion::create(['user_id' => $me->id, 'question' => '내 질문', 'answer' => 'y', 'found' => true, 'access_context' => AiInformationAccess::context($me)]);
         config(['services.anthropic.api_key' => 'test-key']);
 
         $res = $this->actingAs($me)->get(route('attendance-app.ask'));
@@ -197,5 +208,184 @@ class MobileAskTest extends TestCase
     {
         $this->get(route('attendance-app.ask'))->assertRedirect(route('login'));
         $this->postJson(route('ask.question'), ['question' => 'x'])->assertStatus(401);
+    }
+
+    public function test_worker_quantity_facts_keep_quantities_but_never_prices_or_totals(): void
+    {
+        $worker = $this->manager('worker');
+        BoqItem::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'seq' => 1, 'discipline_code' => 'A', 'discipline' => '건축', 'name_kr' => '석고보드', 'qty' => 125, 'unit' => '장', 'unit_price' => 781.23]);
+        $facts = app(ChatFactFinder::class)->gatherFor('석고보드 수량 알려줘', $this->site, $worker)['facts'];
+        $this->assertSame('125 장', $facts['물량/BOQ']['해당 품목'][0]['수량']);
+        $this->assertStringNotContainsString('781.23', json_encode($facts));
+        $this->assertArrayNotHasKey('직접비 합계($)', $facts['물량/BOQ']);
+        $this->assertArrayNotHasKey('단가($)', $facts['물량/BOQ']['해당 품목'][0]);
+
+        $admin = $this->manager('admin');
+        $finance = app(ChatFactFinder::class)->gatherFor('석고보드 수량 단가', $this->site, $admin);
+        $this->assertSame(781.23, $finance['facts']['물량/BOQ']['해당 품목'][0]['단가($)']);
+    }
+
+    public function test_worker_prompt_excludes_money_confidential_mixed_and_unreviewed_sources(): void
+    {
+        $safe = $this->spec();
+        $hiddenIds = [];
+        foreach ([['document_type' => 'contract'], ['document_type' => 'payroll_record'],
+            ['confidentiality' => 'confidential'], ['ai_status' => 'review_required'],
+            ['search_text' => '양생 7일; subcontract price USD 974321.25'],
+            ['summary' => '주방 단가 974321.25'], ['document_type' => 'general']] as $changes) {
+            $doc = $this->spec();
+            $doc->update($changes + ['title' => '주방 양생 비공개 '.$doc->id]);
+            $hiddenIds[] = $doc->id;
+            KnowledgeFact::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+                'intelligent_document_id' => $doc->id, 'doc_title' => $doc->title, 'document_type' => 'specification',
+                'fact' => '양생 비공개정보 974321.25']);
+        }
+        // A stale/misclassified money card on an otherwise technical source is also filtered.
+        KnowledgeFact::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'intelligent_document_id' => $safe->id, 'doc_title' => $safe->title, 'document_type' => 'specification',
+            'fact' => '양생 추가비용 974321.25']);
+        $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => [$safe->id, ...$hiddenIds]], $prompt);
+        $response = $this->actingAs($this->manager('worker'))->postJson(route('ask.question'), ['question' => '주방 양생 도면 알려줘']);
+        $response->assertOk()->assertJsonCount(1, 'sources');
+        $this->assertStringContainsString('양생 대기일 없음', $prompt);
+        $this->assertStringNotContainsString('974321.25', $prompt);
+        $this->assertStringNotContainsString('비공개', $prompt);
+    }
+
+    public function test_worker_can_use_assigned_site_without_an_employee_link(): void
+    {
+        $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active', 'access_scope' => 'all_sites',
+            'allowed_company_id' => $this->company->id, 'allowed_site_id' => $this->site->id]);
+        WbsItem::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'project_code' => 'TEST', 'wbs_code' => '1', 'name' => '배관 설치', 'progress' => 62]);
+        $this->spec();
+        $this->fakeClaude(['answer' => '배관 설치 진행률 62%', 'found' => true, 'sources' => []], $prompt);
+        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '배관 공정 진행률?'])->assertOk();
+        $this->assertStringContainsString('배관 설치', $prompt);
+        $this->assertStringContainsString('62', $prompt);
+        $this->assertSame($this->site->id, DocumentQuestion::query()->sole()->site_id);
+    }
+
+    public function test_worker_cannot_search_another_site_even_with_all_sites_flag(): void
+    {
+        $other = Site::create(['company_id' => $this->company->id, 'code' => 'OTHER', 'name' => '다른 현장', 'status' => 'active']);
+        $worker = $this->manager('worker');
+        $this->spec()->update(['site_id' => $other->id, 'title' => '양생 외부비밀']);
+        $finder = app(ChatFactFinder::class);
+        $this->assertSame([], $finder->gatherFor('양생 도면', $other, $worker)['facts']);
+        $this->assertStringNotContainsString('외부비밀', json_encode($finder->gatherFor('양생 도면', $this->site, $worker), JSON_UNESCAPED_UNICODE));
+    }
+
+    public function test_unassigned_worker_does_not_fall_back_to_all_documents_or_boq(): void
+    {
+        $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active', 'access_scope' => 'all_sites']);
+        $this->spec();
+        $result = app(ChatFactFinder::class)->gatherFor('도면 물량 검사', null, $worker);
+        $this->assertSame([], $result['facts']);
+        $this->assertNotEmpty($result['denied']);
+    }
+
+    public function test_money_intent_covers_korean_english_and_spanish_without_blocking_dimensions(): void
+    {
+        foreach (['계약금액', '견적 알려줘', '시급', 'unit price', 'labor cost', 'contract value', 'presupuesto', 'invoice', '$420'] as $question) {
+            $this->assertTrue(AiInformationAccess::financial($question), $question);
+        }
+        foreach (['덕트 두께 얼마야?', '공정 얼마나 남았어?', '양생 7일', '석고보드 수량 125장'] as $question) {
+            $this->assertFalse(AiInformationAccess::financial($question), $question);
+        }
+    }
+
+    public function test_financial_model_output_is_not_returned_to_worker(): void
+    {
+        $this->spec();
+        $this->fakeClaude(['answer' => '설치 대금 $974321.25', 'found' => true, 'sources' => []]);
+        $this->actingAs($this->manager('worker'))->postJson(route('ask.question'), ['question' => '양생 알려줘'])
+            ->assertOk()->assertJson(['answer' => AiInformationAccess::DENIED, 'found' => false, 'sources' => []]);
+    }
+
+    public function test_dimensions_are_not_treated_as_money_and_construction_topics_search_specs(): void
+    {
+        $worker = $this->manager('worker');
+        $doc = $this->spec();
+        $finder = app(ChatFactFinder::class);
+        $dimensions = $finder->gatherFor('덕트 두께 얼마야?', $this->site, $worker);
+        $this->assertSame([], $dimensions['denied']);
+        $schedule = $finder->gatherFor('양생 일정 며칠?', $this->site, $worker);
+        $this->assertSame($doc->id, $schedule['facts']['문서함']['검색된 문서'][0]['문서ID']);
+    }
+
+    public function test_foreman_and_site_manager_have_no_financial_answers(): void
+    {
+        foreach (['foreman', 'site_manager', 'safety_manager', 'client', 'viewer'] as $role) {
+            $result = app(ChatFactFinder::class)->gatherFor('노무비 총액과 배관 공정 알려줘', $this->site, $this->manager($role));
+            $this->assertSame([], $result['facts'], $role);
+            $this->assertSame([AiInformationAccess::DENIED], $result['denied'], $role);
+        }
+    }
+
+    public function test_same_site_with_wrong_document_company_is_excluded(): void
+    {
+        $other = Company::create(['code' => 'OTHER', 'name' => 'Other', 'status' => 'active']);
+        $this->spec()->update(['company_id' => $other->id]);
+        $this->assertSame(0, AiInformationAccess::documents($this->manager('worker'), $this->site)->count());
+    }
+
+    public function test_history_is_not_replayed_after_permission_or_site_changes(): void
+    {
+        $admin = $this->manager('admin');
+        DocumentQuestion::create(['user_id' => $admin->id, 'site_id' => $this->site->id, 'question' => '공사 현황',
+            'answer' => '내부 합계 974321.25', 'found' => true, 'access_context' => AiInformationAccess::context($admin)]);
+        $admin->update(['access_role' => 'worker']);
+        $this->assertSame([], app(DocumentAsk::class)->recent($admin));
+        DocumentQuestion::create(['user_id' => $admin->id, 'question' => '과거 답변', 'answer' => '974321.25', 'found' => true]);
+        $this->assertSame([], app(DocumentAsk::class)->recent($admin));
+    }
+
+    public function test_history_rechecks_changed_source_confidentiality(): void
+    {
+        $doc = $this->spec();
+        $worker = $this->manager('worker');
+        $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => [$doc->id]]);
+        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])->assertOk();
+        $this->assertCount(1, app(DocumentAsk::class)->recent($worker));
+        $doc->update(['confidentiality' => 'confidential']);
+        $this->assertSame([], app(DocumentAsk::class)->recent($worker));
+    }
+
+    public function test_uncited_facts_are_also_rechecked_in_history(): void
+    {
+        $doc = $this->spec();
+        $worker = $this->manager('worker');
+        $this->fakeClaude(['answer' => '양생 대기일 없음', 'found' => true, 'sources' => []]);
+        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])->assertOk();
+        $this->assertSame([$doc->id], DocumentQuestion::query()->sole()->source_document_ids);
+        $doc->update(['confidentiality' => 'confidential']);
+        $this->assertSame([], app(DocumentAsk::class)->recent($worker));
+    }
+
+    public function test_permission_change_while_model_answers_withholds_the_reply(): void
+    {
+        $doc = $this->spec();
+        $worker = $this->manager('worker');
+        $mock = \Mockery::mock(AnthropicChat::class);
+        $mock->shouldReceive('available')->andReturn(true);
+        $mock->shouldReceive('json')->once()->andReturnUsing(function () use ($doc): array {
+            $doc->update(['confidentiality' => 'confidential']);
+
+            return ['answer' => '양생 대기일 없음', 'found' => true, 'sources' => []];
+        });
+        $this->app->instance(AnthropicChat::class, $mock);
+        $this->actingAs($worker)->postJson(route('ask.question'), ['question' => '양생 알려줘'])
+            ->assertStatus(422)->assertJson(['success' => false])->assertJsonMissing(['answer' => '양생 대기일 없음']);
+        $this->assertDatabaseCount('document_questions', 0);
+    }
+
+    public function test_inactive_accounts_cannot_ask_or_read_history(): void
+    {
+        $worker = $this->manager('worker');
+        $worker->update(['account_status' => 'suspended']);
+        $this->actingAs($worker)->get(route('attendance-app.ask'))->assertForbidden();
+        $this->postJson(route('ask.question'), ['question' => '공정 알려줘'])->assertForbidden();
     }
 }
