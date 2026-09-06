@@ -62,17 +62,24 @@ class DiagnoseDocumentAnalysis extends Command
         $this->line('');
         $this->line('<options=bold>2. 큐(일감 줄)</>');
         $this->line("   문서 전용 연결  {$conn}   (documents 큐 / 이전 default 큐)");
-        $this->line('   실행 명령  php artisan queue:work document-analysis --queue=documents,default --sleep=3 --tries=1 --timeout=600');
+        $this->line('   실행 명령  php artisan queue:work document-analysis --queue=documents --sleep=3 --tries=1 --timeout=600');
         if ($jobs) {
             $waiting = (clone $jobs)->count();
+            $documentQueueJobs = (clone $jobs)->where('queue', 'documents');
+            $documentWaiting = (clone $documentQueueJobs)->count();
+            $legacyWaiting = (clone $jobs)->where('queue', 'default')->count();
             $reserved = (clone $jobs)->whereNotNull('reserved_at')->count();
-            $oldest = (clone $jobs)->min('created_at');
+            $oldest = (clone $documentQueueJobs)->min('created_at');
             $this->line("   문서 일감  {$waiting}건 (예약·실행 중 {$reserved}건 포함)");
+            $this->line("   전용 documents {$documentWaiting}건 / 이전 default 문서 {$legacyWaiting}건");
+            if ($legacyWaiting > 0) {
+                $this->line('   이전 default 문서 작업은 정확한 작업 목록을 검토한 뒤 일회성으로 처리하세요. 문서 worker에 공용 default 큐를 상시 추가하지 마세요.');
+            }
             if ($oldest) {
                 $mins = (int) round((time() - (int) $oldest) / 60);
-                $this->line("   가장 오래된 것  {$mins}분 전");
-                if ($waiting > 0 && $mins > 10) {
-                    $bad[] = "문서 일감 {$waiting}건 중 가장 오래된 요청이 {$mins}분 전입니다. "
+                $this->line("   전용 documents 큐의 가장 오래된 것  {$mins}분 전");
+                if ($documentWaiting > 0 && $mins > 10) {
+                    $bad[] = "전용 documents 큐 {$documentWaiting}건 중 가장 오래된 요청이 {$mins}분 전입니다. "
                         .'대량 업로드 대기 또는 worker 중단일 수 있으므로 Laravel Cloud의 문서 처리 프로세스와 로그를 확인해 주세요.';
                 }
             }
