@@ -90,4 +90,23 @@ if [ "$durable" = "false" ]; then
   echo "::warning title=업로드 저장소가 휘발성::${ENV_LABEL} — 문서 디스크가 \`${dochub:-?}\` 입니다. 배포마다 문서 원본·현장 사진이 사라집니다. 버킷 연결 + DOCUMENT_STORAGE_DISK/DOCUMENT_DISK/WBS_PHOTO_DISK 환경변수를 확인하세요."
 fi
 
-echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?}"
+# 파일을 실제로 몇 MB 까지 받는가. public/.user.ini 에 64M/72M 을 적어 두었지만
+# «적어 두었다» 와 «적용됐다» 는 다르다 — PHP-FPM 이 그 파일을 안 읽으면 기본값(2M)이
+# 살아 있고, 화면은 「최대 50MB」라고 적어 둔 채 도면 한 장도 못 받는다.
+# 화면도 서버도 멀쩡해 보이므로 여기서 숫자로 확인한다.
+userini=$(printf '%s' "$body" | sed -n 's/.*"user_ini_applied" *: *\([a-z]*\).*/\1/p')
+perfile=$(printf '%s' "$body" | sed -n 's/.*"effective_per_file_mb" *: *\([0-9.]*\).*/\1/p')
+postmax=$(printf '%s' "$body" | sed -n 's/.*"post_max_size_mb" *: *\([0-9.]*\).*/\1/p')
+
+if [ "$userini" = "false" ]; then
+  echo "::warning title=업로드 한도가 기본값::${ENV_LABEL} — 파일당 ${perfile:-?}MB 까지만 받습니다(요청 본문 ${postmax:-?}MB). public/.user.ini 가 적용되지 않았습니다 — 도면·사진이 서버에 닿기 전에 잘립니다."
+  {
+    echo
+    echo "**업로드 한도가 기본값입니다** — 파일당 \`${perfile:-?}MB\`, 요청 본문 \`${postmax:-?}MB\`"
+    echo
+    echo "\`public/.user.ini\` 에 적어 둔 64M/72M 이 적용되지 않았습니다. 이 상태에서는"
+    echo "도면·사진이 서버에 닿기도 전에 잘리고, 화면에는 이유 없는 실패만 보입니다."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+fi
+
+echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?} upload_per_file_mb=${perfile:-?} post_max_mb=${postmax:-?} user_ini=${userini:-?}"

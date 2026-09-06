@@ -8,7 +8,6 @@ use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\ExpenseAppController;
-use App\Http\Controllers\MobileAskController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GoogleAuthController;
@@ -16,6 +15,7 @@ use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
 use App\Http\Controllers\IntegratedDocumentController;
 use App\Http\Controllers\MemberRegistrationController;
+use App\Http\Controllers\MobileAskController;
 use App\Http\Controllers\MobileDocumentController;
 use App\Http\Controllers\MobileEquipmentController;
 use App\Http\Controllers\MobileExpenseController;
@@ -46,6 +46,7 @@ use App\Models\User;
 use App\Support\AccessPolicy;
 use App\Support\MailReady;
 use App\Support\Org;
+use App\Support\UploadLimits;
 use Aws\Ses\SesClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -569,6 +570,33 @@ Route::get('/build-version', function (Request $request) {
                 'document_management' => $filed,
                 'wbs_photos' => $photos,
                 'durable' => ! $volatile($docs) && ! $volatile($filed) && ! $volatile($photos),
+            ];
+        })(),
+        // 파일을 실제로 몇 MB 까지 받는가.
+        //
+        // 한도는 코드가 아니라 PHP 설정에 있고, 그 설정은 public/.user.ini 에 적혀 있다.
+        // 그런데 «적어 두었다» 와 «적용됐다» 는 다르다 — PHP-FPM 이 .user.ini 를 읽지
+        // 않는 환경이면 기본값(2M/8M)이 그대로 살아 있고, 화면은 「최대 50MB」라고
+        // 적어 둔 채 5MB 짜리 도면도 못 받는다. 어느 쪽인지 서버에 물어보지 않고는
+        // 알 수 없는데, 물어볼 창구가 없어서 지금까지 추측으로 때웠다.
+        //
+        // effective 가 곧 사람이 화면에서 보는 숫자다. user_ini_applied 가 false 면
+        // 파일이 안 올라가는 이유는 코드가 아니라 배포 환경이다.
+        'uploads' => (function (): array {
+            $post = UploadLimits::postMaxBytes();
+            $file = UploadLimits::uploadMaxBytes();
+            $mb = fn (int $bytes): float => round($bytes / 1048576, 1);
+
+            return [
+                'post_max_size_mb' => $mb($post),
+                'upload_max_filesize_mb' => $mb($file),
+                // 화면이 «파일당 최대» 로 적는 숫자 — 설정·PHP 파일 한도·본문 한도 중 최솟값.
+                'effective_per_file_mb' => $mb(DocumentIntelligenceController::maxUploadBytes()),
+                // .user.ini 는 64M/72M 을 적어 두었다. 그보다 작으면 안 읽힌 것이다.
+                'user_ini_applied' => $post >= 72 * 1048576 && $file >= 64 * 1048576,
+                'message' => $post >= 72 * 1048576 && $file >= 64 * 1048576
+                    ? 'public/.user.ini 의 업로드 한도가 적용되어 있습니다.'
+                    : 'public/.user.ini 가 적용되지 않았습니다 — 큰 파일은 서버가 받기 전에 잘립니다. 배포 환경의 PHP 설정을 확인하세요.',
             ];
         })(),
         // 메일이 진짜로 나가는 상태인가. AI 키와 똑같은 함정이 있다 — 넣었다고 믿었는데

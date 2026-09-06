@@ -173,6 +173,39 @@ class DocumentUploadBatchTest extends TestCase
         $this->assertStringContainsString((string) DocumentIntelligenceController::maxUploadBytes(), $view);
     }
 
+    public function test_the_deploy_check_reports_what_the_server_really_accepts(): void
+    {
+        // 「최대 50MB」라고 적어 두고 2MB 도 못 받는 상태를 화면으로는 알 수 없다.
+        // 배포 확인이 매번 숫자를 읽어 오게 해서, 다음부터는 추측하지 않는다.
+        $body = $this->get('/build-version')->assertOk()->json();
+
+        $this->assertArrayHasKey('uploads', $body);
+        $uploads = $body['uploads'];
+
+        foreach (['post_max_size_mb', 'upload_max_filesize_mb', 'effective_per_file_mb', 'user_ini_applied', 'message'] as $key) {
+            $this->assertArrayHasKey($key, $uploads);
+        }
+
+        // JSON 은 2.0 을 2 로 적으므로 형까지 같기를 요구하지 않는다 — 보려는 것은 값이다.
+        $this->assertEqualsWithDelta(
+            round(DocumentIntelligenceController::maxUploadBytes() / 1048576, 1),
+            $uploads['effective_per_file_mb'],
+            0.05,
+            '진단이 적는 숫자와 화면이 적는 숫자가 다르면 진단이 쓸모없다.',
+        );
+        $this->assertIsBool($uploads['user_ini_applied']);
+    }
+
+    public function test_the_deploy_script_reads_the_upload_limit(): void
+    {
+        // 스크립트가 필드 이름을 잘못 알고 있으면 조용히 «?» 만 찍는다.
+        $script = file_get_contents(base_path('scripts/deploy/check-scheduler.sh'));
+
+        $this->assertStringContainsString('user_ini_applied', $script);
+        $this->assertStringContainsString('effective_per_file_mb', $script);
+        $this->assertStringContainsString('upload_per_file_mb=', $script);
+    }
+
     private function screen(): string
     {
         [$company, $site, $project] = $this->projectFixture();
