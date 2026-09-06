@@ -28,8 +28,11 @@ use Throwable;
  * 문제보다 크다. 그래서 기본은 «보기» 이고, --apply 를 붙여야만 지운다.
  * 지우기 직전에는 지울 줄 전체를 JSON 으로 떨어뜨린다 — 되돌릴 근거가 남는다.
  *
- * 기본 대상은 registration_method='AI자동분석' 뿐이다. 사람이 손으로 넣은 줄은
- * 일부러 건드리지 않는다(--all-methods 로만 포함된다).
+ * 기본 대상은 registration_method='AI자동분석' 뿐이다(--all-methods 로만 넓힌다).
+ * 다만 <b>이 값은 «누가 넣었나» 를 뜻하지 않는다</b> — 컬럼 기본값이 'manual' 이라,
+ * 값을 안 넣고 만든 줄은 자동 등록이어도 manual 로 남는다. 그래서 대상이 대장 전체보다
+ * 훨씬 적으면 경고하고 --all-methods 를 권한다. 2026-09-06 에 이걸로 살았다: 주방기기
+ * 143줄을 치우려는데 대상은 1줄뿐이었고 그 1줄이 진짜 굴착기였다.
  */
 class PurgeEquipment extends Command
 {
@@ -58,6 +61,7 @@ class PurgeEquipment extends Command
         }
 
         $this->summarize($rows);
+        $this->warnIfMostRowsAreOutOfScope($rows);
 
         // 임대 이력이 달린 줄은 자산으로 실제 쓰인 것이다 — 잘못 등록된 목록과 성격이 다르다.
         [$rows, $skipped] = $this->setAsideRented($rows);
@@ -180,6 +184,39 @@ class PurgeEquipment extends Command
         if ($rows->count() > 20) {
             $this->line('  … 그리고 '.($rows->count() - 20).'줄 더 (전체는 아래 파일에)');
         }
+    }
+
+    /**
+     * 대장의 대부분이 대상 밖이면 그 사실을 크게 말한다.
+     *
+     * <b>registration_method 는 «누가 넣었나» 를 뜻하지 않는다.</b> 컬럼 기본값이
+     * 'manual' 이라, 그 값을 안 넣고 만든 줄은 전부 'manual' 이 된다 — 사람이 손으로
+     * 넣은 것과 구별되지 않는다. 그래서 기본 필터(AI자동분석)만 믿으면 «치우려던 것은
+     * 안 잡히고, 엉뚱한 것만 잡히는» 일이 벌어진다.
+     *
+     * 2026-09-06 나손에서 실제로 그랬다. 주방기기 143줄을 치우려고 돌렸더니 대상은
+     * 1줄뿐이었고, 그 1줄은 정작 진짜 장비(미니 굴착기)였다. 그대로 --apply 했으면
+     * 치우려던 것은 그대로 두고 멀쩡한 자산만 지웠을 것이다.
+     */
+    private function warnIfMostRowsAreOutOfScope(Collection $rows): void
+    {
+        if ($this->option('all-methods')) {
+            return;
+        }
+
+        $total = Equipment::query()->count();
+        $outside = $total - $rows->count();
+
+        if ($outside <= 0) {
+            return;
+        }
+
+        $this->line('');
+        $this->warn(sprintf('대장에는 %d줄이 있는데 그중 %d줄만 대상입니다 — %d줄은 대상 밖입니다.', $total, $rows->count(), $outside));
+        $this->line('  등록 방식이 다르면 여기 안 잡힙니다. 그리고 «manual» 은 사람이 넣었다는 뜻이 아닙니다 —');
+        $this->line('  값을 안 넣고 만든 줄의 기본값이라 자동 등록된 줄도 manual 로 남습니다.');
+        $this->line('  치우려는 것이 여기 안 보이면 전체를 먼저 보세요:');
+        $this->line('     php artisan equipment:purge --all-methods');
     }
 
     /**

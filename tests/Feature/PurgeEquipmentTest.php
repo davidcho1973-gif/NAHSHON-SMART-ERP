@@ -160,6 +160,23 @@ class PurgeEquipmentTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_it_warns_when_most_of_the_ledger_is_outside_the_default_filter(): void
+    {
+        // registration_method 기본값이 'manual' 이라, 자동으로 만들어진 줄도 manual 로 남는다.
+        // 그래서 «대상 1줄» 이 «치울 게 1줄» 을 뜻하지 않는다 — 2026-09-06 에 실제로 그랬다.
+        $this->equipment('JCB 18Z Mini Excavator', method: 'AI자동분석');
+        foreach (range(1, 5) as $i) {
+            $this->equipment('주방 기기 '.$i, method: 'manual');
+        }
+
+        $this->artisan('equipment:purge')
+            ->expectsOutputToContain('대장에는 6줄이 있는데 그중 1줄만 대상입니다')
+            ->expectsOutputToContain('--all-methods')
+            ->assertExitCode(0);
+
+        $this->assertSame(6, Equipment::query()->count());
+    }
+
     private function equipment(string $name, string $method = 'AI자동분석', ?Site $site = null): Equipment
     {
         $site ??= $this->site();
