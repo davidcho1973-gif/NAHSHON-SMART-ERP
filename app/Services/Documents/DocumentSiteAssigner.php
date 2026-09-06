@@ -7,7 +7,9 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\SiteFromText;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 /**
  * 현장이 비어 있는 문서를 한 번에 정리한다.
@@ -123,6 +125,11 @@ class DocumentSiteAssigner
         $unmatched = 0;
 
         foreach ($documents as $document) {
+            if ($document->ai_status === 'analyzing') {
+                $skipped++;
+
+                continue;
+            }
             $site = $fixed ?: $this->suggest($document, $sites)['site'];
             if (! $site) {
                 $unmatched++;
@@ -137,12 +144,24 @@ class DocumentSiteAssigner
                 continue;
             }
 
-            $document->forceFill([
-                'site_id' => $site->id,
-                // 회사가 비어 있던 문서는 현장의 회사를 따른다. 이미 회사가 있으면
-                // 건드리지 않는다 — 현장만 채워 달라고 한 작업이다.
-                'company_id' => $document->company_id ?: $site->company_id,
-            ])->save();
+            $resolver = app(DocumentScope::class);
+            try {
+                $scope = $resolver->normalize([
+                    'company_id' => $document->company_id,
+                    'site_id' => $site->id,
+                    'project_id' => $document->project_id,
+                ], $actor);
+            } catch (ValidationException) {
+                $skipped++;
+
+                continue;
+            }
+            $saved = $resolver->saveResolved($document, $scope);
+            if ($saved->ai_payload['duplicate_document_id'] ?? null) {
+                $skipped++;
+
+                continue;
+            }
             $assigned++;
         }
 
@@ -164,7 +183,7 @@ class DocumentSiteAssigner
     }
 
     /** 현장이 비어 있는 문서만 — 볼 수 있는 범위 안에서. */
-    private function scope(User $actor): \Illuminate\Database\Eloquent\Builder
+    private function scope(User $actor): Builder
     {
         return IntelligentDocument::query()->visibleTo($actor)->whereNull('site_id');
     }

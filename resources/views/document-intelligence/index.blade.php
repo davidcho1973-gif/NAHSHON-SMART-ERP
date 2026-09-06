@@ -146,7 +146,7 @@
                         <div class="drop-panel">
                             <div class="scope-grid">
                                 {{-- 기본 소속: ERP 에서 고른 현장 > 본인 소속 현장 > Global(수퍼관리자·고위관리자·회계). 바꾸고 싶으면 바꾸면 된다 — 시작점만 맞춰 둔다. --}}
-                                <div class="field"><label>회사</label><select id="upload-company"><option value="">자동/Global</option>@foreach($companies as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultCompanyId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
+                                <div class="field"><label>회사</label><select id="upload-company"><option value="">미지정/Global</option>@foreach($companies as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultCompanyId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
                                 <div class="field"><label>현장</label><select id="upload-site"><option value="">자동/공통</option>@foreach($sites as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultSiteId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
                                 <div class="field"><label>PROJECT</label><select id="upload-project"><option value="">AI 확인</option>@foreach($projects as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultProjectId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select></div>
                             </div>
@@ -346,6 +346,7 @@ function renderDetail(d){
         <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" onclick="saveEdit(${d.id})">저장</button><button class="btn" onclick="document.getElementById('edit-form').style.display='none'">취소</button></div>
         <p style="font-size:11px;color:var(--muted);margin:9px 0 0">저장하면 이 문서는 "정리 완료(사람 검수)"로 표시됩니다 — AI 추정이 아니라 사람이 확정한 값이라는 뜻입니다.</p>
       </div>`:''}
+      ${d.duplicateDocumentId?`<div class="section" style="border-color:#93c5fd;background:#eff6ff"><h3>이미 등록된 동일 파일</h3><p>기존 문서에서 분석 결과를 확인할 수 있습니다. 이번 접수 원본과 기록은 보존했습니다.</p><button class="btn primary" onclick="openDocument(${Number(d.duplicateDocumentId)})">기존 문서 열기</button></div>`:''}
       ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
       <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
       <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
@@ -354,7 +355,7 @@ function renderDetail(d){
       <details class="section"><summary style="font-weight:800;cursor:pointer">OCR/추출 본문 보기</summary><p style="max-height:420px;overflow:auto">${esc(d.extractedText||'추출 가능한 본문이 없습니다. 이미지/PDF 원본을 확인하세요.')}</p></details>`;
 }
 async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
-async function reanalyze(id){try{await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast('AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+async function reanalyze(id){try{const result=await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast(result.message||'AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
 
 /* 도면 → 물량, 시방 → 제출물.
    결과는 승인 대기줄이 아니라 대장으로 바로 간다 — 확신이 서는 줄은 그냥 들어가고
@@ -512,7 +513,7 @@ async function uploadFiles(fileList){
     document.getElementById('queue-files').innerHTML=files.map((f,i)=>
         `<div class="queue-row" id="q-${i}"><span class="q-name">${esc(f.name)}</span><span class="q-state">대기</span><span class="q-size">${fmtBytes(f.size)}</span></div>`).join('');
     const setState=(i,text,kind='',title='')=>{const row=document.getElementById('q-'+i);if(!row)return;const cell=row.querySelector('.q-state');cell.textContent=text;cell.className='q-state'+(kind?' '+kind:'');cell.title=title||''};
-    const scope={};['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v)scope[k+'_id']=v});
+    const scope={};['company','site','project'].forEach(k=>{const v=document.getElementById('upload-'+k).value;if(v||k==='company')scope[k+'_id']=v});
 
     let done=0,accepted=0,skipped=0;const problems=[];
     for(let i=0;i<files.length;i++){

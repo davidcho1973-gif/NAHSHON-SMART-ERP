@@ -31,6 +31,7 @@ class ReanalyzeDocuments extends Command
     public function handle(): int
     {
         $q = IntelligentDocument::query()
+            ->whereNull('ai_payload->duplicate_document_id')
             ->whereIn('ai_status', $this->option('status') ?: ['ready', 'review_required', 'failed']);
 
         if ($code = $this->option('project')) {
@@ -52,16 +53,17 @@ class ReanalyzeDocuments extends Command
         }
 
         $this->line("대상 {$total}건 중 {$docs->count()}건".($this->option('run') ? ' — 큐에 넣습니다' : ' — 미리보기(실행하려면 --run)'));
+        $queued = 0;
         foreach ($docs as $d) {
             $this->line(sprintf('  %5d  %-12s %s', $d->id, $d->ai_status, mb_substr($d->original_file_name, 0, 56)));
             if ($this->option('run')) {
-                AnalyzeIntelligentDocumentJob::dispatch($d->id);
+                $queued += AnalyzeIntelligentDocumentJob::requestReanalysis($d->id) ? 1 : 0;
             }
         }
 
         if ($this->option('run')) {
             $this->newLine();
-            $this->info("{$docs->count()}건을 분석 큐에 넣었습니다. 남은 대상 ".max(0, $total - $docs->count()).'건.');
+            $this->info("{$queued}건을 분석 큐에 넣었습니다. 남은 대상 ".max(0, $total - $queued).'건.');
         }
 
         return self::SUCCESS;
