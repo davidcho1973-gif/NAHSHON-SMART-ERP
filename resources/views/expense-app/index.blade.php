@@ -14,7 +14,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#FEE500">
     <title>{{ __('영수증') }} · {{ \App\Support\Org::name() }}</title>
 
     <link rel="manifest" href="{{ route('expense-app.manifest') }}">
@@ -22,40 +21,27 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="영수증">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+    @include('partials.field-app-theme')
     <style>
-        :root {
-            color-scheme: light;
-            --kakao: #FEE500; --kakao-2: #F6DC00; --label: rgba(0,0,0,.85);
-            --paper: #F2F3F5; --card: #FFFFFF; --line: #EDEEF0;
-            --ink: #191919; --ink-2: #767676; --ink-3: #B0B8C1;
-            --ok: #16a34a; --warn: #f59e0b; --bad: #ef4444; --info: #2563eb;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body {
-            font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-            background: var(--paper); color: var(--ink); min-height: 100vh; font-size: 15px;
-        }
-        .wrap { max-width: 480px; margin: 0 auto; padding: 0 14px calc(20px + env(safe-area-inset-bottom)); }
 
-        .band { background: var(--kakao); margin: 0 -14px; padding: calc(14px + env(safe-area-inset-top)) 18px 12px; }
-        .band h1 { font-size: 17px; font-weight: 800; color: var(--label); display: flex; align-items: center; gap: 8px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
         .band .who { font-size: 12px; color: rgba(0,0,0,.62); margin-top: 2px; }
         .langs { float: right; }
         .langs button { border: 1px solid rgba(0,0,0,.18); background: transparent; color: var(--label);
             border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; margin-left: 4px; cursor: pointer; }
-        .langs button.on { background: rgba(0,0,0,.85); color: #FEE500; border-color: transparent; }
+        .langs button.on { background: rgba(0,0,0,.85); color: #EDF3F8; border-color: transparent; }
 
         .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
         .tabs button { border: none; border-radius: 12px; padding: 11px 0; font-size: 14px; font-weight: 800; cursor: pointer;
             background: var(--card); color: var(--ink-2); border: 1px solid var(--line); }
-        .tabs button.on { background: var(--kakao); color: var(--label); border-color: transparent; }
+        .tabs button.on { background: var(--accent-bg); color: var(--label); border-color: transparent; }
 
         .card { background: var(--card); border-radius: 12px; border: 1px solid var(--line); padding: 16px; margin-bottom: 10px; }
 
-        .shoot { display: block; width: 100%; border: none; border-radius: 12px; background: var(--kakao); color: var(--label);
+        .shoot { display: block; width: 100%; border: none; border-radius: 12px; background: var(--accent-bg); color: var(--label);
             padding: 22px 16px; font-size: 17px; font-weight: 800; cursor: pointer; text-align: center; }
-        .shoot:active { background: var(--kakao-2); }
+        .shoot:active { background: #193B5A; }
         .shoot .big { font-size: 30px; display: block; margin-bottom: 4px; }
         .album { display: block; width: 100%; border: 1px dashed rgba(0,0,0,.25); border-radius: 12px; background: #FFFDF0;
             color: var(--ink-2); padding: 12px; font-size: 13.5px; font-weight: 700; cursor: pointer; text-align: center; margin-top: 8px; }
@@ -79,12 +65,12 @@
         .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .seg button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 0;
             font-size: 13px; font-weight: 700; color: var(--ink-2); cursor: pointer; }
-        .seg button.on { background: rgba(0,0,0,.85); color: #FEE500; border-color: transparent; }
+        .seg button.on { background: rgba(0,0,0,.85); color: #EDF3F8; border-color: transparent; }
         input[type=number], input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 10px;
             padding: 11px 12px; font-size: 15px; font-family: inherit; background: #fff; color: var(--ink); }
         .hint { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
 
-        .go { display: block; width: 100%; border: none; border-radius: 12px; background: rgba(0,0,0,.85); color: #FEE500;
+        .go { display: block; width: 100%; border: none; border-radius: 12px; background: rgba(0,0,0,.85); color: #EDF3F8;
             padding: 15px 0; font-size: 16px; font-weight: 800; cursor: pointer; margin-top: 14px; }
         .go:disabled { opacity: .45; }
 
@@ -104,7 +90,7 @@
         .chip.rejected { background: #FDECEC; color: var(--bad); }
         .chip.paid { background: #E8F0FE; color: var(--info); }
 
-        .claim { background: var(--kakao); border: none; }
+        .claim { background: var(--accent-bg); border: none; }
         .claim .t { font-size: 12px; font-weight: 700; color: rgba(0,0,0,.62); }
         .claim .v { font-size: 22px; font-weight: 800; color: var(--label); }
 
@@ -114,17 +100,18 @@
         .empty { text-align: center; color: var(--ink-3); font-size: 13px; padding: 26px 0; }
     </style>
 </head>
-<body>
+<body class="field-app field-receipts">
 @include('partials.erp-home')
-<div class="wrap">
-    <div class="band">
+<div class="wrap field-shell">
+    <header class="band field-header">
+        <a class="field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
         <div class="langs">
             <button data-lang="ko">{{ __('한국어') }}</button><button data-lang="en">EN</button><button data-lang="es">ES</button>
         </div>
         <h1>🧾 <span data-t="title">{{ __('영수증') }}</span></h1>
         <div class="who">{{ $employee?->name ?? $user?->name }} · {{ \App\Support\Org::name() }}</div>
-    </div>
-
+    </header>
+    <main class="field-content receipt-content">
     @if (! $employee)
         <div class="card" style="border-left:4px solid var(--warn)">
             <b data-t="noEmp">{{ __('계정에 직원 정보가 연결되어 있지 않습니다.') }}</b>
@@ -137,9 +124,10 @@
     </div>
 
     {{-- ── 제출 화면 ─────────────────────────────────────── --}}
-    <div id="pane-send">
+    <div id="pane-send" class="field-columns">
         <div class="card" id="result-card" style="display:none"></div>
 
+        <section class="receipt-capture">
         <button class="shoot" id="shoot">
             <span class="big">📷</span><span data-t="shoot">{{ __('영수증 사진 찍기') }}</span>
         </button>
@@ -149,6 +137,7 @@
         <input type="file" id="file-album" accept="image/*" multiple style="display:none">
 
         <div class="queue" id="queue"></div>
+        </section>
 
         <div class="card">
             <div class="row">
@@ -176,7 +165,9 @@
         <div class="card" id="mine-list"><div class="empty" data-t="loading">{{ __('불러오는 중…') }}</div></div>
     </div>
     @endif
+    </main>
 </div>
+@include('partials.field-app-nav')
 <div class="toast" id="toast"></div>
 
 <script>

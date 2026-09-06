@@ -16,42 +16,30 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#FEE500">
     <title>{{ $roomLabel ?? $room->name }}</title>
     {{-- Pretendard — 윈도우 기본 한글 글꼴(맑은 고딕)이 화면을 낡아 보이게 한다.
          이 글꼴 하나로 어느 기기에서 열어도 같은 얼굴이 된다. CDN 이 안 닿으면
          뒤의 시스템 글꼴로 조용히 물러난다. --}}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+    @include('partials.field-app-theme')
     <style>
-        :root {
-            color-scheme: light;
-            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
-            --kakao: #fee500;         /* R255 G232 B18 — 브랜드 노랑 */
-            --label: rgba(0,0,0,.85); /* 노랑 위 글자 */
-            --kakao-bg: #b2c7d9;      /* 대화 배경 */
-            --mine: #fee500;          /* 내 말풍선 */
-            --line: #edeef0;
-        }
+
         * { -webkit-tap-highlight-color: transparent; }
         /* hidden 을 붙였는데도 보이던 것들 — 브라우저 기본값 [hidden]{display:none} 은
            우리가 클래스에 display 를 쓰면 곧바로 진다(작성자 규칙이 이긴다). 그래서
            답장 대상 칸(.replying, display:flex)이 빈 채로 늘 떠 있었고, 접속 표시
            점(.dot, display:inline-block)도 항상 켜져 있었다. 규칙을 여기서 되돌린다. */
         [hidden] { display: none !important; }
-        body { margin: 0; background: var(--kakao-bg); color: #191919; }
-        .app { min-height: 100vh; max-width: 640px; margin: 0 auto; background: var(--kakao-bg); display: flex; flex-direction: column; }
 
         /* 머리띠 — 노랑 면에 검정 글자. 방 이름 + 지금 몇 명이 보고 있는지. */
-        header { position: sticky; top: 0; z-index: 20; background: var(--kakao); color: var(--label); padding: 11px 12px; }
+
         .top { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
-        .back { color: var(--label); font-size: 22px; text-decoration: none; line-height: 1; padding: 2px 6px; }
-        h1 { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--label); }
+
         .sub { margin-top: 2px; font-size: 12px; color: rgba(0,0,0,.55); display: flex; align-items: center; gap: 5px; }
         .dot { width: 7px; height: 7px; border-radius: 50%; background: #1e8e3e; display: inline-block; }
         .peo { background: rgba(255,255,255,.65); border: 0; border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; color: var(--label); cursor: pointer; }
 
         /* 대화 */
-        main { flex: 1; padding: 14px 12px 120px; }
+
         .day { text-align: center; margin: 16px 0 12px; }
         .day span { background: rgba(0,0,0,.18); color: #fff; font-size: 11px; padding: 4px 12px; border-radius: 999px; }
 
@@ -65,7 +53,7 @@
         .row.mine .bundle { flex-direction: row-reverse; }
         /* 14px — 카카오톡 기본 크기와 같다. 15px 는 PC 에서 소리치는 것처럼 보였다. */
         .bubble { background: #fff; border-radius: 14px; padding: 8px 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
-        .row.mine .bubble { background: var(--mine); }
+        .row.mine .bubble { background: #DDEAF4; }
         .bubble.gone { background: rgba(255,255,255,.55); color: #64748b; font-style: italic; }
         .stamp { font-size: 10px; color: #4b5563; white-space: nowrap; padding-bottom: 2px; }
         .stamp .unread { color: #eab308; font-weight: 800; }
@@ -74,7 +62,7 @@
         /* 공지·AI — 가운데 카드 */
         /* AI·공지 카드 — 말풍선(14px)보다 한 단 작게(13px). 기계의 말이 사람 말보다
            커 보이면 방의 주인이 바뀐 것처럼 느껴진다. 제목은 작은 꼬리표로. */
-        .notice-card { background: rgba(255,255,255,.94); border-radius: 14px; padding: 11px 14px 12px; margin: 0 auto 12px; max-width: 88%; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; border-left: 4px solid var(--kakao); }
+        .notice-card { background: rgba(255,255,255,.94); border-radius: 14px; padding: 11px 14px 12px; margin: 0 auto 12px; max-width: 88%; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; border-left: 4px solid var(--accent-bg); }
         .notice-card.ai { border-left-color: #3e6be0; }
         .notice-card b { display: block; font-size: 11px; font-weight: 700; letter-spacing: .02em; margin-bottom: 6px; color: #767676; }
 
@@ -90,12 +78,12 @@
         .tools button { background: rgba(255,255,255,.7); border: 0; border-radius: 8px; padding: 3px 8px; font-size: 11px; color: #374151; cursor: pointer; }
 
         /* 입력창 */
-        .composer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: min(640px, 100vw); background: #fff; border-top: 1px solid var(--line); padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+        .composer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: var(--app-width); background: #fff; border-top: 1px solid var(--line); padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); box-sizing: border-box; }
         .cbar { display: grid; grid-template-columns: auto auto 1fr auto; gap: 7px; align-items: end; }
         /* 첨부 [＋] 는 노란 동그라미에 검정 글자 — 카카오가 아이콘을 담는 방식이다. */
-        .plus { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--kakao); font-size: 22px; font-weight: 800; color: var(--label); cursor: pointer; line-height: 1; }
+        .plus { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--accent-bg); font-size: 22px; font-weight: 800; color: var(--label); cursor: pointer; line-height: 1; }
         /* AI 부르기 — 노란 [＋] 옆이라 검정으로 뒤집는다. "@AI" 를 외우게 하지 않는 장치다. */
-        .aibtn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.85); color: var(--kakao); font-size: 13px; font-weight: 800; cursor: pointer; line-height: 1; letter-spacing: .02em; }
+        .aibtn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.85); color: var(--accent-bg); font-size: 13px; font-weight: 800; cursor: pointer; line-height: 1; letter-spacing: .02em; }
         textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 18px; padding: 10px 13px; font: inherit; font-size: 14px; resize: none; max-height: 120px; min-height: 40px; background: #f2f3f5; }
         /* 보내기는 검정 — 노란 [＋] 와 나란히 서므로 여기서 노랑을 또 쓰면 둘 다 죽는다. */
         .send { border: 0; border-radius: 12px; padding: 0 16px; height: 40px; background: rgba(0,0,0,.85); color: #fff; font-weight: 800; cursor: pointer; }
@@ -104,25 +92,25 @@
         .hint { font-size: 11px; color: #6b7280; padding: 6px 2px 0; }
         input[type=file] { display: none; }
         .readonly { padding: 12px; color: #6b7280; font-size: 13px; text-align: center; }
-        .replying { display: flex; align-items: center; gap: 8px; background: #f2f3f5; border-left: 4px solid var(--kakao); border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #191919; }
+        .replying { display: flex; align-items: center; gap: 8px; background: #f2f3f5; border-left: 4px solid var(--accent-bg); border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #191919; }
         .replying span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .replying button { border: 0; background: none; font-size: 16px; color: #64748b; cursor: pointer; line-height: 1; }
         .quote { border-left: 3px solid rgba(0,0,0,.15); padding-left: 8px; margin-bottom: 5px; font-size: 11px; color: #767676; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* 참여자 시트 */
         .sheet-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: none; }
-        .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: min(640px, 100vw); background: #fff; border-radius: 18px 18px 0 0; z-index: 41; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); display: none; max-height: 70vh; overflow: auto; }
+        .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: 100%; max-width: var(--app-width); background: #fff; border-radius: 18px 18px 0 0; z-index: 41; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); display: none; max-height: 70vh; overflow: auto; }
         .sheet h2 { margin: 0 0 12px; font-size: 16px; }
         .mem { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid #f1f3f5; }
-        .mem .face { width: 32px; height: 32px; flex: 0 0 32px; background: var(--kakao); color: var(--label); border-radius: 50%; }
+        .mem .face { width: 32px; height: 32px; flex: 0 0 32px; background: var(--accent-bg); color: var(--label); border-radius: 50%; }
         .mem .face.bot { background: rgba(0,0,0,.85); font-size: 15px; }
         .mem .nm { font-size: 14px; font-weight: 700; }
         .mem .st { font-size: 11px; color: #6b7280; margin-left: auto; }
         .mem .st.on { color: #16a34a; font-weight: 800; }
     </style>
 </head>
-<body>
-    <div class="app">
+<body class="field-app field-chat">
+    <div class="app field-shell">
         @php
             $typeLabel = [
                 'site_announcement' => '공지방',
@@ -133,9 +121,9 @@
                 'direct' => '1:1 대화',
             ][$room->type] ?? '채팅방';
         @endphp
-        <header>
+        <header class="field-header">
             <div class="top">
-                <a class="back" href="{{ route('communication.index') }}" aria-label="목록">‹</a>
+                <a class="back field-back" href="{{ route('communication.index') }}" aria-label="목록">‹</a>
                 <div>
                     <h1>{{ $roomLabel ?? $room->name }}</h1>
                     <div class="sub">
@@ -161,9 +149,9 @@
             </div>
         </header>
 
-        <main id="thread"></main>
+        <main class="field-content" id="thread"></main>
 
-        <section class="composer">
+        <section class="composer" aria-label="{{ __('메시지 입력') }}">
             @if($canPostTopLevel)
                 <form id="composer-form" method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
                     @csrf
@@ -530,7 +518,6 @@
     function poll() {
         if (document.hidden) { schedule(15000); return; }
 
-
         fetch(streamUrl + '?after=' + lastId, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
@@ -612,5 +599,15 @@
     poll();
 })();
 </script>
+<script>
+    (function () {
+        var composer = document.querySelector('.composer');
+        if (composer && window.ResizeObserver) {
+            new ResizeObserver(function () {
+                document.documentElement.style.setProperty('--composer-height', composer.getBoundingClientRect().height + 'px');
+            }).observe(composer);
+        }
+    })();
+    </script>
 </body>
 </html>
