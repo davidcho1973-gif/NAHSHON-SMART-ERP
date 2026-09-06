@@ -108,6 +108,13 @@ class IntelligentToIntegratedBridge
      */
     public function syncAnalysis(IntelligentDocument $doc): ?IntegratedDocument
     {
+        // A preserved duplicate or unresolved scope is not an accepted analysis.
+        // Publishing it would overwrite the already filed document during repair.
+        if (($doc->ai_payload['duplicate_document_id'] ?? null)
+            || ($doc->ai_payload['scope_review_reason'] ?? null)) {
+            return null;
+        }
+
         $mirror = IntegratedDocument::query()->where('source_document_id', $doc->id)->first();
         if (! $mirror) {
             return null;

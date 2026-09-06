@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\AnalyzeIntelligentDocumentJob;
 use App\Models\IntelligentDocument;
+use App\Services\Ocr\OcrEngine;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -18,12 +20,12 @@ use Illuminate\Support\Facades\Schema;
  * 막히는 자리는 넷이다 — 이 순서로 확인한다.
  *   1) AI 열쇠      : 없으면 분석이 시작하자마자 실패한다.
  *   2) 큐 일꾼      : 안 돌면 «대기» 에서 영원히 안 움직인다. 가장 흔한 원인이다.
- *   3) 파일 크기·형식: 15MB 넘는 원본은 본문 추출에 기대는데, 추출이 안 되면 못 읽는다.
+ *   3) 파일 크기·형식: 엔진의 직접 판독 한도를 넘는 원본은 본문 추출에 의존한다.
  *   4) 멈춘 분석    : 일꾼이 물고 죽으면 «분석 중» 에서 굳는다.
  */
 class DiagnoseDocumentAnalysis extends Command
 {
-    protected $signature = 'docs:diagnose {--stuck-minutes=10 : 이 시간 넘게 «분석 중» 이면 멈춘 것으로 본다}';
+    protected $signature = 'docs:diagnose {--stuck-minutes=15 : 최소 15분 넘게 «분석 중» 이면 멈춘 것으로 본다}';
 
     protected $description = '문서 AI 분석이 왜 안 도는지 진단한다 — 열쇠·큐 일꾼·파일 크기·멈춘 분석';
 
@@ -45,31 +47,40 @@ class DiagnoseDocumentAnalysis extends Command
         $this->line("   엔진      {$engine}   (AI_OCR_ENGINE)");
         $this->line('   열쇠      '.($hasKey ? '있음' : '<fg=red>없음</>')."   ({$keyPath})");
         if (! $hasKey) {
-            $bad[] = "AI 열쇠가 없습니다. 배포 환경변수에 ".strtoupper($engine)."_API_KEY 를 넣어야 분석이 시작됩니다.";
+            $bad[] = 'AI 열쇠가 없습니다. 배포 환경변수에 '.strtoupper($engine).'_API_KEY 를 넣어야 분석이 시작됩니다.';
         }
 
         // ── 2. 큐 일꾼
-        $conn = (string) config('queue.default');
+        $conn = 'document-analysis';
+        $queueDb = DB::connection(config("queue.connections.{$conn}.connection"));
+        $queueTable = (string) config("queue.connections.{$conn}.table", 'jobs');
+        $jobs = $queueDb->getSchemaBuilder()->hasTable($queueTable)
+            ? $queueDb->table($queueTable)->whereIn('queue', ['documents', 'default'])
+                ->whereRaw("payload::jsonb->>'displayName' = ?", [AnalyzeIntelligentDocumentJob::class])
+            : null;
+        $waiting = 0;
         $this->line('');
         $this->line('<options=bold>2. 큐(일감 줄)</>');
-        $this->line("   연결      {$conn}   (QUEUE_CONNECTION)");
-        if ($conn === 'sync') {
-            $this->line('   <fg=yellow>sync 는 요청 안에서 바로 도는 방식이라 일꾼이 필요 없지만, 업로드가 그만큼 느려집니다.</>');
-        } elseif ($conn === 'database' && Schema::hasTable('jobs')) {
-            $waiting = DB::table('jobs')->count();
-            $oldest = DB::table('jobs')->min('created_at');
-            $this->line("   대기 일감  {$waiting}건");
+        $this->line("   문서 전용 연결  {$conn}   (documents 큐 / 이전 default 큐)");
+        $this->line('   실행 명령  php artisan queue:work document-analysis --queue=documents,default --sleep=3 --tries=1 --timeout=600');
+        if ($jobs) {
+            $waiting = (clone $jobs)->count();
+            $reserved = (clone $jobs)->whereNotNull('reserved_at')->count();
+            $oldest = (clone $jobs)->min('created_at');
+            $this->line("   문서 일감  {$waiting}건 (예약·실행 중 {$reserved}건 포함)");
             if ($oldest) {
                 $mins = (int) round((time() - (int) $oldest) / 60);
                 $this->line("   가장 오래된 것  {$mins}분 전");
                 if ($waiting > 0 && $mins > 10) {
-                    $bad[] = "일감 {$waiting}건이 {$mins}분째 줄에 서 있습니다 — 큐 일꾼(worker)이 안 돌고 있습니다. "
-                        .'Laravel Cloud 대시보드에서 Worker 프로세스를 켜 주십시오(명령: php artisan queue:work).';
+                    $bad[] = "문서 일감 {$waiting}건 중 가장 오래된 요청이 {$mins}분 전입니다. "
+                        .'대량 업로드 대기 또는 worker 중단일 수 있으므로 Laravel Cloud의 문서 처리 프로세스와 로그를 확인해 주세요.';
                 }
             }
             if ($waiting === 0) {
                 $this->line('   <fg=green>줄이 비어 있습니다 — 일꾼이 처리했거나 애초에 안 넣은 것입니다.</>');
             }
+        } else {
+            $bad[] = '문서 처리용 jobs 테이블이 없습니다. 데이터베이스 연결 및 마이그레이션을 확인해 주세요.';
         }
         if (Schema::hasTable('failed_jobs')) {
             $failed = DB::table('failed_jobs')->count();
@@ -90,13 +101,13 @@ class DiagnoseDocumentAnalysis extends Command
             $this->line('   '.$label.str_repeat(' ', max(1, 12 - mb_strwidth($label))).($rows[$k] ?? 0).'건');
         }
         $queued = (int) ($rows['queued'] ?? 0);
-        if ($queued > 0 && $conn === 'database' && Schema::hasTable('jobs') && DB::table('jobs')->count() === 0) {
+        if ($queued > 0 && $jobs && $waiting === 0) {
             $bad[] = "«대기» 가 {$queued}건인데 줄에 선 일감은 0건입니다 — 상태만 대기로 바뀌고 일감이 안 들어갔습니다. "
                 .'문서함의 «AI 재분석» 또는 docs:reanalyze --run 으로 다시 넣어야 합니다.';
         }
 
         // ── 4. 멈춘 분석
-        $mins = (int) $this->option('stuck-minutes');
+        $mins = max(15, (int) $this->option('stuck-minutes'));
         $stuck = IntelligentDocument::query()->where('ai_status', 'analyzing')
             ->where('updated_at', '<', now()->subMinutes($mins))->count();
         $this->line('');
@@ -109,7 +120,7 @@ class DiagnoseDocumentAnalysis extends Command
 
         // ── 5. 크기·형식으로 못 읽는 문서
         // 한도는 엔진이 말하는 값을 그대로 쓴다 — 진단이 실제 동작과 다른 숫자를 말하면 안 된다.
-        $limit = app(\App\Services\Ocr\OcrEngine::class)->maxAttachmentBytes();
+        $limit = app(OcrEngine::class)->maxAttachmentBytes();
         $big = IntelligentDocument::query()->where('file_size', '>', $limit)
             ->whereIn('ai_status', ['queued', 'analyzing', 'failed'])->get(['original_file_name', 'file_size', 'ai_status']);
         $this->line('');
