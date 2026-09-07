@@ -440,6 +440,20 @@
       'border:1px solid ' + color + ';color:' + color + '">' + esc(text) + '</span>';
   }
 
+  /**
+   * 화면 위에 붙는 안내 띠 — "이 화면이 지금 헛돌고 있다" 를 말하는 자리.
+   *
+   * 왜 필요한가: 설정이 빠지면 화면은 멀쩡한데 숫자만 전부 0 이 된다. 그러면 보는
+   * 사람은 사람들을 탓하며 쫓아다니고, 진짜 원인(서버 설정)은 몇 주 뒤에 발견된다.
+   * 숫자가 0 인 이유가 사람이 아니라 설정일 때는 그 사실이 화면에 있어야 한다.
+   */
+  function notice(text, kind) {
+    var color = kind === 'danger' ? TOKENS.danger : kind === 'ok' ? TOKENS.ok : TOKENS.warn;
+    return '<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:14px;padding:11px 13px;border-radius:10px;' +
+      'border:1px solid ' + color + ';background:transparent;font-size:12.5px;line-height:1.6;color:' + TOKENS.text + '">' +
+      '<span style="color:' + color + ';flex:none;font-weight:700">!</span><div>' + esc(text) + '</div></div>';
+  }
+
   global.AdminUI = {
     esc: esc,
     particle: particle,
@@ -453,5 +467,6 @@
     primaryButton: primaryButton,
     rowButton: rowButton,
     badge: badge,
+    notice: notice,
   };
 })(window);

@@ -12,7 +12,9 @@
   'use strict';
 
   var A = null;
-  var state = { rows: [], options: null, canManage: false, filters: { status: 'active', siteId: '', employmentType: '' } };
+  // pushReady 는 «아직 모른다» 를 true 로 둔다 — 서버 답을 받기 전에 경고를 띄우면
+  // 열쇠가 멀쩡한 배포에서도 화면이 깜빡이며 겁을 준다.
+  var state = { rows: [], options: null, canManage: false, pushReady: true, filters: { status: 'active', siteId: '', employmentType: '' } };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -63,16 +65,27 @@
     var noBadge = rows.filter(function (r) { return !r.badgeNumber; }).length;
     var noW9 = rows.filter(function (r) { return !r.w9OnFile; }).length;
 
+    // 알림을 켤 수 있는 사람(계정이 있는 사람) 중 아직 안 켠 사람 — 쫓아갈 대상이다.
+    var noPush = rows.filter(function (r) { return r.hasAccount && !r.pushDevices; }).length;
+
     var notes = [rows.length + '명'];
     if (expired) notes.push(expired + '명 자격 만료');
     if (noBadge) notes.push(noBadge + '명 NFC 미등록');
     if (noW9) notes.push(noW9 + '명 W-9 미제출');
+    if (noPush) notes.push(noPush + '명 알림 꺼짐');
+
+    // 열쇠가 없으면 모두가 «꺼짐» 으로 보인다. 그건 사람들이 안 켠 게 아니라 서버가
+    // 못 보내는 것이다 — 이 한 줄이 없으면 소장이 애먼 사람들을 쫓아다니게 된다.
+    var pushWarning = state.pushReady === false
+      ? u.notice('이 서버에는 알림 열쇠(VAPID)가 설정돼 있지 않아, 아래 «알림» 칸은 모두 꺼짐으로 보입니다. ' +
+          '출근·퇴근·보고 알림이 지금 한 통도 나가지 않습니다. 관리자가 환경변수를 넣어야 켜집니다.', 'warn')
+      : '';
 
     return u.pageHeader(
       '직원 등록 · 관리',
       '현장에 들어가는 사람을 등록합니다. 비자·안전교육이 끊긴 사람은 목록에 표시됩니다. — ' + notes.join(' · '),
       state.canManage ? u.primaryButton('직원 등록', 'window.AdminEmployees.openForm()', 'user-plus') : ''
-    ) + filterBar() + u.table({
+    ) + pushWarning + filterBar() + u.table({
       id: 'em-tbl',
       searchPlaceholder: '이름 · 사번 · NFC · 직종 검색',
       emptyText: '조건에 맞는 직원이 없습니다.',
@@ -111,6 +124,19 @@
             return r.w9OnFile
               ? u.badge('···' + (r.w9TinLast4 || ''), 'ok')
               : '<span style="font-size:11px;color:var(--status-warning)">미제출</span>';
+          },
+        },
+        {
+          key: 'pushDevices', label: '알림', width: '110px',
+          render: function (r) {
+            // 안 켜진 이유가 둘이고, 해야 할 일이 서로 다르다 —
+            //   계정 없음 : 먼저 계정을 만들어야 한다(알림을 켤 문이 아직 없다)
+            //   꺼짐      : 계정은 있으니 본인이 앱에서 종을 눌러야 한다
+            // 둘을 같은 «꺼짐» 으로 묶으면 소장이 엉뚱한 사람에게 설치를 시킨다.
+            if (!r.hasAccount) return '<span style="font-size:11px;color:var(--text-tertiary)">계정 없음</span>';
+            if (!r.pushDevices) return '<span style="font-size:11px;color:var(--status-warning)">꺼짐</span>';
+            // 기기가 둘 이상이면 수를 붙인다(폰 + 태블릿). 하나면 숫자가 군더더기다.
+            return u.badge(r.pushDevices > 1 ? '켜짐 ' + r.pushDevices : '켜짐', 'ok');
           },
         },
         {
@@ -172,6 +198,7 @@
       }
       state.rows = res.rows || [];
       state.canManage = !!res.canManage;
+      state.pushReady = res.pushReady !== false;
       paint(render());
       ui().bindSearch('em-tbl');
     });

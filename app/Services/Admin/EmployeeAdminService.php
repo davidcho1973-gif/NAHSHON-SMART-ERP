@@ -5,10 +5,12 @@ namespace App\Services\Admin;
 use App\Models\AuthEvent;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\PushSubscription;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Auth\PinAuthService;
+use App\Services\Push\WebPushSender;
 use App\Support\AccessPolicy;
 use App\Support\CurrentCompany;
 use App\Support\WorkerLang;
@@ -108,7 +110,17 @@ class EmployeeAdminService
         $today = Carbon::now()->toDateString();
         $soon = Carbon::now()->addDays(30)->toDateString();
 
-        $rows = $query->get()->map(function (Employee $e) use ($today, $soon): array {
+        // 알림을 켠 기기 — 한 사람이 폰·태블릿을 함께 쓰면 줄이 여럿이라 세어서 붙인다.
+        //
+        // 직원 줄마다 세면 인원 수만큼 질의가 나간다(수백 명이면 수백 번). 한 번에
+        // 세어 두고 붙인다. 계정이 없는 사람은 애초에 여기 없다 — 구독은 계정에 달린다.
+        $pushByUser = PushSubscription::query()
+            ->selectRaw('user_id, count(*) as devices, max(last_used_at) as last_used_at')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $rows = $query->get()->map(function (Employee $e) use ($today, $soon, $pushByUser): array {
             // 만료가 지났거나 30일 안에 닥친 것은 목록에서 바로 보여준다. 비자나 안전교육이
             // 끊긴 사람이 현장에 들어가는 것이 실제 사고로 이어진다.
             $expiring = [];
@@ -123,6 +135,9 @@ class EmployeeAdminService
                     $expiring[] = ['label' => $label, 'date' => $d, 'state' => 'soon'];
                 }
             }
+
+            // 계정이 없는 사람은 구독도 없다 — 알림을 켤 문 자체가 아직 없는 것이다.
+            $push = $e->user ? $pushByUser->get($e->user->id) : null;
 
             return [
                 'id' => $e->id,
@@ -171,10 +186,23 @@ class EmployeeAdminService
                 'w9OnFile' => $e->w9Form !== null,
                 'w9TinLast4' => $e->w9Form?->tin_last4,
                 'w9CertifiedOn' => $e->w9Form?->certified_at?->toDateString(),
+                // 알림을 켰는가 — 출근 독려·퇴근·보고 알림은 이 사람이 자기 폰에서 한 번
+                // 허락해야만 닿는다(브라우저 규칙이라 관리자가 대신 켤 수 없다). 켠 사람이
+                // 누구인지 안 보이면 «누구를 도와줘야 하는지» 를 알 방법이 없다.
+                'pushDevices' => (int) ($push->devices ?? 0),
+                'pushLastUsedAt' => $push?->last_used_at ? Carbon::parse($push->last_used_at)->toDateString() : null,
             ];
         })->values()->all();
 
-        return ['success' => true, 'rows' => $rows, 'canManage' => $this->canManage()];
+        return [
+            'success' => true,
+            'rows' => $rows,
+            'canManage' => $this->canManage(),
+            // 이 배포에 알림 열쇠가 있는가. 없으면 모두가 «꺼짐» 으로 보이는데, 그건
+            // 사람들이 안 켠 게 아니라 서버가 못 보내는 것이다 — 화면이 그 차이를 말해야
+            // 소장이 애먼 사람을 쫓아다니지 않는다.
+            'pushReady' => app(WebPushSender::class)->available(),
+        ];
     }
 
     /**

@@ -473,10 +473,22 @@ class DocumentIntelligenceController extends Controller
             'virtual_path' => ['nullable', 'string', 'max:400'],
         ]);
 
-        // 남의 현장 문서를 자기 현장으로 끌어오지 못하게 — 업로드와 같은 잣대로 검사한다.
+        // 회사는 여기서 «고르는» 값이 아니라 PROJECT·현장을 따라오는 값이다 — 이 화면에는
+        // 회사 칸 자체가 없다. 그래서 회사로 null 을 넘긴다.
+        //
+        // 겪은 일: 예전에는 문서의 <b>지금</b> 회사를 넘겼다. 그러면 «회사와 현장이 일치하는가»
+        // 검사가 «옛 회사 vs 새 PROJECT 의 현장» 을 비교해, 다른 회사의 PROJECT 로 옮기는
+        // 정상적인 재분류를 422 로 막았다. 바로 다음 줄이 어차피 PROJECT 의 회사를 채택하는데도
+        // 그랬다. 게다가 안내문이 «회사와 현장이 일치하지 않습니다» 라, 회사 칸도 현장 칸도
+        // 건드린 적 없는 사람은 무엇을 고쳐야 할지 알 수 없었다 — 그냥 «저장이 안 된다» 로 보였다.
+        //
+        // 그 검사가 필요한 곳은 업로드다. 거기서는 사람이 회사를 직접 고르므로 «고른 회사와
+        // 고른 현장이 어긋났다» 가 참말이다. 같은 함수가 서로 다른 질문에 답하고 있었다.
+        // 권한 검사는 이 값과 무관하게 아래에서 그대로 걸린다(자기 현장·자기 회사 밖의
+        // PROJECT 는 여전히 막힌다).
         [$companyId, $siteId, $projectId] = $this->validatedScope(
             $request->user(),
-            $document->company_id,
+            null,
             $request->integer('site_id') ?: null,
             $request->integer('project_id') ?: null,
         );
@@ -485,7 +497,11 @@ class DocumentIntelligenceController extends Controller
         unset($data['virtual_path'], $data['project_id'], $data['site_id']);
 
         $document = app(DocumentScope::class)->saveResolved($document, [
-            'company_id' => $companyId,
+            // 아무것도 안 고른 저장(제목만 고치는 경우)에는 지금 회사를 그대로 둔다.
+            // 회사는 PROJECT·현장에서 따라오는데, 둘 다 안 골랐으면 따라올 곳이 없어
+            // null 이 되고, 그대로 쓰면 문서가 회사를 잃는다. saveResolved 는 받은 범위를
+            // 그대로 쓰므로(중복 판정도 이 범위를 본다) 그 대비를 여기서 해야 한다.
+            'company_id' => $companyId ?: $document->company_id,
             'site_id' => $siteId,
             'project_id' => $projectId,
         ], [

@@ -18,7 +18,10 @@
 --}}
 {{-- 회색 판 위 검정 버튼 — 바로 위 머리띠가 노랑이라 여기서 노랑을 또 쓰면 둘 다 죽는다. --}}
 <div id="push-strip" hidden style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:9px 12px;background:#F2F3F5;border-radius:12px;font-size:12.5px;color:#191919">
-    <span style="flex:1">🔔 알림을 켜면 화면이 꺼져 있어도 새 메시지를 받습니다.</span>
+    {{-- 켜야 하는 이유는 부르는 화면마다 다르다. 메시지 화면에서는 «새 메시지»가,
+         출퇴근 화면에서는 «출근 알림»이 그 사람에게 맞는 이유다. 틀린 이유를 대면
+         정작 필요한 사람이 안 켠다. --}}
+    <span style="flex:1">🔔 알림을 켜면 화면이 꺼져 있어도 {{ $pushReason ?? '새 메시지를 받습니다' }}.</span>
     <button type="button" id="push-strip-go" style="border:0;background:rgba(0,0,0,.85);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer">켜기</button>
     <button type="button" id="push-strip-x" aria-label="닫기" style="border:0;background:none;color:#767676;font-size:16px;cursor:pointer;line-height:1;padding:2px 4px">×</button>
 </div>
