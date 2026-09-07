@@ -39,7 +39,7 @@
             showManualInput();
             if (choice.value === '__other__') input.focus();
         });
-        input.addEventListener('input', matchInput);
+        input.addEventListener('input', function () { manualChosen = true; matchInput(); });
 
         return {
             refresh: async function (site, translations) {

@@ -41,5 +41,11 @@ function resolve(index, trades) { pending[index].resolve({ok:true, json:async()=
     input.value = '배관'; input.handlers.input(); assert.equal(choice.value,'__other__'); assert.equal(input.type,'text');
     choice.value = '배관'; choice.handlers.change(); assert.equal(input.value,'배관'); assert.equal(input.type,'hidden');
     assert.equal(input.required,false); assert.equal(inputLabel.hidden,true);
+    const restoredInput = element(), restoredChoice = element(), restoredLabel = element();
+    restoredInput.value = 'Restored custom trade';
+    const restored = context.window.createEmployeeTradePicker({choice:restoredChoice, input:restoredInput, inputLabel:restoredLabel, status:element(), urls:{}, defaults:['공무지원'], initialSite:'', initialTrades:[]});
+    await restored.refresh('global',labels); assert.equal(restoredInput.type,'text');
+    restoredInput.value = ''; restoredInput.handlers.input();
+    assert.equal(restoredInput.type,'text'); assert.equal(restoredInput.required,true);
     console.log('Employee trade picker: defaults, Global, selection, manual input, site race, failure, retry and language passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
