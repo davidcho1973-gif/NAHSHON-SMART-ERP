@@ -33,6 +33,7 @@
         .langs button { border: 1px solid var(--rule); background: #fff; color: var(--ink-2); border-radius: 999px; padding: 7px 11px; font-size: .74rem; font-weight: 800; font-family: inherit; cursor: pointer; }
         .langs button.on { background: var(--label); border-color: transparent; color: #fff; }
         label { display: block; font-size: .85rem; font-weight: 700; color: var(--ink-2); margin: 14px 0 6px; }
+        #t-tradeInput[hidden] { display: none; }
         input, select { width: 100%; box-sizing: border-box; padding: 14px; font-size: 1rem; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); color: var(--ink); font-family: inherit; }
         input:focus, select:focus { outline: 2px solid var(--kakao); outline-offset: -2px; background: #fff; }
         .req { color: #D94C4C; }
@@ -240,15 +241,15 @@
 
                 <label id="t-trade" for="f-trade-choice">{{ $dict[$lang]['trade'] }}</label>
                 {{-- datalist is not a reliable picker in mobile/in-app browsers. Keep a real select
-                     and an always-editable submitted value, including when suggestions fail. --}}
-                <select id="f-trade-choice" aria-describedby="t-tradeHint">
+                     and reveal manual entry only when requested or restoring an unlisted value. --}}
+                <select id="f-trade-choice" aria-describedby="t-tradeHint" required>
                     <option value="">{{ $dict[$lang]['tradePlaceholder'] }}</option>
                     @foreach ($roles as $t)<option value="{{ $t }}">{{ $t }}</option>@endforeach
                     <option value="__other__">{{ $dict[$lang]['tradeOther'] }}</option>
                 </select>
-                <label id="t-tradeInput" for="f-role">{{ $dict[$lang]['tradeInput'] }}</label>
-                <input type="text" name="role" id="f-role" value="{{ old('role') }}"
-                       autocomplete="off" maxlength="60" required aria-describedby="t-tradeHint">
+                <label id="t-tradeInput" for="f-role" hidden>{{ $dict[$lang]['tradeInput'] }}</label>
+                <input type="hidden" name="role" id="f-role" value="{{ old('role') }}"
+                       autocomplete="off" maxlength="60" aria-describedby="t-tradeHint">
                 <div class="note" id="t-tradeHint"></div>
                 <div class="note" id="trade-status" role="status" aria-live="polite"></div>
 
@@ -297,6 +298,7 @@
                     var tradePicker = window.createEmployeeTradePicker({
                         choice: document.getElementById('f-trade-choice'),
                         input: document.getElementById('f-role'),
+                        inputLabel: document.getElementById('t-tradeInput'),
                         status: document.getElementById('trade-status'),
                         urls: @json($tradeUrls), defaults: @json($defaultTrades),
                         initialSite: @json((string) ($site?->id ?? '')), initialTrades: @json($roles)

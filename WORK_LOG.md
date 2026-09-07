@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Conditional manual trade field | Remove duplicate selected-trade textbox; show manual input only for unlisted trades, preserving submitted values and validation. | codex/conditional-trade-input | 66 related tests / 372 assertions and JS mode/required/value checks passed; build, browser and CI verified during deployment. |
 | 2026-09-07 | CODEX | Employee trade selection | Replace unreliable datalist with visible select and editable trade field; include 공무지원, load only selected active site's WBS trade names, preserve manual input on site/language changes and lookup failure. | codex/employee-trade-picker | 66 related tests / 372 assertions, JS stale-response/failure tests, build and Blade compile passed; full regression and deployment checks follow. |
 | 2026-09-07 | CODEX | Existing-site employee selection | Add shared /join with live active-site names and Global requested assignment. Preserve site-prefilled links, require managerial position/email for Global, and keep account grants separate. Use existing one gate QR per physical site for all positions and both punch events. | codex/employee-site-selection | 71 targeted tests / 347 assertions; full regression caught and fixed cross-site trade suggestions; build, Blade and Global form behavior checked. Full final regression and deployment checks follow. |
 | 2026-09-07 | CODEX | Unified employee registration | One shared employee form and QR; selected position controls required email and staff classification. Retain old worker/manager URLs, account approval boundary and company-based worker types. | codex/unified-employee-registration | 51 related tests / 288 assertions; local browser position toggles, ko/en/es and 360px layout verified; full isolated PostgreSQL regression: 1,850 passed, one Windows platform skip, 6,610 assertions (existing Windows backup test excluded); Linux CI and deployment verification follow. |
@@ -185,6 +186,12 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Hide duplicate selected trade input
+
+- Owner requested removal of the second field that repeated the selected trade. It now remains hidden for listed selections and opens only for manual entry or a restored unlisted value.
+- The submitted role stays intact when hidden; only manual mode requires the text field, while the visible picker is required. Explicit manual mode remains open while clearing/typing, even if the text matches a known trade. The original 공무지원 option, site-scoped lookup and language behavior remain.
+- Updated registration-owned view and ko/en/es field/error wording. Expanded existing JS regression for input visibility, required state, switching back to known trades and manual-edit continuity; 66 related server/JS tests passed. No production employee submission or permission change.
 
 ### 2026-09-07 — Visible employee trade picker and project support
 
