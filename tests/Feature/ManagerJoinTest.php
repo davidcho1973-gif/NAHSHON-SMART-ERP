@@ -113,12 +113,12 @@ class ManagerJoinTest extends TestCase
     public function test_old_links_show_all_positions_and_submit_to_the_common_form(): void
     {
         $manager = $this->get(route('manager-join.form', ['site' => $this->site]))->assertOk()->getContent();
-        $this->assertStringContainsString(route('employee-join.store', ['site' => $this->site]), $manager);
+        $this->assertStringContainsString(route('employee-join.entry-store'), $manager);
         $this->assertStringContainsString('value="foreman"', $manager);
         $this->assertStringContainsString('value="worker"', $manager);
 
         $worker = $this->get(route('worker-join.form', ['site' => $this->site]))->assertOk()->getContent();
-        $this->assertStringContainsString(route('employee-join.store', ['site' => $this->site]), $worker);
+        $this->assertStringContainsString(route('employee-join.entry-store'), $worker);
         $this->assertStringContainsString('value="worker"', $worker);
     }
 

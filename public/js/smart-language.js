@@ -17,6 +17,7 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '직원 등록 — 현장 선택 / Global': 'Employee registration — Site / Global',
     '직원 QR 등록': 'Employee registration QR',
     '직원 QR 셀프 등록': 'Employee self-registration',
     '팀장 앱 권한 함께 적용': 'Apply foreman app access together',
@@ -313,6 +314,7 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'Employee registration — Site / Global': 'Registro de personal — Obra / Global',
     'Employee registration QR': 'QR de registro de personal',
     'Employee self-registration': 'Autorregistro de personal',
     'Apply foreman app access together': 'Aplicar acceso de capataz al guardar',
