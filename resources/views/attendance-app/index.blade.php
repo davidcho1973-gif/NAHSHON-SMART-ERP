@@ -74,6 +74,15 @@
         }
         .langs button[aria-pressed="true"] { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px #1c2b3d12; }
 
+        /* 알림 종 — 켜짐 🔔 / 꺼짐 🔕. 눌러서 켜고 다시 눌러서 끈다.
+           열쇠(VAPID)가 없는 배포에서는 아예 나타나지 않는다(partials/push-optin 이 스스로 감춘다) —
+           눌러도 아무 일 없는 버튼이 가장 나쁘다. */
+        .bell {
+            flex: none; width: 34px; height: 34px; padding: 0; border-radius: 999px;
+            border: 1px solid rgba(0,0,0,.1); background: rgba(255,255,255,.6);
+            font-size: 15px; line-height: 1; cursor: pointer; font-family: inherit;
+        }
+
         main { flex: 1; min-width: 0; padding: 24px 24px calc(var(--tabh) + env(safe-area-inset-bottom) + 24px); }
         .home-overview { display: grid; gap: 20px; align-items: start; }
         .slab-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
@@ -362,12 +371,28 @@
             <b id="nm">{{ $employee?->name ?? $user?->name ?? '작업자' }}</b>
             <span id="sb">불러오는 중…</span>
         </div>
+        <button type="button" id="push-bell" class="bell" hidden>🔕</button>
         <div class="langs" id="langs">
             <button data-lang="ko" aria-pressed="true">KO</button>
             <button data-lang="en" aria-pressed="false">EN</button>
             <button data-lang="es" aria-pressed="false">ES</button>
         </div>
     </header>
+
+    {{--
+        알림 켜기 — 출퇴근 화면에 둔다.
+
+        예전에는 이 종이 «메시지» 화면에만 있었다. 그런데 알림이 가장 필요한 사람은
+        출근을 까먹는 사람이고, 그 사람은 메시지 화면을 열지 않는다. 아침 출근 알림도
+        퇴근 알림도 이 종을 눌러 둔 기기에만 닿으므로, 켜는 자리가 안 보이면
+        스케줄러가 아무리 정확히 돌아도 아무에게도 가지 않는다.
+
+        <main id="view"> 밖에 두는 이유: 저 안은 화면을 그릴 때마다 innerHTML 이
+        통째로 갈리므로, 안에 넣으면 첫 렌더에서 종과 안내가 함께 지워진다.
+    --}}
+    <div style="padding:0 16px">
+        @include('partials.push-optin', ['pushReason' => '출근·퇴근 알림을 받습니다'])
+    </div>
 
     <main class="field-content" id="view">
         <div class="slab is-waiting"><div class="meta">불러오는 중…</div></div>
