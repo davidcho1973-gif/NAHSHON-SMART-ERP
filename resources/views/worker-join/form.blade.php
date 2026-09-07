@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $site->code }} {{ $site->name }}</title>
+    <title>{{ $site ? $site->code.' '.$site->name : ($done ? 'Global' : \App\Support\Org::name()) }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
         /*
@@ -75,7 +75,7 @@
         @if ($done)
             <div class="done">
                 <div class="check">✓</div>
-                <p class="brand">{{ \App\Support\Org::name() }} · {{ $site->code }} {{ $site->name }}</p>
+                <p class="brand">{{ \App\Support\Org::name() }} · {{ $site ? $site->code.' '.$site->name : ($done ? 'Global' : \App\Support\Org::name()) }}</p>
                 <h1 id="t-doneTitle"></h1>
                 {{-- 고용 구분과 직책을 함께 보여 준다 — 잘못 골랐으면 이 자리에서 알아채야 한다. --}}
                 <div class="type type-{{ $employmentType }}">{{ $typeLabel }}</div>
@@ -97,10 +97,14 @@
                      아이폰의 "홈 화면에 추가" 는 <b>지금 보고 있는 페이지</b>를 담고,
                      안드로이드도 매니페스트 범위(scope) 밖 페이지에서는 설치를 권하지 않는다.
                      그래서 올바른 페이지로 옮긴 뒤 그 자리에서 안내한다(?install=1). --}}
+                @if ($site)
                 <a class="install-cta" id="t-install" href="{{ route('gate.show', ['site' => $site]) }}?install=1"></a>
                 <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
+                @else
+                    <p class="note" id="global-done"></p>
+                @endif
 
-                <a class="next" id="t-next" href="{{ route('employee-join.form', ['site' => $site, 'lang' => $lang]) }}"></a>
+                <a class="next" id="t-next" href="{{ route('employee-join.entry', ['lang' => $lang]) }}"></a>
 
                 @if (!empty($w9Url))
                     {{-- 1099 지급 전제조건 — 등록에 이어 바로 작성하게 해 종이 수거 행정을 없앤다. --}}
@@ -119,6 +123,7 @@
                     var T = DICT[lang] || DICT.ko;
                     var returning = @json($returning ?? false);
                     var myId = String(@json($employee?->id));
+                    var globalRegistration = @json($site === null);
 
                     document.getElementById('t-doneTitle').textContent = returning ? T.againTitle : T.doneTitle;
                     document.getElementById('t-doneBody').textContent = returning ? T.againBody : T.doneBody;
@@ -147,6 +152,11 @@
                     //
                     // 그래서 두 사람 이상이 등록된 폰은 누구의 것으로도 기억하지 않는다.
                     // (지운 토큰은 어디에도 남지 않으므로 그 자리에서 쓸 수 없게 된다.)
+                    if (globalRegistration) {
+                        document.getElementById('global-done').textContent = T.globalDone;
+                        document.getElementById('t-doneDevice').hidden = true;
+                        return;
+                    }
                     var shared = false;
                     try {
                         var prev = localStorage.getItem('workerJoinLastPerson');
@@ -178,13 +188,13 @@
                     @endforeach
                 </div>
             </div>
-            <p class="site">{{ $site->code }} {{ $site->name }}</p>
+            <p class="site">{{ $site ? $site->code.' '.$site->name : ($done ? 'Global' : \App\Support\Org::name()) }}</p>
 
             @if ($errors->any())
                 <div class="err"><span id="t-errors"></span><ul>@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
             @endif
 
-            <form method="POST" action="{{ route('employee-join.store', ['site' => $site]) }}">
+            <form method="POST" action="{{ route('employee-join.entry-store') }}">
                 @csrf
                 @if ($lockedType)
                     {{-- 예전에 인쇄해 붙여 둔 고용 형태별 QR 로 들어온 경우 — 그 값을 그대로 지킨다. --}}
@@ -192,6 +202,16 @@
                 @endif
                 {{-- 여기서 고른 언어가 출퇴근 화면의 기본 언어가 된다. --}}
                 <input type="hidden" name="preferred_language" id="lang-field" value="{{ $lang }}">
+
+                <label id="t-site" for="f-site"></label>
+                <select name="registration_site" id="f-site" required>
+                    <option value="" id="site-blank"></option>
+                    @foreach ($sites as $registeredSite)
+                        <option value="{{ $registeredSite->id }}" @selected((string) old('registration_site', $site?->id) === (string) $registeredSite->id)>{{ $registeredSite->code }} — {{ $registeredSite->name }}</option>
+                    @endforeach
+                    <option value="global" id="site-global" @selected(old('registration_site') === 'global')>Global</option>
+                </select>
+                <div class="note" id="t-siteHint"></div>
 
                 <label id="t-name" for="f-name"></label>
                 <input type="text" name="full_name" id="f-name" value="{{ old('full_name') }}" required>
@@ -269,6 +289,9 @@
                     var DICT = @json($dict, JSON_UNESCAPED_UNICODE);
                     var lang = @json($lang);
                     var locked = @json($lockedType);
+                    var siteTrades = @json($siteTrades);
+                    var initialSite = @json((string) ($site?->id ?? ''));
+                    var siteSel = document.getElementById('f-site');
                     var supervisoryPositions = @json(\App\Models\Employee::SUPERVISORY_POSITIONS);
                     function dict(code) { return DICT[code] || DICT.ko; }
                     var T = dict(lang);
@@ -288,10 +311,11 @@
                         document.documentElement.setAttribute('lang', lang);
                         field.value = lang;
                         text('t-eyebrow', T.eyebrow); text('t-title', T.title);
+                        text('t-site', T.site); text('site-blank', T.sitePlaceholder); text('site-global', T.globalSite);
                         text('t-name', T.name); text('t-company', T.company);
                         text('t-trade', T.trade); text('t-tradeHint', T.tradeHint);
                         text('t-email', T.email); text('t-phone', T.phone);
-                        text('t-emailHint', T.emailHint); text('t-accessHint', T.accessHint); text('t-phoneHint', T.phoneHint);
+                        text('t-emailHint', T.emailHint); text('t-phoneHint', T.phoneHint);
                         text('t-position', T.position); text('t-positionHint', T.positionHint);
                         text('opt-position-blank', T.positionPlaceholder);
                         text('t-payrollTitle', T.payrollTitle); text('t-payrollBody', T.payrollBody);
@@ -313,7 +337,7 @@
                         Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
                             b.classList.toggle('on', b.getAttribute('data-lang') === lang);
                         });
-                        syncCompany();
+                        syncSite();
                     }
 
                     // 자사 직영이면 급여 대상이다 — 그 사실을 알리고 직책을 반드시 받는다.
@@ -325,14 +349,32 @@
                         posSel.required = true;
                     }
 
+                    function syncSite() {
+                        var globalSite = siteSel.value === 'global';
+                        var siteLabel = document.querySelector('.site');
+                        siteLabel.textContent = siteSel.value ? siteSel.options[siteSel.selectedIndex].text : T.sitePlaceholder;
+                        text('t-siteHint', globalSite ? T.globalHint : T.siteHint);
+                        text('t-accessHint', globalSite ? T.globalDone : T.accessHint);
+                        Array.prototype.forEach.call(posSel.options, function (o) {
+                            o.disabled = globalSite && o.value === 'worker';
+                        });
+                        if (globalSite && posSel.value === 'worker') posSel.value = '';
+                        var trades = siteTrades[siteSel.value] || [];
+                        var list = document.getElementById('trade-list');
+                        list.replaceChildren();
+                        trades.forEach(function (trade) { var o = document.createElement('option'); o.value = trade; list.appendChild(o); });
+                        syncCompany();
+                    }
+
                     function syncCompany() {
-                        var isManager = supervisoryPositions.indexOf(posSel.value) !== -1;
+                        var isManager = siteSel.value === 'global' || supervisoryPositions.indexOf(posSel.value) !== -1;
                         document.getElementById('f-email').required = isManager;
                         text('t-email', isManager ? T.managerEmail : T.email);
                         text('t-emailHint', isManager ? T.managerEmailHint : T.emailHint);
                         var opt = sel.options[sel.selectedIndex];
                         // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
-                        var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
+                        var compatibleLocked = siteSel.value === initialSite ? locked : null;
+                        var etype = (opt && opt.getAttribute('data-etype')) || compatibleLocked || '';
                         var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient, staff: T.labelStaff };
 
                         // 관리자는 고용 형태를 묻지 않는다 — 어느 회사 소속이든 관리직이고,
@@ -363,8 +405,8 @@
 
                         if (other) {
                             note.textContent = T.companyOtherHint; note.className = 'note';
-                            ask.style.display = locked ? 'none' : 'block';
-                            radios.forEach(function (r) { r.required = !locked; });
+                            ask.style.display = compatibleLocked ? 'none' : 'block';
+                            radios.forEach(function (r) { r.required = !compatibleLocked; });
                             syncPayroll(etype);
 
                             return;
@@ -387,6 +429,7 @@
                         syncPayroll(etype);
                     }
 
+                    siteSel.addEventListener('change', syncSite);
                     sel.addEventListener('change', syncCompany);
                     posSel.addEventListener('change', syncCompany);
                     // 목록에 없는 회사라 "누가 급여를 주나요?" 를 직접 고른 경우도 같이 본다.

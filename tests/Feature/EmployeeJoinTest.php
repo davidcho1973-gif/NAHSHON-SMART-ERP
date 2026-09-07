@@ -92,4 +92,58 @@ class EmployeeJoinTest extends TestCase
         $this->assertDatabaseCount('users', 0);
         $this->assertSame(1, UnifiedAlert::where('event_type', 'manager_account_pending')->count());
     }
+
+    public function test_site_selector_uses_existing_names_and_does_not_create_regional_sites(): void
+    {
+        $other = Site::create(['code' => 'EXISTING-AZ', 'name' => 'Existing battery project', 'status' => 'active']);
+        $closed = Site::create(['code' => 'CLOSED', 'name' => 'Closed project', 'status' => 'inactive']);
+        $this->get(route('employee-join.entry'))->assertOk()->assertSee($this->site->name)->assertSee($other->name)
+            ->assertSee('Global')->assertDontSee($closed->name);
+        $other->update(['name' => 'Updated project name']);
+        $this->get(route('employee-join.form', $this->site))->assertOk()->assertSee('Updated project name');
+        $this->assertDatabaseCount('sites', 3);
+
+        $this->post(route('employee-join.entry-store'), $this->data + ['registration_site' => (string) $other->id])->assertOk();
+        $this->assertSame($other->id, Employee::sole()->site_id);
+    }
+
+    public function test_site_selection_rejects_missing_nonexistent_and_inactive_sites(): void
+    {
+        $closed = Site::create(['code' => 'CLOSED', 'name' => 'Closed', 'status' => 'inactive']);
+        foreach (['', '99999', (string) $closed->id] as $selection) {
+            $this->post(route('employee-join.entry-store'), $this->data + ['registration_site' => $selection])
+                ->assertSessionHasErrors('registration_site');
+        }
+        $this->assertDatabaseCount('employees', 0);
+    }
+
+    public function test_global_registration_records_scope_without_issuing_access_or_a_fake_site(): void
+    {
+        $this->post(route('employee-join.entry-store'), array_replace($this->data, [
+            'registration_site' => 'global', 'position' => 'general_manager', 'email' => 'central@example.com',
+            'access_role' => 'super_admin', 'access_scope' => 'all_sites',
+        ]))->assertOk()->assertSee('Global')->assertDontSee('/gate//')->assertDontSee('/w9/');
+        $employee = Employee::sole();
+        $this->assertNull($employee->site_id);
+        $this->assertSame('global', data_get($employee->payload, 'registration_scope'));
+        $this->assertSame(Employee::TYPE_STAFF, $employee->employment_type);
+        $this->assertDatabaseCount('sites', 1);
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('worker_devices', 0);
+        $this->assertNull(UnifiedAlert::where('event_type', 'manager_account_pending')->sole()->site_id);
+    }
+
+    public function test_global_rejects_workers_and_does_not_move_existing_employees(): void
+    {
+        $this->post(route('employee-join.entry-store'), $this->data + ['registration_site' => 'global'])
+            ->assertSessionHasErrors('position');
+        $this->post(route('employee-join.store', $this->site), $this->data)->assertOk();
+        $employee = Employee::sole();
+        $before = $employee->getAttributes();
+        $this->post(route('employee-join.entry-store'), array_replace($this->data, [
+            'registration_site' => 'global', 'position' => 'general_manager', 'email' => 'central@example.com',
+        ]))->assertSessionHasErrors('email');
+        $this->assertSame($before, $employee->fresh()->getAttributes());
+        $this->assertDatabaseCount('employees', 1);
+    }
 }

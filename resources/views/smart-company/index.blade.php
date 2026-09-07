@@ -3793,11 +3793,12 @@
           return;
         }
         body.innerHTML =
+          '<div style="margin-bottom:12px"><a class="btn-primary" href="/join?lang=ko" target="_blank" rel="noopener">직원 등록 — 현장 선택 / Global</a></div>' +
           '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·직책·전화번호를 작성합니다. 작업자와 관리자가 <b>현장당 한 링크</b>를 함께 사용합니다. 관리 직책은 이메일이 필수이고, <b>ERP 접속 권한은 본인 확인 후 별도 부여</b>합니다. 고용 구분은 직책과 소속회사에 따라 정해집니다(<b>회사 구분</b> 버튼에서 설정). <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
           '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.openCompanyTypeModal()"><i class="ph ph-buildings"></i> 회사 구분 설정 (자사 / 협력사)</button></div>' +
           sites.map(function (s) {
             var quickPoster = '/join/' + s.id + '/qr';
-            var quickForm = window.location.origin + '/join/' + s.id;
+            var quickForm = window.location.origin + '/join?lang=ko';
             var fullPoster = '/member/site/' + s.id + '/apply/qr';
             return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
               '<div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
