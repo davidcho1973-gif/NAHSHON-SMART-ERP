@@ -26,7 +26,7 @@ class SimpleWorkerRegistrationTest extends TestCase
 
         $res->assertStatus(200);
         $res->assertSee('data:image/svg+xml;base64,');
-        $res->assertSee('/join/w/'.$site->id, false);
+        $res->assertSee('/join/'.$site->id, false);
         $res->assertDontSee('api.qrserver.com');
     }
 

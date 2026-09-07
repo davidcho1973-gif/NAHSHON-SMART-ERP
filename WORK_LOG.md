@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Unified employee registration | One shared employee form and QR; selected position controls required email and staff classification. Retain old worker/manager URLs, account approval boundary and company-based worker types. | codex/unified-employee-registration | 51 related tests / 288 assertions; local browser position toggles, ko/en/es and 360px layout verified; full isolated PostgreSQL regression: 1,850 passed, one Windows platform skip, 6,610 assertions (existing Windows backup test excluded); Linux CI and deployment verification follow. |
 | 2026-09-07 | CODEX | Kakao work reminder scheduling | Add admin-only recipient schedules, encrypted +1 phone storage, official SOLAPI Alimtalk adapter, durable daily deduplication, completion-aware attendance/report links and onboarding templates. Deployment defaults OFF; owner has no provider account/channel and US account eligibility remains to be confirmed. | codex/kakao-work-reminders | PostgreSQL feature tests, full regression, static build and Blade compilation; no real messages or live recipient changes. |
 | 2026-09-07 | CODEX | Foreman app access | Add reviewed, optional app access application to team/foreman form: create missing account or promote worker, set team-only login/QR scope, and revoke this team's former foreman access on replacement/removal/deactivation. Preserve privileged accounts and make assignment/account changes atomic. | `codex/foreman-app-access` → staging/main PRs | 43 related tests / 150 assertions passed, including real crew HTTP page access and rejection for another team; JS/build/Blade and local browser preview verified. Full Linux CI required; no live account grants or invitations. |
 | 2026-09-07 | CODEX | Company/team onboarding | Restore missing company/team editors in SPA; link an employee as foreman, place team members and surface account setup gaps. Default new employees to the selected company; filter team choices and protect linked foremen from inconsistent reassignment. | `codex/company-team-onboarding` → staging/main PRs | 37 targeted tests / 120 assertions; JS syntax, static build, Blade compilation and local browser team form passed. Full local suite: 1,814 passed, one existing Windows backup-path permission error, one skip; Linux CI required before merge. No live employee/account records created. |
@@ -182,6 +183,14 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Unified employee registration
+
+- Owner requested one employee sign-up link instead of nearly identical worker/manager forms. Root cause: URL kind controlled validation and employment classification while both forms collected the same position field. Position now determines the rules on every route.
+- Common GET/POST `/join/{site}` and QR `/join/{site}/qr`; old `/join/w/{site}` and `/join/m/{site}` links render the same form and remain usable. Canonical form requires an explicit position. Already-open legacy worker POSTs without position retain the worker default.
+- Supervisory/office positions require email and use the existing staff registration path; worker email remains optional and company determines direct/indirect type. Public input cannot issue ERP accounts or alter access roles. No live employees were registered or granted access in this change.
+- SPA share action and print sheets use one employee QR; old manager QR keys resolve to that same poster. Korean/English/Spanish labels and access notice are unified. Returning registration updates position consistently with type and raises the existing account-review alert when needed.
+- Shared route/SPA/language edits are required to expose the owner's unified flow. No schema changes or new packages. Local browser uses a static form fixture and isolated PostgreSQL test data, including mobile width and real required-field toggles. See `docs/EMPLOYEE_REGISTRATION.md` for operational guidance.
 
 ### 2026-09-07 — Kakao work reminder scheduling
 

@@ -384,9 +384,15 @@ Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form']
 Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])
     ->middleware('throttle:20,1')->name('worker-join.store');
 
-// 관리자 등록 — 현장소장·공정별 팀장·기사·안전관리자. 작업자와 문을 나눈다:
-// 이메일과 직책이 필수이고(로그인과 결재선이 거기서 나온다), 공종은 관리자에게도 있다.
-// 이 문으로 들어와도 ERP 권한은 생기지 않는다 — QR 은 복사·촬영되므로 계정은 승인 뒤에.
+// 직원 등록은 한 폼에서 직책으로 입력 요건을 정한다. 예전 /w, /m 링크도 유지한다.
+Route::get('/join/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
+    ->middleware('throttle:60,1')->name('employee-join.qr');
+Route::get('/join/{site}', [SimpleWorkerRegistrationController::class, 'form'])
+    ->middleware('throttle:60,1')->name('employee-join.form');
+Route::post('/join/{site}', [SimpleWorkerRegistrationController::class, 'store'])
+    ->middleware('throttle:20,1')->name('employee-join.store');
+
+// 공개 등록은 ERP 권한을 발급하지 않는다. 본인 확인 후 접근계정을 별도로 승인한다.
 Route::get('/join/m/{site}/qr', [SimpleWorkerRegistrationController::class, 'managerQr'])
     ->middleware('throttle:60,1')->name('manager-join.qr');
 Route::get('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerForm'])

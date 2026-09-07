@@ -3773,14 +3773,14 @@
       }
 
       // ── HR ──────────────────────────────────────────
-      // 작업자 QR 셀프 등록 — 현장을 고르면 인쇄용 QR 포스터를 열고, 작업자가 스캔해 직접 입사지원.
+      // 직원 QR 셀프 등록 — 현장을 고르면 인쇄용 QR 포스터를 열고, 작업자가 스캔해 직접 입사지원.
       window.openWorkerJoinModal = async function () {
         var host = document.getElementById('worker-join-modal-root');
         if (!host) { host = document.createElement('div'); host.id = 'worker-join-modal-root'; document.body.appendChild(host); }
         host.innerHTML =
           '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px">' +
           '<div class="panel" style="width:580px;max-width:96vw;max-height:88vh;margin:0;display:flex;flex-direction:column">' +
-          '<div class="panel-header"><div class="panel-title"><i class="ph ph-qr-code"></i> 작업자 QR 셀프 등록</div><button id="wj-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
+          '<div class="panel-header"><div class="panel-title"><i class="ph ph-qr-code"></i> 직원 QR 셀프 등록</div><button id="wj-close" class="icon-btn"><i class="ph ph-x"></i></button></div>' +
           '<div class="panel-body padded" id="wj-body" style="overflow-y:auto"><div style="color:var(--text-tertiary);font-size:13px">현장 목록을 불러오는 중…</div></div></div></div>';
         host.querySelector('#wj-close').addEventListener('click', function () { host.innerHTML = ''; });
 
@@ -3793,11 +3793,11 @@
           return;
         }
         body.innerHTML =
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·이메일·전화만 입력하면 <b>즉시 작업자 등록</b>. QR은 <b>현장당 한 장</b>이고, 작업자가 고른 <b>소속회사</b>로 직접고용/협력사가 자동 지정됩니다(<b>회사 구분</b> 버튼에서 설정). <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·직책·전화번호를 작성합니다. 작업자와 관리자가 <b>현장당 한 링크</b>를 함께 사용합니다. 관리 직책은 이메일이 필수이고, <b>ERP 접속 권한은 본인 확인 후 별도 부여</b>합니다. 고용 구분은 직책과 소속회사에 따라 정해집니다(<b>회사 구분</b> 버튼에서 설정). <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
           '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.openCompanyTypeModal()"><i class="ph ph-buildings"></i> 회사 구분 설정 (자사 / 협력사)</button></div>' +
           sites.map(function (s) {
-            var quickPoster = '/join/w/' + s.id + '/qr';
-            var quickForm = window.location.origin + '/join/w/' + s.id;
+            var quickPoster = '/join/' + s.id + '/qr';
+            var quickForm = window.location.origin + '/join/' + s.id;
             var fullPoster = '/member/site/' + s.id + '/apply/qr';
             return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
               '<div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
@@ -4186,7 +4186,7 @@
               '<div class="header-section"><div>' +
               '<h1 class="page-title">🌐 통합 현황 — 전체 현장</h1>' +
               '<p class="page-subtitle">모든 연동 현장의 출퇴근 데이터를 통합 집계합니다 (' + attendance.date + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 직원 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-secondary" onclick="openMasterSheet()"><i class="ph ph-table"></i> 마스터 시트</button></div></div>' +
               // 전체 KPI
               '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">' +
               '<div class="kpi-card"><div class="kpi-label">전체 출근 인원 <i class="ph ph-users" style="font-size:14px;color:var(--text-tertiary)"></i></div>' +
@@ -4508,7 +4508,7 @@
             pageContainer.innerHTML =
               '<div class="header-section"><div><h1 class="page-title">인사 / 출퇴근 관리</h1>' +
               '<p class="page-subtitle">' + ORG_NAME + ' 총 인원 현황 (' + (attendance.date||'') + ')</p></div>' +
-              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 작업자 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
+              '<div class="action-row"><button class="btn-secondary" onclick="window.openDailyHeadcountModal()"><i class="ph ph-users-three"></i> 오늘 출역 현황</button><button class="btn-secondary" onclick="window.openWorkerJoinModal()"><i class="ph ph-qr-code"></i> 직원 QR 등록</button><button class="btn-secondary" onclick="window.openSiteWifiModal()"><i class="ph ph-wifi-high"></i> 현장 WiFi 등록</button><button class="btn-primary" onclick="window.downloadHrAttendanceExcel()"><i class="ph ph-file-xls"></i> 현황보고 엑셀 다운로드</button></div></div>' +
               // 60% 압축 KPI 카드 — padding/font 축소
               '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">' +
               '<div class="kpi-card" style="padding:10px 12px"><div class="kpi-label" style="font-size:10px">관리자 총합<i class="ph ph-crown" style="font-size:12px;color:#f59e0b"></i></div>' +
