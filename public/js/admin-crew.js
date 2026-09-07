@@ -60,7 +60,7 @@
         u.esc(current ? current.name + ' · 소속 인원' : '현장 등록 인원') + '</h3>' +
         (current ? action('전체 인원','AdminCrew.chooseTeam(0)') : '') + '</div>';
       var rows = current ? people.filter(function(e){return same(e.teamId, current.id);}) : people;
-      html += '<p style="color:var(--text-secondary)">팀 배치와 앱 권한은 별도입니다. 반장 지정 후 QR 역할과 로그인 역할을 확인하세요.</p>';
+      html += '<p style="color:var(--text-secondary)">팀·반장 수정에서 팀장 앱 권한까지 함께 적용할 수 있습니다. 신규 계정은 직원 등록·관리에서 PIN 초대를 준비하세요.</p>';
       html += u.table({id:'crew-people',emptyText:'등록된 인원이 없습니다. 직원 등록·관리에서 먼저 등록하세요.',columns:[
         {key:'name',label:'이름'},
         {key:'teamId',label:'팀',render:function(e){var t=list.find(function(t){return same(t.id,e.teamId);});return u.esc(t?t.name:'미배치');}},
@@ -73,7 +73,7 @@
           if(!e.teamId) notes.push('팀 배치');
           if(!e.accountRole) notes.push('계정 만들기');
           if(e.accountScope==='team' && !same(e.accountTeamId,e.teamId)) notes.push('계정 팀 확인');
-          if(list.some(function(t){return same(t.foremanId,e.id);}) && (e.accountRole!=='foreman' || e.qrRole!=='foreman')) notes.push('반장 권한 확인');
+          if(list.some(function(t){return same(t.foremanId,e.id);}) && (e.accountRole!=='foreman' || e.qrRole!=='foreman' || e.accountScope!=='team' || e.qrScope!=='team')) notes.push('반장 권한 확인');
           return u.esc(notes.join(' · ') || '설정 연결됨');
         }},
         {key:'actions',label:'',render:function(e){return data.canManage?action('팀 배치','AdminCrew.assign(' + e.id + ')'):'';}}
@@ -114,13 +114,38 @@
     if(!companyId || !siteId) {ui().toast('회사와 현장을 먼저 선택하세요.','error');return;}
     var t=data.teams.find(function(x){return same(x.id,id);}) || {};
     var candidates=data.employees.filter(function(e){return inContext(e) && e.status==='active' && (!e.teamId || same(e.teamId,id));});
-    ui().formModal({title:id?'팀·반장 수정':'팀 등록',subtitle:'선택한 회사·현장에 등록합니다. 반장은 직원 명단에서 선택하며 앱 권한은 별도로 승인합니다.',fields:[
+    ui().formModal({title:id?'팀·반장 수정':'팀 등록',subtitle:'팀장 지정과 앱 권한을 한 번에 저장합니다. 아래 적용 내용을 확인하세요.',saveLabel:'확인 후 저장',onReady:function(form){
+      var who=form.querySelector('[name="foremanId"]'), apply=form.querySelector('[name="applyAppAccess"]'), email=form.querySelector('[name="foremanEmail"]'), status=form.querySelector('[name="status"]');
+      var summary=document.createElement('div');
+      summary.style.cssText='padding:12px;margin-top:12px;border:1px solid var(--border-default);border-radius:8px;font-size:12px;line-height:1.7';
+      summary.setAttribute('role','status'); email.parentElement.appendChild(summary);
+      function preview(){
+        var person=candidates.find(function(e){return same(e.id,who.value);});
+        var previous=data.employees.find(function(e){return same(e.id,t.foremanId);});
+        email.disabled=!apply.checked || !person || !!person.accountRole || status.value!=='active';
+        email.value=person && !person.accountRole ? (person.email || '') : '';
+        var lines=[];
+        if(!apply.checked) lines.push('팀 명단만 저장합니다. 로그인·QR 권한은 변경하지 않습니다.');
+        else {
+          if(status.value==='active' && person){
+            lines.push(person.name + ' → 반장 / 이 팀만 / QR 팀 출퇴근');
+            if(!person.accountRole) lines.push('새 로그인 계정을 만듭니다. 이메일을 입력하고 저장 후 PIN 초대를 진행하세요.');
+            else if(['worker','foreman'].indexOf(person.accountRole)===-1 || person.accountStatus!=='active') lines.push('기존 관리자·특수 역할 또는 비활성 계정은 변경할 수 없습니다. 권한 함께 적용을 해제하세요.');
+          } else lines.push('새 팀장 앱 권한을 부여하지 않습니다.');
+          if(previous && (!same(previous.id,who.value) || status.value!=='active')) lines.push(previous.name + ' → 이 팀의 반장·QR 권한 해제, 작업자 본인 범위로 전환. 관리자 권한은 유지합니다.');
+        }
+        summary.textContent=lines.join('\n');summary.style.whiteSpace='pre-line';
+      }
+      who.addEventListener('change',preview);apply.addEventListener('change',preview);status.addEventListener('change',preview);preview();
+    },fields:[
       {name:'name',label:'팀명',required:true,value:t.name,hint:'예: 배관 1팀'},
       {name:'code',label:'팀 코드',required:true,value:t.code,hint:'예: 703K-PIPE-01'},
       {name:'trade',label:'공종',required:true,value:t.trade,hint:'예: 배관 / 전기 / 덕트 / 건축'},
       {name:'foremanId',label:'담당 반장',type:'select',value:t.foremanId,options:options(candidates),hint:(!t.foremanId && t.foreman ? '기존 기록: ' + t.foreman + '. 직원 명단에서 연결하세요. ' : '') + '명단에 없으면 먼저 직원 등록·관리에서 등록하세요.'},
       {name:'planned',label:'계획 인원',type:'number',required:true,value:t.planned || 0},
       {name:'status',label:'상태',type:'select',required:true,value:t.status || 'active',options:[{value:'active',label:'활성'},{value:'inactive',label:'비활성'}]}
+      ,{name:'applyAppAccess',label:'팀장 앱 권한 함께 적용',type:'checkbox',value:true,colSpan:2,hint:'반장 역할·해당 팀 범위·QR 권한을 함께 설정합니다. 교체·해제·팀 비활성 시 기존 팀장의 해당 권한도 해제합니다.'}
+      ,{name:'foremanEmail',label:'신규 팀장 계정 이메일',type:'email',colSpan:2,hint:'계정이 없는 직원만 입력합니다. 기존 계정 이메일·비밀번호는 변경하지 않습니다.'}
     ],onSave:function(v){v.companyId=companyId;v.siteId=siteId;return save('api_saveCrewTeam',v,id);}});
   }
   function assign(id) {

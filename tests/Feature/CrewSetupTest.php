@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceQrCode;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
@@ -9,6 +10,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
+use App\Services\AttendanceQrService;
 use App\Services\Hr\GlobalHrService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,6 +44,106 @@ class CrewSetupTest extends TestCase
     private function employee(array $extra = []): Employee
     {
         return Employee::create(array_merge(['name' => 'Foreman', 'company_id' => $this->company->id, 'site_id' => $this->site->id, 'employment_status' => 'active', 'employment_type' => 'direct'], $extra));
+    }
+
+    public function test_apply_access_promotes_worker_and_limits_actual_crew_app_to_own_team(): void
+    {
+        $person = $this->employee();
+        $user = User::factory()->create(['employee_id' => $person->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
+        $password = $user->password;
+        $result = $this->service()->saveTeam($this->input(['foremanId' => $person->id, 'applyAppAccess' => true]));
+        $this->assertTrue($result['success'], json_encode($result));
+        $user->refresh();
+        $this->assertSame('foreman', $user->access_role);
+        $this->assertSame('team', $user->access_scope);
+        $this->assertEquals($result['id'], $user->allowed_team_id);
+        $this->assertSame($password, $user->password);
+        $this->assertSame('foreman', $person->fresh()->attendance_app_role);
+        $this->assertSame('team', $person->fresh()->attendance_app_scope);
+        $qr = AttendanceQrCode::forTeam(Team::find($result['id']));
+        $other = Team::create(['code' => 'OTHER-T', 'name' => 'Other Team', 'site_id' => $this->site->id, 'company_id' => $this->company->id, 'status' => 'active']);
+        $otherQr = AttendanceQrCode::forTeam($other);
+        $service = app(AttendanceQrService::class);
+        $this->assertTrue($service->canProcessCrew($user, $qr));
+        $this->assertFalse($service->canProcessCrew($user, $otherQr));
+        $this->actingAs($user)->get(route('attendance-app.crew', ['token' => $qr->token]))->assertOk();
+        $this->get(route('attendance-app.crew', ['token' => $otherQr->token]))->assertRedirect();
+        $this->assertDatabaseHas('auth_events', ['event' => 'foreman_access_applied', 'user_id' => $user->id]);
+    }
+
+    public function test_apply_creates_missing_account_with_entered_email(): void
+    {
+        $person = $this->employee();
+        $result = $this->service()->saveTeam($this->input(['foremanId' => $person->id, 'applyAppAccess' => true, 'foremanEmail' => 'foreman@example.test']));
+        $this->assertTrue($result['success'], json_encode($result));
+        $this->assertDatabaseHas('users', ['employee_id' => $person->id, 'email' => 'foreman@example.test', 'access_role' => 'foreman', 'access_scope' => 'team']);
+    }
+
+    public function test_missing_or_duplicate_email_rolls_back_team_and_membership(): void
+    {
+        $person = $this->employee();
+        $existing = User::factory()->create();
+        foreach (['', $existing->email] as $email) {
+            $result = $this->service()->saveTeam($this->input(['foremanId' => $person->id, 'applyAppAccess' => true, 'foremanEmail' => $email]));
+            $this->assertFalse($result['success']);
+            $this->assertDatabaseCount('teams', 0);
+            $this->assertNull($person->fresh()->team_id);
+            $this->assertNull($person->fresh()->user);
+        }
+    }
+
+    public function test_admin_and_inactive_accounts_are_not_overwritten(): void
+    {
+        foreach ([['admin', 'active'], ['foreman', 'inactive'], ['super_admin', 'active']] as [$role, $status]) {
+            $person = $this->employee();
+            $user = User::factory()->create(['employee_id' => $person->id, 'access_role' => $role, 'access_scope' => 'all_sites', 'account_status' => $status]);
+            $result = $this->service()->saveTeam($this->input(['foremanId' => $person->id, 'applyAppAccess' => true]));
+            $this->assertFalse($result['success']);
+            $this->assertSame($role, $user->fresh()->access_role);
+            $this->assertSame($status, $user->fresh()->account_status);
+            $this->assertDatabaseCount('teams', 0);
+        }
+    }
+
+    public function test_replacement_revokes_old_foreman_and_new_account_failure_is_atomic(): void
+    {
+        $old = $this->employee(['email' => 'old@example.test']);
+        $first = $this->service()->saveTeam($this->input(['foremanId' => $old->id, 'applyAppAccess' => true]));
+        $next = $this->employee();
+        $result = $this->service()->saveTeam($this->input(['id' => $first['id'], 'foremanId' => $next->id, 'applyAppAccess' => true]));
+        $this->assertFalse($result['success']);
+        $this->assertSame('foreman', $old->fresh()->user->access_role);
+        $this->assertEquals($old->id, Team::find($first['id'])->foreman_employee_id);
+        $result = $this->service()->saveTeam($this->input(['id' => $first['id'], 'foremanId' => $next->id, 'applyAppAccess' => true, 'foremanEmail' => 'next@example.test']));
+        $this->assertTrue($result['success']);
+        $this->assertSame('worker', $old->fresh()->user->access_role);
+        $this->assertSame('self', $old->fresh()->user->access_scope);
+        $this->assertSame('worker', $old->fresh()->attendance_app_role);
+        $this->assertSame('foreman', $next->fresh()->user->access_role);
+        $this->assertEquals($first['id'], $old->fresh()->team_id);
+    }
+
+    public function test_removal_requires_access_cleanup_and_clears_crew_access(): void
+    {
+        $person = $this->employee(['email' => 'clear@example.test']);
+        $first = $this->service()->saveTeam($this->input(['foremanId' => $person->id, 'applyAppAccess' => true]));
+        $result = $this->service()->saveTeam($this->input(['id' => $first['id'], 'foremanId' => '']));
+        $this->assertFalse($result['success']);
+        $result = $this->service()->saveTeam($this->input(['id' => $first['id'], 'foremanId' => '', 'applyAppAccess' => true]));
+        $this->assertTrue($result['success']);
+        $this->assertSame('worker', $person->fresh()->user->access_role);
+        $this->assertSame('self', $person->fresh()->attendance_app_scope);
+        $this->assertNull(Team::find($first['id'])->foreman_employee_id);
+    }
+
+    public function test_inactive_team_revokes_foreman_without_disabling_account(): void
+    {
+        $person = $this->employee(['email' => 'inactive-team@example.test']);
+        $first = $this->service()->saveTeam($this->input(['foremanId' => $person->id, 'applyAppAccess' => true]));
+        $result = $this->service()->saveTeam($this->input(['id' => $first['id'], 'foremanId' => $person->id, 'status' => 'inactive', 'applyAppAccess' => true]));
+        $this->assertTrue($result['success']);
+        $this->assertSame('worker', $person->fresh()->user->access_role);
+        $this->assertSame('active', $person->fresh()->user->account_status);
     }
 
     public function test_team_links_foreman_and_company_site_without_granting_app_access(): void

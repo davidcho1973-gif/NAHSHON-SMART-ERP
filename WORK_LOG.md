@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Foreman app access | Add reviewed, optional app access application to team/foreman form: create missing account or promote worker, set team-only login/QR scope, and revoke this team's former foreman access on replacement/removal/deactivation. Preserve privileged accounts and make assignment/account changes atomic. | `codex/foreman-app-access` → staging/main PRs | 43 related tests / 150 assertions passed, including real crew HTTP page access and rejection for another team; JS/build/Blade and local browser preview verified. Full Linux CI required; no live account grants or invitations. |
 | 2026-09-07 | CODEX | Company/team onboarding | Restore missing company/team editors in SPA; link an employee as foreman, place team members and surface account setup gaps. Default new employees to the selected company; filter team choices and protect linked foremen from inconsistent reassignment. | `codex/company-team-onboarding` → staging/main PRs | 37 targeted tests / 120 assertions; JS syntax, static build, Blade compilation and local browser team form passed. Full local suite: 1,814 passed, one existing Windows backup-path permission error, one skip; Linux CI required before merge. No live employee/account records created. |
 | 2026-09-05 | CODEX | Shared field-app design | Extend the owner's neutral/navy attendance concept through reports, receipts, document upload, Ask, message list/room and Work/Pay/Me tabs. Centralize palette, typography, shell and navigation; separate desktop input/history sections and profile QR/details; retain mobile stacking. | `codex/field-app-unified-design` → staging/main PRs | 78 related tests / 286 assertions passed; build and Blade cache passed. Local rendered pages checked desktop/mobile, receipt list, shared Work link and Work/Pay/Me; chat composer height reserves message space. Live uploads, clock-in/out and message sends were not used for design testing. |
 | 2026-09-05 | CODEX | Attendance app visual layout | Owner-requested calmer layout: neutral surfaces, navy QR action, small status badges, readable secondary text, responsive shift/actions columns, and bottom navigation constrained to the same shell width. Retain QR, attendance, permission, payroll and language behavior. | `codex/attendance-calm-layout` → staging/main PRs | Local attendance/QR/locale tests: 49 passed / 157 assertions; static build, Blade cache and diff checks passed. Browser fixtures checked at desktop and 320px Spanish permission state; final live verification follows deployment. |
@@ -180,6 +181,12 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Apply foreman access with team assignment
+
+- Owner approved combining team leader designation with app access after the previous split workflow was explained. Add an opt-in request flag (checked in the UI), a before-save person/role/scope summary, and email input for a missing login account.
+- Use existing UserAccessService for account creation/promotion within the team transaction; synchronize QR role/scope, preserve credentials, reject privileged/suspended account changes, and record audit events. Revoke only the replaced leader's matching team foreman access; preserve worker membership and unrelated administrator roles.
+- Test role/scope boundaries using the actual crew route, missing/duplicate email rollback, privileged account preservation, replacement, removal and inactive team behavior. This deploy adds no operational people, accounts or invites.
 
 ### 2026-09-07 — Company → site → team → foreman onboarding
 
