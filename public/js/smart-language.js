@@ -17,6 +17,9 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '팀장 앱 권한 함께 적용': 'Apply foreman app access together',
+    '신규 팀장 계정 이메일': 'Email for new foreman account',
+    '확인 후 저장': 'Review and save',
     '회사·팀 등록': 'Companies & Teams',
     '회사 추가': 'Add company',
     '팀 등록': 'Add team',
@@ -308,6 +311,9 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'Apply foreman app access together': 'Aplicar acceso de capataz al guardar',
+    'Email for new foreman account': 'Correo para nueva cuenta de capataz',
+    'Review and save': 'Revisar y guardar',
     'Companies & Teams': 'Empresas y equipos',
     'Add company': 'Agregar empresa',
     'Add team': 'Agregar equipo',
