@@ -178,7 +178,6 @@
   }
 
   function loadOptions() {
-    if (state.options) return Promise.resolve(state.options);
     return call('api_getEmployeeAdminOptions').then(function (res) {
       if (res.success === false) throw new Error(res.error || '선택지를 불러오지 못했습니다.');
       state.options = res;
@@ -209,6 +208,23 @@
     loadOptions().then(function (o) {
       u.formModal({
         title: r ? '직원 수정 — ' + r.name : '직원 등록',
+        onReady: function (form) {
+          var company = form.querySelector('[name="companyId"]');
+          var site = form.querySelector('[name="siteId"]');
+          var team = form.querySelector('[name="teamId"]');
+          function refreshTeams() {
+            var selected = team.value;
+            team.innerHTML = '<option value="">— 선택 안 함 —</option>' + o.teams.filter(function (t) {
+              var existing = r && String(t.value) === String(r.teamId) && String(r.companyId || '') === company.value && String(r.siteId || '') === site.value;
+              return existing || (String(t.companyId) === company.value && String(t.siteId) === site.value && t.status === 'active');
+            }).map(function (t) {
+              return '<option value="' + u.esc(t.value) + '"' + (String(t.value) === selected ? ' selected' : '') + '>' + u.esc(t.label) + '</option>';
+            }).join('');
+          }
+          company.addEventListener('change', refreshTeams);
+          site.addEventListener('change', refreshTeams);
+          refreshTeams();
+        },
         subtitle: r
           ? '사번 ' + (r.employeeNumber || '') + (r.hasBadgePhoto ? ' · 배지 사진 있음' : '')
           : '이름과 소속 회사만 있으면 등록됩니다. 사번은 자동으로 발급됩니다.',
@@ -232,7 +248,7 @@
 
           // 2. 어디 소속인가
           { name: 'companyId', label: '소속 회사', type: 'select', required: true, group: '② 어디 소속인가',
-            options: o.companies, value: r ? r.companyId : '' },
+            options: o.companies, value: r ? r.companyId : (o.defaultCompanyId || '') },
           { name: 'employmentType', label: '고용 형태', type: 'select', required: true, group: '② 어디 소속인가',
             options: o.employmentTypes, value: r ? r.employmentType : 'direct',
             hint: '직접고용은 시급 정산, 간접고용은 출역 인원으로 집계됩니다.' },
