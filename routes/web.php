@@ -391,6 +391,8 @@ Route::post('/join', [SimpleWorkerRegistrationController::class, 'entryStore'])
     ->middleware('throttle:20,1')->name('employee-join.entry-store');
 Route::get('/join/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
     ->middleware('throttle:60,1')->name('employee-join.qr');
+Route::get('/join/{site}/trades', [SimpleWorkerRegistrationController::class, 'trades'])
+    ->middleware('throttle:60,1')->name('employee-join.trades');
 Route::get('/join/{site}', [SimpleWorkerRegistrationController::class, 'form'])
     ->middleware('throttle:60,1')->name('employee-join.form');
 Route::post('/join/{site}', [SimpleWorkerRegistrationController::class, 'store'])

@@ -196,6 +196,7 @@ class MemberRegistration extends Model
             'Safety' => 'Safety',
             'Spotter' => 'Spotter',
             'Other' => 'Other',
+            '공무지원' => '공무지원',
         ];
     }
 
