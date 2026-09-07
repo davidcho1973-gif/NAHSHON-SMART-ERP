@@ -36,6 +36,7 @@ use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
+use App\Services\Admin\KakaoReminderAdminService;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\OrgSettingService;
 use App\Services\Admin\PayProfileService;
@@ -243,6 +244,8 @@ class SmartCompanyData
             // 조직 설정 — 이 배포가 누구의 것인지. 고객사 관리자가 직접 고친다.
             'api_getOrgSettings' => app(OrgSettingService::class)->load(),
             'api_getCrewSetup' => app(CrewSetupService::class)->overview(),
+            'api_getKakaoReminders' => app(KakaoReminderAdminService::class)->overview(),
+            'api_saveKakaoReminder' => app(KakaoReminderAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_saveCrewCompany' => app(CrewSetupService::class)->saveCompany(is_array($args[0] ?? null) ? $args[0] : []),
             'api_saveCrewTeam' => app(CrewSetupService::class)->saveTeam(is_array($args[0] ?? null) ? $args[0] : []),
             'api_assignCrewEmployee' => app(CrewSetupService::class)->assign(is_array($args[0] ?? null) ? $args[0] : []),

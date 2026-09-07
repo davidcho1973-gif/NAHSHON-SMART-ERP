@@ -24,6 +24,7 @@
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
     <script src="{{ asset('js/admin-crew.js') }}?v={{ filemtime(public_path('js/admin-crew.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-kakao.js') }}?v={{ filemtime(public_path('js/admin-kakao.js')) }}" defer></script>
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-billing.js') }}?v={{ filemtime(public_path('js/admin-billing.js')) }}" defer></script>
@@ -262,6 +263,9 @@
             <ul class="nav-list">
               @if(in_array(auth()->user()?->access_role, \App\Services\Admin\CrewSetupService::VIEW_ROLES, true))
               <li class="nav-item" data-view="crew-setup" id="nav-crew-setup"><i class="ph ph-users-three"></i><span>회사·팀 등록</span></li>
+              @if(in_array(auth()->user()?->access_role, \App\Support\AccessPolicy::SYSTEM_ROLES, true))
+              <li class="nav-item" data-view="kakao-reminders"><i class="ph ph-chat-circle-dots"></i><span>카카오 업무 알림</span></li>
+              @endif
               @endif
               <li class="nav-item" data-view="site-admin" id="nav-site-admin">
                 <i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span>
@@ -355,6 +359,9 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="submittals"><i class="ph ph-clipboard-text"></i><span>제출물 대장</span></button>
           @if(in_array(auth()->user()?->access_role, \App\Services\Admin\CrewSetupService::VIEW_ROLES, true))
           <button class="mobile-more-tile" type="button" data-mobile-view="crew-setup"><i class="ph ph-users-three"></i><span>회사·팀 등록</span></button>
+          @if(in_array(auth()->user()?->access_role, \App\Support\AccessPolicy::SYSTEM_ROLES, true))
+          <button class="mobile-more-tile" type="button" data-mobile-view="kakao-reminders"><i class="ph ph-chat-circle-dots"></i><span>카카오 업무 알림</span></button>
+          @endif
           @endif
           <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear"></i><span>조직 설정</span></button>
@@ -1442,6 +1449,7 @@
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
         'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
         'crew-setup': { title: '회사·팀 등록', render: function () { return window.AdminCrew.render(); } },
+        'kakao-reminders': { title: '카카오 업무 알림', render: function () { return window.AdminKakao.render(); } },
         'site-admin': { title: '현장 · 프로젝트', render: function () { return window.AdminSites.render(); } },
         'org-settings': { title: '조직 설정', render: function () { return window.AdminOrg.render(); } },
         'pay-profiles': { title: '임금 프로필', render: function () { return window.AdminPayProfiles.render(); } },
