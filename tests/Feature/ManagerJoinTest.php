@@ -6,11 +6,13 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
- * 관리자 등록은 작업자 등록과 다른 문이다.
+ * 직책별 입력 요건은 공용 직원 등록과 예전 링크에서 동일하다.
  *
  * 관리자는 이메일이 있어야 하고(로그인·서신이 그 주소로 간다) 어떤 자리인지가 정해져야
  * 한다. 반면 공종은 관리자에게도 있다 — 공정별 팀장이 곧 관리자다. 그리고 QR 은
@@ -33,7 +35,7 @@ class ManagerJoinTest extends TestCase
     }
 
     /** @param array<string, mixed> $overrides */
-    private function submit(array $overrides = []): \Illuminate\Testing\TestResponse
+    private function submit(array $overrides = []): TestResponse
     {
         return $this->post(route('manager-join.store', ['site' => $this->site]), array_merge([
             'full_name' => '김반장',
@@ -68,11 +70,13 @@ class ManagerJoinTest extends TestCase
         $this->assertSame(0, Employee::query()->count());
     }
 
-    public function test_a_manager_cannot_register_themselves_as_a_plain_worker(): void
+    public function test_old_manager_link_accepts_a_worker_position_without_granting_access(): void
     {
-        // 관리자 문으로 들어와 '작업자' 를 고르면 어느 쪽도 아닌 기록이 남는다.
-        $this->submit(['position' => 'worker'])->assertSessionHasErrors('position');
-        $this->assertSame(0, Employee::query()->count());
+        $this->submit(['position' => 'worker', 'email' => ''])->assertOk();
+        $employee = Employee::sole();
+        $this->assertSame('worker', $employee->position);
+        $this->assertSame(Employee::TYPE_DIRECT, $employee->employment_type);
+        $this->assertNull($employee->user);
     }
 
     public function test_registering_does_not_hand_out_erp_access_but_raises_an_alert(): void
@@ -83,7 +87,7 @@ class ManagerJoinTest extends TestCase
         // QR 은 벽에 붙은 종이라 촬영·복사된다. 이메일도 검증되지 않은 자유 입력이다 —
         // 스캔만으로 로그인 계정이 생기면 그 사진 한 장이 곧 열쇠가 된다.
         $this->assertNull($employee->user);
-        $this->assertSame(0, \App\Models\User::query()->where('email', 'foreman@example.com')->count());
+        $this->assertSame(0, User::query()->where('email', 'foreman@example.com')->count());
 
         $alert = UnifiedAlert::query()->where('event_type', 'manager_account_pending')->sole();
         $this->assertSame('HR', $alert->source_module);
@@ -106,16 +110,15 @@ class ManagerJoinTest extends TestCase
         $this->assertNull($worker->email);
     }
 
-    public function test_the_two_forms_post_to_their_own_doors(): void
+    public function test_old_links_show_all_positions_and_submit_to_the_common_form(): void
     {
         $manager = $this->get(route('manager-join.form', ['site' => $this->site]))->assertOk()->getContent();
-        $this->assertStringContainsString(route('manager-join.store', ['site' => $this->site]), $manager);
-        // 감독하는 자리만 고를 수 있다.
+        $this->assertStringContainsString(route('employee-join.store', ['site' => $this->site]), $manager);
         $this->assertStringContainsString('value="foreman"', $manager);
-        $this->assertStringNotContainsString('value="worker"', $manager);
+        $this->assertStringContainsString('value="worker"', $manager);
 
         $worker = $this->get(route('worker-join.form', ['site' => $this->site]))->assertOk()->getContent();
-        $this->assertStringContainsString(route('worker-join.store', ['site' => $this->site]), $worker);
+        $this->assertStringContainsString(route('employee-join.store', ['site' => $this->site]), $worker);
         $this->assertStringContainsString('value="worker"', $worker);
     }
 
@@ -148,18 +151,18 @@ class ManagerJoinTest extends TestCase
         // 게이트가 설치 안내를 품고 있고, 등록에서 온 표시(install=1)를 알아본다.
         $gate = $this->get(route('gate.show', ['site' => $this->site]).'?install=1')->assertOk()->getContent();
         $this->assertStringContainsString('app-install', $gate);
-        $this->assertStringContainsString("install=1", $gate);
+        $this->assertStringContainsString('install=1', $gate);
         $this->assertStringContainsString(route('gate.manifest', ['site' => $this->site]), $gate);
     }
 
-    public function test_each_door_has_its_own_printable_qr(): void
+    public function test_old_qr_links_print_the_same_employee_registration_target(): void
     {
         $managerPoster = $this->get(route('manager-join.qr', ['site' => $this->site]))->assertOk();
-        $managerPoster->assertSee('관리자 등록');
-        $managerPoster->assertSee(route('manager-join.form', ['site' => $this->site]), false);
+        $managerPoster->assertSee('직원 간편 등록');
+        $managerPoster->assertSee(route('employee-join.form', ['site' => $this->site]), false);
 
         $workerPoster = $this->get(route('worker-join.qr', ['site' => $this->site]))->assertOk();
-        $workerPoster->assertSee(route('worker-join.form', ['site' => $this->site]), false);
+        $workerPoster->assertSee(route('employee-join.form', ['site' => $this->site]), false);
         $workerPoster->assertDontSee(route('manager-join.form', ['site' => $this->site]), false);
     }
 }

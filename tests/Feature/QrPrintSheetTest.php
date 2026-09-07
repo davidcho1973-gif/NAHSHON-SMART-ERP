@@ -59,7 +59,7 @@ class QrPrintSheetTest extends TestCase
         $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id);
 
         $res->assertSee('/gate/'.$site->id, false);
-        $res->assertSee('/join/w/'.$site->id, false);
+        $res->assertSee('/join/'.$site->id, false);
         $res->assertSee('/member/site/'.$site->id.'/apply', false);
         // 등록 QR 은 한 장뿐이라 고용 형태가 주소에 박히지 않는다.
         $res->assertDontSee('type=direct', false);
