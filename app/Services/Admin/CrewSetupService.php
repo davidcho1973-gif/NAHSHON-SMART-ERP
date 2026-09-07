@@ -10,6 +10,7 @@ use App\Support\CurrentCompany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /** Company and team masters were never given a replacement editor after the old panel was removed. */
 class CrewSetupService
@@ -117,6 +118,8 @@ class CrewSetupService
                 'accountRole' => $e->user?->access_role, 'accountStatus' => $e->user?->account_status,
                 'accountScope' => $e->user?->access_scope, 'accountTeamId' => $e->user?->allowed_team_id,
                 'qrRole' => $e->attendance_app_role,
+                'qrScope' => $e->attendance_app_scope,
+                'email' => $this->allowed(self::MANAGE_ROLES) ? $e->email : null,
             ]),
         ];
     }
@@ -163,70 +166,86 @@ class CrewSetupService
             return ['success' => false, 'error' => '팀 등록 권한이 없습니다.'];
         }
 
-        return DB::transaction(function () use ($input) {
-            $id = (int) ($input['id'] ?? 0);
-            $team = $id ? Team::lockForUpdate()->find($id) : new Team;
-            if (! $team || ($id && ! $this->canPlace((int) $team->company_id, (int) $team->site_id))) {
-                return ['success' => false, 'error' => '담당 범위의 팀이 아닙니다.'];
-            }
-            $company = (int) ($input['companyId'] ?? 0);
-            $site = (int) ($input['siteId'] ?? 0);
-            if (! $this->canPlace($company, $site)) {
-                return ['success' => false, 'error' => '담당 회사·현장 범위 밖입니다.'];
-            }
-            $data = [
-                'name' => trim((string) ($input['name'] ?? '')),
-                'code' => strtoupper(trim((string) ($input['code'] ?? ''))),
-                'company_id' => $company, 'site_id' => $site,
-                'trade_type' => trim((string) ($input['trade'] ?? '')),
-                'planned_headcount' => $input['planned'] ?? 0,
-                'status' => $input['status'] ?? 'active',
-                'foreman_employee_id' => ($input['foremanId'] ?? null) ?: null,
-            ];
-            $v = Validator::make($data, [
-                'name' => ['required', 'max:120'],
-                'code' => ['required', 'max:40', 'regex:/^[A-Z0-9_-]+$/', Rule::unique('teams', 'code')->ignore($id)],
-                'company_id' => ['required', Rule::exists('companies', 'id')->where('status', 'active')],
-                'site_id' => ['required', Rule::exists('sites', 'id')->where('status', 'active')],
-                'trade_type' => ['required', 'max:80'], 'planned_headcount' => ['required', 'integer', 'min:0', 'max:10000'],
-                'status' => [Rule::in(['active', 'inactive'])], 'foreman_employee_id' => ['nullable', 'integer'],
-            ]);
-            if ($id && ($team->company_id != $company || $team->site_id != $site)) {
-                $v->after(fn ($v) => $v->errors()->add('name', '기존 팀의 회사·현장은 변경할 수 없습니다. 새 팀을 등록하세요.'));
-            }
-            $foreman = $data['foreman_employee_id'] ? Employee::lockForUpdate()->find($data['foreman_employee_id']) : null;
-            if ($data['foreman_employee_id'] && (! $foreman || $foreman->company_id != $company || $foreman->site_id != $site
-                || $foreman->employment_status !== 'active' || ($foreman->team_id && $foreman->team_id != $id))) {
-                $v->after(fn ($v) => $v->errors()->add('foremanId', '반장은 같은 회사·현장의 재직자이며 미배치 또는 이 팀 소속이어야 합니다.'));
-            }
-            if (Team::where('company_id', $company)->where('site_id', $site)->whereRaw('lower(trim(name)) = ?', [mb_strtolower($data['name'])])->where('id', '!=', $id)->exists()) {
-                $v->after(fn ($v) => $v->errors()->add('name', '같은 회사·현장에 동일한 팀명이 있습니다.'));
-            }
-            if ($foreman?->user?->access_scope === 'team' && (! $id || (int) $foreman->user->allowed_team_id !== $id)) {
-                $v->after(fn ($v) => $v->errors()->add('foremanId', '계정·권한 관리에서 반장의 팀 접근 범위를 먼저 확인하세요.'));
-            }
-            if ($v->fails()) {
-                $names = ['company_id' => 'companyId', 'site_id' => 'siteId', 'trade_type' => 'trade', 'planned_headcount' => 'planned', 'foreman_employee_id' => 'foremanId'];
-                $errors = [];
-                foreach ($v->errors()->messages() as $key => $messages) {
-                    $errors[$names[$key] ?? $key] = implode(' ', $messages);
+        try {
+            return DB::transaction(function () use ($input) {
+                $id = (int) ($input['id'] ?? 0);
+                $applyAccess = filter_var($input['applyAppAccess'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $team = $id ? Team::lockForUpdate()->find($id) : new Team;
+                if (! $team || ($id && ! $this->canPlace((int) $team->company_id, (int) $team->site_id))) {
+                    return ['success' => false, 'error' => '담당 범위의 팀이 아닙니다.'];
+                }
+                $company = (int) ($input['companyId'] ?? 0);
+                $site = (int) ($input['siteId'] ?? 0);
+                if (! $this->canPlace($company, $site)) {
+                    return ['success' => false, 'error' => '담당 회사·현장 범위 밖입니다.'];
+                }
+                $data = [
+                    'name' => trim((string) ($input['name'] ?? '')),
+                    'code' => strtoupper(trim((string) ($input['code'] ?? ''))),
+                    'company_id' => $company, 'site_id' => $site,
+                    'trade_type' => trim((string) ($input['trade'] ?? '')),
+                    'planned_headcount' => $input['planned'] ?? 0,
+                    'status' => $input['status'] ?? 'active',
+                    'foreman_employee_id' => ($input['foremanId'] ?? null) ?: null,
+                ];
+                $v = Validator::make($data, [
+                    'name' => ['required', 'max:120'],
+                    'code' => ['required', 'max:40', 'regex:/^[A-Z0-9_-]+$/', Rule::unique('teams', 'code')->ignore($id)],
+                    'company_id' => ['required', Rule::exists('companies', 'id')->where('status', 'active')],
+                    'site_id' => ['required', Rule::exists('sites', 'id')->where('status', 'active')],
+                    'trade_type' => ['required', 'max:80'], 'planned_headcount' => ['required', 'integer', 'min:0', 'max:10000'],
+                    'status' => [Rule::in(['active', 'inactive'])], 'foreman_employee_id' => ['nullable', 'integer'],
+                ]);
+                if ($id && ($team->company_id != $company || $team->site_id != $site)) {
+                    $v->after(fn ($v) => $v->errors()->add('name', '기존 팀의 회사·현장은 변경할 수 없습니다. 새 팀을 등록하세요.'));
+                }
+                $foreman = $data['foreman_employee_id'] ? Employee::lockForUpdate()->find((int) $data['foreman_employee_id']) : null;
+                if ($data['foreman_employee_id'] && (! $foreman || $foreman->company_id != $company || $foreman->site_id != $site
+                    || $foreman->employment_status !== 'active' || ($foreman->team_id && $foreman->team_id != $id))) {
+                    $v->after(fn ($v) => $v->errors()->add('foremanId', '반장은 같은 회사·현장의 재직자이며 미배치 또는 이 팀 소속이어야 합니다.'));
+                }
+                if (Team::where('company_id', $company)->where('site_id', $site)->whereRaw('lower(trim(name)) = ?', [mb_strtolower($data['name'])])->where('id', '!=', $id)->exists()) {
+                    $v->after(fn ($v) => $v->errors()->add('name', '같은 회사·현장에 동일한 팀명이 있습니다.'));
+                }
+                if (! $applyAccess && $foreman?->user?->access_scope === 'team' && (! $id || (int) $foreman->user->allowed_team_id !== $id)) {
+                    $v->after(fn ($v) => $v->errors()->add('foremanId', '계정·권한 관리에서 반장의 팀 접근 범위를 먼저 확인하세요.'));
+                }
+                $previousId = $team->foreman_employee_id ? (int) $team->foreman_employee_id : null;
+                if (! $applyAccess && $previousId && ($previousId !== $foreman?->id || $data['status'] !== 'active')) {
+                    $previous = Employee::find($previousId);
+                    if (($previous?->user?->access_role === 'foreman' && (int) $previous->user->allowed_team_id === $id)
+                        || ($previous?->attendance_app_role === 'foreman' && $previous->attendance_app_scope === 'team')) {
+                        $v->after(fn ($v) => $v->errors()->add('applyAppAccess', '기존 팀장의 앱 권한을 함께 해제하도록 권한 함께 적용을 선택하세요.'));
+                    }
+                }
+                if ($v->fails()) {
+                    $names = ['company_id' => 'companyId', 'site_id' => 'siteId', 'trade_type' => 'trade', 'planned_headcount' => 'planned', 'foreman_employee_id' => 'foremanId'];
+                    $errors = [];
+                    foreach ($v->errors()->messages() as $key => $messages) {
+                        $errors[$names[$key] ?? $key] = implode(' ', $messages);
+                    }
+
+                    return ['success' => false, 'errors' => $errors];
+                }
+                $team->fill($data);
+                // Preserve unlinked legacy names until a person is selected; clearing a linked person is explicit.
+                if ($foreman || $team->getOriginal('foreman_employee_id')) {
+                    $team->foreman_name = null;
+                }
+                $team->save();
+                Company::findOrFail($company)->sites()->syncWithoutDetaching([$site]);
+                if ($foreman && ! $foreman->team_id) {
+                    $foreman->update(['team_id' => $team->id]);
+                }
+                if ($applyAccess) {
+                    app(ForemanAppAccess::class)->apply($team, $foreman, $previousId, $input['foremanEmail'] ?? null);
                 }
 
-                return ['success' => false, 'errors' => $errors];
-            }
-            $team->fill($data);
-            // Preserve unlinked legacy names until a person is selected; clearing a linked person is explicit.
-            if ($foreman || $team->getOriginal('foreman_employee_id')) {
-                $team->foreman_name = null;
-            }
-            $team->save();
-            Company::findOrFail($company)->sites()->syncWithoutDetaching([$site]);
-            if ($foreman && ! $foreman->team_id) {
-                $foreman->update(['team_id' => $team->id]);
-            }
-
-            return ['success' => true, 'id' => $team->id];
-        });
+                return ['success' => true, 'id' => $team->id, 'appAccessApplied' => $applyAccess];
+            });
+        } catch (ValidationException $e) {
+            return ['success' => false, 'errors' => $e->errors()];
+        }
     }
 
     public function assign(array $input): array
