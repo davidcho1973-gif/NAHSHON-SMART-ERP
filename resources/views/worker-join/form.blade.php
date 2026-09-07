@@ -238,15 +238,19 @@
                         <span id="t-askIndirect"></span></label>
                 </div>
 
-                <label id="t-trade" for="f-role"></label>
-                {{-- 목록에서 고르는 것이 기본이지만, 없는 공정은 적을 수 있다. 서버에서 대소문자·공백만
-                     다른 값은 기존 이름으로 맞춘다 — 그래야 집계가 갈리지 않는다. --}}
-                <input type="text" name="role" id="f-role" list="trade-list" value="{{ old('role') }}"
-                       autocomplete="off" maxlength="60" required>
-                <datalist id="trade-list">
-                    @foreach ($roles as $t)<option value="{{ $t }}"></option>@endforeach
-                </datalist>
+                <label id="t-trade" for="f-trade-choice">{{ $dict[$lang]['trade'] }}</label>
+                {{-- datalist is not a reliable picker in mobile/in-app browsers. Keep a real select
+                     and an always-editable submitted value, including when suggestions fail. --}}
+                <select id="f-trade-choice" aria-describedby="t-tradeHint">
+                    <option value="">{{ $dict[$lang]['tradePlaceholder'] }}</option>
+                    @foreach ($roles as $t)<option value="{{ $t }}">{{ $t }}</option>@endforeach
+                    <option value="__other__">{{ $dict[$lang]['tradeOther'] }}</option>
+                </select>
+                <label id="t-tradeInput" for="f-role">{{ $dict[$lang]['tradeInput'] }}</label>
+                <input type="text" name="role" id="f-role" value="{{ old('role') }}"
+                       autocomplete="off" maxlength="60" required aria-describedby="t-tradeHint">
                 <div class="note" id="t-tradeHint"></div>
+                <div class="note" id="trade-status" role="status" aria-live="polite"></div>
 
                 {{-- 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가).
                      자사 직영은 이 값이 급여의 관리자 구분을 정하므로 반드시 받는다. --}}
@@ -284,12 +288,19 @@
                 <button type="submit" id="t-submit"></button>
             </form>
 
+            <script src="{{ asset('js/employee-join-trades.js') }}?v={{ filemtime(public_path('js/employee-join-trades.js')) }}"></script>
             <script>
                 (function () {
                     var DICT = @json($dict, JSON_UNESCAPED_UNICODE);
                     var lang = @json($lang);
                     var locked = @json($lockedType);
-                    var siteTrades = @json($siteTrades);
+                    var tradePicker = window.createEmployeeTradePicker({
+                        choice: document.getElementById('f-trade-choice'),
+                        input: document.getElementById('f-role'),
+                        status: document.getElementById('trade-status'),
+                        urls: @json($tradeUrls), defaults: @json($defaultTrades),
+                        initialSite: @json((string) ($site?->id ?? '')), initialTrades: @json($roles)
+                    });
                     var initialSite = @json((string) ($site?->id ?? ''));
                     var siteSel = document.getElementById('f-site');
                     var supervisoryPositions = @json(\App\Models\Employee::SUPERVISORY_POSITIONS);
@@ -314,6 +325,7 @@
                         text('t-site', T.site); text('site-blank', T.sitePlaceholder); text('site-global', T.globalSite);
                         text('t-name', T.name); text('t-company', T.company);
                         text('t-trade', T.trade); text('t-tradeHint', T.tradeHint);
+                        text('t-tradeInput', T.tradeInput);
                         text('t-email', T.email); text('t-phone', T.phone);
                         text('t-emailHint', T.emailHint); text('t-phoneHint', T.phoneHint);
                         text('t-position', T.position); text('t-positionHint', T.positionHint);
@@ -327,7 +339,7 @@
                         text('t-askTitle', T.askTitle);
                         text('opt-blank', T.companyPlaceholder);
                         document.getElementById('f-name').placeholder = T.namePlaceholder;
-                        document.getElementById('f-role').placeholder = T.tradePlaceholder;
+                        document.getElementById('f-role').placeholder = T.tradeOtherPlaceholder;
                         text('opt-other', T.companyOther);
                         document.getElementById('company-name').placeholder = T.companyOtherPlaceholder;
                         document.getElementById('t-askDirect').innerHTML = '';
@@ -359,10 +371,7 @@
                             o.disabled = globalSite && o.value === 'worker';
                         });
                         if (globalSite && posSel.value === 'worker') posSel.value = '';
-                        var trades = siteTrades[siteSel.value] || [];
-                        var list = document.getElementById('trade-list');
-                        list.replaceChildren();
-                        trades.forEach(function (trade) { var o = document.createElement('option'); o.value = trade; list.appendChild(o); });
+                        tradePicker.refresh(siteSel.value, T);
                         syncCompany();
                     }
 
