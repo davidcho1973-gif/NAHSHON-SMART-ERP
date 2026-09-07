@@ -5,6 +5,7 @@ namespace App\Services\Hr;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\Team;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -200,7 +201,7 @@ class GlobalHrService
             return ['success' => false, 'error' => "현장을 찾을 수 없습니다: {$siteCode}"];
         }
 
-        $teams = \App\Models\Team::query()->where('site_id', $site->id)->where('status', 'active')->orderBy('name')->get();
+        $teams = Team::query()->where('site_id', $site->id)->where('status', 'active')->orderBy('name')->get();
         $employees = Employee::query()->where('employment_status', 'active')->where('site_id', $site->id)
             ->with('company:id,name')->get();
         $byTeam = $employees->groupBy('team_id');
@@ -216,7 +217,7 @@ class GlobalHrService
         return [
             'success' => true,
             'site' => ['code' => $site->code, 'name' => $site->name],
-            'teams' => $teams->map(fn (\App\Models\Team $t): array => [
+            'teams' => $teams->map(fn (Team $t): array => [
                 'id' => $t->id,
                 'name' => $t->name,
                 'members' => ($byTeam[$t->id] ?? collect())->map($card)->values()->all(),
@@ -238,12 +239,18 @@ class GlobalHrService
         }
 
         if ($teamId !== null) {
-            $team = \App\Models\Team::query()->find($teamId);
+            $team = Team::query()->find($teamId);
             if (! $team || $team->site_id !== $employee->site_id) {
                 return ['success' => false, 'message' => '같은 현장의 팀에만 배치할 수 있습니다.'];
             }
         }
 
+        if ($employee->team_id != $teamId && Team::where('foreman_employee_id', $employee->id)->exists()) {
+            return ['success' => false, 'message' => '회사·팀 등록에서 담당 반장 지정부터 변경하세요.'];
+        }
+        if ($employee->user?->access_scope === 'team' && (int) $employee->user->allowed_team_id !== (int) $teamId) {
+            return ['success' => false, 'message' => '계정·권한 관리에서 팀 접근 범위를 먼저 확인하세요.'];
+        }
         $employee->team_id = $teamId;
         $employee->save();
 

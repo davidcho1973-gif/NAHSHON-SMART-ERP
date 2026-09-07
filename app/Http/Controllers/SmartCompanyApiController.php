@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Admin\CorrespondenceService;
+use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\ReportRecipientService;
@@ -29,6 +30,10 @@ class SmartCompanyApiController extends Controller
      * @var array<string, array<int, string>>
      */
     private const GATES = [
+        'api_getCrewSetup' => CrewSetupService::VIEW_ROLES,
+        'api_saveCrewCompany' => CrewSetupService::COMPANY_ROLES,
+        'api_saveCrewTeam' => CrewSetupService::MANAGE_ROLES,
+        'api_assignCrewEmployee' => CrewSetupService::MANAGE_ROLES,
         // [금전] 같은 데이터의 PDF 라우트는 이미 재무 권한자만 열 수 있다 —
         // 화면용 창구만 새고 있었다.
         'api_getPayrollDashboard' => AccessPolicy::MONEY_ROLES,

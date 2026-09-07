@@ -220,7 +220,7 @@
           ';background:' + TOKENS.base + ';color:' + TOKENS.text + ';font-size:13px;font-family:inherit"';
         if (f.type === 'select') {
           return '<select ' + common + '>' +
-            (f.required ? '' : '<option value="">— 선택 안 함 —</option>') +
+            (f.required && v !== '' ? '' : '<option value="">— 선택 안 함 —</option>') +
             (f.options || []).map(function (o) {
               var ov = o.value !== undefined ? o.value : o;
               var ol = o.label !== undefined ? o.label : o;
@@ -369,6 +369,7 @@
 
       document.addEventListener('keydown', onKey);
       document.body.appendChild(wrap);
+      if (opts.onReady) opts.onReady(wrap);
       var firstInput = wrap.querySelector('input,select,textarea');
       if (firstInput) firstInput.focus();
     });

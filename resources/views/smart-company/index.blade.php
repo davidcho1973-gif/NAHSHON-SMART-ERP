@@ -23,6 +23,7 @@
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-crew.js') }}?v={{ filemtime(public_path('js/admin-crew.js')) }}" defer></script>
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-billing.js') }}?v={{ filemtime(public_path('js/admin-billing.js')) }}" defer></script>
@@ -259,6 +260,9 @@
           <div class="nav-section">
             <div class="nav-section-title">설정</div>
             <ul class="nav-list">
+              @if(in_array(auth()->user()?->access_role, \App\Services\Admin\CrewSetupService::VIEW_ROLES, true))
+              <li class="nav-item" data-view="crew-setup" id="nav-crew-setup"><i class="ph ph-users-three"></i><span>회사·팀 등록</span></li>
+              @endif
               <li class="nav-item" data-view="site-admin" id="nav-site-admin">
                 <i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span>
               </li>
@@ -349,6 +353,9 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="docs"><i class="ph ph-folders"></i><span>문서통합관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="contract-admin"><i class="ph ph-file-text"></i><span>원청 계약 · 서류</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="submittals"><i class="ph ph-clipboard-text"></i><span>제출물 대장</span></button>
+          @if(in_array(auth()->user()?->access_role, \App\Services\Admin\CrewSetupService::VIEW_ROLES, true))
+          <button class="mobile-more-tile" type="button" data-mobile-view="crew-setup"><i class="ph ph-users-three"></i><span>회사·팀 등록</span></button>
+          @endif
           <button class="mobile-more-tile" type="button" data-mobile-view="site-admin"><i class="ph ph-map-pin"></i><span>현장 · 프로젝트</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="org-settings"><i class="ph ph-gear"></i><span>조직 설정</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="messenger"><i class="ph ph-chat-circle-text"></i><span>메신저</span></button>
@@ -1434,6 +1441,7 @@
         'boq': { title: '물량 / BOQ', render: function () { return window.AdminRegisters.renderBoq(); } },
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },
         'contract-admin': { title: '원청 계약 · 서류', render: function () { return window.AdminContracts.render(); } },
+        'crew-setup': { title: '회사·팀 등록', render: function () { return window.AdminCrew.render(); } },
         'site-admin': { title: '현장 · 프로젝트', render: function () { return window.AdminSites.render(); } },
         'org-settings': { title: '조직 설정', render: function () { return window.AdminOrg.render(); } },
         'pay-profiles': { title: '임금 프로필', render: function () { return window.AdminPayProfiles.render(); } },
