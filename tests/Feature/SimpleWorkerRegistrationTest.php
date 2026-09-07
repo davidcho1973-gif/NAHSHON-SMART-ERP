@@ -52,7 +52,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         $res->assertStatus(200);
         $res->assertSee('value="ELEC"', false);   // WBS 에서 추출해 제안한다
         $res->assertSee('value="MECH"', false);
-        $res->assertSee('<datalist id="trade-list">', false);
+        $res->assertSee('<select id="f-trade-choice"', false)->assertSee('name="role" id="f-role"', false);
 
         // 목록에 없는 공정도 받는다 — 협력사는 매일 오는 사람이 다르고, 목록에 없다고
         // 등록을 막으면 그 사람은 그날 기록이 아예 남지 않는다.

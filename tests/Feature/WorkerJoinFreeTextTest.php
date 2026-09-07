@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Support\WorkerLang;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -32,7 +34,7 @@ class WorkerJoinFreeTextTest extends TestCase
     }
 
     /** @param array<string, mixed> $overrides */
-    private function submit(array $overrides = []): \Illuminate\Testing\TestResponse
+    private function submit(array $overrides = []): TestResponse
     {
         return $this->post(route('worker-join.store', ['site' => $this->site]), array_merge([
             'full_name' => 'Miguel Torres',
@@ -146,14 +148,15 @@ class WorkerJoinFreeTextTest extends TestCase
         $this->assertStringContainsString('name="company_name"', $html);
         $this->assertStringContainsString('__other__', $html);
         // 공정은 목록을 제안하되 직접 적을 수 있어야 한다.
-        $this->assertStringContainsString('list="trade-list"', $html);
-        $this->assertStringContainsString('<datalist id="trade-list">', $html);
+        $this->assertStringContainsString('<select id="f-trade-choice"', $html);
+        $this->assertStringContainsString('name="role" id="f-role"', $html);
+        $this->assertStringContainsString('value="공무지원"', $html);
     }
 
     public function test_the_free_text_wording_exists_in_all_three_languages(): void
     {
-        foreach (\App\Support\WorkerLang::join() as $code => $t) {
-            foreach (['companyOther', 'companyOtherPlaceholder', 'companyOtherHint'] as $key) {
+        foreach (WorkerLang::join() as $code => $t) {
+            foreach (['companyOther', 'companyOtherPlaceholder', 'companyOtherHint', 'tradeOther', 'tradeInput', 'tradeOtherPlaceholder', 'tradeLoading', 'tradeLoadFailed'] as $key) {
                 $this->assertArrayHasKey($key, $t, "[{$code}.{$key}] 가 없습니다.");
                 $this->assertNotSame('', trim($t[$key]));
             }

@@ -2,12 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Models\BoqItem;
 use App\Models\Company;
+use App\Models\Employee;
+use App\Models\Housing;
+use App\Models\IntelligentDocument;
+use App\Models\Project;
 use App\Models\Site;
+use App\Models\Submittal;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Models\WbsItem;
+use App\Services\Admin\ProjectRegisterService;
 use App\Support\SmartCompanyData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -45,7 +54,7 @@ class SiteIsolationTest extends TestCase
             ->assertDontSee('AZ-ONLY-ELEC', false, '새 현장이 남의 현장 공종을 빌려오면 안 된다');
 
         // 대신 기본 직군을 보여 준다 — 빈 목록으로 두지는 않는다.
-        $this->get('/join/w/'.$this->ga->id)->assertSee('<datalist id="trade-list">', false);
+        $this->get('/join/w/'.$this->ga->id)->assertSee('<select id="f-trade-choice"', false)->assertSee('value="Electrician"', false);
     }
 
     public function test_자기_현장_공정은_그대로_보인다(): void
@@ -87,17 +96,17 @@ class SiteIsolationTest extends TestCase
         // 실제로 겪은 것: 현장 전환기는 애리조나인데 화면에는 조지아 주방 물량이 떴다.
         // 대장 조회가 "선택한 현장" 을 아예 받지 않아, 프로젝트가 안 정해지면 전체에서
         // 첫 번째(코드순)로 넘어갔기 때문이다.
-        $azProject = \App\Models\Project::create([
+        $azProject = Project::create([
             'project_code' => 'ZZ-AZ', 'name' => '애리조나 공사',
             'construction_type' => 'equipment_setting', 'site_id' => $this->az->id,
         ]);
-        $gaProject = \App\Models\Project::create([
+        $gaProject = Project::create([
             'project_code' => 'AA-GA', 'name' => '조지아 공사',   // 코드순으로 먼저 온다
             'construction_type' => 'equipment_setting', 'site_id' => $this->ga->id,
         ]);
 
         foreach ([[$azProject, $this->az, '애리조나 배관'], [$gaProject, $this->ga, '조지아 주방 오수관']] as [$p, $site, $name]) {
-            \App\Models\BoqItem::create([
+            BoqItem::create([
                 'site_id' => $site->id, 'project_id' => $p->id, 'seq' => 1,
                 'discipline_code' => '05', 'discipline' => '배관', 'name_kr' => $name,
                 'unit' => 'LF', 'qty' => 100, 'unit_price' => 10,
@@ -107,7 +116,7 @@ class SiteIsolationTest extends TestCase
         $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
         $this->actingAs($admin);
 
-        $names = collect(app(\App\Services\Admin\ProjectRegisterService::class)->listBoq(null, 'AZ-01')['rows'])
+        $names = collect(app(ProjectRegisterService::class)->listBoq(null, 'AZ-01')['rows'])
             ->pluck('nameKr');
 
         $this->assertTrue($names->contains('애리조나 배관'));
@@ -117,11 +126,11 @@ class SiteIsolationTest extends TestCase
     public function test_그_현장에_프로젝트가_없으면_비어_있는_것이_맞다(): void
     {
         // 조지아에만 프로젝트가 있고 애리조나에는 없다. 예전에는 이때 조지아 대장이 떴다.
-        $ga = \App\Models\Project::create([
+        $ga = Project::create([
             'project_code' => 'GA-P', 'name' => '조지아', 'construction_type' => 'equipment_setting',
             'site_id' => $this->ga->id,
         ]);
-        \App\Models\BoqItem::create([
+        BoqItem::create([
             'site_id' => $this->ga->id, 'project_id' => $ga->id, 'seq' => 1,
             'discipline_code' => '05', 'discipline' => '배관', 'name_kr' => '조지아 오수관',
             'unit' => 'LF', 'qty' => 10, 'unit_price' => 1,
@@ -138,14 +147,14 @@ class SiteIsolationTest extends TestCase
     public function test_제출물_대장도_같은_규칙을_따른다(): void
     {
         // 두 대장이 같은 구조라 구멍도 같았다. 한쪽만 고치면 다음에 또 갈라진다.
-        $ga = \App\Models\Project::create([
+        $ga = Project::create([
             'project_code' => 'GA-S', 'name' => '조지아', 'construction_type' => 'equipment_setting',
             'site_id' => $this->ga->id,
         ]);
-        \App\Models\Submittal::create([
+        Submittal::create([
             'site_id' => $this->ga->id, 'project_id' => $ga->id, 'seq' => 1,
             'csi' => '22 13 16', 'section' => '위생기구', 'category' => '자재승인', 'title' => '조지아 자재승인원',
-            'status' => array_key_first(\App\Models\Submittal::STATUS_OPTIONS),
+            'status' => array_key_first(Submittal::STATUS_OPTIONS),
         ]);
 
         $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
@@ -158,11 +167,11 @@ class SiteIsolationTest extends TestCase
 
     public function test_전체_현장에서는_모두_보인다(): void
     {
-        $ga = \App\Models\Project::create([
+        $ga = Project::create([
             'project_code' => 'GA-A', 'name' => '조지아', 'construction_type' => 'equipment_setting',
             'site_id' => $this->ga->id,
         ]);
-        \App\Models\BoqItem::create([
+        BoqItem::create([
             'site_id' => $this->ga->id, 'project_id' => $ga->id, 'seq' => 1,
             'discipline_code' => '05', 'discipline' => '배관', 'name_kr' => '조지아 오수관',
             'unit' => 'LF', 'qty' => 10, 'unit_price' => 1,
@@ -171,7 +180,7 @@ class SiteIsolationTest extends TestCase
         $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
         $this->actingAs($admin);
 
-        $rows = app(\App\Services\Admin\ProjectRegisterService::class)->listBoq(null, 'ALL')['rows'];
+        $rows = app(ProjectRegisterService::class)->listBoq(null, 'ALL')['rows'];
         $this->assertCount(1, $rows, '전체를 보면 그대로 다 보여야 한다');
     }
 
@@ -181,10 +190,10 @@ class SiteIsolationTest extends TestCase
     {
         // 이 목록들은 상단 현장 전환기를 아예 받지 않아, 애리조나를 띄워 놓고도
         // 조지아 차량·숙소가 함께 떴다. 현장이 하나일 때는 티가 안 났다.
-        \App\Models\Vehicle::create(['site_id' => $this->ga->id, 'plate_number' => 'GA-CAR', 'model' => 'F-150', 'status' => '운행중']);
-        \App\Models\Vehicle::create(['site_id' => $this->az->id, 'plate_number' => 'AZ-CAR', 'model' => 'F-150', 'status' => '운행중']);
-        \App\Models\Housing::create(['site_id' => $this->ga->id, 'code' => 'GA-H1', 'name' => '조지아 숙소', 'beds' => 4, 'occupied' => 0]);
-        \App\Models\Housing::create(['site_id' => $this->az->id, 'code' => 'AZ-H1', 'name' => '애리조나 숙소', 'beds' => 4, 'occupied' => 0]);
+        Vehicle::create(['site_id' => $this->ga->id, 'plate_number' => 'GA-CAR', 'model' => 'F-150', 'status' => '운행중']);
+        Vehicle::create(['site_id' => $this->az->id, 'plate_number' => 'AZ-CAR', 'model' => 'F-150', 'status' => '운행중']);
+        Housing::create(['site_id' => $this->ga->id, 'code' => 'GA-H1', 'name' => '조지아 숙소', 'beds' => 4, 'occupied' => 0]);
+        Housing::create(['site_id' => $this->az->id, 'code' => 'AZ-H1', 'name' => '애리조나 숙소', 'beds' => 4, 'occupied' => 0]);
 
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
         $this->actingAs($admin);
@@ -202,7 +211,7 @@ class SiteIsolationTest extends TestCase
     {
         // 현장 화면의 숫자는 그 현장의 진실이어야 한다 — 미배정을 섞으면 현장별로
         // 더할 때 겹치고, "우리 현장 차가 몇 대냐" 에 답할 수 없다.
-        \App\Models\Vehicle::create(['site_id' => null, 'plate_number' => 'POOL-CAR', 'model' => 'Transit', 'status' => '대기']);
+        Vehicle::create(['site_id' => null, 'plate_number' => 'POOL-CAR', 'model' => 'Transit', 'status' => '대기']);
 
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
         $this->actingAs($admin);
@@ -217,8 +226,8 @@ class SiteIsolationTest extends TestCase
 
     public function test_인원_목록은_상단_현장을_따르되_화면_선택이_이긴다(): void
     {
-        \App\Models\Employee::create(['site_id' => $this->az->id, 'name' => '애리조나사람', 'employment_status' => 'active']);
-        \App\Models\Employee::create(['site_id' => $this->ga->id, 'name' => '조지아사람', 'employment_status' => 'active']);
+        Employee::create(['site_id' => $this->az->id, 'name' => '애리조나사람', 'employment_status' => 'active']);
+        Employee::create(['site_id' => $this->ga->id, 'name' => '조지아사람', 'employment_status' => 'active']);
 
         $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
         $this->actingAs($admin);
@@ -242,8 +251,8 @@ class SiteIsolationTest extends TestCase
         // ERP 안에 얹혀 열리는 화면이라 상단 전환기의 현장을 아예 받지 않았다.
         // 애리조나를 띄워 놓고도 조지아 문서가 목록과 위쪽 숫자에 그대로 떴다.
         foreach ([[$this->az, '애리조나 발주서'], [$this->ga, '조지아 주방 조달계획']] as [$site, $title]) {
-            \App\Models\IntelligentDocument::create([
-                'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            IntelligentDocument::create([
+                'uuid' => (string) Str::uuid(),
                 'site_id' => $site->id, 'title' => $title,
                 'original_file_name' => $title.'.pdf', 'stored_file_name' => uniqid().'.pdf',
                 'file_path' => 'docs/'.uniqid().'.pdf', 'sha256' => hash('sha256', $title),

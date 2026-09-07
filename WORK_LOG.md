@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Employee trade selection | Replace unreliable datalist with visible select and editable trade field; include 공무지원, load only selected active site's WBS trade names, preserve manual input on site/language changes and lookup failure. | codex/employee-trade-picker | 66 related tests / 372 assertions, JS stale-response/failure tests, build and Blade compile passed; full regression and deployment checks follow. |
 | 2026-09-07 | CODEX | Existing-site employee selection | Add shared /join with live active-site names and Global requested assignment. Preserve site-prefilled links, require managerial position/email for Global, and keep account grants separate. Use existing one gate QR per physical site for all positions and both punch events. | codex/employee-site-selection | 71 targeted tests / 347 assertions; full regression caught and fixed cross-site trade suggestions; build, Blade and Global form behavior checked. Full final regression and deployment checks follow. |
 | 2026-09-07 | CODEX | Unified employee registration | One shared employee form and QR; selected position controls required email and staff classification. Retain old worker/manager URLs, account approval boundary and company-based worker types. | codex/unified-employee-registration | 51 related tests / 288 assertions; local browser position toggles, ko/en/es and 360px layout verified; full isolated PostgreSQL regression: 1,850 passed, one Windows platform skip, 6,610 assertions (existing Windows backup test excluded); Linux CI and deployment verification follow. |
 | 2026-09-07 | CODEX | Kakao work reminder scheduling | Add admin-only recipient schedules, encrypted +1 phone storage, official SOLAPI Alimtalk adapter, durable daily deduplication, completion-aware attendance/report links and onboarding templates. Deployment defaults OFF; owner has no provider account/channel and US account eligibility remains to be confirmed. | codex/kakao-work-reminders | PostgreSQL feature tests, full regression, static build and Blade compilation; no real messages or live recipient changes. |
@@ -184,6 +185,14 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Visible employee trade picker and project support
+
+- Cause: the UI promised selection but used a browser-dependent datalist, and generic/Global entries cleared its options. Generic site changes also used defaults instead of the selected site's actual trades.
+- Use native select plus always-editable `role` field, with explicit manual entry and ko/en/es guidance. Share the existing default catalog with 공무지원; keep that option even when WBS trades exist.
+- Add throttled GET `/join/{site}/trades` for active sites: trade names only, no employee/private WBS detail; keep initial HTML scoped, avoid stale asynchronous results, retain input when lookup fails or language/site changes.
+- Shared route and registration-owned view edits are needed for this public onboarding fix. Existing worker/manager links and server normalization/validation stay compatible. No role grants, employee fixture submissions, WBS/financial rows or notifications in production.
+- 66 targeted tests / 372 assertions passed, including JS selection/Global/site race/failure/retry and manual trade persistence. Build and Blade compilation passed. See docs/EMPLOYEE_REGISTRATION.md.
 
 ### 2026-09-07 — Existing-site employee selection and Global
 
@@ -378,4 +387,3 @@ Use this section for manual owner checks, business decisions, and final approval
 ### Planned / Next
 
 - Coordinate with David/CODEX/Cowork before modifying shared frontend shell, API compatibility layer, or core auth/access files.
-

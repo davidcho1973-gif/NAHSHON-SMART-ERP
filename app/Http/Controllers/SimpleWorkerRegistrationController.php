@@ -12,6 +12,7 @@ use App\Models\WorkerDevice;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\URL;
@@ -70,6 +71,15 @@ class SimpleWorkerRegistrationController extends Controller
         return $this->formView($request, null);
     }
 
+    /** Public signup already offers this site's trade names, never WBS details or employee records. */
+    public function trades(Site $site): JsonResponse
+    {
+        abort_unless($site->status === 'active', 404);
+
+        return response()->json(['trades' => $this->tradeOptions($site)])
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function entryStore(Request $request): View
     {
         $ids = Site::query()->where('status', 'active')->pluck('id')->map(fn ($id) => (string) $id)->all();
@@ -92,7 +102,8 @@ class SimpleWorkerRegistrationController extends Controller
         return view('worker-join.form', [
             'site' => $site,
             'sites' => $sites,
-            'siteTrades' => $sites->mapWithKeys(fn (Site $item) => [(string) $item->id => $this->tradeOptions($site?->id === $item->id ? $site : null)]),
+            'tradeUrls' => $sites->mapWithKeys(fn (Site $item) => [(string) $item->id => route('employee-join.trades', $item)]),
+            'defaultTrades' => $this->tradeOptions(null),
             'companies' => $this->companyOptions(),
             'roles' => $this->tradeOptions($site),
             'positions' => Employee::POSITIONS,
@@ -147,7 +158,8 @@ class SimpleWorkerRegistrationController extends Controller
             ->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade')
             ->map(fn ($t) => trim((string) $t))->filter()->unique()->sort()->values()->all();
 
-        return $list !== [] ? $list : array_values(MemberRegistration::roleOptions());
+        // 공무지원은 공정표가 있는 현장에서도 선택할 수 있는 공통 등록 직군이다.
+        return $list !== [] ? array_values(array_unique([...$list, MemberRegistration::roleOptions()['공무지원']])) : array_values(MemberRegistration::roleOptions());
     }
 
     /**
