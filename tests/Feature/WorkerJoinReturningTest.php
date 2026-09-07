@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -32,7 +33,7 @@ class WorkerJoinReturningTest extends TestCase
     }
 
     /** @param array<string, mixed> $extra */
-    private function join(Site $site, array $extra = []): \Illuminate\Testing\TestResponse
+    private function join(Site $site, array $extra = []): TestResponse
     {
         return $this->post('/join/w/'.$site->id, array_merge([
             'full_name' => 'Miguel Torres',
@@ -82,7 +83,7 @@ class WorkerJoinReturningTest extends TestCase
         $this->assertSame(1, Employee::query()->where('name', 'Someone Else')->count(), '두 사람으로 남는다 — 합치는 건 나중에 할 수 있지만 덮은 신원은 되돌릴 수 없다');
     }
 
-    public function test_퇴사자는_QR_로_스스로_되살아나지_않는다(): void
+    public function test_퇴사자는_q_r_로_스스로_되살아나지_않는다(): void
     {
         $this->join($this->site)->assertOk();
         Employee::query()->where('name', 'Miguel Torres')->update(['employment_status' => 'terminated']);
@@ -97,12 +98,12 @@ class WorkerJoinReturningTest extends TestCase
     {
         $own = Company::create(['code' => 'OWN', 'name' => '자사', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
 
-        $this->join($this->site, ['company_id' => $own->id, 'position' => 'foreman'])->assertOk();
+        $this->join($this->site, ['company_id' => $own->id, 'position' => 'worker'])->assertOk();
 
         $employee = Employee::query()->where('name', 'Miguel Torres')->firstOrFail();
         $this->assertSame(Employee::TYPE_DIRECT, $employee->employment_type);
         $this->assertTrue($employee->isHourly(), '자사 직영은 출퇴근 시간이 그대로 급여가 된다');
-        $this->assertSame('foreman', $employee->position, '직책은 공정과 따로 남는다');
+        $this->assertSame('worker', $employee->position, '직책은 공정과 따로 남는다');
         $this->assertSame('Piping', $employee->role, '공정은 공정 칸에 그대로');
         $this->assertSame(now()->toDateString(), $employee->start_date?->toDateString(), '급여 기간을 가르는 값이라 비워 두지 않는다');
     }
@@ -136,7 +137,7 @@ class WorkerJoinReturningTest extends TestCase
         // 예전에는 공정 글자에서 'foreman' 을 찾아 짐작했다 — "Piping" 이라고 적은
         // 반장은 작업자로 계산됐다.
         $own = Company::create(['code' => 'OWN', 'name' => '자사', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
-        $this->join($this->site, ['company_id' => $own->id, 'position' => 'foreman'])->assertOk();
+        $this->join($this->site, ['company_id' => $own->id, 'position' => 'foreman', 'email' => 'foreman@example.com'])->assertOk();
 
         $employee = Employee::query()->where('name', 'Miguel Torres')->firstOrFail();
         $this->assertContains($employee->position, Employee::SUPERVISORY_POSITIONS);

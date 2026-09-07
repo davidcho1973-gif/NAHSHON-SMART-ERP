@@ -39,8 +39,8 @@ final class WorkerLang
 
         return [
             'ko' => [
-                'eyebrow' => '작업자 간편 등록',
-                'title' => '작업자 등록',
+                'eyebrow' => '직원 간편 등록',
+                'title' => '직원 등록',
                 'language' => '언어',
                 'name' => '이름',
                 'namePlaceholder' => '홍길동',
@@ -69,16 +69,21 @@ final class WorkerLang
                 'tradeHint' => '목록에서 고르거나, 없으면 직접 적어 주세요.',
                 'email' => '이메일 (선택)',
                 'emailHint' => '없으면 비워 두세요.',
+                'managerEmail' => '이메일 (필수)',
+                'managerEmailHint' => '반장·기사·소장·안전·사무관리 직책은 업무 연락용 이메일이 필요합니다.',
+                'managerCompanyHint' => '선택한 직책에 따라 관리직으로 등록됩니다. 소속회사를 확인해 주세요.',
+                'labelStaff' => '관리직',
+                'accessHint' => '직원 등록 후 출퇴근을 이용할 수 있습니다. ERP 접속 권한은 관리자가 본인과 담당 업무를 확인한 후 부여합니다.',
                 'phone' => '전화번호',
                 'phoneHint' => '이 번호가 본인 확인에 쓰입니다.',
-                'submit' => '작업자로 등록하기',
+                'submit' => '직원 등록하기',
                 'errors' => '입력을 확인해 주세요:',
                 'doneTitle' => '등록 완료!',
-                'doneBody' => '님, 작업자로 등록되었습니다.',
+                'doneBody' => '님, 직원으로 등록되었습니다.',
                 'doneDevice' => '이 휴대폰이 기억되었습니다. 다음부터 게이트 QR 을 스캔하면 이름을 찾지 않고 바로 출퇴근할 수 있습니다.',
                 'doneBadge' => '사번',
                 'againTitle' => '이미 등록되어 있습니다',
-                'againBody' => '님은 이미 등록된 작업자입니다. 오늘 현장·소속만 새로 맞췄습니다.',
+                'againBody' => '님은 이미 등록된 직원입니다. 오늘 현장·소속만 새로 맞췄습니다.',
                 'sharedTitle' => '이 휴대폰은 기억하지 않습니다',
                 'sharedBody' => '한 휴대폰으로 두 사람 이상 등록했습니다. 대신 등록해 주신 폰으로 보고 출퇴근 인식을 하면 다른 사람으로 찍히므로, 이 폰은 기억하지 않습니다.',
                 'nextPerson' => '다음 사람 등록하기',
@@ -90,8 +95,8 @@ final class WorkerLang
                 'suffixRegistered' => ' 으로 등록됩니다.',
             ],
             'en' => [
-                'eyebrow' => 'Quick Worker Sign-Up',
-                'title' => 'Worker Registration',
+                'eyebrow' => 'Employee Sign-Up',
+                'title' => 'Employee Registration',
                 'language' => 'Language',
                 'name' => 'Full name',
                 'namePlaceholder' => 'John Smith',
@@ -120,12 +125,17 @@ final class WorkerLang
                 'tradeHint' => 'Pick from the list, or type yours if it is not there.',
                 'email' => 'Email (optional)',
                 'emailHint' => 'Leave blank if you do not have one.',
+                'managerEmail' => 'Email (required)',
+                'managerEmailHint' => 'Supervisory and office positions require an email for work correspondence.',
+                'managerCompanyHint' => 'Your selected position registers you as staff. Please check your company.',
+                'labelStaff' => 'Staff',
+                'accessHint' => 'Registration enables gate attendance. An administrator grants ERP access after verifying your identity and responsibilities.',
                 'phone' => 'Phone',
                 'phoneHint' => 'This number is how we recognize you.',
-                'submit' => 'Register as worker',
+                'submit' => 'Register',
                 'errors' => 'Please check your entries:',
                 'doneTitle' => 'You are registered!',
-                'doneBody' => ', you are now registered as a worker.',
+                'doneBody' => ', you are now registered.',
                 'doneDevice' => 'This phone is remembered. Next time, just scan the gate QR — no need to look up your name.',
                 'doneBadge' => 'Employee no.',
                 'againTitle' => 'You are already registered',
@@ -141,8 +151,8 @@ final class WorkerLang
                 'suffixRegistered' => ' will be recorded.',
             ],
             'es' => [
-                'eyebrow' => 'Registro rápido de trabajador',
-                'title' => 'Registro de trabajador',
+                'eyebrow' => 'Registro de personal',
+                'title' => 'Registro de personal',
                 'language' => 'Idioma',
                 'name' => 'Nombre completo',
                 'namePlaceholder' => 'Juan Pérez',
@@ -171,12 +181,17 @@ final class WorkerLang
                 'tradeHint' => 'Elija de la lista, o escriba el suyo si no aparece.',
                 'email' => 'Correo electrónico (opcional)',
                 'emailHint' => 'Déjelo en blanco si no tiene.',
+                'managerEmail' => 'Correo (obligatorio)',
+                'managerEmailHint' => 'Los puestos de supervisión y oficina requieren correo para comunicaciones de trabajo.',
+                'managerCompanyHint' => 'El puesto seleccionado lo registra como personal administrativo. Verifique su empresa.',
+                'labelStaff' => 'Personal administrativo',
+                'accessHint' => 'El registro permite marcar asistencia. Un administrador habilita el acceso al ERP tras verificar su identidad y funciones.',
                 'phone' => 'Teléfono',
                 'phoneHint' => 'Este número es como lo reconocemos.',
-                'submit' => 'Registrarme como trabajador',
+                'submit' => 'Registrarme',
                 'errors' => 'Revise los datos ingresados:',
                 'doneTitle' => '¡Registro completo!',
-                'doneBody' => ', ya está registrado como trabajador.',
+                'doneBody' => ', ya está registrado.',
                 'doneDevice' => 'Este teléfono quedó registrado. La próxima vez solo escanee el QR de la entrada; no tendrá que buscar su nombre.',
                 'doneBadge' => 'N.º de empleado',
                 'againTitle' => 'Ya está registrado',
@@ -236,61 +251,30 @@ final class WorkerLang
             ],
             'join' => [
                 'ko' => [
-                    'title' => '작업자 간편 등록',
+                    'title' => '직원 간편 등록',
                     'hint' => '자사·협력사 모두 이 QR 하나로 등록합니다.',
                     'steps' => [
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                        '이름·소속회사·공정·전화번호를 입력합니다. (이메일은 선택)',
+                        '이름·소속회사·공정·직책·전화번호를 입력합니다. 관리 직책은 이메일도 필수입니다.',
                         '등록 완료 — 바로 현장 출퇴근을 시작할 수 있습니다.',
                     ],
                 ],
                 'en' => [
-                    'title' => 'Worker Sign-Up',
+                    'title' => 'Employee Sign-Up',
                     'hint' => 'One QR for everyone — our own crew and subcontractors.',
                     'steps' => [
                         'Scan the QR code with your phone camera.',
-                        'Enter your name, company, trade and phone. (Email is optional.)',
+                        'Enter your name, company, trade, position and phone. Supervisory positions also require email.',
                         'Done — you can start clocking in right away.',
                     ],
                 ],
                 'es' => [
-                    'title' => 'Registro de trabajador',
+                    'title' => 'Registro de personal',
                     'hint' => 'Un solo QR para todos: personal propio y subcontratistas.',
                     'steps' => [
                         'Escanee el código QR con la cámara.',
-                        'Ingrese su nombre, empresa, oficio y teléfono. (El correo es opcional.)',
+                        'Ingrese nombre, empresa, oficio, puesto y teléfono. Los supervisores también necesitan correo.',
                         'Listo — ya puede registrar su entrada.',
-                    ],
-                ],
-            ],
-            // 관리자용 — 현장소장·공정별 팀장·기사·안전관리자. 작업자 QR 과 나누는 이유는
-            // 필요한 것이 다르기 때문이다(이메일·직책은 필수, 공종은 관리자에게도 있다).
-            'join-manager' => [
-                'ko' => [
-                    'title' => '관리자 등록',
-                    'hint' => '현장소장 · 공정별 팀장 · 기사 · 안전관리자용입니다. 작업자는 옆의 작업자 QR 을 쓰세요.',
-                    'steps' => [
-                        '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                        '이름·회사·담당 공정·직책·이메일·전화번호를 입력합니다.',
-                        '등록 완료 — 출퇴근은 바로 되고, ERP 로그인 권한은 관리자 승인 후 열립니다.',
-                    ],
-                ],
-                'en' => [
-                    'title' => 'Manager Sign-Up',
-                    'hint' => 'For superintendents, trade foremen, engineers and safety managers. Workers: use the worker QR.',
-                    'steps' => [
-                        'Scan the QR code with your phone camera.',
-                        'Enter your name, company, trade, position, email and phone.',
-                        'Done — you can clock in right away. ERP login access opens after an admin approves.',
-                    ],
-                ],
-                'es' => [
-                    'title' => 'Registro de supervisor',
-                    'hint' => 'Para superintendentes, capataces de oficio, ingenieros y encargados de seguridad. Trabajadores: usen el QR de trabajador.',
-                    'steps' => [
-                        'Escanee el código QR con la cámara.',
-                        'Ingrese nombre, empresa, oficio, cargo, correo y teléfono.',
-                        'Listo — puede registrar entrada de inmediato. El acceso al ERP se abre tras la aprobación del administrador.',
                     ],
                 ],
             ],
@@ -486,10 +470,10 @@ final class WorkerLang
                 ."열어서 구글 계정으로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
             'en' => "This is your attendance app. See your hours and pay on your phone.\n"
                 ."{$url}\n"
-                ."Open it, sign in with Google, then tap \"Add to Home Screen\".",
+                .'Open it, sign in with Google, then tap "Add to Home Screen".',
             'es' => "Esta es su aplicación de asistencia. Vea sus horas y su pago en su teléfono.\n"
                 ."{$url}\n"
-                ."Ábrala, inicie sesión con Google y toque \"Agregar a la pantalla de inicio\".",
+                .'Ábrala, inicie sesión con Google y toque "Agregar a la pantalla de inicio".',
         ];
     }
 

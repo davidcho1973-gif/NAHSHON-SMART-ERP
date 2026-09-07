@@ -25,7 +25,7 @@
         h1, .brand, .done p, .note, label, .device, .shared, .payroll { word-break: keep-all; }
         body { margin: 0; padding: 20px; display: flex; justify-content: center; background: var(--kakao); }
         .card { width: min(100%, 460px); background: #fff; border: 0; border-radius: 20px; padding: 26px 22px; box-sizing: border-box; }
-        .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
         .brand { font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); font-weight: 800; margin: 0 0 4px; }
         h1 { margin: 0 0 4px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
         .site { color: var(--ink-2); font-size: .95rem; margin: 0 0 18px; }
@@ -100,11 +100,7 @@
                 <a class="install-cta" id="t-install" href="{{ route('gate.show', ['site' => $site]) }}?install=1"></a>
                 <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
 
-                {{-- 반장이 팀원을 연달아 등록하는 흐름 — 회사·공정은 다음 사람에게 그대로 이어진다.
-                     들어온 문(작업자/관리자)으로 돌아간다. 안 그러면 관리자 등록을 마친 사람이
-                     다음 사람을 작업자로 넣는다. --}}
-                @php($doneKind = ($kind ?? 'worker') === 'manager')
-                <a class="next" id="t-next" href="{{ $doneKind ? route('manager-join.form', ['site' => $site]) : route('worker-join.form', ['site' => $site]) }}"></a>
+                <a class="next" id="t-next" href="{{ route('employee-join.form', ['site' => $site, 'lang' => $lang]) }}"></a>
 
                 @if (!empty($w9Url))
                     {{-- 1099 지급 전제조건 — 등록에 이어 바로 작성하게 해 종이 수거 행정을 없앤다. --}}
@@ -188,9 +184,7 @@
                 <div class="err"><span id="t-errors"></span><ul>@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
             @endif
 
-            {{-- 두 문(작업자·관리자)이 같은 화면을 쓰되 보내는 곳과 필수 칸이 갈린다. --}}
-            @php($isManager = ($kind ?? 'worker') === 'manager')
-            <form method="POST" action="{{ $isManager ? route('manager-join.store', ['site' => $site]) : route('worker-join.store', ['site' => $site]) }}">
+            <form method="POST" action="{{ route('employee-join.store', ['site' => $site]) }}">
                 @csrf
                 @if ($lockedType)
                     {{-- 예전에 인쇄해 붙여 둔 고용 형태별 QR 로 들어온 경우 — 그 값을 그대로 지킨다. --}}
@@ -199,10 +193,10 @@
                 {{-- 여기서 고른 언어가 출퇴근 화면의 기본 언어가 된다. --}}
                 <input type="hidden" name="preferred_language" id="lang-field" value="{{ $lang }}">
 
-                <label id="t-name"></label>
+                <label id="t-name" for="f-name"></label>
                 <input type="text" name="full_name" id="f-name" value="{{ old('full_name') }}" required>
 
-                <label id="t-company"></label>
+                <label id="t-company" for="company"></label>
                 <select name="company_id" id="company" required>
                     <option value="" id="opt-blank"></option>
                     @foreach ($companies as $c)
@@ -224,7 +218,7 @@
                         <span id="t-askIndirect"></span></label>
                 </div>
 
-                <label id="t-trade"></label>
+                <label id="t-trade" for="f-role"></label>
                 {{-- 목록에서 고르는 것이 기본이지만, 없는 공정은 적을 수 있다. 서버에서 대소문자·공백만
                      다른 값은 기존 이름으로 맞춘다 — 그래야 집계가 갈리지 않는다. --}}
                 <input type="text" name="role" id="f-role" list="trade-list" value="{{ old('role') }}"
@@ -236,9 +230,9 @@
 
                 {{-- 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가).
                      자사 직영은 이 값이 급여의 관리자 구분을 정하므로 반드시 받는다. --}}
-                <label id="t-position"></label>
+                <label id="t-position" for="f-position"></label>
                 {{-- 관리자는 자리가 반드시 정해져야 한다 — 결재선과 급여 구분이 여기서 갈린다. --}}
-                <select name="position" id="f-position" @if($isManager) required @endif>
+                <select name="position" id="f-position" required>
                     <option value="" id="opt-position-blank"></option>
                     @foreach ($positions as $code => $label)
                         <option value="{{ $code }}" @selected(old('position') === $code)>{{ $label }}</option>
@@ -254,26 +248,18 @@
 
                 {{-- 전화번호가 신원이다(같은 이름 + 같은 번호 = 같은 사람). 그래서 이메일보다
                      위에 두고, 반드시 받는다. --}}
-                <label id="t-phone"></label>
+                <label id="t-phone" for="f-phone"></label>
                 <input type="tel" name="phone" id="f-phone" value="{{ old('phone') }}" placeholder="480-555-0100" required>
                 <div class="note" id="t-phoneHint"></div>
 
                 {{-- 작업자에게 이메일은 선택. 현장에서 이메일이 없거나 기억나지 않는 사람이
                      여기서 막히면 그날 그 사람은 명단에 없는 채로 일하게 된다.
                      관리자에게는 필수다 — 로그인 계정과 업무 서신이 그 주소로 간다. --}}
-                <label id="t-email"></label>
-                <input type="email" name="email" value="{{ old('email') }}" placeholder="name@example.com"
-                       @if($isManager) required @endif>
+                <label id="t-email" for="f-email"></label>
+                <input type="email" name="email" id="f-email" value="{{ old('email') }}" placeholder="name@example.com">
                 <div class="note" id="t-emailHint"></div>
 
-                @if($isManager)
-                    {{-- 등록과 권한은 다른 일이다. 벽에 붙은 QR 은 촬영·복사되므로,
-                         스캔했다는 사실만으로 ERP 권한을 주면 그 사진이 곧 열쇠가 된다. --}}
-                    <div class="payroll" style="display:block">
-                        <b>등록하면 바로 출퇴근할 수 있습니다.</b><br>
-                        ERP 로그인 권한은 관리자가 본인 확인 후 열어 드립니다.
-                    </div>
-                @endif
+                <div class="note" id="t-accessHint" role="note"></div>
 
                 <button type="submit" id="t-submit"></button>
             </form>
@@ -283,30 +269,8 @@
                     var DICT = @json($dict, JSON_UNESCAPED_UNICODE);
                     var lang = @json($lang);
                     var locked = @json($lockedType);
-                    var isManager = @json($isManager);
-                    // 관리자 문은 제목과 안내만 갈린다 — 나머지 문구(이름·회사·공정)는 그대로다.
-                    // 공종을 묻는 것도 같다: 공정별 팀장이 곧 관리자다.
-                    var MGR = {
-                        ko: { eyebrow: '관리자 등록', title: '관리자 등록',
-                              email: '이메일', submit: '관리자로 등록하기',
-                              positionHint: '맡으신 자리를 골라 주세요. (필수)',
-                              emailHint: '로그인과 업무 연락이 이 주소로 갑니다. (필수)',
-                              tradeHint: '담당하시는 공정을 적어 주세요 — 공정별 팀장도 이 칸을 채웁니다.' },
-                        en: { eyebrow: 'Manager Sign-Up', title: 'Manager Registration',
-                              email: 'Email', submit: 'Register as manager',
-                              positionHint: 'Choose your position. (required)',
-                              emailHint: 'Login and work correspondence go to this address. (required)',
-                              tradeHint: 'Enter the trade you are responsible for — trade foremen fill this too.' },
-                        es: { eyebrow: 'Registro de supervisor', title: 'Registro de supervisor',
-                              email: 'Correo electrónico', submit: 'Registrarme como supervisor',
-                              positionHint: 'Elija su cargo. (obligatorio)',
-                              emailHint: 'El acceso y la correspondencia van a esta dirección. (obligatorio)',
-                              tradeHint: 'Indique el oficio que supervisa — los capataces también llenan esto.' },
-                    };
-                    function dict(code) {
-                        var base = DICT[code] || DICT.ko;
-                        return isManager ? Object.assign({}, base, MGR[code] || MGR.ko) : base;
-                    }
+                    var supervisoryPositions = @json(\App\Models\Employee::SUPERVISORY_POSITIONS);
+                    function dict(code) { return DICT[code] || DICT.ko; }
                     var T = dict(lang);
 
                     var sel = document.getElementById('company');
@@ -327,7 +291,7 @@
                         text('t-name', T.name); text('t-company', T.company);
                         text('t-trade', T.trade); text('t-tradeHint', T.tradeHint);
                         text('t-email', T.email); text('t-phone', T.phone);
-                        text('t-emailHint', T.emailHint); text('t-phoneHint', T.phoneHint);
+                        text('t-emailHint', T.emailHint); text('t-accessHint', T.accessHint); text('t-phoneHint', T.phoneHint);
                         text('t-position', T.position); text('t-positionHint', T.positionHint);
                         text('opt-position-blank', T.positionPlaceholder);
                         text('t-payrollTitle', T.payrollTitle); text('t-payrollBody', T.payrollBody);
@@ -358,14 +322,18 @@
                         var direct = etype === 'direct'
                             || (ask.style.display !== 'none' && (document.querySelector('input[name=employment_type]:checked') || {}).value === 'direct');
                         payrollNote.style.display = direct ? 'block' : 'none';
-                        posSel.required = direct;
+                        posSel.required = true;
                     }
 
                     function syncCompany() {
+                        var isManager = supervisoryPositions.indexOf(posSel.value) !== -1;
+                        document.getElementById('f-email').required = isManager;
+                        text('t-email', isManager ? T.managerEmail : T.email);
+                        text('t-emailHint', isManager ? T.managerEmailHint : T.emailHint);
                         var opt = sel.options[sel.selectedIndex];
                         // 회사 분류가 최우선, 없으면 예전 QR 값, 그것도 없으면 작업자에게 묻는다.
                         var etype = (opt && opt.getAttribute('data-etype')) || locked || '';
-                        var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient };
+                        var LABEL = { direct: T.labelDirect, indirect: T.labelIndirect, client: T.labelClient, staff: T.labelStaff };
 
                         // 관리자는 고용 형태를 묻지 않는다 — 어느 회사 소속이든 관리직이고,
                         // 서버도 그 값을 요구하지 않는다. 화면만 계속 물으면 <b>보낼 수 없는
@@ -380,13 +348,11 @@
                             nameInput.style.display = otherM ? 'block' : 'none';
                             nameInput.required = otherM;
                             if (!otherM) { nameInput.value = ''; }
-                            note.textContent = otherM ? T.companyOtherHint : (etype ? LABEL[etype] + T.suffixRegistered : T.companyHint);
+                            note.textContent = T.managerCompanyHint;
                             note.className = 'note';
 
                             return;
                         }
-
-                        syncPayroll(etype);
 
                         // 목록에 없는 회사 — 이름을 받고, 자사인지 협력사인지 물어본다.
                         // 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
@@ -399,6 +365,7 @@
                             note.textContent = T.companyOtherHint; note.className = 'note';
                             ask.style.display = locked ? 'none' : 'block';
                             radios.forEach(function (r) { r.required = !locked; });
+                            syncPayroll(etype);
 
                             return;
                         }
@@ -417,9 +384,11 @@
                             ask.style.display = 'block';
                             radios.forEach(function (r) { r.required = true; });
                         }
+                        syncPayroll(etype);
                     }
 
                     sel.addEventListener('change', syncCompany);
+                    posSel.addEventListener('change', syncCompany);
                     // 목록에 없는 회사라 "누가 급여를 주나요?" 를 직접 고른 경우도 같이 본다.
                     radios.forEach(function (r) { r.addEventListener('change', function () { syncCompany(); }); });
                     Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
@@ -448,7 +417,8 @@
                         } catch (e) {}
                         if (savedCompany && !sel.value) { sel.value = savedCompany; }
                         var browser = (navigator.language || '').slice(0, 2);
-                        var pick = (saved && DICT[saved]) ? saved : (DICT[browser] ? browser : lang);
+                        var explicit = new URLSearchParams(window.location.search).get('lang');
+                        var pick = DICT[explicit] ? explicit : ((saved && DICT[saved]) ? saved : (DICT[browser] ? browser : lang));
                         lang = pick; T = dict(pick);
                         paint();
                     })();

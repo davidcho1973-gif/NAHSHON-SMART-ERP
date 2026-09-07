@@ -6,8 +6,10 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WbsItem;
 use App\Models\WorkerDevice;
+use App\Services\Alerts\UnifiedAlertService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
 use Illuminate\Http\Request;
@@ -31,13 +33,7 @@ class SimpleWorkerRegistrationController extends Controller
     /** 작업자가 답할 수 있는 고용 형태(미분류 회사일 때만 노출). */
     private const ASKABLE_TYPES = [Employee::TYPE_DIRECT, Employee::TYPE_INDIRECT];
 
-    /**
-     * 등록의 두 갈래 — 작업자와 관리자.
-     *
-     * 문을 나누는 이유는 <b>필요한 것이 다르기</b> 때문이다. 관리자는 이메일이 있어야
-     * 하고(로그인과 서신이 그리로 간다) 어떤 자리인지가 반드시 정해져야 한다. 반면
-     * 관리자에게도 공종은 있다 — 공정별 팀장이 곧 관리자다. 그래서 공종은 양쪽 모두 묻는다.
-     */
+    /** 직책이 입력 요건을 정한다. 공유한 URL 종류로 직원 분류를 결정하지 않는다. */
     private const KIND_WORKER = 'worker';
 
     private const KIND_MANAGER = 'manager';
@@ -51,57 +47,40 @@ class SimpleWorkerRegistrationController extends Controller
         ]);
     }
 
-    /** 관리자용 인쇄 포스터 — 작업자 QR 과 다른 종이다(현장 사무실에 붙인다). */
+    /** 이미 공유된 관리자 QR 주소도 통합 포스터를 보여 준다. */
     public function managerQr(Site $site): View
     {
-        return view('worker-join.qr', [
-            'site' => $site,
-            'poster' => QrPosters::make($site, QrPosters::MANAGER),
-        ]);
+        return $this->qr($site);
     }
 
     /** 간편 등록 폼(모바일). */
     public function form(Request $request, Site $site): View
     {
-        return $this->formView($request, $site, self::KIND_WORKER);
+        return $this->formView($request, $site);
     }
 
-    /** 관리자 등록 폼 — 같은 화면이 이메일·직책을 필수로 바꾼다. */
+    /** 이전 관리자 링크를 받은 사람도 같은 직원 등록 화면을 쓴다. */
     public function managerForm(Request $request, Site $site): View
     {
-        return $this->formView($request, $site, self::KIND_MANAGER);
+        return $this->form($request, $site);
     }
 
-    private function formView(Request $request, Site $site, string $kind): View
+    private function formView(Request $request, Site $site): View
     {
-        $manager = $kind === self::KIND_MANAGER;
-
         return view('worker-join.form', [
             'site' => $site,
-            'kind' => $kind,
             'companies' => $this->companyOptions(),
             'roles' => $this->tradeOptions($site),
-            // 관리자는 감독하는 자리만 고른다 — 관리자 문으로 들어와 '작업자' 를 고르면
-            // 어느 쪽도 아닌 기록이 남는다.
-            'positions' => $manager ? $this->supervisoryPositions() : Employee::POSITIONS,
+            'positions' => Employee::POSITIONS,
             'done' => false,
             'returning' => false,
             // 이미 붙어 있는 예전 QR(?type=direct|indirect) — 회사가 미분류일 때만 쓰이는 보조 값.
-            'lockedType' => $manager ? null : QrPosters::legacyEmploymentType($request->query('type')),
+            'lockedType' => QrPosters::legacyEmploymentType($request->query('type')),
             'lang' => WorkerLang::resolve($request->query('lang')),
             'langOptions' => WorkerLang::OPTIONS,
             'dict' => WorkerLang::join(),
             'deviceToken' => null,
         ]);
-    }
-
-    /** @return array<string, string> */
-    private function supervisoryPositions(): array
-    {
-        return array_intersect_key(
-            Employee::POSITIONS,
-            array_flip(Employee::SUPERVISORY_POSITIONS),
-        );
     }
 
     /**
@@ -259,7 +238,7 @@ class SimpleWorkerRegistrationController extends Controller
 
             // 관리자·사무직 계정에 붙은 기록은 공개 폼이 건드리지 않는다. 이름과 번호를
             // 아는 사람이 남의 소속 현장을 옮겨 버리는 길을 열어 두지 않는다.
-            $elevated = \App\Models\User::query()
+            $elevated = User::query()
                 ->where('employee_id', $candidate->id)
                 ->whereNotIn('access_role', ['worker', 'foreman'])
                 ->exists();
@@ -283,18 +262,23 @@ class SimpleWorkerRegistrationController extends Controller
     /** 즉시 등록 — MemberRegistration 생성 후 곧바로 활성 Employee 로 동기화. */
     public function store(Request $request, Site $site): View
     {
-        return $this->register($request, $site, self::KIND_WORKER);
+        return $this->register($request, $site);
     }
 
-    /** 관리자 등록 — 이메일·직책이 필수이고, 고용 형태는 관리직으로 고정된다. */
+    /** 배포 전에 열린 관리자 폼의 POST도 직책을 기준으로 처리한다. */
     public function managerStore(Request $request, Site $site): View
     {
-        return $this->register($request, $site, self::KIND_MANAGER);
+        return $this->store($request, $site);
     }
 
-    private function register(Request $request, Site $site, string $kind): View
+    private function register(Request $request, Site $site): View
     {
-        $manager = $kind === self::KIND_MANAGER;
+        // 예전 작업자 폼은 직책을 생략할 수 있었다. 새 공용 폼은 항상 직접 선택한다.
+        if ($request->routeIs('worker-join.store') && ! $request->filled('position')) {
+            $request->merge(['position' => 'worker']);
+        }
+        $manager = in_array($request->input('position'), Employee::SUPERVISORY_POSITIONS, true);
+        $kind = $manager ? self::KIND_MANAGER : self::KIND_WORKER;
 
         // 목록에서 고른 회사, 없으면 작업자가 적어 넣은 이름과 같은 회사(있으면).
         // 여기서는 아직 만들지 않는다 — 검증을 통과하지 못한 등록이 회사만 남기면 안 된다.
@@ -317,13 +301,7 @@ class SimpleWorkerRegistrationController extends Controller
             // 공정도 마찬가지로 자유 입력을 받는다. 다만 아래에서 기존 공정명과 대소문자·공백만
             // 다른 값은 기존 이름으로 맞춘다 — 안 그러면 집계가 'Piping' 과 'piping' 으로 갈린다.
             'role' => ['required', 'string', 'max:60'],
-            // 직책 — 공정(무슨 일을 하는가)과 다른 값이다(어떤 자리인가). 급여의 관리자
-            // 구분이 여기서 정해지므로, 자사 직영이면 반드시 받는다.
-            // 관리자는 자리가 반드시 정해져야 한다 — 결재선과 급여 구분이 여기서 갈린다.
-            // 그리고 감독하는 자리만 고를 수 있다(관리자 문으로 들어와 '작업자' 는 없다).
-            'position' => $manager
-                ? ['required', Rule::in(Employee::SUPERVISORY_POSITIONS)]
-                : ['nullable', Rule::in(array_keys(Employee::POSITIONS))],
+            'position' => ['required', Rule::in(array_keys(Employee::POSITIONS))],
             // 이메일은 선택이다. 현장에서 이메일을 안 쓰거나 주소가 기억나지 않는 사람이
             // 여기서 막히면 등록 자체를 못 하고, 그러면 그날 그 사람은 명단에 없는 채로
             // 일한다 — 없는 사람은 출퇴근도 안전서명도 남지 않는다. 신원은 전화번호가
@@ -347,7 +325,7 @@ class SimpleWorkerRegistrationController extends Controller
         $data['company_id'] = $company->getKey();
         $data['role'] = $this->normalizeTrade($site, (string) $data['role']);
 
-        // 관리자 문으로 들어오면 관리직이다 — 회사가 자사든 협력사든 하는 일이 관리다.
+        // 관리 직책을 선택하면 관리직이다 — URL이나 임의의 권한 입력값으로 정하지 않는다.
         // (출퇴근 정책이 여기서 갈린다: 관리직은 출석 확인, 시급 직영은 정밀 시간관리.)
         // 작업자는 회사 분류가 최우선 — 관리자가 유지하는 데이터라 "어느 종이를 스캔했나" 보다 믿을 만하다.
         $type = $manager
@@ -434,7 +412,7 @@ class SimpleWorkerRegistrationController extends Controller
     private function alertManagerNeedsAccount(Employee $employee, Site $site): void
     {
         try {
-            app(\App\Services\Alerts\UnifiedAlertService::class)->emit("manager-account-pending:{$employee->id}", [
+            app(UnifiedAlertService::class)->emit("manager-account-pending:{$employee->id}", [
                 'company_id' => $employee->company_id,
                 'site_id' => $site->id,
                 'employee_id' => $employee->id,
@@ -478,10 +456,16 @@ class SimpleWorkerRegistrationController extends Controller
             'company_id' => $data['company_id'],
             'role' => $data['role'],
             'phone' => $data['phone'],
+            'position' => $data['position'],
             'employment_type' => $type,
             'preferred_language' => $lang,
             'email' => $email ?: $employee->email,
         ], fn ($v) => $v !== null))->save();
+
+        $this->alertIfPayrollSetupMissing($employee);
+        if ($kind === self::KIND_MANAGER && ! $employee->user) {
+            $this->alertManagerNeedsAccount($employee, $site);
+        }
 
         return $this->doneView(
             $site,
@@ -516,7 +500,7 @@ class SimpleWorkerRegistrationController extends Controller
                 return;
             }
 
-            app(\App\Services\Alerts\UnifiedAlertService::class)->emit("payroll-setup-missing:{$employee->id}", [
+            app(UnifiedAlertService::class)->emit("payroll-setup-missing:{$employee->id}", [
                 'company_id' => $employee->company_id,
                 'site_id' => $employee->site_id,
                 'employee_id' => $employee->id,
