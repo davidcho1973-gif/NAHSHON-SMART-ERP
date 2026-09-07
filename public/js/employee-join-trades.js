@@ -4,14 +4,22 @@
     // A visible native picker plus a text value works in mobile and Kakao browsers
     // where datalist suggestions may be hidden. Only the text value is submitted.
     root.createEmployeeTradePicker = function (config) {
-        var choice = config.choice, input = config.input, status = config.status;
+        var choice = config.choice, input = config.input, status = config.status, inputLabel = config.inputLabel;
+        var manualChosen = false;
         var requestId = 0, labels, names = [], activeSite = null;
         var cache = {};
         if (config.initialSite) cache[config.initialSite] = config.initialTrades;
 
         function matchInput() {
             var value = input.value.trim();
-            choice.value = names.indexOf(value) !== -1 ? value : (value ? '__other__' : '');
+            choice.value = manualChosen ? '__other__' : (names.indexOf(value) !== -1 ? value : (value ? '__other__' : ''));
+            showManualInput();
+        }
+        function showManualInput() {
+            var manual = choice.value === '__other__';
+            input.type = manual ? 'text' : 'hidden';
+            input.required = manual;
+            inputLabel.hidden = !manual;
         }
         function render(trades) {
             names = trades;
@@ -26,10 +34,12 @@
             matchInput();
         }
         choice.addEventListener('change', function () {
+            manualChosen = choice.value === '__other__';
             input.value = choice.value === '__other__' ? '' : choice.value;
+            showManualInput();
             if (choice.value === '__other__') input.focus();
         });
-        input.addEventListener('input', matchInput);
+        input.addEventListener('input', function () { manualChosen = true; matchInput(); });
 
         return {
             refresh: async function (site, translations) {
@@ -54,7 +64,7 @@
                     status.textContent = '';
                 } catch (error) {
                     if (current !== requestId) return;
-                    // Input stays editable and is never overwritten by a delayed response.
+                    // Manual entry remains available; delayed responses never overwrite input.
                     status.textContent = labels.tradeLoadFailed;
                 }
             }
