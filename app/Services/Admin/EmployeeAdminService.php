@@ -393,7 +393,8 @@ class EmployeeAdminService
 
         $siteId = $this->intOrNull($input['siteId'] ?? null);
         $teamId = $this->intOrNull($input['teamId'] ?? null);
-        if ($teamId) {
+        $sameAssignment = $row && $row->company_id == $companyId && $row->site_id == $siteId && $row->team_id == $teamId;
+        if ($teamId && ! $sameAssignment) {
             $team = Team::find($teamId);
             if (! $team || $team->company_id != $companyId || $team->site_id != $siteId || $team->status !== 'active') {
                 $errors['teamId'] = '소속 회사·현장에 맞는 활성 팀을 선택하세요.';

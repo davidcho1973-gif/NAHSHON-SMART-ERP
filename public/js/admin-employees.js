@@ -215,7 +215,8 @@
           function refreshTeams() {
             var selected = team.value;
             team.innerHTML = '<option value="">— 선택 안 함 —</option>' + o.teams.filter(function (t) {
-              return String(t.companyId) === company.value && String(t.siteId) === site.value && t.status === 'active';
+              var existing = r && String(t.value) === String(r.teamId) && String(r.companyId || '') === company.value && String(r.siteId || '') === site.value;
+              return existing || (String(t.companyId) === company.value && String(t.siteId) === site.value && t.status === 'active');
             }).map(function (t) {
               return '<option value="' + u.esc(t.value) + '"' + (String(t.value) === selected ? ' selected' : '') + '>' + u.esc(t.label) + '</option>';
             }).join('');

@@ -158,6 +158,15 @@ class CrewSetupTest extends TestCase
         $this->postJson('/smart-company-api/api_saveCrewTeam', ['args' => [$this->input()]])->assertForbidden();
     }
 
+    public function test_editing_a_name_preserves_an_unchanged_inactive_team(): void
+    {
+        $team = Team::create(['code' => 'OLD', 'name' => 'Old Team', 'company_id' => $this->company->id, 'site_id' => $this->site->id, 'status' => 'inactive']);
+        $person = $this->employee(['team_id' => $team->id]);
+        $result = app(EmployeeAdminService::class)->save(['id' => $person->id, 'name' => 'Updated Name', 'companyId' => $this->company->id, 'siteId' => $this->site->id, 'teamId' => $team->id, 'employmentType' => 'direct', 'status' => 'active']);
+        $this->assertTrue($result['success'], json_encode($result));
+        $this->assertEquals($team->id, $person->fresh()->team_id);
+    }
+
     public function test_legacy_team_board_cannot_move_designated_foreman(): void
     {
         $person = $this->employee();
