@@ -19,6 +19,7 @@ class Team extends Model
         'contract_company_name',
         'trade_type',
         'foreman_name',
+        'foreman_employee_id',
         'responsible_manager_name',
         'supervisor_name',
         'supervisor_phone',
@@ -48,6 +49,16 @@ class Team extends Model
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function foreman(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'foreman_employee_id');
+    }
+
+    public function getForemanNameAttribute(?string $value): ?string
+    {
+        return $this->foreman_employee_id ? $this->foreman?->name : $value;
     }
 
     public function dailyCrewReports(): HasMany

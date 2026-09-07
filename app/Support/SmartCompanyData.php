@@ -32,6 +32,7 @@ use App\Services\Admin\BillingAdminService;
 use App\Services\Admin\CommunicationAdminService;
 use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\CorrespondenceService;
+use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
@@ -241,6 +242,10 @@ class SmartCompanyData
 
             // 조직 설정 — 이 배포가 누구의 것인지. 고객사 관리자가 직접 고친다.
             'api_getOrgSettings' => app(OrgSettingService::class)->load(),
+            'api_getCrewSetup' => app(CrewSetupService::class)->overview(),
+            'api_saveCrewCompany' => app(CrewSetupService::class)->saveCompany(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_saveCrewTeam' => app(CrewSetupService::class)->saveTeam(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_assignCrewEmployee' => app(CrewSetupService::class)->assign(is_array($args[0] ?? null) ? $args[0] : []),
             'api_saveOrgSettings' => app(OrgSettingService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
 
             // 직원 등록 · 수정 (Filament EmployeeResource 를 SPA 로 옮긴 것).

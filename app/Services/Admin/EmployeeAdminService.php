@@ -2,13 +2,19 @@
 
 namespace App\Services\Admin;
 
+use App\Models\AuthEvent;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Auth\PinAuthService;
+use App\Support\AccessPolicy;
+use App\Support\CurrentCompany;
 use App\Support\WorkerLang;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 직원 등록 · 수정 — Filament EmployeeResource 를 SPA 로 옮긴 것.
@@ -189,6 +195,7 @@ class EmployeeAdminService
         return [
             'success' => true,
             'statuses' => $pairs(self::STATUSES),
+            'defaultCompanyId' => CurrentCompany::id(),
             'employmentTypes' => $pairs(Employee::EMPLOYMENT_TYPES),
             'qrRoles' => $pairs(self::QR_ROLES),
             'qrScopes' => $pairs(self::QR_SCOPES),
@@ -197,8 +204,9 @@ class EmployeeAdminService
                 ->map(fn (Company $c): array => ['value' => (string) $c->id, 'label' => $c->name])->all(),
             'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
-            'teams' => Team::query()->orderBy('name')->get(['id', 'name'])
-                ->map(fn (Team $t): array => ['value' => (string) $t->id, 'label' => $t->name])->all(),
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name', 'company_id', 'site_id', 'status'])
+                ->map(fn (Team $t): array => ['value' => (string) $t->id, 'label' => $t->name,
+                    'companyId' => $t->company_id, 'siteId' => $t->site_id, 'status' => $t->status])->all(),
             // 계정 부여 폼에서 쓴다. 줄 수 있는 역할은 부여하는 사람의 등급에 달렸다.
             'accountRoles' => $pairs(array_intersect_key(
                 User::ROLE_LABELS_KO,
@@ -251,7 +259,7 @@ class EmployeeAdminService
             return ['success' => false, 'error' => '먼저 [계정 만들기]로 로그인 계정을 만들어 주세요.'];
         }
 
-        $pins = app(\App\Services\Auth\PinAuthService::class);
+        $pins = app(PinAuthService::class);
         if (! $pins->eligibleForPin($user)) {
             return ['success' => false, 'error' => 'PIN 은 현장 인력(작업자·반장) 계정에만 발급합니다. 관리자 계정은 구글 로그인을 쓰세요.'];
         }
@@ -384,6 +392,21 @@ class EmployeeAdminService
         }
 
         $siteId = $this->intOrNull($input['siteId'] ?? null);
+        $teamId = $this->intOrNull($input['teamId'] ?? null);
+        if ($teamId) {
+            $team = Team::find($teamId);
+            if (! $team || $team->company_id != $companyId || $team->site_id != $siteId || $team->status !== 'active') {
+                $errors['teamId'] = '소속 회사·현장에 맞는 활성 팀을 선택하세요.';
+            }
+        }
+        if ($row && ($row->company_id != $companyId || $row->site_id != $siteId || $row->team_id != $teamId)) {
+            if (Team::where('foreman_employee_id', $row->id)->exists()) {
+                $errors['teamId'] = '회사·팀 등록에서 담당 반장 지정부터 변경하세요.';
+            }
+            if ($row->user?->access_scope === 'team' && (int) $row->user->allowed_team_id !== (int) $teamId) {
+                $errors['teamId'] = '계정·권한 관리에서 팀 접근 범위를 먼저 확인하세요.';
+            }
+        }
         if (! $this->siteAllowed($siteId)) {
             $errors['siteId'] = '담당하지 않는 현장에는 배정할 수 없습니다.';
         }
@@ -519,8 +542,8 @@ class EmployeeAdminService
         // 급여명세가 나간 사람은 <b>누구도</b> 지우지 않는다 — 최고관리자도 마찬가지다.
         // 지급 기록은 세무·노동 기록이라 회사가 몇 년을 보관해야 하는 종류이고,
         // 직원 행이 사라지면 명세도 함께 지워진다(payslips 가 cascade 다).
-        $payslips = \Illuminate\Support\Facades\Schema::hasTable('payslips')
-            ? \Illuminate\Support\Facades\DB::table('payslips')->where('employee_id', $row->id)->count()
+        $payslips = Schema::hasTable('payslips')
+            ? DB::table('payslips')->where('employee_id', $row->id)->count()
             : 0;
         if ($payslips > 0) {
             return ['success' => false, 'error' => "급여명세가 {$payslips}건 발행된 직원입니다. 지급 기록은 보관해야 하므로 삭제할 수 없습니다 — 상태를 \"퇴사\" 로 두세요."];
@@ -540,7 +563,7 @@ class EmployeeAdminService
         // 지웠다는 사실을 남긴다 — 기록이 사라진 뒤에 "왜 없어졌나" 를 물을 때
         // 답할 수 있어야 한다.
         if ($logs > 0) {
-            \App\Models\AuthEvent::record(
+            AuthEvent::record(
                 'employee_deleted',
                 actor: $actor,
                 method: 'admin',
@@ -561,13 +584,13 @@ class EmployeeAdminService
             return;
         }
         // 협력사 관리자는 자기 회사 사람만 — 범위 설정보다 역할이 우선한다.
-        if (\App\Support\AccessPolicy::lockedCompanyId($user) !== null) {
-            \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+        if (AccessPolicy::lockedCompanyId($user) !== null) {
+            AccessPolicy::applyCompanyLock($query, $user);
 
             return;
         }
 
-        if (\App\Support\AccessPolicy::canManageMoney($user)
+        if (AccessPolicy::canManageMoney($user)
             || $user->access_scope === 'all_sites') {
             return;
         }

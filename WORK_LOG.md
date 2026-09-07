@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Company/team onboarding | Restore missing company/team editors in SPA; link an employee as foreman, place team members and surface account setup gaps. Default new employees to the selected company; filter team choices and protect linked foremen from inconsistent reassignment. | `codex/company-team-onboarding` → staging/main PRs | 36 targeted tests / 118 assertions; JS syntax, static build, Blade compilation and local browser team form passed. Full local suite: 1,814 passed, one existing Windows backup-path permission error, one skip; Linux CI required before merge. No live employee/account records created. |
 | 2026-09-05 | CODEX | Shared field-app design | Extend the owner's neutral/navy attendance concept through reports, receipts, document upload, Ask, message list/room and Work/Pay/Me tabs. Centralize palette, typography, shell and navigation; separate desktop input/history sections and profile QR/details; retain mobile stacking. | `codex/field-app-unified-design` → staging/main PRs | 78 related tests / 286 assertions passed; build and Blade cache passed. Local rendered pages checked desktop/mobile, receipt list, shared Work link and Work/Pay/Me; chat composer height reserves message space. Live uploads, clock-in/out and message sends were not used for design testing. |
 | 2026-09-05 | CODEX | Attendance app visual layout | Owner-requested calmer layout: neutral surfaces, navy QR action, small status badges, readable secondary text, responsive shift/actions columns, and bottom navigation constrained to the same shell width. Retain QR, attendance, permission, payroll and language behavior. | `codex/attendance-calm-layout` → staging/main PRs | Local attendance/QR/locale tests: 49 passed / 157 assertions; static build, Blade cache and diff checks passed. Browser fixtures checked at desktop and 320px Spanish permission state; final live verification follows deployment. |
 | 2026-09-05 | CODEX | Worker AI questions and financial access | Keep assigned-site construction answers available to workers/foremen. Apply one AI document boundary to excerpts, knowledge, citations and reply history; remove BOQ money fields, reject financial questions for nonfinancial roles, recheck access after model generation, and preserve old records without replaying unverified answers. | `codex/worker-ask-access` → staging/main PRs | Final targeted tests: 39 passed / 138 assertions; build, Blade cache and Pint passed. Earlier full local run: 1,788 passed, 1 Windows backup-path error in existing PurgeEquipmentTest, 1 Windows git-shell skip. Linux CI required before merge. Live whole-document financial-word inventory was blocked by automatic approval review; no coverage claim for that inventory. |
@@ -179,6 +180,13 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Company → site → team → foreman onboarding
+
+- Cause: removal of the old panel left company/team masters without a SPA editor, while employee creation silently chose the first company. Add Settings → Companies & Teams using AdminUI and the existing masters; retain site, employee and account screens as linked steps.
+- Store the designated foreman as an employee FK with a legacy text fallback, preserving old records. Selecting an unassigned foreman joins them to the team without granting login/QR permissions. Block cross-company/site selections, reassignment of designated foremen and silent changes to approved team access. Add scoped read/manage gates and no bulk seed or deletion.
+- Verify local PostgreSQL tests, API dispatch, selected-company defaults and original team board compatibility. Browser fixture confirmed roster, setup gaps and team/foreman form. Deployment follows staging CI then main and verified Deploy NAHSHON.
+
 
 ### 2026-09-05 — Unify the inside field-app pages
 

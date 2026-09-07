@@ -17,6 +17,18 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '회사·팀 등록': 'Companies & Teams',
+    '회사 추가': 'Add company',
+    '팀 등록': 'Add team',
+    '담당 반장': 'Assigned foreman',
+    '작업자 팀 배치': 'Assign employee to team',
+    '회사 정보·분류 수정': 'Edit company details',
+    '현장 등록·수정': 'Manage sites',
+    '1. 회사 선택': '1. Select company',
+    '2. 현장 선택': '2. Select site',
+    '3. 팀·반장 등록': '3. Add team and foreman',
+    '4. 작업자 배치·계정 확인': '4. Assign people and check access',
+    '소속을 먼저 정하고, 팀과 담당 반장을 연결합니다.': 'Select the company and site, then connect teams and foremen.',
     // ── 메뉴 이름 ────────────────────────────────────────────────────
     // 사이드바와 휴대폰 '더보기' 타일. 여기가 한글로 남으면 영어를 골라도
     // 첫 화면부터 한국어라, 언어를 바꾼 보람이 없다.
@@ -296,6 +308,18 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'Companies & Teams': 'Empresas y equipos',
+    'Add company': 'Agregar empresa',
+    'Add team': 'Agregar equipo',
+    'Assigned foreman': 'Capataz asignado',
+    'Assign employee to team': 'Asignar empleado al equipo',
+    'Edit company details': 'Editar empresa',
+    'Manage sites': 'Administrar obras',
+    '1. Select company': '1. Seleccionar empresa',
+    '2. Select site': '2. Seleccionar obra',
+    '3. Add team and foreman': '3. Agregar equipo y capataz',
+    '4. Assign people and check access': '4. Asignar personal y revisar acceso',
+    'Select the company and site, then connect teams and foremen.': 'Seleccione la empresa y la obra, luego vincule equipos y capataces.',
     // ── 메뉴 이름 (영어를 거쳐 온다) ─────────────────────────────────
     // ── 새 메뉴 구조 (2026-08-13 재편) ──────────────────────────────
     'Today': 'Hoy',
