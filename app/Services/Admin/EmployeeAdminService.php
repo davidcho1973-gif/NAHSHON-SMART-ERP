@@ -153,7 +153,7 @@ class EmployeeAdminService
                 'companyId' => $e->company_id,
                 'company' => $e->company?->name,
                 'siteId' => $e->site_id,
-                'site' => $e->site?->code,
+                'site' => $e->site?->code ?? (data_get($e->payload, 'registration_scope') === 'global' ? 'Global' : null),
                 'teamId' => $e->team_id,
                 'team' => $e->team?->name,
                 'role' => $e->role,

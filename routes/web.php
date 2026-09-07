@@ -385,6 +385,10 @@ Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store
     ->middleware('throttle:20,1')->name('worker-join.store');
 
 // 직원 등록은 한 폼에서 직책으로 입력 요건을 정한다. 예전 /w, /m 링크도 유지한다.
+Route::get('/join', [SimpleWorkerRegistrationController::class, 'entry'])
+    ->middleware('throttle:60,1')->name('employee-join.entry');
+Route::post('/join', [SimpleWorkerRegistrationController::class, 'entryStore'])
+    ->middleware('throttle:20,1')->name('employee-join.entry-store');
 Route::get('/join/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
     ->middleware('throttle:60,1')->name('employee-join.qr');
 Route::get('/join/{site}', [SimpleWorkerRegistrationController::class, 'form'])

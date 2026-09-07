@@ -65,10 +65,34 @@ class SimpleWorkerRegistrationController extends Controller
         return $this->form($request, $site);
     }
 
-    private function formView(Request $request, Site $site): View
+    public function entry(Request $request): View
     {
+        return $this->formView($request, null);
+    }
+
+    public function entryStore(Request $request): View
+    {
+        $ids = Site::query()->where('status', 'active')->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $data = $request->validate([
+            'registration_site' => ['required', 'string', Rule::in([...$ids, 'global'])],
+        ], ['registration_site.required' => '등록된 현장 또는 Global을 선택해 주세요. / Select a site or Global.']);
+        $site = $data['registration_site'] === 'global' ? null : Site::query()->findOrFail($data['registration_site']);
+
+        if ($site === null) {
+            $request->validate(['position' => ['required', Rule::in(Employee::SUPERVISORY_POSITIONS)]]);
+        }
+
+        return $this->register($request, $site);
+    }
+
+    private function formView(Request $request, ?Site $site): View
+    {
+        $sites = Site::query()->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name']);
+
         return view('worker-join.form', [
             'site' => $site,
+            'sites' => $sites,
+            'siteTrades' => $sites->mapWithKeys(fn (Site $item) => [(string) $item->id => $this->tradeOptions($site?->id === $item->id ? $site : null)]),
             'companies' => $this->companyOptions(),
             'roles' => $this->tradeOptions($site),
             'positions' => Employee::POSITIONS,
@@ -114,8 +138,11 @@ class SimpleWorkerRegistrationController extends Controller
      *
      * @return array<int, string>
      */
-    private function tradeOptions(Site $site): array
+    private function tradeOptions(?Site $site): array
     {
+        if ($site === null) {
+            return array_values(MemberRegistration::roleOptions());
+        }
         $list = WbsItem::query()->where('site_id', $site->id)
             ->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade')
             ->map(fn ($t) => trim((string) $t))->filter()->unique()->sort()->values()->all();
@@ -184,7 +211,7 @@ class SimpleWorkerRegistrationController extends Controller
      * 인원 집계가 셋으로 갈린다. 대소문자·공백만 다르면 이미 쓰던 이름으로 되돌린다.
      * 진짜 새 공정이면 적은 그대로 남긴다.
      */
-    private function normalizeTrade(Site $site, string $role): string
+    private function normalizeTrade(?Site $site, string $role): string
     {
         $role = trim($role);
         $needle = mb_strtolower($role);
@@ -193,7 +220,7 @@ class SimpleWorkerRegistrationController extends Controller
         // 앞사람이 적어 넣은 새 공정도 다음 사람에게는 "이미 쓰던 이름" 이어야 한다.
         $known = array_merge(
             $this->tradeOptions($site),
-            Employee::query()->where('site_id', $site->getKey())
+            Employee::query()->where('site_id', $site?->getKey())
                 ->whereNotNull('role')->where('role', '!=', '')
                 ->distinct()->pluck('role')->all(),
         );
@@ -271,7 +298,7 @@ class SimpleWorkerRegistrationController extends Controller
         return $this->store($request, $site);
     }
 
-    private function register(Request $request, Site $site): View
+    private function register(Request $request, ?Site $site): View
     {
         // 예전 작업자 폼은 직책을 생략할 수 있었다. 새 공용 폼은 항상 직접 선택한다.
         if ($request->routeIs('worker-join.store') && ! $request->filled('position')) {
@@ -320,6 +347,13 @@ class SimpleWorkerRegistrationController extends Controller
             'position.required' => '직책을 선택해 주세요. / Please choose your position.',
         ]);
 
+        // Global is a requested assignment, never an authorization grant or a way to move existing staff.
+        if ($site === null && (Employee::query()->whereRaw('lower(email) = ?', [Str::lower($data['email'])])->exists()
+            || User::query()->whereRaw('lower(email) = ?', [Str::lower($data['email'])])->exists()
+            || $this->returningWorker($data['full_name'], $data['phone']) !== null)) {
+            throw ValidationException::withMessages(['email' => '이미 등록된 직원은 관리자에게 Global 배정 변경을 요청해 주세요. / Ask an administrator to change your existing assignment.']);
+        }
+
         // 검증을 통과했으니 이제 만들어도 된다.
         $company ??= $this->createCompany((string) $data['company_name']);
         $data['company_id'] = $company->getKey();
@@ -366,7 +400,7 @@ class SimpleWorkerRegistrationController extends Controller
             'preferred_language' => $lang,
             'position' => $data['position'] ?? null,
             'company_id' => $data['company_id'],
-            'site_id' => $site->id,
+            'site_id' => $site?->id,
             'identity_status' => 'pending',
             'document_status' => 'missing',
             'onboarding_status' => 'active',
@@ -374,14 +408,16 @@ class SimpleWorkerRegistrationController extends Controller
             'payload' => [
                 'invite' => [
                     'source' => $manager ? 'manager-quick-qr' : 'worker-quick-qr',
-                    'site_id' => $site->id,
-                    'site_code' => $site->code,
+                    'site_id' => $site?->id,
+                    'site_code' => $site?->code ?? 'Global',
+                    'requested_assignment' => $site ? 'site' : 'global',
                 ],
             ],
         ]);
 
         $employee = $registration->syncEmployee();
         $employee->forceFill([
+            'payload' => array_merge($employee->payload ?? [], ['registration_scope' => $site ? 'site' : 'global']),
             'employment_type' => $type,
             'preferred_language' => $lang,
             'position' => $data['position'] ?? null,
@@ -396,7 +432,7 @@ class SimpleWorkerRegistrationController extends Controller
         }
 
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
-        $deviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
+        $deviceToken = $site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '';
 
         return $this->doneView($site, $employee, $lang, $deviceToken, (string) $data['full_name'], false, $kind);
     }
@@ -409,12 +445,12 @@ class SimpleWorkerRegistrationController extends Controller
      * 즉시 되지만 <b>로그인 권한은 승인 뒤</b>다 — 대신 승인해야 할 일이 있다는 것을
      * 알림으로 올려서, 새로 온 소장이 며칠씩 기다리는 일이 없게 한다.
      */
-    private function alertManagerNeedsAccount(Employee $employee, Site $site): void
+    private function alertManagerNeedsAccount(Employee $employee, ?Site $site): void
     {
         try {
             app(UnifiedAlertService::class)->emit("manager-account-pending:{$employee->id}", [
                 'company_id' => $employee->company_id,
-                'site_id' => $site->id,
+                'site_id' => $site?->id,
                 'employee_id' => $employee->id,
                 'source_module' => 'HR',
                 'source_type' => Employee::class,
@@ -423,9 +459,9 @@ class SimpleWorkerRegistrationController extends Controller
                 'severity' => 'warning',
                 'title' => "관리자 계정 승인 대기: {$employee->name}",
                 'content' => sprintf(
-                    '%s 님이 관리자 QR 로 등록했습니다 (%s · %s%s). 출퇴근은 바로 되지만 ERP 로그인 권한은 아직 없습니다 — 본인이 맞는지 확인한 뒤 직원 목록에서 계정을 만들어 주세요.',
+                    '%s 님이 직원 등록에서 관리 직책을 선택했습니다 (%s · %s%s). 본인과 요청한 현장 범위를 확인한 뒤 필요한 ERP 계정 권한을 부여해 주세요.',
                     $employee->name,
-                    $site->code,
+                    $site?->code ?? 'Global / 전체 현장 요청',
                     $employee->positionLabel() ?: '관리직',
                     $employee->role ? ' · '.$employee->role : '',
                 ),
@@ -523,14 +559,14 @@ class SimpleWorkerRegistrationController extends Controller
     }
 
     /** 등록·재등록 완료 화면. 두 경우가 같은 화면을 쓰되 문구만 갈린다. */
-    private function doneView(Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER): View
+    private function doneView(?Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER): View
     {
         return view('worker-join.form', [
             // 등록 직후 이 화면에서만 노출되는 서명 링크 — W-9(1099 지급 전제)를 바로 이어서 작성한다.
             // 만료를 둔다 — W-9 은 납세자번호를 적는 화면이라 링크가 무기한 살아 있으면
             // 문자·카톡에 남은 링크가 그대로 열쇠가 된다. 관리자 화면에서 재발급할 수 있다.
             // 다시 온 사람에게는 내밀지 않는다 — 이미 낸 서류를 또 요구하는 화면이 된다.
-            'w9Url' => $returning
+            'w9Url' => $returning || $site === null
                 ? null
                 : URL::temporarySignedRoute('w9.show', now()->addDays(30), ['employee' => $employee->id]),
             'site' => $site,

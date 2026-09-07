@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Existing-site employee selection | Add shared /join with live active-site names and Global requested assignment. Preserve site-prefilled links, require managerial position/email for Global, and keep account grants separate. Use existing one gate QR per physical site for all positions and both punch events. | codex/employee-site-selection | 71 targeted tests / 347 assertions; full regression caught and fixed cross-site trade suggestions; build, Blade and Global form behavior checked. Full final regression and deployment checks follow. |
 | 2026-09-07 | CODEX | Unified employee registration | One shared employee form and QR; selected position controls required email and staff classification. Retain old worker/manager URLs, account approval boundary and company-based worker types. | codex/unified-employee-registration | 51 related tests / 288 assertions; local browser position toggles, ko/en/es and 360px layout verified; full isolated PostgreSQL regression: 1,850 passed, one Windows platform skip, 6,610 assertions (existing Windows backup test excluded); Linux CI and deployment verification follow. |
 | 2026-09-07 | CODEX | Kakao work reminder scheduling | Add admin-only recipient schedules, encrypted +1 phone storage, official SOLAPI Alimtalk adapter, durable daily deduplication, completion-aware attendance/report links and onboarding templates. Deployment defaults OFF; owner has no provider account/channel and US account eligibility remains to be confirmed. | codex/kakao-work-reminders | PostgreSQL feature tests, full regression, static build and Blade compilation; no real messages or live recipient changes. |
 | 2026-09-07 | CODEX | Foreman app access | Add reviewed, optional app access application to team/foreman form: create missing account or promote worker, set team-only login/QR scope, and revoke this team's former foreman access on replacement/removal/deactivation. Preserve privileged accounts and make assignment/account changes atomic. | `codex/foreman-app-access` → staging/main PRs | 43 related tests / 150 assertions passed, including real crew HTTP page access and rejection for another team; JS/build/Blade and local browser preview verified. Full Linux CI required; no live account grants or invitations. |
@@ -183,6 +184,14 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Existing-site employee selection and Global
+
+- Owner requested selection from existing ERP sites, explicitly rejecting invented state-name sites. `/join` validates active IDs from the site master plus Global. Old links preselect a site but submit to the common entry route. Share buttons now copy the generic entry link.
+- Global records a null physical site and explicit registration_scope, shown as Global in the employee list. Supervisory position/email are required, existing employee reassignment is rejected, and no login account, access grant, attendance device or W-9 link is issued for Global.
+- New general_manager position is a staff classification only. Existing authorization roles are untouched. Registered physical-site gate QR already supports workers/managers and both clock-in/out; no new global gate or looser site matching is needed.
+- Full regression exposed that embedding every site's trades leaked another site's options into site-specific pages. Only the initial site's trades are embedded; switching uses standard roles with manual entry, while server normalization remains scoped to the selected site.
+- Shared routes, SPA link and ko/en/es copy changes expose this registration flow. No schema changes, secrets, real employee registrations, access grants, clock events or messages. See docs/EMPLOYEE_REGISTRATION.md.
 
 ### 2026-09-07 — Unified employee registration
 
