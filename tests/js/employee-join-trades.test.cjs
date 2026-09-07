@@ -8,19 +8,23 @@ function element() {
         appendChild(child) { this.children.push(child); }, replaceChildren() { this.children = []; },
         focus() { this.focused = true; } };
 }
-const choice = element(), input = element(), status = element(), pending = [];
+const choice = element(), input = element(), inputLabel = element(), status = element(), pending = [];
 const context = { window: {}, document: { createElement: element },
     fetch(url) { return new Promise((resolve, reject) => pending.push({url, resolve, reject})); } };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../public/js/employee-join-trades.js'), 'utf8'), context);
-const picker = context.window.createEmployeeTradePicker({choice, input, status, urls: {a:'/a', b:'/b'}, defaults:['Electrician','공무지원'], initialSite:'', initialTrades:[]});
+const picker = context.window.createEmployeeTradePicker({choice, input, inputLabel, status, urls: {a:'/a', b:'/b'}, defaults:['Electrician','공무지원'], initialSite:'', initialTrades:[]});
 const labels = {tradePlaceholder:'Choose', tradeOther:'Type', tradeLoading:'Loading', tradeLoadFailed:'Type manually'};
 const values = () => choice.children.map(o => o.value);
 function resolve(index, trades) { pending[index].resolve({ok:true, json:async()=>({trades})}); }
 (async () => {
     await picker.refresh('', labels);
     assert(values().includes('공무지원'));
+    assert.equal(input.type,'hidden'); assert.equal(input.required,false); assert.equal(inputLabel.hidden,true);
     choice.value = '공무지원'; choice.handlers.change(); assert.equal(input.value,'공무지원');
+    assert.equal(input.type,'hidden'); assert.equal(inputLabel.hidden,true);
     choice.value = '__other__'; choice.handlers.change(); assert.equal(input.value,''); assert(input.focused);
+    assert.equal(input.type,'text'); assert.equal(input.required,true); assert.equal(inputLabel.hidden,false);
+    input.value = ''; input.handlers.input(); assert.equal(input.type,'text'); assert.equal(choice.value,'__other__');
     input.value = '특수 보온'; input.handlers.input(); assert.equal(choice.value,'__other__');
     await picker.refresh('global', labels); assert(values().includes('공무지원')); assert.equal(input.value,'특수 보온');
     const first = picker.refresh('a', labels), second = picker.refresh('b', labels);
@@ -34,6 +38,14 @@ function resolve(index, trades) { pending[index].resolve({ok:true, json:async()=
     assert.equal(status.textContent,''); assert.equal(input.value,'Manual after network failure');
     await picker.refresh('a',{...labels,tradeOther:'직접 입력'});
     assert.equal(choice.children.at(-1).textContent,'직접 입력'); assert.equal(input.value,'Manual after network failure');
-    input.value = '배관'; input.handlers.input(); assert.equal(choice.value,'배관');
+    input.value = '배관'; input.handlers.input(); assert.equal(choice.value,'__other__'); assert.equal(input.type,'text');
+    choice.value = '배관'; choice.handlers.change(); assert.equal(input.value,'배관'); assert.equal(input.type,'hidden');
+    assert.equal(input.required,false); assert.equal(inputLabel.hidden,true);
+    const restoredInput = element(), restoredChoice = element(), restoredLabel = element();
+    restoredInput.value = 'Restored custom trade';
+    const restored = context.window.createEmployeeTradePicker({choice:restoredChoice, input:restoredInput, inputLabel:restoredLabel, status:element(), urls:{}, defaults:['공무지원'], initialSite:'', initialTrades:[]});
+    await restored.refresh('global',labels); assert.equal(restoredInput.type,'text');
+    restoredInput.value = ''; restoredInput.handlers.input();
+    assert.equal(restoredInput.type,'text'); assert.equal(restoredInput.required,true);
     console.log('Employee trade picker: defaults, Global, selection, manual input, site race, failure, retry and language passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
