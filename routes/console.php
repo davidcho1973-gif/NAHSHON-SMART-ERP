@@ -61,6 +61,11 @@ Schedule::command('docs:alert-expiring')->dailyAt(Org::time('schedule.docs_expir
 // 밖에서는 아무것도 하지 않고, 하루 2번을 넘지 않는다.
 Schedule::command('attendance:remind-clockin')->everyTenMinutes();
 
+// Config gate avoids waking the database before Kakao onboarding is complete.
+if (config('kakao.enabled')) {
+    Schedule::command('kakao:remind-work')->everyTenMinutes()->withoutOverlapping(15);
+}
+
 // 퇴근 알림 — "아직 퇴근이 안 찍혔습니다".
 //
 // 출근보다 이쪽이 돈에 더 가깝다. 시급 직영은 자동 마감을 하지 않으므로(임금 왜곡

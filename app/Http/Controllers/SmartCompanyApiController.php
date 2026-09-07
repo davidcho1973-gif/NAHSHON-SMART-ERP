@@ -30,6 +30,8 @@ class SmartCompanyApiController extends Controller
      * @var array<string, array<int, string>>
      */
     private const GATES = [
+        'api_getKakaoReminders' => AccessPolicy::SYSTEM_ROLES,
+        'api_saveKakaoReminder' => AccessPolicy::SYSTEM_ROLES,
         'api_getCrewSetup' => CrewSetupService::VIEW_ROLES,
         'api_saveCrewCompany' => CrewSetupService::COMPANY_ROLES,
         'api_saveCrewTeam' => CrewSetupService::MANAGE_ROLES,
