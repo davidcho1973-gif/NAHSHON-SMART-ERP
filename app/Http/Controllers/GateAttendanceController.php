@@ -9,6 +9,7 @@ use App\Services\Attendance\GateAttendanceService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -20,8 +21,13 @@ class GateAttendanceController extends Controller
     public function __construct(private readonly GateAttendanceService $service) {}
 
     /** 출입구 게이트 페이지(모바일). */
-    public function show(Request $request, Site $site): View
+    public function show(Request $request, Site $site): View|RedirectResponse
     {
+        // 이미 열려 있는 예전 등록 완료 화면의 설치 링크도 직원 앱으로 보낸다.
+        if ($request->query('install') === '1') {
+            return redirect()->route('attendance-app.index');
+        }
+
         return view('gate.index', [
             'site' => $site,
             // 기기가 기억돼 있으면 그 작업자의 언어로 열린다. 아니면 QR 의 ?lang= 또는 기본값.

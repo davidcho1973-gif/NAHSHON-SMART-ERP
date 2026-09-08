@@ -158,12 +158,10 @@
             </div>
             <div class="remembered hidden" id="done-remembered"></div>
             <button class="ghost" id="done-back"></button>
-            {{-- 안내를 한 번 닫은 사람이 나중에 마음을 바꿀 자리. 이미 설치했으면 숨는다. --}}
-            <button class="ghost hidden" id="done-install"></button>
         </section>
+        <a class="ghost" id="open-worker-app" style="display:block;text-align:center;text-decoration:none" href="{{ route('attendance-app.index') }}">{{ $dict[$lang]['openApp'] }}</a>
     </main>
 
-    @include('partials.install-app', ['installLang' => $lang])
 
     <script>
         var URLS = {
@@ -213,7 +211,6 @@
             T = DICT[code];
             document.documentElement.setAttribute('lang', code);
             if (remember) { try { localStorage.setItem(LANG_KEY, code); } catch (e) {} }
-            if (window.AppInstall) { window.AppInstall.setLang(code); }
             Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
                 b.classList.toggle('on', b.getAttribute('data-lang') === code);
             });
@@ -235,11 +232,7 @@
             var rb = document.getElementById('remember-btn');
             rb.textContent = T.remember;
             rb.classList.toggle('hidden', recognized || !selected);
-            var di = document.getElementById('done-install');
-            if (window.AppInstall) {
-                di.textContent = '＋ ' + window.AppInstall.label();
-                di.classList.toggle('hidden', window.AppInstall.installed());
-            }
+            document.getElementById('open-worker-app').textContent = T.openApp;
             if (!document.getElementById('results').dataset.filled) {
                 document.getElementById('results').innerHTML = '<div class="muted">' + T.searchEmpty + '</div>';
             }
@@ -378,20 +371,6 @@
                 .catch(function () { show('screen-id'); });
         })();
 
-        // 등록을 막 마치고 넘어온 경우(?install=1) — 그 자리에서 홈 화면 추가를 권한다.
-        //
-        // 등록 화면에서 바로 띄우지 않는 이유: 아이폰의 "홈 화면에 추가" 는 보고 있는
-        // 페이지를 담고, 안드로이드도 매니페스트 범위 밖에서는 설치를 권하지 않는다.
-        // 그래서 올바른 페이지(이 게이트)로 옮긴 뒤 여기서 안내한다.
-        (function installIntent() {
-            if (location.search.indexOf('install=1') === -1) { return; }
-            // 주소에서 지운다 — 새로고침할 때마다 같은 안내가 다시 뜨면 앱을 미워하게 된다.
-            try { history.replaceState(null, '', location.pathname); } catch (e) {}
-            if (!window.AppInstall) { return; }
-            // 사람이 스스로 온 길이라 "닫은 적 있음" 을 무시하고 보여 준다(show).
-            setTimeout(function () { window.AppInstall.show(); }, 700);
-        })();
-
         Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) {
             b.addEventListener('click', function () { setLang(b.getAttribute('data-lang'), true); });
         });
@@ -485,19 +464,10 @@
                     paintWorker();
                     show('screen-done');
 
-                    // 설치 안내는 여기서만 뜬다 — 출퇴근이 한 번 찍힌 뒤다. 열자마자 권하면
-                    // 이 화면이 뭘 해 주는지도 모르는 채로 닫는다. 잠깐 두는 것은 "완료"를
-                    // 먼저 읽게 하려는 것이다.
-                    if (window.AppInstall && !d.ignored) {
-                        setTimeout(function () { window.AppInstall.offer(); }, 1200);
-                    }
                 })
                 .catch(function () { btn.disabled = false; btn.textContent = orig; alert(T.network); });
         });
 
-        document.getElementById('done-install').addEventListener('click', function () {
-            window.AppInstall.show();
-        });
     </script>
 </body>
 </html>

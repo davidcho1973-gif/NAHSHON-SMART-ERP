@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-07 | CODEX | Registration employee app destination | Send completed site/Global and returning registrations to attendance-app; replace gate installation offers with the employee app link and redirect legacy install=1 entry. Keep account approval, shared-device protections and physical QR punch flow. | codex/registration-worker-app | 81 relevant tests / 412 assertions passed; build and Blade compilation passed. Full CI and staging/NAHSHON deployment checks follow. |
 | 2026-09-07 | CODEX | Conditional manual trade field | Remove duplicate selected-trade textbox; show manual input only for unlisted trades, preserving submitted values and validation. | codex/conditional-trade-input | 66 related tests / 372 assertions and JS mode/required/value checks passed; build, browser and CI verified during deployment. |
 | 2026-09-07 | CODEX | Employee trade selection | Replace unreliable datalist with visible select and editable trade field; include 공무지원, load only selected active site's WBS trade names, preserve manual input on site/language changes and lookup failure. | codex/employee-trade-picker | 66 related tests / 372 assertions, JS stale-response/failure tests, build and Blade compile passed; full regression and deployment checks follow. |
 | 2026-09-07 | CODEX | Existing-site employee selection | Add shared /join with live active-site names and Global requested assignment. Preserve site-prefilled links, require managerial position/email for Global, and keep account grants separate. Use existing one gate QR per physical site for all positions and both punch events. | codex/employee-site-selection | 71 targeted tests / 347 assertions; full regression caught and fixed cross-site trade suggestions; build, Blade and Global form behavior checked. Full final regression and deployment checks follow. |
@@ -186,6 +187,12 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-07 — Open the employee app after registration
+
+- Root cause: registration completion offered installation of the site gate instead of the full employee app. Use attendance-app for all registrations, including Global and returning employees, and keep the link visible in installed windows.
+- Redirect legacy registration install links and replace the gate install offer with an always-available employee app link. Physical gate QR and existing gate manifests remain compatible. Explain account linking/login and install from the employee app; preserve next-person and W-9 flows without automatic navigation or account grants.
+- Updated registration/gate-owned views and ko/en/es copy for the owner-requested destination correction. 81 related tests (412 assertions), static build and Blade compilation passed. No live registration, clock event or credential changes.
 
 ### 2026-09-07 — Hide duplicate selected trade input
 

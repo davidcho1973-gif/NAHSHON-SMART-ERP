@@ -123,14 +123,17 @@ class AppInstallTest extends TestCase
             ->assertSee('apple-mobile-web-app-capable', false);
     }
 
-    public function test_the_gate_screen_carries_the_install_guide_in_three_languages(): void
+    public function test_the_gate_links_to_the_full_app_instead_of_offering_gate_installation(): void
     {
         // 이 현장 작업자 명단은 Español 이 많다. 한국어로만 안내하면 아무도 설치하지 않는다.
         $res = $this->get(route('gate.show', ['site' => $this->site()]))->assertOk();
 
-        $res->assertSee('Agregar a la pantalla de inicio', false);   // es
-        $res->assertSee('Add to Home Screen', false);                // en
-        $res->assertSee('홈 화면에 추가', false);                      // ko
+        $res->assertSee('Abrir app del empleado', false);
+        $res->assertSee('Open employee app', false);
+        $res->assertSee('직원 앱 열기', false);
+        $res->assertSee(route('attendance-app.index'), false);
+        $res->assertDontSee('window.AppInstall.offer()', false);
+        $res->assertDontSee('id="done-install"', false);
     }
 
     public function test_every_install_string_exists_in_every_language(): void
