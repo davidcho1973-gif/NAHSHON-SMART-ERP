@@ -92,16 +92,11 @@
                 <div class="shared" id="t-shared" style="display:none">
                     <b id="t-sharedTitle"></b><br><span id="t-sharedBody"></span>
                 </div>
-                {{-- 홈 화면에 추가 — 등록을 막 마친 지금이 가장 잘 먹히는 순간이다.
-                     여기서 직접 설치를 띄우지 않고 게이트 화면으로 보내는 이유가 있다:
-                     설치되는 것은 <b>출퇴근 화면</b>이어야지 이 등록 폼이면 안 된다.
-                     아이폰의 "홈 화면에 추가" 는 <b>지금 보고 있는 페이지</b>를 담고,
-                     안드로이드도 매니페스트 범위(scope) 밖 페이지에서는 설치를 권하지 않는다.
-                     그래서 올바른 페이지로 옮긴 뒤 그 자리에서 안내한다(?install=1). --}}
-                @if ($site)
-                <a class="install-cta" id="t-install" href="{{ route('gate.show', ['site' => $site]) }}?install=1"></a>
+                {{-- 등록 후 사용할 앱은 attendance-app이다. 게이트 설치로 연결하면
+                     출퇴근 전용 화면이 홈 화면에 저장되어 직원 앱으로 돌아오지 못한다. --}}
+                <a class="install-cta" id="t-install" href="{{ route('attendance-app.index') }}"></a>
                 <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
-                @else
+                @if (!$site)
                     <p class="note" id="global-done"></p>
                 @endif
 
@@ -135,11 +130,7 @@
                     if (inst) { inst.textContent = T.installApp; }
                     var instHint = document.getElementById('t-installHint');
                     if (instHint) { instHint.textContent = T.installHint; }
-                    // 이미 홈 화면에서 열고 있으면 권할 이유가 없다 — 같은 안내를 두 번 보면 앱을 미워하게 된다.
-                    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-                        if (inst) inst.hidden = true;
-                        if (instHint) instHint.hidden = true;
-                    }
+                    // 기존 게이트 아이콘에서 등록했어도 직원 앱으로 이동할 수 있어야 한다.
                     var badge = document.getElementById('t-doneBadge');
                     if (badge) badge.textContent = T.doneBadge;
 
