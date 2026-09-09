@@ -252,8 +252,8 @@ class UserAccessService
             return ['success' => true, 'id' => $row->id];
         }
 
-        // 새 계정은 구글 로그인으로 들어오므로 비밀번호를 쓰지 않는다. 다만 컬럼이
-        // 비어 있으면 안 되므로 아무도 모르는 값을 넣어 둔다(로그인 경로가 아니다).
+        // Only a user-chosen password (password_set_at) is accepted for email login.
+        // Until setup, keep an unknown placeholder rather than storing phone digits.
         $data['password'] = Hash::make(Str::random(48));
 
         $created = User::create($data);

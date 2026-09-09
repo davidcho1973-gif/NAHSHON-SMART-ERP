@@ -6,6 +6,7 @@ use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
+use App\Http\Controllers\EmailPasswordAuthController;
 use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\ExpenseAppController;
 use App\Http\Controllers\ExpensePreApprovalController;
@@ -59,6 +60,12 @@ use Symfony\Component\Mailer\Bridge\Mailgun\Transport\MailgunApiTransport;
 use Symfony\Component\Mailer\Bridge\Postmark\Transport\PostmarkApiTransport;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
+Route::post('/auth/password/login', [EmailPasswordAuthController::class, 'login'])
+    ->middleware('throttle:10,1')->name('password.login');
+Route::get('/auth/password/setup', [EmailPasswordAuthController::class, 'setup'])
+    ->middleware('throttle:30,1')->name('password.setup');
+Route::post('/auth/password/setup', [EmailPasswordAuthController::class, 'store'])
+    ->middleware('throttle:10,1')->name('password.setup.store');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');

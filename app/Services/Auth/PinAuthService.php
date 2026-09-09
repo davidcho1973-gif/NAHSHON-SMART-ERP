@@ -33,7 +33,7 @@ class PinAuthService
 
     private const LOCK_MINUTES = 15;
 
-    /** PIN 을 쓸 수 있는 역할 — 현장 인력용 문이다. 돈·인사 화면을 여는 계정은 구글로. */
+    /** PIN is for field personnel. Other accounts use Google or their email password. */
     public const PIN_ROLES = ['worker', 'foreman'];
 
     /** 이 계정이 지금 로그인해도 되는가 — 구글·PIN 두 문이 함께 쓰는 판정. */

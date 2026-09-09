@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-08 | CODEX | Email password login | Add registered-email login for staff without Google. Phone last four opens a five-minute first-password setup only; retain account activation and role/scope, block legacy Google/PIN fallbacks, lock after five failures, replace dead password link and update app/profile/install guidance. | codex/email-password-login | 106 related tests / 521 assertions; full local run: 1,890 passed, one existing Windows backup mkdir error, one platform skip / 6,924 assertions. Build/Blade and desktop/360px login/setup preview passed. Linux CI and staging/NAHSHON verification follow. |
 | 2026-09-07 | CODEX | Registration employee app destination | Send completed site/Global and returning registrations to attendance-app; replace gate installation offers with the employee app link and redirect legacy install=1 entry. Keep account approval, shared-device protections and physical QR punch flow. | codex/registration-worker-app | 81 relevant tests / 412 assertions passed; build and Blade compilation passed. Full CI and staging/NAHSHON deployment checks follow. |
 | 2026-09-07 | CODEX | Conditional manual trade field | Remove duplicate selected-trade textbox; show manual input only for unlisted trades, preserving submitted values and validation. | codex/conditional-trade-input | 66 related tests / 372 assertions and JS mode/required/value checks passed; build, browser and CI verified during deployment. |
 | 2026-09-07 | CODEX | Employee trade selection | Replace unreliable datalist with visible select and editable trade field; include 공무지원, load only selected active site's WBS trade names, preserve manual input on site/language changes and lookup failure. | codex/employee-trade-picker | 66 related tests / 372 assertions, JS stale-response/failure tests, build and Blade compile passed; full regression and deployment checks follow. |
@@ -187,6 +188,14 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-08 — Registered email login without Google
+
+- Cause: the public login surface only offered Google for unremembered devices, while its password link returned to the same screen. Add a server-side email credential flow, rather than treating contact data as permanent passwords.
+- An active account linked to an active employee with matching email and a valid phone can start first-time setup using its final four digits. This only grants a five-minute setup session; no ERP authentication happens before the person chooses an 8+ character alphanumeric password. Preserve leading zeroes, recheck contact/status under a database row lock, reject replay, and keep `email_verified_at` unchanged.
+- Existing Google/PIN accounts get no phone fallback. They can add an email password while signed in; later changes require the current password. Keep existing employee/account approval and landing/scope behavior. Store only the existing password hash plus setup timestamp and durable attempt/lock fields; five bad attempts lock an account across IPs for 15 minutes.
+- Shared routes and authentication/profile views are updated for the owner-requested login path. Install/share guidance now mentions email and Google; no live account grants, credentials, employee records or outgoing messages were used for verification. See `docs/EMAIL_LOGIN.md`.
+- Local: 106 related tests passed (521 assertions). Full isolated PostgreSQL: 1,890 passed, one existing Windows-only backup mkdir error, one platform skip, 6,924 assertions. Build, Blade compile, desktop and 360px public login/setup previews passed. Final Linux CI and deployment evidence is recorded in the PR/run.
 
 ### 2026-09-07 — Open the employee app after registration
 
