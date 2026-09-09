@@ -220,7 +220,7 @@
 
   /** 이 사람이 실제로 로그인하는 주소. 직원 이메일과 다르면 그 사실을 알린다. */
   function loginHint(r) {
-    if (!r || !r.hasAccount) return '구글 로그인 계정을 만들 때 기본값으로 쓰입니다.';
+    if (!r || !r.hasAccount) return '로그인 계정을 만들 때 기본값으로 쓰입니다. Gmail이 아니어도 됩니다.';
     if (!r.loginEmail) return '';
     var same = String(r.loginEmail).toLowerCase() === String(r.email || '').toLowerCase();
     if (same) return '로그인 계정도 이 주소입니다.';
@@ -394,7 +394,7 @@
         saveLabel: '만들기',
         fields: [
           { name: 'email', label: '이메일', required: true, colSpan: 2, value: r.email || '',
-            hint: '구글 로그인에 쓰는 주소입니다. 직원 정보의 이메일이 기본값입니다.' },
+            hint: '이메일 또는 Google 로그인에 쓰는 주소입니다. Gmail이 아니어도 됩니다. 신규 활성 계정은 등록 전화번호 끝 4자리로 최초 비밀번호를 설정합니다.' },
           { name: 'role', label: '역할', type: 'select', required: true,
             options: o.accountRoles, value: 'worker' },
           { name: 'scope', label: '볼 수 있는 범위', type: 'select', required: true,

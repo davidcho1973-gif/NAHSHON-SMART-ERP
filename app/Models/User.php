@@ -236,6 +236,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'last_login_at' => 'datetime',
+            'password_set_at' => 'datetime',
+            'password_login_locked_until' => 'datetime',
             'pin_set_at' => 'datetime',
             'pin_locked_until' => 'datetime',
         ];

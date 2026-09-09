@@ -957,6 +957,9 @@
                 '<span class="go">›</span></button></div>';
         }
 
+        h += '<div class="sec"><a class="link" href="{{ route('password.setup') }}"><div><b>' +
+            (state.lang === 'ko' ? '이메일 비밀번호 설정' : (state.lang === 'es' ? 'Contraseña de correo' : 'Email password settings')) +
+            '</b></div><span class="go">›</span></a></div>';
         h += '<div class="sec"><form method="POST" action="{{ route('logout') }}">' +
             '<input type="hidden" name="_token" value="' + CSRF + '">' +
             '<button type="submit" class="link" style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +

@@ -500,13 +500,13 @@ final class WorkerLang
         return [
             'ko' => "내 출퇴근 앱입니다. 근무시간과 급여를 휴대폰에서 바로 볼 수 있어요.\n"
                 ."{$url}\n"
-                ."열어서 구글 계정으로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
+                ."열어서 등록 이메일 또는 Google로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
             'en' => "This is your attendance app. See your hours and pay on your phone.\n"
                 ."{$url}\n"
-                .'Open it, sign in with Google, then tap "Add to Home Screen".',
+                .'Open it, sign in with your registered email or Google, then tap "Add to Home Screen".',
             'es' => "Esta es su aplicación de asistencia. Vea sus horas y su pago en su teléfono.\n"
                 ."{$url}\n"
-                .'Ábrala, inicie sesión con Google y toque "Agregar a la pantalla de inicio".',
+                .'Ábrala, inicie sesión con su correo registrado o Google y toque "Agregar a la pantalla de inicio".',
         ];
     }
 
@@ -526,10 +526,10 @@ final class WorkerLang
             'ko' => [
                 'title' => '내 출퇴근 앱',
                 'hint' => '내 근무시간과 급여를 내 휴대폰에서 바로 봅니다.',
-                'account' => '로그인할 구글 계정',
+                'account' => '로그인할 등록 이메일',
                 'steps' => [
                     '휴대폰 카메라로 위 QR 을 스캔합니다.',
-                    '구글로 로그인 — 반드시 아래 적힌 계정으로 하세요.',
+                    '위에 적힌 이메일과 비밀번호 또는 Google로 로그인합니다. 최초 이메일 로그인은 화면의 전화번호 끝 4자리 안내를 따르세요.',
                     '"홈 화면에 추가" 안내가 뜨면 추가합니다. 다음부터는 아이콘만 누르면 됩니다.',
                 ],
                 'trouble' => '로그인이 안 되면 현장 관리자에게 말씀하세요. 계정 등록이 필요할 수 있습니다.',
@@ -537,10 +537,10 @@ final class WorkerLang
             'en' => [
                 'title' => 'My Attendance App',
                 'hint' => 'See your hours and your pay on your own phone.',
-                'account' => 'Sign in with this Google account',
+                'account' => 'Your registered sign-in email',
                 'steps' => [
                     'Scan the QR code above with your phone camera.',
-                    'Sign in with Google — you must use the account printed below.',
+                    'Use the email printed above and your password, or Google. For first-time email sign-in, follow the phone last-4-digits instructions on screen.',
                     'When it offers "Add to Home Screen", add it. Next time just tap the icon.',
                 ],
                 'trouble' => 'If sign-in fails, tell your site manager. Your account may need to be set up.',
@@ -548,10 +548,10 @@ final class WorkerLang
             'es' => [
                 'title' => 'Mi aplicación de asistencia',
                 'hint' => 'Vea sus horas y su pago en su propio teléfono.',
-                'account' => 'Inicie sesión con esta cuenta de Google',
+                'account' => 'Su correo registrado para iniciar sesión',
                 'steps' => [
                     'Escanee el código QR de arriba con la cámara de su teléfono.',
-                    'Inicie sesión con Google — debe usar la cuenta impresa abajo.',
+                    'Use el correo de arriba y su contraseña, o Google. La primera vez, siga las instrucciones de los últimos 4 dígitos del teléfono.',
                     'Cuando ofrezca "Agregar a la pantalla de inicio", agréguelo. La próxima vez solo toque el ícono.',
                 ],
                 'trouble' => 'Si no puede iniciar sesión, avise a su supervisor. Puede que falte registrar su cuenta.',
