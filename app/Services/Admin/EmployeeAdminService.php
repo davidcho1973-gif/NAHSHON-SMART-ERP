@@ -289,7 +289,7 @@ class EmployeeAdminService
 
         $pins = app(PinAuthService::class);
         if (! $pins->eligibleForPin($user)) {
-            return ['success' => false, 'error' => 'PIN 은 현장 인력(작업자·반장) 계정에만 발급합니다. 관리자 계정은 구글 로그인을 쓰세요.'];
+            return ['success' => false, 'error' => 'PIN 은 현장 인력(작업자·반장) 계정에만 발급합니다. 관리자 계정은 이메일 또는 Google 로그인을 쓰세요.'];
         }
 
         $purpose = $purpose === 'reset' ? 'reset' : 'invite';
@@ -323,7 +323,7 @@ class EmployeeAdminService
 
         $email = mb_strtolower(trim((string) ($input['email'] ?? $employee->email ?? '')));
         if ($email === '') {
-            return ['success' => false, 'errors' => ['email' => '이메일을 입력하세요. 구글 로그인에 쓰는 주소입니다.']];
+            return ['success' => false, 'errors' => ['email' => '로그인에 사용할 이메일을 입력하세요. Gmail이 아니어도 됩니다.']];
         }
 
         $scope = (string) ($input['scope'] ?? 'self');

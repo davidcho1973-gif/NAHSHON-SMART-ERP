@@ -464,7 +464,7 @@
       @endif
       <span>{{ \App\Support\Org::name() }}</span>
     </div>
-    <a class="admin-link" href="{{ url('/admin/login') }}">Password Sign In</a>
+    <a class="admin-link" href="#email-login">이메일 로그인 / Email sign in</a>
   </header>
 
   <main class="page">
@@ -490,10 +490,10 @@
 
       <div class="auth-actions">
       <h1>Sign In</h1>
-      <p class="subtitle">Google 인증 후 {{ \App\Support\Org::name() }} ERP 홈으로 이동합니다.</p>
+      <p class="subtitle">등록된 이메일 또는 Google로 로그인하세요.<br>Sign in with your registered email or Google.</p>
 
       @if ($sessionExpired ?? false)
-        <div class="notice error">로그인 세션이 만료되었습니다. Google로 다시 로그인해 주세요.</div>
+        <div class="notice error">로그인 세션이 만료되었습니다. 다시 로그인해 주세요. / Please sign in again.</div>
       @endif
 
       @if ($errors->has('google'))
@@ -503,6 +503,31 @@
       @if (session('status'))
         <div class="notice success">{{ session('status') }}</div>
       @endif
+
+      <form id="email-login" action="{{ route('password.login') }}" method="POST" style="padding:18px;background:#fff;color:#172033;border:1px solid #d8dee4;border-radius:16px;margin-bottom:18px;text-align:left">
+        @csrf
+        @if ($errors->has('email_login') || $errors->has('email') || $errors->has('password'))
+          <div class="notice error" role="alert">{{ $errors->first('email_login') ?: ($errors->first('email') ?: $errors->first('password')) }}</div>
+        @endif
+        <label for="login-email" style="display:block;font-weight:600;font-size:14px;margin-bottom:7px">등록 이메일 / Email</label>
+        <input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" value="{{ old('email') }}" required maxlength="255"
+          style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
+        <label for="login-password" style="display:block;font-weight:600;font-size:14px;margin:14px 0 7px">비밀번호 / Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="128" aria-describedby="email-login-help"
+          style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
+        <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">이메일로 로그인 / Sign in</button>
+        <div id="email-login-help" style="font-size:12px;line-height:1.65;color:#526174;margin-top:13px">
+          Gmail이 아니어도 됩니다. 처음 이용하는 활성 계정은 등록 전화번호 끝 4자리로 시작한 뒤 본인 비밀번호를 설정하세요.
+          <br>No Gmail needed. For a new active account, start with the last 4 digits of your registered phone, then set your password.
+          <details style="margin-top:8px"><summary style="cursor:pointer">로그인 도움말 / Need help?</summary>
+            직원 등록과 로그인 계정 활성화는 별도입니다. 계정·이메일·전화번호 확인은 관리자에게 요청하세요.
+            기존 Google·PIN 사용자는 해당 방식으로 로그인한 뒤 프로필에서 이메일 비밀번호를 설정하세요.
+            <br>Ask your administrator to check your active login account and contact details. Existing Google/PIN users can sign in as usual and set an email password from their profile.
+          </details>
+        </div>
+      </form>
+
+      <div class="divider">or</div>
 
       <a class="google-button" href="{{ route('auth.google.redirect') }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
         <span class="google-mark">G</span>

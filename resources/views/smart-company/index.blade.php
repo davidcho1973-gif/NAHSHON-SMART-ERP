@@ -463,9 +463,9 @@
                 <button class="account-menu-item" type="button" data-account-view="ui-settings">
                   <i class="ph ph-sliders-horizontal"></i><span>UI Settings</span>
                 </button>
-                <button class="account-menu-item" type="button" data-account-view="password">
-                  <i class="ph ph-lock-key"></i><span>Change Password</span>
-                </button>
+                <a class="account-menu-item" href="{{ route('password.setup') }}">
+                  <i class="ph ph-lock-key"></i><span>이메일 비밀번호 설정 / Password</span>
+                </a>
               </div>
               <div class="account-menu-group">
                 <button class="account-menu-item" type="button" data-account-logout>
