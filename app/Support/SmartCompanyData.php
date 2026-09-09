@@ -378,7 +378,7 @@ class SmartCompanyData
             // 현장 상황실 — 자유 형식 글/카톡 붙여넣기 판독
             // 판독 예약 — 사진이 많아도 요청은 즉시 끝나고, 실제 판독은 응답 후에 돈다(504 방지).
             // 공종별 오늘 보고 현황판 — 소장이 "누가 아직 안 냈나" 를 본다.
-            'api_tradeReportBoard' => app(TradeReportService::class)->board(
+            'api_tradeReportBoard', 'api_getTradeReportBoard' => app(TradeReportService::class)->board(
                 // 일일보고는 현장의 것이다. 상단에서 고른 현장이 최우선이고, '전체' 이면
                 // 보는 사람의 소속 현장으로 떨어진다(현장 사람은 대개 자기 현장을 본다).
                 // 둘 다 없으면 board() 가 "현장을 먼저 고르세요" 라고 말한다 — 현장을
@@ -398,6 +398,9 @@ class SmartCompanyData
                 self::resolveSiteId($siteId) ? Site::find(self::resolveSiteId($siteId)) : null,
                 auth()->id(),
                 OpsPhotoController::resolve(is_array($args[1] ?? null) ? $args[1] : [], auth()->id()),
+                // 어디서 보냈나 — 현장앱은 'app', 관리자 화면 붙여넣기는 'paste'. 상황실 카드가
+                // «현장앱 / 붙여넣기 / 톡방» 으로 갈라 보여 주므로 값이 맞아야 한다.
+                in_array($args[2] ?? null, ['app', 'paste'], true) ? $args[2] : 'paste',
             ),
             'api_getOpsJob' => app(OpsIntakeService::class)->job((int) ($args[0] ?? 0)),
             // 인원 보고 — 상황실이 읽은 "오늘 몇 명" 과 게이트 QR 실적을 나란히 본다.
@@ -477,8 +480,10 @@ class SmartCompanyData
             'api_getOpsBatches' => self::opsBatches($siteId),
             'api_getOpsBatch' => app(OpsIntakeService::class)->batch((int) ($args[0] ?? 0)),
             'api_getOpsPending' => app(OpsIntakeService::class)->pending(self::resolveSiteId($siteId)),
+            // 상황실 피드 — 보낸 사람 단위 카드(사진·판독 결과 포함). 화면이 이것 하나로 «오늘» 을 그린다.
+            'api_getOpsFeed' => app(OpsIntakeService::class)->feed(self::resolveSiteId($siteId), max(1, min(7, (int) ($args[0] ?? 2))), 80, auth()->user()),
             'api_applyOpsItem' => app(OpsIntakeService::class)->apply((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : null, auth()->id()),
-            'api_applyAllOpsItems' => app(OpsIntakeService::class)->applyAll(self::resolveSiteId($siteId), auth()->id()),
+            'api_applyAllOpsItems' => app(OpsIntakeService::class)->applyAll(self::resolveSiteId($siteId), auth()->id(), is_array($args[0] ?? null) ? $args[0] : null),
             'api_revertOpsItem' => app(OpsIntakeService::class)->revert((int) ($args[0] ?? 0), auth()->id()),
             'api_dismissOpsItem' => app(OpsIntakeService::class)->dismiss((int) ($args[0] ?? 0)),
             // 원문 기록 수정·삭제 — 근거 자료라 관리자만 손댈 수 있다.

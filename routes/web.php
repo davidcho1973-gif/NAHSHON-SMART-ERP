@@ -293,6 +293,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/expense-app/list', [ExpenseAppController::class, 'list'])->name('expense-app.list');
     // 상황실 사진 업로드 — 한 요청에 한 장씩(본문이 작아 크기 제한이 사실상 사라진다)
     Route::post('/ops-api/photo', [OpsPhotoController::class, 'store'])->name('ops.photo');
+    // 올라온 사진 보기 — 상황실 카드의 썸네일(?s=t)과 크게 보기 둘 다 이 길로 온다.
+    Route::get('/ops-api/photo/{batch}/{index}', [OpsPhotoController::class, 'show'])
+        ->whereNumber('index')->name('ops.photo.show');
     // 말한 것을 글자로 — 장갑 낀 손으로 타자를 치지 않아도 되게. 녹음은 보관하지 않는다.
     Route::post('/ops-api/voice', [OpsVoiceController::class, 'store'])
         ->middleware('throttle:30,1')->name('ops.voice');

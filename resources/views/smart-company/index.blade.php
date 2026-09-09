@@ -8702,61 +8702,370 @@
         noise:       { label: '잡담',          color: '#94a3b8', icon: 'ph-chat-dots' }
       };
 
+      // ── 상황실 그리기 도구
+      // 카테고리를 두 글자로 — 카드 한 줄에 «작업 마감·진행» 같은 긴 이름이 서면 요약이 밀려난다.
+      var OPS_SHORT = {
+        progress: '진행', plan: '계획', procurement: '자재', labor: '인원', expense: '지출', issue: '이슈',
+        inspection: '검사', request: '지시', approval: '승인', decision: '결정', todo: '준비',
+        submittal: '제출물', billing: '청구', permit: '허가', hr: '인사', admin: '사무', noise: '잡담'
+      };
+      var OPS_TRADE_COLOR = { '전기': '#f59e0b', '배관': '#0ea5e9', '기계': '#6366f1', '소방': '#ef4444', '건축': '#22c55e', '토목': '#a16207', '주방': '#ec4899', '구조': '#64748b' };
+
+      function opsEnsureCss() {
+        if (document.getElementById('ops-css')) return;
+        var st = document.createElement('style'); st.id = 'ops-css';
+        st.textContent =
+          '.ops-hide{display:none!important}.ops-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:860px){.ops-two{grid-template-columns:1fr}}' +
+          '.ops-strip{margin-bottom:14px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.06);border-radius:10px;padding:10px 14px}' +
+          '.ops-strip .t{font-size:11px;font-weight:800;color:var(--status-danger);letter-spacing:.04em;margin-bottom:5px}' +
+          '.ops-strip .l{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;font-size:14px;padding:4px 0;cursor:pointer}' +
+          '.ops-strip .l b{color:var(--text-primary);flex:0 1 auto} .ops-strip .l span{color:var(--text-tertiary);font-size:11.5px;white-space:nowrap} .ops-strip .l>span:first-child{flex-shrink:0}' +
+          '.ops-tiles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}' +
+          '.ops-tile{flex:1 1 120px;min-width:120px;max-width:200px;padding:9px 12px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-panel)}' +
+          '.ops-tile.miss{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.07)}' +
+          '.ops-tile .n{font-size:14px;font-weight:800;display:flex;align-items:center;gap:6px}' +
+          '.ops-tile .n i{width:7px;height:7px;border-radius:50%;display:inline-block}' +
+          '.ops-tile .s{font-size:12.5px;margin-top:3px;color:var(--text-secondary)} .ops-tile.miss .s{color:#b45309;font-weight:700}' +
+          '.ops-tile .m{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}' +
+          '.ops-day{padding:7px 18px;font-size:11px;font-weight:800;color:var(--text-tertiary);background:var(--bg-base);border-bottom:1px solid var(--border-subtle);letter-spacing:.04em}' +
+          '.ops-card{padding:13px 18px;border-bottom:1px solid var(--border-subtle)} .ops-card:last-child{border-bottom:0}' +
+          '.ops-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}' +
+          '.ops-who{font-size:15.5px;font-weight:800;color:var(--text-primary)}' +
+          '.ops-trade{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;color:#fff}' +
+          '.ops-at{font-family:var(--font-mono,monospace);font-size:11.5px;color:var(--text-tertiary)}' +
+          '.ops-src{font-size:11px;color:var(--text-tertiary)}' +
+          '.ops-sum{margin-left:auto;font-size:11px;color:var(--text-tertiary);white-space:nowrap}' +
+          '.ops-body{display:flex;gap:14px;align-items:flex-start}@media(max-width:640px){.ops-body{flex-direction:column}}' +
+          '.ops-photos{display:grid;grid-template-columns:repeat(2,176px);gap:6px;flex-shrink:0}' +
+          '.ops-photos.one{grid-template-columns:320px} .ops-photos.three{grid-template-columns:repeat(3,150px)} .ops-photos.four{grid-template-columns:repeat(2,176px)}@media(max-width:640px){.ops-photos,.ops-photos.three,.ops-photos.four{grid-template-columns:repeat(2,1fr);width:100%}.ops-photos.one{grid-template-columns:1fr;width:100%;max-width:340px}.ops-line{flex-wrap:wrap}.ops-text{flex:1 1 180px}.ops-act{width:100%;justify-content:flex-end;padding-left:56px}}' +
+          '.ops-ph{position:relative;width:100%;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:zoom-in}' +
+          '.ops-site{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-secondary)}' +
+          '.ops-strip .q{flex-basis:100%;padding:0 0 3px 46px;font-size:12px;color:#b45309;white-space:normal}@media(max-width:640px){.ops-strip .q{padding-left:0}}' +
+          '.ops-text .chg.big{border-color:#f59e0b;color:#b45309}' +
+          '.ops-ph img{width:100%;height:100%;object-fit:cover;display:block}' +
+          '.ops-ph .more{position:absolute;inset:0;background:rgba(0,0,0,.55);color:#fff;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center}' +
+          '.ops-lines{flex:1;min-width:0}' +
+          '.ops-line{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border-subtle)} .ops-line:last-of-type{border-bottom:0}' +
+          '.ops-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;position:relative;top:-1px}' +
+          '.ops-cat{font-size:11.5px;font-weight:800;flex-shrink:0;width:40px;white-space:nowrap}' +
+          '.ops-text{font-size:14.5px;color:var(--text-primary);flex:1;min-width:0;line-height:1.55}' +
+          '.ops-text small{display:block;font-size:11.5px;color:#b45309;margin-top:2px}' +
+          '.ops-text .chg{display:inline-block;font-size:11px;color:var(--text-secondary);background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:5px;padding:0 6px;margin-left:6px}' +
+          '.ops-act{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto}.ops-state{flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap}' +
+          '.ops-state.ok{color:#16a34a} .ops-state.need{color:#b45309} .ops-state.info{color:var(--text-tertiary);font-weight:500} .ops-state.fail{color:var(--status-danger)}' +
+          '.ops-btn{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;border:1px solid var(--brand-primary);background:var(--brand-primary);color:#fff;cursor:pointer;white-space:nowrap}' +
+          '.ops-btn.ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-subtle);margin-left:4px}' +
+          '.ops-raw{margin-top:8px} .ops-raw summary{font-size:11px;color:var(--text-tertiary);cursor:pointer;user-select:none}' +
+          '.ops-raw pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;color:var(--text-secondary);background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;padding:9px 11px;margin:6px 0 0;max-height:220px;overflow:auto}' +
+          '.ops-empty{padding:34px 18px;text-align:center;color:var(--text-tertiary);font-size:13px;line-height:1.7}' +
+          '.ops-anal{font-size:11.5px;color:var(--brand-primary);font-weight:700;animation:opsPulse 1.4s ease-in-out infinite}' +
+          '@keyframes opsPulse{0%,100%{opacity:1}50%{opacity:.45}}' +
+          '.ops-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out}' +
+          '.ops-lightbox img{max-width:94vw;max-height:92vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6)}';
+        document.head.appendChild(st);
+      }
+
+      window.opsTogglePaste = function () {
+        var p = document.getElementById('ops-paste'); if (!p) return;
+        p.classList.toggle('ops-hide');
+        if (!p.classList.contains('ops-hide')) { var t = document.getElementById('ops-input'); if (t) t.focus(); }
+      };
+
+      window.opsCloseZoom = function () { var lb = document.getElementById('ops-lightbox'); if (lb) lb.classList.add('ops-hide'); };
+      window.opsZoom = function (url) {
+        var lb = document.getElementById('ops-lightbox'); if (!lb) return;
+        lb.querySelector('img').src = url; lb.classList.remove('ops-hide');
+      };
+
+      // 막힘·이슈 띠 — 카드 안에 묻히면 저녁에야 본다. 맨 위에 한 줄씩.
+      function opsIssuesStrip(issues) {
+        var host = document.getElementById('ops-issues'); if (!host) return;
+        if (!issues || !issues.length) { host.innerHTML = ''; return; }
+        host.innerHTML = '<div class="ops-strip"><div class="t"><i class="ph ph-warning"></i> 지금 봐야 할 것 ' + issues.length + '건</div>' +
+          issues.map(function (x) {
+            var c = OPS_CAT[x.category] || OPS_CAT.issue;
+            var all = !window.currentSiteId || window.currentSiteId === 'ALL';
+            return '<div class="l" onclick="window.opsJump(' + x.batchId + ')">' +
+              '<span style="color:' + (x.needsInput ? '#b45309' : c.color) + ';font-weight:800;font-size:11px">' + (x.needsInput ? '답 필요' : opsEsc(OPS_SHORT[x.category] || c.label)) + '</span>' +
+              (all && x.site ? '<span class="ops-site">' + opsEsc(x.site) + '</span>' : '') +
+              '<b>' + opsEsc(x.summary || '') + '</b>' +
+              (x.targetName ? '<span>— ' + opsEsc(x.targetName) + '</span>' : '') +
+              (x.by ? '<span>· ' + opsEsc(x.by) + '</span>' : '') +
+              (x.conflict ? '<span style="color:var(--status-danger)">· 공정표와 충돌</span>' : '') +
+              (x.needsInput && x.question ? '<span class="q">' + opsEsc(x.question) + '</span>' : '') + '</div>';
+          }).join('') + '</div>';
+      }
+      window.opsJump = function (batchId) {
+        var el = document.getElementById('ops-card-' + batchId);
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.transition = 'background .6s'; el.style.background = 'rgba(59,130,246,.10)'; setTimeout(function () { el.style.background = ''; }, 1600); }
+      };
+
+      // 공종별 보고 현황 — «누가 냈고 누가 안 냈나» 가 현장을 한눈에 보는 첫 줄이다.
+      window.opsLoadTrades = async function () {
+        var host = document.getElementById('ops-trades'); if (!host) return;
+        if (window.apiCache) delete window.apiCache['api_getTradeReportBoard[]'];
+        var d = null;
+        try { d = await gsRun('api_getTradeReportBoard', [], null); } catch (e) { d = null; }
+        if (!host.isConnected) return;
+        if (!d || !d.success) { host.innerHTML = ''; return; }
+        if (d.noSite) { host.innerHTML = '<div style="margin-bottom:14px;font-size:12px;color:#b45309"><i class="ph ph-info"></i> 위에서 현장을 고르면 공종별 보고 현황이 보입니다.</div>'; return; }
+        if (!d.rows || !d.rows.length) { host.innerHTML = ''; return; }
+        host.innerHTML = '<div class="ops-tiles">' + d.rows.map(function (r) {
+          var color = OPS_TRADE_COLOR[r.trade] || 'var(--brand-primary)';
+          var ok = !!r.submitted;
+          var status = ok ? '제출 ' + opsEsc(r.submittedAt || '') : (r.entries ? '올린 것 ' + r.entries + '건 · 미제출' : '미제출');
+          return '<div class="ops-tile ' + (ok ? 'ok' : 'miss') + '">' +
+            '<div class="n"><i style="background:' + color + '"></i>' + opsEsc(r.trade) + (r.kind === 'office' ? ' <span style="font-weight:400;color:var(--text-tertiary);font-size:10.5px">부서</span>' : '') + '</div>' +
+            '<div class="s">' + status + '</div>' +
+            '<div class="m">' + (r.headcount || 0) + '명' + (r.photos ? ' · 📷 ' + r.photos : '') + (r.held ? ' · <span style="color:#b45309">확인 ' + r.held + '</span>' : '') + '</div>' +
+            '</div>';
+        }).join('') + '</div>';
+      };
+
+      // 피드 — 뭉치(보낸 것) 하나가 카드 하나. 사진이 먼저, 판독은 한 줄씩.
+      var _opsFeedTimer = null;
+      window._opsFeedIndex = {};
+      window._opsApplicableIds = [];
+      window.opsLoadFeed = async function (manual) {
+        var host = document.getElementById('ops-feed'); if (!host) return;
+        var analyzing = false, failed = false;
+        try {
+          await opsLoadFeedOnce(host, manual, function (a) { analyzing = a; });
+        } catch (e) {
+          failed = true;
+          var live0 = document.getElementById('ops-feed-live');
+          if (live0) live0.textContent = '연결 재시도 중…';
+        } finally {
+          // 한 번 실패했다고 새로고침이 영영 멈추면, 소장은 아침 화면을 저녁까지 본다.
+          clearTimeout(_opsFeedTimer);
+          _opsFeedTimer = setTimeout(function () { if (document.getElementById('ops-feed')) window.opsLoadFeed(); }, failed ? 8000 : (analyzing ? 4000 : 60000));
+        }
+      };
+      async function opsLoadFeedOnce(host, manual, setAnalyzing) {
+        if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('api_getOpsFeed') === 0) delete window.apiCache[k]; });
+        var d = await gsRun('api_getOpsFeed', [2], null);
+        if (!host.isConnected) return;
+        if (!d || !d.success) { throw new Error((d && d.error) || 'feed'); }
+
+        opsIssuesStrip(d.issues);
+
+        // «반영 가능 N건» — 0이면 단추 자체를 감춘다. 눌러도 아무 일 없는 단추가 «안 된다» 로 읽히던 원인.
+        // 현장을 안 고른 상태면 «현장을 고르면 …» 이라고 먼저 말한다.
+        var all = !window.currentSiteId || window.currentSiteId === 'ALL';
+        window._opsApplicableIds = d.applicableIds || [];
+        var btn = document.getElementById('ops-applyall-btn'), lab = document.getElementById('ops-applyall-label');
+        if (btn) {
+          btn.classList.toggle('ops-hide', !(d.applicable > 0));
+          btn.classList.toggle('btn-primary', !all); btn.classList.toggle('btn-secondary', all);
+          if (lab) lab.textContent = all ? '현장을 고르면 반영 가능 ' + d.applicable + '건' : (d.applicable === 1 ? '반영 가능 1건 반영' : '반영 가능 ' + d.applicable + '건 모두 반영');
+        }
+
+        var cards = d.cards || [];
+        window._opsFeedIndex = {};
+        cards.forEach(function (c) { (c.items || []).forEach(function (it) { window._opsFeedIndex[it.id] = it; }); });
+        var todayN = cards.filter(function (c) { return c.day === d.today; }).length;
+        var oldN = cards.filter(function (c) { return c.old; }).length;
+        var yN = cards.length - todayN - oldN;
+        var cnt = document.getElementById('ops-feed-count');
+        if (cnt) {
+          var bits = [];
+          bits.push(todayN ? '오늘 ' + todayN + '건' : '오늘 아직 없음');
+          if (yN) bits.push('어제 ' + yN + '건');
+          if (oldN) bits.push('<span style="color:#b45309">이전 미처리 ' + oldN + '건</span>');
+          if (d.needsInput) bits.push('<span style="color:#b45309">답 필요 ' + d.needsInput + '</span>');
+          cnt.innerHTML = cards.length ? bits.join(' · ') : '';
+        }
+
+        if (!cards.length) {
+          host.innerHTML = '<div class="ops-empty">아직 올라온 것이 없습니다.<br>반장들이 현장앱에서 보내면 사진과 함께 여기 쌓입니다.</div>';
+        } else {
+          var html = '', lastDay = null;
+          cards.forEach(function (c) {
+            if (c.day !== lastDay) { html += '<div class="ops-day">' + opsEsc(c.dayLabel) + '</div>'; lastDay = c.day; }
+            html += opsCard(c);
+          });
+          host.innerHTML = html;
+        }
+
+        // 아직 읽는 중인 카드가 있으면 잠깐씩 다시 본다 — 반장이 보낸 것이 판독되는 순간을 놓치지 않게.
+        var analyzing = cards.some(function (c) { return c.status === 'analyzing' && (c.ageMin === undefined || c.ageMin === null || c.ageMin < 15); });
+        var live = document.getElementById('ops-feed-live');
+        if (live) live.textContent = analyzing ? 'AI 읽는 중…' : '';
+        setAnalyzing(analyzing);
+      }
+
+      function opsCard(c) {
+        var tradeColor = OPS_TRADE_COLOR[c.trade] || 'var(--brand-primary)';
+        var photos = c.photos || [];
+        var shown = photos.slice(0, 4);
+        var cls = ['', 'one', 'two', 'three', 'four'][shown.length] || '';
+        var photoHtml = shown.length ? '<div class="ops-photos ' + cls + '">' + shown.map(function (p, i) {
+          var more = (i === 3 && photos.length > 4) ? '<div class="more">+' + (photos.length - 4) + '</div>' : '';
+          return '<div class="ops-ph" data-full="' + opsEsc(p.full) + '" onclick="window.opsZoom(this.dataset.full)"><img loading="lazy" src="' + opsEsc(p.thumb) + '" alt="">' + more + '</div>';
+        }).join('') + '</div>' : '';
+
+        var lines;
+        if (c.status === 'analyzing') {
+          lines = '<div class="ops-anal"><i class="ph ph-sparkle"></i> AI 가 읽는 중…</div>' +
+            (c.preview ? '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:4px">' + opsEsc(c.preview) + '</div>' : '');
+        } else if (c.status === 'failed') {
+          lines = '<div class="ops-state fail"><i class="ph ph-warning-circle"></i> 판독 실패 — ' + opsEsc(c.error || '') + '</div>' +
+            (c.preview ? '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:4px">' + opsEsc(c.preview) + '</div>' : '');
+        } else if (!c.items.length) {
+          lines = '<div style="font-size:12.5px;color:var(--text-secondary)">' + (c.preview ? opsEsc(c.preview) : '<span style="color:var(--text-tertiary)">사진만 보냄</span>') + '</div>' +
+            (c.noise ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">업무로 읽힌 것 없음</div>' : '');
+        } else {
+          lines = c.items.map(opsLine).join('');
+        }
+
+        var sum = [];
+        if (c.applied) sum.push('반영 ' + c.applied);
+        var needs = (c.items || []).filter(function (i) { return i.status === 'needs_input'; }).length;
+        if (needs) sum.push('<span style="color:#b45309">확인 ' + needs + '</span>');
+
+        var all = !window.currentSiteId || window.currentSiteId === 'ALL';
+        return '<div class="ops-card" id="ops-card-' + c.id + '">' +
+          '<div class="ops-head">' +
+          (all && c.site ? '<span class="ops-site">' + opsEsc(c.site) + '</span>' : '') +
+          '<span class="ops-who">' + opsEsc(c.by) + '</span>' +
+          (c.trade ? '<span class="ops-trade" style="background:' + tradeColor + '">' + opsEsc(c.trade) + '</span>' : '') +
+          '<span class="ops-at">' + (c.date ? opsEsc(c.date) + ' ' : '') + opsEsc(c.at) + '</span>' +
+          '<span class="ops-src">' + opsEsc(c.source || '') + (photos.length ? ' · 📷 ' + photos.length : '') + '</span>' +
+          (sum.length ? '<span class="ops-sum">' + sum.join(' · ') + '</span>' : '') +
+          '</div>' +
+          '<div class="ops-body">' + photoHtml + '<div class="ops-lines">' + lines +
+          (c.raw && c.status !== 'analyzing' && c.items.length ? '<details class="ops-raw"><summary>원문 보기</summary><pre>' + opsEsc(c.raw) + '</pre></details>' : '') +
+          '</div></div></div>';
+      }
+
+      // 판독 항목 한 줄 — «무슨 종류 · 무슨 뜻 · 지금 어떤 상태» 만. 확신도·코드·긴 인용은 뺐다.
+      // 2026-09-09 → 9/9. 날짜 칩은 «언제» 만 보이면 된다.
+      function opsFmt(v) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v === null || v === undefined ? '' : v));
+        return m ? (+m[2]) + '/' + (+m[3]) : (v === true ? '예' : (v === false ? '아니오' : v));
+      }
+      function opsBigMove(k, a, b) {
+        if (a === undefined || a === null || a === '') return false;
+        if (k === 'progress') return Number(b) < Number(a);
+        var da = Date.parse(a), db = Date.parse(b);
+        return !isNaN(da) && !isNaN(db) && Math.abs(db - da) > 7 * 86400000;
+      }
+      function opsLine(it) {
+        var c = OPS_CAT[it.category] || OPS_CAT.todo;
+        var prev = it.previous || {}, prop = it.proposed || {};
+        var chg = Object.keys(prop).slice(0, 2).map(function (k) {
+          var same = String(prev[k]) === String(prop[k]);
+          var b = (!same && prev[k] !== undefined && prev[k] !== null && prev[k] !== '') ? opsEsc(opsFmt(prev[k])) + '→' : '';
+          return '<span class="chg' + (opsBigMove(k, prev[k], prop[k]) ? ' big' : '') + '">' + opsEsc(OPS_FIELD[k] || k) + ' ' + b + opsEsc(opsFmt(prop[k])) + '</span>';
+        }).join('');
+        var state;
+        if (it.status === 'applied') {
+          state = '<span class="ops-state ok"><i class="ph ph-check-circle"></i> 반영됨</span><button class="ops-btn ghost" onclick="window.opsRevert(' + it.id + ')">되돌리기</button>';
+        } else if (it.status === 'needs_input') {
+          state = '<span class="ops-state need">답 필요</span><button class="ops-btn ghost" onclick="window.opsDismiss(' + it.id + ')">치우기</button>';
+        } else if (it.applicable) {
+          var what = it.targetType === 'submittal' ? '제출물' : (it.targetType === 'procurement' ? '조달' : '공정표');
+          state = '<button class="ops-btn" onclick="window.opsApply(' + it.id + ')">' + what + '에 반영</button><button class="ops-btn ghost" onclick="window.opsDismiss(' + it.id + ')">치우기</button>';
+        } else if (it.status === 'dismissed') {
+          state = '<span class="ops-state info">치움</span>';
+        } else if (it.category === 'issue' || it.category === 'inspection') {
+          // 이슈에 «참고» 딱지를 붙이면 안 봐도 되는 걸로 읽힌다 — 본 사람이 «확인함» 만 누른다.
+          state = '<button class="ops-btn ghost" onclick="window.opsDismiss(' + it.id + ')">확인함</button>';
+        } else {
+          state = '<span class="ops-state info">참고</span><button class="ops-btn ghost" onclick="window.opsDismiss(' + it.id + ')">치우기</button>';
+        }
+        return '<div class="ops-line">' +
+          '<span class="ops-dot" style="background:' + c.color + '"></span>' +
+          '<span class="ops-cat" style="color:' + c.color + '">' + opsEsc(OPS_SHORT[it.category] || c.label) + '</span>' +
+          '<span class="ops-text">' + opsEsc(it.summary || it.raw || '') +
+            (it.targetName ? ' <span style="color:var(--text-tertiary)">— ' + opsEsc(it.targetName) + '</span>' : '') + chg +
+            (it.status === 'needs_input' && it.question ? '<small>' + opsEsc(it.question) + '</small>' : '') +
+          '</span><span class="ops-act">' + state + '</span></div>';
+      }
+
       async function renderOpsRoom() {
         const pc = document.getElementById('page-container');
         if (!pc) return;
+        opsEnsureCss();
+        var scope = window.currentSiteId || 'ALL';
+        // 현장이 하나뿐인 회사는 고를 것도 없다 — 첫 진입 때 그 현장으로 들어간다.
+        if ((scope === 'ALL' || scope === '') && !window._opsAutoSited) {
+          window._opsAutoSited = true;
+          var sel0 = document.getElementById('project-context-switcher');
+          var opts = sel0 ? Array.prototype.filter.call(sel0.options, function (o) { return o.value && o.value !== 'ALL'; }) : [];
+          if (opts.length === 1 && typeof window.setProjectContext === 'function') { sel0.value = opts[0].value; window.setProjectContext(opts[0].value); return; }
+        }
+        var scopeName = (scope === 'ALL' || scope === '') ? '' : ((window.SITE_NAMES && window.SITE_NAMES[scope]) || scope);
+        var d = new Date();
+        var dayName = ['일','월','화','수','목','금','토'][d.getDay()];
         pc.innerHTML =
           '<div class="header-section"><div>' +
           '<h1 class="page-title"><i class="ph ph-broadcast" style="color:#22c55e"></i> 현장 상황실</h1>' +
-          '<p class="page-subtitle">오늘 한 일 · 내일 할 일 · 자재 · 영수증 · 이슈를 그냥 올리세요. AI 가 읽고 공정 반영안을 만듭니다.</p>' +
+          '<p class="page-subtitle" id="ops-scope-line">' +
+            (scopeName ? opsEsc(scopeName) + ' · ' : '<span style="color:#b45309">현장을 고르지 않음 · </span>') +
+            (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + dayName + ') · 현장앱·톡방에서 보낸 것이 여기 모입니다</p>' +
           '</div>' +
           '<div class="action-row">' +
-          '<button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 기록 <span id="ops-batch-count"></span></button>' +
+          '<button class="btn-primary ops-hide" id="ops-applyall-btn" style="font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> <span id="ops-applyall-label">반영</span></button>' +
+          '<button class="btn-secondary" onclick="window.opsTogglePaste()" title="카카오톡 대화를 그대로 붙여넣을 때"><i class="ph ph-clipboard-text"></i> 직접 붙여넣기</button>' +
+          '<button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 <span id="ops-batch-count"></span></button>' +
           '<button class="btn-primary" style="background:#0f766e;border-color:#0f766e" onclick="window.opsCloseDay()"><i class="ph ph-clipboard-text"></i> 일일 마감</button>' +
           '</div></div>' +
-          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
-          '<div class="panel-title"><i class="ph ph-note-pencil"></i> 현장 이야기 붙여넣기</div>' +
-          '<span style="font-size:11.5px;color:var(--text-tertiary)">카카오톡 대화를 통째로 붙여넣어도 됩니다</span>' +
+
+          // 직접 붙여넣기 — 접어 둔다. 이 화면의 본업은 «보는 것» 이고, 붙여넣기는 소장이 톡을 옮길 때만 쓴다.
+          '<div class="panel ops-hide" id="ops-paste" style="margin-bottom:14px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-note-pencil"></i> 직접 붙여넣기</div>' +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">카카오톡 대화를 통째로 붙여넣어도 됩니다 · 반장들은 현장앱에서 보냅니다</span>' +
           '</div><div class="panel-body padded">' +
-          '<textarea id="ops-input" placeholder="예)&#10;김철수: 천장 배관 20개 중 12개 했습니다&#10;이민준: 그레이바 자재 화요일 도착한대요&#10;내일 전기 3명 투입해서 트레이 작업합니다" ' +
-          'style="width:100%;height:150px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
-          '<div style="margin-top:11px">' +
-          '<label style="display:block;font-size:11.5px;color:var(--text-tertiary);margin-bottom:6px"><i class="ph ph-camera"></i> 현장 사진 첨부 <span style="color:#22c55e">(AI가 사진도 함께 읽습니다)</span></label>' +
+          '<textarea id="ops-input" placeholder="예)&#10;김철수: 천장 배관 20개 중 12개 했습니다&#10;이민준: 그레이바 자재 화요일 도착한대요" ' +
+          'style="width:100%;height:120px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:13px;padding:12px;resize:vertical"></textarea>' +
+          '<div style="margin-top:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
           '<input type="file" id="ops-photo-input" accept="image/*" multiple capture="environment" style="font-size:12px;color:var(--text-secondary);max-width:100%">' +
-          '<div id="ops-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>' +
-          '<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px">시공 사진·영수증·납품 사진 모두 인식합니다. 최대 20장, 크기 제한 없음(서버가 알아서 줄입니다). 글과 같이 올리면 가장 정확합니다.</div>' +
+          '<div id="ops-photo-strip" style="display:flex;flex-wrap:wrap;gap:6px"></div>' +
           '</div>' +
-          '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">' +
-          '<button class="btn-primary" id="ops-read-btn" style="padding:10px 18px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
+          '<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
+          '<button class="btn-primary" id="ops-read-btn" style="padding:8px 16px;font-weight:700"><i class="ph ph-sparkle"></i> AI 판독</button>' +
           '<span id="ops-read-msg" style="font-size:12px;color:var(--text-tertiary)">잡담은 자동으로 걸러집니다. 공정표는 확인 후 반영됩니다.</span>' +
           '</div></div></div>' +
-          '<div id="ops-digest"></div>' +
+
           '<div id="ops-result"></div>' +
-          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
-          '<div class="panel-title"><i class="ph ph-check-square-offset"></i> 오늘 한 일 · 내일 할 일 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">지시·승인·준비물</span></div>' +
-          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddAction()"><i class="ph ph-plus"></i> 직접 추가</button>' +
-          '</div><div class="panel-body" id="ops-actions" style="padding:0"></div></div>' +
-          '<div class="panel" style="margin-bottom:16px"><div class="panel-header">' +
-          '<div class="panel-title"><i class="ph ph-users-three"></i> 오늘 출역 인원 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">보고 vs 게이트 QR</span></div>' +
-          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsAddLabor()"><i class="ph ph-plus"></i> 직접 입력</button>' +
-          '</div><div class="panel-body" id="ops-labor" style="padding:0"></div></div>' +
+          '<div id="ops-digest" class="ops-hide"></div>' +
+          '<div id="ops-issues"></div>' +
+          '<div id="ops-trades"></div>' +
+
+          '<div class="panel" style="margin-bottom:14px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-chats-circle"></i> 올라온 것 <span id="ops-feed-count" style="font-size:11px;color:var(--text-tertiary);font-weight:400"></span></div>' +
+          '<div style="display:flex;gap:7px;align-items:center">' +
+          '<span id="ops-feed-live" style="font-size:11px;color:var(--text-tertiary)"></span>' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsLoadFeed(true)"><i class="ph ph-arrows-clockwise"></i></button></div>' +
+          '</div><div class="panel-body" id="ops-feed" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>' +
+
+          '<div class="ops-two">' +
           '<div class="panel"><div class="panel-header">' +
-          '<div class="panel-title"><i class="ph ph-list-checks"></i> 확인 대기 목록</div>' +
-          '<div style="display:flex;gap:7px">' +
-          '<button class="btn-primary" style="padding:5px 12px;font-size:12px;font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> 전체 반영</button>' +
-          '<button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.opsLoadPending()"><i class="ph ph-arrows-clockwise"></i> 새로고침</button></div>' +
-          '</div><div class="panel-body" id="ops-pending" style="padding:0"><div style="padding:28px;text-align:center;color:var(--text-tertiary);font-size:13px">불러오는 중…</div></div></div>' +
-          '<div class="panel" id="ops-batches-panel" style="margin-top:16px"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-check-square-offset"></i> 할 일</div>' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsAddAction()"><i class="ph ph-plus"></i></button>' +
+          '</div><div class="panel-body" id="ops-actions" style="padding:0"></div></div>' +
+          '<div class="panel"><div class="panel-header">' +
+          '<div class="panel-title"><i class="ph ph-users-three"></i> 출역 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">보고 vs QR</span></div>' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsAddLabor()"><i class="ph ph-plus"></i></button>' +
+          '</div><div class="panel-body" id="ops-labor" style="padding:0"></div></div>' +
+          '</div>' +
+
+          // 원문 기록 — 같은 글이 피드 밑에 또 서면 화면이 두 배로 길어진다. 고치거나 지울 사람만 연다.
+          '<div class="panel ops-hide" id="ops-batches-panel" style="margin-top:14px"><div class="panel-header">' +
           '<div class="panel-title"><i class="ph ph-scroll"></i> 원문 기록</div>' +
-          '<span style="font-size:11.5px;color:var(--text-tertiary)">붙여넣은 대화 원문이 그대로 보관됩니다 · 수정·삭제 가능</span>' +
-          '</div><div class="panel-body" id="ops-batches" style="padding:0"></div></div>';
+          '<div style="display:flex;gap:8px;align-items:center"><span style="font-size:11.5px;color:var(--text-tertiary)">올라온 글 원문 그대로 · 수정·삭제 가능</span>' +
+          '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsGoBatches()">닫기</button></div>' +
+          '</div><div class="panel-body" id="ops-batches" style="padding:0"></div></div>' +
+          '<div id="ops-pending" class="ops-hide"></div>' +
+          '<div id="ops-lightbox" class="ops-lightbox ops-hide" onclick="window.opsCloseZoom()"><img alt=""></div>';
 
         document.getElementById('ops-read-btn').addEventListener('click', window.opsRead);
         window._opsFiles = [];
         var photoInput = document.getElementById('ops-photo-input');
         if (photoInput) photoInput.addEventListener('change', function () { opsHandlePhotos(this.files); });
-        window.opsLoadPending();
-        window.opsLoadDigest();
+        window.opsLoadFeed();
+        window.opsLoadTrades();
         window.opsLoadBatches();
         window.opsLoadLabor();
         window.opsLoadActions();
@@ -8843,7 +9152,7 @@
           section('이후', d.later, 'var(--text-tertiary)', false) +
           section('✓ 오늘 한 일', d.doneToday, 'var(--status-success)', true);
 
-        host.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">지시·승인·준비물이 아직 없습니다.<br>상황실에 대화를 올리면 "화기작업 승인 받으세요" 같은 항목이 자동으로 잡힙니다.</div>';
+        host.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 할 일이 아직 없습니다.</div>';
       };
 
       window.opsToggleAction = async function (id) {
@@ -9090,16 +9399,12 @@
           return '<span style="color:#f59e0b;font-weight:700">보고누락 ' + Math.abs(gap) + '명</span>';
         }
 
-        var kpi =
-          '<div style="display:flex;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
-          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">현장 보고 인원</div>' +
-            '<div style="font-size:24px;font-weight:800;color:var(--brand-primary)">' + d.reportedTotal + '명</div></div>' +
-          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">게이트 QR 실적</div>' +
-            '<div style="font-size:24px;font-weight:800;color:#22c55e">' + d.actualTotal + '명</div></div>' +
-          '<div style="flex:1;min-width:110px"><div style="font-size:10.5px;color:var(--text-tertiary)">차이</div>' +
-            '<div style="font-size:24px;font-weight:800;color:' + (d.gap ? 'var(--status-danger)' : 'var(--status-success)') + '">' +
-            (d.gap > 0 ? '+' : '') + d.gap + '</div></div>' +
-          '</div>';
+        // 큰 숫자 타일은 치웠다 — «보고 12 · QR 11 · 미확인 1명» 한 줄이면 된다.
+        var kpi = (d.reportedTotal || d.actualTotal)
+          ? '<div style="padding:10px 18px;border-bottom:1px solid var(--border-subtle);font-size:14px;font-weight:700;color:var(--text-primary)">' +
+            '보고 ' + (d.reportedTotal || 0) + '명 · QR ' + (d.actualTotal || 0) + '명' +
+            (d.gap ? ' · ' + gapChip(d.gap) : ' · <span style="color:var(--status-success)">일치</span>') + '</div>'
+          : '';
 
         var rows = (d.rows || []).map(function (r) {
           return '<tr style="border-bottom:1px solid var(--border-subtle)">' +
@@ -9129,7 +9434,7 @@
             '<th style="text-align:right;font-size:10.5px;color:var(--text-tertiary)">QR</th>' +
             '<th style="text-align:right;padding-right:12px;font-size:10.5px;color:var(--text-tertiary)">확인</th><th></th>' +
             '</tr></thead><tbody>' + rows + qrOnly + '</tbody></table>'
-          : '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 올라온 인원 보고가 없습니다.<br>상황실에 "한빛전기 3명 나왔습니다" 처럼 올리면 자동으로 잡힙니다.</div>');
+          : '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12.5px">오늘 인원 보고가 없습니다.</div>');
       };
 
       window.opsAddLabor = async function () {
@@ -9154,7 +9459,8 @@
       // 오늘 요약 — 저녁 다이제스트와 같은 집계를 화면에서도 바로 본다.
       window.opsLoadDigest = async function () {
         var host = document.getElementById('ops-digest');
-        if (!host) return;
+        // 통계 타일은 새 화면에서 안 그린다(자리는 숨긴 채 남겨 옛 호출자와 호환).
+        if (!host || host.classList.contains('ops-hide')) return;
         var d = await gsRun('api_getOpsDigest', [], { actionable: 0 });
         if (!d || !d.actionable) { host.innerHTML = ''; return; }
         function stat(label, value, color) {
@@ -9260,26 +9566,18 @@
             return;
           }
 
-          if (msg) msg.textContent = '판독 완료 — ' + j.parsed + '건 중 업무 ' + j.actionable + '건, 잡담 ' + j.noise + '건 제외 (' + elapsed + '초, 원문은 아래 기록에 보관됨)';
-          document.getElementById('ops-result').innerHTML =
-            '<div class="panel" style="margin-bottom:16px;border-left:3px solid #22c55e"><div class="panel-header">' +
-            '<div class="panel-title" style="color:#22c55e"><i class="ph ph-check-circle"></i> 방금 판독한 내용</div></div>' +
-            '<div class="panel-body" style="padding:0">' + opsRows(j.items || [], true) + '</div></div>';
+          if (msg) msg.textContent = '판독 완료 (' + elapsed + '초) — 아래 카드에 들어갔습니다.';
           opsClearCache();
           window.opsLoadBatches();
-          window.opsLoadPending();
+          await window.opsLoadFeed(true);
+          window.opsJump(batchId);
           return;
         }
       };
 
       window.opsLoadPending = async function () {
-        var host = document.getElementById('ops-pending');
-        if (!host) return;
-        var d = await gsRun('api_getOpsPending', [], { count: 0, items: [] });
-        var items = (d && d.items) || [];
-        host.innerHTML = items.length
-          ? opsRows(items, false)
-          : '<div style="padding:32px;text-align:center;color:var(--text-tertiary);font-size:13px">확인 대기 중인 항목이 없습니다.</div>';
+        // 옛 «확인 대기 목록» 은 피드에 합쳐졌다. 옛 호출자(판독 완료·반영·되돌리기)는 그대로 여기로 온다.
+        return window.opsLoadFeed();
       };
 
       function opsRows(items, showNoise) {
@@ -9344,9 +9642,21 @@
 
       // 헤더 버튼 → 원문 기록 패널로 스크롤. (페이지 맨 아래라 못 찾는 일이 잦았다.)
       window.opsGoBatches = function () {
-        var panel = document.getElementById('ops-batches-panel');
-        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var panel = document.getElementById('ops-batches-panel'); if (!panel) return;
+        panel.classList.toggle('ops-hide');
+        if (!panel.classList.contains('ops-hide')) { window.opsLoadBatches(); panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       };
+      // 2026-09-08 21:33 → 오늘 21:33 / 어제 21:33 / 9/6 21:33
+      function opsWhen(at) {
+        var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/.exec(String(at || ''));
+        if (!m) return at || '';
+        var d = new Date(), pad = function (x) { return (x < 10 ? '0' : '') + x; };
+        var today = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        d.setDate(d.getDate() - 1);
+        var yday = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        var day = m[1] + '-' + m[2] + '-' + m[3];
+        return (day === today ? '오늘' : (day === yday ? '어제' : (+m[2]) + '/' + (+m[3]))) + ' ' + m[4];
+      }
 
       window.opsLoadBatches = async function () {
         var host = document.getElementById('ops-batches');
@@ -9363,9 +9673,8 @@
         host.innerHTML = list.map(function (b) {
           return '<div style="padding:12px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer" onclick="window.opsShowBatch(' + b.id + ')">' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">' +
-            '<span style="font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + opsEsc(b.at || '') + '</span>' +
+            '<span style="font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono,monospace)">' + opsEsc(opsWhen(b.at)) + '</span>' +
             (b.by ? '<span style="font-size:11px;color:var(--text-secondary)">' + opsEsc(b.by) + '</span>' : '') +
-            '<span style="font-size:10.5px;color:var(--brand-primary)">업무 ' + b.actionable + '건' + (b.noise ? ' · 잡담 ' + b.noise + '건 제외' : '') + '</span>' +
             (b.imageCount ? '<span style="font-size:10.5px;color:#22c55e">📷 ' + b.imageCount + '</span>' : '') +
             (b.edited ? '<span style="font-size:10.5px;color:#f59e0b">✎ 수정됨</span>' : '') +
             (b.applied ? '<span style="font-size:10.5px;color:#22c55e">반영 ' + b.applied + '건</span>' : '') +
@@ -9381,6 +9690,8 @@
         if (!d || d.success === false) { alert('원문을 불러오지 못했습니다.'); return; }
         var host = document.getElementById('ops-batches');
         if (!host) return;
+        var panel0 = document.getElementById('ops-batches-panel');
+        if (panel0 && panel0.classList.contains('ops-hide')) { panel0.classList.remove('ops-hide'); panel0.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         window._opsBatch = d;
         var manage = window._opsCanManageBatches
           ? '<span style="margin-left:auto;display:flex;gap:6px">' +
@@ -9392,7 +9703,7 @@
           '<div style="padding:14px 18px">' +
           '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">' +
           '<button class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="window.opsLoadBatches()">← 목록</button>' +
-          '<span style="font-size:11.5px;color:var(--text-tertiary)">' + opsEsc(d.at || '') + (d.by ? ' · ' + opsEsc(d.by) : '') +
+          '<span style="font-size:11.5px;color:var(--text-tertiary)">' + opsEsc(opsWhen(d.at)) + (d.by ? ' · ' + opsEsc(d.by) : '') +
           (d.imageCount ? ' · 사진 ' + d.imageCount + '장' : '') + '</span>' + manage + '</div>' +
           (d.editedAt ? '<div style="font-size:11px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;margin-bottom:8px">' +
             '✎ ' + opsEsc(d.editedAt) + (d.editedBy ? ' · ' + opsEsc(d.editedBy) : '') + ' 수정됨 — 처음 올라온 원문은 아래 <b>최초 원문</b>에서 볼 수 있습니다.</div>' : '') +
@@ -9456,33 +9767,45 @@
       window.opsApply = async function (id) {
         var r = await gsRun('api_applyOpsItem', [id], { success: false });
         if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
-        if (window.showToast) window.showToast('공정표에 반영했습니다.', 'success');
+        var it0 = (window._opsFeedIndex || {})[id] || {};
+        var what0 = it0.targetType === 'submittal' ? '제출물' : (it0.targetType === 'procurement' ? '조달' : '공정표');
+        if (window.showToast) window.showToast(what0 + '에 반영했습니다.', false);
         opsClearCache();
         window.opsLoadDigest();
+        window.opsLoadTrades();
         if (window.apiCache) Object.keys(window.apiCache).forEach(function (k) { if (k.indexOf('Wbs') >= 0 || k.indexOf('Procurement') >= 0) delete window.apiCache[k]; });
         window.opsLoadPending();
       };
 
       window.opsApplyAll = async function () {
-        // 어느 현장에 반영되는지 이름으로 먼저 보여 준다. 일괄 작업은 그 범위를
-        // 사람이 눈으로 보고 있을 때만 성립한다 — 「전체」 상태에서는 서버가 막는다.
         var scope = window.currentSiteId || 'ALL';
         if (scope === 'ALL' || scope === '') {
-          alert('현장을 먼저 고른 뒤에 일괄 반영하세요.\n「전체」 상태에서는 어느 현장에 반영되는지 화면에서 확인할 수 없습니다.');
+          if (window.showToast) window.showToast('위에서 현장을 먼저 고르세요. 「전체」 상태에서는 어느 현장에 반영되는지 알 수 없습니다.', 'warning');
+          else alert('위에서 현장을 먼저 고르세요.');
           return;
         }
         var scopeName = (window.SITE_NAMES && window.SITE_NAMES[scope]) || scope;
-        if (!confirm(scopeName + ' 현장의 확인 대기 제안을 한 번에 공정표·조달에 반영할까요?\n(확인 필요 항목은 건너뜁니다. 되돌릴 수 있습니다.)')) return;
-        var r = await gsRun('api_applyAllOpsItems', [], { success: false });
+        var lab = document.getElementById('ops-applyall-label');
+        if (!confirm(scopeName + ' — ' + ((lab && lab.textContent) || '반영 가능한 항목을 모두 반영') + '할까요?\n확인 필요 항목은 그대로 둡니다. 되돌릴 수 있습니다.')) return;
+        var btn = document.getElementById('ops-applyall-btn'); if (btn) btn.disabled = true;
+        var r = await gsRun('api_applyAllOpsItems', [window._opsApplicableIds || []], { success: false });
+        if (btn) btn.disabled = false;
         if (!r || !r.success) { alert((r && r.error) || '반영에 실패했습니다.'); return; }
-        var msg = r.applied + '건 반영' + (r.failed ? ', ' + r.failed + '건 실패' : '');
-        if (window.showToast) window.showToast(msg, r.failed ? 'warning' : 'success'); else alert(msg);
+        var parts = [];
+        parts.push(r.applied ? r.applied + '건 반영' : '반영할 수 있는 항목이 없었습니다');
+        if (r.failed) parts.push(r.failed + '건 실패');
+        if (r.skippedNeedsInput) parts.push('답 필요 ' + r.skippedNeedsInput + '건은 남김');
+        var msg = parts.join(' · ');
+        if (window.showToast) window.showToast(msg, !!r.failed); else alert(msg);
         if ((r.failures || []).length) {
-          console.warn('[ops] 반영 실패', r.failures);
+          var host = document.getElementById('ops-result');
+          if (host) host.innerHTML = '<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--status-danger)"><div class="panel-body padded" style="font-size:12.5px">' +
+            '<b style="color:var(--status-danger)">반영 못 한 ' + r.failures.length + '건</b><ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">' +
+            r.failures.map(function (f) { return '<li>' + opsEsc(f.summary || ('#' + f.id)) + ' — <span style="color:var(--text-tertiary)">' + opsEsc(f.error || '') + '</span></li>'; }).join('') + '</ul></div></div>';
         }
         opsClearCache();
-        window.opsLoadPending();
-        window.opsLoadDigest();
+        window.opsLoadFeed(true);
+        window.opsLoadTrades();
       };
 
       window.opsRevert = async function (id) {
