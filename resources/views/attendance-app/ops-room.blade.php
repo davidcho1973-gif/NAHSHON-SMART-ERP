@@ -449,7 +449,8 @@
             uploadPhotos(function (n, total) { say(t('사진 올리는 중 ') + n + '/' + total + '…'); })
                 .then(function (tokens) {
                     btn.textContent = raw ? t('정리하는 중…') : t('올리는 중…');
-                    return api('api_opsIngest', [raw, tokens]);
+                    // 'app' — 상황실 카드에 «현장앱» 으로 찍힌다(관리자 붙여넣기와 구별).
+                    return api('api_opsIngest', [raw, tokens, 'app']);
                 })
                 .then(function (d) {
                     if (!d || d.success === false) { throw new Error((d && d.error) || t('보내지 못했습니다.')); }

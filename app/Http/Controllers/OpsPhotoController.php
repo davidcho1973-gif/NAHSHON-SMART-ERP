@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OpsIntakeBatch;
+use App\Support\AccessPolicy;
+use App\Support\ImageDownscale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -59,6 +63,53 @@ class OpsPhotoController extends Controller
             'token' => $token,
             'bytes' => (int) $file->getSize(),
             'mime' => $mime,
+        ]);
+    }
+
+    /**
+     * 상황실에 올라온 사진을 보여 준다 — 원본 또는 목록용 작은 판.
+     *
+     * 사진은 올릴 수만 있고 볼 길이 없었다. 반장이 현장 사진을 찍어 보내도 소장 화면에는
+     * «사진 3장» 이라는 글자만 떴다. 상황실은 «현장을 한눈에 보는» 자리라 사진이 그 자체로
+     * 보고다 — 글보다 먼저 눈에 들어와야 한다.
+     *
+     * 파일은 «.bin» 으로 저장돼 있어 확장자가 없다. 형식은 바이트를 보고 가린다.
+     * 목록에는 줄인 판(?s=t)을 준다 — 원본 10MB 를 카드마다 내려받게 하면 화면이 안 열린다.
+     */
+    public function show(Request $request, OpsIntakeBatch $batch, int $index): Response
+    {
+        $user = $request->user();
+        $site = $batch->site;
+        $mine = $user && (int) $batch->created_by_id === (int) $user->id;
+        $siteLocked = $user && ($user->access_scope ?? null) === 'site'
+            && (int) ($user->allowed_site_id ?: 0) !== (int) $batch->site_id;
+        abort_unless($mine || (! $siteLocked && AccessPolicy::canSeeCompany($user, $site?->company_id)), 403);
+
+        $paths = is_array($batch->photo_paths) ? array_values($batch->photo_paths) : [];
+        abort_unless(isset($paths[$index]), 404);
+
+        $disk = Storage::disk((string) ($batch->photo_disk ?: self::disk()));
+        abort_unless($disk->exists($paths[$index]), 404);
+
+        $bytes = (string) $disk->get($paths[$index]);
+        $info = @getimagesizefromstring($bytes);
+        // GD 가 못 읽는 형식(HEIC 등)도 이미지로 내보낸다 — octet-stream 으로 주면 브라우저가
+        // 사진 대신 «내려받기» 를 띄운다.
+        $mime = is_array($info) && isset($info['mime'])
+            ? (string) $info['mime']
+            : ((string) (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: 'application/octet-stream');
+
+        if ($request->query('s') === 't') {
+            $shrunk = ImageDownscale::shrink($bytes, $mime, 720, 74);
+            $bytes = $shrunk['data'];
+            $mime = $shrunk['mime'];
+        }
+
+        // 올린 사진은 바뀌지 않는다 — 한 번 받으면 하루는 다시 안 받아도 된다.
+        return response($bytes, 200, [
+            'Content-Type' => $mime,
+            'Cache-Control' => 'private, max-age=86400',
+            'Content-Disposition' => 'inline',
         ]);
     }
 

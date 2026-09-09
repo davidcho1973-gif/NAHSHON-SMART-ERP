@@ -20,6 +20,7 @@ use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
 use App\Support\ImageDownscale;
 use App\Support\ImageParts;
+use App\Support\ReportSlot;
 use App\Support\SiteFromText;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -393,41 +394,42 @@ class OpsIntakeService
 
         $diskName = (string) ($batch->photo_disk ?: OpsPhotoController::disk());
         $disk = Storage::disk($diskName);
-        $toDelete = [];
         $filed = 0;
 
         foreach ($paths as $i => $path) {
             $kind = (string) ($photoKinds[$i]['kind'] ?? OpsPhotoRouter::KIND_OTHER);
 
-            if (! in_array($kind, OpsPhotoRouter::KEEP_AS_EVIDENCE, true)) {
-                $toDelete[] = $path;
-
-                continue;
+            if (in_array($kind, OpsPhotoRouter::KEEP_AS_EVIDENCE, true)) {
+                try {
+                    $title = trim((string) ($photoKinds[$i]['summary'] ?? '')) ?: (OpsPhotoRouter::KIND_LABELS[$kind] ?? '증빙');
+                    $doc = $this->documents->fileOpsEvidence($diskName, $path, $kind, $title, $batch->site_id, $batch->created_by_id);
+                    if ($doc !== null) {
+                        $filed++;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('상황실 증빙 편철 실패: '.$e->getMessage());
+                }
             }
 
+            // 예전에는 판독이 끝나면 사진을 지웠다. 그러자 상황실 카드에서 사진이 판독 직후
+            // 사라졌다 — 반장이 찍어 보낸 현장 사진이 «3장» 이라는 글자로만 남는 원인.
+            // 상황실은 사진이 곧 보고다. 지우는 대신 1280px 로 줄여 같은 자리에 둔다
+            // (원본 10MB → 수백 KB). 목록 썸네일도 이 줄인 판에서 만들어 부담이 없다.
             try {
-                $title = trim((string) ($photoKinds[$i]['summary'] ?? '')) ?: (OpsPhotoRouter::KIND_LABELS[$kind] ?? '증빙');
-                $doc = $this->documents->fileOpsEvidence($diskName, $path, $kind, $title, $batch->site_id, $batch->created_by_id);
-                if ($doc !== null) {
-                    $filed++;
-                    $toDelete[] = $path;   // 문서함으로 복사됐으니 임시본은 지운다.
+                $bytes = (string) $disk->get($path);
+                $info = @getimagesizefromstring($bytes);
+                $mime = is_array($info) && isset($info['mime']) ? (string) $info['mime'] : 'image/jpeg';
+                $small = ImageDownscale::shrink($bytes, $mime, 1280, 78);
+                if (($small['resized'] ?? false) && strlen((string) $small['data']) < strlen($bytes)) {
+                    $disk->put($path, $small['data'], 'private');
                 }
             } catch (\Throwable $e) {
-                Log::warning('상황실 증빙 편철 실패: '.$e->getMessage());
-                // 편철에 실패하면 원본을 지우지 않는다 — 증빙을 잃는 것보다 남겨 두는 편이 낫다.
+                Log::warning('상황실 사진 줄이기 실패: '.$e->getMessage());
+                // 못 줄이면 원본을 그대로 둔다 — 사진을 잃는 것보다 낫다.
             }
         }
 
-        try {
-            if ($toDelete !== []) {
-                $disk->delete($toDelete);
-            }
-        } catch (\Throwable $e) {
-            Log::warning('상황실 사진 정리 실패: '.$e->getMessage());
-        }
-
-        $remaining = array_values(array_diff($paths, $toDelete));
-        $batch->update(['photo_paths' => $remaining ?: null, 'evidence_filed' => $filed]);
+        $batch->update(['evidence_filed' => $filed]);
     }
 
     /**
@@ -448,6 +450,163 @@ class OpsIntakeService
             'count' => $rows->count(),
             'items' => $rows->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
+    }
+
+    /**
+     * 상황실 피드 — «오늘 현장에서 올라온 것» 을 보낸 사람 단위로, 최근 것부터.
+     *
+     * 예전 화면은 판독 결과를 항목 하나하나로 흩어 놓았다. 같은 사람이 한 번에 보낸 글 셋이
+     * 서로 떨어져 서고, 사진은 «3장» 이라는 글자로만 남았다. 소장이 알고 싶은 것은
+     * «누가 언제 무엇을 보냈고, 그게 무슨 뜻인가» 인데 그 순서가 뒤집혀 있었다.
+     *
+     * 그래서 뭉치(batch) 하나가 카드 하나다 — 보낸 사람·공종·시각·사진이 머리에 서고,
+     * 판독 결과는 그 아래 한 줄씩 붙는다. 잡담은 아예 빼고, 되돌아볼 원문은 접어 둔다.
+     *
+     * @return array<string, mixed>
+     */
+    public function feed(?int $siteId = null, int $days = 2, int $limit = 80, ?User $viewer = null): array
+    {
+        $site = $siteId ? Site::find($siteId) : null;
+        $tz = $site?->timezone ?: config('app.timezone');
+        $today = Carbon::now($tz)->toDateString();
+        // DB 는 앱 시간대로 저장한다. utc() 로 바꾸면 벽시계가 7시간 어긋나 새벽 것이 빠진다.
+        $since = Carbon::now($tz)->subDays(max(0, $days - 1))->startOfDay()->setTimezone(config('app.timezone'));
+
+        $rows = OpsIntakeBatch::query()
+            ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            // 최근 것 + 아직 처리 안 된 것. 이틀 지났다고 «확인 필요» 가 화면에서 사라지면
+            // 아무도 답을 안 하게 된다 — 옛 «확인 대기 목록» 은 날짜 제한이 없었다.
+            ->where(fn ($q) => $q->where('created_at', '>=', $since)
+                ->orWhereHas('items', fn ($i) => $i->whereIn('status', ['pending', 'needs_input'])->where('category', '!=', 'noise')))
+            ->with(['items', 'createdBy.employee', 'tradeReport', 'site'])
+            ->latest()->limit($limit)->get();
+
+        // 협력사 계정은 자기 회사 현장 것만, 현장 한정 계정은 그 현장 것만 본다.
+        $rows = $this->visibleTo($rows, $viewer ?? auth()->user());
+
+        $sourceLabel = ['paste' => '붙여넣기', 'room' => '톡방', 'app' => '현장앱', 'report' => '보고'];
+        $applicable = 0;
+        $applicableIds = [];
+        $needs = 0;
+        $issues = [];
+
+        $cards = $rows->map(function (OpsIntakeBatch $b) use ($tz, $today, $since, $sourceLabel, &$applicable, &$applicableIds, &$needs, &$issues): array {
+            $employee = $b->createdBy?->employee;
+            $paths = is_array($b->photo_paths) ? array_values($b->photo_paths) : [];
+            $photos = [];
+            foreach (array_keys($paths) as $i) {
+                $photos[] = [
+                    // 상대 주소 — 화면이 열린 그 주소로 간다. 절대 주소는 APP_URL 을 따라가
+                    // 로컬·프록시 뒤에서 엉뚱한 호스트를 가리킨다.
+                    'thumb' => route('ops.photo.show', ['batch' => $b->id, 'index' => $i, 's' => 't'], false),
+                    'full' => route('ops.photo.show', ['batch' => $b->id, 'index' => $i], false),
+                ];
+            }
+
+            $items = $b->items
+                ->filter(fn (OpsIntakeItem $i) => $i->category !== 'noise')
+                ->sortBy(fn (OpsIntakeItem $i) => match ($i->status) {
+                    'needs_input' => 0, 'pending' => 1, 'applied' => 3, default => 2,
+                })
+                ->values()
+                ->map(function (OpsIntakeItem $i) use (&$applicable, &$applicableIds, &$needs, &$issues, $b): array {
+                    $row = $this->row($i);
+                    // «반영» 단추가 뜰 수 있는가 — 대상과 바꿀 값이 둘 다 있어야 한다.
+                    $row['applicable'] = $i->status === 'pending'
+                        && filled($i->target_code)
+                        && is_array($i->proposed) && $i->proposed !== [];
+                    if ($row['applicable']) {
+                        $applicable++;
+                        $applicableIds[] = $i->id;
+                    }
+                    if ($i->status === 'needs_input') {
+                        $needs++;
+                    }
+                    // 막힘·안전·충돌·답을 기다리는 것은 맨 위 띠로 올린다 — 카드 속에 묻히면
+                    // 저녁에야 본다. 이미 치웠거나 반영한 것은 올리지 않는다.
+                    $open = in_array($i->status, ['pending', 'needs_input'], true);
+                    if ($open && (in_array($i->category, ['issue', 'inspection'], true) || filled($i->conflict) || $i->status === 'needs_input')) {
+                        $issues[] = [
+                            'id' => $i->id,
+                            'batchId' => $b->id,
+                            'category' => $i->category,
+                            'summary' => $i->summary,
+                            'targetName' => $i->target_name,
+                            'conflict' => $i->conflict ?: null,
+                            'needsInput' => $i->status === 'needs_input',
+                            'question' => $i->question,
+                            'site' => $b->site?->name,
+                            'by' => $b->createdBy?->employee?->name ?: $b->createdBy?->name,
+                        ];
+                    }
+
+                    return $row;
+                })->all();
+
+            $day = $b->created_at?->timezone($tz)->toDateString();
+            $old = $b->created_at !== null && $b->created_at->lt($since);
+
+            return [
+                'id' => $b->id,
+                'day' => $old ? 'old' : $day,
+                'old' => $old,
+                'dayLabel' => $old ? '이전 · 아직 처리 안 됨' : ($day === $today ? '오늘' : ($day === Carbon::parse($today)->subDay()->toDateString() ? '어제' : $b->created_at?->timezone($tz)->format('n/j'))),
+                'date' => $old ? $b->created_at?->timezone($tz)->format('n/j') : null,
+                'site' => $b->site?->name,
+                'at' => $b->created_at?->timezone($tz)->format('H:i'),
+                // 올라온 지 몇 분 — «읽는 중» 이 너무 오래가면 화면이 빠른 되묻기를 멈추는 기준.
+                'ageMin' => $b->created_at ? (int) $b->created_at->diffInMinutes(now()) : null,
+                'by' => $employee?->name ?: $b->createdBy?->name ?: '—',
+                'trade' => $b->tradeReport?->trade ?: ReportSlot::keyOf($employee),
+                'source' => $sourceLabel[$b->source] ?? $b->source,
+                'status' => $b->status,          // analyzing / done / failed
+                'error' => $b->error,
+                'raw' => (string) $b->raw_text,
+                'preview' => $b->preview(140),
+                'photos' => $photos,
+                'items' => $items,
+                'noise' => (int) $b->noise_count,
+                'applied' => $b->items->where('status', 'applied')->count(),
+            ];
+        })->values()->all();
+
+        return [
+            'success' => true,
+            'today' => $today,
+            'cards' => $cards,
+            'applicable' => $applicable,
+            'applicableIds' => $applicableIds,
+            'needsInput' => $needs,
+            'issues' => array_slice($issues, 0, 12),
+        ];
+    }
+
+    /**
+     * 이 사람이 볼 수 있는 뭉치만 남긴다.
+     *
+     * 협력사(vendor_admin) 계정은 자기 회사 현장 것만, 현장 한정(access_scope=site) 계정은
+     * 그 현장 것만. 내가 올린 것은 언제나 보인다.
+     *
+     * @param  Collection<int, OpsIntakeBatch>  $rows
+     * @return Collection<int, OpsIntakeBatch>
+     */
+    private function visibleTo(Collection $rows, ?User $user): Collection
+    {
+        if (! $user) {
+            return $rows;
+        }
+        $siteLock = ($user->access_scope ?? null) === 'site' ? (int) ($user->allowed_site_id ?: 0) : null;
+
+        return $rows->filter(function (OpsIntakeBatch $b) use ($user, $siteLock): bool {
+            if ((int) $b->created_by_id === (int) $user->id) {
+                return true;
+            }
+            if ($siteLock !== null && (int) $b->site_id !== $siteLock) {
+                return false;
+            }
+
+            return \App\Support\AccessPolicy::canSeeCompany($user, $b->site?->company_id);
+        })->values();
     }
 
     /**
@@ -998,7 +1157,7 @@ class OpsIntakeService
      *
      * @return array<string, mixed>
      */
-    public function applyAll(?int $siteId = null, ?int $userId = null): array
+    public function applyAll(?int $siteId = null, ?int $userId = null, ?array $ids = null): array
     {
         // 현장을 안 고르면 «전체 반영» 은 전 현장·전 회사의 대기 항목을 한 번에
         // 반영해 버린다. 되돌리기는 항목 하나씩뿐이라 원상복구가 사실상 불가능하다.
@@ -1011,16 +1170,32 @@ class OpsIntakeService
             ];
         }
 
+        // 화면이 «반영 가능 N건» 이라고 보여 준 바로 그 N건만 반영한다. id 없이 부르면
+        // (옛 호출자) 현장의 대기 전부.
+        $ids = is_array($ids) ? array_values(array_filter(array_map('intval', $ids))) : null;
         $rows = OpsIntakeItem::query()
             ->where('site_id', $siteId)
             ->where('status', 'pending')
             ->where('category', '!=', 'noise')
             ->whereNotNull('target_code')
+            ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
             ->get();
+
+        // 왜 «반영이 안 된다» 고 보였나: 대기 6건 중 반영할 수 있는 건 대상과 바꿀 값이 둘 다
+        // 있는 것뿐인데, 나머지가 조용히 건너뛰어졌다. 몇 건을 왜 못 했는지 함께 돌려줘야
+        // 화면이 «0건 반영» 대신 «반영할 수 있는 게 없다 — 확인 필요 3건» 이라고 말한다.
+        $skippedNeedsInput = OpsIntakeItem::query()
+            ->where('site_id', $siteId)->where('status', 'needs_input')->where('category', '!=', 'noise')->count();
+        $skippedNoTarget = OpsIntakeItem::query()
+            ->where('site_id', $siteId)->where('status', 'pending')->where('category', '!=', 'noise')
+            ->where(fn ($q) => $q->whereNull('target_code')->orWhereNull('proposed'))->count();
 
         $ok = 0;
         $failed = [];
         foreach ($rows as $row) {
+            if (! is_array($row->proposed) || $row->proposed === []) {
+                continue;   // 대상은 있는데 바꿀 값이 없다 — 위 «noTarget» 에 이미 세어졌다
+            }
             $res = $this->apply($row->id, null, $userId);
             if ($res['success'] ?? false) {
                 $ok++;
@@ -1029,7 +1204,14 @@ class OpsIntakeService
             }
         }
 
-        return ['success' => true, 'applied' => $ok, 'failed' => count($failed), 'failures' => $failed];
+        return [
+            'success' => true,
+            'applied' => $ok,
+            'failed' => count($failed),
+            'failures' => $failed,
+            'skippedNeedsInput' => $skippedNeedsInput,
+            'skippedNoTarget' => $skippedNoTarget,
+        ];
     }
 
     /**
