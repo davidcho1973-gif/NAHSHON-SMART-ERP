@@ -14,7 +14,10 @@ class IntegratedDocument extends Model
     /**
      * 9개 통합 문서 폴더(현장 문서 분류 체계). code => 표시명.
      */
+    public const FOLDER_DAILY_REPORT = 'DAY';
+
     public const FOLDERS = [
+        'DAY' => ['name' => '일일 보고서', 'color' => '#0f766e'],
         '01' => ['name' => '계약·행정', 'color' => '#6366f1'],
         '02' => ['name' => '인허가·법규', 'color' => '#0891b2'],
         '03' => ['name' => '시공·공정', 'color' => '#2563eb'],
@@ -201,7 +204,7 @@ class IntegratedDocument extends Model
         // 2) 제목·요약·필드 키워드 휴리스틱(종류가 'other'/불명확일 때).
         $summary = is_array($analysis['summary'] ?? null) ? implode(' ', $analysis['summary']) : '';
         $hay = mb_strtolower(trim(
-            ((string) ($analysis['title'] ?? '')) . ' ' . $summary . ' ' . implode(' ', array_keys((array) ($analysis['fields'] ?? [])))
+            ((string) ($analysis['title'] ?? '')).' '.$summary.' '.implode(' ', array_keys((array) ($analysis['fields'] ?? [])))
         ));
 
         $rules = [

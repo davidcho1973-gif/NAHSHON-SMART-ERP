@@ -155,7 +155,7 @@ class IntegratedDocumentServiceTest extends TestCase
         $svc = app(IntegratedDocumentService::class);
         $dash = $svc->dashboard(null);
         $this->assertSame(1, $dash['stats'][0]['value']);       // 전체 1건
-        $this->assertCount(9, $dash['dist']);                   // 9개 폴더 분포
+        $this->assertCount(10, $dash['dist']); // Nine trade folders plus the requested daily report room.
 
         $search = $svc->search(null, 'Surety');
         $this->assertSame(1, $search['count']);

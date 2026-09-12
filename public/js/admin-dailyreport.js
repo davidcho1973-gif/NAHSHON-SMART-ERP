@@ -372,7 +372,7 @@
       u.rowButton('미리보기', 'AdminDailyReport.preview(\'closing\')') +
       u.rowButton('다시 마감', 'AdminDailyReport.runClosing()') + '</div>';
 
-    var out = '';
+    var out = c.archiveUrl ? '<p style="color:#0f766e">문서함 · 일일 보고서에 저장되었습니다. <a target="_blank" rel="noopener" href="' + u.esc(c.archiveUrl) + '">저장된 보고서 열기</a></p>' : '';
 
     if (n.headline) {
       out += '<div style="padding:14px 16px;margin-bottom:14px;border-radius:10px;background:var(--bg-panel);' +

@@ -195,7 +195,7 @@ class OpsPhotoAsyncTest extends TestCase
             ->assertJson(['status' => 'failed']);
     }
 
-    public function test_photos_are_downscaled_before_the_ai_call_and_cleaned_up_after(): void
+    public function test_photos_are_downscaled_for_ai_and_preserved_for_the_situation_room(): void
     {
         $user = $this->user();
         $token = $this->actingAs($user)->post('/ops-api/photo', [
@@ -226,9 +226,11 @@ class OpsPhotoAsyncTest extends TestCase
         $this->assertLessThanOrEqual(ImageDownscale::MAX_EDGE, max($w, $h), '비전 API 로 원본 크기가 그대로 나가면 안 된다');
         $this->assertSame('image/jpeg', $seen[0]['mime_type']);
 
-        // 판독이 끝나면 원본 사진은 정리된다.
-        Storage::disk('ops-test')->assertMissing($path);
-        $this->assertNull(OpsIntakeBatch::find($batchId)->photo_paths);
+        // The situation-room feed retains a smaller photo after analysis (f982352).
+        Storage::disk('ops-test')->assertExists($path);
+        [$storedWidth, $storedHeight] = getimagesizefromstring(Storage::disk('ops-test')->get($path));
+        $this->assertLessThanOrEqual(1280, max($storedWidth, $storedHeight));
+        $this->assertSame([$path], OpsIntakeBatch::find($batchId)->photo_paths);
     }
 
     public function test_ops_may_send_more_photos_than_the_synchronous_paths(): void

@@ -9339,8 +9339,8 @@
           '<div class="panel-header"><div class="panel-title" style="color:#0f766e"><i class="ph ph-clipboard-text"></i> 일일 마감 보고서 · ' + opsEsc(d.date) + '</div>' +
           '<div style="display:flex;gap:7px"><button class="btn-secondary" style="padding:5px 11px;font-size:12px" onclick="window.print()"><i class="ph ph-printer"></i> 인쇄</button></div></div>' +
           '<div class="panel-body padded">' +
-
           (n.headline ? '<div style="font-size:15px;font-weight:800;color:var(--text-primary);margin-bottom:12px">' + opsEsc(n.headline) + '</div>' : '') +
+          (d.archiveUrl ? '<p style="margin-bottom:14px;color:#0f766e">문서함 · 일일 보고서에 저장되었습니다. <a target="_blank" rel="noopener" href="' + opsEsc(d.archiveUrl) + '">저장된 보고서 열기</a></p>' : '') +
 
           '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">' +
           stat('보고 인원', (labor.reported || 0) + '명', 'AI·현장 보고', 'var(--brand-primary)') +

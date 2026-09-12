@@ -7,9 +7,11 @@ use App\Models\DailyClosingReport;
 use App\Models\DailyCrewReport;
 use App\Models\DailyTradeReport;
 use App\Models\Equipment;
+use App\Models\IntegratedDocument;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\OpsLaborReport;
+use App\Models\ReportRecipient;
 use App\Models\SafetyPermit;
 use App\Models\SafetyWorkIssue;
 use App\Models\SafetyWorkItem;
@@ -84,9 +86,14 @@ class DailyClosingService
             $report->update([
                 'metrics' => $metrics,
                 'narrative' => $narrative,
-                'status' => 'done',
+                'status' => 'writing',
                 'error' => null,
             ]);
+            app(DailyReportArchive::class)->save(
+                $report->fresh(), ReportRecipient::CLOSING,
+                app(DailyReportComposer::class)->closing($report->fresh()),
+            );
+            $report->update(['status' => 'done']);
         } catch (\Throwable $e) {
             report($e);
             $report->update(['status' => 'failed', 'error' => $e->getMessage()]);
@@ -768,9 +775,16 @@ PROMPT;
             return ['success' => false, 'error' => '보고서를 찾을 수 없습니다.'];
         }
 
+        $archive = IntegratedDocument::query()
+            ->where('folder_code', IntegratedDocument::FOLDER_DAILY_REPORT)
+            ->where('site_id', $report->site_id)
+            ->whereDate('issued_on', $report->report_date)
+            ->where('document_number', 'like', 'DCR-%')->first();
+
         return [
             'success' => true,
             'id' => $report->id,
+            'archiveUrl' => $archive && $report->status === 'done' ? route('docs.show', $archive) : null,
             'status' => $report->status,
             'error' => $report->error,
             'date' => $report->report_date->toDateString(),
