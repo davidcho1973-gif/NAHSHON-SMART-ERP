@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-11 | CODEX | Daily report archive | File closing output automatically into dedicated daily report room; share archive writer with mail sender and refresh both document copies on re-close. Show saved-file link; archive failure prevents done status. | codex/daily-closing-document-room | Related tests and build passed; full CI/deployment verification follows. |
 | 2026-09-08 | CODEX | Email password login | Add registered-email login for staff without Google. Phone last four opens a five-minute first-password setup only; retain account activation and role/scope, block legacy Google/PIN fallbacks, lock after five failures, replace dead password link and update app/profile/install guidance. | codex/email-password-login | 106 related tests / 521 assertions; full local run: 1,890 passed, one existing Windows backup mkdir error, one platform skip / 6,924 assertions. Build/Blade and desktop/360px login/setup preview passed. Linux CI and staging/NAHSHON verification follow. |
 | 2026-09-07 | CODEX | Registration employee app destination | Send completed site/Global and returning registrations to attendance-app; replace gate installation offers with the employee app link and redirect legacy install=1 entry. Keep account approval, shared-device protections and physical QR punch flow. | codex/registration-worker-app | 81 relevant tests / 412 assertions passed; build and Blade compilation passed. Full CI and staging/NAHSHON deployment checks follow. |
 | 2026-09-07 | CODEX | Conditional manual trade field | Remove duplicate selected-trade textbox; show manual input only for unlisted trades, preserving submitted values and validation. | codex/conditional-trade-input | 66 related tests / 372 assertions and JS mode/required/value checks passed; build, browser and CI verified during deployment. |
@@ -410,3 +411,7 @@ Use this section for manual owner checks, business decisions, and final approval
 ### Planned / Next
 
 - Coordinate with David/CODEX/Cowork before modifying shared frontend shell, API compatibility layer, or core auth/access files.
+
+## CODEX — Daily report archive (2026-09-11)
+
+Cause: filing was reachable only through email sending. Moved the writer to DailyReportArchive and call it before closing completes. Dedicated DAY folder, printable HTML, date/site document replacement, no new report table and no new automatic email sending. See docs/DAILY_REPORT_ARCHIVE.md.

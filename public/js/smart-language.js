@@ -17,6 +17,9 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '일일 보고서': 'Daily reports',
+    '저장된 보고서 열기': 'Open saved report',
+    '문서함 · 일일 보고서에 저장되었습니다.': 'Saved to Documents · Daily reports.',
     '직원 등록 — 현장 선택 / Global': 'Employee registration — Site / Global',
     '직원 QR 등록': 'Employee registration QR',
     '직원 QR 셀프 등록': 'Employee self-registration',
@@ -314,6 +317,9 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    '일일 보고서': 'Informes diarios',
+    '저장된 보고서 열기': 'Abrir informe guardado',
+    '문서함 · 일일 보고서에 저장되었습니다.': 'Guardado en Documentos · Informes diarios.',
     'Employee registration — Site / Global': 'Registro de personal — Obra / Global',
     'Employee registration QR': 'QR de registro de personal',
     'Employee self-registration': 'Autorregistro de personal',
