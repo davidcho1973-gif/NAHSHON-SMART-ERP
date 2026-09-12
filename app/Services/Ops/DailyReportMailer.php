@@ -338,66 +338,11 @@ class DailyReportMailer
      * @param  array{subject: string, html: string, text: string}  $composed
      * @param  list<string>  $recipientNames
      */
-    private function file(
-        DailyClosingReport $report,
-        string $kind,
-        array $composed,
-        array $recipientNames,
-    ): ?IntelligentDocument {
+    private function file(DailyClosingReport $report, string $kind, array $composed, array $recipientNames): ?IntelligentDocument
+    {
         try {
-            $date = $report->report_date->toDateString();
-            $label = $kind === ReportRecipient::PLAN ? '작업계획서' : '작업보고서';
-            $siteCode = $report->site?->code ?: 'ALL';
-
-            // 같은 날 같은 종류를 두 번 보내면 문서가 두 벌 쌓인다 — 덮어쓴다.
-            $number = sprintf('%s-%s-%s', $kind === ReportRecipient::PLAN ? 'DWP' : 'DCR',
-                $siteCode, str_replace('-', '', $date));
-
-            $existing = IntelligentDocument::query()->where('document_number', $number)->first();
-
-            $uuid = $existing?->uuid ?: (string) Str::uuid();
-            $name = "{$date}_{$label}_{$siteCode}.html";
-            $diskName = (string) config('document-intelligence.disk');
-            $path = "document-intelligence/inbox/{$uuid}/{$name}";
-            Storage::disk($diskName)->put($path, $composed['html']);
-
-            $attributes = [
-                'uuid' => $uuid,
-                'disk' => $diskName,
-                'site_id' => $report->site_id,
-                'file_path' => $path,
-                'original_file_name' => $name,
-                'stored_file_name' => $name,
-                'mime_type' => 'text/html',
-                'extension' => 'html',
-                'file_size' => strlen($composed['html']),
-                'sha256' => hash('sha256', $composed['html']),
-                'title' => sprintf('%s 일일 %s (%s)', $date, $label, $report->site?->name ?: '전 현장'),
-                // 문서함이 이미 아는 분류를 쓴다 — 새 이름을 지어내면 서랍 밖에 떨어져
-                // 목록·검색에 안 잡힌다. 일보는 '공정·일정' 서랍의 '일보' 종류다.
-                'category' => 'schedule',
-                'document_type' => 'daily_report',
-                'direction' => 'outgoing',
-                'document_number' => $number,
-                'recipients' => $recipientNames,
-                'summary' => Str::limit(strip_tags($composed['text']), 400),
-                // 우리가 만든 문서라 AI 분류를 다시 돌릴 이유가 없다.
-                'ai_status' => 'ready',
-                'ai_confidence' => 100,
-                'received_at' => now(),
-                'analyzed_at' => now(),
-                'document_date' => $date,
-            ];
-
-            if ($existing) {
-                $existing->update($attributes);
-
-                return $existing;
-            }
-
-            return IntelligentDocument::create($attributes);
+            return app(DailyReportArchive::class)->save($report, $kind, $composed, $recipientNames);
         } catch (\Throwable $e) {
-            // 편철에 실패해도 발송은 계속한다 — 보고가 나가는 것이 먼저다.
             report($e);
             Log::warning('일일 보고 문서함 편철 실패: '.$e->getMessage());
 
