@@ -37,6 +37,7 @@ use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
 use App\Services\Admin\KakaoReminderAdminService;
+use App\Services\Admin\LegacyActions;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\OrgSettingService;
 use App\Services\Admin\PayProfileService;
@@ -100,7 +101,7 @@ class SmartCompanyData
             'api_getDailyTeamMatrix' => self::realDailyTeamMatrix($siteId),
             'api_getDailyAttendanceDetail', 'api_getAttendanceDetailed' => self::realDailyAttendanceDetail($siteId, (isset($args[1]) && is_string($args[1]) && $args[1] !== '') ? $args[1] : null),
             'api_getEmployeeDetail' => self::realEmployeeDetail((string) ($args[0] ?? ''), $siteId),
-            'api_uploadEmployeePhoto' => ['success' => true, 'message' => 'Photo upload endpoint is ready. Configure filesystem disk for production.'],
+            'api_uploadEmployeePhoto' => ['success' => false, 'error' => '이 사진 등록 연결은 구현되지 않았습니다. 사진이 저장되지 않았습니다.'],
             'api_getHrDirectory' => self::hrDirectory($siteId),
             'api_getHrAttendanceRecords' => self::hrAttendanceRecords($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
             'api_getHrAttendanceEvents' => self::hrAttendanceEvents($args[0] ?? null, $args[1] ?? null, $args[2] ?? null),
@@ -500,7 +501,7 @@ class SmartCompanyData
             'api_getRentalList' => self::rentalList($siteId),
             'api_getRentalStats' => self::rentalStats($siteId),
             'api_createRental' => self::createRental($args[0] ?? []),
-            'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
+            'api_returnRental', 'api_processRentalContracts', 'api_processEquipmentRentalContracts', 'setupRentalSheet', 'generateSampleRentalContracts', 'api_cleanEmptyRentalRows' => ['success' => false, 'error' => '레거시 일괄처리는 지원되지 않습니다. 자재·장비의 계약 및 반납 화면을 이용하세요.'],
             'api_getHousingList' => self::housingList($siteId),
             'api_getHousingStats' => self::housingStats($siteId),
             'api_getVendorList' => self::vendors(),
@@ -511,20 +512,20 @@ class SmartCompanyData
             'api_getSiteList' => Schema::hasTable('sites') ? Site::query()->where('status', 'active')->orderBy('code')->get()->map(fn ($s) => ['id' => $s->id, 'code' => $s->code, 'name' => $s->name])->all() : [],
             'api_getProjectList' => Schema::hasTable('projects') ? Project::query()->orderByDesc('id')->get()->map(fn ($p) => ['id' => $p->id, 'code' => $p->project_code, 'name' => $p->name, 'site_id' => $p->site_id])->all() : [],
             'api_createVendor' => self::createVendor(is_array($args[0] ?? null) ? $args[0] : []),
-            'api_generateVendorEmailPrompt' => ['success' => true, 'draft' => "Hello,\n\nPlease send the latest quote and availability for the requested materials.\n\nRegards,\n".Org::name()],
-            // stub: 실제 번역 미구현 — 원문 그대로 반환. 'english' 키는 벤더 모달 translateDraft() JS 계약.
-            'api_translateToEnglish' => ['success' => true, 'english' => (string) ($args[0] ?? ''), 'text' => (string) ($args[0] ?? '')],
-            'api_sendVendorEmail' => ['success' => true],
-            'api_getVendorReplies' => ['success' => true, 'replies' => []],
+            'api_generateVendorEmailPrompt' => app(LegacyActions::class)->writeEnglish((string) ($args[0] ?? ''), true),
+            // Vendor tools use real translation, delivery and the shared mail ledger.
+            'api_translateToEnglish' => app(LegacyActions::class)->writeEnglish((string) ($args[0] ?? '')),
+            'api_sendVendorEmail' => app(LegacyActions::class)->sendVendor($args, $siteId),
+            'api_getVendorReplies' => app(CorrespondenceService::class)->vendorReplies((string) ($args[0] ?? '')),
 
-            'api_getAllFolderFiles' => json_encode(['success' => true, 'data' => [Org::name().' RECEIPT' => ['pending' => 3, 'done' => 28, 'total' => 31], 'UTILITY RECEIPT' => ['pending' => 1, 'done' => 12, 'total' => 13]]]),
-            'api_bulkProcessDriveFolder' => json_encode(['success' => true, 'log' => ['Scanned pending receipts', 'Updated finance records']]),
-            'api_getFinanceExcelBase64' => '',
+            'api_getAllFolderFiles' => ['success' => false, 'error' => '이 레거시 연결은 지원되지 않습니다. 해당 관리 화면에서 처리하세요.'],
+            'api_bulkProcessDriveFolder' => ['success' => false, 'error' => '이 레거시 연결은 지원되지 않습니다. 해당 관리 화면에서 처리하세요.'],
+            'api_getFinanceExcelBase64' => app(LegacyActions::class)->financeExcel($siteId),
             'api_getPersonnelCard' => self::realPersonnelCard((string) ($args[0] ?? '')),
-            'api_syncWorkerStatus' => ['success' => true, 'messages' => ['Worker status updated', 'Related vehicle/housing assignments checked']],
+            'api_syncWorkerStatus' => app(EmployeeAdminService::class)->setStatus((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
             'api_universalAIScan' => self::universalAIScan($args),
             'api_nfcAssignVehicle' => self::nfcAssignVehicle($args),
-            'api_nfcAssignHousing' => ['success' => true, 'message' => 'NFC assignment saved'],
+            'api_nfcAssignHousing' => ['success' => false, 'error' => '이 레거시 연결은 지원되지 않습니다. 해당 관리 화면에서 처리하세요.'],
 
             default => self::defaultResponse($method),
         };
@@ -578,6 +579,7 @@ class SmartCompanyData
 
     public static function nfcAssignVehicle(array $args): array
     {
+        OperationalAccess::assertManage();
         $uid = $args[0] ?? null;
         $vehicleCode = $args[1] ?? null;
 
@@ -598,6 +600,8 @@ class SmartCompanyData
                 return ['success' => false, 'error' => '차량을 찾을 수 없습니다.'];
             }
 
+            OperationalAccess::assertRecord($vehicle);
+            OperationalAccess::assertRecord($employee);
             DB::transaction(function () use ($vehicle, $employee): void {
                 // Terminate active rentals for this vehicle
                 VehicleRental::where('vehicle_id', $vehicle->id)
@@ -1465,7 +1469,7 @@ class SmartCompanyData
         $query->where('site_id', $resolved);
     }
 
-    private static function resolveSiteId(string $siteId): ?int
+    public static function resolveSiteId(string $siteId): ?int
     {
         $siteId = trim($siteId);
 
@@ -4316,7 +4320,7 @@ class SmartCompanyData
             return [];
         }
 
-        return ['success' => true, 'method' => $method, 'message' => 'Endpoint stub is ready for implementation.'];
+        return ['success' => false, 'method' => $method, 'error' => '지원하지 않는 기능입니다. 연결을 확인하세요.'];
     }
 
     /**

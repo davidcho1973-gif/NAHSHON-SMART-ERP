@@ -415,3 +415,20 @@ Use this section for manual owner checks, business decisions, and final approval
 ## CODEX — Daily report archive (2026-09-11)
 
 Cause: filing was reachable only through email sending. Moved the writer to DailyReportArchive and call it before closing completes. Dedicated DAY folder, printable HTML, date/site document replacement, no new report table and no new automatic email sending. See docs/DAILY_REPORT_ARCHIVE.md.
+
+## CODEX — Whole ERP audit (2026-09-12)
+
+Read-only production audit against 385b6e6 (live NAHSHON build verified). Report and synthetic reproductions are in workspace outputs/ERP_전체점검_20260912, outside the repository. No application fixes or deployments made by this audit.
+
+- PHP lint: 523 files, zero errors; 23 public JavaScript syntax checks passed; static build and Blade compilation passed.
+- Full local suite: 1908 tests, 1899 passed, 7 Windows Bash failures, 1 sandbox mkdir error, 1 skipped. Same-commit Linux PHP8.5 CI and Deploy NAHSHON succeeded (run 34730952819).
+- Fourteen synthetic defect reproductions passed (34 assertions): legacy document money read/status exposure, delete/confirm, cross-site browse, suspended session read, Ops action delete and cross-site WBS apply, equipment delete, vehicle return, shared-room AI reply visibility, false vendor mail/translation/unknown endpoint success. These tests intentionally assert observed defects and are NOT regression acceptance tests.
+- Static authenticated GET smoke: 34 routes, 28 HTTP200 / 4 redirects / 2 missing-input HTTP400, no server errors. Only synthetic DB and mocked external calls.
+- Operational gaps include invalid SMTP scheme tls/587, no daily report recipients, Kakao disabled/unconfigured, 703K GPS/WiFi absent, 85 unserved default jobs, site-specific schedule timing, document site/review cleanup. Latest documents queue empty; this does not prove worker liveness.
+- Report separates 7 P0 authorization findings, 13 P1 functional/configuration/data findings, 4 P2 cleanup/verification items. Real external delivery, phone GPS/QR/offline flows, provider AI probes, and backup restoration remain explicitly unverified.
+
+## CODEX — 2026-09-12 ERP audit remediation
+
+User assigned document/data cleanup to Claude and authorized the remaining code repairs. Added shared legacy role/site boundaries, active-account middleware, technical-only shared AI replies, real vendor mail/translation/status/XLSX operations, honest unsupported-adapter errors, scoped vendor replies and expiry alerts, TLS scheme compatibility and site-local GA/AZ schedules. Details: `docs/erp-audit-remediation-2026-09-12.md`.
+
+Verification checkpoint: affected regression suite 54 tests / 163 assertions passed; static build, JS syntax, Blade cache and diff checks passed. Local full suite Windows-only failures are documented; Linux CI and NAHSHON live deployment verification pending. No external test messages, cleanup commands, invented recipients or GPS values. Claude's latest `MoveLegacyDocumentJobs` edits are preserved.

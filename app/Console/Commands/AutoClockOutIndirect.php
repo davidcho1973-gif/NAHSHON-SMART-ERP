@@ -12,14 +12,14 @@ use Illuminate\Support\Carbon;
  */
 class AutoClockOutIndirect extends Command
 {
-    protected $signature = 'attendance:auto-clockout {date? : YYYY-MM-DD, 기본=오늘}';
+    protected $signature = 'attendance:auto-clockout {date? : YYYY-MM-DD, 기본=오늘} {--timezone= : Only sites in this timezone}';
 
     protected $description = '퇴근 미기록 간접고용 인원을 16:00 으로 자동 마감';
 
     public function handle(AutoClockOutService $service): int
     {
         $date = $this->argument('date') ? Carbon::parse($this->argument('date')) : null;
-        $r = $service->run($date);
+        $r = $service->run($date, $this->option('timezone'));
 
         $this->info(sprintf(
             '[%s] 간접고용 자동 퇴근 %d건 · 직접고용 미마감 %d건(관리자 확인 필요)',

@@ -8,8 +8,8 @@ use App\Models\AttendanceSession;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
-use Illuminate\Support\Carbon;
 use App\Support\Org;
+use Illuminate\Support\Carbon;
 
 /**
  * 하이브리드 자동 출퇴근 판정.
@@ -278,10 +278,10 @@ class AttendanceGeoService
      *
      * @return array{success: bool, finalized: int, needsReview: int, skipped: int}
      */
-    public function finalize(Carbon $date, int $activeGraceMinutes = 0): array
+    public function finalize(Carbon $date, int $activeGraceMinutes = 0, ?array $siteIds = null): array
     {
         $ds = $date->toDateString();
-        $sessions = AttendanceSession::query()->where('work_date', $ds)->whereIn('status', ['on_site', 'left'])->get();
+        $sessions = AttendanceSession::query()->when($siteIds !== null, fn ($q) => $q->whereIn('site_id', $siteIds))->where('work_date', $ds)->whereIn('status', ['on_site', 'left'])->get();
 
         $finalized = 0;
         $review = 0;

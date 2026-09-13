@@ -2,6 +2,7 @@
 
 use App\Models\SystemHeartbeat;
 use App\Support\Org;
+use App\Support\SiteSchedule;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -42,15 +43,21 @@ Schedule::call(function (): void {
 // 저녁 20:00 — 그날 일이 끝난 사람을 그날 안에 마감한다. 하루 지나서 기록이 나타나면
 //              작업자도 반장도 그날 안에 확인할 수 없다. 아직 현장에 있는 사람(최근 30분
 //              안에 재실이 확인된 사람)은 건너뛴다 — 저녁 마감이 연장 근무를 자르면 안 된다.
-Schedule::command('attendance:finalize-sessions --today --grace='.Org::int('attendance.evening_grace_minutes', 30))
-    ->dailyAt(Org::time('attendance.evening_finalize_at', '20:00'));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('attendance:finalize-sessions --today --grace='.Org::int('attendance.evening_grace_minutes', 30).' --timezone='.$timezone)
+        ->dailyAt(Org::time('attendance.evening_finalize_at', '20:00'))->timezone($timezone)->withoutOverlapping(30);
+}
 
 // 자정 00:05 — 안전망. 저녁에 건너뛴 사람과 늦게까지 남은 사람을 어제 날짜로 정리한다.
-Schedule::command('attendance:finalize-sessions')->dailyAt(Org::time('attendance.safety_net_at', '00:05'));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('attendance:finalize-sessions --timezone='.$timezone)->dailyAt(Org::time('attendance.safety_net_at', '00:05'))->timezone($timezone)->withoutOverlapping(30);
+}
 
 // 간접고용(협력사) 퇴근 자동 마감 — 현장 16:00 기준(직접고용은 제외).
-Schedule::command('attendance:auto-clockout')
-    ->dailyAt(sprintf('%02d:05', Org::int('attendance.indirect_cutoff_hour', 16)));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('attendance:auto-clockout --timezone='.$timezone)
+        ->dailyAt(sprintf('%02d:05', Org::int('attendance.indirect_cutoff_hour', 16)))->timezone($timezone)->withoutOverlapping(30);
+}
 
 // 만료 임박 문서(COI·면허·인허가·비자) 알림 — 매일 아침 업무 시작 전.
 Schedule::command('docs:alert-expiring')->dailyAt(Org::time('schedule.docs_expiry_alert_at', '07:00'));
@@ -79,23 +86,31 @@ Schedule::command('attendance:remind-clockout')->everyTenMinutes();
 Schedule::command('ops:remind-trade-report')->everyTenMinutes();
 
 // 현장 상황실 하루 요약 — 일과 종료 무렵.
-Schedule::command('ops:digest')->dailyAt(Org::time('schedule.ops_digest_at', '18:00'));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('ops:digest --timezone='.$timezone)->dailyAt(Org::time('schedule.ops_digest_at', '18:00'))->timezone($timezone)->withoutOverlapping(30);
+}
 
 // 원청 정기 보고 — 아침 작업계획서, 저녁 마감보고서.
 //
 // 사람이 제출한 것만 나간다(미제출이면 조용히 보류 — 그건 실패가 아니라 아직 안 쓴 것이다).
 // 실패하면 명령이 FAILURE 를 반환하고 알림 센터에 올린다. 이게 없던 동안에는 발송이
 // 실패해도 로그 파일에만 남아서, 원청이 사흘째 못 받아도 화면은 정상으로 보였다.
-Schedule::command('reports:send-daily plan')
-    ->dailyAt(Org::time('schedule.daily_plan_send_at', '08:30'))
-    ->onFailure(fn () => Log::error('일일 작업계획서 자동 발송 실패 — 알림 센터를 확인하세요.'));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('reports:send-daily plan --timezone='.$timezone)
+        ->dailyAt(Org::time('schedule.daily_plan_send_at', '08:30'))
+        ->onFailure(fn () => Log::error('일일 작업계획서 자동 발송 실패 — 알림 센터를 확인하세요.'))->timezone($timezone)->withoutOverlapping(30);
+}
 
-Schedule::command('reports:send-daily closing')
-    ->dailyAt(Org::time('schedule.daily_report_send_at', '18:30'))
-    ->onFailure(fn () => Log::error('일일 마감보고서 자동 발송 실패 — 알림 센터를 확인하세요.'));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('reports:send-daily closing --timezone='.$timezone)
+        ->dailyAt(Org::time('schedule.daily_report_send_at', '18:30'))
+        ->onFailure(fn () => Log::error('일일 마감보고서 자동 발송 실패 — 알림 센터를 확인하세요.'))->timezone($timezone)->withoutOverlapping(30);
+}
 
 // 아침 브리핑 — "오늘 가장 위험한 3가지"를 영향도 순으로. 위험이 없으면 조용하다.
-Schedule::command('ops:morning-brief')->dailyAt(Org::time('schedule.morning_brief_at', '06:30'));
+foreach (SiteSchedule::timezones() as $timezone) {
+    Schedule::command('ops:morning-brief --timezone='.$timezone)->dailyAt(Org::time('schedule.morning_brief_at', '06:30'))->timezone($timezone)->withoutOverlapping(30);
+}
 
 // 장비 임대료·숙소 월세 → 월별 경비 자동 계상(pending, 사람이 승인).
 // 매일 새벽에 돌려도 멱등이라 안전하고, 월중에 등록된 장비도 그 달치가 잡힌다.

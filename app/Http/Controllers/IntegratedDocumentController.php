@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Jobs\AnalyzeIntegratedDocumentJob;
 use App\Models\IntegratedDocument;
 use App\Services\IntegratedDocumentService;
+use App\Support\OfficePreview;
+use App\Support\OperationalAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,18 +18,18 @@ use RuntimeException;
  */
 class IntegratedDocumentController extends Controller
 {
-    public function __construct(private readonly IntegratedDocumentService $service)
-    {
-    }
+    public function __construct(private readonly IntegratedDocumentService $service) {}
 
     /**
      * 문서 업로드 → analyzing 상태로 생성 → 응답 후 AI 분석 잡 실행 → 202.
      */
     public function upload(Request $request): JsonResponse
     {
+        OperationalAccess::assertSite($this->service->resolveSiteId($request->input('site_id')));
+
         $maxKb = (int) config('filesystems.documents_max_kb', 262144); // 기본 256MB
         $request->validate([
-            'file' => 'required|file|max:' . $maxKb,
+            'file' => 'required|file|max:'.$maxKb,
             'site_id' => 'nullable',
             'project_code' => 'nullable|string|max:80',
             'title' => 'nullable|string|max:255',
@@ -110,7 +112,7 @@ class IntegratedDocumentController extends Controller
     public function status(Request $request): JsonResponse
     {
         $ids = array_filter(array_map('intval', explode(',', (string) $request->query('ids', ''))));
-        $query = IntegratedDocument::query()->latest();
+        $query = IntegratedDocument::query()->visibleToActor()->latest();
         if ($ids !== []) {
             $query->whereIn('id', $ids);
         } else {
@@ -127,26 +129,27 @@ class IntegratedDocumentController extends Controller
      */
     public function show(IntegratedDocument $document)
     {
+        abort_unless(IntegratedDocument::query()->visibleToActor()->whereKey($document->id)->exists(), 404);
         $disk = $document->disk ?: 'public';
         abort_unless(filled($document->path) && Storage::disk($disk)->exists($document->path), 404);
 
         // 엑셀·워드·파워포인트는 브라우저가 못 그리므로, 내려받기를 명시하지 않는 한
         // 서버가 HTML 로 바꿔 보여준다. 문서함(document-hub) 미리보기와 같은 규칙이다.
         $extension = strtolower(pathinfo((string) ($document->original_name ?: $document->path), PATHINFO_EXTENSION));
-        if (! request()->boolean('download') && \App\Support\OfficePreview::supports($extension)) {
-            $html = \App\Support\OfficePreview::html(
+        if (! request()->boolean('download') && OfficePreview::supports($extension)) {
+            $html = OfficePreview::html(
                 (string) Storage::disk($disk)->get($document->path),
                 $extension,
                 (string) ($document->title ?: $document->original_name),
             );
             if ($html !== null) {
-                return response($html, 200, \App\Support\OfficePreview::safeHeaders());
+                return response($html, 200, OfficePreview::safeHeaders());
             }
         }
 
         return Storage::disk($disk)->response(
             $document->path,
-            $document->original_name ?: ('document-' . $document->id),
+            $document->original_name ?: ('document-'.$document->id),
             ['Content-Type' => $document->mime_type ?: 'application/octet-stream']
         );
     }

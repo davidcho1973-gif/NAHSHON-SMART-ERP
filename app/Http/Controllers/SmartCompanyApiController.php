@@ -8,9 +8,11 @@ use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\ReportRecipientService;
 use App\Support\AccessPolicy;
+use App\Support\LegacyOperationPolicy;
 use App\Support\SmartCompanyData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class SmartCompanyApiController extends Controller
 {
@@ -106,6 +108,8 @@ class SmartCompanyApiController extends Controller
         }
 
         try {
+            $siteId = LegacyOperationPolicy::authorize($method, is_array($args) ? $args : [], is_string($siteId) ? $siteId : 'ALL');
+
             $result = SmartCompanyData::handle(
                 $method,
                 is_array($args) ? $args : [],
@@ -120,6 +124,10 @@ class SmartCompanyApiController extends Controller
             }
 
             return response()->json($result);
+        } catch (HttpExceptionInterface $e) {
+            // Legacy screens consume business errors from JSON, including permission flags.
+            return response()->json(['success' => false, 'canManage' => false,
+                'error' => $e->getMessage() ?: '자료가 없거나 접근 권한이 없습니다.', 'code' => $e->getStatusCode()]);
         } catch (\Throwable $e) {
             report($e);
 

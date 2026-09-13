@@ -39,6 +39,7 @@ use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
+use App\Http\Middleware\AuthorizeAssetApi;
 use App\Models\OrgSetting;
 use App\Models\PushSubscription;
 use App\Models\ReportRecipient;
@@ -207,24 +208,24 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-geo/status', [AttendanceGeoController::class, 'status'])->name('attendance-geo.status');
 
     // Vehicle API Routes
-    Route::post('/vehicle-api/scan-rental', [VehicleApiController::class, 'scanRental'])->name('vehicle.scan-rental');
-    Route::post('/vehicle-api/save', [VehicleApiController::class, 'saveVehicle'])->name('vehicle.save');
-    Route::post('/vehicle-api/assign', [VehicleApiController::class, 'assignVehicle'])->name('vehicle.assign');
-    Route::post('/vehicle-api/return', [VehicleApiController::class, 'returnVehicle'])->name('vehicle.return');
-    Route::get('/vehicle-api/{vehicle}/history', [VehicleApiController::class, 'getRentalHistory'])->name('vehicle.history');
-    Route::get('/vehicle-api/file', [VehicleApiController::class, 'serveFile'])->name('vehicle.file');
+    Route::post('/vehicle-api/scan-rental', [VehicleApiController::class, 'scanRental'])->middleware(AuthorizeAssetApi::class)->name('vehicle.scan-rental');
+    Route::post('/vehicle-api/save', [VehicleApiController::class, 'saveVehicle'])->middleware(AuthorizeAssetApi::class)->name('vehicle.save');
+    Route::post('/vehicle-api/assign', [VehicleApiController::class, 'assignVehicle'])->middleware(AuthorizeAssetApi::class)->name('vehicle.assign');
+    Route::post('/vehicle-api/return', [VehicleApiController::class, 'returnVehicle'])->middleware(AuthorizeAssetApi::class)->name('vehicle.return');
+    Route::get('/vehicle-api/{vehicle}/history', [VehicleApiController::class, 'getRentalHistory'])->middleware(AuthorizeAssetApi::class)->name('vehicle.history');
+    Route::get('/vehicle-api/file', [VehicleApiController::class, 'serveFile'])->middleware(AuthorizeAssetApi::class)->name('vehicle.file');
 
     // Equipment API Routes
-    Route::post('/equipment-api/scan-rental', [EquipmentApiController::class, 'scanRental'])->name('equipment.scan-rental');
-    Route::post('/equipment-api/save', [EquipmentApiController::class, 'saveEquipment'])->name('equipment.save');
-    Route::post('/equipment-api/scan-inventory', [EquipmentApiController::class, 'scanInventory'])->name('equipment.scan-inventory');
-    Route::post('/equipment-api/save-inventory', [EquipmentApiController::class, 'saveInventory'])->name('equipment.save-inventory');
-    Route::post('/equipment-api/assign', [EquipmentApiController::class, 'assignEquipment'])->name('equipment.assign');
-    Route::post('/equipment-api/return', [EquipmentApiController::class, 'returnEquipment'])->name('equipment.return');
-    Route::get('/equipment-api/{equipment}/history', [EquipmentApiController::class, 'getRentalHistory'])->name('equipment.history');
-    Route::get('/equipment-api/file', [EquipmentApiController::class, 'serveFile'])->name('equipment.file');
-    Route::post('/equipment-api/{equipment}/update', [EquipmentApiController::class, 'updateEquipment'])->name('equipment.update');
-    Route::post('/equipment-api/{equipment}/delete', [EquipmentApiController::class, 'deleteEquipment'])->name('equipment.delete');
+    Route::post('/equipment-api/scan-rental', [EquipmentApiController::class, 'scanRental'])->middleware(AuthorizeAssetApi::class)->name('equipment.scan-rental');
+    Route::post('/equipment-api/save', [EquipmentApiController::class, 'saveEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.save');
+    Route::post('/equipment-api/scan-inventory', [EquipmentApiController::class, 'scanInventory'])->middleware(AuthorizeAssetApi::class)->name('equipment.scan-inventory');
+    Route::post('/equipment-api/save-inventory', [EquipmentApiController::class, 'saveInventory'])->middleware(AuthorizeAssetApi::class)->name('equipment.save-inventory');
+    Route::post('/equipment-api/assign', [EquipmentApiController::class, 'assignEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.assign');
+    Route::post('/equipment-api/return', [EquipmentApiController::class, 'returnEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.return');
+    Route::get('/equipment-api/{equipment}/history', [EquipmentApiController::class, 'getRentalHistory'])->middleware(AuthorizeAssetApi::class)->name('equipment.history');
+    Route::get('/equipment-api/file', [EquipmentApiController::class, 'serveFile'])->middleware(AuthorizeAssetApi::class)->name('equipment.file');
+    Route::post('/equipment-api/{equipment}/update', [EquipmentApiController::class, 'updateEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.update');
+    Route::post('/equipment-api/{equipment}/delete', [EquipmentApiController::class, 'deleteEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.delete');
 
     // Mobile Equipment Routes
     Route::get('/mobile-equipment/index', [MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');

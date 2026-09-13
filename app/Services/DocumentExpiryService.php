@@ -4,7 +4,11 @@ namespace App\Services;
 
 use App\Models\CommunicationNotification;
 use App\Models\IntegratedDocument;
+use App\Models\Site;
 use App\Models\User;
+use App\Support\AccessPolicy;
+use App\Support\AiInformationAccess;
+use App\Support\SensitiveDocuments;
 use Illuminate\Support\Carbon;
 
 /**
@@ -30,7 +34,7 @@ class DocumentExpiryService
     {
         $today = Carbon::today();
 
-        $rows = IntegratedDocument::query()
+        $rows = IntegratedDocument::query()->visibleToActor()
             ->whereNotNull('expires_on')
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->where('expires_on', '<=', $today->copy()->addDays($withinDays))
@@ -105,10 +109,20 @@ class DocumentExpiryService
                 IntegratedDocument::typeLabel($doc->document_type),
                 $doc->folderName(),
                 $doc->expires_on?->toDateString() ?? '-',
-                $doc->issuer ? ' · ' . $doc->issuer : '',
+                $doc->issuer ? ' · '.$doc->issuer : '',
             );
 
             foreach ($managers as $m) {
+                if (! AccessPolicy::canManageSystem($m)) {
+                    $site = $doc->site_id ? Site::find($doc->site_id) : null;
+                    if (! $site || ! AiInformationAccess::canUseSite($m, $site)) {
+                        continue;
+                    }
+                }
+                if (in_array($doc->document_type, SensitiveDocuments::MONEY_TYPES, true)
+                    && ! AccessPolicy::canManageMoney($m)) {
+                    continue;
+                }
                 // 같은 문서·같은 날 중복 알림 방지.
                 $exists = CommunicationNotification::query()
                     ->where('user_id', $m->id)

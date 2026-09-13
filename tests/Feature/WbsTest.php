@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\SafetyWorkItem;
 use App\Models\User;
 use App\Models\WbsItem;
+use App\Services\Wbs\GeminiWbsAnalyzer;
 use App\Services\Wbs\WbsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -39,7 +40,7 @@ class WbsTest extends TestCase
         foreach (array_merge($defaults, $subs) as $i => $s) {
             WbsItem::create([
                 'project_code' => 'TST-01', 'parent_id' => $task->id, 'level' => 'subtask',
-                'wbs_code' => 'TST-01-W-' . $s['no'], 'node_no' => $s['no'], 'name' => $s['name'],
+                'wbs_code' => 'TST-01-W-'.$s['no'], 'node_no' => $s['no'], 'name' => $s['name'],
                 'company' => $s['company'] ?? 'ABC ENG', 'manhours' => $s['mh'], 'days' => 1,
                 'ehs' => $s['ehs'] ?? 'medium', 'status' => $s['status'], 'progress' => $s['progress'],
                 // 기본 픽스처는 조달성 작업(현장 인원 0) — 게이트가 개입하지 않는다.
@@ -51,7 +52,7 @@ class WbsTest extends TestCase
             // 안전카드는 이제 공정을 가리킨다(1:N). 링크는 카드 쪽에서 건다.
             if (isset($s['safety'])) {
                 SafetyWorkItem::where('work_code', $s['safety'])->update([
-                    'wbs_code' => 'TST-01-W-' . $s['no'],
+                    'wbs_code' => 'TST-01-W-'.$s['no'],
                     'work_date' => $s['safety_date'] ?? now()->toDateString(),
                 ]);
             }
@@ -196,7 +197,7 @@ class WbsTest extends TestCase
 
         Project::create(['project_code' => 'TST-01', 'name' => '테스트 설치', 'construction_type' => 'equipment_setting', 'scope_of_work' => '장비 반입 및 설치']);
 
-        $res = app(\App\Services\Wbs\GeminiWbsAnalyzer::class)->processManual('TST-01');
+        $res = app(GeminiWbsAnalyzer::class)->processManual('TST-01');
 
         $this->assertTrue($res['success']);
         $this->assertSame(1, $res['results'][0]['subTasks']);
@@ -218,7 +219,7 @@ class WbsTest extends TestCase
 
         // Pre-existing field progress on 1.1.1 must survive an AI regen.
         $this->seedTree();
-        app(\App\Services\Wbs\GeminiWbsAnalyzer::class)->processManual('TST-01');
+        app(GeminiWbsAnalyzer::class)->processManual('TST-01');
 
         $this->assertSame('완료', WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->value('status'));
         $this->assertSame(100, (int) WbsItem::where('wbs_code', 'TST-01-W-1.1.1')->value('progress'));
@@ -301,9 +302,10 @@ class WbsTest extends TestCase
 
     public function test_api_update_row_clears_company_through_http_middleware(): void
     {
+        // Global fixture has no site: use a global administrator; scoped access is covered in LegacyBoundaryTest.
         // ConvertEmptyStringsToNull 미들웨어가 '' 를 null 로 바꿔도 배정 해제가 동작해야 한다.
         $this->seedTree();
-        $user = User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active']);
+        $user = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
 
         $res = $this->actingAs($user)->postJson('/smart-company-api/api_updateWbsRow', [
             'args' => ['TST-01-W-1.1.1', ['담당사' => '']], 'siteId' => 'ALL',

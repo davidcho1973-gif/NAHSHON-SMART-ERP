@@ -60,7 +60,14 @@ return [
 
         'smtp' => [
             'transport' => 'smtp',
-            'scheme' => env('MAIL_SCHEME'),
+            // Older deployments used encryption names in MAIL_SCHEME. Symfony
+            // expects a transport scheme; STARTTLS stays mandatory for legacy tls.
+            'scheme' => match (strtolower((string) env('MAIL_SCHEME', ''))) {
+                'tls' => 'smtp',
+                'ssl' => 'smtps',
+                default => env('MAIL_SCHEME'),
+            },
+            'require_tls' => strtolower((string) env('MAIL_SCHEME', '')) === 'tls',
             'url' => env('MAIL_URL'),
             'host' => env('MAIL_HOST', '127.0.0.1'),
             'port' => env('MAIL_PORT', 2525),
