@@ -17,6 +17,15 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '공사 문서함': 'Construction documents',
+    '검토할 문서': 'Documents to review',
+    '긴급·고위험 항목': 'Urgent / high-risk items',
+    '문서 관리 도구': 'Document management tools',
+    '문서 목록': 'Document list',
+    '선택 해제': 'Clear selection',
+    '원본 미리보기 펼치기': 'Expand original preview',
+    '문서를 선택하고, 원본과 AI 분석을 나란히 검토하세요.': 'Select a document to review the original and AI analysis side by side.',
+    '제목을 선택하면 오른쪽에 상세가 열립니다.': 'Select a title to open its details on the right.',
     '계약금액 대비 지출 잔액': 'Contract amount less recorded expenses',
     '급여 정산 · 명세서': 'Payroll settlement and statements',
     '일일 보고서': 'Daily reports',
@@ -319,6 +328,15 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'Construction documents': 'Documentos de obra',
+    'Documents to review': 'Documentos por revisar',
+    'Urgent / high-risk items': 'Elementos urgentes / de alto riesgo',
+    'Document management tools': 'Herramientas de documentos',
+    'Document list': 'Lista de documentos',
+    'Clear selection': 'Quitar selección',
+    'Expand original preview': 'Ampliar vista previa del original',
+    'Select a document to review the original and AI analysis side by side.': 'Seleccione un documento para revisar el original y el análisis de IA en paralelo.',
+    'Select a title to open its details on the right.': 'Seleccione un título para abrir sus detalles a la derecha.',
     '계약금액 대비 지출 잔액': 'Importe contractual menos gastos registrados',
     '급여 정산 · 명세서': 'Liquidación y recibos de nómina',
     '일일 보고서': 'Informes diarios',

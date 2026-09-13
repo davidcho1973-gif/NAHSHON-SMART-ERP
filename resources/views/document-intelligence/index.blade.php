@@ -89,8 +89,9 @@
         });
     </script>
     @endif
+    <link rel="stylesheet" href="{{ asset('css/document-review-desk.css') }}?v={{ filemtime(public_path('css/document-review-desk.css')) }}">
 </head>
-<body>
+<body class="document-review-desk">
 <div class="app">
     <aside class="sidebar">
         <div class="brand">@if (\App\Support\Org::hasLogo())<img class="brand-mark" style="background:none;object-fit:contain" src="{{ route('org.logo') }}?v={{ \App\Support\Org::logoVersion() }}" alt="">@else<div class="brand-mark">{{ \App\Support\Org::initials() }}</div>@endif<div><strong>{{ \App\Support\Org::name() }}</strong><small>DOCUMENT CONTROL</small></div></div>
@@ -115,34 +116,50 @@
         </header>
         <div class="content">
             <div class="hero">
-                <div><h1>AI 공사 문서 인텔리전스</h1><p>파일을 넣으면 AI가 읽고, 분류하고, 기억하고, 위험과 기한을 먼저 알려줍니다.</p></div>
-                <div class="live-pill">● PRIVATE STORAGE · AI INDEX ACTIVE</div>
+                <div><div class="desk-eyebrow">DOCUMENT REVIEW DESK</div><h1>공사 문서함</h1><p>문서를 선택하고, 원본과 AI 분석을 나란히 검토하세요.</p></div>
+                @if($canManage)<button class="btn primary" id="upload-open">＋ 문서 올리기</button>@endif
             </div>
             <div class="stats">
-                <div class="stat"><span>전체 문서</span><strong id="stat-total">0</strong></div>
-                <div class="stat"><span>AI 분석 중</span><strong id="stat-analyzing">0</strong></div>
-                <div class="stat warn"><span>사람 검토 필요</span><strong id="stat-review">0</strong></div>
-                <div class="stat"><span>미완료 후속조치</span><strong id="stat-actions">0</strong></div>
-                <div class="stat danger"><span>긴급·고위험</span><strong id="stat-critical">0</strong></div>
+                <div class="stat"><span>전체 문서</span><strong><b id="stat-total">0</b><span class="stat-unit">건</span></strong></div>
+                <div class="stat"><span>AI 분석 중</span><strong><b id="stat-analyzing">0</b><span class="stat-unit">건</span></strong></div>
+                <div class="stat warn"><span>검토할 문서</span><strong><b id="stat-review">0</b><span class="stat-unit">건</span></strong></div>
+                <div class="stat"><span>미완료 후속조치</span><strong><b id="stat-actions">0</b><span class="stat-unit">건</span></strong></div>
+                <div class="stat danger"><span>긴급·고위험 항목</span><strong><b id="stat-critical">0</b><span class="stat-unit">건</span></strong></div>
             </div>
 
-            <div class="workspace">
-                <section class="panel">
-                    <div class="panel-head"><div><h2>통합 문서 검색·인덱스</h2><p>파일명, 본문, 문서번호, Revision, 키워드와 AI 요약을 한 번에 검색합니다.</p></div><div style="display:flex;gap:6px"><button class="btn small" id="tidy-btn" style="display:none" title="현장이 비어 있는 문서에 현장을 한 번에 붙입니다">⚑ 현장 정리</button><button class="btn small" id="unstick-btn" title="AI 분석 중에서 멈춘 문서를 다시 분석합니다">⟳ 멈춘 분석 재시도</button><button class="btn small" id="ko-btn" title="요약·핵심사실·후속조치가 영어로만 남아 있는 문서를 다시 분석해 한국어를 붙입니다">가 한글 붙이기</button><button class="btn small" id="refresh-btn">↻ 새로고침</button></div></div>
+            <p class="desk-count-help">현황은 선택 현장 기준입니다. 후속조치·위험 항목은 문서 수와 별도로 집계됩니다.</p>
+            <section class="desk-controls" aria-label="문서 검색과 관리">
                     <div class="searchbar">
-                        <input id="search" placeholder="예: RFI-023, backcharge, cable tray, 30일 notice…">
-                        <select id="site-filter"><option value="">전체 현장</option><option value="none">현장 미지정</option>@foreach($sites as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultSiteId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select>
-                        <select id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
-                        <select id="project-filter"><option value="">전체 PROJECT</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
+                        <input aria-label="문서 검색" id="search" placeholder="문서명 · 도면번호 · 본문에서 검색">
+                        <select aria-label="검색 필터" id="site-filter"><option value="">전체 현장</option><option value="none">현장 미지정</option>@foreach($sites as $id => $label)<option value="{{ $id }}" @selected((int) ($defaultSiteId ?? 0) === (int) $id)>{{ $label }}</option>@endforeach</select>
+                        <select aria-label="검색 필터" id="category-filter"><option value="">전체 분류</option>@foreach(\App\Models\IntelligentDocument::CATEGORY_OPTIONS as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
+                        <select aria-label="검색 필터" id="project-filter"><option value="">전체 PROJECT</option>@foreach($projects as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach</select>
+                        <select id="status-filter" aria-label="AI 처리 상태"><option value="">전체 상태</option><option value="review_required">검토 필요</option><option value="ready">정리 완료</option><option value="queued">접수됨</option><option value="analyzing">AI 분석 중</option><option value="failed">분석 실패</option></select>
                         <button class="btn primary" id="search-btn">검색</button>
                     </div>
-                    <div style="overflow:auto"><table class="doc-table"><thead><tr><th>문서</th><th>AI 분류</th><th>PROJECT / 폴더</th><th>문서일·Revision</th><th>기억·조치</th><th></th></tr></thead><tbody id="doc-list"><tr><td colspan="6" class="empty">문서 인덱스를 불러오는 중입니다.</td></tr></tbody></table></div>
-                </section>
-
-                <aside>
+                <details class="desk-management"><summary>문서 관리 도구</summary><div class="tools">
                     @if($canManage)
-                    <section class="panel" style="margin-bottom:17px">
-                        <div class="panel-head"><div><h2>AI 문서 드롭존</h2><p>최대 50개 파일을 한 번에 올릴 수 있습니다.</p></div></div>
+                    <button class="btn small" id="tidy-btn" style="display:none">현장 미지정 정리</button>
+                    <button class="btn small" id="unstick-btn">멈춘 분석 재시도</button>
+                    <button class="btn small" id="ko-btn">한글 붙이기</button>
+                    @endif
+                    <button class="btn small" id="refresh-btn">새로고침</button>
+                </div><p>문서명·소속·AI 처리 관리에 사용하는 도구입니다.</p></details>
+            </section>
+            <div class="workspace" id="review-workspace">
+                <section class="panel desk-list" aria-label="문서 목록">
+                    <div class="panel-head"><div><h2>문서 목록</h2><p>제목을 선택하면 오른쪽에 상세가 열립니다.</p></div></div>
+                    <div class="desk-table-wrap"><table class="doc-table"><thead><tr><th class="desk-name">문서 / 현장 · 개정</th><th class="desk-state">상태 / 후속조치</th></tr></thead><tbody id="doc-list"><tr><td colspan="2" class="empty">문서를 불러오는 중입니다.</td></tr></tbody></table></div>
+                    <div class="desk-pagination"><span id="document-count" aria-live="polite"></span><div class="tools"><button class="btn small" id="page-prev" disabled>이전</button><button class="btn small" id="page-next" disabled>다음</button></div></div>
+                </section>
+                <aside class="desk-review" aria-label="선택 문서 검토">
+                    <div class="drawer-bg" id="drawer-bg"><div class="drawer"><div class="drawer-head"><div><h2 id="detail-title" tabindex="-1">문서 상세</h2><div class="doc-sub" id="detail-file"></div></div><button class="btn" id="drawer-close">선택 해제</button></div><div class="drawer-body" id="drawer-body"><div class="desk-empty"><strong>검토할 문서를 선택하세요</strong><p>원본 미리보기, AI 요약, 후속조치를<br>목록 옆에서 확인할 수 있습니다.</p></div></div></div></div>
+                    <details class="panel desk-memory"><summary>선택 문서의 미완료 후속조치</summary><div class="memory-list" id="memory-list"><div class="empty">문서를 선택하세요.</div></div></details>
+                </aside>
+            </div>
+            @if($canManage)<dialog class="upload-dialog" id="upload-dialog" aria-labelledby="upload-title">
+                    <section class="panel">
+                        <div class="panel-head"><div><h2 id="upload-title">문서 올리기</h2><p>최대 50개 파일을 한 번에 올릴 수 있습니다.</p></div><button class="btn small" id="upload-close">닫기</button></div>
                         <div class="drop-panel">
                             <div class="scope-grid">
                                 {{-- 기본 소속: ERP 에서 고른 현장 > 본인 소속 현장 > Global(수퍼관리자·고위관리자·회계). 바꾸고 싶으면 바꾸면 된다 — 시작점만 맞춰 둔다. --}}
@@ -157,18 +174,11 @@
                             <div class="queue" id="upload-queue"><div id="queue-files"></div><div class="progress"><i id="upload-progress"></i></div><div id="queue-summary"></div></div>
                         </div>
                     </section>
-                    @endif
-                    <section class="panel">
-                        <div class="panel-head"><div><h2>기억·예방 큐</h2><p>문서에서 발견한 중요한 기한과 위험입니다.</p></div></div>
-                        <div class="memory-list" id="memory-list"><div class="empty" style="padding:28px 10px">문서를 선택하면 후속조치가 표시됩니다.</div></div>
-                    </section>
-                </aside>
-            </div>
+            </dialog>@endif
         </div>
     </main>
 </div>
 
-<div class="drawer-bg" id="drawer-bg"><div class="drawer"><div class="drawer-head"><div><h2 id="detail-title">문서 상세</h2><div class="doc-sub" id="detail-file"></div></div><button class="btn" id="drawer-close">닫기</button></div><div class="drawer-body" id="drawer-body"></div></div></div>
 <div class="toast" id="toast"></div>
 
 {{-- 현장 미지정 문서 일괄 정리 --}}
@@ -231,6 +241,11 @@ const SITE_OPTIONS = @json(collect($sites)->map(fn($l,$v)=>['value'=>(string)$v,
 let currentDocuments = [];
 let currentDoc = null;
 let pollTimer = null;
+let selectedDocumentId = null;
+let detailRequest = 0;
+let listRequest = 0;
+let documentPage = 1;
+let documentLastPage = 1;
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtBytes = bytes => !bytes ? '-' : bytes >= 1048576 ? (bytes/1048576).toFixed(1)+' MB' : (bytes/1024).toFixed(1)+' KB';
 const statusLabel = status => ({queued:'접수됨',analyzing:'AI 분석 중',ready:'정리 완료',review_required:'검토 필요',failed:'분석 실패'}[status] || status);
@@ -238,6 +253,7 @@ function toast(message, error=false){const el=document.getElementById('toast');e
 async function jsonFetch(url, options={}){const response=await fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf,...(options.headers||{})},...options});const data=await response.json().catch(()=>({success:false,error:'응답을 읽을 수 없습니다.'}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||'요청 실패');return data}
 
 async function loadDocuments(){
+    const requestId=++listRequest;
     // ERP 안에 얹혀 열릴 때 상단 전환기의 현장이 주소로 실려 온다. 그 현장 문서만 본다.
     // 그때는 이 화면의 현장 선택기를 숨긴다 — 현장을 고르는 곳이 두 군데면 어느 쪽이
     // 이겼는지 화면만 봐서는 알 수 없다.
@@ -245,17 +261,25 @@ async function loadDocuments(){
     const siteSel=document.getElementById('site-filter');
     if(embeddedSite)siteSel.style.display='none';
     const site=embeddedSite||siteSel.value;
-    const params=new URLSearchParams({q:document.getElementById('search').value,category:document.getElementById('category-filter').value,project_id:document.getElementById('project-filter').value});
+    const params=new URLSearchParams({q:document.getElementById('search').value,category:document.getElementById('category-filter').value,project_id:document.getElementById('project-filter').value,ai_status:document.getElementById('status-filter').value,page:documentPage});
     if(site)params.set('site_id',site);
     const list=document.getElementById('doc-list'); list.classList.add('loading');
     try{
-        const data=await jsonFetch(endpoints.list+'?'+params.toString()); currentDocuments=data.documents||[]; renderRows();
+        const data=await jsonFetch(endpoints.list+'?'+params.toString());
+        if(requestId!==listRequest)return;
+        currentDocuments=data.documents||[];
+        const pagination=data.pagination||{};documentLastPage=pagination.last_page||1;
+        if(documentPage>documentLastPage){documentPage=documentLastPage;loadDocuments();return;}
+        renderRows();
+        document.getElementById('document-count').textContent='검색 결과 '+(pagination.total||0)+'건 · '+documentPage+' / '+documentLastPage+' 페이지';
+        document.getElementById('page-prev').disabled=documentPage<=1;
+        document.getElementById('page-next').disabled=documentPage>=documentLastPage;
         const s=data.stats||{};document.getElementById('stat-total').textContent=s.total||0;document.getElementById('stat-analyzing').textContent=s.analyzing||0;document.getElementById('stat-review').textContent=s.review_required||0;document.getElementById('stat-actions').textContent=s.open_actions||0;document.getElementById('stat-critical').textContent=s.critical_actions||0;
         // 정리할 문서가 있을 때만 정리 버튼이 나온다 — 할 일이 없으면 버튼도 없다.
         const tidyBtn=document.getElementById('tidy-btn');
         if(tidyBtn&&canManage){const n=s.unassigned||0;tidyBtn.style.display=n>0?'':'none';tidyBtn.textContent='⚑ 현장 미지정 '+n+'건 정리'}
         clearTimeout(pollTimer); if((s.analyzing||0)>0)pollTimer=setTimeout(loadDocuments,5000);
-    }catch(e){list.innerHTML='<tr><td colspan="6" class="empty">'+esc(e.message)+'</td></tr>'}finally{list.classList.remove('loading')}
+    }catch(e){if(requestId===listRequest){list.innerHTML='<tr><td colspan="2" class="empty">'+esc(e.message)+'</td></tr>';document.getElementById('document-count').textContent='목록을 불러오지 못했습니다.';}}finally{if(requestId===listRequest)list.classList.remove('loading')}
 }
 
 let tidyRows=[];
@@ -301,18 +325,31 @@ async function applyTidy(){
 }
 function renderRows(){
     const list=document.getElementById('doc-list');
-    if(!currentDocuments.length){list.innerHTML='<tr><td colspan="6" class="empty">검색된 문서가 없습니다. 오른쪽 드롭존에 첫 문서를 넣어보세요.</td></tr>';return}
-    list.innerHTML=currentDocuments.map(d=>`<tr>
-      <td><div class="doc-title">${esc(d.title)}</div><div class="doc-sub">${esc(d.fileName)} · ${fmtBytes(d.fileSize)}${d.fileMissing?' · <span class="badge failed" title="서버 배포로 저장소가 초기화된 문서입니다. 같은 파일을 다시 올리면 복원됩니다.">원본 없음</span>':''}</div></td>
-      <td><span class="badge ${esc(d.aiStatus)}">${esc(statusLabel(d.aiStatus))}</span><div class="doc-sub">${esc(d.categoryLabel)}<br>${esc(d.documentTypeLabel)}</div></td>
-      <td><b style="font-size:11px">${esc(d.project||d.site||'Global')}</b><div class="doc-sub">${esc(d.virtualPath||'AI 분류 대기')}</div></td>
-      <td><div style="font-size:11px">${esc(d.documentDate||'-')}</div><div class="doc-sub">${d.documentNumber?'No. '+esc(d.documentNumber):''} ${d.revision?'· Rev '+esc(d.revision):''}</div></td>
-      <td>${d.openActions?`<span class="action-count">미처리 ${d.openActions}건</span>`:'<span class="badge ready">조치 없음</span>'}${d.responseDueOn?`<div class="doc-sub">회신 ${esc(d.responseDueOn)}</div>`:''}</td>
-      <td><button class="btn small" onclick="openDocument(${d.id})">열기</button></td></tr>`).join('');
+    if(!currentDocuments.length){list.innerHTML='<tr><td colspan="2" class="empty">검색 조건에 맞는 문서가 없습니다.</td></tr>';return;}
+    list.innerHTML=currentDocuments.map(d=>`<tr class="${d.id===selectedDocumentId?'selected':''}">
+      <td><button class="doc-open" aria-pressed="${d.id===selectedDocumentId}" onclick="openDocument(${Number(d.id)})"><span class="doc-file-mark">${esc((d.fileName||'').split('.').pop().slice(0,5).toUpperCase())}</span><span class="doc-open-text"><span class="doc-title">${esc(d.title)}</span><span class="doc-sub">${esc(d.site||'Global')} · ${esc(d.project||'프로젝트 미지정')}</span><span class="doc-sub">${esc(d.documentNumber||d.categoryLabel||'')} ${d.revision?' · Rev. '+esc(d.revision):''} · ${esc(d.documentDate||'날짜 미지정')}</span>${d.fileMissing?'<span class="badge failed">원본 없음</span>':''}</span></button></td>
+      <td><span class="badge ${esc(d.aiStatus)}">${esc(statusLabel(d.aiStatus))}</span>${d.openActions?`<span class="action-count">미완료 ${Number(d.openActions)}건</span>`:'<div class="doc-sub">후속조치 없음</div>'}${d.responseDueOn?`<div class="doc-sub">회신 ${esc(d.responseDueOn)}</div>`:''}</td></tr>`).join('');
+}
+function clearDocument(){
+    ++detailRequest;selectedDocumentId=null;currentDoc=null;
+    document.getElementById('drawer-bg').classList.remove('open');
+    document.getElementById('detail-title').textContent='문서 상세';document.getElementById('detail-file').textContent='';
+    document.getElementById('drawer-body').innerHTML='<div class="desk-empty"><strong>검토할 문서를 선택하세요</strong><p>원본·AI 요약·후속조치를 목록 옆에서 확인할 수 있습니다.</p></div>';
+    document.getElementById('memory-list').innerHTML='<div class="empty">문서를 선택하세요.</div>';renderRows();
 }
 async function openDocument(id){
-    document.getElementById('drawer-bg').classList.add('open');document.getElementById('drawer-body').innerHTML='<div class="empty">AI 문서 인덱스를 불러오는 중…</div>';
-    try{const {document:d}=await jsonFetch(endpoints.show+'/'+id);renderDetail(d);renderMemory(d.actions||[])}catch(e){document.getElementById('drawer-body').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+    const requestId=++detailRequest;selectedDocumentId=Number(id);currentDoc=null;renderRows();
+    document.getElementById('drawer-bg').classList.add('open');document.getElementById('detail-title').textContent='문서 불러오는 중';document.getElementById('detail-file').textContent='';
+    document.getElementById('drawer-body').innerHTML='<div class="empty" role="status">문서 상세를 불러오는 중…</div>';
+    document.getElementById('memory-list').innerHTML='<div class="empty">후속조치를 불러오는 중…</div>';
+    if(window.matchMedia('(max-width:780px)').matches)document.getElementById('drawer-bg').scrollIntoView({block:'start'});
+    try{const {document:d}=await jsonFetch(endpoints.show+'/'+id);if(requestId!==detailRequest)return;renderDetail(d);renderMemory(d.actions||[]);document.getElementById('drawer-body').scrollTop=0;}
+    catch(e){if(requestId===detailRequest){document.getElementById('detail-title').textContent='문서 확인 필요';document.getElementById('drawer-body').innerHTML='<div class="empty">'+esc(e.message)+'</div>';document.getElementById('memory-list').innerHTML='<div class="empty">문서 상세를 다시 열어 주세요.</div>';}}
+}
+function openInlinePreview(details){
+    if(!details.open||!currentDoc)return;
+    const box=details.querySelector('.inline-preview-body');if(box.childElementCount)return;
+    const frame=document.createElement('iframe');frame.src=currentDoc.previewUrl;frame.title=currentDoc.fileName||'원본 문서';box.appendChild(frame);
 }
 function renderMemory(actions){
     const box=document.getElementById('memory-list');const open=actions.filter(a=>!['completed','ignored'].includes(a.status));
@@ -327,7 +364,8 @@ function renderDetail(d){
     const actions=(d.actions||[]).map(a=>`<div class="action-card ${esc(a.severity)}"><strong>${esc(a.title)}</strong><p>${esc(a.details||'')}</p>${a.recommendedAction?`<p><b>권고:</b> ${esc(a.recommendedAction)}</p>`:''}${a.sourceExcerpt?`<div class="doc-sub">근거: “${esc(a.sourceExcerpt)}”</div>`:''}<div class="action-foot"><span>${a.dueAt?'기한 '+esc(a.dueAt.slice(0,10)):'명시 기한 없음'} · 신뢰도 ${esc(a.confidence||0)}%</span>${canManage&&!['completed','ignored'].includes(a.status)?`<button class="btn small" onclick="completeAction(${a.id},${d.id})">처리완료</button>`:`<span class="badge ${a.status==='completed'?'ready':''}">${esc(a.status)}</span>`}</div></div>`).join('')||'<p>AI가 발견한 필수 후속조치가 없습니다.</p>';
     document.getElementById('drawer-body').innerHTML=`
       <div class="detail-grid"><div class="detail-chip"><span>분류</span><b>${esc(d.categoryLabel)}</b></div><div class="detail-chip"><span>문서유형</span><b>${esc(d.documentTypeLabel)}</b></div><div class="detail-chip"><span>문서번호 / Revision</span><b>${esc(d.documentNumber||'-')} / ${esc(d.revision||'-')}</b></div><div class="detail-chip"><span>AI 신뢰도</span><b>${esc(d.aiConfidence||0)}%</b></div></div>
-      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>같은 파일을 오른쪽 드롭존에 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<button class="btn primary" onclick="openViewer()">바로 보기</button><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" style="border-color:#c7d2fe;color:#3730a3" onclick="runExtract(${d.id},'takeoff',this)" title="이 도면에서 수량을 뽑아 물량대장에 넣습니다">📐 물량 뽑기</button><button class="btn" style="border-color:#c7d2fe;color:#3730a3" onclick="runExtract(${d.id},'submittals',this)" title="이 시방서에서 제출물 요구를 뽑아 제출물대장에 넣습니다">📋 제출물 뽑기</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button>`:''}</div></div>
+      <div class="section"><h3>원본 문서</h3><p>${esc(d.virtualPath||'분류 대기')}</p>${d.fileMissing?`<p style="color:#b91c1c;background:#fff4f4;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin:0 0 9px">원본 파일이 서버에 없습니다(서버 배포로 저장소가 초기화된 문서). <b>상단 ‘문서 올리기’에서 같은 파일을 다시 올리면</b> 이 문서에 그대로 복원되고 분석도 다시 돕니다.</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap">${d.fileMissing?'':`<button class="btn primary" onclick="openViewer()">바로 보기</button><a class="btn" href="${esc(d.downloadUrl)}">다운로드</a>`}${canManage?`<details class="detail-secondary" style="flex-basis:100%"><summary>문서 관리 · AI 도구</summary><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="reanalyze(${d.id})">AI 재분석</button><button class="btn" style="border-color:#c7d2fe;color:#3730a3" onclick="runExtract(${d.id},'takeoff',this)" title="이 도면에서 수량을 뽑아 물량대장에 넣습니다">📐 물량 뽑기</button><button class="btn" style="border-color:#c7d2fe;color:#3730a3" onclick="runExtract(${d.id},'submittals',this)" title="이 시방서에서 제출물 요구를 뽑아 제출물대장에 넣습니다">📋 제출물 뽑기</button><button class="btn" onclick="openEdit(${d.id})">✎ 정보 수정</button><button class="btn" style="border-color:#fecaca;color:#b91c1c" onclick="removeDocument(${d.id})">🗑 삭제</button></div></details>`:''}</div></div>
+      ${!d.fileMissing&&VIEWER_INLINE.includes((d.extension||'').toLowerCase())?`<details class="section detail-preview" ontoggle="openInlinePreview(this)"><summary>원본 미리보기 펼치기</summary><div class="inline-preview-body"></div><button class="btn small" onclick="openViewer()">크게 보기</button></details>`:''}
       ${canManage?`<div class="section" id="edit-form" style="display:none"><h3>문서 정보 수정</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
           <div class="field" style="grid-column:1/-1"><label>제목</label><input id="ed-title" value="${esc(d.title||'')}"></div>
@@ -356,7 +394,7 @@ function renderDetail(d){
       <details class="section"><summary style="font-weight:800;cursor:pointer">OCR/추출 본문 보기</summary><p style="max-height:420px;overflow:auto">${esc(d.extractedText||'추출 가능한 본문이 없습니다. 이미지/PDF 원본을 확인하세요.')}</p></details>`;
 }
 async function completeAction(actionId,documentId){try{await jsonFetch(endpoints.actions+'/'+actionId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'})});toast('후속조치를 완료했습니다.');openDocument(documentId);loadDocuments()}catch(e){toast(e.message,true)}}
-async function reanalyze(id){try{const result=await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast(result.message||'AI 재분석을 시작했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()}catch(e){toast(e.message,true)}}
+async function reanalyze(id){try{const result=await jsonFetch(endpoints.show+'/'+id+'/reanalyze',{method:'POST'});toast(result.message||'AI 재분석을 시작했습니다.');clearDocument();loadDocuments()}catch(e){toast(e.message,true)}}
 
 /* 도면 → 물량, 시방 → 제출물.
    결과는 승인 대기줄이 아니라 대장으로 바로 간다 — 확신이 서는 줄은 그냥 들어가고
@@ -433,7 +471,7 @@ async function removeDocument(id){
     if(!confirm(`'${name}' 을(를) 삭제할까요?\n\n원본 파일과 이 문서에서 나온 후속조치·알림도 함께 지워집니다. 되돌릴 수 없습니다.`))return;
     try{
         await jsonFetch(endpoints.show+'/'+id,{method:'DELETE'});
-        toast('삭제했습니다.');document.getElementById('drawer-bg').classList.remove('open');loadDocuments()
+        toast('삭제했습니다.');clearDocument();loadDocuments()
     }catch(e){toast(e.message,true)}
 }
 async function unstick(){
@@ -562,10 +600,14 @@ async function uploadFiles(fileList){
         setTimeout(()=>{queue.classList.remove('show');bar.style.width='0';summary.textContent=''},1200);
     }
 }
-if(canManage){const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
-document.getElementById('drawer-close').onclick=()=>document.getElementById('drawer-bg').classList.remove('open');document.getElementById('drawer-bg').addEventListener('click',e=>{if(e.target.id==='drawer-bg')e.currentTarget.classList.remove('open')});
-document.getElementById('search-btn').onclick=loadDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
-if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;const kb=document.getElementById('ko-btn');if(kb)kb.onclick=addKorean;}else{for(const id of ['unstick-btn','ko-btn']){const b=document.getElementById(id);if(b)b.style.display='none';}}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadDocuments()});document.getElementById('category-filter').onchange=loadDocuments;document.getElementById('project-filter').onchange=loadDocuments;document.getElementById('site-filter').onchange=loadDocuments;
+if(canManage){const dialog=document.getElementById('upload-dialog');document.getElementById('upload-open').onclick=()=>dialog.showModal();document.getElementById('upload-close').onclick=()=>dialog.close();const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
+document.getElementById('drawer-close').onclick=()=>{clearDocument();document.getElementById('search').focus();};
+function searchDocuments(){documentPage=1;clearDocument();loadDocuments();}
+document.getElementById('search-btn').onclick=searchDocuments;
+document.getElementById('page-prev').onclick=()=>{if(documentPage>1){documentPage--;loadDocuments();}};
+document.getElementById('page-next').onclick=()=>{if(documentPage<documentLastPage){documentPage++;loadDocuments();}};
+document.getElementById('status-filter').onchange=searchDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
+if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;const kb=document.getElementById('ko-btn');if(kb)kb.onclick=addKorean;}else{for(const id of ['unstick-btn','ko-btn']){const b=document.getElementById(id);if(b)b.style.display='none';}}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')searchDocuments()});document.getElementById('category-filter').onchange=searchDocuments;document.getElementById('project-filter').onchange=searchDocuments;document.getElementById('site-filter').onchange=searchDocuments;
 if(canManage){
     document.getElementById('tidy-btn').onclick=openTidy;
     document.getElementById('tidy-close').onclick=()=>document.getElementById('tidy-bg').classList.remove('open');

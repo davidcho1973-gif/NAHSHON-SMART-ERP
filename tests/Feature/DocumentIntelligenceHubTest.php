@@ -259,6 +259,26 @@ class DocumentIntelligenceHubTest extends TestCase
             ->assertOk();
     }
 
+    public function test_review_desk_renders_both_panes_and_management_controls_only_for_managers(): void
+    {
+        $this->actingAs($this->user('admin'))
+            ->get(route('document-intelligence.index', ['embed' => 1]))
+            ->assertOk()
+            ->assertSee('id="review-workspace"', false)
+            ->assertSee('class="desk-review"', false)
+            ->assertSee('id="upload-dialog"', false)
+            ->assertSee('id="status-filter"', false)
+            ->assertSee('id="page-next"', false);
+
+        $this->actingAs($this->user('payroll'))
+            ->get(route('document-intelligence.index', ['embed' => 1]))
+            ->assertOk()
+            ->assertSee('id="review-workspace"', false)
+            ->assertDontSee('id="upload-dialog"', false)
+            ->assertDontSee('id="upload-open"', false)
+            ->assertDontSee('id="unstick-btn"', false);
+    }
+
     public function test_unified_alert_status_updates_the_source_action_and_is_scope_filtered(): void
     {
         [$company, $site, $project] = $this->projectFixture();
