@@ -142,15 +142,30 @@ q_pending=$(json queue.pending)
 q_oldest=$(json queue.oldest_pending_minutes)
 q_failed=$(json queue.failed)
 
+# 일꾼은 documents 큐 하나만 듣는다. 그러니 판정도 그 줄만 보고 한다 —
+# 아무도 듣지 않는 줄(default)에 남은 옛 작업까지 세면, 일꾼이 정상으로 돌아도
+# 영원히 «일꾼 없음» 이라고 말하게 된다. 거짓말하는 경고는 곧 통째로 무시당한다.
+q_served=$(json queue.served.pending)
+q_served_oldest=$(json queue.served.oldest_pending_minutes)
+q_unserved=$(json queue.unserved.pending)
+q_unserved_oldest=$(json queue.unserved.oldest_pending_minutes)
+
 if [ "$q_working" = "false" ]; then
-  echo "::warning title=큐 일꾼이 멈춤::${ENV_LABEL} — ${q_pending:-?}건이 밀려 있고 가장 오래된 것이 ${q_oldest:-?}분째 기다립니다. 큐 일꾼(queue:work)이 돌고 있지 않아 문서 AI 분석이 전부 멈춰 있습니다."
+  echo "::warning title=큐 일꾼이 멈춤::${ENV_LABEL} — documents 큐에 ${q_served:-?}건이 밀려 있고 가장 오래된 것이 ${q_served_oldest:-?}분째 기다립니다. 큐 일꾼(queue:work)이 돌고 있지 않아 문서 AI 분석이 전부 멈춰 있습니다."
   {
     echo
-    echo "**큐 일꾼이 돌고 있지 않습니다** — 밀린 작업 \`${q_pending:-?}건\`, 가장 오래된 것 \`${q_oldest:-?}분\`째"
+    echo "**큐 일꾼이 돌고 있지 않습니다** — \`documents\` 큐에 밀린 작업 \`${q_served:-?}건\`, 가장 오래된 것 \`${q_served_oldest:-?}분\`째"
     echo
-    echo "문서를 올려도 AI 분석이 돌지 않고 「읽는 중」에서 멈춥니다. 「물어보기」도 답하지 못합니다."
+    echo "문서를 올려도 AI 분석이 돌지 않고 「접수됨」에서 멈춥니다. 「물어보기」도 답하지 못합니다."
     echo "Laravel Cloud 에서 백그라운드 프로세스를 만들고 Scale to Zero 를 꺼 주세요."
   } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+fi
+
+# 아무도 듣지 않는 줄에 쌓인 일은 «일꾼 고장» 이 아니라 «치울 옛 작업» 이다.
+# 고치는 방법이 다르므로 경고도 따로 낸다 — 섞어 놓으면 일꾼을 만들어 놓고도
+# 경고가 안 사라져서 «고쳐도 안 되네» 로 읽힌다.
+if [ -n "${q_unserved:-}" ] && [ "${q_unserved:-0}" != "0" ]; then
+  echo "::notice title=아무도 듣지 않는 큐::${ENV_LABEL} — 일꾼이 듣지 않는 줄에 ${q_unserved}건이 남아 있습니다(가장 오래된 것 ${q_unserved_oldest:-?}분째). 일꾼 문제가 아니라 정리할 옛 작업입니다."
 fi
 
 if [ -n "${q_failed:-}" ] && [ "$q_failed" -gt 0 ] 2>/dev/null; then
@@ -184,4 +199,4 @@ elif [ "${mail_recipients:-0}" = "0" ]; then
   echo "::warning title=받는 사람이 없음::${ENV_LABEL} — 메일 설정은 정상인데 일일보고 수신자가 0명입니다. 발송은 성공하고 아무 데도 안 갑니다."
 fi
 
-echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?} upload_per_file_mb=${perfile:-?} post_max_mb=${postmax:-?} user_ini=${userini:-?} queue_working=${q_working:-?} queue_pending=${q_pending:-?} queue_oldest_min=${q_oldest:-?} queue_failed=${q_failed:-?} mail_ready=${mail_ready:-?} mail_recipients=${mail_recipients:-?}"
+echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?} upload_per_file_mb=${perfile:-?} post_max_mb=${postmax:-?} user_ini=${userini:-?} queue_working=${q_working:-?} queue_pending=${q_pending:-?} queue_oldest_min=${q_oldest:-?} queue_failed=${q_failed:-?} queue_documents_pending=${q_served:-?} queue_documents_oldest_min=${q_served_oldest:-?} queue_unserved_pending=${q_unserved:-?} mail_ready=${mail_ready:-?} mail_recipients=${mail_recipients:-?}"

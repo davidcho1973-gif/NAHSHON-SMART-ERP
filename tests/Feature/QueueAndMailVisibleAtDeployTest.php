@@ -68,13 +68,60 @@ class QueueAndMailVisibleAtDeployTest extends TestCase
         $this->assertSame(['default' => 1, 'documents' => 2], collect($snapshot['by_queue'])->sortKeys()->all());
     }
 
+    public function test_a_backlog_nobody_listens_to_is_not_a_dead_worker(): void
+    {
+        // 2026-08-27 에 default 로 들어간 옛 작업 85건. 일꾼은 documents 만 듣기로
+        // 되어 있으므로(그렇게 하라고 docs 에 적혀 있다), 이 더미가 아무리 오래돼도
+        // «일꾼이 죽었다» 는 뜻이 아니다. 처음엔 줄을 가리지 않고 세어서 일꾼이
+        // 정상으로 돌아도 영원히 «일꾼 없음» 이라고 말했다 — 거짓말하는 경고는
+        // 곧 통째로 무시당하고, 그때는 진짜 고장도 같이 묻힌다.
+        for ($i = 0; $i < 85; $i++) {
+            $this->queueJob('default', minutesAgo: 24_198);
+        }
+
+        $snapshot = QueueHealth::snapshot();
+
+        $this->assertTrue($snapshot['working'], '아무도 안 듣는 줄이 밀렸다고 일꾼이 죽은 것은 아니다.');
+        $this->assertStringNotContainsString('queue:work', $snapshot['message'], '고칠 자리가 아닌 것을 고치라고 말하면 안 된다.');
+
+        // 그렇다고 숨기지도 않는다 — 치워야 할 옛 작업으로 따로 보인다.
+        $this->assertSame(85, $snapshot['unserved']['pending']);
+        $this->assertSame(['default'], $snapshot['unserved']['queues']);
+        $this->assertSame(0, $snapshot['served']['pending']);
+        $this->assertStringContainsString('아무도 듣지 않는 줄', $snapshot['message']);
+        $this->assertStringContainsString('별개', $snapshot['message']);
+    }
+
+    public function test_a_stalled_worker_is_still_called_out_while_a_legacy_pile_sits_there(): void
+    {
+        // 두 가지가 동시에 참일 수 있다. 하나가 다른 하나를 가리면 안 된다.
+        $this->queueJob(QueueHealth::DOCUMENT_QUEUE, minutesAgo: 90);
+        for ($i = 0; $i < 85; $i++) {
+            $this->queueJob('default', minutesAgo: 24_198);
+        }
+
+        $snapshot = QueueHealth::snapshot();
+
+        $this->assertFalse($snapshot['working']);
+        $this->assertStringContainsString('queue:work', $snapshot['message']);
+        $this->assertStringContainsString('아무도 듣지 않는 줄', $snapshot['message']);
+        $this->assertSame(1, $snapshot['served']['pending']);
+        $this->assertSame(85, $snapshot['unserved']['pending']);
+        // 합계는 합계대로 남는다 — 배포 로그의 한 줄은 계속 전체를 센다.
+        $this->assertSame(86, $snapshot['pending']);
+    }
+
     public function test_the_deploy_check_reads_the_queue_and_mail(): void
     {
         $body = $this->get('/build-version')->assertOk()->json();
 
         $this->assertArrayHasKey('queue', $body);
-        foreach (['known', 'working', 'pending', 'failed', 'oldest_pending_minutes', 'message'] as $key) {
+        foreach (['known', 'working', 'pending', 'failed', 'oldest_pending_minutes', 'message', 'served', 'unserved', 'served_queues'] as $key) {
             $this->assertArrayHasKey($key, $body['queue']);
+        }
+        foreach (['queues', 'pending', 'oldest_pending_minutes'] as $key) {
+            $this->assertArrayHasKey($key, $body['queue']['served']);
+            $this->assertArrayHasKey($key, $body['queue']['unserved']);
         }
 
         $this->assertArrayHasKey('mail', $body);
@@ -91,6 +138,9 @@ class QueueAndMailVisibleAtDeployTest extends TestCase
 
         $this->assertStringContainsString('json queue.pending', $script);
         $this->assertStringContainsString('json queue.working', $script);
+        // 판정에 쓰는 숫자는 «일꾼이 듣는 줄» 것이어야 한다. 세 칸짜리 경로다.
+        $this->assertStringContainsString('json queue.served.pending', $script);
+        $this->assertStringContainsString('json queue.unserved.pending', $script);
         $this->assertStringContainsString('json mail.ready', $script);
         $this->assertStringContainsString('json mail.scheme_ok', $script);
 
@@ -117,6 +167,24 @@ class QueueAndMailVisibleAtDeployTest extends TestCase
         $this->assertStringContainsString('MAIL_SCHEME', $script);
         // 설정은 맞는데 받는 사람이 0명이면 발송은 «성공» 하고 아무 데도 안 간다.
         $this->assertStringContainsString('받는 사람이 없음', $script);
+    }
+
+    public function test_the_two_conditions_get_two_different_warnings(): void
+    {
+        // «일꾼이 죽었다» 와 «아무도 안 듣는 줄에 옛 작업이 남았다» 는 고칠 자리가 다르다.
+        // 한 경고로 뭉쳐 놓으면, 일꾼을 제대로 만들어 놓고도 경고가 안 사라져서
+        // 사장님이 «고쳐도 안 되네» 로 읽고 되돌리게 된다.
+        $script = (string) file_get_contents(base_path('scripts/deploy/check-scheduler.sh'));
+
+        $this->assertStringContainsString('title=큐 일꾼이 멈춤', $script);
+        $this->assertStringContainsString('title=아무도 듣지 않는 큐', $script);
+        $this->assertStringContainsString('일꾼 문제가 아니라', $script);
+
+        // 일꾼 경고의 숫자는 전체 합계가 아니라 documents 줄의 숫자여야 한다.
+        $workerWarning = (string) strstr($script, 'title=큐 일꾼이 멈춤');
+        $workerWarning = substr($workerWarning, 0, (int) strpos($workerWarning, "\n"));
+        $this->assertStringContainsString('q_served', $workerWarning, '일꾼 경고는 일꾼이 듣는 줄의 숫자로 말해야 한다.');
+        $this->assertStringNotContainsString('${q_pending', $workerWarning, '전체 합계로 일꾼을 판정하면 옛 작업 때문에 영원히 빨개진다.');
     }
 
     public function test_a_failed_read_does_not_turn_the_deploy_red(): void
