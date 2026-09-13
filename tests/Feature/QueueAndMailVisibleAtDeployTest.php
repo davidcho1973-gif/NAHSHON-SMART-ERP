@@ -119,6 +119,21 @@ class QueueAndMailVisibleAtDeployTest extends TestCase
         $this->assertStringContainsString('받는 사람이 없음', $script);
     }
 
+    public function test_a_failed_read_does_not_turn_the_deploy_red(): void
+    {
+        // 이 스크립트의 첫 줄에 적힌 약속은 «배포를 실패시키지 않는다» 이다.
+        // 그런데 set -e 아래에서 값 읽기가 실패하면 그 약속을 진단 도구가 스스로 깬다 —
+        // 경고만 하기로 한 단계가 배포를 빨갛게 만들고, 사람은 곧 그 빨간 X 를 무시한다.
+        $script = (string) file_get_contents(base_path('scripts/deploy/check-scheduler.sh'));
+
+        $this->assertStringContainsString('set -euo pipefail', $script);
+        $this->assertMatchesRegularExpression(
+            '/\}\s*"\$1"\s*2>\/dev\/null\s*\|\|\s*true|2>\/dev\/null \|\| true/',
+            $script,
+            '값을 못 읽어도 «값 없음» 으로 끝나야 한다.',
+        );
+    }
+
     private function queueJob(string $queue, int $minutesAgo): void
     {
         $at = time() - ($minutesAgo * 60);

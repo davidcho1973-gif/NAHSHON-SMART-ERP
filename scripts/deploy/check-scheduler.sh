@@ -45,7 +45,10 @@ if isinstance(node, bool):
     print("true" if node else "false")
 elif node is not None:
     print(node)
-' "$1" 2>/dev/null
+' "$1" 2>/dev/null || true
+  # 읽기가 실패해도 «값 없음» 으로 끝낸다. set -e 아래에서 이 함수가 실패하면
+  # 경고만 하기로 한 이 단계가 배포를 빨갛게 만든다 — 이 파일의 첫 줄에 적어 둔
+  # 약속(«배포를 실패시키지 않는다»)을 진단 도구가 스스로 깨는 셈이다.
 }
 
 running=$(printf '%s' "$body" | sed -n 's/.*"running" *: *\([a-z]*\).*/\1/p')
