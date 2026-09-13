@@ -40,7 +40,8 @@ class MoveLegacyDocumentJobs extends Command
         {--from=default : 어느 줄에서 가져올지}
         {--to= : 어느 줄로 보낼지 (기본값은 일꾼이 듣는 줄)}
         {--limit=0 : 한 번에 옮길 최대 건수. 0 이면 전부}
-        {--record= : 옮긴 작업 ID 를 적어 둘 파일 (되돌릴 때 쓴다)}';
+        {--record= : 옮긴 작업 ID 를 적어 둘 파일 (되돌릴 때 쓴다)}
+        {--delete-noop : 옮겨도 아무 일도 안 하는 죽은 작업 줄을 지운다. --apply 와 함께 써야 한다}';
 
     protected $description = '옛 문서 분석 작업을 일꾼이 듣는 큐로 옮긴다 (기본은 시늉만).';
 
@@ -78,16 +79,32 @@ class MoveLegacyDocumentJobs extends Command
 
         $buckets = ['movable' => [], 'not_document_job' => [], 'in_flight' => [], 'no_document' => [], 'document_not_queued' => []];
 
+        // «이미 끝남» 을 한 칸으로 뭉치면 <b>가장 중요한 것</b>이 가려진다 — 85건이
+        // 전부 «완료» 인 것과 전부 «실패» 인 것은 정반대의 소식인데 표에는 똑같이 보인다.
+        // 실제로 나손에서 그 표를 보고도 무슨 일이 벌어진 건지 알 수 없었다.
+        $statusCounts = [];
+
         foreach ($rows as $row) {
-            $buckets[$this->classify($row)][] = $row;
+            $bucket = $this->classify($row);
+            $buckets[$bucket][] = $row;
+
+            if ($bucket === 'document_not_queued') {
+                $status = (string) $this->statusOf($row);
+                $statusCounts[$status] = ($statusCounts[$status] ?? 0) + 1;
+            }
         }
+        ksort($statusCounts);
 
         $movable = $buckets['movable'];
         if ($limit > 0) {
             $movable = array_slice($movable, 0, $limit);
         }
 
-        $this->report($from, $to, $buckets, $movable);
+        $this->report($from, $to, $buckets, $movable, $statusCounts);
+
+        if ($this->option('delete-noop')) {
+            return $this->deleteNoop($buckets, $apply);
+        }
 
         if (! $apply) {
             $this->newLine();
@@ -157,8 +174,9 @@ class MoveLegacyDocumentJobs extends Command
     /**
      * @param  array<string, list<object>>  $buckets
      * @param  list<object>  $movable
+     * @param  array<string, int>  $statusCounts
      */
-    private function report(string $from, string $to, array $buckets, array $movable): void
+    private function report(string $from, string $to, array $buckets, array $movable, array $statusCounts = []): void
     {
         $this->newLine();
         $this->line("«{$from}» → «{$to}»");
@@ -169,8 +187,18 @@ class MoveLegacyDocumentJobs extends Command
             ['문서 작업 아님', count($buckets['not_document_job']), '손대지 않습니다 — 다른 업무 작업입니다'],
             ['처리 중·시도함', count($buckets['in_flight']), '손대지 않습니다 — 누가 집어갔을 수 있습니다'],
             ['문서 없음', count($buckets['no_document']), '문서가 지워졌습니다. 옮겨도 헛돕니다'],
-            ['이미 끝남·실패', count($buckets['document_not_queued']), '옮겨도 그냥 종료됩니다'],
+            ['이미 처리된 문서', count($buckets['document_not_queued']), '옮겨도 그냥 종료됩니다 — 아래에 갈라 적었습니다'],
         ]);
+
+        // «이미 처리된 문서» 를 상태별로 갈라 준다. 전부 ready 인 것과 전부 failed 인
+        // 것은 정반대의 소식이고, 사장님이 다음에 할 일도 완전히 다르다.
+        if ($statusCounts !== []) {
+            $this->newLine();
+            $this->line('  이미 처리된 문서의 실제 상태:');
+            foreach ($statusCounts as $status => $count) {
+                $this->line(sprintf('    · %-16s %d건   %s', $status, $count, $this->meaning((string) $status)));
+            }
+        }
 
         // 돈이 나가는 단위는 작업이 아니라 «문서» 다. 같은 문서에 작업이 여러 개
         // 겹쳐 있어도 AI 는 한 번만 부른다 — 이 숫자를 보고 비용을 가늠하시라.
@@ -195,6 +223,102 @@ class MoveLegacyDocumentJobs extends Command
                 count($movable) - count($documents),
             ));
         }
+    }
+
+    private function statusOf(object $row): ?string
+    {
+        $documentId = $this->documentId($row->payload);
+
+        return $documentId === null
+            ? null
+            : IntelligentDocument::query()->whereKey($documentId)->value('ai_status');
+    }
+
+    private function meaning(string $status): string
+    {
+        return match ($status) {
+            'ready' => '분석이 끝났습니다 — 할 일 없음',
+            'review_required' => '분석은 됐고 사람 확인을 기다립니다',
+            'failed' => '분석이 실패했습니다 — 화면에서 「AI 재분석」이 필요합니다',
+            'analyzing' => '지금 처리 중입니다',
+            'queued' => '아직 기다리는 중입니다',
+            default => '',
+        };
+    }
+
+    /**
+     * 옮겨도 아무 일도 안 하는 작업 줄을 지운다.
+     *
+     * 이런 줄은 영원히 남아서 배포 진단에 «85건 남음» 이라고 계속 찍는다. 고칠 것이
+     * 없는데 경고만 계속 뜨면 사람은 곧 그 경고를 통째로 무시한다 — 그 상태가 되면
+     * 진짜 문제가 생겨도 같이 묻힌다. 그래서 치운다.
+     *
+     * 지우는 대상은 «지워도 아무것도 잃지 않는다» 가 증명되는 것뿐이다: 정확히 문서
+     * 분석 작업이고, 아무도 손대지 않았고, 연결된 문서가 이미 처리를 마쳤거나 사라진 것.
+     * 옮길 수 있는 작업(문서가 아직 기다리는 것)은 한 건도 건드리지 않는다.
+     *
+     * @param  array<string, list<object>>  $buckets
+     */
+    private function deleteNoop(array $buckets, bool $apply): int
+    {
+        $dead = array_merge($buckets['document_not_queued'], $buckets['no_document']);
+
+        $this->newLine();
+
+        if ($dead === []) {
+            $this->info('지울 죽은 작업이 없습니다.');
+
+            return self::SUCCESS;
+        }
+
+        $this->line(sprintf('지울 수 있는 죽은 작업: %d건', count($dead)));
+        $this->line('  (연결된 문서가 이미 처리를 마쳤거나 사라져서, 옮겨도 그냥 끝나는 줄입니다)');
+
+        if (! $apply) {
+            $this->newLine();
+            $this->warn('시늉만 했습니다 — 아무것도 지우지 않았습니다.');
+            $this->line('  실제로 지우려면 --delete-noop --apply 를 함께 쓰세요.');
+
+            return self::SUCCESS;
+        }
+
+        $deleted = [];
+
+        foreach ($dead as $candidate) {
+            DB::transaction(function () use ($candidate, &$deleted): void {
+                $row = DB::table('jobs')->where('id', $candidate->id)->lockForUpdate()->first();
+
+                // 지우기 직전에 다시 본다. 그사이 문서가 「AI 재분석」으로 다시
+                // queued 가 됐다면 이 줄은 살아 있는 작업이므로 건드리면 안 된다.
+                if ($row === null) {
+                    return;
+                }
+                $bucket = $this->classify($row);
+                if (! in_array($bucket, ['document_not_queued', 'no_document'], true)) {
+                    return;
+                }
+
+                DB::table('jobs')->where('id', $row->id)->delete();
+                $deleted[] = ['job_id' => (int) $row->id, 'document_id' => $this->documentId($row->payload)];
+            });
+        }
+
+        $this->newLine();
+        $this->info(count($deleted).'건을 지웠습니다.');
+
+        // 지운 내역은 <b>화면에 찍는다.</b> 라라벨 클라우드의 로컬 저장소는 배포마다
+        // 사라지므로 파일에만 적어 두면 남지 않는다. 명령 실행 기록은 남는다.
+        $this->line('  지운 작업 ID: '.implode(', ', array_column($deleted, 'job_id')));
+
+        $record = (string) ($this->option('record') ?? '');
+        if ($record !== '' && $deleted !== []) {
+            @file_put_contents($record, json_encode([
+                'deleted_at' => now()->toIso8601String(),
+                'rows' => $deleted,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+
+        return self::SUCCESS;
     }
 
     /**
