@@ -94,6 +94,7 @@
         .parsed { font-size: 12.5px; color: var(--ink-2); border-top: 1px solid var(--rule); padding: 9px 0; }
         .parsed b { color: var(--ink); }
     </style>
+<script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}"></script>
 </head>
 <body class="field-app field-report">
     @include('partials.erp-home')
@@ -541,6 +542,7 @@
         el('more').addEventListener('click', function () { showAll = !showAll; render(); });
 
         function reload() {
+            if(opsNavigation && opsNavigation.route().batch)opsNavigation.navigate({batch:null},{replace:true});
             api('api_getOpsBatches', []).then(function (d) {
                 BATCHES = (d && d.batches) || [];
                 render();
@@ -596,8 +598,12 @@
         }
 
         // ── 원문 상세 (관리자는 여기서 고치거나 지운다) ─────────────
-        function openDetail(id) {
+        var detailGeneration=0;
+        function openDetail(id, remember=true) {
+            if(remember)return opsNavigation.navigate({batch:String(id)},{refresh:true});
+            var generation=++detailGeneration;
             api('api_getOpsBatch', [Number(id)]).then(function (d) {
+                if(generation!==detailGeneration)return;
                 if (!d || d.success === false) { alert('원문을 불러오지 못했습니다.'); return; }
                 var host = el('detail-screen');
                 var manage = CAN_MANAGE
@@ -623,13 +629,25 @@
                     '</div>';
                 showScreen('detail');
 
-                el('back-btn').addEventListener('click', function () { showScreen('list'); });
+                el('back-btn').addEventListener('click', function () { opsNavigation.back({batch:null}); });
                 var eb = el('edit-btn');
                 if (eb) eb.addEventListener('click', function () { openEdit(d); });
                 var db = el('del-btn');
                 if (db) db.addEventListener('click', function () { removeBatch(d.id); });
             });
         }
+
+        var opsNavigation=window.ERPHistory.create({
+            read:function(){return {batch:new URLSearchParams(location.search).get('batch')};},
+            url:function(state){var url=new URL(location.href);url.searchParams.delete('batch');if(state.batch)url.searchParams.set('batch',state.batch);return url.pathname+url.search;},
+            capture:function(){return {y:window.scrollY};},
+            render:function(state,snapshot){
+                if(state.batch)openDetail(state.batch,false);
+                else{++detailGeneration;showScreen('list');if(snapshot)window.scrollTo(0,snapshot.y||0);}
+            }
+        });
+        opsNavigation.start();
+        window.addEventListener('scroll',function(){opsNavigation.save();},{passive:true});
 
         function openEdit(d) {
             var host = el('detail-screen');

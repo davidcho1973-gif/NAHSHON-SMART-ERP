@@ -109,7 +109,7 @@ class DocumentIntelligenceService
                 'effective_on' => $this->date($data['effective_on'] ?? null),
                 'expires_on' => $this->date($data['expires_on'] ?? null),
                 'response_due_on' => $this->date($data['response_due_on'] ?? null),
-                'ai_status' => $confidence >= 70 && ! $resolution['review_reason'] ? 'ready' : 'review_required',
+                'ai_status' => $confidence >= 70 && ! $resolution['review_reason'] && empty($data['source_review_reason']) ? 'ready' : 'review_required',
                 'ai_engine' => $analysis['engine'],
                 'ai_model' => $analysis['model'],
                 'ai_confidence' => $confidence,
@@ -136,7 +136,7 @@ class DocumentIntelligenceService
 
             // Preserve both originals and existing links. A duplicate/uncertain scope must
             // not replace action items, create expenses, send replies or harvest knowledge.
-            if (! empty($document->ai_payload['duplicate_document_id']) || $resolution['review_reason']) {
+            if (! empty($document->ai_payload['duplicate_document_id']) || $resolution['review_reason'] || ! empty($data['source_review_reason'])) {
                 return $document->fresh(['company', 'site', 'project', 'actionItems']);
             }
 
@@ -175,7 +175,7 @@ class DocumentIntelligenceService
             return $document->fresh(['company', 'site', 'project', 'actionItems']);
         });
 
-        if ($superseded || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason'])) {
+        if ($superseded || ! empty($fresh->ai_payload['duplicate_document_id']) || ! empty($fresh->ai_payload['scope_review_reason']) || ! empty($fresh->ai_payload['source_review_reason'])) {
             return $fresh;
         }
 

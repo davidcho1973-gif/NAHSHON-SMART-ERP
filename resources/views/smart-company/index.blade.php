@@ -16,6 +16,7 @@
     rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
+  <script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-photos.js') }}?v={{ filemtime(public_path('js/wbs-photos.js')) }}" defer></script>
   <script src="{{ asset('js/guest-links.js') }}?v={{ filemtime(public_path('js/guest-links.js')) }}" defer></script>
@@ -388,6 +389,7 @@
             </select>
           </div>
           <div class="breadcrumbs" style="margin-left: 14px; border-left: 1px solid var(--border-color); padding-left: 14px;">
+            <button type="button" class="btn-secondary" onclick="window.erpBack()" aria-label="이전 화면으로 돌아가기" style="padding:4px 8px;margin-right:8px"><i class="ph ph-arrow-left" aria-hidden="true"></i></button>
             <span>{{ \App\Support\Org::name() }}</span>
             <i class="ph ph-caret-right"></i>
             <span class="active-crumb" id="breadcrumb-current">Overview</span>
@@ -1586,7 +1588,6 @@
           item.classList.add('active');
           openNavGroupFor(item);
           var view = item.getAttribute('data-view');
-          prepareViewNavigation(view);
           closeMobileMore();
           loadView(view);
         });
@@ -1664,23 +1665,152 @@
       var settingsButton = document.getElementById('btn-settings');
       if (settingsButton) settingsButton.addEventListener('click', function () { openAccountView('ui-settings'); });
 
-      window.loadView = function loadView(viewKey) {
-        var route = routes[viewKey];
-        if (!route) return;
-        window._currentView = viewKey;
-        syncMobileNavigation(viewKey);
-        breadcrumbCurrent.textContent = route.title;
-        pageContainer.style.opacity = '0.3';
-        setTimeout(function () {
-          pageContainer.innerHTML = '';
-          route.render();
-          pageContainer.style.opacity = '1';
-        }, 120);
+      var navigationRender = 0, restoreObserver = null, restoreTimer = null;
+      function readNavigation() {
+        var p = new URLSearchParams(location.search);
+        return { view: routes[p.get('view')] ? p.get('view') : 'dashboard',
+          site: p.get('site') || window.currentSiteId || 'ALL', document: p.get('document') || null,
+          detail:p.get('detail') || null, code:p.get('code') || null };
       }
+      function navigationUrl(state) {
+        var url = new URL(location.href);
+        url.searchParams.set('view', state.view);
+        url.searchParams.set('site', state.site || 'ALL');
+        url.searchParams.delete('document');
+        ['detail','code'].forEach(function(key){url.searchParams.delete(key);if(state[key])url.searchParams.set(key,state[key]);});
+        if (state.view === 'document-hub' && state.document) url.searchParams.set('document', state.document);
+        return url.pathname + url.search + url.hash;
+      }
+      function captureNavigation() {
+        var controls = {};
+        pageContainer.querySelectorAll('input[id],select[id]').forEach(function (el) {
+          // Only query controls: never persist edit forms, credentials or uploads in history.
+          if (!el.closest('form,dialog,.modal') && /filter|search|query|period/i.test(el.id) &&
+              !['password','file','hidden'].includes(el.type)) controls[el.id] = el.value;
+        });
+        var scroll = [];
+        document.querySelectorAll('.main-content,#page-container,#page-container [id]').forEach(function (el) {
+          if (el.scrollTop || el.scrollLeft) scroll.push({ id: el.id, main: el.matches('.main-content'), x: el.scrollLeft, y: el.scrollTop });
+        });
+        var docScroll = null, docFrame = pageContainer.querySelector('iframe');
+        if(window._currentView==='document-hub' && docFrame && docFrame.contentWindow){
+          docScroll={x:docFrame.contentWindow.scrollX,y:docFrame.contentWindow.scrollY};
+        }
+        return { controls: controls, scroll: scroll, x: window.scrollX, y: window.scrollY, docScroll:docScroll,
+          wbsProject: window.WBS_CURRENT_PROJECT, wbsView: window._wbsViewMode, wbsOps: window._wbsOpsView };
+      }
+      function restoreNavigation(snapshot, generation) {
+        if (!snapshot) { window.scrollTo(0, 0); return; }
+        var applied = new Set();
+        function restore() {
+          if (generation !== navigationRender) return;
+          Object.keys(snapshot.controls || {}).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el || applied.has(id) || !pageContainer.contains(el)) return;
+            if (el.tagName === 'SELECT' && !Array.from(el.options).some(function(o){return o.value===snapshot.controls[id];})) return;
+            applied.add(id);
+            if (el.value !== snapshot.controls[id]) {
+              el.value = snapshot.controls[id];
+              el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+            }
+          });
+          (snapshot.scroll || []).forEach(function (s) {
+            var el = s.main ? document.querySelector('.main-content') : document.getElementById(s.id);
+            if (el) { el.scrollTop = s.y; el.scrollLeft = s.x; }
+          });
+          window.scrollTo(snapshot.x || 0, snapshot.y || 0);
+        }
+        restore();
+        restoreObserver = new MutationObserver(restore);
+        restoreObserver.observe(pageContainer, { childList: true, subtree: true });
+        restoreTimer = setTimeout(function(){ if(restoreObserver)restoreObserver.disconnect(); }, 8000);
+      }
+      var erpNavigation = window.ERPHistory.create({
+        read: readNavigation, url: navigationUrl, capture: captureNavigation,
+        render: function (state, snapshot) {
+          if (!routes[state.view]) state = { view: 'dashboard', site: window.currentSiteId || 'ALL' };
+          var generation = ++navigationRender;
+          if (restoreObserver) restoreObserver.disconnect();
+          clearTimeout(restoreTimer);
+          // Cancel outstanding WBS generations when leaving it; late replies must not repaint another menu.
+          ++_wbsRenderGen;
+          if (window.currentSiteId !== state.site && window.apiCache) Object.keys(window.apiCache).forEach(function(k){delete window.apiCache[k];});
+          window.currentSiteId = state.site || 'ALL';
+          var siteSelect = document.getElementById('project-context-switcher');
+          if (siteSelect) siteSelect.value = window.currentSiteId;
+          if (snapshot) {
+            window.WBS_CURRENT_PROJECT = snapshot.wbsProject;
+            window._wbsViewMode = snapshot.wbsView;
+            window._wbsOpsView = snapshot.wbsOps;
+          }
+          var existingFrame = pageContainer.querySelector('iframe');
+          var frameSite = existingFrame ? new URL(existingFrame.src,location.href).searchParams.get('site_id') || 'ALL' : null;
+          var expectedFrameSite = window.SITE_DB_IDS && window.SITE_DB_IDS[state.site];
+          var sameDocumentView = window._currentView === 'document-hub' && state.view === 'document-hub' && frameSite === (expectedFrameSite ? String(expectedFrameSite) : 'ALL');
+          window._currentView = state.view;
+          syncMobileNavigation(state.view);
+          breadcrumbCurrent.textContent = routes[state.view].title;
+          navItems.forEach(function(item){item.classList.toggle('active',item.getAttribute('data-view')===state.view);});
+          openNavGroupFor(document.querySelector('.nav-item.active'));
+          var frame = sameDocumentView && pageContainer.querySelector('iframe');
+          if (frame && frame.contentWindow.ERPDocumentNavigation) {
+            frame.contentWindow.ERPDocumentNavigation.restore(state.documentState || { document: state.document }).then(function(){
+              if(generation===navigationRender && snapshot && snapshot.docScroll)frame.contentWindow.scrollTo(snapshot.docScroll.x,snapshot.docScroll.y);
+            });
+            restoreNavigation(snapshot, generation); return;
+          }
+          window.__docHubOpenDoc = state.view === 'document-hub' ? state.document : null;
+          pageContainer.innerHTML = '';
+          pageContainer.style.opacity = '1';
+          var rendering;
+          if(state.view==='hr' && ['global-site','team-board'].includes(state.detail) && state.code){
+            rendering=window.renderGlobalHr().then(function(){
+              if(generation!==navigationRender)return;
+              return state.detail==='team-board'?window.openTeamBoard(state.code,false):window.openGlobalSite(state.code,false);
+            });
+          }else rendering=routes[state.view].render();
+          Promise.resolve(rendering).then(function(){
+            if (generation === navigationRender) restoreNavigation(snapshot, generation);
+          }).catch(function(error){if(generation===navigationRender)renderError(safeHtml(error.message || '화면을 불러오지 못했습니다.'));});
+          if (state.view === 'document-hub') {
+            var docFrame = pageContainer.querySelector('iframe');
+            if (docFrame) docFrame.addEventListener('load',function(){
+              if(generation===navigationRender && docFrame.contentWindow.ERPDocumentNavigation && state.documentState)
+                docFrame.contentWindow.ERPDocumentNavigation.restore(state.documentState).then(function(){
+                  if(generation===navigationRender && snapshot && snapshot.docScroll)docFrame.contentWindow.scrollTo(snapshot.docScroll.x,snapshot.docScroll.y);
+                });
+            },{once:true});
+          }
+        }
+      });
+      window.ERPDocumentNavigate = function (documentState, replace) {
+        if (window._currentView !== 'document-hub') return;
+        erpNavigation.navigate({ view:'document-hub', site:window.currentSiteId || 'ALL',
+          document:documentState.document ? String(documentState.document) : null, documentState:documentState }, { silent:true, replace:!!replace });
+      };
+      window.ERPDocumentSave = function(){if(window._currentView==='document-hub')erpNavigation.save();};
+      window.loadView = function loadView(viewKey) {
+        if (!routes[viewKey]) return;
+        var site = ['hr','attendance','personnel'].includes(viewKey) ? 'ALL' : window.currentSiteId || 'ALL';
+        erpNavigation.navigate({ view:viewKey, site:site, document:null, detail:null, code:null }, { refresh:window._currentView===viewKey });
+      };
+      window.erpBack = function(){erpNavigation.back({view:'dashboard',site:window.currentSiteId||'ALL',document:null,detail:null,code:null});};
+      // Save before popstate, while the current entry is still active.
+      var saveNavigationTimer;
+      function scheduleNavigationSave() {
+        clearTimeout(saveNavigationTimer);
+        saveNavigationTimer=setTimeout(function(){erpNavigation.save();},100);
+      }
+      document.addEventListener('scroll',scheduleNavigationSave,true);
+      ['wheel','touchstart','pointerdown','keydown'].forEach(function(event){
+        document.addEventListener(event,function(){if(restoreObserver)restoreObserver.disconnect();clearTimeout(restoreTimer);},{capture:true,passive:true});
+      });
+      pageContainer.addEventListener('input',scheduleNavigationSave);
+      pageContainer.addEventListener('change',scheduleNavigationSave);
+      pageContainer.addEventListener('click',scheduleNavigationSave);
 
       window.goToView = function(viewKey) {
         var target = document.querySelector('.nav-item[data-view="' + viewKey + '"]');
-        prepareViewNavigation(viewKey);
         if (target) {
           navItems.forEach(function(n) { n.classList.remove('active'); });
           target.classList.add('active');
@@ -2332,7 +2462,8 @@
         } catch (err) { target.innerHTML = '<div style="color:var(--status-danger);text-align:center;padding:32px">글로벌 현황 로딩 실패: ' + err.message + '</div>'; console.error(err); }
       };
 
-      window.openGlobalSite = function (code) {
+      window.openGlobalSite = function (code, remember) {
+        if(remember!==false)return erpNavigation.navigate({view:'hr',site:'ALL',document:null,detail:'global-site',code:String(code)});
         var data = window._globalHrData;
         if (!data) { window.backToGlobalHr(); return; }
         var site = null, country = null;
@@ -2370,7 +2501,8 @@
       };
 
       // ── 팀 편성 드래그 보드 ──────────────────────────────────────
-      window.openTeamBoard = async function (siteCode) {
+      window.openTeamBoard = async function (siteCode, remember) {
+        if(remember!==false)return erpNavigation.navigate({view:'hr',site:'ALL',document:null,detail:'team-board',code:String(siteCode)},{refresh:true});
         pageContainer.innerHTML = skeleton();
         try {
           var res = await window.API.getTeamBoard(siteCode);
@@ -13231,13 +13363,14 @@
       navItems.forEach(function (item) {
         item.classList.toggle('active', item.getAttribute('data-view') === initialView);
       });
-      loadView(initialView);
+      erpNavigation.start();
 
       // URL team_code 파라미터 체크 및 QR 출퇴근 자동 진입
       const teamCodeParam = urlParams.get('team_code');
       if (teamCodeParam) {
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-        window.history.replaceState({ path: newUrl }, '', newUrl);
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('team_code');
+        window.history.replaceState(window.history.state, '', newUrl);
         setTimeout(function() {
           if (typeof window.openMyCommuteModal === 'function') {
             window.openMyCommuteModal(teamCodeParam);
