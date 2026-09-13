@@ -76,6 +76,9 @@ jobs:
       - name: Execute tests
         run: php artisan test
 
+      - name: Browser history state regression tests
+        run: node --test tests/js/erp-history.test.cjs
+
 
   # ──────────────────────────────────────────────────────────────────────────
   # 배포.

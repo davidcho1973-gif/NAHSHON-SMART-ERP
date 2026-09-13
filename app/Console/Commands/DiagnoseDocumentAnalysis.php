@@ -108,6 +108,9 @@ class DiagnoseDocumentAnalysis extends Command
             $this->line('   '.$label.str_repeat(' ', max(1, 12 - mb_strwidth($label))).($rows[$k] ?? 0).'건');
         }
         $queued = (int) ($rows['queued'] ?? 0);
+        if ((int) ($rows['failed'] ?? 0) > 0) {
+            $bad[] = '분석 실패 문서 '.$rows['failed'].'건이 있습니다. 최근 오류 및 docs:preflight 결과를 확인하세요.';
+        }
         if ($queued > 0 && $jobs && $waiting === 0) {
             $bad[] = "«대기» 가 {$queued}건인데 줄에 선 일감은 0건입니다 — 상태만 대기로 바뀌고 일감이 안 들어갔습니다. "
                 .'문서함의 «AI 재분석» 또는 docs:reanalyze --run 으로 다시 넣어야 합니다.';

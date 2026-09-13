@@ -90,6 +90,7 @@
     </script>
     @endif
     <link rel="stylesheet" href="{{ asset('css/document-review-desk.css') }}?v={{ filemtime(public_path('css/document-review-desk.css')) }}">
+    <script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}"></script>
 </head>
 <body class="document-review-desk">
 <div class="app">
@@ -246,6 +247,37 @@ let detailRequest = 0;
 let listRequest = 0;
 let documentPage = 1;
 let documentLastPage = 1;
+let restoringDocumentNavigation = false;
+let documentNavigation = null;
+let navigationRestoreRequest = 0;
+const documentFilterIds = ['search','category-filter','project-filter','status-filter','site-filter'];
+function documentNavigationState(){
+    return {document:selectedDocumentId ? String(selectedDocumentId) : null,page:documentPage,viewer:document.getElementById('viewer-bg').classList.contains('open'),
+        filters:Object.fromEntries(documentFilterIds.map(id=>[id,document.getElementById(id).value]))};
+}
+function rememberDocumentNavigation(replace=false){
+    if(restoringDocumentNavigation)return;
+    const state=documentNavigationState();
+    if(window.parent!==window && typeof window.parent.ERPDocumentNavigate==='function')window.parent.ERPDocumentNavigate(state,replace);
+    else if(documentNavigation)documentNavigation.navigate(state,{silent:true,replace});
+}
+async function restoreDocumentNavigation(state){
+    const generation=++navigationRestoreRequest;
+    restoringDocumentNavigation=true;
+    closeViewer(false);
+    // All synchronous state changes are complete before awaiting network requests.
+    clearDocument();
+    documentPage=Math.max(1,Number(state.page)||1);
+    documentFilterIds.forEach(id=>{if(state.filters && Object.hasOwn(state.filters,id))document.getElementById(id).value=state.filters[id];});
+    restoringDocumentNavigation=false;
+    const list=loadDocuments();
+    const detail=state.document ? openDocument(Number(state.document),false) : Promise.resolve();
+    await Promise.all([list,detail]);
+    if(generation!==navigationRestoreRequest)return;
+    if(state.viewer && currentDoc)openViewer(false);
+}
+window.ERPDocumentNavigation={restore:restoreDocumentNavigation};
+window.addEventListener('scroll',()=>{if(window.parent!==window && typeof window.parent.ERPDocumentSave==='function')window.parent.ERPDocumentSave();},{passive:true});
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtBytes = bytes => !bytes ? '-' : bytes >= 1048576 ? (bytes/1048576).toFixed(1)+' MB' : (bytes/1024).toFixed(1)+' KB';
 const statusLabel = status => ({queued:'접수됨',analyzing:'AI 분석 중',ready:'정리 완료',review_required:'검토 필요',failed:'분석 실패'}[status] || status);
@@ -337,8 +369,9 @@ function clearDocument(){
     document.getElementById('drawer-body').innerHTML='<div class="desk-empty"><strong>검토할 문서를 선택하세요</strong><p>원본·AI 요약·후속조치를 목록 옆에서 확인할 수 있습니다.</p></div>';
     document.getElementById('memory-list').innerHTML='<div class="empty">문서를 선택하세요.</div>';renderRows();
 }
-async function openDocument(id){
+async function openDocument(id,remember=true){
     const requestId=++detailRequest;selectedDocumentId=Number(id);currentDoc=null;renderRows();
+    if(remember)rememberDocumentNavigation();
     document.getElementById('drawer-bg').classList.add('open');document.getElementById('detail-title').textContent='문서 불러오는 중';document.getElementById('detail-file').textContent='';
     document.getElementById('drawer-body').innerHTML='<div class="empty" role="status">문서 상세를 불러오는 중…</div>';
     document.getElementById('memory-list').innerHTML='<div class="empty">후속조치를 불러오는 중…</div>';
@@ -387,6 +420,7 @@ function renderDetail(d){
       ${d.duplicateDocumentId?`<div class="section" style="border-color:#93c5fd;background:#eff6ff"><h3>이미 등록된 동일 파일</h3><p>기존 문서에서 분석 결과를 확인할 수 있습니다. 이번 접수 원본과 기록은 보존했습니다.</p><button class="btn primary" onclick="openDocument(${Number(d.duplicateDocumentId)})">기존 문서 열기</button></div>`:''}
       ${d.aiError?`<div class="section" style="border-color:#fecaca;background:#fff4f4"><h3>분석 오류</h3><p>${esc(d.aiError)}</p></div>`:''}
       ${d.aiStatus==='review_required'&&d.aiPayload?.scope_review_reason?`<div class="section" style="border-color:#fcd34d;background:#fffbeb"><h3>소속 확인 필요</h3><p>${esc(d.aiPayload.scope_review_reason)}</p><p>문서 내용과 현재 PROJECT·현장을 확인해 주세요. 수정 권한이 있으면 ‘정보 수정’에서 확인한 값을 저장할 수 있습니다.</p></div>`:''}
+      ${d.aiPayload?.source_review_reason?`<div class="section"><h3>본문 범위 확인 필요</h3><p>${esc(d.aiPayload.source_review_reason)}</p></div>`:''}
       <div class="section"><h3>AI 요약</h3><p>${esc(d.summary||'AI 분석 대기 중입니다.')}</p></div>
       <div class="section"><h3>반드시 기억할 사실</h3>${facts}</div>
       <div class="section"><h3>위험·기한·후속조치</h3>${actions}</div>
@@ -601,11 +635,11 @@ async function uploadFiles(fileList){
     }
 }
 if(canManage){const dialog=document.getElementById('upload-dialog');document.getElementById('upload-open').onclick=()=>dialog.showModal();document.getElementById('upload-close').onclick=()=>dialog.close();const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
-document.getElementById('drawer-close').onclick=()=>{clearDocument();document.getElementById('search').focus();};
-function searchDocuments(){documentPage=1;clearDocument();loadDocuments();}
+document.getElementById('drawer-close').onclick=()=>{clearDocument();rememberDocumentNavigation();document.getElementById('search').focus();};
+function searchDocuments(){documentPage=1;clearDocument();rememberDocumentNavigation();loadDocuments();}
 document.getElementById('search-btn').onclick=searchDocuments;
-document.getElementById('page-prev').onclick=()=>{if(documentPage>1){documentPage--;loadDocuments();}};
-document.getElementById('page-next').onclick=()=>{if(documentPage<documentLastPage){documentPage++;loadDocuments();}};
+document.getElementById('page-prev').onclick=()=>{if(documentPage>1){documentPage--;rememberDocumentNavigation();loadDocuments();}};
+document.getElementById('page-next').onclick=()=>{if(documentPage<documentLastPage){documentPage++;rememberDocumentNavigation();loadDocuments();}};
 document.getElementById('status-filter').onchange=searchDocuments;document.getElementById('refresh-btn').onclick=loadDocuments;
 if(canManage){const ub=document.getElementById('unstick-btn');if(ub)ub.onclick=unstick;const kb=document.getElementById('ko-btn');if(kb)kb.onclick=addKorean;}else{for(const id of ['unstick-btn','ko-btn']){const b=document.getElementById(id);if(b)b.style.display='none';}}document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')searchDocuments()});document.getElementById('category-filter').onchange=searchDocuments;document.getElementById('project-filter').onchange=searchDocuments;document.getElementById('site-filter').onchange=searchDocuments;
 if(canManage){
@@ -624,12 +658,13 @@ if(canManage){
    현장 인터넷에서 CDN 이 막히면 매번 다운로드로 후퇴했고, 변환기가 서버·브라우저 두 벌이
    되면 같은 파일이 화면마다 다르게 보인다. 변환 규칙은 한 곳에만 둔다. */
 const VIEWER_INLINE=['pdf','jpg','jpeg','png','webp','tif','tiff','txt','csv','xlsx','xls','docx','pptx'];
-function closeViewer(){const bg=document.getElementById('viewer-bg');bg.classList.remove('open');document.getElementById('viewer-body').innerHTML=''}
-function openViewer(){
+function closeViewer(remember=true){const bg=document.getElementById('viewer-bg');const wasOpen=bg.classList.contains('open');bg.classList.remove('open');document.getElementById('viewer-body').innerHTML='';if(wasOpen&&remember)rememberDocumentNavigation();}
+function openViewer(remember=true){
     if(!currentDoc)return;
     const {fileName,extension:ext,previewUrl,downloadUrl}=currentDoc;
     const bg=document.getElementById('viewer-bg'),body=document.getElementById('viewer-body');
     bg.classList.add('open');document.getElementById('viewer-title').textContent=fileName||'문서';document.getElementById('viewer-dl').href=downloadUrl;
+    if(remember)rememberDocumentNavigation();
     if(!VIEWER_INLINE.includes(ext)){body.innerHTML=viewerFallback(ext,downloadUrl);return}
     // sandbox: 업로드된 내용은 남이 만든 것 — 스크립트로 살아나면 안 된다(서버 CSP 와 이중 잠금).
     // iframe 에 sandbox 를 걸지 않는다 — 크롬 내장 PDF 뷰어는 샌드박스 프레임에서
@@ -644,7 +679,17 @@ document.getElementById('viewer-close').onclick=closeViewer;
 document.getElementById('viewer-bg').addEventListener('click',e=>{if(e.target.id==='viewer-bg')closeViewer()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('viewer-bg').classList.contains('open'))closeViewer()});
 
-loadDocuments();const requested=new URLSearchParams(location.search).get('document');if(requested)setTimeout(()=>openDocument(Number(requested)),400);
+const requested=new URLSearchParams(location.search).get('document');
+if(window.parent===window || typeof window.parent.ERPDocumentNavigate!=='function'){
+    documentNavigation=window.ERPHistory.create({
+        read:()=>({document:new URLSearchParams(location.search).get('document')}),
+        url:state=>{const url=new URL(location.href);url.searchParams.delete('document');if(state.document)url.searchParams.set('document',state.document);return url.pathname+url.search;},
+        render:restoreDocumentNavigation
+    });
+    documentNavigation.start();
+}else{
+    restoreDocumentNavigation({document:requested}).then(()=>rememberDocumentNavigation(true));
+}
 </script>
 </body>
 </html>

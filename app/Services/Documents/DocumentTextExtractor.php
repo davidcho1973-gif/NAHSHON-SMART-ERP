@@ -31,8 +31,11 @@ class DocumentTextExtractor
         $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text) ?? $text;
 
         $text = html_entity_decode($text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+        // Entity decoding must not reintroduce forbidden PostgreSQL NUL/controls.
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? $text;
         $text = preg_replace('/[ \t]+/', ' ', $text) ?? $text;
-        $text = preg_replace('/\R{3,}/', "\n\n", $text) ?? $text;
+        // Byte-mode \R treats 0x85 inside a Korean UTF-8 character as a newline.
+        $text = preg_replace('/\R{3,}/u', "\n\n", $text) ?? $text;
         $text = trim($text);
 
         return mb_strlen($text) >= 20 ? $text : null;
@@ -48,8 +51,9 @@ class DocumentTextExtractor
 
     private function fromEmail(string $bytes): string
     {
-        [$headers, $body] = array_pad(preg_split("/\R\R/", $bytes, 2) ?: [], 2, '');
-        $importantHeaders = collect(preg_split('/\R/', $headers) ?: [])
+        // Mail separators are CRLF/LF, not arbitrary bytes inside multibyte text.
+        [$headers, $body] = array_pad(preg_split('/\r?\n\r?\n/', $bytes, 2) ?: [], 2, '');
+        $importantHeaders = collect(preg_split('/\r?\n/', $headers) ?: [])
             ->filter(fn (string $line): bool => preg_match('/^(subject|from|to|cc|date):/i', $line) === 1)
             ->implode("\n");
 
@@ -85,22 +89,52 @@ class DocumentTextExtractor
 
         return $this->withArchive($bytes, function (ZipArchive $zip): string {
             $parts = [];
+            $populatedRows = 0;
+            $strings = [];
             $shared = $zip->getFromName('xl/sharedStrings.xml');
             if (is_string($shared)) {
-                $shared = str_replace(['</si>', '</row>'], "\n", $shared);
-                $parts[] = strip_tags($shared);
+                foreach ($this->xml($shared)->xpath('//*[local-name()="si"]') ?: [] as $item) {
+                    $strings[] = implode('', array_map(static fn ($t) => (string) $t, $item->xpath('.//*[local-name()="t"]') ?: []));
+                }
             }
 
-            for ($i = 1; $i <= 50; $i++) {
-                $sheet = $zip->getFromName("xl/worksheets/sheet{$i}.xml");
-                if (! is_string($sheet)) {
+            // Deleted/renamed sheets leave gaps; shared-string IDs are not cell values.
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = $zip->getNameIndex($i);
+                if (! preg_match('~^xl/worksheets/[^/]+\.xml$~', (string) $name)) {
                     continue;
                 }
-                $sheet = str_replace(['</c>', '</row>'], ["\t", "\n"], $sheet);
-                $parts[] = strip_tags($sheet);
+                $parts[] = '[Worksheet '.$name.'; formulas use saved values, not recalculated]';
+                $sheet = $this->xml((string) $zip->getFromIndex($i));
+                foreach ($sheet->xpath('//*[local-name()="sheetData"]/*[local-name()="row"]') ?: [] as $row) {
+                    $cells = [];
+                    foreach ($row->xpath('./*[local-name()="c"]') ?: [] as $cell) {
+                        $value = (string) (($cell->xpath('./*[local-name()="v"]') ?: [])[0] ?? '');
+                        $type = (string) $cell['t'];
+                        if ($type === 's') {
+                            if (! ctype_digit($value) || ! array_key_exists((int) $value, $strings)) {
+                                throw new \RuntimeException('[INVALID_WORKBOOK] Excel 문자열 참조가 손상되었습니다. Excel에서 다시 저장해 주세요.');
+                            }
+                            $value = $strings[(int) $value];
+                        } elseif ($type === 'inlineStr') {
+                            $value = implode('', array_map(static fn ($t) => (string) $t, $cell->xpath('.//*[local-name()="t"]') ?: []));
+                        }
+                        $formula = (string) (($cell->xpath('./*[local-name()="f"]') ?: [])[0] ?? '');
+                        if ($formula !== '' && $value === '') {
+                            $value = '[formula without saved result: '.$formula.']';
+                        }
+                        if ($value !== '') {
+                            $cells[] = (string) $cell['r'].'='.$value;
+                        }
+                    }
+                    if ($cells !== []) {
+                        $parts[] = implode("\t", $cells);
+                        $populatedRows++;
+                    }
+                }
             }
 
-            return implode("\n", $parts);
+            return $populatedRows > 0 ? implode("\n", $parts) : '';
         });
     }
 
@@ -119,6 +153,18 @@ class DocumentTextExtractor
             }
 
             try {
+                // Check expanded XML sizes before ZIP extraction/DOM allocation.
+                $total = 0;
+                for ($i = 0; $i < $zip->numFiles; $i++) {
+                    $entry = $zip->statIndex($i);
+                    if (str_ends_with(strtolower((string) ($entry['name'] ?? '')), '.xml')) {
+                        $size = (int) ($entry['size'] ?? 0);
+                        $total += $size;
+                        if ($size > 8 * 1048576 || $total > 32 * 1048576) {
+                            throw new \RuntimeException('[EXTRACTION_LIMIT] Office 압축 해제 본문이 안전 한도를 넘습니다. 시트 또는 문서를 나눠 주세요.');
+                        }
+                    }
+                }
                 $result = $callback($zip);
             } finally {
                 $zip->close();
@@ -127,6 +173,25 @@ class DocumentTextExtractor
             return is_string($result) ? $result : null;
         } finally {
             @unlink($tempPath);
+        }
+    }
+
+    private function xml(string $xml): \SimpleXMLElement
+    {
+        if (stripos($xml, '<!DOCTYPE') !== false || stripos($xml, '<!ENTITY') !== false) {
+            throw new \RuntimeException('[INVALID_WORKBOOK] 외부 엔터티를 포함한 Excel XML은 분석하지 않습니다.');
+        }
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $parsed = simplexml_load_string($xml, \SimpleXMLElement::class, LIBXML_NONET);
+            if ($parsed === false) {
+                throw new \RuntimeException('[INVALID_WORKBOOK] Excel XML을 읽을 수 없습니다. 파일을 다시 저장해 주세요.');
+            }
+
+            return $parsed;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
         }
     }
 }
