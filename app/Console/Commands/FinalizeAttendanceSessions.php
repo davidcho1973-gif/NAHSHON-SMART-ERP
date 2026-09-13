@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Attendance\AttendanceGeoService;
+use App\Support\SiteSchedule;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -20,6 +21,7 @@ class FinalizeAttendanceSessions extends Command
 {
     protected $signature = 'attendance:finalize-sessions
         {date? : YYYY-MM-DD, 기본=어제}
+        {--timezone= : Only sites in this timezone}
         {--today : 어제 대신 오늘을 마감한다(저녁 마감용)}
         {--grace=0 : 최근 이 시간(분) 안에 현장에 있던 사람은 아직 근무중으로 보고 건너뛴다}';
 
@@ -29,11 +31,11 @@ class FinalizeAttendanceSessions extends Command
     {
         $date = $this->argument('date')
             ? Carbon::parse((string) $this->argument('date'))
-            : ($this->option('today') ? Carbon::today() : Carbon::yesterday());
+            : ($this->option('today') ? Carbon::today($this->option('timezone') ?: config('app.timezone')) : Carbon::yesterday($this->option('timezone') ?: config('app.timezone')));
 
         $grace = max(0, (int) $this->option('grace'));
 
-        $r = $service->finalize($date, $grace);
+        $r = $service->finalize($date, $grace, $this->option('timezone') ? SiteSchedule::sites($this->option('timezone')) : null);
 
         $this->info(sprintf(
             '[%s] 마감 %d건 · 확인필요 %d건 · 근무중이라 건너뜀 %d건',

@@ -5299,7 +5299,7 @@
             '<div class="kpi-card" onclick="window.goToView(\'billing-admin\')" style="cursor:pointer"><div class="kpi-label">미수금 (AR)<i class="ph ph-warning-circle" style="font-size:14px;color:var(--status-warning)"></i></div><div class="kpi-value" style="color:var(--status-warning)">' + fmtUSD(arOutstanding) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + arNote + '</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">개인카드 환급 대기<i class="ph ph-hand-coins" style="font-size:14px;color:var(--status-success)"></i></div><div class="kpi-value" style="color:var(--status-success)">' + fmtUSD(stats.claimable) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">승인됨 · 직원에게 지급할 경비</span></div></div>' +
             '<div class="kpi-card"><div class="kpi-label">누적 지출 금액 (비용)<i class="ph ph-credit-card" style="font-size:14px;color:var(--status-warning)"></i></div><div class="kpi-value" style="color:var(--status-warning)">' + fmtUSD(totalSpend) + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">승인·지급 전체 누적 · 이번 달 ' + fmtUSD(mtdTotal) + (Number(stats.pendingSpend) > 0 ? ' · <span style="color:var(--status-warning)">승인대기 ' + fmtUSD(Number(stats.pendingSpend)) + ' 별도</span>' : '') + '</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">실행 예산 잔액 (원가 기준)<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(contractBalance) + '</div><div class="kpi-meta"><span class="trend-' + (contractBalance >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">총 수주 − 누적 지출' + (Number(stats.pendingSpend) > 0 ? ' · 대기 반영 시 ' + fmtUSD(Number(stats.projectedBalance)) : '') + '</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">계약금액 대비 지출 잔액<i class="ph ph-piggy-bank" style="font-size:14px;color:var(--text-tertiary)"></i></div><div class="kpi-value">' + fmtUSD(contractBalance) + '</div><div class="kpi-meta"><span class="trend-' + (contractBalance >= 0 ? 'up' : 'down') + '"><i class="ph ph-line-segments"></i></span><span style="color:var(--text-secondary)">총 수주 − 누적 지출' + (Number(stats.pendingSpend) > 0 ? ' · 대기 반영 시 ' + fmtUSD(Number(stats.projectedBalance)) : '') + '</span></div></div>' +
             '</div>' +
 
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
@@ -7872,7 +7872,7 @@
               '</div>' +
               '<div style="display:flex;gap:8px">' +
                 '<button class="btn-secondary" onclick="window.shiftPayPeriod(0)"><i class="ph ph-arrow-clockwise"></i> 현재 주기</button>' +
-                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>명세서 (Phase B)</button>' +
+                '<button class="btn-primary" onclick="window.openPayrollDocs(this)"><i class="ph ph-file-pdf"></i>급여 정산 · 명세서</button>' +
               '</div>' +
             '</div></div>';
 
@@ -13398,9 +13398,9 @@
         style="padding:14px 24px;border-top:1px solid var(--border-subtle);display:flex;gap:10px;justify-content:flex-end;background:var(--bg-surface);">
         <select id="personnel-status-select"
           style="padding:7px 12px;border-radius:var(--radius-md);border:1px solid var(--border-strong);background:var(--bg-body);color:var(--text-primary);font-size:13px;">
-          <option value="파견중">🟢 파견중</option>
-          <option value="귀국">🟡 귀국</option>
-          <option value="퇴사">🔴 퇴사</option>
+          <option value="active">🟢 파견중</option>
+          <option value="on_leave">🟡 귀국</option>
+          <option value="terminated">🔴 퇴사</option>
         </select>
         <button class="btn-primary" id="btn-personnel-status-save" onclick="window.savePersonnelStatus()"><i
             class="ph ph-floppy-disk"></i> 상태 저장</button>
@@ -13881,12 +13881,13 @@ window.submitVendorCreate = function() {
       document.getElementById('vendorModalOverlay').style.display = 'flex';
       if (v.email) {
         window.API.getVendorReplies(v.email).then(function(res) {
+          function safeReply(value) { var el = document.createElement('span'); el.textContent = value || ''; return el.innerHTML; }
           if (res && res.success && res.replies && res.replies.length > 0) {
             document.getElementById('vm-replies').innerHTML = res.replies.map(function(r) {
-              return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border-color);"><b style="color:var(--brand-primary);font-size:12px;">' + r.date + '</b><div style="margin:4px 0;">' + r.body + '</div>' + (r.summaryKr ? '<div style="color:#b45309;font-size:12px;">AI: ' + r.summaryKr + '</div>' : '') + '</div>';
+              return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border-color);"><b style="color:var(--brand-primary);font-size:12px;">' + safeReply(r.date) + '</b><div style="margin:4px 0;white-space:pre-wrap;">' + safeReply(r.body) + '</div>' + (r.summaryKr ? '<div style="color:#b45309;font-size:12px;">AI: ' + safeReply(r.summaryKr) + '</div>' : '') + '</div>';
             }).join('');
           } else {
-            document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">답장 없음</div>';
+            document.getElementById('vm-replies').textContent = (res && (res.error || res.notice)) || '저장된 답장 없음';
           }
         }).catch(function() { document.getElementById('vm-replies').innerHTML = '<div style="color:var(--text-secondary);">조회 실패</div>'; });
       } else {

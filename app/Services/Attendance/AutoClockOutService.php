@@ -5,8 +5,10 @@ namespace App\Services\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
-use Illuminate\Support\Carbon;
+use App\Services\Alerts\UnifiedAlertService;
 use App\Support\Org;
+use App\Support\SiteSchedule;
+use Illuminate\Support\Carbon;
 
 /**
  * 간접고용(협력사) 퇴근 자동 마감.
@@ -35,7 +37,7 @@ class AutoClockOutService
     /**
      * @return array{closed: int, pendingDirect: int, date: string}
      */
-    public function run(?Carbon $date = null): array
+    public function run(?Carbon $date = null, ?string $timezone = null): array
     {
         $closed = 0;
         $pendingDirect = 0;
@@ -44,6 +46,9 @@ class AutoClockOutService
         $unclosed = [];
 
         foreach (Site::query()->where('status', 'active')->get() as $site) {
+            if (! SiteSchedule::matches($site, $timezone)) {
+                continue;
+            }
             $tz = $site->timezone ?: config('app.timezone');
             $workDate = ($dateArg ?? Carbon::now($tz))->copy()->timezone($tz)->toDateString();
             $cutoff = Carbon::parse($workDate.' '.str_pad((string) self::cutoffHour(), 2, '0', STR_PAD_LEFT).':00:00', $tz);
@@ -111,7 +116,7 @@ class AutoClockOutService
         $site = Site::query()->find($siteId);
 
         try {
-            app(\App\Services\Alerts\UnifiedAlertService::class)->emit(
+            app(UnifiedAlertService::class)->emit(
                 "attendance-unclosed:{$siteId}:{$workDate}",
                 [
                     'company_id' => $people[0]->company_id,

@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Services\Ops\DailyReportMailer;
 use App\Support\MailReady;
+use App\Support\SiteSchedule;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -26,6 +27,7 @@ class SendDailyReport extends Command
 {
     protected $signature = 'reports:send-daily
                             {kind=closing : plan(아침 작업계획서) 또는 closing(저녁 마감보고서)}
+                            {--timezone= : Only sites in this timezone}
                             {--site= : 특정 현장만(현장 ID). 없으면 수신처가 등록된 모든 현장}
                             {--date= : 특정 날짜(YYYY-MM-DD). 없으면 현장 현지 기준 오늘}
                             {--force : 제출 여부와 상관없이 보낸다}';
@@ -48,6 +50,9 @@ class SendDailyReport extends Command
 
         foreach ($this->targetSites() as $siteId) {
             $site = $siteId ? Site::find($siteId) : null;
+            if (! SiteSchedule::matches($site, $this->option('timezone'))) {
+                continue;
+            }
             $name = $site?->name ?: '전 현장';
 
             // 현장 현지 시각으로 오늘을 정한다.

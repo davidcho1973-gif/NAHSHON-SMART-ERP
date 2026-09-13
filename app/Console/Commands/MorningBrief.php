@@ -5,7 +5,10 @@ namespace App\Console\Commands;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\ProcurementItem;
+use App\Models\Site;
 use App\Models\WbsItem;
+use App\Services\Push\ChatPushNotifier;
+use App\Support\SiteSchedule;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -19,7 +22,7 @@ use Throwable;
  */
 class MorningBrief extends Command
 {
-    protected $signature = 'ops:morning-brief';
+    protected $signature = 'ops:morning-brief {--timezone= : Only sites in this timezone}';
 
     protected $description = '오늘 가장 위험한 3가지를 현장 상황실 방에 게시합니다';
 
@@ -34,6 +37,9 @@ class MorningBrief extends Command
             ->get();
 
         foreach ($rooms as $room) {
+            if (! SiteSchedule::matches($room->site, $this->option('timezone'))) {
+                continue;
+            }
             try {
                 $risks = $this->risksFor((int) $room->site_id);
                 if ($risks === []) {
@@ -57,7 +63,7 @@ class MorningBrief extends Command
      */
     private function risksFor(int $siteId): array
     {
-        $today = now()->toDateString();
+        $today = now(Site::find($siteId)?->timezone ?: config('app.timezone'))->toDateString();
         $risks = [];
 
         // ① 임계경로 작업이 늦고 있다 — 이 지연은 그대로 준공 지연이다(CPM 엔진 검증).
@@ -111,7 +117,7 @@ class MorningBrief extends Command
     /** @param array<int, string> $risks */
     private function post(CommunicationRoom $room, array $risks): void
     {
-        $body = "오늘 가장 위험한 ".count($risks)."가지 — 영향이 큰 순서입니다.\n".implode("\n", $risks);
+        $body = '오늘 가장 위험한 '.count($risks)."가지 — 영향이 큰 순서입니다.\n".implode("\n", $risks);
 
         $message = CommunicationMessage::query()->create([
             'communication_room_id' => $room->id,
@@ -124,11 +130,11 @@ class MorningBrief extends Command
             'body' => mb_substr($body, 0, 2000),
             'status' => 'active',
             'priority' => 'high',
-            'payload' => ['bot' => self::BOT_MARKER, 'date' => now()->toDateString()],
+            'payload' => ['bot' => self::BOT_MARKER, 'date' => now($room->site?->timezone ?: config('app.timezone'))->toDateString()],
         ]);
 
         try {
-            app(\App\Services\Push\ChatPushNotifier::class)->notify($message);
+            app(ChatPushNotifier::class)->notify($message);
         } catch (Throwable $e) {
             report($e);
         }

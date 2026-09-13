@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CommunicationNotification;
 use App\Models\IntegratedDocument;
+use App\Models\Site;
 use App\Models\User;
 use App\Services\DocumentExpiryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,7 +29,7 @@ class DocumentExpiryAlertTest extends TestCase
             'folder_code' => '08', 'title' => $title, 'document_type' => $type,
             'status' => 'confirmed', 'expires_on' => $expiresOn,
             'type_confidence' => 90, 'folder_confidence' => 90,
-            'disk' => 'public', 'path' => 'integrated-documents/' . md5($title) . '.pdf',
+            'disk' => 'public', 'path' => 'integrated-documents/'.md5($title).'.pdf',
         ]);
     }
 
@@ -80,19 +81,23 @@ class DocumentExpiryAlertTest extends TestCase
         $this->assertSame(0, CommunicationNotification::where('title', 'like', '%D-29%')->count());
     }
 
-    public function test_every_manager_is_notified_but_workers_are_not(): void
+    public function test_only_authorized_managers_are_notified(): void
     {
-        $today = Carbon::today();
-        $this->manager('admin');
-        $this->manager('site_manager');
-        $worker = User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']);
-        $this->doc('D-7 면허', $today->copy()->addDays(7)->toDateString());
-
-        $r = $this->service()->dispatchAlerts($today);
-
-        $this->assertSame($this->managerCount(), $r['sent']);
-        // 작업자에게는 가지 않는다(문서 만료는 관리자 업무).
-        $this->assertSame(0, CommunicationNotification::where('user_id', $worker->id)->count());
+        $site = Site::create(['code' => 'EXPIRY-SITE', 'name' => 'Expiry site']);
+        $admin = $this->manager();
+        $manager = $this->manager('site_manager');
+        $manager->update(['access_scope' => 'site', 'allowed_site_id' => $site->id]);
+        $outside = $this->manager('site_manager');
+        $worker = $this->manager('worker');
+        $doc = $this->doc('D-7 COI', Carbon::today()->addDays(7)->toDateString());
+        $doc->update(['site_id' => $site->id]);
+        $this->service()->dispatchAlerts();
+        foreach ([$admin, $manager] as $allowed) {
+            $this->assertDatabaseHas('communication_notifications', ['user_id' => $allowed->id, 'type' => 'document_expiry']);
+        }
+        foreach ([$outside, $worker] as $denied) {
+            $this->assertDatabaseMissing('communication_notifications', ['user_id' => $denied->id, 'type' => 'document_expiry']);
+        }
     }
 
     public function test_same_day_rerun_does_not_duplicate_notifications(): void
