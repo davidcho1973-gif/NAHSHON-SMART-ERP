@@ -28,6 +28,7 @@ await page.goto('https://desk.test/?embed=1');await page.locator('.doc-open').fi
 assert.equal(await page.locator('#stat-total').textContent(),'122');
 assert.equal(await page.locator('#upload-dialog').evaluate(e=>e.open),false);
 await page.getByRole('button',{name:'＋ 문서 올리기',exact:true}).click();assert.equal(await page.locator('#upload-dialog').evaluate(e=>e.open),true);
+await page.evaluate(()=>toast('파일 확인이 필요합니다.',true));assert.ok(await page.locator('#upload-dialog #toast').isVisible(),'upload errors stay visible in the dialog top layer');
 await page.keyboard.press('Escape');assert.equal(await page.locator('#upload-dialog').evaluate(e=>e.open),false);
 await page.locator('.doc-open').first().click();await page.waitForFunction(()=>document.getElementById('detail-title').textContent==='드라이월 3종 설치 계획');
 const listRect=await page.locator('.desk-list').boundingBox(),detailRect=await page.locator('.desk-review').boundingBox();assert.ok(detailRect.x>listRect.x+listRect.width-1,'detail is next to list');
