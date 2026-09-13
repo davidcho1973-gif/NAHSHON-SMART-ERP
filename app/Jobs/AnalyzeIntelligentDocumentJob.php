@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\IntelligentDocument;
 use App\Services\Alerts\UnifiedAlertService;
+use App\Services\Documents\DocumentAnalysisFailure;
 use App\Services\Documents\DocumentIntelligenceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -159,6 +160,9 @@ class AnalyzeIntelligentDocumentJob implements ShouldQueue
         }
 
         $message = mb_strtolower($e->getMessage());
+        if ($safe = DocumentAnalysisFailure::preflightMessage($e)) {
+            return $safe;
+        }
         if ($e instanceof TimeoutExceededException || str_contains($message, 'timed out') || str_contains($message, 'timeout')) {
             return '[ANALYSIS_TIMEOUT] 문서 분석 시간이 제한을 초과했습니다. 파일 상태를 확인한 뒤 AI 재분석을 실행해 주세요.';
         }

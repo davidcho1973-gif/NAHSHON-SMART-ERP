@@ -74,7 +74,7 @@ class DocumentCrossCheck
      *
      * @param  array<string, mixed>  $data  1차 분석 결과
      * @param  array<string, mixed>  $analysis  분석 메타(engine/model)
-     * @return array<string, mixed>|null  소집하지 않았으면 null
+     * @return array<string, mixed>|null 소집하지 않았으면 null
      */
     public function check(IntelligentDocument $document, array $data, string $bytes, array $analysis = []): ?array
     {
@@ -92,12 +92,13 @@ class DocumentCrossCheck
         ];
 
         try {
-            $read = $this->reread($document, $bytes);
+            $read = $this->reread($document, $bytes, $analysis['extracted_text'] ?? null);
         } catch (Throwable $e) {
             report($e);
 
             // 검증이 죽어도 문서 분석은 살아 있어야 한다. "검증 못 했다" 로 남긴다.
-            return $base + ['status' => 'failed', 'fields' => [], 'disagreements' => [], 'note' => $e->getMessage()];
+            return $base + ['status' => 'failed', 'fields' => [], 'disagreements' => [],
+                'note' => DocumentAnalysisFailure::preflightMessage($e) ?: '교차검증을 완료하지 못했습니다. 서버 로그 확인이 필요합니다.'];
         }
 
         if ($read === null) {
@@ -112,7 +113,7 @@ class DocumentCrossCheck
     /**
      * @return array<string, mixed>|null
      */
-    private function reread(IntelligentDocument $document, string $bytes): ?array
+    private function reread(IntelligentDocument $document, string $bytes, ?string $currentText = null): ?array
     {
         $content = [];
         $maxBytes = (int) config('document-intelligence.native_max_bytes', 15728640);
@@ -126,7 +127,8 @@ class DocumentCrossCheck
                 'source' => ['type' => 'base64', 'media_type' => $this->nativeMime($mime), 'data' => base64_encode($bytes)],
             ];
         } else {
-            $text = trim((string) $document->extracted_text);
+            // Analysis has not been saved yet: use this run's source, not an older revision.
+            $text = trim($currentText ?? (string) $document->extracted_text);
             if ($text === '') {
                 return null;
             }

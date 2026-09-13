@@ -16,6 +16,37 @@ class DocumentIntelligenceAnalyzer
     /** @return array{data: array<string, mixed>, extracted_text: string|null, engine: string, model: string} */
     public function analyze(IntelligentDocument $document, string $bytes): array
     {
+        $prepared = $this->prepare($document, $bytes);
+        $parts = $prepared['parts'];
+        $prompt = $prepared['prompt'];
+        $extractedText = $prepared['extracted_text'];
+        try {
+            $result = $this->engine->analyze($parts, $prompt, $this->schema());
+        } catch (\Throwable $e) {
+            if ($parts === [] || blank($extractedText) || ! DocumentAnalysisFailure::retryWithText($e)) {
+                throw $e;
+            }
+            $result = $this->engine->analyze([], $prompt, $this->schema());
+            $parts = [];
+        }
+        if (! is_array($result['data'] ?? null) || $result['data'] === []) {
+            throw new \RuntimeException('[EMPTY_ANALYSIS] AI returned an empty or invalid document analysis.');
+        }
+        $result['data']['source_review_reason'] = $parts === [] && $prepared['text_truncated']
+            ? '본문이 AI 입력 한도를 넘어 일부만 분석되었습니다. 문서를 분할하여 전체 내용을 검토해 주세요.'
+            : null;
+
+        return [
+            'data' => $result['data'],
+            'extracted_text' => $extractedText,
+            'engine' => $this->engine->name(),
+            'model' => (string) ($result['model'] ?? ''),
+        ];
+    }
+
+    /** Same preparation for real analysis and bulk preflight; makes no AI request. */
+    public function prepare(IntelligentDocument $document, string $bytes): array
+    {
         $extractedText = $this->textExtractor->extract($bytes, $document->extension, $document->mime_type);
         $parts = [];
 
@@ -32,7 +63,7 @@ class DocumentIntelligenceAnalyzer
         if ($parts === [] && blank($extractedText)) {
             $mb = (int) round($this->engine->maxAttachmentBytes() / 1048576);
 
-            throw new \RuntimeException("이 파일은 서버에서 본문을 추출할 수 없고, AI 직접 판독 한도({$mb}MB)도 넘었습니다. PDF로 변환하거나 {$mb}MB 이하로 나눠 다시 분석해 주세요.");
+            throw new \RuntimeException("이 파일은 서버에서 본문을 추출할 수 없으며 현재 엔진의 직접 판독 경로도 사용할 수 없습니다. 형식·원본 상태를 확인해 주세요. 직접 첨부 한도는 {$mb}MB입니다.");
         }
 
         $context = [
@@ -46,25 +77,16 @@ class DocumentIntelligenceAnalyzer
 
         $prompt = $this->prompt($context, $extractedText);
 
-        try {
-            $result = $this->engine->analyze($parts, $prompt, $this->schema());
-        } catch (\Throwable $e) {
-            // 원본 첨부가 실패 원인일 수 있다 — 10MB대 PDF 는 base64 로 1.3배로 불어
-            // 요청 한도·타임아웃에 걸리기 쉽다. 서버가 추출한 본문이 있으면 첨부 없이
-            // 텍스트만으로 한 번 더 시도한다. (역설적으로 15MB 초과 파일은 처음부터
-            // 텍스트 경로라 성공하고, 12MB 파일이 실패하던 원인이 이것이다.)
-            if ($parts === [] || blank($extractedText)) {
-                throw $e;
-            }
-            $parts = [];
-            $result = $this->engine->analyze([], $prompt, $this->schema());
+        if (! mb_check_encoding($extractedText ?? '', 'UTF-8') || ! mb_check_encoding($prompt, 'UTF-8')) {
+            throw new \RuntimeException('[INPUT_ENCODING] Invalid UTF-8 after document preparation.');
         }
+        json_encode(['prompt' => $prompt, 'schema' => $this->schema()], JSON_THROW_ON_ERROR);
 
         return [
-            'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+            'parts' => $parts,
+            'prompt' => $prompt,
             'extracted_text' => $extractedText,
-            'engine' => $this->engine->name(),
-            'model' => (string) ($result['model'] ?? ''),
+            'text_truncated' => mb_strwidth($extractedText ?? '', 'UTF-8') > 120000,
         ];
     }
 
@@ -125,7 +147,7 @@ severity는 critical/high/warning/normal 중 하나다. confidence는 0~100 숫�
 source_excerpt 는 <b>원문 그대로</b> 두고 번역하지 않는다 — 근거 인용이라 손대면 안 된다.
 문서가 이미 한국어면 굳이 영문을 만들지 말고 한국어만 쓴다.
 PROMPT
-            ."\n\n시스템 컨텍스트:\n".json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+            ."\n\n시스템 컨텍스트:\n".json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)
             ."\n\n문서 추출 본문:\n".$sourceText;
     }
 

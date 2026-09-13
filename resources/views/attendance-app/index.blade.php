@@ -353,6 +353,7 @@
             .langs { margin-left: auto; }
         }
     </style>
+<script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}"></script>
 </head>
 <body class="field-app field-home">
 <div class="app field-shell">
@@ -1340,15 +1341,13 @@
         if (act === 'install') return window.AppInstall.show();
         if (act === 'retry') return load();
         // 서버로 이동하지 않는다 — 끊긴 것이 인터넷이라 이동하면 아무 데도 못 간다.
-        if (act === 'goqr') { state.tab = 'me'; render(); window.scrollTo({ top: 0 }); }
+        if (act === 'goqr') { appNavigation.navigate({tab:'me'}); }
     });
 
     document.getElementById('tabs').addEventListener('click', function (ev) {
         var b = ev.target.closest('[data-tab]');
         if (!b) return;
-        state.tab = b.dataset.tab;
-        render();
-        window.scrollTo({ top: 0 });
+        appNavigation.navigate({tab:b.dataset.tab});
     });
 
     document.getElementById('langs').addEventListener('click', function (ev) {
@@ -1358,6 +1357,14 @@
         render();
     });
 
+    var appNavigation=window.ERPHistory.create({
+        read:function(){var tab=new URLSearchParams(location.search).get('tab');return {tab:['home','work','pay','me'].includes(tab)?tab:'home'};},
+        url:function(route){var url=new URL(location.href);url.searchParams.set('tab',route.tab);return url.pathname+url.search;},
+        capture:function(){return {y:window.scrollY};},
+        render:function(route,snapshot){state.tab=['home','work','pay','me'].includes(route.tab)?route.tab:'home';render();window.scrollTo(0,snapshot?snapshot.y:0);}
+    });
+    appNavigation.start();
+    window.addEventListener('scroll',function(){appNavigation.save();},{passive:true});
     window.addEventListener('online', render);
     window.addEventListener('offline', render);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
