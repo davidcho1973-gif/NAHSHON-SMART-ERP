@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\OperationalAccess;
+use App\Support\SensitiveDocuments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
@@ -11,6 +13,11 @@ use Illuminate\Support\Facades\Storage;
  */
 class IntegratedDocument extends Model
 {
+    public function scopeVisibleToActor($query)
+    {
+        return SensitiveDocuments::scope(OperationalAccess::scope($query));
+    }
+
     /**
      * 9개 통합 문서 폴더(현장 문서 분류 체계). code => 표시명.
      */

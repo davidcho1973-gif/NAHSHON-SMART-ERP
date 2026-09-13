@@ -32,6 +32,25 @@ use Illuminate\Support\Facades\Schema;
  */
 class EmployeeAdminService
 {
+    /** Update only status; the legacy card must not overwrite the full employee form. */
+    public function setStatus(string $uid, string $status): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '직원 관리 권한이 없습니다.'];
+        }
+        $row = Employee::where('employee_number', $uid)->orWhere('badge_number', $uid)->first();
+        if (! $row || ! $this->inScope($row)) {
+            return ['success' => false, 'error' => '직원을 찾을 수 없거나 접근 권한이 없습니다.'];
+        }
+        $status = ['파견중' => 'active', '귀국' => 'on_leave', '퇴사' => 'terminated'][$status] ?? $status;
+        if (! array_key_exists($status, self::STATUSES)) {
+            return ['success' => false, 'error' => '올바른 재직 상태를 선택하세요.'];
+        }
+        $row->update(['employment_status' => $status]);
+
+        return ['success' => true, 'messages' => ['재직 상태를 저장했습니다.', '차량·숙소 반납은 실제 반납 확인 후 별도로 처리하세요.']];
+    }
+
     public const VIEW_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager', 'payroll', 'safety_manager'];
 
     public const MANAGE_ROLES = ['super_admin', 'admin', 'hr_manager'];

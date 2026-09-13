@@ -9,9 +9,9 @@ use App\Models\IntegratedDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
-use App\Support\SensitiveDocuments;
 use App\Models\Site;
 use App\Support\ReceiptFilePayload;
+use App\Support\SensitiveDocuments;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -155,7 +155,7 @@ class IntegratedDocumentService
     public function dashboard(?int $siteId): array
     {
         $base = SensitiveDocuments::scope(
-            IntegratedDocument::query()->when($siteId, fn ($q) => $q->where('site_id', $siteId))
+            IntegratedDocument::query()->visibleToActor()->when($siteId, fn ($q) => $q->where('site_id', $siteId))
         );
 
         $total = (clone $base)->count();
@@ -208,7 +208,7 @@ class IntegratedDocumentService
      */
     public function folders(?int $siteId): array
     {
-        $counts = IntegratedDocument::query()
+        $counts = IntegratedDocument::query()->visibleToActor()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->selectRaw('folder_code, count(*) as c')->groupBy('folder_code')->pluck('c', 'folder_code');
 
@@ -230,7 +230,7 @@ class IntegratedDocumentService
      */
     public function browse(?int $siteId, string $folderCode): array
     {
-        $docs = SensitiveDocuments::scope(IntegratedDocument::query())
+        $docs = IntegratedDocument::query()->visibleToActor()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->where('folder_code', $folderCode)
             ->latest()->limit(200)->get()
@@ -250,7 +250,7 @@ class IntegratedDocumentService
      */
     public function detail(int $id): ?array
     {
-        $d = IntegratedDocument::query()
+        $d = IntegratedDocument::query()->visibleToActor()
             ->with(['site', 'uploadedBy', 'duplicateOf', 'procurementItem', 'employee', 'company'])->find($id);
         if (! $d) {
             return null;
@@ -316,7 +316,7 @@ class IntegratedDocumentService
         // 금전·개인정보 문서는 권한 있는 사람에게만. 예전에는 이 가리개가 없어서
         // 열람 전용 원청 계정이 «주급» 으로 검색하면 급여 명세 본문이 스니펫으로 나왔다.
         $builder = SensitiveDocuments::scope(
-            IntegratedDocument::query()->when($siteId, fn ($b) => $b->where('site_id', $siteId))
+            IntegratedDocument::query()->visibleToActor()->when($siteId, fn ($b) => $b->where('site_id', $siteId))
         );
 
         if ($q !== '') {
@@ -539,7 +539,7 @@ class IntegratedDocumentService
         $spec = $map[$type];
         $label = $spec['label'];
 
-        $docs = IntegratedDocument::query()
+        $docs = IntegratedDocument::query()->visibleToActor()
             ->where($spec['column'], $spec['cast'] === 'int' ? (int) $id : (string) $id)
             ->latest()->limit(100)->get()->map(fn (IntegratedDocument $d) => $this->summaryRow($d))->all();
 

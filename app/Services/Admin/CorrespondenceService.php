@@ -6,8 +6,8 @@ use App\Models\MailMessage;
 use App\Models\MailThread;
 use App\Models\Site;
 use App\Support\AccessPolicy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 /**
  * 서신 원장 — 우리가 무엇을 언제 누구에게 보냈는가.
@@ -22,6 +22,25 @@ use Illuminate\Support\Str;
  */
 class CorrespondenceService
 {
+    public function vendorReplies(string $email): array
+    {
+        if (! $this->canView()) {
+            return ['success' => false, 'error' => '서신 원장을 볼 권한이 없습니다.'];
+        }
+        validator(['email' => $email], ['email' => 'required|email|max:254'])->validate();
+        $threads = MailThread::query()->where('counterparty_email', $email);
+        $this->applyScope($threads);
+        $messages = MailMessage::query()
+            ->whereIn('mail_thread_id', $threads->select('id'))
+            ->where('direction', 'incoming')->where('status', 'received')
+            ->latest('occurred_at')->limit(20)->get();
+
+        return ['success' => true, 'replies' => $messages->map(fn ($m) => [
+            'date' => $m->occurred_at?->format('Y-m-d H:i'),
+            'body' => $m->body_text ?: strip_tags((string) $m->body_html),
+        ])->all(), 'notice' => 'ERP에 저장된 수신 메일만 표시합니다. Outlook·Gmail 자동 수집은 별도 연결이 필요합니다.'];
+    }
+
     /** 현장 일을 보는 사람이면 자기 현장 서신을 본다. 외부 열람 계정은 제외된다. */
     public const VIEW_ROLES = AccessPolicy::SITE_ROLES;
 
@@ -35,7 +54,7 @@ class CorrespondenceService
      *
      * 문서함은 같은 상황을 visibleTo() 로 막고 있다. 원장만 그 규약을 건너뛰고 있었다.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<MailThread>  $q
+     * @param  Builder<MailThread>  $q
      */
     private function applyScope($q): void
     {

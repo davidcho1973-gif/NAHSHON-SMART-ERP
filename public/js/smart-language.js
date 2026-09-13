@@ -17,6 +17,8 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '계약금액 대비 지출 잔액': 'Contract amount less recorded expenses',
+    '급여 정산 · 명세서': 'Payroll settlement and statements',
     '일일 보고서': 'Daily reports',
     '저장된 보고서 열기': 'Open saved report',
     '문서함 · 일일 보고서에 저장되었습니다.': 'Saved to Documents · Daily reports.',
@@ -317,6 +319,8 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    '계약금액 대비 지출 잔액': 'Importe contractual menos gastos registrados',
+    '급여 정산 · 명세서': 'Liquidación y recibos de nómina',
     '일일 보고서': 'Informes diarios',
     '저장된 보고서 열기': 'Abrir informe guardado',
     '문서함 · 일일 보고서에 저장되었습니다.': 'Guardado en Documentos · Informes diarios.',

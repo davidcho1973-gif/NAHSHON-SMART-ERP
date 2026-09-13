@@ -4,9 +4,15 @@ namespace App\Services\Communication;
 
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
+use App\Models\OpsIntakeItem;
 use App\Models\User;
+use App\Models\WbsItem;
+use App\Services\Push\ChatPushNotifier;
+use App\Services\Wbs\CpmEngine;
+use App\Support\AiInformationAccess;
 use App\Support\AnthropicChat;
 use App\Support\Org;
+use Illuminate\Support\Carbon;
 use Throwable;
 
 /**
@@ -45,8 +51,7 @@ class ChatAssistant
     public function __construct(
         private readonly AnthropicChat $claude,
         private readonly ChatFactFinder $facts,
-    ) {
-    }
+    ) {}
 
     /** 이 배포에 AI 도우미가 살아 있는가(열쇠가 있는가). */
     public function available(): bool
@@ -116,12 +121,19 @@ class ChatAssistant
 
         $question = $this->questionOf((string) $message->body);
 
+        // Room membership is not financial clearance. Never publish a privileged
+        // answer to a shared stream (including its push notifications).
+        if (AiInformationAccess::financial($question)) {
+            return $this->reply($message, '금전·급여 관련 질문은 개인 물어보기 화면에서 확인해 주세요: /attendance-app/ask');
+        }
+
         if ($question === '') {
             return $this->reply($message, '무엇을 도와드릴까요? '.self::HANDLE.' 뒤에 질문을 적어 주세요.');
         }
 
         try {
             $gathered = $this->facts->gather($question, $room, $asker);
+            $gathered['facts'] = AiInformationAccess::technicalFacts($gathered['facts']);
 
             // What-if — "A작업 3일 밀리면 뭐가 밀려?" 는 CPM 엔진이 계산한 사실로 답한다.
             // 상용 제품들은 조회까지만 한다 — 우리는 반영 제안까지 만들어 [반영] 한 번이면 된다.
@@ -138,6 +150,10 @@ class ChatAssistant
             report($e);
 
             return $this->reply($message, '지금은 답을 만들지 못했습니다. 잠시 뒤에 다시 불러 주세요.');
+        }
+
+        if (AiInformationAccess::financial((string) $text)) {
+            $text = '금전 정보가 포함된 답변은 개인 물어보기 화면에서 확인해 주세요: /attendance-app/ask';
         }
 
         return blank($text) ? null : $this->reply($message, $text);
@@ -169,23 +185,23 @@ class ChatAssistant
             return null;
         }
 
-        $codes = \App\Models\WbsItem::query()
+        $codes = WbsItem::query()
             ->where('site_id', $room->site_id)
             ->whereNotNull('project_code')
             ->distinct()->pluck('project_code');
 
         foreach ($codes as $code) {
-            $sim = app(\App\Services\Wbs\CpmEngine::class)->simulate((string) $code, $target, $days);
+            $sim = app(CpmEngine::class)->simulate((string) $code, $target, $days);
             if (! ($sim['success'] ?? false)) {
                 continue;
             }
 
             // 반영 제안 — [반영] 한 번으로 실제 공정표가 갱신되게. 결과는 방으로 돌아온다.
             try {
-                $newEnd = \Illuminate\Support\Carbon::parse((string) \App\Models\WbsItem::query()
+                $newEnd = Carbon::parse((string) WbsItem::query()
                     ->where('wbs_code', $sim['wbsCode'])->value('planned_end'))
                     ->addDays($days)->toDateString();
-                \App\Models\OpsIntakeItem::create([
+                OpsIntakeItem::create([
                     'site_id' => $room->site_id,
                     'source' => 'chat',
                     'communication_message_id' => $message->id,
@@ -287,7 +303,7 @@ class ChatAssistant
             ->get()
             ->sortBy('id');
 
-        return $rows->map(function (CommunicationMessage $m): string {
+        return $rows->reject(fn (CommunicationMessage $m) => AiInformationAccess::financial($m->visibleBody()))->map(function (CommunicationMessage $m): string {
             $who = $m->senderEmployee?->name
                 ?? $m->senderUser?->name
                 ?? ($m->kind === CommunicationMessage::KIND_SYSTEM ? 'AI' : '시스템');
@@ -318,7 +334,7 @@ class ChatAssistant
 
         // 물어본 사람은 답이 온 것을 알아야 한다 — 화면을 닫고 있어도.
         try {
-            app(\App\Services\Push\ChatPushNotifier::class)->notify($reply);
+            app(ChatPushNotifier::class)->notify($reply);
         } catch (Throwable $e) {
             report($e);
         }

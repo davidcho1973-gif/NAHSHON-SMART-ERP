@@ -5,9 +5,11 @@ namespace App\Services\Ops;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationNotification;
 use App\Models\CommunicationRoom;
+use App\Models\CommunicationRoomMember;
 use App\Models\OpsIntakeItem;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\SiteSchedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -64,7 +66,7 @@ class OpsDigestService
      *
      * @return array{sites: int, posted: int, notified: int}
      */
-    public function dispatchDigest(?Carbon $date = null): array
+    public function dispatchDigest(?Carbon $date = null, ?string $timezone = null): array
     {
         $date ??= Carbon::today();
         $sites = Site::query()->where('status', 'active')->get();
@@ -72,6 +74,9 @@ class OpsDigestService
         $posted = 0;
         $notified = 0;
         foreach ($sites as $site) {
+            if (! SiteSchedule::matches($site, $timezone)) {
+                continue;
+            }
             $s = $this->summary($site->id, $date);
             if ($s['actionable'] === 0) {
                 continue; // 그날 건진 게 없으면 조용히 넘어간다.
@@ -99,7 +104,7 @@ class OpsDigestService
             // 방 멤버인 관리자는 방 게시로 이미 받는다 — 종(개인 알림)까지 울리면
             // 같은 요약이 두 번 온다(연계 점검: 다이제스트 방+종 2번).
             $roomMemberUserIds = $room
-                ? \App\Models\CommunicationRoomMember::query()
+                ? CommunicationRoomMember::query()
                     ->where('communication_room_id', $room->id)
                     ->where('status', 'active')
                     ->whereNotNull('user_id')
