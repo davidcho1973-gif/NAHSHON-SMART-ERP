@@ -47,6 +47,7 @@ use App\Models\User;
 use App\Support\AccessPolicy;
 use App\Support\MailReady;
 use App\Support\Org;
+use App\Support\QueueHealth;
 use App\Support\UploadLimits;
 use Aws\Ses\SesClient;
 use Illuminate\Http\Request;
@@ -598,6 +599,15 @@ Route::get('/build-version', function (Request $request) {
                 'durable' => ! $volatile($docs) && ! $volatile($filed) && ! $volatile($photos),
             ];
         })(),
+        // 큐 일꾼이 돌고 있는가.
+        //
+        // 문서 AI 분석은 뒤에서 도는 일꾼이 처리한다. 그 일꾼은 코드가 아니라 배포
+        // 환경의 프로세스라서, 안 만들면 아무 일도 안 일어난다 — 그런데 화면은 멀쩡하다.
+        // 문서는 올라가고 「읽는 중」이라고 적힌 채 영원히 멈춘다.
+        //
+        // 2026-09-06 나손에서 85건이 그렇게 쌓여 있었는데, 스케줄러·저장소·업로드가
+        // 전부 초록이라 아무도 몰랐다. 그 자리에 숫자를 세워 둔다.
+        'queue' => QueueHealth::snapshot(),
         // 파일을 실제로 몇 MB 까지 받는가.
         //
         // 한도는 코드가 아니라 PHP 설정에 있고, 그 설정은 public/.user.ini 에 적혀 있다.

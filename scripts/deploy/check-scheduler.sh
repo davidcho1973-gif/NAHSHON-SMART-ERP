@@ -28,6 +28,26 @@ fi
 
 field() { printf '%s' "$body" | sed -n "s/.*\"$1\" *: *\"\\([^\"]*\\)\".*/\\1/p"; }
 
+# 이름만으로 찾으면 JSON 앞쪽의 같은 이름을 집는다 — "pending" 은 마이그레이션 블록에도,
+# "message" 는 네 블록에 있다. 중첩 경로를 지정해 그 자리의 값만 읽는다.
+json() {
+  printf '%s' "$body" | python3 -c '
+import json, sys
+try:
+    node = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for key in sys.argv[1].split("."):
+    node = node.get(key) if isinstance(node, dict) else None
+    if node is None:
+        break
+if isinstance(node, bool):
+    print("true" if node else "false")
+elif node is not None:
+    print(node)
+' "$1" 2>/dev/null
+}
+
 running=$(printf '%s' "$body" | sed -n 's/.*"running" *: *\([a-z]*\).*/\1/p')
 store=$(field store)
 wakes=$(printf '%s' "$body" | sed -n 's/.*"wakes_database_every_minute" *: *\([a-z]*\).*/\1/p')
@@ -109,4 +129,56 @@ if [ "$userini" = "false" ]; then
   } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 fi
 
-echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?} upload_per_file_mb=${perfile:-?} post_max_mb=${postmax:-?} user_ini=${userini:-?}"
+# 큐 일꾼이 돌고 있는가.
+#
+# 문서 AI 분석은 뒤에서 도는 일꾼이 처리하는데, 그 일꾼은 코드가 아니라 배포 환경의
+# 프로세스다. 안 만들면 문서가 「읽는 중」에서 영원히 멈추는데 화면은 멀쩡하다 —
+# 2026-09-06 나손에서 85건이 그렇게 쌓여 있었고 아무도 몰랐다.
+q_working=$(json queue.working)
+q_pending=$(json queue.pending)
+q_oldest=$(json queue.oldest_pending_minutes)
+q_failed=$(json queue.failed)
+
+if [ "$q_working" = "false" ]; then
+  echo "::warning title=큐 일꾼이 멈춤::${ENV_LABEL} — ${q_pending:-?}건이 밀려 있고 가장 오래된 것이 ${q_oldest:-?}분째 기다립니다. 큐 일꾼(queue:work)이 돌고 있지 않아 문서 AI 분석이 전부 멈춰 있습니다."
+  {
+    echo
+    echo "**큐 일꾼이 돌고 있지 않습니다** — 밀린 작업 \`${q_pending:-?}건\`, 가장 오래된 것 \`${q_oldest:-?}분\`째"
+    echo
+    echo "문서를 올려도 AI 분석이 돌지 않고 「읽는 중」에서 멈춥니다. 「물어보기」도 답하지 못합니다."
+    echo "Laravel Cloud 에서 백그라운드 프로세스를 만들고 Scale to Zero 를 꺼 주세요."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+fi
+
+if [ -n "${q_failed:-}" ] && [ "$q_failed" -gt 0 ] 2>/dev/null; then
+  echo "::warning title=실패한 작업 있음::${ENV_LABEL} — 큐에서 ${q_failed}건이 실패로 빠져 있습니다. 그 문서들은 다시 돌리지 않으면 영영 분석되지 않습니다."
+fi
+
+# 메일이 진짜로 나가는 상태인가. 진단은 이미 /build-version 에 있었는데 배포 로그에
+# 찍히지 않아, 「보고서 메일이 왜 안 오지」를 아무도 배포 화면에서 볼 수 없었다.
+# 라라벨 기본 메일러는 log 라서 설정이 없어도 발송이 예외 없이 «성공» 한다 —
+# 화면에는 "발송했습니다" 가 뜨고 로그 파일에만 쌓인다.
+mail_ready=$(json mail.ready)
+mail_scheme_ok=$(json mail.scheme_ok)
+mailer=$(json mail.mailer)
+mail_scheme=$(json mail.scheme)
+mail_recipients=$(json mail.daily_report_recipients)
+
+if [ "$mail_ready" = "false" ]; then
+  if [ "$mail_scheme_ok" = "false" ]; then
+    echo "::warning title=메일 설정 오류::${ENV_LABEL} — MAIL_SCHEME 값 «${mail_scheme:-?}» 은 쓸 수 없습니다. 다른 설정이 다 맞아도 한 통도 안 나갑니다(587 포트면 비우고, 465 포트면 smtps)."
+  else
+    echo "::warning title=메일 준비 안 됨::${ENV_LABEL} — 메일러 «${mailer:-?}» 로는 지금 발송되지 않습니다. 보고서가 조용히 로그에만 쌓입니다."
+  fi
+  {
+    echo
+    echo "**메일이 나가지 않는 상태입니다** — 메일러 \`${mailer:-?}\` · MAIL_SCHEME \`${mail_scheme:-?}\`"
+    echo
+    echo "라라벨 기본 메일러는 \`log\` 라서 설정이 없어도 발송이 «성공» 합니다."
+    echo "화면에는 「발송했습니다」가 뜨고 로그 파일에만 쌓입니다 — 받는 사람은 영원히 못 받습니다."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+elif [ "${mail_recipients:-0}" = "0" ]; then
+  echo "::warning title=받는 사람이 없음::${ENV_LABEL} — 메일 설정은 정상인데 일일보고 수신자가 0명입니다. 발송은 성공하고 아무 데도 안 갑니다."
+fi
+
+echo "running=${running:-?} minutes_ago=${minutes:-?} last_beat_at=${last:-?} cache_store=${store:-?} app_url=${appurl:-?} domain_ok=${matches:-?} storage_durable=${durable:-?} document_disk=${dochub:-?} upload_per_file_mb=${perfile:-?} post_max_mb=${postmax:-?} user_ini=${userini:-?} queue_working=${q_working:-?} queue_pending=${q_pending:-?} queue_oldest_min=${q_oldest:-?} queue_failed=${q_failed:-?} mail_ready=${mail_ready:-?} mail_recipients=${mail_recipients:-?}"
