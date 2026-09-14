@@ -7,6 +7,14 @@
         'ko' => [
             'html' => 'ko',
             'title' => $org.' 입사지원서',
+            'quick_title' => $org.' 간편 등록',
+            'quick_intro' => '현장에서 바로 등록합니다. 네 가지만 적으면 끝입니다 — 이름 · 전화번호 · 직책 · 동의 서명.',
+            'quick_later' => '이메일 · 주소 · 비상 연락처 · 신분증 · 자격증 · 경력은 <b>나중에</b> 사무실에서 받습니다. 지금은 안 하셔도 됩니다.',
+            'quick_submit' => '등록하기',
+            'quick_basic' => '내 정보',
+            'quick_application' => '직책',
+            'quick_consent' => '개인정보 동의 및 서명',
+            'quick_success' => '등록되었습니다. 담당자가 확인한 뒤 앱 링크를 보내 드립니다.',
             'access' => '접속 방법: Google 이메일 링크로 접속 또는 QR 코드 스캔 후 접속',
             'success' => '입사지원서가 제출되었습니다. 지원자 코드가 생성되었고 HR 담당자가 검토 후 안내합니다.',
             'applicant_code' => '지원자 코드',
@@ -64,6 +72,14 @@
         'en' => [
             'html' => 'en',
             'title' => $org.' Employment Application',
+            'quick_title' => $org.' Quick Registration',
+            'quick_intro' => 'Register right here at the site. Four things and you are done — name, phone, trade, and your signature.',
+            'quick_later' => 'Email, address, emergency contact, ID, certificates and work history are collected <b>later</b> by the office. You do not need them now.',
+            'quick_submit' => 'Register',
+            'quick_basic' => 'About you',
+            'quick_application' => 'Your trade',
+            'quick_consent' => 'Consent and signature',
+            'quick_success' => 'You are registered. Someone will check it and send you the app link.',
             'access' => 'Access by Google email link or QR code scan.',
             'success' => 'Application submitted. Your applicant code was created and HR will review it.',
             'applicant_code' => 'Applicant code',
@@ -121,6 +137,14 @@
         'es' => [
             'html' => 'es',
             'title' => 'Solicitud de empleo '.$org,
+            'quick_title' => 'Registro rápido '.$org,
+            'quick_intro' => 'Regístrese aquí mismo en la obra. Cuatro cosas y listo — nombre, teléfono, oficio y su firma.',
+            'quick_later' => 'El correo, la dirección, el contacto de emergencia, la identificación, los certificados y la experiencia los recoge <b>después</b> la oficina. Ahora no hacen falta.',
+            'quick_submit' => 'Registrarse',
+            'quick_basic' => 'Sus datos',
+            'quick_application' => 'Su oficio',
+            'quick_consent' => 'Consentimiento y firma',
+            'quick_success' => 'Ya está registrado. Alguien lo revisará y le enviará el enlace de la app.',
             'access' => 'Acceso por enlace de Google email o escaneo de código QR.',
             'success' => 'Solicitud enviada. Se creó su código de solicitante y HR la revisará.',
             'applicant_code' => 'Código de solicitante',
@@ -188,7 +212,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>{{ $t['title'] }}</title>
+    <title>{{ ($quick ?? false) ? $t['quick_title'] : $t['title'] }}</title>
     <style>
         :root {
             color-scheme: light;
@@ -204,6 +228,8 @@
         h1, h2, p { margin: 0; }
         h1 { font-size: clamp(1.55rem, 6vw, 2.35rem); line-height: 1.08; }
         h2 { font-size: 1.05rem; }
+        .quick-later { margin: 0 0 14px; padding: 12px 14px; background: #eff6ff; border-left: 4px solid #145fff;
+                      border-radius: 6px; color: #1e3a8a; font-size: 14px; line-height: 1.6; }
         .muted { color: #cbd5e1; line-height: 1.5; }
         .language-form { display: flex; align-items: center; gap: 0.75rem; }
         .language-form label { color: #e5e7eb; font-weight: 800; }
@@ -236,8 +262,8 @@
 <body>
     <main>
         <header>
-            <h1>{{ $t['title'] }}</h1>
-            <p class="muted">{{ $t['access'] }}</p>
+            <h1>{{ ($quick ?? false) ? $t['quick_title'] : $t['title'] }}</h1>
+            <p class="muted">{{ ($quick ?? false) ? $t['quick_intro'] : $t['access'] }}</p>
             <form class="language-form" method="GET" action="{{ $languageActionUrl }}">
                 <label for="lang">{{ $t['language'] }}</label>
                 <select id="lang" name="lang" onchange="this.form.submit()">
@@ -250,7 +276,7 @@
 
         <div class="content">
             @if ($submitted)
-                <div class="success">{{ $t['success'] }}</div>
+                <div class="success">{{ ($quick ?? false) ? $t['quick_success'] : $t['success'] }}</div>
             @endif
 
             <section class="summary">
@@ -260,13 +286,19 @@
             </section>
 
             @unless ($submitted)
+            @if ($quick ?? false)
+                {{-- 무엇을 «안 해도 되는지» 를 먼저 말해 준다. 안 그러면 빠진 칸을
+                     찾느라 화면을 훑다가 그 자리에서 포기한다. --}}
+                <p class="quick-later">{!! $t['quick_later'] !!}</p>
+            @endif
+
             <section class="form-card">
                 <form class="application" method="POST" action="{{ $formActionUrl }}" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" name="preferred_language" value="{{ $language }}">
 
                     <fieldset>
-                        <legend>{{ $t['basic'] }}</legend>
+                        <legend>{{ ($quick ?? false) ? $t['quick_basic'] : $t['basic'] }}</legend>
                         <label class="field">{{ $t['last_name'] }} <small>{{ $t['required'] }}</small>
                             <input name="last_name" value="{{ old('last_name', $registration->last_name) }}" required maxlength="120" autocomplete="family-name">
                             @error('last_name') <span class="error">{{ $message }}</span> @enderror
@@ -275,29 +307,42 @@
                             <input name="first_name" value="{{ old('first_name', $registration->first_name) }}" required maxlength="120" autocomplete="given-name">
                             @error('first_name') <span class="error">{{ $message }}</span> @enderror
                         </label>
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['dob'] }}
                             <input name="date_of_birth" type="date" value="{{ old('date_of_birth', optional($registration->date_of_birth)->format('Y-m-d')) }}">
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['nationality'] }}
                             <input name="nationality" value="{{ old('nationality', $registration->nationality) }}" maxlength="80" autocomplete="country-name">
                         </label>
+                        @endunless
                         <label class="field">{{ $t['phone'] }} <small>{{ $t['required'] }}</small>
                             <input name="phone" value="{{ old('phone', $registration->phone) }}" required maxlength="80" autocomplete="tel">
                             @error('phone') <span class="error">{{ $message }}</span> @enderror
                         </label>
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['email'] }} <small>{{ $t['required'] }}</small>
                             <input name="email" type="email" value="{{ old('email', $registration->email) }}" required maxlength="255" autocomplete="email">
                             @error('email') <span class="error">{{ $message }}</span> @enderror
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['address'] }}
                             <input name="address" value="{{ old('address', $registration->address) }}" maxlength="255" autocomplete="street-address">
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['emergency_name'] }} <small>{{ $t['required'] }}</small>
                             <input name="emergency_contact_name" value="{{ old('emergency_contact_name', $registration->emergency_contact_name) }}" required maxlength="255">
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['emergency_phone'] }} <small>{{ $t['required'] }}</small>
                             <input name="emergency_contact_phone" value="{{ old('emergency_contact_phone', $registration->emergency_contact_phone) }}" required maxlength="80">
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <div class="field full">
                             <strong>{{ $t['available_languages'] }}</strong>
                             <div class="choice-group">
@@ -311,10 +356,11 @@
                             <input name="available_language_other" placeholder="{{ $t['other'] }}" value="{{ old('available_language_other') }}" maxlength="120">
                             @error('available_languages') <span class="error">{{ $message }}</span> @enderror
                         </div>
+                        @endunless
                     </fieldset>
 
                     <fieldset>
-                        <legend>{{ $t['application'] }}</legend>
+                        <legend>{{ ($quick ?? false) ? $t['quick_application'] : $t['application'] }}</legend>
                         <div class="field full">
                             <strong>{{ $t['position'] }} <small>{{ $t['required'] }}</small></strong>
                             <div class="choice-group">
@@ -328,15 +374,22 @@
                             <input name="role_other" placeholder="{{ $t['other'] }}" value="{{ old('role_other') }}" maxlength="120">
                             @error('role') <span class="error">{{ $message }}</span> @enderror
                         </div>
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['start_date'] }}
                             <input name="start_date" type="date" value="{{ old('start_date', optional($registration->start_date)->format('Y-m-d')) }}">
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <label class="field">{{ $t['desired_site'] }}
                             <input name="desired_site" value="{{ old('desired_site', $application['desired_site'] ?? '') }}" maxlength="255">
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <label class="field full">{{ $t['previous_experience'] }}
                             <textarea name="previous_site_experience">{{ old('previous_site_experience', $application['previous_site_experience'] ?? '') }}</textarea>
                         </label>
+                        @endunless
+                        @unless ($quick ?? false)
                         <div class="field full">
                             <strong>{{ $t['hoffman_experience'] }} <small>{{ $t['required'] }}</small></strong>
                             <div class="choice-group">
@@ -344,8 +397,10 @@
                                 <label class="choice"><input type="radio" name="hoffman_experience" value="no" @checked(old('hoffman_experience', $application['hoffman_experience'] ?? '') === 'no') required>{{ $t['no'] }}</label>
                             </div>
                         </div>
+                        @endunless
                     </fieldset>
 
+                    @unless ($quick ?? false)
                     <fieldset>
                         <legend>{{ $t['identity'] }}</legend>
                         <p class="full">{{ $t['id_instruction'] }}</p>
@@ -363,7 +418,9 @@
                             @error('identity_back') <span class="error">{{ $message }}</span> @enderror
                         </label>
                     </fieldset>
+                    @endunless
 
+                    @unless ($quick ?? false)
                     <fieldset>
                         <legend>{{ $t['certs'] }}</legend>
                         <p class="full">{{ $t['cert_instruction'] }}</p>
@@ -373,7 +430,9 @@
                             @error('certifications.*') <span class="error">{{ $message }}</span> @enderror
                         </label>
                     </fieldset>
+                    @endunless
 
+                    @unless ($quick ?? false)
                     <fieldset>
                         <legend>{{ $t['history'] }}</legend>
                         @for ($index = 0; $index < 2; $index++)
@@ -396,9 +455,10 @@
                             </div>
                         @endfor
                     </fieldset>
+                    @endunless
 
                     <fieldset>
-                        <legend>{{ $t['consent'] }}</legend>
+                        <legend>{{ ($quick ?? false) ? $t['quick_consent'] : $t['consent'] }}</legend>
                         <div class="consent-box full">
                             <p>{{ $t['consent_text'] }}</p>
                             <small>{{ $t['collected'] }}</small>
@@ -419,7 +479,7 @@
                         </label>
                     </fieldset>
 
-                    <button type="submit">{{ $t['submit'] }}</button>
+                    <button type="submit">{{ ($quick ?? false) ? $t['quick_submit'] : $t['submit'] }}</button>
                 </form>
             </section>
             @endunless

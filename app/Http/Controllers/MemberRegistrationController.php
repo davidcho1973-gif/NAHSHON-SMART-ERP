@@ -62,12 +62,13 @@ class MemberRegistrationController extends Controller
             route('member-registration.site.show', ['site' => $site]),
             route('member-registration.site.store', ['site' => $site]),
             true,
+            true,
         );
     }
 
     public function siteStore(Request $request, Site $site): View
     {
-        $data = $this->validateApplication($request, false);
+        $data = $this->validateApplication($request, false, true);
         $language = $this->resolveLanguage($data['preferred_language']);
         $companyId = $this->siteCompanyId($site);
 
@@ -95,7 +96,7 @@ class MemberRegistrationController extends Controller
             ],
         ]);
 
-        return $this->saveApplication($request, $registration, $data);
+        return $this->saveApplication($request, $registration, $data, true);
     }
 
     public function store(Request $request, string $token): View
@@ -120,20 +121,30 @@ class MemberRegistrationController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validateApplication(Request $request, bool $hasIdentityDocument): array
+    private function validateApplication(Request $request, bool $hasIdentityDocument, bool $quick = false): array
     {
-        return $request->validate([
+        /*
+         * 간편 등록은 <b>이름 · 전화 · 직책 · 동의 서명</b> 네 가지만 받는다.
+         *
+         * 현장 입구에서 장갑 낀 손으로 채우는 화면이다. 여섯 단짜리 입사지원서를
+         * 들이밀면 그 자리에서 포기하고, 등록 안 된 사람이 현장에 들어간다 —
+         * 서류를 다 받으려다 아무것도 못 받는다.
+         *
+         * 나머지는 지우는 것이 아니라 <b>미루는 것</b>이다. 사무실이 나중에 받는다.
+         * 칸도 규칙도 그대로 두고 «지금 필수는 아니다» 로만 바꾼다.
+         */
+        $rules = $request->validate([
             'preferred_language' => ['required', Rule::in(array_keys(MemberRegistration::languageOptions()))],
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:255'],
+            'email' => [$quick ? 'nullable' : 'required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:80'],
             'date_of_birth' => ['nullable', 'date'],
             'nationality' => ['nullable', 'string', 'max:80'],
             'address' => ['nullable', 'string', 'max:255'],
-            'emergency_contact_name' => ['required', 'string', 'max:255'],
-            'emergency_contact_phone' => ['required', 'string', 'max:80'],
-            'available_languages' => ['required', 'array', 'min:1'],
+            'emergency_contact_name' => [$quick ? 'nullable' : 'required', 'string', 'max:255'],
+            'emergency_contact_phone' => [$quick ? 'nullable' : 'required', 'string', 'max:80'],
+            'available_languages' => [$quick ? 'nullable' : 'required', 'array', $quick ? 'min:0' : 'min:1'],
             'available_languages.*' => [Rule::in(array_keys(MemberRegistration::availableLanguageOptions()))],
             'available_language_other' => ['nullable', 'string', 'max:120'],
             'role' => ['required', Rule::in(array_keys(MemberRegistration::roleOptions()))],
@@ -141,10 +152,10 @@ class MemberRegistrationController extends Controller
             'start_date' => ['nullable', 'date'],
             'desired_site' => ['nullable', 'string', 'max:255'],
             'previous_site_experience' => ['nullable', 'string', 'max:2000'],
-            'hoffman_experience' => ['required', Rule::in(['yes', 'no'])],
-            'identity_document_type' => ['required', Rule::in(['driver_license', 'passport', 'government_id'])],
+            'hoffman_experience' => [$quick ? 'nullable' : 'required', Rule::in(['yes', 'no'])],
+            'identity_document_type' => [$quick ? 'nullable' : 'required', Rule::in(['driver_license', 'passport', 'government_id'])],
             'identity_front' => [
-                Rule::requiredIf(! $hasIdentityDocument),
+                Rule::requiredIf(! $quick && ! $hasIdentityDocument),
                 'file',
                 'mimes:jpg,jpeg,png,webp,pdf',
                 'max:10240',
@@ -162,12 +173,14 @@ class MemberRegistrationController extends Controller
             'applicant_signature' => ['required', 'string', 'max:255'],
             'signed_on' => ['required', 'date'],
         ]);
+
+        return $rules;
     }
 
     /**
      * @param  array<string, mixed>  $data
      */
-    private function saveApplication(Request $request, MemberRegistration $registration, array $data): View
+    private function saveApplication(Request $request, MemberRegistration $registration, array $data, bool $quick = false): View
     {
         $language = $this->resolveLanguage($data['preferred_language']);
         $fullName = trim($data['first_name'] . ' ' . $data['last_name']);
@@ -175,7 +188,7 @@ class MemberRegistrationController extends Controller
         $role = $data['role'] === 'Other' && filled($data['role_other'] ?? null)
             ? 'Other: ' . $data['role_other']
             : $data['role'];
-        $availableLanguages = $data['available_languages'];
+        $availableLanguages = $data['available_languages'] ?? [];
         if (in_array('Other', $availableLanguages, true) && filled($data['available_language_other'] ?? null)) {
             $availableLanguages[] = 'Other: ' . $data['available_language_other'];
         }
@@ -189,8 +202,8 @@ class MemberRegistrationController extends Controller
                 'nationality' => $data['nationality'] ?? null,
                 'desired_site' => $data['desired_site'] ?? data_get($registration->payload, 'application.desired_site'),
                 'previous_site_experience' => $data['previous_site_experience'] ?? null,
-                'hoffman_experience' => $data['hoffman_experience'],
-                'identity_document_type' => $data['identity_document_type'],
+                'hoffman_experience' => $data['hoffman_experience'] ?? null,
+                'identity_document_type' => $data['identity_document_type'] ?? null,
                 'certification_upload_count' => is_array($certificationFiles) ? count($certificationFiles) : 0,
                 'work_history' => array_values(array_filter(
                     $data['work_history'] ?? [],
@@ -211,7 +224,7 @@ class MemberRegistrationController extends Controller
             'first_name' => $data['first_name'],
             'last_name' => $data['last_name'],
             'full_name' => $fullName,
-            'email' => $data['email'],
+            'email' => $data['email'] ?? null,
             'phone' => $data['phone'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
             'nationality' => $data['nationality'] ?? null,
@@ -219,8 +232,8 @@ class MemberRegistrationController extends Controller
             'role' => $role,
             'trade' => null,
             'start_date' => $data['start_date'] ?? null,
-            'emergency_contact_name' => $data['emergency_contact_name'],
-            'emergency_contact_phone' => $data['emergency_contact_phone'],
+            'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
+            'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
             'identity_status' => 'pending',
             'document_status' => 'pending',
             'onboarding_status' => 'submitted',
@@ -238,7 +251,7 @@ class MemberRegistrationController extends Controller
                 $request->file('identity_front'),
                 'id',
                 'Government ID - front',
-                ['side' => 'front', 'identity_document_type' => $data['identity_document_type']],
+                ['side' => 'front', 'identity_document_type' => $data['identity_document_type'] ?? null],
             );
         }
 
@@ -258,7 +271,14 @@ class MemberRegistrationController extends Controller
             }
         }
 
-        return $this->intakeView($registration->fresh(['company', 'site', 'team', 'documents']), true, $language);
+        // 제출 뒤 화면도 같은 모드여야 한다. 간편 등록으로 넣었는데 «입사지원서가
+        // 제출되었습니다» 가 뜨면, 방금 네 칸만 채운 사람이 무엇을 낸 건지 헷갈린다.
+        return $this->intakeView(
+            $registration->fresh(['company', 'site', 'team', 'documents']),
+            true,
+            $language,
+            quick: $quick,
+        );
     }
 
     private function intakeView(
@@ -268,9 +288,12 @@ class MemberRegistrationController extends Controller
         ?string $languageActionUrl = null,
         ?string $formActionUrl = null,
         bool $siteIntake = false,
+        bool $quick = false,
     ): View
     {
         return view('member-registration.show', [
+            // 간편 등록 — 현장에서 QR 로 들어온 사람에게는 네 가지만 묻는다.
+            'quick' => $quick,
             'registration' => $registration,
             'submitted' => $submitted,
             'language' => $language,
