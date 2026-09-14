@@ -407,22 +407,22 @@
         <button type="button" class="scan-cancel" id="scan-cancel">✕</button>
     </div>
 
-    <nav class="tabs" id="tabs" aria-label="화면 이동">
+    <nav class="tabs" id="tabs" aria-label="{{ __('화면 이동') }}">
         <button class="tab field-nav-item" data-tab="home" aria-selected="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.2V12l3.1 2"/></svg>
-            출퇴근
+            {{ __('출퇴근') }}
         </button>
         <button class="tab field-nav-item" data-tab="work" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.8 7.5V5.6a1.6 1.6 0 0 1 1.6-1.6h3.2a1.6 1.6 0 0 1 1.6 1.6v1.9"/><path d="M3 12.6h18"/></svg>
-            근무
+            {{ __('근무') }}
         </button>
         <button class="tab field-nav-item" data-tab="pay" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v17"/><path d="M16.2 7.4c0-1.5-1.9-2.6-4.2-2.6s-4.2 1.1-4.2 2.6 1.9 2.3 4.2 3 4.2 1.5 4.2 3-1.9 2.6-4.2 2.6-4.2-1.1-4.2-2.6"/></svg>
-            급여
+            {{ __('급여') }}
         </button>
         <button class="tab field-nav-item" data-tab="me" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8.2" r="3.9"/><path d="M4.8 20c0-3.4 3.2-6.1 7.2-6.1s7.2 2.7 7.2 6.1"/></svg>
-            나
+            {{ __('나') }}
         </button>
     </nav>
 </div>
@@ -461,7 +461,17 @@
 
     var initialTab = new URLSearchParams(window.location.search).get('tab');
     if (['home', 'work', 'pay', 'me'].indexOf(initialTab) === -1) initialTab = 'home';
-    var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: initialTab, lang: 'ko', tick: 0 };
+    /*
+     * 화면이 시작하는 언어는 <b>서버가 이미 정한 것</b>을 그대로 받는다.
+     *
+     * 블레이드가 그린 글자(__())는 서버 판정을 따르는데 화면 JS 만 따로 판정하면
+     * 한 화면에 두 언어가 섞인다 — 제목은 한국어, 버튼은 스페인어가 된다. 실제로
+     * 그랬다: JS 가 쿠키를 안 보고 localStorage 가 비면 가입 언어로 덮어썼다.
+     * 판정은 AppLocale 한 곳에서만 한다.
+     */
+    var SERVER_LANG = @json(app()->getLocale());
+    var LANG_PICKED = @json(request()->hasCookie(\App\Support\AppLocale::COOKIE));
+    var state = { data: null, coords: null, permission: 'unknown', busy: false, tab: initialTab, lang: (SERVER_LANG || 'ko'), tick: 0 };
     var watchId = null;
 
     /*
@@ -639,9 +649,11 @@
             weekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
         }
     };
-    var T = DICT.ko;
+    var T = DICT[SERVER_LANG] || DICT.ko;
     var LANG_KEY = 'workerAppLang';
-    var langChosen = false;   // 사람이 고른 적이 있으면 서버의 기본 언어가 못 덮는다
+    // 쿠키가 있다는 것은 <b>이 사람이 언제 고른 적이 있다</b>는 뜻이다. 그러면 가입
+    // 언어가 그것을 덮으면 안 된다 — 고른 것을 되돌리는 화면이 된다.
+    var langChosen = !!LANG_PICKED;
 
     // 고른 언어를 서버도 알아야 한다. 예전에는 localStorage 에만 두어서, 첫 화면만
     // 영어로 바뀌고 거기서 들어가는 화면(현장 기록·물어보기·문서 올리기)은 서버가
@@ -683,6 +695,9 @@
         document.getElementById('offline').textContent = T.offlineBar;
     }
     (function () {
+        // 서버가 정한 언어로 화면 표시(선택 버튼 강조 등)를 먼저 맞춰 둔다.
+        setLang(state.lang, false);
+
         var saved = null;
         try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
         if (!saved || !DICT[saved]) return;

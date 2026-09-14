@@ -158,6 +158,53 @@ class AppLocaleFollowsChoiceTest extends TestCase
         $this->assertStringContainsString('Pulse para hablar', $spanish);
     }
 
+    public function test_the_worker_screen_starts_in_the_chosen_language_not_the_signup_one(): void
+    {
+        // 한 화면에 두 언어가 섞이던 자리다. 블레이드는 쿠키를 따랐는데 화면 JS 는
+        // 쿠키를 안 보고, localStorage 가 비면 <b>가입 언어</b>로 덮어썼다. 그래서
+        // 가입은 스페인어로 하고 영어를 고른 사람은 제목만 영어, 버튼은 스페인어를
+        // 봤다. 새 폰으로 열 때마다 그랬다 — localStorage 는 폰마다 따로이기 때문이다.
+        $user = $this->worker('es');
+
+        $html = $this->actingAs($user)
+            ->withUnencryptedCookie(AppLocale::COOKIE, 'en')
+            ->get('/attendance-app')->assertOk()->getContent();
+
+        // 화면 JS 가 시작하는 언어는 서버가 정한 그 언어여야 한다.
+        $this->assertStringContainsString('var SERVER_LANG = "en"', $html);
+        // 고른 적이 있다는 사실도 넘겨야 한다 — 안 그러면 가입 언어가 다시 덮는다.
+        $this->assertStringContainsString('var LANG_PICKED = true', $html);
+        $this->assertStringContainsString('DICT[SERVER_LANG]', $html);
+    }
+
+    public function test_without_a_cookie_the_signup_language_still_wins(): void
+    {
+        // 반대쪽도 지켜야 한다. 한 번도 안 고른 스페인어 작업자는 버튼을 찾기 전에
+        // 이미 자기 말로 보여야 한다 — 쿠키가 없다고 한국어로 떨어지면 안 된다.
+        $user = $this->worker('es');
+
+        $html = $this->actingAs($user)->get('/attendance-app')->assertOk()->getContent();
+
+        $this->assertStringContainsString('var SERVER_LANG = "es"', $html);
+        $this->assertStringContainsString('var LANG_PICKED = false', $html);
+    }
+
+    public function test_the_bottom_tabs_are_translated_too(): void
+    {
+        // 탭 네 칸만 한글로 남아 있었다. 화면 전체가 스페인어인데 맨 아래 «출퇴근»
+        // 이 한글이면, 그 앱은 자기 말로 만들어진 앱이 아니다.
+        $user = $this->worker('ko');
+
+        $spanish = $this->actingAs($user)
+            ->withUnencryptedCookie(AppLocale::COOKIE, 'es')
+            ->get('/attendance-app')->assertOk()->getContent();
+
+        foreach (['Asistencia', 'Trabajo', 'Pago', 'Yo'] as $word) {
+            $this->assertStringContainsString($word, $spanish);
+        }
+        $this->assertStringNotContainsString(">\n            출퇴근\n", $spanish, '탭에 한글이 그대로 남으면 안 된다.');
+    }
+
     public function test_the_screen_and_its_script_read_the_same_dictionary(): void
     {
         // 사전이 두 벌이면 «버튼은 영어인데 알림 문구는 한글» 이 된다.
