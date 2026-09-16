@@ -42,7 +42,8 @@ class LoginDevice extends Model
         self::query()->create([
             'user_id' => $user->id,
             'token_hash' => self::hash($token),
-            'label' => $label ? Str::limit($label, 118) : null,
+            // 칸은 120자다. «...» 꼬리표까지 넣으면 121자가 되어 PIN 설정이 500 이 된다.
+            'label' => $label ? Str::limit($label, 120, '') : null,
             'last_used_at' => now(),
         ]);
 

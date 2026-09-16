@@ -48,7 +48,9 @@ class WorkerDevice extends Model
         self::query()->create([
             'employee_id' => $employee->id,
             'token_hash' => self::hash($token),
-            'label' => $label ? Str::limit($label, 118) : null,
+            // 칸은 120자다. 118자로 자른 뒤 «...» 를 붙이면 121자가 되어 DB 가 거절했고,
+            // 이름표가 긴 카톡 브라우저에서 등록 완료 화면이 500 이 됐다. 꼬리표 없이 자른다.
+            'label' => $label ? Str::limit($label, 120, '') : null,
             'last_used_at' => now(),
         ]);
 
