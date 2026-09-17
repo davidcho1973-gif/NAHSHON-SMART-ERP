@@ -24,6 +24,7 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-16 | CODEX | Attendance action buttons | Escape inline handler HTML attributes in shared AdminUI buttons so approval/rejection status strings do not truncate the click handler; remove redundant caller escaping in crew navigation. Add interaction regressions and run all JavaScript tests in CI. | codex/attendance-actions-fix-20260916 | 25 JavaScript checks passed; local synthetic browser approval/rejection/edit/delete completed; attendance PHP tests 134 passed / 411 assertions. Full suite and deployment tracked below. |
 | 2026-09-13 | CODEX | Browser Back / Forward | Shared route history for ERP menus, document iframe, worker tabs, ops details and HR site/team screens; restore query/site/scroll context | Local patch; public GitHub publication approval pending | 281 PHP tests / 1143 assertions, 9 JS tests, rendered-fixture Chrome navigation scenarios passed |
 | 2026-09-13 | CODEX | Document hub design 04 | Replace overlay review with persistent list/detail workspace; compact summary, warm palette, upload dialog, status filter and pagination | Branch codex/document-review-desk | Browser fixtures and document feature tests; full CI/deploy pending |
 | 2026-09-11 | CODEX | Daily report archive | File closing output automatically into dedicated daily report room; share archive writer with mail sender and refresh both document copies on re-close. Show saved-file link; archive failure prevents done status. | codex/daily-closing-document-room | Related tests and build passed; full CI/deployment verification follows. |
@@ -191,6 +192,14 @@ Use this section for manual owner checks, business decisions, and final approval
 - Decide exact employee registration invite channels: Gmail, WhatsApp, KakaoTalk.
 
 ## CODEX Log
+
+### 2026-09-16 - Restore attendance row actions
+
+- Cause: `rowButton` and `primaryButton` concatenated unescaped JavaScript into a double-quoted HTML attribute. Attendance status calls contain double-quoted arguments, so the browser parsed incomplete handlers.
+- Centralized attribute escaping in AdminUI and removed the one pre-escaped crew caller. Existing edit/delete forms, backend access controls, audit trail and recoverable deletion semantics are unchanged.
+- Added 14 interaction regressions covering actual rendered handlers, all attendance actions, cancellation, permissions, API errors, and crew navigation. Reproduced failures before applying each fix. CI now runs every `tests/js/*.test.cjs` file (25 checks).
+- Verified production edit and delete dialogs without saving or deleting any real record. Verified approval, rejection, edit/save and deletion in a separate browser fixture with in-memory synthetic records.
+- Local dedicated PostgreSQL database: `nahshon_erp_attendance_test`; focused PHP suite: 134 tests / 411 assertions passed. Full suite and deployment results will be recorded after completion.
 
 ### 2026-09-08 — Registered email login without Google
 
