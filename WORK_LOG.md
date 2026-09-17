@@ -193,6 +193,12 @@ Use this section for manual owner checks, business decisions, and final approval
 
 ## CODEX Log
 
+### 2026-09-16 - Attendance release precision correction
+
+- The approved release passed PR68, staging, and PR69 CI (1,985 PHP tests / 7,298 assertions and 25 JavaScript tests), but the main run exposed a seconds-boundary error in the upstream geofence fixture through the actual attendance observer.
+- Root cause: Carbon 3 returns fractional elapsed minutes; derived payroll timesheet columns are integers. The failed SQL write is caught by the attendance observer and aborts the surrounding PostgreSQL transaction.
+- Normalize elapsed time to whole minutes before the existing lunch/overtime rules. Add deterministic second-precision observer tests, preserving original attendance timestamps and existing test assertions. No live data backfill is performed.
+
 ### 2026-09-16 - Restore attendance row actions
 
 - Cause: `rowButton` and `primaryButton` concatenated unescaped JavaScript into a double-quoted HTML attribute. Attendance status calls contain double-quoted arguments, so the browser parsed incomplete handlers.

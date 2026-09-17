@@ -6,6 +6,7 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\PayrollTimesheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -86,5 +87,38 @@ class TimesheetSingleWriterTest extends TestCase
         $row = PayrollTimesheet::firstOrFail();
 
         $this->assertSame([$in->id, $out->id], $row->payload['attendance_log_ids'], '급여 이의 때 어느 로그에서 나온 시간인지 추적할 수 있어야 한다');
+    }
+
+    #[DataProvider('secondPrecisionPunches')]
+    public function test_second_precision_attendance_syncs_whole_minutes_without_aborting_transaction(
+        string $checkOut,
+        int $regular,
+        int $overtime,
+        int $payable,
+    ): void {
+        $emp = $this->employee();
+        $in = $this->log($emp, 'clock_in', '2026-08-07 07:00:00');
+        $out = $this->log($emp, 'clock_out', $checkOut);
+
+        // Use the real saved observer and PostgreSQL transaction. A swallowed
+        // fractional-minute write failure leaves this query unable to execute.
+        $row = PayrollTimesheet::where('employee_id', $emp->id)->sole();
+
+        $this->assertSame($regular, (int) $row->regular_minutes);
+        $this->assertSame($overtime, (int) $row->overtime_minutes);
+        $this->assertSame($payable, (int) $row->payable_minutes);
+        $this->assertSame('approved', $row->status);
+        $this->assertSame([$in->id, $out->id], $row->payload['attendance_log_ids']);
+        $this->assertSame(2, AttendanceLog::where('employee_id', $emp->id)->count());
+    }
+
+    public static function secondPrecisionPunches(): array
+    {
+        return [
+            'one second' => ['2026-08-07 07:00:01', 0, 0, 0],
+            'whole-minute lunch threshold' => ['2026-08-07 11:00:59', 240, 0, 240],
+            'normal day with seconds' => ['2026-08-07 16:00:59', 480, 0, 480],
+            'overtime with seconds' => ['2026-08-07 17:01:59', 480, 61, 541],
+        ];
     }
 }
