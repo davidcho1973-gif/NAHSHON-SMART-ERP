@@ -394,7 +394,19 @@ class WorkerAttendanceService
             }
         }
 
-        $verified = $this->verifyOnSite($site, $signal);
+        // 여기까지 왔다는 것은 <b>출입구에 붙은 그 현장의 QR 을 찍었다</b>는 뜻이다.
+        // 컨트롤러가 gate_site 를 필수로 받고, 배정 현장과 다르면 그 자리에서 막는다.
+        //
+        // 그런데 그 사실을 승인 판정에서는 쓰지 않고 GPS·WiFi 만 봤다. 그래서 실내에서
+        // GPS 를 못 잡으면(정확도가 반경보다 나쁘면 코드가 아예 판정을 포기한다) 현장에
+        // 서서 문 앞 QR 을 찍은 사람도 «확인 필요» 로 떨어졌다. 현장 WiFi 는 원청사
+        // 것이라 일반 작업자에게 비밀번호가 없어 그 길도 없다 — 결국 전원이 매일 대기로
+        // 쌓이고 반장이 하나씩 눌렀다.
+        //
+        // 그래서 «확실히 현장 밖» 일 때만 대기로 돌린다. QR 을 사진 찍어 집에서 스캔하는
+        // 경우가 그것이고, 그것만 사람이 본다. 나머지(반경 안 / 판정 불가)는 승인한다.
+        $verdict = $this->geo->verdict($site, $signal);
+        $verified = $verdict !== AttendanceGeoService::OFF_SITE;
 
         AttendanceLog::create([
             'employee_id' => $employee->id,
@@ -409,6 +421,9 @@ class WorkerAttendanceService
             'status' => $verified ? 'approved' : 'pending',
             'payload' => [
                 'verified_on_site' => $verified,
+                // 무엇을 근거로 통과했는가. 나중에 기록을 설명해야 할 때 이 한 칸이 답한다.
+                'verified_by' => $verdict === AttendanceGeoService::ON_SITE ? 'geo' : ($verified ? 'gate_qr' : 'none'),
+                'geo_verdict' => $verdict,
                 'lat' => $signal['lat'] ?? null,
                 'lng' => $signal['lng'] ?? null,
                 'accuracy' => $signal['accuracy'] ?? null,
@@ -532,9 +547,9 @@ class WorkerAttendanceService
             'no_in' => '출근 기록이 없습니다. 먼저 출근을 눌러 주세요.',
             'dup_out' => '오늘은 이미 퇴근이 기록되었습니다.',
             'in_ok' => '출근이 기록되었습니다.',
-            'in_pending' => '출근을 접수했습니다. 현장 확인이 안 되어 반장 승인을 기다립니다.',
+            'in_pending' => '출근을 접수했습니다. 휴대폰 위치가 현장에서 멀리 떨어진 것으로 나와 반장 확인을 기다립니다.',
             'out_ok' => '퇴근이 기록되었습니다.',
-            'out_pending' => '퇴근을 접수했습니다. 현장 확인이 안 되어 반장 승인을 기다립니다.',
+            'out_pending' => '퇴근을 접수했습니다. 휴대폰 위치가 현장에서 멀리 떨어진 것으로 나와 반장 확인을 기다립니다.',
         ],
         'en' => [
             'pick' => 'Please choose clock-in or clock-out.',
@@ -544,9 +559,9 @@ class WorkerAttendanceService
             'no_in' => 'No clock-in yet. Please clock in first.',
             'dup_out' => 'You already clocked out today.',
             'in_ok' => 'Clock-in recorded.',
-            'in_pending' => 'Clock-in received. Site could not be verified — waiting for foreman approval.',
+            'in_pending' => 'Clock-in received. Your phone shows you far from the site — waiting for your foreman to check.',
             'out_ok' => 'Clock-out recorded.',
-            'out_pending' => 'Clock-out received. Site could not be verified — waiting for foreman approval.',
+            'out_pending' => 'Clock-out received. Your phone shows you far from the site — waiting for your foreman to check.',
         ],
         'es' => [
             'pick' => 'Elija entrada o salida.',
@@ -556,9 +571,9 @@ class WorkerAttendanceService
             'no_in' => 'No hay entrada registrada. Marque la entrada primero.',
             'dup_out' => 'Ya registró su salida hoy.',
             'in_ok' => 'Entrada registrada.',
-            'in_pending' => 'Entrada recibida. No se pudo verificar el sitio — pendiente de aprobación del capataz.',
+            'in_pending' => 'Entrada recibida. Su teléfono lo ubica lejos de la obra — pendiente de revisión del capataz.',
             'out_ok' => 'Salida registrada.',
-            'out_pending' => 'Salida recibida. No se pudo verificar el sitio — pendiente de aprobación del capataz.',
+            'out_pending' => 'Salida recibida. Su teléfono lo ubica lejos de la obra — pendiente de revisión del capataz.',
         ],
     ];
 
@@ -570,8 +585,4 @@ class WorkerAttendanceService
      *
      * @param  array<string, mixed>  $signal
      */
-    private function verifyOnSite(Site $site, array $signal): bool
-    {
-        return $this->geo->verdict($site, $signal) === AttendanceGeoService::ON_SITE;
-    }
 }

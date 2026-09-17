@@ -264,14 +264,17 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->assertDatabaseHas('attendance_logs', ['event_type' => 'clock_in', 'status' => 'pending']);
     }
 
-    public function test_manual_punch_without_any_location_waits_for_approval(): void
+    public function test_without_any_location_the_gate_qr_is_the_confirmation(): void
     {
-        // 위치 권한을 껐거나 실내라 안 잡히는 경우. 확인할 방법이 없으면 승인 대기다.
+        // 예전에는 «확인할 방법이 없으면 승인 대기» 였다. 그런데 확인할 방법은 있었다 —
+        // 이 경로로 오려면 <b>그 현장 출입구의 QR 을 찍어야만</b> 한다(gate_site 필수).
+        // 그 사실을 판정에서 안 쓰는 바람에, 실내에서 GPS 를 못 잡는 사람 전원이 매일
+        // 대기로 쌓이고 반장이 하나씩 눌렀다. 이제 QR 을 증거로 인정한다.
         $this->actingAs($this->user)
             ->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $this->site->id])
-            ->assertJsonPath('verified', false);
+            ->assertJsonPath('verified', true);
 
-        $this->assertDatabaseHas('attendance_logs', ['event_type' => 'clock_in', 'status' => 'pending']);
+        $this->assertDatabaseHas('attendance_logs', ['event_type' => 'clock_in', 'status' => 'approved']);
     }
 
     public function test_site_network_alone_verifies_a_manual_punch(): void
@@ -291,15 +294,24 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->assertDatabaseHas('attendance_logs', ['event_type' => 'clock_in', 'status' => 'approved']);
     }
 
-    public function test_a_sloppy_fix_does_not_count_as_being_on_site(): void
+    public function test_a_sloppy_fix_is_never_mistaken_for_gps_proof(): void
     {
-        // 좌표는 현장 한가운데인데 오차가 900m 다. 자동 판정과 같은 규칙을 써야 한다.
+        // 좌표는 현장 한가운데인데 오차가 900m 다. 이 시험이 지키려던 것은
+        // «엉성한 좌표를 GPS 확인으로 쳐 주지 않는다» 이고, 그것은 그대로 지킨다.
+        //
+        // 다만 결과는 승인이다 — 출입구 QR 을 찍었기 때문이다. 승인의 근거가
+        // GPS 가 아니라 QR 이라는 사실이 기록에 남아야 나중에 설명할 수 있다.
         $this->actingAs($this->user)
             ->postJson(route('attendance-app.punch'), [
                 'direction' => 'in',
                 'gate_site' => $this->site->id, 'lat' => self::SITE_LAT, 'lng' => self::SITE_LNG, 'accuracy' => 900,
             ])
-            ->assertJsonPath('verified', false);
+            ->assertOk();
+
+        $log = \App\Models\AttendanceLog::query()->latest('id')->firstOrFail();
+        $this->assertSame('approved', $log->status);
+        $this->assertSame('gate_qr', $log->payload['verified_by'], '엉성한 좌표를 GPS 확인으로 쳐 주면 안 된다.');
+        $this->assertNotSame('geo', $log->payload['verified_by']);
     }
 
     public function test_you_cannot_clock_in_twice(): void
