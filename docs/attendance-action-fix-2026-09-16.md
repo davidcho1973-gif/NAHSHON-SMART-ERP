@@ -14,4 +14,5 @@ The production edit form and deletion confirmation opened correctly during read-
 
 ## Delivery status
 
-Local correction only. Automated approval review rejected publishing to the public GitHub repository without explicit user authorization for this change. No remote publication or deployment occurred. After approval, publish the branch, run PR CI, merge through staging, then deploy and verify the NAHSHON production build.
+The user explicitly authorized publication and production deployment after being informed this repository is public. The release branch is rebased onto eaff7d0, preserving the upstream neutral company fixture. PR CI, staging, and NAHSHON production verification are the delivery gates; final run/PR/build evidence will be recorded in the local release record.
+
