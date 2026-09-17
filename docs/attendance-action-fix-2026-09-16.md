@@ -15,4 +15,3 @@ The production edit form and deletion confirmation opened correctly during read-
 ## Delivery status
 
 The user explicitly authorized publication and production deployment after being informed this repository is public. The release branch is rebased onto eaff7d0, preserving the upstream neutral company fixture. PR CI, staging, and NAHSHON production verification are the delivery gates; final run/PR/build evidence will be recorded in the local release record.
-
