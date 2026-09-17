@@ -77,7 +77,10 @@ class AttendanceTimesheetSync
         $payable = 0;
 
         if ($checkIn && $checkOut) {
-            $worked = Carbon::parse($checkIn)->diffInMinutes(Carbon::parse($checkOut));
+            // Carbon 3 returns fractional minutes for second-precision punches.
+            // Preserve whole-minute truncation before applying payroll rules;
+            // PostgreSQL integer columns reject fractional-minute values.
+            $worked = (int) Carbon::parse($checkIn)->diffInMinutes(Carbon::parse($checkOut));
             $payable = $worked > self::LUNCH_THRESHOLD_MINUTES ? $worked - self::LUNCH_MINUTES : $worked;
             $payable = max(0, $payable);
             $regular = min($payable, self::REGULAR_MINUTES_PER_DAY);
