@@ -265,7 +265,7 @@ class MemberRegistrationSyncTest extends TestCase
         ]);
     }
 
-    public function test_activation_copies_hoffman_badge_fields_to_employee(): void
+    public function test_activation_copies_the_site_badge_fields_to_employee(): void
     {
         $registration = MemberRegistration::create([
             'first_name' => 'Sekon',

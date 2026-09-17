@@ -720,7 +720,7 @@
       ],
       getProjectStatus: async () => [
         { code: 'PRJ-LGS-01', name: 'LGES Battery Plant AZ', manager: 'S. Connor', progress: 68, color: '#2563eb', endDate: '2026-11-30' },
-        { code: 'PRJ-HFF-02', name: 'Hoffman Logistics Hub', manager: 'D. Wright', progress: 42, color: '#f59e0b', endDate: '2026-08-15' },
+        { code: 'PRJ-HFF-02', name: 'Logistics Hub', manager: 'D. Wright', progress: 42, color: '#f59e0b', endDate: '2026-08-15' },
         { code: 'PRJ-SST-03', name: 'Samsung Taylor Fab', manager: 'M. Lee', progress: 12, color: '#10b981', endDate: '2027-03-01' },
         { code: 'PRJ-HWH-04', name: 'Hanwha Solar Site', manager: 'A. Chen', progress: 89, color: '#8b5cf6', endDate: '2026-05-20' },
       ],
@@ -885,36 +885,36 @@
       getCertMatrix: async () => [
         { id: 'P-2604-0001', name: 'Kim Chulsoo', nameKr: '김철수', role: 'Pipefitter', company: ORG_NAME,
           certs: [
-            { type: 'OSHA 30-Hour', issued: '2024-10-15', expiry: '2029-10-15', status: '유효', hoffmanReq: true },
-            { type: 'Fall Protection', issued: '2025-04-01', expiry: '2026-04-01', status: '만료', hoffmanReq: true },
-            { type: 'First Aid/CPR', issued: '2025-01-10', expiry: '2027-01-10', status: '유효', hoffmanReq: true }
+            { type: 'OSHA 30-Hour', issued: '2024-10-15', expiry: '2029-10-15', status: '유효', gcReq: true },
+            { type: 'Fall Protection', issued: '2025-04-01', expiry: '2026-04-01', status: '만료', gcReq: true },
+            { type: 'First Aid/CPR', issued: '2025-01-10', expiry: '2027-01-10', status: '유효', gcReq: true }
           ]
         },
         { id: 'P-2604-0002', name: 'Lee Minjun', nameKr: '이민준', role: 'Electrician', company: ORG_NAME,
           certs: [
-            { type: 'OSHA 10-Hour', issued: '2025-03-20', expiry: '2030-03-20', status: '유효', hoffmanReq: true },
-            { type: 'LOTO', issued: '2025-02-14', expiry: '2026-05-14', status: '만료임박', hoffmanReq: true },
-            { type: 'Electrical Safety', issued: '2025-06-01', expiry: '2027-06-01', status: '유효', hoffmanReq: false }
+            { type: 'OSHA 10-Hour', issued: '2025-03-20', expiry: '2030-03-20', status: '유효', gcReq: true },
+            { type: 'LOTO', issued: '2025-02-14', expiry: '2026-05-14', status: '만료임박', gcReq: true },
+            { type: 'Electrical Safety', issued: '2025-06-01', expiry: '2027-06-01', status: '유효', gcReq: false }
           ]
         },
         { id: 'P-2604-0003', name: 'Park Jiho', nameKr: '박지호', role: 'Welder', company: 'SUBO',
           certs: [
-            { type: 'OSHA 10-Hour', issued: '2025-01-05', expiry: '2030-01-05', status: '유효', hoffmanReq: true },
-            { type: 'Hot Work Permit', issued: '2025-08-20', expiry: '2026-08-20', status: '유효', hoffmanReq: true },
-            { type: 'Confined Space', issued: '2024-06-01', expiry: '2025-06-01', status: '만료', hoffmanReq: true }
+            { type: 'OSHA 10-Hour', issued: '2025-01-05', expiry: '2030-01-05', status: '유효', gcReq: true },
+            { type: 'Hot Work Permit', issued: '2025-08-20', expiry: '2026-08-20', status: '유효', gcReq: true },
+            { type: 'Confined Space', issued: '2024-06-01', expiry: '2025-06-01', status: '만료', gcReq: true }
           ]
         },
         { id: 'P-2604-0004', name: 'Choi Donghyuk', nameKr: '최동혁', role: 'Pipefitter', company: 'SUBO',
           certs: [
-            { type: 'OSHA 30-Hour', issued: '2023-09-01', expiry: '2028-09-01', status: '유효', hoffmanReq: true },
-            { type: 'Rigging/Signal', issued: '2025-04-10', expiry: '2026-04-10', status: '만료임박', hoffmanReq: true }
+            { type: 'OSHA 30-Hour', issued: '2023-09-01', expiry: '2028-09-01', status: '유효', gcReq: true },
+            { type: 'Rigging/Signal', issued: '2025-04-10', expiry: '2026-04-10', status: '만료임박', gcReq: true }
           ]
         },
         { id: 'P-2604-0005', name: 'Kang Seungwoo', nameKr: '강승우', role: 'Equipment Operator', company: 'ETC',
           certs: [
-            { type: 'Forklift/Telehandler', issued: '2024-07-15', expiry: '2027-07-15', status: '유효', hoffmanReq: true },
-            { type: 'OSHA 10-Hour', issued: '2025-05-20', expiry: '2030-05-20', status: '유효', hoffmanReq: true },
-            { type: 'Crane Operator (NCCCO)', issued: '2022-03-10', expiry: '2027-03-10', status: '유효', hoffmanReq: false }
+            { type: 'Forklift/Telehandler', issued: '2024-07-15', expiry: '2027-07-15', status: '유효', gcReq: true },
+            { type: 'OSHA 10-Hour', issued: '2025-05-20', expiry: '2030-05-20', status: '유효', gcReq: true },
+            { type: 'Crane Operator (NCCCO)', issued: '2022-03-10', expiry: '2027-03-10', status: '유효', gcReq: false }
           ]
         }
       ],

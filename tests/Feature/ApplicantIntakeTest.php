@@ -119,7 +119,7 @@ class ApplicantIntakeTest extends TestCase
             'emergency_contact_phone' => '555-9292',
             'available_languages' => ['English'],
             'role' => 'General Labor',
-            'hoffman_experience' => 'no',
+            'gc_experience' => 'no',
             'identity_document_type' => 'driver_license',
             'identity_front' => UploadedFile::fake()->create('walkin-license.jpg', 64, 'image/jpeg'),
             'privacy_consent' => '1',
@@ -163,9 +163,9 @@ class ApplicantIntakeTest extends TestCase
             'emergency_contact_phone' => '555-0202',
             'available_languages' => ['Spanish', 'English'],
             'role' => 'Safety',
-            'desired_site' => 'Hoffman Project A',
+            'desired_site' => 'Logistics Hub Project A',
             'previous_site_experience' => 'Two years of commercial construction.',
-            'hoffman_experience' => 'no',
+            'gc_experience' => 'no',
             'identity_document_type' => 'driver_license',
             'identity_front' => UploadedFile::fake()->create('license-front.jpg', 64, 'image/jpeg'),
             'identity_back' => UploadedFile::fake()->create('license-back.jpg', 64, 'image/jpeg'),
@@ -201,7 +201,7 @@ class ApplicantIntakeTest extends TestCase
         $this->assertNotNull($registration->privacy_consent_at);
         $this->assertSame(['Spanish', 'English'], data_get($registration->payload, 'application.available_languages'));
         $this->assertSame('Korea', data_get($registration->payload, 'application.nationality'));
-        $this->assertSame('no', data_get($registration->payload, 'application.hoffman_experience'));
+        $this->assertSame('no', data_get($registration->payload, 'application.gc_experience'));
         $this->assertSame(0, Employee::query()->count());
 
         $this->assertDatabaseHas('member_documents', [
@@ -253,7 +253,7 @@ class ApplicantIntakeTest extends TestCase
             'emergency_contact_phone' => '555-0202',
             'available_languages' => ['Spanish'],
             'role' => 'Safety',
-            'hoffman_experience' => 'no',
+            'gc_experience' => 'no',
             'identity_document_type' => 'driver_license',
             'identity_front' => UploadedFile::fake()->create('license-front.jpg', 64, 'image/jpeg'),
             'privacy_consent' => '1',

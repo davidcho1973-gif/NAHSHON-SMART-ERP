@@ -406,6 +406,8 @@ class ApplicantAdminService
                 $fields = app(GeminiBadgeAnalyzer::class)->analyze(
                     Storage::disk($this->disk())->path($path),
                     $file->getClientMimeType() ?: 'image/jpeg',
+                    // 배지를 발급한 원청사는 현장마다 다르다. 현장에 적힌 것을 그대로 쓴다.
+                    $r->site?->client?->name,
                 );
                 if (is_array($fields) && $fields !== []) {
                     $r->forceFill([

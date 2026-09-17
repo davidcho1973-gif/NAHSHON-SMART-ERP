@@ -300,7 +300,7 @@
     var today = new Date().toISOString().slice(0, 10);
     u.formModal({
       title: '안전교육 이수 — ' + (r ? r.name : ''),
-      subtitle: 'Hoffman 안전교육을 마쳐야 배지를 받을 수 있습니다.',
+      subtitle: '현장 안전교육을 마쳐야 배지를 받을 수 있습니다.',
       saveLabel: '등록',
       fields: [
         { name: 'completedOn', label: '이수일', type: 'date', required: true, group: '이수', value: today },

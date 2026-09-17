@@ -88,7 +88,7 @@ class QuickSiteRegistrationTest extends TestCase
         // 미루는 것 — 화면에 아예 없어야 한다. required 인 칸이 숨어 있으면
         // 브라우저가 «채우라» 며 제출을 막는데, 사람은 그 칸을 볼 수 없다.
         foreach (['name="email"', 'name="emergency_contact_name"', 'name="identity_front"',
-            'name="certifications[]"', 'name="hoffman_experience"', 'name="date_of_birth"'] as $field) {
+            'name="certifications[]"', 'name="gc_experience"', 'name="date_of_birth"'] as $field) {
             $this->assertStringNotContainsString($field, $html, "간편 등록에 {$field} 가 남아 있다.");
         }
     }
@@ -138,7 +138,7 @@ class QuickSiteRegistrationTest extends TestCase
 
         $this->assertStringContainsString('입사지원서', $html);
         foreach (['name="email"', 'name="emergency_contact_name"', 'name="identity_front"',
-            'name="certifications[]"', 'name="hoffman_experience"'] as $field) {
+            'name="certifications[]"', 'name="gc_experience"'] as $field) {
             $this->assertStringContainsString($field, $html, "전체 지원서에서 {$field} 가 사라졌다.");
         }
     }

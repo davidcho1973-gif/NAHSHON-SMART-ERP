@@ -362,8 +362,6 @@
 
     // ── 모달 헤딩 / 버튼 / 액션 (추가) ──
     'Badge/NFC 등록': { en: 'Badge/NFC Registration', es: 'Registro Badge/NFC' },
-    'Hoffman Badge/NFC 등록': { en: 'Hoffman Badge/NFC Registration', es: 'Registro Badge/NFC Hoffman' },
-    'Hoffman 안전교육 완료': { en: 'Hoffman Safety Training Done', es: 'Capacitación de Seguridad Hoffman' },
     '안전교육 완료': { en: 'Safety Training Done', es: 'Capacitación Completada' },
     'Employees 열기': { en: 'Open Employees', es: 'Abrir Empleados' },
     'QR 코드로 열기': { en: 'Open by QR Code', es: 'Abrir con Código QR' },

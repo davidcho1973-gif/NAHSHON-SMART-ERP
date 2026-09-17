@@ -446,19 +446,28 @@ class WorkerAttendanceService
     }
 
     /**
-     * 출근 시각 정정 요청 — "실제로는 더 일찍 왔다".
+     * 출퇴근 시각 정정 요청 — "실제로는 더 일찍 왔다" / "실제로는 더 늦게까지 있었다".
      *
      * 웹 앱은 주머니 속에서 위치를 못 보내므로, 5시에 도착해도 11시에 앱을 열면
-     * 그때가 출근으로 찍힌다. 그 사람이 실제 도착 시각을 말하면 기록을 <b>바로
-     * 고치지 않고</b> 확인 대기(pending)로 돌린다 — 임금 기록을 본인 신고만으로
-     * 고치면 나중에 아무도 그 시간을 설명하지 못한다. 반장이 보고 승인한다.
+     * 그때가 출근으로 찍힌다. 퇴근도 같다 — 4시 30분에 일이 끝나고 정리하다 5시
+     * 10분에 찍히거나, 3시 30분에 찍고 30분 더 일한다. 그 사람이 실제 시각을 말하면
+     * 기록을 <b>바로 고치지 않고</b> 확인 대기(pending)로 돌린다 — 임금 기록을 본인
+     * 신고만으로 고치면 나중에 아무도 그 시간을 설명하지 못한다. 반장이 보고 승인한다.
      * 요청 내용은 기록의 메모와 payload 에 남아 관리 화면에서 그대로 보인다.
      *
+     * ── 방향이 한쪽으로만 열려 있는 이유 ──────────────────────────────────
+     * 출근은 <b>더 이른</b> 시각만, 퇴근은 <b>더 늦은</b> 시각만 요청할 수 있다.
+     * 둘 다 «내 근무시간이 실제로는 더 길었다» 는 방향이다. 반대 방향은 근무시간을
+     * 줄이는 요청이라 본인 신고로 시작할 일이 아니다 — 그건 반장이 기록을 보고
+     * 직접 줄인다. 이 한 줄이 없으면 작업자가 실수로 자기 임금을 깎게 된다.
+     *
+     * @param  string  $direction  'in' = 출근 기록, 'out' = 퇴근 기록
      * @return array<string, mixed>
      */
-    public function requestCorrection(Employee $employee, string $time, string $lang = 'ko'): array
+    public function requestCorrection(Employee $employee, string $time, string $lang = 'ko', string $direction = 'in'): array
     {
         $t = self::CORRECTION_MESSAGES[$lang] ?? self::CORRECTION_MESSAGES['ko'];
+        $isOut = $direction === 'out';
 
         if (! preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', $time)) {
             return ['success' => false, 'error' => $t['bad_time']];
@@ -471,36 +480,44 @@ class WorkerAttendanceService
         $log = AttendanceLog::query()
             ->where('employee_id', $employee->id)
             ->where('attendance_date', $today)
-            ->where('event_type', 'clock_in')
+            ->where('event_type', $isOut ? 'clock_out' : 'clock_in')
             ->where('status', '!=', 'rejected')
-            ->orderBy('event_at')
+            // 출근은 그날의 첫 기록, 퇴근은 <b>마지막</b> 기록이 그 사람의 하루 끝이다.
+            ->orderBy('event_at', $isOut ? 'desc' : 'asc')
             ->first();
 
         if (! $log) {
-            return ['success' => false, 'error' => $t['no_log']];
+            return ['success' => false, 'error' => $isOut ? $t['no_log_out'] : $t['no_log']];
         }
         if (is_array($log->payload) && isset($log->payload['correction_request'])) {
             return ['success' => false, 'error' => $t['already']];
         }
 
         $recordedLocal = $log->event_at?->timezone($tz)->format('H:i');
-        if ($recordedLocal !== null && $time >= $recordedLocal) {
-            // 더 늦게 왔다는 정정은 받지 않는다 — 그건 반장이 기록을 줄이는 방향이라
-            // 본인 요청으로 시작할 일이 아니다.
-            return ['success' => false, 'error' => $t['not_earlier']];
+        if ($recordedLocal !== null) {
+            if (! $isOut && $time >= $recordedLocal) {
+                return ['success' => false, 'error' => $t['not_earlier']];
+            }
+            if ($isOut && $time <= $recordedLocal) {
+                return ['success' => false, 'error' => $t['not_later']];
+            }
         }
 
         $payload = is_array($log->payload) ? $log->payload : [];
         $payload['correction_request'] = [
             'requested_time' => $time,
             'recorded_time' => $recordedLocal,
+            // 반장 화면이 «무엇을 고쳐 달라는 건가» 를 되묻지 않아도 되게 남긴다.
+            'event_type' => $isOut ? 'clock_out' : 'clock_in',
             'requested_at' => Carbon::now()->toIso8601String(),
         ];
+
+        $what = $isOut ? '실제 퇴근' : '실제 도착';
 
         $log->update([
             'status' => 'pending',   // 반장 확인 대기 — 화면에는 "확인 필요" 로 뜬다.
             'notes' => trim(($log->notes ? $log->notes."\n" : '')
-                ."[작업자 정정 요청] 실제 도착 {$time} (기록 {$recordedLocal})"),
+                ."[작업자 정정 요청] {$what} {$time} (기록 {$recordedLocal})"),
             'payload' => $payload,
         ]);
 
@@ -511,22 +528,28 @@ class WorkerAttendanceService
         'ko' => [
             'bad_time' => '시각을 05:00 처럼 입력해 주세요.',
             'no_log' => '오늘 출근 기록이 없습니다. 먼저 출근을 찍어 주세요.',
+            'no_log_out' => '오늘 퇴근 기록이 없습니다. 먼저 퇴근을 찍어 주세요.',
             'already' => '오늘 정정 요청이 이미 접수돼 있습니다.',
             'not_earlier' => '기록된 시각보다 이른 시각만 요청할 수 있습니다.',
+            'not_later' => '기록된 시각보다 늦은 시각만 요청할 수 있습니다. 더 일찍 끝난 것은 반장에게 말씀해 주세요.',
             'ok' => '정정 요청을 접수했습니다. 반장 확인 후 반영됩니다.',
         ],
         'en' => [
             'bad_time' => 'Enter the time like 05:00.',
             'no_log' => 'No clock-in today yet. Clock in first.',
+            'no_log_out' => 'No clock-out today yet. Clock out first.',
             'already' => 'A correction request is already in for today.',
             'not_earlier' => 'Only an earlier time than the recorded one can be requested.',
+            'not_later' => 'Only a later time than the recorded one can be requested. If you finished earlier, tell your foreman.',
             'ok' => 'Request received. It applies after foreman review.',
         ],
         'es' => [
             'bad_time' => 'Escriba la hora como 05:00.',
             'no_log' => 'Aún no hay entrada hoy. Marque la entrada primero.',
+            'no_log_out' => 'Aún no hay salida hoy. Marque la salida primero.',
             'already' => 'Ya hay una solicitud de corrección para hoy.',
             'not_earlier' => 'Solo puede pedir una hora anterior a la registrada.',
+            'not_later' => 'Solo puede pedir una hora posterior a la registrada. Si terminó antes, dígaselo al capataz.',
             'ok' => 'Solicitud recibida. Se aplica tras la revisión del capataz.',
         ],
     ];

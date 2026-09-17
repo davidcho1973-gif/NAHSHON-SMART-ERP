@@ -672,7 +672,7 @@ class SmartCompanyData
     public static function sites(): array
     {
         return [
-            'HFF-02' => 'HFF-02 — Hoffman',
+            'HFF-02' => 'HFF-02 — Logistics Hub',
             'LGES-AZ' => 'LGES-AZ — Battery Plant',
             'NV-05' => 'NV-05 — Nevada EV Plant',
         ];
@@ -874,7 +874,7 @@ class SmartCompanyData
         $fromDb = self::smartRecords('wbs');
 
         return $fromDb ?: [
-            ['code' => 'HFF-02', 'name' => 'Hoffman Logistics Hub', 'manager' => 'James Kim', 'progress' => 68, 'color' => '#2563eb', 'endDate' => '2026-09-15', 'status' => 'On Track', 'signal' => 'Schedule risk: low', 'action' => 'Close RFI-104'],
+            ['code' => 'HFF-02', 'name' => 'Logistics Hub', 'manager' => 'James Kim', 'progress' => 68, 'color' => '#2563eb', 'endDate' => '2026-09-15', 'status' => 'On Track', 'signal' => 'Schedule risk: low', 'action' => 'Close RFI-104'],
             ['code' => 'LGES-AZ', 'name' => 'Battery Plant AZ', 'manager' => 'Sophia Park', 'progress' => 42, 'color' => '#10b981', 'endDate' => '2026-11-30', 'status' => 'Watch', 'signal' => 'Material delivery', 'action' => 'Confirm conduit ETA'],
             ['code' => 'NV-05', 'name' => 'Nevada EV Plant', 'manager' => 'Daniel Cho', 'progress' => 24, 'color' => '#f59e0b', 'endDate' => '2027-02-20', 'status' => 'At Risk', 'signal' => 'Labor ramp-up', 'action' => 'Approve overtime plan'],
         ];
@@ -3328,7 +3328,7 @@ class SmartCompanyData
                 }
             }
 
-            // 현장별 대표 GPS Fallback (Hoffman, LGES-AZ, NV-05)
+            // 현장별 대표 GPS Fallback (HFF-02, LGES-AZ, NV-05)
             if (is_null($siteLat) || is_null($siteLng)) {
                 $code = strtoupper($site->code);
                 if ($code === 'HFF-02') {

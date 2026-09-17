@@ -152,7 +152,7 @@ class MemberRegistrationController extends Controller
             'start_date' => ['nullable', 'date'],
             'desired_site' => ['nullable', 'string', 'max:255'],
             'previous_site_experience' => ['nullable', 'string', 'max:2000'],
-            'hoffman_experience' => [$quick ? 'nullable' : 'required', Rule::in(['yes', 'no'])],
+            'gc_experience' => [$quick ? 'nullable' : 'required', Rule::in(['yes', 'no'])],
             'identity_document_type' => [$quick ? 'nullable' : 'required', Rule::in(['driver_license', 'passport', 'government_id'])],
             'identity_front' => [
                 Rule::requiredIf(! $quick && ! $hasIdentityDocument),
@@ -202,7 +202,8 @@ class MemberRegistrationController extends Controller
                 'nationality' => $data['nationality'] ?? null,
                 'desired_site' => $data['desired_site'] ?? data_get($registration->payload, 'application.desired_site'),
                 'previous_site_experience' => $data['previous_site_experience'] ?? null,
-                'hoffman_experience' => $data['hoffman_experience'] ?? null,
+                // 원청사 현장 경험 여부. 어느 원청사인지는 현장이 안다(sites.client_company_id).
+                'gc_experience' => $data['gc_experience'] ?? null,
                 'identity_document_type' => $data['identity_document_type'] ?? null,
                 'certification_upload_count' => is_array($certificationFiles) ? count($certificationFiles) : 0,
                 'work_history' => array_values(array_filter(

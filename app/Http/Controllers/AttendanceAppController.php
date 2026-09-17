@@ -257,9 +257,16 @@ class AttendanceAppController extends Controller
         $data = $request->validate([
             'time' => ['required', 'string', 'max:5'],
             'lang' => ['nullable', 'in:ko,en,es'],
+            // 출근만 고칠 수 있던 시절의 화면은 방향을 안 보냈다. 그때 그대로 'in'.
+            'direction' => ['nullable', 'in:in,out'],
         ]);
 
-        return response()->json($worker->requestCorrection($employee, $data['time'], $data['lang'] ?? 'ko'));
+        return response()->json($worker->requestCorrection(
+            $employee,
+            $data['time'],
+            $data['lang'] ?? 'ko',
+            $data['direction'] ?? 'in',
+        ));
     }
 
     public function team(Request $request, string $token): View|RedirectResponse

@@ -535,6 +535,8 @@
             viewOnly: '보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
             fixTime: '출근 시각 정정 요청',
             fixPrompt: '실제 도착 시각 (맞으면 확인만 누르세요)',
+            fixTimeOut: '퇴근 시각 정정 요청',
+            fixPromptOut: '실제로 일을 마친 시각',
             fixPending: '정정 요청됨 — 반장 확인 대기',
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
@@ -590,6 +592,8 @@
             viewOnly: 'View-only mode. You cannot punch here.',
             fixTime: 'Fix clock-in time',
             fixPrompt: 'Actual arrival time (just OK if correct)',
+            fixTimeOut: 'Fix clock-out time',
+            fixPromptOut: 'Time you actually finished',
             fixPending: 'Fix requested — waiting for foreman',
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
@@ -645,6 +649,8 @@
             viewOnly: 'Modo de solo lectura. No puede marcar aquí.',
             fixTime: 'Corregir hora de entrada',
             fixPrompt: 'Hora real de llegada (OK si es correcta)',
+            fixTimeOut: 'Corregir hora de salida',
+            fixPromptOut: 'Hora en que realmente terminó',
             fixPending: 'Corrección pedida — esperando al capataz',
             weekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
         }
@@ -851,18 +857,30 @@
             : '<div class="empty">' + T.noLogs + '</div>';
         h += '</div>';
 
-        // 출근이 늦게 잡혔을 때의 구제 — 주머니 속 웹 앱은 위치를 못 보내므로
-        // 5시 도착이 11시 기록이 될 수 있다. 본인이 실제 시각을 말하면 반장 확인
-        // 대기로 돌린다. 이미 요청했으면 그 사실만 보인다.
-        var firstIn = (d.logs || []).filter(function (l) { return l.type === 'clock_in'; })[0];
-        if (firstIn && !AS) {
-            h += firstIn.correctionRequested
-                ? '<div class="note" style="margin-top:8px">⏳ ' + T.fixPending + '</div>'
-                : '<button type="button" class="btn quiet" data-act="fixtime" style="margin-top:8px;font-size:13.5px;min-height:44px;padding:11px">' + T.fixTime + '</button>';
+        // 시각이 잘못 잡혔을 때의 구제 — 주머니 속 웹 앱은 위치를 못 보내므로
+        // 5시 도착이 11시 출근으로, 4시 30분 종료가 5시 10분 퇴근으로 남을 수 있다.
+        // 둘 다 임금이 걸린 시각이라 둘 다 고칠 길이 있어야 한다. 본인이 실제 시각을
+        // 말하면 반장 확인 대기로 돌린다. 이미 요청했으면 그 사실만 보인다.
+        var ins = (d.logs || []).filter(function (l) { return l.type === 'clock_in'; });
+        var outs = (d.logs || []).filter(function (l) { return l.type === 'clock_out'; });
+        if (!AS) {
+            // 출근은 그날의 첫 기록, 퇴근은 마지막 기록이 그 사람의 하루 끝이다.
+            h += fixRow(ins[0], 'in', T.fixTime);
+            h += fixRow(outs[outs.length - 1], 'out', T.fixTimeOut);
         }
         h += '</div>';
 
         return h;
+    }
+
+    /* 시각 정정 한 줄. 기록이 없으면 아무것도 안 그리고, 이미 요청했으면 그 사실만. */
+    function fixRow(log, dir, label) {
+        if (!log) return '';
+        // 출근·퇴근 둘 다 요청해 두면 같은 줄이 두 개 뜬다. 어느 쪽인지 앞에 붙인다.
+        if (log.correctionRequested) return '<div class="note" style="margin-top:8px">⏳ ' +
+            (dir === 'out' ? T.clockOut : T.clockIn) + ' · ' + T.fixPending + '</div>';
+        return '<button type="button" class="btn quiet" data-act="fixtime" data-dir="' + dir +
+            '" style="margin-top:8px;font-size:13.5px;min-height:44px;padding:11px">' + esc(label) + '</button>';
     }
 
     /* 네 칸 그리드 한 칸. 아이콘 · 이름 · 한 줄 설명 · (필요하면) 빨간 숫자. */
@@ -1326,16 +1344,21 @@
         state.busy = false;
     }
 
-    /** 출근 시각 정정 요청 — 평소 시각이 미리 채워져 있어 대부분 확인만 누르면 된다. */
-    async function requestFix() {
+    /**
+     * 시각 정정 요청. 출근은 평소 시각이 미리 채워져 있어 대부분 확인만 누르면 된다.
+     * 퇴근에는 미리 채울 «평소 시각» 이 없다 — 날마다 끝나는 시각이 다르기 때문에
+     * 아무 값이나 채워 두면 그걸 그대로 눌러 잘못된 시각이 들어간다.
+     */
+    async function requestFix(dir) {
         var d = state.data || {};
-        var time = window.prompt(T.fixPrompt, d.usualTime || '');
+        var out = dir === 'out';
+        var time = window.prompt(out ? T.fixPromptOut : T.fixPrompt, out ? '' : (d.usualTime || ''));
         if (!time) return;
         try {
             var r = await fetch('{{ route('attendance-app.correction') }}', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, Accept: 'application/json' },
-                body: JSON.stringify({ time: time.trim(), lang: state.lang })
+                body: JSON.stringify({ time: time.trim(), lang: state.lang, direction: out ? 'out' : 'in' })
             });
             var j = await r.json();
             toast(j.message || j.error || T.done);
@@ -1351,7 +1374,7 @@
         ev.preventDefault();
         var act = el.getAttribute('data-act');
         if (act === 'scan') return scanAndPunch(el.getAttribute('data-dir'));
-        if (act === 'fixtime') return requestFix();
+        if (act === 'fixtime') return requestFix(el.getAttribute('data-dir'));
         if (act === 'perm') { state.permission = 'unknown'; startWatch(); return render(); }
         if (act === 'install') return window.AppInstall.show();
         if (act === 'retry') return load();

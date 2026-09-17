@@ -3,6 +3,17 @@
     // 지원자가 남의 회사 이름에 동의하게 된다.
     $org = \App\Support\Org::name();
 
+    // 원청사(현장의 발주처/원청)도 <b>현장마다</b> 다르다. 예전에는 특정 원청사
+    // 이름이 이 파일에 글자 그대로 박혀 있어서, 다른 원청사 현장에 등록하는 사람도
+    // 「그 회사 현장 경험 있나요?」 를 필수로 답해야 했고, 동의문에도 자기와 상관없는
+    // 회사 이름이 적혀 있었다. 현장에 적힌 원청사를 읽고, 없으면 이름 없이 쓴다.
+    $gcName = $registration->site?->client?->name;
+    $gc = [
+        'ko' => filled($gcName) ? $gcName : '원청사',
+        'en' => filled($gcName) ? $gcName : 'the general contractor',
+        'es' => filled($gcName) ? $gcName : 'el contratista general',
+    ];
+
     $copy = [
         'ko' => [
             'html' => 'ko',
@@ -43,7 +54,7 @@
             'start_date' => '근무 가능 시작일',
             'desired_site' => '희망 근무 현장',
             'previous_experience' => '이전 현장 근무 경험',
-            'hoffman_experience' => 'HOFFMAN 현장 근무 경험 여부',
+            'gc_experience' => $gc['ko'].' 현장 근무 경험 여부',
             'yes' => '있음',
             'no' => '없음',
             'id_instruction' => '본인 확인을 위해 아래 중 하나를 사진으로 찍어 업로드하세요.',
@@ -60,8 +71,8 @@
             'period' => '근무 기간',
             'duties' => '담당 업무',
             'reason' => '퇴사 사유',
-            'consent_text' => '본인은 입사지원, 서류 검토, 인터뷰, 채용 여부 판단, HOFFMAN 안전교육 진행, 현장 출입 베지 발급, 출퇴근/NFC 관리, 비상 연락 및 인사 기록 관리를 위해 본인이 제출한 개인정보가 '.$org.' ERP 시스템에 저장 및 사용되는 것에 동의합니다.',
-            'collected' => '수집 및 이용 항목: 이름, 생년월일, 국적, 연락처, 이메일, 주소, 비상 연락처, 지원 직책, 경력 사항, 근무 가능일, 신분증 사진, 자격증 및 라이선스 사진, HOFFMAN 안전교육 및 현장 출입 베지 정보, NFC ID 및 출퇴근 기록',
+            'consent_text' => '본인은 입사지원, 서류 검토, 인터뷰, 채용 여부 판단, '.$gc['ko'].' 안전교육 진행, 현장 출입 베지 발급, 출퇴근/NFC 관리, 비상 연락 및 인사 기록 관리를 위해 본인이 제출한 개인정보가 '.$org.' ERP 시스템에 저장 및 사용되는 것에 동의합니다.',
+            'collected' => '수집 및 이용 항목: 이름, 생년월일, 국적, 연락처, 이메일, 주소, 비상 연락처, 지원 직책, 경력 사항, 근무 가능일, 신분증 사진, 자격증 및 라이선스 사진, '.$gc['ko'].' 안전교육 및 현장 출입 베지 정보, NFC ID 및 출퇴근 기록',
             'purpose' => '보관 및 이용 목적: 입사지원 및 채용 검토, 인터뷰 진행 및 결과 관리, 안전교육 및 현장 출입 자격 확인, 직원 등록 및 현장 배정, 출퇴근, 급여, 비상 연락, 현장 운영 관리',
             'agree' => '위 개인정보 수집 및 이용에 동의합니다.',
             'signature' => '지원자 서명',
@@ -108,7 +119,7 @@
             'start_date' => 'Available start date',
             'desired_site' => 'Preferred job site',
             'previous_experience' => 'Previous job site experience',
-            'hoffman_experience' => 'Previous HOFFMAN site experience',
+            'gc_experience' => 'Previous experience on a '.$gc['en'].' site',
             'yes' => 'Yes',
             'no' => 'No',
             'id_instruction' => 'Upload one of the following for identity verification.',
@@ -125,8 +136,8 @@
             'period' => 'Work period',
             'duties' => 'Duties',
             'reason' => 'Reason for leaving',
-            'consent_text' => 'I agree that the personal information I submit may be stored and used in the '.$org.' ERP system for job application, document review, interview, hiring decision, HOFFMAN safety training, site badge issuance, attendance/NFC management, emergency contact, and HR records.',
-            'collected' => 'Collected items: name, date of birth, nationality, contact, email, address, emergency contact, position, work history, available start date, ID photos, certification/license photos, HOFFMAN safety and site badge information, NFC ID and attendance records.',
+            'consent_text' => 'I agree that the personal information I submit may be stored and used in the '.$org.' ERP system for job application, document review, interview, hiring decision, '.$gc['en'].' safety training, site badge issuance, attendance/NFC management, emergency contact, and HR records.',
+            'collected' => 'Collected items: name, date of birth, nationality, contact, email, address, emergency contact, position, work history, available start date, ID photos, certification/license photos, '.$gc['en'].' safety and site badge information, NFC ID and attendance records.',
             'purpose' => 'Purpose: job application and hiring review, interview/result management, safety and site access qualification, employee registration and site assignment, attendance, payroll, emergency contact, and site operations.',
             'agree' => 'I agree to the personal information collection and use above.',
             'signature' => 'Applicant signature',
@@ -173,7 +184,7 @@
             'start_date' => 'Fecha disponible para empezar',
             'desired_site' => 'Sitio de trabajo preferido',
             'previous_experience' => 'Experiencia previa en obra',
-            'hoffman_experience' => 'Experiencia previa en sitio HOFFMAN',
+            'gc_experience' => 'Experiencia previa en sitio de '.$gc['es'],
             'yes' => 'Sí',
             'no' => 'No',
             'id_instruction' => 'Suba uno de los siguientes documentos para verificar su identidad.',
@@ -190,8 +201,8 @@
             'period' => 'Periodo',
             'duties' => 'Responsabilidades',
             'reason' => 'Razón de salida',
-            'consent_text' => 'Acepto que la información personal enviada se guarde y use en el sistema '.$org.' ERP para solicitud de empleo, revisión de documentos, entrevista, decisión de contratación, entrenamiento de seguridad HOFFMAN, badge de acceso, asistencia/NFC, contacto de emergencia y registros de HR.',
-            'collected' => 'Datos recopilados: nombre, fecha de nacimiento, nacionalidad, contacto, email, dirección, contacto de emergencia, puesto, experiencia, fecha disponible, fotos de ID, certificaciones/licencias, seguridad HOFFMAN y badge, NFC ID y registros de asistencia.',
+            'consent_text' => 'Acepto que la información personal enviada se guarde y use en el sistema '.$org.' ERP para solicitud de empleo, revisión de documentos, entrevista, decisión de contratación, entrenamiento de seguridad de '.$gc['es'].', badge de acceso, asistencia/NFC, contacto de emergencia y registros de HR.',
+            'collected' => 'Datos recopilados: nombre, fecha de nacimiento, nacionalidad, contacto, email, dirección, contacto de emergencia, puesto, experiencia, fecha disponible, fotos de ID, certificaciones/licencias, seguridad de '.$gc['es'].' y badge, NFC ID y registros de asistencia.',
             'purpose' => 'Propósito: revisión de empleo, entrevistas, seguridad y acceso a sitio, registro de empleado y asignación, asistencia, nómina, emergencia y operación del sitio.',
             'agree' => 'Acepto la recopilación y uso de información personal descritos arriba.',
             'signature' => 'Firma del solicitante',
@@ -391,10 +402,18 @@
                         @endunless
                         @unless ($quick ?? false)
                         <div class="field full">
-                            <strong>{{ $t['hoffman_experience'] }} <small>{{ $t['required'] }}</small></strong>
+                            <strong>{{ $t['gc_experience'] }} <small>{{ $t['required'] }}</small></strong>
                             <div class="choice-group">
-                                <label class="choice"><input type="radio" name="hoffman_experience" value="yes" @checked(old('hoffman_experience', $application['hoffman_experience'] ?? '') === 'yes') required>{{ $t['yes'] }}</label>
-                                <label class="choice"><input type="radio" name="hoffman_experience" value="no" @checked(old('hoffman_experience', $application['hoffman_experience'] ?? '') === 'no') required>{{ $t['no'] }}</label>
+                                @php
+                                    // 예전에 저장된 지원서는 이 답을 다른 이름(특정 원청사 이름이
+                                    // 박힌 칸)으로 갖고 있다. 그 이름을 여기 다시 적으면 «코드에
+                                    // 고객사 이름을 남기지 않는다» 는 규칙이 그대로 깨진다. 그 값은
+                                    // 기록에는 남아 있고 화면에서 읽는 곳이 없으므로, 아직 제출하지
+                                    // 않은 옛 지원서에서 이 라디오만 안 채워진 채 열린다 — 그뿐이다.
+                                    $gcAnswer = old('gc_experience', $application['gc_experience'] ?? '');
+                                @endphp
+                                <label class="choice"><input type="radio" name="gc_experience" value="yes" @checked($gcAnswer === 'yes') required>{{ $t['yes'] }}</label>
+                                <label class="choice"><input type="radio" name="gc_experience" value="no" @checked($gcAnswer === 'no') required>{{ $t['no'] }}</label>
                             </div>
                         </div>
                         @endunless

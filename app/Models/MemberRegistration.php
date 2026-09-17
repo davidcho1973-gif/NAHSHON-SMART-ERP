@@ -314,7 +314,7 @@ class MemberRegistration extends Model
         }
 
         if ($this->safety_training_status !== 'completed') {
-            $blockers[] = 'Hoffman safety training must be completed first.';
+            $blockers[] = 'Site safety training must be completed first.';
         }
 
         if (blank($this->nfc_raw_uid)) {
@@ -428,7 +428,7 @@ class MemberRegistration extends Model
         if ($this->badge_photo_path || $this->badge_number) {
             $checklist[] = [
                 'document_type' => 'nfc',
-                'title' => 'Hoffman Badge / NFC',
+                'title' => '현장 출입 배지 (Site Badge / NFC)',
                 'status' => $this->badge_registration_status === 'registered' ? 'verified' : 'pending',
                 'issued_on' => $this->badge_issued_on,
                 'file_path' => $this->publicStorageUrl($this->badge_photo_path),
