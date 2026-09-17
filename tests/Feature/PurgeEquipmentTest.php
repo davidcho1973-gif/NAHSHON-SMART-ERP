@@ -110,7 +110,7 @@ class PurgeEquipmentTest extends TestCase
         $path = storage_path('app/testing-equipment-purge.json');
         @unlink($path);
 
-        $this->artisan('equipment:purge --apply --backup='.$path)->assertExitCode(0);
+        $this->artisan('equipment:purge', ['--apply' => true, '--backup' => $path])->assertExitCode(0);
 
         $this->assertFileExists($path, '되돌릴 근거 없이 지우면 안 된다.');
         $saved = json_decode((string) file_get_contents($path), true);
