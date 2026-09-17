@@ -38,7 +38,9 @@ class DeviceLabelLengthTest extends TestCase
             'timezone' => 'America/Phoenix', 'status' => 'active',
         ]);
         $this->company = Company::create([
-            'code' => 'NAHSHON', 'name' => 'NAHSHON MEP', 'status' => 'active',
+            // 픽스처 회사명은 중립으로 둔다 — 공개 저장소라 고객사 이름이 남으면
+            // 다음 고객 배포에 남의 회사 이름이 먼저 들어가 앉는다(OrgIdentityTest).
+            'code' => 'ACME', 'name' => 'ACME MECHANICAL', 'status' => 'active',
             'company_type' => Company::TYPE_PARTNER,
         ]);
     }
