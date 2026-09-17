@@ -30,7 +30,7 @@
     var company = data.companies.find(function (c) { return same(c.id, companyId); });
     var current = list.find(function (t) { return same(t.id, selectedTeam); });
     if (!current) selectedTeam = '';
-    var action = function (label, fn) { return u.rowButton(label, u.esc(fn)); };
+    var action = function (label, fn) { return u.rowButton(label, fn); };
     var companyButton = data.canManageCompanies ? action('회사 추가', 'AdminCrew.company()') : '';
     var steps = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:18px 0">' +
       ['1. 회사 선택', '2. 현장 선택', '3. 팀·반장 등록', '4. 작업자 배치·계정 확인'].map(function (s) {
