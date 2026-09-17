@@ -404,7 +404,11 @@ class AttendanceGeoService
         return false;
     }
 
-    private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    /**
+     * 두 좌표 사이 거리(m). 지오펜스 판정과 «기록에서 현장 중심 제안» 이 같은 자를
+     * 쓰도록 공개해 둔다 — 거리 계산이 두 벌이면 언젠가 서로 다른 답을 낸다.
+     */
+    public function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
     {
         $r = 6371000.0;
         $dLat = deg2rad($lat2 - $lat1);

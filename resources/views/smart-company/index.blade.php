@@ -14556,6 +14556,21 @@ async function renderVendors() {
           '<span style="font-size:12px">m</span>' +
           '<button class="btn-primary" style="padding:7px 12px" onclick="window.autoAttSetGeofence()"><i class="ph ph-crosshair-simple"></i> 선택 현장에 현재 위치 등록</button>' +
         '</div>' +
+        // 현장에 못 가는 경우 — 조지아 현장을 애리조나 사무실에서 설정해야 할 때가 있다.
+        // 그때 길이 없으면 그 현장 사람들은 매일 «확인 필요» 로 쌓인다.
+        '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default)">' +
+          '<div style="font-size:12px;font-weight:700;margin-bottom:6px">현장에 갈 수 없을 때</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+            '<span style="font-size:12px">위도</span>' +
+            '<input id="auto-att-lat" type="text" inputmode="decimal" placeholder="32.0809" style="width:120px;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary)">' +
+            '<span style="font-size:12px">경도</span>' +
+            '<input id="auto-att-lng" type="text" inputmode="decimal" placeholder="-81.0912" style="width:120px;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-base);color:var(--text-primary)">' +
+            '<button class="btn-secondary" style="padding:7px 12px" onclick="window.autoAttSetGeofenceManual()"><i class="ph ph-map-pin"></i> 입력한 좌표로 등록</button>' +
+            '<button class="btn-secondary" style="padding:7px 12px" onclick="window.autoAttSuggestGeofence()"><i class="ph ph-magic-wand"></i> 기록된 출퇴근 위치에서 제안</button>' +
+          '</div>' +
+          '<div id="auto-att-suggest" style="font-size:11.5px;color:var(--text-tertiary);margin-top:6px"></div>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">※ 구글 지도에서 현장을 오른쪽 클릭하면 좌표가 나옵니다. 그대로 붙여 넣으세요(예: 32.0809, -81.0912).</div>' +
+        '</div>' +
         '<div id="auto-att-site-info" style="font-size:11.5px;color:var(--text-tertiary);margin-top:8px"></div>' +
         '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">※ 등록하려는 현장에 실제로 서 있는 상태에서(실내 진입 전, 현장 외곽 권장) 눌러야 정확합니다.</div>' +
         '</div>';
@@ -14621,6 +14636,42 @@ async function renderVendors() {
         if (r && r.success) { if (window.showToast) window.showToast('현장 ' + r.site + ' 지오펜스를 설정했습니다(반경 ' + r.radius + 'm). 해당 현장 작업자 전원에게 적용됩니다.', 'success'); autoAttRefresh(); }
         else alert('설정 실패: ' + ((r && r.error) || '오류'));
       }, function (err) { alert('위치 권한이 필요합니다: ' + err.message); }, { enableHighAccuracy: true });
+    };
+
+    // 좌표를 손으로 넣어 등록한다. 서버 쪽은 이미 위도·경도를 인자로 받고 있었다 —
+    // 화면이 브라우저 위치로만 채워 넣고 있었을 뿐이다.
+    window.autoAttSetGeofenceManual = async function () {
+      var lat = parseFloat(((document.getElementById('auto-att-lat') || {}).value || '').trim());
+      var lng = parseFloat(((document.getElementById('auto-att-lng') || {}).value || '').trim());
+      if (!isFinite(lat) || !isFinite(lng)) { alert('위도와 경도를 숫자로 넣어 주세요. 예: 32.0809 / -81.0912'); return; }
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { alert('좌표 범위가 올바르지 않습니다. 위도 -90~90, 경도 -180~180.'); return; }
+      var radius = (document.getElementById('auto-att-radius') || {}).value || 322;
+      var siteSel = document.getElementById('auto-att-site');
+      var siteId = siteSel ? siteSel.value : null;
+      var siteLabel = siteSel && siteSel.selectedIndex >= 0 ? siteSel.options[siteSel.selectedIndex].text : '내 현장';
+      if (!confirm('[' + siteLabel + '] 의 중심을\n위도 ' + lat + ' · 경도 ' + lng + ' · 반경 ' + radius + 'm\n로 설정할까요?')) return;
+      var r = await autoAttScApi('api_setMySiteGeofence', [lat, lng, Number(radius), siteId]);
+      if (r && r.success) { if (window.showToast) window.showToast('현장 ' + r.site + ' 지오펜스를 설정했습니다(반경 ' + r.radius + 'm).'); autoAttLoadGeoManager(); }
+      else alert('설정 실패: ' + ((r && r.error) || '오류'));
+    };
+
+    // 이미 찍힌 출퇴근 위치에서 현장 중심을 제안한다. 등록까지 하지는 않는다 —
+    // 사람이 숫자를 보고 «맞다» 고 판단한 뒤에 누르는 편이 안전하다.
+    window.autoAttSuggestGeofence = async function () {
+      var out = document.getElementById('auto-att-suggest');
+      var siteSel = document.getElementById('auto-att-site');
+      var siteId = siteSel ? siteSel.value : null;
+      if (out) out.textContent = '기록을 찾는 중…';
+      var r = await autoAttScApi('api_suggestSiteGeofence', [siteId]);
+      if (!r || !r.success) { if (out) out.textContent = (r && r.error) || '제안할 수 없습니다.'; return; }
+      var la = document.getElementById('auto-att-lat');
+      var ln = document.getElementById('auto-att-lng');
+      var ra = document.getElementById('auto-att-radius');
+      if (la) la.value = r.lat;
+      if (ln) ln.value = r.lng;
+      if (ra) ra.value = r.radius;
+      if (out) out.innerHTML = '출퇴근 기록 <b>' + r.samples + '건</b>의 가운데입니다. 반경 <b>' + r.radius + 'm</b> 를 제안합니다. ' +
+        '<a href="https://maps.google.com/?q=' + r.lat + ',' + r.lng + '" target="_blank" rel="noopener">지도에서 확인</a> 후 <b>입력한 좌표로 등록</b> 을 누르세요.';
     };
 
     window.renderMyAttendance = function() {

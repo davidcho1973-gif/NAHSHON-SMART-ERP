@@ -156,6 +156,7 @@ class SmartCompanyData
             // 현장 WiFi(BSSID) 등록 — 하이브리드 자동 출퇴근의 실내 확인 기반
             'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
             'api_getGeofenceSites' => self::getGeofenceSites(),
+            'api_suggestSiteGeofence' => self::suggestSiteGeofence($args[0] ?? null),
             'api_finalizeAttendanceNow' => self::finalizeAttendanceNow($args[0] ?? null),
             // 회사 구분(자사/협력사) — 작업자 간편 등록의 고용 형태가 여기서 정해진다.
             'api_getCompanyTypes' => self::companyTypes(),
@@ -1397,6 +1398,99 @@ class SmartCompanyData
      *
      * @return array<string, mixed>
      */
+    /**
+     * 현장에 <b>가지 않고</b> 그 현장의 중심을 찾는다 — 이미 찍힌 출퇴근 위치로.
+     *
+     * 지오펜스를 넣는 길이 「현재 위치 등록」 하나뿐이었다. 그러려면 관리자가 그 현장에
+     * 서 있어야 한다. 애리조나 사무실에서 조지아 현장을 설정할 방법이 없었고, 그동안
+     * 그 현장 사람들은 매일 «확인 필요» 로 쌓였다.
+     *
+     * 그런데 좌표는 이미 있다. 작업자가 출퇴근을 찍을 때마다 그 위치가 기록에 남는다.
+     * 그것들의 <b>중앙값</b>을 쓰면 현장 한가운데가 나온다 — 평균이 아니라 중앙값인
+     * 이유는, 집에서 잘못 찍힌 한 건이 평균을 몇 킬로미터씩 끌고 가기 때문이다.
+     *
+     * 반경은 «찍힌 위치의 90%가 들어오는 거리» 로 제안한다. 다 덮으려고 최대값을 쓰면
+     * 이상치 하나 때문에 반경이 도시 하나만큼 커진다.
+     *
+     * @return array<string, mixed>
+     */
+    public static function suggestSiteGeofence(mixed $siteId = null): array
+    {
+        $user = auth()->user();
+        if (! $user || ! in_array($user->access_role, self::GEOFENCE_ROLES, true)) {
+            return ['success' => false, 'error' => '현장 지오펜스를 설정할 권한이 없습니다.'];
+        }
+
+        $resolvedId = ($siteId !== null && $siteId !== '') ? self::resolveSiteId((string) $siteId) : null;
+        $site = $resolvedId ? Site::find($resolvedId) : null;
+        if (! $site) {
+            return ['success' => false, 'error' => '현장을 선택하세요.'];
+        }
+        if (! in_array($user->access_role, ['super_admin', 'admin'], true)) {
+            $employee = $user->employee_id ? Employee::find($user->employee_id) : null;
+            if ($employee?->site_id && $site->id !== $employee->site_id) {
+                return ['success' => false, 'error' => '배정된 현장만 볼 수 있습니다.'];
+            }
+        }
+
+        // payload 는 JSON 이지만 여기서는 <b>PHP 로</b> 읽는다. 데이터베이스에서 JSON 을
+        // 글자로 꺼내다 널바이트 한 개에 쿼리 전체가 죽는 것을 이 저장소에서 이미 겪었다.
+        $rows = AttendanceLog::query()
+            ->where('site_id', $site->id)
+            ->where('event_at', '>=', now()->subDays(60))
+            ->orderByDesc('event_at')
+            ->limit(500)
+            ->get(['payload']);
+
+        $points = [];
+        foreach ($rows as $row) {
+            $p = is_array($row->payload) ? $row->payload : [];
+            $lat = $p['lat'] ?? null;
+            $lng = $p['lng'] ?? null;
+            if (is_numeric($lat) && is_numeric($lng)) {
+                $points[] = [(float) $lat, (float) $lng];
+            }
+        }
+
+        if (count($points) < 3) {
+            return [
+                'success' => false,
+                'error' => '위치가 남은 출퇴근 기록이 '.count($points).'건뿐입니다. 최소 3건이 필요합니다.',
+                'samples' => count($points),
+            ];
+        }
+
+        $lat = self::median(array_column($points, 0));
+        $lng = self::median(array_column($points, 1));
+
+        $distances = [];
+        foreach ($points as [$pLat, $pLng]) {
+            $distances[] = app(AttendanceGeoService::class)->distanceMeters($pLat, $pLng, $lat, $lng);
+        }
+        sort($distances);
+        $p90 = $distances[(int) floor(count($distances) * 0.9)] ?? end($distances);
+        $radius = max(100, min(2000, (int) ceil($p90 / 50) * 50));
+
+        return [
+            'success' => true,
+            'lat' => round($lat, 6),
+            'lng' => round($lng, 6),
+            'radius' => $radius,
+            'samples' => count($points),
+            'site' => $site->code,
+        ];
+    }
+
+    /** @param  list<float>  $values */
+    private static function median(array $values): float
+    {
+        sort($values);
+        $n = count($values);
+        $mid = intdiv($n, 2);
+
+        return $n % 2 === 1 ? $values[$mid] : ($values[$mid - 1] + $values[$mid]) / 2;
+    }
+
     public static function getGeofenceSites(): array
     {
         $user = auth()->user();
