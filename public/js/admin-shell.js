@@ -422,14 +422,15 @@
   }
 
   function primaryButton(label, onclickAttr, icon) {
-    return '<button type="button" onclick="' + onclickAttr + '" style="padding:9px 16px;border-radius:8px;border:none;background:' +
+    // Handler arguments can contain quotes; escape the HTML attribute, not the JavaScript.
+    return '<button type="button" onclick="' + esc(onclickAttr) + '" style="padding:9px 16px;border-radius:8px;border:none;background:' +
       TOKENS.brand + ';color:#fff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">' +
       (icon ? '<i class="ph ph-' + esc(icon) + '"></i>' : '') + esc(label) + '</button>';
   }
 
   function rowButton(label, onclickAttr, kind) {
     var danger = kind === 'danger';
-    return '<button type="button" onclick="' + onclickAttr + '" style="padding:5px 10px;border-radius:6px;border:1px solid ' +
+    return '<button type="button" onclick="' + esc(onclickAttr) + '" style="padding:5px 10px;border-radius:6px;border:1px solid ' +
       (danger ? TOKENS.danger : TOKENS.line) + ';background:transparent;color:' + (danger ? TOKENS.danger : TOKENS.dim) +
       ';font-size:12px;cursor:pointer">' + esc(label) + '</button>';
   }
