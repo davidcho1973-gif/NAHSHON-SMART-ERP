@@ -7,6 +7,7 @@ use App\Models\AttendanceSession;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
+use App\Models\Equipment;
 use App\Models\EmployeePayrollProfile;
 use App\Models\PayrollTimesheet;
 use App\Models\Payslip;
@@ -99,7 +100,42 @@ class WorkerAttendanceService
             'week' => $this->week($employee, $tz),
             'pay' => $this->pay($employee),
             'notices' => $this->notices($employee, $site, $tz),
+            'myEquipment' => $this->myEquipment($employee),
         ];
+    }
+
+    /**
+     * 지금 이 사람 앞으로 나가 있는 장비.
+     *
+     * ── 왜 앱 첫 화면에 두나 ───────────────────────────────────────────
+     * 반납하려면 장비에 붙은 QR 을 다시 찍어야 하는데, 스티커가 흙·기름에 덮여
+     * 안 읽히거나 장비가 창고 안쪽에 들어가 있으면 그 자리에서 길이 막힌다. 그러면
+     * 반납이 안 찍히고, 그 장비는 영원히 «그 사람이 들고 있는 것» 으로 남는다.
+     * 여기서 바로 열 수 있으면 그 막힘이 없어진다.
+     *
+     * 주소에 들어가는 토큰은 <b>그 스티커의 주소 그대로</b>다. 지금 그 장비를 손에
+     * 들고 있는 사람에게 스티커를 보여 주는 것과 같아서, 새로 여는 문이 없다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function myEquipment(Employee $employee): array
+    {
+        try {
+            return Equipment::query()
+                ->where('employee_id', $employee->id)
+                ->whereHas('activeRental')
+                ->orderBy('equipment_code')
+                ->limit(20)
+                ->get()
+                ->map(fn (Equipment $e): array => [
+                    'code' => $e->equipment_code,
+                    'name' => $e->equipment_type,
+                    'url' => route('equipment-checklist.show', ['token' => $e->ensureQrToken()]),
+                ])->values()->all();
+        } catch (\Throwable) {
+            // 장비 표가 아직 없는 배포에서도 출퇴근 화면은 떠야 한다.
+            return [];
+        }
     }
 
     /**

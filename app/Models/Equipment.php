@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Equipment extends Model
 {
@@ -45,7 +46,23 @@ class Equipment extends Model
         'payload',
         'quantity',
         'is_bulk',
+        'qr_token',
+        'qr_token_hash',
+        'last_checked_at',
     ];
+
+    /**
+     * 장비 상태 — 화면·집계가 이 낱말들로 갈린다.
+     *
+     * «점검필요» 는 사용 전 점검에서 치명 항목이 걸린 장비다. 일부러 사용중·대기중
+     * 어느 쪽도 아니게 뒀다: 가동 가능 대수에서 빠지고, 배정 가능 목록에도 안 뜬다.
+     * 셋 중 하나로 우겨넣으면 못 쓰는 장비가 «쓸 수 있는 것» 으로 세어진다.
+     */
+    public const STATUS_IN_USE = '사용중';
+
+    public const STATUS_AVAILABLE = '대기중';
+
+    public const STATUS_NEEDS_INSPECTION = '점검필요';
 
     /**
      * 대분류 (자재/공구/장비/안전/가설) — 기능 분류의 상위 묶음.
@@ -140,6 +157,8 @@ class Equipment extends Model
             'payload' => 'array',
             'quantity' => 'integer',
             'is_bulk' => 'boolean',
+            'qr_token' => 'encrypted',
+            'last_checked_at' => 'datetime',
         ];
     }
 
@@ -220,6 +239,60 @@ class Equipment extends Model
     public function activeRental(): HasOne
     {
         return $this->hasOne(EquipmentRental::class)->where('status', 'active')->whereNull('returned_at');
+    }
+
+    public function checklistLogs(): HasMany
+    {
+        return $this->hasMany(EquipmentChecklistLog::class)->orderByDesc('submitted_at');
+    }
+
+    /** 가장 최근 점검 한 건 — «지금 이 장비를 써도 되나» 는 이 줄이 답한다. */
+    public function latestChecklistLog(): HasOne
+    {
+        return $this->hasOne(EquipmentChecklistLog::class)->latestOfMany('submitted_at');
+    }
+
+    // ── QR 스티커 ───────────────────────────────────────────────────────
+    //
+    // 스티커에 장비 번호를 그대로 박으면 번호를 하나씩 올려가며 남의 장비 화면을
+    // 열어 볼 수 있다. 출퇴근 QR·배지 QR 과 같은 방식이다: 추측 불가능한 토큰을
+    // 쓰고, 원문은 암호화해 두고 대조는 해시로 한다.
+
+    public static function makeQrToken(): string
+    {
+        return 'eq_'.Str::random(48);
+    }
+
+    public static function hashQrToken(string $token): string
+    {
+        return hash('sha256', $token);
+    }
+
+    public static function forQrToken(string $token): ?self
+    {
+        return self::query()
+            ->with(['site', 'company', 'activeRental'])
+            ->where('qr_token_hash', self::hashQrToken($token))
+            ->first();
+    }
+
+    /**
+     * 스티커를 뽑을 수 있게 토큰을 보장한다. 이미 있으면 그대로 둔다 —
+     * 다시 만들면 <b>이미 장비에 붙어 있는 스티커가 죽는다.</b>
+     */
+    public function ensureQrToken(): string
+    {
+        if (filled($this->qr_token)) {
+            return (string) $this->qr_token;
+        }
+
+        $token = self::makeQrToken();
+        $this->forceFill([
+            'qr_token' => $token,
+            'qr_token_hash' => self::hashQrToken($token),
+        ])->save();
+
+        return $token;
     }
 
     /**

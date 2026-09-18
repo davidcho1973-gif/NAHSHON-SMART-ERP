@@ -8,6 +8,7 @@ use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\EmailPasswordAuthController;
 use App\Http\Controllers\EquipmentApiController;
+use App\Http\Controllers\EquipmentChecklistController;
 use App\Http\Controllers\ExpenseAppController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
@@ -226,6 +227,21 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/equipment-api/file', [EquipmentApiController::class, 'serveFile'])->middleware(AuthorizeAssetApi::class)->name('equipment.file');
     Route::post('/equipment-api/{equipment}/update', [EquipmentApiController::class, 'updateEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.update');
     Route::post('/equipment-api/{equipment}/delete', [EquipmentApiController::class, 'deleteEquipment'])->middleware(AuthorizeAssetApi::class)->name('equipment.delete');
+
+    /**
+     * 장비 사용 점검 — 장비에 붙은 QR 을 폰 기본 카메라로 찍으면 여기로 온다.
+     *
+     * 로그인 구간 안에 둔다. 이 기록의 값어치는 «누가 봤는가» 에 있어서, 익명으로
+     * 받으면 사고 조사에서 아무 소용이 없는 종이가 된다. 로그인이 안 돼 있으면
+     * 컨트롤러가 로그인시킨 뒤 이 화면으로 되돌려 보낸다.
+     */
+    Route::get('/eq/{token}', [EquipmentChecklistController::class, 'show'])->name('equipment-checklist.show');
+    Route::post('/eq/{token}/submit', [EquipmentChecklistController::class, 'submit'])
+        ->middleware('throttle:60,1')->name('equipment-checklist.submit');
+    Route::get('/equipment-stickers', [EquipmentChecklistController::class, 'stickerSheet'])->name('equipment-checklist.sheet');
+    Route::get('/equipment-stickers/{equipment}', [EquipmentChecklistController::class, 'sticker'])->name('equipment-checklist.sticker');
+    Route::get('/equipment-check-photo/{path}', [EquipmentChecklistController::class, 'photo'])
+        ->where('path', '.*')->name('equipment-checklist.photo');
 
     // Mobile Equipment Routes
     Route::get('/mobile-equipment/index', [MobileEquipmentController::class, 'index'])->name('mobile-equipment.index');

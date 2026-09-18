@@ -35,6 +35,7 @@
     <script src="{{ asset('js/admin-org.js') }}?v={{ filemtime(public_path('js/admin-org.js')) }}" defer></script>
     <script src="{{ asset('js/admin-messenger.js') }}?v={{ filemtime(public_path('js/admin-messenger.js')) }}" defer></script>
     <script src="{{ asset('js/admin-dailyreport.js') }}?v={{ filemtime(public_path('js/admin-dailyreport.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-equipment-checks.js') }}?v={{ filemtime(public_path('js/admin-equipment-checks.js')) }}" defer></script>
     <script src="{{ asset('js/admin-correspondence.js') }}?v={{ filemtime(public_path('js/admin-correspondence.js')) }}" defer></script>
     <script src="{{ asset('js/smart-language.js') }}?v={{ filemtime(public_path('js/smart-language.js')) }}" defer></script>
   <link rel="stylesheet" href="{{ asset('css/smart-company.css') }}">
@@ -218,6 +219,9 @@
             <ul class="nav-sub" data-sub="g-inv">
               <li class="nav-item nav-child" data-view="item-master" id="nav-item-master">
                 <i class="ph ph-list-bullets"></i><span>품목 · 분류</span>
+              </li>
+              <li class="nav-item nav-child" data-view="equipment-checks" id="nav-equipment-checks">
+                <i class="ph ph-clipboard-text" style="color:#dc2626"></i><span>장비 사용 점검</span>
               </li>
               <li class="nav-item nav-child" data-view="boq" id="nav-boq">
                 <i class="ph ph-calculator"></i><span>물량 / BOQ</span>
@@ -1446,6 +1450,7 @@
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
+        'equipment-checks': { title: '장비 사용 점검', render: function () { return window.AdminEquipmentChecks.render(); } },
         'submittals': { title: '제출물 대장', render: function () { return window.AdminRegisters.renderSubmittals(); } },
         'boq': { title: '물량 / BOQ', render: function () { return window.AdminRegisters.renderBoq(); } },
         'employee-admin': { title: '직원 등록 · 관리', render: function () { return window.AdminEmployees.render(); } },

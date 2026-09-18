@@ -34,6 +34,7 @@ use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
+use App\Services\Admin\EquipmentCheckAdminService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
 use App\Services\Admin\KakaoReminderAdminService;
@@ -157,6 +158,16 @@ class SmartCompanyData
             'api_setMySiteGeofence' => self::setMySiteGeofence($args[0] ?? null, $args[1] ?? null, $args[2] ?? null, $args[3] ?? null),
             'api_getGeofenceSites' => self::getGeofenceSites(),
             'api_suggestSiteGeofence' => self::suggestSiteGeofence($args[0] ?? null),
+
+            // 장비 사용 점검 — QR 로 들어온 기록을 보고, 못 쓰게 세워 둔 장비를 풀고,
+            // 질문지를 고친다.
+            'api_getEquipmentChecks' => app(EquipmentCheckAdminService::class)
+                ->board($siteId, (int) ($args[0] ?? 14)),
+            'api_clearEquipmentBlock' => app(EquipmentCheckAdminService::class)
+                ->clearBlock($args[0] ?? null, isset($args[1]) && is_string($args[1]) ? $args[1] : null),
+            'api_getEquipmentChecklistTemplates' => app(EquipmentCheckAdminService::class)->templates(),
+            'api_saveEquipmentChecklistItem' => app(EquipmentCheckAdminService::class)
+                ->saveItem($args[0] ?? null, is_array($args[1] ?? null) ? $args[1] : []),
             'api_finalizeAttendanceNow' => self::finalizeAttendanceNow($args[0] ?? null),
             // 회사 구분(자사/협력사) — 작업자 간편 등록의 고용 형태가 여기서 정해진다.
             'api_getCompanyTypes' => self::companyTypes(),

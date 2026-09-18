@@ -533,6 +533,7 @@
             retry: '다시 시도', loadFail: '정보를 불러오지 못했습니다.',
             sentFail: '보내지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.', done: '처리했습니다.',
             viewOnly: '보는 중입니다. 여기서는 출퇴근을 찍을 수 없습니다.',
+            myEquip: '내가 쓰고 있는 장비', myEquipSub: '누르면 반납 점검이 열립니다',
             fixTime: '출근 시각 정정 요청',
             fixPrompt: '실제 도착 시각 (맞으면 확인만 누르세요)',
             fixTimeOut: '퇴근 시각 정정 요청',
@@ -590,6 +591,7 @@
             retry: 'Retry', loadFail: 'Could not load your data.',
             sentFail: 'Could not send. Check your internet and try again.', done: 'Done.',
             viewOnly: 'View-only mode. You cannot punch here.',
+            myEquip: 'Equipment you have out', myEquipSub: 'Tap to open the return check',
             fixTime: 'Fix clock-in time',
             fixPrompt: 'Actual arrival time (just OK if correct)',
             fixTimeOut: 'Fix clock-out time',
@@ -647,6 +649,7 @@
             retry: 'Reintentar', loadFail: 'No se pudo cargar su información.',
             sentFail: 'No se pudo enviar. Revise su internet e intente de nuevo.', done: 'Listo.',
             viewOnly: 'Modo de solo lectura. No puede marcar aquí.',
+            myEquip: 'Equipo que tiene consigo', myEquipSub: 'Toque para abrir la revisión de devolución',
             fixTime: 'Corregir hora de entrada',
             fixPrompt: 'Hora real de llegada (OK si es correcta)',
             fixTimeOut: 'Corregir hora de salida',
@@ -843,6 +846,19 @@
                         '<span>' + esc(n.at || '') + '</span></div>' +
                         (n.body ? '<div class="notice-b">' + esc(n.body) + '</div>' : '') +
                         '</div>';
+                }).join('') +
+                '</div></div>';
+        }
+
+        // 지금 내 앞으로 나가 있는 장비. 반납하려면 장비의 QR 을 다시 찍어야 하는데
+        // 스티커가 더러워졌거나 장비가 창고 안쪽이면 그 자리에서 막힌다 — 여기서 바로 연다.
+        var mine = d.myEquipment || [];
+        if (mine.length) {
+            h += '<div class="sec"><div class="sec-h">' + T.myEquip + '</div><div class="panel">' +
+                mine.map(function (e) {
+                    return '<a class="row" href="' + e.url + '" style="text-decoration:none;color:inherit">' +
+                        '<div class="row-m"><div class="row-a">' + esc(e.code) + ' ' + esc(e.name || '') + '</div>' +
+                        '<div class="row-b">' + T.myEquipSub + '</div></div></a>';
                 }).join('') +
                 '</div></div>';
         }
