@@ -396,6 +396,8 @@ class ProjectRegisterService
 
         return [
             'canManage' => $this->canManage(),
+            // 대장을 통째로 비우는 것은 되돌릴 수 없어 권한을 따로 둔다.
+            'canClear' => app(BoqSheetService::class)->canClear(),
             'projects' => $projects,
             'projectId' => $projectId,
             'rows' => $rows,

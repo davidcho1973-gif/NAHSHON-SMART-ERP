@@ -25,7 +25,13 @@
   function call(method, args) {
     return global.gsRun(method, args || [], null).then(function (res) {
       if (!res) throw new Error('서버 응답이 없습니다.');
-      if (res.success === false) throw new Error(res.error || '요청이 거부되었습니다.');
+      if (res.success === false) {
+        // 서버가 «어느 줄이 틀렸는지» 를 같이 보냈으면 그것도 들고 올라가야 한다.
+        // 메시지만 던지면 사람이 418줄짜리 파일에서 그 줄을 직접 찾게 된다.
+        var err = new Error(res.error || '요청이 거부되었습니다.');
+        if (res.lineErrors) err.lineErrors = res.lineErrors;
+        throw err;
+      }
       return res;
     });
   }
@@ -802,6 +808,11 @@
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">' +
         projectSelect(d.projects, d.projectId, 'window.AdminRegisters.setBoqProject(this.value)') +
+        // 내보낸 파일이 그대로 올리는 파일이다 — 엑셀에서 고쳐 다시 올리면 된다.
+        (canManage ? '<button type="button" class="btn" onclick="window.AdminRegisters.exportBoq()">표로 내보내기</button>' +
+          '<button type="button" class="btn" onclick="window.AdminRegisters.importBoq()">표에서 올리기</button>' : '') +
+        (d.canClear ? '<button type="button" class="btn" style="border-color:var(--danger,#dc2626);color:var(--danger,#dc2626)" ' +
+          'onclick="window.AdminRegisters.clearBoq()">전체 비우기</button>' : '') +
       '</div>' +
       boqTabs() +
       u.table({
@@ -842,8 +853,10 @@
               return (r.wbsActivityId ? '<div style="margin-bottom:3px">' + u.badge('WBS ' + r.wbsActivityId, 'ok') + '</div>' : '') +
                 (r.source ? '<div style="font-size:11px;color:var(--text-tertiary);white-space:normal">' + u.esc(r.source) + '</div>' : '');
             } },
-          { key: '_act', label: '', width: '70px', align: 'right', render: function (r) {
-              return canManage ? u.rowButton('수정', 'window.AdminRegisters.openBoqItem(' + r.id + ')') : '';
+          { key: '_act', label: '', width: '120px', align: 'right', render: function (r) {
+              if (!canManage) return '';
+              return u.rowButton('수정', 'window.AdminRegisters.openBoqItem(' + r.id + ')') +
+                ' ' + u.rowButton('삭제', 'window.AdminRegisters.deleteBoqItem(' + r.id + ')', 'danger');
             } },
         ],
         rows: rows,
@@ -900,9 +913,127 @@
     });
   }
 
+  /* ══════════ 물량 표 주고받기 ══════════
+   *
+   * 대장에 줄을 «새로 넣는» 길이 없었다. 수정은 이미 있는 줄의 수량·단가만 고치고,
+   * 새 줄은 전용 임포트 명령이나 도면 AI 판독으로만 들어왔다. 그래서 수백 줄짜리
+   * 견적을 다시 넣으려면 엑셀에서 넣고 통째로 올리는 길이 있어야 한다.
+   */
+
+  /** 브라우저에서 파일로 떨어뜨린다 — 서버에 백업을 «두는» 것은 배포마다 지워져 못 믿는다. */
+  function downloadCsv(name, csv) {
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  function exportBoq() {
+    var u = ui();
+    call('api_exportBoq', [state.boqProjectId]).then(function (r) {
+      downloadCsv(r.fileName, r.csv);
+      u.toast(r.count + '줄을 표로 내려받았습니다. 엑셀에서 고쳐 그대로 다시 올리시면 됩니다.');
+    }).catch(function (e) { u.toast(e.message, 'error'); });
+  }
+
+  function importBoq() {
+    var u = ui();
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,text/csv';
+    input.onchange = function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { askImportMode(String(reader.result), file.name); };
+      // 엑셀이 한글을 CP949 로 저장하는 경우가 있어 UTF-8 로 읽는다. 내보내기 파일에는
+      // BOM 이 들어 있어 엑셀이 UTF-8 로 저장하므로 왕복은 깨지지 않는다.
+      reader.readAsText(file, 'UTF-8');
+    };
+    input.click();
+  }
+
+  function askImportMode(csv, fileName) {
+    var u = ui();
+    var lines = csv.split(/\r?\n/).filter(function (l) { return l.trim() !== ''; }).length - 1;
+
+    u.formModal({
+      title: '물량 올리기 — ' + fileName,
+      subtitle: '제목 줄을 뺀 ' + (lines > 0 ? lines : 0) + '줄로 보입니다. 한 줄이라도 잘못돼 있으면 아무것도 바꾸지 않고 그 줄 번호를 알려 드립니다.',
+      saveLabel: '올리기',
+      fields: [
+        { name: 'mode', label: '어떻게 넣을까요?', type: 'select', required: true, value: 'replace',
+          options: [
+            { value: 'replace', label: '교체 — 이 프로젝트의 기존 물량을 지우고 이 파일로 바꿉니다' },
+            { value: 'append', label: '추가 — 기존 물량 뒤에 붙입니다' },
+          ],
+          hint: '교체는 한 번에 일어납니다. 파일이 잘못돼 있으면 기존 물량은 그대로 남습니다.' },
+      ],
+      onSave: function (v) {
+        return call('api_importBoq', [state.boqProjectId, csv, v.mode]).then(function (r) {
+          u.toast(r.imported + '줄을 넣었습니다.' + (r.replaced ? ' (기존 ' + r.replaced + '줄 교체)' : ''));
+          return reloadBoq().then(function () { drawBoq(); return { success: true }; });
+        }).catch(function (e) {
+          // 서버가 줄 번호를 줬으면 그대로 보여 준다 — 「어디가 틀렸냐」 를 안 물어보게.
+          var detail = e.lineErrors ? '\n\n' + e.lineErrors.join('\n') : '';
+          return { success: false, error: e.message + detail };
+        });
+      },
+    });
+  }
+
+  function deleteBoqItem(id) {
+    var u = ui();
+    var row = (state.boq.rows || []).filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+
+    u.confirmDanger({
+      title: '이 물량을 지울까요?',
+      body: '#' + row.seq + ' ' + row.nameKr + ' — ' + money(row.amount) + '. 되돌릴 수 없습니다.',
+      confirmLabel: '삭제',
+    }).then(function (yes) {
+      if (!yes) return;
+      call('api_deleteBoqItem', [id]).then(function () {
+        u.toast('지웠습니다.');
+        return reloadBoq().then(drawBoq);
+      }).catch(function (e) { u.toast(e.message, 'error'); });
+    });
+  }
+
+  /** 전체 비우기 — 세어 보여 주고, 적어서 확인받고, 지우기 전에 백업을 내려보낸다. */
+  function clearBoq() {
+    var u = ui();
+    call('api_clearBoq', [state.boqProjectId, '', true]).then(function (p) {
+      u.formModal({
+        title: '물량 대장을 전부 비웁니다',
+        subtitle: p.project + ' — ' + p.count + '줄, ' + money(p.amount) + '. 되돌릴 수 없습니다.',
+        saveLabel: '전부 삭제',
+        fields: [
+          { name: 'confirm', label: '확인', type: 'text', required: true,
+            hint: '지우려면 「전부 삭제」 라고 그대로 적어 주세요. 지우기 직전의 내용은 표 파일로 자동으로 내려받습니다.' },
+        ],
+        onSave: function (v) {
+          return call('api_clearBoq', [state.boqProjectId, v.confirm, false]).then(function (r) {
+            // 지운 내용을 먼저 손에 쥐여 준다. 이 파일을 그대로 다시 올리면 복구된다.
+            if (r.backupCsv) downloadCsv(r.backupName, r.backupCsv);
+            u.toast(r.count + '줄을 지웠습니다. 삭제 직전 내용을 표 파일로 내려받았습니다.');
+            return reloadBoq().then(function () { drawBoq(); return { success: true }; });
+          }).catch(function (e) { return { success: false, error: e.message }; });
+        },
+      });
+    }).catch(function (e) { u.toast(e.message, 'error'); });
+  }
+
   global.AdminRegisters = {
     renderSubmittals: renderSubmittals,
     renderBoq: renderBoq,
+    exportBoq: exportBoq,
+    importBoq: importBoq,
+    deleteBoqItem: deleteBoqItem,
+    clearBoq: clearBoq,
     setSubProject: setSubProject,
     setSubFilter: setSubFilter,
     quickStatus: quickStatus,

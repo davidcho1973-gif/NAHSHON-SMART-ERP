@@ -29,6 +29,7 @@ use App\Models\Vendor;
 use App\Services\Admin\ApplicantAdminService;
 use App\Services\Admin\AttendanceLogAdminService;
 use App\Services\Admin\BillingAdminService;
+use App\Services\Admin\BoqSheetService;
 use App\Services\Admin\CommunicationAdminService;
 use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\CorrespondenceService;
@@ -251,6 +252,21 @@ class SmartCompanyData
             'api_fileSubmittalResearch' => app(ProjectRegisterService::class)->fileSubmittalResearch((int) ($args[0] ?? 0), (int) ($args[1] ?? -1)),
             'api_getBoq' => app(ProjectRegisterService::class)->listBoq((($args[0] ?? null) !== null) ? (int) $args[0] : null, $siteId),
             'api_saveBoqItem' => app(ProjectRegisterService::class)->saveBoqItem(is_array($args[0] ?? null) ? $args[0] : []),
+
+            // 물량 대장을 표 파일로 주고받는다 — 내보내기 · 올리기 · 비우기.
+            // 지금까지 대장에 줄을 «새로 넣는» 길이 아예 없었다(수정은 기존 줄만 고친다).
+            'api_exportBoq' => app(BoqSheetService::class)->export($args[0] ?? null),
+            'api_deleteBoqItem' => app(BoqSheetService::class)->deleteItem($args[0] ?? null),
+            'api_clearBoq' => app(BoqSheetService::class)->clear(
+                $args[0] ?? null,
+                is_string($args[1] ?? null) ? $args[1] : '',
+                (bool) ($args[2] ?? false),
+            ),
+            'api_importBoq' => app(BoqSheetService::class)->import(
+                $args[0] ?? null,
+                is_string($args[1] ?? null) ? $args[1] : '',
+                ($args[2] ?? 'replace') === 'append' ? 'append' : 'replace',
+            ),
             // 대장 한 줄 → 그 줄을 뽑아 온 원본 문서. 대장과 근거가 한 화면에 있게.
             'api_getSourceDocument' => app(ProjectRegisterService::class)->sourceDocument((int) ($args[0] ?? 0)),
 
