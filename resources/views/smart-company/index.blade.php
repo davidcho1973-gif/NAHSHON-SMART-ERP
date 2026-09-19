@@ -5536,6 +5536,11 @@
             '<div class="action-row">' +
               '<button class="btn-secondary" onclick="window.refreshInventory()"><i class="ph ph-arrow-clockwise"></i> 새로고침</button>' +
               '<button class="btn-secondary" onclick="window.downloadInventoryExcel()"><i class="ph ph-file-csv"></i> 엑셀 다운로드</button>' +
+              // 지우기 전에 반드시 한 번 받아 두는 용도. 서버가 대장 그대로를 표로 내려보낸다.
+              '<button class="btn-secondary" onclick="window.exportEquipmentSheet()"><i class="ph ph-download-simple"></i> 표로 내보내기(백업)</button>' +
+              (res.canClear
+                ? '<button class="btn-secondary" style="border-color:var(--status-danger);color:var(--status-danger)" onclick="window.clearEquipmentAll()"><i class="ph ph-trash"></i> 전체 비우기</button>'
+                : '') +
               '<button class="btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none" onclick="window.runAIInventoryRegister()"><i class="ph ph-robot"></i> AI 사진 등록</button>' +
             '</div></div>' +
             window.inventoryTabsHtml('assets');
@@ -5659,8 +5664,18 @@
               '<div class="panel-header"><div class="panel-title" style="display:flex;align-items:center;gap:8px">' +
                 '<i class="ph ph-list-magnifying-glass" style="color:#a78bfa"></i> 자산 추적 ' +
                 '<span id="inv-asset-count" style="font-size:11px;color:var(--text-tertiary);font-weight:500"></span></div></div>' +
+              // 골라 지우기 — 「이건 지우고 저건 남기고」 가 대부분의 실제 정리다.
+              // 한 대씩 창을 열어 지우게 하면 146대를 정리하는 데 146번을 누르게 된다.
+              '<div id="inv-bulk-bar" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border-default);' +
+                'background:rgba(220,38,38,0.06);align-items:center;gap:10px">' +
+                '<span id="inv-bulk-count" style="font-size:12.5px;font-weight:700;color:var(--status-danger)"></span>' +
+                '<button class="btn-secondary" style="padding:5px 12px;font-size:12px;border-color:var(--status-danger);color:var(--status-danger)" ' +
+                  'onclick="window.deleteSelectedEquipment()">선택 삭제</button>' +
+                '<button class="btn-secondary" style="padding:5px 12px;font-size:12px" onclick="window.clearEquipmentSelection()">선택 해제</button>' +
+              '</div>' +
               '<div class="panel-body" style="padding:0"><div style="overflow-x:auto">' +
               '<table class="data-table" style="width:100%"><thead><tr>' +
+                '<th style="width:34px;text-align:center"><input type="checkbox" id="inv-check-all" onclick="window.toggleAllEquipment(this.checked)" title="전부 선택"></th>' +
                 '<th>자산ID</th><th>분류</th><th>모델</th><th>구분</th><th>취득 목적 (프로젝트·현장)</th><th>현 위치</th><th>현 담당자</th><th>상태</th>' +
               '</tr></thead><tbody id="inv-asset-tbody"></tbody></table>' +
               '</div></div></div>';
@@ -5727,8 +5742,9 @@
         });
         var cnt = document.getElementById('inv-asset-count');
         if (cnt) cnt.textContent = '(' + rows.length + '건)';
+        setTimeout(function () { if (window.paintInvBulkBar) window.paintInvBulkBar(); }, 0);
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-tertiary);padding:28px">조건에 맞는 자산이 없습니다.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:28px">조건에 맞는 자산이 없습니다.</td></tr>';
           return;
         }
         tbody.innerHTML = rows.map(function(a) {
@@ -5741,7 +5757,11 @@
             : '<span style="color:var(--text-tertiary)">미지정</span>';
           if (a.purposeSite && a.purposeSite !== '-') purpose += ' <span style="color:var(--text-secondary);font-size:11px">· ' + a.purposeSite + '</span>';
           var holder = (a.holder && a.holder !== '미배정') ? a.holder : '<span style="color:var(--text-tertiary)">미배정</span>';
+          var picked = (window._invSelected || {})[a.realId] ? ' checked' : '';
           return '<tr style="cursor:pointer" onclick="window.openInventoryAssetModal(\'' + a.assetId + '\')">' +
+            // 체크칸을 누른 것은 «열어 보겠다» 가 아니다 — 행 열기로 번지지 않게 막는다.
+            '<td style="text-align:center" onclick="event.stopPropagation()">' +
+              '<input type="checkbox"' + picked + ' onclick="window.toggleEquipmentPick(' + a.realId + ', this.checked)"></td>' +
             '<td class="cell-mono">' + a.assetId + '</td>' +
             '<td><i class="ph ' + gm.icon + '" style="color:' + gm.color + ';margin-right:5px"></i>' + a.tradeLabel + '</td>' +
             '<td class="cell-primary">' + a.name + '</td>' +
@@ -5752,6 +5772,115 @@
             '<td>' + statusPill(a.status) + '</td>' +
           '</tr>';
         }).join('');
+      };
+
+      /* ══════════ 자재·장비 대장 정리 ══════════
+       *
+       * 장비를 지우면 <b>수불 이력과 QR 점검 기록이 CASCADE 로 함께 사라진다</b>
+       * (데이터베이스에 직접 물어 확인했다). 그래서 지우기 전에 그 숫자를 세어
+       * 보여 주고, 지우기 직전의 대장을 표 파일로 손에 쥐여 준다.
+       */
+
+      window._invSelected = {};
+
+      function invDownloadCsv(name, csv) {
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      }
+
+      function invCall(method, args) {
+        return window.gsRun(method, args || [], null).then(function (res) {
+          if (!res) throw new Error('서버 응답이 없습니다.');
+          if (res.success === false) throw new Error(res.error || '요청이 거부되었습니다.');
+          return res;
+        });
+      }
+
+      window.exportEquipmentSheet = function () {
+        var group = (window._invFilter && window._invFilter.group) || 'ALL';
+        invCall('api_exportEquipment', [group]).then(function (r) {
+          invDownloadCsv(r.fileName, r.csv);
+          showToast(r.count + '건을 표로 내려받았습니다.');
+        }).catch(function (e) { alert('오류: ' + e.message); });
+      };
+
+      window.toggleEquipmentPick = function (id, on) {
+        if (on) window._invSelected[id] = true;
+        else delete window._invSelected[id];
+        window.paintInvBulkBar();
+      };
+
+      window.toggleAllEquipment = function (on) {
+        var rows = document.querySelectorAll('#inv-asset-tbody input[type=checkbox]');
+        window._invSelected = {};
+        rows.forEach(function (cb) {
+          cb.checked = on;
+          var m = (cb.getAttribute('onclick') || '').match(/toggleEquipmentPick\((\d+)/);
+          if (on && m) window._invSelected[m[1]] = true;
+        });
+        window.paintInvBulkBar();
+      };
+
+      window.clearEquipmentSelection = function () {
+        window._invSelected = {};
+        var all = document.getElementById('inv-check-all');
+        if (all) all.checked = false;
+        document.querySelectorAll('#inv-asset-tbody input[type=checkbox]').forEach(function (cb) { cb.checked = false; });
+        window.paintInvBulkBar();
+      };
+
+      window.paintInvBulkBar = function () {
+        var bar = document.getElementById('inv-bulk-bar');
+        var label = document.getElementById('inv-bulk-count');
+        if (!bar || !label) return;
+        var n = Object.keys(window._invSelected || {}).length;
+        bar.style.display = n ? 'flex' : 'none';
+        label.textContent = n + '개 선택됨';
+      };
+
+      window.deleteSelectedEquipment = function () {
+        var ids = Object.keys(window._invSelected || {});
+        if (!ids.length) return;
+        if (!confirm(ids.length + '개를 지웁니다.\n\n이 장비들의 수불 이력과 QR 점검 기록도 함께 사라집니다.\n지우기 직전 내용은 표 파일로 내려받습니다.\n\n계속할까요?')) return;
+
+        invCall('api_deleteEquipmentMany', [ids]).then(function (r) {
+          if (r.backupCsv) invDownloadCsv(r.backupName, r.backupCsv);
+          showToast(r.count + '건을 지웠습니다. (수불 ' + r.rentals + '건 · 점검 ' + r.checks + '건 함께 삭제)');
+          window._invSelected = {};
+          renderInventory();
+        }).catch(function (e) { alert('오류: ' + e.message); });
+      };
+
+      /** 전체 비우기 — 세어 보여 주고, 적어서 확인받고, 백업을 내려보낸 뒤 지운다. */
+      window.clearEquipmentAll = function () {
+        var group = (window._invFilter && window._invFilter.group) || 'ALL';
+
+        invCall('api_clearEquipment', [group, '', true]).then(function (p) {
+          if (!p.count) { alert('이 범위에는 지울 자재·장비가 없습니다.'); return; }
+
+          var warn = '[' + p.scope + ']\n\n' +
+            '자재·장비 ' + p.count + '건을 지웁니다.\n' +
+            '함께 사라지는 것:\n' +
+            '  · 불출·반납 이력 ' + p.rentals + '건\n' +
+            '  · QR 사용 점검 기록 ' + p.checks + '건\n\n' +
+            '되돌릴 수 없습니다. 지우기 직전 내용은 표 파일로 내려받습니다.\n\n' +
+            '계속하시려면 아래에 「전부 삭제」 라고 그대로 적어 주세요.';
+
+          var typed = window.prompt(warn, '');
+          if (typed === null) return;
+
+          invCall('api_clearEquipment', [group, typed, false]).then(function (r) {
+            if (r.backupCsv) invDownloadCsv(r.backupName, r.backupCsv);
+            showToast(r.count + '건을 지웠습니다. (수불 ' + r.rentals + '건 · 점검 ' + r.checks + '건 함께 삭제)');
+            window._invSelected = {};
+            renderInventory();
+          }).catch(function (e) { alert('오류: ' + e.message); });
+        }).catch(function (e) { alert('오류: ' + e.message); });
       };
 
       // 새로고침

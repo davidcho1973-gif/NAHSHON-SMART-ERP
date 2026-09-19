@@ -35,6 +35,7 @@ use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
+use App\Services\Admin\EquipmentSheetService;
 use App\Services\Admin\EquipmentCheckAdminService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
@@ -138,6 +139,20 @@ class SmartCompanyData
             'api_getToolTransactions' => self::toolTransactions(),
             'api_getInventoryDashboard' => self::inventoryDashboard($siteId),
             'api_getInventoryAssetDetail' => self::inventoryAssetDetail((string) ($args[0] ?? '')),
+
+            // 자재·장비 대장 정리 — 내보내기 · 골라 지우기 · 전부 비우기.
+            // 장비를 지우면 수불 이력과 QR 점검 기록이 CASCADE 로 함께 사라지므로,
+            // 지우기 전에 그 숫자를 세어 보여 준다(EquipmentSheetService 주석).
+            'api_exportEquipment' => app(EquipmentSheetService::class)
+                ->export($siteId, (string) ($args[0] ?? 'ALL')),
+            'api_deleteEquipmentMany' => app(EquipmentSheetService::class)
+                ->deleteMany(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_clearEquipment' => app(EquipmentSheetService::class)->clear(
+                $siteId,
+                (string) ($args[0] ?? 'ALL'),
+                is_string($args[1] ?? null) ? $args[1] : '',
+                (bool) ($args[2] ?? false),
+            ),
             'api_processInventoryPhotos', 'setupInventorySheets', 'setupInventoryFolders' => ['success' => true, 'processed' => 0, 'saved' => 0, 'errors' => 0, 'results' => []],
 
             'api_getAlerts' => self::alerts($args[0] ?? 'all'),

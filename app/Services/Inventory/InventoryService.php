@@ -101,6 +101,8 @@ class InventoryService
 
         return [
             'success' => true,
+            // 대장을 통째로 비우는 버튼을 보일지. 되돌릴 수 없는 일이라 권한이 따로다.
+            'canClear' => app(\App\Services\Admin\EquipmentSheetService::class)->canClear(),
             'totals' => [
                 'count' => $items->sum($qty),
                 'value' => (float) $items->sum(fn (Equipment $e) => (float) $e->asset_value),
