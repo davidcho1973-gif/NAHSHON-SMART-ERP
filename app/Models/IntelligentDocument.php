@@ -156,9 +156,7 @@ class IntelligentDocument extends Model
         if (! in_array($user->access_role, [
             'super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'payroll',
         ], true)) {
-            // An employee may use the personal email inbox without gaining access to the
-            // company document hub. Their own private originals are the only exception.
-            return $query->where('access_level', 'private')->where('owner_user_id', $user->id);
+            return $query->whereRaw('1 = 0');
         }
 
         // Personal mailbox originals remain owner-only even for system administrators.

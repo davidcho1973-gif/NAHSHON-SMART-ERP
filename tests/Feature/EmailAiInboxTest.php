@@ -65,24 +65,6 @@ class EmailAiInboxTest extends TestCase
         Bus::assertDispatched(AnalyzeIntelligentDocumentJob::class);
     }
 
-    public function test_employee_can_open_only_their_own_private_mail_document(): void
-    {
-        $owner = $this->user('worker', 'self');
-        $other = $this->user('worker', 'self');
-        $document = IntelligentDocument::query()->create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
-            'uploaded_by' => $owner->id, 'owner_user_id' => $owner->id,
-            'source' => 'email', 'disk' => 'local', 'file_path' => 'email-intake/owner.eml',
-            'original_file_name' => 'owner.eml', 'stored_file_name' => 'owner.eml',
-            'mime_type' => 'message/rfc822', 'extension' => 'eml', 'file_size' => 10,
-            'sha256' => hash('sha256', 'owner-mail'), 'access_level' => 'private',
-            'confidentiality' => 'internal', 'ai_status' => 'queued',
-        ]);
-
-        $this->assertTrue(IntelligentDocument::query()->visibleTo($owner)->whereKey($document)->exists());
-        $this->assertFalse(IntelligentDocument::query()->visibleTo($other)->whereKey($document)->exists());
-    }
-
     public function test_same_private_attachment_can_be_owned_by_two_users_without_cross_mailbox_deduplication(): void
     {
         [$company] = $this->projectFixture();
@@ -149,7 +131,7 @@ class EmailAiInboxTest extends TestCase
             'id' => $id, 'conversationId' => 'thread-'.$id, 'internetMessageId' => '<'.$id.'@example.test>',
             'subject' => 'RE: 703K Door Delivery Schedule',
             'from' => ['emailAddress' => ['address' => 'john@turner.example']],
-            'toRecipients' => [['emailAddress' => ['address' => 'david@nahshonmep.com']]],
+            'toRecipients' => [['emailAddress' => ['address' => 'office@example.test']]],
             'ccRecipients' => [], 'sentDateTime' => '2026-09-20T10:32:00Z',
             'receivedDateTime' => '2026-09-20T10:32:01Z', 'bodyPreview' => 'Delivery is confirmed for September 24.',
             'hasAttachments' => false,
@@ -158,14 +140,14 @@ class EmailAiInboxTest extends TestCase
 
     private function mime(string $suffix = ''): string
     {
-        return "From: john@turner.example\r\nTo: david@nahshonmep.com\r\nSubject: Door Delivery {$suffix}\r\n\r\nDelivery is confirmed for September 24.";
+        return "From: john@turner.example\r\nTo: office@example.test\r\nSubject: Door Delivery {$suffix}\r\n\r\nDelivery is confirmed for September 24.";
     }
 
     private function connection(User $user, Company $company): MailboxConnection
     {
         return MailboxConnection::query()->create([
             'user_id' => $user->id, 'company_id' => $company->id, 'provider' => 'microsoft',
-            'provider_user_id' => 'ms-'.$user->id, 'email' => 'user'.$user->id.'@nahshonmep.com',
+            'provider_user_id' => 'ms-'.$user->id, 'email' => 'user'.$user->id.'@example.test',
             'access_token' => 'token', 'refresh_token' => 'refresh', 'token_expires_at' => now()->addHour(),
             'selected_folders' => ['inbox', 'sentitems'], 'status' => 'active',
         ]);
@@ -173,7 +155,7 @@ class EmailAiInboxTest extends TestCase
 
     private function projectFixture(): array
     {
-        $company = Company::query()->create(['code' => 'NAH', 'name' => 'NAHSHON MEP', 'status' => 'active']);
+        $company = Company::query()->create(['code' => 'EXAMPLE', 'name' => 'Example Company', 'status' => 'active']);
         $site = Site::query()->create(['company_id' => $company->id, 'code' => '703K', 'name' => '703K', 'country' => 'US', 'timezone' => 'America/New_York', 'status' => 'active']);
         $project = Project::query()->create(['company_id' => $company->id, 'site_id' => $site->id, 'project_code' => '703K', 'name' => '703K Kitchen', 'construction_type' => 'commercial', 'project_stage' => 'awarded']);
         return [$company, $site, $project];
