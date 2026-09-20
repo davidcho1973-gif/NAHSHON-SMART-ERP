@@ -171,6 +171,16 @@ class User extends Authenticatable
         return $this->hasMany(CommunicationMessage::class, 'sender_user_id');
     }
 
+    public function mailboxConnections(): HasMany
+    {
+        return $this->hasMany(MailboxConnection::class);
+    }
+
+    public function ownedEmailThreads(): HasMany
+    {
+        return $this->hasMany(EmailThread::class, 'owner_user_id');
+    }
+
     public function allowedCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'allowed_company_id');

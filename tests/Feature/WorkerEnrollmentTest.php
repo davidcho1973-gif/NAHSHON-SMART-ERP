@@ -63,6 +63,19 @@ class WorkerEnrollmentTest extends TestCase
         $this->post($this->url(), ['team_id' => $this->team->id, 'name' => 'Kim', 'phone' => 'abc'])->assertSessionHasErrors('phone');
     }
 
+    public function test_back_link_returns_to_attendance_app_only_when_opened_from_it(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('worker-enrollment.index', ['return_to' => '/attendance-app']))
+            ->assertOk()
+            ->assertSee('href="/attendance-app"', false);
+
+        $this->get(route('worker-enrollment.index', ['return_to' => 'https://example.com']))
+            ->assertOk()
+            ->assertSee('href="/"', false)
+            ->assertDontSee('example.com');
+    }
+
     public function test_approval_activation_and_pin_login_without_email_use_existing_employee_relation(): void
     {
         $enrollment = $this->submit();

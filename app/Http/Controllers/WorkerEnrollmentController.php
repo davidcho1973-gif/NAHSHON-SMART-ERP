@@ -19,8 +19,9 @@ class WorkerEnrollmentController extends Controller
         abort_unless($request->user()->account_status === 'active' && in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager', 'foreman'], true), 403);
         $canRegister = in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true);
         $rows = WorkerEnrollment::with(['team', 'employee.user'])->whereIn('team_id', $teams->modelKeys())->latest()->paginate(30);
+        $returnTo = $this->returnTo($request);
 
-        return response()->view('worker-enrollment.manage', compact('teams', 'rows', 'canRegister'))->header('Cache-Control', 'no-store');
+        return response()->view('worker-enrollment.manage', compact('teams', 'rows', 'canRegister', 'returnTo'))->header('Cache-Control', 'no-store');
     }
 
     public function store(Request $request)
@@ -29,7 +30,7 @@ class WorkerEnrollmentController extends Controller
         $data = $request->validate(['name' => ['required', 'string', 'max:160'], 'phone' => ['required', 'string', 'max:30'], 'team_id' => ['required', 'integer', 'exists:teams,id']]);
         $this->enrollment->submit($request->user(), Team::findOrFail($data['team_id']), $data);
 
-        return redirect()->route('worker-enrollment.index')->with('notice', '등록 내용을 저장했습니다. 인사담당자가 확인 후 계정을 승인하세요.');
+        return redirect()->route('worker-enrollment.index', $this->returnQuery($request))->with('notice', '등록 내용을 저장했습니다. 인사담당자가 확인 후 계정을 승인하세요.');
     }
 
     public function approve(Request $request, WorkerEnrollment $enrollment)
@@ -37,7 +38,7 @@ class WorkerEnrollmentController extends Controller
         $request->validate(['confirmed' => ['accepted']]);
         $this->enrollment->approve($request->user(), $enrollment);
 
-        return redirect()->route('worker-enrollment.index')->with('notice', '승인했습니다. 개인용 앱 연결 QR을 발급하여 본인에게 전달하세요. 시급 금액은 급여 설정에서 확인하세요.');
+        return redirect()->route('worker-enrollment.index', $this->returnQuery($request))->with('notice', '승인했습니다. 개인용 앱 연결 QR을 발급하여 본인에게 전달하세요. 시급 금액은 급여 설정에서 확인하세요.');
     }
 
     public function activation(Request $request, WorkerEnrollment $enrollment)
@@ -53,7 +54,23 @@ class WorkerEnrollmentController extends Controller
         // Conditional update prevents a stale rejection from undoing a concurrent approval.
         WorkerEnrollment::whereKey($enrollment->id)->where('status', 'pending')->update(['status' => 'rejected']);
 
-        return redirect()->route('worker-enrollment.index')->with('notice', '신청을 반려했습니다.');
+        return redirect()->route('worker-enrollment.index', $this->returnQuery($request))->with('notice', '신청을 반려했습니다.');
+    }
+
+    private function returnTo(Request $request): string
+    {
+        // This page is also opened from the compact attendance app.  Preserve that
+        // explicit source without accepting arbitrary redirect destinations.
+        return $request->string('return_to')->toString() === '/attendance-app'
+            ? '/attendance-app'
+            : $request->user()->landingPath();
+    }
+
+    private function returnQuery(Request $request): array
+    {
+        return $this->returnTo($request) === '/attendance-app'
+            ? ['return_to' => '/attendance-app']
+            : [];
     }
 
     private function qr(string $url, string $title, string $note)

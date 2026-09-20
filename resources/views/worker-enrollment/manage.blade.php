@@ -1,11 +1,12 @@
 @extends('worker-enrollment.layout')
 @section('content')
-<nav><a href="{{ auth()->user()->landingPath() }}">← 이전 업무 화면 / Back</a></nav>
+<nav><a href="{{ $returnTo }}">← 이전 업무 화면 / Back</a></nav>
 <h1>{{ $canRegister ? '인사 · 작업자 등록 및 앱 연결' : '우리 팀 직원 등록 현황' }}</h1>
 @if($canRegister)
 <p>인사 등록 → 인사 승인 → 직원 개인 QR → 본인 PIN 설정</p>
 <section class="panel"><h2>작업자 등록</h2><p>인사 권한을 가진 관리자만 등록할 수 있습니다. 팀 공용 가입 QR은 사용하지 않습니다.</p>
 <form method="post" action="{{ route('worker-enrollment.store') }}">@csrf
+@if($returnTo === '/attendance-app')<input type="hidden" name="return_to" value="/attendance-app">@endif
 <label for="name">직원 이름</label><input id="name" name="name" value="{{ old('name') }}" maxlength="160" required>
 <label for="phone">전화번호</label><input id="phone" name="phone" type="tel" value="{{ old('phone') }}" maxlength="30" required><small>미국 번호 10자리 / 다른 국가는 +국가번호 포함</small>
 <label for="team">소속</label><select id="team" name="team_id" required><option value="">소속 선택</option>@foreach($teams as $team)<option value="{{ $team->id }}" @selected(old('team_id') == $team->id)>{{ $team->company?->name }} / {{ $team->site?->code }} / {{ $team->name }}</option>@endforeach</select>
@@ -19,8 +20,8 @@
 @if($row->status === 'pending')
 <p>인사 승인 대기 · Pending</p>
 @if($canRegister)
-<form method="post" action="{{ route('worker-enrollment.approve', $row) }}">@csrf<label class="check"><input type="checkbox" name="confirmed" value="1" required><span>인사담당자로서 직원 신원과 소속을 확인했습니다.</span></label><button type="submit">인사 승인</button></form>
-<form method="post" action="{{ route('worker-enrollment.reject', $row) }}">@csrf<button class="secondary" type="submit">반려</button></form>
+<form method="post" action="{{ route('worker-enrollment.approve', $row) }}">@csrf @if($returnTo === '/attendance-app')<input type="hidden" name="return_to" value="/attendance-app">@endif<label class="check"><input type="checkbox" name="confirmed" value="1" required><span>인사담당자로서 직원 신원과 소속을 확인했습니다.</span></label><button type="submit">인사 승인</button></form>
+<form method="post" action="{{ route('worker-enrollment.reject', $row) }}">@csrf @if($returnTo === '/attendance-app')<input type="hidden" name="return_to" value="/attendance-app">@endif<button class="secondary" type="submit">반려</button></form>
 @endif
 @elseif($row->status === 'approved')
 @if($row->employee?->employment_status !== 'active' || $row->employee?->user?->account_status !== 'active')<p class="error">직원 또는 계정이 비활성 상태입니다. 인사담당자에게 확인하세요.</p>
