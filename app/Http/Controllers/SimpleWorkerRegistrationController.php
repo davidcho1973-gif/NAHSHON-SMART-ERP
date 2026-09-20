@@ -9,6 +9,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsItem;
 use App\Models\WorkerDevice;
+use App\Models\WorkerEnrollment;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
@@ -21,14 +22,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
-/**
- * 간편 작업자 등록 — 현장 QR 을 스캔하면 이름·소속회사·공정·이메일·전화만 입력하고
- * 곧바로 활성 작업자(Employee)로 등록된다. (검토 대기 없는 즉시 등록.)
- *
- * QR 은 현장당 한 장이다. 고용 형태(직접/간접)는 작업자가 고른 <b>소속회사</b>로 정해진다 —
- * 작업자에게 "직접고용입니까?" 같은 사내 용어를 묻지 않으려는 설계다.
- * 회사가 아직 분류되지 않았을 때만 폼에서 한 번 물어본다.
- */
+/** Legacy employee form, restricted to authenticated HR roles by route middleware. */
 class SimpleWorkerRegistrationController extends Controller
 {
     /** 작업자가 답할 수 있는 고용 형태(미분류 회사일 때만 노출). */
@@ -273,6 +267,10 @@ class SimpleWorkerRegistrationController extends Controller
         foreach ($candidates as $candidate) {
             if ($this->phoneKey((string) $candidate->phone) !== $digits) {
                 continue;
+            }
+
+            if (WorkerEnrollment::where('employee_id', $candidate->id)->where('status', 'approved')->exists()) {
+                throw ValidationException::withMessages(['phone' => '승인된 출퇴근 계정이 있습니다. 이름·전화번호로 소속이나 기기를 변경할 수 없습니다. 관리자에게 앱 연결을 요청하세요.']);
             }
 
             // 관리자·사무직 계정에 붙은 기록은 공개 폼이 건드리지 않는다. 이름과 번호를

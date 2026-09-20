@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>작업자 앱 연결 · Worker onboarding</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f7fb;color:#193249;font:16px/1.6 Arial,'Malgun Gothic',sans-serif}header{background:#fff;padding:18px 24px;border-bottom:1px solid #dce5ed;font-weight:700}main{max-width:860px;margin:24px auto;padding:0 18px}.panel{background:#fff;border:1px solid #dce5ed;border-radius:16px;padding:24px;margin:16px 0}h1{font-size:26px;margin:0 0 14px}h2{font-size:19px}label{display:block;margin:14px 0 6px}input:not([type=checkbox]),select{width:100%;padding:13px;border:1px solid #b8cbdc;border-radius:8px;font:inherit}button,.action{display:inline-block;padding:12px 18px;background:#007fb5;color:#fff;border:0;border-radius:8px;font:inherit;cursor:pointer;text-decoration:none}button.secondary{background:#e8eff5;color:#193249}small,.muted{color:#566d80}.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.error{padding:14px;background:#ffeded;color:#982b31}.notice{padding:14px;background:#e5f6f0;color:#205848}a{color:#006da0}.qr{display:block;width:100%;max-width:300px;margin:20px auto}.check{display:flex;gap:10px;align-items:flex-start}.check input{width:20px;height:20px;flex-shrink:0}.tag{padding:4px 9px;background:#eaf2f8;border-radius:8px}form{margin:10px 0}nav{margin-bottom:20px}
+</style></head><body><header>{{ config('app.name') }} · 작업자 앱 연결</header><main>
+@if($errors->any())<div class="error" role="alert">@foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach</div>@endif
+@if(session('notice'))<div class="notice" role="status">{{ session('notice') }}</div>@endif
+@yield('content')
+</main></body></html>

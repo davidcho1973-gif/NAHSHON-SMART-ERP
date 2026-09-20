@@ -8,6 +8,7 @@ use App\Models\LoginDevice;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
@@ -50,7 +51,11 @@ class PinAuthService
     /** 관리자가 초대·재설정 링크를 발급한다 — 값이 아니라 링크다. */
     public function issueSetupLink(User $user, string $purpose, ?User $actor = null): string
     {
-        $token = AuthSetupToken::issue($user, $purpose, $actor?->id);
+        $token = DB::transaction(function () use ($user, $purpose, $actor) {
+            User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            return AuthSetupToken::issue($user, $purpose, $actor?->id);
+        });
 
         AuthEvent::record(
             $purpose === AuthSetupToken::PURPOSE_RESET ? 'reset_issued' : 'invite_issued',
@@ -69,13 +74,24 @@ class PinAuthService
      */
     public function completeSetup(string $token, string $pin, Request $request): array
     {
+        return DB::transaction(fn () => $this->completeSetupLocked($token, $pin, $request));
+    }
+
+    private function completeSetupLocked(string $token, string $pin, Request $request): array
+    {
         $row = AuthSetupToken::findUsable($token);
         if (! $row) {
             return ['success' => false, 'error' => '링크가 만료되었거나 이미 사용되었습니다. 관리자에게 새 링크를 요청하세요.'];
         }
 
-        $user = $row->user;
-        if (! $user || ! $this->canSignIn($user)) {
+        $user = User::whereKey($row->user_id)->lockForUpdate()->first();
+        // Recheck after the lock: two simultaneous scans must not consume one link twice.
+        $row = AuthSetupToken::findUsable($token);
+        if (! $row) {
+            return ['success' => false, 'error' => '링크가 만료되었거나 이미 사용되었습니다.'];
+        }
+        if (! $user || ! $this->canSignIn($user) || ! $this->eligibleForPin($user)
+            || ($user->employee && $user->employee->employment_status !== 'active')) {
             return ['success' => false, 'error' => '사용할 수 없는 계정입니다. 관리자에게 문의하세요.'];
         }
 
@@ -96,7 +112,8 @@ class PinAuthService
         $deviceToken = LoginDevice::issueFor($user, $request->userAgent());
 
         AuthEvent::record('pin_set', user: $user, method: 'pin', request: $request);
-        Auth::login($user);
+        Auth::login($user, remember: true);
+        $request->session()->regenerate();
         AuthEvent::record('login_ok', user: $user, method: 'pin', request: $request, note: '설정 직후 자동 로그인');
 
         return ['success' => true, 'device_token' => $deviceToken, 'user' => $user];
@@ -115,7 +132,8 @@ class PinAuthService
             return ['success' => false, 'error' => '이 휴대폰은 등록되어 있지 않습니다. 관리자에게 링크를 요청하세요.'];
         }
 
-        if (! $this->canSignIn($user) || ! $user->pin_hash) {
+        if (! $this->canSignIn($user) || ! $this->eligibleForPin($user) || ! $user->pin_hash
+            || ($user->employee && $user->employee->employment_status !== 'active')) {
             AuthEvent::record('login_fail', user: $user, method: 'pin', request: $request, note: '계정 비활성 또는 PIN 미설정');
 
             return ['success' => false, 'error' => '사용할 수 없는 계정입니다. 관리자에게 문의하세요.'];

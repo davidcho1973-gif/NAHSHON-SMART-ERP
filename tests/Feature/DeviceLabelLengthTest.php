@@ -32,6 +32,7 @@ class DeviceLabelLengthTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
 
         $this->site = Site::create([
             'code' => '703K', 'name' => 'Building 703K',

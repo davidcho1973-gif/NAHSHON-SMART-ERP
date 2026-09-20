@@ -85,7 +85,7 @@
       '직원 등록 · 관리',
       '현장에 들어가는 사람을 등록합니다. 비자·안전교육이 끊긴 사람은 목록에 표시됩니다. — ' + notes.join(' · '),
       state.canManage ? u.primaryButton('직원 등록', 'window.AdminEmployees.openForm()', 'user-plus') : ''
-    ) + pushWarning + filterBar() + u.table({
+    ) + '<p><a href="/worker-onboarding">인사 · 작업자 등록 · 승인 · 개인 앱 연결</a></p>' + pushWarning + filterBar() + u.table({
       id: 'em-tbl',
       searchPlaceholder: '이름 · 사번 · NFC · 직종 검색',
       emptyText: '조건에 맞는 직원이 없습니다.',
@@ -393,8 +393,8 @@
         subtitle: r.name + ' 님이 앱에 들어올 수 있게 합니다. 이름과 소속은 직원 정보를 그대로 씁니다.',
         saveLabel: '만들기',
         fields: [
-          { name: 'email', label: '이메일', required: true, colSpan: 2, value: r.email || '',
-            hint: '이메일 또는 Google 로그인에 쓰는 주소입니다. Gmail이 아니어도 됩니다. 신규 활성 계정은 등록 전화번호 끝 4자리로 최초 비밀번호를 설정합니다.' },
+          { name: 'email', label: '이메일 (작업자·반장은 선택)', colSpan: 2, value: r.email || '',
+            hint: '전화번호가 등록된 작업자·반장은 이메일 없이 PIN으로 연결할 수 있습니다. 계정 생성 후 개인 PIN 링크를 발급하세요. 관리자 계정은 이메일이 필요합니다.' },
           { name: 'role', label: '역할', type: 'select', required: true,
             options: o.accountRoles, value: 'worker' },
           { name: 'scope', label: '볼 수 있는 범위', type: 'select', required: true,

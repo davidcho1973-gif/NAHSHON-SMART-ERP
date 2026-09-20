@@ -40,7 +40,9 @@ use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
+use App\Http\Controllers\WorkerEnrollmentController;
 use App\Http\Middleware\AuthorizeAssetApi;
+use App\Http\Middleware\RequireHrRegistration;
 use App\Models\OrgSetting;
 use App\Models\PushSubscription;
 use App\Models\ReportRecipient;
@@ -78,6 +80,14 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 // 관문이 둘이다: 기억된 폰(가진 것) + 4자리 번호(아는 것). 폰이 등록되어 있지 않으면
 // 번호 입력창 자체가 뜨지 않으므로, 링크 없이 번호만 대보는 공격은 성립하지 않는다.
 // throttle 은 그 위에 한 겹 더 — 4자리는 만 가지뿐이라 속도를 묶어 두어야 한다.
+Route::middleware(['auth'])->prefix('worker-onboarding')->group(function () {
+    Route::get('/', [WorkerEnrollmentController::class, 'index'])->name('worker-enrollment.index');
+    Route::post('/', [WorkerEnrollmentController::class, 'store'])->middleware('throttle:30,1')->name('worker-enrollment.store');
+    Route::post('/{enrollment}/approve', [WorkerEnrollmentController::class, 'approve'])->name('worker-enrollment.approve');
+    Route::post('/{enrollment}/activation', [WorkerEnrollmentController::class, 'activation'])->middleware('throttle:20,1')->name('worker-enrollment.activation');
+    Route::post('/{enrollment}/reject', [WorkerEnrollmentController::class, 'reject'])->name('worker-enrollment.reject');
+});
+
 Route::get('/auth/pin/setup/{token}', [PinAuthController::class, 'setupForm'])
     ->middleware('throttle:30,1')->name('pin.setup');
 Route::post('/auth/pin/setup/{token}', [PinAuthController::class, 'setupStore'])
@@ -399,40 +409,37 @@ Route::get('/guest/{token}', [GuestViewController::class, 'show'])
     ->middleware('throttle:30,1')
     ->name('guest.view');
 
-// 간편 작업자 등록 — 현장 QR 스캔 → 최소 정보 입력 → 즉시 활성 작업자 등록 (공개)
-//
-// 로그인 없이 열리는 폼이라 자동화로 인원·회사 행을 대량 생성할 수 있었다. 현장에서
-// 한 사람이 1분에 스무 번 등록할 일은 없으므로 그 선에서 묶는다(등록이 사라지는 게
-// 아니라 잠시 뒤 다시 되는 정도). 이 폼은 계정을 만들지 않는다 — MemberRegistration
-// 이 공개 출처를 알아보고 계정 발급을 관리자 승인 뒤로 미룬다.
-Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
-    ->middleware('throttle:60,1')->name('worker-join.qr');
-Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])
-    ->middleware('throttle:60,1')->name('worker-join.form');
-Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])
-    ->middleware('throttle:20,1')->name('worker-join.store');
+// 직원 등록은 인사 권한자 전용. 예전 공개 QR 주소도 로그인 및 인사 권한을 검사한다.
+Route::middleware(['auth', RequireHrRegistration::class])->group(function () {
+    Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
+        ->middleware('throttle:60,1')->name('worker-join.qr');
+    Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])
+        ->middleware('throttle:60,1')->name('worker-join.form');
+    Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])
+        ->middleware('throttle:20,1')->name('worker-join.store');
 
-// 직원 등록은 한 폼에서 직책으로 입력 요건을 정한다. 예전 /w, /m 링크도 유지한다.
-Route::get('/join', [SimpleWorkerRegistrationController::class, 'entry'])
-    ->middleware('throttle:60,1')->name('employee-join.entry');
-Route::post('/join', [SimpleWorkerRegistrationController::class, 'entryStore'])
-    ->middleware('throttle:20,1')->name('employee-join.entry-store');
-Route::get('/join/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
-    ->middleware('throttle:60,1')->name('employee-join.qr');
-Route::get('/join/{site}/trades', [SimpleWorkerRegistrationController::class, 'trades'])
-    ->middleware('throttle:60,1')->name('employee-join.trades');
-Route::get('/join/{site}', [SimpleWorkerRegistrationController::class, 'form'])
-    ->middleware('throttle:60,1')->name('employee-join.form');
-Route::post('/join/{site}', [SimpleWorkerRegistrationController::class, 'store'])
-    ->middleware('throttle:20,1')->name('employee-join.store');
+    // 직원 등록은 한 폼에서 직책으로 입력 요건을 정한다. 예전 /w, /m 링크도 유지한다.
+    Route::get('/join', [SimpleWorkerRegistrationController::class, 'entry'])
+        ->middleware('throttle:60,1')->name('employee-join.entry');
+    Route::post('/join', [SimpleWorkerRegistrationController::class, 'entryStore'])
+        ->middleware('throttle:20,1')->name('employee-join.entry-store');
+    Route::get('/join/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
+        ->middleware('throttle:60,1')->name('employee-join.qr');
+    Route::get('/join/{site}/trades', [SimpleWorkerRegistrationController::class, 'trades'])
+        ->middleware('throttle:60,1')->name('employee-join.trades');
+    Route::get('/join/{site}', [SimpleWorkerRegistrationController::class, 'form'])
+        ->middleware('throttle:60,1')->name('employee-join.form');
+    Route::post('/join/{site}', [SimpleWorkerRegistrationController::class, 'store'])
+        ->middleware('throttle:20,1')->name('employee-join.store');
 
-// 공개 등록은 ERP 권한을 발급하지 않는다. 본인 확인 후 접근계정을 별도로 승인한다.
-Route::get('/join/m/{site}/qr', [SimpleWorkerRegistrationController::class, 'managerQr'])
-    ->middleware('throttle:60,1')->name('manager-join.qr');
-Route::get('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerForm'])
-    ->middleware('throttle:60,1')->name('manager-join.form');
-Route::post('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerStore'])
-    ->middleware('throttle:20,1')->name('manager-join.store');
+    // 공개 등록은 ERP 권한을 발급하지 않는다. 본인 확인 후 접근계정을 별도로 승인한다.
+    Route::get('/join/m/{site}/qr', [SimpleWorkerRegistrationController::class, 'managerQr'])
+        ->middleware('throttle:60,1')->name('manager-join.qr');
+    Route::get('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerForm'])
+        ->middleware('throttle:60,1')->name('manager-join.form');
+    Route::post('/join/m/{site}', [SimpleWorkerRegistrationController::class, 'managerStore'])
+        ->middleware('throttle:20,1')->name('manager-join.store');
+});
 
 // W-9 작성 — 간편 등록 완료 화면에서 서명된 링크로 진입(공개, 서명 URL 이 본인 확인을 대신).
 // 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
