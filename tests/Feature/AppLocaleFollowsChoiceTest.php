@@ -191,7 +191,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
 
     public function test_the_bottom_tabs_are_translated_too(): void
     {
-        // 탭 네 칸만 한글로 남아 있었다. 화면 전체가 스페인어인데 맨 아래 «출퇴근»
+        // 탭 세 칸도 선택한 언어를 따른다. 화면 전체가 스페인어인데 맨 아래 «출퇴근»
         // 이 한글이면, 그 앱은 자기 말로 만들어진 앱이 아니다.
         $user = $this->worker('ko');
 
@@ -199,9 +199,10 @@ class AppLocaleFollowsChoiceTest extends TestCase
             ->withUnencryptedCookie(AppLocale::COOKIE, 'es')
             ->get('/attendance-app')->assertOk()->getContent();
 
-        foreach (['Asistencia', 'Trabajo', 'Pago', 'Yo'] as $word) {
+        foreach (['Asistencia', 'Trabajo', 'Yo'] as $word) {
             $this->assertStringContainsString($word, $spanish);
         }
+        $this->assertStringNotContainsString('data-tab="pay"', $spanish);
         $this->assertStringNotContainsString(">\n            출퇴근\n", $spanish, '탭에 한글이 그대로 남으면 안 된다.');
     }
 

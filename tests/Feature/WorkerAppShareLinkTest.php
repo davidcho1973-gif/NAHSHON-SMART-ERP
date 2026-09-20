@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\User;
 use App\Support\WorkerLang;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -39,7 +40,7 @@ class WorkerAppShareLinkTest extends TestCase
         ]);
     }
 
-    private function open(): \Illuminate\Testing\TestResponse
+    private function open(): TestResponse
     {
         return $this->actingAs($this->admin())
             ->get(route('attendance-app.employee.share', ['employee' => $this->employee]));
@@ -88,6 +89,8 @@ class WorkerAppShareLinkTest extends TestCase
             $this->assertStringContainsString($url, $text, "[{$code}] 문구에 주소가 없습니다.");
             $this->assertMatchesRegularExpression('/구글|Google/u', $text, "[{$code}] 로그인 안내가 없습니다.");
             $this->assertMatchesRegularExpression('/홈 화면|Home Screen|pantalla de inicio/u', $text);
+            $this->assertDoesNotMatchRegularExpression('/급여|your pay|su pago/u', $text);
+            $this->assertDoesNotMatchRegularExpression('/급여|your pay|su pago/u', WorkerLang::installCard()[$code]['hint']);
         }
     }
 
