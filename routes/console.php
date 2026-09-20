@@ -127,6 +127,10 @@ Schedule::command('wbs:recompute-cpm')->dailyAt(Org::time('schedule.cpm_recomput
 // 한 번은 자동 재시도, 그래도 멈추면 실패로 표시해 사용자가 알 수 있게 한다.
 Schedule::command('docs:reap-stuck')->everyTenMinutes();
 
+// Connected Outlook inboxes: incremental cursors make this cheap when nothing changed.
+// The work itself goes to the durable document queue so closing the ERP does not stop it.
+Schedule::command('mailboxes:sync')->everyFiveMinutes()->withoutOverlapping(10);
+
 // Durable dedicated queue: never depend on afterResponse, and never consume legacy default jobs.
 // A dedicated Cloud worker may run the same command continuously; database leases prevent double claims.
 Schedule::command('queue:work meeting-analysis --queue=meetings --stop-when-empty --max-time=50 --tries=2 --timeout=1500')

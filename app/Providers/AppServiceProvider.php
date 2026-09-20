@@ -129,6 +129,17 @@ class AppServiceProvider extends ServiceProvider
             } catch (\Throwable $e) {
                 report($e);
             }
+            // Only the email body represents the thread. Attachment analysis must not
+            // overwrite the thread summary or classification with a single file's result.
+            if ($d->email_thread_id && $d->source === 'email') {
+                $d->emailThread?->forceFill([
+                    'summary_ko' => $d->summary ?: $d->emailThread?->summary_ko,
+                    'classification' => $d->document_type ?: $d->emailThread?->classification,
+                    'response_due_on' => $d->response_due_on ?: $d->emailThread?->response_due_on,
+                    'needs_response' => $d->actionItems()->where('status', 'open')->exists(),
+                    'ai_confidence' => $d->ai_confidence,
+                ])->save();
+            }
         });
         ProjectContractDocument::saved(fn (ProjectContractDocument $d) => app(LinkedDocumentFilingObserver::class)->contractDocumentSaved($d));
 

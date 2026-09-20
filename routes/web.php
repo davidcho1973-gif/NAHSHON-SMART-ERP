@@ -6,6 +6,7 @@ use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
+use App\Http\Controllers\EmailAiInboxController;
 use App\Http\Controllers\EmailPasswordAuthController;
 use App\Http\Controllers\EquipmentApiController;
 use App\Http\Controllers\EquipmentChecklistController;
@@ -304,6 +305,16 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/document-hub/api/actions/{action}', [DocumentIntelligenceController::class, 'updateAction'])->name('document-intelligence.action.update');
     Route::get('/document-hub/documents/{document}/download', [DocumentIntelligenceController::class, 'download'])->name('document-intelligence.download');
     Route::get('/document-hub/documents/{document}/preview', [DocumentIntelligenceController::class, 'preview'])->name('document-intelligence.preview');
+
+    // Personal Outlook analysis: each signed-in user owns the connection and private source.
+    Route::get('/email-ai', [EmailAiInboxController::class, 'index'])->name('email-ai.index');
+    Route::get('/email-ai/microsoft/connect', [EmailAiInboxController::class, 'connect'])->name('email-ai.microsoft.connect');
+    Route::get('/email-ai/microsoft/callback', [EmailAiInboxController::class, 'callback'])->name('email-ai.microsoft.callback');
+    Route::post('/email-ai/connections/{connection}/sync', [EmailAiInboxController::class, 'sync'])->name('email-ai.sync');
+    Route::delete('/email-ai/connections/{connection}', [EmailAiInboxController::class, 'disconnect'])->name('email-ai.disconnect');
+    Route::get('/email-ai/threads/{thread}', [EmailAiInboxController::class, 'show'])->name('email-ai.thread');
+    Route::patch('/email-ai/threads/{thread}/share', [EmailAiInboxController::class, 'share'])->name('email-ai.share');
+    Route::post('/email-ai/ask', [EmailAiInboxController::class, 'ask'])->name('email-ai.ask');
 
     // QR Attendance mobile app
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');

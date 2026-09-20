@@ -53,7 +53,7 @@ final class AiInformationAccess
 
     public static function documents(User $user, ?Site $site): Builder
     {
-        $query = IntelligentDocument::query()->where('ai_status', 'ready');
+        $query = IntelligentDocument::query()->visibleTo($user)->where('ai_status', 'ready');
         if ($user->account_status !== 'active' || ($site && ! self::canUseSite($user, $site)) || (! $site && ! AccessPolicy::canManageSystem($user))) {
             return $query->whereRaw('1 = 0');
         }

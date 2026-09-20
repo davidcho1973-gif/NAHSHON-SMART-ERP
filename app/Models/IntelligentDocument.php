@@ -63,10 +63,10 @@ class IntelligentDocument extends Model
 
     protected $fillable = [
         'uuid', 'company_id', 'site_id', 'project_id', 'project_contract_id', 'supersedes_document_id',
-        'uploaded_by', 'reviewed_by', 'source', 'external_id', 'disk', 'file_path', 'original_file_name',
+        'uploaded_by', 'owner_user_id', 'reviewed_by', 'source', 'external_id', 'email_thread_id', 'disk', 'file_path', 'original_file_name',
         'stored_file_name', 'mime_type', 'extension', 'file_size', 'sha256', 'title', 'category',
         'document_type', 'discipline', 'direction', 'document_number', 'revision', 'sender', 'recipients',
-        'status', 'confidentiality', 'virtual_path', 'folder_structure', 'tags', 'keywords', 'summary',
+        'status', 'confidentiality', 'access_level', 'virtual_path', 'folder_structure', 'tags', 'keywords', 'summary',
         'key_facts', 'extracted_text', 'search_text', 'document_date', 'effective_on', 'expires_on',
         'response_due_on', 'received_at', 'ai_status', 'ai_engine', 'ai_model', 'ai_confidence',
         'ai_payload', 'ai_error', 'analyzed_at', 'reviewed_at',
@@ -132,6 +132,16 @@ class IntelligentDocument extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function emailThread(): BelongsTo
+    {
+        return $this->belongsTo(EmailThread::class);
+    }
+
     public function actionItems(): HasMany
     {
         return $this->hasMany(DocumentActionItem::class);
@@ -139,11 +149,25 @@ class IntelligentDocument extends Model
 
     public function scopeVisibleTo(Builder $query, ?User $user): Builder
     {
-        if (! $user || ! in_array($user->access_role, [
-            'super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'payroll',
-        ], true)) {
+        if (! $user) {
             return $query->whereRaw('1 = 0');
         }
+
+        if (! in_array($user->access_role, [
+            'super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'payroll',
+        ], true)) {
+            // An employee may use the personal email inbox without gaining access to the
+            // company document hub. Their own private originals are the only exception.
+            return $query->where('access_level', 'private')->where('owner_user_id', $user->id);
+        }
+
+        // Personal mailbox originals remain owner-only even for system administrators.
+        // Sharing is an explicit state transition, never a side effect of an admin role.
+        $query->where(function (Builder $access) use ($user): void {
+            $access->whereNull('access_level')
+                ->orWhere('access_level', '!=', 'private')
+                ->orWhere('owner_user_id', $user->id);
+        });
 
         if (in_array($user->access_role, ['super_admin', 'admin'], true) || $user->access_scope === 'all_sites') {
             return $query;
@@ -151,7 +175,11 @@ class IntelligentDocument extends Model
 
         return match ($user->access_scope) {
             'company' => $user->allowed_company_id
-                ? $query->where('company_id', $user->allowed_company_id)
+                ? $query->where(function (Builder $company) use ($user): void {
+                    $company->where('company_id', $user->allowed_company_id)
+                        ->orWhere(fn (Builder $private): Builder => $private
+                            ->where('access_level', 'private')->where('owner_user_id', $user->id));
+                })
                 : $query->whereRaw('1 = 0'),
             'site' => $user->allowed_site_id
                 ? $query->where(function (Builder $site) use ($user): void {
@@ -159,7 +187,9 @@ class IntelligentDocument extends Model
                     $site->where('site_id', $user->allowed_site_id)
                         ->when($companyId, fn (Builder $global): Builder => $global->orWhere(function (Builder $company) use ($companyId): void {
                             $company->whereNull('site_id')->where('company_id', $companyId);
-                        }));
+                        }))
+                        ->orWhere(fn (Builder $private): Builder => $private
+                            ->where('access_level', 'private')->where('owner_user_id', $user->id));
                 })
                 : $query->whereRaw('1 = 0'),
             'self' => $query->where('uploaded_by', $user->id),
