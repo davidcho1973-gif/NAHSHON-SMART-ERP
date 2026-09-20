@@ -26,3 +26,12 @@ test('empty housing database renders an explicit empty state',async()=>{
   assert.ok(html.includes('등록된 숙소가 없습니다.'));
   assert.ok(!html.includes('NaN'));
 });
+test('successful NFC vehicle assignment refreshes the active SPA without retired DOM selectors',()=>{
+  const start = source.indexOf('      function openNfcAssignModal(mode)');
+  const callbackStart = source.indexOf('.withSuccessHandler(',start)+'.withSuccessHandler('.length;
+  const callbackEnd = source.indexOf('\n              .withFailureHandler',callbackStart);
+  const callback = source.slice(callbackStart,callbackEnd).trim().replace(/\)$/, '');
+  const views=[];
+  vm.runInNewContext('('+callback+')({success:true,message:"Saved"})',{showToast:()=>{},window:{loadView:view=>views.push(view)}});
+  assert.deepEqual(views,['vehicle']);
+});

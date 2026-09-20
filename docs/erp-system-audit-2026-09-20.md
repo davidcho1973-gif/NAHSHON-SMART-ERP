@@ -20,6 +20,7 @@ The 35-menu browser pass was performed as a super administrator. It is a page-lo
 | Procurement partial success | Finance sync exceptions were logged while the user saw complete success. Preserve procurement save and return/display a finance warning. | Connector-failure regression |
 | Housing page | Renderer expected legacy room/utility fields that the real API never returned, causing `undefined.toLocaleString`. Render actual house name/address/capacity/rent fields. Summary uses the same scoped rows. | Backend numeric contract + JS empty/populated/XSS tests + browser |
 | Housing unavailable actions | Legacy NFC assignment backend explicitly rejects requests; AI housing registration has no housing persistence path. Remove those misleading page actions; disclose current read-only scope. | Source inspection + rendered-page test |
+| Vehicle NFC refresh | Successful assignment tried to read a retired sidebar selector and call removed renderers. Refresh through the current SPA navigation API. | Callback behavior regression |
 | Supplier list | An empty vendor table displayed fictional supplier names/contacts. Return a real empty state. | Empty-vendor-table regression |
 | Document status | Hardcoded “AI engine operating normally” was shown without checking provider/queue status. Replace with a neutral feature label. | Source inspection and browser |
 | Frontend API inventory | Unused `api_getAvailableDates` wrapper had no dispatch implementation. Remove it; test literal SPA/admin `gsRun` dispatch names. | Static API contract regression |
@@ -55,7 +56,7 @@ The 35-menu browser pass was performed as a super administrator. It is a page-lo
 - Browser final pass: 35 menus, no JavaScript/console errors, local HTTP failures or API `success:false` responses in those page-load paths.
 - Manual: 45 chapters; search filters content; mobile width 390px has no horizontal overflow.
 - PDF: 48 pages, no empty pages; sampled cover/contents/chapters/final page rendered and visually checked.
-- JavaScript: 27 tests passed, including two housing renderer cases.
+- JavaScript: 28 tests passed, including housing renderer and vehicle NFC refresh cases.
 - PHP: 2,111 passed / 1 Windows-only skipped / 7,992 assertions on the isolated PostgreSQL database (186.9 seconds). Linux CI is the additional platform gate.
 - Static asset build and `git diff --check` passed.
 

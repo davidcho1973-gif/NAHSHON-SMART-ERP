@@ -14444,12 +14444,8 @@ window.submitVendorCreate = function() {
               .withSuccessHandler(function (res) {
                 if (res.success) {
                   showToast(res.message);
-                  // 탭 새로고침
-                  const curTab = document.querySelector('.sidebar-item.active').getAttribute('data-tab');
-                  if (curTab === 'vehicle') window.renderVehicle();
-                  if (curTab === 'rental') window.loadView('rental');
-                  if (curTab === 'housing') window.renderHousing();
-                  if (curTab === 'personnel') window.renderPersonnel();
+                  // The current SPA exposes loadView, not the retired sidebar-item/data-tab renderer.
+                  window.loadView('vehicle');
                 } else {
                   alert('배정 실패: ' + res.error);
                 }
