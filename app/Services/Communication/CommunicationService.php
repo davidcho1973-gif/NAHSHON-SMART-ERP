@@ -15,6 +15,7 @@ use App\Models\Team;
 use App\Services\Push\ChatPushNotifier;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -684,19 +685,40 @@ class CommunicationService
 
     public function markMessageRead(CommunicationMessage $message, User $user): void
     {
-        $identity = $user->employee_id
-            ? ['communication_message_id' => $message->id, 'employee_id' => $user->employee_id]
-            : ['communication_message_id' => $message->id, 'user_id' => $user->id];
+        // A receipt may have been written before the employee and login records
+        // were linked. Reuse either identity instead of inserting a second row.
+        $existing = fn () => CommunicationMessageRead::query()
+            ->where('communication_message_id', $message->id)
+            ->where(function (Builder $query) use ($user): void {
+                $query->where('user_id', $user->id);
 
-        CommunicationMessageRead::query()->updateOrCreate(
-            $identity,
-            [
-                'communication_room_id' => $message->communication_room_id,
-                'user_id' => $user->id,
-                'employee_id' => $user->employee_id,
-                'read_at' => Carbon::now(),
-            ],
-        );
+                if ($user->employee_id) {
+                    $query->orWhere('employee_id', $user->employee_id);
+                }
+            })
+            ->first();
+
+        $read = $existing();
+
+        if (! $read) {
+            try {
+                $read = CommunicationMessageRead::query()->create([
+                    'communication_message_id' => $message->id,
+                    'communication_room_id' => $message->communication_room_id,
+                    'user_id' => $user->id,
+                    'employee_id' => $user->employee_id,
+                    'read_at' => Carbon::now(),
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // Concurrent page and stream requests can mark the same message.
+                $read = $existing();
+            }
+        }
+
+        $read?->update([
+            'communication_room_id' => $message->communication_room_id,
+            'read_at' => Carbon::now(),
+        ]);
     }
 
     /**
