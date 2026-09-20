@@ -53,7 +53,15 @@ final class AiInformationAccess
 
     public static function documents(User $user, ?Site $site): Builder
     {
-        $query = IntelligentDocument::query()->visibleTo($user)->where('ai_status', 'ready');
+        // Worker Q&A has its own stricter site/financial policy below and intentionally does
+        // not use the document-hub role gate. Add only the mailbox privacy boundary here.
+        $query = IntelligentDocument::query()
+            ->where('ai_status', 'ready')
+            ->where(function (Builder $access) use ($user): void {
+                $access->whereNull('access_level')
+                    ->orWhere('access_level', '!=', 'private')
+                    ->orWhere('owner_user_id', $user->id);
+            });
         if ($user->account_status !== 'active' || ($site && ! self::canUseSite($user, $site)) || (! $site && ! AccessPolicy::canManageSystem($user))) {
             return $query->whereRaw('1 = 0');
         }
