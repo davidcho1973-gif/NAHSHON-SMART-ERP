@@ -9,6 +9,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsItem;
 use App\Models\WorkerDevice;
+use App\Models\WorkerEnrollment;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
@@ -273,6 +274,10 @@ class SimpleWorkerRegistrationController extends Controller
         foreach ($candidates as $candidate) {
             if ($this->phoneKey((string) $candidate->phone) !== $digits) {
                 continue;
+            }
+
+            if (WorkerEnrollment::where('employee_id', $candidate->id)->where('status', 'approved')->exists()) {
+                throw ValidationException::withMessages(['phone' => '승인된 출퇴근 계정이 있습니다. 이름·전화번호로 소속이나 기기를 변경할 수 없습니다. 관리자에게 앱 연결을 요청하세요.']);
             }
 
             // 관리자·사무직 계정에 붙은 기록은 공개 폼이 건드리지 않는다. 이름과 번호를

@@ -40,6 +40,7 @@ use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
+use App\Http\Controllers\WorkerEnrollmentController;
 use App\Http\Middleware\AuthorizeAssetApi;
 use App\Models\OrgSetting;
 use App\Models\PushSubscription;
@@ -78,6 +79,16 @@ Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')-
 // 관문이 둘이다: 기억된 폰(가진 것) + 4자리 번호(아는 것). 폰이 등록되어 있지 않으면
 // 번호 입력창 자체가 뜨지 않으므로, 링크 없이 번호만 대보는 공격은 성립하지 않는다.
 // throttle 은 그 위에 한 겹 더 — 4자리는 만 가지뿐이라 속도를 묶어 두어야 한다.
+Route::middleware(['auth'])->prefix('worker-onboarding')->group(function () {
+    Route::get('/', [WorkerEnrollmentController::class, 'index'])->name('worker-enrollment.index');
+    Route::post('/teams/{team}/invite', [WorkerEnrollmentController::class, 'invite'])->name('worker-enrollment.invite');
+    Route::post('/{enrollment}/approve', [WorkerEnrollmentController::class, 'approve'])->name('worker-enrollment.approve');
+    Route::post('/{enrollment}/activation', [WorkerEnrollmentController::class, 'activation'])->middleware('throttle:20,1')->name('worker-enrollment.activation');
+    Route::post('/{enrollment}/reject', [WorkerEnrollmentController::class, 'reject'])->name('worker-enrollment.reject');
+});
+Route::get('/worker-enroll/{team}', [WorkerEnrollmentController::class, 'form'])->middleware(['signed', 'throttle:60,1'])->name('worker-enrollment.join');
+Route::post('/worker-enroll/{team}', [WorkerEnrollmentController::class, 'submit'])->middleware(['signed', 'throttle:10,1']);
+
 Route::get('/auth/pin/setup/{token}', [PinAuthController::class, 'setupForm'])
     ->middleware('throttle:30,1')->name('pin.setup');
 Route::post('/auth/pin/setup/{token}', [PinAuthController::class, 'setupStore'])

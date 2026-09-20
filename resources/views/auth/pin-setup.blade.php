@@ -54,9 +54,9 @@
   p.lead { font-size:15px; line-height:1.55; color:#444; margin:0 0 22px }
   .who { font-size:14px; color:var(--blue); font-weight:700; margin-bottom:4px }
   label { display:block; font-size:13px; font-weight:700; color:var(--navy); margin:16px 0 6px }
-  input[type=tel] { width:100%; font-size:30px; letter-spacing:14px; text-align:center; padding:14px 10px;
+  input[type=password] { width:100%; font-size:30px; letter-spacing:14px; text-align:center; padding:14px 10px;
                     border:2px solid var(--line); border-radius:10px; background:#fff; font-family:monospace }
-  input[type=tel]:focus { outline:none; border-color:var(--blue) }
+  input[type=password]:focus { outline:none; border-color:var(--blue) }
   button { width:100%; margin-top:22px; padding:16px; font-size:17px; font-weight:700; color:#fff;
            background:var(--blue); border:0; border-radius:10px }
   button:disabled { background:#9fb2c4 }
@@ -79,10 +79,10 @@
   <p class="lead">{{ str_replace(':n', (string) $pinLength, $t['lead']) }}</p>
 
   <label for="pin1">PIN</label>
-  <input id="pin1" type="tel" inputmode="numeric" maxlength="{{ $pinLength }}" autocomplete="one-time-code">
+  <input id="pin1" type="password" inputmode="numeric" maxlength="{{ $pinLength }}" autocomplete="new-password">
 
   <label for="pin2">{{ $t['again'] }}</label>
-  <input id="pin2" type="tel" inputmode="numeric" maxlength="{{ $pinLength }}" autocomplete="one-time-code">
+  <input id="pin2" type="password" inputmode="numeric" maxlength="{{ $pinLength }}" autocomplete="new-password">
 
   <button id="go">{{ $t['save'] }}</button>
   <div class="hint">{{ $t['hint'] }}</div>
