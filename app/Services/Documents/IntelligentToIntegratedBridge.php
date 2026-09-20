@@ -33,7 +33,7 @@ class IntelligentToIntegratedBridge
 
     public function file(IntelligentDocument $doc): ?IntegratedDocument
     {
-        if ($doc->source === self::FROM_INTEGRATED) {
+        if ($doc->source === self::FROM_INTEGRATED || $doc->access_level === 'private') {
             return null;
         }
 

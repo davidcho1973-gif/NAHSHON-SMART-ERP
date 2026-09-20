@@ -498,3 +498,11 @@ Release inspection found that the shared queue diagnostic still classified only 
 # 2026-09-20 — Verify the real meeting analysis model
 
 Live NAHSHON model metadata lookup returned200 for gemini-3.5-transcribe but404 for the proposed gemini-3.5-pro identifier. Correct the new meeting analysis default and environment example to Google's documented gemini-3.1-pro-preview; use HIGH reasoning and the provider's default temperature rather than0.1. This is an endpoint-name correction, not a silent downgrade/fallback. The transcriber and other existing modules are unchanged. Verify the actual analysis request using a synthetic non-business prompt before production release.
+
+## CODEX — 2026-09-20 company email AI inbox
+
+Added a personal Microsoft 365 Outlook inbox under the ERP document menu. Each user connects with delegated read-only OAuth; the server incrementally imports Inbox and Sent Items, preserves encrypted tokens and private source files, analyzes email/attachments through the durable document queue, and continues after the browser closes. The review desk shows Korean summary, classification, response need/deadline, source/attachments and document Q&A. Explicit owner approval can file a conversation to a selected project; changing it back to private removes the integrated mirror.
+
+Security is a data boundary, not a UI convention: private source documents require the owner ID even for a super administrator, duplicate hashes include owner/access level, Microsoft accounts cannot be bound to two ERP users, and shared email/search/Q&A reuse the existing document company/site/financial access query. The app requests `Mail.Read` only and never stores a mailbox password or requests send/write permission. Setup and operating details: `docs/email-ai-inbox.md`.
+
+Local validation: all changed PHP files pass syntax checking; static asset build and diff checks pass. Local feature execution is unavailable because the installed PHP is 8.3 while current Composer dependencies require 8.4.1. Browser regression fixtures copied from another worktree are stale and stop on a missing retired selector; Linux CI remains the release gate. No mailbox was connected, no production email was imported, and no external message was sent during development.

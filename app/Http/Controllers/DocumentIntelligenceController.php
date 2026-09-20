@@ -653,6 +653,7 @@ class DocumentIntelligenceController extends Controller
             'tiff' => 'image/tiff',
             'txt' => 'text/plain; charset=UTF-8',
             'csv' => 'text/csv; charset=UTF-8',
+            'eml' => 'text/plain; charset=UTF-8',
         ];
         // 확장자 칸을 믿을 수 없다 — 일괄 임포트로 들어온 문서는 이 칸이 비어 있어
         // PDF 인데도 415 로 막혔다(703K 도면·시방 전부가 그랬다). 그래서 파일 이름과

@@ -110,7 +110,7 @@ class DocumentScope
         }
     }
 
-    public function findDuplicate(string $sha256, array $scope, ?int $exceptId = null): ?IntelligentDocument
+    public function findDuplicate(string $sha256, array $scope, ?int $exceptId = null, ?int $ownerUserId = null, string $accessLevel = 'scope'): ?IntelligentDocument
     {
         $query = IntelligentDocument::query()->where('sha256', $sha256)
             ->when($exceptId, fn (Builder $q) => $q->whereKeyNot($exceptId));
@@ -124,6 +124,8 @@ class DocumentScope
                 $value ? $query->where($column, $value) : $query->whereNull($column);
             }
         }
+        $ownerUserId ? $query->where('owner_user_id', $ownerUserId) : $query->whereNull('owner_user_id');
+        $query->where('access_level', $accessLevel);
 
         return $query->orderByRaw("case when ai_status = 'ready' then 0 else 1 end")->orderBy('id')->first();
     }
@@ -133,7 +135,13 @@ class DocumentScope
     {
         $original = $this->scopeOf($document);
         $contractId = $document->getRawOriginal('project_contract_id');
-        $duplicate = $this->findDuplicate($document->sha256, $scope, $document->id);
+        $duplicate = $this->findDuplicate(
+            $document->sha256,
+            $scope,
+            $document->id,
+            $document->owner_user_id ? (int) $document->owner_user_id : null,
+            (string) ($document->access_level ?: 'scope'),
+        );
         if ($duplicate) {
             return $this->retainDuplicate($document, $duplicate, $attributes, $scope);
         }
@@ -160,7 +168,13 @@ class DocumentScope
                 $document->fill([...$attributes, ...$scope])->save();
             });
         } catch (UniqueConstraintViolationException $e) {
-            $duplicate = $this->findDuplicate($document->sha256, $scope, $document->id);
+            $duplicate = $this->findDuplicate(
+                $document->sha256,
+                $scope,
+                $document->id,
+                $document->owner_user_id ? (int) $document->owner_user_id : null,
+                (string) ($document->access_level ?: 'scope'),
+            );
             if (! $duplicate) {
                 throw $e;
             }

@@ -255,6 +255,9 @@
               <li class="nav-item nav-child" data-view="docs" id="nav-docs">
                 <i class="ph ph-folders" style="color:#818cf8"></i><span>문서통합관리</span>
               </li>
+              <li class="nav-item nav-child" data-view="email-ai" id="nav-email-ai">
+                <i class="ph ph-envelope-simple-open" style="color:#087be6"></i><span>회사 이메일 분석함</span>
+              </li>
               <li class="nav-item nav-child" data-view="contract-admin" id="nav-contract-admin">
                 <i class="ph ph-file-text"></i><span>원청 계약 · 서류</span>
               </li>
@@ -1440,6 +1443,10 @@
           window.__docHubOpenDoc = null;
           pageContainer.innerHTML = '<iframe src="/document-hub?embed=1' + (docSite ? '&site_id=' + docSite : '') + openDoc + '" ' +
             'style="width:100%;height:calc(100vh - 150px);min-height:560px;border:1px solid var(--border-strong);border-radius:12px;background:#f3f6fb"></iframe>';
+        } },
+        'email-ai': { title: '회사 이메일 AI 분석함', render: function () {
+          pageContainer.innerHTML = '<iframe src="/email-ai?embed=1" ' +
+            'style="width:100%;height:calc(100vh - 150px);min-height:650px;border:1px solid var(--border-strong);border-radius:12px;background:#f4f7fb"></iframe>';
         } },
         'safety': { title: 'AI 작업안전관리', render: renderSafety },
         'hr': { title: '인원관리', render: renderHR },
