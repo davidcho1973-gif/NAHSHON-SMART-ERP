@@ -35,8 +35,8 @@ use App\Services\Admin\ContractAdminService;
 use App\Services\Admin\CorrespondenceService;
 use App\Services\Admin\CrewSetupService;
 use App\Services\Admin\EmployeeAdminService;
-use App\Services\Admin\EquipmentSheetService;
 use App\Services\Admin\EquipmentCheckAdminService;
+use App\Services\Admin\EquipmentSheetService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
 use App\Services\Admin\KakaoReminderAdminService;
@@ -2358,28 +2358,22 @@ class SmartCompanyData
 
     public static function housingStats(string $siteId = 'ALL'): array
     {
-        try {
-            if (class_exists(Schema::class) && Schema::hasTable('housings')) {
-                $housingQuery = Housing::query();
-                self::applyAssetSiteScope($housingQuery, $siteId);
-                $rows = $housingQuery->get();
-                $total = $rows->count();
-                $occupied = $rows->filter(fn (Housing $h): bool => (int) $h->beds > 0 && (int) $h->occupied >= (int) $h->beds)->count();
-                $maintenance = $rows->where('status', 'maintenance')->count();
+        // The summary and cards use the same scoped rows and the same real fields.
+        $rows = collect(self::housingList($siteId));
+        $capacity = (int) $rows->sum('beds');
+        $people = (int) $rows->sum('occupied');
+        $full = $rows->filter(fn (array $h): bool => $h['beds'] > 0 && $h['occupied'] >= $h['beds'])->count();
 
-                return [
-                    'total' => $total,
-                    'occupied' => $occupied,
-                    'available' => max(0, $total - $occupied),
-                    'maintenance' => $maintenance,
-                    'occupancyRate' => $total > 0 ? (int) round($occupied / $total * 100) : 0,
-                ];
-            }
-        } catch (\Throwable) {
-            // Fall back to empty stats when the table is not ready.
-        }
-
-        return ['total' => 0, 'occupied' => 0, 'available' => 0, 'maintenance' => 0, 'occupancyRate' => 0];
+        return [
+            'total' => $rows->count(),
+            'occupied' => $full,
+            'available' => max(0, $rows->count() - $full),
+            'maintenance' => $rows->where('status', '수리필요')->count(),
+            'occupancyRate' => $capacity > 0 ? (int) round($people / $capacity * 100) : 0,
+            'totalCapacity' => $capacity,
+            'currentOcc' => $people,
+            'monthlyRentTotal' => (float) $rows->sum('monthlyRent'),
+        ];
     }
 
     public static function housingList(string $siteId = 'ALL'): array
@@ -2395,6 +2389,8 @@ class SmartCompanyData
                     ->map(fn (Housing $h): array => [
                         'id' => $h->code,
                         'name' => $h->name,
+                        'address' => $h->address,
+                        'monthlyRent' => (float) $h->monthly_rent,
                         'site' => $h->site?->code ?: '-',
                         'beds' => (int) $h->beds,
                         'occupied' => (int) $h->occupied,
@@ -2455,7 +2451,7 @@ class SmartCompanyData
     public static function vendors(): array
     {
         try {
-            if (class_exists(Schema::class) && Schema::hasTable('vendors') && Vendor::query()->exists()) {
+            if (class_exists(Schema::class) && Schema::hasTable('vendors')) {
                 $query = Vendor::query()->orderBy('name');
                 self::applyVendorUserScope($query);
 
@@ -2476,11 +2472,10 @@ class SmartCompanyData
                 ])->all();
             }
         } catch (\Throwable) {
-            // Fall through to the demo fallback below.
+            // Return an empty list instead of fabricated supplier contacts.
         }
 
-        // demo fallback: vendors 테이블이 없거나 완전히 비어 있을 때만
-        return [['id' => 'VEN-001', 'name' => 'Graybar', 'category' => 'Electrical Supply', 'manager' => 'Amy', 'phone' => '602-555-0111', 'email' => 'quotes@graybar.example', 'contractStatus' => '진행중', 'site' => 'ALL'], ['id' => 'VEN-002', 'name' => 'United Rentals', 'category' => 'Equipment Rental', 'manager' => 'Mark', 'phone' => '602-555-0122', 'email' => 'az@united.example', 'contractStatus' => '진행중', 'site' => 'ALL']];
+        return [];
     }
 
     /**

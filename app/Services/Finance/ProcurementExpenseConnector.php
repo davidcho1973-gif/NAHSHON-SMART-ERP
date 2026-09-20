@@ -6,6 +6,7 @@ use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\Project;
 use App\Models\Site;
+use App\Models\Vendor;
 use App\Support\FinanceChartOfAccounts;
 
 /**
@@ -29,15 +30,19 @@ class ProcurementExpenseConnector
     /** 입고완료가 아니면 아무것도 하지 않는다. 금액이 없어도 넘길 것이 없다. */
     public function sync(ProcurementItem $item): void
     {
-        if ($item->status !== '입고완료' || $item->amount === null || (float) $item->amount <= 0) {
-            return;
-        }
-
         $sourceRef = "procurement:{$item->id}";
         $existing = MobileExpense::query()->where('source_ref', $sourceRef)->first();
 
         // 사람이 이미 승인/지급한 건은 손대지 않는다 — 장부 확정 후 소급 변경 금지.
         if ($existing && $existing->status !== 'pending') {
+            return;
+        }
+
+        // A reversed receipt must not remain in pending costs. Finalized entries
+        // above remain untouched and require the existing finance review process.
+        if ($item->status !== '입고완료' || $item->amount === null || (float) $item->amount <= 0) {
+            $existing?->delete();
+
             return;
         }
 
@@ -57,7 +62,7 @@ class ProcurementExpenseConnector
             'company_id' => $project?->company_id
                 ?? ($item->site_id ? Site::query()->whereKey($item->site_id)->value('company_id') : null),
             // AP·1099 의 근거 — 발주의 벤더 연결을 그대로, 없으면 이름 매칭(유일할 때만).
-            'vendor_id' => $item->vendor_id ?: \App\Models\Vendor::matchByName($item->vendor),
+            'vendor_id' => $item->vendor_id ?: Vendor::matchByName($item->vendor),
             'site_id' => $item->site_id,
             'project_id' => $project?->id,
             'wbs_code' => $item->wbs_code,
@@ -78,11 +83,12 @@ class ProcurementExpenseConnector
             return;
         }
 
-        if ((float) $existing->amount !== (float) $item->amount
-            || (string) $existing->description !== (string) $attributes['description']) {
-            // 입고일은 처음 잡힌 날을 지킨다 — 금액 수정 때마다 비용 날짜가 밀리면 안 된다.
-            unset($attributes['expense_date']);
-            $existing->update($attributes);
+        // Vendor/project/site links can change even when amount and label do not.
+        // Keep the original receipt date while synchronizing every source field.
+        unset($attributes['expense_date']);
+        $existing->fill($attributes);
+        if ($existing->isDirty()) {
+            $existing->save();
         }
     }
 }

@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
+use App\Models\Vendor;
 use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Support\Facades\Storage;
@@ -55,15 +56,16 @@ class DocumentExpenseConnector
         $flow = strtolower(trim((string) ($money['flow'] ?? '')));
         $amount = is_numeric($money['amount'] ?? null) ? (float) $money['amount'] : 0.0;
 
-        if ($flow !== 'out' || $amount <= 0) {
-            return;
-        }
-
         $sourceRef = "document:{$document->id}";
         $existing = MobileExpense::query()->where('source_ref', $sourceRef)->first();
 
         // 사람이 이미 승인/지급한 건은 손대지 않는다 — 장부 확정 후 소급 변경 금지.
         if ($existing && $existing->status !== 'pending') {
+            return;
+        }
+        if ($flow !== 'out' || $amount <= 0) {
+            $existing?->delete();
+
             return;
         }
 
@@ -80,7 +82,7 @@ class DocumentExpenseConnector
 
         $attributes = [
             'company_id' => $document->company_id,
-            'vendor_id' => \App\Models\Vendor::matchByName($payee),
+            'vendor_id' => Vendor::matchByName($payee),
             'site_id' => $document->site_id,
             'project_id' => $document->project_id,
             'payment_type' => 'corporate',
@@ -122,12 +124,12 @@ class DocumentExpenseConnector
             return;
         }
 
-        if ((float) $existing->amount !== $amount
-            || (string) $existing->description !== (string) $attributes['description']
-            || (blank($existing->receipt_file) && isset($attributes['receipt_file']))) {
-            // 지출일은 처음 잡힌 값을 지킨다 — 재분석 때마다 날짜가 밀리면 안 된다.
-            unset($attributes['expense_date']);
-            $existing->update($attributes);
+        // Reclassification and site/project/vendor changes must propagate even
+        // when the recognized amount and document title stay the same.
+        unset($attributes['expense_date']);
+        $existing->fill($attributes);
+        if ($existing->isDirty()) {
+            $existing->save();
         }
     }
 

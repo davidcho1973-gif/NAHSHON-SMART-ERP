@@ -44,7 +44,7 @@ class ProcurementService
             ->with(['item:id,name,unit,standard_cost', 'contract:id,contract_number,title,current_amount,currency'])
             ->get()->keyBy('wbs_code');
 
-        $rows = $subs->map(function (WbsItem $i) use ($tracking): array {
+        $rows = $subs->map(function (WbsItem $i) use ($tracking, $today): array {
             $t = $tracking->get($i->wbs_code);
             $status = $t?->status ?? '발주대기';
             $eta = $t?->eta?->toDateString();
@@ -54,7 +54,7 @@ class ProcurementService
                 ? (int) Carbon::parse($eta)->diffInDays(Carbon::parse($needBy), false)
                 : null;
 
-            $delay = $this->delayState($status, $eta, $slack);
+            $delay = $this->delayState($status, $eta, $slack, $today);
 
             return [
                 'wbs_id' => $i->wbs_code,
@@ -188,10 +188,12 @@ class ProcurementService
 
         // 입고완료면 발주 금액을 원가(경비 원장)로 넘긴다. 실패해도 조달 저장은
         // 살아야 하므로 여기서 삼킨다 — 부가 기능이 주 기능을 막으면 안 된다.
+        $financeWarning = null;
         try {
             app(ProcurementExpenseConnector::class)->sync($item);
         } catch (\Throwable $e) {
             report($e);
+            $financeWarning = '조달 정보는 저장됐지만 회계 대기 내역 연결에 실패했습니다. 다시 저장하거나 관리자에게 확인하세요.';
         }
 
         return [
@@ -201,6 +203,7 @@ class ProcurementService
             'vendorId' => $item->vendor_id,
             'vendor' => $item->vendor,
             'contractId' => $item->contract_id,
+            'financeWarning' => $financeWarning,
         ];
     }
 
@@ -246,10 +249,13 @@ class ProcurementService
         })->values()->all();
     }
 
-    private function delayState(string $status, ?string $eta, ?int $slack): string
+    private function delayState(string $status, ?string $eta, ?int $slack, string $today): string
     {
         if ($status === '입고완료') {
             return 'done';
+        }
+        if ($eta !== null && $eta < $today) {
+            return 'late';
         }
         if ($eta === null || $slack === null) {
             return 'unknown';

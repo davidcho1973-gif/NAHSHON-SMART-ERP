@@ -398,6 +398,7 @@
     <main class="field-content" id="view">
         <div class="slab is-waiting"><div class="meta">불러오는 중…</div></div>
     </main>
+    <div style="padding:12px 20px;text-align:center"><a href="{{ route('user-manual') }}#attendance-app">{{ __('출퇴근 앱 사용 안내') }}</a></div>
 
     {{-- 현장 QR 스캔 — 출퇴근은 이 화면을 지나야만 찍힌다. --}}
     <div class="scan" id="scan-box" style="display:none">

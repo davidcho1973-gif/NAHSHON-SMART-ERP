@@ -65,6 +65,10 @@ use Symfony\Component\Mailer\Bridge\Mailgun\Transport\MailgunApiTransport;
 use Symfony\Component\Mailer\Bridge\Postmark\Transport\PostmarkApiTransport;
 
 Route::get('/login', [GoogleAuthController::class, 'login'])->name('login');
+Route::get('/help', fn () => response()->file(resource_path('manuals/user-manual-ko.html'), [
+    'Content-Type' => 'text/html; charset=UTF-8',
+    'Cache-Control' => 'private, no-store',
+]))->middleware('auth')->name('user-manual');
 Route::post('/auth/password/login', [EmailPasswordAuthController::class, 'login'])
     ->middleware('throttle:10,1')->name('password.login');
 Route::get('/auth/password/setup', [EmailPasswordAuthController::class, 'setup'])
