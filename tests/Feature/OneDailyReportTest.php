@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DailyClosingReport;
 use App\Models\Site;
 use App\Services\Ops\DailyClosingService;
+use App\Services\Ops\DailyPlanService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -201,5 +202,34 @@ class OneDailyReportTest extends TestCase
 
         $this->assertSame(1, DailyClosingReport::query()
             ->where('site_id', $site->id)->whereDate('report_date', '2026-08-18')->count());
+    }
+
+    public function test_morning_plan_and_evening_closing_are_one_daily_work_record(): void
+    {
+        $site = $this->site();
+
+        app(DailyPlanService::class)->save($site->id, '2026-08-18', [
+            'workScope' => '주방 배관 트렌치 되메우기',
+            'crews' => [[
+                'company' => 'NAHSHON', 'trade' => '배관', 'headcount' => 4,
+                'location' => 'Kitchen 100', 'work' => '배관 시험 후 되메우기',
+            ]],
+            'hazards' => [['hazard' => '개구부', 'control' => '바리케이드 설치']],
+        ], submit: true);
+
+        app(DailyClosingService::class)->start($site->id, '2026-08-18');
+
+        $records = DailyClosingReport::query()
+            ->where('site_id', $site->id)
+            ->whereDate('report_date', '2026-08-18')
+            ->get();
+
+        $this->assertCount(1, $records, '아침 계획과 마감이 서로 다른 기록으로 갈라졌습니다.');
+        $this->assertSame('주방 배관 트렌치 되메우기', $records->first()->plan['workScope']);
+        $this->assertSame(DailyClosingReport::PLAN_SUBMITTED, $records->first()->plan_status);
+        $this->assertContains($records->first()->status, [
+            DailyClosingReport::WRITING,
+            DailyClosingReport::DONE,
+        ]);
     }
 }
