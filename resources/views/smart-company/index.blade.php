@@ -16,6 +16,7 @@
     rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
+  <script src="{{ asset('js/admin-meetings.js') }}?v={{ filemtime(public_path('js/admin-meetings.js')) }}" defer></script>
   <script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-photos.js') }}?v={{ filemtime(public_path('js/wbs-photos.js')) }}" defer></script>
@@ -1445,6 +1446,7 @@
         'payroll': { title: '급여 / 정산', render: renderPayroll },
         'wbs': { title: '공정 관리', render: renderWbs },
         'opsroom': { title: '현장 상황실', render: renderOpsRoom },
+        'meetings': { title: '공정미팅', render: function () { return window.MeetingDesk.render(); } },
         'daily-report': { title: '일일 보고', render: function () { return window.AdminDailyReport.render(); } },
         'correspondence': { title: '서신 원장', render: function () { return window.AdminCorrespondence.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
@@ -1794,6 +1796,9 @@
           document:documentState.document ? String(documentState.document) : null, documentState:documentState }, { silent:true, replace:!!replace });
       };
       window.ERPDocumentSave = function(){if(window._currentView==='document-hub')erpNavigation.save();};
+      window.ERPMeetingNavigate = function(id) {
+        erpNavigation.navigate({view:'meetings',site:window.currentSiteId || 'ALL',document:null,detail:id?'meeting':null,code:id?String(id):null});
+      };
       window.loadView = function loadView(viewKey) {
         if (!routes[viewKey]) return;
         var site = ['hr','attendance','personnel'].includes(viewKey) ? 'ALL' : window.currentSiteId || 'ALL';
@@ -9277,6 +9282,9 @@
           '<button class="btn-primary ops-hide" id="ops-applyall-btn" style="font-weight:700" onclick="window.opsApplyAll()"><i class="ph ph-lightning"></i> <span id="ops-applyall-label">반영</span></button>' +
           '<button class="btn-secondary" onclick="window.opsTogglePaste()" title="카카오톡 대화를 그대로 붙여넣을 때"><i class="ph ph-clipboard-text"></i> 직접 붙여넣기</button>' +
           '<button class="btn-secondary" onclick="window.opsGoBatches()"><i class="ph ph-scroll"></i> 원문 <span id="ops-batch-count"></span></button>' +
+          @if(\App\Services\Ops\MeetingAccess::allowed(auth()->user()))
+          '<button class="btn-primary" onclick="window.loadView(\'meetings\')"><i class="ph ph-microphone"></i> 공정미팅</button>' +
+          @endif
           '<button class="btn-primary" style="background:#0f766e;border-color:#0f766e" onclick="window.opsCloseDay()"><i class="ph ph-clipboard-text"></i> 일일 마감</button>' +
           '</div></div>' +
 

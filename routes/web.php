@@ -22,6 +22,7 @@ use App\Http\Controllers\MobileDocumentController;
 use App\Http\Controllers\MobileEquipmentController;
 use App\Http\Controllers\MobileExpenseController;
 use App\Http\Controllers\MobileOpsRoomController;
+use App\Http\Controllers\OpsMeetingController;
 use App\Http\Controllers\OpsPhotoController;
 use App\Http\Controllers\OpsVoiceController;
 use App\Http\Controllers\OrgLogoController;
@@ -331,6 +332,21 @@ Route::middleware('auth')->group(function (): void {
     // 말한 것을 글자로 — 장갑 낀 손으로 타자를 치지 않아도 되게. 녹음은 보관하지 않는다.
     Route::post('/ops-api/voice', [OpsVoiceController::class, 'store'])
         ->middleware('throttle:30,1')->name('ops.voice');
+
+    Route::prefix('ops-api/meetings')->controller(OpsMeetingController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::post('/', 'store')->middleware('throttle:20,1');
+        Route::get('/{meeting}', 'show')->whereNumber('meeting');
+        Route::post('/{meeting}/parts/{part}', 'part')->whereNumber(['meeting', 'part'])->middleware('throttle:120,1');
+        Route::post('/{meeting}/finish', 'finish')->whereNumber('meeting');
+        Route::post('/{meeting}/retry', 'retry')->whereNumber('meeting')->middleware('throttle:5,1');
+        Route::get('/{meeting}/audio', 'audio')->whereNumber('meeting')->name('ops.meeting.audio');
+        Route::get('/{meeting}/targets', 'targets')->whereNumber('meeting');
+        Route::patch('/{meeting}/items/{item}', 'edit')->whereNumber(['meeting', 'item']);
+        Route::post('/{meeting}/items/{item}/apply', 'apply')->whereNumber(['meeting', 'item']);
+        Route::post('/{meeting}/items/{item}/dismiss', 'dismiss')->whereNumber(['meeting', 'item']);
+        Route::post('/{meeting}/items/{item}/undo', 'undo')->whereNumber(['meeting', 'item']);
+    });
 
     // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
     Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');

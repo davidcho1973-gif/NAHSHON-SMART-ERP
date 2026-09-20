@@ -31,6 +31,8 @@ class OpsDigestService
     {
         $date ??= Carbon::today();
         $rows = OpsIntakeItem::query()
+            // Meeting quotations stay in the scoped meeting desk, not the site's shared chat digest.
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'meeting'))
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->whereDate('created_at', $date->toDateString())
             ->get();
