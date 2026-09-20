@@ -211,7 +211,7 @@ class OneDailyReportTest extends TestCase
         app(DailyPlanService::class)->save($site->id, '2026-08-18', [
             'workScope' => '주방 배관 트렌치 되메우기',
             'crews' => [[
-                'company' => 'NAHSHON', 'trade' => '배관', 'headcount' => 4,
+                'company' => '직영팀', 'trade' => '배관', 'headcount' => 4,
                 'location' => 'Kitchen 100', 'work' => '배관 시험 후 되메우기',
             ]],
             'hazards' => [['hazard' => '개구부', 'control' => '바리케이드 설치']],
