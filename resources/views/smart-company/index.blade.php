@@ -291,6 +291,7 @@
         </nav>
       </div>
       <div class="sidebar-footer">
+        <a href="{{ route('user-manual') }}" style="display:block;padding:8px 4px;margin-bottom:8px;color:var(--text-secondary);font-size:13px;text-decoration:none"><i class="ph ph-book-open"></i> 사용자 설명서</a>
         <div class="user-block">
           <div class="user-avatar">{{ $authUser['initials'] }}</div>
           <div class="user-details">
@@ -1209,7 +1210,6 @@
         delete window.apiCache['api_getHrAttendanceSummary' + JSON.stringify(args)];
         return gsRun('api_getHrAttendanceSummary', args, { success: false, kpis: { work_hours: 0, lates: 0, early_outs: 0, absences: 0 }, records: [] });
       },
-      getAvailableDates: () => gsRun('api_getAvailableDates', [_siteId()], { success: false, dates: [] }),
       getLgesProcessData: async () => MockAPI.getLgesProcessData ? await MockAPI.getLgesProcessData() : [],
       getPersonnelList: () => gsRun('api_getPersonnelList', [_siteId()], []),
       getPersonnelStats: () => gsRun('api_getPersonnelStats', [_siteId()], { total: 0, active: 0, onLeave: 0, visaExpiringSoon: 0, safetyExpiring: 0, byCompany: [] }),
@@ -1253,8 +1253,8 @@
       setupRentalSheet: () => gsRun('setupRentalSheet', [], { success: false }),
       generateSampleRentalContracts: () => gsRun('generateSampleRentalContracts', [], { success: false, count: 0, results: [] }),
       cleanEmptyRentalRows: () => gsRun('api_cleanEmptyRentalRows', [], { success: false, deleted: 0 }),
-      getHousingList: () => gsRun('api_getHousingList', [], []),
-      getHousingStats: () => gsRun('api_getHousingStats', [], { total: 0, occupied: 0, available: 0, maintenance: 0 }),
+      getHousingList: () => gsRun('api_getHousingList', [], null),
+      getHousingStats: () => gsRun('api_getHousingStats', [], null),
       getCommandCenter: (siteId) => gsRun('api_getConstructionCommandCenter', [siteId || _siteId()], null),
       getDailyAlertScan: async () => {
         try {
@@ -8526,6 +8526,7 @@
         if (!it) return;
         var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, { status: it.nextStatus });
         if (!r || !r.success) { alert('상태 변경 실패: ' + ((r && r.error) || '오류')); return; }
+        if (r.financeWarning) alert(r.financeWarning);
         await wbsReloadProcurement();
       };
 
@@ -8682,7 +8683,8 @@
           if (!r || !r.success) { alert('저장 실패: ' + ((r && r.error) || '오류')); btn.disabled = false; return; }
           close();
           await wbsReloadProcurement();
-          if (window.showToast) window.showToast('조달 정보를 저장했습니다.', 'success');
+          if (r.financeWarning) alert(r.financeWarning);
+          else if (window.showToast) window.showToast('조달 정보를 저장했습니다.', 'success');
         });
       };
 
@@ -10141,7 +10143,7 @@
           '<div class="docs-head">' +
           '<div><h1><i class="ph ph-folders" style="color:#818cf8;margin-right:8px"></i>문서통합관리</h1>' +
           '<p>직원·협력사·현장 작업자가 올린 모든 서류를 AI가 분석·분류하여 자동 정리합니다.</p></div>' +
-          '<div class="docs-live"><span class="dot"></span>AI 분석 엔진 정상 가동중</div>' +
+          '<div class="docs-live">문서 분석·분류</div>' +
           '</div>' +
           '<div id="docs-storage-banner"></div>' +
           '<div class="docs-tabs">' +
@@ -13446,44 +13448,25 @@
       async function renderHousing() {
         pageContainer.innerHTML = skeleton();
         try {
-          const [stats, housings] = await Promise.all([
-            window.API.getHousingStats(),
-            window.API.getHousingList()
-          ]);
-          var housingsHtml = housings.map(function (h) {
-            var occRate = Math.round(h.currentOcc / h.maxOcc * 100);
-            var totalUtil = h.elecAmt + h.waterAmt + h.gasAmt + h.internet;
-            var occColor = occRate >= 100 ? 'var(--status-success)' : occRate >= 50 ? 'var(--status-warning)' : 'var(--status-danger)';
-            var pillCls = occRate >= 100 ? 'ok' : occRate >= 50 ? 'warning' : 'pending';
-            var gasHtml = h.gasAmt > 0 ? '<div style="font-size:11px;color:var(--text-secondary)">가스</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.gasAmt + '</div>' : '';
-            var residentsHtml = h.residents.map(function (r) { return '<span class="tag">' + r + '</span>'; }).join('');
-            return '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-buildings"></i> ' + h.building + ' — ' + h.unit + '</div><span class="status-pill ' + pillCls + '">' + h.currentOcc + '/' + h.maxOcc + '명</span></div>' +
-              '<div class="panel-body padded"><div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">' + h.address + '</div>' +
-              '<div class="progress-wrapper" style="margin-bottom:14px"><div class="progress-bar"><div class="progress-fill" style="width:' + occRate + '%;background:' + occColor + '"></div></div><div class="progress-text cell-primary">' + occRate + '%</div></div>' +
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
-              '<div style="font-size:11px;color:var(--text-secondary)">월 임대료</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.rent + '</div>' +
-              '<div style="font-size:11px;color:var(--text-secondary)">전기</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.elecAmt + ' (납부일: ' + h.elecDue + '일)</div>' +
-              '<div style="font-size:11px;color:var(--text-secondary)">수도</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.waterAmt + '</div>' +
-              gasHtml +
-              '<div style="font-size:11px;color:var(--text-secondary)">인터넷</div><div class="cell-mono" style="font-size:11px;text-align:right">$' + h.internet + '</div>' +
-              '<div style="font-size:11px;font-weight:700;color:var(--text-primary)">월 합계</div><div class="cell-mono" style="font-size:11px;text-align:right;font-weight:700">$' + (h.rent + totalUtil).toLocaleString() + '</div>' +
-              '</div>' +
-              '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">입주자</div>' +
-              '<div style="display:flex;flex-wrap:wrap;gap:4px">' + residentsHtml + '</div>' +
-              '</div></div>';
+          const [stats, housings] = await Promise.all([window.API.getHousingStats(), window.API.getHousingList()]);
+          if (!Array.isArray(housings) || !stats || stats.success === false) throw new Error('Housing response invalid');
+          const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+          const money = value => Number(value || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+          const cards = housings.map(h => {
+            const rate = h.beds > 0 ? Math.round(h.occupied / h.beds * 100) : 0;
+            return '<div class="panel"><div class="panel-header"><div class="panel-title">' + esc(h.name || h.id) + '</div><span class="status-pill">' + esc(h.status) + '</span></div>' +
+              '<div class="panel-body padded"><p>' + esc(h.address || '주소 미등록') + '</p><p>현장: ' + esc(h.site) + ' · 숙소 코드: ' + esc(h.id) + '</p>' +
+              '<p>입주 ' + Number(h.occupied) + '명 / 정원 ' + Number(h.beds) + '명 · 입주율 ' + rate + '%</p>' +
+              '<p>월 임대료 <strong>$' + money(h.monthlyRent) + '</strong></p></div></div>';
           }).join('');
-
-          pageContainer.innerHTML =
-            '<div class="header-section"><div><h1 class="page-title">숙소 관리</h1><p class="page-subtitle">숙소별 입주현황 · 유틸리티 납부 추적 · 수리 요청</p></div>' +
-            '<div class="action-row"><button class="btn-secondary" onclick="window.print()"><i class="ph ph-export"></i> 현황 출력</button><button class="btn-primary" onclick="openUniversalScanner(\'HOUSING\', \'숙소 렌트/리스 계약서\')"><i class="ph ph-scan"></i> AI 숙소 등록</button><button class="btn-primary" style="background:var(--status-warning); color:#000;" onclick="openNfcAssignModal(\'HOUSING\')"><i class="ph ph-identification-card"></i> NFC 숙소 배정</button></div></div>' +
-            '<div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">' +
-            '<div class="kpi-card"><div class="kpi-label">입주율</div><div class="kpi-value">' + stats.occupancyRate + '%</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + stats.currentOcc + ' / ' + stats.totalCapacity + '명</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">월 임대비</div><div class="kpi-value">$' + stats.monthlyRentTotal.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">' + stats.totalUnits + '개 유닛</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">월 유틸비</div><div class="kpi-value">$' + stats.monthlyUtilTotal.toLocaleString() + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">전기+수도+가스+인터넷</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">납부임박</div><div class="kpi-value" style="color:var(--status-warning)">' + stats.utilPayingDueSoon + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">7일 이내</span></div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">미처리 수리</div><div class="kpi-value" style="color:var(--status-danger)">' + stats.pendingIssues + '</div><div class="kpi-meta"><span style="color:var(--text-secondary)">처리 필요</span></div></div>' +
-            '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' + housingsHtml + '</div>';
+          pageContainer.innerHTML = '<div class="header-section"><div><h1 class="page-title">숙소 관리</h1><p class="page-subtitle">주택별 입주 현황과 월 임대료</p></div><button class="btn-secondary" onclick="window.print()">현황 출력</button></div>' +
+            '<div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">' +
+            '<div class="kpi-card"><div class="kpi-label">등록 숙소</div><div class="kpi-value">' + stats.total + '</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">입주 / 정원</div><div class="kpi-value">' + stats.currentOcc + ' / ' + stats.totalCapacity + '</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">입주율</div><div class="kpi-value">' + stats.occupancyRate + '%</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">월 임대료</div><div class="kpi-value">$' + money(stats.monthlyRentTotal) + '</div></div></div>' +
+            '<div class="panel"><div class="panel-body padded">숙소 기준정보 조회 화면입니다. 계약서는 문서함에서 보관하며, 개인 입퇴거·수리 요청·NFC 배정은 아직 연결되어 있지 않습니다.</div></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px">' + (cards || '<div class="panel"><div class="panel-body padded">등록된 숙소가 없습니다.</div></div>') + '</div>';
         } catch (err) { renderError('숙소 데이터 로딩 실패'); console.error(err); }
       }
 

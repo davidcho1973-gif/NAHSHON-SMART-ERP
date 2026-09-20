@@ -166,6 +166,9 @@ class UserAccessService
         if ($id > 0 && ! $row) {
             return ['success' => false, 'error' => '계정을 찾을 수 없습니다.'];
         }
+        if ($row && ! array_key_exists($row->access_role, $this->assignableRoles())) {
+            return ['success' => false, 'error' => '상위 권한 계정은 수정할 수 없습니다.'];
+        }
 
         $name = trim((string) ($input['name'] ?? ''));
         $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
@@ -174,6 +177,12 @@ class UserAccessService
         $status = (string) ($input['status'] ?? 'active');
 
         $errors = [];
+        $employeeId = $this->intOrNull($input['employeeId'] ?? null);
+        if ($employeeId && ! Employee::whereKey($employeeId)->exists()) {
+            $errors['employeeId'] = '존재하는 직원을 선택하세요.';
+        } elseif ($employeeId && User::where('employee_id', $employeeId)->when($row, fn ($q) => $q->whereKeyNot($row->id))->exists()) {
+            $errors['employeeId'] = '이미 다른 로그인 계정에 연결된 직원입니다.';
+        }
         if ($name === '') {
             $errors['name'] = '이름을 입력하세요.';
         }
@@ -280,6 +289,9 @@ class UserAccessService
         $row = User::find($id);
         if (! $row) {
             return ['success' => false, 'error' => '계정을 찾을 수 없습니다.'];
+        }
+        if (! array_key_exists($row->access_role, $this->assignableRoles())) {
+            return ['success' => false, 'error' => '상위 권한 계정의 상태는 변경할 수 없습니다.'];
         }
         if ($row->id === auth()->id()) {
             return ['success' => false, 'error' => '자기 계정의 상태는 바꿀 수 없습니다.'];

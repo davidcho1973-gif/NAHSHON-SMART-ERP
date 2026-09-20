@@ -152,9 +152,9 @@ class RentalExpenseConnector
             return;
         }
 
-        if ((float) $existing->amount !== (float) $attributes['amount']
-            || (string) $existing->description !== (string) $attributes['description']) {
-            $existing->update($attributes);
+        $existing->fill($attributes);
+        if ($existing->isDirty()) {
+            $existing->save();
             $counts['updated']++;
 
             return;
