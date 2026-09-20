@@ -197,6 +197,14 @@ class WorkerAttendanceScreenTest extends TestCase
             ->assertDontSee('function tabPay(', escape: false)
             ->assertSee("['home','work','me'].includes(tab)?tab:'home'", escape: false)
             ->assertSee('data-tab="me"', escape: false);
+
+        // Secondary worker screens use the shared footer, not the home page buttons.
+        foreach (['/attendance-app/ask', '/attendance-app/docs', '/attendance-app/ops-room', '/attendance-app/messages', '/expense-app'] as $url) {
+            $this->actingAs($this->user)->get($url)->assertOk()
+                ->assertSee(route('attendance-app.index', ['tab' => 'work']), escape: false)
+                ->assertSee(route('attendance-app.index', ['tab' => 'me']), escape: false)
+                ->assertDontSee(route('attendance-app.index', ['tab' => 'pay']), escape: false);
+        }
     }
 
     public function test_the_qr_button_does_not_navigate_away(): void
