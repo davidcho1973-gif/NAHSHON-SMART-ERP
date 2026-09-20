@@ -41,7 +41,7 @@ PROMPT;
         $r = Http::connectTimeout(20)->timeout(600)->withHeaders(['x-goog-api-key' => config('services.gemini.api_key')])
             ->post(rtrim(config('services.gemini.endpoint'), '/').'/v1beta/models/'.$model.':generateContent', [
                 'contents' => [['parts' => [['text' => $prompt."\nSOURCE_DATA:\n".$source]]]],
-                'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.1, 'maxOutputTokens' => 24000],
+                'generationConfig' => ['responseMimeType' => 'application/json', 'thinkingConfig' => ['thinkingLevel' => 'HIGH'], 'maxOutputTokens' => 24000],
             ]);
         AiMeter::record('gemini', 'meeting_analysis', $model, (array) $r->json('usageMetadata', []), (int) ((microtime(true) - $start) * 1000), $r->successful(), $r->failed() ? 'HTTP '.$r->status() : null, 'meeting', $meeting->id);
         if (! $r->successful()) {
