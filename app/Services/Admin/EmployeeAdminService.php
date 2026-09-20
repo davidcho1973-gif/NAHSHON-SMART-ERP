@@ -9,6 +9,7 @@ use App\Models\PushSubscription;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
+use App\Models\WorkerEnrollment;
 use App\Services\Auth\PinAuthService;
 use App\Services\Push\WebPushSender;
 use App\Support\AccessPolicy;
@@ -341,7 +342,7 @@ class EmployeeAdminService
         }
 
         $email = mb_strtolower(trim((string) ($input['email'] ?? $employee->email ?? '')));
-        if ($email === '') {
+        if ($email === '' && ! in_array($input['role'] ?? 'worker', ['worker', 'foreman'], true)) {
             return ['success' => false, 'errors' => ['email' => '로그인에 사용할 이메일을 입력하세요. Gmail이 아니어도 됩니다.']];
         }
 
@@ -549,7 +550,7 @@ class EmployeeAdminService
         }
 
         // 화면에 지금 무엇이 어긋나 있는지 늘 알려 준다 — 이번에 안 바꾸더라도.
-        $mismatch = $email !== '' && mb_strtolower($account->email) !== $email
+        $mismatch = $email !== '' && mb_strtolower((string) $account->email) !== $email
             ? ['loginEmail' => $account->email, 'emailMismatch' => true]
             : ['loginEmail' => $account->email];
 
@@ -557,7 +558,7 @@ class EmployeeAdminService
             return $mismatch;
         }
 
-        if ($email === '' || mb_strtolower($account->email) === $email) {
+        if ($email === '' || mb_strtolower((string) $account->email) === $email) {
             return $mismatch;
         }
 
@@ -586,6 +587,10 @@ class EmployeeAdminService
         }
 
         $isSuper = $actor->access_role === 'super_admin';
+
+        if (WorkerEnrollment::where('employee_id', $row->id)->exists()) {
+            return ['success' => false, 'error' => '앱 가입 승인 이력이 있는 직원입니다. 삭제 대신 재직 상태를 퇴사로 변경하세요.'];
+        }
 
         // 급여명세가 나간 사람은 <b>누구도</b> 지우지 않는다 — 최고관리자도 마찬가지다.
         // 지급 기록은 세무·노동 기록이라 회사가 몇 년을 보관해야 하는 종류이고,

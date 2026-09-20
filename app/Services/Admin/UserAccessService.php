@@ -177,11 +177,13 @@ class UserAccessService
         if ($name === '') {
             $errors['name'] = '이름을 입력하세요.';
         }
-        if ($email === '') {
+        $phoneAccount = in_array($role, ['worker', 'foreman'], true)
+            && Employee::whereKey($this->intOrNull($input['employeeId'] ?? null))->whereNotNull('phone')->exists();
+        if ($email === '' && ! $phoneAccount) {
             $errors['email'] = '이메일을 입력하세요.';
-        } elseif (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        } elseif ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = '이메일 형식이 올바르지 않습니다.';
-        } elseif (User::query()->where('email', $email)->when($row, fn ($q) => $q->whereKeyNot($row->id))->exists()) {
+        } elseif ($email !== '' && User::query()->where('email', $email)->when($row, fn ($q) => $q->whereKeyNot($row->id))->exists()) {
             $errors['email'] = '이미 등록된 이메일입니다.';
         }
 
@@ -235,7 +237,7 @@ class UserAccessService
 
         $data = [
             'name' => mb_substr($name, 0, 255),
-            'email' => $email,
+            'email' => $email ?: null,
             'access_role' => $role,
             'access_scope' => $scope,
             'account_status' => $status,

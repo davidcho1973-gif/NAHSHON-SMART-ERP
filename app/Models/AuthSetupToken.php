@@ -20,7 +20,7 @@ class AuthSetupToken extends Model
     public const PURPOSE_RESET = 'reset';
 
     /** 초대는 사흘, 재설정은 30분 — 재설정은 현장에서 그 자리에 쓰는 링크다. */
-    private const TTL_MINUTES = [self::PURPOSE_INVITE => 4320, self::PURPOSE_RESET => 30];
+    private const TTL_MINUTES = [self::PURPOSE_INVITE => 4320, self::PURPOSE_RESET => 30, 'activation' => 15];
 
     protected $fillable = ['user_id', 'token_hash', 'purpose', 'issued_by_id', 'expires_at', 'used_at'];
 

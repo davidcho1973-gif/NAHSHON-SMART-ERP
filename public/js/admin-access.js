@@ -158,8 +158,8 @@
         saveLabel: row ? '수정' : '추가',
         fields: [
           { name: 'name', label: '이름', required: true, group: '기본 정보', value: row ? row.name : '' },
-          { name: 'email', label: '이메일', type: 'email', required: true, group: '기본 정보',
-            value: row ? row.email : '', hint: '구글 로그인에 쓰는 주소여야 합니다.' },
+          { name: 'email', label: '이메일', type: 'email', group: '기본 정보',
+            value: row ? row.email : '', hint: '전화번호가 등록된 직원에 연결된 작업자·반장은 선택입니다. 다른 역할은 이메일이 필요합니다.' },
           { name: 'employeeId', label: '연결할 직원', type: 'select', group: '기본 정보',
             options: o.employees, value: row ? row.employeeId : '',
             hint: '연결하면 출퇴근·급여가 이 계정과 이어집니다.', colSpan: 2 },
