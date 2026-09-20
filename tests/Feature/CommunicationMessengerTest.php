@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AttendanceLog;
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationMessageRead;
 use App\Models\CommunicationNotification;
 use App\Models\CommunicationRoom;
 use App\Models\Company;
@@ -106,6 +107,35 @@ class CommunicationMessengerTest extends TestCase
             'communication_message_id' => $message->id,
             'employee_id' => $this->employee->id,
         ]);
+    }
+
+    public function test_opening_room_reuses_read_receipt_created_before_employee_link(): void
+    {
+        $room = $this->communicationService->ensureSiteRooms($this->site)['chat'];
+        $message = CommunicationMessage::query()->create([
+            'communication_room_id' => $room->id,
+            'sender_user_id' => $this->workerUser->id,
+            'kind' => CommunicationMessage::KIND_MESSAGE,
+            'body' => 'Existing message',
+            'status' => 'active',
+            'sent_at' => now(),
+        ]);
+
+        CommunicationMessageRead::query()->create([
+            'communication_message_id' => $message->id,
+            'communication_room_id' => $room->id,
+            'user_id' => $this->workerUser->id,
+            'employee_id' => null,
+            'read_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($this->workerUser)
+            ->get(route('communication.show', ['room' => $room]))
+            ->assertOk();
+
+        $this->assertSame(1, CommunicationMessageRead::query()
+            ->where('communication_message_id', $message->id)
+            ->count());
     }
 
     public function test_attendance_log_creates_site_chat_alert(): void
