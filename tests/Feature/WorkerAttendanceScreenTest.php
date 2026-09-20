@@ -6,7 +6,9 @@ use App\Models\AttendanceLog;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeePayrollProfile;
+use App\Models\PayrollRun;
 use App\Models\PayrollTimesheet;
+use App\Models\Payslip;
 use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
 use App\Models\User;
@@ -57,7 +59,7 @@ class WorkerAttendanceScreenTest extends TestCase
         ]);
     }
 
-    // ── 근무 · 급여 탭 ──────────────────────────────────────────────
+    // ── 근무 내역 · 급여 비공개 ──────────────────────────────────────
 
     public function test_the_work_tab_reads_hours_from_the_payroll_timesheet(): void
     {
@@ -100,7 +102,7 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->assertFalse($week['days'][0]['settled']);
     }
 
-    public function test_pay_is_estimated_from_the_rate_and_this_weeks_hours(): void
+    public function test_worker_app_omits_pay_but_preserves_hours_and_admin_payroll(): void
     {
         EmployeePayrollProfile::where('employee_id', $this->employee->id)
             ->update(['base_rate' => 40, 'overtime_multiplier' => 1.5, 'pay_currency' => 'USD']);
@@ -113,22 +115,33 @@ class WorkerAttendanceScreenTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $pay = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('pay');
+        $run = PayrollRun::create(['code' => 'PAY-APP', 'period_start' => '2026-08-10', 'period_end' => '2026-08-16', 'status' => 'approved']);
+        $slip = Payslip::create(['payroll_run_id' => $run->id, 'employee_id' => $this->employee->id, 'snap_pay_type' => 'hourly', 'snap_base_rate' => 40, 'gross_pay' => 520, 'net_pay' => 460, 'status' => 'paid']);
 
-        $this->assertTrue($pay['hasRate']);
-        $this->assertEqualsWithDelta(400.0, $pay['regularPay'], 0.01);       // 10h × 40
-        $this->assertEqualsWithDelta(120.0, $pay['overtimePay'], 0.01);      // 2h × 60
-        $this->assertEqualsWithDelta(520.0, $pay['estimated'], 0.01);
+        foreach (['worker', 'foreman'] as $role) {
+            $this->user->update(['access_role' => $role]);
+            $response = $this->actingAs($this->user)->getJson(route('attendance-app.home'));
+            $response->assertOk()->assertJsonMissingPath('pay');
+            $this->assertEqualsWithDelta(10.0, $response->json('week.regularHours'), 0.01);
+            $this->assertEqualsWithDelta(2.0, $response->json('week.overtimeHours'), 0.01);
+            $this->actingAs($this->user)->get(route('payroll.payslip', $slip))->assertForbidden();
+        }
+
+        $admin = User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->actingAs($admin)->getJson(route('attendance-app.home', ['as' => $this->employee->id]))
+            ->assertOk()->assertJsonMissingPath('pay');
+        $this->actingAs($admin)->get(route('payroll.payslip', $slip))->assertOk()->assertSee('460.00');
+        $this->assertEquals(40, $this->employee->payrollProfile->base_rate);
+        $this->assertEquals(460, $slip->fresh()->net_pay);
     }
 
-    public function test_no_rate_means_no_invented_number(): void
+    public function test_home_has_no_pay_section_even_when_no_rate_is_set(): void
     {
-        // 단가가 0 이면 금액을 지어내지 않는다. 0 원이라고 띄우면 작업자는 못 받는 줄 안다.
+        // 미설정 급여 안내도 제거한다. 출퇴근 앱에는 금액 자체를 내려주지 않는다.
         EmployeePayrollProfile::where('employee_id', $this->employee->id)->update(['base_rate' => 0]);
 
-        $pay = $this->actingAs($this->user)->getJson(route('attendance-app.home'))->json('pay');
-
-        $this->assertFalse($pay['hasRate']);
+        $this->actingAs($this->user)->getJson(route('attendance-app.home'))
+            ->assertOk()->assertJsonMissingPath('pay')->assertJsonStructure(['week', 'logs']);
     }
 
     public function test_elapsed_time_counts_from_the_clock_in(): void
@@ -173,15 +186,25 @@ class WorkerAttendanceScreenTest extends TestCase
         ]);
     }
 
-    public function test_the_screen_has_four_tabs(): void
+    public function test_the_screen_has_only_attendance_work_and_profile_tabs(): void
     {
         $this->actingAs($this->user)
-            ->get(route('attendance-app.index'))
+            ->get(route('attendance-app.index', ['tab' => 'pay']))
             ->assertOk()
             ->assertSee('data-tab="home"', escape: false)
             ->assertSee('data-tab="work"', escape: false)
-            ->assertSee('data-tab="pay"', escape: false)
+            ->assertDontSee('data-tab="pay"', escape: false)
+            ->assertDontSee('function tabPay(', escape: false)
+            ->assertSee("['home','work','me'].includes(tab)?tab:'home'", escape: false)
             ->assertSee('data-tab="me"', escape: false);
+
+        // Secondary worker screens use the shared footer, not the home page buttons.
+        foreach (['/attendance-app/ask', '/attendance-app/docs', '/attendance-app/ops-room', '/attendance-app/messages', '/expense-app'] as $url) {
+            $this->actingAs($this->user)->get($url)->assertOk()
+                ->assertSee(route('attendance-app.index', ['tab' => 'work']), escape: false)
+                ->assertSee(route('attendance-app.index', ['tab' => 'me']), escape: false)
+                ->assertDontSee(route('attendance-app.index', ['tab' => 'pay']), escape: false);
+        }
     }
 
     public function test_the_qr_button_does_not_navigate_away(): void
@@ -308,7 +331,7 @@ class WorkerAttendanceScreenTest extends TestCase
             ])
             ->assertOk();
 
-        $log = \App\Models\AttendanceLog::query()->latest('id')->firstOrFail();
+        $log = AttendanceLog::query()->latest('id')->firstOrFail();
         $this->assertSame('approved', $log->status);
         $this->assertSame('gate_qr', $log->payload['verified_by'], '엉성한 좌표를 GPS 확인으로 쳐 주면 안 된다.');
         $this->assertNotSame('geo', $log->payload['verified_by']);
@@ -371,15 +394,15 @@ class WorkerAttendanceScreenTest extends TestCase
 
     // ── 화면의 뼈대 ────────────────────────────────────────────────
 
-    public function test_the_screen_always_carries_all_four_tabs(): void
+    public function test_the_screen_always_carries_all_three_tabs(): void
     {
-        // 탭은 이 화면의 뼈대다. 하나라도 사라지면 근무·급여·내 QR 로 갈 길이 없어지는데,
+        // 탭은 이 화면의 뼈대다. 하나라도 사라지면 근무·내 QR 로 갈 길이 없어지는데,
         // 화면은 안 깨지고 멀쩡해 보인다 — 아무도 오류를 못 본 채 기능만 없어진다.
         $html = $this->actingAs($this->user)->get(route('attendance-app.index'))->assertOk()->getContent();
 
         $this->assertStringContainsString('<nav class="tabs"', $html, '탭 바가 없습니다.');
 
-        foreach (['home' => '출퇴근', 'work' => '근무', 'pay' => '급여', 'me' => '나'] as $tab => $label) {
+        foreach (['home' => '출퇴근', 'work' => '근무', 'me' => '나'] as $tab => $label) {
             $this->assertStringContainsString('data-tab="'.$tab.'"', $html, "[{$tab}] 탭이 없습니다.");
             $this->assertStringContainsString($label, $html, "[{$tab}] 탭 이름이 없습니다.");
         }
@@ -451,7 +474,7 @@ class WorkerAttendanceScreenTest extends TestCase
         $this->assertStringContainsString("d.code === 'no_employee'", $html);
         $this->assertStringContainsString('작업자와 연결되지 않았습니다', $html);
         // 진짜 실패는 다시 해 볼 수 있어야 한다.
-        $this->assertStringContainsString("data-act=\"retry\"", $html);
+        $this->assertStringContainsString('data-act="retry"', $html);
     }
 
     // ── 오늘 줄(진행 중)과 언어 ─────────────────────────────────────

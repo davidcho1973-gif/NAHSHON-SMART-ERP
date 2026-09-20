@@ -498,13 +498,13 @@ final class WorkerLang
     public static function shareMessage(string $url): array
     {
         return [
-            'ko' => "내 출퇴근 앱입니다. 근무시간과 급여를 휴대폰에서 바로 볼 수 있어요.\n"
+            'ko' => "내 출퇴근 앱입니다. 출퇴근 기록과 근무시간을 휴대폰에서 바로 볼 수 있어요.\n"
                 ."{$url}\n"
                 ."열어서 등록 이메일 또는 Google로 로그인한 뒤 '홈 화면에 추가'를 눌러 주세요.",
-            'en' => "This is your attendance app. See your hours and pay on your phone.\n"
+            'en' => "This is your attendance app. See your attendance and hours on your phone.\n"
                 ."{$url}\n"
                 .'Open it, sign in with your registered email or Google, then tap "Add to Home Screen".',
-            'es' => "Esta es su aplicación de asistencia. Vea sus horas y su pago en su teléfono.\n"
+            'es' => "Esta es su aplicación de asistencia. Vea sus registros de asistencia y horas en su teléfono.\n"
                 ."{$url}\n"
                 .'Ábrala, inicie sesión con su correo registrado o Google y toque "Agregar a la pantalla de inicio".',
         ];
@@ -525,7 +525,7 @@ final class WorkerLang
         return [
             'ko' => [
                 'title' => '내 출퇴근 앱',
-                'hint' => '내 근무시간과 급여를 내 휴대폰에서 바로 봅니다.',
+                'hint' => '내 출퇴근 기록과 근무시간을 내 휴대폰에서 바로 봅니다.',
                 'account' => '로그인할 등록 이메일',
                 'steps' => [
                     '휴대폰 카메라로 위 QR 을 스캔합니다.',
@@ -536,7 +536,7 @@ final class WorkerLang
             ],
             'en' => [
                 'title' => 'My Attendance App',
-                'hint' => 'See your hours and your pay on your own phone.',
+                'hint' => 'See your attendance and hours on your own phone.',
                 'account' => 'Your registered sign-in email',
                 'steps' => [
                     'Scan the QR code above with your phone camera.',
@@ -547,7 +547,7 @@ final class WorkerLang
             ],
             'es' => [
                 'title' => 'Mi aplicación de asistencia',
-                'hint' => 'Vea sus horas y su pago en su propio teléfono.',
+                'hint' => 'Vea sus registros de asistencia y horas en su propio teléfono.',
                 'account' => 'Su correo registrado para iniciar sesión',
                 'steps' => [
                     'Escanee el código QR de arriba con la cámara de su teléfono.',

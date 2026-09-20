@@ -8,12 +8,11 @@ use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Models\Equipment;
-use App\Models\EmployeePayrollProfile;
 use App\Models\PayrollTimesheet;
-use App\Models\Payslip;
 use App\Models\Site;
 use App\Models\SiteWifiAccessPoint;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * 작업자 화면의 뒷단 — 오늘 내 출퇴근.
@@ -97,8 +96,8 @@ class WorkerAttendanceService
             'usualTime' => $snap['firstIn']
                 ? app(ClockInReminderService::class)->usualClockIn($employee, $tz, Carbon::now($tz))?->format('H:i')
                 : null,
+            // Worker app exposes attendance only; rates and payslips stay in admin payroll.
             'week' => $this->week($employee, $tz),
-            'pay' => $this->pay($employee),
             'notices' => $this->notices($employee, $site, $tz),
             'myEquipment' => $this->myEquipment($employee),
         ];
@@ -198,7 +197,7 @@ class WorkerAttendanceService
      * 흐르는데 근무 탭은 비어 있어, 연동이 끊긴 것으로 보고됐다. 계산이 한 곳에 있으면
      * 두 탭이 다른 말을 할 수 없다.
      *
-     * @return array{session: ?AttendanceSession, logs: \Illuminate\Support\Collection<int, AttendanceLog>, firstIn: ?Carbon, lastOut: ?Carbon, seconds: int}
+     * @return array{session: ?AttendanceSession, logs: Collection<int, AttendanceLog>, firstIn: ?Carbon, lastOut: ?Carbon, seconds: int}
      */
     private function todaySnapshot(Employee $employee, string $tz): array
     {
@@ -321,53 +320,6 @@ class WorkerAttendanceService
     }
 
     private const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-
-    /**
-     * 급여 — 예상액과 지난 명세.
-     *
-     * 예상액은 말 그대로 예상이다. 세금·공제 전이고 마감 전이라 바뀐다. 화면에서도
-     * 그렇게 말해야 한다 — 숫자만 크게 띄우면 작업자는 그 금액을 받는 줄 안다.
-     *
-     * @return array<string, mixed>
-     */
-    private function pay(Employee $employee): array
-    {
-        $profile = EmployeePayrollProfile::query()->where('employee_id', $employee->id)->first();
-        $rate = (float) ($profile?->base_rate ?? 0);
-        $multiplier = (float) ($profile?->overtime_multiplier ?: 1.5);
-        $currency = $profile?->pay_currency ?: 'USD';
-
-        $tz = $employee->site?->timezone ?: config('app.timezone');
-        $week = $this->week($employee, $tz);
-
-        $regularPay = $rate * $week['regularHours'];
-        $overtimePay = $rate * $multiplier * $week['overtimeHours'];
-
-        $slips = Payslip::query()
-            ->where('employee_id', $employee->id)
-            ->with('run:id,period_start,period_end')
-            ->latest('id')
-            ->limit(3)
-            ->get()
-            ->map(fn (Payslip $p): array => [
-                'net' => (float) $p->net_pay,
-                'from' => $p->run?->period_start?->toDateString(),
-                'to' => $p->run?->period_end?->toDateString(),
-                'status' => $p->status,
-            ])->values()->all();
-
-        return [
-            // 단가가 없으면 금액을 지어내지 않는다. 화면이 "아직 정해지지 않았다"고 말한다.
-            'hasRate' => $rate > 0,
-            'rate' => $rate,
-            'multiplier' => $multiplier,
-            'currency' => $currency,
-            'regularPay' => round($regularPay, 2),
-            'overtimePay' => round($overtimePay, 2),
-            'estimated' => round($regularPay + $overtimePay, 2),
-            'payslips' => $slips,
-        ];
-    }
 
     private const SOURCE_LABELS = [
         'geo_auto' => '자동',
