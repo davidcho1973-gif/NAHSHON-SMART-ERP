@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\W9Form;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ class W9FormTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
         $this->emp = Employee::create(['name' => 'Carlos Ramirez', 'employee_number' => 'E-001', 'employment_status' => 'active']);
     }
 

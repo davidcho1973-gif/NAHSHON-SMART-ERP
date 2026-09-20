@@ -26,6 +26,7 @@ class WorkerJoinReturningTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
 
         $this->site = Site::create(['code' => 'AZ-01', 'name' => '1현장', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         $this->other = Site::create(['code' => 'AZ-02', 'name' => '2현장', 'timezone' => 'America/Phoenix', 'status' => 'active']);

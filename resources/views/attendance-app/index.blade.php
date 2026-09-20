@@ -830,8 +830,10 @@
         h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
             tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
-            @if(in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager', 'foreman'], true))
-            tile('{{ route('worker-enrollment.index') }}', ICON.report, '작업자 가입 승인 / Worker enrollment', '우리 팀 가입 QR · 개인 앱 연결', '') +
+            @if(auth()->user()->access_role === 'foreman')
+            tile('{{ route('worker-enrollment.index') }}', ICON.report, '우리 팀 직원 등록 현황', '인사 등록 및 앱 연결 상태 조회', '') +
+            @elseif(in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true))
+            tile('{{ route('worker-enrollment.index') }}', ICON.report, '인사 · 작업자 등록', '인사 승인 · 직원 개인 앱 연결', '') +
             @endif
             tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, d.reportBadge) +
             tile('{{ route('expense-app.index') }}', ICON.receipt, T.qReceipt, T.qReceiptSub, '') +

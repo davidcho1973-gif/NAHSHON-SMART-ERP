@@ -2,6 +2,10 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-19 HR-only onboarding correction
+
+Owner changed the operating policy: HR owns registration and personal activation; foremen only view their team, with no confirmation action or comments. Removed public team invitations, added an HR registration form, restricted legacy /join routes to authenticated people-management roles, and retained existing PIN/attendance linkage. Updated registration fixtures to use authorized HR users and added server-side denial coverage. Previous staging PR #72 merged; production PR #73 must include this correction before merge.
+
 ## Log Rules
 
 - Add new timeline rows at the top.
