@@ -490,3 +490,6 @@ Validation before PR: 146 related PHP tests /495 assertions passed; final affect
 # 2026-09-20 — Meeting queue deployment diagnostic correction
 
 Release inspection found that the shared queue diagnostic still classified only documents as served; meetings would be mislabeled as abandoned legacy jobs despite its dedicated scheduler worker. Include meetings in the monitored queues, identify the actual queued names and describe prolonged waiting as a delay requiring worker/capacity investigation, not proof that all document analysis has stopped. Keep legacy default jobs separate and untouched. Regression covers meeting backlog with concurrent legacy work.
+# 2026-09-20 — Verify the real meeting analysis model
+
+Live NAHSHON model metadata lookup returned200 for gemini-3.5-transcribe but404 for the proposed gemini-3.5-pro identifier. Correct the new meeting analysis default and environment example to Google's documented gemini-3.1-pro-preview; use HIGH reasoning and the provider's default temperature rather than0.1. This is an endpoint-name correction, not a silent downgrade/fallback. The transcriber and other existing modules are unchanged. Verify the actual analysis request using a synthetic non-business prompt before production release.

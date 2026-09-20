@@ -33,7 +33,7 @@
 - `GEMINI_API_KEY`: Interactions / Files / 선택한 분석 모델 접근 가능한 유료 키.
 - `ELEVENLABS_API_KEY`: Scribe v2 사용 가능한 키. 채팅·저장소에 기입하지 않고 Laravel Cloud의 보안 환경변수에 등록합니다.
 - `MEETING_DISK`: private durable disk. 버킷이 있으면 기본 s3를 선택합니다. Cloud의 임시 local 저장소를 영구 보관으로 사용하지 않습니다.
-- `MEETING_TRANSCRIBE_MODEL=gemini-3.5-transcribe`, `MEETING_ANALYSIS_MODEL=gemini-3.5-pro`. 저성능 모델로 조용히 대체하지 않습니다.
+- `MEETING_TRANSCRIBE_MODEL=gemini-3.5-transcribe`, `MEETING_ANALYSIS_MODEL=gemini-3.1-pro-preview` (HIGH reasoning). 실제 제공되는 Pro 모델명으로 고정하고 저성능 모델로 조용히 대체하지 않습니다. Preview 수명과 모델 접근 상태는 운영 점검 대상입니다.
 - 스케줄러가 매분 `queue:work meeting-analysis --queue=meetings --stop-when-empty --max-time=50 --tries=2 --timeout=1500`을 중복 없이 기동합니다. 전용 worker를 운영하면 같은 큐/연결로 실행합니다. `retry_after=1800`은 작업 timeout보다 깁니다.
 - 자동 재시도 2회, 사용자가 재시도한 총 분석 시도는 최대 5회. 성공한 전사본은 재사용하고 실패한 제공자만 다시 호출합니다. 부분 JSON/전사 실패를 성공으로 반영하지 않습니다.
 - `php artisan meetings:health`: 키 존재 여부·모델·큐·31분 이상 정체 건수만 읽습니다. 실제 유료 API 성공이나 품질 검증을 의미하지 않습니다. 비밀값은 출력하지 않습니다.
@@ -45,4 +45,4 @@
 
 합성 음성/API 응답으로 서비스 계약과 ERP 안전장치를 시험한 것과 실제 한국어·영어 현장 회의의 인식 정확도는 별개입니다. 운영 키 연결 후 실제 회의 샘플로 숫자/제품명/정정/담당자/날짜/조건 인식, 처리 시간, 제공자 청구를 점검해야 합니다. 이번 배포 검증 기록은 WORK_LOG와 별도 릴리스 기록을 참조합니다.
 
-공식 API 근거: [Gemini Transcribe](https://ai.google.dev/gemini-api/docs/transcribe), [ElevenLabs speech-to-text](https://elevenlabs.io/docs/api-reference/speech-to-text/convert).
+공식 API 근거: [Gemini Transcribe](https://ai.google.dev/gemini-api/docs/transcribe), [Gemini Pro 모델명](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview), [추론·temperature 권고](https://ai.google.dev/gemini-api/docs/gemini-3), [ElevenLabs speech-to-text](https://elevenlabs.io/docs/api-reference/speech-to-text/convert).
