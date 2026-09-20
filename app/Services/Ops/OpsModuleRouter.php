@@ -39,6 +39,9 @@ class OpsModuleRouter
     public function autoRoute(OpsIntakeBatch $batch, OpsIntakeItem $item): array
     {
         $done = ['labor' => 0, 'expense' => 0, 'action' => 0];
+        if ($item->source === 'meeting') {
+            return $done;
+        }
 
         try {
             if ($item->category === 'labor') {

@@ -18,6 +18,7 @@ use App\Services\Communication\DecisionReplyConnector;
 use App\Services\IntegratedDocumentService;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
+use App\Support\AccessPolicy;
 use App\Support\ImageDownscale;
 use App\Support\ImageParts;
 use App\Support\ReportSlot;
@@ -310,6 +311,9 @@ class OpsIntakeService
     public function job(int $batchId): array
     {
         $batch = OpsIntakeBatch::with('items')->find($batchId);
+        if ($batch?->source === 'meeting') {
+            return ['success' => false, 'error' => '공정미팅 화면에서 확인하세요.'];
+        }
         if (! $batch) {
             return ['success' => false, 'error' => '판독 작업을 찾을 수 없습니다.'];
         }
@@ -440,6 +444,7 @@ class OpsIntakeService
     public function pending(?int $siteId = null, int $limit = 100): array
     {
         $rows = OpsIntakeItem::query()
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'meeting'))
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->whereIn('status', ['pending', 'needs_input'])
             ->where('category', '!=', 'noise')
@@ -473,6 +478,7 @@ class OpsIntakeService
         $since = Carbon::now($tz)->subDays(max(0, $days - 1))->startOfDay()->setTimezone(config('app.timezone'));
 
         $rows = OpsIntakeBatch::query()
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'meeting'))
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             // 최근 것 + 아직 처리 안 된 것. 이틀 지났다고 «확인 필요» 가 화면에서 사라지면
             // 아무도 답을 안 하게 된다 — 옛 «확인 대기 목록» 은 날짜 제한이 없었다.
@@ -605,7 +611,7 @@ class OpsIntakeService
                 return false;
             }
 
-            return \App\Support\AccessPolicy::canSeeCompany($user, $b->site?->company_id);
+            return AccessPolicy::canSeeCompany($user, $b->site?->company_id);
         })->values();
     }
 
@@ -617,6 +623,7 @@ class OpsIntakeService
     public function batches(?int $siteId = null, int $limit = 50): array
     {
         $rows = OpsIntakeBatch::query()
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'meeting'))
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->with('createdBy')
             ->withCount(['items as items_applied_count' => fn ($q) => $q->where('status', 'applied')])
@@ -649,6 +656,9 @@ class OpsIntakeService
     public function batch(int $id): array
     {
         $b = OpsIntakeBatch::with(['items', 'createdBy', 'editedBy'])->find($id);
+        if ($b?->source === 'meeting') {
+            return ['success' => false, 'error' => '공정미팅 화면에서 확인하세요.'];
+        }
         if (! $b) {
             return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
         }
@@ -682,6 +692,9 @@ class OpsIntakeService
     public function updateBatch(int $id, string $raw, ?int $userId = null): array
     {
         $batch = OpsIntakeBatch::find($id);
+        if ($batch?->source === 'meeting') {
+            return ['success' => false, 'error' => '회의 원음·전사는 보존됩니다. 공정미팅 화면에서 해석한 항목을 수정하세요.'];
+        }
         if (! $batch) {
             return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
         }
@@ -717,6 +730,9 @@ class OpsIntakeService
     public function deleteBatch(int $id): array
     {
         $batch = OpsIntakeBatch::with('items')->find($id);
+        if ($batch?->source === 'meeting') {
+            return ['success' => false, 'error' => '회의 근거는 이 화면에서 삭제할 수 없습니다.'];
+        }
         if (! $batch) {
             return ['success' => false, 'error' => '원문을 찾을 수 없습니다.'];
         }
@@ -765,6 +781,9 @@ class OpsIntakeService
     public function apply(int $id, ?array $overrides = null, ?int $userId = null, string $via = OpsIntakeItem::VIA_MANUAL): array
     {
         $item = OpsIntakeItem::find($id);
+        if ($item?->source === 'meeting' && $via !== 'meeting_review') {
+            return ['success' => false, 'error' => '공정미팅 화면에서 근거·최신 대상 정보를 확인 후 반영하세요.'];
+        }
         if (! $item) {
             return ['success' => false, 'error' => '항목을 찾을 수 없습니다.'];
         }
@@ -1015,7 +1034,7 @@ class OpsIntakeService
             'applied_at' => now(),
             'applied_by_id' => $userId,
             'applied_via' => $via,
-            'result_note' => '조달 반영 완료',
+            'result_note' => mb_substr($res['financeWarning'] ?? '조달 반영 완료', 0, 300),
         ]);
 
         // "그 자재 언제 와요?"의 답이 방으로 돌아간다 — 특히 입고완료가 그렇다.
@@ -1028,7 +1047,7 @@ class OpsIntakeService
             report($e);
         }
 
-        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean];
+        return ['success' => true, 'target' => $item->target_code, 'applied' => $clean, 'financeWarning' => $res['financeWarning'] ?? null];
     }
 
     /**
@@ -1219,9 +1238,12 @@ class OpsIntakeService
      *
      * @return array<string, mixed>
      */
-    public function revert(int $id, ?int $userId = null): array
+    public function revert(int $id, ?int $userId = null, string $via = 'manual'): array
     {
         $item = OpsIntakeItem::find($id);
+        if ($item?->source === 'meeting' && $via !== 'meeting_review') {
+            return ['success' => false, 'error' => '공정미팅 화면에서 되돌려 주세요.'];
+        }
         if (! $item || $item->status !== 'applied') {
             return ['success' => false, 'error' => '반영된 항목이 아닙니다.'];
         }
@@ -1300,6 +1322,9 @@ class OpsIntakeService
     public function dismiss(int $id, ?string $note = null): array
     {
         $item = OpsIntakeItem::find($id);
+        if ($item?->source === 'meeting') {
+            return ['success' => false, 'error' => '공정미팅 화면에서 제외 사유를 남겨 주세요.'];
+        }
         if (! $item) {
             return ['success' => false, 'error' => '항목을 찾을 수 없습니다.'];
         }

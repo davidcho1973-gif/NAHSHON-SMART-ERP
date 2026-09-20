@@ -31,6 +31,15 @@ return [
 
     'connections' => [
 
+        'meeting-analysis' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => 'jobs',
+            'queue' => 'meetings',
+            'retry_after' => 1800,
+            'after_commit' => true,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],
