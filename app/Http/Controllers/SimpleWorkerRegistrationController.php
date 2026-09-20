@@ -22,14 +22,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
-/**
- * 간편 작업자 등록 — 현장 QR 을 스캔하면 이름·소속회사·공정·이메일·전화만 입력하고
- * 곧바로 활성 작업자(Employee)로 등록된다. (검토 대기 없는 즉시 등록.)
- *
- * QR 은 현장당 한 장이다. 고용 형태(직접/간접)는 작업자가 고른 <b>소속회사</b>로 정해진다 —
- * 작업자에게 "직접고용입니까?" 같은 사내 용어를 묻지 않으려는 설계다.
- * 회사가 아직 분류되지 않았을 때만 폼에서 한 번 물어본다.
- */
+/** Legacy employee form, restricted to authenticated HR roles by route middleware. */
 class SimpleWorkerRegistrationController extends Controller
 {
     /** 작업자가 답할 수 있는 고용 형태(미분류 회사일 때만 노출). */

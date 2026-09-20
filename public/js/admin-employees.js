@@ -85,7 +85,7 @@
       '직원 등록 · 관리',
       '현장에 들어가는 사람을 등록합니다. 비자·안전교육이 끊긴 사람은 목록에 표시됩니다. — ' + notes.join(' · '),
       state.canManage ? u.primaryButton('직원 등록', 'window.AdminEmployees.openForm()', 'user-plus') : ''
-    ) + '<p><a href="/worker-onboarding">작업자 간편등록 · 가입 QR · 승인 · 앱 연결</a></p>' + pushWarning + filterBar() + u.table({
+    ) + '<p><a href="/worker-onboarding">인사 · 작업자 등록 · 승인 · 개인 앱 연결</a></p>' + pushWarning + filterBar() + u.table({
       id: 'em-tbl',
       searchPlaceholder: '이름 · 사번 · NFC · 직종 검색',
       emptyText: '조건에 맞는 직원이 없습니다.',

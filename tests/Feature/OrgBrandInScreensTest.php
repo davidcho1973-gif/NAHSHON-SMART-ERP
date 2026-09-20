@@ -9,6 +9,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\Org;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 /**
@@ -77,7 +78,7 @@ class OrgBrandInScreensTest extends TestCase
 
     public function test_the_quick_sign_up_form(): void
     {
-        $this->get(route('worker-join.form', ['site' => $this->site]))
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get(route('worker-join.form', ['site' => $this->site]))
             ->assertOk()->assertSee(self::NAME, false);
     }
 
@@ -91,7 +92,7 @@ class OrgBrandInScreensTest extends TestCase
         // 인쇄본(w9.blank)에는 회사 이름이 없다 — 국세청 양식에 없는 문구가 종이에
         // 섞이면 그 종이는 W-9 이 아니게 된다. 이름은 작성 화면에만 있다.
         $this->actingAs($this->admin())
-            ->get(\Illuminate\Support\Facades\URL::signedRoute('w9.show', ['employee' => $this->employee()->id]))
+            ->get(URL::signedRoute('w9.show', ['employee' => $this->employee()->id]))
             ->assertOk()->assertSee(self::NAME, false);
     }
 

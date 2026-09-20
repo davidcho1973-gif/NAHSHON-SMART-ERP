@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WorkerDevice;
 use App\Support\WorkerLang;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,6 +26,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
 
         $this->site = Site::create([
             'code' => 'AZ-01', 'name' => 'Arizona Site',

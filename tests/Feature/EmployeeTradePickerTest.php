@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WbsItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,6 +13,12 @@ use Tests\TestCase;
 class EmployeeTradePickerTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
+    }
 
     public function test_browser_picker_preserves_manual_input_and_ignores_stale_site_responses(): void
     {
@@ -65,7 +72,7 @@ class EmployeeTradePickerTest extends TestCase
         ])->assertOk();
         $this->assertNull(Employee::where('name', 'Test Global')->sole()->site_id);
         $this->assertDatabaseCount('wbs_items', 0);
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('users', 1);
     }
 
     public function test_manual_trade_is_required_and_length_limited(): void

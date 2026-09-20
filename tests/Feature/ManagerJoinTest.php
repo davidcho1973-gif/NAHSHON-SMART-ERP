@@ -27,6 +27,7 @@ class ManagerJoinTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
         $own = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
         $this->site = Site::create([
             'company_id' => $own->id, 'code' => 'LG_ESS_PH', 'name' => 'LG ESS Phoenix',
@@ -140,12 +141,13 @@ class ManagerJoinTest extends TestCase
             $this->assertStringNotContainsString('?install=1', $body);
             $this->assertStringNotContainsString('inst.hidden = true', $body);
         }
-        $this->assertDatabaseCount('users', 0);
-        $this->assertGuest();
+        $this->assertDatabaseCount('users', 1);
+        $this->assertAuthenticated();
     }
 
     public function test_old_registration_install_links_redirect_to_the_employee_app(): void
     {
+        auth()->logout();
         $this->get(route('gate.show', ['site' => $this->site]).'?install=1')
             ->assertRedirect(route('attendance-app.index'));
         $this->get(route('attendance-app.index'))->assertRedirect(route('login'));

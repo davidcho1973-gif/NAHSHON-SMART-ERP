@@ -125,7 +125,7 @@ class QrPrintSheetTest extends TestCase
         $this->get('/gate/'.$site->id.'/qr')->assertStatus(200)->assertSee($gate['url']);
 
         $join = QrPosters::make($site, QrPosters::JOIN);
-        $this->get('/join/w/'.$site->id.'/qr')->assertStatus(200)->assertSee($join['url']);
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/w/'.$site->id.'/qr')->assertStatus(200)->assertSee($join['url']);
         $this->assertNull($join['badge']);
     }
 }

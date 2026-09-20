@@ -7,7 +7,6 @@ use App\Models\WorkerEnrollment;
 use App\Services\Auth\WorkerEnrollmentService;
 use App\Support\QrSvg;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\URL;
 
 class WorkerEnrollmentController extends Controller
 {
@@ -16,35 +15,21 @@ class WorkerEnrollmentController extends Controller
     public function index(Request $request)
     {
         $teams = Team::with(['company', 'site'])->where('status', 'active')->get()
-            ->filter(fn ($team) => $this->enrollment->canManage($request->user(), $team));
-        abort_unless(in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager', 'foreman'], true), 403);
+            ->filter(fn ($team) => $this->enrollment->canView($request->user(), $team));
+        abort_unless($request->user()->account_status === 'active' && in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager', 'foreman'], true), 403);
+        $canRegister = in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true);
         $rows = WorkerEnrollment::with(['team', 'employee.user'])->whereIn('team_id', $teams->modelKeys())->latest()->paginate(30);
 
-        return response()->view('worker-enrollment.manage', compact('teams', 'rows'))->header('Cache-Control', 'no-store');
+        return response()->view('worker-enrollment.manage', compact('teams', 'rows', 'canRegister'))->header('Cache-Control', 'no-store');
     }
 
-    public function invite(Request $request, Team $team)
+    public function store(Request $request)
     {
-        abort_unless($this->enrollment->canManage($request->user(), $team), 403);
-        $url = URL::temporarySignedRoute('worker-enrollment.join', now()->addDays(7), ['team' => $team->id]);
+        abort_unless(in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true), 403);
+        $data = $request->validate(['name' => ['required', 'string', 'max:160'], 'phone' => ['required', 'string', 'max:30'], 'team_id' => ['required', 'integer', 'exists:teams,id']]);
+        $this->enrollment->submit($request->user(), Team::findOrFail($data['team_id']), $data);
 
-        return $this->qr($url, $team->name.' · 가입 QR', '가입 신청용 · 7일 유효 · 이 QR만으로 로그인되지 않습니다.');
-    }
-
-    public function form(Team $team)
-    {
-        abort_unless($team->status === 'active' && $team->company_id && $team->site_id, 404);
-
-        return response()->view('worker-enrollment.join', ['team' => $team, 'done' => false])->header('Referrer-Policy', 'no-referrer');
-    }
-
-    public function submit(Request $request, Team $team)
-    {
-        $data = $request->validate(['name' => ['required', 'string', 'max:160'], 'phone' => ['required', 'string', 'max:30']]);
-        $this->enrollment->submit($team, $data);
-
-        // No private record or activation token is exposed to the public applicant.
-        return response()->view('worker-enrollment.join', ['team' => $team, 'done' => true])->header('Cache-Control', 'no-store');
+        return redirect()->route('worker-enrollment.index')->with('notice', '등록 내용을 저장했습니다. 인사담당자가 확인 후 계정을 승인하세요.');
     }
 
     public function approve(Request $request, WorkerEnrollment $enrollment)

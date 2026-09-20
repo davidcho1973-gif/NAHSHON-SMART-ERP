@@ -21,6 +21,7 @@ class EmployeeJoinTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
         $company = Company::create(['code' => 'OWN', 'name' => 'Own company', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
         $this->site = Site::create(['code' => 'SITE', 'name' => 'Site', 'company_id' => $company->id, 'status' => 'active', 'timezone' => 'America/New_York']);
         $this->data = ['full_name' => 'New Employee', 'company_id' => $company->id, 'role' => 'Piping', 'position' => 'worker', 'phone' => '+14805550111'];
@@ -46,7 +47,7 @@ class EmployeeJoinTest extends TestCase
         $this->assertDatabaseCount('employees', 2);
         $this->assertSame(Employee::TYPE_DIRECT, Employee::where('name', 'New Employee')->sole()->employment_type);
         $this->assertSame(Employee::TYPE_STAFF, Employee::where('name', 'Site Foreman')->sole()->employment_type);
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('users', 1);
         $this->assertSame(1, UnifiedAlert::where('event_type', 'manager_account_pending')->count());
     }
 
@@ -77,7 +78,7 @@ class EmployeeJoinTest extends TestCase
             'position' => 'superintendent', 'email' => $boss->email,
         ]))->assertOk();
         $this->assertSame($before, $boss->fresh()->getAttributes());
-        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('users', 2);
     }
 
     public function test_returning_employee_position_and_pending_access_alert_stay_consistent(): void
@@ -89,7 +90,7 @@ class EmployeeJoinTest extends TestCase
         $this->assertDatabaseCount('employees', 1);
         $this->assertSame('engineer', Employee::sole()->position);
         $this->assertSame(Employee::TYPE_STAFF, Employee::sole()->employment_type);
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('users', 1);
         $this->assertSame(1, UnifiedAlert::where('event_type', 'manager_account_pending')->count());
     }
 
@@ -129,7 +130,7 @@ class EmployeeJoinTest extends TestCase
         $this->assertSame('global', data_get($employee->payload, 'registration_scope'));
         $this->assertSame(Employee::TYPE_STAFF, $employee->employment_type);
         $this->assertDatabaseCount('sites', 1);
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('users', 1);
         $this->assertDatabaseCount('worker_devices', 0);
         $this->assertNull(UnifiedAlert::where('event_type', 'manager_account_pending')->sole()->site_id);
     }

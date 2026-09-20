@@ -11,10 +11,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-/** Public submission is not identity proof. Only a scoped human approval creates access. */
+/** HR owns registration and activation; foremen have read-only team visibility. */
 class WorkerEnrollmentService
 {
     public function canManage(User $actor, Team $team): bool
+    {
+        return in_array($actor->access_role, ['super_admin', 'admin', 'hr_manager'], true)
+            && $this->canView($actor, $team);
+    }
+
+    public function canView(User $actor, Team $team): bool
     {
         if ($actor->account_status !== 'active' || $team->status !== 'active' || ! $team->company_id || ! $team->site_id) {
             return false;
@@ -31,7 +37,7 @@ class WorkerEnrollmentService
                 && (int) $actor->employee?->site_id === (int) $team->site_id
                 && (int) $actor->employee?->company_id === (int) $team->company_id;
         }
-        if (! in_array($actor->access_role, ['hr_manager', 'site_manager'], true)) {
+        if ($actor->access_role !== 'hr_manager') {
             return false;
         }
 
@@ -57,13 +63,14 @@ class WorkerEnrollmentService
         return '+'.$digits;
     }
 
-    public function submit(Team $team, array $data): void
+    public function submit(User $actor, Team $team, array $data): void
     {
+        abort_unless($this->canManage($actor, $team), 403);
         abort_unless($team->status === 'active' && $team->site_id && $team->company_id, 404);
         $phone = self::phone($data['phone']);
         DB::transaction(function () use ($team, $data, $phone) {
             Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
-            // Repeat public requests never overwrite names, approved people or access.
+            // Repeated registration never overwrites existing names or access.
             WorkerEnrollment::firstOrCreate(['team_id' => $team->id, 'phone' => $phone], [
                 'name' => trim($data['name']), 'status' => 'pending',
             ]);
