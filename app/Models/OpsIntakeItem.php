@@ -45,7 +45,7 @@ class OpsIntakeItem extends Model
         'raw_text', 'speaker', 'occurred_on',
         'category', 'confidence', 'summary',
         'target_type', 'target_code', 'target_name',
-        'proposed', 'previous', 'question', 'conflict',
+        'proposed', 'previous', 'question', 'conflict', 'meeting_meta',
         'status', 'applied_at', 'applied_by_id', 'result_note', 'applied_via',
     ];
 
@@ -64,6 +64,7 @@ class OpsIntakeItem extends Model
             'occurred_on' => 'date',
             'confidence' => 'integer',
             'proposed' => 'array',
+            'meeting_meta' => 'array',
             'conflict' => 'array',
             'previous' => 'array',
             'applied_at' => 'datetime',

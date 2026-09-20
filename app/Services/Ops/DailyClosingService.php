@@ -11,6 +11,7 @@ use App\Models\IntegratedDocument;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
 use App\Models\OpsLaborReport;
+use App\Models\OpsMeeting;
 use App\Models\ReportRecipient;
 use App\Models\SafetyPermit;
 use App\Models\SafetyWorkIssue;
@@ -163,8 +164,10 @@ class DailyClosingService
 
         $batches = OpsIntakeBatch::query()
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
-            ->where('created_at', '>=', $from)
-            ->where('created_at', '<', $to)
+            ->where(function ($q) use ($from, $to, $date) {
+                $q->where(fn ($ordinary) => $ordinary->where(fn ($s) => $s->whereNull('source')->orWhere('source', '!=', 'meeting'))->where('created_at', '>=', $from)->where('created_at', '<', $to))
+                    ->orWhereIn('id', OpsMeeting::whereDate('meeting_on', $date)->whereNotNull('ops_intake_batch_id')->select('ops_intake_batch_id'));
+            })
             ->get();
 
         $items = OpsIntakeItem::query()

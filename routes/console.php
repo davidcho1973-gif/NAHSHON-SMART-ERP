@@ -127,6 +127,11 @@ Schedule::command('wbs:recompute-cpm')->dailyAt(Org::time('schedule.cpm_recomput
 // 한 번은 자동 재시도, 그래도 멈추면 실패로 표시해 사용자가 알 수 있게 한다.
 Schedule::command('docs:reap-stuck')->everyTenMinutes();
 
+// Durable dedicated queue: never depend on afterResponse, and never consume legacy default jobs.
+// A dedicated Cloud worker may run the same command continuously; database leases prevent double claims.
+Schedule::command('queue:work meeting-analysis --queue=meetings --stop-when-empty --max-time=50 --tries=2 --timeout=1500')
+    ->everyMinute()->withoutOverlapping(35)->runInBackground();
+
 // 지식 창고 안전망 — 새 문서는 분석 직후 자동 수확되지만, 수확이 실패했거나
 // 이 기능 이전에 분석된 문서를 매시간 쓸어 담는다. 최신 문서는 isFresh 로
 // 건너뛰므로 평소에는 문서당 조회 한 번으로 끝난다 — 임베딩 호출이 헛돌지 않는다.
