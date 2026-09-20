@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Admin\PayProfileService;
+use App\Support\SmartCompanyData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -107,7 +108,7 @@ class WorkerScreenViewAsTest extends TestCase
 
     public function test_a_role_that_cannot_see_pay_is_told_why(): void
     {
-        // 현장소장은 출퇴근은 봐도 시급은 못 본다. 이 화면에는 시급이 나온다.
+        // 개인 배지 QR을 포함하는 관리자 미리보기의 기존 역할 제한은 유지한다.
         // 예전에는 버튼을 감췄다 — 그러면 "왜 안 보이지" 를 아무도 답할 수 없다.
         $this->assertNotContains('site_manager', PayProfileService::VIEW_ROLES);
 
@@ -202,7 +203,7 @@ class WorkerScreenViewAsTest extends TestCase
     public function test_the_personnel_payload_carries_the_id_the_button_needs(): void
     {
         // 표에 찍히는 인원ID(MR-...)로는 화면을 열 수 없다. 숫자 id 가 따로 필요하다.
-        $rows = \App\Support\SmartCompanyData::realPersonnel('ALL');
+        $rows = SmartCompanyData::realPersonnel('ALL');
 
         $this->assertNotEmpty($rows);
         $this->assertArrayHasKey('employeeDbId', $rows[0]);

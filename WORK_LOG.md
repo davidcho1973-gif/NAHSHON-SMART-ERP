@@ -6,6 +6,10 @@ DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 Owner changed the operating policy: HR owns registration and personal activation; foremen only view their team, with no confirmation action or comments. Removed public team invitations, added an HR registration form, restricted legacy /join routes to authenticated people-management roles, and retained existing PIN/attendance linkage. Updated registration fixtures to use authorized HR users and added server-side denial coverage. PR74 merged the correction to staging (a2565b6); PR73 merged production (71bea3c). Actions 35484859058 and 35485056005 succeeded, including Deploy NAHSHON. No production employee records were changed.
 
+## CODEX — 2026-09-20 Worker app without pay
+
+Owner requested removal of pay viewing from the worker app. Removed the pay tab, renderer, rate multiplier and home API wage/payslip payload for workers, foremen and administrator previews. Kept attendance hours, payroll records/calculations and existing management permissions. Retired pay-tab links resolve to Attendance; revised Korean/English/Spanish installation/share text and the online manual. Extended existing attendance/share regression coverage to verify no pay payload, intact hours, denied worker payslip access and retained administrator payslip access. Validation and release evidence: workspace outputs/ERP_Worker_NoPay_20260920.
+
 ## Log Rules
 
 - Add new timeline rows at the top.
@@ -28,6 +32,7 @@ Owner changed the operating policy: HR owns registration and personal activation
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-20 | CODEX | Remove pay from worker app | Attendance-only home response and three-tab UI; preserve administrative payroll. | codex/worker-remove-pay | Relevant PostgreSQL tests and release verification recorded in workspace outputs/ERP_Worker_NoPay_20260920. |
 | 2026-09-20 | CODEX | System integration audit + Korean manual | Repair stale pending finance links, access-role target checks, ETA delay, housing API/UI contract, fake vendor fallback, misleading AI health label; add authenticated searchable manual. | codex/erp-integration-audit-manual; release verification in progress | 35-menu browser pass; 45 guide chapters; 48-page PDF; 28 JS checks; 2,111 PHP passed / 1 Windows-only skip / 7,992 assertions; static build passed. |
 | 2026-09-19 | CODEX | HR-only worker onboarding correction | HR owns name/phone registration and personal activation QR; foreman views only own team, with no approval or comments. Public team signup removed and old /join paths restricted. | PR74 staging a2565b6 / PR73 main 71bea3c | Full 2,099 PHP tests passed + 1 Windows skip; 25 JS tests; Actions deployment verification succeeded including NAHSHON. |
 | 2026-09-19 | CODEX | Worker phone onboarding | Add signed team signup QR, name/phone-only pending requests, scoped human approval, email-less worker accounts, private 15-minute one-use PIN activation QR and existing attendance integration. Protect duplicate identities and legacy public re-enrollment; expose management from employee list and foreman app. | codex/worker-phone-onboarding; release pending | PostgreSQL dedicated test DB: full 2,098 passed/1 Windows skip; final targeted 99 passed/467 assertions; 25 JS checks; 4 mobile views rendered without horizontal overflow. |

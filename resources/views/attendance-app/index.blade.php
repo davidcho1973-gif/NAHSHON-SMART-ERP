@@ -216,23 +216,6 @@
         .stat-v { font-size: 28px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 2px; }
         .stat-v small { font-size: 14px; font-weight: 700; color: var(--ink-3); margin-left: 1px; }
 
-        /* 급여는 흰 카드와 절제된 강조색으로 표시한다. */
-        .money { background: var(--card); color: var(--ink); border-radius: 16px; padding: 20px; }
-        .money .stat-k { color: var(--ink-2); }
-        .money .amt {
-            font-size: 38px; font-weight: 800; letter-spacing: -.035em;
-            font-variant-numeric: tabular-nums; margin: 5px 0 2px;
-        }
-        .money .amt em { font-style: normal; background: var(--accent-bg); border-radius: 6px; padding: 0 6px; }
-        .money .sub { font-size: 12.5px; color: var(--ink-3); }
-        .money .line {
-            display: flex; justify-content: space-between; gap: 12px;
-            font-size: 14px; padding: 10px 0; border-top: 1px solid var(--rule);
-            font-variant-numeric: tabular-nums; color: var(--ink-2);
-        }
-        .money .line:first-of-type { margin-top: 14px; }
-        .money .line b { color: var(--ink); font-weight: 700; }
-
         /* 오프라인 배지 QR은 고대비를 유지한다. */
         .qr { background: var(--card); color: var(--ink); border: 1px solid var(--rule); border-radius: 16px; padding: 22px; text-align: center; }
         .qr img { display: block; margin: 0 auto; width: 232px; height: 232px; max-width: 100%; }
@@ -417,10 +400,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.8 7.5V5.6a1.6 1.6 0 0 1 1.6-1.6h3.2a1.6 1.6 0 0 1 1.6 1.6v1.9"/><path d="M3 12.6h18"/></svg>
             {{ __('근무') }}
         </button>
-        <button class="tab field-nav-item" data-tab="pay" aria-selected="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v17"/><path d="M16.2 7.4c0-1.5-1.9-2.6-4.2-2.6s-4.2 1.1-4.2 2.6 1.9 2.3 4.2 3 4.2 1.5 4.2 3-1.9 2.6-4.2 2.6-4.2-1.1-4.2-2.6"/></svg>
-            {{ __('급여') }}
-        </button>
         <button class="tab field-nav-item" data-tab="me" aria-selected="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8.2" r="3.9"/><path d="M4.8 20c0-3.4 3.2-6.1 7.2-6.1s7.2 2.7 7.2 6.1"/></svg>
             {{ __('나') }}
@@ -461,7 +440,7 @@
     }
 
     var initialTab = new URLSearchParams(window.location.search).get('tab');
-    if (['home', 'work', 'pay', 'me'].indexOf(initialTab) === -1) initialTab = 'home';
+    if (['home', 'work', 'me'].indexOf(initialTab) === -1) initialTab = 'home';
     /*
      * 화면이 시작하는 언어는 <b>서버가 이미 정한 것</b>을 그대로 받는다.
      *
@@ -485,7 +464,7 @@
      */
     var DICT = {
         ko: {
-            workPage: '근무 내역', payPage: '급여 내역', mePage: '내 정보',
+            workPage: '근무 내역', mePage: '내 정보',
             todayShift: '오늘의 근무', quickActions: '빠른 실행',
             working: '근무중', offline: '오프라인', outside: '현장 밖', noAuto: '자동 안 됨',
             offlineBar: '오프라인 · 내 QR 을 반장에게 보여 주세요',
@@ -521,11 +500,6 @@
             unsettled: '미확정', inProgress: '진행 중', noWeek: '이번 주 기록이 아직 없습니다.',
             liveNote: '오늘 줄은 지금까지 일한 시간입니다. 연장 구분과 확정은 하루가 끝날 때 계산됩니다.',
             wrong: '기록이 틀렸다면', wrongText: '출근 시각이 틀렸으면 「출퇴근」 화면 아래 <b>출근 시각 정정 요청</b> 을 누르세요. 그 밖의 정정은 반장에게 말씀해 주세요.',
-            noRate: '단가 미정',
-            noRateText: '<b>아직 시급이 정해지지 않았습니다.</b> 정해지면 이 화면에 이번 주 예상 금액이 나옵니다. 근무 시간은 그대로 쌓이고 있으니 걱정하지 않으셔도 됩니다.',
-            weekEst: '이번 주 예상', preTax: '세금·공제 전',
-            payNote: '실제 지급액은 세금과 공제를 뺀 금액입니다. 확정 명세서는 마감 뒤에 올라옵니다.',
-            pastSlips: '지난 명세서', paid: '지급', noSlips: '아직 명세서가 없습니다.',
             myQr: '내 배지 QR', myInfo: '내 정보', name: '이름', number: '사번', trade: '직종', site: '현장',
             autoDetect: '현장 자동 인식', gps: 'GPS 반경', wifi: '현장 WiFi',
             registered: '등록됨', notRegistered: '미등록',
@@ -543,7 +517,7 @@
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
         en: {
-            workPage: 'Work history', payPage: 'My pay', mePage: 'My profile',
+            workPage: 'Work history', mePage: 'My profile',
             todayShift: 'Today’s shift', quickActions: 'Quick actions',
             working: 'Working', offline: 'Offline', outside: 'Off site', noAuto: 'No auto',
             offlineBar: 'Offline · Show your QR to the foreman',
@@ -579,11 +553,6 @@
             unsettled: 'Pending', inProgress: 'In progress', noWeek: 'No records this week yet.',
             liveNote: "Today's row is time worked so far. Overtime split is calculated at day close.",
             wrong: 'Wrong record?', wrongText: 'If your clock-in time is wrong, press <b>Fix clock-in time</b> at the bottom of the Attendance screen. For anything else, tell your foreman.',
-            noRate: 'No rate yet',
-            noRateText: '<b>Your hourly rate is not set yet.</b> Once set, the weekly estimate shows here. Your hours are still being counted.',
-            weekEst: 'Estimated this week', preTax: 'before tax & deductions',
-            payNote: 'Actual pay is after taxes and deductions. Final payslips appear after closing.',
-            pastSlips: 'Past payslips', paid: 'Paid', noSlips: 'No payslips yet.',
             myQr: 'My badge QR', myInfo: 'My info', name: 'Name', number: 'ID', trade: 'Trade', site: 'Site',
             autoDetect: 'Site auto-detect', gps: 'GPS radius', wifi: 'Site WiFi',
             registered: 'Registered', notRegistered: 'Not set',
@@ -601,7 +570,7 @@
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
         es: {
-            workPage: 'Historial de trabajo', payPage: 'Mi pago', mePage: 'Mi perfil',
+            workPage: 'Historial de trabajo', mePage: 'Mi perfil',
             todayShift: 'Jornada de hoy', quickActions: 'Accesos rápidos',
             working: 'Trabajando', offline: 'Sin conexión', outside: 'Fuera del sitio', noAuto: 'Sin auto',
             offlineBar: 'Sin conexión · Muestre su QR al capataz',
@@ -637,11 +606,6 @@
             unsettled: 'Pendiente', inProgress: 'En curso', noWeek: 'Sin registros esta semana.',
             liveNote: 'La fila de hoy es el tiempo trabajado hasta ahora. Las horas extra se calculan al cierre del día.',
             wrong: '¿Registro incorrecto?', wrongText: 'Si su hora de entrada está mal, presione <b>Corregir hora de entrada</b> abajo en la pantalla de Asistencia. Para lo demás, avise a su capataz.',
-            noRate: 'Sin tarifa aún',
-            noRateText: '<b>Su tarifa por hora aún no está definida.</b> Cuando lo esté, verá aquí el estimado semanal. Sus horas se siguen contando.',
-            weekEst: 'Estimado esta semana', preTax: 'antes de impuestos y deducciones',
-            payNote: 'El pago real es después de impuestos y deducciones. El recibo final aparece tras el cierre.',
-            pastSlips: 'Recibos anteriores', paid: 'Pagado', noSlips: 'Sin recibos todavía.',
             myQr: 'Mi QR de gafete', myInfo: 'Mis datos', name: 'Nombre', number: 'ID', trade: 'Oficio', site: 'Sitio',
             autoDetect: 'Detección automática', gps: 'Radio GPS', wifi: 'WiFi del sitio',
             registered: 'Registrado', notRegistered: 'Sin registrar',
@@ -752,11 +716,6 @@
         var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
         return h + '<small>' + T.h + '</small>' + m + '<small>' + T.m + '</small>';
     }
-    function money(v, cur) {
-        var sign = cur === 'KRW' ? '₩' : '$';
-        return sign + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
     /**
      * 사다리 판정. 작업자가 고르는 게 아니라 여기서 정한다.
      * 서버가 준 상태와 브라우저만 아는 것(온라인 여부·위치 권한)을 합쳐 한 단을 고른다.
@@ -928,7 +887,7 @@
 
         var h = '<h1 class="field-page-title">' + T.workPage + '</h1><div class="stats">' +
             '<div class="stat"><div class="stat-k">' + T.weekRegular + '</div><div class="stat-v">' + w.regularHours + '<small>' + T.h + '</small></div></div>' +
-            '<div class="stat"><div class="stat-k">' + T.ot + ' ×' + (d.pay ? d.pay.multiplier : 1.5) + '</div><div class="stat-v">' + w.overtimeHours + '<small>' + T.h + '</small></div></div>' +
+            '<div class="stat"><div class="stat-k">' + T.ot + '</div><div class="stat-v">' + w.overtimeHours + '<small>' + T.h + '</small></div></div>' +
             '</div>';
 
         h += '<div class="sec"><div class="sec-h">' + T.byDay + '<em>' + esc(w.from || '') + ' – ' + esc(w.to || '') + '</em></div><div class="panel">';
@@ -954,37 +913,6 @@
         h += '<div class="sec"><div class="sec-h">' + T.wrong + '</div>' +
             '<div class="panel"><div class="empty" style="text-align:left;padding:16px">' +
             T.wrongText + '</div></div></div>';
-        return h;
-    }
-
-    function tabPay(d) {
-        var p = d.pay || {};
-        var w = d.week || {};
-        var h = '<h1 class="field-page-title">' + T.payPage + '</h1><div class="personal-grid"><section>';
-
-        if (!p.hasRate) {
-            h += '<div class="slab is-manual"><div class="state"><i></i>' + T.noRate + '</div>' +
-                 '<div class="why">' + T.noRateText + '</div></div>';
-        } else {
-            h += '<div class="money"><div class="stat-k">' + T.weekEst + '</div>' +
-                '<div class="amt"><em>' + (p.currency === 'KRW' ? '₩' : '$') + '</em>' +
-                Number(p.estimated).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</div>' +
-                '<div class="sub">' + esc(w.from || '') + ' – ' + esc(w.to || '') + ' · ' + T.preTax + '</div>' +
-                '<div class="line"><span>' + T.regular + ' ' + w.regularHours + 'h × ' + money(p.rate, p.currency) + '</span><b>' + money(p.regularPay, p.currency) + '</b></div>' +
-                '<div class="line"><span>' + T.ot + ' ' + w.overtimeHours + 'h × ' + money(p.rate * p.multiplier, p.currency) + '</span><b>' + money(p.overtimePay, p.currency) + '</b></div>' +
-                '</div>' +
-                '<div class="note" style="color:var(--ink-3);margin-top:12px">' + T.payNote + '</div>';
-        }
-
-        h += '</section><div class="sec"><div class="sec-h">' + T.pastSlips + '</div><div class="panel">';
-        h += (p.payslips || []).length
-            ? p.payslips.map(function (s) {
-                return '<div class="row"><div class="row-m"><div class="row-a">' + money(s.net, p.currency) + '</div>' +
-                    '<div class="row-b">' + esc(s.from || '') + ' – ' + esc(s.to || '') + '</div></div>' +
-                    '<span class="chip ' + (s.status === 'paid' ? 'auto' : 'hand') + '">' + esc(s.status === 'paid' ? T.paid : s.status) + '</span></div>';
-            }).join('')
-            : '<div class="empty">' + T.noSlips + '</div>';
-        h += '</div></div></div>';
         return h;
     }
 
@@ -1056,7 +984,7 @@
 
         view.innerHTML = state.tab === 'home' ? tabHome(d)
             : state.tab === 'work' ? tabWork(d)
-            : state.tab === 'pay' ? tabPay(d) : tabMe(d);
+            : tabMe(d);
 
         paintTabs();
     }
@@ -1080,7 +1008,7 @@
             '<div class="state"><i></i>연결 대기 중</div>' +
             '<div class="setup-h">이 계정은 아직<br>작업자와 연결되지 않았습니다</div>' +
             (who ? '<div class="setup-who">' + esc(who) + '</div>' : '') +
-            '<div class="why">근무시간과 급여는 <b>작업자 본인</b>에게만 보입니다. ' +
+            '<div class="why">본인의 출퇴근 기록과 근무시간을 확인할 수 있습니다. ' +
             '계정과 작업자를 이어 주면 이 화면이 채워집니다.</div>' +
             '</div>';
 
@@ -1197,8 +1125,8 @@
             '<div class="state"><i></i>권한 없음</div>' +
             '<div class="setup-h">이 계정으로는<br>남의 화면을 볼 수 없습니다</div>' +
             (d.email ? '<div class="setup-who">' + esc(d.email) + '</div>' : '') +
-            '<div class="why">이 화면에는 그 사람의 <b>시급과 급여</b>가 그대로 나옵니다. ' +
-            '그래서 급여를 볼 수 있는 역할에만 열려 있습니다.</div>' +
+            '<div class="why">이 화면에는 다른 직원의 <b>출퇴근 기록과 개인 배지 QR</b>이 나옵니다. ' +
+            '허용된 관리 역할만 직원 화면을 미리 볼 수 있습니다.</div>' +
             '</div>';
 
         h += '<div class="sec"><div class="sec-h">지금 이 계정</div><div class="panel">' +
@@ -1418,10 +1346,10 @@
     });
 
     var appNavigation=window.ERPHistory.create({
-        read:function(){var tab=new URLSearchParams(location.search).get('tab');return {tab:['home','work','pay','me'].includes(tab)?tab:'home'};},
+        read:function(){var tab=new URLSearchParams(location.search).get('tab');return {tab:['home','work','me'].includes(tab)?tab:'home'};},
         url:function(route){var url=new URL(location.href);url.searchParams.set('tab',route.tab);return url.pathname+url.search;},
         capture:function(){return {y:window.scrollY};},
-        render:function(route,snapshot){state.tab=['home','work','pay','me'].includes(route.tab)?route.tab:'home';render();window.scrollTo(0,snapshot?snapshot.y:0);}
+        render:function(route,snapshot){state.tab=['home','work','me'].includes(route.tab)?route.tab:'home';render();window.scrollTo(0,snapshot?snapshot.y:0);}
     });
     appNavigation.start();
     window.addEventListener('scroll',function(){appNavigation.save();},{passive:true});
