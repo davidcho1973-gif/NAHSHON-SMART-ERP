@@ -18,11 +18,11 @@ use Throwable;
  * 화면·스케줄러·저장소가 전부 초록이라 아무도 몰랐다.
  *
  * ── 어느 줄을 보고 판정하나 ────────────────────────────────────────────
- * 일꾼은 <b>documents 큐 하나만</b> 듣는다(docs/document-analysis-operations.md).
+ * 문서 일꾼은 documents, 회의 일꾼은 meetings 큐를 각각 듣는다.
  * 공용 default 큐는 일부러 안 듣는다 — 오늘은 문서 작업만 들어 있어도 앞으로 전혀
  * 다른 업무 작업이 그 줄에 들어오기 때문이다.
  *
- * 그래서 «일꾼이 도는가» 는 <b>documents 큐만</b> 보고 판정한다. 처음에는 줄을 가리지
+ * 그래서 대기 지연은 <b>처리하도록 설정된 큐</b>만 보고 판정한다. 처음에는 줄을 가리지
  * 않고 전부 세었는데, 그러면 2026-08-27 에 default 로 들어간 옛 작업 85건 때문에
  * 일꾼이 정상으로 돌아도 영원히 «일꾼 없음» 이라고 말한다. 경고가 거짓말을 하면
  * 사람은 곧 그 경고를 통째로 무시하고, 그때는 진짜 고장도 같이 묻힌다.
@@ -32,7 +32,8 @@ use Throwable;
  *
  * ── 무엇으로 판정하나 ──────────────────────────────────────────────────
  * <b>가장 오래 기다린 작업의 나이</b>다. 일꾼이 돌고 있으면 작업은 몇 초 안에 집혀
- * 나가므로 이 숫자가 크게 자랄 수 없다. 며칠씩 기다리는 작업이 있다면 일꾼이 없다.
+ * 나간다. 오래 기다리면 지연으로 알리되, 장시간 분석이나 처리량 부족도 원인일 수
+ * 있으므로 대기 시간만으로 일꾼이 죽었다고 단정하지 않는다.
  *
  * 큐가 비어 있을 때는 «일꾼이 있다» 와 «일꾼은 없는데 마침 할 일도 없다» 를 구별하지
  * 못한다. 그래도 괜찮다 — 구별이 필요해지는 순간(일이 들어오는 순간) 바로 드러난다.
@@ -52,7 +53,7 @@ final class QueueHealth
      *
      * @var list<string>
      */
-    public const SERVED_QUEUES = [self::DOCUMENT_QUEUE];
+    public const SERVED_QUEUES = [self::DOCUMENT_QUEUE, 'meetings'];
 
     /**
      * @return array<string, mixed>
@@ -167,14 +168,14 @@ final class QueueHealth
 
         $head = match (true) {
             $stuck => sprintf(
-                '%s 큐에 %d건이 밀려 있고 가장 오래된 것이 %d분째 기다립니다 — 큐 일꾼(queue:work)이 돌고 있지 않습니다. 문서 AI 분석이 전부 멈춥니다.',
-                self::DOCUMENT_QUEUE,
+                '%s 큐에 %d건이 밀려 있고 가장 오래된 것이 %d분째 기다립니다 — 처리 지연입니다. 큐 일꾼(queue:work), 진행 중인 장시간 분석과 처리량을 확인하세요.',
+                implode(', ', $served['queues']),
                 $served['pending'],
                 $served['oldest_pending_minutes'] ?? 0,
             ),
             $served['pending'] > 0 => sprintf(
                 '%s 큐에 %d건이 있고 가장 오래된 것이 %d분째입니다 — 처리 중입니다.',
-                self::DOCUMENT_QUEUE,
+                implode(', ', $served['queues']),
                 $served['pending'],
                 $served['oldest_pending_minutes'] ?? 0,
             ),
@@ -182,7 +183,7 @@ final class QueueHealth
             // 비어 있으면 «일꾼이 있다» 고 말하지 않는다 — 알 수 없기 때문이다.
             default => sprintf(
                 '%s 큐가 비어 있습니다. 밀린 작업이 없습니다(일꾼이 떠 있는지는 이것만으로 알 수 없습니다).',
-                self::DOCUMENT_QUEUE,
+                implode(', ', self::SERVED_QUEUES),
             ),
         };
 

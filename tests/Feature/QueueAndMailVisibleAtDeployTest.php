@@ -130,6 +130,21 @@ class QueueAndMailVisibleAtDeployTest extends TestCase
         }
     }
 
+    public function test_meeting_backlog_is_monitored_instead_of_mislabeled_as_legacy_work(): void
+    {
+        $this->queueJob('meetings', minutesAgo: 20);
+        $this->queueJob('default', minutesAgo: 100);
+
+        $snapshot = QueueHealth::snapshot();
+
+        $this->assertSame(['meetings'], $snapshot['served']['queues']);
+        $this->assertSame(['default'], $snapshot['unserved']['queues']);
+        $this->assertFalse($snapshot['working']);
+        $this->assertStringContainsString('meetings 큐에 1건', $snapshot['message']);
+        $this->assertStringContainsString('장시간 분석', $snapshot['message']);
+        $this->assertStringNotContainsString('문서 AI 분석이 전부 멈춥니다', $snapshot['message']);
+    }
+
     public function test_the_script_reads_them_by_path_not_by_name(): void
     {
         // 이름만으로 찾으면 JSON 앞쪽의 같은 이름을 집는다 — "pending" 은 마이그레이션
