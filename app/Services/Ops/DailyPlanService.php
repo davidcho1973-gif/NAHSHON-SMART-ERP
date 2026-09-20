@@ -219,7 +219,7 @@ class DailyPlanService
             'reportId' => $report->id,
             'date' => $date,
             'status' => $report->plan_status,
-            'message' => $submit ? '작업계획서를 제출했습니다.' : '작업계획서를 저장했습니다.',
+            'message' => $submit ? '오늘 작업 계획을 확정했습니다.' : '오늘 작업 계획을 임시저장했습니다.',
         ];
     }
 

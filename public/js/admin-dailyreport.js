@@ -1,5 +1,5 @@
 /**
- * 일일 보고 — 아침 작업계획서와 저녁 마감보고서를 ERP 안에서 쓰고, 정해진 사람에게 보낸다.
+ * 오늘 작업 기록 — 아침 계획과 저녁 결과를 같은 날짜의 한 기록에서 이어 쓴다.
  *
  * 이 화면의 유일한 설계 원칙: <b>빈 종이를 주지 않는다.</b>
  * 열면 ERP 가 아는 것(안전 작업카드·장비 대장·전날 마감·출역 인원)이 이미 채워져 있고,
@@ -18,7 +18,6 @@
   function ui() { if (!A) A = global.AdminUI; return A; }
 
   var state = {
-    tab: 'plan',          // plan | closing
     date: null,
     plan: null,           // api_getDailyPlan 응답
     closing: null,        // api_getDailyClosing 응답
@@ -59,6 +58,7 @@
       state.plan = r[0];
       state.dispatches = r[1];
       state.dirty = false;
+      return loadClosing();
     });
   }
 
@@ -69,13 +69,8 @@
       return;
     }
     state.date = v;
+    state.closing = null;
     render();
-  }
-
-  function setTab(t) {
-    state.tab = t;
-    if (t === 'closing' && !state.closing) { loadClosing().then(draw); return; }
-    draw();
   }
 
   /* ══════════════════════ 그리기 ══════════════════════ */
@@ -87,8 +82,8 @@
       ? state.dispatches.mailNote : null;
 
     var head = u.pageHeader(
-      '일일 보고',
-      (p.site && p.site.name ? p.site.name + ' · ' : '') + '아침 작업계획서와 저녁 마감보고서를 여기서 쓰고 원청에 보냅니다.',
+      '오늘 작업 기록',
+      (p.site && p.site.name ? p.site.name + ' · ' : '') + '아침 계획부터 현장 실행, 마감 결과와 내일 계획까지 한 기록으로 이어집니다.',
       u.rowButton('수신처 관리', 'AdminDailyReport.openRecipients()') +
       u.rowButton('발송 이력', 'AdminDailyReport.openHistory()')
     );
@@ -98,8 +93,7 @@
         '<input type="date" value="' + u.esc(state.date) + '" onchange="AdminDailyReport.setDate(this.value)" ' +
           'style="padding:8px 11px;border-radius:8px;border:1px solid var(--border-default);' +
           'background:var(--bg-base);color:var(--text-primary);font-size:13px;font-family:inherit">' +
-        tabBtn('plan', '작업계획서', '아침') +
-        tabBtn('closing', '마감보고서', '저녁') +
+        '<span style="font-size:12px;color:var(--text-tertiary)">날짜를 선택하면 그날의 계획과 결과가 함께 열립니다.</span>' +
       '</div>';
 
     var note = mailNote
@@ -109,19 +103,34 @@
         ' 지금은 [발송] 을 누르면 메일앱이 열리고 내용이 채워집니다.</div>'
       : '';
 
-    paint(head + bar + note + (state.tab === 'plan' ? planBody() : closingBody()));
-
-    if (state.tab === 'plan') bindDirty();
+    paint(head + bar + note + dayFlow() + planBody() + closingBody());
+    bindDirty();
   }
 
-  function tabBtn(key, label, sub) {
-    var on = state.tab === key;
-    return '<button type="button" onclick="AdminDailyReport.setTab(\'' + key + '\')" ' +
-      'style="padding:8px 15px;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;' +
-      'border:1px solid ' + (on ? 'var(--brand-primary)' : 'var(--border-default)') + ';' +
-      'background:' + (on ? 'var(--brand-primary)' : 'transparent') + ';' +
-      'color:' + (on ? '#fff' : 'var(--text-secondary)') + ';font-weight:' + (on ? '600' : '400') + '">' +
-      ui().esc(label) + ' <span style="opacity:.7;font-size:11px">' + ui().esc(sub) + '</span></button>';
+  /** 같은 날의 진행 상태를 한 줄로 보여 준다. 계획과 마감이 서로 다른 문서처럼 보이지 않게 한다. */
+  function dayFlow() {
+    var p = state.plan || {};
+    var c = state.closing || {};
+    var planDone = p.status === 'submitted';
+    var closingDone = c.status === 'done';
+    var live = !closingDone && (planDone || (c.metrics && c.metrics.ops && c.metrics.ops.batches > 0));
+
+    function step(no, title, detail, done, active) {
+      var color = done ? 'var(--status-success,#16a34a)' : (active ? 'var(--brand-primary)' : 'var(--text-tertiary)');
+      return '<div style="flex:1;min-width:190px;padding:13px 15px;border:1px solid ' +
+        (done || active ? color : 'var(--border-default)') + ';border-radius:10px;background:var(--bg-surface)">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+        '<span style="display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:' + color +
+        ';color:#fff;font-size:11px;font-weight:800">' + (done ? '✓' : no) + '</span>' +
+        '<b style="font-size:13px;color:var(--text-primary)">' + title + '</b></div>' +
+        '<div style="font-size:11px;line-height:1.5;color:var(--text-tertiary);padding-left:30px">' + detail + '</div></div>';
+    }
+
+    return '<section style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">' +
+      step('1', '작업 시작 전', planDone ? '계획 확정 완료' : '계획 확인·확정 필요', planDone, !planDone) +
+      step('2', '현장 실행', closingDone ? '당일 기록 수집 완료' : '사진·진척·인력·요청을 계속 수집', closingDone, live) +
+      step('3', '작업 마감', closingDone ? '마감 및 ERP 반영 완료' : '결과 확인 후 한 번에 마감', closingDone, false) +
+      '</section>';
   }
 
   /* ══════════════════════ 작업계획서 ══════════════════════ */
@@ -138,13 +147,16 @@
 
     var actions =
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 8px">' +
-        u.primaryButton('저장', 'AdminDailyReport.savePlan(false)', 'floppy-disk') +
-        u.rowButton(submitted ? '다시 제출' : '제출', 'AdminDailyReport.savePlan(true)') +
-        u.rowButton('미리보기', 'AdminDailyReport.preview(\'plan\')') +
-        u.rowButton('원청에 발송', 'AdminDailyReport.send(\'plan\')') +
+        u.primaryButton('계획 임시저장', 'AdminDailyReport.savePlan(false)', 'floppy-disk') +
+        u.rowButton(submitted ? '작업 시작 다시 확정' : '작업 시작 확정', 'AdminDailyReport.savePlan(true)') +
+        u.rowButton('계획서 미리보기', 'AdminDailyReport.preview(\'plan\')') +
+        u.rowButton('원청 계획서 발송', 'AdminDailyReport.send(\'plan\')') +
       '</div>';
 
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' + status +
+    return '<div style="display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 14px">' +
+      '<div><div style="font-size:11px;font-weight:800;color:var(--brand-primary);letter-spacing:.06em">STEP 1 · 작업 시작 전</div>' +
+      '<h2 style="margin:4px 0 0;font-size:18px;color:var(--text-primary)">오늘 작업 계획</h2></div>' + status + '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
       (p.isNew ? '<span style="font-size:12px;color:var(--text-tertiary)">ERP 가 아는 내용으로 초안을 채웠습니다 — 확인하고 저장하세요.</span>' : '') +
       '</div>' +
 
@@ -343,19 +355,24 @@
     var u = ui();
     var c = state.closing;
 
+    var sectionHead = '<div style="margin:30px 0 14px;padding-top:22px;border-top:1px solid var(--border-default)">' +
+      '<div style="font-size:11px;font-weight:800;color:var(--brand-primary);letter-spacing:.06em">STEP 2–3 · 현장 실행과 마감</div>' +
+      '<h2 style="margin:4px 0 0;font-size:18px;color:var(--text-primary)">오늘 작업 결과</h2>' +
+      '<p style="margin:5px 0 0;font-size:12px;line-height:1.6;color:var(--text-tertiary)">현장 기록·출퇴근·공정·자재 요청·문제점이 모입니다. 마감하면 내일 계획까지 같은 기록에 확정됩니다.</p></div>';
+
     if (!c || c.missing) {
-      return '<section style="background:var(--bg-surface);border:1px solid var(--border-default);' +
+      return sectionHead + '<section style="background:var(--bg-surface);border:1px solid var(--border-default);' +
         'border-radius:12px;padding:44px 18px;text-align:center">' +
         '<p style="margin:0 0 6px;font-size:14px;color:var(--text-primary);font-weight:600">' +
         state.date + ' 마감이 아직 없습니다.</p>' +
         '<p style="margin:0 0 18px;font-size:12px;color:var(--text-tertiary);line-height:1.7">' +
         '마감을 실행하면 그날 출역 인원 · 공정 · 자재 · 안전 · 사진을 모아 보고서를 만듭니다.<br>' +
         '숫자는 시스템이 세고, 문장은 AI 가 그 숫자를 근거로 씁니다.</p>' +
-        u.primaryButton('일일 마감 실행', 'AdminDailyReport.runClosing()', 'play') + '</section>';
+        u.primaryButton('오늘 작업 마감', 'AdminDailyReport.runClosing()', 'play') + '</section>';
     }
 
     if (c.status === 'writing') {
-      return '<section style="background:var(--bg-surface);border:1px solid var(--border-default);' +
+      return sectionHead + '<section style="background:var(--bg-surface);border:1px solid var(--border-default);' +
         'border-radius:12px;padding:44px 18px;text-align:center;color:var(--text-secondary);font-size:13px">' +
         '보고서를 작성하는 중입니다… <button type="button" onclick="AdminDailyReport.refreshClosing()" ' +
         'style="margin-left:8px;padding:5px 10px;border-radius:6px;border:1px solid var(--border-default);' +
@@ -368,8 +385,8 @@
     var f = c.field || {};
 
     var actions = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 8px">' +
-      u.primaryButton('원청에 발송', 'AdminDailyReport.send(\'closing\')', 'paper-plane-tilt') +
-      u.rowButton('미리보기', 'AdminDailyReport.preview(\'closing\')') +
+      u.primaryButton('원청 마감보고서 발송', 'AdminDailyReport.send(\'closing\')', 'paper-plane-tilt') +
+      u.rowButton('마감보고서 미리보기', 'AdminDailyReport.preview(\'closing\')') +
       u.rowButton('다시 마감', 'AdminDailyReport.runClosing()') + '</div>';
 
     var out = c.archiveUrl ? '<p style="color:#0f766e">문서함 · 일일 보고서에 저장되었습니다. <a target="_blank" rel="noopener" href="' + u.esc(c.archiveUrl) + '">저장된 보고서 열기</a></p>' : '';
@@ -379,6 +396,20 @@
         'border-left:3px solid var(--brand-primary);font-size:14px;font-weight:600;color:var(--text-primary);' +
         'line-height:1.6">' + u.esc(n.headline) + '</div>';
     }
+
+    var planned = (state.plan && state.plan.plan) || {};
+    var plannedCrew = (planned.crews || []).reduce(function (sum, row) {
+      return sum + (parseInt(row.headcount, 10) || 0);
+    }, 0);
+    out += card('계획과 결과 연결',
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">' +
+      compareCell('아침 계획', planned.workScope || '확정된 작업계획이 없습니다.') +
+      compareCell('실제 작업', f.workToday || (n.done || []).join('\n') || '현장 결과가 아직 입력되지 않았습니다.') +
+      compareCell('계획 인원', plannedCrew ? plannedCrew + '명' : '계획 인원 없음') +
+      compareCell('실제 인원', (labor.final || 0) + '명') +
+      '</div>' +
+      '<p style="margin:10px 0 0;font-size:11px;line-height:1.6;color:var(--text-tertiary)">' +
+      '계획과 결과가 다르면 잘못된 것으로 덮어쓰지 않고 차이를 그대로 남깁니다. 차이는 다음 날 계획과 공정 조정의 근거가 됩니다.</p>');
 
     out += card('출역 인원', grid([
       stat('최종 확정', (labor.final || 0) + '명'),
@@ -416,7 +447,7 @@
         u.esc(n.summary) + '</p>');
     }
 
-    return out + actions;
+    return sectionHead + out + actions;
   }
 
   function stat(label, value, warn) {
@@ -427,10 +458,25 @@
       u.esc(value) + '</div></div>';
   }
 
+  function compareCell(label, value) {
+    var u = ui();
+    return '<div style="padding:11px 13px;border:1px solid var(--border-default);border-radius:9px;background:var(--bg-base)">' +
+      '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:5px;letter-spacing:.03em">' + u.esc(label) + '</div>' +
+      '<div style="white-space:pre-line;font-size:12px;line-height:1.6;color:var(--text-primary)">' + u.esc(value) + '</div></div>';
+  }
+
   function runClosing() {
     var u = ui();
     u.toast('마감을 시작했습니다. 잠시 걸립니다…');
-    call('api_startDailyClosing', [state.date]).then(function () {
+    // 마감 직전에 계획을 고쳤어도 별도 저장 버튼을 다시 누르게 하지 않는다.
+    // 화면에 보이는 계획을 먼저 같은 일일 기록에 저장한 뒤, 그 한 줄을 마감한다.
+    var beforeClosing = state.dirty
+      ? call('api_saveDailyPlan', [collectPlan(), state.date, false]).then(function () { state.dirty = false; })
+      : Promise.resolve();
+
+    beforeClosing.then(function () {
+      return call('api_startDailyClosing', [state.date]);
+    }).then(function () {
       state.closing = null;
       setTimeout(function () { refreshClosing(); }, 4000);
     }).catch(function (e) { u.toast(e.message, 'error'); });
@@ -663,7 +709,6 @@
   global.AdminDailyReport = {
     render: render,
     setDate: setDate,
-    setTab: setTab,
     addRow: addRow,
     savePlan: savePlan,
     runClosing: runClosing,
