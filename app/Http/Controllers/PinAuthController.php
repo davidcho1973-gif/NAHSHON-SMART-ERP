@@ -29,6 +29,7 @@ class PinAuthController extends Controller
             'token' => $token,
             'valid' => $row !== null,
             'userName' => $row?->user?->name,
+            'isActivation' => $row?->purpose === AuthSetupToken::PURPOSE_ACTIVATION,
             'lang' => WorkerLang::resolve($request->query('lang') ?: $row?->user?->employee?->preferred_language),
             'pinLength' => PinAuthService::PIN_LENGTH,
         ]);
@@ -43,10 +44,15 @@ class PinAuthController extends Controller
             return response()->json(['success' => false, 'error' => $result['error']], 422);
         }
 
+        $attendanceSiteId = $result['attendance_site_id'] ?? null;
+
         return response()->json([
             'success' => true,
             'device_token' => $result['device_token'],
-            'redirect' => $result['user']->landingPath(),
+            'attendance_device_token' => $result['attendance_device_token'] ?? null,
+            'redirect' => $attendanceSiteId
+                ? route('gate.show', ['site' => $attendanceSiteId, 'onboarded' => 1])
+                : $result['user']->landingPath(),
         ]);
     }
 

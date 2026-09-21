@@ -53,7 +53,7 @@ class EmployeeJoinTest extends TestCase
 
     public function test_every_supervisory_position_requires_email_even_on_old_worker_link(): void
     {
-        foreach (['employee-join.store', 'worker-join.store', 'manager-join.store'] as $route) {
+        foreach (['employee-join.store', 'manager-join.store'] as $route) {
             foreach (Employee::SUPERVISORY_POSITIONS as $position) {
                 $this->post(route($route, $this->site), array_replace($this->data, ['position' => $position]))
                     ->assertSessionHasErrors('email');

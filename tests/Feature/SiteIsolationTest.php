@@ -49,12 +49,12 @@ class SiteIsolationTest extends TestCase
             'name' => '배선', 'trade' => 'AZ-ONLY-ELEC', 'site_id' => $this->az->id,
         ]);
 
-        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/w/'.$this->ga->id)
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/'.$this->ga->id)
             ->assertOk()
             ->assertDontSee('AZ-ONLY-ELEC', false, '새 현장이 남의 현장 공종을 빌려오면 안 된다');
 
         // 대신 기본 직군을 보여 준다 — 빈 목록으로 두지는 않는다.
-        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/w/'.$this->ga->id)->assertSee('<select id="f-trade-choice"', false)->assertSee('value="Electrician"', false);
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/'.$this->ga->id)->assertSee('<select id="f-trade-choice"', false)->assertSee('value="Electrician"', false);
     }
 
     public function test_자기_현장_공정은_그대로_보인다(): void
@@ -64,7 +64,7 @@ class SiteIsolationTest extends TestCase
             'name' => '배관', 'trade' => 'GA-PIPING', 'site_id' => $this->ga->id,
         ]);
 
-        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/w/'.$this->ga->id)->assertOk()->assertSee('value="GA-PIPING"', false);
+        $this->actingAs(User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']))->get('/join/'.$this->ga->id)->assertOk()->assertSee('value="GA-PIPING"', false);
     }
 
     public function test_프로젝트를_안_고르면_남의_공정표로_넘어가지_않는다(): void

@@ -6,6 +6,7 @@ use App\Models\AuthEvent;
 use App\Models\AuthSetupToken;
 use App\Models\LoginDevice;
 use App\Models\User;
+use App\Models\WorkerDevice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +71,7 @@ class PinAuthService
     /**
      * 본인이 링크를 열고 PIN 을 정한다. 성공하면 이 기기를 기억하고 바로 로그인시킨다.
      *
-     * @return array{success: bool, error?: string, device_token?: string, user?: User}
+     * @return array{success: bool, error?: string, device_token?: string, attendance_device_token?: string, attendance_site_id?: int, user?: User}
      */
     public function completeSetup(string $token, string $pin, Request $request): array
     {
@@ -110,13 +111,30 @@ class PinAuthService
         $row->consume();
 
         $deviceToken = LoginDevice::issueFor($user, $request->userAgent());
+        $attendanceDeviceToken = null;
+        $attendanceSiteId = null;
+        $employee = $user->employee;
+        if ($row->purpose === AuthSetupToken::PURPOSE_ACTIVATION
+            && $employee?->employment_status === 'active'
+            && $employee->site?->status === 'active') {
+            // The personal activation QR proves the same identity that the gate would otherwise
+            // ask the worker to find again. Bind this phone once so the gate opens ready to punch.
+            $attendanceDeviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
+            $attendanceSiteId = (int) $employee->site_id;
+        }
 
         AuthEvent::record('pin_set', user: $user, method: 'pin', request: $request);
         Auth::login($user, remember: true);
         $request->session()->regenerate();
         AuthEvent::record('login_ok', user: $user, method: 'pin', request: $request, note: '설정 직후 자동 로그인');
 
-        return ['success' => true, 'device_token' => $deviceToken, 'user' => $user];
+        return [
+            'success' => true,
+            'device_token' => $deviceToken,
+            'attendance_device_token' => $attendanceDeviceToken,
+            'attendance_site_id' => $attendanceSiteId,
+            'user' => $user,
+        ];
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Models\AuthEvent;
+use App\Models\AuthSetupToken;
 use App\Models\Employee;
 use App\Models\Team;
 use App\Models\User;
@@ -63,17 +64,31 @@ class WorkerEnrollmentService
         return '+'.$digits;
     }
 
-    public function submit(User $actor, Team $team, array $data): void
+    public function submit(User $actor, Team $team, array $data): WorkerEnrollment
     {
         abort_unless($this->canManage($actor, $team), 403);
         abort_unless($team->status === 'active' && $team->site_id && $team->company_id, 404);
         $phone = self::phone($data['phone']);
-        DB::transaction(function () use ($team, $data, $phone) {
+
+        return DB::transaction(function () use ($team, $data, $phone) {
             Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
+
             // Repeated registration never overwrites existing names or access.
-            WorkerEnrollment::firstOrCreate(['team_id' => $team->id, 'phone' => $phone], [
+            return WorkerEnrollment::firstOrCreate(['team_id' => $team->id, 'phone' => $phone], [
                 'name' => trim($data['name']), 'status' => 'pending',
             ]);
+        });
+    }
+
+    /** HR-confirmed desk registration: create, approve and issue one personal QR as one unit. */
+    public function registerAndActivate(User $actor, Team $team, array $data): array
+    {
+        return DB::transaction(function () use ($actor, $team, $data) {
+            $enrollment = $this->submit($actor, $team, $data);
+            $this->approve($actor, $enrollment);
+            $url = $this->activation($actor, $enrollment->fresh());
+
+            return ['enrollment' => $enrollment->fresh(), 'url' => $url];
         });
     }
 
@@ -148,7 +163,7 @@ class WorkerEnrollmentService
                 && $user->employee?->employment_status === 'active'
                 && (int) $user->employee?->team_id === (int) $request->team_id, 409);
 
-            return app(PinAuthService::class)->issueSetupLink($user, 'activation', $actor);
+            return app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_ACTIVATION, $actor);
         });
     }
 }

@@ -18,6 +18,7 @@ use App\Support\WorkerLang;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 
 /**
  * 직원 등록 · 수정 — Filament EmployeeResource 를 SPA 로 옮긴 것.
@@ -111,6 +112,7 @@ class EmployeeAdminService
 
         $query = Employee::query()
             ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,email,access_role,account_status',
+                'memberRegistration',
                 'w9Form:id,employee_id,tin_last4,certified_at'])
             ->orderBy('name');
         $this->applyScope($query);
@@ -140,7 +142,8 @@ class EmployeeAdminService
             ->get()
             ->keyBy('user_id');
 
-        $rows = $query->get()->map(function (Employee $e) use ($today, $soon, $pushByUser): array {
+        $canManage = $this->canManage();
+        $rows = $query->get()->map(function (Employee $e) use ($today, $soon, $pushByUser, $canManage): array {
             // 만료가 지났거나 30일 안에 닥친 것은 목록에서 바로 보여준다. 비자나 안전교육이
             // 끊긴 사람이 현장에 들어가는 것이 실제 사고로 이어진다.
             $expiring = [];
@@ -206,6 +209,15 @@ class EmployeeAdminService
                 'w9OnFile' => $e->w9Form !== null,
                 'w9TinLast4' => $e->w9Form?->tin_last4,
                 'w9CertifiedOn' => $e->w9Form?->certified_at?->toDateString(),
+                'hrReviewPending' => (bool) data_get($e->payload, 'self_registered_pending_hr', false),
+                // 이름·전화만 받은 현장 등록의 나머지를 작업자 본인이 채우는 만료 링크.
+                // 인사관리 권한이 있는 사용자에게만 내려가며, URL 자체도 서명을 검증한다.
+                'onboardingRequestUrl' => $canManage && $e->memberRegistration
+                    ? URL::temporarySignedRoute('worker-profile.show', now()->addDays(14), [
+                        'employee' => $e->id,
+                        'registration' => $e->memberRegistration->id,
+                    ])
+                    : null,
                 // 알림을 켰는가 — 출근 독려·퇴근·보고 알림은 이 사람이 자기 폰에서 한 번
                 // 허락해야만 닿는다(브라우저 규칙이라 관리자가 대신 켤 수 없다). 켠 사람이
                 // 누구인지 안 보이면 «누구를 도와줘야 하는지» 를 알 방법이 없다.
@@ -217,7 +229,7 @@ class EmployeeAdminService
         return [
             'success' => true,
             'rows' => $rows,
-            'canManage' => $this->canManage(),
+            'canManage' => $canManage,
             // 이 배포에 알림 열쇠가 있는가. 없으면 모두가 «꺼짐» 으로 보이는데, 그건
             // 사람들이 안 켠 게 아니라 서버가 못 보내는 것이다 — 화면이 그 차이를 말해야
             // 소장이 애먼 사람을 쫓아다니지 않는다.
@@ -506,6 +518,14 @@ class EmployeeAdminService
             'visa_expires_on' => $date('visaExpiresOn'),
             'safety_training_expires_on' => $date('safetyExpiresOn'),
         ];
+
+        if ($row && data_get($row->payload, 'self_registered_pending_hr', false)) {
+            $data['payload'] = array_merge($row->payload ?? [], [
+                'self_registered_pending_hr' => false,
+                'hr_reviewed_at' => now()->toISOString(),
+                'hr_reviewed_by_id' => auth()->id(),
+            ]);
+        }
 
         if ($row) {
             $row->update($data);

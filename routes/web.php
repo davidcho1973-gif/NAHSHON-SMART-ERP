@@ -43,6 +43,7 @@ use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
 use App\Http\Controllers\WorkerEnrollmentController;
+use App\Http\Controllers\WorkerProfileCompletionController;
 use App\Http\Middleware\AuthorizeAssetApi;
 use App\Http\Middleware\RequireHrRegistration;
 use App\Models\OrgSetting;
@@ -440,14 +441,18 @@ Route::get('/guest/{token}', [GuestViewController::class, 'show'])
     ->middleware('throttle:30,1')
     ->name('guest.view');
 
-// 직원 등록은 인사 권한자 전용. 예전 공개 QR 주소도 로그인 및 인사 권한을 검사한다.
+// 새 작업자 현장 등록 QR — 휴대폰 기본 카메라로 열고 이름·전화번호만 등록한다.
+// 현장 번호는 QR 주소가 정하며, 등록 직후 이 휴대폰을 기억해 같은 현장 출퇴근으로 이어진다.
+// 공개 폼에는 ERP 계정·권한을 만드는 기능이 없고 속도 제한을 둔다.
+Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
+    ->middleware('throttle:60,1')->name('worker-join.qr');
+Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'quickForm'])
+    ->middleware('throttle:60,1')->name('worker-join.form');
+Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'quickStore'])
+    ->middleware('throttle:10,1')->name('worker-join.store');
+
+// 회사·직책·공정까지 지정하는 관리용 등록은 인사 권한자 전용이다.
 Route::middleware(['auth', RequireHrRegistration::class])->group(function () {
-    Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'])
-        ->middleware('throttle:60,1')->name('worker-join.qr');
-    Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'form'])
-        ->middleware('throttle:60,1')->name('worker-join.form');
-    Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'store'])
-        ->middleware('throttle:20,1')->name('worker-join.store');
 
     // 직원 등록은 한 폼에서 직책으로 입력 요건을 정한다. 예전 /w, /m 링크도 유지한다.
     Route::get('/join', [SimpleWorkerRegistrationController::class, 'entry'])
@@ -476,6 +481,12 @@ Route::middleware(['auth', RequireHrRegistration::class])->group(function () {
 // 1099 지급의 전제조건이라 등록 흐름에 바로 이어 붙였다. TIN 은 암호화 저장.
 Route::get('/w9/{employee}', [W9FormController::class, 'show'])->middleware('signed')->name('w9.show');
 Route::post('/w9/{employee}', [W9FormController::class, 'store'])->middleware('signed')->name('w9.store');
+
+// 인사담당자가 나중에 보내는 개인 보안 링크 — 주소·비상연락처를 보완한 뒤 W-9 으로 이어진다.
+Route::get('/worker-profile/{employee}/{registration}', [WorkerProfileCompletionController::class, 'show'])
+    ->middleware(['signed', 'throttle:30,1'])->name('worker-profile.show');
+Route::post('/worker-profile/{employee}/{registration}', [WorkerProfileCompletionController::class, 'store'])
+    ->middleware(['signed', 'throttle:10,1'])->name('worker-profile.store');
 
 // 홈 화면에 추가할 때 브라우저가 읽는 파일. 로그인 뒤에 두면 브라우저가 못 읽어
 // 설치가 조용히 실패한다 — 안에는 아이콘 주소와 화면 이름뿐이라 감출 것이 없다.

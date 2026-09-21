@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\WorkerEnrollment;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\UserAccessService;
+use App\Services\Auth\PinAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -55,6 +56,25 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertSame('Kim Worker', WorkerEnrollment::first()->name);
     }
 
+    public function test_hr_can_confirm_registration_and_receive_personal_qr_in_one_step(): void
+    {
+        $response = $this->actingAs($this->admin)->post($this->url(), [
+            'team_id' => $this->team->id,
+            'name' => 'Fast Worker',
+            'phone' => '202-555-0199',
+            'confirmed' => 1,
+        ])->assertOk()->assertViewIs('worker-enrollment.qr')->assertSee('출퇴근 시작 QR');
+
+        $this->assertDatabaseHas('worker_enrollments', ['phone' => '+12025550199', 'status' => 'approved']);
+        $this->assertDatabaseHas('employees', [
+            'name' => 'Fast Worker',
+            'team_id' => $this->team->id,
+            'employment_status' => 'active',
+        ]);
+        $this->assertDatabaseCount('auth_setup_tokens', 1);
+        $this->assertStringContainsString('/auth/pin/setup/', $response->viewData('url'));
+    }
+
     public function test_public_registration_and_team_qr_are_removed_and_guest_cannot_register(): void
     {
         $this->get('/worker-enroll/'.$this->team->id)->assertNotFound();
@@ -95,9 +115,15 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertTrue(AuthSetupToken::first()->expires_at->lte(now()->addMinutes(15)));
         auth()->logout();
         $this->get($url)->assertOk()->assertSee('Kim Worker');
-        $result = $this->postJson($url, ['pin' => '5937'])->assertOk()->assertJsonPath('redirect', '/attendance-app');
+        $result = $this->postJson($url, ['pin' => '5937'])->assertOk();
+        $this->assertSame(route('gate.show', ['site' => $employee->site_id, 'onboarded' => 1]), $result->json('redirect'));
+        $this->assertNotEmpty($result->json('attendance_device_token'));
         $this->assertAuthenticatedAs($user);
         $this->assertDatabaseCount('login_devices', 1);
+        $this->assertDatabaseCount('worker_devices', 1);
+        $this->postJson(route('gate.me', ['site' => $employee->site_id]), [
+            'device_token' => $result->json('attendance_device_token'),
+        ])->assertOk()->assertJsonPath('recognized', true)->assertJsonPath('employee.id', $employee->id);
         $this->get('/attendance-app')->assertOk();
         $this->travelTo(Carbon::parse('2026-09-19 12:00:00', 'UTC'));
         $this->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $employee->site_id])
@@ -233,5 +259,32 @@ class WorkerEnrollmentTest extends TestCase
         }
         $this->postJson($url, ['pin' => '5937'])->assertOk();
         $this->actingAs($this->admin)->post(route('worker-enrollment.activation', $enrollment))->assertStatus(409);
+    }
+
+    public function test_regular_pin_invite_does_not_bind_a_gate_attendance_device(): void
+    {
+        $employee = Employee::create([
+            'name' => 'Invited Worker',
+            'phone' => '+12025550188',
+            'company_id' => $this->team->company_id,
+            'site_id' => $this->team->site_id,
+            'team_id' => $this->team->id,
+            'position' => 'worker',
+            'employment_type' => 'direct',
+            'employment_status' => 'active',
+        ]);
+        $user = User::factory()->create([
+            'employee_id' => $employee->id,
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+        ]);
+        $url = app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_INVITE, $this->admin);
+
+        $this->postJson($url, ['pin' => '5937'])
+            ->assertOk()
+            ->assertJsonPath('attendance_device_token', null)
+            ->assertJsonPath('redirect', '/attendance-app');
+        $this->assertDatabaseCount('worker_devices', 0);
     }
 }
