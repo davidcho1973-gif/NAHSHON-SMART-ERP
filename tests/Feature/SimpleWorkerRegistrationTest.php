@@ -65,6 +65,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         $company = Company::first();
         $this->post('/join/'.$site->id, [
             'full_name' => 'Kim', 'company_id' => $company->id, 'role' => '특수용접',
+            'position' => 'worker',
             'email' => 'kim@example.com', 'phone' => '480-555-0199',
         ])->assertStatus(200);
         $this->assertSame('특수용접', Employee::where('email', 'kim@example.com')->first()->role);
@@ -72,6 +73,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         // 목록에 있는 공정은 그대로.
         $this->post('/join/'.$site->id, [
             'full_name' => 'Lee', 'company_id' => $company->id, 'role' => 'MECH',
+            'position' => 'worker',
             'email' => 'lee@example.com', 'phone' => '480-555-0198',
         ])->assertStatus(200);
         $this->assertSame('MECH', Employee::where('email', 'lee@example.com')->first()->role);
@@ -86,6 +88,7 @@ class SimpleWorkerRegistrationTest extends TestCase
             'full_name' => 'HYUNSUK CHO',
             'company_id' => $company->id,
             'role' => 'Electrician',
+            'position' => 'worker',
             'email' => 'hyunsuk@example.com',
             'phone' => '480-555-0100',
         ]);
@@ -110,11 +113,11 @@ class SimpleWorkerRegistrationTest extends TestCase
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
 
         // 이메일은 선택이지만, 적었는데 형식이 틀리면 잡는다.
-        $this->post('/join/'.$site->id, ['full_name' => '', 'email' => 'bad'])
+        $this->post('/join/'.$site->id, ['full_name' => '', 'email' => 'bad', 'position' => 'worker'])
             ->assertSessionHasErrors(['full_name', 'company_id', 'role', 'email', 'phone']);
 
         // 비워 두는 것은 오류가 아니다 — 신원은 전화번호가 맡는다.
-        $this->post('/join/'.$site->id, ['full_name' => '', 'email' => ''])
+        $this->post('/join/'.$site->id, ['full_name' => '', 'email' => '', 'position' => 'worker'])
             ->assertSessionHasErrors(['full_name', 'phone'])
             ->assertSessionDoesntHaveErrors('email');
     }
@@ -139,6 +142,7 @@ class SimpleWorkerRegistrationTest extends TestCase
             'full_name' => 'IMPOSTOR KIM',
             'company_id' => $company->id,
             'role' => 'Laborer',
+            'position' => 'worker',
             'email' => 'boss@example.com',
             'phone' => '480-555-0199',
         ]);

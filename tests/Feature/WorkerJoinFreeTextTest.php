@@ -42,6 +42,7 @@ class WorkerJoinFreeTextTest extends TestCase
             'full_name' => 'Miguel Torres',
             'company_name' => 'Sun Valley Mechanical',
             'role' => 'Insulation',
+            'position' => 'worker',
             'email' => 'miguel@example.com',
             'phone' => '480-555-0100',
             'employment_type' => 'indirect',

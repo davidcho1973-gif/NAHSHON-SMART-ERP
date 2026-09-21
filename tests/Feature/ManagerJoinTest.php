@@ -102,6 +102,7 @@ class ManagerJoinTest extends TestCase
             'full_name' => 'Miguel Torres',
             'company_name' => 'Sun Valley Mechanical',
             'role' => 'Insulation',
+            'position' => 'worker',
             'phone' => '480-555-0100',
             'employment_type' => 'indirect',
         ])->assertOk();
@@ -130,6 +131,7 @@ class ManagerJoinTest extends TestCase
             'worker' => fn () => $this->post(route('employee-join.store', ['site' => $this->site]), [
                 'full_name' => 'Miguel Torres', 'company_name' => 'Sun Valley Mechanical',
                 'role' => 'Insulation', 'phone' => '480-555-0100', 'employment_type' => 'indirect',
+                'position' => 'worker',
             ]),
         ] as $door => $submit) {
             $body = $submit()->assertOk()->getContent();

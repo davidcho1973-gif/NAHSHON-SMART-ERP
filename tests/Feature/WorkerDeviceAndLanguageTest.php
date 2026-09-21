@@ -45,6 +45,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
             'full_name' => 'Carlos Ramirez',
             'company_id' => $this->partner->id,
             'role' => 'Welder', // 공정은 목록 선택만 허용 — 기본 직군 목록에 있는 값이어야 한다.
+            'position' => 'worker',
             'email' => $email,
             'phone' => '480-555-0100',
             'preferred_language' => $lang,
@@ -72,6 +73,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
     {
         $this->post(route('employee-join.store', ['site' => $this->site]), [
             'full_name' => 'Odd', 'company_id' => $this->partner->id, 'role' => 'X',
+            'position' => 'worker',
             'email' => 'odd@example.com', 'phone' => '1', 'preferred_language' => 'fr',
         ])->assertSessionHasErrors(['preferred_language']);
 

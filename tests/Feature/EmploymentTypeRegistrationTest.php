@@ -46,6 +46,7 @@ class EmploymentTypeRegistrationTest extends TestCase
             'full_name' => 'Worker '.$email,
             'company_id' => $company->id,
             'role' => 'Electrician',
+            'position' => 'worker',
             'email' => $email,
             'phone' => '480-555-0100',
             ...$extra,

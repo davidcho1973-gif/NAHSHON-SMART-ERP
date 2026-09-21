@@ -520,3 +520,7 @@ Corrected the onboarding trigger after owner clarification. The site registratio
 The employee list marks self-registered workers as `QR 신규 · 확인 필요`. HR save clears that marker. HR can copy a worker-specific, signed 14-day follow-up link for address and emergency-contact completion; after saving, the worker continues to the existing signed W-9 flow. Private completion links are available only to HR management roles, contain no reusable ERP login permission, and are rate limited. Existing HR detailed registration and one-use PIN activation remain available as alternate controlled paths.
 
 Validation checkpoint: new QR and employee-admin suite 40 tests / 185 assertions passed. Blade compilation, PHP/JS syntax, static build, Pint and diff checks are release gates. Existing PostgreSQL fresh-migration ordering can intermittently fail locally when an older attendance backfill queries `deleted_at` before its later migration; Linux CI remains the clean full-suite gate.
+
+## CODEX — 2026-09-21 QR release verification
+Detailed HR registration fixtures now specify their required worker position. Public signup discards extra HR fields and cannot reissue an existing login/device using a known name and phone. Targeted registration regression: 67 tests, 365 assertions passed. Printable registration/attendance posters and email delivery requested after verified release; not yet delivered.
+

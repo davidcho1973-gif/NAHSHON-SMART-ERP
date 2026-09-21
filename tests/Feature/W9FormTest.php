@@ -108,6 +108,7 @@ class W9FormTest extends TestCase
 
         $res = $this->post(route('employee-join.store', ['site' => $site]), [
             'full_name' => 'Carlos Ramirez', 'company_id' => $company->id, 'role' => 'Electrician',
+            'position' => 'worker',
             'email' => 'carlos@example.com', 'phone' => '480-555-0100',
         ]);
 

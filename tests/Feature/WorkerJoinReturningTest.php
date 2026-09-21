@@ -40,6 +40,7 @@ class WorkerJoinReturningTest extends TestCase
             'full_name' => 'Miguel Torres',
             'company_id' => $this->partner->id,
             'role' => 'Piping',
+            'position' => 'worker',
             'phone' => '480-555-0100',
         ], $extra));
     }

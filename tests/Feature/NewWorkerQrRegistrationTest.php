@@ -45,7 +45,7 @@ class NewWorkerQrRegistrationTest extends TestCase
     {
         $response = $this->withHeader('User-Agent', 'New worker phone')->post(
             route('worker-join.store', $this->site),
-            ['full_name' => '  Miguel   Torres ', 'phone' => '(480) 555-0100', 'preferred_language' => 'es'],
+            ['full_name' => '  Miguel   Torres ', 'phone' => '(480) 555-0100', 'preferred_language' => 'es', 'email' => 'injected@example.com', 'position' => 'manager'],
         );
 
         $employee = Employee::sole();
@@ -56,6 +56,7 @@ class NewWorkerQrRegistrationTest extends TestCase
         $this->assertSame('Miguel Torres', $employee->name);
         $this->assertSame($this->site->id, $employee->site_id);
         $this->assertSame('worker', $employee->position);
+        $this->assertNull($employee->email);
         $this->assertSame('미지정', $employee->role);
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertSame($employee->id, MemberRegistration::sole()->employee_id);
@@ -63,6 +64,12 @@ class NewWorkerQrRegistrationTest extends TestCase
         $this->assertSame('worker', $employee->user?->access_role);
         $this->assertDatabaseCount('auth_setup_tokens', 1);
         $this->assertDatabaseHas('unified_alerts', ['event_type' => 'worker_self_registration_review']);
+
+        $this->post(route('worker-join.store', $this->site), [
+            'full_name' => 'Miguel Torres', 'phone' => '4805550100',
+        ])->assertSessionHasErrors('phone');
+        $this->assertDatabaseCount('worker_devices', 1);
+        $this->assertDatabaseCount('auth_setup_tokens', 1);
     }
 
     public function test_hr_can_copy_a_signed_followup_link_and_worker_completes_details(): void

@@ -96,7 +96,7 @@ class SimpleWorkerRegistrationController extends Controller
             ?? Company::query()->where('status', 'active')->where('company_type', Company::TYPE_OWN)->first();
         abort_unless($company, 422, '이 현장의 기본 회사를 먼저 설정해 주세요.');
 
-        $request->merge([
+        $request->replace([
             'full_name' => trim(preg_replace('/\s+/u', ' ', (string) $data['full_name']) ?: (string) $data['full_name']),
             'phone' => trim((string) $data['phone']),
             'company_id' => $company->id,
@@ -437,6 +437,13 @@ class SimpleWorkerRegistrationController extends Controller
         $returning = $this->returningWorker((string) $data['full_name'], (string) $data['phone']);
 
         if ($returning !== null) {
+            // Public identity fields are not proof of ownership of an existing login.
+            // Keep account/device recovery with HR instead of minting a replacement token.
+            if ($quick && $returning->user !== null) {
+                throw ValidationException::withMessages([
+                    'phone' => '이미 등록된 계정입니다. 기존 휴대폰에서 출퇴근 QR을 이용하세요. 휴대폰 변경은 인사담당자에게 요청하세요. / Already registered. Use the attendance QR on your registered phone; contact HR to change devices.',
+                ]);
+            }
             // 퇴사·비활성 기록은 스스로 되살아나지 않는다. QR 한 번으로 복직이 되면
             // 내보낸 사람이 다음 날 다시 명단에 서 있게 된다 — 그 판단은 사람이 한다.
             if ($returning->employment_status !== 'active') {
