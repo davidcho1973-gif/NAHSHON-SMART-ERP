@@ -144,6 +144,7 @@
           render: function (r) {
             var kind = r.status === 'active' ? 'ok' : r.status === 'terminated' ? 'danger' : 'warn';
             var out = u.badge(r.statusLabel, kind);
+            if (r.hrReviewPending) out += ' ' + u.badge('QR 신규 · 확인 필요', 'warn');
             var exp = expiryCell(r);
             return exp ? out + ' ' + exp : out;
           },
@@ -167,6 +168,9 @@
               html += u.rowButton(r.hasPin ? 'PIN 재설정' : 'PIN 초대',
                 "window.AdminEmployees.pinLink(" + r.id + ",'" + (r.hasPin ? 'reset' : 'invite') + "')") + ' ';
               html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
+            }
+            if (r.onboardingRequestUrl) {
+              html += u.rowButton('추가정보·W-9 링크', 'window.AdminEmployees.copyOnboardingLink(' + r.id + ')') + ' ';
             }
             // 버튼을 권한으로 감추지 않는다. 감추면 "왜 안 보이지" 를 아무도 답할 수 없다 —
             // 권한이 없으면 열린 화면이 이유를 말해 준다(조용히 사라지는 것보다 낫다).
@@ -202,6 +206,22 @@
       paint(render());
       ui().bindSearch('em-tbl');
     });
+  }
+
+  function copyOnboardingLink(id) {
+    var row = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!row || !row.onboardingRequestUrl) {
+      alert('이 직원의 추가정보 링크를 만들 수 없습니다. 등록 기록을 확인해 주세요.');
+      return;
+    }
+    var message = row.name + ' 님, 아래 개인 보안 링크에서 추가 인사정보를 입력한 뒤 W-9을 작성해 주세요.\n' + row.onboardingRequestUrl;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(message).then(function () {
+        alert('전송할 안내문과 링크를 복사했습니다. 문자에 붙여 넣어 보내세요. 링크는 14일 동안 유효합니다.');
+      }).catch(function () { global.prompt('아래 내용을 복사해 보내세요.', message); });
+      return;
+    }
+    global.prompt('아래 내용을 복사해 보내세요.', message);
   }
 
   function loadOptions() {
@@ -448,6 +468,7 @@
     openForm: openForm,
     grantAccount: grantAccount,
     pinLink: pinLink,
+    copyOnboardingLink: copyOnboardingLink,
     remove: remove,
     _state: state,
   };

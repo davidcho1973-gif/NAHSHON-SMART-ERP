@@ -49,7 +49,7 @@ final class QrPosters
         $key = $key === self::MANAGER ? self::JOIN : $key;
         $url = match ($key) {
             self::GATE => route('gate.show', ['site' => $site]),
-            self::JOIN => route('employee-join.form', ['site' => $site]),
+            self::JOIN => route('worker-join.form', ['site' => $site]),
             self::APPLY => route('member-registration.site.show', ['site' => $site]),
             default => throw new \InvalidArgumentException("Unknown QR poster [{$key}]."),
         };

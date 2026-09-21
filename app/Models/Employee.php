@@ -49,6 +49,12 @@ class Employee extends Model
         return self::EMPLOYMENT_TYPES[$this->employment_type] ?? (string) $this->employment_type;
     }
 
+    /** 이 직원과 연결된 가장 최근 등록 기록(추가정보 보안 링크 발급용). */
+    public function memberRegistration(): HasOne
+    {
+        return $this->hasOne(MemberRegistration::class)->latestOfMany();
+    }
+
     /**
      * 이 직원의 출퇴근 관리 정책.
      *

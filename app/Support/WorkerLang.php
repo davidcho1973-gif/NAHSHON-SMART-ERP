@@ -282,29 +282,29 @@ final class WorkerLang
             'join' => [
                 'ko' => [
                     'title' => '직원 간편 등록',
-                    'hint' => '자사·협력사 모두 이 QR 하나로 등록합니다.',
+                    'hint' => '새 작업자는 이 QR 하나로 등록하고 바로 출근합니다.',
                     'steps' => [
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                        '이름·소속회사·공정·직책·전화번호를 입력합니다. 관리 직책은 이메일도 필수입니다.',
-                        '등록 완료 — 바로 현장 출퇴근을 시작할 수 있습니다.',
+                        '이름과 전화번호만 입력합니다.',
+                        '등록 완료 — 같은 화면에서 바로 출근합니다. 추가정보와 W-9은 인사담당자가 나중에 보내는 개인 링크에서 작성합니다.',
                     ],
                 ],
                 'en' => [
                     'title' => 'Employee Sign-Up',
-                    'hint' => 'One QR for everyone — our own crew and subcontractors.',
+                    'hint' => 'New workers register here and clock in right away.',
                     'steps' => [
                         'Scan the QR code with your phone camera.',
-                        'Enter your name, company, trade, position and phone. Supervisory positions also require email.',
-                        'Done — you can start clocking in right away.',
+                        'Enter only your name and phone number.',
+                        'Done — clock in on the next screen. HR sends a private link later for additional details and W-9.',
                     ],
                 ],
                 'es' => [
                     'title' => 'Registro de personal',
-                    'hint' => 'Un solo QR para todos: personal propio y subcontratistas.',
+                    'hint' => 'Los trabajadores nuevos se registran aquí y marcan entrada de inmediato.',
                     'steps' => [
                         'Escanee el código QR con la cámara.',
-                        'Ingrese nombre, empresa, oficio, puesto y teléfono. Los supervisores también necesitan correo.',
-                        'Listo — ya puede registrar su entrada.',
+                        'Ingrese solamente su nombre y teléfono.',
+                        'Listo — marque entrada en la siguiente pantalla. Recursos Humanos enviará después un enlace privado para datos adicionales y W-9.',
                     ],
                 ],
             ],

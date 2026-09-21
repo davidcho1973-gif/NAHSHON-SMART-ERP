@@ -162,10 +162,10 @@ class ManagerJoinTest extends TestCase
     {
         $managerPoster = $this->get(route('manager-join.qr', ['site' => $this->site]))->assertOk();
         $managerPoster->assertSee('직원 간편 등록');
-        $managerPoster->assertSee(route('employee-join.form', ['site' => $this->site]), false);
+        $managerPoster->assertSee(route('worker-join.form', ['site' => $this->site]), false);
 
         $workerPoster = $this->get(route('worker-join.qr', ['site' => $this->site]))->assertOk();
-        $workerPoster->assertSee(route('employee-join.form', ['site' => $this->site]), false);
+        $workerPoster->assertSee(route('worker-join.form', ['site' => $this->site]), false);
         $workerPoster->assertDontSee(route('manager-join.form', ['site' => $this->site]), false);
     }
 }
