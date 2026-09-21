@@ -206,7 +206,8 @@ class MobileAskTest extends TestCase
 
     public function test_it_needs_a_login(): void
     {
-        $this->get(route('attendance-app.ask'))->assertRedirect(route('login'));
+        // 여전히 못 연다 — 보내지는 곳만 작업자 문으로 바뀌었다.
+        $this->get(route('attendance-app.ask'))->assertRedirect(route('worker-app.entry'));
         $this->postJson(route('ask.question'), ['question' => 'x'])->assertStatus(401);
     }
 

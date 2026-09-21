@@ -137,7 +137,7 @@ class ManagerJoinTest extends TestCase
         ] as $door => $submit) {
             $body = $submit()->assertOk()->getContent();
             $this->assertStringContainsString(
-                'id="t-install" href="'.route('attendance-app.index').'"',
+                'id="t-install" href="'.route('worker-app.entry').'"',
                 $body,
                 "{$door} 등록 완료 화면에 직원 앱 링크가 없습니다",
             );
@@ -151,14 +151,18 @@ class ManagerJoinTest extends TestCase
     public function test_old_registration_install_links_redirect_to_the_employee_app(): void
     {
         auth()->logout();
+        // 예전 링크도 작업자 문으로 모인다. 그 문이 휴대폰으로 알아보고 앱에 넣어 준다.
         $this->get(route('gate.show', ['site' => $this->site]).'?install=1')
-            ->assertRedirect(route('attendance-app.index'));
-        $this->get(route('attendance-app.index'))->assertRedirect(route('login'));
+            ->assertRedirect(route('worker-app.entry'));
+
+        // 기억된 휴대폰이 아니면 여전히 앱에 못 들어간다 — 다만 이메일·비밀번호를
+        // 묻는 화면이 아니라, 무엇을 하면 되는지 말해 주는 화면으로 보낸다.
+        $this->get(route('attendance-app.index'))->assertRedirect(route('worker-app.entry'));
         $this->assertGuest();
         $this->assertSame(route('attendance-app.index'), session('url.intended'));
         $this->get(route('gate.show', ['site' => $this->site]))->assertOk()
             ->assertSee('id="open-worker-app"', false)
-            ->assertSee(route('attendance-app.index'), false);
+            ->assertSee(route('worker-app.entry'), false);
     }
 
     public function test_old_qr_links_print_the_same_employee_registration_target(): void

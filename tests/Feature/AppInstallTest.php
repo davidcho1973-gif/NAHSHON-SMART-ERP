@@ -131,7 +131,9 @@ class AppInstallTest extends TestCase
         $res->assertSee('Abrir app del empleado', false);
         $res->assertSee('Open employee app', false);
         $res->assertSee('직원 앱 열기', false);
-        $res->assertSee(route('attendance-app.index'), false);
+        // 게이트가 가리키는 곳은 작업자 문이다 — 거기서 휴대폰으로 알아보고 앱으로 넣어 준다.
+        // 앱 주소로 바로 보내면 로그인 화면을 한 번 거쳤다 돌아온다(작업자에게는 막다른 길).
+        $res->assertSee(route('worker-app.entry'), false);
         $res->assertDontSee('window.AppInstall.offer()', false);
         $res->assertDontSee('id="done-install"', false);
     }

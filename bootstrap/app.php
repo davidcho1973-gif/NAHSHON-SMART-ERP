@@ -21,8 +21,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // 로그인 안 한 사람을 어디로 보낼지.
+        //
+        // 작업자 앱으로 오는 사람은 /login 으로 보내면 안 된다. 그 화면은 이메일과
+        // 비밀번호를 묻는데 작업자에게는 둘 다 없다 — 북마크나 홈 화면 아이콘으로
+        // 들어온 작업자가 거기서 끝났다. 작업자 문(/app)은 등록할 때 기억해 둔
+        // 휴대폰으로 알아보고, 못 알아보면 무엇을 하면 되는지 말해 준다.
         $middleware->redirectTo(
-            guests: '/login',
+            guests: fn (Request $request) => $request->is('attendance-app', 'attendance-app/*', 'app/*')
+                ? route('worker-app.entry')
+                : '/login',
             users: '/',
         );
 

@@ -57,7 +57,9 @@ class MobileOpsRoomTest extends TestCase
 
     public function test_page_requires_login(): void
     {
-        $this->get('/attendance-app/ops-room')->assertRedirect('/login');
+        // 여전히 못 연다 — 보내지는 곳만 작업자 문으로 바뀌었다.
+        $this->get('/attendance-app/ops-room')->assertRedirect(route('worker-app.entry'));
+        $this->assertGuest();
     }
 
     public function test_page_lists_the_raw_records(): void

@@ -24,8 +24,10 @@ class GateAttendanceController extends Controller
     public function show(Request $request, Site $site): View|RedirectResponse
     {
         // 이미 열려 있는 예전 등록 완료 화면의 설치 링크도 직원 앱으로 보낸다.
+        // 앱 주소가 아니라 작업자 문으로 — 이 링크를 누르는 사람은 작업자이고,
+        // 앱 주소로 보내면 로그인 화면을 한 번 거쳤다 돌아온다.
         if ($request->query('install') === '1') {
-            return redirect()->route('attendance-app.index');
+            return redirect()->route('worker-app.entry');
         }
 
         return view('gate.index', [

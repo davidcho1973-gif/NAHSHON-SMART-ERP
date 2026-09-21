@@ -163,7 +163,7 @@
             <div class="remembered hidden" id="done-remembered"></div>
             <button class="ghost" id="done-back"></button>
         </section>
-        <a class="ghost" id="open-worker-app" style="display:block;text-align:center;text-decoration:none" href="{{ route('attendance-app.index') }}">{{ $dict[$lang]['openApp'] }}</a>
+        <a class="ghost" id="open-worker-app" style="display:block;text-align:center;text-decoration:none" href="{{ route('worker-app.entry') }}">{{ $dict[$lang]['openApp'] }}</a>
     </main>
 
 

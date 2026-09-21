@@ -7,6 +7,7 @@ use App\Models\AuthSetupToken;
 use App\Models\LoginDevice;
 use App\Models\User;
 use App\Models\WorkerDevice;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -125,6 +126,7 @@ class PinAuthService
 
         AuthEvent::record('pin_set', user: $user, method: 'pin', request: $request);
         Auth::login($user, remember: true);
+        WorkerDeviceSession::clear($request);
         $request->session()->regenerate();
         AuthEvent::record('login_ok', user: $user, method: 'pin', request: $request, note: '설정 직후 자동 로그인');
 
@@ -150,6 +152,18 @@ class PinAuthService
             return ['success' => false, 'error' => '이 휴대폰은 등록되어 있지 않습니다. 관리자에게 링크를 요청하세요.'];
         }
 
+        return $this->verifyFor($user, $pin, $request);
+    }
+
+    /**
+     * 누구인지는 이미 정해졌고, PIN 만 맞는지 본다.
+     *
+     * attempt() 에서 떼어 냈다 — 작업자 앱은 기기 토큰으로 이미 본인이 확인된 상태에서
+     * 메시지·문서를 열 때만 PIN 을 묻는다. 그때 잠금·시도횟수 규칙을 저쪽에 또 적으면
+     * 한쪽에만 잠금이 붙는다. 규칙은 여기 한 벌뿐이다.
+     */
+    public function verifyFor(User $user, string $pin, Request $request): array
+    {
         if (! $this->canSignIn($user) || ! $this->eligibleForPin($user) || ! $user->pin_hash
             || ($user->employee && $user->employee->employment_status !== 'active')) {
             AuthEvent::record('login_fail', user: $user, method: 'pin', request: $request, note: '계정 비활성 또는 PIN 미설정');
@@ -182,6 +196,7 @@ class PinAuthService
         $user->forceFill(['pin_failed_count' => 0, 'pin_locked_until' => null])->save();
 
         Auth::login($user, remember: true);
+        WorkerDeviceSession::clear($request);
         AuthEvent::record('login_ok', user: $user, method: 'pin', request: $request);
 
         return ['success' => true, 'user' => $user];

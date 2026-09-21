@@ -124,7 +124,7 @@ class EmployeeJoinTest extends TestCase
             'registration_site' => 'global', 'position' => 'general_manager', 'email' => 'central@example.com',
             'access_role' => 'super_admin', 'access_scope' => 'all_sites',
         ]))->assertOk()->assertSee('Global')->assertDontSee('/gate//')->assertDontSee('/w9/')
-            ->assertSee('id="t-install" href="'.route('attendance-app.index').'"', false);
+            ->assertSee('id="t-install" href="'.route('worker-app.entry').'"', false);
         $employee = Employee::sole();
         $this->assertNull($employee->site_id);
         $this->assertSame('global', data_get($employee->payload, 'registration_scope'));

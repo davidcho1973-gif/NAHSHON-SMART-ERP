@@ -53,7 +53,10 @@ class MobileDocumentUploadTest extends TestCase
 
     public function test_a_stranger_cannot_open_it(): void
     {
-        $this->get(route('attendance-app.docs'))->assertRedirect('/login');
+        // 여전히 못 연다 — 다만 보내지는 곳이 사무직 로그인(이메일·비밀번호)이 아니라
+        // 작업자 문이다. 문 자체는 아무에게도 권한을 주지 않는다.
+        $this->get(route('attendance-app.docs'))->assertRedirect(route('worker-app.entry'));
+        $this->assertGuest();
     }
 
     public function test_it_shows_what_i_uploaded_and_not_what_others_did(): void

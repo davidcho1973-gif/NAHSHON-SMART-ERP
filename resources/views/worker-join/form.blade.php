@@ -94,7 +94,7 @@
                 </div>
                 {{-- 등록 후 사용할 앱은 attendance-app이다. 게이트 설치로 연결하면
                      출퇴근 전용 화면이 홈 화면에 저장되어 직원 앱으로 돌아오지 못한다. --}}
-                <a class="install-cta" id="t-install" href="{{ route('attendance-app.index') }}"></a>
+                <a class="install-cta" id="t-install" href="{{ route('worker-app.entry') }}"></a>
                 <p class="note" id="t-installHint" style="margin-top:8px;text-align:center"></p>
                 @if (!$site)
                     <p class="note" id="global-done"></p>

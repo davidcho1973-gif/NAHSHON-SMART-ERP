@@ -42,10 +42,13 @@ use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
+use App\Http\Controllers\WorkerAppEntryController;
+use App\Http\Controllers\WorkerAppPinController;
 use App\Http\Controllers\WorkerEnrollmentController;
 use App\Http\Controllers\WorkerProfileCompletionController;
 use App\Http\Middleware\AuthorizeAssetApi;
 use App\Http\Middleware\RequireHrRegistration;
+use App\Http\Middleware\RequireMoreThanTheDevice;
 use App\Models\OrgSetting;
 use App\Models\PushSubscription;
 use App\Models\ReportRecipient;
@@ -360,39 +363,58 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{meeting}/items/{item}/undo', 'undo')->whereNumber(['meeting', 'item']);
     });
 
-    // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
-    Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
-    // 폰으로 문서 올리기 — 현장에서 손에 들어온 도면·계약서를 그 자리에서 문서함으로.
-    Route::get('/attendance-app/docs', [MobileDocumentController::class, 'index'])->name('attendance-app.docs');
-    // 물어보기 — 도면·서류·대장에 대고 묻는다. 답은 물어본 사람만 본다.
-    Route::get('/attendance-app/ask', [MobileAskController::class, 'index'])->name('attendance-app.ask');
-    Route::post('/ask-api/question', [MobileAskController::class, 'question'])
-        ->middleware('throttle:30,1')->name('ask.question');
+    // 휴대폰만으로 들어온 작업자가 메시지·문서를 열 때 거치는 한 단계(출퇴근은 안 거친다).
+    Route::get('/app/pin', [WorkerAppPinController::class, 'show'])->name('worker-app.pin');
+    Route::post('/app/pin', [WorkerAppPinController::class, 'store'])
+        ->middleware('throttle:20,1')->name('worker-app.pin.store');
+
+    // ── 남의 글이 있는 곳 ────────────────────────────────────────────
+    // 휴대폰을 기억한 것만으로는 열지 않는다. PIN 네 자리를 한 번 받는다
+    // (출퇴근은 이 묶음 밖이라 그대로 0단계로 열린다).
+    //
+    // 줄마다 따로 붙이지 않고 묶어서 거는 이유: 여기에 화면을 하나 더 붙이는 사람이
+    // 미들웨어를 빠뜨리면, 그 화면만 조용히 휴대폰 하나로 열린다.
+    Route::middleware(RequireMoreThanTheDevice::class)->group(function (): void {
+        // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
+        Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
+        // 폰으로 문서 올리기 — 현장에서 손에 들어온 도면·계약서를 그 자리에서 문서함으로.
+        Route::get('/attendance-app/docs', [MobileDocumentController::class, 'index'])->name('attendance-app.docs');
+        // 물어보기 — 도면·서류·대장에 대고 묻는다. 답은 물어본 사람만 본다.
+        Route::get('/attendance-app/ask', [MobileAskController::class, 'index'])->name('attendance-app.ask');
+        Route::post('/ask-api/question', [MobileAskController::class, 'question'])
+            ->middleware('throttle:30,1')->name('ask.question');
+    });
     // 공종별 오늘 보고 — 반장이 자기 몫을 확정한다(현황판은 ERP 쪽 api_tradeReportBoard).
     Route::post('/ops-api/trade-report/submit', [MobileOpsRoomController::class, 'submitTradeReport'])
         ->name('ops.trade-report.submit');
     // 제출한 것이 ERP 로 넘어갔는지 — 반영은 응답 뒤에 돌기 때문에 화면이 잠깐 물어본다.
     Route::get('/ops-api/trade-report/status', [MobileOpsRoomController::class, 'tradeReportStatus'])
         ->name('ops.trade-report.status');
-    Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
-    Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
-    Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
+    // ── 메시지 ───────────────────────────────────────────────────────
+    // 방의 글은 남의 것이다. 폰을 빌려주거나 잃어버렸을 때 출퇴근 화면이 열리는 것과
+    // 현장 대화가 통째로 읽히는 것은 무게가 다르다 — 이쪽만 PIN 을 한 번 받는다.
+    Route::middleware(RequireMoreThanTheDevice::class)->group(function (): void {
+        Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
+        Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
+        Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
+
+        // 채팅 화면에서 방 만들기·정리 — 규칙은 관리 서비스 한 곳에 있고 여기서는 부르기만 한다.
+        Route::post('/attendance-app/messages/rooms', [CommunicationController::class, 'storeRoom'])->name('communication.room.store');
+        Route::delete('/attendance-app/messages/rooms/{room}', [CommunicationController::class, 'destroyRoom'])->name('communication.room.destroy');
+        Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
+        // 새로고침 없이 대화가 흐르게 — 마지막으로 받은 번호 이후만.
+        Route::get('/attendance-app/messages/{room}/stream', [CommunicationController::class, 'stream'])->name('communication.stream');
+        // 이 방에 누가 있는지 · 잘못 쓴 글 고치기·지우기(본인)
+        Route::get('/attendance-app/messages/{room}/members', [CommunicationController::class, 'members'])->name('communication.members');
+        Route::patch('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'updateMessage'])->name('communication.message.update');
+        Route::delete('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'destroyMessage'])->name('communication.message.destroy');
+        Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
+    });
 
     // 푸시 알림 — 이 기기로 받겠다는 등록/해지. 화면이 꺼져 있어도 지시가 닿는 길.
     Route::get('/push/key', [PushSubscriptionController::class, 'key'])->name('push.key');
     Route::post('/push/subscribe', [PushSubscriptionController::class, 'store'])->name('push.subscribe');
     Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
-    // 채팅 화면에서 방 만들기·정리 — 규칙은 관리 서비스 한 곳에 있고 여기서는 부르기만 한다.
-    Route::post('/attendance-app/messages/rooms', [CommunicationController::class, 'storeRoom'])->name('communication.room.store');
-    Route::delete('/attendance-app/messages/rooms/{room}', [CommunicationController::class, 'destroyRoom'])->name('communication.room.destroy');
-    Route::get('/attendance-app/messages/{room}/files/{file}', [CommunicationController::class, 'file'])->name('communication.file');
-    // 새로고침 없이 대화가 흐르게 — 마지막으로 받은 번호 이후만.
-    Route::get('/attendance-app/messages/{room}/stream', [CommunicationController::class, 'stream'])->name('communication.stream');
-    // 이 방에 누가 있는지 · 잘못 쓴 글 고치기·지우기(본인)
-    Route::get('/attendance-app/messages/{room}/members', [CommunicationController::class, 'members'])->name('communication.members');
-    Route::patch('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'updateMessage'])->name('communication.message.update');
-    Route::delete('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'destroyMessage'])->name('communication.message.destroy');
-    Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');
     Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
     Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');
     Route::post('/attendance-app/team/{token}', [AttendanceAppController::class, 'recordTeam'])->name('attendance-app.team.record');
@@ -440,6 +462,16 @@ Route::get('/print/qr/{site}', [QrPrintController::class, 'sheet'])
 Route::get('/guest/{token}', [GuestViewController::class, 'show'])
     ->middleware('throttle:30,1')
     ->name('guest.view');
+
+// 작업자 앱 입구 — 등록할 때 기억해 둔 휴대폰이 열쇠다(로그인 화면 없음).
+//
+// 작업자가 「작업자 앱」 을 누르면 ERP 로그인 화면이 떠서 이메일과 비밀번호를 물었다.
+// 작업자에게는 둘 다 없으니 거기가 막다른 길이었다. 게이트는 같은 사람을 기기 토큰
+// 하나로 알아보는데 앱만 사무직과 같은 문을 쓰고 있었다 — 그 문을 따로 낸다.
+Route::get('/app', [WorkerAppEntryController::class, 'show'])
+    ->middleware('throttle:60,1')->name('worker-app.entry');
+Route::post('/app/device', [WorkerAppEntryController::class, 'device'])
+    ->middleware('throttle:30,1')->name('worker-app.device');
 
 // 새 작업자 현장 등록 QR — 휴대폰 기본 카메라로 열고 이름·전화번호만 등록한다.
 // 현장 번호는 QR 주소가 정하며, 등록 직후 이 휴대폰을 기억해 같은 현장 출퇴근으로 이어진다.
