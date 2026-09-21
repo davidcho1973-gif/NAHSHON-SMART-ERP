@@ -38,10 +38,11 @@ class WorkerJoinFreeTextTest extends TestCase
     /** @param array<string, mixed> $overrides */
     private function submit(array $overrides = []): TestResponse
     {
-        return $this->post(route('worker-join.store', ['site' => $this->site]), array_merge([
+        return $this->post(route('employee-join.store', ['site' => $this->site]), array_merge([
             'full_name' => 'Miguel Torres',
             'company_name' => 'Sun Valley Mechanical',
             'role' => 'Insulation',
+            'position' => 'worker',
             'email' => 'miguel@example.com',
             'phone' => '480-555-0100',
             'employment_type' => 'indirect',
@@ -145,7 +146,7 @@ class WorkerJoinFreeTextTest extends TestCase
 
     public function test_the_form_offers_both_the_list_and_a_free_text_box(): void
     {
-        $html = $this->get(route('worker-join.form', ['site' => $this->site]))->assertOk()->getContent();
+        $html = $this->get(route('employee-join.form', ['site' => $this->site]))->assertOk()->getContent();
 
         $this->assertStringContainsString('name="company_name"', $html);
         $this->assertStringContainsString('__other__', $html);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuthSetupToken;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
@@ -11,6 +12,7 @@ use App\Models\WbsItem;
 use App\Models\WorkerDevice;
 use App\Models\WorkerEnrollment;
 use App\Services\Alerts\UnifiedAlertService;
+use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +24,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
-/** Legacy employee form, restricted to authenticated HR roles by route middleware. */
+/** 현장 공용 QR 간편 등록과 인사담당자용 상세 등록. */
 class SimpleWorkerRegistrationController extends Controller
 {
     /** 작업자가 답할 수 있는 고용 형태(미분류 회사일 때만 노출). */
@@ -52,6 +54,58 @@ class SimpleWorkerRegistrationController extends Controller
     public function form(Request $request, Site $site): View
     {
         return $this->formView($request, $site);
+    }
+
+    /**
+     * 현장 공용 QR 화면. 새 작업자는 이름과 전화번호만 적는다.
+     * 회사·현장·직책·공정 분류는 QR 과 ERP 기준값으로 채우고 인사담당자가 나중에 보완한다.
+     */
+    public function quickForm(Request $request, Site $site): View
+    {
+        abort_unless($site->status === 'active', 404);
+
+        return view('worker-join.quick', [
+            'site' => $site,
+            'done' => false,
+            'returning' => false,
+            'lang' => WorkerLang::resolve($request->query('lang')),
+            'langOptions' => WorkerLang::OPTIONS,
+            'deviceToken' => null,
+        ]);
+    }
+
+    /** 이름·전화번호를 직원으로 등록하고 이 휴대폰을 즉시 출퇴근 기기로 연결한다. */
+    public function quickStore(Request $request, Site $site): View
+    {
+        abort_unless($site->status === 'active', 404);
+
+        $data = $request->validate([
+            'full_name' => ['required', 'string', 'max:120'],
+            'phone' => ['required', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (strlen(preg_replace('/\D/', '', (string) $value) ?: '') < 10) {
+                    $fail('전화번호를 지역번호 포함 10자리 이상 입력해 주세요. / Enter at least 10 digits.');
+                }
+            }],
+            'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
+        ]);
+
+        // 현장에 지정한 자사를 우선 사용한다. 오래된 현장처럼 company_id 가 비어 있으면
+        // 활성 자사 한 곳까지만 안전하게 보완한다. 어느 회사인지 추측해야 하는 상태라면
+        // 사람을 엉뚱한 급여대장에 넣지 않고 관리자 설정을 요구한다.
+        $company = $site->company
+            ?? Company::query()->where('status', 'active')->where('company_type', Company::TYPE_OWN)->first();
+        abort_unless($company, 422, '이 현장의 기본 회사를 먼저 설정해 주세요.');
+
+        $request->replace([
+            'full_name' => trim(preg_replace('/\s+/u', ' ', (string) $data['full_name']) ?: (string) $data['full_name']),
+            'phone' => trim((string) $data['phone']),
+            'company_id' => $company->id,
+            'role' => '미지정',
+            'position' => 'worker',
+            'preferred_language' => WorkerLang::resolve($data['preferred_language'] ?? null),
+        ]);
+
+        return $this->register($request, $site);
     }
 
     /** 이전 관리자 링크를 받은 사람도 같은 직원 등록 화면을 쓴다. */
@@ -310,6 +364,7 @@ class SimpleWorkerRegistrationController extends Controller
 
     private function register(Request $request, ?Site $site): View
     {
+        $quick = $request->routeIs('worker-join.store');
         // 예전 작업자 폼은 직책을 생략할 수 있었다. 새 공용 폼은 항상 직접 선택한다.
         if ($request->routeIs('worker-join.store') && ! $request->filled('position')) {
             $request->merge(['position' => 'worker']);
@@ -382,6 +437,13 @@ class SimpleWorkerRegistrationController extends Controller
         $returning = $this->returningWorker((string) $data['full_name'], (string) $data['phone']);
 
         if ($returning !== null) {
+            // Public identity fields are not proof of ownership of an existing login.
+            // Keep account/device recovery with HR instead of minting a replacement token.
+            if ($quick && $returning->user !== null) {
+                throw ValidationException::withMessages([
+                    'phone' => '이미 등록된 계정입니다. 기존 휴대폰에서 출퇴근 QR을 이용하세요. 휴대폰 변경은 인사담당자에게 요청하세요. / Already registered. Use the attendance QR on your registered phone; contact HR to change devices.',
+                ]);
+            }
             // 퇴사·비활성 기록은 스스로 되살아나지 않는다. QR 한 번으로 복직이 되면
             // 내보낸 사람이 다음 날 다시 명단에 서 있게 된다 — 그 판단은 사람이 한다.
             if ($returning->employment_status !== 'active') {
@@ -427,7 +489,11 @@ class SimpleWorkerRegistrationController extends Controller
 
         $employee = $registration->syncEmployee();
         $employee->forceFill([
-            'payload' => array_merge($employee->payload ?? [], ['registration_scope' => $site ? 'site' : 'global']),
+            'payload' => array_merge($employee->payload ?? [], [
+                'registration_scope' => $site ? 'site' : 'global',
+                'self_registered_pending_hr' => $quick,
+                'self_registered_at' => $quick ? now()->toISOString() : null,
+            ]),
             'employment_type' => $type,
             'preferred_language' => $lang,
             'position' => $data['position'] ?? null,
@@ -437,6 +503,9 @@ class SimpleWorkerRegistrationController extends Controller
         ])->save();
 
         $this->alertIfPayrollSetupMissing($employee);
+        if ($quick) {
+            $this->alertHrNeedsReview($employee, $site);
+        }
         if ($manager) {
             $this->alertManagerNeedsAccount($employee, $site);
         }
@@ -444,7 +513,17 @@ class SimpleWorkerRegistrationController extends Controller
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
         $deviceToken = $site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '';
 
-        return $this->doneView($site, $employee, $lang, $deviceToken, (string) $data['full_name'], false, $kind);
+        return $this->doneView(
+            $site,
+            $employee,
+            $lang,
+            $deviceToken,
+            (string) $data['full_name'],
+            false,
+            $kind,
+            $quick,
+            $quick ? $this->quickPinSetupUrl($employee) : null,
+        );
     }
 
     /**
@@ -482,6 +561,28 @@ class SimpleWorkerRegistrationController extends Controller
         }
     }
 
+    /** 새 작업자는 바로 출퇴근하지만 소속·공정·서류는 인사담당자가 뒤에서 확인한다. */
+    private function alertHrNeedsReview(Employee $employee, Site $site): void
+    {
+        try {
+            app(UnifiedAlertService::class)->emit("worker-self-registration-review:{$employee->id}", [
+                'company_id' => $employee->company_id,
+                'site_id' => $site->id,
+                'employee_id' => $employee->id,
+                'source_module' => 'HR',
+                'source_type' => Employee::class,
+                'source_id' => (string) $employee->id,
+                'event_type' => 'worker_self_registration_review',
+                'severity' => 'warning',
+                'title' => "신규 작업자 확인 필요: {$employee->name}",
+                'content' => "{$employee->name} 님이 {$site->code} 공용 QR에서 이름·전화번호로 등록하고 출퇴근을 시작했습니다. 인사담당자가 소속회사·팀·공정·고용형태를 확인하고 W-9 및 추가정보 링크를 보내 주세요.",
+                'action_url' => '/?view=employee-admin',
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     /**
      * 다시 온 사람 — 명단에 한 줄 더 만들지 않고 오늘의 소속(현장·회사·공정)만 갱신한다.
      *
@@ -490,6 +591,7 @@ class SimpleWorkerRegistrationController extends Controller
      */
     private function welcomeBack(Request $request, Site $site, Employee $employee, array $data, ?string $type, string $lang, string $kind = self::KIND_WORKER): View
     {
+        $quick = $request->routeIs('worker-join.store');
         $email = filled($data['email'] ?? null) ? Str::lower((string) $data['email']) : null;
 
         // 이메일이 이미 다른 직원의 것이면 옮기지 않는다 — employees.email 은 유니크다.
@@ -497,7 +599,13 @@ class SimpleWorkerRegistrationController extends Controller
             $email = null;
         }
 
-        $employee->forceFill(array_filter([
+        // 공용 두 칸 QR은 기존 인사정보를 다시 묻지 않는다. 따라서 현장·기기만 갱신하고
+        // 이미 확인된 회사·공정·고용형태·직책을 기본값으로 덮지 않는다.
+        $updates = $quick ? [
+            'site_id' => $site->id,
+            'phone' => $data['phone'],
+            'preferred_language' => $lang,
+        ] : [
             'site_id' => $site->id,
             'company_id' => $data['company_id'],
             'role' => $data['role'],
@@ -506,7 +614,8 @@ class SimpleWorkerRegistrationController extends Controller
             'employment_type' => $type,
             'preferred_language' => $lang,
             'email' => $email ?: $employee->email,
-        ], fn ($v) => $v !== null))->save();
+        ];
+        $employee->forceFill(array_filter($updates, fn ($v) => $v !== null))->save();
 
         $this->alertIfPayrollSetupMissing($employee);
         if ($kind === self::KIND_MANAGER && ! $employee->user) {
@@ -521,7 +630,38 @@ class SimpleWorkerRegistrationController extends Controller
             (string) $employee->name,
             true,
             $kind,
+            $quick,
+            $quick ? $this->quickPinSetupUrl($employee) : null,
         );
+    }
+
+    /** 공용 QR 등록 뒤 본인이 바로 PIN을 정한다. 권한은 작업자 본인 범위로만 만든다. */
+    private function quickPinSetupUrl(Employee $employee): ?string
+    {
+        $user = $employee->user;
+
+        if ($user && ($user->access_role !== 'worker' || $user->access_scope !== 'self' || $user->account_status !== 'active')) {
+            return null;
+        }
+
+        $user ??= User::query()->create([
+            'name' => $employee->name,
+            'email' => null,
+            'password' => Str::random(64),
+            'employee_id' => $employee->id,
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+            'allowed_company_id' => $employee->company_id,
+            'allowed_site_id' => $employee->site_id,
+            'allowed_team_id' => $employee->team_id,
+        ]);
+
+        if ($user->hasPin()) {
+            return null;
+        }
+
+        return app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_ACTIVATION);
     }
 
     /**
@@ -569,8 +709,23 @@ class SimpleWorkerRegistrationController extends Controller
     }
 
     /** 등록·재등록 완료 화면. 두 경우가 같은 화면을 쓰되 문구만 갈린다. */
-    private function doneView(?Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER): View
+    private function doneView(?Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER, bool $quick = false, ?string $pinSetupUrl = null): View
     {
+        if ($quick && $site !== null) {
+            return view('worker-join.quick', [
+                'site' => $site,
+                'done' => true,
+                'returning' => $returning,
+                'lang' => $lang,
+                'langOptions' => WorkerLang::OPTIONS,
+                'deviceToken' => $deviceToken,
+                'employee' => $employee,
+                'workerName' => $workerName,
+                'gateUrl' => route('gate.show', ['site' => $site, 'onboarded' => 1]),
+                'pinSetupUrl' => $pinSetupUrl,
+            ]);
+        }
+
         return view('worker-join.form', [
             // 등록 직후 이 화면에서만 노출되는 서명 링크 — W-9(1099 지급 전제)를 바로 이어서 작성한다.
             // 만료를 둔다 — W-9 은 납세자번호를 적는 화면이라 링크가 무기한 살아 있으면

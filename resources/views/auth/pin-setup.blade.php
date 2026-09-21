@@ -11,6 +11,8 @@
             'mismatch' => '두 번 넣은 번호가 다릅니다.',
             'hint' => '1111, 1234 처럼 쉬운 번호는 쓸 수 없습니다.',
             'saving' => '저장 중…',
+            'activation_lead' => '출퇴근에 사용할 숫자 :n자리를 정하세요. 저장하면 바로 출근 화면이 열립니다.',
+            'activation_save' => '저장하고 출근 화면 열기',
         ],
         'en' => [
             'title' => 'Set your PIN',
@@ -22,6 +24,8 @@
             'mismatch' => 'The two PINs do not match.',
             'hint' => 'Easy PINs like 1111 or 1234 are not allowed.',
             'saving' => 'Saving…',
+            'activation_lead' => 'Choose a :n-digit PIN for attendance. The clock-in screen opens next.',
+            'activation_save' => 'Save and open clock-in',
         ],
         'es' => [
             'title' => 'Cree su PIN',
@@ -33,6 +37,8 @@
             'mismatch' => 'Los dos PIN no coinciden.',
             'hint' => 'No se permiten PIN fáciles como 1111 o 1234.',
             'saving' => 'Guardando…',
+            'activation_lead' => 'Elija un PIN de :n dígitos. Después se abrirá la pantalla de entrada.',
+            'activation_save' => 'Guardar y abrir entrada',
         ],
     ];
     $t = $T[$lang] ?? $T['ko'];
@@ -76,7 +82,7 @@
 @else
   @if ($userName)<div class="who">{{ $userName }}</div>@endif
   <h1>{{ $t['title'] }}</h1>
-  <p class="lead">{{ str_replace(':n', (string) $pinLength, $t['lead']) }}</p>
+  <p class="lead">{{ str_replace(':n', (string) $pinLength, $isActivation ? $t['activation_lead'] : $t['lead']) }}</p>
 
   <label for="pin1">PIN</label>
   <input id="pin1" type="password" inputmode="numeric" maxlength="{{ $pinLength }}" autocomplete="new-password">
@@ -84,7 +90,7 @@
   <label for="pin2">{{ $t['again'] }}</label>
   <input id="pin2" type="password" inputmode="numeric" maxlength="{{ $pinLength }}" autocomplete="new-password">
 
-  <button id="go">{{ $t['save'] }}</button>
+  <button id="go">{{ $isActivation ? $t['activation_save'] : $t['save'] }}</button>
   <div class="hint">{{ $t['hint'] }}</div>
   <div class="err" id="err"></div>
 
@@ -127,12 +133,15 @@
         body: JSON.stringify({ pin: p1.value })
       });
       var data = await res.json();
-      if (!data.success) { show(data.error || 'Error'); b.disabled = false; b.textContent = '{{ $t['save'] }}'; return; }
+      if (!data.success) { show(data.error || 'Error'); b.disabled = false; b.textContent = '{{ $isActivation ? $t['activation_save'] : $t['save'] }}'; return; }
       // 기기 토큰은 이 폰에만 남는다 — 서버는 해시만 갖는다.
-      try { localStorage.setItem('erp_login_device', data.device_token); } catch (e) {}
+      try {
+        localStorage.setItem('erp_login_device', data.device_token);
+        if (data.attendance_device_token) localStorage.setItem('dasolWorkerDevice', data.attendance_device_token);
+      } catch (e) {}
       location.href = data.redirect || '/';
     } catch (e) {
-      show('Network error'); b.disabled = false; b.textContent = '{{ $t['save'] }}';
+      show('Network error'); b.disabled = false; b.textContent = '{{ $isActivation ? $t['activation_save'] : $t['save'] }}';
     }
   });
 })();

@@ -106,8 +106,9 @@ class W9FormTest extends TestCase
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         $company = Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
 
-        $res = $this->post('/join/w/'.$site->id, [
+        $res = $this->post(route('employee-join.store', ['site' => $site]), [
             'full_name' => 'Carlos Ramirez', 'company_id' => $company->id, 'role' => 'Electrician',
+            'position' => 'worker',
             'email' => 'carlos@example.com', 'phone' => '480-555-0100',
         ]);
 
