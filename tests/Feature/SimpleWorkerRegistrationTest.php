@@ -32,7 +32,7 @@ class SimpleWorkerRegistrationTest extends TestCase
 
         $res->assertStatus(200);
         $res->assertSee('data:image/svg+xml;base64,');
-        $res->assertSee('/join/'.$site->id, false);
+        $res->assertSee('/join/w/'.$site->id, false);
         $res->assertDontSee('api.qrserver.com');
     }
 
@@ -41,7 +41,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
 
-        $res = $this->get('/join/w/'.$site->id);
+        $res = $this->get('/join/'.$site->id);
         $res->assertStatus(200);
         $res->assertSee('대한설비');
         $res->assertSee('Electrician');
@@ -54,7 +54,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         WbsItem::create(['project_code' => 'P1', 'level' => 'subtask', 'wbs_code' => 'P1-A1', 'name' => '배선', 'trade' => 'ELEC', 'status' => '진행중', 'site_id' => $site->id]);
         WbsItem::create(['project_code' => 'P1', 'level' => 'subtask', 'wbs_code' => 'P1-A2', 'name' => '배관', 'trade' => 'MECH', 'status' => '진행중', 'site_id' => $site->id]);
 
-        $res = $this->get('/join/w/'.$site->id);
+        $res = $this->get('/join/'.$site->id);
         $res->assertStatus(200);
         $res->assertSee('value="ELEC"', false);   // WBS 에서 추출해 제안한다
         $res->assertSee('value="MECH"', false);
@@ -63,14 +63,14 @@ class SimpleWorkerRegistrationTest extends TestCase
         // 목록에 없는 공정도 받는다 — 협력사는 매일 오는 사람이 다르고, 목록에 없다고
         // 등록을 막으면 그 사람은 그날 기록이 아예 남지 않는다.
         $company = Company::first();
-        $this->post('/join/w/'.$site->id, [
+        $this->post('/join/'.$site->id, [
             'full_name' => 'Kim', 'company_id' => $company->id, 'role' => '특수용접',
             'email' => 'kim@example.com', 'phone' => '480-555-0199',
         ])->assertStatus(200);
         $this->assertSame('특수용접', Employee::where('email', 'kim@example.com')->first()->role);
 
         // 목록에 있는 공정은 그대로.
-        $this->post('/join/w/'.$site->id, [
+        $this->post('/join/'.$site->id, [
             'full_name' => 'Lee', 'company_id' => $company->id, 'role' => 'MECH',
             'email' => 'lee@example.com', 'phone' => '480-555-0198',
         ])->assertStatus(200);
@@ -82,7 +82,7 @@ class SimpleWorkerRegistrationTest extends TestCase
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
         $company = Company::create(['code' => 'C1', 'name' => '대한설비', 'status' => 'active', 'company_type' => Company::TYPE_PARTNER]);
 
-        $res = $this->post('/join/w/'.$site->id, [
+        $res = $this->post('/join/'.$site->id, [
             'full_name' => 'HYUNSUK CHO',
             'company_id' => $company->id,
             'role' => 'Electrician',
@@ -110,11 +110,11 @@ class SimpleWorkerRegistrationTest extends TestCase
         $site = Site::create(['code' => 'AZ-01', 'name' => 'Arizona Site', 'timezone' => 'America/Phoenix', 'status' => 'active']);
 
         // 이메일은 선택이지만, 적었는데 형식이 틀리면 잡는다.
-        $this->post('/join/w/'.$site->id, ['full_name' => '', 'email' => 'bad'])
+        $this->post('/join/'.$site->id, ['full_name' => '', 'email' => 'bad'])
             ->assertSessionHasErrors(['full_name', 'company_id', 'role', 'email', 'phone']);
 
         // 비워 두는 것은 오류가 아니다 — 신원은 전화번호가 맡는다.
-        $this->post('/join/w/'.$site->id, ['full_name' => '', 'email' => ''])
+        $this->post('/join/'.$site->id, ['full_name' => '', 'email' => ''])
             ->assertSessionHasErrors(['full_name', 'phone'])
             ->assertSessionDoesntHaveErrors('email');
     }
@@ -135,7 +135,7 @@ class SimpleWorkerRegistrationTest extends TestCase
             'employee_id' => $bossEmp->id, 'access_role' => 'super_admin', 'account_status' => 'active',
         ]);
 
-        $this->post('/join/w/'.$site->id, [
+        $this->post('/join/'.$site->id, [
             'full_name' => 'IMPOSTOR KIM',
             'company_id' => $company->id,
             'role' => 'Laborer',

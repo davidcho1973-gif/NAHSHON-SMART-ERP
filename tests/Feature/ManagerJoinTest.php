@@ -98,7 +98,7 @@ class ManagerJoinTest extends TestCase
 
     public function test_the_worker_door_still_takes_workers_without_an_email(): void
     {
-        $this->post(route('worker-join.store', ['site' => $this->site]), [
+        $this->post(route('employee-join.store', ['site' => $this->site]), [
             'full_name' => 'Miguel Torres',
             'company_name' => 'Sun Valley Mechanical',
             'role' => 'Insulation',
@@ -118,7 +118,7 @@ class ManagerJoinTest extends TestCase
         $this->assertStringContainsString('value="foreman"', $manager);
         $this->assertStringContainsString('value="worker"', $manager);
 
-        $worker = $this->get(route('worker-join.form', ['site' => $this->site]))->assertOk()->getContent();
+        $worker = $this->get(route('employee-join.form', ['site' => $this->site]))->assertOk()->getContent();
         $this->assertStringContainsString(route('employee-join.entry-store'), $worker);
         $this->assertStringContainsString('value="worker"', $worker);
     }
@@ -127,7 +127,7 @@ class ManagerJoinTest extends TestCase
     {
         foreach ([
             'manager' => fn () => $this->submit(),
-            'worker' => fn () => $this->post(route('worker-join.store', ['site' => $this->site]), [
+            'worker' => fn () => $this->post(route('employee-join.store', ['site' => $this->site]), [
                 'full_name' => 'Miguel Torres', 'company_name' => 'Sun Valley Mechanical',
                 'role' => 'Insulation', 'phone' => '480-555-0100', 'employment_type' => 'indirect',
             ]),

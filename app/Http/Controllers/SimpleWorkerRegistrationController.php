@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuthSetupToken;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
@@ -11,6 +12,7 @@ use App\Models\WbsItem;
 use App\Models\WorkerDevice;
 use App\Models\WorkerEnrollment;
 use App\Services\Alerts\UnifiedAlertService;
+use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
 use Illuminate\Http\JsonResponse;
@@ -62,12 +64,6 @@ class SimpleWorkerRegistrationController extends Controller
     {
         abort_unless($site->status === 'active', 404);
 
-        // 이미 배포된 인사관리용 /join/w 주소는 상세 등록 화면으로 계속 쓸 수 있게 한다.
-        // 공개 QR을 찍은 비로그인 작업자에게만 두 칸짜리 간편 화면을 보여 준다.
-        if ($this->isHrManager($request)) {
-            return $this->formView($request, $site);
-        }
-
         return view('worker-join.quick', [
             'site' => $site,
             'done' => false,
@@ -82,10 +78,6 @@ class SimpleWorkerRegistrationController extends Controller
     public function quickStore(Request $request, Site $site): View
     {
         abort_unless($site->status === 'active', 404);
-
-        if ($this->isHrManager($request) && ($request->filled('company_id') || $request->filled('company_name'))) {
-            return $this->register($request, $site);
-        }
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:120'],
@@ -114,15 +106,6 @@ class SimpleWorkerRegistrationController extends Controller
         ]);
 
         return $this->register($request, $site);
-    }
-
-    private function isHrManager(Request $request): bool
-    {
-        $user = $request->user();
-
-        return $user !== null
-            && $user->account_status === 'active'
-            && in_array($user->access_role, ['super_admin', 'admin', 'hr_manager'], true);
     }
 
     /** 이전 관리자 링크를 받은 사람도 같은 직원 등록 화면을 쓴다. */
@@ -381,7 +364,7 @@ class SimpleWorkerRegistrationController extends Controller
 
     private function register(Request $request, ?Site $site): View
     {
-        $quick = $request->routeIs('worker-join.store') && ! $this->isHrManager($request);
+        $quick = $request->routeIs('worker-join.store');
         // 예전 작업자 폼은 직책을 생략할 수 있었다. 새 공용 폼은 항상 직접 선택한다.
         if ($request->routeIs('worker-join.store') && ! $request->filled('position')) {
             $request->merge(['position' => 'worker']);
@@ -523,7 +506,17 @@ class SimpleWorkerRegistrationController extends Controller
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
         $deviceToken = $site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '';
 
-        return $this->doneView($site, $employee, $lang, $deviceToken, (string) $data['full_name'], false, $kind, $quick);
+        return $this->doneView(
+            $site,
+            $employee,
+            $lang,
+            $deviceToken,
+            (string) $data['full_name'],
+            false,
+            $kind,
+            $quick,
+            $quick ? $this->quickPinSetupUrl($employee) : null,
+        );
     }
 
     /**
@@ -591,7 +584,7 @@ class SimpleWorkerRegistrationController extends Controller
      */
     private function welcomeBack(Request $request, Site $site, Employee $employee, array $data, ?string $type, string $lang, string $kind = self::KIND_WORKER): View
     {
-        $quick = $request->routeIs('worker-join.store') && ! $this->isHrManager($request);
+        $quick = $request->routeIs('worker-join.store');
         $email = filled($data['email'] ?? null) ? Str::lower((string) $data['email']) : null;
 
         // 이메일이 이미 다른 직원의 것이면 옮기지 않는다 — employees.email 은 유니크다.
@@ -631,7 +624,37 @@ class SimpleWorkerRegistrationController extends Controller
             true,
             $kind,
             $quick,
+            $quick ? $this->quickPinSetupUrl($employee) : null,
         );
+    }
+
+    /** 공용 QR 등록 뒤 본인이 바로 PIN을 정한다. 권한은 작업자 본인 범위로만 만든다. */
+    private function quickPinSetupUrl(Employee $employee): ?string
+    {
+        $user = $employee->user;
+
+        if ($user && ($user->access_role !== 'worker' || $user->access_scope !== 'self' || $user->account_status !== 'active')) {
+            return null;
+        }
+
+        $user ??= User::query()->create([
+            'name' => $employee->name,
+            'email' => null,
+            'password' => Str::random(64),
+            'employee_id' => $employee->id,
+            'access_role' => 'worker',
+            'access_scope' => 'self',
+            'account_status' => 'active',
+            'allowed_company_id' => $employee->company_id,
+            'allowed_site_id' => $employee->site_id,
+            'allowed_team_id' => $employee->team_id,
+        ]);
+
+        if ($user->hasPin()) {
+            return null;
+        }
+
+        return app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_ACTIVATION);
     }
 
     /**
@@ -679,7 +702,7 @@ class SimpleWorkerRegistrationController extends Controller
     }
 
     /** 등록·재등록 완료 화면. 두 경우가 같은 화면을 쓰되 문구만 갈린다. */
-    private function doneView(?Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER, bool $quick = false): View
+    private function doneView(?Site $site, Employee $employee, string $lang, string $deviceToken, string $workerName, bool $returning, string $kind = self::KIND_WORKER, bool $quick = false, ?string $pinSetupUrl = null): View
     {
         if ($quick && $site !== null) {
             return view('worker-join.quick', [
@@ -692,6 +715,7 @@ class SimpleWorkerRegistrationController extends Controller
                 'employee' => $employee,
                 'workerName' => $workerName,
                 'gateUrl' => route('gate.show', ['site' => $site, 'onboarded' => 1]),
+                'pinSetupUrl' => $pinSetupUrl,
             ]);
         }
 

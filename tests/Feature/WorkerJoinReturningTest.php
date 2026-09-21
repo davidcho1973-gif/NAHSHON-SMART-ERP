@@ -36,7 +36,7 @@ class WorkerJoinReturningTest extends TestCase
     /** @param array<string, mixed> $extra */
     private function join(Site $site, array $extra = []): TestResponse
     {
-        return $this->post('/join/w/'.$site->id, array_merge([
+        return $this->post(route('employee-join.store', ['site' => $site]), array_merge([
             'full_name' => 'Miguel Torres',
             'company_id' => $this->partner->id,
             'role' => 'Piping',

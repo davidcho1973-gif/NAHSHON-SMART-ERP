@@ -42,7 +42,7 @@ class EmploymentTypeRegistrationTest extends TestCase
     /** @param array<string, mixed> $extra */
     private function register(Site $site, Company $company, string $email, array $extra = [], string $query = ''): TestResponse
     {
-        return $this->post('/join/w/'.$site->id.$query, [
+        return $this->post(route('employee-join.store', ['site' => $site]).$query, [
             'full_name' => 'Worker '.$email,
             'company_id' => $company->id,
             'role' => 'Electrician',
@@ -64,7 +64,7 @@ class EmploymentTypeRegistrationTest extends TestCase
         $res = $this->get('/join/w/'.$site->id.'/qr');
 
         $res->assertStatus(200);
-        $res->assertSee('자사·협력사 모두 이 QR 하나');
+        $res->assertSee('새 작업자는 이 QR 하나로 등록하고 바로 출근합니다.');
         $res->assertDontSee('type=direct', false);
         $res->assertDontSee('type=indirect', false);
     }
@@ -122,7 +122,7 @@ class EmploymentTypeRegistrationTest extends TestCase
         $this->company('ABC ENG', Company::TYPE_OWN);
         $this->company('한빛전기', Company::TYPE_PARTNER);
 
-        $res = $this->get('/join/w/'.$site->id);
+        $res = $this->get(route('employee-join.form', ['site' => $site]));
 
         $res->assertStatus(200);
         $res->assertSee('data-etype="direct"', false);
@@ -136,7 +136,7 @@ class EmploymentTypeRegistrationTest extends TestCase
         $unknown = $this->company('미분류산업', Company::TYPE_UNKNOWN);
 
         // 현장에 이미 붙어 있는 예전 "협력사 QR" — 폼이 묻지 않고 그대로 협력사로 등록된다.
-        $this->get('/join/w/'.$site->id.'?type=indirect')
+        $this->get(route('employee-join.form', ['site' => $site]).'?type=indirect')
             ->assertStatus(200)
             ->assertSee('name="qr_type" value="indirect"', false);
 

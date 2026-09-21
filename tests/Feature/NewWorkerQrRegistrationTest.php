@@ -22,7 +22,7 @@ class NewWorkerQrRegistrationTest extends TestCase
     {
         parent::setUp();
         $company = Company::create([
-            'code' => 'OWN', 'name' => 'Nahshon', 'status' => 'active', 'company_type' => Company::TYPE_OWN,
+            'code' => 'OWN', 'name' => 'Own Company', 'status' => 'active', 'company_type' => Company::TYPE_OWN,
         ]);
         $this->site = Site::create([
             'company_id' => $company->id, 'code' => '703K', 'name' => 'Savannah',
@@ -50,7 +50,8 @@ class NewWorkerQrRegistrationTest extends TestCase
 
         $employee = Employee::sole();
         $response->assertOk()
-            ->assertSee(route('gate.show', ['site' => $this->site, 'onboarded' => 1]), false)
+            ->assertSee('/auth/pin/setup/', false)
+            ->assertSee('PIN 설정하고 출근하기')
             ->assertSee('localStorage.setItem(\'dasolWorkerDevice\'', false);
         $this->assertSame('Miguel Torres', $employee->name);
         $this->assertSame($this->site->id, $employee->site_id);
@@ -59,6 +60,8 @@ class NewWorkerQrRegistrationTest extends TestCase
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertSame($employee->id, MemberRegistration::sole()->employee_id);
         $this->assertSame($employee->id, WorkerDevice::sole()->employee_id);
+        $this->assertSame('worker', $employee->user?->access_role);
+        $this->assertDatabaseCount('auth_setup_tokens', 1);
         $this->assertDatabaseHas('unified_alerts', ['event_type' => 'worker_self_registration_review']);
     }
 

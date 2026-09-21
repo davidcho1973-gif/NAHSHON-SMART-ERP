@@ -38,8 +38,8 @@
             <div class="check">✓</div>
             <h1 id="done-title">등록되었습니다</h1>
             <p><strong>{{ $workerName }}</strong><br><span id="done-copy">이 휴대폰을 출퇴근용으로 연결했습니다.</span></p>
-            <div class="moving" id="moving">출근 화면으로 이동합니다…</div>
-            <a class="gate" id="gate-link" href="{{ $gateUrl }}">출근 화면 열기</a>
+            <div class="moving" id="moving">{{ $pinSetupUrl ? '개인 PIN 설정으로 이동합니다…' : '출근 화면으로 이동합니다…' }}</div>
+            <a class="gate" id="gate-link" href="{{ $pinSetupUrl ?: $gateUrl }}">{{ $pinSetupUrl ? 'PIN 설정하고 출근하기' : '출근 화면 열기' }}</a>
         </section>
         <script>
             (function () {
@@ -60,20 +60,26 @@
                 var words = {
                     ko: shared
                         ? ['등록되었습니다', '공용 휴대폰으로 판단되어 자동 본인 연결은 하지 않았습니다. 출근 화면에서 본인을 확인해 주세요.', '출근 화면으로 이동합니다…', '출근 화면 열기']
-                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다.', '바로 출근할 수 있도록 이동합니다…', '출근 화면 열기'],
+                        : @json($pinSetupUrl)
+                            ? ['등록되었습니다', '이제 본인만 아는 4자리 PIN을 설정해 주세요.', 'PIN 설정 후 바로 출근 화면이 열립니다…', 'PIN 설정하고 출근하기']
+                            : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다.', '바로 출근할 수 있도록 이동합니다…', '출근 화면 열기'],
                     en: shared
                         ? ['Registration complete', 'This appears to be a shared phone. Confirm your identity on the attendance screen.', 'Opening attendance…', 'Open attendance']
-                        : ['Registration complete', 'This phone is now linked for attendance.', 'Opening attendance so you can clock in…', 'Open attendance'],
+                        : @json($pinSetupUrl)
+                            ? ['Registration complete', 'Now set a private 4-digit PIN.', 'Attendance opens after PIN setup…', 'Set PIN and clock in']
+                            : ['Registration complete', 'This phone is now linked for attendance.', 'Opening attendance so you can clock in…', 'Open attendance'],
                     es: shared
                         ? ['Registro completo', 'Parece ser un teléfono compartido. Confirme su identidad en la pantalla de asistencia.', 'Abriendo asistencia…', 'Abrir asistencia']
-                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia.', 'Abriendo asistencia para marcar entrada…', 'Abrir asistencia']
+                        : @json($pinSetupUrl)
+                            ? ['Registro completo', 'Ahora configure un PIN privado de 4 dígitos.', 'La asistencia se abrirá después de configurar el PIN…', 'Configurar PIN y marcar entrada']
+                            : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia.', 'Abriendo asistencia para marcar entrada…', 'Abrir asistencia']
                 }[@json($lang)];
                 document.getElementById('done-title').textContent = words[0];
                 document.getElementById('done-copy').textContent = words[1];
                 document.getElementById('moving').textContent = words[2];
                 document.getElementById('gate-link').textContent = words[3];
 
-                window.setTimeout(function () { window.location.replace(@json($gateUrl)); }, 900);
+                window.setTimeout(function () { window.location.replace(@json($pinSetupUrl ?: $gateUrl)); }, 900);
             })();
         </script>
     @else
