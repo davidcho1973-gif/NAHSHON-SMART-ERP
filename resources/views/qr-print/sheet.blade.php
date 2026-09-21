@@ -58,6 +58,7 @@
                     'qrImage' => $poster['qrImage'],
                     'url' => $poster['url'],
                     'tags' => $poster['tags'],
+                    'accent' => $poster['accent'],
                 ])
             </section>
         @empty

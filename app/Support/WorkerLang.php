@@ -279,9 +279,12 @@ final class WorkerLang
                     ],
                 ],
             ],
+            // 포스터의 이름은 이 QR 이 실제로 여는 화면(worker-join.quick, 「새 작업자 등록」)과
+            // 같아야 한다. 등록 화면이 두 칸짜리로 바뀐 뒤에도 포스터만 예전 이름으로 남아,
+            // 벽에서는 일곱 칸짜리 인사담당자용 화면을 가리키는 것처럼 읽혔다.
             'join' => [
                 'ko' => [
-                    'title' => '직원 간편 등록',
+                    'title' => '새 작업자 등록',
                     'hint' => '새 작업자는 이 QR 하나로 등록하고 바로 출근합니다.',
                     'steps' => [
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
@@ -290,7 +293,7 @@ final class WorkerLang
                     ],
                 ],
                 'en' => [
-                    'title' => 'Employee Sign-Up',
+                    'title' => 'New Worker Sign-Up',
                     'hint' => 'New workers register here and clock in right away.',
                     'steps' => [
                         'Scan the QR code with your phone camera.',
@@ -299,7 +302,7 @@ final class WorkerLang
                     ],
                 ],
                 'es' => [
-                    'title' => 'Registro de personal',
+                    'title' => 'Registro de trabajador nuevo',
                     'hint' => 'Los trabajadores nuevos se registran aquí y marcan entrada de inmediato.',
                     'steps' => [
                         'Escanee el código QR con la cámara.',

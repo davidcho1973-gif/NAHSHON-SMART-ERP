@@ -3,8 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>작업자 간편 등록 QR — {{ $site->code }} {{ $site->name }}</title>
+    {{-- 이름은 포스터가 정한다. 여기에 손으로 적어 두면 포스터 이름이 바뀔 때 탭 제목만 옛 이름으로 남는다. --}}
+    <title>{{ \App\Support\QrPosters::LABELS[$poster['key']] }} — {{ $site->code }} {{ $site->name }}</title>
     @include('partials.qr-poster-styles')
+    {{-- 판 안쪽은 포스터가 스스로 칠한다. 한 장짜리 화면은 바깥 바닥도 같이 맞춘다. --}}
+    <style>:root, body { background: {{ $poster['accent']['bg'] }}; }</style>
 </head>
 <body>
     <div>
@@ -14,6 +17,7 @@
             'qrImage' => $poster['qrImage'],
             'url' => $poster['url'],
             'tags' => $poster['tags'],
+            'accent' => $poster['accent'],
         ])
         <div class="actions" style="text-align:center">
             <button type="button" onclick="window.print()">포스터 인쇄 (Print)</button>

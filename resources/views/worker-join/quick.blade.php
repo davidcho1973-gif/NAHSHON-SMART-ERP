@@ -9,8 +9,14 @@
         * { box-sizing:border-box; }
         body { margin:0; min-height:100vh; padding:24px 16px; display:flex; justify-content:center; align-items:flex-start; }
         .card { width:min(100%,480px); background:#fff; border:1px solid #dbe4ef; border-radius:22px; padding:26px 22px; box-shadow:0 14px 36px rgba(16,35,63,.09); }
-        .top { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }
+        /* 제목과 언어칩이 한 줄을 나눠 쓰면 좁은 폰에서 제목이 「새 / 작업자 / 등록」 으로
+           세 줄이 된다. 언어칩은 보조 도구이니 제목에 한 줄을 통째로 내준다. */
+        .top { display:block; }
+        .langs { margin-top:12px; }
         .eyebrow { margin:0 0 5px; color:#0877bd; font-size:.78rem; font-weight:800; letter-spacing:.06em; }
+        /* 한글은 기본값이 글자 단위로 끊겨 좁은 폰에서 「새 작업 / 자 등록」 처럼 낱말 한가운데가
+           갈라진다. 낱말 단위로 넘긴다(worker-join/form.blade.php 와 같은 이유, 같은 규칙). */
+        h1, .eyebrow, .site, label, .hint, .privacy { word-break:keep-all; }
         h1 { margin:0; font-size:1.55rem; letter-spacing:-.03em; }
         .site { margin:8px 0 22px; color:#607188; line-height:1.45; }
         .langs { display:flex; gap:4px; flex-shrink:0; }
@@ -41,21 +47,12 @@
             <div class="moving" id="moving">{{ $pinSetupUrl ? '개인 PIN 설정으로 이동합니다…' : '출근 화면으로 이동합니다…' }}</div>
             <a class="gate" id="gate-link" href="{{ $pinSetupUrl ?: $gateUrl }}">{{ $pinSetupUrl ? 'PIN 설정하고 출근하기' : '출근 화면 열기' }}</a>
         </section>
+        <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
         <script>
             (function () {
-                var myId = String(@json($employee->id));
-                var shared = false;
-                try {
-                    var previous = localStorage.getItem('workerJoinLastPerson');
-                    shared = !!previous && previous !== myId;
-                    if (shared) {
-                        localStorage.removeItem('dasolWorkerDevice');
-                    } else {
-                        localStorage.setItem('dasolWorkerDevice', @json($deviceToken));
-                    }
-                    localStorage.setItem('workerJoinLastPerson', myId);
-                    localStorage.setItem('dasolWorkerLang', @json($lang));
-                } catch (e) {}
+                // 이 폰을 기억할지 말지는 worker-device-remember.js 한 곳이 정한다
+                // (반장 폰으로 팀원을 여럿 등록했을 때 남의 출근이 찍히는 것을 막는 규칙).
+                var shared = window.rememberWorkerDevice(@json($employee->id), @json($deviceToken), @json($lang));
 
                 var words = {
                     ko: shared

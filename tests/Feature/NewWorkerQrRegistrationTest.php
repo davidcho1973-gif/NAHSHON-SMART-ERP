@@ -52,7 +52,10 @@ class NewWorkerQrRegistrationTest extends TestCase
         $response->assertOk()
             ->assertSee('/auth/pin/setup/', false)
             ->assertSee('PIN 설정하고 출근하기')
-            ->assertSee('localStorage.setItem(\'dasolWorkerDevice\'', false);
+            // 이 폰을 기억하는 규칙은 worker-device-remember.js 한 곳에 있다(등록 화면 둘이 같이 쓴다).
+            // 화면이 그 파일을 싣고 부르는지를 본다 — 저장 코드가 화면 안에 박혀 있는지가 아니라.
+            ->assertSee('js/worker-device-remember.js', false)
+            ->assertSee('window.rememberWorkerDevice(', false);
         $this->assertSame('Miguel Torres', $employee->name);
         $this->assertSame($this->site->id, $employee->site_id);
         $this->assertSame('worker', $employee->position);

@@ -111,6 +111,7 @@
                 @endif
             </div>
 
+            <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
             <script>
                 // 등록과 동시에 이 휴대폰을 기억한다 — 다음부터 게이트 QR 만 찍으면 본인으로 인식된다.
                 (function () {
@@ -149,19 +150,7 @@
                         document.getElementById('t-doneDevice').hidden = true;
                         return;
                     }
-                    var shared = false;
-                    try {
-                        var prev = localStorage.getItem('workerJoinLastPerson');
-                        shared = !!prev && prev !== myId;
-
-                        if (shared) {
-                            localStorage.removeItem('dasolWorkerDevice');
-                        } else {
-                            localStorage.setItem('dasolWorkerDevice', @json($deviceToken));
-                        }
-                        localStorage.setItem('workerJoinLastPerson', myId);
-                        localStorage.setItem('dasolWorkerLang', lang);
-                    } catch (e) {}
+                    var shared = window.rememberWorkerDevice(myId, @json($deviceToken), lang);
 
                     document.getElementById('t-doneDevice').textContent = T.doneDevice;
                     document.getElementById('t-doneDevice').style.display = shared ? 'none' : '';

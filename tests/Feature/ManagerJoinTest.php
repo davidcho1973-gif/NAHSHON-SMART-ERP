@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Support\QrPosters;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -163,7 +164,8 @@ class ManagerJoinTest extends TestCase
     public function test_old_qr_links_print_the_same_employee_registration_target(): void
     {
         $managerPoster = $this->get(route('manager-join.qr', ['site' => $this->site]))->assertOk();
-        $managerPoster->assertSee('직원 간편 등록');
+        // 포스터 이름은 QrPosters 가 정한다 — 여기에 문자열을 박아 두면 이름을 고칠 때마다 시험이 깨진다.
+        $managerPoster->assertSee(QrPosters::make($this->site, QrPosters::JOIN)['langs']['ko']['title']);
         $managerPoster->assertSee(route('worker-join.form', ['site' => $this->site]), false);
 
         $workerPoster = $this->get(route('worker-join.qr', ['site' => $this->site]))->assertOk();

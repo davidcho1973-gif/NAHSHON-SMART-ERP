@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>현장 출퇴근 QR — {{ $site->code }} {{ $site->name }}</title>
     @include('partials.qr-poster-styles')
+    {{-- 판 안쪽은 포스터가 스스로 칠한다. 한 장짜리 화면은 바깥 바닥도 같이 맞춘다. --}}
+    <style>:root, body { background: {{ $poster['accent']['bg'] }}; }</style>
 </head>
 <body>
     <div>
@@ -14,6 +16,7 @@
             'qrImage' => $poster['qrImage'],
             'url' => $poster['url'],
             'tags' => $poster['tags'],
+            'accent' => $poster['accent'],
         ])
         <div class="actions" style="text-align:center">
             <button type="button" onclick="window.print()">포스터 인쇄 (Print)</button>

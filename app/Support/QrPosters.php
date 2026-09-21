@@ -27,8 +27,24 @@ final class QrPosters
 
     public const LABELS = [
         self::GATE => '게이트 출퇴근 QR',
-        self::JOIN => '직원 간편 등록 QR',
+        self::JOIN => '새 작업자 등록 QR (이름·전화)',
         self::APPLY => '정식 입사지원서 QR',
+    ];
+
+    /**
+     * 포스터 바탕색 — 포스터는 <b>자기가 여는 화면과 같은 색</b>이어야 한다.
+     *
+     * 등록 QR 이 여는 화면이 두 칸짜리 파란 화면으로 바뀌었는데 포스터는 게이트와 같은
+     * 노랑으로 남아 있었다. 벽에서 두 장이 구별되지 않고, 찍고 넘어간 사람은 색이 바뀌어
+     * "잘못 찍었나" 하고 멈칫한다. 색을 한 곳에서 정해 둘이 갈라지지 않게 한다.
+     *
+     * @var array<string, array{bg: string, ink: string}>
+     */
+    public const ACCENTS = [
+        self::GATE => ['bg' => '#FEE500', 'ink' => 'rgba(0,0,0,.85)'],
+        // 화면(worker-join/quick.blade.php)의 파랑과 같은 값이다.
+        self::JOIN => ['bg' => '#0877BD', 'ink' => '#FFFFFF'],
+        self::APPLY => ['bg' => '#FEE500', 'ink' => 'rgba(0,0,0,.85)'],
     ];
 
     /**
@@ -42,7 +58,7 @@ final class QrPosters
      *
      * 문구는 3개 언어를 모두 담는다 — 벽에 붙는 종이라 언어를 고를 수 없으니 전부 찍는다.
      *
-     * @return array{key: string, label: string, title: string, url: string, qrImage: string, langs: array<string, array<string, mixed>>, badge: null, tags: array<int, array{label: string, class: string}>}
+     * @return array{key: string, label: string, title: string, url: string, qrImage: string, langs: array<string, array<string, mixed>>, badge: null, accent: array{bg: string, ink: string}, tags: array<int, array{label: string, class: string}>}
      */
     public static function make(Site $site, string $key): array
     {
@@ -65,6 +81,7 @@ final class QrPosters
             'title' => $langs[WorkerLang::DEFAULT]['title'],
             'langs' => $langs,
             'badge' => null,
+            'accent' => self::ACCENTS[$key] ?? self::ACCENTS[self::GATE],
             'tags' => $key === self::GATE ? WorkerLang::gateTags() : [],
         ];
     }
