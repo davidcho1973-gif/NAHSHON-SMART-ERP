@@ -3942,12 +3942,15 @@
           return;
         }
         body.innerHTML =
-          '<div style="margin-bottom:12px"><a class="btn-primary" href="/join?lang=ko" target="_blank" rel="noopener">직원 등록 — 현장 선택 / Global</a></div>' +
-          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b>간편 등록</b>: 이름·소속회사·공정·직책·전화번호를 작성합니다. 작업자와 관리자가 <b>현장당 한 링크</b>를 함께 사용합니다. 관리 직책은 이메일이 필수이고, <b>ERP 접속 권한은 본인 확인 후 별도 부여</b>합니다. 고용 구분은 직책과 소속회사에 따라 정해집니다(<b>회사 구분</b> 버튼에서 설정). <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b style="color:#059669">게이트 출퇴근 QR</b>: 출입구에 붙이면 작업자가 스캔해 <b>출근·퇴근</b>을 찍습니다(앱·로그인 불필요). 포스터를 인쇄해 현장에 붙이세요.</div>' +
+          '<div style="margin-bottom:12px"><a class="btn-secondary" href="/join?lang=ko" target="_blank" rel="noopener"><i class="ph ph-lock-simple"></i> 직원 등록 (관리자용 · 로그인 필요)</a></div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"><b style="color:#0877BD">새 작업자 등록 QR</b>(파란 포스터): 현장에 붙입니다. 작업자가 휴대폰 카메라로 찍고 <b>이름·전화번호 두 가지만</b> 적으면 명단에 오르고 바로 출퇴근을 찍을 수 있습니다(앱·로그인 불필요). 소속회사와 공정은 비어 있으니 <b>인원관리에서 채워 주세요</b>. <b style="color:#059669">게이트 출퇴근 QR</b>(초록): 출입구에 붙이면 <b>출근·퇴근</b>을 찍습니다. <b>지원서</b>: 신분증·경력 등 정식 입사지원서. <b>직원 등록(관리자용)</b>: 회사·공정·직책까지 지정하는 일곱 칸짜리 화면으로, <b>로그인한 인사담당자 전용</b>입니다 — 작업자에게 주는 링크가 아닙니다.</div>' +
           '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.openCompanyTypeModal()"><i class="ph ph-buildings"></i> 회사 구분 설정 (자사 / 협력사)</button></div>' +
           sites.map(function (s) {
-            var quickPoster = '/join/' + s.id + '/qr';
-            var quickForm = window.location.origin + '/join?lang=ko';
+            var quickPoster = '/join/w/' + s.id + '/qr';
+            // 작업자에게 건네는 링크는 «로그인 없이 열리는» 두 칸짜리 등록 화면이어야 한다.
+            // 예전에는 /join 을 복사해 줬는데 그건 인사담당자 전용(로그인 필요)이라,
+            // 받은 작업자는 등록 화면 대신 로그인 화면을 만났다.
+            var quickForm = window.location.origin + '/join/w/' + s.id + '?lang=ko';
             var fullPoster = '/member/site/' + s.id + '/apply/qr';
             return '<div style="display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap">' +
               '<div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + dashEsc(s.code) + ' · ' + dashEsc(s.name) + '</div>' +
@@ -3955,7 +3958,7 @@
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.wjCopyLink(\'' + quickForm + '\', this)"><i class="ph ph-link"></i> 링크</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'/print/qr/' + s.id + '\',\'_blank\')" title="게이트·간편등록·지원서 QR을 한 번에 인쇄"><i class="ph ph-printer"></i> 모아 인쇄</button>' +
               '<button class="btn-secondary" style="padding:6px 9px;font-size:12px" onclick="window.open(\'' + fullPoster + '\',\'_blank\')" title="정식 입사지원서 QR"><i class="ph ph-identification-card"></i> 지원서</button>' +
-              '<button class="btn-primary" style="padding:6px 10px;font-size:12px" onclick="window.open(\'' + quickPoster + '\',\'_blank\')" title="자사·협력사 공용 등록 QR"><i class="ph ph-qr-code"></i> 간편등록 QR</button>' +
+              '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#0877BD;border-color:#0877BD" onclick="window.open(\'' + quickPoster + '\',\'_blank\')" title="이름·전화 두 칸 — 로그인 없이 열리는 현장 등록 QR"><i class="ph ph-qr-code"></i> 새 작업자 등록 QR</button>' +
               '<button class="btn-primary" style="padding:6px 10px;font-size:12px;background:#059669;border-color:#059669" onclick="window.open(\'/gate/' + s.id + '/qr\',\'_blank\')" title="출입구 부착용 출퇴근 QR(앱 불필요)"><i class="ph ph-sign-in"></i> 게이트 출퇴근 QR</button>' +
               '</div>';
           }).join('');
