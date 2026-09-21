@@ -27,8 +27,25 @@ class WorkerEnrollmentController extends Controller
     public function store(Request $request)
     {
         abort_unless(in_array($request->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true), 403);
-        $data = $request->validate(['name' => ['required', 'string', 'max:160'], 'phone' => ['required', 'string', 'max:30'], 'team_id' => ['required', 'integer', 'exists:teams,id']]);
-        $this->enrollment->submit($request->user(), Team::findOrFail($data['team_id']), $data);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'],
+            'phone' => ['required', 'string', 'max:30'],
+            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'confirmed' => ['sometimes', 'accepted'],
+        ]);
+        $team = Team::findOrFail($data['team_id']);
+
+        if ($request->boolean('confirmed')) {
+            $result = $this->enrollment->registerAndActivate($request->user(), $team, $data);
+
+            return $this->qr(
+                $result['url'],
+                $result['enrollment']->name.' · 출퇴근 시작 QR',
+                '직원 본인이 기본 카메라로 스캔 · 15분 유효 · 1회 사용 · PIN 설정 후 바로 출근 화면',
+            );
+        }
+
+        $this->enrollment->submit($request->user(), $team, $data);
 
         return redirect()->route('worker-enrollment.index', $this->returnQuery($request))->with('notice', '등록 내용을 저장했습니다. 인사담당자가 확인 후 계정을 승인하세요.');
     }

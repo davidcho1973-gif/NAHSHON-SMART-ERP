@@ -92,6 +92,7 @@
         .remembered { color: #1E8E3E; font-weight: 800; font-size: .86rem; margin-top: 12px; }
         /* 공용 폰이라 기억하지 않았다는 안내 — 좋은 소식이 아니므로 초록이 아니다. */
         .remembered.shared { color: #B26A00; }
+        .onboarded { margin: 0 0 18px; padding: 14px 16px; border-radius: 12px; background: #FFF8C7; border: 1px solid #F4D800; color: var(--label); font-weight: 800; line-height: 1.45; white-space: pre-line; }
         .hidden { display: none; }
         .spin { color: var(--ink-3); text-align: center; padding: 10px; }
     </style>
@@ -113,6 +114,9 @@
             </div>
         </div>
         <p class="site">{{ $site->code }} · {{ $site->name }}</p>
+        @if(request()->boolean('onboarded'))
+            <div class="onboarded" id="onboarded" role="status">{{ $dict[$lang]['onboarded'] }}</div>
+        @endif
 
         {{-- 0) 기억된 기기 확인 중 --}}
         <section id="screen-boot" class="panel">
@@ -233,6 +237,8 @@
             rb.textContent = T.remember;
             rb.classList.toggle('hidden', recognized || !selected);
             document.getElementById('open-worker-app').textContent = T.openApp;
+            var onboarded = document.getElementById('onboarded');
+            if (onboarded) onboarded.textContent = T.onboarded;
             if (!document.getElementById('results').dataset.filled) {
                 document.getElementById('results').innerHTML = '<div class="muted">' + T.searchEmpty + '</div>';
             }
