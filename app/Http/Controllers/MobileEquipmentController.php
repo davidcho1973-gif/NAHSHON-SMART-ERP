@@ -2,23 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
 use App\Models\Equipment;
 use App\Models\Site;
 use App\Models\Team;
-use App\Models\Employee;
 use App\Services\GeminiEquipmentPhotoAnalyzer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
 
 class MobileEquipmentController extends Controller
 {
-    public function __construct(private readonly GeminiEquipmentPhotoAnalyzer $analyzer)
-    {
-    }
+    public function __construct(private readonly GeminiEquipmentPhotoAnalyzer $analyzer) {}
 
     public function index(Request $request): View
     {
@@ -30,7 +28,7 @@ class MobileEquipmentController extends Controller
             ->with(['site', 'team', 'employee']);
 
         if ($siteCode && $siteCode !== 'ALL') {
-            $query->whereHas('site', fn($q) => $q->where('code', $siteCode));
+            $query->whereHas('site', fn ($q) => $q->where('code', $siteCode));
         }
 
         $equipments = $query->orderByDesc('id')->get();
@@ -113,7 +111,7 @@ class MobileEquipmentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'photo_path' => '/storage/' . $path,
+                'photo_path' => '/storage/'.$path,
                 'data' => $analysisResult,
             ]);
         } catch (\Throwable $e) {
@@ -144,7 +142,7 @@ class MobileEquipmentController extends Controller
             foreach ($files as $file) {
                 $path = $file->store('equipments', 'public');
                 $absolutePaths[] = Storage::disk('public')->path($path);
-                $publicPaths[] = '/storage/' . $path;
+                $publicPaths[] = '/storage/'.$path;
                 $mimeTypes[] = $file->getClientMimeType();
             }
 
@@ -170,13 +168,13 @@ class MobileEquipmentController extends Controller
         }
     }
 
-
     public function store(Request $request)
     {
         $request->validate([
             'equipment_type' => 'required|string|max:100',
             'model' => 'required|string|max:100',
             'vendor' => 'nullable|string|max:100',
+            'acquisition_type' => 'nullable|in:소유,임대',
             'site_id' => 'nullable|exists:sites,id',
             'team_id' => 'nullable|exists:teams,id',
             'employee_id' => 'nullable|exists:employees,id',
@@ -199,6 +197,8 @@ class MobileEquipmentController extends Controller
         }
 
         $quantity = (int) $request->input('quantity', 1);
+        // Match desktop registration: omitted ownership must not inherit the legacy rental DB default.
+        $acquisitionType = $request->input('acquisition_type') ?: '소유';
         $isBulk = $request->input('is_bulk') === 'on' || $request->input('is_bulk') == 1 || $request->input('is_bulk') === 'true';
 
         if ($isBulk) {
@@ -210,6 +210,7 @@ class MobileEquipmentController extends Controller
                 'equipment_type' => $request->input('equipment_type'),
                 'model' => $request->input('model'),
                 'vendor' => $request->input('vendor'),
+                'acquisition_type' => $acquisitionType,
                 'status' => $request->input('status'),
                 'photo_front' => $request->input('photo_front'),
                 'registration_method' => 'AI자동분석',
@@ -227,6 +228,7 @@ class MobileEquipmentController extends Controller
                     'equipment_type' => $request->input('equipment_type'),
                     'model' => $request->input('model'),
                     'vendor' => $request->input('vendor'),
+                    'acquisition_type' => $acquisitionType,
                     'status' => $request->input('status'),
                     'photo_front' => $request->input('photo_front'),
                     'registration_method' => 'AI자동분석',
@@ -251,6 +253,7 @@ class MobileEquipmentController extends Controller
             'items.*.equipment_type' => 'required|string|max:100',
             'items.*.model' => 'required|string|max:100',
             'items.*.vendor' => 'nullable|string|max:100',
+            'items.*.acquisition_type' => 'nullable|in:소유,임대',
             'items.*.photo_front' => 'nullable|string',
             'items.*.photo' => 'nullable|image|max:10240',
             'items.*.status' => 'required|string|in:대기중,사용중,정비중',
@@ -266,7 +269,7 @@ class MobileEquipmentController extends Controller
         $batchTeamId = $request->input('team_id');
         $batchEmployeeId = $request->input('employee_id');
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $companyId, $batchSiteId, $batchTeamId, $batchEmployeeId): void {
+        DB::transaction(function () use ($request, $companyId, $batchSiteId, $batchTeamId, $batchEmployeeId): void {
             foreach ($request->input('items') as $key => $item) {
                 $quantity = (int) ($item['quantity'] ?? 1);
                 $isBulk = isset($item['is_bulk']) && ($item['is_bulk'] === 'on' || $item['is_bulk'] == 1 || $item['is_bulk'] === 'true');
@@ -275,7 +278,7 @@ class MobileEquipmentController extends Controller
                 if ($request->hasFile("items.{$key}.photo")) {
                     $file = $request->file("items.{$key}.photo");
                     $path = $file->store('equipments', 'public');
-                    $photoPath = '/storage/' . $path;
+                    $photoPath = '/storage/'.$path;
                 }
 
                 if ($isBulk) {
@@ -287,6 +290,7 @@ class MobileEquipmentController extends Controller
                         'equipment_type' => $item['equipment_type'],
                         'model' => $item['model'],
                         'vendor' => $item['vendor'] ?? null,
+                        'acquisition_type' => ($item['acquisition_type'] ?? null) ?: '소유',
                         'status' => $item['status'] ?? '대기중',
                         'photo_front' => $photoPath,
                         'registration_method' => 'AI자동분석',
@@ -304,6 +308,7 @@ class MobileEquipmentController extends Controller
                             'equipment_type' => $item['equipment_type'],
                             'model' => $item['model'],
                             'vendor' => $item['vendor'] ?? null,
+                            'acquisition_type' => ($item['acquisition_type'] ?? null) ?: '소유',
                             'status' => $item['status'] ?? '대기중',
                             'photo_front' => $photoPath,
                             'registration_method' => 'AI자동분석',
@@ -317,7 +322,7 @@ class MobileEquipmentController extends Controller
         });
 
         return redirect()->route('mobile-equipment.index')
-            ->with('success', '총 ' . count($request->input('items')) . '건의 장비/자재가 일괄 등록되었습니다.');
+            ->with('success', '총 '.count($request->input('items')).'건의 장비/자재가 일괄 등록되었습니다.');
     }
 
     public function update(Request $request, Equipment $equipment)
@@ -346,7 +351,7 @@ class MobileEquipmentController extends Controller
         if ($request->hasFile('photo')) {
             $file = $request->file('photo');
             $path = $file->store('equipments', 'public');
-            $data['photo_front'] = '/storage/' . $path;
+            $data['photo_front'] = '/storage/'.$path;
         }
 
         $equipment->update($data);
