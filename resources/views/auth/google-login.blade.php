@@ -517,12 +517,18 @@
           style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
         <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">이메일로 로그인 / Sign in</button>
         <div id="email-login-help" style="font-size:12px;line-height:1.65;color:#526174;margin-top:13px">
-          Gmail이 아니어도 됩니다. 처음 이용하는 활성 계정은 등록 전화번호 끝 4자리로 시작한 뒤 본인 비밀번호를 설정하세요.
-          <br>No Gmail needed. For a new active account, start with the last 4 digits of your registered phone, then set your password.
+          {{-- 구글이 안 되는 관리자가 여기서 멈추지 않게, 무엇을 넣으면 되는지 첫 줄에 적는다.
+               예전에는 «처음 이용하는 계정» 이라고만 적혀 있어서, 이미 구글로 쓰던 사람은
+               자기 얘기가 아닌 줄 알고 그냥 돌아섰다. --}}
+          <b>Gmail이 안 되시나요?</b> 비밀번호를 아직 정하지 않았다면, 비밀번호 칸에 <b>등록된 전화번호 끝 4자리</b>를 넣으세요.
+          그러면 본인 비밀번호를 정하는 화면으로 넘어갑니다. 구글로 쓰시던 계정도 됩니다.
+          <br><b>Gmail not working?</b> If you have not set a password yet, type the <b>last 4 digits of your registered phone</b> here. You will then set your own password. This works for Google accounts too.
           <details style="margin-top:8px"><summary style="cursor:pointer">로그인 도움말 / Need help?</summary>
-            직원 등록과 로그인 계정 활성화는 별도입니다. 계정·이메일·전화번호 확인은 관리자에게 요청하세요.
-            기존 Google·PIN 사용자는 해당 방식으로 로그인한 뒤 프로필에서 이메일 비밀번호를 설정하세요.
-            <br>Ask your administrator to check your active login account and contact details. Existing Google/PIN users can sign in as usual and set an email password from their profile.
+            끝 4자리는 <b>비밀번호를 정할 때 한 번만</b> 쓰입니다 — 정하고 나면 그 번호로는 더 이상 들어올 수 없고,
+            누군가 이 방법으로 비밀번호를 설정하면 관리자에게 알림이 갑니다.
+            <br>안 되면 관리자에게 <b>등록 이메일과 전화번호가 맞는지</b> 확인을 요청하세요. 직원 등록과 로그인 계정 활성화는 별도입니다.
+            <br>The last 4 digits work only once, to set a password; after that they no longer sign you in, and an administrator is notified when a password is set this way.
+            If it does not work, ask your administrator to confirm your registered email and phone number.
           </details>
         </div>
       </form>

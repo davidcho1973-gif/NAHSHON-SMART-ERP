@@ -74,12 +74,80 @@ class EmailPasswordAuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
-    public function test_google_or_pin_accounts_do_not_gain_phone_digit_fallback(): void
+    /**
+     * 구글이 안 되는 관리자도 들어올 수 있어야 한다 (2026-09-22, 오너 지시).
+     *
+     * 예전에는 google_id 가 있으면 이 길을 막았다. 4자리가 약한 값이라서였다. 그런데
+     * 지메일이 없거나 회사 구글 로그인이 막힌 관리자에게는 그게 «문이 하나도 없다» 가
+     * 된다 — 계정은 있는데 들어갈 수가 없었다.
+     */
+    public function test_a_manager_whose_google_does_not_work_can_still_get_in_with_phone_digits(): void
     {
-        $user = $this->employeeUser();
+        $user = $this->employeeUser('site_manager');
         $user->forceFill(['google_id' => 'registered-google'])->save();
+
+        // 열리는 것은 로그인이 아니라 «비밀번호를 정하는 5분» 이다.
+        $this->signIn()->assertRedirect('/auth/password/setup');
+        $this->assertGuest();
+
+        $this->savePassword()->assertRedirect($user->fresh()->landingPath());
+        $this->assertAuthenticatedAs($user->fresh());
+
+        // 구글 연결은 건드리지 않는다 — 나중에 지메일이 다시 되면 그대로 쓴다.
+        $this->assertSame('registered-google', $user->fresh()->google_id);
+    }
+
+    public function test_the_phone_digit_door_shuts_the_moment_a_password_exists(): void
+    {
+        $user = $this->employeeUser('site_manager');
+        $user->forceFill(['google_id' => 'registered-google'])->save();
+        $this->signIn();
+        $this->savePassword();
+        Auth::logout();
+
+        // 4자리는 이제 열쇠가 아니다. 한 번 쓰고 닫히는 문이라 오래 열려 있지 않는다.
         $this->signIn()->assertSessionHasErrors('email_login');
+        $this->assertGuest();
+    }
+
+    public function test_getting_in_that_way_is_reported_so_a_theft_is_seen(): void
+    {
+        // 4자리는 현장에서 반쯤 공개된 값이다. 문을 열어 두는 대신, 열렸다는 사실이
+        // 반드시 보이게 한다 — 본인이 «안 들어가진다» 고 말할 때까지 기다리면 늦는다.
+        $user = $this->employeeUser('site_manager');
+        $user->forceFill(['google_id' => 'registered-google'])->save();
+
+        $this->signIn();
+        $this->savePassword();
+
+        $this->assertDatabaseHas('unified_alerts', [
+            'fingerprint' => "password-set-by-phone-digits:{$user->id}",
+            'event_type' => 'password_set_by_phone_digits',
+            'severity' => 'warning',
+        ]);
+    }
+
+    public function test_adding_a_password_while_already_signed_in_is_not_reported_as_a_theft(): void
+    {
+        // 이미 들어와 있는 사람이 비밀번호를 더하는 것은 4자리로 들어온 것이 아니다.
+        // 여기까지 알리면 알림이 시끄러워지고, 시끄러운 알림은 곧 안 읽는 알림이 된다.
+        $user = $this->employeeUser('admin');
+        $user->forceFill(['google_id' => 'existing-google'])->save();
+
+        $this->actingAs($user)->savePassword();
+
+        $this->assertDatabaseMissing('unified_alerts', [
+            'fingerprint' => "password-set-by-phone-digits:{$user->id}",
+        ]);
+    }
+
+    public function test_pin_accounts_still_do_not_gain_the_phone_digit_fallback(): void
+    {
+        // 작업자·반장에게는 이미 쓰는 길(PIN)이 따로 있다. 4자리에 4자리를 더하는 것은
+        // 보탬이 되지 않고, 약한 문만 하나 더 생긴다.
+        $user = $this->employeeUser();
         $user->forceFill(['google_id' => null, 'pin_hash' => Hash::make('7392')])->save();
+
         $this->signIn()->assertSessionHasErrors('email_login');
         $this->assertGuest();
     }
