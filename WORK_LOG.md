@@ -2,6 +2,12 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-22 Mobile material receiving
+
+The existing receiving ledger had no entry point in the worker app, and client-supplied attachment paths were not tied to their uploader or site. Added a managerial worker-app receiving page using the same ledger as the ERP: camera/file evidence, optional AI suggestions, manual correction, draft saving, history and human confirmation. Active supervisory workers are restricted to their assigned sites; private evidence uses expiring actor/site-bound tokens, and device-only sessions follow the existing PIN gate. Retried creates use an actor-scoped unique request key; the screen reloads stored quantities before confirmation. Failed AI leaves usable evidence and manual entry. Photos, PDF and common office/text files are supported as evidence, one file per receipt. Mobile equipment registration now retains the selected owned/rental classification instead of inheriting the rental database default.
+
+Validation: relevant PHP 47 tests / 331 assertions and all 32 JavaScript tests passed; final device-only legacy-API regression included in a 60-test rerun. Full local suite ran 2,238 tests: 2,228 passed initially, with Windows Bash/PATH and local APP_URL failures plus one transient PostgreSQL timeout; all failed classes passed after correcting the test environment (60 tests / 331 assertions). Static build and Blade compilation passed. Browser verification uses only a separate local synthetic database. Linux CI and staging/NAHSHON deployment are verified through the release PRs and GitHub Actions.
+
 ## CODEX — 2026-09-19 HR-only onboarding correction
 
 Owner changed the operating policy: HR owns registration and personal activation; foremen only view their team, with no confirmation action or comments. Removed public team invitations, added an HR registration form, restricted legacy /join routes to authenticated people-management roles, and retained existing PIN/attendance linkage. Updated registration fixtures to use authorized HR users and added server-side denial coverage. PR74 merged the correction to staging (a2565b6); PR73 merged production (71bea3c). Actions 35484859058 and 35485056005 succeeded, including Deploy NAHSHON. No production employee records were changed.
@@ -32,6 +38,7 @@ Owner requested removal of pay viewing from the worker app. Removed the pay tab,
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-22 | CODEX | Manager mobile receiving | Worker app camera/file intake shares ERP receiving ledger; scoped private proof, manual/AI draft, human confirmation, duplicate retry protection and owned/rental fix. | codex/material-receiving-mobile | Related PHP47 + final failed-class/security rerun60 passed; JS32 passed; build/Blade passed. Linux CI and staging/NAHSHON release gates follow. |
 | 2026-09-20 | CODEX | Remove pay from worker app | Attendance-only home response and three-tab UI; preserve administrative payroll. | codex/worker-remove-pay | Relevant PostgreSQL tests and release verification recorded in workspace outputs/ERP_Worker_NoPay_20260920. |
 | 2026-09-20 | CODEX | System integration audit + Korean manual | Repair stale pending finance links, access-role target checks, ETA delay, housing API/UI contract, fake vendor fallback, misleading AI health label; add authenticated searchable manual. | codex/erp-integration-audit-manual; release verification in progress | 35-menu browser pass; 45 guide chapters; 48-page PDF; 28 JS checks; 2,111 PHP passed / 1 Windows-only skip / 7,992 assertions; static build passed. |
 | 2026-09-19 | CODEX | HR-only worker onboarding correction | HR owns name/phone registration and personal activation QR; foreman views only own team, with no approval or comments. Public team signup removed and old /join paths restricted. | PR74 staging a2565b6 / PR73 main 71bea3c | Full 2,099 PHP tests passed + 1 Windows skip; 25 JS tests; Actions deployment verification succeeded including NAHSHON. |
@@ -523,4 +530,3 @@ Validation checkpoint: new QR and employee-admin suite 40 tests / 185 assertions
 
 ## CODEX — 2026-09-21 QR release verification
 Detailed HR registration fixtures now specify their required worker position. Public signup discards extra HR fields and cannot reissue an existing login/device using a known name and phone. Targeted registration regression: 67 tests, 365 assertions passed. Printable registration/attendance posters and email delivery requested after verified release; not yet delivered.
-

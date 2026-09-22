@@ -464,6 +464,7 @@
      */
     var DICT = {
         ko: {
+            qMaterial: '자재 입고', qMaterialSub: '촬영 · 파일 첨부 · 수량 확인',
             workPage: '근무 내역', mePage: '내 정보',
             todayShift: '오늘의 근무', quickActions: '빠른 실행',
             working: '근무중', offline: '오프라인', outside: '현장 밖', noAuto: '자동 안 됨',
@@ -517,6 +518,7 @@
             weekdays: ['일', '월', '화', '수', '목', '금', '토']
         },
         en: {
+            qMaterial: 'Material receiving', qMaterialSub: 'Photo · file · received quantities',
             workPage: 'Work history', mePage: 'My profile',
             todayShift: 'Today’s shift', quickActions: 'Quick actions',
             working: 'Working', offline: 'Offline', outside: 'Off site', noAuto: 'No auto',
@@ -570,6 +572,7 @@
             weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         },
         es: {
+            qMaterial: 'Recepción de materiales', qMaterialSub: 'Foto · archivo · cantidades recibidas',
             workPage: 'Historial de trabajo', mePage: 'Mi perfil',
             todayShift: 'Jornada de hoy', quickActions: 'Accesos rápidos',
             working: 'Trabajando', offline: 'Sin conexión', outside: 'Fuera del sitio', noAuto: 'Sin auto',
@@ -790,6 +793,9 @@
         h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
             tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
+            @if($canReceiveMaterials)
+            tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '') +
+            @endif
             @if(auth()->user()->access_role === 'foreman')
             tile('{{ route('worker-enrollment.index', ['return_to' => '/attendance-app']) }}', ICON.report, '우리 팀 직원 등록 현황', '인사 등록 및 앱 연결 상태 조회', '') +
             @elseif(in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true))
@@ -1004,7 +1010,12 @@
      */
     function notLinked(d) {
         var who = d && d.email ? d.email : '';
-        var h = '<div class="slab is-waiting">' +
+        var h = '';
+        @if($canReceiveMaterials)
+        h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
+            tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '', true) + '</div></section>';
+        @endif
+        h += '<div class="slab is-waiting">' +
             '<div class="state"><i></i>연결 대기 중</div>' +
             '<div class="setup-h">이 계정은 아직<br>작업자와 연결되지 않았습니다</div>' +
             (who ? '<div class="setup-who">' + esc(who) + '</div>' : '') +

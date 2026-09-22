@@ -227,8 +227,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/procurement-api/file/{item}', [ProcurementController::class, 'showFile'])->name('procurement.file');
 
     // 자재 입고 — 납품서 사진 AI 판독(→ 확인 대기 입고 생성) + 근거 사진 열람
-    Route::post('/material-receipt-api/analyze', [MaterialReceiptController::class, 'analyze'])->name('material-receipts.analyze');
-    Route::get('/material-receipt-api/file/{receipt}', [MaterialReceiptController::class, 'showFile'])->name('material-receipts.file');
+    Route::post('/material-receipt-api/analyze', [MaterialReceiptController::class, 'analyze'])
+        ->middleware([RequireMoreThanTheDevice::class, 'throttle:20,1'])->name('material-receipts.analyze');
+    Route::get('/material-receipt-api/file/{receipt}', [MaterialReceiptController::class, 'showFile'])
+        ->middleware(RequireMoreThanTheDevice::class)->name('material-receipts.file');
 
     // 하이브리드 자동 출퇴근 — 작업자 앱이 위치/WiFi 신호 전송 + 현재 상태 조회
     Route::post('/attendance-geo/ping', [AttendanceGeoController::class, 'ping'])->name('attendance-geo.ping');
@@ -381,6 +383,13 @@ Route::middleware('auth')->group(function (): void {
     // 줄마다 따로 붙이지 않고 묶어서 거는 이유: 여기에 화면을 하나 더 붙이는 사람이
     // 미들웨어를 빠뜨리면, 그 화면만 조용히 휴대폰 하나로 열린다.
     Route::middleware(RequireMoreThanTheDevice::class)->group(function (): void {
+        Route::get('/attendance-app/material-receipts', [MaterialReceiptController::class, 'index'])->name('attendance-app.material-receipts');
+        Route::get('/attendance-app/material-receipts/items', [MaterialReceiptController::class, 'items'])->name('attendance-app.material-receipts.items');
+        Route::post('/attendance-app/material-receipts/upload', [MaterialReceiptController::class, 'upload'])
+            ->middleware('throttle:20,1')->name('attendance-app.material-receipts.upload');
+        Route::post('/attendance-app/material-receipts', [MaterialReceiptController::class, 'store'])->name('attendance-app.material-receipts.store');
+        Route::post('/attendance-app/material-receipts/{receipt}/confirm', [MaterialReceiptController::class, 'confirmMobile'])
+            ->whereNumber('receipt')->name('attendance-app.material-receipts.confirm');
         // 모바일 현장 상황실 — 원문 기록 보기·올리기·수정·삭제
         Route::get('/attendance-app/ops-room', [MobileOpsRoomController::class, 'index'])->name('attendance-app.ops-room');
         // 폰으로 문서 올리기 — 현장에서 손에 들어온 도면·계약서를 그 자리에서 문서함으로.
