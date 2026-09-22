@@ -857,6 +857,13 @@
 
               <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 2px;">
                 <div class="form-group-sm">
+                  <label class="form-label-sm" for="acquisition-${cardId}">구매 / 임대</label>
+                  <select name="items[${cardId}][acquisition_type]" id="acquisition-${cardId}" class="input-text-sm">
+                    <option value="소유" ${data.acquisition_type !== '임대' ? 'selected' : ''}>구매 (소유)</option>
+                    <option value="임대" ${data.acquisition_type === '임대' ? 'selected' : ''}>임대</option>
+                  </select>
+                </div>
+                <div class="form-group-sm">
                   <label class="form-label-sm">상태</label>
                   <select name="items[${cardId}][status]" id="status-${cardId}" class="input-text-sm" style="background-color: var(--bg-surface-elevated);">
                     <option value="대기중" selected>대기중</option>
