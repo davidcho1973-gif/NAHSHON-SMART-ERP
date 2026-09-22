@@ -31,14 +31,28 @@ function executeControl(context, control) {
   return vm.runInContext('(function () {' + decodeAttribute(match[1]) + '\n}).call(window)', context);
 }
 
-function row(overrides = {}) {
+// 목록은 «사람 · 하루» 한 줄이고, 찍힌 기록은 그 안에 들어 있다.
+function event(overrides = {}) {
   return {
-    id: 41, employeeId: 7, employee: 'Test Worker', employeeNumber: 'TEST-7',
-    date: '2026-09-15', eventAt: '2026-09-15 07:30:00', eventTime: '07:30',
+    id: 41, time: '07:30', eventAt: '2026-09-15 07:30:00',
     eventType: 'clock_in', eventTypeLabel: '출근', status: 'pending', statusLabel: '대기중',
-    source: 'manual', sourceLabel: '수기 입력', siteId: 3, site: 'TEST-SITE',
+    source: 'manual', sourceLabel: '수기 입력', siteId: 3,
     notes: 'Original note', editCount: 1, deleted: false, ...overrides,
   };
+}
+
+function row({ clockIn = {}, ...overrides } = {}) {
+  return {
+    key: '7|2026-09-15', employeeId: 7, employee: 'Test Worker', employeeNumber: 'TEST-7',
+    date: '2026-09-15', siteId: 3, site: 'TEST-SITE', zone: 'MST',
+    clockIn: event(clockIn), clockOut: null, extras: [], workedLabel: null,
+    canDelete: true, ...overrides,
+  };
+}
+
+// 한 줄 안의 기록들 — 화면이 보는 것과 같은 방식으로 펼친다.
+function eventsIn(rows) {
+  return rows.flatMap(r => [r.clockIn, r.clockOut, ...(r.extras || [])]).filter(Boolean);
 }
 
 async function harness({ rows = [row()], canManage = true, canDelete = true, responses = {} } = {}) {
@@ -75,22 +89,31 @@ async function harness({ rows = [row()], canManage = true, canDelete = true, res
       case 'api_getAttendanceLogs':
         return { success: true, rows: clone(serverRows), canManage, canDelete };
       case 'api_setAttendanceLogStatus': {
-        const current = serverRows.find(item => item.id === args[0]);
-        assert.ok(current, 'status request must identify the selected row');
+        const current = eventsIn(serverRows).find(item => item.id === args[0]);
+        assert.ok(current, 'status request must identify the selected record');
         current.status = args[1];
         return { success: true, status: args[1] };
       }
       case 'api_saveAttendanceLog': {
-        const current = serverRows.find(item => item.id === args[0].id);
-        assert.ok(current, 'save request must edit the selected row');
+        const current = eventsIn(serverRows).find(item => item.id === args[0].id);
+        assert.ok(current, 'save request must edit the selected record');
         Object.assign(current, args[0]);
         return { success: true, id: current.id };
       }
-      case 'api_deleteAttendanceLog':
-        serverRows.splice(serverRows.findIndex(item => item.id === args[0]), 1);
+      case 'api_deleteAttendanceLog': {
+        // 기록이 빠지면 그 하루가 비고, 빈 하루는 목록에서 사라진다.
+        for (const day of serverRows) {
+          for (const slot of ['clockIn', 'clockOut']) {
+            if (day[slot] && day[slot].id === args[0]) day[slot] = null;
+          }
+          day.extras = (day.extras || []).filter(item => item.id !== args[0]);
+        }
+        const emptied = serverRows.findIndex(day => !day.clockIn && !day.clockOut && !(day.extras || []).length);
+        if (emptied >= 0) serverRows.splice(emptied, 1);
         return { success: true };
+      }
       case 'api_restoreAttendanceLog':
-        serverRows.find(item => item.id === args[0]).deleted = false;
+        eventsIn(serverRows).find(item => item.id === args[0]).deleted = false;
         return { success: true };
       case 'api_getAttendanceLogHistory':
         return { success: true, edits: [{ at: '2026-09-15 08:00:00', by: 'Test Admin',
@@ -198,7 +221,7 @@ test('edit opens the selected record and saves its ID and changed field', async 
   assert.equal(h.requests('api_saveAttendanceLog').length, 1);
   assert.deepEqual(h.requests('api_saveAttendanceLog')[0].args, [{ ...values, id: 41 }]);
   assert.equal(h.requests('api_getAttendanceLogs').length, 2);
-  assert.equal(h.context.window.AdminAttendance._state.rows[0].notes, 'Corrected by test');
+  assert.equal(h.context.window.AdminAttendance._state.rows[0].clockIn.notes, 'Corrected by test');
 });
 
 test('delete cancels safely and confirmed deletion reloads without the removed row', async () => {
@@ -219,7 +242,7 @@ test('delete cancels safely and confirmed deletion reloads without the removed r
 });
 
 test('deleted rows expose restore and reload after restoration', async () => {
-  const h = await harness({ rows: [row({ deleted: true, deletedAt: '2026-09-15 09:00:00' })] });
+  const h = await harness({ rows: [row({ clockIn: { deleted: true, deletedAt: '2026-09-15 09:00:00' } })] });
   for (const label of ['승인', '반려', '수정', '삭제']) {
     assert.ok(!h.actions().some(control => control.label === label));
   }
@@ -246,7 +269,10 @@ test('read-only users retain history but see no mutation controls', async () => 
 });
 
 test('managers without delete permission can edit but cannot delete or restore', async () => {
-  const h = await harness({ canDelete: false, rows: [row(), row({ id: 42, deleted: true })] });
+  const h = await harness({
+    canDelete: false,
+    rows: [row(), row({ key: '8|2026-09-15', employeeId: 8, employee: 'Second Worker', clockIn: { id: 42, deleted: true } })],
+  });
   for (const label of ['승인', '반려', '수정']) {
     assert.ok(h.actions().some(control => control.label === label));
   }
@@ -255,12 +281,37 @@ test('managers without delete permission can edit but cannot delete or restore',
   }
 });
 
+test('a day missing its clock-out offers to add it for that person and day', async () => {
+  // 짝이 안 맞는 날이 이 표에서 가장 중요한 줄이다. 흩어져 있을 때는 «없는 줄» 이라
+  // 눈에 띄지도 않았다 — 한 줄로 모았으니 빈 칸에서 바로 넣을 수 있어야 한다.
+  const h = await harness();
+  await h.click('퇴근 추가');
+  const form = h.forms[0];
+  assert.equal(form.title, '출퇴근 기록 추가');
+  const values = Object.fromEntries(form.fields.map(field => [field.name, field.value]));
+  assert.equal(values.employeeId, 7, '그 사람으로 미리 채워져야 한다');
+  assert.equal(values.eventType, 'clock_out');
+  assert.equal(values.siteId, 3);
+  // 시각은 비워 둔다. 채워 두면 그대로 저장되고, 아무도 찍지 않은 시각이 임금이 된다.
+  assert.equal(values.eventAt, '');
+  assert.match(form.subtitle, /2026-09-15/);
+});
+
+test('the times shown are the ones the server rendered on the site clock', async () => {
+  // 화면이 스스로 시각을 만들지 않는다. 만들기 시작하면 어느 시계인지 또 갈라진다.
+  const h = await harness({ rows: [row({ clockOut: event({ id: 42, time: '16:20', eventType: 'clock_out' }), workedLabel: '8시간 50분' })] });
+  assert.match(h.host.innerHTML, /07:30/);
+  assert.match(h.host.innerHTML, /16:20/);
+  assert.match(h.host.innerHTML, /8시간 50분/);
+  assert.match(h.host.innerHTML, /MST 기준/, '어느 시계로 보고 있는지 화면에 있어야 한다');
+});
+
 test('failed status response displays an error and does not reload or claim success', async () => {
   const h = await harness({ responses: { api_setAttendanceLogStatus: { success: false, error: 'Test permission denied' } } });
   await h.click('승인');
   assert.deepEqual(h.toasts, [{ message: 'Test permission denied', kind: 'error' }]);
   assert.equal(h.requests('api_getAttendanceLogs').length, 1);
-  assert.equal(h.context.window.AdminAttendance._state.rows[0].status, 'pending');
+  assert.equal(h.context.window.AdminAttendance._state.rows[0].clockIn.status, 'pending');
 });
 
 test('save validation errors return to the form without a success toast or reload', async () => {
@@ -282,5 +333,5 @@ test('failed deletion keeps the row and displays the API error', async () => {
   await settle();
   assert.deepEqual(h.toasts, [{ message: 'Test delete denied', kind: 'error' }]);
   assert.equal(h.requests('api_getAttendanceLogs').length, 1);
-  assert.equal(h.context.window.AdminAttendance._state.rows[0].id, 41);
+  assert.equal(h.context.window.AdminAttendance._state.rows[0].clockIn.id, 41);
 });
