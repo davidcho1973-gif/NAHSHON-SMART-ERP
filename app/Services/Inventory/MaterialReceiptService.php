@@ -8,8 +8,12 @@ use App\Models\MaterialReceiptLine;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Vendors\VendorResolver;
-use App\Support\AccessPolicy;
+use App\Support\MaterialReceiptAccess;
+use App\Support\MaterialReceiptUpload;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 /**
  * 자재 입고 — 트럭이 왔고 무엇이 몇 개 왔는가.
@@ -37,6 +41,11 @@ class MaterialReceiptService
     public function list(string $siteId = 'ALL', ?string $from = null, ?string $to = null): array
     {
         $user = auth()->user();
+
+        if (! $this->canManage($user)) {
+            return ['success' => false, 'canManage' => false, 'sites' => [], 'items' => [], 'total' => 0,
+                'draftCount' => 0, 'error' => '자재 입고를 조회할 권한이 없습니다.'];
+        }
 
         $query = MaterialReceipt::query()
             ->visibleTo($user)
@@ -78,36 +87,66 @@ class MaterialReceiptService
             return ['success' => false, 'error' => '자재 입고를 기록할 권한이 없습니다.'];
         }
 
-        $id = (int) ($patch['id'] ?? 0);
-        $receipt = $id > 0
-            ? MaterialReceipt::query()->visibleTo($user)->whereKey($id)->first()
-            : new MaterialReceipt;
-
-        if ($receipt === null) {
-            return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
-        }
-
-        // 확정된 장은 그대로 둔다. 확정은 «이 숫자를 내가 봤다» 는 뜻이라, 뒤에서
-        // 조용히 바뀌면 그 말이 거짓이 된다. 고치려면 먼저 확정을 푼다.
-        if ($receipt->exists && $receipt->isConfirmed()) {
-            return ['success' => false, 'error' => '확정된 입고는 수정할 수 없습니다. 먼저 «확정 해제» 하세요.'];
-        }
-
         $site = $this->siteFor($patch['site_id'] ?? null, $siteId, $user);
         if ($site === null) {
             return ['success' => false, 'error' => '현장을 선택하세요.'];
         }
 
-        $receivedOn = $this->date($patch['received_on'] ?? null) ?? now()->toDateString();
-
+        $validator = Validator::make($patch, [
+            'id' => 'nullable|integer|min:1', 'request_key' => 'nullable|uuid',
+            'received_on' => 'nullable|date_format:Y-m-d', 'vendor' => 'nullable|string|max:160',
+            'po_no' => 'nullable|string|max:80', 'delivery_no' => 'nullable|string|max:80',
+            'note' => 'nullable|string|max:10000', 'photo' => 'nullable|array',
+            'lines' => 'required|array|min:1|max:100', 'lines.*.name' => 'nullable|string|max:255',
+            'lines.*.unit' => 'nullable|string|max:32', 'lines.*.note' => 'nullable|string|max:2000',
+            'lines.*.quantity' => 'nullable|numeric|max:99999999999.999',
+            'lines.*.unit_price' => 'nullable|numeric|min:0|max:999999999999.99',
+        ]);
+        if ($validator->fails()) {
+            return ['success' => false, 'error' => $validator->errors()->first()];
+        }
+        $receivedOn = $this->date($patch['received_on'] ?? null) ?? now($site->timezone ?: config('app.timezone'))->toDateString();
         $lines = $this->cleanLines(is_array($patch['lines'] ?? null) ? $patch['lines'] : []);
         if ($lines === []) {
             return ['success' => false, 'error' => '품목을 한 줄 이상 적어주세요. 수량이 없는 줄은 저장되지 않습니다.'];
         }
 
-        $vendor = app(VendorResolver::class)->resolve((string) ($patch['vendor'] ?? ''), $site->company_id);
+        $id = (int) ($patch['id'] ?? 0);
+        $requestKey = ! $id && filled($patch['request_key'] ?? null)
+            ? $user->id.':'.strtolower((string) $patch['request_key']) : null;
 
-        DB::transaction(function () use ($receipt, $site, $receivedOn, $vendor, $patch, $lines, $userId): void {
+        return DB::transaction(function () use ($id, $requestKey, $user, $site, $receivedOn, $patch, $lines): array {
+            // Serialise a user's retried creates; the unique key is also a database backstop.
+            if ($requestKey) {
+                User::query()->whereKey($user->id)->lockForUpdate()->first();
+                $existing = MaterialReceipt::query()->where('request_key', $requestKey)->first();
+                if ($existing) {
+                    return $existing->site_id === $site->id
+                        ? ['success' => true, 'id' => $existing->id, 'status' => $existing->status, 'replayed' => true]
+                        : ['success' => false, 'error' => '다른 현장에서 사용한 요청입니다. 새 입고로 등록해 주세요.'];
+                }
+            }
+            $receipt = $id > 0
+                ? MaterialReceipt::query()->visibleTo($user)->whereKey($id)->lockForUpdate()->first()
+                : new MaterialReceipt;
+            if (! $receipt) {
+                return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
+            }
+            if ($receipt->exists && $receipt->isConfirmed()) {
+                return ['success' => false, 'error' => '확정된 입고는 수정할 수 없습니다. 먼저 «확정 해제» 하세요.'];
+            }
+            if ($receipt->exists && filled($receipt->photo_path) && $receipt->site_id !== $site->id) {
+                return ['success' => false, 'error' => '첨부 근거가 있는 입고의 현장은 변경할 수 없습니다.'];
+            }
+            $photo = null;
+            if (! empty($patch['photo'])) {
+                try {
+                    $photo = MaterialReceiptUpload::resolve($patch['photo'], $user, $site);
+                } catch (ValidationException $e) {
+                    return ['success' => false, 'error' => collect($e->errors())->flatten()->first()];
+                }
+            }
+            $vendor = app(VendorResolver::class)->resolve((string) ($patch['vendor'] ?? ''), $site->company_id);
             $receipt->fill([
                 'company_id' => $site->company_id,
                 'site_id' => $site->id,
@@ -121,15 +160,16 @@ class MaterialReceiptService
 
             if (! $receipt->exists) {
                 $receipt->status = MaterialReceipt::STATUS_DRAFT;
-                $receipt->created_by_id = $userId;
+                $receipt->created_by_id = $user->id;
+                $receipt->request_key = $requestKey;
             }
 
             // 사진과 AI 판독 결과는 «왜 이 숫자냐» 의 근거다. 새로 올라온 것이 없으면
             // 예전 근거를 지우지 않는다 — 줄 하나 고쳤다고 근거가 사라지면 안 된다.
-            if (is_array($patch['photo'] ?? null) && filled($patch['photo']['path'] ?? null)) {
-                $receipt->photo_disk = (string) ($patch['photo']['disk'] ?? 'public');
-                $receipt->photo_path = (string) $patch['photo']['path'];
-                $receipt->photo_name = $this->text($patch['photo']['name'] ?? null);
+            if ($photo) {
+                $receipt->photo_disk = $photo['disk'];
+                $receipt->photo_path = $photo['path'];
+                $receipt->photo_name = $photo['name'];
             }
             if (is_array($patch['analysis'] ?? null) && $patch['analysis'] !== []) {
                 $receipt->analysis = $patch['analysis'];
@@ -143,9 +183,9 @@ class MaterialReceiptService
             foreach ($lines as $seq => $line) {
                 $receipt->lines()->create($line + ['seq' => $seq]);
             }
-        });
 
-        return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
+            return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
+        });
     }
 
     /**
@@ -160,26 +200,32 @@ class MaterialReceiptService
             return ['success' => false, 'error' => '입고를 확정할 권한이 없습니다.'];
         }
 
-        $receipt = MaterialReceipt::query()->visibleTo($user)->whereKey($id)->first();
-        if (! $receipt) {
-            return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
-        }
+        return DB::transaction(function () use ($user, $id, $confirmed): array {
+            $receipt = MaterialReceipt::query()->visibleTo($user)->whereKey($id)->lockForUpdate()->first();
+            if (! $receipt) {
+                return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
+            }
 
-        if ($confirmed && $receipt->lines()->count() === 0) {
-            return ['success' => false, 'error' => '품목이 없는 입고는 확정할 수 없습니다.'];
-        }
+            if ($confirmed && $receipt->lines()->count() === 0) {
+                return ['success' => false, 'error' => '품목이 없는 입고는 확정할 수 없습니다.'];
+            }
 
-        $receipt->forceFill($confirmed ? [
-            'status' => MaterialReceipt::STATUS_CONFIRMED,
-            'confirmed_by_id' => $user?->id,
-            'confirmed_at' => now(),
-        ] : [
-            'status' => MaterialReceipt::STATUS_DRAFT,
-            'confirmed_by_id' => null,
-            'confirmed_at' => null,
-        ])->save();
+            if ($receipt->isConfirmed() === $confirmed) {
+                return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
+            }
 
-        return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
+            $receipt->forceFill($confirmed ? [
+                'status' => MaterialReceipt::STATUS_CONFIRMED,
+                'confirmed_by_id' => $user?->id,
+                'confirmed_at' => now(),
+            ] : [
+                'status' => MaterialReceipt::STATUS_DRAFT,
+                'confirmed_by_id' => null,
+                'confirmed_at' => null,
+            ])->save();
+
+            return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
+        });
     }
 
     /**
@@ -194,23 +240,27 @@ class MaterialReceiptService
             return ['success' => false, 'error' => '입고를 삭제할 권한이 없습니다.'];
         }
 
-        $receipt = MaterialReceipt::query()->visibleTo($user)->whereKey($id)->first();
-        if (! $receipt) {
-            return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
-        }
-        if ($receipt->isConfirmed()) {
-            return ['success' => false, 'error' => '확정된 입고는 삭제할 수 없습니다. 먼저 «확정 해제» 하세요.'];
-        }
+        return DB::transaction(function () use ($user, $id): array {
+            $receipt = MaterialReceipt::query()->visibleTo($user)->whereKey($id)->lockForUpdate()->first();
+            if (! $receipt) {
+                return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
+            }
+            if ($receipt->isConfirmed()) {
+                return ['success' => false, 'error' => '확정된 입고는 삭제할 수 없습니다. 먼저 «확정 해제» 하세요.'];
+            }
 
-        $receipt->delete();
+            $receipt->delete();
 
-        return ['success' => true];
+            return ['success' => true];
+        });
     }
 
     /** 현장 운영자면 기록·확정할 수 있다(출퇴근 수정·문서와 같은 등급). */
     private function canManage(?User $user): bool
     {
-        return AccessPolicy::canManageSite($user);
+        // The ERP adapter can invoke this service without the mobile route's PIN middleware.
+        return MaterialReceiptAccess::canManage($user)
+            && (! request()->hasSession() || ! WorkerDeviceSession::isDeviceOnly(request()));
     }
 
     /**
@@ -323,20 +373,7 @@ class MaterialReceiptService
     /** 이 사람이 입고를 적을 수 있는 현장들. */
     private function siteFor(mixed $wanted, string $fallbackSiteId, ?User $user): ?Site
     {
-        $id = is_numeric($wanted) ? (int) $wanted : $this->siteId((string) ($wanted ?: $fallbackSiteId));
-        if ($id === null) {
-            return null;
-        }
-
-        $site = Site::query()->whereKey($id)->first();
-        if ($site === null) {
-            return null;
-        }
-
-        // 현장 범위가 걸린 사람이 남의 현장에 입고를 적을 수는 없다.
-        $allowed = collect($this->siteOptions($user))->pluck('value')->map(fn ($v): int => (int) $v);
-
-        return $allowed->contains($site->id) ? $site : null;
+        return MaterialReceiptAccess::site($user, $wanted ?: $fallbackSiteId);
     }
 
     /**
@@ -344,26 +381,7 @@ class MaterialReceiptService
      */
     private function siteOptions(?User $user): array
     {
-        $query = Site::query()->where('status', 'active');
-
-        if ($user && ! in_array($user->access_role, AccessPolicy::SYSTEM_ROLES, true)
-            && $user->access_scope !== 'all_sites') {
-            match ($user->access_scope) {
-                'company' => $user->allowed_company_id
-                    ? $query->where('company_id', $user->allowed_company_id)
-                    : $query->whereRaw('1 = 0'),
-                'site', 'team' => $user->allowed_site_id
-                    ? $query->whereKey($user->allowed_site_id)
-                    : $query->whereRaw('1 = 0'),
-                default => $query->whereRaw('1 = 0'),
-            };
-        }
-
-        return $query->orderBy('name')->get(['id', 'code', 'name'])
-            ->map(fn (Site $s): array => [
-                'value' => $s->id,
-                'label' => trim($s->code.' — '.$s->name, ' —'),
-            ])->all();
+        return MaterialReceiptAccess::siteOptions($user);
     }
 
     private function siteId(string $siteId): ?int
@@ -383,7 +401,8 @@ class MaterialReceiptService
     {
         $v = is_string($v) ? trim($v) : null;
 
-        return $v !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : null;
+        return $v !== null && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $parts)
+            && checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1]) ? $v : null;
     }
 
     private function text(mixed $v): ?string

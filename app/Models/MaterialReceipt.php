@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\MaterialReceiptAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,7 +25,7 @@ class MaterialReceipt extends Model
         'company_id', 'site_id', 'received_on', 'vendor', 'vendor_id',
         'po_no', 'delivery_no', 'note', 'status',
         'photo_disk', 'photo_path', 'photo_name', 'analysis',
-        'created_by_id', 'confirmed_by_id', 'confirmed_at',
+        'created_by_id', 'confirmed_by_id', 'confirmed_at', 'request_key',
     ];
 
     protected function casts(): array
@@ -64,24 +65,7 @@ class MaterialReceipt extends Model
     /** 접근제어 — 다른 안전·장비 표와 같은 규칙(AGENTS.md §6-3). */
     public function scopeVisibleTo(Builder $query, ?User $user): Builder
     {
-        if (! $user) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        if (in_array($user->access_role, ['super_admin', 'admin'], true)
-            || $user->access_scope === 'all_sites') {
-            return $query;
-        }
-
-        return match ($user->access_scope) {
-            'company' => $user->allowed_company_id
-                ? $query->where('company_id', $user->allowed_company_id)
-                : $query->whereRaw('1 = 0'),
-            'site', 'team' => $user->allowed_site_id
-                ? $query->where('site_id', $user->allowed_site_id)
-                : $query->whereRaw('1 = 0'),
-            default => $query->whereRaw('1 = 0'),
-        };
+        return $query->whereIn('site_id', MaterialReceiptAccess::sites($user)->pluck('id'));
     }
 
     public function isConfirmed(): bool

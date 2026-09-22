@@ -2,24 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\IntegratedDocument;
 use App\Models\MaterialReceipt;
+use App\Models\Site;
 use App\Services\Inventory\DeliverySlipAnalyzer;
 use App\Services\Inventory\MaterialReceiptService;
-use App\Support\AccessPolicy;
+use App\Support\MaterialReceiptAccess;
+use App\Support\MaterialReceiptUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
-/**
- * 납품서 사진 → AI 판독 → <b>확인 대기</b> 입고 한 장.
- *
- * 사진을 올리면 그 자리에서 초안이 만들어진다. 현장에서 손으로 품목을 옮겨 적는
- * 단계를 없애는 것이 목적이다 — 그 단계가 있으면 아무도 안 적고, 안 적으면 없는 일이 된다.
- *
- * 판독이 곧 장부는 아니다. 만들어지는 것은 `draft` 이고, 사람이 화면에서 수량을 보고
- * «확정» 을 눌러야 숫자가 된다.
- */
+/** Mobile receiving and ERP intake share one ledger, permission and evidence boundary. */
 class MaterialReceiptController extends Controller
 {
     public function __construct(
@@ -27,86 +22,188 @@ class MaterialReceiptController extends Controller
         private readonly MaterialReceiptService $receipts,
     ) {}
 
-    public function analyze(Request $request): JsonResponse
+    public function index(Request $request): View
     {
-        if (! AccessPolicy::canManageSite($request->user())) {
-            return response()->json(['success' => false, 'error' => '자재 입고를 기록할 권한이 없습니다.'], 403);
-        }
+        $this->authorizeManager($request);
+        $sites = MaterialReceiptAccess::siteOptions($request->user());
+        $preferred = $request->query('site_id') ?: $request->user()->allowed_site_id ?: $request->user()->employee?->site_id;
+        $site = MaterialReceiptAccess::site($request->user(), $preferred)
+            ?? MaterialReceiptAccess::site($request->user(), $sites[0]['value'] ?? null);
 
-        $request->validate([
-            'file' => 'required|file|max:32768',
-            'site_id' => 'nullable',
+        return view('attendance-app.material-receipts', [
+            'sites' => $sites,
+            'initialSiteId' => $site?->id,
+            'receivedOn' => now($site?->timezone ?: config('app.timezone'))->toDateString(),
         ]);
-
-        try {
-            $file = $request->file('file');
-            $ext = strtolower((string) $file?->getClientOriginalExtension());
-            if (! in_array($ext, ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'heic'], true)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => sprintf('지원하지 않는 형식입니다(.%s). 납품서는 사진(JPG·PNG) 또는 PDF 로 올려주세요.', $ext ?: '?'),
-                ], 422);
-            }
-
-            $mime = $file->getClientMimeType() ?: ($file->getMimeType() ?: 'application/octet-stream');
-
-            // 임시 파일을 바로 읽고(왕복 한 번), 원본은 근거로 보관한다.
-            $data = $this->analyzer->analyze($file->getRealPath(), $mime);
-
-            $disk = IntegratedDocument::storageDisk();
-            $path = $file->store('material-receipts', $disk);
-            $photo = [
-                'disk' => $disk,
-                'path' => $path,
-                'name' => $file->getClientOriginalName() ?: basename($path),
-            ];
-
-            // 품목을 한 줄이라도 읽었으면 확인 대기 상태로 바로 만들어 둔다.
-            // 한 줄도 못 읽었으면 저장하지 않는다 — 빈 입고 한 장이 목록에 남아 있으면
-            // 나중에 그게 «아직 안 적은 것» 인지 «온 게 없는 것» 인지 아무도 모른다.
-            $saved = ['success' => false];
-            if ($data['lines'] !== []) {
-                $saved = $this->receipts->save([
-                    'site_id' => $request->input('site_id'),
-                    'received_on' => $data['received_on'],
-                    'vendor' => $data['vendor'],
-                    'po_no' => $data['po_no'],
-                    'delivery_no' => $data['delivery_no'],
-                    'lines' => $data['lines'],
-                    'photo' => $photo,
-                    'analysis' => $data,
-                ], (string) $request->input('site_id', 'ALL'), $request->user()?->id);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-                'file' => $photo,
-                'id' => $saved['success'] ? $saved['id'] : null,
-                // 읽기는 했는데 저장이 막힌 경우(현장 미선택 등)를 숨기지 않는다.
-                'saveError' => $saved['success'] ? null : ($saved['error'] ?? null),
-            ]);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
-        }
     }
 
-    /** 근거 사진 원본 열람. */
+    public function items(Request $request): JsonResponse
+    {
+        $this->authorizeManager($request);
+        $request->validate(['site_id' => 'nullable|string|max:80']);
+        $wanted = $request->query('site_id', 'ALL');
+        if ($wanted !== 'ALL' && filled($wanted)) {
+            $this->authorizeSite($request, $wanted, false);
+        }
+
+        return response()->json($this->receipts->list((string) $wanted));
+    }
+
+    /** Evidence can be kept even when OCR fails; nothing is booked by an upload. */
+    public function upload(Request $request): JsonResponse
+    {
+        return response()->json($this->receiveUpload($request));
+    }
+
+    /** Keep the existing ERP photo-to-draft contract, using the same trusted upload token. */
+    public function analyze(Request $request): JsonResponse
+    {
+        $result = $this->receiveUpload($request, true);
+        $data = $result['data'] ?? $this->emptyAnalysis();
+        $saved = ['success' => false];
+        if ($data['lines'] !== []) {
+            $saved = $this->receipts->save([
+                'site_id' => $request->input('site_id'),
+                'received_on' => $data['received_on'],
+                'vendor' => $data['vendor'], 'po_no' => $data['po_no'], 'delivery_no' => $data['delivery_no'],
+                'lines' => $data['lines'], 'photo' => $result['file'], 'analysis' => $data,
+            ], (string) $request->input('site_id', 'ALL'), $request->user()->id);
+        }
+
+        return response()->json($result + [
+            'data' => $data,
+            'id' => $saved['success'] ? $saved['id'] : null,
+            'saveError' => $saved['success'] ? null : ($saved['error'] ?? ($result['warning'] ?? null)),
+        ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $this->authorizeManager($request);
+        $data = $request->validate([
+            'id' => 'nullable|integer|min:1',
+            'request_key' => 'nullable|uuid',
+            'site_id' => 'required|integer',
+            'received_on' => 'required|date_format:Y-m-d',
+            'vendor' => 'nullable|string|max:160',
+            'po_no' => 'nullable|string|max:80',
+            'delivery_no' => 'nullable|string|max:80',
+            'note' => 'nullable|string|max:10000',
+            'photo' => 'nullable|array:token,name',
+            'photo.token' => 'required_with:photo|string|max:8192',
+            'photo.name' => 'nullable|string|max:255',
+            'lines' => 'required|array|min:1|max:100',
+            'lines.*' => 'required|array',
+            'lines.*.item_id' => 'nullable|integer|exists:items,id',
+            'lines.*.name' => 'required|string|max:255',
+            'lines.*.quantity' => 'required|numeric|min:0.001|max:99999999999.999',
+            'lines.*.unit' => 'nullable|string|max:32',
+            'lines.*.unit_price' => 'nullable|numeric|min:0|max:999999999999.99',
+            'lines.*.note' => 'nullable|string|max:2000',
+        ]);
+        $this->authorizeSite($request, $data['site_id']);
+        if (! empty($data['id'])) {
+            abort_unless(MaterialReceipt::query()->visibleTo($request->user())->whereKey($data['id'])->exists(), 403);
+        }
+        $result = $this->receipts->save($data, (string) $data['site_id'], $request->user()->id);
+
+        return response()->json($result, $result['success'] ? 200 : 422);
+    }
+
+    public function confirmMobile(Request $request, MaterialReceipt $receipt): JsonResponse
+    {
+        $this->authorizeManager($request);
+        abort_unless(MaterialReceipt::query()->visibleTo($request->user())->whereKey($receipt->id)->exists(), 403);
+        $result = $this->receipts->confirm($receipt->id);
+
+        return response()->json($result, $result['success'] ? 200 : 422);
+    }
+
     public function showFile(Request $request, MaterialReceipt $receipt)
     {
-        abort_unless(
-            MaterialReceipt::query()->visibleTo($request->user())->whereKey($receipt->id)->exists(),
-            403,
-        );
-
+        $this->authorizeManager($request);
+        abort_unless(MaterialReceipt::query()->visibleTo($request->user())->whereKey($receipt->id)->exists(), 403);
         $disk = $receipt->photo_disk ?: 'public';
-        abort_unless(filled($receipt->photo_path) && Storage::disk($disk)->exists($receipt->photo_path), 404);
+        abort_unless(filled($receipt->photo_path) && str_starts_with($receipt->photo_path, 'material-receipts/')
+            && Storage::disk($disk)->exists($receipt->photo_path), 404);
 
-        return Storage::disk($disk)->response(
-            $receipt->photo_path,
-            $receipt->photo_name ?: ('delivery-'.$receipt->id),
-        );
+        return Storage::disk($disk)->download($receipt->photo_path, $receipt->photo_name ?: 'delivery-'.$receipt->id, [
+            'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    private function receiveUpload(Request $request, bool $forceAnalyze = false): array
+    {
+        $this->authorizeManager($request);
+        $request->validate([
+            'file' => 'required|file|max:32768|mimes:jpg,jpeg,png,webp,heic,heif,pdf,doc,docx,xls,xlsx,csv,txt',
+            'site_id' => 'required', 'analyze' => 'nullable|boolean',
+        ]);
+        // Scope must be checked before either AI processing or a durable storage write.
+        $site = $this->authorizeSite($request, $request->input('site_id'));
+        $file = $request->file('file');
+        $mime = $file->getMimeType() ?: 'application/octet-stream';
+        $extension = strtolower($file->getClientOriginalExtension());
+        // A global MIME list also admits a text file renamed .jpg because text is supported.
+        // Match each claimed format to the detected type before retaining it as evidence.
+        $allowedTypes = [
+            'jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'],
+            'webp' => ['image/webp'], 'heic' => ['image/heic', 'image/heif', 'image/heic-sequence'],
+            'heif' => ['image/heif', 'image/heic', 'image/heif-sequence'], 'pdf' => ['application/pdf'],
+            'doc' => ['application/msword', 'application/x-ole-storage', 'application/CDFV2'],
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+            'xls' => ['application/vnd.ms-excel', 'application/x-ole-storage', 'application/CDFV2'],
+            'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+            'csv' => ['text/plain', 'text/csv', 'application/csv', 'application/vnd.ms-excel'],
+            'txt' => ['text/plain'],
+        ];
+        if (! in_array($mime, $allowedTypes[$extension] ?? [], true)) {
+            throw ValidationException::withMessages(['file' => '파일 확장자와 실제 형식이 일치하지 않습니다. 원본 사진 또는 문서로 다시 올려주세요.']);
+        }
+        try {
+            $photo = MaterialReceiptUpload::store($file, $request->user(), $site);
+        } catch (\Throwable $e) {
+            report($e);
+            abort(503, '파일을 보관하지 못했습니다. 다시 업로드해 주세요.');
+        }
+        $result = ['success' => true, 'file' => $photo];
+        if (! $forceAnalyze && ! $request->boolean('analyze')) {
+            return $result;
+        }
+
+        if (! str_starts_with($mime, 'image/') && $mime !== 'application/pdf') {
+            return $result + ['warning' => '파일은 보관했습니다. 이 형식은 자동 판독하지 않으므로 실제 입고 품목과 수량을 입력해 주세요.'];
+        }
+        try {
+            $result['data'] = $this->analyzer->analyze($file->getRealPath(), $mime);
+            if ($result['data']['lines'] === []) {
+                $result['warning'] = '파일은 보관했지만 품목을 읽지 못했습니다. 실제 입고 품목과 수량을 직접 입력해 주세요.';
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $result['warning'] = '파일은 보관했습니다. 자동 판독을 완료하지 못했으므로 품목과 실제 입고 수량을 직접 입력해 주세요.';
+        }
+
+        return $result;
+    }
+
+    private function authorizeManager(Request $request): void
+    {
+        abort_unless(MaterialReceiptAccess::canManage($request->user()), 403, '자재 입고를 기록할 권한이 없습니다.');
+        abort_if($request->filled('as'), 403, '다른 사람 화면 보기에서는 입고를 처리할 수 없습니다.');
+    }
+
+    private function authorizeSite(Request $request, mixed $wanted, bool $activeOnly = true): Site
+    {
+        $site = MaterialReceiptAccess::site($request->user(), $wanted, $activeOnly);
+        abort_unless($site, 403, '이 현장에 자재 입고를 기록할 권한이 없습니다.');
+
+        return $site;
+    }
+
+    private function emptyAnalysis(): array
+    {
+        return ['vendor' => null, 'po_no' => null, 'delivery_no' => null, 'received_on' => null,
+            'lines' => [], 'confidence' => null, 'summary' => null];
     }
 }

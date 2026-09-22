@@ -19,9 +19,13 @@ class MobileEquipmentTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Employee $employee;
+
     private Company $company;
+
     private Site $site;
+
     private Team $team;
 
     protected function setUp(): void
@@ -216,7 +220,7 @@ class MobileEquipmentTest extends TestCase
         $path = $response->json('photo_path');
         $this->assertNotNull($path);
         $storedFilename = basename($path);
-        Storage::disk('public')->assertExists('equipments/' . $storedFilename);
+        Storage::disk('public')->assertExists('equipments/'.$storedFilename);
     }
 
     public function test_mobile_equipment_store_saves_and_redirects(): void
@@ -366,7 +370,7 @@ class MobileEquipmentTest extends TestCase
                     'quantity' => 10,
                     'is_bulk' => 'on',
                 ],
-            ]
+            ],
         ];
 
         $response = $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), $postData);
@@ -410,7 +414,7 @@ class MobileEquipmentTest extends TestCase
                     'model' => 'EU2000i',
                     'vendor' => 'Honda',
                     'photo_front' => '', // Empty, rely on upload
-                    'photo' => \Illuminate\Http\UploadedFile::fake()->create('custom_generator.jpg', 800, 'image/jpeg'),
+                    'photo' => UploadedFile::fake()->create('custom_generator.jpg', 800, 'image/jpeg'),
                     'status' => '대기중',
                     'quantity' => 1,
                     'is_bulk' => '0',
@@ -424,7 +428,7 @@ class MobileEquipmentTest extends TestCase
                     'quantity' => 1,
                     'is_bulk' => 'on',
                 ],
-            ]
+            ],
         ];
 
         $response = $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), $postData);
@@ -436,7 +440,7 @@ class MobileEquipmentTest extends TestCase
         $this->assertNotNull($card1);
         $this->assertNotNull($card1->photo_front);
         $this->assertStringStartsWith('/storage/equipments/', $card1->photo_front);
-        Storage::disk('public')->assertExists('equipments/' . basename($card1->photo_front));
+        Storage::disk('public')->assertExists('equipments/'.basename($card1->photo_front));
 
         // Check card_2 static image path remains
         $card2 = Equipment::where('model', 'Static Photo')->first();
@@ -452,7 +456,7 @@ class MobileEquipmentTest extends TestCase
 
     public function test_mobile_equipment_scan_photos_batch_analyzes_multiple_images_successfully(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('public');
+        Storage::fake('public');
 
         $mockAnalyzer = $this->createMock(GeminiEquipmentPhotoAnalyzer::class);
         $mockAnalyzer->expects($this->once())
@@ -465,7 +469,7 @@ class MobileEquipmentTest extends TestCase
                         'vendor' => 'DeWalt',
                         'quantity' => 1,
                         'is_bulk' => false,
-                        'photo_index' => 0
+                        'photo_index' => 0,
                     ],
                     [
                         'equipment_type' => 'Other (기타)',
@@ -473,24 +477,24 @@ class MobileEquipmentTest extends TestCase
                         'vendor' => 'Grip-Rite',
                         'quantity' => 5,
                         'is_bulk' => true,
-                        'photo_index' => 1
-                    ]
+                        'photo_index' => 1,
+                    ],
                 ],
-                'model_name' => 'gemini-2.5-flash'
+                'model_name' => 'gemini-2.5-flash',
             ]);
 
         $this->app->instance(GeminiEquipmentPhotoAnalyzer::class, $mockAnalyzer);
 
-        $file1 = \Illuminate\Http\UploadedFile::fake()->create('drill.jpg', 800, 'image/jpeg');
-        $file2 = \Illuminate\Http\UploadedFile::fake()->create('nails.jpg', 800, 'image/jpeg');
+        $file1 = UploadedFile::fake()->create('drill.jpg', 800, 'image/jpeg');
+        $file2 = UploadedFile::fake()->create('nails.jpg', 800, 'image/jpeg');
 
         $response = $this->actingAs($this->user)->post(route('mobile-equipment.scan-photos-batch'), [
-            'photos' => [$file1, $file2]
+            'photos' => [$file1, $file2],
         ]);
 
         $response->assertStatus(200);
         $response->assertJsonPath('success', true);
-        
+
         $data = $response->json();
         $this->assertCount(2, $data['items']);
         $this->assertCount(2, $data['photos']);
@@ -506,7 +510,7 @@ class MobileEquipmentTest extends TestCase
     public function test_mobile_equipment_update_saves_changes_and_optional_photo(): void
     {
         Storage::fake('public');
-        
+
         $equipment = Equipment::create([
             'company_id' => $this->company->id,
             'site_id' => $this->site->id,
@@ -524,7 +528,7 @@ class MobileEquipmentTest extends TestCase
             'site_id' => $this->site->id,
             'team_id' => $this->team->id,
             'employee_id' => $this->employee->id,
-            'photo' => \Illuminate\Http\UploadedFile::fake()->create('new_photo.jpg', 800, 'image/jpeg'),
+            'photo' => UploadedFile::fake()->create('new_photo.jpg', 800, 'image/jpeg'),
         ];
 
         $response = $this->actingAs($this->user)->put(route('mobile-equipment.update', $equipment), $updateData);
@@ -539,10 +543,10 @@ class MobileEquipmentTest extends TestCase
         $this->assertSame('사용중', $equipment->status);
         $this->assertSame($this->team->id, $equipment->team_id);
         $this->assertSame($this->employee->id, $equipment->employee_id);
-        
+
         $this->assertNotNull($equipment->photo_front);
         $storedFilename = basename($equipment->photo_front);
-        Storage::disk('public')->assertExists('equipments/' . $storedFilename);
+        Storage::disk('public')->assertExists('equipments/'.$storedFilename);
     }
 
     public function test_mobile_equipment_destroy_removes_record(): void
@@ -564,6 +568,53 @@ class MobileEquipmentTest extends TestCase
             'id' => $equipment->id,
         ]);
     }
+
+    public function test_mobile_registration_defaults_to_owned_and_preserves_explicit_rental(): void
+    {
+        $base = [
+            'equipment_type' => 'Other (기타)', 'status' => '대기중',
+            'site_id' => $this->site->id, 'quantity' => 2, 'is_bulk' => 'on',
+        ];
+        $this->actingAs($this->user)
+            ->post(route('mobile-equipment.store'), $base + ['model' => 'Purchased material'])
+            ->assertRedirect(route('mobile-equipment.index'));
+        $this->post(route('mobile-equipment.store'), array_merge($base, [
+            'model' => 'Rented lift', 'is_bulk' => '0', 'acquisition_type' => '임대',
+        ]))->assertRedirect(route('mobile-equipment.index'));
+
+        $this->assertDatabaseHas('equipments', ['model' => 'Purchased material', 'acquisition_type' => '소유', 'quantity' => 2]);
+        $this->assertSame(['임대', '임대'], Equipment::where('model', 'Rented lift')->pluck('acquisition_type')->all());
+    }
+
+    public function test_mobile_batch_preserves_ownership_for_bulk_and_serialized_items(): void
+    {
+        $item = ['equipment_type' => 'Other (기타)', 'status' => '대기중', 'quantity' => 2];
+        $this->actingAs($this->user)->post(route('mobile-equipment.store-batch'), [
+            'site_id' => $this->site->id,
+            'items' => [
+                $item + ['model' => 'Owned material', 'is_bulk' => 'on'],
+                $item + ['model' => 'Owned tools', 'is_bulk' => '0', 'acquisition_type' => '소유'],
+                $item + ['model' => 'Rental tools', 'is_bulk' => '0', 'acquisition_type' => '임대'],
+                $item + ['model' => 'Rental bulk', 'is_bulk' => 'on', 'acquisition_type' => '임대'],
+            ],
+        ])->assertRedirect(route('mobile-equipment.index'));
+
+        $this->assertDatabaseHas('equipments', ['model' => 'Owned material', 'acquisition_type' => '소유', 'quantity' => 2]);
+        $this->assertSame(['소유', '소유'], Equipment::where('model', 'Owned tools')->pluck('acquisition_type')->all());
+        $this->assertSame(['임대', '임대'], Equipment::where('model', 'Rental tools')->pluck('acquisition_type')->all());
+        $this->assertDatabaseHas('equipments', ['model' => 'Rental bulk', 'acquisition_type' => '임대', 'quantity' => 2]);
+    }
+
+    public function test_mobile_registration_rejects_unknown_acquisition_types_before_writing(): void
+    {
+        $item = [
+            'equipment_type' => 'Other (기타)', 'model' => 'Invalid ownership',
+            'status' => '대기중', 'quantity' => 1, 'acquisition_type' => 'unknown',
+        ];
+        $this->actingAs($this->user)->postJson(route('mobile-equipment.store'), $item)
+            ->assertUnprocessable()->assertJsonValidationErrors('acquisition_type');
+        $this->postJson(route('mobile-equipment.store-batch'), ['items' => [$item]])
+            ->assertUnprocessable()->assertJsonValidationErrors('items.0.acquisition_type');
+        $this->assertDatabaseCount('equipments', 0);
+    }
 }
-
-
