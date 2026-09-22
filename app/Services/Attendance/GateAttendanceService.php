@@ -155,8 +155,21 @@ class GateAttendanceService
         }
 
         $tz = $site->timezone ?: config('app.timezone');
-        $now = Carbon::now($tz);
-        $workDate = $now->toDateString();
+
+        // 기록하는 값은 «언제였는가» 다 — 시계 문자열이 아니라 그 순간 자체다.
+        //
+        // 여기에 `Carbon::now($tz)` 를 쓰면 <b>현장 시간대의 벽시계</b>가 저장된다.
+        // 이 저장소는 2026-07-24 에 날짜 칸을 전부 naive 로 통일했고(그 마이그레이션의
+        // 주석 참고), 그때부터 규칙은 «저장 문자열은 <b>앱 시간대</b>의 벽시계» 다.
+        // 쓰는 시계와 읽는 시계가 다르면 그 차이가 그대로 오차가 된다.
+        //
+        // 조지아 사바나에서 아침 7시에 찍은 출근이 10시로 적혔다. 사바나의 "07:00" 이
+        // 저장되고 앱 시간대(피닉스)의 07:00 으로 읽혀 세계시 14:00 이 된 것이다.
+        // 현장이 애리조나 한 곳일 때는 두 시계가 같아 아무 일도 없었다.
+        //
+        // 현장 시간대는 «몇 시로 보여줄까» 와 «오늘이 며칠인가» 에만 쓴다.
+        $now = Carbon::now();
+        $workDate = $now->copy()->timezone($tz)->toDateString();
 
         // 중복 스캔(5분 내) → 무시.
         $recent = AttendanceLog::query()->where('employee_id', $employee->id)

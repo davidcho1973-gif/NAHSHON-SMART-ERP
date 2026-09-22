@@ -51,7 +51,12 @@ class AutoClockOutService
             }
             $tz = $site->timezone ?: config('app.timezone');
             $workDate = ($dateArg ?? Carbon::now($tz))->copy()->timezone($tz)->toDateString();
-            $cutoff = Carbon::parse($workDate.' '.str_pad((string) self::cutoffHour(), 2, '0', STR_PAD_LEFT).':00:00', $tz);
+            // 현장 시계로 «저녁 6시» 라는 순간을 만든 다음, <b>앱 시간대로 옮겨서</b> 저장한다.
+            // 날짜 칸은 naive 라 저장되는 문자열이 곧 앱 시간대의 벽시계여야 한다
+            // (2026-07-24 마이그레이션). 현장 시계 문자열을 그대로 넣으면 두 시계의
+            // 차이만큼 어긋난다 — 사바나에서 게이트 출근이 3시간 밀린 것과 같은 원인이다.
+            $cutoff = Carbon::parse($workDate.' '.str_pad((string) self::cutoffHour(), 2, '0', STR_PAD_LEFT).':00:00', $tz)
+                ->setTimezone(config('app.timezone'));
 
             // 그날 출근만 있고 퇴근이 없는 사람.
             $open = $this->openEmployees($site->id, $workDate);

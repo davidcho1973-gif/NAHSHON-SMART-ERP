@@ -33,6 +33,7 @@
         {{-- 안드로이드: 버튼 하나로 끝난다. --}}
         <div class="di-auto" hidden>
             <button type="button" class="di-go" id="di-go"></button>
+            <a class="di-help" href="{{ route('install-guide') }}" target="_blank" rel="noopener"></a>
             <button type="button" class="di-later" data-di-dismiss></button>
         </div>
 
@@ -49,6 +50,9 @@
                 <li><span class="di-n">3</span><span class="di-t" id="di-s3"></span></li>
             </ol>
             <p class="di-note" id="di-safari"></p>
+            {{-- 여기까지 읽고도 안 되는 사람이 갈 곳. 현장에서 막히는 대부분은
+                 «카카오톡으로 열어서» 인데, 그건 단계를 더 적어서 풀리지 않는다. --}}
+            <a class="di-help" href="{{ route('install-guide') }}" target="_blank" rel="noopener"></a>
             <button type="button" class="di-later" data-di-dismiss></button>
         </div>
     </div>
@@ -79,6 +83,8 @@
         background: #FEE500; color: rgba(0,0,0,.85);
         padding: 18px; font-size: 1.12rem; font-weight: 900; font-family: inherit; cursor: pointer;
     }
+    .di-help { display: block; text-align: center; margin-top: 12px; padding: 12px; border-radius: 10px;
+               background: rgba(8,119,189,.08); color: #0877BD; font-weight: 800; font-size: .92rem; text-decoration: none; }
     .di-later {
         width: 100%; margin-top: 10px; border: 0; background: none;
         color: #767676; padding: 13px; font-size: .93rem; font-weight: 700; font-family: inherit; cursor: pointer;
@@ -141,6 +147,11 @@
         document.getElementById('di-s2').innerHTML = T.iosStep2;
         document.getElementById('di-s3').innerHTML = T.iosStep3;
         document.getElementById('di-safari').innerHTML = T.iosSafari;
+        Array.prototype.forEach.call(root.querySelectorAll('.di-help'), function (a) {
+            a.textContent = T.help;
+            // 안내서도 지금 보고 있는 언어로 연다.
+            a.href = a.href.split('?')[0] + '?lang=' + lang;
+        });
         Array.prototype.forEach.call(root.querySelectorAll('.di-later'), function (b) {
             b.textContent = T.later;
         });

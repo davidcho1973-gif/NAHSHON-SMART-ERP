@@ -16,6 +16,7 @@ use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
+use App\Http\Controllers\InstallGuideController;
 use App\Http\Controllers\IntegratedDocumentController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileAskController;
@@ -462,6 +463,13 @@ Route::get('/print/qr/{site}', [QrPrintController::class, 'sheet'])
 Route::get('/guest/{token}', [GuestViewController::class, 'show'])
     ->middleware('throttle:30,1')
     ->name('guest.view');
+
+// 「홈 화면에 추가」 안내서 — 공개다.
+//
+// 이 화면을 가장 필요로 하는 사람은 <b>아직 앱에 못 들어간</b> 사람이다.
+// 그 앞에 로그인을 놓으면 안내서까지 못 본다.
+Route::get('/app/install', [InstallGuideController::class, 'show'])
+    ->middleware('throttle:60,1')->name('install-guide');
 
 // 작업자 앱 입구 — 등록할 때 기억해 둔 휴대폰이 열쇠다(로그인 화면 없음).
 //
