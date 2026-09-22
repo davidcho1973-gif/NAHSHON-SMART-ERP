@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\AttendanceLog;
 use App\Models\Site;
-use App\Services\Attendance\AutoClockOutService;
+use App\Support\WorkRules;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -183,7 +183,9 @@ class FixGateAttendanceClock extends Command
      */
     private function autoCloseUsedTheSiteWallClock(AttendanceLog $log, string $tz): bool
     {
-        $cutoffHour = AutoClockOutService::cutoffHour();
+        // 마감 시각은 현장마다 다르다 — 회사 기본값으로 판정하면 다른 시각에
+        // 마감하는 현장의 밀린 줄을 못 찾거나, 엉뚱한 줄을 고르게 된다.
+        $cutoffHour = (int) explode(':', WorkRules::forSite($log->site_id)->end)[0];
 
         return (int) $log->event_at->format('G') === $cutoffHour
             && (int) $log->event_at->copy()->timezone($tz)->format('G') !== $cutoffHour;

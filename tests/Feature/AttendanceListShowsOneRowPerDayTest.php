@@ -101,7 +101,9 @@ class AttendanceListShowsOneRowPerDayTest extends TestCase
         $row = $res['rows'][0];
         $this->assertSame('07:50', $row['clockIn']['time']);
         $this->assertSame('16:20', $row['clockOut']['time']);
-        $this->assertSame('8시간 30분', $row['workedLabel']);
+        // 「근무」 는 급여가 보는 시간이다 — 현장에 있던 8시간 30분에서 무급 점심 1시간을 뺀 값.
+        $this->assertSame('7시간 30분', $row['workedLabel']);
+        $this->assertSame('점심 1시간 제외', $row['breakLabel']);
     }
 
     public function test_the_time_is_the_clock_of_the_place_it_happened(): void
@@ -152,7 +154,7 @@ class AttendanceListShowsOneRowPerDayTest extends TestCase
 
         $this->assertSame('07:50', $row['clockIn']['time']);
         $this->assertSame('16:20', $row['clockOut']['time']);
-        $this->assertSame('8시간 30분', $row['workedLabel']);
+        $this->assertSame('7시간 30분', $row['workedLabel']);
     }
 
     public function test_a_rejected_record_is_kept_in_sight_next_to_the_good_one(): void

@@ -65,10 +65,12 @@
           },
         },
         {
-          key: 'timezone', label: '타임존', width: '150px',
+          key: 'timezone', label: '타임존 · 근무', width: '200px',
           render: function (r) {
             // 타임존이 틀리면 출퇴근 시각이 하루씩 밀린다. 눈에 띄게 둔다.
-            return '<span style="font-size:12px;color:var(--text-secondary)">' + u.esc(r.timezone || '—') + '</span>';
+            // 근무 규칙도 같이 보여 준다 — 현장마다 다르고, 그 값이 곧 임금이다.
+            return '<span style="font-size:12px;color:var(--text-secondary)">' + u.esc(r.timezone || '—') + '</span>' +
+              (r.workRules ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.workRules) + '</div>' : '');
           },
         },
         {
@@ -249,6 +251,22 @@
           { name: 'status', label: '상태', type: 'select', required: true, group: '시각 · 상태',
             options: o.statuses, value: row ? row.status : 'active',
             hint: '끝난 현장은 지우지 말고 Inactive 로 두세요. 출퇴근 기록이 남습니다.' },
+
+          { name: 'work_start', label: '작업 시작', type: 'time', group: '근무 시간',
+            value: row ? row.workStart : '',
+            hint: '현장 시계 기준. 비우면 회사 기본값을 씁니다.' },
+          { name: 'work_end', label: '작업 종료', type: 'time', group: '근무 시간',
+            value: row ? row.workEnd : '',
+            hint: '퇴근을 안 찍은 협력사 인원을 이 시각으로 자동 마감합니다.' },
+          { name: 'regular_minutes', label: '하루 정규 근무 (분)', type: 'number', group: '근무 시간',
+            value: row ? row.regularMinutes : 480,
+            hint: '480 = 8시간. 이 시간을 넘긴 만큼이 초과근무가 됩니다.' },
+          { name: 'break_minutes', label: '무급 휴게 (분)', type: 'number', group: '근무 시간',
+            value: row ? row.breakMinutes : 60,
+            hint: '60 = 점심 1시간. 급여에서 빠집니다. 없으면 0.' },
+          { name: 'break_after_minutes', label: '휴게 공제 기준 (분)', type: 'number', group: '근무 시간',
+            colSpan: 2, value: row ? row.breakAfterMinutes : 240,
+            hint: '이 시간을 넘게 일한 날만 휴게를 뺍니다. 240 = 4시간. 반나절 일한 사람의 점심까지 빼지 않기 위한 값입니다.' },
 
           { name: 'company_id', label: '소속 회사', type: 'select', group: '소속',
             options: o.companies, value: row ? row.companyId : '' },

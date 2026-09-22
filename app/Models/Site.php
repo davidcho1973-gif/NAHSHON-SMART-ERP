@@ -64,6 +64,12 @@ class Site extends Model
         'latitude',
         'longitude',
         'radius_meters',
+        // 근무 규칙 — 현장마다 다르다(여러 주에 흩어져 있다). 읽는 규칙은 WorkRules 한 곳.
+        'work_start',
+        'work_end',
+        'regular_minutes',
+        'break_minutes',
+        'break_after_minutes',
     ];
 
     protected function casts(): array

@@ -5,6 +5,7 @@ namespace App\Services\Payroll;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\PayrollTimesheet;
+use App\Support\WorkRules;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,14 +20,6 @@ use Illuminate\Support\Facades\Schema;
  */
 class AttendanceTimesheetSync
 {
-    /** Standard regular minutes per day; minutes beyond this are overtime. */
-    private const REGULAR_MINUTES_PER_DAY = 480; // 8h
-
-    /** Unpaid lunch deducted once a day exceeds this worked duration. */
-    private const LUNCH_THRESHOLD_MINUTES = 240; // 4h
-
-    private const LUNCH_MINUTES = 60;
-
     /**
      * Recompute and upsert the timesheet for one employee on one date.
      * Returns null when there is no usable attendance (e.g. only rejected logs).
@@ -72,6 +65,9 @@ class AttendanceTimesheetSync
         $checkIn = $logs->firstWhere('event_type', 'clock_in')?->event_at;
         $checkOut = $logs->where('event_type', 'clock_out')->last()?->event_at;
 
+        // 그날 실제로 찍힌 현장/팀이 직원 마스터의 소속보다 정확하다 — 파견·이동 근무가 있다.
+        $context = $logs->last();
+
         $regular = 0;
         $overtime = 0;
         $payable = 0;
@@ -81,14 +77,16 @@ class AttendanceTimesheetSync
             // Preserve whole-minute truncation before applying payroll rules;
             // PostgreSQL integer columns reject fractional-minute values.
             $worked = (int) Carbon::parse($checkIn)->diffInMinutes(Carbon::parse($checkOut));
-            $payable = $worked > self::LUNCH_THRESHOLD_MINUTES ? $worked - self::LUNCH_MINUTES : $worked;
-            $payable = max(0, $payable);
-            $regular = min($payable, self::REGULAR_MINUTES_PER_DAY);
-            $overtime = max(0, $payable - self::REGULAR_MINUTES_PER_DAY);
-        }
 
-        // 그날 실제로 찍힌 현장/팀이 직원 마스터의 소속보다 정확하다 — 파견·이동 근무가 있다.
-        $context = $logs->last();
+            // 정규 시간·무급 휴게는 <b>현장마다 다르다</b>(여러 주에 흩어져 있고
+            // 프로젝트마다 시간표가 다르다). 규칙은 WorkRules 한 곳에만 둔다 —
+            // 여기와 화면이 각자 계산하면 같은 하루가 두 숫자가 된다.
+            $split = WorkRules::forSite($context?->site_id ?: $employee?->site_id)->split($worked);
+
+            $payable = $split['payable'];
+            $regular = $split['regular'];
+            $overtime = $split['overtime'];
+        }
 
         return PayrollTimesheet::updateOrCreate(
             ['employee_id' => $employeeId, 'work_date' => $date],

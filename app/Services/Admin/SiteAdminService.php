@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WbsItem;
+use App\Support\WorkRules;
 
 /**
  * 현장 · PROJECT 관리 — Filament SiteResource / ProjectResource 를 SPA 로 옮긴 것.
@@ -56,6 +57,8 @@ class SiteAdminService
         $crewCounts = Employee::query()->where('employment_status', 'active')
             ->selectRaw('site_id, count(*) as n')->groupBy('site_id')->pluck('n', 'site_id');
 
+        $rules = fn (Site $s): WorkRules => WorkRules::forSite($s);
+
         $sites = Site::query()->with(['company:id,name', 'client:id,name'])
             ->orderBy('code')->get()
             ->map(fn (Site $s): array => [
@@ -66,6 +69,13 @@ class SiteAdminService
                 'country' => $s->country,
                 'timezone' => $s->timezone,
                 'status' => $s->status,
+                // 근무 규칙 — 현장마다 다르다. 값은 현장에, 읽는 규칙은 WorkRules 한 곳.
+                'workStart' => $rules($s)->start,
+                'workEnd' => $rules($s)->end,
+                'regularMinutes' => $rules($s)->regularMinutes,
+                'breakMinutes' => $rules($s)->breakMinutes,
+                'breakAfterMinutes' => $rules($s)->breakAfterMinutes,
+                'workRules' => $rules($s)->summary(),
                 'companyId' => $s->company_id,
                 'company' => $s->company?->name,
                 'clientCompanyId' => $s->client_company_id,
@@ -204,7 +214,20 @@ class SiteAdminService
             'company_id' => ($input['company_id'] ?? '') !== '' ? (int) $input['company_id'] : null,
             'client_company_id' => ($input['client_company_id'] ?? '') !== '' ? (int) $input['client_company_id'] : null,
         ]);
+
+        // 근무 규칙 — 비워 두면 회사 기본값을 쓴다(값을 지울 수 있어야 기본값으로 돌아갈 길이 있다).
+        $site->work_start = $this->clock($input['work_start'] ?? null);
+        $site->work_end = $this->clock($input['work_end'] ?? null);
+        foreach (['regular_minutes' => WorkRules::DEFAULT_REGULAR_MINUTES,
+            'break_minutes' => WorkRules::DEFAULT_BREAK_MINUTES,
+            'break_after_minutes' => WorkRules::DEFAULT_BREAK_AFTER_MINUTES] as $field => $fallback) {
+            $given = $input[$field] ?? null;
+            // 0 은 «없음» 이다(점심 없는 현장). 빈 칸이어야 기본값으로 돌아간다.
+            $site->{$field} = ($given === null || $given === '') ? $fallback : max(0, (int) $given);
+        }
+
         $site->save();
+        WorkRules::forget();   // 방금 바꾼 규칙이 같은 요청 안에서 옛 값으로 읽히면 안 된다.
 
         return ['success' => true, 'id' => $site->id];
     }
@@ -403,6 +426,17 @@ class SiteAdminService
     private function money(mixed $v): ?float
     {
         return is_numeric($v) ? (float) $v : null;
+    }
+
+    /**
+     * 사람이 적은 「07:00」 을 시각 칸으로. 비었거나 모양이 아니면 null —
+     * null 이면 회사 기본값을 쓴다는 뜻이다.
+     */
+    private function clock(mixed $v): ?string
+    {
+        $text = trim((string) $v);
+
+        return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $text) ? $text.':00' : null;
     }
 
     private function text(mixed $v, bool $upper = false): ?string

@@ -177,19 +177,24 @@
           render: function (r) { return timeCell(r, r.clockOut, '퇴근'); },
         },
         {
-          key: 'workedLabel', label: '근무', width: '95px',
+          key: 'workedLabel', label: '근무 (급여)', width: '130px',
           render: function (r) {
             // 한쪽만 있는 날은 «0시간» 이 아니라 «모름» 이다 — 그 차이가 임금이다.
-            return r.workedLabel
-              ? '<span style="font-weight:600">' + u.esc(r.workedLabel) + '</span>'
-              : '<span style="color:var(--text-tertiary)">—</span>';
+            if (!r.workedLabel) return '<span style="color:var(--text-tertiary)">—</span>';
+            // 점심을 빼고도 말하지 않으면 «내 시간이 한 시간 없어졌다» 가 된다.
+            var notes = [r.breakLabel, r.overtimeLabel].filter(Boolean).join(' · ');
+            return '<span style="font-weight:600">' + u.esc(r.workedLabel) + '</span>' +
+              (notes ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(notes) + '</div>' : '');
           },
         },
         {
-          key: 'site', label: '현장', width: '110px',
+          key: 'site', label: '현장', width: '150px',
           render: function (r) {
             return u.esc(r.site || '—') +
-              (r.zone ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.zone) + ' 기준</div>' : '');
+              (r.zone ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.zone) + ' 기준</div>' : '') +
+              // 그 현장의 근무 규칙을 같이 적는다 — 「근무」 칸의 숫자가 어떻게 나온
+              // 것인지 그 자리에서 알 수 있어야, 매번 묻지 않는다.
+              (r.rulesLabel ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.rulesLabel) + '</div>' : '');
           },
         },
         {

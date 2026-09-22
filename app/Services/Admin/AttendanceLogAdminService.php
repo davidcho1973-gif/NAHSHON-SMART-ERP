@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\AccessPolicy;
 use App\Support\SiteClock;
+use App\Support\WorkRules;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -186,7 +187,12 @@ class AttendanceLogAdminService
                 'clockIn' => null,
                 'clockOut' => null,
                 'extras' => [],
+                // 근무 시간은 <b>급여가 보는 대로</b> 적는다. 화면이 따로 계산하면
+                // 같은 하루가 화면 9시간 30분, 급여 8시간 30분이 된다.
                 'workedLabel' => null,
+                'breakLabel' => null,
+                'overtimeLabel' => null,
+                'rulesLabel' => WorkRules::forSite($log->site_id)->summary(),
                 'canDelete' => $this->canDelete(),
             ];
 
@@ -209,7 +215,7 @@ class AttendanceLogAdminService
         }
 
         foreach ($days as $key => $day) {
-            $days[$key]['workedLabel'] = $this->workedLabel($day['clockIn'], $day['clockOut']);
+            $days[$key] = array_merge($day, $this->worked($day));
         }
 
         // 화면은 최근 날짜부터 본다 — 고칠 일이 생기는 건 대개 어제오늘이다.
@@ -250,28 +256,41 @@ class AttendanceLogAdminService
     }
 
     /**
-     * 그날 일한 시간. 두 끝이 다 있고 둘 다 유효할 때만 센다.
+     * 그날 일한 시간 — <b>급여가 보는 대로</b>. 두 끝이 다 있고 둘 다 유효할 때만 센다.
      *
      * 한쪽만 있을 때 0 이나 추정치를 적지 않는다 — 비어 있는 것과 «0시간 일했다» 는
      * 전혀 다른 말이고, 그 차이가 임금이다.
      *
-     * @param  array<string, mixed>|null  $in
-     * @param  array<string, mixed>|null  $out
+     * 무급 휴게(점심)를 뺀 값을 「근무」 로 적고, 뺀 사실을 옆에 적는다. 빼기만 하고
+     * 말을 안 하면 «내 시간이 한 시간 없어졌다» 가 되고, 그건 매번 묻게 된다.
+     *
+     * @param  array<string, mixed>  $day
+     * @return array<string, mixed>
      */
-    private function workedLabel(?array $in, ?array $out): ?string
+    private function worked(array $day): array
     {
         $usable = fn (?array $e): bool => $e !== null && ! $e['deleted'] && $e['status'] !== 'rejected';
+        $blank = ['workedLabel' => null, 'breakLabel' => null, 'overtimeLabel' => null];
 
-        if (! $usable($in) || ! $usable($out)) {
-            return null;
+        if (! $usable($day['clockIn']) || ! $usable($day['clockOut'])) {
+            return $blank;
         }
 
-        $minutes = (int) round(Carbon::parse($in['eventAt'])->diffInMinutes(Carbon::parse($out['eventAt']), false));
+        $minutes = (int) round(Carbon::parse($day['clockIn']['eventAt'])
+            ->diffInMinutes(Carbon::parse($day['clockOut']['eventAt']), false));
         if ($minutes <= 0) {
-            return null;   // 퇴근이 출근보다 이르면 셈이 아니라 고칠 거리다.
+            return $blank;   // 퇴근이 출근보다 이르면 셈이 아니라 고칠 거리다.
         }
 
-        return intdiv($minutes, 60).'시간'.($minutes % 60 ? ' '.($minutes % 60).'분' : '');
+        $split = WorkRules::forSite($day['siteId'])->split($minutes);
+
+        return [
+            'workedLabel' => WorkRules::hours($split['payable']),
+            'breakLabel' => $split['break'] > 0
+                ? '점심 '.WorkRules::hours($split['break']).' 제외' : null,
+            'overtimeLabel' => $split['overtime'] > 0
+                ? '초과 '.WorkRules::hours($split['overtime']) : null,
+        ];
     }
 
     /**

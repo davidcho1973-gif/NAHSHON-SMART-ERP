@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Services\Alerts\UnifiedAlertService;
 use App\Support\Org;
 use App\Support\SiteSchedule;
+use App\Support\WorkRules;
 use Illuminate\Support\Carbon;
 
 /**
@@ -22,10 +23,14 @@ use Illuminate\Support\Carbon;
 class AutoClockOutService
 {
     /**
-     * 자동 퇴근 처리 시각 기본값(현장 로컬 기준, 24h).
+     * 자동 퇴근 처리 시각의 <b>회사 기본값</b>(현장 로컬 기준, 24h).
      *
      * 회사마다 다르다 — config/org.php 의 attendance.indirect_cutoff_hour 로 덮는다.
      * 여기 상수는 아무것도 설정하지 않은 배포가 쓰는 값이다.
+     *
+     * 현장이 작업 종료 시각을 갖고 있으면 <b>그것이 이긴다</b>(WorkRules). 현장은
+     * 여러 주에 흩어져 있고 프로젝트마다 끝나는 시각이 다르다 — 회사 한 값으로
+     * 마감하면 어느 현장인가는 반드시 남의 시간에 퇴근 처리된다.
      */
     public const CUTOFF_HOUR = 16;
 
@@ -55,8 +60,7 @@ class AutoClockOutService
             // 날짜 칸은 naive 라 저장되는 문자열이 곧 앱 시간대의 벽시계여야 한다
             // (2026-07-24 마이그레이션). 현장 시계 문자열을 그대로 넣으면 두 시계의
             // 차이만큼 어긋난다 — 사바나에서 게이트 출근이 3시간 밀린 것과 같은 원인이다.
-            $cutoff = Carbon::parse($workDate.' '.str_pad((string) self::cutoffHour(), 2, '0', STR_PAD_LEFT).':00:00', $tz)
-                ->setTimezone(config('app.timezone'));
+            $cutoff = WorkRules::forSite($site)->endOfWorkDay($workDate);
 
             // 그날 출근만 있고 퇴근이 없는 사람.
             $open = $this->openEmployees($site->id, $workDate);
@@ -83,7 +87,9 @@ class AutoClockOutService
                     'event_at' => $cutoff,
                     'source' => 'auto_clockout',
                     'status' => 'approved',
-                    'notes' => '퇴근 미기록 — 16:00 자동 마감(간접고용)',
+                    // 적히는 시각을 문장에도 그대로 — 「16:00」 을 박아 두면 현장마다
+                    // 다른 마감 시각과 어긋나고, 그 쪽지를 읽는 사람이 헷갈린다.
+                    'notes' => '퇴근 미기록 — '.$cutoff->copy()->timezone($tz)->format('H:i').' 자동 마감(간접고용)',
                 ]);
                 $closed++;
             }
