@@ -4,6 +4,13 @@
  * 이 표는 급여의 근거 자료다. 그래서 목록이 답해야 하는 질문은 "누가 언제 찍었나" 가
  * 아니라 "고쳐야 할 게 있나" 다. 대기중·반려 건과 손댄 적 있는 건을 먼저 눈에 띄게 한다.
  *
+ * <b>한 사람의 하루가 한 줄</b>이다. 출근과 퇴근이 따로 올라오면 같은 사람의 두 끝이
+ * 목록 여기저기에 흩어져, 「몇 시간 일했나」 를 눈으로 짝지어야 한다 — 그게 이 표를
+ * 여는 이유인데도 그렇다. 나란히 놓으면 빠진 퇴근도 빈 칸으로 그대로 보인다.
+ *
+ * 시각은 <b>현장 시계</b>다. 현장 칸에 시계 이름(EDT 등)을 같이 적는다 — 서버 시계로
+ * 보여 주던 때는 사바나 아침 7시 50분이 04:50 으로 떴고, 그걸 알아채는 데 하루가 걸렸다.
+ *
  * 기본 기간은 최근 7일. 전체를 다 불러오면 수천 건이라 정작 오늘 문제를 못 찾는다.
  */
 (function (global) {
@@ -61,15 +68,83 @@
       '</div>';
   }
 
+  /** 한 줄(하루) 안의 모든 기록 — 출근·퇴근·밀려난 것까지. */
+  function eventsOf(row) {
+    return [row.clockIn, row.clockOut].concat(row.extras || []).filter(Boolean);
+  }
+
+  function findEvent(id) {
+    for (var i = 0; i < state.rows.length; i++) {
+      var hit = eventsOf(state.rows[i]).filter(function (e) { return e.id === id; })[0];
+      if (hit) return { row: state.rows[i], event: hit };
+    }
+    return null;
+  }
+
+  /** 출근/퇴근 칸 하나. 시각 + 그 기록의 상태. */
+  function timeCell(row, e, what) {
+    var u = ui();
+    if (!e) {
+      return '<span style="color:var(--text-tertiary)">—</span>' +
+        (state.canManage
+          ? '<div style="margin-top:3px">' + u.rowButton(what + ' 추가',
+            'window.AdminAttendance.addFor(\'' + row.key + '\',\'' + (what === '출근' ? 'clock_in' : 'clock_out') + '\')') + '</div>'
+          : '');
+    }
+
+    var time = '<span style="font-family:var(--font-mono,monospace);font-size:14px;font-weight:600' +
+      (e.deleted ? ';text-decoration:line-through;color:var(--text-tertiary)' : '') + '">' + u.esc(e.time || '—') + '</span>';
+
+    var note = '';
+    if (e.deleted) {
+      note = ' ' + u.badge('삭제됨', 'danger');
+    } else if (e.status !== 'approved') {
+      note = ' ' + u.badge(e.statusLabel, e.status === 'pending' ? 'warn' : 'danger');
+    }
+
+    var trail = '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + u.esc(e.sourceLabel || '') +
+      // 손댄 적 있는 건은 표시한다 — 급여 담당이 되짚을 단서다.
+      (e.editCount ? ' · <a href="#" onclick="window.AdminAttendance.showHistory(' + e.id + ');return false" ' +
+        'style="color:var(--text-tertiary);text-decoration:underline">수정 ' + e.editCount + '회</a>' : '') +
+      '</div>';
+
+    return time + note + trail;
+  }
+
+  /** 한 기록에 대해 할 수 있는 일들. */
+  function eventActions(e, what) {
+    var u = ui();
+    if (!e || !state.canManage) return '';
+
+    // 지워진 기록에서 할 수 있는 것은 되살리기뿐이다. 승인·수정 버튼을 같이 두면
+    // 눌러 보고 거절당하게 된다.
+    if (e.deleted) {
+      return state.canDelete
+        ? '<div style="margin-bottom:3px"><span style="font-size:11px;color:var(--text-tertiary);margin-right:5px">' + what + '</span>' +
+          u.rowButton('되살리기', 'window.AdminAttendance.restore(' + e.id + ')') + '</div>'
+        : '';
+    }
+
+    var out = '<span style="font-size:11px;color:var(--text-tertiary);margin-right:5px">' + what + '</span>';
+    if (e.status !== 'approved') out += u.rowButton('승인', 'window.AdminAttendance.setStatus(' + e.id + ',"approved")') + ' ';
+    out += u.rowButton('수정', 'window.AdminAttendance.openForm(' + e.id + ')') + ' ';
+    if (e.status !== 'rejected') out += u.rowButton('반려', 'window.AdminAttendance.setStatus(' + e.id + ',"rejected")') + ' ';
+    // 삭제는 관리자만. 급여 근거를 목록에서 빼는 일이다.
+    if (state.canDelete) out += u.rowButton('삭제', 'window.AdminAttendance.remove(' + e.id + ')', 'danger');
+
+    return '<div style="margin-bottom:3px">' + out + '</div>';
+  }
+
   function render() {
     var u = ui();
     var rows = state.rows;
-    var pending = rows.filter(function (r) { return r.status === 'pending'; }).length;
-    var edited = rows.filter(function (r) { return r.editCount > 0; }).length;
+    var all = rows.reduce(function (acc, r) { return acc.concat(eventsOf(r)); }, []);
+    var pending = all.filter(function (e) { return e.status === 'pending'; }).length;
+    var missing = rows.filter(function (r) { return r.clockIn && !r.clockOut; }).length;
 
-    var notes = [rows.length + '건'];
+    var notes = [rows.length + '명·일', all.length + '건'];
     if (pending) notes.push(pending + '건 대기중');
-    if (edited) notes.push(edited + '건 수정됨');
+    if (missing) notes.push(missing + '건 퇴근 미기록');
 
     var actions = state.canManage
       ? u.primaryButton('기록 추가', 'window.AdminAttendance.openForm()', 'plus')
@@ -77,7 +152,8 @@
 
     return u.pageHeader(
       '출퇴근 기록',
-      '급여의 근거가 되는 기록입니다. 고치면 누가 무엇을 바꿨는지 남습니다. — ' + notes.join(' · '),
+      '급여의 근거가 되는 기록입니다. 한 사람의 하루가 한 줄이고, 시각은 현장 시계 기준입니다. ' +
+      '고치면 누가 무엇을 바꿨는지 남습니다. — ' + notes.join(' · '),
       actions
     ) + filterBar() + u.table({
       id: 'at-tbl',
@@ -91,49 +167,38 @@
               (r.employeeNumber ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.employeeNumber) + '</div>' : '');
           },
         },
-        { key: 'date', label: '날짜', width: '110px' },
+        { key: 'date', label: '날짜', width: '105px' },
         {
-          key: 'eventTime', label: '시각', width: '90px',
-          render: function (r) { return '<span style="font-family:var(--font-mono,monospace)">' + u.esc(r.eventTime || '—') + '</span>'; },
+          key: 'clockIn', label: '출근', width: '120px',
+          render: function (r) { return timeCell(r, r.clockIn, '출근'); },
         },
         {
-          key: 'eventTypeLabel', label: '구분', width: '80px',
-          render: function (r) { return u.badge(r.eventTypeLabel, r.eventType === 'clock_in' ? 'ok' : 'warn'); },
+          key: 'clockOut', label: '퇴근', width: '120px',
+          render: function (r) { return timeCell(r, r.clockOut, '퇴근'); },
         },
-        { key: 'sourceLabel', label: '방식', width: '90px' },
-        { key: 'site', label: '현장', width: '110px' },
         {
-          key: 'statusLabel', label: '상태', width: '100px',
+          key: 'workedLabel', label: '근무', width: '95px',
           render: function (r) {
-            if (r.deleted) {
-              return u.badge('삭제됨', 'danger') +
-                '<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">' +
-                u.esc((r.deletedAt || '').slice(0, 16)) + '</div>';
-            }
-            var kind = r.status === 'approved' ? 'ok' : r.status === 'pending' ? 'warn' : 'danger';
-            return u.badge(r.statusLabel, kind) +
-              // 손댄 적 있는 건은 표시한다 — 급여 담당이 되짚을 단서다.
-              (r.editCount ? ' <a href="#" onclick="window.AdminAttendance.showHistory(' + r.id + ');return false" ' +
-                'style="font-size:11px;color:var(--text-tertiary);text-decoration:underline">수정 ' + r.editCount + '회</a>' : '');
+            // 한쪽만 있는 날은 «0시간» 이 아니라 «모름» 이다 — 그 차이가 임금이다.
+            return r.workedLabel
+              ? '<span style="font-weight:600">' + u.esc(r.workedLabel) + '</span>'
+              : '<span style="color:var(--text-tertiary)">—</span>';
           },
         },
         {
-          key: 'act', label: '', align: 'right', width: '250px',
+          key: 'site', label: '현장', width: '110px',
           render: function (r) {
-            if (!state.canManage) return '';
-            // 지워진 줄에서 할 수 있는 것은 되살리기뿐이다. 승인·반려·수정 버튼을
-            // 같이 두면 눌러 보고 거절당하게 된다.
-            if (r.deleted) {
-              return state.canDelete
-                ? u.rowButton('되살리기', 'window.AdminAttendance.restore(' + r.id + ')')
-                : '';
-            }
-            var out = '';
-            if (r.status !== 'approved') out += u.rowButton('승인', 'window.AdminAttendance.setStatus(' + r.id + ',"approved")') + ' ';
-            if (r.status !== 'rejected') out += u.rowButton('반려', 'window.AdminAttendance.setStatus(' + r.id + ',"rejected")') + ' ';
-            out += u.rowButton('수정', 'window.AdminAttendance.openForm(' + r.id + ')');
-            // 삭제는 관리자만. 급여 근거를 목록에서 빼는 일이다.
-            if (state.canDelete) out += ' ' + u.rowButton('삭제', 'window.AdminAttendance.remove(' + r.id + ')', 'danger');
+            return u.esc(r.site || '—') +
+              (r.zone ? '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(r.zone) + ' 기준</div>' : '');
+          },
+        },
+        {
+          key: 'act', label: '', align: 'right', width: '300px',
+          render: function (r) {
+            var out = eventActions(r.clockIn, '출근') + eventActions(r.clockOut, '퇴근');
+            (r.extras || []).forEach(function (e) {
+              out += eventActions(e, e.eventTypeLabel + ' (중복)');
+            });
             return out;
           },
         },
@@ -177,42 +242,78 @@
     reload();
   }
 
-  function openForm(id) {
+  function isManualSource(o, source) {
+    return (o.sources || []).some(function (x) { return String(x.value) === String(source); });
+  }
+
+  /** 고를 수 있는 방식 + (고치는 중이면) 그 기록 자신의 방식. */
+  function sourceOptions(o, ev) {
+    var list = (o.sources || []).slice();
+    if (ev && ev.source && !isManualSource(o, ev.source)) {
+      list.unshift({ value: ev.source, label: ev.sourceLabel + ' (자동 기록)' });
+    }
+    return list;
+  }
+
+  /** 빠진 쪽(대개 퇴근)을 그 사람·그날로 바로 넣는다. */
+  function addFor(key, eventType) {
+    var row = state.rows.filter(function (r) { return r.key === key; })[0];
+    if (!row) return;
+    openForm(null, {
+      employeeId: row.employeeId, siteId: row.siteId, eventType: eventType,
+      date: row.date, employee: row.employee, zone: row.zone,
+    });
+  }
+
+  function openForm(id, prefill) {
     var u = ui();
-    var row = id ? state.rows.filter(function (r) { return r.id === id; })[0] : null;
+    var found = id ? findEvent(id) : null;
+    var ev = found ? found.event : null;
+    var row = found ? found.row : null;
+    var p = prefill || {};
 
     loadOptions().then(function (o) {
       u.formModal({
-        title: row ? '출퇴근 기록 수정' : '출퇴근 기록 추가',
-        subtitle: row
-          ? '급여 근거 자료입니다. 바뀐 내용은 이력에 남습니다.'
-          : '누락된 기록을 직접 넣습니다. 기록 방식은 "수기 입력" 으로 남습니다.',
-        saveLabel: row ? '수정' : '추가',
+        title: ev ? '출퇴근 기록 수정' : '출퇴근 기록 추가',
+        subtitle: ev
+          ? '급여 근거 자료입니다. 시각은 ' + (row && row.zone ? row.zone + ' (현장 시계)' : '현장 시계') +
+            ' 기준입니다. 바뀐 내용은 이력에 남습니다.'
+          : (p.date
+            ? (p.employee || '') + ' · ' + p.date + ' 의 ' + (p.eventType === 'clock_in' ? '출근' : '퇴근') +
+              ' 기록을 넣습니다. 시각은 ' + (p.zone ? p.zone + ' (현장 시계)' : '현장 시계') + ' 기준으로 적으세요.'
+            : '누락된 기록을 직접 넣습니다. 시각은 현장 시계 기준이고, 기록 방식은 "수기 입력" 으로 남습니다.'),
+        saveLabel: ev ? '수정' : '추가',
         fields: [
           { name: 'employeeId', label: '직원', type: 'select', required: true, group: '대상',
-            options: o.employees, value: row ? row.employeeId : '', colSpan: 2 },
+            options: o.employees, value: ev ? row.employeeId : (p.employeeId || ''), colSpan: 2 },
           { name: 'siteId', label: '현장', type: 'select', group: '대상',
-            options: o.sites, value: row ? row.siteId : '',
-            hint: '비우면 직원의 소속 현장을 씁니다.' },
+            options: o.sites, value: ev ? ev.siteId : (p.siteId || ''),
+            hint: '비우면 직원의 소속 현장을 씁니다. 시각은 이 현장의 시계로 읽습니다.' },
           { name: 'eventType', label: '구분', type: 'select', required: true, group: '대상',
-            options: o.eventTypes, value: row ? row.eventType : 'clock_in' },
+            options: o.eventTypes, value: ev ? ev.eventType : (p.eventType || 'clock_in') },
 
-          { name: 'eventAt', label: '기록 시각', type: 'datetime-local', required: true, group: '기록',
-            value: row ? String(row.eventAt || '').replace(' ', 'T').slice(0, 16) : '',
-            hint: '날짜는 현장 시간대 기준으로 자동 계산됩니다.' },
+          { name: 'eventAt', label: '기록 시각 (현장 시계)', type: 'datetime-local', required: true, group: '기록',
+            // 없는 쪽을 넣을 때 시각을 미리 채우지 않는다. 채워 두면 그대로 저장되고,
+            // 그건 아무도 찍지 않은 시각이 임금이 되는 일이다.
+            value: ev ? String(ev.eventAt || '').replace(' ', 'T').slice(0, 16) : '',
+            hint: '현장 시계로 적으세요. 날짜도 현장 시간대 기준으로 계산됩니다.' },
           { name: 'status', label: '상태', type: 'select', required: true, group: '기록',
-            options: o.statuses, value: row ? row.status : 'approved' },
+            options: o.statuses, value: ev ? ev.status : 'approved' },
           { name: 'source', label: '기록 방식', type: 'select', group: '기록',
-            options: o.sources, value: row ? row.source : 'manual', colSpan: 2 },
+            // 자동으로 찍힌 기록(게이트·위치·자동마감)은 고를 수 없지만, 고치려고 연
+            // 기록의 출처는 그대로 보여야 한다 — 안 보이면 저장할 때 바뀐 줄 안다.
+            options: sourceOptions(o, ev), value: ev ? ev.source : 'manual', colSpan: 2,
+            hint: ev && ev.source && !isManualSource(o, ev.source)
+              ? '자동으로 찍힌 기록입니다. 기록 방식은 그대로 유지됩니다.' : '' },
           { name: 'notes', label: '비고', type: 'textarea', colSpan: 2, group: '기록',
-            value: row ? row.notes : '',
+            value: ev ? ev.notes : '',
             hint: '왜 고쳤는지 적어두면 급여 정산 때 다시 묻지 않아도 됩니다.' },
         ],
         onSave: function (v) {
           v.id = id || 0;
           return call('api_saveAttendanceLog', [v]).then(function (res) {
             if (res.success === false) return res;
-            u.toast(row ? '기록을 수정했습니다.' : '기록을 추가했습니다.');
+            u.toast(ev ? '기록을 수정했습니다.' : '기록을 추가했습니다.');
             return reload().then(function () { return { success: true }; });
           });
         },
@@ -220,10 +321,16 @@
     }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
   }
 
+  /** 「누구의 무슨 기록인가」 — 확인창이 무엇을 건드리는지 말해 준다. */
+  function describe(id) {
+    var f = findEvent(id);
+    if (!f) return '이 기록';
+    return f.row.employee + ' · ' + f.row.date + ' ' + f.event.eventTypeLabel + ' ' + (f.event.time || '');
+  }
+
   function setStatus(id, status) {
     var u = ui();
-    var row = state.rows.filter(function (r) { return r.id === id; })[0];
-    var who = row ? row.employee + ' · ' + row.date + ' ' + row.eventTime : '이 기록';
+    var who = describe(id);
     var go = status === 'approved'
       ? Promise.resolve(true)
       : u.confirmDanger({
@@ -244,8 +351,7 @@
 
   function remove(id) {
     var u = ui();
-    var row = state.rows.filter(function (r) { return r.id === id; })[0];
-    var who = row ? row.employee + ' · ' + row.date + ' ' + row.eventTime : '이 기록';
+    var who = describe(id);
 
     // 반려로 충분한 경우가 대부분이다. 반려는 급여에서 빠지면서도 "그날 왔었다" 는
     // 사실은 남긴다. 그래서 삭제 창에서 그 선택지를 먼저 말해 준다.
@@ -328,6 +434,7 @@
     render: renderScreen,
     applyFilters: applyFilters,
     openForm: openForm,
+    addFor: addFor,
     setStatus: setStatus,
     remove: remove,
     restore: restore,

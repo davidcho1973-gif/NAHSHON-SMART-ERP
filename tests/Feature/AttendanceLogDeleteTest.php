@@ -170,8 +170,8 @@ class AttendanceLogDeleteTest extends TestCase
         $rows = $this->svc()->list(['status' => 'deleted'])['rows'];
 
         $this->assertCount(1, $rows);
-        $this->assertTrue($rows[0]['deleted']);
-        $this->assertNotNull($rows[0]['deletedAt']);
+        $this->assertTrue($rows[0]['clockIn']['deleted']);
+        $this->assertNotNull($rows[0]['clockIn']['deletedAt']);
     }
 
     public function test_the_delete_status_is_not_offered_as_a_record_state(): void

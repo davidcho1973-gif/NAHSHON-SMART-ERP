@@ -6,6 +6,7 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
+use App\Support\SiteClock;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -179,7 +180,7 @@ class GlobalHrService
                     'event_type' => $log->event_type,
                     'source' => $log->source,
                     'status' => $log->status,
-                    'time' => $log->event_at?->format('H:i'),
+                    'time' => SiteClock::show($log->site_id, $log->event_at),
                 ];
             })->all();
     }

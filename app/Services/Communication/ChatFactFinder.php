@@ -18,6 +18,7 @@ use App\Models\WbsItem;
 use App\Services\Documents\KnowledgeKeeper;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
+use App\Support\SiteClock;
 
 /**
  * AI 가 대화방에서 질문을 받았을 때 <b>대신 조회해 주는</b> 자리.
@@ -307,11 +308,11 @@ class ChatFactFinder
                     ->where('employee_id', $asker->employee_id)
                     ->where('attendance_date', $today)
                     ->orderBy('event_at')
-                    ->get(['event_type', 'event_at']);
+                    ->get(['event_type', 'event_at', 'site_id']);
 
                 $facts['내 오늘 출퇴근'] = $mine->map(fn (AttendanceLog $l): array => [
                     '구분' => $l->event_type === 'clock_in' ? '출근' : '퇴근',
-                    '시각' => $l->event_at?->format('H:i'),
+                    '시각' => SiteClock::show($l->site_id, $l->event_at),
                 ])->all();
             }
 

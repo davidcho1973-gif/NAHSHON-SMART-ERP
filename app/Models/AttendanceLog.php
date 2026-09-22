@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\Communication\CommunicationService;
 use App\Services\Payroll\AttendanceTimesheetSync;
+use App\Support\SiteClock;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,7 @@ use Illuminate\Support\Carbon;
 class AttendanceLog extends Model
 {
     use HasFactory;
+
     // 급여의 근거라 진짜로 지우지 않는다. 지우면 "그날 그 사람이 왔었다" 는 사실
     // 자체가 사라지고, 누가 언제 지웠는지도 남지 않는다. 표시만 하고 화면·급여
     // 계산에서는 즉시 빠진다.
@@ -96,7 +98,8 @@ class AttendanceLog extends Model
                 'source' => $log->source ?: $existing->source,
                 'payload' => self::withMergeNote(
                     $existing,
-                    '퇴근 '.$existing->event_at->format('H:i').' → '.$incoming->format('H:i'),
+                    '퇴근 '.SiteClock::show($existing->site_id, $existing->event_at)
+                    .' → '.SiteClock::show($existing->site_id, $incoming),
                     $log->source,
                 ),
             ])->save();
@@ -108,7 +111,7 @@ class AttendanceLog extends Model
             'payload' => self::withMergeNote(
                 $existing,
                 ($log->event_type === 'clock_in' ? '출근' : '퇴근').' '
-                    .($incoming?->format('H:i') ?? '').' 중복 — 버림',
+                    .(SiteClock::show($log->site_id, $incoming) ?? '').' 중복 — 버림',
                 $log->source,
             ),
         ])->saveQuietly();

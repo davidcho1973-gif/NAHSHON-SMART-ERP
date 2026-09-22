@@ -69,6 +69,32 @@ class AttendanceLogAdminTest extends TestCase
         return app(AttendanceLogAdminService::class);
     }
 
+    /**
+     * 목록은 «사람 · 하루» 한 줄이고 찍힌 기록은 그 안에 들어 있다.
+     * 시험이 보는 것은 대개 «그 기록이 목록에 있나» 이므로 다시 펼쳐서 본다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function events(array $res): array
+    {
+        $out = [];
+        foreach ($res['rows'] as $day) {
+            foreach (array_merge([$day['clockIn'], $day['clockOut']], $day['extras']) as $e) {
+                if ($e !== null) {
+                    $out[] = $e;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return array<int, int> */
+    private function eventIds(array $res): array
+    {
+        return array_column($this->events($res), 'id');
+    }
+
     // ── 접근 ────────────────────────────────────────────────────────────
 
     public function test_a_worker_cannot_read_attendance_logs(): void
@@ -97,7 +123,7 @@ class AttendanceLogAdminTest extends TestCase
 
         $this->actingAs($this->user('site_manager', ['access_scope' => 'site', 'allowed_site_id' => $this->site->id]));
 
-        $ids = array_column($this->svc()->list()['rows'], 'id');
+        $ids = $this->eventIds($this->svc()->list());
         $this->assertContains($mine->id, $ids);
         $this->assertNotContains($theirs->id, $ids);
     }
@@ -144,7 +170,7 @@ class AttendanceLogAdminTest extends TestCase
         $this->assertSame($admin->id, $last['byId']);
         $this->assertSame('07:02:00', substr($last['changes']['event_at']['from'], 11));
         $this->assertSame('08:30:00', substr($last['changes']['event_at']['to'], 11));
-        $this->assertSame(1, $this->svc()->list()['rows'][0]['editCount'], '고친 적이 있으면 목록에서 보여야 한다');
+        $this->assertSame(1, $this->events($this->svc()->list())[0]['editCount'], '고친 적이 있으면 목록에서 보여야 한다');
     }
 
     public function test_an_unchanged_save_does_not_pile_up_history(): void
@@ -275,10 +301,10 @@ class AttendanceLogAdminTest extends TestCase
         $recent = $this->log(['attendance_date' => '2026-08-05', 'status' => 'pending']);
         $this->actingAs($this->user('admin'));
 
-        $ids = array_column($this->svc()->list(['from' => '2026-08-04', 'until' => '2026-08-06'])['rows'], 'id');
+        $ids = $this->eventIds($this->svc()->list(['from' => '2026-08-04', 'until' => '2026-08-06']));
         $this->assertSame([$recent->id], $ids);
 
-        $ids = array_column($this->svc()->list(['status' => 'pending'])['rows'], 'id');
+        $ids = $this->eventIds($this->svc()->list(['status' => 'pending']));
         $this->assertSame([$recent->id], $ids);
     }
 

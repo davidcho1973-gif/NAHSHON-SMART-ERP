@@ -5,6 +5,7 @@ namespace App\Services\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Support\SiteClock;
 use Illuminate\Support\Carbon;
 
 /**
@@ -27,7 +28,7 @@ class DailyHeadcountService
      * 같은 attendance_logs 를 보면서도 앱에서 본 인원과 상황실에서 본 인원이
      * 어긋날 수 있었다. 인원을 세는 규칙이 두 곳에 있으면 언젠가 갈라진다.
      *
-     * @return array<int, array{seconds: int, openAt: mixed, firstIn: mixed, lastOut: mixed}>
+     * @return array<int, array{seconds: int, openAt: mixed, firstIn: mixed, lastOut: mixed, siteId: ?int}>
      */
     private function attendanceState(?int $siteId, string $workDate, ?int $teamId = null): array
     {
@@ -37,7 +38,7 @@ class DailyHeadcountService
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId))
             ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->orderBy('event_at')->orderBy('id')
-            ->get(['employee_id', 'event_type', 'event_at']);
+            ->get(['employee_id', 'event_type', 'event_at', 'site_id']);
 
         // 직원별 근무 구간을 접는다: clock_in 을 열고 clock_out 에서 닫으며 초를 누적.
         $state = [];
@@ -45,9 +46,12 @@ class DailyHeadcountService
             $id = (int) $log->employee_id;
 
             if ($log->event_type === 'clock_in') {
-                $state[$id] ??= ['seconds' => 0, 'openAt' => null, 'firstIn' => null, 'lastOut' => null];
+                $state[$id] ??= ['seconds' => 0, 'openAt' => null, 'firstIn' => null, 'lastOut' => null, 'siteId' => null];
                 $state[$id]['openAt'] ??= $log->event_at;
                 $state[$id]['firstIn'] ??= $log->event_at;
+                // 시각을 보여 줄 때 «어느 현장의 시계인가» 가 필요하다. 전체 현장을
+                // 한 번에 볼 때는 줄마다 현장이 다르므로 줄에 달아 둔다.
+                $state[$id]['siteId'] ??= $log->site_id;
             } elseif ($log->event_type === 'clock_out' && ($state[$id]['openAt'] ?? null)) {
                 $state[$id]['seconds'] += max(0, $state[$id]['openAt']->diffInSeconds($log->event_at));
                 $state[$id]['openAt'] = null;
@@ -135,8 +139,9 @@ class DailyHeadcountService
                 'trade' => (string) $emp->role,
                 'type' => $type,
                 'typeLabel' => Employee::EMPLOYMENT_TYPES[$type] ?? $type,
-                'in' => $s['firstIn']?->format('H:i'),
-                'out' => $s['lastOut']?->format('H:i'),
+                // 현장 시계로 — 서버 시계로 쓰면 사바나 07:50 출근이 04:50 으로 뜬다.
+                'in' => SiteClock::show($s['siteId'] ?? $siteId, $s['firstIn']),
+                'out' => SiteClock::show($s['siteId'] ?? $siteId, $s['lastOut']),
                 'hours' => $hours,
                 'open' => $open,
             ];

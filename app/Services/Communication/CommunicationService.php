@@ -797,7 +797,7 @@ class CommunicationService
     {
         $siteName = $log->site?->name ?: $log->employee?->site?->name ?: '-';
         $teamName = $log->team?->name ?: $log->employee?->team?->name ?: '-';
-        $eventAt = $log->event_at?->format('Y-m-d H:i') ?: '-';
+        $eventAt = \App\Support\SiteClock::show($log->site_id, $log->event_at, 'Y-m-d H:i') ?: '-';
 
         return implode("\n", [
             "[출석 알림]",

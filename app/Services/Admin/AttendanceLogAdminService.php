@@ -6,7 +6,10 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\AccessPolicy;
+use App\Support\SiteClock;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * 출퇴근 기록 수정 — Filament AttendanceLogResource 를 SPA 로 옮긴 것.
@@ -41,14 +44,33 @@ class AttendanceLogAdminService
         'rejected' => '반려',
     ];
 
+    /**
+     * 어떻게 찍힌 기록인가 — <b>실제로 저장되는 값을 전부</b> 담는다.
+     *
+     * 빠진 값이 있으면 화면에 'gate_qr' 같은 날것이 그대로 뜬다. 급여 근거를 보는
+     * 사람에게 그건 «내가 모르는 경로로 들어온 기록» 으로 읽히고, 그 한 줄을 믿을지
+     * 말지 판단할 수 없게 된다.
+     */
     public const SOURCES = [
+        'gate_qr' => '게이트 QR',
+        'geo_auto' => '자동(위치)',
+        'auto_clockout' => '자동 마감',
         'web_portal' => '웹 포탈',
+        'field_app' => '작업자 앱',
+        'offline_gps_sync' => '오프라인 동기화',
         'team_qr' => 'QR 스캔',
         'nfc_reader' => 'NFC 리더',
         'gps' => 'GPS',
         'gate' => '게이트',
         'manual' => '수기 입력',
     ];
+
+    /**
+     * 사람이 <b>고를 수 있는</b> 방식. 자동 경로(게이트·위치·자동마감)는 여기 없다 —
+     * 손으로 넣은 기록에 «게이트에서 찍혔다» 를 붙일 수 있으면, 기록의 출처가
+     * 더 이상 증거가 아니게 된다.
+     */
+    public const MANUAL_SOURCES = ['manual', 'web_portal', 'team_qr', 'nfc_reader'];
 
     public function canView(?User $actor = null): bool
     {
@@ -78,7 +100,14 @@ class AttendanceLogAdminService
     }
 
     /**
-     * 목록. 기본은 최근 것부터 — 고칠 일이 생기는 건 대개 어제오늘 기록이다.
+     * 목록 — <b>한 사람의 하루가 한 줄</b>이다. 출근과 퇴근이 나란히 선다.
+     *
+     * 예전에는 찍힌 것 하나가 한 줄이었다. 그러면 같은 사람의 출근과 퇴근이 목록
+     * 여기저기에 흩어져서, 「이 사람 오늘 몇 시간 일했나」 를 보려면 눈으로 짝을
+     * 맞춰야 한다. 그 질문이 이 표를 여는 이유인데도 그렇다.
+     *
+     * 짝이 안 맞는 날(퇴근이 없는 날)이 오히려 중요하다. 한 줄로 모으면 빈 칸이
+     * 그대로 보인다 — 흩어져 있을 때는 «없는 줄» 이라 아예 눈에 띄지 않았다.
      *
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
@@ -118,34 +147,131 @@ class AttendanceLogAdminService
             $query->where('site_id', $siteId);
         }
 
-        $rows = $query->get()->map(fn (AttendanceLog $r): array => [
-            'id' => $r->id,
-            'employeeId' => $r->employee_id,
-            'employee' => $r->employee?->name,
-            'employeeNumber' => $r->employee?->employee_number,
-            'date' => $r->attendance_date?->toDateString(),
-            'eventAt' => $r->event_at?->toDateTimeString(),
-            'eventTime' => $r->event_at?->format('H:i'),
-            'eventType' => $r->event_type,
-            'eventTypeLabel' => self::EVENT_TYPES[$r->event_type] ?? (string) $r->event_type,
-            'status' => $r->status,
-            'statusLabel' => self::STATUSES[$r->status] ?? (string) $r->status,
-            'source' => $r->source,
-            'sourceLabel' => self::SOURCES[$r->source] ?? (string) $r->source,
-            'siteId' => $r->site_id,
-            'site' => $r->site?->code,
-            'company' => $r->company?->name,
-            'notes' => $r->notes,
-            'approvedBy' => $r->approvedBy?->name,
-            // 고친 적이 있으면 목록에서 바로 보이게 한다 — 급여 담당이 되짚을 단서다.
-            'editCount' => count($r->payload['admin_edits'] ?? []),
-            // 지워진 기록인지. 화면이 그 줄을 다르게 그리고 '되살리기' 를 준다.
-            'deleted' => $r->trashed(),
-            'deletedAt' => $r->deleted_at?->toDateTimeString(),
+        return [
+            'success' => true,
+            'rows' => $this->days($query->get()),
+            'canManage' => $this->canManage(),
             'canDelete' => $this->canDelete(),
-        ])->values()->all();
+        ];
+    }
 
-        return ['success' => true, 'rows' => $rows, 'canManage' => $this->canManage(), 'canDelete' => $this->canDelete()];
+    /**
+     * 찍힌 기록들을 «사람 · 하루» 로 묶는다.
+     *
+     * @param  Collection<int, AttendanceLog>  $logs
+     * @return array<int, array<string, mixed>>
+     */
+    private function days($logs): array
+    {
+        $days = [];
+
+        // 이른 것부터 훑는다. 출근은 <b>그날 처음</b> 찍은 것이, 퇴근은 <b>마지막</b>에
+        // 찍은 것이 그날의 두 끝이다. 최근순으로 훑으면 이 둘이 뒤집힌다.
+        foreach ($logs->sortBy(fn (AttendanceLog $l) => (string) $l->event_at) as $log) {
+            $date = $log->attendance_date?->toDateString() ?? '';
+            $key = $log->employee_id.'|'.$date;
+
+            $days[$key] ??= [
+                'key' => $key,
+                'employeeId' => $log->employee_id,
+                'employee' => $log->employee?->name,
+                'employeeNumber' => $log->employee?->employee_number,
+                'date' => $date,
+                'siteId' => $log->site_id,
+                'site' => $log->site?->code,
+                // 어느 시계로 보고 있는지 화면에 적는다. 이 한 글자가 없어서
+                // «3시간 차이» 를 발견하는 데 하루가 걸렸다.
+                'zone' => SiteClock::label($log->site_id, $log->event_at),
+                'company' => $log->company?->name,
+                'clockIn' => null,
+                'clockOut' => null,
+                'extras' => [],
+                'workedLabel' => null,
+                'canDelete' => $this->canDelete(),
+            ];
+
+            $event = $this->event($log);
+            $isIn = $log->event_type === 'clock_in';
+            $slot = $isIn ? 'clockIn' : 'clockOut';
+            $held = $days[$key][$slot];
+
+            // 출근은 먼저 찍은 것이, 퇴근은 나중에 찍은 것이 그날의 끝이다.
+            // 밀려난 기록은 버리지 않는다 — 이 표는 급여의 근거라서, 화면에서
+            // 사라진 줄은 없는 줄이 된다(반려·중복·되살린 기록이 여기로 온다).
+            if ($held === null) {
+                $days[$key][$slot] = $event;
+            } elseif ($isIn) {
+                $days[$key]['extras'][] = $event;
+            } else {
+                $days[$key][$slot] = $event;
+                $days[$key]['extras'][] = $held;
+            }
+        }
+
+        foreach ($days as $key => $day) {
+            $days[$key]['workedLabel'] = $this->workedLabel($day['clockIn'], $day['clockOut']);
+        }
+
+        // 화면은 최근 날짜부터 본다 — 고칠 일이 생기는 건 대개 어제오늘이다.
+        $rows = array_values($days);
+        usort($rows, fn (array $a, array $b): int => [$b['date'], (string) $a['employee']] <=> [$a['date'], (string) $b['employee']]);
+
+        return $rows;
+    }
+
+    /**
+     * 찍힌 기록 하나 — 화면이 그 줄에 대해 할 수 있는 일을 모두 담는다.
+     *
+     * @return array<string, mixed>
+     */
+    private function event(AttendanceLog $log): array
+    {
+        return [
+            'id' => $log->id,
+            // 시각은 <b>현장 시계</b>로 쓴다. 서버 시계로 쓰면 사바나 아침 7시 50분이
+            // 04:50 으로 뜬다 — 기록은 옳은데 화면만 거짓말을 한다.
+            'time' => SiteClock::show($log->site_id, $log->event_at),
+            'eventAt' => SiteClock::show($log->site_id, $log->event_at, 'Y-m-d H:i:s'),
+            'eventType' => $log->event_type,
+            'eventTypeLabel' => self::EVENT_TYPES[$log->event_type] ?? (string) $log->event_type,
+            'status' => $log->status,
+            'statusLabel' => self::STATUSES[$log->status] ?? (string) $log->status,
+            'source' => $log->source,
+            'sourceLabel' => self::SOURCES[$log->source] ?? (string) $log->source,
+            'siteId' => $log->site_id,
+            'notes' => $log->notes,
+            'approvedBy' => $log->approvedBy?->name,
+            // 고친 적이 있으면 목록에서 바로 보이게 한다 — 급여 담당이 되짚을 단서다.
+            'editCount' => count($log->payload['admin_edits'] ?? []),
+            // 지워진 기록인지. 화면이 그 줄을 다르게 그리고 '되살리기' 를 준다.
+            'deleted' => $log->trashed(),
+            'deletedAt' => $log->deleted_at?->toDateTimeString(),
+        ];
+    }
+
+    /**
+     * 그날 일한 시간. 두 끝이 다 있고 둘 다 유효할 때만 센다.
+     *
+     * 한쪽만 있을 때 0 이나 추정치를 적지 않는다 — 비어 있는 것과 «0시간 일했다» 는
+     * 전혀 다른 말이고, 그 차이가 임금이다.
+     *
+     * @param  array<string, mixed>|null  $in
+     * @param  array<string, mixed>|null  $out
+     */
+    private function workedLabel(?array $in, ?array $out): ?string
+    {
+        $usable = fn (?array $e): bool => $e !== null && ! $e['deleted'] && $e['status'] !== 'rejected';
+
+        if (! $usable($in) || ! $usable($out)) {
+            return null;
+        }
+
+        $minutes = (int) round(Carbon::parse($in['eventAt'])->diffInMinutes(Carbon::parse($out['eventAt']), false));
+        if ($minutes <= 0) {
+            return null;   // 퇴근이 출근보다 이르면 셈이 아니라 고칠 거리다.
+        }
+
+        return intdiv($minutes, 60).'시간'.($minutes % 60 ? ' '.($minutes % 60).'분' : '');
     }
 
     /**
@@ -170,7 +296,8 @@ class AttendanceLogAdminService
             // 조회용에만 '삭제됨' 을 더한다. 수정 폼의 상태 목록에 넣으면 사람이
             // 상태를 골라서 삭제하게 되는데, 삭제는 상태가 아니라 별개의 일이다.
             'filterStatuses' => $pairs(self::STATUSES + ['deleted' => '삭제됨']),
-            'sources' => $pairs(self::SOURCES),
+            // 폼에는 사람이 고를 수 있는 것만 — 자동 경로는 목록에 두지 않는다.
+            'sources' => $pairs(array_intersect_key(self::SOURCES, array_flip(self::MANUAL_SOURCES))),
             'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
             'employees' => Employee::query()->orderBy('name')->get(['id', 'name', 'employee_number'])
@@ -219,16 +346,26 @@ class AttendanceLogAdminService
         if (! array_key_exists($status, self::STATUSES)) {
             $errors['status'] = '상태를 선택하세요.';
         }
-        if (! array_key_exists($source, self::SOURCES)) {
-            $source = 'manual';
+        // 손으로 넣거나 고친 기록이 «게이트에서 찍혔다» 를 달 수는 없다. 출처가
+        // 증거인데, 사람이 아무 출처나 붙일 수 있으면 그 증거가 증거가 아니게 된다.
+        // 이미 있는 기록은 자기 출처를 그대로 지킨다(고치려고 연 것뿐인데 바뀌면 안 된다).
+        $keepable = array_merge(self::MANUAL_SOURCES, $row?->source ? [$row->source] : []);
+        if (! in_array($source, $keepable, true)) {
+            $source = $row?->source ?: 'manual';
         }
+
+        // 어느 현장의 시계로 적힌 시각인가 — 읽기 전에 정해야 한다.
+        // 화면이 현장 시계로 보여 주므로 입력도 현장 시계로 읽는다. 짝이 어긋나면
+        // 기록을 열어 아무것도 안 고치고 저장만 해도 시각이 3시간 움직인다.
+        $siteId = $this->intOrNull($input['siteId'] ?? null) ?: $employee?->site_id;
+        $tz = SiteClock::zone($siteId);
 
         $eventAt = null;
         if ($eventAtRaw === '') {
             $errors['eventAt'] = '기록 시각을 입력하세요.';
         } else {
             try {
-                $eventAt = Carbon::parse($eventAtRaw);
+                $eventAt = SiteClock::read($eventAtRaw, $siteId);
             } catch (\Throwable) {
                 $errors['eventAt'] = '시각 형식이 올바르지 않습니다.';
             }
@@ -253,7 +390,7 @@ class AttendanceLogAdminService
 
             if ($clash) {
                 $errors['eventType'] = '그날 '.self::EVENT_TYPES[$eventType].' 기록이 이미 있습니다('
-                    .$clash->event_at?->format('H:i').'). 새로 넣지 말고 그 기록을 수정하세요.';
+                    .SiteClock::show($clash->site_id, $clash->event_at).'). 새로 넣지 말고 그 기록을 수정하세요.';
             }
         }
 
@@ -261,10 +398,8 @@ class AttendanceLogAdminService
             return ['success' => false, 'errors' => $errors];
         }
 
-        // 현장의 시간대로 날짜를 계산한다. 서버가 UTC 라 자정 근처 기록이
-        // 하루 밀리면 그날 인원과 급여가 어긋난다.
-        $siteId = $this->intOrNull($input['siteId'] ?? null) ?: $employee->site_id;
-        $tz = $siteId ? (Site::find($siteId)?->timezone ?: config('app.timezone')) : config('app.timezone');
+        // 현장의 시간대로 날짜를 계산한다. 서버 시계로 계산하면 자정 근처 기록이
+        // 하루 밀리고, 그날 인원과 급여가 통째로 어긋난다.
         $attendanceDate = $eventAt->copy()->setTimezone($tz)->toDateString();
 
         $data = [
@@ -466,13 +601,13 @@ class AttendanceLogAdminService
             return;
         }
         // 협력사 관리자는 자기 회사 사람의 출퇴근만 본다.
-        if (\App\Support\AccessPolicy::lockedCompanyId($user) !== null) {
-            \App\Support\AccessPolicy::applyCompanyLock($query, $user);
+        if (AccessPolicy::lockedCompanyId($user) !== null) {
+            AccessPolicy::applyCompanyLock($query, $user);
 
             return;
         }
 
-        if (\App\Support\AccessPolicy::canManageMoney($user)
+        if (AccessPolicy::canManageMoney($user)
             || $user->access_scope === 'all_sites') {
             return;
         }

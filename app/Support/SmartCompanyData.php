@@ -905,11 +905,12 @@ class SmartCompanyData
                 ->where('event_type', 'clock_in')
                 ->when($siteRowId !== null, fn ($q) => $q->where('site_id', $siteRowId))
                 ->orderBy('event_at')
-                ->get(['employee_id', 'event_at'])
+                ->get(['employee_id', 'site_id', 'event_at'])
                 ->each(function ($log) use (&$presentIds, &$clockIn): void {
                     if ($log->employee_id) {
                         $presentIds[$log->employee_id] = true;
-                        $clockIn[$log->employee_id] ??= $log->event_at?->format('H:i');
+                        // 현장 시계로 — 서버 시계로 적으면 사바나 07:50 이 04:50 이 된다.
+                        $clockIn[$log->employee_id] ??= SiteClock::show($log->site_id, $log->event_at);
                     }
                 });
         }
