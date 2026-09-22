@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\UnifiedAlert;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -148,7 +149,7 @@ class EmailPasswordAuthTest extends TestCase
         // 로그인할 때마다 울리면 곧 안 읽는 알림이 된다 — 계정당 한 줄이다.
         Auth::logout();
         $this->signIn();
-        $this->assertSame(1, \App\Models\UnifiedAlert::query()
+        $this->assertSame(1, UnifiedAlert::query()
             ->where('fingerprint', "signed-in-with-phone-digits:{$user->id}")->count());
     }
 
