@@ -45,32 +45,56 @@ class EmailPasswordAuthTest extends TestCase
             ->assertSee('/auth/password/login')->assertSee('/auth/google')->assertDontSee('/admin/login');
     }
 
-    public function test_phone_digits_create_only_a_setup_session_then_password_logs_worker_into_app(): void
+    /**
+     * 전화번호 뒷 4자리로 <b>바로</b> 들어간다 (2026-09-22, 오너 지시 「계속 쓸 수 있게」).
+     *
+     * 예전에는 4자리가 «비밀번호를 정하는 5분» 만 열었고, 비밀번호를 정하면 닫혔다.
+     * 오너가 계속 쓰게 하라고 정했다 — 현장 관리자에게 비밀번호를 하나 더 외우게 하는
+     * 것이 실제로는 «못 들어온다» 로 끝나기 때문이다.
+     */
+    public function test_phone_digits_sign_a_person_straight_in(): void
     {
         $user = $this->employeeUser();
-        $this->signIn('0072', ' WORKER@YAHOO.COM ')->assertRedirect('/auth/password/setup');
-        $this->assertGuest();
-        $this->get('/auth/password/setup')->assertOk();
-        $this->get('/')->assertRedirect('/login');
-        $this->savePassword()->assertRedirect('/attendance-app');
+
+        // 이메일은 앞뒤 공백·대소문자가 달라도 같은 사람으로 읽는다.
+        $this->signIn('0072', ' WORKER@YAHOO.COM ')->assertRedirect('/attendance-app');
         $this->assertAuthenticatedAs($user);
-        $this->assertTrue(Hash::check('MySite2026', $user->fresh()->password));
-        $this->assertNotNull($user->fresh()->password_set_at);
-        $this->assertNull($user->fresh()->email_verified_at);
+
+        // 들어왔다고 권한이 달라지지 않는다.
         $this->assertSame('worker', $user->fresh()->access_role);
         $this->assertSame('self', $user->fresh()->access_scope);
+        $this->assertNull($user->fresh()->email_verified_at);
+
+        // 넣은 값이 기록에 남으면 그 기록을 보는 사람이 곧 그 사람 열쇠를 갖게 된다.
         $this->assertDatabaseMissing('auth_events', ['note' => '0072']);
     }
 
-    public function test_last_four_digits_cannot_be_reused_after_password_setup_or_phone_change(): void
+    public function test_the_digits_keep_working_after_a_password_is_set(): void
     {
         $user = $this->employeeUser();
-        $user->forceFill(['password' => 'MySite2026', 'password_set_at' => now()])->save();
-        $user->employee->update(['phone' => '4805559911']);
-        $this->signIn('0072')->assertSessionHasErrors('email_login');
-        $this->signIn('9911')->assertSessionHasErrors('email_login');
-        $this->assertGuest();
+        $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+
+        // 비밀번호를 정했다고 4자리가 닫히지 않는다 — 그게 「계속 쓸 수 있게」 의 뜻이다.
+        $this->signIn('0072')->assertRedirect('/attendance-app');
+        $this->assertAuthenticatedAs($user);
+        Auth::logout();
+
+        // 정해 둔 비밀번호도 그대로 통한다. 둘 다 열쇠다.
         $this->signIn('MySite2026')->assertRedirect('/attendance-app');
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_the_old_digits_stop_working_when_the_phone_number_changes(): void
+    {
+        // 번호를 바꾼 이유가 폰을 잃어버린 것일 수 있다. 예전 번호가 계속 열쇠면
+        // 그 폰을 주운 사람이 계속 들어온다.
+        $user = $this->employeeUser();
+        $user->employee->update(['phone' => '4805559911']);
+
+        $this->signIn('0072')->assertSessionHasErrors('email_login');
+        $this->assertGuest();
+
+        $this->signIn('9911')->assertRedirect('/attendance-app');
         $this->assertAuthenticatedAs($user);
     }
 
@@ -86,58 +110,57 @@ class EmailPasswordAuthTest extends TestCase
         $user = $this->employeeUser('site_manager');
         $user->forceFill(['google_id' => 'registered-google'])->save();
 
-        // 열리는 것은 로그인이 아니라 «비밀번호를 정하는 5분» 이다.
-        $this->signIn()->assertRedirect('/auth/password/setup');
-        $this->assertGuest();
-
-        $this->savePassword()->assertRedirect($user->fresh()->landingPath());
+        $this->signIn()->assertRedirect($user->fresh()->landingPath());
         $this->assertAuthenticatedAs($user->fresh());
 
         // 구글 연결은 건드리지 않는다 — 나중에 지메일이 다시 되면 그대로 쓴다.
         $this->assertSame('registered-google', $user->fresh()->google_id);
     }
 
-    public function test_the_phone_digit_door_shuts_the_moment_a_password_exists(): void
+    public function test_a_google_manager_keeps_the_digits_after_setting_a_password(): void
     {
         $user = $this->employeeUser('site_manager');
         $user->forceFill(['google_id' => 'registered-google'])->save();
+
         $this->signIn();
         $this->savePassword();
         Auth::logout();
 
-        // 4자리는 이제 열쇠가 아니다. 한 번 쓰고 닫히는 문이라 오래 열려 있지 않는다.
-        $this->signIn()->assertSessionHasErrors('email_login');
-        $this->assertGuest();
+        // 비밀번호를 정해 둔 뒤에도 4자리는 그대로 열쇠다.
+        $this->signIn()->assertRedirect($user->fresh()->landingPath());
+        $this->assertAuthenticatedAs($user->fresh());
     }
 
-    public function test_getting_in_that_way_is_reported_so_a_theft_is_seen(): void
+    public function test_getting_in_with_the_digits_is_reported_once(): void
     {
-        // 4자리는 현장에서 반쯤 공개된 값이다. 문을 열어 두는 대신, 열렸다는 사실이
-        // 반드시 보이게 한다 — 본인이 «안 들어가진다» 고 말할 때까지 기다리면 늦는다.
+        // 4자리는 명부·단톡방에 적혀 있는 값이라 아는 사람이 여럿이다. 상시 열쇠로 쓰는
+        // 이상 잠금만으로는 «번호를 아는 사람» 을 막을 수 없으니, 들어온 사실을 보이게 한다.
         $user = $this->employeeUser('site_manager');
-        $user->forceFill(['google_id' => 'registered-google'])->save();
 
         $this->signIn();
-        $this->savePassword();
 
         $this->assertDatabaseHas('unified_alerts', [
-            'fingerprint' => "password-set-by-phone-digits:{$user->id}",
-            'event_type' => 'password_set_by_phone_digits',
+            'fingerprint' => "signed-in-with-phone-digits:{$user->id}",
+            'event_type' => 'signed_in_with_phone_digits',
             'severity' => 'warning',
         ]);
+
+        // 로그인할 때마다 울리면 곧 안 읽는 알림이 된다 — 계정당 한 줄이다.
+        Auth::logout();
+        $this->signIn();
+        $this->assertSame(1, \App\Models\UnifiedAlert::query()
+            ->where('fingerprint', "signed-in-with-phone-digits:{$user->id}")->count());
     }
 
-    public function test_adding_a_password_while_already_signed_in_is_not_reported_as_a_theft(): void
+    public function test_signing_in_with_a_real_password_is_not_reported(): void
     {
-        // 이미 들어와 있는 사람이 비밀번호를 더하는 것은 4자리로 들어온 것이 아니다.
-        // 여기까지 알리면 알림이 시끄러워지고, 시끄러운 알림은 곧 안 읽는 알림이 된다.
         $user = $this->employeeUser('admin');
-        $user->forceFill(['google_id' => 'existing-google'])->save();
+        $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
 
-        $this->actingAs($user)->savePassword();
+        $this->signIn('MySite2026');
 
         $this->assertDatabaseMissing('unified_alerts', [
-            'fingerprint' => "password-set-by-phone-digits:{$user->id}",
+            'fingerprint' => "signed-in-with-phone-digits:{$user->id}",
         ]);
     }
 
@@ -203,58 +226,81 @@ class EmailPasswordAuthTest extends TestCase
         $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.100']);
         $this->signIn()->assertSessionHasErrors('email_login');
         $this->travel(16)->minutes();
-        $this->signIn()->assertRedirect('/auth/password/setup');
+        // 4자리는 10,000 가지뿐이다. 이 잠금이 «전부 시도하면 언젠가 열린다» 를 막는다
+        // (5회/15분이면 다 해보는 데 500시간이 걸린다).
+        $this->signIn()->assertRedirect('/attendance-app');
         $this->assertSame(0, $user->fresh()->password_login_failures);
-        $this->assertGuest();
+        $this->assertAuthenticatedAs($user->fresh());
     }
 
-    public function test_expired_setup_or_post_without_setup_cannot_set_password(): void
+    public function test_nobody_can_set_a_password_without_signing_in_first(): void
     {
+        // 비밀번호 설정 화면은 «들어온 사람» 만 쓴다. 로그인하지 않고 여기에 바로 던지면
+        // 이메일만 아는 사람이 남의 비밀번호를 정해 버릴 수 있다.
         $user = $this->employeeUser();
-        $this->savePassword()->assertRedirect('/login');
-        $this->signIn();
-        $this->travel(6)->minutes();
+
         $this->get('/auth/password/setup')->assertRedirect('/login');
         $this->savePassword()->assertRedirect('/login');
+
         $this->assertNull($user->fresh()->password_set_at);
         $this->assertGuest();
     }
 
-    public function test_pending_setup_cannot_be_replayed_after_another_setup_completes(): void
+    /**
+     * 심어 놓은 «비밀번호 설정 세션» 으로는 아무것도 못 한다.
+     *
+     * 예전에는 4자리를 맞히면 서버가 5분짜리 설정 세션을 내줬고, 그 세션을 복사해
+     * 두었다가 나중에 다시 쓰는 것이 위험이었다. 4자리가 바로 로그인이 된 지금은
+     * 그 세션을 서버가 아예 내주지 않는다 — 그래도 <b>손으로 만들어 넣는</b> 길은
+     * 여전히 막혀 있어야 한다. 로그인하지 않았으면 비밀번호를 정할 수 없다.
+     */
+    public function test_a_planted_setup_session_cannot_set_a_password(): void
     {
         $user = $this->employeeUser();
         $this->signIn();
-        $pending = session(EmailPasswordAuthService::SETUP_SESSION);
         $this->savePassword();
         Auth::logout();
-        $this->withSession([EmailPasswordAuthService::SETUP_SESSION => $pending]);
+
+        $this->withSession([EmailPasswordAuthService::SETUP_SESSION => [
+            'user_id' => $user->id,
+            'expires_at' => now()->addMinutes(5)->timestamp,
+            'contact' => 'forged',
+        ]]);
         $this->savePassword('Attacker2026')->assertRedirect('/login');
+
         $this->assertTrue(Hash::check('MySite2026', $user->fresh()->password));
         $this->assertGuest();
     }
 
-    public function test_changed_phone_or_disabled_account_invalidates_pending_setup(): void
+    public function test_a_suspended_account_cannot_get_in_or_set_a_password(): void
     {
         $user = $this->employeeUser();
         $this->signIn();
-        $user->employee->update(['phone' => '4805557788']);
-        $this->savePassword()->assertRedirect('/login');
-        $this->signIn('7788');
+        $this->assertAuthenticatedAs($user->fresh());
+
+        // 정지된 뒤에는 이미 열려 있던 화면으로도 비밀번호를 정할 수 없다.
         $user->forceFill(['account_status' => 'suspended'])->save();
-        $this->savePassword()->assertRedirect('/login');
+        $this->savePassword();
         $this->assertNull($user->fresh()->password_set_at);
+
+        Auth::logout();
+        $this->signIn()->assertSessionHasErrors('email_login');
+        $this->assertGuest();
     }
 
     public function test_password_requires_letters_numbers_and_matching_confirmation(): void
     {
-        $this->employeeUser();
+        $user = $this->employeeUser();
         $this->signIn();
+
         foreach (['0072', 'abcdefgh', '12345678'] as $password) {
             $this->savePassword($password)->assertSessionHasErrors('password');
         }
         $this->post('/auth/password/setup', ['password' => 'MySite2026', 'password_confirmation' => 'Other2026'])
             ->assertSessionHasErrors('password');
-        $this->assertGuest();
+
+        // 약한 값은 하나도 저장되지 않았다.
+        $this->assertNull($user->fresh()->password_set_at);
     }
 
     public function test_password_change_requires_current_password(): void
@@ -283,9 +329,9 @@ class EmailPasswordAuthTest extends TestCase
     public function test_active_manager_without_google_can_bootstrap_without_changing_scope(): void
     {
         $user = $this->employeeUser('site_manager', 'manager@outlook.com');
-        $this->signIn('0072', 'manager@outlook.com')->assertRedirect('/auth/password/setup');
-        $this->savePassword()->assertRedirect('/');
+        $this->signIn('0072', 'manager@outlook.com')->assertRedirect('/');
         $this->assertAuthenticatedAs($user);
+        $this->savePassword()->assertRedirect('/');
         $this->assertSame('site_manager', $user->fresh()->access_role);
         $this->assertSame('self', $user->fresh()->access_scope);
     }

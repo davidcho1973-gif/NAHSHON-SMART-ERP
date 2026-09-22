@@ -15,7 +15,23 @@ class EmailPasswordAuthService
 {
     public const SETUP_SESSION = 'email_password_setup';
 
-    /** Initial phone digits only open a five-minute setup session, never an ERP session. */
+    /**
+     * 이메일 + (전화번호 뒷 4자리 또는 본인이 정한 비밀번호) 로 들어온다.
+     *
+     * ── 4자리가 계속 통하는 이유 (2026-09-22, 오너 지시) ────────────────
+     * 처음에는 4자리를 «비밀번호를 정하는 5분» 을 여는 열쇠로만 썼다. 한 번 쓰고 닫히는
+     * 문이었다. 오너가 <b>계속 쓸 수 있게</b> 하라고 정했다 — 현장 관리자에게 비밀번호를
+     * 하나 더 외우게 하는 것이 실제로는 «못 들어온다» 로 끝나기 때문이다.
+     *
+     * 그래서 4자리는 상시 열쇠가 된다. 비밀번호를 정한 사람은 둘 다 쓸 수 있다.
+     *
+     * 4자리는 10,000 가지뿐이라 그 자체로는 약하다. 대신 아래 두 가지가 지킨다:
+     *   · 5번 틀리면 15분 잠긴다 — 전부 시도하려면 500시간이 걸려 원격 추측은 사실상 막힌다.
+     *   · 이 길로 들어온 계정은 알림으로 한 번 올라간다.
+     *
+     * 남는 위험은 <b>번호를 아는 사람</b>이다(명부·단톡방에 적혀 있다). 그건 잠금으로
+     * 막을 수 없고, 알림으로 «보이게» 하는 것이 이 설계가 할 수 있는 전부다.
+     */
     public function attempt(string $email, string $password, Request $request): string
     {
         $request->session()->forget(self::SETUP_SESSION);
@@ -28,10 +44,11 @@ class EmailPasswordAuthService
                 return ['result' => 'denied'];
             }
 
+            // 둘 중 어느 쪽이든 된다. 비밀번호를 정했다고 4자리가 닫히지 않는다.
             $initial = $this->initialDigits($user);
-            $valid = $user->password_set_at
-                ? Hash::check($password, $user->password)
-                : ($initial !== null && hash_equals($initial, $password));
+            $byDigits = $initial !== null && hash_equals($initial, $password);
+            $byPassword = $user->password_set_at && Hash::check($password, $user->password);
+            $valid = $byDigits || $byPassword;
 
             if (! $valid) {
                 $failures = $user->password_login_locked_until ? 1 : $user->password_login_failures + 1;
@@ -46,19 +63,16 @@ class EmailPasswordAuthService
 
             $user->forceFill(['password_login_failures' => 0, 'password_login_locked_until' => null])->save();
 
-            return ['result' => $user->password_set_at ? 'login' : 'setup', 'user' => $user];
+            // 바로 들어간다. 예전에는 4자리면 «비밀번호를 정하라» 는 화면을 한 번 거쳤는데,
+            // 4자리를 계속 쓰게 된 지금 그 화면은 매번 나오는 군더더기가 된다.
+            return ['result' => 'login', 'user' => $user, 'digits' => $byDigits];
         });
 
-        if ($result['result'] === 'setup') {
-            $request->session()->regenerate();
-            $request->session()->put(self::SETUP_SESSION, [
-                'user_id' => $result['user']->id,
-                'expires_at' => now()->addMinutes(5)->timestamp,
-                // Bind setup to the contact values checked at the first step.
-                'contact' => $this->contactFingerprint($result['user']),
-            ]);
-        } elseif ($result['result'] === 'login') {
+        if ($result['result'] === 'login') {
             $this->signIn($result['user'], $request);
+            if ($result['digits'] ?? false) {
+                $this->announcePhoneDigitSignIn($result['user'], $request);
+            }
         }
 
         return $result['result'];
@@ -82,10 +96,6 @@ class EmailPasswordAuthService
         if (! $id) {
             return null;
         }
-
-        // 이 사람이 «전화번호 뒷 4자리» 로 들어온 것인지, 이미 로그인한 채로 비밀번호를
-        // 더하는 것인지. 아래에서 알림을 올릴지 정하는 값이라 바뀌기 전에 붙잡아 둔다.
-        $viaPhoneDigits = $request->user() === null;
 
         $user = DB::transaction(function () use ($id, $password, $request, $currentPassword) {
             $user = User::query()->lockForUpdate()->find($id);
@@ -115,40 +125,41 @@ class EmailPasswordAuthService
         $request->session()->forget(self::SETUP_SESSION);
         if ($user) {
             $this->signIn($user, $request);
-            if ($viaPhoneDigits) {
-                $this->announcePhoneDigitSetup($user, $request);
-            }
         }
 
         return $user;
     }
 
     /**
-     * 전화번호 뒷 4자리로 첫 비밀번호가 정해졌다 — 알린다.
+     * 전화번호 뒷 4자리로 계정에 들어왔다 — 알린다.
      *
-     * 4자리는 현장에서 반쯤 공개된 값이다(명부·단톡방에 적혀 있다). 그래서 이 문을 열어
-     * 두는 대신, 열렸다는 사실이 <b>반드시 보이게</b> 한다. 남이 먼저 가로챘다면 본인은
-     * 못 들어가게 되는데, 본인이 «안 들어가진다» 고 말할 때까지 기다리면 늦는다.
+     * 4자리는 현장에서 반쯤 공개된 값이다(명부·단톡방에 적혀 있다). 상시 열쇠로 쓰기로
+     * 한 이상 잠금만으로는 «번호를 아는 사람» 을 막을 수 없다. 그래서 이 길로 들어온
+     * 계정이 <b>보이게</b> 한다 — 이 설계가 그 위험에 대해 할 수 있는 것은 그것뿐이다.
      *
-     * 알림이 실패해도 비밀번호 설정은 되돌리지 않는다 — 그 사람은 이미 들어와 있다.
+     * 계정당 한 번만 올린다(fingerprint). 로그인할 때마다 울리면 곧 안 읽는 알림이 되고,
+     * 안 읽는 알림은 없는 알림이다.
+     *
+     * 알림이 실패해도 로그인은 되돌리지 않는다 — 그 사람은 이미 들어와 있다.
      */
-    private function announcePhoneDigitSetup(User $user, Request $request): void
+    private function announcePhoneDigitSignIn(User $user, Request $request): void
     {
         try {
-            app(UnifiedAlertService::class)->emit("password-set-by-phone-digits:{$user->id}", [
+            app(UnifiedAlertService::class)->emit("signed-in-with-phone-digits:{$user->id}", [
                 'company_id' => $user->allowed_company_id,
                 'site_id' => $user->allowed_site_id,
                 'employee_id' => $user->employee_id,
                 'source_module' => 'HR',
                 'source_type' => User::class,
                 'source_id' => (string) $user->id,
-                'event_type' => 'password_set_by_phone_digits',
+                'event_type' => 'signed_in_with_phone_digits',
                 'severity' => 'warning',
-                'title' => "비밀번호 설정: {$user->name} (전화 뒷 4자리로 들어옴)",
+                'title' => "전화 뒷 4자리로 로그인: {$user->name}",
                 'content' => sprintf(
-                    '%s (%s) 님이 등록 이메일과 전화번호 뒷 4자리로 들어와 비밀번호를 처음 설정했습니다. '
-                    .'본인이 한 것이 맞는지 확인해 주세요 — 본인이 아니라면 그 계정은 지금 남의 손에 있습니다. '
-                    .'접속 시각 %s · IP %s',
+                    '%s (%s) 님의 계정이 등록 이메일과 전화번호 뒷 4자리로 열렸습니다. '
+                    .'뒷 4자리는 명부·단톡방에 적혀 있는 값이라 아는 사람이 여럿입니다 — 본인이 맞는지 '
+                    .'한 번 확인해 주세요. 더 단단히 하려면 그분이 로그인한 뒤 비밀번호를 정하면 됩니다. '
+                    .'첫 접속 %s · IP %s',
                     $user->name,
                     $user->email,
                     now()->format('Y-m-d H:i'),
@@ -189,7 +200,9 @@ class EmailPasswordAuthService
      */
     private function initialDigits(User $user): ?string
     {
-        if ($user->password_set_at || $user->hasPin()) {
+        // password_set_at 을 더 이상 보지 않는다 — 비밀번호를 정했다고 4자리가 닫히면
+        // «계속 쓸 수 있게» 가 되지 않는다. PIN 계정(작업자·반장)만 계속 막는다.
+        if ($user->hasPin()) {
             return null;
         }
         $employee = $user->employee;

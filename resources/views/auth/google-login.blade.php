@@ -520,15 +520,18 @@
           {{-- 구글이 안 되는 관리자가 여기서 멈추지 않게, 무엇을 넣으면 되는지 첫 줄에 적는다.
                예전에는 «처음 이용하는 계정» 이라고만 적혀 있어서, 이미 구글로 쓰던 사람은
                자기 얘기가 아닌 줄 알고 그냥 돌아섰다. --}}
-          <b>Gmail이 안 되시나요?</b> 비밀번호를 아직 정하지 않았다면, 비밀번호 칸에 <b>등록된 전화번호 끝 4자리</b>를 넣으세요.
-          그러면 본인 비밀번호를 정하는 화면으로 넘어갑니다. 구글로 쓰시던 계정도 됩니다.
-          <br><b>Gmail not working?</b> If you have not set a password yet, type the <b>last 4 digits of your registered phone</b> here. You will then set your own password. This works for Google accounts too.
+          {{-- 4자리는 상시 열쇠다(2026-09-22 오너 지시). 「한 번만」 이라고 적어 두면
+               다음 날 다시 쓰려던 사람이 안 될 줄 알고 시도조차 하지 않는다. --}}
+          <b>비밀번호가 없으신가요?</b> 비밀번호 칸에 <b>등록된 전화번호 끝 4자리</b>를 넣으면 바로 들어갑니다.
+          Gmail이 없어도, 구글로 쓰시던 계정이어도 됩니다.
+          <br><b>No password?</b> Type the <b>last 4 digits of your registered phone</b> in the password box and you are in. No Gmail needed; this works for Google accounts too.
           <details style="margin-top:8px"><summary style="cursor:pointer">로그인 도움말 / Need help?</summary>
-            끝 4자리는 <b>비밀번호를 정할 때 한 번만</b> 쓰입니다 — 정하고 나면 그 번호로는 더 이상 들어올 수 없고,
-            누군가 이 방법으로 비밀번호를 설정하면 관리자에게 알림이 갑니다.
+            끝 4자리는 <b>계속 쓰실 수 있습니다.</b> 원하시면 로그인한 뒤 본인 비밀번호를 따로 정할 수 있고,
+            그 뒤에도 4자리는 그대로 됩니다.
+            <br>5번 틀리면 15분 동안 잠깁니다. 이 방법으로 처음 들어온 계정은 관리자 알림에 한 번 올라갑니다.
             <br>안 되면 관리자에게 <b>등록 이메일과 전화번호가 맞는지</b> 확인을 요청하세요. 직원 등록과 로그인 계정 활성화는 별도입니다.
-            <br>The last 4 digits work only once, to set a password; after that they no longer sign you in, and an administrator is notified when a password is set this way.
-            If it does not work, ask your administrator to confirm your registered email and phone number.
+            <br>The last 4 digits keep working. You may also set your own password after signing in; the digits still work afterwards.
+            Five wrong tries lock the account for 15 minutes. If it does not work, ask your administrator to confirm your registered email and phone number.
           </details>
         </div>
       </form>

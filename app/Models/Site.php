@@ -7,10 +7,40 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Site extends Model
 {
     use HasFactory;
+
+    /**
+     * 주소에서 현장을 찾을 때 <b>번호와 코드를 모두</b> 받는다.
+     *
+     * 게이트·등록 QR 주소에는 현장 번호(id)가 들어간다. 그런데 그 번호는 데이터베이스
+     * 줄 번호라서 환경마다 다르다 — 같은 703K 현장이 여기서는 780, 서버에서는 다른
+     * 번호일 수 있다. 벽에 붙는 종이에 그런 값이 들어가면, 옮기거나 다시 세운 환경에서
+     * 그 종이가 통째로 죽는다.
+     *
+     * 현장 코드(703K)는 사람이 정하고 바뀌지 않는 값이다. 그래서 코드로도 찾게 한다.
+     * 이미 인쇄된 번호 주소도 계속 동작해야 하므로 <b>번호를 먼저</b> 본다.
+     */
+    public function resolveRouteBinding($value, $field = null): ?Model
+    {
+        if ($field !== null) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        $value = is_string($value) ? trim($value) : $value;
+
+        if (is_numeric($value)) {
+            $byId = $this->newQuery()->whereKey($value)->first();
+            if ($byId) {
+                return $byId;
+            }
+        }
+
+        return $this->newQuery()->whereRaw('upper(code) = ?', [Str::upper((string) $value)])->first();
+    }
 
     /** 글로벌 인원·출퇴근 현황의 국가 분류 (ISO-2). */
     public const COUNTRY_OPTIONS = [
