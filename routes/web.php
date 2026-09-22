@@ -18,6 +18,7 @@ use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
 use App\Http\Controllers\InstallGuideController;
 use App\Http\Controllers\IntegratedDocumentController;
+use App\Http\Controllers\MaterialReceiptController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileAskController;
 use App\Http\Controllers\MobileDocumentController;
@@ -224,6 +225,10 @@ Route::middleware('auth')->group(function (): void {
     // 조달 관리 — 발주서/선적서 AI 분석(업로드 → 추출·단계 판정) + 근거 서류 열람
     Route::post('/procurement-api/analyze', [ProcurementController::class, 'analyze'])->name('procurement.analyze');
     Route::get('/procurement-api/file/{item}', [ProcurementController::class, 'showFile'])->name('procurement.file');
+
+    // 자재 입고 — 납품서 사진 AI 판독(→ 확인 대기 입고 생성) + 근거 사진 열람
+    Route::post('/material-receipt-api/analyze', [MaterialReceiptController::class, 'analyze'])->name('material-receipts.analyze');
+    Route::get('/material-receipt-api/file/{receipt}', [MaterialReceiptController::class, 'showFile'])->name('material-receipts.file');
 
     // 하이브리드 자동 출퇴근 — 작업자 앱이 위치/WiFi 신호 전송 + 현재 상태 조회
     Route::post('/attendance-geo/ping', [AttendanceGeoController::class, 'ping'])->name('attendance-geo.ping');

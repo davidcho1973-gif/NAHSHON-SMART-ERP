@@ -24,6 +24,7 @@
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-material-receipts.js') }}?v={{ filemtime(public_path('js/admin-material-receipts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
     <script src="{{ asset('js/admin-crew.js') }}?v={{ filemtime(public_path('js/admin-crew.js')) }}" defer></script>
     <script src="{{ asset('js/admin-kakao.js') }}?v={{ filemtime(public_path('js/admin-kakao.js')) }}" defer></script>
@@ -218,6 +219,9 @@
                 <i class="ph ph-package"></i><span>자재 · 장비</span>
               </li>
             <ul class="nav-sub" data-sub="g-inv">
+              <li class="nav-item nav-child" data-view="material-receipts" id="nav-material-receipts">
+                <i class="ph ph-truck-trailer"></i><span>자재 입고</span>
+              </li>
               <li class="nav-item nav-child" data-view="item-master" id="nav-item-master">
                 <i class="ph ph-list-bullets"></i><span>품목 · 분류</span>
               </li>
@@ -357,6 +361,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여 / 정산</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-sliders"></i><span>임금 프로필</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재 · 장비</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="material-receipts"><i class="ph ph-truck-trailer"></i><span>자재 입고</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-list-bullets"></i><span>품목 · 분류</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="boq"><i class="ph ph-calculator"></i><span>물량 / BOQ</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-shopping-cart"></i><span>구매 / 렌트</span></button>
@@ -1458,6 +1463,7 @@
         'correspondence': { title: '서신 원장', render: function () { return window.AdminCorrespondence.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
+        'material-receipts': { title: '자재 입고', render: function () { return window.AdminMaterialReceipts.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'equipment-checks': { title: '장비 사용 점검', render: function () { return window.AdminEquipmentChecks.render(); } },
         'submittals': { title: '제출물 대장', render: function () { return window.AdminRegisters.renderSubmittals(); } },

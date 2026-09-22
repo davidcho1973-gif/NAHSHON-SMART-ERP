@@ -62,6 +62,7 @@ use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Inventory\InventoryService;
+use App\Services\Inventory\MaterialReceiptService;
 use App\Services\Ops\DailyClosingService;
 use App\Services\Ops\DailyPlanService;
 use App\Services\Ops\DailyReportMailer;
@@ -407,6 +408,23 @@ class SmartCompanyData
                 $siteId,
                 auth()->id()
             ),
+
+            // 자재 입고 (자재·장비 하위 — 공정표 없이, 수량과 함께)
+            'api_getMaterialReceipts' => app(MaterialReceiptService::class)->list(
+                $siteId,
+                ($args[0] ?? null) !== null ? (string) $args[0] : null,
+                ($args[1] ?? null) !== null ? (string) $args[1] : null,
+            ),
+            'api_saveMaterialReceipt' => app(MaterialReceiptService::class)->save(
+                is_array($args[0] ?? null) ? $args[0] : [],
+                $siteId,
+                auth()->id(),
+            ),
+            'api_confirmMaterialReceipt' => app(MaterialReceiptService::class)->confirm(
+                (int) ($args[0] ?? 0),
+                ! isset($args[1]) || (bool) $args[1],
+            ),
+            'api_deleteMaterialReceipt' => app(MaterialReceiptService::class)->delete((int) ($args[0] ?? 0)),
 
             // 문서통합관리 (공정관리 하위 SPA 페이지)
             'api_getDocDashboard' => app(IntegratedDocumentService::class)->dashboard(self::resolveSiteId($siteId)),
