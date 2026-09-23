@@ -10,6 +10,17 @@ class PayrollRun extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $run): void {
+            if ($run->isDirty('status') && in_array($run->status, ['approved', 'paid'], true)
+                && Employee::whereIn('id', $run->payslips()->select('employee_id'))
+                    ->where('payload->self_registered_pending_hr', true)->exists()) {
+                throw new \DomainException('인사 확인이 필요한 신규 직원이 있습니다. 직원 관리에서 확인 후 급여를 확정하세요.');
+            }
+        });
+    }
+
     protected $fillable = [
         'code',
         'period_start',

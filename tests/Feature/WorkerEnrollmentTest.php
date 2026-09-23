@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
+use App\Models\WorkerDevice;
 use App\Models\WorkerEnrollment;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\UserAccessService;
@@ -283,8 +284,8 @@ class WorkerEnrollmentTest extends TestCase
 
         $this->postJson($url, ['pin' => '5937'])
             ->assertOk()
-            ->assertJsonPath('attendance_device_token', null)
-            ->assertJsonPath('redirect', '/attendance-app');
-        $this->assertDatabaseCount('worker_devices', 0);
+            ->assertJsonPath('redirect', route('gate.show', ['site' => $employee->site_id, 'onboarded' => 1]));
+        $this->assertDatabaseCount('worker_devices', 1);
+        $this->assertNotNull(WorkerDevice::sole()->identity_verified_at);
     }
 }

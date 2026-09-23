@@ -115,12 +115,14 @@ class PinAuthService
         $attendanceDeviceToken = null;
         $attendanceSiteId = null;
         $employee = $user->employee;
-        if ($row->purpose === AuthSetupToken::PURPOSE_ACTIVATION
+        if (WorkerDeviceSession::mayEnterWithDeviceAlone($user)
             && $employee?->employment_status === 'active'
             && $employee->site?->status === 'active') {
             // The personal activation QR proves the same identity that the gate would otherwise
             // ask the worker to find again. Bind this phone once so the gate opens ready to punch.
-            $attendanceDeviceToken = WorkerDevice::issueFor($employee, $request->userAgent());
+            // A reset also replaces attendance credentials on a lost phone.
+            WorkerDevice::where('employee_id', $employee->id)->delete();
+            $attendanceDeviceToken = WorkerDevice::issueFor($employee, $request->userAgent(), verified: true);
             $attendanceSiteId = (int) $employee->site_id;
         }
 

@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkerEnrollment;
+use App\Services\Attendance\DailyHeadcountService;
 use App\Services\Auth\PinAuthService;
 use App\Services\Push\WebPushSender;
 use App\Support\AccessPolicy;
@@ -111,7 +112,7 @@ class EmployeeAdminService
         }
 
         $query = Employee::query()
-            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,email,access_role,account_status',
+            ->with(['company:id,name', 'site:id,code', 'team:id,name', 'user:id,employee_id,email,access_role,account_status,pin_hash',
                 'memberRegistration',
                 'w9Form:id,employee_id,tin_last4,certified_at'])
             ->orderBy('name');
@@ -143,7 +144,13 @@ class EmployeeAdminService
             ->keyBy('user_id');
 
         $canManage = $this->canManage();
-        $rows = $query->get()->map(function (Employee $e) use ($today, $soon, $pushByUser, $canManage): array {
+        $employees = $query->get();
+        $attendance = collect();
+        foreach ($employees->pluck('site_id')->filter()->unique() as $attendanceSiteId) {
+            $attendance = $attendance->concat(app(DailyHeadcountService::class)->today((int) $attendanceSiteId)['workers']);
+        }
+        $attendance = $attendance->keyBy('id');
+        $rows = $employees->map(function (Employee $e) use ($today, $soon, $pushByUser, $canManage, $attendance): array {
             // 만료가 지났거나 30일 안에 닥친 것은 목록에서 바로 보여준다. 비자나 안전교육이
             // 끊긴 사람이 현장에 들어가는 것이 실제 사고로 이어진다.
             $expiring = [];
@@ -177,8 +184,10 @@ class EmployeeAdminService
                 'company' => $e->company?->name,
                 'siteId' => $e->site_id,
                 'site' => $e->site?->code ?? (data_get($e->payload, 'registration_scope') === 'global' ? 'Global' : null),
+                'siteQrUrl' => $canManage && $e->site_id ? route('gate.qr', $e->site_id) : null,
                 'teamId' => $e->team_id,
                 'team' => $e->team?->name,
+                'todayAttendance' => $attendance->get($e->id),
                 'role' => $e->role,
                 'startDate' => $e->start_date?->toDateString(),
                 'status' => $e->employment_status,
@@ -194,6 +203,7 @@ class EmployeeAdminService
                 'qrScope' => $e->attendance_app_scope,
                 // 로그인 계정이 있는지 — 없으면 이 사람은 앱에 못 들어온다.
                 'hasAccount' => $e->user !== null,
+                'canQuickConnect' => $e->employment_status === 'active' && in_array($e->position, [null, '', 'worker'], true),
                 // 번호를 정했는지 <b>여부만</b> 내려보낸다 — 값은 관리자도 볼 수 없다.
                 'hasPin' => $e->user?->hasPin() ?? false,
                 // 로그인에 실제로 쓰는 주소. 직원 정보의 이메일과 다를 수 있는데,
@@ -316,7 +326,24 @@ class EmployeeAdminService
 
         $user = $employee->user;
         if (! $user) {
-            return ['success' => false, 'error' => '먼저 [계정 만들기]로 로그인 계정을 만들어 주세요.'];
+            if ($employee->employment_status !== 'active' || ! in_array($employee->position, [null, '', 'worker'], true)) {
+                return ['success' => false, 'error' => '작업자 외 직책은 계정·권한을 먼저 지정해 주세요.'];
+            }
+            $account = DB::transaction(function () use ($employee): array {
+                $locked = Employee::whereKey($employee->id)->lockForUpdate()->firstOrFail();
+                if ($locked->user) {
+                    return ['success' => true];
+                }
+
+                return $this->grantAccount($employee->id, ['role' => 'worker', 'scope' => 'self']);
+            });
+            if (! ($account['success'] ?? false)) {
+                return $account;
+            }
+            $user = $employee->fresh()->user;
+            if (! $user) {
+                return ['success' => false, 'error' => '작업자 계정을 연결하지 못했습니다.'];
+            }
         }
 
         $pins = app(PinAuthService::class);

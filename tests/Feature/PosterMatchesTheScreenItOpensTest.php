@@ -51,9 +51,9 @@ class PosterMatchesTheScreenItOpensTest extends TestCase
         $screen = (string) $this->get($poster['url'])->assertOk()->getContent();
 
         // 화면 제목이 포스터 제목 안에 그대로 있어야 한다.
-        $this->assertStringContainsString('새 작업자 등록', $screen);
-        $this->assertStringContainsString('새 작업자 등록', $poster['langs']['ko']['title']);
-        $this->assertStringContainsString('새 작업자 등록', QrPosters::LABELS[QrPosters::JOIN]);
+        $this->assertStringContainsString('현장 출퇴근', $screen);
+        $this->assertStringContainsString('등록 · 출근 · 퇴근', $poster['langs']['ko']['title']);
+        $this->assertStringContainsString('현장 등록 · 출퇴근 QR', QrPosters::LABELS[QrPosters::GATE]);
     }
 
     public function test_the_registration_poster_is_the_same_colour_as_its_screen(): void
@@ -69,9 +69,9 @@ class PosterMatchesTheScreenItOpensTest extends TestCase
     public function test_the_registration_poster_does_not_look_like_the_gate_poster(): void
     {
         // 벽에 나란히 붙는다. 둘이 같은 색이면 작업자가 아무거나 찍는다.
-        $this->assertNotSame(
-            QrPosters::ACCENTS[QrPosters::GATE]['bg'],
-            QrPosters::ACCENTS[QrPosters::JOIN]['bg'],
+        $this->assertSame(
+            QrPosters::make($this->site, QrPosters::GATE)['accent'],
+            QrPosters::make($this->site, QrPosters::JOIN)['accent'],
         );
     }
 
@@ -96,7 +96,7 @@ class PosterMatchesTheScreenItOpensTest extends TestCase
             ->get(route('qr-print.sheet', ['site' => $this->site]))
             ->assertOk()->getContent();
 
-        foreach ([QrPosters::GATE, QrPosters::JOIN] as $key) {
+        foreach (QrPosters::ORDER as $key) {
             $this->assertStringContainsStringIgnoringCase(
                 '--kakao: '.QrPosters::ACCENTS[$key]['bg'],
                 $html,

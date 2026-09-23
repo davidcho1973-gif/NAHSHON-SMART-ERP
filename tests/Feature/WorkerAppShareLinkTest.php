@@ -120,7 +120,7 @@ class WorkerAppShareLinkTest extends TestCase
     {
         $js = file_get_contents(public_path('js/admin-employees.js'));
 
-        $this->assertStringContainsString('링크 보내기', $js);
-        $this->assertStringContainsString("/share'", $js);
+        $this->assertStringContainsString('출퇴근 연결', $js);
+        $this->assertStringContainsString("window.AdminEmployees.pinLink", $js);
     }
 }

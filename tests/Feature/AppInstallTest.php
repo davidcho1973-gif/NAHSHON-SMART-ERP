@@ -125,17 +125,10 @@ class AppInstallTest extends TestCase
 
     public function test_the_gate_links_to_the_full_app_instead_of_offering_gate_installation(): void
     {
-        // 이 현장 작업자 명단은 Español 이 많다. 한국어로만 안내하면 아무도 설치하지 않는다.
-        $res = $this->get(route('gate.show', ['site' => $this->site()]))->assertOk();
-
-        $res->assertSee('Abrir app del empleado', false);
-        $res->assertSee('Open employee app', false);
-        $res->assertSee('직원 앱 열기', false);
-        // 게이트가 가리키는 곳은 작업자 문이다 — 거기서 휴대폰으로 알아보고 앱으로 넣어 준다.
-        // 앱 주소로 바로 보내면 로그인 화면을 한 번 거쳤다 돌아온다(작업자에게는 막다른 길).
-        $res->assertSee(route('worker-app.entry'), false);
-        $res->assertDontSee('window.AppInstall.offer()', false);
-        $res->assertDontSee('id="done-install"', false);
+        $this->get(route('gate.show', $this->site()))->assertOk()
+            ->assertSee('Registrar trabajador nuevo', false)
+            ->assertDontSee('href="/attendance-app"', false)
+            ->assertDontSee('href="/"', false);
     }
 
     public function test_every_install_string_exists_in_every_language(): void
@@ -161,9 +154,9 @@ class AppInstallTest extends TestCase
         foreach (['ko', 'en', 'es'] as $code) {
             $steps = implode(' ', $langs[$code]['steps']);
             $this->assertMatchesRegularExpression(
-                '/홈 화면에 추가|Home Screen|pantalla de inicio/u',
+                '/PIN/u',
                 $steps,
-                "[{$code}] 포스터에 설치 안내가 없습니다."
+                "[{$code}] 포스터에 최초 PIN 안내가 없습니다."
             );
         }
     }

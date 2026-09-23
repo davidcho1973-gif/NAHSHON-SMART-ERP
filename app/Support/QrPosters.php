@@ -23,10 +23,10 @@ final class QrPosters
     /** 정식 입사지원서 QR. */
     public const APPLY = 'apply';
 
-    public const ORDER = [self::GATE, self::JOIN, self::APPLY];
+    public const ORDER = [self::GATE];
 
     public const LABELS = [
-        self::GATE => '게이트 출퇴근 QR',
+        self::GATE => '현장 등록 · 출퇴근 QR',
         self::JOIN => '새 작업자 등록 QR (이름·전화)',
         self::APPLY => '정식 입사지원서 QR',
     ];
@@ -62,7 +62,7 @@ final class QrPosters
      */
     public static function make(Site $site, string $key): array
     {
-        $key = $key === self::MANAGER ? self::JOIN : $key;
+        $key = in_array($key, [self::MANAGER, self::JOIN], true) ? self::GATE : $key;
         $url = match ($key) {
             self::GATE => route('gate.show', ['site' => $site]),
             self::JOIN => route('worker-join.form', ['site' => $site]),
@@ -96,7 +96,7 @@ final class QrPosters
     {
         $wanted = $keys === null
             ? self::ORDER
-            : array_values(array_intersect(self::ORDER, array_map(fn ($key) => $key === self::MANAGER ? self::JOIN : (string) $key, $keys)));
+            : array_values(array_unique(array_intersect([self::GATE, self::APPLY], array_map(fn ($key) => in_array($key, [self::MANAGER, self::JOIN], true) ? self::GATE : (string) $key, $keys))));
 
         if ($wanted === []) {
             $wanted = self::ORDER;

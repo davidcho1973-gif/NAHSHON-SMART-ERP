@@ -70,9 +70,9 @@
 
     var notes = [rows.length + '명'];
     if (expired) notes.push(expired + '명 자격 만료');
-    if (noBadge) notes.push(noBadge + '명 NFC 미등록');
+    notes.push(rows.filter(function(r){ return r.hrReviewPending; }).length + '명 인사 확인 필요');
     if (noW9) notes.push(noW9 + '명 W-9 미제출');
-    if (noPush) notes.push(noPush + '명 알림 꺼짐');
+    notes.push(rows.filter(function(r){ return r.todayAttendance && r.todayAttendance.open; }).length + '명 근무 중');
 
     // 열쇠가 없으면 모두가 «꺼짐» 으로 보인다. 그건 사람들이 안 켠 게 아니라 서버가
     // 못 보내는 것이다 — 이 한 줄이 없으면 소장이 애먼 사람들을 쫓아다니게 된다.
@@ -83,9 +83,9 @@
 
     return u.pageHeader(
       '직원 등록 · 관리',
-      '현장에 들어가는 사람을 등록합니다. 비자·안전교육이 끊긴 사람은 목록에 표시됩니다. — ' + notes.join(' · '),
+      '현장 QR 하나로 등록·출퇴근합니다. 신규 직원을 확인하고 서류 링크를 전달하세요. — ' + notes.join(' · '),
       state.canManage ? u.primaryButton('직원 등록', 'window.AdminEmployees.openForm()', 'user-plus') : ''
-    ) + '<p><a href="/worker-onboarding">인사 · 작업자 등록 · 승인 · 개인 앱 연결</a></p>' + pushWarning + filterBar() + u.table({
+    ) + filterBar() + u.table({
       id: 'em-tbl',
       searchPlaceholder: '이름 · 사번 · NFC · 직종 검색',
       emptyText: '조건에 맞는 직원이 없습니다.',
@@ -108,35 +108,17 @@
             return u.badge(r.employmentTypeLabel, kind);
           },
         },
-        {
-          key: 'badgeNumber', label: 'NFC', width: '110px',
-          render: function (r) {
-            // NFC 가 없으면 게이트에서 태그를 못 찍는다 — 등록이 덜 끝난 상태다.
-            return r.badgeNumber
-              ? '<span style="font-family:var(--font-mono,monospace);font-size:12px">' + u.esc(r.badgeNumber) + '</span>'
-              : '<span style="font-size:11px;color:var(--status-warning)">미등록</span>';
-          },
-        },
-        {
+        { key: 'team', label: '팀', width: '110px' },
+        { key: 'todayAttendance', label: '오늘 출퇴근', width: '150px', render: function(r) {
+          var a = r.todayAttendance;
+          return a ? u.badge(a.open ? '근무 중' : '퇴근', a.open ? 'ok' : 'muted') + '<div>' + u.esc(a.in || '') + ' → ' + u.esc(a.out || '—') + '</div>' : u.badge('기록 없음', 'muted');
+        } },        {
           key: 'w9OnFile', label: 'W-9', width: '90px',
           render: function (r) {
             // W-9 가 없으면 1099 지급 전 24% backup withholding 대상이 된다.
             return r.w9OnFile
-              ? u.badge('···' + (r.w9TinLast4 || ''), 'ok')
+              ? u.badge('제출 완료', 'ok')
               : '<span style="font-size:11px;color:var(--status-warning)">미제출</span>';
-          },
-        },
-        {
-          key: 'pushDevices', label: '알림', width: '110px',
-          render: function (r) {
-            // 안 켜진 이유가 둘이고, 해야 할 일이 서로 다르다 —
-            //   계정 없음 : 먼저 계정을 만들어야 한다(알림을 켤 문이 아직 없다)
-            //   꺼짐      : 계정은 있으니 본인이 앱에서 종을 눌러야 한다
-            // 둘을 같은 «꺼짐» 으로 묶으면 소장이 엉뚱한 사람에게 설치를 시킨다.
-            if (!r.hasAccount) return '<span style="font-size:11px;color:var(--text-tertiary)">계정 없음</span>';
-            if (!r.pushDevices) return '<span style="font-size:11px;color:var(--status-warning)">꺼짐</span>';
-            // 기기가 둘 이상이면 수를 붙인다(폰 + 태블릿). 하나면 숫자가 군더더기다.
-            return u.badge(r.pushDevices > 1 ? '켜짐 ' + r.pushDevices : '켜짐', 'ok');
           },
         },
         {
@@ -156,18 +138,17 @@
             var html = '';
             // 계정이 없으면 이 사람은 앱에 못 들어온다. 직원 정보를 그대로 써서
             // 여기서 바로 만들어 준다 — 계정 화면에서 이름·이메일을 또 치지 않는다.
-            if (!r.hasAccount && state.options && state.options.canGrantAccount) {
+            if (!r.hasAccount && !r.canQuickConnect && state.options && state.options.canGrantAccount) {
               html += u.rowButton('계정 만들기', 'window.AdminEmployees.grantAccount(' + r.id + ')') + ' ';
             }
             // 계정이 생긴 다음에야 앱에 들어올 수 있다. 그때부터 설치 카드를 뽑을 수 있게 한다 —
             // 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
-            if (r.hasAccount) {
+            if (r.hasAccount || r.canQuickConnect) {
               // 보내기(문자·QR)와 인쇄 카드는 쓰임이 다르다. 대개 보내기를 먼저 쓴다.
-              html += u.rowButton('링크 보내기', "window.open('/attendance-app/employee/" + r.id + "/share','_blank')") + ' ';
+              if (r.siteQrUrl) html += u.rowButton('현장 공용 QR', "window.open('" + u.esc(r.siteQrUrl) + "','_blank')") + ' ';
               // 구글 계정이 없는 현장 인력은 이 링크로 자기 번호를 정하고 폰을 기억시킨다.
-              html += u.rowButton(r.hasPin ? 'PIN 재설정' : 'PIN 초대',
+              html += u.rowButton(r.hasPin ? 'PIN 재설정' : '출퇴근 연결',
                 "window.AdminEmployees.pinLink(" + r.id + ",'" + (r.hasPin ? 'reset' : 'invite') + "')") + ' ';
-              html += u.rowButton('앱 설치 카드', "window.open('/attendance-app/employee/" + r.id + "/install-card','_blank')") + ' ';
             }
             if (r.onboardingRequestUrl) {
               html += u.rowButton('추가정보·W-9 링크', 'window.AdminEmployees.copyOnboardingLink(' + r.id + ')') + ' ';
@@ -178,7 +159,7 @@
             // W-9 는 1099 지급의 전제조건이라 급여 담당이 수시로 찾는다. 제출 전이면
             // 아는 칸이 채워진 종이가, 제출 후면 보관용 사본이 나온다.
             html += u.rowButton('W-9 출력', "window.open('/w9/" + r.id + "/print','_blank')") + ' ';
-            html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
+            html += u.rowButton(r.hrReviewPending ? '인사 확인·수정' : '수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
             return html;
           },

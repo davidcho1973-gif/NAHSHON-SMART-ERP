@@ -4,150 +4,142 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WorkerDevice;
 use App\Services\Attendance\GateAttendanceService;
+use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
+use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
+use App\Support\WorkerPhone;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-/**
- * 게이트 QR 출퇴근 — 현장 출입구 QR(로그인 불필요). 이름으로 본인을 찾아 출근/퇴근을 찍는다.
- */
+/** One site QR, one identity rule: verified personal phone or phone + PIN. */
 class GateAttendanceController extends Controller
 {
     public function __construct(private readonly GateAttendanceService $service) {}
 
-    /** 출입구 게이트 페이지(모바일). */
-    public function show(Request $request, Site $site): View|RedirectResponse
+    public function show(Request $request, Site $site): View
     {
-        // 이미 열려 있는 예전 등록 완료 화면의 설치 링크도 직원 앱으로 보낸다.
-        // 앱 주소가 아니라 작업자 문으로 — 이 링크를 누르는 사람은 작업자이고,
-        // 앱 주소로 보내면 로그인 화면을 한 번 거쳤다 돌아온다.
-        if ($request->query('install') === '1') {
-            return redirect()->route('worker-app.entry');
-        }
+        abort_unless($site->status === 'active', 404);
 
         return view('gate.index', [
-            'site' => $site,
-            // 기기가 기억돼 있으면 그 작업자의 언어로 열린다. 아니면 QR 의 ?lang= 또는 기본값.
-            'lang' => WorkerLang::resolve($request->query('lang')),
-            'langOptions' => WorkerLang::OPTIONS,
-            'dict' => WorkerLang::gate(),
+            'site' => $site, 'lang' => WorkerLang::resolve($request->query('lang')),
+            'langOptions' => WorkerLang::OPTIONS, 'dict' => WorkerLang::gate(),
         ]);
     }
 
-    /** 인쇄용 게이트 QR 포스터. */
     public function qr(Site $site): View
     {
-        return view('gate.qr', [
-            'site' => $site,
-            'poster' => QrPosters::make($site, QrPosters::GATE),
-        ]);
+        return view('gate.qr', ['site' => $site, 'poster' => QrPosters::make($site, QrPosters::GATE)]);
     }
 
-    /** 전화번호 뒷 4자리로 본인 찾기 — 게이트의 기본 확인 방법. */
+    // Public roster selection was not identity verification. Retire old open-page requests.
     public function identify(Request $request, Site $site): JsonResponse
     {
-        $last4 = (string) $request->input('last4', '');
-
-        return response()->json([
-            'success' => true,
-            'workers' => $this->service->identify($site, $last4)->all(),
-        ]);
+        return response()->json(['success' => false, 'error' => '화면을 새로고침하고 전화번호와 PIN으로 연결하세요. / Refresh and sign in with phone and PIN.'], 410);
     }
 
-    /**
-     * 이름/소속 자동완성 — 번호가 등록되지 않은 사람을 위한 예비 통로.
-     *
-     * 두 글자 미만은 받지 않는다. 한 글자를 허용하면 알파벳을 돌려가며 현장 명단을
-     * 통째로 훑을 수 있고, 그 명단은 이 화면을 열 수 있는 누구에게나 열려 있다.
-     */
     public function search(Request $request, Site $site): JsonResponse
     {
-        $q = trim((string) $request->query('q', $request->input('q', '')));
-
-        if (mb_strlen($q) < 2) {
-            return response()->json(['success' => true, 'workers' => [], 'tooShort' => true]);
-        }
-
-        return response()->json(['success' => true, 'workers' => $this->service->search($site, $q)->all()]);
+        return $this->identify($request, $site);
     }
 
-    /**
-     * 기억된 기기로 본인 자동 인식 — 이름 검색을 건너뛴다.
-     * 다른 현장에 배정된 작업자이거나 비활성이면 인식하지 않고 검색 화면으로 보낸다.
-     */
+    public function remember(Request $request, Site $site): JsonResponse
+    {
+        return $this->identify($request, $site);
+    }
+
+    public function login(Request $request, Site $site): JsonResponse
+    {
+        abort_unless($site->status === 'active', 404);
+        $data = $request->validate(['phone' => 'required|string|max:40', 'pin' => 'required|digits:4']);
+        $result = DB::transaction(function () use ($request, $site, $data): array {
+            $candidates = WorkerPhone::employees($data['phone'])->limit(2)->get();
+            $employee = $candidates->count() === 1 ? $candidates->first() : null;
+            $user = $employee ? User::where('employee_id', $employee->id)->lockForUpdate()->first() : null;
+            if (! $employee || $employee->employment_status !== 'active'
+                || (int) $employee->site_id !== (int) $site->id
+                || ! WorkerDeviceSession::mayEnterWithDeviceAlone($user)) {
+                return ['success' => false];
+            }
+            $verified = app(PinAuthService::class)->verifyFor($user, $data['pin'], $request);
+            if (! $verified['success']) {
+                return ['success' => false];
+            }
+            $request->session()->regenerate();
+
+            return ['success' => true, 'device_token' => WorkerDevice::issueFor($employee, $request->userAgent(), verified: true)];
+        });
+        if (! $result['success']) {
+            return response()->json(['success' => false, 'error' => '전화번호·PIN을 확인하세요. 계속 안 되거나 PIN을 잊었으면 인사담당자에게 초기화를 요청하세요. / Check phone and PIN, or ask HR to reset.'], 422);
+        }
+
+        return response()->json($result + ['csrf_token' => csrf_token()])->header('Cache-Control', 'no-store');
+    }
+
+    private function identity(Request $request, Site $site): ?Employee
+    {
+        if ($site->status !== 'active') {
+            return null;
+        }
+        $token = (string) $request->input('device_token', '');
+        $employee = $token !== '' ? WorkerDevice::resolve($token, requireVerified: true) : null;
+        if (! $employee || $employee->employment_status !== 'active'
+            || (int) $employee->site_id !== (int) $site->id
+            || ! WorkerDeviceSession::mayEnterWithDeviceAlone($employee->user)) {
+            return null;
+        }
+
+        return $employee;
+    }
+
     public function me(Request $request, Site $site): JsonResponse
     {
-        $token = (string) $request->input('device_token', '');
-        $employee = $token !== '' ? WorkerDevice::resolve($token) : null;
-
-        if (! $employee || $employee->employment_status !== 'active' || (int) $employee->site_id !== (int) $site->id) {
+        $employee = $this->identity($request, $site);
+        if (! $employee) {
             return response()->json(['success' => false, 'recognized' => false]);
         }
 
         return response()->json([
-            'recognized' => true,
-            'employee' => ['id' => $employee->id, 'name' => $employee->name, 'company' => $employee->company?->name ?: ($employee->badge_company_name ?: ''), 'role' => $employee->role ?: ''],
+            'recognized' => true, 'employee' => ['id' => $employee->id, 'name' => $employee->name],
             'lang' => WorkerLang::resolve($employee->preferred_language),
-        ] + $this->service->status($employee, $site));
+        ] + $this->service->status($employee, $site))->header('Cache-Control', 'no-store');
     }
 
-    /** 이 휴대폰을 내 것으로 기억 — 이름으로 찾아 찍은 뒤 다음부터 건너뛰고 싶을 때. */
-    public function remember(Request $request, Site $site): JsonResponse
-    {
-        $data = $request->validate(['employee_id' => ['required', 'integer']]);
-
-        $employee = Employee::query()->where('id', $data['employee_id'])
-            ->where('site_id', $site->id)->where('employment_status', 'active')->first();
-
-        if (! $employee) {
-            return response()->json(['success' => false, 'error' => '작업자를 찾을 수 없습니다.'], 404);
-        }
-
-        return response()->json([
-            'success' => true,
-            'device_token' => WorkerDevice::issueFor($employee, $request->userAgent()),
-            'lang' => WorkerLang::resolve($employee->preferred_language),
-        ]);
-    }
-
-    /** 기기 기억 해제 — 휴대폰을 바꿨거나 남의 폰으로 찍었을 때. */
     public function forget(Request $request, Site $site): JsonResponse
     {
         $token = (string) $request->input('device_token', '');
-        if ($token !== '') {
-            WorkerDevice::forget($token);
+        $employee = WorkerDevice::resolve($token, requireVerified: true);
+        WorkerDevice::forget($token);
+        if ($employee && (int) $request->user()?->employee_id === (int) $employee->id) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
         }
 
         return response()->json(['success' => true]);
     }
 
-    /** 출근/퇴근 기록(자동 판별). */
     public function punch(Request $request, Site $site): JsonResponse
     {
-        $data = $request->validate([
-            'employee_id' => ['required', 'integer'],
-            'lat' => ['nullable', 'numeric'],
-            'lng' => ['nullable', 'numeric'],
-            'accuracy' => ['nullable', 'numeric'],
-            // 어떤 방법으로 본인을 확인했는지 — 기록에 남겨 두면 나중에 "이 출근은
-            // 어떻게 확인된 것인가" 를 되짚을 수 있다.
-            'identified_by' => ['nullable', 'in:phone4,name,device'],
-        ]);
-
-        $employee = Employee::query()->where('id', $data['employee_id'])->where('site_id', $site->id)->first();
+        $employee = $this->identity($request, $site);
         if (! $employee) {
-            return response()->json(['success' => false, 'error' => '작업자를 찾을 수 없습니다.'], 404);
+            return response()->json(['success' => false, 'error' => '전화번호와 PIN으로 먼저 연결하세요. / Sign in with phone and PIN.'], 401);
         }
-
-        // 폰이 보낸 ip 는 믿지 않는다 — 서버가 본 주소로 넣는다(작업자 앱과 같은 규칙).
-        // 현장 WiFi/망이 등록돼 있으면 이 값만으로도 현장 확인이 된다.
+        $data = $request->validate(['lat' => 'nullable|numeric', 'lng' => 'nullable|numeric', 'accuracy' => 'nullable|numeric']);
         $data['ip'] = $request->ip();
+        $data['identified_by'] = 'device';
 
-        return response()->json($this->service->punch($employee, $site, $data));
+        // Serialize concurrent taps; the request's employee ID never selects the worker.
+        return response()->json(DB::transaction(function () use ($employee, $site, $data) {
+            $locked = Employee::whereKey($employee->id)->lockForUpdate()->firstOrFail();
+
+            return $this->service->punch($locked, $site, $data);
+        }));
     }
 }
