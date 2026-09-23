@@ -70,6 +70,7 @@ class Site extends Model
         'regular_minutes',
         'break_minutes',
         'break_after_minutes',
+        'workweek_days',
     ];
 
     protected function casts(): array

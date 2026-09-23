@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Site;
 use Carbon\CarbonImmutable;
 
 /**
@@ -52,8 +53,20 @@ class WorkCalendar
             array_filter($list, fn ($d) => is_string($d) && trim($d) !== ''),
         ), true);
 
-        $ww = $workweek ?? (int) config('org.workweek', 7);
+        $ww = $workweek ?? WorkRules::defaultWorkweek();
         $this->workweek = in_array($ww, [5, 6, 7], true) ? $ww : 7;
+    }
+
+    /**
+     * 그 현장의 달력 — 주 작업일은 현장 규칙(WorkRules)에서 온다.
+     *
+     * 나손 현장은 여러 주에 흩어져 있고 원청마다 주 5일·6일 합의가 다르다. 회사 전체 설정
+     * 하나로는 한 현장을 6일로 바꾸는 순간 다른 현장 공정표가 밀린다. 현장이 없으면
+     * (site_id 없는 옛 공정표) 회사 설정을 쓴다 — 지금까지와 같다.
+     */
+    public static function forSite(Site|int|null $site): self
+    {
+        return new self(null, WorkRules::forSite($site)->workweekDays);
     }
 
     public function isWorkday(CarbonImmutable $d): bool

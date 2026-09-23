@@ -265,8 +265,12 @@
             value: row ? row.breakMinutes : 60,
             hint: '60 = 점심 1시간. 급여에서 빠집니다. 없으면 0.' },
           { name: 'break_after_minutes', label: '휴게 공제 기준 (분)', type: 'number', group: '근무 시간',
-            colSpan: 2, value: row ? row.breakAfterMinutes : 240,
+            value: row ? row.breakAfterMinutes : 240,
             hint: '이 시간을 넘게 일한 날만 휴게를 뺍니다. 240 = 4시간. 반나절 일한 사람의 점심까지 빼지 않기 위한 값입니다.' },
+          { name: 'workweek_days', label: '주 작업일', type: 'select', group: '근무 시간',
+            options: [{ value: '', label: '회사 기본' }, { value: 6, label: '주 6일 (일요일 휴무)' }, { value: 5, label: '주 5일 (토·일 휴무)' }, { value: 7, label: '주 7일' }],
+            value: row ? row.workweekDays : '',
+            hint: '정식 공정표의 날짜 계산에 씁니다. 바꾸면 그 현장 공정표가 다시 계산되니 원청과 합의한 값을 넣으세요.' },
 
           { name: 'company_id', label: '소속 회사', type: 'select', group: '소속',
             options: o.companies, value: row ? row.companyId : '' },

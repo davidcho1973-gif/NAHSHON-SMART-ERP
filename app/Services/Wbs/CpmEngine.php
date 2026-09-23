@@ -64,6 +64,7 @@ class CpmEngine
         if ($items->isEmpty()) {
             return ['success' => true, 'skipped' => true, 'reason' => '작업이 없습니다.'];
         }
+        $this->useCalendarOf($items);
 
         // 노드 키는 activity_id (없으면 wbs_code) — preds 가 액티비티 ID 를 가리킨다.
         $nodes = $items->keyBy(fn (WbsItem $i): string => $this->keyOf($i));
@@ -125,6 +126,7 @@ class CpmEngine
             ->where('level', WbsItem::LEVEL_SUBTASK)
             ->orderBy('sort_order')->orderBy('id')
             ->get();
+        $this->useCalendarOf($items);
         $nodes = $items->keyBy(fn (WbsItem $i): string => $this->keyOf($i));
 
         $key = $this->resolveKey($nodes, $activityKey);
@@ -487,7 +489,21 @@ class CpmEngine
 
     private function calendar(): WorkCalendar
     {
-        return $this->calendar ??= new WorkCalendar();
+        return $this->calendar ??= new WorkCalendar;
+    }
+
+    /**
+     * 이 공정표의 현장 달력을 쓴다 — 주 작업일은 현장마다 다르다(703K 는 주 6일).
+     *
+     * 같은 엔진으로 다른 프로젝트를 이어 계산해도 앞 현장의 달력이 남지 않게, 프로젝트를
+     * 읽을 때마다 새로 정한다.
+     *
+     * @param  Collection<int, WbsItem>  $items
+     */
+    private function useCalendarOf($items): void
+    {
+        $siteId = $items->first(fn (WbsItem $i): bool => $i->site_id !== null)?->site_id;
+        $this->calendar = WorkCalendar::forSite($siteId ? (int) $siteId : null);
     }
 
     private function isFixed(WbsItem $node): bool

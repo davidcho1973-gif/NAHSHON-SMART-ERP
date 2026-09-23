@@ -75,6 +75,8 @@ class SiteAdminService
                 'regularMinutes' => $rules($s)->regularMinutes,
                 'breakMinutes' => $rules($s)->breakMinutes,
                 'breakAfterMinutes' => $rules($s)->breakAfterMinutes,
+                // 현장에 값이 있을 때만 — 없으면 폼이 «회사 기본» 으로 보여야 한다.
+                'workweekDays' => $s->workweek_days !== null ? (int) $s->workweek_days : '',
                 'workRules' => $rules($s)->summary(),
                 'companyId' => $s->company_id,
                 'company' => $s->company?->name,
@@ -225,6 +227,9 @@ class SiteAdminService
             // 0 은 «없음» 이다(점심 없는 현장). 빈 칸이어야 기본값으로 돌아간다.
             $site->{$field} = ($given === null || $given === '') ? $fallback : max(0, (int) $given);
         }
+        // 주 작업일 — 5·6·7 만. 비우면 회사 설정(org.workweek)을 따른다.
+        $ww = (int) ($input['workweek_days'] ?? 0);
+        $site->workweek_days = in_array($ww, [5, 6, 7], true) ? $ww : null;
 
         $site->save();
         WorkRules::forget();   // 방금 바꾼 규칙이 같은 요청 안에서 옛 값으로 읽히면 안 된다.

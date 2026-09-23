@@ -43,7 +43,17 @@ final class WorkRules
         public readonly int $regularMinutes,
         public readonly int $breakMinutes,
         public readonly int $breakAfterMinutes,
+        /** 주 작업일 5·6·7 — 공정 달력(WorkCalendar)이 «이 날 일하는가» 를 물을 때 쓴다. */
+        public readonly int $workweekDays,
     ) {}
+
+    /** 회사 전체 기본 주 작업일(config org.workweek). 현장에 값이 없을 때. */
+    public static function defaultWorkweek(): int
+    {
+        $ww = (int) config('org.workweek', 7);
+
+        return in_array($ww, [5, 6, 7], true) ? $ww : 7;
+    }
 
     public static function forSite(Site|int|null $site): self
     {
@@ -69,6 +79,7 @@ final class WorkRules
             regularMinutes: (int) ($row?->regular_minutes ?? self::DEFAULT_REGULAR_MINUTES),
             breakMinutes: (int) ($row?->break_minutes ?? self::DEFAULT_BREAK_MINUTES),
             breakAfterMinutes: (int) ($row?->break_after_minutes ?? self::DEFAULT_BREAK_AFTER_MINUTES),
+            workweekDays: in_array((int) ($row?->workweek_days ?? 0), [5, 6, 7], true) ? (int) $row->workweek_days : self::defaultWorkweek(),
         );
 
         if ($row) {
@@ -113,6 +124,10 @@ final class WorkRules
         $bits = [$this->start.'–'.$this->end, '정규 '.self::hours($this->regularMinutes)];
         if ($this->breakMinutes > 0) {
             $bits[] = '점심 '.self::hours($this->breakMinutes).' 무급';
+        }
+        // 주 7일은 «쉬는 날 없음» 이라 굳이 적지 않는다 — 6일·5일일 때만 눈에 띄어야 한다.
+        if ($this->workweekDays !== 7) {
+            $bits[] = '주 '.$this->workweekDays.'일';
         }
 
         return implode(' · ', $bits);
