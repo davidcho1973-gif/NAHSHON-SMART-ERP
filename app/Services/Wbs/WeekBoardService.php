@@ -412,6 +412,62 @@ class WeekBoardService
         return ['success' => $saved > 0 || $errors === [], 'saved' => $saved, 'errors' => $errors];
     }
 
+    /**
+     * 저녁 한 줄 — 「📋 작업판 9/23 — 12줄: ✅ 완료 4 (오늘 2) · 🔧 진행중 5 · ⛔ 못함 2 (자재 미입고) · 예정 1」.
+     *
+     * 사장 지시: 「매일 저녁 K-TALK 로 작업판 한 줄 요약」. 상황실 하루 요약(OpsDigestService)이
+     * 이 줄을 맨 위에 싣는다 — 저녁 메시지를 하나 더 만들지 않는다. 이번 주에 적힌 줄이
+     * 없으면 null — 없는 판을 요약하지 않는다.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function daySummary(Site $site, ?string $date = null): ?array
+    {
+        $day = $date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
+            ? Carbon::parse($date, SiteClock::zone($site))
+            : Carbon::now()->setTimezone(SiteClock::zone($site));
+        $weekStart = $day->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
+        $today = $day->toDateString();
+
+        $lines = WeekBoardLine::query()
+            ->where('site_id', $site->id)->whereDate('week_start', $weekStart)
+            ->orderBy('sort_order')->orderBy('id')->get();
+        if ($lines->isEmpty()) {
+            return null;
+        }
+
+        $onDay = fn (?Carbon $at): bool => $at !== null && SiteClock::show($site, $at, 'Y-m-d') === $today;
+        $done = $lines->where('status', WeekBoardLine::STATUS_DONE);
+        $doneToday = $done->filter(fn (WeekBoardLine $l): bool => $onDay($l->done_at))->count();
+        $blocked = $lines->where('status', WeekBoardLine::STATUS_BLOCKED);
+        $reasons = $blocked->pluck('reason')->filter()->unique()->take(3)->values();
+        $autoToday = $lines->filter(fn (WeekBoardLine $l): bool => $onDay($l->auto_at))->count();
+
+        $parts = [
+            sprintf('✅ 완료 %d%s', $done->count(), $doneToday ? " (오늘 {$doneToday})" : ''),
+            sprintf('🔧 진행중 %d', $lines->where('status', WeekBoardLine::STATUS_DOING)->count()),
+            sprintf('⛔ 못함 %d%s', $blocked->count(), $reasons->isNotEmpty() ? ' ('.$reasons->implode(', ').')' : ''),
+            sprintf('예정 %d', $lines->where('status', WeekBoardLine::STATUS_PLANNED)->count()),
+        ];
+        if ($autoToday > 0) {
+            $parts[] = "🤖 상황실 글로 자동 {$autoToday}";
+        }
+
+        return [
+            'date' => $today,
+            'weekStart' => $weekStart,
+            'total' => $lines->count(),
+            'done' => $done->count(),
+            'doneToday' => $doneToday,
+            'doing' => $lines->where('status', WeekBoardLine::STATUS_DOING)->count(),
+            'blocked' => $blocked->count(),
+            'planned' => $lines->where('status', WeekBoardLine::STATUS_PLANNED)->count(),
+            'blockedReasons' => $reasons->all(),
+            'autoToday' => $autoToday,
+            'line' => sprintf('📋 작업판 %s — %d줄: %s', $day->format('n/j'), $lines->count(), implode(' · ', $parts)),
+        ];
+    }
+
     /** 이 사람이 볼 수 있는 현장 하나를 고른다 — 비서 초안이 어느 현장 낱말을 쓸지 정할 때. */
     public function siteFor(string $siteId, ?User $user): ?Site
     {

@@ -9,6 +9,7 @@ use App\Models\CommunicationRoomMember;
 use App\Models\OpsIntakeItem;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Wbs\WeekBoardService;
 use App\Support\SiteSchedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -21,6 +22,8 @@ use Illuminate\Support\Collection;
 class OpsDigestService
 {
     private const MANAGER_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager'];
+
+    public function __construct(private readonly WeekBoardService $board) {}
 
     /**
      * 하루 집계.
@@ -80,11 +83,14 @@ class OpsDigestService
                 continue;
             }
             $s = $this->summary($site->id, $date);
-            if ($s['actionable'] === 0) {
-                continue; // 그날 건진 게 없으면 조용히 넘어간다.
+            // 이번 주 작업판 한 줄(사장 지시: 「매일 저녁 K-TALK 로 작업판 한 줄 요약」).
+            // 상황실이 조용한 날에도 작업판에 줄이 있으면 그 한 줄은 간다 — 판이 살아 있다는 증거다.
+            $board = $this->board->daySummary($site, $date->toDateString());
+            if ($s['actionable'] === 0 && $board === null) {
+                continue; // 그날 건진 게 없고 작업판도 비었으면 조용히 넘어간다.
             }
 
-            $body = $this->body($s);
+            $body = $this->body($s, $board);
 
             $room = CommunicationRoom::query()
                 ->where('site_id', $site->id)
@@ -113,7 +119,11 @@ class OpsDigestService
                     ->pluck('user_id')->all()
                 : [];
 
-            $title = sprintf('[상황실 요약] %s · 반영 %d · 확인필요 %d', $site->code, $s['applied'], $s['needsInput']);
+            $title = $board !== null && $s['actionable'] === 0
+                ? sprintf('[작업판 요약] %s · 완료 %d · 못함 %d', $site->code, $board['done'], $board['blocked'])
+                : sprintf('[상황실 요약] %s · 반영 %d · 확인필요 %d', $site->code, $s['applied'], $s['needsInput']);
+            $noteBody = ($board !== null ? $board['line']."\n" : '')
+                .($s['actionable'] > 0 ? sprintf('오늘 %d건 인식 · 반영 %d · 확인필요 %d', $s['actionable'], $s['applied'], $s['needsInput']) : '');
             foreach ($this->managers($site->id) as $m) {
                 if (in_array($m->id, $roomMemberUserIds, true)) {
                     continue;
@@ -129,7 +139,7 @@ class OpsDigestService
                     'employee_id' => $m->employee_id,
                     'type' => 'ops_digest',
                     'title' => mb_substr($title, 0, 255),
-                    'body' => mb_substr(sprintf('오늘 %d건 인식 · 반영 %d · 확인필요 %d', $s['actionable'], $s['applied'], $s['needsInput']), 0, 255),
+                    'body' => mb_substr(trim($noteBody), 0, 255),
                 ]);
                 $notified++;
             }
@@ -140,13 +150,21 @@ class OpsDigestService
 
     /**
      * @param  array<string, mixed>  $s
+     * @param  array<string, mixed>|null  $board  이번 주 작업판 한 줄(WeekBoardService::daySummary)
      */
-    private function body(array $s): string
+    private function body(array $s, ?array $board = null): string
     {
-        $lines = [
-            sprintf('오늘 상황실에서 %d건을 읽어 업무 %d건을 뽑았습니다. (잡담 %d건 제외)', $s['parsed'], $s['actionable'], $s['noise']),
-            sprintf('✅ 반영 %d건 · ⏳ 대기 %d건 · ❓ 확인필요 %d건', $s['applied'], $s['pending'], $s['needsInput']),
-        ];
+        // 작업판 한 줄이 맨 위다 — 저녁에 사장이 먼저 보는 것은 «오늘 뭐가 됐나» 이지 «AI 가 몇 건 읽었나» 가 아니다.
+        $lines = $board !== null ? [$board['line'], ''] : [];
+
+        if ($s['actionable'] === 0) {
+            $lines[] = '오늘 상황실은 조용했습니다.';
+
+            return implode("\n", $lines);
+        }
+
+        $lines[] = sprintf('오늘 상황실에서 %d건을 읽어 업무 %d건을 뽑았습니다. (잡담 %d건 제외)', $s['parsed'], $s['actionable'], $s['noise']);
+        $lines[] = sprintf('✅ 반영 %d건 · ⏳ 대기 %d건 · ❓ 확인필요 %d건', $s['applied'], $s['pending'], $s['needsInput']);
 
         if ($s['byCategory'] !== []) {
             $parts = [];
