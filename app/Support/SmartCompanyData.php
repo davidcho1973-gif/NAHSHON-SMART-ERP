@@ -402,6 +402,8 @@ class SmartCompanyData
 
             // 이번 주 작업판 — 공종별로, 현장의 말로, 한 주. 정식 공정표와 별개의 사실.
             'api_getWeekBoard' => app(WeekBoardService::class)->board($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
+            // 3주 나란히 — 지난주 · 이번 주 · 다음 주. 가운데가 보고 있는 주.
+            'api_getWeekBoard3Weeks' => app(WeekBoardService::class)->threeWeeks($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
             'api_saveWeekBoardLine' => app(WeekBoardService::class)->save(is_array($args[0] ?? null) ? $args[0] : [], $siteId),
             'api_setWeekBoardStatus' => app(WeekBoardService::class)->setStatus(
                 (int) ($args[0] ?? 0), (string) ($args[1] ?? ''), ($args[2] ?? null) !== null ? (string) $args[2] : null,

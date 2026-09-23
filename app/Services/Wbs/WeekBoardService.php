@@ -105,6 +105,49 @@ class WeekBoardService
     }
 
     /**
+     * 3주 나란히 — 지난주 · 이번 주 · 다음 주(보고 있는 주를 가운데에).
+     *
+     * 사장 지시. 한 주만 보면 «지난주에 못 한 게 뭐였지» 와 «다음 주에 뭘 잡았지» 를
+     * 화살표로 왔다 갔다 해야 한다. 세 판을 옆에 놓으면 같은 일이 넘어오는 것이 보인다.
+     * 세 판 모두 board() 그대로다 — 다른 계산을 하지 않는다.
+     *
+     * @return array<string, mixed>
+     */
+    public function threeWeeks(string $siteId = 'ALL', ?string $week = null): array
+    {
+        $current = $this->board($siteId, $week);
+        if (! ($current['success'] ?? false) || ($current['noSite'] ?? false)) {
+            return $current;
+        }
+
+        $site = Site::query()->find($current['siteId']);
+        $thisWeek = $site ? $this->weekStart($site, null) : $current['weekStart'];
+
+        $weeks = [];
+        foreach ([-1, 0, 1] as $delta) {
+            $b = $delta === 0
+                ? $current
+                : $this->board($siteId, Carbon::parse($current['weekStart'])->addWeeks($delta)->toDateString());
+            $offset = (int) round(Carbon::parse($thisWeek)->diffInDays(Carbon::parse($b['weekStart']), false) / 7);
+            $weeks[] = [
+                'weekStart' => $b['weekStart'],
+                'weekEnd' => $b['weekEnd'],
+                'label' => match ($offset) {
+                    -1 => '지난주', 0 => '이번 주', 1 => '다음 주',
+                    default => Carbon::parse($b['weekStart'])->format('n/j').' 주',
+                },
+                'isThisWeek' => (bool) $b['isThisWeek'],
+                'groups' => $b['groups'],
+                'total' => $b['total'],
+                'doneCount' => $b['doneCount'],
+                'blockedCount' => $b['blockedCount'],
+            ];
+        }
+
+        return ['success' => true, 'current' => $current, 'weeks' => $weeks];
+    }
+
+    /**
      * 줄 하나를 적거나 고친다.
      *
      * @param  array<string, mixed>  $input

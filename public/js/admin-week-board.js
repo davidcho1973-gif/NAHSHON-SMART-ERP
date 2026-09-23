@@ -14,7 +14,8 @@
   'use strict';
 
   var A = null;
-  var state = { data: null, week: null, busy: false };
+  var state = { data: null, weeks: null, week: null, busy: false, mode: 'week' };
+  try { if (localStorage.getItem('weekBoardMode') === '3weeks') state.mode = '3weeks'; } catch (e) { /* 사생활 모드 */ }
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -36,10 +37,14 @@
     return f(s) + ' – ' + f(e) + (d.isThisWeek ? ' (이번 주)' : '');
   }
 
+  function addDays(ymd, n) {
+    var b = new Date(ymd + 'T00:00:00');
+    b.setDate(b.getDate() + n);
+    return b.toISOString().slice(0, 10);
+  }
+
   function shiftWeek(delta) {
-    var base = new Date((state.data ? state.data.weekStart : new Date().toISOString().slice(0, 10)) + 'T00:00:00');
-    base.setDate(base.getDate() + delta * 7);
-    state.week = base.toISOString().slice(0, 10);
+    state.week = addDays(state.data ? state.data.weekStart : new Date().toISOString().slice(0, 10), delta * 7);
     reload();
   }
 
@@ -115,6 +120,7 @@
     if (d.doneCount) notes.push(d.doneCount + '줄 완료');
     if (d.blockedCount) notes.push(d.blockedCount + '줄 못함');
 
+    var three = state.mode === '3weeks';
     var actions =
       '<div style="display:flex;align-items:center;gap:6px">' +
         u.rowButton('◀', 'window.AdminWeekBoard.shiftWeek(-1)') +
@@ -122,21 +128,89 @@
         u.rowButton('▶', 'window.AdminWeekBoard.shiftWeek(1)') +
       '</div>' +
       siteSel +
+      u.rowButton(three ? '한 주만 보기' : '3주 나란히', 'window.AdminWeekBoard.setMode(\'' + (three ? 'week' : '3weeks') + '\')') +
       (d.canManage && d.leftoverCount
         ? u.rowButton('지난주 못한 ' + d.leftoverCount + '줄 이월', 'window.AdminWeekBoard.carryOver()')
         : '') +
       (d.canManage ? u.primaryButton('줄 추가', 'window.AdminWeekBoard.open()', 'plus') : '');
 
-    var body = d.groups.length
-      ? d.groups.map(function (g) { return tradeGroup(u, g); }).join('')
-      : '<div style="padding:40px;text-align:center;color:var(--text-tertiary)">이번 주에 적힌 일이 없습니다. ' +
-        (d.canManage ? '「줄 추가」 로 적거나, 아래 비서에게 말로 맡기세요.' : '') + '</div>';
+    var body;
+    if (three && state.weeks) {
+      body = threeWeeks(u, state.weeks);
+    } else {
+      body = d.groups.length
+        ? d.groups.map(function (g) { return tradeGroup(u, g); }).join('')
+        : '<div style="padding:40px;text-align:center;color:var(--text-tertiary)">이번 주에 적힌 일이 없습니다. ' +
+          (d.canManage ? '「줄 추가」 로 적거나, 아래 비서에게 말로 맡기세요.' : '') + '</div>';
+    }
 
     return u.pageHeader(
-      '이번 주 작업판',
+      three ? '작업판 — 3주 나란히' : '이번 주 작업판',
       d.site + ' · 공종별로 이번 주 하는 일과 인원. 됐다/안 됐다만 누르면 됩니다. — ' + notes.join(' · '),
       actions
     ) + (d.canManage ? secretaryBar(u) : '') + body;
+  }
+
+  // ── 3주 나란히 — 지난주 · 이번 주 · 다음 주 ───────────────────────────
+  //
+  // 사장 지시. 한 주만 보면 «지난주에 못 한 게 뭐였지» 와 «다음 주에 뭘 잡았지» 를
+  // 화살표로 왔다 갔다 해야 한다. 세 판을 옆에 놓으면 같은 일이 넘어오는 것이 보인다.
+  // 여기서는 보기만 한다 — 상태 버튼은 줄을 눌러 그 주로 들어가서 누른다(작은 칸에
+  // 버튼 다섯 개를 넣으면 폰에서 아무것도 안 눌린다).
+
+  function compactLine(u, l) {
+    var done = l.status === 'done';
+    return '<div onclick="window.AdminWeekBoard.open(' + l.id + ')" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--border-subtle);cursor:pointer">' +
+      '<div style="flex:1;min-width:0;font-size:13px;' + (done ? 'color:var(--text-tertiary);text-decoration:line-through' : '') + '">' +
+        u.esc(l.task) +
+        (l.carried ? ' <span title="지난주에서 넘어옴" style="font-size:10px;color:var(--status-warning)">↩</span>' : '') +
+        (l.auto ? ' <span title="상황실 글에서 자동" style="font-size:10px">🤖</span>' : '') +
+        (l.status === 'blocked' && l.reason ? '<div style="font-size:11px;color:var(--status-danger)">' + u.esc(l.reason) + '</div>' : '') +
+      '</div>' +
+      '<div style="font-size:12px;font-weight:600;min-width:28px;text-align:right">' + (l.headcount !== null ? u.esc(String(l.headcount)) + '명' : '') + '</div>' +
+      statusBadge(u, l) +
+      '</div>';
+  }
+
+  function weekColumn(u, w) {
+    var counts = [w.total + '줄'];
+    if (w.doneCount) counts.push('완료 ' + w.doneCount);
+    if (w.blockedCount) counts.push('못함 ' + w.blockedCount);
+    var head = '<div style="padding:10px 12px;border-bottom:2px solid ' + (w.isThisWeek ? 'var(--brand-primary,#2563eb)' : 'var(--border-default)') + ';display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">' +
+      '<div><div style="font-size:14px;font-weight:800">' + u.esc(w.label) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(fmtWeek({ weekStart: w.weekStart, weekEnd: w.weekEnd, isThisWeek: false })) + ' · ' + u.esc(counts.join(' · ')) + '</div></div>' +
+      '<div style="display:flex;gap:4px">' +
+        u.rowButton('이 주 보기', 'window.AdminWeekBoard.goWeek(\'' + u.esc(w.weekStart) + '\')') +
+        (state.data.canManage ? u.rowButton('+ 줄', 'window.AdminWeekBoard.open(0,\'' + u.esc(w.weekStart) + '\')') : '') +
+      '</div></div>';
+
+    var groups = w.groups.length
+      ? w.groups.map(function (g) {
+          return '<div style="padding:8px 12px 2px;font-size:12px;font-weight:700;color:var(--text-secondary);background:var(--bg-base)">' + u.esc(g.trade) +
+            ' <span style="font-weight:400;color:var(--text-tertiary)">계획 ' + u.esc(String(g.plannedHeadcount)) + '명</span></div>' +
+            g.lines.map(function (l) { return compactLine(u, l); }).join('');
+        }).join('')
+      : '<div style="padding:24px 12px;text-align:center;color:var(--text-tertiary);font-size:12px">적힌 일이 없습니다.</div>';
+
+    return '<div style="border:1px solid var(--border-default);border-radius:12px;overflow:hidden;background:var(--bg-surface);' + (w.isThisWeek ? 'box-shadow:0 0 0 1px var(--brand-primary,#2563eb)' : '') + '">' + head + groups + '</div>';
+  }
+
+  function threeWeeks(u, weeks) {
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start">' +
+      weeks.map(function (w) { return weekColumn(u, w); }).join('') + '</div>';
+  }
+
+  function setMode(mode) {
+    state.mode = mode === '3weeks' ? '3weeks' : 'week';
+    try { localStorage.setItem('weekBoardMode', state.mode); } catch (e) { /* 사생활 모드 */ }
+    reload();
+  }
+
+  function goWeek(weekStart) {
+    state.week = weekStart;
+    state.mode = 'week';
+    try { localStorage.setItem('weekBoardMode', 'week'); } catch (e) { /* 사생활 모드 */ }
+    reload();
   }
 
   // ── AI 비서 — 타이핑 대신 말·사진·회의로 ────────────────────────────────
@@ -363,12 +437,15 @@
   }
 
   function reload() {
-    return call('api_getWeekBoard', [state.week]).then(function (res) {
+    var three = state.mode === '3weeks';
+    return call(three ? 'api_getWeekBoard3Weeks' : 'api_getWeekBoard', [state.week]).then(function (res) {
       if (res.success === false) {
         paint('<div style="padding:40px;text-align:center;color:var(--text-secondary)">' + ui().esc(res.error || '작업판을 불러오지 못했습니다.') + '</div>');
         return;
       }
-      state.data = res;
+      // 3주 응답은 {current, weeks} — current 가 보고 있는 주의 판이라 나머지 함수는 그대로 쓴다.
+      state.data = res.current || res;
+      state.weeks = res.weeks || null;
       paint(render());
     });
   }
@@ -385,21 +462,26 @@
 
   function findLine(id) {
     var out = null;
-    (state.data.groups || []).forEach(function (g) { g.lines.forEach(function (l) { if (l.id === id) out = l; }); });
+    var pools = [state.data.groups || []];
+    (state.weeks || []).forEach(function (w) { pools.push(w.groups || []); });   // 3주 보기에서는 다른 주의 줄도 찾는다.
+    pools.forEach(function (groups) { groups.forEach(function (g) { g.lines.forEach(function (l) { if (l.id === id) out = l; }); }); });
     return out;
   }
 
-  function open(id) {
+  /** @param week 3주 보기에서 「다음 주에 줄 추가」 — 그 주에 적는다. 없으면 보고 있는 주. */
+  function open(id, week) {
     var u = ui();
     var d = state.data;
     var line = id ? findLine(id) : null;
+    var weekStart = week || d.weekStart;
+    var weekLabel = weekStart === d.weekStart ? fmtWeek(d) : fmtWeek({ weekStart: weekStart, weekEnd: addDays(weekStart, 6), isThisWeek: false });
     var tradeOpts = (d.tradeOptions || []).map(function (t) { return { value: t, label: t }; });
     if (line && line.trade && d.tradeOptions.indexOf(line.trade) === -1) tradeOpts.unshift({ value: line.trade, label: line.trade });
     tradeOpts.push({ value: '__other__', label: '직접 적기…' });
 
     u.formModal({
-      title: line ? '줄 수정' : '이번 주 할 일 추가',
-      subtitle: fmtWeek(d) + ' · ' + d.site + ' — 현장에서 부르는 말 그대로 적으세요. 코드가 아닙니다.',
+      title: line ? '줄 수정' : (weekStart === d.weekStart ? '이번 주 할 일 추가' : weekLabel + ' 할 일 추가'),
+      subtitle: weekLabel + ' · ' + d.site + ' — 현장에서 부르는 말 그대로 적으세요. 코드가 아닙니다.',
       saveLabel: line ? '수정' : '추가',
       fields: [
         { name: 'trade', label: '공종', type: 'select', required: true, group: '누가',
@@ -419,7 +501,7 @@
       onSave: function (v) {
         var trade = v.trade === '__other__' ? String(v.tradeOther || '').trim() : v.trade;
         if (!trade) return { success: false, errors: { trade: '공종을 고르거나 적으세요.' } };
-        var payload = { id: id || 0, siteId: d.siteId, week: d.weekStart, trade: trade, task: v.task,
+        var payload = { id: id || 0, siteId: d.siteId, week: weekStart, trade: trade, task: v.task,
           headcount: v.headcount, note: v.note, wbsCodes: v.wbsCodes };
         return call('api_saveWeekBoardLine', [payload]).then(function (res) {
           if (res.success === false) return res;
@@ -494,6 +576,8 @@
     carryOver: carryOver,
     shiftWeek: shiftWeek,
     pickSite: pickSite,
+    setMode: setMode,
+    goWeek: goWeek,
     record: record,
     pickFile: pickFile,
     fileChosen: fileChosen,
