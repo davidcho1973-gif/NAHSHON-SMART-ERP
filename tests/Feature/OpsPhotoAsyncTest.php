@@ -231,6 +231,12 @@ class OpsPhotoAsyncTest extends TestCase
         [$storedWidth, $storedHeight] = getimagesizefromstring(Storage::disk('ops-test')->get($path));
         $this->assertLessThanOrEqual(1280, max($storedWidth, $storedHeight));
         $this->assertSame([$path], OpsIntakeBatch::find($batchId)->photo_paths);
+        $original = OpsIntakeBatch::find($batchId)->original_photos[0];
+        Storage::disk('ops-test')->assertExists($original['path']);
+        $bytes = Storage::disk('ops-test')->get($original['path']);
+        $this->assertSame(hash('sha256', $bytes), $original['sha256']);
+        [$originalWidth, $originalHeight] = getimagesizefromstring($bytes);
+        $this->assertGreaterThan(1280, max($originalWidth, $originalHeight));
     }
 
     public function test_ops_may_send_more_photos_than_the_synchronous_paths(): void

@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Models\WbsItem;
 use App\Services\Admin\ProjectRegisterService;
 use App\Services\Communication\DecisionReplyConnector;
+use App\Services\Finance\ClaimEvidenceService;
 use App\Services\IntegratedDocumentService;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
@@ -412,7 +413,7 @@ class OpsIntakeService
      * 판독이 끝난 뒤 사진을 정리한다.
      *
      * 영수증·납품서·도면·안전 사진은 **원본이 곧 증빙**이라 문서함으로 옮겨 영구 보관한다.
-     * 단순 시공 사진만 지운다 — 진행률로 이미 반영됐고 원본을 계속 둘 이유가 없다.
+     * 시공 사진도 원본과 해시를 보존하고, 기존 경로에는 화면용 축소본을 둔다.
      *
      * @param  array<int, array<string, mixed>>  $photoKinds
      */
@@ -426,6 +427,7 @@ class OpsIntakeService
         $diskName = (string) ($batch->photo_disk ?: OpsPhotoController::disk());
         $disk = Storage::disk($diskName);
         $filed = 0;
+        $originals = $batch->original_photos ?? [];
 
         foreach ($paths as $i => $path) {
             $kind = (string) ($photoKinds[$i]['kind'] ?? OpsPhotoRouter::KIND_OTHER);
@@ -442,12 +444,19 @@ class OpsIntakeService
                 }
             }
 
-            // 예전에는 판독이 끝나면 사진을 지웠다. 그러자 상황실 카드에서 사진이 판독 직후
-            // 사라졌다 — 반장이 찍어 보낸 현장 사진이 «3장» 이라는 글자로만 남는 원인.
-            // 상황실은 사진이 곧 보고다. 지우는 대신 1280px 로 줄여 같은 자리에 둔다
-            // (원본 10MB → 수백 KB). 목록 썸네일도 이 줄인 판에서 만들어 부담이 없다.
+            // 기성 증빙의 정본을 먼저 보존한 뒤 화면용 경로만 줄인다.
             try {
                 $bytes = (string) $disk->get($path);
+                if (! isset($originals[$i])) {
+                    $originalPath = $path.'.original';
+                    $uploadOriginal = $disk->exists($originalPath);
+                    if (! $uploadOriginal && ! $disk->put($originalPath, $bytes, 'private')) {
+                        throw new \RuntimeException('사진 원본을 보존하지 못해 축소하지 않았습니다.');
+                    }
+                    $originals[$i] = ['path' => $originalPath, 'sha256' => hash('sha256', (string) $disk->get($originalPath)),
+                        'provenance' => $uploadOriginal ? 'upload_original' : 'available_copy'];
+                    $batch->update(['original_photos' => $originals]);
+                }
                 $info = @getimagesizefromstring($bytes);
                 $mime = is_array($info) && isset($info['mime']) ? (string) $info['mime'] : 'image/jpeg';
                 $small = ImageDownscale::shrink($bytes, $mime, 1280, 78);
@@ -774,6 +783,11 @@ class OpsIntakeService
         }
 
         $items = $batch->items->count();
+        foreach ($batch->items as $item) {
+            if (ClaimEvidenceService::sourceIsProtected('intake', $item->id)) {
+                return ['success' => false, 'error' => '기성 근거로 연결된 현장 원문은 삭제할 수 없습니다.'];
+            }
+        }
         $batch->items()->delete();
         $batch->delete();
 
