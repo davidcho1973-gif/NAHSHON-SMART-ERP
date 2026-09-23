@@ -19,12 +19,14 @@ class WorkerDevice extends Model
         'token_hash',
         'label',
         'last_used_at',
+        'identity_verified_at',
     ];
 
     protected function casts(): array
     {
         return [
             'last_used_at' => 'datetime',
+            'identity_verified_at' => 'datetime',
         ];
     }
 
@@ -41,7 +43,7 @@ class WorkerDevice extends Model
     /**
      * 이 직원용 새 기기 토큰을 발급한다. 원문 토큰을 돌려주며, 서버에는 해시만 남는다.
      */
-    public static function issueFor(Employee $employee, ?string $label = null): string
+    public static function issueFor(Employee $employee, ?string $label = null, bool $verified = false): string
     {
         $token = Str::random(48);
 
@@ -52,16 +54,17 @@ class WorkerDevice extends Model
             // 이름표가 긴 카톡 브라우저에서 등록 완료 화면이 500 이 됐다. 꼬리표 없이 자른다.
             'label' => $label ? Str::limit($label, 120, '') : null,
             'last_used_at' => now(),
+            'identity_verified_at' => $verified ? now() : null,
         ]);
 
         return $token;
     }
 
     /** 토큰으로 직원을 찾고 마지막 사용 시각을 갱신한다. */
-    public static function resolve(string $token): ?Employee
+    public static function resolve(string $token, bool $requireVerified = false): ?Employee
     {
         $device = self::query()->where('token_hash', self::hash($token))->first();
-        if (! $device) {
+        if (! $device || ($requireVerified && ! $device->identity_verified_at)) {
             return null;
         }
 

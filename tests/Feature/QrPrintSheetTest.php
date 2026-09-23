@@ -44,7 +44,7 @@ class QrPrintSheetTest extends TestCase
         $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id);
 
         $res->assertStatus(200);
-        foreach (QrPosters::LABELS as $label) {
+        foreach ([QrPosters::LABELS[QrPosters::GATE]] as $label) {
             $res->assertSee($label);
         }
         // 포스터마다 자체 생성한 QR 이미지가 들어간다(외부 서비스 호출 없음).
@@ -59,8 +59,8 @@ class QrPrintSheetTest extends TestCase
         $res = $this->actingAs($this->admin())->get('/print/qr/'.$site->id);
 
         $res->assertSee('/gate/'.$site->id, false);
-        $res->assertSee('/join/w/'.$site->id, false);
-        $res->assertSee('/member/site/'.$site->id.'/apply', false);
+        $res->assertDontSee('/join/w/'.$site->id, false);
+        $res->assertDontSee('/member/site/'.$site->id.'/apply', false);
         // 등록 QR 은 한 장뿐이라 고용 형태가 주소에 박히지 않는다.
         $res->assertDontSee('type=direct', false);
         $res->assertDontSee('type=indirect', false);
@@ -74,8 +74,8 @@ class QrPrintSheetTest extends TestCase
 
         $res->assertStatus(200);
         $res->assertSee(QrPosters::LABELS[QrPosters::GATE]);
-        $res->assertSee(QrPosters::LABELS[QrPosters::JOIN]);
-        $this->assertSame(2, substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
+        $res->assertDontSee(QrPosters::LABELS[QrPosters::JOIN]);
+        $this->assertSame(1, substr_count($res->getContent(), 'data:image/svg+xml;base64,'));
     }
 
     public function test_unknown_only_values_fall_back_to_all(): void

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Jobs\AnswerChatQuestionJob;
 use App\Jobs\ReadOpsRoomMessageJob;
+use App\Mail\Transport\GraphTransport;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
@@ -16,12 +17,19 @@ use App\Observers\EmployeeOffboardingObserver;
 use App\Observers\EmployeePayrollProfileObserver;
 use App\Observers\LinkedDocumentFilingObserver;
 use App\Observers\MobileExpenseReceiptObserver;
+use App\Services\Communication\ChatAssistant;
+use App\Services\Communication\CommunicationService;
 use App\Services\Documents\IntegratedToIntelligentBridge;
 use App\Services\Documents\IntelligentToIntegratedBridge;
 use App\Services\Ocr\ClaudeOcrEngine;
 use App\Services\Ocr\GeminiOcrEngine;
 use App\Services\Ocr\OcrEngine;
 use App\Services\Ocr\OpenAiOcrEngine;
+use App\Support\WorkerPhone;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -49,13 +57,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // A shared site Wi-Fi must not lock out all workers after ten registrations.
+        RateLimiter::for('worker-entry', function (Request $request) {
+            $phone = WorkerPhone::normalize((string) $request->input('phone', '')) ?? 'invalid';
+
+            return [
+                Limit::perMinute(10)->by('phone:'.hash('sha256', $phone)),
+                Limit::perMinute(120)->by('ip:'.$request->ip()),
+            ];
+        });
+
         // Microsoft 365 발송기 등록 — MAIL_MAILER=graph 로 쓴다.
         //
         // 라라벨에 없는 발송기라 여기서 붙인다. 설정이 비어 있어도 등록 자체는 해 둔다 —
         // 그래야 진단 화면이 "값이 비었다" 고 말할 수 있다. 등록을 조건부로 하면
         // 사용자에게는 그냥 "알 수 없는 메일러" 라는 라라벨 오류만 뜬다.
-        \Illuminate\Support\Facades\Mail::extend('graph', function (array $config) {
-            return new \App\Mail\Transport\GraphTransport(
+        Mail::extend('graph', function (array $config) {
+            return new GraphTransport(
                 (string) ($config['tenant_id'] ?? ''),
                 (string) ($config['client_id'] ?? ''),
                 (string) ($config['client_secret'] ?? ''),
@@ -74,7 +92,7 @@ class AppServiceProvider extends ServiceProvider
         // 새 직원은 아무 방에도 없이 시작했다(연계 점검 ⑮).
         Employee::created(function (Employee $employee): void {
             try {
-                $comm = app(\App\Services\Communication\CommunicationService::class);
+                $comm = app(CommunicationService::class);
                 if ($employee->company) {
                     $comm->ensureRoomMember($comm->ensureCompanyRoom($employee->company), $employee);
                 }
@@ -152,7 +170,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             // 부름은 방 종류를 가리지 않는다 — 공지방이든 1:1 이든 물으면 답한다.
-            if (app(\App\Services\Communication\ChatAssistant::class)->mentioned($m->body)) {
+            if (app(ChatAssistant::class)->mentioned($m->body)) {
                 AnswerChatQuestionJob::dispatch($m->id)->afterResponse();
             }
 

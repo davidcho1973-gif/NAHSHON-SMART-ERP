@@ -65,7 +65,7 @@ class EmploymentTypeRegistrationTest extends TestCase
         $res = $this->get('/join/w/'.$site->id.'/qr');
 
         $res->assertStatus(200);
-        $res->assertSee('새 작업자는 이 QR 하나로 등록하고 바로 출근합니다.');
+        $res->assertSee('현장 QR은 이 한 장입니다. 휴대폰 기본 카메라로 스캔하세요.');
         $res->assertDontSee('type=direct', false);
         $res->assertDontSee('type=indirect', false);
     }

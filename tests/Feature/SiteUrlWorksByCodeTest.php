@@ -43,7 +43,7 @@ class SiteUrlWorksByCodeTest extends TestCase
 
     public function test_the_registration_form_opens_by_site_code(): void
     {
-        $this->get('/join/w/703K')->assertOk()->assertSee('703K 주방 설비');
+        $this->followingRedirects()->get('/join/w/703K')->assertOk()->assertSee('703K 주방 설비');
     }
 
     public function test_lower_case_on_the_paper_still_finds_the_site(): void
@@ -56,7 +56,7 @@ class SiteUrlWorksByCodeTest extends TestCase
     {
         // 이미 벽에 붙은 종이를 죽이지 않는 것이 이 변경의 조건이다.
         $this->get('/gate/'.$this->site->id)->assertOk();
-        $this->get('/join/w/'.$this->site->id)->assertOk();
+        $this->followingRedirects()->get('/join/w/'.$this->site->id)->assertOk();
     }
 
     public function test_a_site_number_wins_over_a_code_that_looks_like_a_number(): void
