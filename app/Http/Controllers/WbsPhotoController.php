@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\WbsItem;
 use App\Models\WbsPhoto;
+use App\Services\Finance\ClaimEvidenceService;
 use App\Support\ImageDownscale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -67,13 +68,13 @@ class WbsPhotoController extends Controller
     }
 
     /**
-     * 업로드 — 받자마자 줄여서 저장한다. 원본은 어디에도 남기지 않는다.
+     * 원본과 SHA256을 보존하고, 화면용 이미지·썸네일을 별도로 만든다.
      */
     public function store(Request $request): JsonResponse
     {
         $request->validate([
             'wbs' => 'required|string|max:120',
-            // 폰 원본을 그대로 받아야 하므로 한도는 넉넉하게. 어차피 줄여서 저장한다.
+            // 원본은 증빙으로 보존하며 화면에는 축소본을 사용한다.
             'photo' => 'required|image|max:20480', // 20MB
             'photo_date' => 'required|date',
             'caption' => 'nullable|string|max:2000',
@@ -96,6 +97,10 @@ class WbsPhotoController extends Controller
         $ext = $main['resized'] ? 'jpg' : ($file->guessExtension() ?: 'jpg');
 
         $path = "{$dir}/{$name}.{$ext}";
+        $originalPath = "{$dir}/{$name}_original.".($file->guessExtension() ?: 'bin');
+        if (! Storage::disk($disk)->put($originalPath, $bytes, 'private')) {
+            return response()->json(['success' => false, 'error' => '사진 원본을 보존하지 못했습니다. 다시 등록하세요.'], 500);
+        }
         Storage::disk($disk)->put($path, $main['data']);
 
         $thumbPath = null;
@@ -112,6 +117,8 @@ class WbsPhotoController extends Controller
             'caption' => trim((string) $request->input('caption', '')) ?: null,
             'disk' => $disk,
             'path' => $path,
+            'original_path' => $originalPath,
+            'original_sha256' => hash('sha256', $bytes),
             'thumb_path' => $thumbPath,
             'mime' => $main['resized'] ? 'image/jpeg' : $mime,
             'width' => $main['width'] ?: null,
@@ -147,7 +154,11 @@ class WbsPhotoController extends Controller
     {
         $this->authorizeOwn($request, $photo);
 
-        foreach ([$photo->path, $photo->thumb_path] as $p) {
+        if (app(ClaimEvidenceService::class)->sourceIsProtected('photo', $photo->id)) {
+            return response()->json(['success' => false, 'error' => '기성 근거로 연결된 사진은 삭제할 수 없습니다.'], 422);
+        }
+
+        foreach ([$photo->path, $photo->thumb_path, $photo->original_path] as $p) {
             if ($p) {
                 Storage::disk($photo->disk)->delete($p);
             }
@@ -160,9 +171,10 @@ class WbsPhotoController extends Controller
     public function file(Request $request, WbsPhoto $photo)
     {
         $this->authorizeSiteRead($request, $photo);
-        abort_unless(Storage::disk($photo->disk)->exists($photo->path), 404);
+        $path = $request->boolean('original') ? $photo->original_path : $photo->path;
+        abort_unless($path && Storage::disk($photo->disk)->exists($path), 404);
 
-        return Storage::disk($photo->disk)->response($photo->path, null, [
+        return Storage::disk($photo->disk)->response($path, null, [
             'Cache-Control' => 'private, max-age=86400',
         ]);
     }

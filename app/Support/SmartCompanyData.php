@@ -56,6 +56,8 @@ use App\Services\AttendanceQrService;
 use App\Services\CommandCenter\ConstructionCommandCenterService;
 use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
+use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\Finance\ProgressBillingDrafter;
 use App\Services\GeminiReceiptAnalyzer;
@@ -332,6 +334,13 @@ class SmartCompanyData
             // 조회 3개는 api_get* 접두사라 읽기전용 계정 게이트·프론트 캐시가 그대로 작동하고,
             // 쓰기 6개는 read-only 계정에 403 이 떨어진다. 산식·전이 규칙은 서비스 안에서 방어한다.
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
+            'api_saveClaimLine' => app(ClaimEvidenceService::class)->saveLine(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_saveClaimRecord' => app(ClaimEvidenceService::class)->saveRecord(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_reviewClaimRecord' => app(ClaimEvidenceService::class)->reviewRecord(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_draftClaimEvidence' => app(ClaimEvidenceService::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),
+            'api_getClaimPacket' => app(ClaimEvidenceService::class)->getPacket((int) ($args[0] ?? 0)),
+            'api_importClaimSource' => app(ClaimSourceImportService::class)->import((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : [], (int) ($args[2] ?? 0), (int) ($args[3] ?? 0)),
             'api_getBillings' => app(BillingAdminService::class)->getBillings((int) ($args[0] ?? 0)),
             'api_getBillingOptions' => app(BillingAdminService::class)->getBillingOptions(),
             'api_saveBilling' => app(BillingAdminService::class)->saveBilling(is_array($args[0] ?? null) ? $args[0] : []),

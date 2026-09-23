@@ -32,6 +32,7 @@
     <script src="{{ asset('js/admin-employees.js') }}?v={{ filemtime(public_path('js/admin-employees.js')) }}" defer></script>
     <script src="{{ asset('js/admin-contracts.js') }}?v={{ filemtime(public_path('js/admin-contracts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-billing.js') }}?v={{ filemtime(public_path('js/admin-billing.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-claim-evidence.js') }}?v={{ filemtime(public_path('js/admin-claim-evidence.js')) }}" defer></script>
     <script src="{{ asset('js/admin-applicants.js') }}?v={{ filemtime(public_path('js/admin-applicants.js')) }}" defer></script>
     <script src="{{ asset('js/admin-payprofiles.js') }}?v={{ filemtime(public_path('js/admin-payprofiles.js')) }}" defer></script>
     <script src="{{ asset('js/admin-sites.js') }}?v={{ filemtime(public_path('js/admin-sites.js')) }}" defer></script>
@@ -1428,6 +1429,7 @@
         'attendance': { title: '출퇴근 현황', render: function () { window._pendingHrTab = 'attendance'; return renderHR(); } },
         'receipts': { title: '재무', render: renderFinance },
         'billing-admin': { title: '기성 청구 · 수금', render: function () { return window.AdminBilling.render(); } },
+        'claim-evidence-admin': { title: '기성 근거 대장', render: function () { return window.AdminClaimEvidence.render(); } },
         'messages': { title: '알림 센터', render: renderUnifiedAlerts },
         'schedule': { title: '공정 관리', render: renderWbs },
         'personnel': { title: '인원관리', render: function () { window._pendingHrTab = 'personnel'; return renderHR(); } },

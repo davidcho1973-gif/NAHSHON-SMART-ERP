@@ -16,7 +16,7 @@ use Tests\TestCase;
  * 공정별 현장 사진 — 날짜별 업로드·열람.
  *
  * 핵심 약속 두 가지를 지키는지 본다:
- *   1) 원본은 저장하지 않는다 — 큰 사진은 줄어서 저장된다
+ *   1) 원본과 해시를 보존하고 화면용 큰 사진은 줄어서 저장된다
  *   2) 공정표를 교체해도(wbs_code 유지) 사진은 살아남는다
  */
 class WbsPhotoTest extends TestCase
@@ -94,6 +94,11 @@ class WbsPhotoTest extends TestCase
 
         $photo = WbsPhoto::firstOrFail();
         $this->assertLessThan($photo->original_bytes, $photo->bytes, '저장본이 원본보다 작아야 한다');
+        Storage::disk('local')->assertExists($photo->original_path);
+        $original = Storage::disk('local')->get($photo->original_path);
+        $this->assertSame($photo->original_bytes, strlen($original));
+        $this->assertSame(hash('sha256', $original), $photo->original_sha256);
+        $this->get("/wbs-api/photos/{$photo->id}/file?original=1")->assertOk();
         $this->assertLessThanOrEqual(1600, max((int) $photo->width, (int) $photo->height), '장변 1600px 로 줄인다');
         $this->assertNotNull($photo->thumb_path, '목록용 썸네일을 따로 굽는다');
         Storage::disk('local')->assertExists($photo->path);

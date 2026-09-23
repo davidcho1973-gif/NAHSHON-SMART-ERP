@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 공정별 현장 사진 (날짜별).
  *
  * 공정과는 wbs_code 문자열로 잇는다(안전카드와 같은 방식) — 공정표 교체를 견디기 위해서.
- * 저장되는 것은 항상 축소본이다: 업로드 시 장변 1,600px JPEG 로 줄이고,
- * 목록용 썸네일(400px)을 따로 굽는다. 원본 크기는 original_bytes 로만 남는다.
+ * 원본은 해시와 함께 별도 보존한다. 화면용 1,600px 이미지와 썸네일은 파생본이다.
+ * 도입 전 사진의 original_path 가 null 이면 원본이 보존됐다고 표시하지 않는다.
  */
 class WbsPhoto extends Model
 {
@@ -19,6 +19,7 @@ class WbsPhoto extends Model
         'photo_date', 'caption',
         'disk', 'path', 'thumb_path', 'mime', 'width', 'height',
         'bytes', 'original_bytes', 'original_name', 'uploaded_by_id',
+        'original_path', 'original_sha256',
     ];
 
     protected function casts(): array

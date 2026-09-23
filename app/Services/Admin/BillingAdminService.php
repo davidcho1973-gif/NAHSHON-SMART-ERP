@@ -3,10 +3,12 @@
 namespace App\Services\Admin;
 
 use App\Models\BillingReceipt;
+use App\Models\ContractBoqLine;
 use App\Models\PayApplication;
 use App\Models\ProjectContract;
 use App\Models\User;
 use App\Services\Finance\BillingCalculator;
+use App\Services\Finance\ClaimEvidenceService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -227,6 +229,7 @@ class BillingAdminService
             $rows[] = [
                 'id' => $app->id,
                 'applicationNo' => $app->application_no,
+                'evidenceBased' => data_get($app->payload, 'billingBasis') === 'claim_evidence',
                 'internalReference' => $app->internal_reference,
                 'type' => $app->type,
                 'typeLabel' => PayApplication::TYPE_OPTIONS[$app->type] ?? (string) $app->type,
@@ -360,7 +363,25 @@ class BillingAdminService
      * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      */
-    public function saveBilling(array $input): array
+    public function saveBilling(array $input, bool $fromEvidence = false): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '기성 관리 권한이 없습니다.'];
+        }
+        $existing = ! empty($input['id']) ? $this->findAccessibleApplication((int) $input['id']) : null;
+        $contract = $this->findAccessibleContract((int) ($existing?->project_contract_id ?? $input['projectContractId'] ?? 0));
+        if (! $contract) {
+            return ['success' => false, 'error' => '계약을 찾을 수 없습니다.'];
+        }
+
+        return DB::transaction(function () use ($input, $fromEvidence, $contract): array {
+            ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
+
+            return $this->saveBillingLocked($input, $fromEvidence);
+        });
+    }
+
+    private function saveBillingLocked(array $input, bool $fromEvidence): array
     {
         if (! $this->canManage()) {
             return ['success' => false, 'error' => '기성 관리 권한이 없습니다.'];
@@ -387,6 +408,16 @@ class BillingAdminService
 
         if ($contract->direction !== 'receivable') {
             return ['success' => false, 'error' => '기성 청구는 수주(receivable) 계약에만 만들 수 있습니다.'];
+        }
+
+        // Contract BOQ records are the valuation source once this contract uses the ledger.
+        // A browser payload cannot opt out: only the evidence service passes this PHP argument.
+        if (! $fromEvidence && ContractBoqLine::where('project_contract_id', $contract->id)->exists()) {
+            $requestedType = trim((string) ($input['type'] ?? '')) ?: ($row?->type ?? 'progress');
+            if ($requestedType !== 'retainage_release' || ($row && $row->type !== 'retainage_release')
+                || (float) ($input['thisPeriodAmount'] ?? 0) !== 0.0 || (float) ($input['storedMaterialsAmount'] ?? 0) !== 0.0) {
+                return ['success' => false, 'error' => '이 계약은 기성 근거 대장에서 확인수량으로 초안을 만듭니다. 직접 입력은 시공·자재 금액이 0인 유보 해제만 가능합니다.'];
+            }
         }
 
         // 새 회차 게이트: draft 동시 2건 금지 — 어느 회차가 다음 청구인지 흐려지고
@@ -545,21 +576,43 @@ class BillingAdminService
             return ['success' => false, 'error' => '기성 회차를 찾을 수 없습니다.'];
         }
 
-        return match ($action) {
-            'submit' => $this->submitApplication($row),
-            'withdraw' => $this->revertApplication($row, 'submitted', 'draft'),
-            'approve' => $this->approveApplication($row, $input),
-            'unapprove' => $this->revertApplication($row, 'approved', 'submitted'),
-            'close' => $this->closeApplication($row, trim((string) ($input['memo'] ?? ''))),
-            'reopen' => $this->reopenApplication($row),
-            default => ['success' => false, 'error' => '지원하지 않는 상태 변경입니다.'],
-        };
+        return DB::transaction(function () use ($action, $input, $row): array {
+            ProjectContract::whereKey($row->project_contract_id)->lockForUpdate()->firstOrFail();
+            $row->refresh();
+
+            return match ($action) {
+                'submit' => $this->submitApplication($row),
+                'withdraw' => $this->revertApplication($row, 'submitted', 'draft'),
+                'approve' => $this->approveApplication($row, $input),
+                'unapprove' => $this->revertApplication($row, 'approved', 'submitted'),
+                'close' => $this->closeApplication($row, trim((string) ($input['memo'] ?? ''))),
+                'reopen' => $this->reopenApplication($row),
+                default => ['success' => false, 'error' => '지원하지 않는 상태 변경입니다.'],
+            };
+        });
     }
 
     /**
      * @return array<string, mixed>
      */
     public function deleteBilling(int $id): array
+    {
+        if (! $this->canDelete()) {
+            return ['success' => false, 'error' => '기성 삭제 권한이 없습니다.'];
+        }
+        $row = $this->findAccessibleApplication($id);
+        if (! $row) {
+            return ['success' => false, 'error' => '기성 회차를 찾을 수 없습니다.'];
+        }
+
+        return DB::transaction(function () use ($row, $id): array {
+            ProjectContract::whereKey($row->project_contract_id)->lockForUpdate()->firstOrFail();
+
+            return $this->deleteBillingLocked($id);
+        });
+    }
+
+    private function deleteBillingLocked(int $id): array
     {
         if (! $this->canDelete()) {
             return ['success' => false, 'error' => '기성 삭제 권한이 없습니다.'];
@@ -578,6 +631,10 @@ class BillingAdminService
         }
         if ($row->receipts()->exists()) {
             return ['success' => false, 'error' => '수금이 배정된 회차는 삭제할 수 없습니다. 수금을 먼저 재배정하세요.'];
+        }
+
+        if (data_get($row->payload, 'evidenceSubmittedAt')) {
+            return ['success' => false, 'error' => '한 번 제출된 기성 근거 묶음은 삭제할 수 없습니다.'];
         }
 
         DB::transaction(fn () => $row->delete());
@@ -799,6 +856,15 @@ class BillingAdminService
         }
 
         $contract = $row->contract;
+        if (ContractBoqLine::where('project_contract_id', $row->project_contract_id)->exists()) {
+            $error = $row->type === 'retainage_release'
+                ? (((float) $row->this_period_amount !== 0.0 || (float) $row->stored_materials_amount !== 0.0)
+                    ? '유보 해제 회차에는 시공·보관 자재 금액을 넣을 수 없습니다.' : null)
+                : app(ClaimEvidenceService::class)->validateApplication($row);
+            if ($error !== null) {
+                return ['success' => false, 'error' => $error];
+            }
+        }
         $e = (float) $row->this_period_amount;
         $f = (float) $row->stored_materials_amount;
         $released = (float) $row->retainage_released;
@@ -844,6 +910,8 @@ class BillingAdminService
             'earned_less_retainage' => $computed['line6'],
             'previous_certificates' => $computed['line7'],
             'amount_due' => $computed['due'],
+            'payload' => array_merge((array) $row->payload, data_get($row->payload, 'billingBasis') === 'claim_evidence'
+                ? ['evidenceSubmittedAt' => now()->toIso8601String()] : []),
         ]));
 
         return [
@@ -864,6 +932,9 @@ class BillingAdminService
      */
     private function revertApplication(PayApplication $row, string $from, string $to): array
     {
+        if ($to === 'draft' && data_get($row->payload, 'evidenceSubmittedAt')) {
+            return ['success' => false, 'error' => '제출한 근거 묶음은 보존됩니다. 정정은 다음 회차에서 처리하세요.'];
+        }
         if ($row->status !== $from) {
             return ['success' => false, 'error' => sprintf('%s 상태의 회차만 되돌릴 수 있습니다.', PayApplication::STATUS_OPTIONS[$from] ?? $from)];
         }
@@ -1159,7 +1230,7 @@ class BillingAdminService
 
     // ── 접근 · 스코프 ────────────────────────────────────────────────────
 
-    private function findAccessibleContract(int $id): ?ProjectContract
+    public function findAccessibleContract(int $id): ?ProjectContract
     {
         if ($id <= 0) {
             return null;

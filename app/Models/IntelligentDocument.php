@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Services\Finance\ClaimEvidenceService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class IntelligentDocument extends Model
 {
@@ -75,6 +77,9 @@ class IntelligentDocument extends Model
     protected static function booted(): void
     {
         static::deleting(function (IntelligentDocument $document): void {
+            if (app(ClaimEvidenceService::class)->sourceIsProtected('document', $document->id)) {
+                throw ValidationException::withMessages(['document' => '기성 근거로 연결된 원본 문서는 삭제할 수 없습니다.']);
+            }
             if (filled($document->file_path)) {
                 Storage::disk($document->disk ?: config('document-intelligence.disk'))->delete($document->file_path);
             }
