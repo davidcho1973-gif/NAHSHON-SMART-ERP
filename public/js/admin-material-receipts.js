@@ -323,7 +323,12 @@
     var u = ui();
     call('api_confirmMaterialReceipt', [id, !!on]).then(function (res) {
       if (res.success === false) { u.toast(res.error || '처리하지 못했습니다.', 'error'); return; }
-      u.toast(on ? '입고를 확정했습니다.' : '확정을 해제했습니다. 이제 수정할 수 있습니다.');
+      // 확정은 회계 대기로 이어진다 — 얼마가 넘어갔는지, 왜 안 넘어갔는지 그 자리에서 말한다.
+      var f = res.finance || {};
+      if (res.financeWarning) u.toast(res.financeWarning, 'error');
+      else if (on && f.posted && f.amount !== null && f.amount !== undefined) u.toast('입고를 확정했습니다. $' + Number(f.amount).toLocaleString() + ' 을(를) 회계 대기로 넘겼습니다.');
+      else if (on && f.note) u.toast('입고를 확정했습니다. ' + f.note, 'error');
+      else u.toast(on ? '입고를 확정했습니다.' : '확정을 해제했습니다. 회계 대기에서 빠졌고, 이제 수정할 수 있습니다.');
       return reload();
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }

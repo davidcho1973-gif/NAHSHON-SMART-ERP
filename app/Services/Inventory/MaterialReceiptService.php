@@ -7,6 +7,7 @@ use App\Models\MaterialReceipt;
 use App\Models\MaterialReceiptLine;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Finance\MaterialReceiptExpenseConnector;
 use App\Services\Vendors\VendorResolver;
 use App\Support\MaterialReceiptAccess;
 use App\Support\MaterialReceiptUpload;
@@ -224,7 +225,19 @@ class MaterialReceiptService
                 'confirmed_at' => null,
             ])->save();
 
-            return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
+            // 확정된 입고는 회계 대기(경비 원장 pending)로, 풀린 입고는 거기서 빠진다.
+            // 실패해도 확정은 살아야 한다 — 부가 목적지가 주 기능을 막으면 안 된다.
+            $finance = null;
+            $financeWarning = null;
+            try {
+                $finance = app(MaterialReceiptExpenseConnector::class)->sync($receipt);
+            } catch (\Throwable $e) {
+                report($e);
+                $financeWarning = '입고는 확정됐지만 회계 대기 연결에 실패했습니다. 확정을 풀었다 다시 확정하거나 관리자에게 확인하세요.';
+            }
+
+            return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status,
+                'finance' => $finance, 'financeWarning' => $financeWarning];
         });
     }
 

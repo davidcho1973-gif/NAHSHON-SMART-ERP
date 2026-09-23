@@ -285,6 +285,7 @@ class MobileMaterialReceiptTest extends TestCase
         $this->assertSame(24.0, (float) $receipt->lines[1]->quantity);
         $this->assertDatabaseCount('material_receipts', 1);
         $this->assertDatabaseCount('material_receipt_lines', 2);
+        $this->assertSame(0, MobileExpense::query()->count(), 'Receiving alone does not post an expense — only a human confirmation does.');
 
         $this->postJson(self::URL.'/'.$id.'/confirm')->assertSuccessful()->assertJsonPath('success', true);
         $receipt->refresh();
@@ -294,7 +295,13 @@ class MobileMaterialReceiptTest extends TestCase
         $this->postJson(self::URL, $payload)->assertSuccessful()->assertJsonPath('id', $id);
         $this->assertDatabaseCount('material_receipts', 1);
         $this->assertSame(0, Equipment::query()->count(), 'Receiving does not invent rental assets.');
-        $this->assertSame(0, MobileExpense::query()->count(), 'Receiving does not post an expense or full purchase order.');
+        // 2026-09-23 owner directive lifted the hold on the accounting link: a confirmed
+        // receipt posts the priced total (12.5 × 3.2) as a pending expense, never a purchase order.
+        $expense = MobileExpense::query()->where('source_ref', "material-receipt:{$id}")->first();
+        $this->assertNotNull($expense, 'Confirmation posts the priced total to the pending ledger.');
+        $this->assertSame('pending', $expense->status);
+        $this->assertSame(40.0, (float) $expense->amount);
+        $this->assertSame(1, MobileExpense::query()->count(), 'Re-posting the same receipt never doubles the expense.');
     }
 
     public function test_mobile_save_rejects_invalid_line_instead_of_silently_dropping_it(): void
