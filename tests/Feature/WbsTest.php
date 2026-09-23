@@ -21,15 +21,20 @@ class WbsTest extends TestCase
      *
      * @param  array<int, array<string, mixed>>  $subs  extra subtask overrides
      */
+    /**
+     * AI 가 만든 트리 하나 — 이 파일의 시험들이 «AI 재생성» 을 다루므로 출처를 'ai' 로 적는다.
+     * 출처를 안 적으면 기본값 'manual'(사람이 적은 것)이 되고, 사람이 적은 공정표는 AI 가
+     * 덮어쓰지 못하게 막혀 있다(WbsService::importGenerated).
+     */
     private function seedTree(array $subs = []): void
     {
         $stage = WbsItem::create([
             'project_code' => 'TST-01', 'level' => 'stage', 'wbs_code' => 'TST-01-S-1',
-            'node_no' => '1', 'name' => '설치', 'sort_order' => 0,
+            'node_no' => '1', 'name' => '설치', 'sort_order' => 0, 'source' => 'ai',
         ]);
         $task = WbsItem::create([
             'project_code' => 'TST-01', 'parent_id' => $stage->id, 'level' => 'task', 'wbs_code' => 'TST-01-T-1.1',
-            'node_no' => '1.1', 'name' => '패널 설치', 'sort_order' => 0,
+            'node_no' => '1.1', 'name' => '패널 설치', 'sort_order' => 0, 'source' => 'ai',
         ]);
 
         $defaults = [
@@ -42,7 +47,7 @@ class WbsTest extends TestCase
                 'project_code' => 'TST-01', 'parent_id' => $task->id, 'level' => 'subtask',
                 'wbs_code' => 'TST-01-W-'.$s['no'], 'node_no' => $s['no'], 'name' => $s['name'],
                 'company' => $s['company'] ?? 'ABC ENG', 'manhours' => $s['mh'], 'days' => 1,
-                'ehs' => $s['ehs'] ?? 'medium', 'status' => $s['status'], 'progress' => $s['progress'],
+                'ehs' => $s['ehs'] ?? 'medium', 'status' => $s['status'], 'progress' => $s['progress'], 'source' => 'ai',
                 // 기본 픽스처는 조달성 작업(현장 인원 0) — 게이트가 개입하지 않는다.
                 // 안전 게이트를 검증하는 테스트는 'crew' 를 명시해 현장작업으로 만든다.
                 'crew_size' => $s['crew'] ?? 0,

@@ -82,6 +82,7 @@ use App\Services\Wbs\GeminiWbsAnalyzer;
 use App\Services\Wbs\LaborAllocationService;
 use App\Services\Wbs\WbsLaborService;
 use App\Services\Wbs\WbsService;
+use App\Services\Wbs\WeekBoardService;
 use App\Services\Wbs\WeeklyPlanService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -398,6 +399,15 @@ class SmartCompanyData
                 is_numeric($args[2] ?? null) ? (int) $args[2] : null,
             ),
             'api_revokeGuestLink' => app(GuestLinkService::class)->revoke((int) ($args[0] ?? 0)),
+
+            // 이번 주 작업판 — 공종별로, 현장의 말로, 한 주. 정식 공정표와 별개의 사실.
+            'api_getWeekBoard' => app(WeekBoardService::class)->board($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
+            'api_saveWeekBoardLine' => app(WeekBoardService::class)->save(is_array($args[0] ?? null) ? $args[0] : [], $siteId),
+            'api_setWeekBoardStatus' => app(WeekBoardService::class)->setStatus(
+                (int) ($args[0] ?? 0), (string) ($args[1] ?? ''), ($args[2] ?? null) !== null ? (string) $args[2] : null,
+            ),
+            'api_deleteWeekBoardLine' => app(WeekBoardService::class)->delete((int) ($args[0] ?? 0)),
+            'api_carryOverWeekBoard' => app(WeekBoardService::class)->carryOver($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
 
             // 조달 관리 (공정관리 하위 — 발주·조달성 공정의 납기 추적)
             'api_getProcurement' => app(ProcurementService::class)->list((string) ($args[0] ?? ''), $siteId),

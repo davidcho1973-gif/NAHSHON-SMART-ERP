@@ -2,6 +2,7 @@
 
 namespace App\Services\Wbs;
 
+use App\Models\MobileExpense;
 use App\Models\Project;
 use App\Models\SafetyWorkItem;
 use App\Models\Site;
@@ -691,6 +692,24 @@ class WbsService
      */
     public function importGenerated(string $projectCode, array $stages, string $siteId = 'ALL'): array
     {
+        // AI 가 «지어낸» 표준 WBS 는 사람이 맞춘 공정표 위에 덮어쓰지 않는다.
+        //
+        // 이 경로는 문서가 공정표가 아닐 때(도면·시방서) AI 가 3~6단계 × 2~5작업 × 2~6세부작업을
+        // 공수·공기까지 추측해 만든 것이다. 그런데 아래에서 프로젝트의 기존 트리를 통째로 지운다.
+        // 703K 처럼 원청 공정표를 들여와 손으로 62건을 맞춘 프로젝트에 도면 한 장을 올리면
+        // 그 공정표가 교과서 공정표로 바뀐다 — 조용히, 되돌릴 길 없이. 그래서 AI 가 만든 것이
+        // 아닌 줄이 하나라도 있으면 여기서 멈춘다. 지우고 새로 만들려면 «공정표 교체» 를 쓴다.
+        $curated = WbsItem::query()
+            ->where('project_code', $projectCode)
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'ai'))
+            ->count();
+        if ($curated > 0) {
+            throw new \RuntimeException(
+                "이 프로젝트에는 이미 들여오거나 손으로 맞춘 공정표가 있습니다({$curated}줄). "
+                .'AI 가 새로 만든 공정표로 덮어쓰지 않았습니다. 정말 바꾸려면 「공정표 교체」(엑셀)나 wbs:clear 를 쓰세요.'
+            );
+        }
+
         $siteRowId = $siteId !== 'ALL' ? Site::query()->where('code', $siteId)->value('id') : null;
         $projectRowId = Project::query()->where('project_code', $projectCode)->value('id');
 
@@ -919,7 +938,7 @@ class WbsService
                 return $planned > 0 ? ['planned' => $planned, 'actual' => 0.0, 'pending' => 0.0] : null;
             }
 
-            $byStatus = \App\Models\MobileExpense::query()
+            $byStatus = MobileExpense::query()
                 ->where('project_id', $projectId)
                 ->whereIn('status', ['pending', 'approved', 'paid'])
                 ->selectRaw("case when status = 'pending' then 'pending' else 'actual' end as bucket, sum(amount) as total")

@@ -25,6 +25,7 @@
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/admin-material-receipts.js') }}?v={{ filemtime(public_path('js/admin-material-receipts.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-week-board.js') }}?v={{ filemtime(public_path('js/admin-week-board.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
     <script src="{{ asset('js/admin-crew.js') }}?v={{ filemtime(public_path('js/admin-crew.js')) }}" defer></script>
     <script src="{{ asset('js/admin-kakao.js') }}?v={{ filemtime(public_path('js/admin-kakao.js')) }}" defer></script>
@@ -162,6 +163,9 @@
                 <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>공정 관리</span><span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
             <ul class="nav-sub" data-sub="g-site">
+              <li class="nav-item nav-child" data-view="week-board" id="nav-week-board">
+                <i class="ph ph-calendar-check" style="color:#16a34a"></i><span>이번 주 작업판</span>
+              </li>
               <li class="nav-item nav-child" data-view="opsroom" id="nav-opsroom">
                 <i class="ph ph-broadcast" style="color:#22c55e"></i><span>현장 상황실</span>
               </li>
@@ -349,6 +353,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="dashboard"><i class="ph ph-squares-four"></i><span>대시보드</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="command"><i class="ph ph-command"></i><span>AI 현장 지휘실</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="alerts"><i class="ph ph-bell-ringing"></i><span>알림</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="week-board"><i class="ph ph-calendar-check"></i><span>이번 주 작업판</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="wbs"><i class="ph ph-tree-structure"></i><span>공정 관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="opsroom"><i class="ph ph-broadcast"></i><span>현장 상황실</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>작업안전</span></button>
@@ -1463,6 +1468,7 @@
         'correspondence': { title: '서신 원장', render: function () { return window.AdminCorrespondence.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
+        'week-board': { title: '이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
         'material-receipts': { title: '자재 입고', render: function () { return window.AdminMaterialReceipts.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'equipment-checks': { title: '장비 사용 점검', render: function () { return window.AdminEquipmentChecks.render(); } },
