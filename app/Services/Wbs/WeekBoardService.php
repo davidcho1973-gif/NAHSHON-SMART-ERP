@@ -359,14 +359,54 @@ class WeekBoardService
      * @param  Collection<int, WeekBoardLine>  $lines
      * @return array<int, string>
      */
-    private function tradeOptions(Site $site, Collection $lines): array
+    public function tradeOptions(Site $site, ?Collection $lines = null): array
     {
-        $keys = collect(ReportSlot::keysOf($this->employees($site)))
-            ->reject(fn (string $k): bool => ReportSlot::isOffice($k))   // 사무·안전은 공종이 아니다
-            ->concat($lines->pluck('trade'))
+        // 도면에서 분석한 공정표의 공종이 먼저다(사장 지시) — 그 현장의 공정이 곧 공종 목록이다.
+        $fromSchedule = WbsItem::query()->where('site_id', $site->id)
+            ->whereNotNull('trade')->where('trade', '!=', '')->distinct()->pluck('trade')
+            ->map(fn ($t) => trim((string) $t))->filter();
+
+        $keys = $fromSchedule
+            ->concat(collect(ReportSlot::keysOf($this->employees($site)))
+                ->reject(fn (string $k): bool => ReportSlot::isOffice($k)))   // 사무·안전은 공종이 아니다
+            ->concat(($lines ?? collect())->pluck('trade'))
             ->filter()->unique()->values()->all();
 
         return ReportSlot::sort($keys);
+    }
+
+    /**
+     * 여러 줄을 한 번에 — 비서(AI)가 정리한 초안을 사람이 보고 저장할 때.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     * @return array<string, mixed>
+     */
+    public function saveMany(array $lines, string $siteId = 'ALL', ?string $week = null, ?string $source = null): array
+    {
+        $saved = 0;
+        $errors = [];
+        foreach ($lines as $i => $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $res = $this->save($line + ['siteId' => $line['siteId'] ?? null, 'week' => $week], $siteId);
+            if ($res['success'] ?? false) {
+                $saved++;
+                if ($source) {
+                    WeekBoardLine::query()->whereKey($res['id'])->update(['note' => trim(((string) ($line['note'] ?? '')).' ['.$source.']')]);
+                }
+            } else {
+                $errors[] = ($i + 1).'번째 줄: '.($res['error'] ?? implode(' ', $res['errors'] ?? []));
+            }
+        }
+
+        return ['success' => $saved > 0 || $errors === [], 'saved' => $saved, 'errors' => $errors];
+    }
+
+    /** 이 사람이 볼 수 있는 현장 하나를 고른다 — 비서 초안이 어느 현장 낱말을 쓸지 정할 때. */
+    public function siteFor(string $siteId, ?User $user): ?Site
+    {
+        return $this->site($siteId, $user);
     }
 
     /** @return Collection<int, Employee> */

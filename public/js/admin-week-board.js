@@ -128,13 +128,236 @@
     var body = d.groups.length
       ? d.groups.map(function (g) { return tradeGroup(u, g); }).join('')
       : '<div style="padding:40px;text-align:center;color:var(--text-tertiary)">이번 주에 적힌 일이 없습니다. ' +
-        (d.canManage ? '「줄 추가」 로 공종별로 이번 주 할 일을 적으세요.' : '') + '</div>';
+        (d.canManage ? '「줄 추가」 로 적거나, 아래 비서에게 말로 맡기세요.' : '') + '</div>';
 
     return u.pageHeader(
       '이번 주 작업판',
       d.site + ' · 공종별로 이번 주 하는 일과 인원. 됐다/안 됐다만 누르면 됩니다. — ' + notes.join(' · '),
       actions
-    ) + body;
+    ) + (d.canManage ? secretaryBar(u) : '') + body;
+  }
+
+  // ── AI 비서 — 타이핑 대신 말·사진·회의로 ────────────────────────────────
+  //
+  // 사장 말: 「이번 주 할 일을 따로 시간 내서 만들고 싶지 않다. 매일 공정 미팅과 토요일
+  // 다음 주 미팅에서 오간 말을 AI 가 비서처럼 듣고 정리해서 처리하는 시스템」.
+  // 그래서 입구가 넷이다 — 말로 적기 · 사진/녹음 올리기 · 회의에서 가져오기 · 메모.
+  // 넷 다 같은 곳으로 간다: 서버가 「공종 | 하는 일 | 인원 | 메모」 초안을 돌려주고,
+  // 사람이 그 초안을 보고 고친 뒤 저장한다. AI 가 들은 대로 바로 판이 되지는 않는다.
+
+  var rec = { recorder: null, stream: null, timer: null, startedAt: 0 };
+
+  function secretaryBar(u) {
+    var recording = rec.recorder && rec.recorder.state === 'recording';
+    var b = function (label, fn, icon) {
+      return '<button type="button" onclick="window.AdminWeekBoard.' + fn + '()" ' +
+        'style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">' +
+        '<i class="ph ph-' + icon + '"></i>' + u.esc(label) + '</button>';
+    };
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;margin-bottom:12px;border:1px dashed var(--border-default);border-radius:12px;background:var(--bg-base)">' +
+      '<div style="font-size:12px;color:var(--text-secondary);margin-right:4px"><b>AI 비서</b> — 타이핑 대신:</div>' +
+      (recording
+        ? '<button type="button" onclick="window.AdminWeekBoard.record()" style="padding:8px 12px;border-radius:8px;border:none;background:var(--status-danger);color:#fff;font-size:13px;font-weight:600;cursor:pointer">■ 녹음 끝내기 <span id="wb-rec-clock">0:00</span></button>'
+        : b('말로 적기', 'record', 'microphone')) +
+      b('사진·녹음 올리기', 'pickFile', 'upload-simple') +
+      b('회의에서 가져오기', 'fromMeeting', 'users-three') +
+      b('메모 붙여넣기', 'fromText', 'note-pencil') +
+      '<input type="file" id="wb-draft-file" accept="audio/*,image/*,.webm,.m4a,.jpg,.jpeg,.png,.heic" style="display:none" onchange="window.AdminWeekBoard.fileChosen(this)">' +
+      '</div>';
+  }
+
+  function csrf() {
+    var el = document.querySelector('meta[name="csrf-token"]');
+    return el ? el.getAttribute('content') : '';
+  }
+
+  /** 파일 없는 초안 요청(글·회의). 파일이 있으면 AdminUI.uploadFile 을 쓴다. */
+  function postDraft(fields) {
+    var fd = new FormData();
+    Object.keys(fields).forEach(function (k) { if (fields[k] !== null && fields[k] !== undefined) fd.append(k, fields[k]); });
+    return fetch('/week-board-api/draft', {
+      method: 'POST', credentials: 'same-origin', body: fd,
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
+    }).then(function (r) { return r.json().catch(function () { return { success: false, error: '응답을 읽지 못했습니다. (HTTP ' + r.status + ')' }; }); })
+      .catch(function (e) { return { success: false, error: e.message || '요청에 실패했습니다.' }; });
+  }
+
+  /** 다음 주 월요일 — 토요일 「다음 주」 미팅은 다음 주 판에 적는다. */
+  function nextWeekStart() {
+    var b = new Date(state.data.weekStart + 'T00:00:00');
+    b.setDate(b.getDate() + 7);
+    return b.toISOString().slice(0, 10);
+  }
+
+  function busyToast(msg) {
+    var u = ui();
+    u.toast(msg || '비서가 정리하는 중…');
+  }
+
+  function handleDraft(res, weekLabel) {
+    var u = ui();
+    if (!res || res.success === false) { u.toast((res && res.error) || '정리하지 못했습니다.', 'error'); return; }
+    if (!res.lines || !res.lines.length) {
+      u.toast('할 일로 적을 만한 말을 못 찾았습니다.' + (res.heard ? ' 들은 내용: ' + res.heard.slice(0, 80) : ''), 'error');
+      return;
+    }
+    reviewDraft(res, weekLabel);
+  }
+
+  /** 초안을 사람이 보고 고친 뒤 저장 — 한 줄에 한 일, 「공종 | 하는 일 | 인원 | 메모」. */
+  function reviewDraft(res, weekLabel) {
+    var u = ui();
+    var d = state.data;
+    var week = weekLabel === '다음 주' ? nextWeekStart() : d.weekStart;
+    var text = res.lines.map(function (l) {
+      return [l.trade, l.task, l.headcount !== null && l.headcount !== undefined ? l.headcount : '', l.note || ''].join(' | ').replace(/( \| )+$/, '');
+    }).join('\n');
+
+    u.formModal({
+      title: '비서가 정리한 ' + weekLabel + ' 할 일 — 확인하고 저장',
+      subtitle: (res.summary ? res.summary + ' · ' : '') + '출처: ' + (res.source || '') + ' · 틀린 줄은 고치고, 아닌 줄은 지우세요.',
+      saveLabel: '이대로 작업판에 적기',
+      fields: [
+        { name: 'lines', label: '할 일 (한 줄에 하나: 공종 | 하는 일 | 인원 | 메모)', type: 'textarea', rows: Math.min(14, res.lines.length + 3),
+          colSpan: 2, required: true, value: text, group: weekLabel + ' 작업판에 들어갈 줄',
+          hint: '공종은 이 현장 낱말: ' + (res.trades || []).join(', ') },
+        { name: 'heard', label: '들은 내용 (근거 — 저장되지 않습니다)', type: 'textarea', rows: 5, colSpan: 2,
+          value: res.heard || '', group: '비서가 무엇을 듣고 적었나' },
+      ],
+      onSave: function (v) {
+        var lines = String(v.lines || '').split('\n').map(function (row) {
+          var p = row.split('|').map(function (s) { return s.trim(); });
+          if (!p[0] && !p[1]) return null;
+          return { siteId: d.siteId, trade: p[0] || '', task: p[1] || '', headcount: p[2] || '', note: p[3] || '' };
+        }).filter(Boolean);
+        if (!lines.length) return { success: false, errors: { lines: '적을 줄이 없습니다.' } };
+        return call('api_saveWeekBoardLines', [lines, week, res.source || null]).then(function (r) {
+          if (r.success === false && !r.saved) return { success: false, error: (r.errors || []).join(' / ') || r.error || '저장하지 못했습니다.' };
+          u.toast(r.saved + '줄을 ' + weekLabel + ' 작업판에 적었습니다.' + (r.errors && r.errors.length ? ' 못 적은 줄: ' + r.errors.join(' / ') : ''), r.errors && r.errors.length ? 'error' : undefined);
+          if (week !== d.weekStart) state.week = week;   // 다음 주에 적었으면 그 주를 보여 준다.
+          return reload().then(function () { return { success: true }; });
+        });
+      },
+    });
+  }
+
+  // 1. 말로 적기 — 상황실 음성 보고와 같은 MediaRecorder 경로.
+  function record() {
+    var u = ui();
+    if (rec.recorder && rec.recorder.state === 'recording') { rec.recorder.stop(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !global.MediaRecorder) {
+      u.toast('이 브라우저에서는 녹음할 수 없습니다. 휴대폰 녹음 파일을 올려 주세요.', 'error');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }).then(function (stream) {
+      var mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].filter(function (m) { return MediaRecorder.isTypeSupported(m); })[0];
+      var chunks = [];
+      rec.stream = stream;
+      rec.recorder = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 96000 } : {});
+      rec.startedAt = Date.now();
+      rec.recorder.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
+      rec.recorder.onstop = function () {
+        clearInterval(rec.timer);
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        var blob = new Blob(chunks, { type: rec.recorder.mimeType });
+        rec.recorder = null;
+        paint(render());
+        sendFile(blob, (blob.type || 'audio/webm').split(';')[0]);
+      };
+      rec.recorder.onerror = function () { u.toast('녹음 장치에 오류가 났습니다.', 'error'); if (rec.recorder && rec.recorder.state !== 'inactive') rec.recorder.stop(); };
+      rec.recorder.start(5000);
+      paint(render());
+      rec.timer = setInterval(function () {
+        var s = Math.floor((Date.now() - rec.startedAt) / 1000);
+        var el = document.getElementById('wb-rec-clock');
+        if (el) el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        if (s >= 180 && rec.recorder && rec.recorder.state === 'recording') rec.recorder.stop();   // 서버 상한과 같다.
+      }, 1000);
+    }).catch(function (e) { u.toast('마이크를 쓸 수 없습니다: ' + (e.message || e), 'error'); });
+  }
+
+  // 2. 사진·녹음 파일 올리기 — 수기 노트, 화이트보드, 폰 녹음.
+  function pickFile() {
+    var el = document.getElementById('wb-draft-file');
+    if (el) { el.value = ''; el.click(); }
+  }
+
+  function fileChosen(input) {
+    var f = input.files && input.files[0];
+    if (!f) return;
+    var type = (f.type || '').split(';')[0];
+    if (type === 'video/webm') type = 'audio/webm';
+    if (type === 'audio/x-m4a') type = 'audio/mp4';
+    if (!type) type = /\.(m4a|mp4)$/i.test(f.name) ? 'audio/mp4' : /\.(jpe?g)$/i.test(f.name) ? 'image/jpeg' : /\.png$/i.test(f.name) ? 'image/png' : '';
+    sendFile(f, type);
+  }
+
+  function sendFile(file, mime) {
+    var u = ui();
+    if (state.busy) return;
+    state.busy = true;
+    busyToast(mime.indexOf('image/') === 0 ? '사진을 읽는 중…' : '녹음을 듣고 정리하는 중…');
+    u.uploadFile('/week-board-api/draft', file, { site_id: state.data.siteId, mime: mime, week_label: '이번 주' })
+      .then(function (res) { handleDraft(res, '이번 주'); })
+      .finally(function () { state.busy = false; });
+  }
+
+  // 3. 회의에서 가져오기 — 끝난 공정미팅(받아쓰기 완료)에서 다음 주(또는 이번 주) 할 일을.
+  function fromMeeting() {
+    var u = ui();
+    var d = state.data;
+    fetch('/week-board-api/meetings?site_id=' + encodeURIComponent(d.siteId), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var list = (res && res.meetings) || [];
+        if (!list.length) { u.toast('받아쓰기가 끝난 회의가 아직 없습니다. 공정미팅에서 녹음을 올리면 여기 나옵니다.', 'error'); return; }
+        return u.formModal({
+          title: '회의에서 할 일 가져오기',
+          subtitle: '회의 녹음을 비서가 이미 글로 옮겨 두었습니다. 그 글에서 할 일만 골라 초안을 만듭니다.',
+          saveLabel: '비서에게 정리시키기',
+          fields: [
+            { name: 'meeting', label: '회의', type: 'select', required: true, colSpan: 2,
+              options: list.map(function (m) { return { value: m.id, label: (m.on || '') + ' · ' + m.title }; }), value: list[0].id },
+            { name: 'week', label: '어느 주 할 일인가', type: 'select', required: true, colSpan: 2,
+              options: [{ value: '다음 주', label: '다음 주 (토요일 미팅)' }, { value: '이번 주', label: '이번 주 (아침 미팅)' }],
+              value: '다음 주' },
+          ],
+          onSave: function (v) {
+            busyToast('회의 내용을 읽는 중…');
+            return postDraft({ site_id: d.siteId, meeting_id: v.meeting, week_label: v.week }).then(function (out) {
+              if (!out || out.success === false) return { success: false, error: (out && out.error) || '정리하지 못했습니다.' };
+              setTimeout(function () { handleDraft(out, v.week); }, 0);
+              return { success: true };
+            });
+          },
+        });
+      })
+      .catch(function (e) { u.toast(e.message || '회의 목록을 못 가져왔습니다.', 'error'); });
+  }
+
+  // 4. 메모 붙여넣기 — 카톡·문자에 적힌 지시를 그대로.
+  function fromText() {
+    var u = ui();
+    var d = state.data;
+    u.formModal({
+      title: '메모를 비서에게',
+      subtitle: '회의 메모, 카톡, 문자 — 그대로 붙여 넣으면 공종별 할 일로 정리합니다.',
+      saveLabel: '비서에게 정리시키기',
+      fields: [
+        { name: 'text', label: '내용', type: 'textarea', rows: 8, colSpan: 2, required: true, value: '',
+          hint: '예) 배관은 급탕 마무리하고 둘은 그리스트랩. 전기 후드 배선 셋. 덕트는 자재 오면 시작.' },
+        { name: 'week', label: '어느 주 할 일인가', type: 'select', required: true,
+          options: [{ value: '이번 주', label: '이번 주' }, { value: '다음 주', label: '다음 주' }], value: '이번 주' },
+      ],
+      onSave: function (v) {
+        busyToast();
+        return postDraft({ site_id: d.siteId, text: v.text, week_label: v.week }).then(function (out) {
+          if (!out || out.success === false) return { success: false, error: (out && out.error) || '정리하지 못했습니다.' };
+          setTimeout(function () { handleDraft(out, v.week); }, 0);
+          return { success: true };
+        });
+      },
+    });
   }
 
   function reload() {
@@ -269,6 +492,12 @@
     carryOver: carryOver,
     shiftWeek: shiftWeek,
     pickSite: pickSite,
+    record: record,
+    pickFile: pickFile,
+    fileChosen: fileChosen,
+    fromMeeting: fromMeeting,
+    fromText: fromText,
+    reviewDraft: reviewDraft,
     _state: state,
   };
 })(window);

@@ -44,6 +44,7 @@ use App\Http\Controllers\WbsManualController;
 use App\Http\Controllers\WbsPhotoController;
 use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
+use App\Http\Controllers\WeekBoardDraftController;
 use App\Http\Controllers\WorkerAppEntryController;
 use App\Http\Controllers\WorkerAppPinController;
 use App\Http\Controllers\WorkerEnrollmentController;
@@ -352,6 +353,10 @@ Route::middleware('auth')->group(function (): void {
     // 올라온 사진 보기 — 상황실 카드의 썸네일(?s=t)과 크게 보기 둘 다 이 길로 온다.
     Route::get('/ops-api/photo/{batch}/{index}', [OpsPhotoController::class, 'show'])
         ->whereNumber('index')->name('ops.photo.show');
+    // 이번 주 작업판 — 말·사진·글·회의를 AI 비서가 줄로 정리(초안). 저장은 사람이 보고 따로.
+    Route::post('/week-board-api/draft', [WeekBoardDraftController::class, 'draft'])->middleware('throttle:30,1')->name('week-board.draft');
+    Route::get('/week-board-api/meetings', [WeekBoardDraftController::class, 'meetings'])->name('week-board.meetings');
+
     // 말한 것을 글자로 — 장갑 낀 손으로 타자를 치지 않아도 되게. 녹음은 보관하지 않는다.
     Route::post('/ops-api/voice', [OpsVoiceController::class, 'store'])
         ->middleware('throttle:30,1')->name('ops.voice');

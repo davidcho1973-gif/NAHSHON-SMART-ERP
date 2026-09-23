@@ -407,6 +407,11 @@ class SmartCompanyData
                 (int) ($args[0] ?? 0), (string) ($args[1] ?? ''), ($args[2] ?? null) !== null ? (string) $args[2] : null,
             ),
             'api_deleteWeekBoardLine' => app(WeekBoardService::class)->delete((int) ($args[0] ?? 0)),
+            'api_saveWeekBoardLines' => app(WeekBoardService::class)->saveMany(
+                is_array($args[0] ?? null) ? $args[0] : [], $siteId,
+                ($args[1] ?? null) !== null ? (string) $args[1] : null,
+                ($args[2] ?? null) !== null ? (string) $args[2] : null,
+            ),
             'api_carryOverWeekBoard' => app(WeekBoardService::class)->carryOver($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
 
             // 조달 관리 (공정관리 하위 — 발주·조달성 공정의 납기 추적)
