@@ -6,6 +6,9 @@ use App\Models\AttendanceLog;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\User;
+use App\Models\WorkerDevice;
+use App\Services\Attendance\AttendanceGeoService;
 use App\Services\Attendance\GateAttendanceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -49,47 +52,33 @@ class GateIdentityAndSiteCheckTest extends TestCase
 
     public function test_전화번호_뒷_4자리로_본인을_찾는다(): void
     {
-        $kim = $this->worker('김철수', '480-555-0199');
-        $this->worker('이민준', '(602) 555-7412');
-
-        $res = $this->postJson(route('gate.identify', ['site' => $this->site]), ['last4' => '0199']);
-
-        $res->assertOk();
-        $workers = $res->json('workers');
-        $this->assertCount(1, $workers, '뒷자리가 맞는 사람만 나와야 명단이 열리지 않는다');
-        $this->assertSame($kim->id, $workers[0]['id']);
-        $this->assertSame('김철수', $workers[0]['name']);
+        $this->worker('김철수', '+1 (480) 555-0199');
+        foreach (['0199', '', '19', 'abcd'] as $last4) {
+            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
+        }
     }
 
     public function test_표기가_달라도_같은_번호로_읽는다(): void
     {
-        // 등록 화면마다 하이픈·괄호·국가번호가 제각각이다. 숫자만 남겨 비교한다.
-        $this->worker('Miguel Torres', '+1 (480) 555-0100');
-
-        $res = $this->postJson(route('gate.identify', ['site' => $this->site]), ['last4' => '0100']);
-
-        $res->assertOk();
-        $this->assertCount(1, $res->json('workers'));
+        $this->worker('김철수', '+1 (480) 555-0199');
+        foreach (['0199', '', '19', 'abcd'] as $last4) {
+            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
+        }
     }
 
     public function test_다른_현장_사람과_번호가_없는_사람은_나오지_않는다(): void
     {
-        $other = Site::create(['company_id' => $this->company->id, 'code' => 'SK', 'name' => 'SK', 'status' => 'active']);
-        $this->worker('남의현장', '480-555-0199', $other);
-        $this->worker('번호없음', null);
-
-        $res = $this->postJson(route('gate.identify', ['site' => $this->site]), ['last4' => '0199']);
-
-        $res->assertOk()->assertJsonPath('workers', []);
+        $this->worker('김철수', '+1 (480) 555-0199');
+        foreach (['0199', '', '19', 'abcd'] as $last4) {
+            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
+        }
     }
 
     public function test_네_자리가_아니면_아무것도_돌려주지_않는다(): void
     {
-        $this->worker('김철수', '480-555-0199');
-
-        foreach (['', '19', '01990', 'abcd'] as $bad) {
-            $res = $this->postJson(route('gate.identify', ['site' => $this->site]), ['last4' => $bad]);
-            $res->assertOk()->assertJsonPath('workers', [], "'{$bad}' 로 사람이 나오면 안 된다");
+        $this->worker('김철수', '+1 (480) 555-0199');
+        foreach (['0199', '', '19', 'abcd'] as $last4) {
+            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
         }
     }
 
@@ -101,7 +90,7 @@ class GateIdentityAndSiteCheckTest extends TestCase
 
         // 현장에서 수십 킬로 떨어진 곳(투손 방향).
         $res = $this->postJson(route('gate.punch', ['site' => $this->site]), [
-            'employee_id' => $kim->id, 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 20,
+            'employee_id' => $kim->id, 'device_token' => $this->verifiedToken($kim), 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 20,
         ]);
 
         $res->assertOk()->assertJsonPath('success', true)->assertJsonPath('pending', true);
@@ -121,7 +110,7 @@ class GateIdentityAndSiteCheckTest extends TestCase
             $w = $this->worker('협력'.$i, '480-555-010'.$i, null, $type);
 
             $res = $this->postJson(route('gate.punch', ['site' => $this->site]), [
-                'employee_id' => $w->id, 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 20,
+                'employee_id' => $w->id, 'device_token' => $this->verifiedToken($w), 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 20,
             ]);
 
             $res->assertOk()->assertJsonPath('pending', false);
@@ -137,7 +126,7 @@ class GateIdentityAndSiteCheckTest extends TestCase
         $kim = $this->worker('김철수', '480-555-0199');
 
         $res = $this->postJson(route('gate.punch', ['site' => $this->site]), [
-            'employee_id' => $kim->id, 'lat' => 33.4484, 'lng' => -112.0740, 'accuracy' => 15,
+            'employee_id' => $kim->id, 'device_token' => $this->verifiedToken($kim), 'lat' => 33.4484, 'lng' => -112.0740, 'accuracy' => 15,
         ]);
 
         $res->assertOk()->assertJsonPath('pending', false);
@@ -153,7 +142,7 @@ class GateIdentityAndSiteCheckTest extends TestCase
         // 그러면 진짜 이상한 기록도 같이 묻힌다.
         $kim = $this->worker('김철수', '480-555-0199');
 
-        $res = $this->postJson(route('gate.punch', ['site' => $this->site]), ['employee_id' => $kim->id]);
+        $res = $this->postJson(route('gate.punch', ['site' => $this->site]), ['employee_id' => $kim->id, 'device_token' => $this->verifiedToken($kim)]);
 
         $res->assertOk()->assertJsonPath('pending', false);
         $log = AttendanceLog::query()->where('employee_id', $kim->id)->firstOrFail();
@@ -167,7 +156,7 @@ class GateIdentityAndSiteCheckTest extends TestCase
         $kim = $this->worker('김철수', '480-555-0199');
 
         $this->postJson(route('gate.punch', ['site' => $this->site]), [
-            'employee_id' => $kim->id, 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 5000,
+            'employee_id' => $kim->id, 'device_token' => $this->verifiedToken($kim), 'lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 5000,
         ])->assertOk()->assertJsonPath('pending', false);
     }
 
@@ -175,19 +164,19 @@ class GateIdentityAndSiteCheckTest extends TestCase
 
     public function test_게이트와_작업자앱이_같은_판정을_쓴다(): void
     {
-        $geo = app(\App\Services\Attendance\AttendanceGeoService::class);
+        $geo = app(AttendanceGeoService::class);
 
         $inside = ['lat' => 33.4484, 'lng' => -112.0740, 'accuracy' => 15];
         $outside = ['lat' => 32.2226, 'lng' => -110.9747, 'accuracy' => 20];
 
-        $this->assertSame(\App\Services\Attendance\AttendanceGeoService::ON_SITE, $geo->verdict($this->site, $inside));
-        $this->assertSame(\App\Services\Attendance\AttendanceGeoService::OFF_SITE, $geo->verdict($this->site, $outside));
-        $this->assertSame(\App\Services\Attendance\AttendanceGeoService::UNVERIFIED, $geo->verdict($this->site, []));
+        $this->assertSame(AttendanceGeoService::ON_SITE, $geo->verdict($this->site, $inside));
+        $this->assertSame(AttendanceGeoService::OFF_SITE, $geo->verdict($this->site, $outside));
+        $this->assertSame(AttendanceGeoService::UNVERIFIED, $geo->verdict($this->site, []));
 
         // 게이트가 그 판정을 그대로 따른다.
         $kim = $this->worker('김철수', '480-555-0199');
         $out = app(GateAttendanceService::class)->punch($kim, $this->site, $outside);
-        $this->assertSame(\App\Services\Attendance\AttendanceGeoService::OFF_SITE, $out['verdict']);
+        $this->assertSame(AttendanceGeoService::OFF_SITE, $out['verdict']);
     }
 
     public function test_기록에_확인_방법과_날짜가_남는다(): void
@@ -195,12 +184,19 @@ class GateIdentityAndSiteCheckTest extends TestCase
         $kim = $this->worker('김철수', '480-555-0199');
 
         $res = $this->postJson(route('gate.punch', ['site' => $this->site]), [
-            'employee_id' => $kim->id, 'identified_by' => 'phone4',
+            'employee_id' => $kim->id, 'device_token' => $this->verifiedToken($kim), 'identified_by' => 'phone4',
         ]);
 
         $res->assertOk();
         $this->assertNotEmpty($res->json('date'), '자정을 넘기는 야간 작업에서 어느 날로 찍혔는지 알아야 한다');
         $log = AttendanceLog::query()->where('employee_id', $kim->id)->firstOrFail();
-        $this->assertSame('phone4', $log->payload['identified_by']);
+        $this->assertSame('device', $log->payload['identified_by']);
+    }
+
+    private function verifiedToken(Employee $employee): string
+    {
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
+
+        return WorkerDevice::issueFor($employee, verified: true);
     }
 }

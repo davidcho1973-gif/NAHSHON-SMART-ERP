@@ -19,7 +19,9 @@ class GateAttendanceTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private Site $site;
+
     private Site $otherSite;
 
     protected function setUp(): void
@@ -35,7 +37,7 @@ class GateAttendanceTest extends TestCase
         return Employee::create([
             'company_id' => $this->company->id, 'site_id' => ($site ?? $this->site)->id,
             'name' => $name, 'first_name' => $name, 'last_name' => '',
-            'email' => $name . '@x.com', 'employment_status' => $status,
+            'email' => $name.'@x.com', 'employment_status' => $status,
             'badge_company_name' => 'AUTORICA',
         ]);
     }
@@ -111,35 +113,22 @@ class GateAttendanceTest extends TestCase
     public function test_punch_endpoint_records_without_login(): void
     {
         $kim = $this->worker('김철수');
-
-        $res = $this->postJson(route('gate.punch', ['site' => $this->site]), ['employee_id' => $kim->id]);
-
-        $res->assertStatus(200)->assertJsonPath('success', true)->assertJsonPath('event', 'clock_in');
-        $this->assertDatabaseHas('attendance_logs', ['employee_id' => $kim->id, 'source' => 'gate_qr', 'event_type' => 'clock_in']);
+        $this->postJson(route('gate.punch', $this->site), ['employee_id' => $kim->id])->assertUnauthorized();
+        $this->assertDatabaseCount('attendance_logs', 0);
     }
 
     public function test_search_endpoint_scopes_to_site(): void
     {
         $this->worker('김철수');
         $this->worker('이민준', $this->otherSite);
-
-        $res = $this->postJson(route('gate.search', ['site' => $this->site]), ['q' => '김철']);
-        $res->assertStatus(200);
-        $names = collect($res->json('workers'))->pluck('name');
-        $this->assertTrue($names->contains('김철수'));
-        $this->assertFalse($names->contains('이민준'));
+        $this->postJson(route('gate.search', $this->site), ['q' => '김철'])->assertStatus(410)->assertJsonMissingPath('workers');
     }
 
     public function test_search_refuses_to_hand_out_the_roster(): void
     {
-        // 예전에는 빈 값·한 글자로 현장 명단이 통째로 나왔다. 이 화면은 주소만 알면
-        // 누구나 열 수 있으므로, 그건 명단을 벽에 붙여 둔 것과 같다.
         $this->worker('김철수');
-
-        foreach (['', '김'] as $q) {
-            $res = $this->postJson(route('gate.search', ['site' => $this->site]), ['q' => $q]);
-            $res->assertStatus(200)->assertJsonPath('tooShort', true);
-            $this->assertSame([], $res->json('workers'), "'{$q}' 로 명단이 나오면 안 된다");
+        foreach (['', '김', '김철수'] as $q) {
+            $this->postJson(route('gate.search', $this->site), ['q' => $q])->assertStatus(410)->assertJsonMissingPath('workers');
         }
     }
 }

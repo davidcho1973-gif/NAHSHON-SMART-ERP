@@ -92,7 +92,7 @@ class WorkerAppEntryController extends Controller
      */
     private function signIn(Request $request, string $token): bool
     {
-        $employee = WorkerDevice::resolve($token);
+        $employee = WorkerDevice::resolve($token, requireVerified: true);
         if ($employee === null || $employee->employment_status !== 'active') {
             return false;
         }

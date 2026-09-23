@@ -249,33 +249,33 @@ final class WorkerLang
         return [
             'gate' => [
                 'ko' => [
-                    'title' => '출근 · 퇴근',
-                    'hint' => '출입할 때 휴대폰 카메라로 이 QR 을 스캔하세요. (앱 설치·로그인 불필요)',
+                    'title' => '등록 · 출근 · 퇴근',
+                    'hint' => '현장 QR은 이 한 장입니다. 휴대폰 기본 카메라로 스캔하세요.',
                     'steps' => [
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                        '전화번호 뒷 4자리를 입력합니다. (한 번 찍으면 이 휴대폰을 기억해 다음부터 바로)',
+                        '처음 온 사람: 이름·전화번호 등록 → 개인 PIN 설정. 기존 직원: 전화번호·PIN으로 연결.',
                         '출근하기 / 퇴근하기 버튼을 누르면 끝.',
-                        '직원 앱 열기를 눌러 로그인한 뒤 ‘나 → 홈 화면에 추가’에서 직원 앱을 설치합니다.',
+                        '다음부터는 이 휴대폰을 기억합니다. PIN을 잊었으면 인사담당자에게 문의하세요.',
                     ],
                 ],
                 'en' => [
-                    'title' => 'Clock In / Clock Out',
-                    'hint' => 'Scan this QR with your phone camera when you enter or leave. No app, no login.',
+                    'title' => 'Register / Clock In / Clock Out',
+                    'hint' => 'One site QR. Scan with your phone camera. No app installation needed.',
                     'steps' => [
                         'Scan the QR code with your phone camera.',
-                        'Enter the last 4 digits of your phone number. (This phone is remembered from next time)',
+                        'New worker: name + phone, then set a PIN. Existing worker: phone + PIN.',
                         'Tap CLOCK IN or CLOCK OUT. Done.',
-                        'Open the employee app, sign in, then choose Me → Add to Home Screen to install it.',
+                        'Your phone is remembered next time. Forgot your PIN? Ask HR.',
                     ],
                 ],
                 'es' => [
                     'title' => 'Entrada / Salida',
-                    'hint' => 'Escanee este QR con la cámara de su teléfono al entrar y salir. Sin app ni contraseña.',
+                    'hint' => 'Un solo QR. Escanee con la cámara de su teléfono. No necesita instalar una app.',
                     'steps' => [
                         'Escanee el código QR con la cámara.',
-                        'Escriba los últimos 4 dígitos de su teléfono. (El teléfono se guarda para la próxima vez)',
+                        'Nuevo: nombre y teléfono, después cree su PIN. Registrado: teléfono y PIN.',
                         'Pulse ENTRADA o SALIDA. Listo.',
-                        'Abra la app del empleado, inicie sesión y elija Yo → Agregar a la pantalla de inicio para instalarla.',
+                        'El teléfono se recuerda. Si olvidó su PIN, consulte a Recursos Humanos.',
                     ],
                 ],
             ],

@@ -45,9 +45,9 @@ class WorkerJoinLinkIsPublicTest extends TestCase
     public function test_the_link_handed_to_a_worker_opens_without_logging_in(): void
     {
         // 계정 없는 사람이 그대로 열 수 있어야 한다.
-        $this->get(route('worker-join.form', ['site' => $this->site]))
+        $this->followingRedirects()->get(route('worker-join.form', ['site' => $this->site]))
             ->assertOk()
-            ->assertSee('새 작업자 등록');
+            ->assertSee('처음 온 작업자 등록');
     }
 
     public function test_the_hr_only_link_still_needs_a_login(): void
@@ -66,8 +66,8 @@ class WorkerJoinLinkIsPublicTest extends TestCase
         $html = (string) $this->actingAs($boss)->get('/')->assertOk()->getContent();
 
         // 복사되는 링크와 포스터 주소는 둘 다 공개 경로(/join/w/…)를 가리켜야 한다.
-        $this->assertStringContainsString("'/join/w/' + s.id + '?lang=ko'", $html);
-        $this->assertStringContainsString("'/join/w/' + s.id + '/qr'", $html);
+        $this->assertStringContainsString("'/gate/' + s.id + '?lang=ko'", $html);
+        $this->assertStringContainsString("'/gate/' + s.id + '/qr'", $html);
 
         // 작업자에게 주는 자리에 로그인 필요한 주소를 넣지 않는다.
         $this->assertStringNotContainsString("window.location.origin + '/join?lang=ko'", $html);
@@ -86,7 +86,7 @@ class WorkerJoinLinkIsPublicTest extends TestCase
         $html = (string) $this->actingAs($boss)->get('/')->assertOk()->getContent();
 
         // 설명이 화면과 어긋나면 사장님이 잘못된 안내를 현장에 내려보낸다.
-        $this->assertStringContainsString('이름·전화번호 두 가지만', $html);
+        $this->assertStringContainsString('현장 QR 하나로 등록·출퇴근', $html);
         $this->assertStringNotContainsString('이름·소속회사·공정·직책·전화번호를 작성합니다', $html);
     }
 }

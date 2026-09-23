@@ -15,9 +15,12 @@ use App\Services\Alerts\UnifiedAlertService;
 use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
 use App\Support\WorkerLang;
+use App\Support\WorkerPhone;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -60,18 +63,11 @@ class SimpleWorkerRegistrationController extends Controller
      * 현장 공용 QR 화면. 새 작업자는 이름과 전화번호만 적는다.
      * 회사·현장·직책·공정 분류는 QR 과 ERP 기준값으로 채우고 인사담당자가 나중에 보완한다.
      */
-    public function quickForm(Request $request, Site $site): View
+    public function quickForm(Request $request, Site $site): RedirectResponse
     {
         abort_unless($site->status === 'active', 404);
 
-        return view('worker-join.quick', [
-            'site' => $site,
-            'done' => false,
-            'returning' => false,
-            'lang' => WorkerLang::resolve($request->query('lang')),
-            'langOptions' => WorkerLang::OPTIONS,
-            'deviceToken' => null,
-        ]);
+        return redirect()->route('gate.show', ['site' => $site, 'lang' => WorkerLang::resolve($request->query('lang'))]);
     }
 
     /** 이름·전화번호를 직원으로 등록하고 이 휴대폰을 즉시 출퇴근 기기로 연결한다. */
@@ -105,7 +101,16 @@ class SimpleWorkerRegistrationController extends Controller
             'preferred_language' => WorkerLang::resolve($data['preferred_language'] ?? null),
         ]);
 
-        return $this->register($request, $site);
+        return DB::transaction(function () use ($request, $site): View {
+            // Serialize public registrations for the normalized phone, including different sites.
+            $phone = WorkerPhone::normalize((string) $request->input('phone'));
+            DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['worker-register:'.$phone]);
+            if (! $phone || WorkerPhone::employees((string) $request->input('phone'))->exists()) {
+                throw ValidationException::withMessages(['phone' => '이미 등록된 번호이거나 올바르지 않은 번호입니다. 전화번호·PIN으로 연결하거나 인사담당자에게 문의하세요. / Use phone and PIN, or contact HR.']);
+            }
+
+            return $this->register($request, $site);
+        });
     }
 
     /** 이전 관리자 링크를 받은 사람도 같은 직원 등록 화면을 쓴다. */

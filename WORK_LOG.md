@@ -2,6 +2,12 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-22 Unified site attendance QR
+
+Separate registration, roster-selection attendance and app/account entry paths confused workers and allowed an employee ID or phone suffix to stand in for identity. Consolidated site QR entry into registration or full-phone/PIN connection, followed by a remembered verified device and one clock-in/out button. Legacy registration QR URLs redirect to this gate. Public roster lookup/device issuance is retired; existing unverified tokens require one PIN connection. HR retains registration review, PIN links and private follow-up paperwork; the roster shows the existing headcount service's attendance state. New workers may record attendance before HR review, but unreviewed workers block payroll approval/payment. Existing employee, attendance and payroll records are preserved.
+
+Validation: targeted 63 tests/281 assertions passed, full local run covered 2,273 tests (2,219 passed, 52 local GD-extension errors, 2 skips); all affected GD classes passed on direct PHP execution (170 tests/690 assertions). JavaScript 34 tests, static build, changed-PHP style and diff checks passed. Local synthetic browser registration reached PIN setup; no production employee or attendance data was changed. Linux full CI and staging/NAHSHON build verification remain release gates.
+
 ## CODEX — 2026-09-22 Mobile material receiving
 
 The existing receiving ledger had no entry point in the worker app, and client-supplied attachment paths were not tied to their uploader or site. Added a managerial worker-app receiving page using the same ledger as the ERP: camera/file evidence, optional AI suggestions, manual correction, draft saving, history and human confirmation. Active supervisory workers are restricted to their assigned sites; private evidence uses expiring actor/site-bound tokens, and device-only sessions follow the existing PIN gate. Retried creates use an actor-scoped unique request key; the screen reloads stored quantities before confirmation. Failed AI leaves usable evidence and manual entry. Photos, PDF and common office/text files are supported as evidence, one file per receipt. Mobile equipment registration now retains the selected owned/rental classification instead of inheriting the rental database default.
@@ -38,6 +44,7 @@ Owner requested removal of pay viewing from the worker app. Removed the pay tab,
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-22 | CODEX | Unified attendance | One site QR, verified personal device, HR roster and pending-review payroll protection. | codex/unified-attendance; release verification pending | Targeted63 + GD rerun170 passed; JS34/build/style passed; full Linux CI required. |
 | 2026-09-22 | CODEX | Manager mobile receiving | Worker app camera/file intake shares ERP receiving ledger; scoped private proof, manual/AI draft, human confirmation, duplicate retry protection and owned/rental fix. | codex/material-receiving-mobile | Related PHP47 + final failed-class/security rerun60 passed; JS32 passed; build/Blade passed. Linux CI and staging/NAHSHON release gates follow. |
 | 2026-09-20 | CODEX | Remove pay from worker app | Attendance-only home response and three-tab UI; preserve administrative payroll. | codex/worker-remove-pay | Relevant PostgreSQL tests and release verification recorded in workspace outputs/ERP_Worker_NoPay_20260920. |
 | 2026-09-20 | CODEX | System integration audit + Korean manual | Repair stale pending finance links, access-role target checks, ETA delay, housing API/UI contract, fake vendor fallback, misleading AI health label; add authenticated searchable manual. | codex/erp-integration-audit-manual; release verification in progress | 35-menu browser pass; 45 guide chapters; 48-page PDF; 28 JS checks; 2,111 PHP passed / 1 Windows-only skip / 7,992 assertions; static build passed. |

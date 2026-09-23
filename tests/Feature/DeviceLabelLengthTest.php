@@ -66,15 +66,9 @@ class DeviceLabelLengthTest extends TestCase
 
     public function test_gate_remember_accepts_a_long_browser_name(): void
     {
-        $employee = Employee::create([
-            'name' => '김창돈', 'company_id' => $this->company->id, 'site_id' => $this->site->id,
-            'phone' => '480-555-0101', 'employment_status' => 'active',
-        ]);
-
-        $this->withHeader('User-Agent', self::KAKAO_UA)
-            ->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])
-            ->assertOk()
-            ->assertJson(['success' => true]);
+        $employee = Employee::create(['name' => 'Worker', 'company_id' => $this->company->id, 'site_id' => $this->site->id, 'employment_status' => 'active']);
+        WorkerDevice::issueFor($employee, self::KAKAO_UA, verified: true);
+        $this->assertLessThanOrEqual(120, mb_strlen(WorkerDevice::sole()->label));
     }
 
     public function test_login_device_accepts_a_long_browser_name(): void
