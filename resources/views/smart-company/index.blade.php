@@ -159,12 +159,15 @@
           <div class="nav-section">
             <div class="nav-section-title">현장</div>
             <ul class="nav-list">
-              <li class="nav-item" data-view="wbs" id="nav-wbs" data-group="g-site">
-                <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>공정 관리</span><span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
+              {{-- 공정 관리 = 이번 주 작업판. 현장이 매일 만지는 것이 먼저다. 원청 보고용
+                   정식 공정표는 하위 메뉴로 — 사장 지시(2026-09-23): 「원청 보고용은 신경 쓰지 마,
+                   우리한테 필요한 것만. 매일 살아 움직이는 공정표」. --}}
+              <li class="nav-item" data-view="week-board" id="nav-week-board" data-group="g-site">
+                <i class="ph ph-calendar-check" style="color:#16a34a"></i><span>공정 관리</span>
               </li>
             <ul class="nav-sub" data-sub="g-site">
-              <li class="nav-item nav-child" data-view="week-board" id="nav-week-board">
-                <i class="ph ph-calendar-check" style="color:#16a34a"></i><span>이번 주 작업판</span>
+              <li class="nav-item nav-child" data-view="wbs" id="nav-wbs">
+                <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>정식 공정표 (원청용)</span><span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
               <li class="nav-item nav-child" data-view="opsroom" id="nav-opsroom">
                 <i class="ph ph-broadcast" style="color:#22c55e"></i><span>현장 상황실</span>
@@ -353,8 +356,8 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="dashboard"><i class="ph ph-squares-four"></i><span>대시보드</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="command"><i class="ph ph-command"></i><span>AI 현장 지휘실</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="alerts"><i class="ph ph-bell-ringing"></i><span>알림</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="week-board"><i class="ph ph-calendar-check"></i><span>이번 주 작업판</span></button>
-          <button class="mobile-more-tile" type="button" data-mobile-view="wbs"><i class="ph ph-tree-structure"></i><span>공정 관리</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="week-board"><i class="ph ph-calendar-check"></i><span>공정 관리 (작업판)</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="wbs"><i class="ph ph-tree-structure"></i><span>정식 공정표</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="opsroom"><i class="ph ph-broadcast"></i><span>현장 상황실</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>작업안전</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="attendance-logs"><i class="ph ph-clock"></i><span>출퇴근</span></button>
@@ -1461,14 +1464,14 @@
         'safety': { title: 'AI 작업안전관리', render: renderSafety },
         'hr': { title: '인원관리', render: renderHR },
         'payroll': { title: '급여 / 정산', render: renderPayroll },
-        'wbs': { title: '공정 관리', render: renderWbs },
+        'wbs': { title: '정식 공정표 (원청용)', render: renderWbs },
         'opsroom': { title: '현장 상황실', render: renderOpsRoom },
         'meetings': { title: '공정미팅', render: function () { return window.MeetingDesk.render(); } },
         'daily-report': { title: '일일 보고', render: function () { return window.AdminDailyReport.render(); } },
         'correspondence': { title: '서신 원장', render: function () { return window.AdminCorrespondence.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
-        'week-board': { title: '이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
+        'week-board': { title: '공정 관리 — 이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
         'material-receipts': { title: '자재 입고', render: function () { return window.AdminMaterialReceipts.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'equipment-checks': { title: '장비 사용 점검', render: function () { return window.AdminEquipmentChecks.render(); } },

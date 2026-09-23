@@ -116,8 +116,13 @@ foreach (SiteSchedule::timezones() as $timezone) {
 // 매일 새벽에 돌려도 멱등이라 안전하고, 월중에 등록된 장비도 그 달치가 잡힌다.
 Schedule::command('finance:accrue-rentals')->dailyAt(Org::time('schedule.rental_accrual_at', '05:30'));
 
-// 주간 리듬(LPS) — 월요일 아침, 지난주 약속 이행률(PPC) 집계 + 이번 주 약속 제안 + 방 요약.
-Schedule::command('wbs:weekly-plan')->weeklyOn(1, Org::time('schedule.weekly_plan_at', '05:00'));
+// 주간 리듬(LPS) — 월요일 새벽 자동 «약속» 등록은 끈다(사장 지시 2026-09-23).
+//
+// 이 명령은 그 주 창에 걸린 정식 공정표 행을 전부 «약속» 으로 올리고, 안 지키면 이행률을
+// 깎고 사유를 물었다. 그런데 정식 공정표는 원청 보고용 문서라 현장이 실제로 하는 일과
+// 다르다 — 현실과 안 맞는 행으로 매주 잔소리만 쌓였다. 현장의 한 주는 이제 «이번 주
+// 작업판»(WeekBoardService)이 사람 손으로 적는다. 명령 자체는 남겨 둔다(수동 실행 가능).
+// Schedule::command('wbs:weekly-plan')->weeklyOn(1, Org::time('schedule.weekly_plan_at', '05:00'));
 
 // 공정 CPM 안전망 — 평소에는 편집 순간마다 재계산되므로 바꿀 게 없어야 정상.
 // 다른 경로로 어긋난 여유·주공정·예상 준공을 하루 안에 스스로 바로잡는다.
