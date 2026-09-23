@@ -2,10 +2,11 @@
 
 namespace App\Services\Finance;
 
+use App\Models\ContractBoqLine;
 use App\Models\PayApplication;
 use App\Models\Project;
-use App\Models\ProjectContract;
 use App\Models\WbsItem;
+use App\Services\Admin\BillingAdminService;
 use Illuminate\Support\Carbon;
 
 /**
@@ -36,16 +37,20 @@ class ProgressBillingDrafter
     public function draft(int $contractId, ?string $periodEnd = null): array
     {
         // 권한은 기성 관리와 동일 — 초안도 청구 기록이다.
-        if (! app(\App\Services\Admin\BillingAdminService::class)->canManage()) {
+        if (! app(BillingAdminService::class)->canManage()) {
             return ['success' => false, 'error' => '기성 청구를 관리할 권한이 없습니다.'];
         }
 
-        $contract = ProjectContract::query()->find($contractId);
+        $contract = app(BillingAdminService::class)->findAccessibleContract($contractId);
         if (! $contract) {
             return ['success' => false, 'error' => '계약을 찾을 수 없습니다.'];
         }
         if ($contract->direction !== 'receivable') {
             return ['success' => false, 'error' => '받을 돈(원청 청구) 계약에서만 기성 초안을 만들 수 있습니다.'];
+        }
+
+        if (ContractBoqLine::where('project_contract_id', $contractId)->exists()) {
+            return app(ClaimEvidenceService::class)->draft($contractId, $periodEnd);
         }
 
         $projectCode = $contract->project_id
