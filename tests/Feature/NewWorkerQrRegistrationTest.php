@@ -32,7 +32,7 @@ class NewWorkerQrRegistrationTest extends TestCase
 
     public function test_public_qr_form_asks_only_for_name_and_phone(): void
     {
-        $this->get(route('worker-join.form', $this->site))
+        $this->followingRedirects()->get(route('worker-join.form', $this->site))
             ->assertOk()
             ->assertSee('name="full_name"', false)
             ->assertSee('name="phone"', false)
@@ -127,7 +127,7 @@ class NewWorkerQrRegistrationTest extends TestCase
 
         $this->post(route('worker-join.store', $this->site), [
             'full_name' => 'Existing Worker', 'phone' => '(480) 555-0222',
-        ])->assertOk();
+        ])->assertSessionHasErrors('phone');
 
         $employee->refresh();
         $this->assertSame($partner->id, $employee->company_id);

@@ -62,7 +62,7 @@ class WorkerAppNeedsNoPasswordTest extends TestCase
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->deviceToken = WorkerDevice::issueFor($this->employee, 'phone');
+        $this->deviceToken = WorkerDevice::issueFor($this->employee, 'phone', verified: true);
     }
 
     // ── 출퇴근: 0단계 ───────────────────────────────────────────────────

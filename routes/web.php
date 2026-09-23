@@ -503,7 +503,7 @@ Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'
 Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'quickForm'])
     ->middleware('throttle:60,1')->name('worker-join.form');
 Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'quickStore'])
-    ->middleware('throttle:10,1')->name('worker-join.store');
+    ->middleware('throttle:worker-entry')->name('worker-join.store');
 
 // 회사·직책·공정까지 지정하는 관리용 등록은 인사 권한자 전용이다.
 Route::middleware(['auth', RequireHrRegistration::class])->group(function () {
@@ -562,6 +562,8 @@ Route::get('/org/logo', [OrgLogoController::class, 'show'])->name('org.logo');
 // 조이다가 출근 줄을 세우는 쪽이 더 큰 사고다.
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');
 Route::get('/gate/{site}', [GateAttendanceController::class, 'show'])->name('gate.show');
+Route::post('/gate/{site}/login', [GateAttendanceController::class, 'login'])
+    ->middleware('throttle:worker-entry')->name('gate.login');
 // 뒷 4자리는 만 가지뿐이라, 이름 검색보다 조인다 — 한 사람이 아침에 한두 번 쓰는 길이다.
 Route::post('/gate/{site}/identify', [GateAttendanceController::class, 'identify'])
     ->middleware('throttle:60,1')->name('gate.identify');

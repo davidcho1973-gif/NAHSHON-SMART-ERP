@@ -153,7 +153,7 @@ class ManagerJoinTest extends TestCase
         auth()->logout();
         // 예전 링크도 작업자 문으로 모인다. 그 문이 휴대폰으로 알아보고 앱에 넣어 준다.
         $this->get(route('gate.show', ['site' => $this->site]).'?install=1')
-            ->assertRedirect(route('worker-app.entry'));
+            ->assertOk()->assertSee('id="login-form"', false);
 
         // 기억된 휴대폰이 아니면 여전히 앱에 못 들어간다 — 다만 이메일·비밀번호를
         // 묻는 화면이 아니라, 무엇을 하면 되는지 말해 주는 화면으로 보낸다.
@@ -161,8 +161,8 @@ class ManagerJoinTest extends TestCase
         $this->assertGuest();
         $this->assertSame(route('attendance-app.index'), session('url.intended'));
         $this->get(route('gate.show', ['site' => $this->site]))->assertOk()
-            ->assertSee('id="open-worker-app"', false)
-            ->assertSee(route('worker-app.entry'), false);
+            ->assertSee('id="login-form"', false)
+            ->assertDontSee('id="open-worker-app"', false);
     }
 
     public function test_old_qr_links_print_the_same_employee_registration_target(): void
@@ -170,10 +170,10 @@ class ManagerJoinTest extends TestCase
         $managerPoster = $this->get(route('manager-join.qr', ['site' => $this->site]))->assertOk();
         // 포스터 이름은 QrPosters 가 정한다 — 여기에 문자열을 박아 두면 이름을 고칠 때마다 시험이 깨진다.
         $managerPoster->assertSee(QrPosters::make($this->site, QrPosters::JOIN)['langs']['ko']['title']);
-        $managerPoster->assertSee(route('worker-join.form', ['site' => $this->site]), false);
+        $managerPoster->assertSee(route('gate.show', ['site' => $this->site]), false);
 
         $workerPoster = $this->get(route('worker-join.qr', ['site' => $this->site]))->assertOk();
-        $workerPoster->assertSee(route('worker-join.form', ['site' => $this->site]), false);
+        $workerPoster->assertSee(route('gate.show', ['site' => $this->site]), false);
         $workerPoster->assertDontSee(route('manager-join.form', ['site' => $this->site]), false);
     }
 }

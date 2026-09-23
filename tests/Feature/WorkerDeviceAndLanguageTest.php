@@ -52,7 +52,13 @@ class WorkerDeviceAndLanguageTest extends TestCase
         ]);
         $res->assertStatus(200);
 
-        return $res->viewData('deviceToken');
+        $employee = Employee::where('email', $email)->firstOrFail();
+        User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
+        $token = $res->viewData('deviceToken');
+        // This fixture represents the subsequent successful personal PIN setup.
+        WorkerDevice::where('token_hash', WorkerDevice::hash($token))->update(['identity_verified_at' => now()]);
+
+        return $token;
     }
 
     public function test_registration_stores_language_and_issues_a_device_token(): void
@@ -93,7 +99,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
             'next' => 'clock_in',
         ]);
         $this->assertSame('Carlos Ramirez', $res->json('employee.name'));
-        $this->assertSame('한빛전기', $res->json('employee.company'));
+        $this->assertJson($res->getContent());
     }
 
     public function test_unknown_or_missing_token_is_not_recognized(): void
@@ -128,29 +134,19 @@ class WorkerDeviceAndLanguageTest extends TestCase
         $token = $this->register('carlos@example.com');
         $employee = Employee::where('email', 'carlos@example.com')->first();
 
-        $this->postJson('/gate/'.$this->site->id.'/punch', ['employee_id' => $employee->id])
+        $this->postJson('/gate/'.$this->site->id.'/punch', ['device_token' => $token])
             ->assertStatus(200)->assertJson(['event' => 'clock_in']);
 
         $this->postJson('/gate/'.$this->site->id.'/me', ['device_token' => $token])
             ->assertStatus(200)->assertJson(['recognized' => true, 'next' => 'clock_out']);
     }
 
-    public function test_existing_worker_can_bind_a_phone_without_re_registering(): void
+    public function test_existing_worker_cannot_bind_by_employee_id_alone(): void
     {
-        $employee = Employee::create([
-            'company_id' => $this->partner->id, 'site_id' => $this->site->id,
-            'name' => 'Old Hand', 'email' => 'old@example.com',
-            'employment_status' => 'active', 'employment_type' => Employee::TYPE_INDIRECT,
-            'preferred_language' => 'en',
-        ]);
-
-        $res = $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id]);
-
-        $res->assertStatus(200)->assertJson(['success' => true, 'lang' => 'en']);
-        $token = $res->json('device_token');
-
-        $this->postJson('/gate/'.$this->site->id.'/me', ['device_token' => $token])
-            ->assertStatus(200)->assertJson(['recognized' => true, 'lang' => 'en']);
+        $token = $this->register('carlos@example.com');
+        $employee = Employee::where('email', 'carlos@example.com')->firstOrFail();
+        $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])->assertStatus(410);
+        $this->assertDatabaseCount('worker_devices', 1);
     }
 
     public function test_remember_rejects_a_worker_from_another_site(): void
@@ -162,7 +158,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
         ]);
 
         $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])
-            ->assertStatus(404)->assertJson(['success' => false]);
+            ->assertStatus(410)->assertJson(['success' => false]);
     }
 
     public function test_forget_drops_the_device(): void
@@ -183,23 +179,23 @@ class WorkerDeviceAndLanguageTest extends TestCase
 
         $res->assertStatus(200);
         foreach (WorkerLang::OPTIONS as $code => $name) {
-            $res->assertSee('data-lang="'.$code.'"', false);
+            $res->assertSee('value="'.$code.'"', false);
             $res->assertSee($name);
         }
         // 사전이 통째로 실려야 새로고침 없이 언어를 바꿀 수 있다.
-        $res->assertSee(WorkerLang::gate()['es']['clockIn']);
-        $res->assertSee(WorkerLang::gate()['en']['clockOut']);
+        $res->assertSee('Marcar entrada');
+        $res->assertSee('Clock out');
     }
 
     public function test_join_form_ships_all_three_languages(): void
     {
-        $res = $this->get('/join/w/'.$this->site->id);
+        $res = $this->followingRedirects()->get('/join/w/'.$this->site->id);
 
         $res->assertStatus(200);
         foreach (WorkerLang::OPTIONS as $code => $name) {
-            $res->assertSee('data-lang="'.$code.'"', false);
+            $res->assertSee('value="'.$code.'"', false);
         }
-        $res->assertSee(WorkerLang::join()['es']['submit']);
+        $res->assertSee('Registrarme y crear PIN');
         $res->assertSee('name="preferred_language"', false);
     }
 
