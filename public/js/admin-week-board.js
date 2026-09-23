@@ -65,6 +65,8 @@
 
     var sub = [];
     if (l.carried) sub.push('지난주에서 넘어옴');
+    // 상황실 글이 저절로 바꾼 줄 — 누가 어느 말을 듣고 바꿨는지 보인다. 틀렸으면 버튼 한 번으로 사람이 이긴다.
+    if (l.auto) sub.push('🤖 ' + l.auto.source + ' 글에서 자동' + (l.auto.quote ? ': «' + l.auto.quote + '»' : ''));
     if (l.status === 'blocked' && l.reason) sub.push('못한 이유: ' + l.reason);
     if (l.note) sub.push(l.note);
     if (l.wbsCodes && l.wbsCodes.length) sub.push('공정표 ' + l.wbsCodes.join(', '));

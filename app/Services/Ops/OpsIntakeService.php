@@ -18,6 +18,7 @@ use App\Services\Communication\DecisionReplyConnector;
 use App\Services\IntegratedDocumentService;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
+use App\Services\Wbs\WeekBoardReflector;
 use App\Support\AccessPolicy;
 use App\Support\ImageDownscale;
 use App\Support\ImageParts;
@@ -124,6 +125,8 @@ class OpsIntakeService
             'noise_count' => $items->where('category', 'noise')->count(),
         ]);
 
+        $board = $this->reflectWeekBoard($batch);
+
         return [
             'success' => true,
             'batchId' => $batch->id,
@@ -132,7 +135,27 @@ class OpsIntakeService
             'noise' => $items->where('category', 'noise')->count(),
             'needsInput' => $items->where('status', 'needs_input')->count(),
             'items' => $items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
+            'weekBoard' => $board,
         ];
+    }
+
+    /**
+     * 같은 글로 이번 주 작업판도 움직인다 — 「급탕 배관 끝났습니다」 가 그 줄을 완료로.
+     *
+     * 실패해도 판독 결과는 살아야 한다. 작업판은 부가 목적지이지 판독의 조건이 아니다.
+     *
+     * @return array{updated: int, lines: array<int, array<string, mixed>>}
+     */
+    private function reflectWeekBoard(OpsIntakeBatch $batch): array
+    {
+        try {
+            return app(WeekBoardReflector::class)->reflect($batch);
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('상황실 → 작업판 반영 실패(batch '.$batch->id.'): '.$e->getMessage());
+
+            return ['updated' => 0, 'lines' => []];
+        }
     }
 
     /**
@@ -260,6 +283,9 @@ class OpsIntakeService
                 'auto_applied' => $autoLabor + $autoAction,
             ]);
 
+            // 4단계: 이번 주 작업판 — 글이 말한 줄을 진행중/완료/못함으로.
+            $this->reflectWeekBoard($batch);
+
             $this->discardPhotos($batch, $photoKinds);
 
             // 제출한 뒤에 올린 사진이 이제야 읽혔다.
@@ -346,6 +372,7 @@ class OpsIntakeService
             // 사진을 보고 그럴듯한 이야기를 지어내 그 자리를 채웠다.
             'photoOnly' => trim((string) $batch->raw_text) === '' && (int) $batch->image_count > 0,
             'evidenceFiled' => (int) $batch->evidence_filed,
+            'weekBoardUpdated' => (int) $batch->week_board_updated,
             'items' => $items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
         ];
     }

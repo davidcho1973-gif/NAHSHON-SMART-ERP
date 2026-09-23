@@ -166,7 +166,7 @@ class WeekBoardService
         }
         $line->save();
 
-        $warning = $status !== $line->status ? $this->applyStatus($line, $status, $this->text($input['reason'] ?? null)) : null;
+        $warning = $status !== $line->status ? $this->applyStatus($line, $status, $this->text($input['reason'] ?? null), $user?->id) : null;
 
         return ['success' => true, 'id' => $line->id, 'weekStart' => $line->week_start->toDateString(), 'warning' => $warning];
     }
@@ -191,7 +191,7 @@ class WeekBoardService
             return ['success' => false, 'error' => '줄을 찾을 수 없습니다.'];
         }
 
-        $warning = $this->applyStatus($line, $status, $this->text($reason));
+        $warning = $this->applyStatus($line, $status, $this->text($reason), $user?->id);
 
         return ['success' => true, 'id' => $line->id, 'status' => $line->status, 'warning' => $warning];
     }
@@ -282,15 +282,22 @@ class WeekBoardService
 
     // ── 안쪽 ──────────────────────────────────────────────────────────
 
-    /** 상태를 바꾸고, 붙어 있는 공정표 액티비티가 있으면 그쪽도 따라가게 한다. */
-    private function applyStatus(WeekBoardLine $line, string $status, ?string $reason): ?string
+    /**
+     * 상태를 바꾸고, 붙어 있는 공정표 액티비티가 있으면 그쪽도 따라가게 한다.
+     *
+     * 사람이 눌렀으면($auto 없음) 상황실이 남긴 자동 흔적을 지운다 — 사람의 결정이
+     * AI 의 짐작을 이긴다. 상황실이 바꿨으면($auto 있음) 어느 글을 듣고 바꿨는지 남긴다.
+     *
+     * @param  array<string, mixed>|null  $auto  상황실 자동 반영의 흔적(auto_source·auto_quote·auto_batch_id·auto_at)
+     */
+    public function applyStatus(WeekBoardLine $line, string $status, ?string $reason, ?int $userId = null, ?array $auto = null): ?string
     {
         $line->forceFill([
             'status' => $status,
             'reason' => $status === WeekBoardLine::STATUS_BLOCKED ? $reason : null,
             'done_at' => $status === WeekBoardLine::STATUS_DONE ? Carbon::now() : null,
-            'updated_by_id' => auth()->id(),
-        ])->save();
+            'updated_by_id' => $userId,
+        ] + ($auto ?? ['auto_source' => null, 'auto_quote' => null, 'auto_batch_id' => null, 'auto_at' => null]))->save();
 
         if ($status !== WeekBoardLine::STATUS_DONE || ($line->wbs_codes ?? []) === []) {
             return null;
@@ -331,6 +338,8 @@ class WeekBoardService
             'wbsCodes' => $l->wbs_codes ?? [],
             'carried' => $l->carried_from_id !== null,
             'doneAt' => $l->done_at?->toDateTimeString(),
+            // 상황실 글이 저절로 바꾼 줄 — 화면에 «상황실에서 자동» 과 들은 문장이 보인다.
+            'auto' => $l->auto_source ? ['source' => $l->auto_source, 'quote' => $l->auto_quote, 'batchId' => $l->auto_batch_id] : null,
         ];
     }
 

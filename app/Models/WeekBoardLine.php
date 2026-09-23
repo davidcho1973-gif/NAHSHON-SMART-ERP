@@ -32,6 +32,8 @@ class WeekBoardLine extends Model
         'company_id', 'site_id', 'week_start', 'trade', 'task', 'headcount',
         'status', 'reason', 'note', 'wbs_codes', 'sort_order', 'carried_from_id',
         'created_by_id', 'updated_by_id', 'done_at',
+        // 상황실 글이 저절로 바꾼 흔적 — 사람이 버튼을 누르면 지워진다.
+        'auto_source', 'auto_quote', 'auto_batch_id', 'auto_at',
     ];
 
     protected function casts(): array
@@ -41,6 +43,7 @@ class WeekBoardLine extends Model
             'headcount' => 'decimal:1',
             'wbs_codes' => 'array',
             'done_at' => 'datetime',
+            'auto_at' => 'datetime',
         ];
     }
 

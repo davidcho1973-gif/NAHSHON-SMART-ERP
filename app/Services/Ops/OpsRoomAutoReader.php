@@ -5,6 +5,7 @@ namespace App\Services\Ops;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\Site;
+use App\Services\Push\ChatPushNotifier;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -74,7 +75,10 @@ class OpsRoomAutoReader
     private function reply(CommunicationMessage $message, array $result): void
     {
         $items = collect($result['items'] ?? [])->where('category', '!=', 'noise');
-        if ($items->isEmpty()) {
+        // 같은 글이 이번 주 작업판을 움직였으면 그것도 말해 준다 — 「급탕 배관 → 완료」.
+        // 반장은 작업판 화면을 안 열어도 자기 말이 어디에 어떻게 적혔는지 안다.
+        $board = collect($result['weekBoard']['lines'] ?? []);
+        if ($items->isEmpty() && $board->isEmpty()) {
             return; // 잡담뿐이면 답글로 방을 어지럽히지 않는다.
         }
 
@@ -86,7 +90,7 @@ class OpsRoomAutoReader
             $note = ($c['note'] ?? '') !== '' ? "\n   ".$c['note'] : '';
 
             return sprintf(
-                "⚠️ %s 은(는) 기록상 %s 인데 %s 로 말씀하셨습니다. 바뀐 것이 맞나요?%s",
+                '⚠️ %s 은(는) 기록상 %s 인데 %s 로 말씀하셨습니다. 바뀐 것이 맞나요?%s',
                 $c['with'], $c['expected'], $c['heard'], $note,
             );
         })->implode("\n");
@@ -104,13 +108,19 @@ class OpsRoomAutoReader
             $lines = $head."\n\n".$lines;
         }
 
+        if ($board->isNotEmpty()) {
+            $boardLines = $board->take(5)->map(fn (array $l): string => '📋 작업판: '.$l['trade'].' · '.$l['task'].' → '.$l['statusLabel'])->implode("\n");
+            $lines = trim($lines."\n".$boardLines, "\n");
+        }
+
         $needs = $items->where('status', 'needs_input')->count();
         $foot = $conflicts->isNotEmpty()
             ? "\n\n확정된 내용과 달라서 자동 반영하지 않았습니다. 답을 주시면 그대로 기록합니다."
             : ($needs > 0
                 ? "\n\n❓ {$needs}건은 확인이 필요합니다. 현장 상황실 화면에서 확인해 주세요."
-                : "\n\n확인 후 [공정표에 반영]을 누르면 적용됩니다.");
+                : ($items->isNotEmpty() ? "\n\n확인 후 [공정표에 반영]을 누르면 적용됩니다." : ''));
 
+        $count = $items->count() + $board->count();
         $reply = CommunicationMessage::query()->create([
             'communication_room_id' => $message->communication_room_id,
             'parent_id' => $message->id,
@@ -118,7 +128,7 @@ class OpsRoomAutoReader
             'sender_employee_id' => null,
             'kind' => CommunicationMessage::KIND_SYSTEM,
             'title' => '🤖 상황실 AI',
-            'body' => mb_substr("읽었습니다 — {$items->count()}건 인식했습니다.\n{$lines}{$foot}", 0, 2000),
+            'body' => mb_substr("읽었습니다 — {$count}건 인식했습니다.\n{$lines}{$foot}", 0, 2000),
             'status' => 'active',
             'priority' => 'normal',
             'payload' => ['bot' => self::BOT_MARKER, 'intake_ids' => $items->pluck('id')->all()],
@@ -128,7 +138,7 @@ class OpsRoomAutoReader
         // 울려야 한다. 다른 AI 답글들은 전부 ChatPushNotifier 를 지나는데 이 경로만
         // 빠져 있어서, 정작 가장 급한 알림이 조용했다.
         try {
-            app(\App\Services\Push\ChatPushNotifier::class)->notify($reply);
+            app(ChatPushNotifier::class)->notify($reply);
         } catch (Throwable $e) {
             report($e);
         }

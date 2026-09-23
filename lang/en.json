@@ -66,6 +66,8 @@
     "거래처": "Vendor",
     "건 보기": " — show",
     "건 정리됨": " item(s) sorted",
+    " · 작업판 ": " · work board ",
+    "줄 갱신": " line(s) updated",
     "건)</div>": ")</div>",
     "건</b>이 이미 공정표에 반영됐습니다. 지우려면 PC 상황실에서 먼저 되돌리세요.</div>": "</b> item(s) already reached the schedule. To delete, revert them first in the control room on a PC.</div>",
     "건</span>": "</span>",

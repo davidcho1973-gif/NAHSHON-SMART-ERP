@@ -9864,7 +9864,8 @@
             return;
           }
 
-          if (msg) msg.textContent = '판독 완료 (' + elapsed + '초) — 아래 카드에 들어갔습니다.';
+          if (msg) msg.textContent = '판독 완료 (' + elapsed + '초) — 아래 카드에 들어갔습니다.' +
+            (j.weekBoardUpdated ? ' 이번 주 작업판 ' + j.weekBoardUpdated + '줄도 바뀌었습니다.' : '');
           opsClearCache();
           window.opsLoadBatches();
           await window.opsLoadFeed(true);

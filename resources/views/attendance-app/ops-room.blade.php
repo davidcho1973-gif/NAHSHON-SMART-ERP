@@ -493,7 +493,8 @@
                                     t(' <b>무슨 일이었는지 한마디만</b> 남겨 주시면 공정표까지 올라갑니다.'), 'warn');
                                 return resolve();
                             }
-                            say(t('올렸습니다 — 업무 ') + (j.actionable || 0) + t('건 정리됨'), 'ok');
+                            say(t('올렸습니다 — 업무 ') + (j.actionable || 0) + t('건 정리됨') +
+                                (j.weekBoardUpdated ? t(' · 작업판 ') + j.weekBoardUpdated + t('줄 갱신') : ''), 'ok');
                             resolve();
                         }).catch(function () {
                             say(t('정리하는 중… ') + elapsed + t('초 (연결 재시도 중)'));
