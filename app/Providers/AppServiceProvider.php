@@ -15,6 +15,7 @@ use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
 use App\Observers\EmployeeOffboardingObserver;
 use App\Observers\EmployeePayrollProfileObserver;
+use App\Observers\EmployeeTimesheetPolicyObserver;
 use App\Observers\LinkedDocumentFilingObserver;
 use App\Observers\MobileExpenseReceiptObserver;
 use App\Services\Communication\ChatAssistant;
@@ -87,6 +88,10 @@ class AppServiceProvider extends ServiceProvider
 
         // 퇴사·비활성 전환 시 계정·배지·기기·채팅방·푸시를 한 번에 닫는다(열쇠 회수).
         Employee::observe(EmployeeOffboardingObserver::class);
+
+        // 고용형태가 바뀌면 그 사람의 급여 시트를 다시 계산한다 — 파생된 표는
+        // 출퇴근 기록만이 아니라 고용형태까지, 자기 입력 전부를 따라야 한다.
+        Employee::observe(EmployeeTimesheetPolicyObserver::class);
 
         // 신규 직원 → 회사방·팀방 자동 가입. 함수는 있었는데 부르는 곳이 0곳이라
         // 새 직원은 아무 방에도 없이 시작했다(연계 점검 ⑮).
