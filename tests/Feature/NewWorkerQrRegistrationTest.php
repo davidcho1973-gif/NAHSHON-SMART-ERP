@@ -60,7 +60,11 @@ class NewWorkerQrRegistrationTest extends TestCase
         $this->assertSame($this->site->id, $employee->site_id);
         $this->assertSame('worker', $employee->position);
         $this->assertNull($employee->email);
-        $this->assertSame('미지정', $employee->role);
+        // 공정도 소속도 이 화면은 묻지 않는다 — 그러니 적지도 않는다.
+        // '미지정' 은 공정처럼 생긴 글자라 공종별 인원 집계에 영원히 한 칸을 차지했다.
+        $this->assertNull($employee->role);
+        $this->assertNull($employee->company_id);
+        $this->assertSame(Employee::TYPE_UNVERIFIED, $employee->employment_type);
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertSame($employee->id, MemberRegistration::sole()->employee_id);
         $this->assertSame($employee->id, WorkerDevice::sole()->employee_id);

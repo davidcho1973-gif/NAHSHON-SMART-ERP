@@ -39,7 +39,7 @@ class TimesheetFollowsEmploymentTypeTest extends TestCase
             'code' => 'AZ-01', 'name' => 'Arizona Site',
             'timezone' => 'America/Phoenix', 'status' => 'active',
         ]);
-        $this->company = Company::create(['code' => 'C1', 'name' => 'NAHSHON MEP', 'status' => 'active']);
+        $this->company = Company::create(['code' => 'C1', 'name' => 'ABC MEP', 'status' => 'active']);
     }
 
     private function worker(string $type): Employee

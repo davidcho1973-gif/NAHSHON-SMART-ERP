@@ -85,18 +85,18 @@ class SimpleWorkerRegistrationController extends Controller
             'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
         ]);
 
-        // 현장에 지정한 자사를 우선 사용한다. 오래된 현장처럼 company_id 가 비어 있으면
-        // 활성 자사 한 곳까지만 안전하게 보완한다. 어느 회사인지 추측해야 하는 상태라면
-        // 사람을 엉뚱한 급여대장에 넣지 않고 관리자 설정을 요구한다.
-        $company = $site->company
-            ?? Company::query()->where('status', 'active')->where('company_type', Company::TYPE_OWN)->first();
-        abort_unless($company, 422, '이 현장의 기본 회사를 먼저 설정해 주세요.');
-
+        // 소속은 비워 둔다 — 이 화면은 회사를 묻지 않는다.
+        //
+        // 예전에는 현장의 자사 회사로 찍었다. 그러면 협력사 인원까지 «자사 직영(시급)»
+        // 이 되어 우리 급여 대장에 오르고, 임금률이 없으니 경고가 뜬다. 묻지 않은 것을
+        // 아는 척한 값이었고, 틀린 쪽이 하필 돈이 걸린 쪽이었다.
+        //
+        // 공정도 마찬가지다. '미지정' 은 공정처럼 생긴 글자라 공종별 인원 집계에
+        // 영원히 한 칸을 차지한다. 비워 두면 «없다» 로 읽히고, 인사 확인 줄에서
+        // 진짜 공정을 채운다.
         $request->replace([
             'full_name' => trim(preg_replace('/\s+/u', ' ', (string) $data['full_name']) ?: (string) $data['full_name']),
             'phone' => trim((string) $data['phone']),
-            'company_id' => $company->id,
-            'role' => '미지정',
             'position' => 'worker',
             'preferred_language' => WorkerLang::resolve($data['preferred_language'] ?? null),
         ]);
@@ -388,16 +388,18 @@ class SimpleWorkerRegistrationController extends Controller
         // 처음 보는 회사 이름을 적어 넣었으면 당연히 여기에 걸린다 — 그 회사가 자사인지
         // 협력사인지는 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
         // 관리자는 묻지 않는다 — 어느 회사 소속이든 관리직이다.
-        $mustAsk = ! $manager && $company?->employmentType() === null && $locked === null;
+        // 현장 QR 은 이름·전화 두 가지만 묻는다 — 소속도 공정도 여기서는 답하지 않는다.
+        $mustAsk = ! $quick && ! $manager && $company?->employmentType() === null && $locked === null;
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:120'],
             // 목록에 없는 회사는 직접 적는다. 내일 처음 오는 협력사 인원이 목록에 있을 리 없다.
-            'company_id' => ['nullable', 'required_without:company_name', Rule::exists('companies', 'id')],
-            'company_name' => ['nullable', 'required_without:company_id', 'string', 'max:120'],
+            // (현장 QR 은 묻지 않으므로 비어 있는 채로 통과한다.)
+            'company_id' => $quick ? ['nullable'] : ['nullable', 'required_without:company_name', Rule::exists('companies', 'id')],
+            'company_name' => $quick ? ['nullable'] : ['nullable', 'required_without:company_id', 'string', 'max:120'],
             // 공정도 마찬가지로 자유 입력을 받는다. 다만 아래에서 기존 공정명과 대소문자·공백만
             // 다른 값은 기존 이름으로 맞춘다 — 안 그러면 집계가 'Piping' 과 'piping' 으로 갈린다.
-            'role' => ['required', 'string', 'max:60'],
+            'role' => $quick ? ['nullable', 'string', 'max:60'] : ['required', 'string', 'max:60'],
             'position' => ['required', Rule::in(array_keys(Employee::POSITIONS))],
             // 이메일은 선택이다. 현장에서 이메일을 안 쓰거나 주소가 기억나지 않는 사람이
             // 여기서 막히면 등록 자체를 못 하고, 그러면 그날 그 사람은 명단에 없는 채로
@@ -425,16 +427,26 @@ class SimpleWorkerRegistrationController extends Controller
         }
 
         // 검증을 통과했으니 이제 만들어도 된다.
-        $company ??= $this->createCompany((string) $data['company_name']);
-        $data['company_id'] = $company->getKey();
-        $data['role'] = $this->normalizeTrade($site, (string) $data['role']);
+        // 현장 QR 은 회사를 묻지 않았으므로 만들 것도 없다 — 비어 있는 채로 둔다.
+        if (! $quick) {
+            $company ??= $this->createCompany((string) $data['company_name']);
+        }
+        $data['company_id'] = $company?->getKey();
+        $data['role'] = filled($data['role'] ?? null)
+            ? $this->normalizeTrade($site, (string) $data['role'])
+            : null;
 
         // 관리 직책을 선택하면 관리직이다 — URL이나 임의의 권한 입력값으로 정하지 않는다.
         // (출퇴근 정책이 여기서 갈린다: 관리직은 출석 확인, 시급 직영은 정밀 시간관리.)
         // 작업자는 회사 분류가 최우선 — 관리자가 유지하는 데이터라 "어느 종이를 스캔했나" 보다 믿을 만하다.
-        $type = $manager
-            ? Employee::TYPE_STAFF
-            : ($company?->employmentType() ?? $locked ?? $data['employment_type']);
+        // 현장 QR 은 소속을 묻지 않았다 — 그러니 아는 척하지 않고 «미확인» 으로 둔다.
+        // 인원은 세지만 급여 시트는 만들지 않는다. 인사가 회사를 확인하는 순간 진짜
+        // 값이 되고, 그때 이미 일한 날의 급여가 따라온다(EmployeeTimesheetPolicyObserver).
+        $type = match (true) {
+            $manager => Employee::TYPE_STAFF,
+            $quick => Employee::TYPE_UNVERIFIED,
+            default => $company?->employmentType() ?? $locked ?? $data['employment_type'],
+        };
 
         $lang = WorkerLang::resolve($data['preferred_language'] ?? null);
 

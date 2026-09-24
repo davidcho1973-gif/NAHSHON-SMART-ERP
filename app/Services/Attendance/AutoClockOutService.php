@@ -123,7 +123,12 @@ class AutoClockOutService
             return;
         }
 
-        $names = collect($people)->map(fn (Employee $e): string => $e->name)->implode(', ');
+        // 아직 소속이 확인되지 않은 사람은 이름 옆에 그 사실을 적는다. 할 일이
+        // «퇴근 시각을 확인하라» 가 아니라 «이 사람 회사를 확인하라» 이기 때문이다 —
+        // 그냥 명단에 섞어 두면 현장 관리자가 없는 퇴근 시각을 찾아 헤맨다.
+        $names = collect($people)->map(fn (Employee $e): string => $e->employment_type === Employee::TYPE_UNVERIFIED
+            ? $e->name.' (소속 미확인 — 인사 확인 필요)'
+            : $e->name)->implode(', ');
         $site = Site::query()->find($siteId);
 
         try {

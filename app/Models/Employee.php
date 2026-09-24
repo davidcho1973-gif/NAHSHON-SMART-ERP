@@ -25,7 +25,36 @@ class Employee extends Model
     /** 원청 담당자 — 출퇴근 대상 아님. */
     public const TYPE_CLIENT = 'client';
 
+    /**
+     * 아직 누가 임금을 주는지 모른다 — 현장 QR 로 스스로 등록한 사람의 시작 상태.
+     *
+     * 예전에는 이 상태를 적을 자리가 없어서 코드가 «자사 직영(시급)» 으로 찍었다.
+     * 그래서 협력사 인원까지 우리 급여 대장에 올라 시트가 생기고 «임금률 미설정»
+     * 경고가 떴다. 묻지 않은 것을 아는 척한 값이었다.
+     *
+     * 이 상태에서는 출역 인원만 센다(급여 시트를 만들지 않는다). 인사가 소속 회사를
+     * 확인하는 순간 진짜 값이 되고, 그때 이미 일한 날의 급여 시트가 따라 생긴다
+     * (EmployeeTimesheetPolicyObserver).
+     */
+    public const TYPE_UNVERIFIED = 'unverified';
+
     public const EMPLOYMENT_TYPES = [
+        self::TYPE_DIRECT => '직접고용 (시급)',
+        self::TYPE_INDIRECT => '간접고용 (협력사)',
+        self::TYPE_STAFF => '관리직',
+        self::TYPE_CLIENT => '원청',
+        self::TYPE_UNVERIFIED => '미확인 (인사 확인 전)',
+    ];
+
+    /**
+     * 사람이 고를 수 있는 고용형태 — «미확인» 은 시작 상태일 뿐 답이 아니다.
+     *
+     * 관리자 화면의 선택지에 넣으면 그게 결론으로 저장될 수 있고, 그러면 그 사람은
+     * 영원히 급여 대상 밖에 남는다. 보여 주기는 하되 고르게 하지는 않는다.
+     *
+     * @var array<string, string>
+     */
+    public const ASSIGNABLE_EMPLOYMENT_TYPES = [
         self::TYPE_DIRECT => '직접고용 (시급)',
         self::TYPE_INDIRECT => '간접고용 (협력사)',
         self::TYPE_STAFF => '관리직',
@@ -66,6 +95,9 @@ class Employee extends Model
         return match (true) {
             $this->employment_type === self::TYPE_CLIENT => self::POLICY_NONE,
             $this->employment_type === self::TYPE_INDIRECT => self::POLICY_HEADCOUNT,
+            // 누가 임금을 주는지 아직 모르는 사람 — 인원만 센다. 이 줄이 없으면 아래
+            // default 가 시급으로 받아 버려서, «모른다» 를 적어 둔 의미가 사라진다.
+            $this->employment_type === self::TYPE_UNVERIFIED => self::POLICY_HEADCOUNT,
             $this->employment_type === self::TYPE_STAFF => self::POLICY_PRESENCE,
             $this->payrollProfile?->pay_type === 'salary' => self::POLICY_PRESENCE,
             default => self::POLICY_HOURLY,
