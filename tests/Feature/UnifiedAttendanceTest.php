@@ -8,10 +8,8 @@ use App\Models\PayrollRun;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkerDevice;
-use App\Services\Admin\EmployeeAdminService;
 use App\Support\QrPosters;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class UnifiedAttendanceTest extends TestCase
@@ -23,7 +21,7 @@ class UnifiedAttendanceTest extends TestCase
         $company = Company::create(['code' => 'OWN', 'name' => 'Own', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
         $site = Site::create(['code' => 'TEST', 'name' => 'Test', 'company_id' => $company->id, 'status' => 'active', 'timezone' => 'America/New_York']);
         $employee = Employee::create(['name' => 'Test Worker', 'phone' => '4805550123', 'company_id' => $company->id, 'site_id' => $site->id, 'employment_status' => 'active', 'employment_type' => Employee::TYPE_DIRECT]);
-        $user = User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active', 'pin_hash' => Hash::make('2580')]);
+        $user = User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
 
         return [$site, $employee, $user];
     }
@@ -138,33 +136,25 @@ class UnifiedAttendanceTest extends TestCase
         // 인사 확인은 아직 남아 있다 — 그렇다고 출퇴근을 막지는 않는다.
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id]);
-        // PIN 은 본인이 나중에 앱에서 정한다 — 그 자리를 알려 준다.
-        $this->assertSame(route('worker-app.pin'), $response->viewData('pinSetupUrl'));
     }
 
-    public function test_repeated_wrong_pin_locks_phone_recovery(): void
-    {
-        [$site, $employee, $user] = $this->worker();
-        for ($i = 0; $i < 5; $i++) {
-            $this->postJson(route('gate.login', $site), ['phone' => $employee->phone, 'pin' => '9870'])->assertUnprocessable();
-        }
-        $this->assertTrue($user->fresh()->pin_locked_until->isFuture());
-        $this->postJson(route('gate.login', $site), ['phone' => $employee->phone, 'pin' => '2580'])->assertUnprocessable();
-        $this->assertDatabaseCount('worker_devices', 0);
-    }
-
-    public function test_hr_connects_existing_worker_without_separate_account_creation(): void
+    /**
+     * 계정이 없던 옛 직원도 자기 출근은 찍는다.
+     *
+     * 예전에는 인사담당자가 «PIN 링크» 를 발급해야 그 사람에게 계정이 생겼다. PIN 이
+     * 사라진 지금, 계정이 필요한 곳은 앱(메시지·문서)뿐이고 출퇴근은 계정 없이도 된다 —
+     * 계정이 없다는 이유로 현장에 서 있는 사람의 근무가 기록되지 않으면 그건 임금이다.
+     */
+    public function test_a_worker_without_an_account_still_clocks_in(): void
     {
         [$site, $employee, $user] = $this->worker();
         $user->delete();
-        $hr = User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $this->actingAs($hr);
-        $result = app(EmployeeAdminService::class)->issuePinLink($employee->id);
-        $this->assertTrue($result['success']);
-        $this->assertSame('worker', $employee->fresh()->user->access_role);
-        $this->assertSame('self', $employee->fresh()->user->access_scope);
-        $foreman = User::factory()->create(['access_role' => 'foreman', 'access_scope' => 'team', 'account_status' => 'active']);
-        $this->actingAs($foreman);
-        $this->assertFalse(app(EmployeeAdminService::class)->issuePinLink($employee->id)['success']);
+
+        $found = $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertOk()->json('workers');
+        $this->assertSame($employee->id, $found[0]['id']);
+
+        $token = $this->postJson(route('gate.claim', $site), ['employee_id' => $employee->id])->assertOk()->json('device_token');
+        $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('success', true);
+        $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id, 'event_type' => 'clock_in']);
     }
 }

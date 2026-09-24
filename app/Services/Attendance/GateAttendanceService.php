@@ -5,9 +5,10 @@ namespace App\Services\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Support\Org;
+use App\Support\WorkerPhone;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use App\Support\Org;
 
 /**
  * 게이트 QR 출퇴근 — 현장 출입구에 붙인 QR 을 스캔하면(로그인 불필요) 출근/퇴근을 찍는다.
@@ -44,19 +45,10 @@ class GateAttendanceService
      */
     public function identify(Site $site, string $last4): Collection
     {
-        $last4 = preg_replace('/\D/', '', $last4) ?: '';
-        if (strlen($last4) !== 4) {
-            return collect();
-        }
-
-        // 표기(하이픈·괄호·국가번호)가 제각각이라 숫자만 남겨 뒤에서 비교한다.
-        $digits = "regexp_replace(coalesce(phone, ''), '\\D', '', 'g')";
-
-        $rows = Employee::query()
+        // 뒷 4자리를 어떻게 비교하는가는 WorkerPhone 한 곳에 있다 — 게이트와 작업자 앱이
+        // 같은 열쇠를 쓰므로, 규칙이 두 벌이면 한쪽 문에서만 사람이 안 찾아진다.
+        $rows = WorkerPhone::matchingLast4($last4)
             ->where('site_id', $site->id)
-            ->where('employment_status', 'active')
-            ->whereRaw("length({$digits}) >= 4")
-            ->whereRaw("right({$digits}, 4) = ?", [$last4])
             ->with('company:id,name')
             ->orderBy('name')
             ->limit(10)

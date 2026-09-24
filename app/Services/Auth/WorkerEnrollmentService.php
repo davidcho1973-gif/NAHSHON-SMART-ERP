@@ -3,7 +3,6 @@
 namespace App\Services\Auth;
 
 use App\Models\AuthEvent;
-use App\Models\AuthSetupToken;
 use App\Models\Employee;
 use App\Models\Team;
 use App\Models\User;
@@ -80,15 +79,20 @@ class WorkerEnrollmentService
         });
     }
 
-    /** HR-confirmed desk registration: create, approve and issue one personal QR as one unit. */
+    /**
+     * 인사 창구 등록 — 신청과 승인을 한 번에 끝낸다.
+     *
+     * 예전에는 여기서 «개인용 앱 연결 QR» 까지 발급했다. 이제 그 링크가 없다 —
+     * 승인된 사람은 현장 QR 을 찍고 전화번호 뒷 4자리를 넣으면 들어온다
+     * (사장님 결정 2026-09-23, PIN 폐지). 보낼 것이 없으니 만들지도 않는다.
+     */
     public function registerAndActivate(User $actor, Team $team, array $data): array
     {
         return DB::transaction(function () use ($actor, $team, $data) {
             $enrollment = $this->submit($actor, $team, $data);
             $this->approve($actor, $enrollment);
-            $url = $this->activation($actor, $enrollment->fresh());
 
-            return ['enrollment' => $enrollment->fresh(), 'url' => $url];
+            return ['enrollment' => $enrollment->fresh()];
         });
     }
 
@@ -125,7 +129,7 @@ class WorkerEnrollmentService
                     || $employee->employment_status !== 'active' || ! $employee->isHourly()
                     || ! in_array($employee->position, [null, '', 'worker'], true)
                     || ! in_array($employee->attendance_app_role, [null, '', 'worker'], true)
-                    || ($account && ($account->access_role !== 'worker' || $account->access_scope !== 'self' || $account->account_status !== 'active' || $account->hasPin()))) {
+                    || ($account && ($account->access_role !== 'worker' || $account->access_scope !== 'self' || $account->account_status !== 'active'))) {
                     throw ValidationException::withMessages(['approval' => '기존 직원 정보 또는 계정이 있습니다. 중복 생성하지 않습니다. 관리자가 소속·신원을 확인하고 기존 계정 복구를 진행하세요.']);
                 }
             } else {
@@ -148,22 +152,6 @@ class WorkerEnrollmentService
             AuthEvent::record('worker_enrollment_approved', user: $user, actor: $actor, method: 'onboarding');
 
             return $user;
-        });
-    }
-
-    public function activation(User $actor, WorkerEnrollment $request): string
-    {
-        return DB::transaction(function () use ($actor, $request) {
-            $request = WorkerEnrollment::whereKey($request->id)->lockForUpdate()->firstOrFail();
-            abort_unless($this->canManage($actor, $request->team), 403);
-            abort_unless($request->status === 'approved', 409);
-            $user = User::where('employee_id', $request->employee_id)->lockForUpdate()->firstOrFail();
-            abort_unless($user->access_role === 'worker' && $user->access_scope === 'self'
-                && $user->account_status === 'active' && ! $user->hasPin()
-                && $user->employee?->employment_status === 'active'
-                && (int) $user->employee?->team_id === (int) $request->team_id, 409);
-
-            return app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_ACTIVATION, $actor);
         });
     }
 }

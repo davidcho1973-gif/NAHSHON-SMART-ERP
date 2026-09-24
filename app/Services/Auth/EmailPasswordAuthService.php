@@ -201,10 +201,11 @@ class EmailPasswordAuthService
     private function initialDigits(User $user): ?string
     {
         // password_set_at 을 더 이상 보지 않는다 — 비밀번호를 정했다고 4자리가 닫히면
-        // «계속 쓸 수 있게» 가 되지 않는다. PIN 계정(작업자·반장)만 계속 막는다.
-        if ($user->hasPin()) {
-            return null;
-        }
+        // «계속 쓸 수 있게» 가 되지 않는다.
+        //
+        // PIN 계정을 막던 줄도 없앴다. PIN 자체가 사라졌고(2026-09-23), 그 줄을 남겨
+        // 두면 예전에 PIN 을 정해 둔 사람만 이 문이 닫힌 채로 남는다 — 본인은 이유를
+        // 알 수 없고 화면도 아무 말을 안 한다.
         $employee = $user->employee;
         if (! $employee || Str::lower(trim((string) $employee->email)) !== Str::lower(trim($user->email))) {
             return null;

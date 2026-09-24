@@ -543,7 +543,7 @@ class SimpleWorkerRegistrationController extends Controller
             false,
             $kind,
             $quick,
-            $quick ? $this->quickPinSetupUrl($employee, $deviceToken) : null,
+            null,
         );
     }
 
@@ -692,7 +692,7 @@ class SimpleWorkerRegistrationController extends Controller
             true,
             $kind,
             $quick,
-            $quick ? $this->quickPinSetupUrl($employee, $deviceToken) : null,
+            null,
         );
     }
 
@@ -729,26 +729,6 @@ class SimpleWorkerRegistrationController extends Controller
         ]);
 
         return $user;
-    }
-
-    /**
-     * PIN 을 아직 안 정한 사람에게 권하는 자리 — 이제는 <b>권유</b>지 관문이 아니다.
-     *
-     * 예전에는 등록이 15분짜리 설정 링크를 발급하고 그 화면으로 곧장 보냈다. 그 링크를
-     * 놓치면 첫 출근을 못 찍었고, 인사담당자가 다시 보내 줘야 했다.
-     *
-     * 이제 첫 출근은 이 링크 없이 된다(linkThisPhone). PIN 이 필요한 순간은 둘뿐이다 —
-     * 다른 휴대폰에서 열 때, 그리고 메시지·문서처럼 남의 글이 보이는 곳을 열 때.
-     * 둘 다 본인이 앱 안에서 스스로 정할 수 있고(WorkerAppPinController), 그 화면은
-     * 만료가 없다. 링크가 아니라 자리를 알려 준다.
-     */
-    private function quickPinSetupUrl(Employee $employee, string $deviceToken): ?string
-    {
-        if ($deviceToken === '' || $employee->user?->hasPin()) {
-            return null;
-        }
-
-        return route('worker-app.pin');
     }
 
     /**

@@ -91,16 +91,24 @@ class MobileMaterialReceiptTest extends TestCase
         return $response->json();
     }
 
-    public function test_receiving_requires_login_and_stronger_than_device_only_authentication(): void
+    /**
+     * 자재 인수는 로그인한 사람만 한다 — 다만 «한 겹 더» 는 이제 없다.
+     *
+     * 예전에는 휴대폰만으로 들어온 세션에 PIN 을 한 번 더 받았다. PIN 이 사라졌으므로
+     * (사장님 결정 2026-09-23) 그 한 겹을 요구할 수단이 없고, 대신 이 문으로 들어온
+     * 세션은 ERP 본화면에 닿지 못한다(FourDigitDoorTest).
+     */
+    public function test_receiving_requires_login_but_not_a_second_step(): void
     {
         $this->get(self::URL)->assertRedirect(route('worker-app.entry'));
         $this->postJson(self::URL, $this->payload())->assertUnauthorized();
 
         $this->manager();
-        $this->withSession([WorkerDeviceSession::FLAG => true])->getJson(self::URL.'/items')
-            ->assertForbidden()->assertJsonPath('code', 'pin_required');
-        $this->postJson(self::URL, $this->payload())->assertForbidden()->assertJsonPath('code', 'pin_required');
-        $this->assertDatabaseCount('material_receipts', 0);
+
+        // 휴대폰 번호로 들어온 세션에도 이 화면은 열린다 — PIN 한 겹이 사라졌으므로
+        // 더 요구할 것이 없다. (본화면은 여전히 닫혀 있다 — FourDigitDoorTest.)
+        $this->withSession([WorkerDeviceSession::FLAG => true])->getJson(self::URL.'/items')->assertOk();
+        $this->withSession([WorkerDeviceSession::FLAG => true])->get(self::URL)->assertOk();
     }
 
     public function test_unlinked_manager_can_open_receiving_from_worker_app_home(): void
@@ -111,31 +119,25 @@ class MobileMaterialReceiptTest extends TestCase
         $this->get(self::URL)->assertOk();
     }
 
-    public function test_device_only_session_cannot_bypass_pin_through_legacy_receiving_adapter(): void
+    /**
+     * 뒷 4자리로 들어온 세션은 «권한이 필요한» 레거시 창구를 지나지 못한다.
+     *
+     * 자재 인수 화면 자체는 열린다(현장에서 쓰는 화면이다). 다만 화면을 거치지 않고
+     * 창구를 직접 불러 권한이 필요한 자료를 꺼내 가는 길은 막혀 있어야 한다 —
+     * 그 길이 열리면 남의 번호 뒷자리를 아는 사람이 회사 자료 앞에 선다.
+     */
+    public function test_a_four_digit_session_cannot_reach_gated_legacy_endpoints(): void
     {
         $this->manager();
         $id = $this->postJson(self::URL, $this->payload())->assertOk()->json('id');
         $this->withSession([WorkerDeviceSession::FLAG => true]);
 
-        foreach ([
-            'api_getMaterialReceipts' => [],
-            'api_saveMaterialReceipt' => [$this->payload()],
-            'api_confirmMaterialReceipt' => [$id],
-            'api_deleteMaterialReceipt' => [$id],
-        ] as $method => $args) {
-            $this->postJson('/smart-company-api/'.$method, [
-                'siteId' => (string) $this->site->id, 'args' => $args,
-            ])->assertJsonPath('success', false);
-        }
-        $this->postJson('/material-receipt-api/analyze', [
-            'site_id' => $this->site->id, 'file' => UploadedFile::fake()->image('slip.jpg'),
-        ])->assertForbidden()->assertJsonPath('code', 'pin_required');
-        $this->getJson(route('material-receipts.file', $id))
-            ->assertForbidden()->assertJsonPath('code', 'pin_required');
+        $this->postJson('/smart-company-api/api_getKakaoReminders', [
+            'siteId' => (string) $this->site->id, 'args' => [],
+        ])->assertJsonPath('success', false);
 
         $this->assertDatabaseCount('material_receipts', 1);
         $this->assertSame(MaterialReceipt::STATUS_DRAFT, MaterialReceipt::findOrFail($id)->status);
-        $this->assertSame([], Storage::disk('local')->allFiles());
     }
 
     public function test_worker_viewer_and_inactive_accounts_cannot_use_receiving(): void

@@ -46,10 +46,6 @@
             <p><strong>{{ $workerName }}</strong><br><span id="done-copy">이 휴대폰을 출퇴근용으로 연결했습니다.</span></p>
             <div class="moving" id="moving">출근 화면으로 이동합니다…</div>
             <a class="gate" id="gate-link" href="{{ $gateUrl }}">출근 화면 열기</a>
-            {{-- PIN 은 권유지 관문이 아니다. 첫 출근을 막지 않는 자리에, 이유와 함께 둔다. --}}
-            @if ($pinSetupUrl)
-                <a class="pin" id="pin-link" href="{{ $pinSetupUrl }}">PIN 만들기 — 다른 휴대폰에서도 쓰려면</a>
-            @endif
         </section>
         <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
         <script>
@@ -77,8 +73,6 @@
                 document.getElementById('done-copy').textContent = words[1];
                 document.getElementById('moving').textContent = words[2];
                 document.getElementById('gate-link').textContent = words[3];
-                var pinLink = document.getElementById('pin-link');
-                if (pinLink) { pinLink.textContent = words[4]; }
 
                 // 공용 휴대폰이면 데려가지 않는다 — 여기서 읽어야 할 안내가 있고,
                 // 그 화면에서 이 사람이 찍을 수 있는 것도 없다.

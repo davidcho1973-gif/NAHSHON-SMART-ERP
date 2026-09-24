@@ -165,15 +165,22 @@ class EmailPasswordAuthTest extends TestCase
         ]);
     }
 
-    public function test_pin_accounts_still_do_not_gain_the_phone_digit_fallback(): void
+    /**
+     * 예전에 PIN 을 정해 둔 사람도 이메일 + 전화 뒷 4자리로 들어온다.
+     *
+     * PIN 은 2026-09-23 에 사라졌다(사장님 지시). 그런데 이 문은 «PIN 이 있으면 닫는다»
+     * 는 조건을 갖고 있었다 — 그 줄을 남겨 두면 예전에 PIN 을 정해 둔 사람만 조용히
+     * 막힌 채 남고, 본인은 이유를 알 수 없다. 남은 pin_hash 는 지워진 기능의 흔적일 뿐
+     * 문을 닫는 근거가 아니다.
+     */
+    public function test_an_old_pin_value_no_longer_closes_the_email_door(): void
     {
-        // 작업자·반장에게는 이미 쓰는 길(PIN)이 따로 있다. 4자리에 4자리를 더하는 것은
-        // 보탬이 되지 않고, 약한 문만 하나 더 생긴다.
         $user = $this->employeeUser();
         $user->forceFill(['google_id' => null, 'pin_hash' => Hash::make('7392')])->save();
 
-        $this->signIn()->assertSessionHasErrors('email_login');
-        $this->assertGuest();
+        $this->signIn();
+
+        $this->assertAuthenticatedAs($user->fresh());
     }
 
     public function test_signed_in_google_user_can_set_email_password_without_phone_fallback(): void

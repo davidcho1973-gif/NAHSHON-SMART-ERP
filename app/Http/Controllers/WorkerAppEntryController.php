@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
+use App\Models\WorkerDevice;
 use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
+use App\Support\WorkerPhone;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -90,5 +94,57 @@ class WorkerAppEntryController extends Controller
     private function signIn(Request $request, string $token): bool
     {
         return WorkerDeviceSession::openFor($request, $token);
+    }
+
+    /**
+     * 전화번호 뒷 4자리로 본인 찾기 — 휴대폰이 기억돼 있지 않을 때의 문.
+     *
+     * <b>사장님 결정(2026-09-23):</b> «작업자앱은 작업반장, 관리자도 본인 핸드폰 뒷자리
+     * 4자리만 입력하고 입장 가능하게. 대신 ERP 본화면은 슈퍼관리자가 승인한 경우에만.»
+     *
+     * 그래서 이 문은 직책을 가리지 않는다 — 재직 중이고 번호가 적혀 있으면 누구든 열린다.
+     * 열리는 것은 <b>작업자 앱뿐</b>이고, ERP 본화면은 이 문으로 열리지 않는다(세션에 표시가
+     * 남고 RequireApprovedErpAccess 가 그 표시를 본다).
+     */
+    public function find(Request $request): JsonResponse
+    {
+        $matches = WorkerPhone::matchingLast4((string) $request->input('last4', ''))
+            ->with(['site:id,code,name', 'company:id,name'])
+            ->orderBy('name')
+            ->limit(10)
+            ->get()
+            ->map(fn (Employee $e): array => [
+                'id' => $e->id,
+                'name' => $e->name,
+                'site' => $e->site?->code,
+                'company' => $e->company?->name,
+                'position' => $e->positionLabel(),
+            ]);
+
+        return response()->json(['success' => true, 'workers' => $matches->all()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    /** 고른 사람으로 앱에 들어간다 — 이 휴대폰도 함께 기억한다. */
+    public function enter(Request $request): RedirectResponse|JsonResponse
+    {
+        $data = $request->validate(['employee_id' => ['required', 'integer']]);
+
+        $employee = Employee::query()
+            ->where('id', $data['employee_id'])
+            ->where('employment_status', 'active')
+            ->first();
+
+        if (! $employee) {
+            return response()->json(['success' => false, 'error' => '찾을 수 없습니다. 인사담당자에게 문의하세요. / Not found — contact HR.'], 422);
+        }
+
+        $token = WorkerDevice::issueFor($employee, $request->userAgent(), verified: true);
+        if (! WorkerDeviceSession::openForApp($request, $employee)) {
+            return response()->json(['success' => false, 'error' => '이 사람의 계정이 아직 없습니다. 인사담당자에게 문의하세요. / No account yet — contact HR.'], 422);
+        }
+
+        return response()->json(['success' => true, 'device_token' => $token, 'redirect' => route('attendance-app.index')])
+            ->header('Cache-Control', 'no-store');
     }
 }

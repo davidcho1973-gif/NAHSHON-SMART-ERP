@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Employee;
-use App\Models\LoginDevice;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkerDevice;
@@ -69,14 +68,5 @@ class DeviceLabelLengthTest extends TestCase
         $employee = Employee::create(['name' => 'Worker', 'company_id' => $this->company->id, 'site_id' => $this->site->id, 'employment_status' => 'active']);
         WorkerDevice::issueFor($employee, self::KAKAO_UA, verified: true);
         $this->assertLessThanOrEqual(120, mb_strlen(WorkerDevice::sole()->label));
-    }
-
-    public function test_login_device_accepts_a_long_browser_name(): void
-    {
-        $user = User::factory()->create();
-
-        LoginDevice::issueFor($user, self::KAKAO_UA);
-
-        $this->assertLessThanOrEqual(120, mb_strlen(LoginDevice::query()->sole()->label));
     }
 }

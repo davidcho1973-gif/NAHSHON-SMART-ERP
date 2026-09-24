@@ -134,7 +134,6 @@ class GateSelfServiceRegistrationTest extends TestCase
         $this->register(['full_name' => '여섯번째', 'phone' => '480-555-0116'])->assertStatus(429);
 
         // 같은 주소에서 출퇴근 문은 계속 열려 있어야 한다 — 현장 WiFi 는 주소 하나를 나눠 쓴다.
-        $this->postJson('/gate/'.$this->site->id.'/login', ['phone' => '480-555-0111', 'pin' => '1357'])
-            ->assertStatus(422);
+        $this->postJson('/gate/'.$this->site->id.'/identify', ['last4' => '0111'])->assertOk();
     }
 }

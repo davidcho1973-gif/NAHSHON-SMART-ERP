@@ -137,58 +137,20 @@ class WorkerAppNeedsNoPasswordTest extends TestCase
         $this->assertGuest();
     }
 
-    // ── 메시지·문서: PIN 한 번 ──────────────────────────────────────────
-
-    public function test_messages_and_documents_are_not_opened_by_the_phone_alone(): void
+    /**
+     * 메시지·문서도 같은 문으로 열린다 — 한 겹 더 묻지 않는다.
+     *
+     * 예전에는 여기서 PIN 네 자리를 한 번 받았다. 사장님 결정(2026-09-23)으로 PIN 이
+     * 사라졌으므로 그 한 겹을 요구할 수단도 없다. 대신 이 문으로 들어온 세션은
+     * ERP 본화면에 닿지 못한다(FourDigitDoorTest 가 그 쪽을 잠근다).
+     */
+    public function test_the_same_phone_opens_messages_and_documents_too(): void
     {
         $this->post(route('worker-app.device'), ['device_token' => $this->deviceToken]);
 
-        foreach (['communication.index', 'attendance-app.docs', 'attendance-app.ops-room'] as $name) {
-            $this->get(route($name))
-                ->assertRedirect(route('worker-app.pin', ['next' => route($name)]));
+        foreach (['attendance-app.index', 'communication.index', 'attendance-app.docs'] as $name) {
+            $this->get(route($name))->assertOk();
         }
-    }
-
-    public function test_the_pin_step_asks_for_four_digits_not_a_password(): void
-    {
-        $this->workerUser->forceFill(['pin_hash' => Hash::make('4729'), 'pin_set_at' => now()])->save();
-        $this->post(route('worker-app.device'), ['device_token' => $this->deviceToken]);
-
-        $html = (string) $this->get(route('worker-app.pin'))->assertOk()->getContent();
-
-        $this->assertStringContainsString('maxlength="4"', $html);
-        $this->assertStringNotContainsString('name="email"', $html);
-    }
-
-    public function test_the_right_pin_opens_the_messages_and_is_not_asked_again(): void
-    {
-        $this->workerUser->forceFill(['pin_hash' => Hash::make('4729'), 'pin_set_at' => now()])->save();
-        $this->post(route('worker-app.device'), ['device_token' => $this->deviceToken]);
-
-        $this->post(route('worker-app.pin.store'), ['pin' => '4729', 'next' => route('communication.index')])
-            ->assertRedirect(route('communication.index'));
-
-        // 세션이 살아 있는 동안은 다시 묻지 않는다.
-        $this->get(route('communication.index'))->assertOk();
-    }
-
-    public function test_a_wrong_pin_does_not_open_the_messages(): void
-    {
-        $this->workerUser->forceFill(['pin_hash' => Hash::make('4729'), 'pin_set_at' => now()])->save();
-        $this->post(route('worker-app.device'), ['device_token' => $this->deviceToken]);
-
-        $this->post(route('worker-app.pin.store'), ['pin' => '1357'])->assertOk();
-
-        $this->get(route('communication.index'))->assertRedirect();
-    }
-
-    public function test_clocking_in_still_works_while_the_messages_stay_shut(): void
-    {
-        $this->post(route('worker-app.device'), ['device_token' => $this->deviceToken]);
-
-        // 이것이 이 설계 전부다 — 매일 쓰는 것은 0단계, 남의 글은 한 겹.
-        $this->get(route('attendance-app.index'))->assertOk();
-        $this->get(route('communication.index'))->assertRedirect(route('worker-app.pin', ['next' => route('communication.index')]));
     }
 
     // ── 사무직은 지금까지 쓰던 문을 그대로 쓴다 ─────────────────────────

@@ -116,11 +116,19 @@ class WorkerAppShareLinkTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_the_employee_screen_offers_the_send_button(): void
+    /**
+     * 직원 화면에서 «보낼 링크» 가 사라졌다 — 보낼 것이 없기 때문이다.
+     *
+     * PIN 이 없어진 뒤(2026-09-23) 현장 사람에게 건네는 것은 현장 QR 한 장뿐이고,
+     * 그 앞에서 전화번호 뒷 4자리를 넣으면 들어온다. 링크 단추를 남겨 두면 관리자가
+     * 여전히 «뭔가 보내야 한다» 고 믿는다.
+     */
+    public function test_the_employee_screen_hands_out_the_site_qr_not_a_personal_link(): void
     {
         $js = file_get_contents(public_path('js/admin-employees.js'));
 
-        $this->assertStringContainsString('출퇴근 연결', $js);
-        $this->assertStringContainsString("window.AdminEmployees.pinLink", $js);
+        $this->assertStringContainsString('현장 공용 QR', $js);
+        $this->assertStringNotContainsString('pinLink', $js);
+        $this->assertStringNotContainsString('PIN 재설정', $js);
     }
 }

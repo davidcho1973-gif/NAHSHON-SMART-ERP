@@ -4,21 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\Site;
-use App\Models\User;
 use App\Models\WorkerDevice;
 use App\Services\Attendance\GateAttendanceService;
-use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
 use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
-use App\Support\WorkerPhone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-/** One site QR, one identity rule: verified personal phone or phone + PIN. */
+/** 현장 QR 하나, 신원 규칙 하나: 기억된 휴대폰 아니면 전화번호 뒷 4자리. */
 class GateAttendanceController extends Controller
 {
     public function __construct(private readonly GateAttendanceService $service) {}
@@ -49,8 +46,8 @@ class GateAttendanceController extends Controller
      * 얻는 것은, 현장에 온 사람이 아무것도 배우지 않고 4자리만 눌러 출근을 찍는 것이다.
      * 안 찍힌 출퇴근은 없는 근무가 되고 그건 그 사람 임금이다 — 그래서 이 선택이다.
      *
-     * 되돌리기 쉽게 남겨 둔다: 이 화면이 PIN 을 다시 요구하려면 `claim()` 이
-     * PinAuthService 를 한 번 부르면 된다(login() 이 그 모양으로 남아 있다).
+     * 되돌릴 때는 claim() 에 «아는 것» 을 한 겹 더하면 된다 — 문의 모양은 그대로 두고
+     * 그 자리에 무엇을 요구할지만 바꾸는 자리다.
      */
     public function identify(Request $request, Site $site): JsonResponse
     {
@@ -115,34 +112,6 @@ class GateAttendanceController extends Controller
     public function remember(Request $request, Site $site): JsonResponse
     {
         return $this->claim($request, $site);
-    }
-
-    public function login(Request $request, Site $site): JsonResponse
-    {
-        abort_unless($site->status === 'active', 404);
-        $data = $request->validate(['phone' => 'required|string|max:40', 'pin' => 'required|digits:4']);
-        $result = DB::transaction(function () use ($request, $site, $data): array {
-            $candidates = WorkerPhone::employees($data['phone'])->limit(2)->get();
-            $employee = $candidates->count() === 1 ? $candidates->first() : null;
-            $user = $employee ? User::where('employee_id', $employee->id)->lockForUpdate()->first() : null;
-            if (! $employee || $employee->employment_status !== 'active'
-                || (int) $employee->site_id !== (int) $site->id
-                || ! WorkerDeviceSession::mayEnterWithDeviceAlone($user)) {
-                return ['success' => false];
-            }
-            $verified = app(PinAuthService::class)->verifyFor($user, $data['pin'], $request);
-            if (! $verified['success']) {
-                return ['success' => false];
-            }
-            $request->session()->regenerate();
-
-            return ['success' => true, 'device_token' => WorkerDevice::issueFor($employee, $request->userAgent(), verified: true)];
-        });
-        if (! $result['success']) {
-            return response()->json(['success' => false, 'error' => '전화번호·PIN을 확인하세요. 계속 안 되거나 PIN을 잊었으면 인사담당자에게 초기화를 요청하세요. / Check phone and PIN, or ask HR to reset.'], 422);
-        }
-
-        return response()->json($result + ['csrf_token' => csrf_token()])->header('Cache-Control', 'no-store');
     }
 
     private function identity(Request $request, Site $site): ?Employee

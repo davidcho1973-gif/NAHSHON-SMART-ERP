@@ -26,8 +26,7 @@
 @endif
 @elseif($row->status === 'approved')
 @if($row->employee?->employment_status !== 'active' || $row->employee?->user?->account_status !== 'active')<p class="error">직원 또는 계정이 비활성 상태입니다. 인사담당자에게 확인하세요.</p>
-@elseif($row->employee?->user?->hasPin())<p class="notice">PIN 설정 완료 · 출퇴근 계정 연결됨</p>
-@else<p>인사 승인 완료 · PIN 설정 대기</p>@if($canRegister)<form method="post" action="{{ route('worker-enrollment.activation', $row) }}">@csrf<button type="submit">직원 개인용 앱 연결 QR 발급 / 재발급</button></form>@endif
+@else<p class="notice">인사 승인 완료 · 본인이 전화번호 뒷 4자리로 바로 들어옵니다 (링크를 보낼 일이 없습니다)</p>
 @endif
 @else<p>반려됨 · Rejected</p>@endif
 </article>

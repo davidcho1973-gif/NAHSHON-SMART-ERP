@@ -148,13 +148,9 @@
             }
             // 계정이 생긴 다음에야 앱에 들어올 수 있다. 그때부터 설치 카드를 뽑을 수 있게 한다 —
             // 카드의 핵심은 QR 이 아니라 "어느 구글 계정으로 로그인하는가" 이다.
-            if (r.hasAccount || r.canQuickConnect) {
-              // 보내기(문자·QR)와 인쇄 카드는 쓰임이 다르다. 대개 보내기를 먼저 쓴다.
-              if (r.siteQrUrl) html += u.rowButton('현장 공용 QR', "window.open('" + u.esc(r.siteQrUrl) + "','_blank')") + ' ';
-              // 구글 계정이 없는 현장 인력은 이 링크로 자기 번호를 정하고 폰을 기억시킨다.
-              html += u.rowButton(r.hasPin ? 'PIN 재설정' : '출퇴근 연결',
-                "window.AdminEmployees.pinLink(" + r.id + ",'" + (r.hasPin ? 'reset' : 'invite') + "')") + ' ';
-            }
+            // 현장 사람에게 보낼 링크는 없다 — 벽의 QR 을 찍고 전화번호 뒷 4자리를 넣으면
+            // 들어온다. 그래서 여기 남는 것은 그 QR 을 여는 단추 하나뿐이다.
+            if (r.siteQrUrl) html += u.rowButton('현장 공용 QR', "window.open('" + u.esc(r.siteQrUrl) + "','_blank')") + ' ';
             if (r.onboardingRequestUrl) {
               html += u.rowButton('추가정보·W-9 링크', 'window.AdminEmployees.copyOnboardingLink(' + r.id + ')') + ' ';
             }
@@ -413,46 +409,6 @@
     }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
   }
 
-  // PIN 초대·재설정 — 관리자에게 나가는 것은 링크뿐이다. 번호는 본인 폰에서만 정해지고
-  // 관리자는 영원히 모른다(그래야 출퇴근 기록이 급여의 근거로 남는다).
-  function pinLink(id, purpose) {
-    var u = ui();
-    var r = state.rows.filter(function (x) { return x.id === id; })[0];
-    if (!r) return;
-
-    call('api_issuePinLink', [id, purpose || 'invite']).then(function (res) {
-      if (res.success === false) { u.toast(res.error || '발급하지 못했습니다.', 'error'); return; }
-
-      var isReset = res.purpose === 'reset';
-      var body =
-        '<p style="margin:0 0 12px;font-size:13.5px;line-height:1.6;color:var(--text-secondary)">' +
-        '<b>' + (res.name || '') + '</b> 님께 아래 링크를 보내세요. 본인이 열어 <b>4자리 번호</b>를 직접 정합니다.<br>' +
-        '유효 시간 <b>' + (res.expiresIn || '') + '</b> · 한 번 쓰면 사라집니다. 관리자는 그 번호를 알 수 없습니다.</p>' +
-        '<input id="pin-link-box" readonly value="' + res.url + '" ' +
-        'style="width:100%;padding:10px;font-size:12.5px;border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary)">' +
-        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button type="button" id="pin-copy" class="btn-primary" style="padding:8px 14px;font-size:13px">링크 복사</button>' +
-        // 회사 이름은 배포마다 다르다. 문구에 박아 두면 다음 고객의 작업자에게
-        // 남의 회사 이름으로 문자가 나간다.
-        '<a href="sms:?&body=' + encodeURIComponent('[' + (window.ORG_NAME || 'ERP') + '] 출퇴근 앱 번호 설정: ' + res.url) + '" ' +
-        'class="btn-secondary" style="padding:8px 14px;font-size:13px;text-decoration:none">문자로 보내기</a>' +
-        '</div>';
-
-      u.modal({ title: isReset ? 'PIN 재설정 링크' : 'PIN 초대 링크', body: body, width: 520 });
-
-      setTimeout(function () {
-        var btn = document.getElementById('pin-copy');
-        var box = document.getElementById('pin-link-box');
-        if (!btn || !box) return;
-        btn.addEventListener('click', function () {
-          box.select();
-          try { document.execCommand('copy'); } catch (e) {}
-          if (navigator.clipboard) { navigator.clipboard.writeText(box.value).catch(function () {}); }
-          u.toast('링크를 복사했습니다.');
-        });
-      }, 60);
-    }).catch(function (e) { u.toast(e.message || '발급하지 못했습니다.', 'error'); });
-  }
 
   function grantAccount(id) {
     var u = ui();
@@ -466,7 +422,7 @@
         saveLabel: '만들기',
         fields: [
           { name: 'email', label: '이메일 (작업자·반장은 선택)', colSpan: 2, value: r.email || '',
-            hint: '전화번호가 등록된 작업자·반장은 이메일 없이 PIN으로 연결할 수 있습니다. 계정 생성 후 개인 PIN 링크를 발급하세요. 관리자 계정은 이메일이 필요합니다.' },
+            hint: '현장 인력(작업자·반장)은 이메일이 없어도 됩니다 — 전화번호 뒷 4자리로 앱에 들어옵니다. ERP 화면을 여는 계정에는 이메일이 필요합니다.' },
           { name: 'role', label: '역할', type: 'select', required: true,
             options: o.accountRoles, value: 'worker' },
           { name: 'scope', label: '볼 수 있는 범위', type: 'select', required: true,
@@ -519,7 +475,6 @@
     applyFilters: applyFilters,
     openForm: openForm,
     grantAccount: grantAccount,
-    pinLink: pinLink,
     copyOnboardingLink: copyOnboardingLink,
     confirmRegistration: confirmRegistration,
     remove: remove,

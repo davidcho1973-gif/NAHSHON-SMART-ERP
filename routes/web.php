@@ -30,7 +30,6 @@ use App\Http\Controllers\OpsPhotoController;
 use App\Http\Controllers\OpsVoiceController;
 use App\Http\Controllers\OrgLogoController;
 use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\PinAuthController;
 use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\ProjectContractDocumentController;
 use App\Http\Controllers\PushSubscriptionController;
@@ -46,12 +45,11 @@ use App\Http\Controllers\WbsScheduleController;
 use App\Http\Controllers\WebManifestController;
 use App\Http\Controllers\WeekBoardDraftController;
 use App\Http\Controllers\WorkerAppEntryController;
-use App\Http\Controllers\WorkerAppPinController;
 use App\Http\Controllers\WorkerEnrollmentController;
 use App\Http\Controllers\WorkerProfileCompletionController;
 use App\Http\Middleware\AuthorizeAssetApi;
+use App\Http\Middleware\RequireApprovedErpAccess;
 use App\Http\Middleware\RequireHrRegistration;
-use App\Http\Middleware\RequireMoreThanTheDevice;
 use App\Models\OrgSetting;
 use App\Models\PushSubscription;
 use App\Models\ReportRecipient;
@@ -88,29 +86,12 @@ Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('aut
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
 
-// PIN 로그인 — 구글 계정이 없는 현장 인력이 자기 폰으로 들어오는 두 번째 문.
-//
-// 관문이 둘이다: 기억된 폰(가진 것) + 4자리 번호(아는 것). 폰이 등록되어 있지 않으면
-// 번호 입력창 자체가 뜨지 않으므로, 링크 없이 번호만 대보는 공격은 성립하지 않는다.
-// throttle 은 그 위에 한 겹 더 — 4자리는 만 가지뿐이라 속도를 묶어 두어야 한다.
 Route::middleware(['auth'])->prefix('worker-onboarding')->group(function () {
     Route::get('/', [WorkerEnrollmentController::class, 'index'])->name('worker-enrollment.index');
     Route::post('/', [WorkerEnrollmentController::class, 'store'])->middleware('throttle:30,1')->name('worker-enrollment.store');
     Route::post('/{enrollment}/approve', [WorkerEnrollmentController::class, 'approve'])->name('worker-enrollment.approve');
-    Route::post('/{enrollment}/activation', [WorkerEnrollmentController::class, 'activation'])->middleware('throttle:20,1')->name('worker-enrollment.activation');
     Route::post('/{enrollment}/reject', [WorkerEnrollmentController::class, 'reject'])->name('worker-enrollment.reject');
 });
-
-Route::get('/auth/pin/setup/{token}', [PinAuthController::class, 'setupForm'])
-    ->middleware('throttle:30,1')->name('pin.setup');
-Route::post('/auth/pin/setup/{token}', [PinAuthController::class, 'setupStore'])
-    ->middleware('throttle:10,1')->name('pin.setup.store');
-Route::post('/auth/pin/who', [PinAuthController::class, 'who'])
-    ->middleware('throttle:60,1')->name('pin.who');
-Route::post('/auth/pin/login', [PinAuthController::class, 'login'])
-    ->middleware('throttle:10,1')->name('pin.login');
-Route::post('/auth/pin/forget', [PinAuthController::class, 'forget'])
-    ->middleware('throttle:30,1')->name('pin.forget');
 
 // 스크린샷 자동화용 서명 로그인 — erp:snap-links 가 발급한 10분짜리 서명 URL 로만 진입 가능.
 // 구글 OAuth 뿐인 이 앱에서 헤드리스 브라우저가 화면을 찍을 수 있는 유일한 통로다. 감사 로그를 남긴다.
@@ -173,7 +154,14 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/field-app/{any}', function () {
         return view('field-app.index');
     })->where('any', '.*');
-    Route::get('/', [SmartCompanyController::class, 'index'])->name('smart-company.index');
+    // ERP 본화면 — 승인된 권한으로 정식 로그인한 사람만. 뒷 4자리로 들어온 세션은
+    // 여기서 걸러 작업자 앱으로 돌려보낸다. 창구(API)는 메서드마다 이미 자기 관문이
+    // 있으므로 여기서 통째로 막지 않는다 — 작업자 앱(현장 상황실)도 같은 창구를 쓴다.
+    Route::get('/', [SmartCompanyController::class, 'index'])
+        ->middleware(RequireApprovedErpAccess::class)->name('smart-company.index');
+    Route::post('/smart-company-api/{method}', SmartCompanyApiController::class)
+        ->where('method', '[A-Za-z0-9_]+')
+        ->name('api.smart-company');
     Route::redirect('/erp', '/');
     Route::redirect('/dashboard', '/');
 
@@ -228,10 +216,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/procurement-api/file/{item}', [ProcurementController::class, 'showFile'])->name('procurement.file');
 
     // 자재 입고 — 납품서 사진 AI 판독(→ 확인 대기 입고 생성) + 근거 사진 열람
-    Route::post('/material-receipt-api/analyze', [MaterialReceiptController::class, 'analyze'])
-        ->middleware([RequireMoreThanTheDevice::class, 'throttle:20,1'])->name('material-receipts.analyze');
-    Route::get('/material-receipt-api/file/{receipt}', [MaterialReceiptController::class, 'showFile'])
-        ->middleware(RequireMoreThanTheDevice::class)->name('material-receipts.file');
+    Route::post('/material-receipt-api/analyze', [MaterialReceiptController::class, 'analyze'])->middleware('throttle:20,1')->name('material-receipts.analyze');
+    Route::get('/material-receipt-api/file/{receipt}', [MaterialReceiptController::class, 'showFile'])->name('material-receipts.file');
 
     // 하이브리드 자동 출퇴근 — 작업자 앱이 위치/WiFi 신호 전송 + 현재 상태 조회
     Route::post('/attendance-geo/ping', [AttendanceGeoController::class, 'ping'])->name('attendance-geo.ping');
@@ -376,18 +362,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{meeting}/items/{item}/undo', 'undo')->whereNumber(['meeting', 'item']);
     });
 
-    // 휴대폰만으로 들어온 작업자가 메시지·문서를 열 때 거치는 한 단계(출퇴근은 안 거친다).
-    Route::get('/app/pin', [WorkerAppPinController::class, 'show'])->name('worker-app.pin');
-    Route::post('/app/pin', [WorkerAppPinController::class, 'store'])
-        ->middleware('throttle:20,1')->name('worker-app.pin.store');
-
     // ── 남의 글이 있는 곳 ────────────────────────────────────────────
     // 휴대폰을 기억한 것만으로는 열지 않는다. PIN 네 자리를 한 번 받는다
     // (출퇴근은 이 묶음 밖이라 그대로 0단계로 열린다).
     //
     // 줄마다 따로 붙이지 않고 묶어서 거는 이유: 여기에 화면을 하나 더 붙이는 사람이
     // 미들웨어를 빠뜨리면, 그 화면만 조용히 휴대폰 하나로 열린다.
-    Route::middleware(RequireMoreThanTheDevice::class)->group(function (): void {
+    Route::group([], function (): void {
         Route::get('/attendance-app/material-receipts', [MaterialReceiptController::class, 'index'])->name('attendance-app.material-receipts');
         Route::get('/attendance-app/material-receipts/items', [MaterialReceiptController::class, 'items'])->name('attendance-app.material-receipts.items');
         Route::post('/attendance-app/material-receipts/upload', [MaterialReceiptController::class, 'upload'])
@@ -413,7 +394,7 @@ Route::middleware('auth')->group(function (): void {
     // ── 메시지 ───────────────────────────────────────────────────────
     // 방의 글은 남의 것이다. 폰을 빌려주거나 잃어버렸을 때 출퇴근 화면이 열리는 것과
     // 현장 대화가 통째로 읽히는 것은 무게가 다르다 — 이쪽만 PIN 을 한 번 받는다.
-    Route::middleware(RequireMoreThanTheDevice::class)->group(function (): void {
+    Route::group([], function (): void {
         Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
         Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
         Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
@@ -465,10 +446,6 @@ Route::middleware('auth')->group(function (): void {
     // Team QR Code Printable Sheet
     Route::get('/team/{team}/qr', [SmartCompanyController::class, 'teamQr'])->name('team.qr');
 
-    // Universal Scanner and Compatibility Adapter Route
-    Route::post('/smart-company-api/{method}', SmartCompanyApiController::class)
-        ->where('method', '[A-Za-z0-9_]+')
-        ->name('api.smart-company');
 });
 
 // 현장 QR 모아 인쇄 — 게이트·간편등록(직접/협력사)·입사지원서 포스터를 한 번에 출력
@@ -499,6 +476,12 @@ Route::get('/app', [WorkerAppEntryController::class, 'show'])
     ->middleware('throttle:60,1')->name('worker-app.entry');
 Route::post('/app/device', [WorkerAppEntryController::class, 'device'])
     ->middleware('throttle:30,1')->name('worker-app.device');
+// 휴대폰이 기억돼 있지 않을 때의 문 — 전화번호 뒷 4자리로 본인을 찾아 들어온다.
+// 작업자·반장·관리자 모두 같은 문을 쓴다. 이 문으로 열리는 것은 작업자 앱뿐이다.
+Route::post('/app/find', [WorkerAppEntryController::class, 'find'])
+    ->middleware('throttle:20,1')->name('worker-app.find');
+Route::post('/app/enter', [WorkerAppEntryController::class, 'enter'])
+    ->middleware('throttle:20,1')->name('worker-app.enter');
 
 // 새 작업자 현장 등록 QR — 휴대폰 기본 카메라로 열고 이름·전화번호만 등록한다.
 // 현장 번호는 QR 주소가 정하며, 등록 직후 이 휴대폰을 기억해 같은 현장 출퇴근으로 이어진다.
@@ -567,8 +550,6 @@ Route::get('/org/logo', [OrgLogoController::class, 'show'])->name('org.logo');
 // 조이다가 출근 줄을 세우는 쪽이 더 큰 사고다.
 Route::get('/gate/{site}/qr', [GateAttendanceController::class, 'qr'])->name('gate.qr');
 Route::get('/gate/{site}', [GateAttendanceController::class, 'show'])->name('gate.show');
-Route::post('/gate/{site}/login', [GateAttendanceController::class, 'login'])
-    ->middleware('throttle:worker-entry')->name('gate.login');
 // 뒷 4자리는 만 가지뿐이라, 이름 검색보다 조인다 — 한 사람이 아침에 한두 번 쓰는 길이다.
 Route::post('/gate/{site}/identify', [GateAttendanceController::class, 'identify'])
     ->middleware('throttle:60,1')->name('gate.identify');
