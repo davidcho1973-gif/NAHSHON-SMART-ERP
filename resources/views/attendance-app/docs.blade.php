@@ -64,6 +64,7 @@
     <div class="app field-shell">
         <header class="field-header">
             <a class="back field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+            @include("partials.lang-switch")
             <h1>{{ __('문서 올리기') }}</h1>
             <p class="sub">{{ $siteName ?: __('현장') }} · {{ __('도면 · 계약서 · 시방서를 올리면 ERP 문서함에 자동으로 분류돼 들어갑니다.') }}</p>
         </header>

@@ -185,11 +185,12 @@ class WorkerDeviceAndLanguageTest extends TestCase
         $res = $this->get('/gate/'.$this->site->id);
 
         $res->assertStatus(200);
-        foreach (WorkerLang::OPTIONS as $code => $name) {
-            $res->assertSee('value="'.$code.'"', false);
-            $res->assertSee($name);
+        // 언어 단추는 공용 조각 하나를 모든 화면이 쓴다(partials/lang-switch) —
+        // 화면마다 만들면 새 화면에서 반드시 하나가 빠진다.
+        foreach (['ko', 'en', 'es'] as $code) {
+            $res->assertSee('data-locale="'.$code.'"', false);
         }
-        // 사전이 통째로 실려야 새로고침 없이 언어를 바꿀 수 있다.
+        // 사전이 통째로 실려야 화면이 그 말로 바로 그려진다.
         $res->assertSee('Marcar entrada');
         $res->assertSee('Clock out');
     }
@@ -199,8 +200,8 @@ class WorkerDeviceAndLanguageTest extends TestCase
         $res = $this->followingRedirects()->get('/join/w/'.$this->site->id);
 
         $res->assertStatus(200);
-        foreach (WorkerLang::OPTIONS as $code => $name) {
-            $res->assertSee('value="'.$code.'"', false);
+        foreach (['ko', 'en', 'es'] as $code) {
+            $res->assertSee('data-locale="'.$code.'"', false);
         }
         $res->assertSee('Registrarme y marcar entrada');
         $res->assertSee('name="preferred_language"', false);

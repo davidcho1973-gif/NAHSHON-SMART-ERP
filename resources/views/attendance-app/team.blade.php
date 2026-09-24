@@ -35,6 +35,7 @@
     <div class="app">
         <header>
             <p class="eyebrow">Attendance QR</p>
+            @include("partials.lang-switch")
             <h1>{{ $qrCode->team?->name ?? 'Team' }} {{ __('출퇴근') }}</h1>
         </header>
 

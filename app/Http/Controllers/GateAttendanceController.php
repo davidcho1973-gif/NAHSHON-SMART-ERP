@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\WorkerDevice;
 use App\Services\Attendance\GateAttendanceService;
+use App\Support\AppLocale;
 use App\Support\QrPosters;
 use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
@@ -25,7 +26,10 @@ class GateAttendanceController extends Controller
         abort_unless($site->status === 'active', 404);
 
         return view('gate.index', [
-            'site' => $site, 'lang' => WorkerLang::resolve($request->query('lang')),
+            'site' => $site,
+            // 고른 언어는 이 화면 안에만 두지 않는다 — 쿠키에 남은 선택을 먼저 본다.
+            // 그래야 여기서 스페인어를 고른 사람이 다음 화면에서 다시 한글을 만나지 않는다.
+            'lang' => WorkerLang::resolve($request->query('lang', $request->cookie(AppLocale::COOKIE))),
             'langOptions' => WorkerLang::OPTIONS, 'dict' => WorkerLang::gate(),
         ]);
     }

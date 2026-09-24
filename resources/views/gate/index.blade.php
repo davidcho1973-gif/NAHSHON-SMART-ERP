@@ -13,7 +13,8 @@
 </style>
 </head>
 <body><main>
-<header>@if(\App\Support\Org::hasLogo())<img src="{{ route('org.logo', ['v' => \App\Support\Org::logoVersion()]) }}" alt="{{ \App\Support\Org::name() }}" style="max-width:100px;max-height:35px">@endif<strong>{{ \App\Support\Org::name() }}</strong><select id="language" aria-label="Language">@foreach($langOptions as $code => $label)<option value="{{ $code }}" @selected($lang === $code)>{{ $label }}</option>@endforeach</select></header>
+<header>@if(\App\Support\Org::hasLogo())<img src="{{ route('org.logo', ['v' => \App\Support\Org::logoVersion()]) }}" alt="{{ \App\Support\Org::name() }}" style="max-width:100px;max-height:35px">@endif<strong>{{ \App\Support\Org::name() }}</strong>{{-- 고른 언어는 서버가 기억한다 — 이 화면에서 고른 말로 다음 화면도 열린다. --}}
+@include('partials.lang-switch')</header>
 <h1 data-t="title">현장 출퇴근</h1><p>{{ $site->code }} · {{ $site->name }}</p>
 @if($errors->any())<div class="error" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
 <p id="notice" role="status" aria-live="polite"></p>
@@ -63,7 +64,7 @@
  function save(value){token=value;try{value?localStorage.setItem('dasolWorkerDevice',value):localStorage.removeItem('dasolWorkerDevice');}catch(_){} }
  async function post(kind,data){const r=await fetch(urls[kind],{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)}); const d=await r.json();if(!r.ok)throw new Error(d.error||d.message||text().network);return d;}
  async function recognize(){const d=await post('me',{device_token:token}); if(!d.recognized){show('entry');return false;}record=d;paint();show('attendance');return true;}
- el('language').onchange=()=>{lang=el('language').value;paint();};
+ // 언어 단추는 공용 조각이 맡는다 — 서버에 알리고 화면을 다시 그린다(partials/lang-switch).
  el('new-worker').onclick=()=>{note('');show('register');}; el('back').onclick=()=>show('entry');
  // 이 휴대폰이 이미 다른 사람을 등록했다면 그 사실만 실어 보낸다 — 연결할지 말지는 서버가 정한다.
  el('register-form').addEventListener('submit',()=>window.markRegisteringPhone(el('register-form')));

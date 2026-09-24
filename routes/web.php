@@ -18,6 +18,7 @@ use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
 use App\Http\Controllers\InstallGuideController;
 use App\Http\Controllers\IntegratedDocumentController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MaterialReceiptController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MobileAskController;
@@ -478,6 +479,9 @@ Route::post('/app/device', [WorkerAppEntryController::class, 'device'])
     ->middleware('throttle:30,1')->name('worker-app.device');
 // 휴대폰이 기억돼 있지 않을 때의 문 — 전화번호 뒷 4자리로 본인을 찾아 들어온다.
 // 작업자·반장·관리자 모두 같은 문을 쓴다. 이 문으로 열리는 것은 작업자 앱뿐이다.
+// 언어 고르기 — 로그인 전 화면(현장 QR·앱 문·로그인)에서도 눌린다. 받는 값은 셋뿐이다.
+Route::post('/locale', LocaleController::class)
+    ->middleware('throttle:60,1')->name('locale.set');
 Route::post('/app/find', [WorkerAppEntryController::class, 'find'])
     ->middleware('throttle:20,1')->name('worker-app.find');
 Route::post('/app/enter', [WorkerAppEntryController::class, 'enter'])

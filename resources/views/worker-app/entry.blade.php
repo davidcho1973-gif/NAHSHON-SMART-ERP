@@ -75,6 +75,7 @@
         {{-- 휴대폰이 기억돼 있지 않을 때 — 외울 것을 주지 않는다. 자기 전화번호 뒷 4자리다.
              작업자·반장·관리자가 같은 문을 쓴다. 이 문으로 열리는 것은 작업자 앱뿐이다. --}}
         <div id="stuck" hidden>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:10px">@include('partials.lang-switch')</div>
             <h1>{{ $t['findTitle'] }}</h1>
             <p>{{ $t['findBody'] }}</p>
             <label for="last4">{{ $t['last4'] }}</label>
