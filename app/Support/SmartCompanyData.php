@@ -307,6 +307,11 @@ class SmartCompanyData
             ),
             'api_getEmployeeAdminOptions' => app(EmployeeAdminService::class)->options(),
             'api_saveEmployeeAdmin' => app(EmployeeAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            // 현장 QR 등록자 «확인» — 회사·팀·(자사일 때) 시급 셋만 정하면 끝난다.
+            'api_confirmSelfRegistration' => app(EmployeeAdminService::class)->confirmSelfRegistration(
+                (int) ($args[0] ?? 0),
+                is_array($args[1] ?? null) ? $args[1] : [],
+            ),
             'api_deleteEmployeeAdmin' => app(EmployeeAdminService::class)->delete((int) ($args[0] ?? 0)),
             // 직원 정보를 그대로 써서 로그인 계정을 만든다 — 이름·이메일을 또 치지 않는다.
             'api_grantEmployeeAccount' => app(EmployeeAdminService::class)->grantAccount(

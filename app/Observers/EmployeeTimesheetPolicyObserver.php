@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Employee;
 use App\Services\Payroll\AttendanceTimesheetSync;
+use App\Services\Payroll\PayrollSetupAlert;
 
 /**
  * 고용형태가 바뀌면 그 사람의 급여 시트를 다시 계산한다.
@@ -32,6 +33,10 @@ class EmployeeTimesheetPolicyObserver
 
         try {
             app(AttendanceTimesheetSync::class)->resyncEmployee($employee->id);
+
+            // 방금 시급 대상이 된 사람인데 임금률이 없으면 지금 말한다. 여기서 말하지
+            // 않으면 «미확인» 이던 사람이 자사 직영으로 확인된 순간부터 $0 으로 쌓인다.
+            PayrollSetupAlert::emitIfMissing($employee->fresh() ?? $employee);
         } catch (\Throwable $exception) {
             // 급여 재계산이 실패해도 직원 정보 저장은 막지 않는다 — 기록은 남아 있고
             // `payroll:sync-attendance` 로 언제든 다시 돌릴 수 있다.

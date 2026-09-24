@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\PushSubscription;
 use App\Models\Site;
 use App\Models\Team;
+use App\Models\UnifiedAlert;
 use App\Models\User;
 use App\Models\WorkerEnrollment;
 use App\Services\Attendance\DailyHeadcountService;
@@ -270,8 +271,19 @@ class EmployeeAdminService
             'qrRoles' => $pairs(self::QR_ROLES),
             'qrScopes' => $pairs(self::QR_SCOPES),
             'languages' => $pairs(WorkerLang::OPTIONS),
-            'companies' => Company::query()->orderBy('name')->get(['id', 'name'])
-                ->map(fn (Company $c): array => ['value' => (string) $c->id, 'label' => $c->name])->all(),
+            // 회사마다 «자사/협력사» 를 함께 내려보낸다 — 확인 줄이 회사를 고르는 순간
+            // 고용형태를 보여 주고, 자사일 때만 시급 칸을 띄우기 위해서다.
+            'companies' => Company::query()->orderBy('name')->get(['id', 'name', 'company_type'])
+                ->map(fn (Company $c): array => [
+                    'value' => (string) $c->id,
+                    'label' => $c->name,
+                    'employmentType' => $c->employmentType(),
+                    'typeLabel' => $c->companyTypeLabel(),
+                ])->all(),
+            // 이 회사들이 실제로 쓰는 공정 이름 — 확인 줄에서 고르게 한다. 자유 입력만
+            // 두면 'Piping' 과 'piping' 이 다른 공정이 되어 공종별 인원이 갈린다.
+            'trades' => Employee::query()->whereNotNull('role')->where('role', '!=', '')
+                ->distinct()->orderBy('role')->pluck('role')->all(),
             'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
             'teams' => Team::query()->orderBy('name')->get(['id', 'name', 'company_id', 'site_id', 'status'])
@@ -360,6 +372,123 @@ class EmployeeAdminService
             'purpose' => $purpose,
             'name' => $employee->name,
             'expiresIn' => $purpose === 'reset' ? '30분' : '3일',
+        ];
+    }
+
+    /**
+     * 현장 QR 로 들어온 사람을 «확인» 한다 — 사람이 정할 것은 셋뿐이다.
+     *
+     * 예전에는 한 명이 등록될 때마다 여덟 가지를 세 화면에서 했다: 회사 고치기,
+     * 고용형태 고치기, 공정 고치기, 팀 배정, 계정 만들기, 추가정보 링크 보내기,
+     * 임금률 넣기, 그리고 20칸짜리 폼을 열어 저장해야 «확인 필요» 딱지가 사라졌다.
+     *
+     * 그중 사람만 아는 것은 <b>소속 회사 · 팀 · (자사일 때) 시급</b> 셋이다. 나머지는
+     * 이미 정해져 있거나(계정은 등록이 만든다) 고른 회사에서 따라 나온다(고용형태).
+     *
+     * 직원 표에 쓰는 곳은 늘리지 않는다 — 기존 save() 에 넘긴다. 검증·권한·«확인 필요»
+     * 해제가 모두 거기 한 곳에 있고, 규칙이 두 벌이 되는 순간 한쪽만 고쳐진다.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public function confirmSelfRegistration(int $employeeId, array $input): array
+    {
+        if (! $this->canManage()) {
+            return ['success' => false, 'error' => '직원 등록 권한이 없습니다.'];
+        }
+
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return ['success' => false, 'error' => '직원을 찾을 수 없습니다.'];
+        }
+        if (! $this->inScope($employee)) {
+            return ['success' => false, 'error' => '다른 현장의 직원은 수정할 수 없습니다.'];
+        }
+
+        $company = Company::find($this->intOrNull($input['companyId'] ?? null));
+        if (! $company) {
+            return ['success' => false, 'errors' => ['companyId' => '이 사람의 소속 회사를 골라 주세요.']];
+        }
+
+        // 고용형태는 회사에서 따라 나온다 — 사람이 두 번 답하지 않는다.
+        // 회사가 아직 «미지정» 이면 여기서 멈춘다. 그 답이 급여 방식을 정하는데,
+        // 회사 분류를 안 한 채로 확인하면 «미확인» 이 그대로 결론이 되어 버린다.
+        $type = $company->employmentType();
+        if ($type === null) {
+            return ['success' => false, 'errors' => [
+                'companyId' => $company->name.' 이(가) 자사인지 협력사인지 먼저 정해 주세요. (회사·팀 등록 → 회사 구분)',
+            ]];
+        }
+
+        $result = $this->save([
+            'id' => $employee->id,
+            'name' => $employee->name,
+            'firstName' => $employee->first_name,
+            'lastName' => $employee->last_name,
+            'email' => $employee->email,
+            'phone' => $employee->phone,
+            'nationality' => $employee->nationality,
+            'language' => $employee->preferred_language,
+            'companyId' => $company->id,
+            'employmentType' => $type,
+            'siteId' => $employee->site_id,
+            'teamId' => $this->intOrNull($input['teamId'] ?? null),
+            'role' => trim((string) ($input['role'] ?? $employee->role ?? '')),
+            'startDate' => $employee->start_date?->toDateString(),
+            'status' => $employee->employment_status,
+            'employeeNumber' => $employee->employee_number,
+            'badgeNumber' => $employee->badge_number,
+            'badgePrintedNumber' => $employee->badge_printed_number,
+            'badgeCompanyName' => $employee->badge_company_name,
+            'badgeIssuedOn' => $employee->badge_issued_on?->toDateString(),
+            'qrRole' => $employee->attendance_app_role ?: 'worker',
+            'qrScope' => $employee->attendance_app_scope ?: 'self',
+            'visaExpiresOn' => $employee->visa_expires_on?->toDateString(),
+            'safetyExpiresOn' => $employee->safety_training_expires_on?->toDateString(),
+        ]);
+
+        if (($result['success'] ?? false) !== true) {
+            return $result;
+        }
+
+        // 시급은 자사 직영일 때만 묻는다 — 협력사 인원의 임금은 그 회사가 준다.
+        //
+        // 임금은 인사 권한이 아니라 급여 권한이다(AccessPolicy 의 «돈 규칙은 한 곳»).
+        // 인사담당자가 확인할 때는 시급 칸이 저장되지 않는데, 그렇다고 확인 자체를
+        // 막지는 않는다 — 사람은 이미 현장에서 일하고 있고, 확인이 늦어지면 그 사람의
+        // 출퇴근이 급여에서 계속 빠진다. 대신 «임금률 미설정» 알림이 급여 담당을 부른다.
+        $rate = $input['baseRate'] ?? null;
+        $rateSaved = false;
+        $payroll = app(PayProfileService::class);
+        if ($type === Employee::TYPE_DIRECT && $rate !== null && $rate !== '' && $payroll->canManage()) {
+            $profile = $employee->fresh()->payrollProfile;
+            $saved = $payroll->save([
+                'id' => $profile?->id ?? 0,
+                'employee_id' => $employee->id,
+                'base_rate' => $rate,
+                'pay_type' => $profile?->pay_type ?: 'hourly',
+            ]);
+            if (($saved['success'] ?? false) !== true) {
+                return ['success' => false, 'errors' => ['baseRate' => $saved['error'] ?? '임금률을 저장하지 못했습니다.']];
+            }
+            $rateSaved = true;
+        }
+
+        // 확인했으니 «확인 필요» 알림도 닫는다. 지금까지는 닫는 곳이 없어서
+        // 처리된 사람의 알림이 목록에 계속 남았고, 그러면 남은 알림을 아무도 안 본다.
+        UnifiedAlert::query()
+            ->where('fingerprint', 'worker-self-registration-review:'.$employee->id)
+            ->update(['status' => 'completed', 'resolved_at' => now()]);
+
+        return [
+            'success' => true,
+            'id' => $employee->id,
+            'employmentType' => $type,
+            'rateSaved' => $rateSaved,
+            // 시급을 못 넣은 채로 확인이 끝났으면 화면이 그 사실을 말해 줘야 한다.
+            'notice' => $type === Employee::TYPE_DIRECT && ! $rateSaved
+                ? '확인했습니다. 시급은 급여 권한이 있는 사람이 임금 프로필에서 정합니다 — 급여 담당에게 알림이 올라갔습니다.'
+                : null,
         ];
     }
 

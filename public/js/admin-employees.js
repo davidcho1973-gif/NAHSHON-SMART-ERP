@@ -136,6 +136,11 @@
           render: function (r) {
             if (!state.canManage) return '';
             var html = '';
+            // 현장 QR 로 들어온 사람은 «확인» 이 첫 단추다 — 회사·팀·(자사면) 시급 셋만 정하면
+            // 딱지가 사라지고 급여 계산에 들어간다. 20칸짜리 폼을 열 이유가 없다.
+            if (r.hrReviewPending) {
+              html += u.rowButton('확인', 'window.AdminEmployees.confirmRegistration(' + r.id + ')') + ' ';
+            }
             // 계정이 없으면 이 사람은 앱에 못 들어온다. 직원 정보를 그대로 써서
             // 여기서 바로 만들어 준다 — 계정 화면에서 이름·이메일을 또 치지 않는다.
             if (!r.hasAccount && !r.canQuickConnect && state.options && state.options.canGrantAccount) {
@@ -159,7 +164,7 @@
             // W-9 는 1099 지급의 전제조건이라 급여 담당이 수시로 찾는다. 제출 전이면
             // 아는 칸이 채워진 종이가, 제출 후면 보관용 사본이 나온다.
             html += u.rowButton('W-9 출력', "window.open('/w9/" + r.id + "/print','_blank')") + ' ';
-            html += u.rowButton(r.hrReviewPending ? '인사 확인·수정' : '수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
+            html += u.rowButton('수정', 'window.AdminEmployees.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminEmployees.remove(' + r.id + ')', 'danger');
             return html;
           },
@@ -342,6 +347,72 @@
     }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
   }
 
+  /**
+   * 현장 QR 로 들어온 사람 확인 — 사람이 정할 것은 셋뿐이다.
+   *
+   * 예전에는 한 명마다 여덟 가지를 세 화면에서 했다(회사·고용형태·공정·팀·계정·
+   * 추가정보 링크·임금률·20칸 폼 저장). 그중 사람만 아는 것은 소속 회사, 팀,
+   * 그리고 자사일 때의 시급뿐이다. 고용형태는 회사에서 따라 나오고 계정은 등록이
+   * 이미 만든다. 그래서 묻는 것도 셋으로 줄인다.
+   */
+  function confirmRegistration(id) {
+    var u = ui();
+    var r = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+
+    loadOptions().then(function (o) {
+      var teamsFor = function (companyId) {
+        return o.teams.filter(function (t) {
+          return String(t.companyId) === String(companyId) && String(t.siteId) === String(r.siteId || '') && t.status === 'active';
+        }).map(function (t) { return { value: String(t.id !== undefined ? t.id : t.value), label: t.label }; });
+      };
+
+      u.formModal({
+        title: '확인 — ' + r.name,
+        saveLabel: '확인',
+        subtitle: '현장 QR 로 스스로 등록한 사람입니다. 소속 회사를 고르면 고용 형태가 따라 정해집니다. '
+          + '확인 전까지 이 사람은 인원으로만 집계되고 급여 계산에는 들어가지 않습니다.',
+        onReady: function (form) {
+          var company = form.querySelector('[name="companyId"]');
+          var team = form.querySelector('[name="teamId"]');
+          var rateBox = form.querySelector('[name="baseRate"]');
+          function refresh() {
+            var picked = (o.companies || []).filter(function (c) { return String(c.value) === String(company.value); })[0];
+            var list = teamsFor(company.value);
+            team.innerHTML = '<option value="">— 팀 없음 —</option>' + list.map(function (t) {
+              return '<option value="' + t.value + '">' + t.label + '</option>';
+            }).join('');
+            // 시급은 자사 직영일 때만 뜻이 있다 — 협력사 인원의 임금은 그 회사가 준다.
+            var direct = picked && picked.employmentType === 'direct';
+            if (rateBox) {
+              rateBox.closest('div').style.display = direct ? '' : 'none';
+            }
+          }
+          company.addEventListener('change', refresh);
+          refresh();
+        },
+        fields: [
+          { name: 'companyId', label: '소속 회사', type: 'select', required: true,
+            options: o.companies, value: r.companyId || '',
+            hint: '이 한 가지가 급여 방식을 정합니다. 자사면 시급 정산, 협력사면 출역 인원 집계입니다.' },
+          { name: 'teamId', label: '팀', type: 'select', options: [], value: r.teamId || '',
+            hint: '이 현장·이 회사의 활성 팀만 나옵니다.' },
+          { name: 'role', label: '공정', value: r.role || '',
+            hint: '이미 쓰는 이름으로 적어 주세요. 표기가 갈리면 공종별 인원이 나뉩니다.' },
+          { name: 'baseRate', label: '시급 ($)', type: 'number',
+            hint: '자사 직영만 해당합니다. 비워 두면 임금 프로필에서 나중에 넣을 수 있습니다.' },
+        ],
+        onSave: function (v) {
+          return call('api_confirmSelfRegistration', [id, v]).then(function (res) {
+            if (res.success === false) return res;
+            u.toast(res.notice || '확인했습니다. 이제 급여 계산에 들어갑니다.');
+            return reload().then(function () { return { success: true }; });
+          });
+        },
+      });
+    }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
+  }
+
   // PIN 초대·재설정 — 관리자에게 나가는 것은 링크뿐이다. 번호는 본인 폰에서만 정해지고
   // 관리자는 영원히 모른다(그래야 출퇴근 기록이 급여의 근거로 남는다).
   function pinLink(id, purpose) {
@@ -450,6 +521,7 @@
     grantAccount: grantAccount,
     pinLink: pinLink,
     copyOnboardingLink: copyOnboardingLink,
+    confirmRegistration: confirmRegistration,
     remove: remove,
     _state: state,
   };
