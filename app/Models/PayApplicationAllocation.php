@@ -9,6 +9,9 @@ class PayApplicationAllocation extends Model
 {
     protected $guarded = ['id'];
 
+    // PostgreSQL timestamptz must receive the instant's offset, not local wall time.
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     protected function casts(): array
     {
         return ['quantity' => 'decimal:4', 'amount' => 'decimal:2', 'snapshot' => 'array'];

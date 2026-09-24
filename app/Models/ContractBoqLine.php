@@ -10,6 +10,9 @@ class ContractBoqLine extends Model
 {
     protected $guarded = ['id'];
 
+    // PostgreSQL timestamptz must receive the instant's offset, not local wall time.
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     protected function casts(): array
     {
         return ['contract_qty' => 'decimal:4', 'unit_price' => 'decimal:4', 'stage_weights' => 'array', 'accepted_at' => 'datetime'];
