@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuthSetupToken;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
@@ -12,8 +11,8 @@ use App\Models\WbsItem;
 use App\Models\WorkerDevice;
 use App\Models\WorkerEnrollment;
 use App\Services\Alerts\UnifiedAlertService;
-use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
+use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
 use App\Support\WorkerPhone;
 use Illuminate\Http\JsonResponse;
@@ -83,6 +82,8 @@ class SimpleWorkerRegistrationController extends Controller
                 }
             }],
             'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
+            // 이 휴대폰이 이미 등록한 사람 — 브라우저가 알려 주는 값이다(공용 폰 판단용).
+            'device_owner' => ['nullable', 'string', 'max:32'],
         ]);
 
         // 소속은 비워 둔다 — 이 화면은 회사를 묻지 않는다.
@@ -99,6 +100,7 @@ class SimpleWorkerRegistrationController extends Controller
             'phone' => trim((string) $data['phone']),
             'position' => 'worker',
             'preferred_language' => WorkerLang::resolve($data['preferred_language'] ?? null),
+            'device_owner' => trim((string) ($data['device_owner'] ?? '')),
         ]);
 
         return DB::transaction(function () use ($request, $site): View {
@@ -528,7 +530,9 @@ class SimpleWorkerRegistrationController extends Controller
         }
 
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
-        $deviceToken = $site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '';
+        $deviceToken = $quick && $site
+            ? $this->linkThisPhone($request, $employee)
+            : ($site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '');
 
         return $this->doneView(
             $site,
@@ -539,8 +543,42 @@ class SimpleWorkerRegistrationController extends Controller
             false,
             $kind,
             $quick,
-            $quick ? $this->quickPinSetupUrl($employee) : null,
+            $quick ? $this->quickPinSetupUrl($employee, $deviceToken) : null,
         );
+    }
+
+    /**
+     * 등록한 그 휴대폰을 이 사람의 것으로 연결한다 — 바로 출근을 찍을 수 있게.
+     *
+     * 예전에는 등록이 «검증되지 않은» 토큰을 발급했다. 게이트는 검증된 토큰만 받으므로
+     * 그 토큰으로는 아무것도 못 찍고, 15분짜리 PIN 링크를 따라가 PIN 을 정해야만
+     * 첫 출근이 됐다. 15분을 놓치면 인사담당자가 링크를 다시 보내 줘야 했다 —
+     * 벽에 붙은 QR 을 찍은 사람이 그 자리에서 출근하지 못하는 구조였다.
+     *
+     * 신원은 이미 이 자리에서 받았다: 본인이 자기 휴대폰으로 이름과 번호를 적었고,
+     * 이미 등록된 번호는 거부된다(quickStore). 그러니 이 휴대폰을 그 사람으로
+     * 인정한다 — 확인을 두 번 하지 않는다.
+     *
+     * 다만 <b>공용 휴대폰</b>은 예외다. 반장이 자기 폰으로 팀원을 여럿 등록하면,
+     * 마지막 사람으로 연결된 폰이 반장의 주머니에 남아 남의 출근을 찍게 된다.
+     * 브라우저가 «이 폰은 이미 다른 사람을 등록했다» 고 알려 주면(device_owner)
+     * 연결하지 않는다. 판단은 서버가 한다 — 값을 지어내면 연결이 <b>안 되는</b>
+     * 방향이라 거짓말로 얻을 것이 없다.
+     */
+    private function linkThisPhone(Request $request, Employee $employee): string
+    {
+        $owner = trim((string) $request->input('device_owner', ''));
+        if ($owner !== '' && $owner !== (string) $employee->getKey()) {
+            return '';
+        }
+
+        $token = WorkerDevice::issueFor($employee, $request->userAgent(), verified: true);
+
+        // 계정이 있어야 세션을 열 수 있다(PIN·메시지·앱이 모두 계정에 달려 있다).
+        $this->quickAccount($employee);
+        WorkerDeviceSession::openFor($request, $token);
+
+        return $token;
     }
 
     /**
@@ -639,21 +677,33 @@ class SimpleWorkerRegistrationController extends Controller
             $this->alertManagerNeedsAccount($employee, $site);
         }
 
+        // 다시 온 사람도 이 휴대폰에서 바로 찍을 수 있어야 한다. 현장 QR 로 왔으면
+        // 그 자리에서 연결하고(공용 폰이면 연결하지 않는다), 인사 등록이면 예전처럼 기억만 한다.
+        $deviceToken = $quick && $site !== null
+            ? $this->linkThisPhone($request, $employee)
+            : WorkerDevice::issueFor($employee, $request->userAgent());
+
         return $this->doneView(
             $site,
             $employee,
             $lang,
-            WorkerDevice::issueFor($employee, $request->userAgent()),
+            $deviceToken,
             (string) $employee->name,
             true,
             $kind,
             $quick,
-            $quick ? $this->quickPinSetupUrl($employee) : null,
+            $quick ? $this->quickPinSetupUrl($employee, $deviceToken) : null,
         );
     }
 
-    /** 공용 QR 등록 뒤 본인이 바로 PIN을 정한다. 권한은 작업자 본인 범위로만 만든다. */
-    private function quickPinSetupUrl(Employee $employee): ?string
+    /**
+     * 현장 QR 등록자의 로그인 계정 — 작업자 본인 범위로만 만든다.
+     *
+     * 계정이 있어야 이 사람의 세션을 열 수 있고(출퇴근 앱·PIN 설정이 모두 그 뒤에 있다),
+     * 권한은 «자기 기록만» 이다. 벽에 붙은 QR 로 등록한 휴대폰 한 대가 관리자 열쇠가
+     * 되면 안 된다(WorkerDeviceSession::mayEnterWithDeviceAlone).
+     */
+    private function quickAccount(Employee $employee): ?User
     {
         $user = $employee->user;
 
@@ -661,7 +711,11 @@ class SimpleWorkerRegistrationController extends Controller
             return null;
         }
 
-        $user ??= User::query()->create([
+        if ($user) {
+            return $user;
+        }
+
+        $user = User::query()->create([
             'name' => $employee->name,
             'email' => null,
             'password' => Str::random(64),
@@ -674,11 +728,27 @@ class SimpleWorkerRegistrationController extends Controller
             'allowed_team_id' => $employee->team_id,
         ]);
 
-        if ($user->hasPin()) {
+        return $user;
+    }
+
+    /**
+     * PIN 을 아직 안 정한 사람에게 권하는 자리 — 이제는 <b>권유</b>지 관문이 아니다.
+     *
+     * 예전에는 등록이 15분짜리 설정 링크를 발급하고 그 화면으로 곧장 보냈다. 그 링크를
+     * 놓치면 첫 출근을 못 찍었고, 인사담당자가 다시 보내 줘야 했다.
+     *
+     * 이제 첫 출근은 이 링크 없이 된다(linkThisPhone). PIN 이 필요한 순간은 둘뿐이다 —
+     * 다른 휴대폰에서 열 때, 그리고 메시지·문서처럼 남의 글이 보이는 곳을 열 때.
+     * 둘 다 본인이 앱 안에서 스스로 정할 수 있고(WorkerAppPinController), 그 화면은
+     * 만료가 없다. 링크가 아니라 자리를 알려 준다.
+     */
+    private function quickPinSetupUrl(Employee $employee, string $deviceToken): ?string
+    {
+        if ($deviceToken === '' || $employee->user?->hasPin()) {
             return null;
         }
 
-        return app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_ACTIVATION);
+        return route('worker-app.pin');
     }
 
     /**

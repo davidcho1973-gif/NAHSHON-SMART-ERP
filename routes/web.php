@@ -508,7 +508,7 @@ Route::get('/join/w/{site}/qr', [SimpleWorkerRegistrationController::class, 'qr'
 Route::get('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'quickForm'])
     ->middleware('throttle:60,1')->name('worker-join.form');
 Route::post('/join/w/{site}', [SimpleWorkerRegistrationController::class, 'quickStore'])
-    ->middleware('throttle:worker-entry')->name('worker-join.store');
+    ->middleware('throttle:worker-register')->name('worker-join.store');
 
 // 회사·직책·공정까지 지정하는 관리용 등록은 인사 권한자 전용이다.
 Route::middleware(['auth', RequireHrRegistration::class])->group(function () {

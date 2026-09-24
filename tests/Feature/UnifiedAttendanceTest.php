@@ -92,21 +92,31 @@ class UnifiedAttendanceTest extends TestCase
         $this->assertSame('approved', $run->fresh()->status);
     }
 
-    public function test_new_worker_sets_pin_then_clocks_in_without_hr_blocking_attendance(): void
+    /**
+     * 등록한 그 자리에서 출근이 찍힌다 — 인사 확인을 기다리지 않는다.
+     *
+     * 예전에는 등록과 첫 출근 사이에 15분짜리 PIN 링크가 있었다. 그 링크를 놓치면
+     * 인사담당자가 다시 보내 줘야 했고, 그 사이에 그 사람은 명단에는 있는데 출근은
+     * 못 찍는 상태로 현장에 서 있었다.
+     */
+    public function test_new_worker_clocks_in_immediately_without_a_pin_or_hr(): void
     {
         [$site] = $this->worker();
         $response = $this->post(route('worker-join.store', $site), ['full_name' => 'New Worker', 'phone' => '4805550198']);
         $response->assertOk();
-        $setup = $response->viewData('pinSetupUrl');
-        $this->assertNotEmpty($setup);
-        $result = $this->postJson($setup, ['pin' => '2580'])->assertOk();
-        $token = $result->json('attendance_device_token');
+        $token = $response->viewData('deviceToken');
+        $this->assertNotEmpty($token);
+        $this->assertDatabaseCount('auth_setup_tokens', 0);
+
         $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', true);
         $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('success', true);
+
         $employee = Employee::where('phone', '4805550198')->firstOrFail();
+        // 인사 확인은 아직 남아 있다 — 그렇다고 출퇴근을 막지는 않는다.
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id]);
-        $this->postJson($setup, ['pin' => '4826'])->assertUnprocessable();
+        // PIN 은 본인이 나중에 앱에서 정한다 — 그 자리를 알려 준다.
+        $this->assertSame(route('worker-app.pin'), $response->viewData('pinSetupUrl'));
     }
 
     public function test_repeated_wrong_pin_locks_phone_recovery(): void

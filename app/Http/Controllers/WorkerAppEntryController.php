@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuthEvent;
-use App\Models\WorkerDevice;
 use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\View\View;
 
@@ -92,26 +89,6 @@ class WorkerAppEntryController extends Controller
      */
     private function signIn(Request $request, string $token): bool
     {
-        $employee = WorkerDevice::resolve($token, requireVerified: true);
-        if ($employee === null || $employee->employment_status !== 'active') {
-            return false;
-        }
-
-        $user = $employee->user;
-        if (! WorkerDeviceSession::mayEnterWithDeviceAlone($user)) {
-            return false;
-        }
-
-        Auth::login($user, remember: true);
-        $request->session()->regenerate();
-        WorkerDeviceSession::markDeviceOnly($request);
-
-        try {
-            AuthEvent::record('login_ok', user: $user, method: 'device', request: $request);
-        } catch (\Throwable $e) {
-            report($e); // 기록이 실패해도 출퇴근은 막지 않는다.
-        }
-
-        return true;
+        return WorkerDeviceSession::openFor($request, $token);
     }
 }

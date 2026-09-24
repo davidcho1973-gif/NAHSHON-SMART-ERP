@@ -195,7 +195,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
         foreach (WorkerLang::OPTIONS as $code => $name) {
             $res->assertSee('value="'.$code.'"', false);
         }
-        $res->assertSee('Registrarme y crear PIN');
+        $res->assertSee('Registrarme y marcar entrada');
         $res->assertSee('name="preferred_language"', false);
     }
 

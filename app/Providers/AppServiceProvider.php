@@ -68,6 +68,23 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        // 등록은 출퇴근과 다른 일이다 — 한 문을 같이 쓰면 한쪽에 맞춘 숫자가 다른 쪽을 연다.
+        //
+        // 현장 WiFi 는 주소 하나를 여럿이 나눠 쓰므로 출퇴근은 분당 120번이 맞다.
+        // 그런데 같은 숫자를 등록에 적용하면 «분당 120명의 새 직원» 이 된다. 등록은
+        // 벽에 붙은 QR 로 누구나 열 수 있는 문이고, 이제 등록 즉시 출퇴근까지 찍히므로
+        // 그 문은 더 좁아야 한다. 하루 상한까지 둔다 — 한 현장에 하루 40명 넘게
+        // 처음 오는 일은 드물고, 넘을 일이 있으면 인사담당자가 등록해 주면 된다.
+        RateLimiter::for('worker-register', function (Request $request) {
+            $phone = WorkerPhone::normalize((string) $request->input('phone', '')) ?? 'invalid';
+
+            return [
+                Limit::perMinute(3)->by('phone:'.hash('sha256', $phone)),
+                Limit::perMinute(5)->by('ip:'.$request->ip()),
+                Limit::perDay(40)->by('ip-day:'.$request->ip()),
+            ];
+        });
+
         // Microsoft 365 발송기 등록 — MAIL_MAILER=graph 로 쓴다.
         //
         // 라라벨에 없는 발송기라 여기서 붙인다. 설정이 비어 있어도 등록 자체는 해 둔다 —

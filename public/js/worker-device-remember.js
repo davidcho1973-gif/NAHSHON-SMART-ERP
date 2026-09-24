@@ -28,7 +28,8 @@ window.rememberWorkerDevice = function (employeeId, deviceToken, lang) {
 
     try {
         var previous = localStorage.getItem(OWNER_KEY);
-        shared = !!previous && previous !== String(employeeId);
+        // 서버가 토큰을 안 줬다면 그쪽이 이미 «공용 폰» 이라고 판단한 것이다.
+        shared = (!!previous && previous !== String(employeeId)) || !deviceToken;
 
         if (shared) {
             // 지운 토큰은 어디에도 남지 않으므로 그 자리에서 쓸 수 없게 된다.
@@ -46,4 +47,30 @@ window.rememberWorkerDevice = function (employeeId, deviceToken, lang) {
     }
 
     return shared;
+};
+
+/**
+ * 등록 폼에 «이 휴대폰은 이미 누구를 등록했는가» 를 실어 보낸다.
+ *
+ * 서버가 그 값을 보고 공용 휴대폰이면 이 사람으로 연결하지 않는다 — 반장 폰이
+ * 마지막 팀원의 출퇴근 열쇠가 되는 것을 막는 규칙이고, 판단은 서버가 한다.
+ * 값을 지어내면 연결이 <b>안 되는</b> 방향이라 거짓말로 얻을 것이 없다.
+ *
+ * @param {HTMLFormElement} form 등록 폼
+ */
+window.markRegisteringPhone = function (form) {
+    if (!form) {
+        return;
+    }
+
+    var field = form.querySelector('input[name="device_owner"]');
+    if (!field) {
+        return;
+    }
+
+    try {
+        field.value = localStorage.getItem('workerJoinLastPerson') || '';
+    } catch (e) {
+        // 저장이 막힌 브라우저 — 알릴 것이 없으면 빈 값이고, 그건 «처음 쓰는 폰» 과 같다.
+    }
 };
