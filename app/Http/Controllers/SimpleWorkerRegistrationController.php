@@ -107,12 +107,68 @@ class SimpleWorkerRegistrationController extends Controller
             // Serialize public registrations for the normalized phone, including different sites.
             $phone = WorkerPhone::normalize((string) $request->input('phone'));
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['worker-register:'.$phone]);
-            if (! $phone || WorkerPhone::employees((string) $request->input('phone'))->exists()) {
-                throw ValidationException::withMessages(['phone' => '이미 등록된 번호이거나 올바르지 않은 번호입니다. 전화번호·PIN으로 연결하거나 인사담당자에게 문의하세요. / Use phone and PIN, or contact HR.']);
-            }
+
+            $this->refuseIfAlreadyRegistered(
+                (string) $request->input('full_name'),
+                (string) $request->input('phone'),
+                $phone,
+            );
 
             return $this->register($request, $site);
         });
+    }
+
+    /**
+     * 이미 등록된 사람은 다시 등록하지 않는다 — <b>이름이나 번호 하나만 같아도</b> 막는다.
+     *
+     * <b>사장님 지시(2026-09-23):</b> «이름과 휴대폰을 비교해서 둘 중 하나라도 같은 정보가
+     * 있으면 이미 등록되어 있다고 말해라.»
+     *
+     * 예전에는 번호만 봤다. 그래서 같은 사람이 번호를 다르게 적으면(오타, 새 번호, 회사 폰)
+     * 명단에 같은 사람이 두 줄로 섰다. 두 줄이 되는 순간 출역 인원이 부풀고, 그 사람의
+     * 근무가 두 기록으로 갈려 급여에서 한쪽이 통째로 빠진다.
+     *
+     * 이름까지 보면 <b>동명이인</b>이 막힌다. 그건 알고 고른 쪽이다 — 현장에 같은 이름이
+     * 둘 있는 것은 드물고, 막혔을 때 인사담당자가 직접 등록하면 된다. 반대로 한 사람이
+     * 두 줄로 서는 것은 급여를 뽑는 날까지 아무도 모른다.
+     *
+     * 그래서 «왜 막혔는지» 를 문구가 말해 준다. «이미 등록됨» 만 띄우면 본인은 등록한 적이
+     * 없는데 막힌 이유를 알 수 없고, 그 자리에서 포기한다.
+     */
+    private function refuseIfAlreadyRegistered(string $name, string $rawPhone, ?string $normalizedPhone): void
+    {
+        if (! $normalizedPhone) {
+            throw ValidationException::withMessages(['phone' => '전화번호를 다시 확인해 주세요.'
+                .' / Check the phone number. / Revise el número de teléfono.']);
+        }
+
+        if (WorkerPhone::employees($rawPhone)->exists()) {
+            throw ValidationException::withMessages(['phone' => '이미 등록된 번호입니다. 현장 QR 을 찍고 전화번호 뒷 4자리로 들어오세요.'
+                .' / Already registered — scan the site QR and enter the last 4 digits of your phone.'
+                .' / Ya está registrado: escanee el QR de la obra y escriba los últimos 4 dígitos.']);
+        }
+
+        // 표기가 갈려도 같은 이름은 같은 이름이다 — 앞뒤 공백·가운데 여러 칸·대소문자를 지운다.
+        $key = $this->nameKey($name);
+        if ($key === '') {
+            return;
+        }
+
+        $twin = Employee::query()->whereNotNull('name')
+            ->get(['id', 'name', 'employment_status'])
+            ->first(fn (Employee $e): bool => $this->nameKey((string) $e->name) === $key);
+
+        if ($twin !== null) {
+            throw ValidationException::withMessages(['full_name' => '이미 등록된 이름입니다. 본인이면 현장 QR 을 찍고 전화번호 뒷 4자리로 들어오세요. 같은 이름의 다른 사람이면 인사담당자에게 말씀해 주세요.'
+                .' / This name is already registered. If it is you, scan the site QR and enter the last 4 digits of your phone; if you are a different person with the same name, please see HR.'
+                .' / Ese nombre ya está registrado. Si es usted, escanee el QR y escriba los últimos 4 dígitos; si es otra persona con el mismo nombre, avise a Recursos Humanos.']);
+        }
+    }
+
+    /** 이름 비교용 열쇠 — 표기(공백·대소문자)가 달라도 같은 이름은 같게 읽힌다. */
+    private function nameKey(string $name): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $name) ?? $name));
     }
 
     /** 이전 관리자 링크를 받은 사람도 같은 직원 등록 화면을 쓴다. */
