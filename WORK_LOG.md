@@ -546,3 +546,10 @@ Validation checkpoint: new QR and employee-admin suite 40 tests / 185 assertions
 
 ## CODEX — 2026-09-21 QR release verification
 Detailed HR registration fixtures now specify their required worker position. Public signup discards extra HR fields and cannot reissue an existing login/device using a known name and phone. Targeted registration regression: 67 tests, 365 assertions passed. Printable registration/attendance posters and email delivery requested after verified release; not yet delivered.
+
+## 2026-09-23 — Claim evidence audit timestamp correction
+
+- The evidence-ledger rollout passed 2,348 PHP tests (9,187 assertions) and 35 Node tests. PRs #94/#95 were merged, and Deploy NAHSHON verified build 90dfea6 with a healthy scheduler.
+- Post-deployment review found that the application's local wall time was serialized without its offset into PostgreSQL timestamp-with-time-zone columns when the database session used UTC. This affected audit timestamps, not quantities, prices or claim calculations.
+- Follow-up correction preserves offsets in the three evidence models and restricts historical repair to untouched source imports whose original import metadata proves the clock displacement. Reviewed or edited records are excluded.
+- Follow-up validation and deployment results will be recorded with the correction PR and its CI run.
