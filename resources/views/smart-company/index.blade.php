@@ -3960,7 +3960,7 @@
         }
         body.innerHTML =
           '<div style="margin-bottom:12px"><a class="btn-secondary" href="/join?lang=ko" target="_blank" rel="noopener"><i class="ph ph-lock-simple"></i> 직원 등록 (관리자용 · 로그인 필요)</a></div>' +
-          '<div style="font-size:13px;line-height:1.6;margin-bottom:12px"><b>현장 QR 하나로 등록·출퇴근</b>합니다. 신규 작업자는 이름·전화번호를 입력하고 본인 PIN을 설정합니다. 다음부터는 같은 QR을 찍고 출근·퇴근 버튼만 누릅니다. 인사담당자는 직원 관리에서 신규 직원의 소속을 확인하고 추가정보·W-9 링크를 전달하세요.</div>' +
+          '<div style="font-size:13px;line-height:1.6;margin-bottom:12px"><b>현장 QR 하나로 등록·출퇴근</b>합니다. 신규 작업자는 이름·전화번호만 입력하면 그 자리에서 등록됩니다. 이미 등록된 사람은 전화번호 뒷 4자리로 본인을 찾고, 출근·퇴근 버튼만 누릅니다. 인사담당자는 직원 관리에서 신규 직원의 소속을 확인하고 추가정보·W-9 링크를 전달하세요.</div>' +
           '<div style="margin-bottom:12px"><button class="btn-secondary" style="padding:7px 12px;font-size:12px" onclick="window.openCompanyTypeModal()"><i class="ph ph-buildings"></i> 회사 구분 설정 (자사 / 협력사)</button></div>' +
           sites.map(function (s) {
             var quickPoster = '/gate/' + s.id + '/qr';

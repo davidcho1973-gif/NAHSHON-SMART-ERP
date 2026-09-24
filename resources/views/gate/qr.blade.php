@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>현장 출퇴근 QR — {{ $site->code }} {{ $site->name }}</title>
     @include('partials.qr-poster-styles')
-    {{-- 판 안쪽은 포스터가 스스로 칠한다. 한 장짜리 화면은 바깥 바닥도 같이 맞춘다. --}}
-    <style>:root, body { background: {{ $poster['accent']['bg'] }}; }</style>
+    {{-- 판 안쪽은 포스터가 스스로 칠한다. 한 장짜리 «화면» 은 바깥 바닥도 같이 맞춘다.
+         @media screen 로 묶는 이유: 이 줄이 공용 스타일보다 뒤에 오므로, 묶지 않으면
+         인쇄용 «바탕은 흰색» 규칙을 덮어 종이 한 장이 통째로 노랗게 나온다. --}}
+    <style>@media screen { :root, body { background: {{ $poster['accent']['bg'] }}; } }</style>
 </head>
 <body>
     <div>

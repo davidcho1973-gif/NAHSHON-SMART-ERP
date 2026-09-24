@@ -7,7 +7,8 @@
     <title>{{ \App\Support\QrPosters::LABELS[$poster['key']] }} — {{ $site->code }} {{ $site->name }}</title>
     @include('partials.qr-poster-styles')
     {{-- 판 안쪽은 포스터가 스스로 칠한다. 한 장짜리 화면은 바깥 바닥도 같이 맞춘다. --}}
-    <style>:root, body { background: {{ $poster['accent']['bg'] }}; }</style>
+    {{-- 화면에서만 칠한다 — 인쇄에서 덮으면 종이 한 장이 통째로 색으로 나온다(gate/qr 와 같은 이유). --}}
+    <style>@media screen { :root, body { background: {{ $poster['accent']['bg'] }}; } }</style>
 </head>
 <body>
     <div>

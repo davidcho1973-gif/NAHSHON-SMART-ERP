@@ -253,9 +253,9 @@ final class WorkerLang
                     'hint' => '현장 QR은 이 한 장입니다. 휴대폰 기본 카메라로 스캔하세요.',
                     'steps' => [
                         '휴대폰 카메라로 QR 코드를 스캔합니다.',
-                        '처음 온 사람: 이름·전화번호 등록 → 개인 PIN 설정. 기존 직원: 전화번호·PIN으로 연결.',
-                        '출근하기 / 퇴근하기 버튼을 누르면 끝.',
-                        '다음부터는 이 휴대폰을 기억합니다. PIN을 잊었으면 인사담당자에게 문의하세요.',
+                        '이미 등록된 사람: 전화번호 뒷 4자리를 넣고 내 이름을 누릅니다.',
+                        '처음 온 사람: 이름과 전화번호만 적으면 그 자리에서 등록됩니다.',
+                        '출근하기 / 퇴근하기 버튼을 누르면 끝. 다음부터는 이 휴대폰을 기억합니다.',
                     ],
                 ],
                 'en' => [
@@ -263,9 +263,9 @@ final class WorkerLang
                     'hint' => 'One site QR. Scan with your phone camera. No app installation needed.',
                     'steps' => [
                         'Scan the QR code with your phone camera.',
-                        'New worker: name + phone, then set a PIN. Existing worker: phone + PIN.',
-                        'Tap CLOCK IN or CLOCK OUT. Done.',
-                        'Your phone is remembered next time. Forgot your PIN? Ask HR.',
+                        'Already registered: type the last 4 digits of your phone number, then tap your name.',
+                        'First time here: enter your name and phone number — that is the whole sign-up.',
+                        'Tap CLOCK IN or CLOCK OUT. Done. Your phone is remembered next time.',
                     ],
                 ],
                 'es' => [
@@ -273,9 +273,9 @@ final class WorkerLang
                     'hint' => 'Un solo QR. Escanee con la cámara de su teléfono. No necesita instalar una app.',
                     'steps' => [
                         'Escanee el código QR con la cámara.',
-                        'Nuevo: nombre y teléfono, después cree su PIN. Registrado: teléfono y PIN.',
-                        'Pulse ENTRADA o SALIDA. Listo.',
-                        'El teléfono se recuerda. Si olvidó su PIN, consulte a Recursos Humanos.',
+                        'Ya registrado: escriba los últimos 4 dígitos de su teléfono y pulse su nombre.',
+                        'Primera vez: escriba su nombre y su teléfono — eso es todo el registro.',
+                        'Pulse ENTRADA o SALIDA. Listo. El teléfono se recuerda la próxima vez.',
                     ],
                 ],
             ],

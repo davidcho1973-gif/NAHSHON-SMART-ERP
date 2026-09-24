@@ -60,14 +60,14 @@
 
                 var words = {
                     ko: shared
-                        ? ['등록되었습니다', '공용 휴대폰으로 보여 이 휴대폰을 본인 것으로 연결하지 않았습니다. 본인 휴대폰에서 같은 QR 을 찍으면 바로 출근할 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기', 'PIN 만들기 — 다른 휴대폰에서도 쓰려면']
-                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다. 바로 출근을 찍을 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기', 'PIN 만들기 — 다른 휴대폰에서도 쓰려면'],
+                        ? ['등록되었습니다', '공용 휴대폰으로 보여 이 휴대폰을 본인 것으로 연결하지 않았습니다. 본인 휴대폰에서 같은 QR 을 찍으면 바로 출근할 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기']
+                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다. 바로 출근을 찍을 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기'],
                     en: shared
-                        ? ['Registration complete', 'This looks like a shared phone, so it was not linked to you. Scan the same QR on your own phone and you can clock in right away.', 'Opening attendance…', 'Open attendance', 'Create a PIN — to use another phone']
-                        : ['Registration complete', 'This phone is linked for attendance. You can clock in right now.', 'Opening attendance…', 'Open attendance', 'Create a PIN — to use another phone'],
+                        ? ['Registration complete', 'This looks like a shared phone, so it was not linked to you. Scan the same QR on your own phone and you can clock in right away.', 'Opening attendance…', 'Open attendance']
+                        : ['Registration complete', 'This phone is linked for attendance. You can clock in right now.', 'Opening attendance…', 'Open attendance'],
                     es: shared
-                        ? ['Registro completo', 'Parece un teléfono compartido, así que no se vinculó a usted. Escanee el mismo QR en su propio teléfono y podrá marcar entrada de inmediato.', 'Abriendo asistencia…', 'Abrir asistencia', 'Cree un PIN — para usar otro teléfono']
-                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia. Ya puede marcar entrada.', 'Abriendo asistencia…', 'Abrir asistencia', 'Cree un PIN — para usar otro teléfono']
+                        ? ['Registro completo', 'Parece un teléfono compartido, así que no se vinculó a usted. Escanee el mismo QR en su propio teléfono y podrá marcar entrada de inmediato.', 'Abriendo asistencia…', 'Abrir asistencia']
+                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia. Ya puede marcar entrada.', 'Abriendo asistencia…', 'Abrir asistencia']
                 }[@json($lang)];
                 document.getElementById('done-title').textContent = words[0];
                 document.getElementById('done-copy').textContent = words[1];

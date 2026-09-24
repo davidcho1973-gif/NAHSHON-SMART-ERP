@@ -60,7 +60,7 @@
         u.esc(current ? current.name + ' · 소속 인원' : '현장 등록 인원') + '</h3>' +
         (current ? action('전체 인원','AdminCrew.chooseTeam(0)') : '') + '</div>';
       var rows = current ? people.filter(function(e){return same(e.teamId, current.id);}) : people;
-      html += '<p style="color:var(--text-secondary)">팀·반장 수정에서 팀장 앱 권한까지 함께 적용할 수 있습니다. 신규 계정은 직원 등록·관리에서 PIN 초대를 준비하세요.</p>';
+      html += '<p style="color:var(--text-secondary)">팀·반장 수정에서 팀장 앱 권한까지 함께 적용할 수 있습니다. 반장·작업자는 전화번호 뒷 4자리로 작업자 앱에 들어옵니다 — 따로 초대할 것이 없습니다.</p>';
       html += u.table({id:'crew-people',emptyText:'등록된 인원이 없습니다. 직원 등록·관리에서 먼저 등록하세요.',columns:[
         {key:'name',label:'이름'},
         {key:'teamId',label:'팀',render:function(e){var t=list.find(function(t){return same(t.id,e.teamId);});return u.esc(t?t.name:'미배치');}},
@@ -129,7 +129,7 @@
         else {
           if(status.value==='active' && person){
             lines.push(person.name + ' → 반장 / 이 팀만 / QR 팀 출퇴근');
-            if(!person.accountRole) lines.push('새 로그인 계정을 만듭니다. 이메일을 입력하고 저장 후 PIN 초대를 진행하세요.');
+            if(!person.accountRole) lines.push('새 로그인 계정을 만듭니다. 이메일을 입력하고 저장하면 됩니다.');
             else if(['worker','foreman'].indexOf(person.accountRole)===-1 || person.accountStatus!=='active') lines.push('기존 관리자·특수 역할 또는 비활성 계정은 변경할 수 없습니다. 권한 함께 적용을 해제하세요.');
           } else lines.push('새 팀장 앱 권한을 부여하지 않습니다.');
           if(previous && (!same(previous.id,who.value) || status.value!=='active')) lines.push(previous.name + ' → 이 팀의 반장·QR 권한 해제, 작업자 본인 범위로 전환. 관리자 권한은 유지합니다.');
