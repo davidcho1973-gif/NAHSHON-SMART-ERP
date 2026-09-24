@@ -579,6 +579,9 @@ Route::post('/gate/{site}/punch', [GateAttendanceController::class, 'punch'])
 // 기억된 휴대폰으로 본인 자동 인식 — 이름 검색을 건너뛴다.
 Route::post('/gate/{site}/me', [GateAttendanceController::class, 'me'])
     ->middleware('throttle:240,1')->name('gate.me');
+// 「이 사람이 나다」 — 고른 순간 이 휴대폰을 기억하고 출퇴근 화면을 연다.
+Route::post('/gate/{site}/claim', [GateAttendanceController::class, 'claim'])
+    ->middleware('throttle:60,1')->name('gate.claim');
 Route::post('/gate/{site}/remember', [GateAttendanceController::class, 'remember'])
     ->middleware('throttle:60,1')->name('gate.remember');
 Route::post('/gate/{site}/forget', [GateAttendanceController::class, 'forget'])->name('gate.forget');

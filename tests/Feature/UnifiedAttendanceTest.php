@@ -32,21 +32,32 @@ class UnifiedAttendanceTest extends TestCase
     {
         [$site] = $this->worker();
         $this->get(route('worker-join.form', $site))->assertRedirect(route('gate.show', ['site' => $site, 'lang' => 'ko']));
-        $this->get(route('gate.show', $site))->assertOk()->assertSee('name="full_name"', false)->assertSee('id="pin"', false);
+        $this->get(route('gate.show', $site))->assertOk()->assertSee('name="full_name"', false)->assertSee('id="last4"', false);
         $this->assertSame(QrPosters::make($site, QrPosters::GATE)['url'], QrPosters::make($site, QrPosters::JOIN)['url']);
         $this->assertCount(1, QrPosters::many($site));
     }
 
-    public function test_only_pin_verified_device_can_punch_and_client_cannot_choose_employee(): void
+    /**
+     * 찍는 사람은 «이 휴대폰» 이 정한다 — 요청 본문이 사람을 고르지 못한다.
+     *
+     * PIN 은 없앴지만(사장님 결정 2026-09-23) 이 규칙은 남는다. 없으면 아무나
+     * employee_id 만 바꿔 남의 출근을 찍을 수 있고, 그건 곧 남의 임금이다.
+     */
+    public function test_the_phone_decides_who_punches_and_the_client_cannot_choose(): void
     {
         [$site,$employee] = $this->worker();
-        $this->postJson(route('gate.remember', $site), ['employee_id' => $employee->id])->assertStatus(410);
-        $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertStatus(410);
-        $legacy = WorkerDevice::issueFor($employee);
-        $this->postJson(route('gate.punch', $site), ['employee_id' => $employee->id, 'device_token' => $legacy])->assertUnauthorized();
-        $this->postJson(route('gate.login', $site), ['phone' => '+1 (480) 555-0123', 'pin' => '9998'])->assertUnprocessable();
-        $token = $this->postJson(route('gate.login', $site), ['phone' => '+1 (480) 555-0123', 'pin' => '2580'])->assertOk()->json('device_token');
+
+        // 연결되지 않은 휴대폰은 아무것도 못 찍는다.
+        $stray = WorkerDevice::issueFor($employee);
+        $this->postJson(route('gate.punch', $site), ['employee_id' => $employee->id, 'device_token' => $stray])->assertUnauthorized();
+
+        // 뒷 4자리로 찾아 이름을 고르면 그 순간 이 휴대폰이 기억된다.
+        $found = $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertOk()->json('workers');
+        $this->assertSame($employee->id, $found[0]['id']);
+        $token = $this->postJson(route('gate.claim', $site), ['employee_id' => $employee->id])->assertOk()->json('device_token');
+
         $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', true);
+        // 본문에 남의 번호를 넣어도 이 휴대폰의 주인으로 찍힌다.
         $this->postJson(route('gate.punch', $site), ['employee_id' => 999999, 'device_token' => $token])->assertJsonPath('success', true);
         $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id, 'event_type' => 'clock_in']);
         $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('ignored', true);
@@ -62,16 +73,28 @@ class UnifiedAttendanceTest extends TestCase
         $this->assertSame('Test Worker', $employee->fresh()->name);
     }
 
-    public function test_wrong_site_disabled_and_admin_accounts_cannot_use_public_gate(): void
+    /**
+     * 게이트는 <b>출퇴근만</b> 하는 문이다.
+     *
+     * 관리자 계정을 가진 사람도 자기 출근은 이 문으로 찍는다 — 현장에 서 있는 사람이니까.
+     * 다만 그 휴대폰이 ERP 세션을 여는 열쇠가 되지는 않는다(벽에 붙은 QR 로 연결한
+     * 휴대폰 한 대가 관리자 권한이 되면 안 된다). 퇴사·비활성 기록은 아예 못 찍는다.
+     */
+    public function test_the_gate_records_attendance_but_never_opens_an_admin_session(): void
     {
         [$site,$employee,$user] = $this->worker();
         $user->update(['access_role' => 'admin']);
-        $this->postJson(route('gate.login', $site), ['phone' => $employee->phone, 'pin' => '2580'])->assertUnprocessable();
-        $token = WorkerDevice::issueFor($employee, verified: true);
-        $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', false);
-        $user->update(['access_role' => 'worker', 'account_status' => 'disabled']);
+
+        $token = $this->postJson(route('gate.claim', $site), ['employee_id' => $employee->id])->assertOk()->json('device_token');
+        $this->assertGuest('web', '관리자 계정은 휴대폰만으로 ERP 세션이 열리지 않는다');
+        $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', true);
+        $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('success', true);
+
+        // 퇴사·비활성은 이름부터 나오지 않고 찍히지도 않는다.
+        $employee->update(['employment_status' => 'terminated']);
+        $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertOk()->assertJsonCount(0, 'workers');
         $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertUnauthorized();
-        $this->assertDatabaseCount('attendance_logs', 0);
+        $this->assertDatabaseCount('attendance_logs', 1);
     }
 
     public function test_hr_unconfirmed_employee_blocks_payroll_approval(): void

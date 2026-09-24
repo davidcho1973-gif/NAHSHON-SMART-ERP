@@ -141,12 +141,19 @@ class WorkerDeviceAndLanguageTest extends TestCase
             ->assertStatus(200)->assertJson(['recognized' => true, 'next' => 'clock_out']);
     }
 
-    public function test_existing_worker_cannot_bind_by_employee_id_alone(): void
+    /**
+     * 같은 사람을 다른 휴대폰에서 고르면 그 휴대폰도 기억된다 — 폰을 바꾼 사람을 막지 않는다.
+     * (사장님 결정 2026-09-23: PIN 없이 뒷 4자리로 본인을 찾아 바로 찍는다.)
+     */
+    public function test_choosing_yourself_on_a_second_phone_remembers_that_phone_too(): void
     {
-        $token = $this->register('carlos@example.com');
+        $this->register('carlos@example.com');
         $employee = Employee::where('email', 'carlos@example.com')->firstOrFail();
-        $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])->assertStatus(410);
-        $this->assertDatabaseCount('worker_devices', 1);
+
+        $this->postJson('/gate/'.$this->site->id.'/claim', ['employee_id' => $employee->id])
+            ->assertOk()->assertJson(['success' => true]);
+
+        $this->assertDatabaseCount('worker_devices', 2);
     }
 
     public function test_remember_rejects_a_worker_from_another_site(): void
@@ -158,7 +165,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
         ]);
 
         $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])
-            ->assertStatus(410)->assertJson(['success' => false]);
+            ->assertStatus(422)->assertJson(['success' => false]);
     }
 
     public function test_forget_drops_the_device(): void
