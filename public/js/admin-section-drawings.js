@@ -258,17 +258,22 @@
       (rows || empty) + other + '</div>';
   }
 
-  function sheetChip(u, pick) {
+  /** 공정 카드의 도면 한 장 — 누르면 표시가 얹힌 도면이 크게 열린다. */
+  function sheetChip(u, pick, sectionId) {
     var s = pick.sheet;
+    var marks = (state.data.markCounts || {})[String(pick.sheetNo).toUpperCase()] || 0;
+    var badge = marks ? '<span style="position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:999px;background:#0f172a;color:#fff;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.25)">표시 ' + marks + '</span>' : '';
+    var open = 'window.AdminSectionDrawings.view(' + sectionId + ',\'' + u.esc(String(pick.sheetNo).replace(/'/g, '')) + '\')';
     if (!s) {
-      return '<div title="이 번호의 도면이 아직 읽히지 않았습니다" style="width:150px;border:1px dashed var(--border-default);border-radius:10px;padding:8px;background:var(--bg-base)">' +
+      return '<div onclick="' + open + '" title="이 번호의 도면이 아직 읽히지 않았습니다" style="position:relative;width:150px;border:1px dashed var(--border-default);border-radius:10px;padding:8px;background:var(--bg-base);cursor:pointer">' + badge +
         '<div style="height:96px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:11px;text-align:center">파일 없음<br>또는 아직 안 읽음</div>' +
         '<div style="font-size:12px;font-weight:700;margin-top:6px">' + u.esc(pick.sheetNo) + '</div></div>';
     }
-    return '<div onclick="window.AdminSectionDrawings.openSheet(' + s.id + ')" style="width:150px;border:1px solid var(--border-default);border-radius:10px;padding:8px;cursor:pointer;background:var(--bg-surface)">' +
+    return '<div onclick="' + open + '" class="sd-chip" style="position:relative;width:150px;border:1px solid var(--border-default);border-radius:10px;padding:8px;cursor:pointer;background:var(--bg-surface);transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 8px 20px rgba(0,0,0,.12)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">' + badge +
       (s.thumbUrl ? '<img src="' + u.esc(s.thumbUrl) + '" alt="" loading="lazy" style="width:100%;height:96px;object-fit:contain;background:#fff;border-radius:6px">'
         : '<div style="height:96px;background:var(--bg-base);border-radius:6px"></div>') +
-      '<div style="font-size:12px;font-weight:700;margin-top:6px">' + u.esc(pick.sheetNo) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:4px;margin-top:6px"><span style="font-size:12px;font-weight:700;flex:1">' + u.esc(pick.sheetNo) + '</span>' +
+        '<span title="도면 번호·읽은 글자" onclick="event.stopPropagation();window.AdminSectionDrawings.openSheet(' + s.id + ')" style="font-size:13px;color:var(--text-tertiary);padding:0 2px"><i class="ph ph-info"></i></span></div>' +
       '<div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + u.esc(s.title || '') + '</div>' +
       (s.textSource === 'ocr' ? '<div style="font-size:10px;color:var(--status-warning)">사진 → AI 판독</div>' : '') +
       '</div>';
@@ -397,7 +402,7 @@
               (d.billing && d.billing.canManage && s.contractId ? u.rowButton('작업 추가 RFI', 'window.AdminSectionDrawings.rfi(' + s.id + ')') : '') +
             '</div>' + changeList(u, s, d.billing && d.billing.canManage) + sectionMoney(u, s) +
             (s.sheets.length
-              ? '<div style="display:flex;gap:10px;flex-wrap:wrap">' + s.sheets.map(function (p) { return sheetChip(u, p); }).join('') + '</div>'
+              ? '<div style="display:flex;gap:10px;flex-wrap:wrap">' + s.sheets.map(function (p) { return sheetChip(u, p, s.id); }).join('') + '</div>'
               : '<div style="font-size:12px;color:var(--text-tertiary)">고른 도면이 없습니다.</div>') +
             '</div>';
         }).join('') + '</div>';
@@ -758,6 +763,18 @@
 
   var INPUT = 'width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:13px;font-family:inherit;box-sizing:border-box';
 
+  /** 기록 창의 «도면에 표시» — 이 공정에 고른 도면 중 하나를 열어 작업한 곳을 찍는다. */
+  function markField(u, s) {
+    var sheets = (s.sheets || []).filter(function (p) { return p.found; });
+    if (!global.DrawingMarker || !sheets.length) return '';
+    return '<div style="margin-top:12px;padding:10px 12px;border:1px solid var(--border-default);border-radius:10px;background:var(--bg-base)">' +
+      '<div style="font-size:12px;font-weight:700;margin-bottom:6px">도면에 표시</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><select data-mark-sheet style="' + INPUT + ';margin-top:0;flex:1;min-width:150px">' +
+        sheets.map(function (p) { return '<option value="' + u.esc(p.sheetNo) + '">' + u.esc(p.sheetNo + (p.sheet && p.sheet.title ? ' · ' + p.sheet.title : '')) + '</option>'; }).join('') + '</select>' +
+      '<button type="button" data-mark-open style="padding:8px 12px;border-radius:8px;border:none;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer"><i class="ph ph-map-pin"></i> 도면에서 찍기</button></div>' +
+      '<div data-mark-state style="font-size:12px;color:var(--text-tertiary);margin-top:6px">찍으면 사진·수량과 함께 도면 위에 표시됩니다. 위치 칸의 방 이름을 도면에서 찾아 보여 줍니다.</div></div>';
+  }
+
   /** 줄 하나에 반입·설치(시공) 기록 — 사진은 문서함에 올라가 그 기록의 근거가 된다. 확인은 담당자가 한다. */
   function record(sectionId, lineId) {
     var u = ui();
@@ -773,6 +790,7 @@
       (l.splitsMaterial ? '<label data-with-stored style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px"><input type="checkbox" data-stored checked> <span data-stored-text>반입도 같은 수량으로 기록 (설치한 자재는 들어온 것)</span></label>' : '') +
       field('작업일', '<input data-date type="date" value="' + today() + '" style="' + INPUT + '">') +
       field('위치', '<input data-location placeholder="예) 주방 서쪽 벽 · 그리드 C-4" style="' + INPUT + '">') +
+      markField(u, s) +
       field('사진 · 송장 (여러 장)', '<input data-files type="file" multiple accept="image/*,application/pdf" style="' + INPUT + '">') +
       '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">사진이나 송장이 있어야 담당자가 확인하고 청구할 수 있습니다.</div>' +
       field('메모', '<textarea data-notes rows="2" style="' + INPUT + '"></textarea>');
@@ -781,6 +799,20 @@
       width: 560, body: body,
       actions: [{ label: '취소', value: null }, { label: '기록하기', value: 'keep', kind: 'primary' }],
       onReady: function (box) {
+        var openBtn = box.querySelector('[data-mark-open]');
+        if (openBtn) openBtn.addEventListener('click', function () {
+          global.DrawingMarker.open({
+            siteId: state.data.siteId, sheetNo: box.querySelector('[data-mark-sheet]').value, mode: 'pick', sectionId: s.id,
+            line: { id: l.id, lineNo: l.lineNo, description: l.description, unit: l.unit },
+            suggest: box.querySelector('[data-location]').value,
+            onPick: function (g) {
+              box._geom = g;
+              var t = box.querySelector('[data-mark-state]');
+              t.innerHTML = '<span style="color:var(--status-success);font-weight:700">✓ ' + u.esc(g.sheetNo) + ' 에 ' + ({ point: '점', line: '선', area: '영역' }[g.shape] || '') + ' 표시 준비</span> · 기록하면 함께 저장됩니다.';
+              openBtn.innerHTML = '<i class="ph ph-arrow-clockwise"></i> 다시 찍기';
+            },
+          });
+        });
         var sel = box.querySelector('[data-stage]');
         var wrap = box.querySelector('[data-with-stored]');
         function sync() { if (wrap) wrap.style.display = sel.value === 'installation' ? 'flex' : 'none'; }
@@ -804,17 +836,27 @@
         uploadDocs(files).then(function (ids) {
           var evidence = ids.map(function (id, i) { return { type: 'document', id: id, locator: (stage === 'stored' ? '송장·사진 ' : '현장 사진 ') + (i + 1) }; });
           var uuid = global.crypto && global.crypto.randomUUID ? global.crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
-          var jobs = [{ stage: stage, qty: qty }];
+          var jobs = [{ stage: stage, qty: qty, main: true }];
           if (storedQty > 0) jobs.unshift({ stage: 'stored', qty: storedQty });
+          var mainId = null;
           return jobs.reduce(function (p, j) {
             return p.then(function () {
               return call('api_saveClaimRecord', [{ lineId: l.id, recordKind: 'actual', workDate: date, location: location, stage: j.stage,
                 reportedQty: j.qty, sourceRef: 'section-ui:' + uuid + ':' + j.stage, evidence: evidence,
                 notes: (j.stage === 'stored' && stage === 'installation' ? '설치 기록과 함께 반입 인정. ' : '') + notes }]).then(function (r) {
                 if (r.success === false) throw new Error(r.error || '기록하지 못했습니다.');
+                if (j.main) mainId = r.id;
               });
             });
-          }, Promise.resolve());
+          }, Promise.resolve()).then(function () {
+            var g = box._geom;
+            if (!g || !mainId) return;
+            // 표시는 기록의 근거를 도면에 보여 주는 것이다 — 기록은 이미 저장됐으니 표시가 실패해도 기록은 남는다.
+            return call('api_saveDrawingMark', [{ siteId: state.data.siteId, sheetNo: g.sheetNo, shape: g.shape, points: g.points,
+              lineId: l.id, recordId: mainId, sectionId: s.id, label: notes }]).then(function (r) {
+              if (r.success === false) u.toast('기록은 저장했지만 도면 표시는 못 했습니다: ' + (r.error || ''), 'error');
+            });
+          });
         }).then(function () {
           m.close(null);
           u.toast('확인 대기로 기록했습니다.' + (storedQty > 0 ? ' 반입 ' + qtyText(storedQty) + ' 도 함께 적었습니다.' : ''));
@@ -956,6 +998,17 @@
     });
   }
 
+  /** 도면 한 장을 표시와 함께 크게 — 이 공정의 줄을 골라 점·선·영역·메모를 더할 수 있다. */
+  function view(sectionId, sheetNo) {
+    var s = findSection(sectionId);
+    if (!global.DrawingMarker || !s) return;
+    global.DrawingMarker.open({
+      siteId: state.data.siteId, sheetNo: sheetNo, mode: 'view', sectionId: s.id,
+      lines: s.billing ? s.billing.lines.map(function (l) { return { id: l.id, lineNo: l.lineNo, description: l.description, unit: l.unit }; }) : [],
+      onChange: function () { reload(); },
+    });
+  }
+
   function qtyText(v) { return v === null || v === undefined ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
 
   function ledger(contractId, lineId) {
@@ -990,6 +1043,7 @@
     pickSite: pickSite,
     uploadContract: uploadContract,
     lines: lines,
+    view: view,
     toggleAll: toggleAll,
     record: record,
     rfi: rfi,

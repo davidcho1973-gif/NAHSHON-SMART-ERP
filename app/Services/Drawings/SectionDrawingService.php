@@ -103,6 +103,8 @@ class SectionDrawingService
             'catalog' => $sheets->map(fn (DrawingSheet $s): array => $this->sheetRow($s))->values()->all(),
             'canManage' => $this->canManage($user),
             'billing' => $money['summary'],
+            // 도면 번호별 표시 수 — 도면 칩에 «표시 N» 으로 붙는다.
+            'markCounts' => (object) app(DrawingMarkService::class)->counts($site->id),
         ];
     }
 
