@@ -6,6 +6,7 @@ use App\Http\Controllers\AttendanceGeoController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
+use App\Http\Controllers\DrawingSheetController;
 use App\Http\Controllers\EmailAiInboxController;
 use App\Http\Controllers\EmailPasswordAuthController;
 use App\Http\Controllers\EquipmentApiController;
@@ -353,6 +354,14 @@ Route::middleware('auth')->group(function (): void {
     // 올라온 사진 보기 — 상황실 카드의 썸네일(?s=t)과 크게 보기 둘 다 이 길로 온다.
     Route::get('/ops-api/photo/{batch}/{index}', [OpsPhotoController::class, 'show'])
         ->whereNumber('index')->name('ops.photo.show');
+    // 공정별 도면 — 브라우저가 도면 PDF 를 한 쪽씩 그려 보내고, 사진 쪽은 AI 가 글자를 읽어 붙인다.
+    Route::post('/drawing-api/documents/{document}/start', [DrawingSheetController::class, 'start'])->whereNumber('document')->name('drawing-sheets.start');
+    Route::post('/drawing-api/documents/{document}/pages/{page}', [DrawingSheetController::class, 'page'])
+        ->whereNumber(['document', 'page'])->middleware('throttle:240,1')->name('drawing-sheets.page');
+    Route::get('/drawing-api/documents/{document}/status', [DrawingSheetController::class, 'status'])->whereNumber('document')->name('drawing-sheets.status');
+    Route::get('/drawing-api/sheets/{sheet}/thumb', [DrawingSheetController::class, 'thumb'])->name('drawing-sheets.thumb');
+    Route::get('/drawing-api/sheets/{sheet}/text', [DrawingSheetController::class, 'text'])->name('drawing-sheets.text');
+
     // 이번 주 작업판 — 말·사진·글·회의를 AI 비서가 줄로 정리(초안). 저장은 사람이 보고 따로.
     Route::post('/week-board-api/draft', [WeekBoardDraftController::class, 'draft'])->middleware('throttle:30,1')->name('week-board.draft');
     Route::get('/week-board-api/meetings', [WeekBoardDraftController::class, 'meetings'])->name('week-board.meetings');

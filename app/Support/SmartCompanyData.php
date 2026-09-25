@@ -56,6 +56,7 @@ use App\Services\AttendanceQrService;
 use App\Services\CommandCenter\ConstructionCommandCenterService;
 use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
+use App\Services\Drawings\SectionDrawingService;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\Finance\ProgressBillingDrafter;
 use App\Services\GeminiReceiptAnalyzer;
@@ -402,6 +403,11 @@ class SmartCompanyData
 
             // 이번 주 작업판 — 공종별로, 현장의 말로, 한 주. 정식 공정표와 별개의 사실.
             'api_getWeekBoard' => app(WeekBoardService::class)->board($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
+            // 공정별 도면 — 계약서 공정마다 쓸 도면(도면 번호로 잇는다).
+            'api_getSectionDrawings' => app(SectionDrawingService::class)->board($siteId),
+            'api_setSectionSheets' => app(SectionDrawingService::class)->setSheets((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
+            'api_saveWorkSection' => app(SectionDrawingService::class)->saveSection(is_array($args[0] ?? null) ? $args[0] : [], $siteId),
+            'api_updateDrawingSheet' => app(SectionDrawingService::class)->updateSheet((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null, isset($args[2]) ? (string) $args[2] : null),
             // 3주 나란히 — 지난주 · 이번 주 · 다음 주. 가운데가 보고 있는 주.
             'api_getWeekBoard3Weeks' => app(WeekBoardService::class)->threeWeeks($siteId, ($args[0] ?? null) !== null ? (string) $args[0] : null),
             'api_saveWeekBoardLine' => app(WeekBoardService::class)->save(is_array($args[0] ?? null) ? $args[0] : [], $siteId),

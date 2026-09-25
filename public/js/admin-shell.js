@@ -135,6 +135,54 @@
     });
   }
 
+  /* ── 자유 모달 ─────────────────────────────────────────────────────────────
+   * 폼이 아닌 것(그림 목록에서 고르기, 큰 그림 보기)을 띄울 때. 틀과 닫기 규칙은 formModal 과 같다.
+   * opts: { title, subtitle, body(html), width, actions: [{ label, value, kind: 'primary'|'danger'|'' }] }
+   * 반환: { el, close(value), result: Promise(value) } — 버튼을 누르면 그 value 로, 바깥·Esc 는 null 로 닫힌다.
+   * 버튼의 value 가 'keep' 이면 닫지 않고 onAction(value, el) 만 부른다.
+   */
+  function modal(opts) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText =
+      'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+    var actions = (opts.actions || [{ label: '닫기', value: null }]).map(function (a, i) {
+      var bg = a.kind === 'primary' ? TOKENS.brand : a.kind === 'danger' ? TOKENS.danger : TOKENS.base;
+      var fg = a.kind === 'primary' || a.kind === 'danger' ? '#fff' : TOKENS.text;
+      var border = a.kind === 'primary' || a.kind === 'danger' ? 'none' : '1px solid ' + TOKENS.line;
+      return '<button type="button" data-m="' + i + '" style="padding:9px 16px;border-radius:8px;border:' + border +
+        ';background:' + bg + ';color:' + fg + ';font-size:13px;font-weight:600;cursor:pointer">' + esc(a.label) + '</button>';
+    }).join('');
+    wrap.innerHTML =
+      '<div role="dialog" aria-modal="true" style="background:' + TOKENS.surface + ';border:1px solid ' + TOKENS.line +
+      ';border-radius:14px;width:100%;max-width:' + (opts.width || 720) + 'px;max-height:calc(100vh - 32px);display:flex;flex-direction:column">' +
+        '<div style="padding:18px 20px 12px;border-bottom:1px solid ' + TOKENS.line + '">' +
+          '<div style="font-size:16px;font-weight:700;color:' + TOKENS.text + '">' + esc(opts.title || '') + '</div>' +
+          (opts.subtitle ? '<div style="font-size:12px;color:' + TOKENS.dim + ';margin-top:4px;line-height:1.5">' + esc(opts.subtitle) + '</div>' : '') +
+        '</div>' +
+        '<div data-m-body style="padding:14px 20px;overflow:auto;flex:1">' + (opts.body || '') + '</div>' +
+        '<div style="padding:12px 20px;border-top:1px solid ' + TOKENS.line + ';display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">' + actions + '</div>' +
+      '</div>';
+
+    var resolveFn;
+    var result = new Promise(function (r) { resolveFn = r; });
+    function close(v) { wrap.remove(); document.removeEventListener('keydown', onKey); resolveFn(v === undefined ? null : v); }
+    function onKey(e) { if (e.key === 'Escape') close(null); }
+
+    wrap.addEventListener('click', function (e) {
+      if (e.target === wrap) return close(null);
+      var i = e.target.closest && e.target.closest('[data-m]');
+      if (!i) return;
+      var a = (opts.actions || [{ value: null }])[Number(i.getAttribute('data-m'))] || {};
+      if (a.value === 'keep') { if (opts.onAction) opts.onAction(a, wrap); return; }
+      close(a.value);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    if (opts.onReady) opts.onReady(wrap);
+
+    return { el: wrap, close: close, result: result };
+  }
+
   /* ── 표 ──────────────────────────────────────────────────────────────────
    * columns: [{ key, label, width, align, render(row) }]
    * 검색은 클라이언트에서 건다 — 관리자 목록은 수백 건 규모라 서버 왕복이 오히려 느리다.
@@ -461,6 +509,7 @@
     uploadFile: uploadFile,
     toast: toast,
     confirmDanger: confirmDanger,
+    modal: modal,
     table: table,
     bindSearch: bindSearch,
     formModal: formModal,

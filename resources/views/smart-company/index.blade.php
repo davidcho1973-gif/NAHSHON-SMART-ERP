@@ -26,6 +26,7 @@
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
     <script src="{{ asset('js/admin-material-receipts.js') }}?v={{ filemtime(public_path('js/admin-material-receipts.js')) }}" defer></script>
     <script src="{{ asset('js/admin-week-board.js') }}?v={{ filemtime(public_path('js/admin-week-board.js')) }}" defer></script>
+    <script src="{{ asset('js/admin-section-drawings.js') }}?v={{ filemtime(public_path('js/admin-section-drawings.js')) }}" defer></script>
     <script src="{{ asset('js/admin-registers.js') }}?v={{ filemtime(public_path('js/admin-registers.js')) }}" defer></script>
     <script src="{{ asset('js/admin-crew.js') }}?v={{ filemtime(public_path('js/admin-crew.js')) }}" defer></script>
     <script src="{{ asset('js/admin-kakao.js') }}?v={{ filemtime(public_path('js/admin-kakao.js')) }}" defer></script>
@@ -166,6 +167,9 @@
                 <i class="ph ph-calendar-check" style="color:#16a34a"></i><span>공정 관리</span>
               </li>
             <ul class="nav-sub" data-sub="g-site">
+              <li class="nav-item nav-child" data-view="section-drawings" id="nav-section-drawings">
+                <i class="ph ph-map-trifold" style="color:#0891b2"></i><span>공정별 도면</span>
+              </li>
               <li class="nav-item nav-child" data-view="wbs" id="nav-wbs">
                 <i class="ph ph-tree-structure" style="color:#7c3aed"></i><span>정식 공정표 (원청용)</span><span class="nav-badge alert" id="wbs-ai-badge" style="background:#7c3aed;display:none">AI</span>
               </li>
@@ -357,6 +361,7 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="command"><i class="ph ph-command"></i><span>AI 현장 지휘실</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="alerts"><i class="ph ph-bell-ringing"></i><span>알림</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="week-board"><i class="ph ph-calendar-check"></i><span>공정 관리 (작업판)</span></button>
+          <button class="mobile-more-tile" type="button" data-mobile-view="section-drawings"><i class="ph ph-map-trifold"></i><span>공정별 도면</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="wbs"><i class="ph ph-tree-structure"></i><span>정식 공정표</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="opsroom"><i class="ph ph-broadcast"></i><span>현장 상황실</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="safety"><i class="ph ph-shield-check"></i><span>작업안전</span></button>
@@ -1472,6 +1477,7 @@
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
         'week-board': { title: '공정 관리 — 이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
+        'section-drawings': { title: '공정별 도면', render: function () { return window.AdminSectionDrawings.render(); } },
         'material-receipts': { title: '자재 입고', render: function () { return window.AdminMaterialReceipts.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'equipment-checks': { title: '장비 사용 점검', render: function () { return window.AdminEquipmentChecks.render(); } },

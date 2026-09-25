@@ -1,0 +1,2 @@
+PDF.js 6.3.289 (Mozilla, Apache-2.0) — legacy build, renamed .mjs -> .js so every web server serves it as JavaScript.
+Source: https://www.npmjs.com/package/pdfjs-dist/v/6.3.289
