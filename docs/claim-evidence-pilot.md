@@ -89,3 +89,11 @@ php artisan claims:import-source CONTRACT_ID source.json original.xlsx markup.pd
 - 공정별 진행률과 금액은 `ClaimEvidenceService::progressByLine` 이 대장과 같은 규칙으로 계산한다.
 - 아직 없는 것: 청구서 엑셀 내보내기(반입 자재 칸 분리·유보금·선급금 상계·천 달러 절사), 송장 사진·상황실 글에서
   반입/설치 기록 제안, 도면 위 표시. 초안 금액은 지금 `this_period_amount` 한 칸이며 청구서 형식으로 나누는 일은 내보내기에서 한다.
+
+## RFI 추가·감액과 703K 자동 적재 (2026-09-25)
+
+- 703K 계약서 원본은 `database/seed-files/703k-kitchen-contract.xlsx` 이고, 마이그레이션 `2026_09_25_000105` 이 화면의
+  계약서 올리기와 같은 길로 350줄을 올린다(사장 승인).
+- RFI 는 `contract_changes` 한 건과 `contract_change_lines` 로 적는다. 추가 RFI 의 줄은 승인 전 `draft` 라 기록은 모이되
+  확인·청구가 막히고, 승인(원청 승인 문서 필수) 때 `accepted` 가 된다. 감액은 승인 때 기존 줄의 계약 수량을 줄이며
+  `qty_before` 에 원래 수량을 남긴다. 확인된 수량보다 적게 줄일 수 없다. 승인 금액은 계약의 `approved_change_amount` 에 더한다.

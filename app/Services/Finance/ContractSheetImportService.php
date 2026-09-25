@@ -3,13 +3,17 @@
 namespace App\Services\Finance;
 
 use App\Models\ContractBoqLine;
+use App\Models\ContractChangeLine;
 use App\Models\IntelligentDocument;
 use App\Models\ProjectContract;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
 use App\Services\Admin\ContractAdminService;
+use App\Services\Documents\DocumentIntake;
 use App\Support\AiInformationAccess;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -110,8 +114,10 @@ class ContractSheetImportService
 
             return DB::transaction(function () use ($input, $doc, $site, $sheet): array {
                 $contract = $this->resolveContract($input, $site, $sheet);
-                if (abs((float) $contract->current_amount - $sheet['contractTotal']) >= 0.01) {
-                    throw new InvalidArgumentException('선택한 계약의 금액('.number_format((float) $contract->current_amount, 2).')이 계약서 합계('.number_format($sheet['contractTotal'], 2).')와 다릅니다. 계약을 확인하세요.');
+                // 계약서는 «원래 계약» 이다. RFI 로 늘거나 준 금액은 원래 계약 금액과 비교하지 않는다.
+                $base = (float) ($contract->original_amount ?? $contract->current_amount);
+                if (abs($base - $sheet['contractTotal']) >= 0.01) {
+                    throw new InvalidArgumentException('선택한 계약의 금액('.number_format($base, 2).')이 계약서 합계('.number_format($sheet['contractTotal'], 2).')와 다릅니다. 계약을 확인하세요.');
                 }
                 if ($doc->project_contract_id && (int) $doc->project_contract_id !== $contract->id) {
                     throw new InvalidArgumentException('이 파일은 이미 다른 계약에 연결된 문서입니다.');
@@ -157,6 +163,46 @@ class ContractSheetImportService
                 ];
             });
         });
+    }
+
+    /**
+     * 사람이 화면에서 올리는 대신 배포가 계약서를 올린다 — 사장 지시(2026-09-25) «자동으로 다 넣어줘».
+     * 화면과 똑같은 길(문서함 접수 → 미리보기와 같은 판독 → 확정 줄)을 지나며, 결정한 사람은 $actor 다.
+     * 금액이 같은 수주 계약이 하나면 거기에, 없으면 계약서 금액으로 새로 만든다.
+     *
+     * @param  array<string, mixed>  $contractDefaults  새 계약에 넣을 값(retainagePercent, contractNotes)
+     * @return array<string, mixed>
+     */
+    public function loadFile(Site $site, string $path, string $fileName, User $actor, array $contractDefaults = []): array
+    {
+        $previous = auth()->user();
+        auth()->setUser($actor);
+        try {
+            $ingested = app(DocumentIntake::class)->ingest(
+                new UploadedFile($path, $fileName, null, null, true),
+                ['company_id' => $site->company_id, 'site_id' => $site->id],
+                ['uploaded_by' => $actor->id, 'source' => 'contract-sheet'],
+            );
+            $doc = $ingested['document'];
+            if ($doc === null) {
+                return ['success' => false, 'error' => $ingested['reason'] ?? '계약서를 문서함에 넣지 못했습니다.'];
+            }
+            $doc->forceFill(['category' => 'contract', 'document_type' => 'contract'])->save();
+
+            $preview = $this->preview($doc->id);
+            if (! ($preview['success'] ?? false)) {
+                return $preview;
+            }
+            $same = collect($preview['contracts'])->filter(fn (array $c): bool => $c['amount'] !== null && abs($c['amount'] - $preview['contractTotal']) < 0.01);
+
+            return $this->import($contractDefaults + [
+                'documentId' => $doc->id, 'confirmContract' => true,
+                'contractId' => $same->count() === 1 ? $same->first()['id'] : 0,
+                'createContract' => $same->count() !== 1,
+            ]);
+        } finally {
+            $previous ? auth()->setUser($previous) : auth()->forgetUser();
+        }
     }
 
     // ── 계약서 읽기 ───────────────────────────────────────────────────
@@ -381,7 +427,10 @@ class ContractSheetImportService
     private function saveLine(ProjectContract $contract, IntelligentDocument $doc, WorkSection $section, array $line, string $sheetName): string
     {
         $existing = ContractBoqLine::query()->where('project_contract_id', $contract->id)->where('line_no', $line['itemNo'])->first();
-        if ($existing && (abs((float) $existing->contract_qty - $line['qty']) > 0.00005 || abs((float) $existing->unit_price - $line['price']) > 0.00005 || strcasecmp(trim($existing->unit), $line['unit']) !== 0)) {
+        // 승인된 RFI 가 바꾼 수량을 빼면 원래 계약 수량이다 — 계약서는 원래 계약과 비교한다.
+        $changed = $existing ? (float) ContractChangeLine::where('contract_boq_line_id', $existing->id)
+            ->whereHas('change', fn ($q) => $q->where('status', 'approved'))->sum('qty_delta') : 0.0;
+        if ($existing && (abs((float) $existing->contract_qty - $changed - $line['qty']) > 0.00005 || abs((float) $existing->unit_price - $line['price']) > 0.00005 || strcasecmp(trim($existing->unit), $line['unit']) !== 0)) {
             return '#'.$line['itemNo'].' '.$line['description'];
         }
 
@@ -396,8 +445,8 @@ class ContractSheetImportService
         ] + $this->recognition($line);
 
         if ($existing) {
-            if ($existing->records()->where('status', 'verified')->exists()) {
-                // 확인된 실적이 있는 줄의 계약 조건은 대장이 잠근다. 같은 줄임은 위에서 확인했으니 공정만 잇는다.
+            if ($changed != 0.0 || $existing->records()->where('status', 'verified')->exists()) {
+                // 확인된 실적이 있거나 RFI 로 바뀐 줄의 계약 조건은 다시 쓰지 않는다. 같은 줄임은 위에서 확인했으니 공정만 잇는다.
                 $existing->forceFill(['work_section_id' => $section->id])->save();
 
                 return 'kept';
@@ -425,17 +474,29 @@ class ContractSheetImportService
     /** @return array<string, mixed> */
     private function recognition(array $line): array
     {
-        if (! $this->splitsMaterial($line)) {
+        return self::recognitionFor($line['material'], $line['labor'], $line['expense'], $line['price'], '원청 계약 기성표 원문 그대로');
+    }
+
+    /**
+     * 줄의 기성 인정 방식 — 계약서 줄이든 RFI 로 더한 줄이든 한 규칙이다.
+     * 자재·노무(경비) 단가가 둘 다 있으면 반입(자재 단가)과 설치(나머지)로 나눠 받는다.
+     *
+     * @return array{recognitionBasis: string, stageWeights: array<string, float>, acceptanceNote: string}
+     */
+    public static function recognitionFor(mixed $material, mixed $labor, mixed $expense, float $price, string $basis): array
+    {
+        $rest = (float) $labor + (float) $expense;
+        if (! ((float) $material > 0 && $rest > 0) || $price <= 0) {
             return ['recognitionBasis' => 'quantity', 'stageWeights' => [],
-                'acceptanceNote' => '원청 계약 기성표 원문 그대로 · 수량 기준(시공 수량 × 계약 단가).'];
+                'acceptanceNote' => $basis.' · 수량 기준(시공 수량 × 계약 단가).'];
         }
-        $stored = round((float) $line['material'] / $line['price'] * 100, 4);
+        $stored = round((float) $material / $price * 100, 4);
 
         return [
             'recognitionBasis' => 'milestone',
             'stageWeights' => ['stored' => $stored, 'installation' => round(100 - $stored, 4)],
-            'acceptanceNote' => '원청 계약 기성표 원문 그대로 · 원청이 설치 전 반입 자재도 기성으로 인정(사장 확인 2026-09-25) · '
-                .'반입 인정 = 자재 단가 '.$line['material'].' / 설치 인정 = 노무·경비 단가 '.round((float) $line['labor'] + (float) $line['expense'], 4).'.',
+            'acceptanceNote' => $basis.' · 원청이 설치 전 반입 자재도 기성으로 인정(사장 확인 2026-09-25) · '
+                .'반입 인정 = 자재 단가 '.(float) $material.' / 설치 인정 = 노무·경비 단가 '.round($rest, 4).'.',
         ];
     }
 
@@ -458,7 +519,8 @@ class ContractSheetImportService
             'contractType' => '', 'companyId' => $site->company_id, 'siteId' => $site->id,
             'originalAmount' => (string) $sheet['contractTotal'], 'currency' => 'USD',
             'scopeOfWork' => $sheet['scope'] ?? '',
-            'notes' => '원청 계약 기성표에서 만든 계약. 계약 번호·유보율·선급금 조건은 계약서를 보고 채우세요.',
+            'retainagePercent' => isset($input['retainagePercent']) ? (string) $input['retainagePercent'] : '',
+            'notes' => $input['contractNotes'] ?? '원청 계약 기성표에서 만든 계약. 계약 번호·유보율·선급금 조건은 계약서를 보고 채우세요.',
         ]);
         if (! ($saved['success'] ?? false)) {
             throw new InvalidArgumentException($saved['error'] ?? implode(' ', (array) ($saved['errors'] ?? ['계약을 만들지 못했습니다.'])));
@@ -560,7 +622,7 @@ class ContractSheetImportService
     {
         return ProjectContract::query()->where('site_id', $site->id)->where('direction', 'receivable')->orderByDesc('id')->get()
             ->filter(fn (ProjectContract $c): bool => $this->billing->findAccessibleContract($c->id) !== null)
-            ->map(fn (ProjectContract $c): array => ['id' => $c->id, 'title' => $c->title, 'amount' => $c->current_amount !== null ? (float) $c->current_amount : null,
+            ->map(fn (ProjectContract $c): array => ['id' => $c->id, 'title' => $c->title, 'amount' => ($c->original_amount ?? $c->current_amount) !== null ? (float) ($c->original_amount ?? $c->current_amount) : null,
                 'lines' => ContractBoqLine::query()->where('project_contract_id', $c->id)->count()])
             ->values()->all();
     }

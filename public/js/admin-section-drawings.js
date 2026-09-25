@@ -28,7 +28,7 @@
   var THUMB_WIDTH = 900;
 
   var A = null;
-  var state = { data: null, pdfjs: null, reading: false, progress: {}, poll: null, auto: true };
+  var state = { data: null, pdfjs: null, reading: false, progress: {}, poll: null, auto: true, open: {} };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -278,15 +278,69 @@
   function sectionMoney(u, s) {
     var b = s.billing;
     if (!b) return '';
+    var open = !!state.open[s.id];
     return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px">' +
       '<div style="flex:1;min-width:140px">' + bar(b.percent) + '</div>' +
       '<span style="font-size:12px;font-weight:700">' + pct(b.percent) + '</span>' +
       '<span style="font-size:12px;color:var(--text-secondary)">기성 ' + money(b.earned) + ' / 계약 ' + money(b.amount) + '</span>' +
       (b.storedOnSite > 0 ? '<span style="font-size:12px;color:var(--text-secondary)">반입 자재 ' + money(b.storedOnSite) + '</span>' : '') +
+      (b.rfiPendingAmount ? '<span style="font-size:12px;color:var(--status-warning)">RFI 승인 대기 ' + money(b.rfiPendingAmount) + '</span>' : '') +
       (b.pendingCount ? '<span style="font-size:12px;color:var(--status-warning)">확인 대기 ' + b.pendingCount + '건</span>' : '') +
       (b.gaps ? '<span style="font-size:12px;color:var(--status-danger)">반입 기록 빠짐 ' + b.gaps + '줄</span>' : '') +
-      u.rowButton('줄 ' + b.lines + '개 보기', 'window.AdminSectionDrawings.lines(' + s.id + ')') +
-      '</div>';
+      u.rowButton((open ? '줄 접기' : '줄 ' + b.lines.length + '개 펼치기'), 'window.AdminSectionDrawings.lines(' + s.id + ')') +
+      '</div>' + (open ? lineList(u, s) : '');
+  }
+
+  var STATUS_TEXT = { submitted: '승인 대기', approved: '승인', rejected: '반려' };
+
+  /** 공정의 RFI — 추가(+)·감액(−), 승인 대기면 승인·반려 버튼. */
+  function changeList(u, s, can) {
+    if (!(s.changes || []).length) return '';
+    return '<div style="margin:0 0 10px;display:flex;flex-direction:column;gap:6px">' + s.changes.map(function (c) {
+      var color = c.status === 'approved' ? 'var(--status-success)' : c.status === 'rejected' ? 'var(--text-tertiary)' : 'var(--status-warning)';
+      return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-subtle);border-radius:8px;font-size:12px">' +
+        '<b>RFI ' + u.esc(c.rfiNo) + '</b><span>' + (c.kind === 'add' ? '작업 추가' : '감액') + '</span>' +
+        '<span style="flex:1;min-width:120px">' + u.esc(c.title) + '</span>' +
+        '<b>' + (c.amount >= 0 ? '+' : '') + money(c.amount) + '</b>' +
+        '<span style="color:' + color + ';font-weight:700">' + (STATUS_TEXT[c.status] || c.status) + (c.decidedOn ? ' ' + u.esc(c.decidedOn) : c.submittedOn ? ' · 제출 ' + u.esc(c.submittedOn) : '') + '</span>' +
+        (c.requestDocumentUrl ? '<a href="' + u.esc(c.requestDocumentUrl) + '" target="_blank" rel="noopener" style="color:var(--brand-primary)">RFI 문서</a>' : '') +
+        (c.approvalDocumentUrl ? '<a href="' + u.esc(c.approvalDocumentUrl) + '" target="_blank" rel="noopener" style="color:var(--brand-primary)">승인 문서</a>' : '') +
+        (can && c.status === 'submitted' ? u.rowButton('승인', 'window.AdminSectionDrawings.rfiDecide(' + c.id + ",'approve')") + ' ' +
+          u.rowButton('반려', 'window.AdminSectionDrawings.rfiDecide(' + c.id + ",'reject')") + ' ' +
+          u.rowButton('취소', 'window.AdminSectionDrawings.rfiDecide(' + c.id + ",'withdraw')", 'danger') : '') +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
+  /** 공정 카드 안의 계약 줄 — 줄마다 진행률, 반입·설치, 바로 기록. */
+  function lineList(u, s) {
+    var can = state.data.billing && state.data.billing.canManage;
+    var group = null;
+    return '<div style="border-top:1px solid var(--border-subtle);margin:4px 0 12px">' + s.billing.lines.map(function (l) {
+      var head = '';
+      if ((l.group || '') !== (group || '')) { group = l.group; head = group ? '<div style="padding:12px 2px 2px;font-size:12px;font-weight:800;color:var(--text-secondary)">' + u.esc(group) + '</div>' : ''; }
+      var done = l.splitsMaterial ? '반입 ' + qtyText(l.storedQty) + ' · 설치 ' + qtyText(l.installedQty) : '시공 ' + qtyText(l.installedQty);
+      var waiting = l.pendingStoredQty || l.pendingInstalledQty ? ' · 확인 대기 ' + (l.splitsMaterial ? '반입 ' + qtyText(l.pendingStoredQty) + ' 설치 ' + qtyText(l.pendingInstalledQty) : qtyText(l.pendingInstalledQty)) : '';
+      var tags = (l.rfi || []).map(function (r) {
+        return '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:4px;background:var(--bg-base);color:' +
+          (r.status === 'approved' ? 'var(--status-success)' : r.status === 'rejected' ? 'var(--text-tertiary)' : 'var(--status-warning)') + '">RFI ' + u.esc(r.rfiNo) + ' ' +
+          (r.kind === 'add' ? '추가' : '감액 ' + qtyText(r.qtyDelta)) + ' · ' + (STATUS_TEXT[r.status] || r.status) + '</span>';
+      }).join('');
+      var draft = l.status !== 'accepted';
+      return head + '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 2px;border-top:1px solid var(--border-subtle)' + (draft ? ';opacity:.8' : '') + '">' +
+        '<div style="flex:1 1 300px;min-width:0"><div style="font-size:13px;font-weight:700">#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + tags + '</div>' +
+          (l.spec ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + u.esc(l.spec) + '</div>' : '') +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + money(l.amount) +
+          (draft ? ' · 원청 승인 전이라 청구에 안 들어갑니다' : '') + '</div></div>' +
+        '<div style="flex:1 1 200px;font-size:12px">' + bar(l.percent) +
+          '<div style="margin-top:4px"><b>' + pct(l.percent) + '</b> · ' + money(l.earned) + '</div>' +
+          '<div style="color:var(--text-tertiary)">' + done + waiting + '</div>' +
+          (l.installGap ? '<div style="color:var(--status-danger)">설치가 반입보다 많음 · 반입 기록을 더하세요</div>' : '') + '</div>' +
+        '<div style="flex:0 0 auto;align-self:flex-start;display:flex;gap:6px">' +
+          (can && l.contractQty > 0 ? u.rowButton('기록', 'window.AdminSectionDrawings.record(' + s.id + ',' + l.id + ')') : '') +
+          (s.contractId ? u.rowButton(can ? '확인' : '근거', 'window.AdminSectionDrawings.ledger(' + s.contractId + ',' + l.id + ')') : '') +
+        '</div></div>';
+    }).join('') + '</div>';
   }
 
   /** 현장 전체 기성 — 계약서가 올라왔으면 합계, 안 올라왔으면 올리라는 안내. */
@@ -298,13 +352,17 @@
         '원청 계약 기성표(엑셀)를 올리면 계약서의 줄이 공정 아래에 붙고, 줄마다 진행률과 기성 금액이 보입니다. 위의 <b>계약서 올리기</b>를 누르세요.</div>' : '';
     }
     var cells = [
-      ['계약', money(b.contractAmount !== null ? b.contractAmount : b.lineTotal), b.contractAmount !== null && Math.abs(b.contractAmount - b.lineTotal) >= 0.01 ? '줄 합계 ' + money(b.lineTotal) + ' · 절사 ' + money(b.contractAmount - b.lineTotal) : '줄 ' + b.lines + '개'],
+      ['계약', money(b.contractAmount !== null ? b.contractAmount : b.lineTotal),
+        (b.approvedChanges ? '원계약 ' + money(b.originalAmount) + ' · RFI 승인 ' + (b.approvedChanges > 0 ? '+' : '') + money(b.approvedChanges) + ' · ' : '') +
+        (b.contractAmount !== null && Math.abs(b.contractAmount - b.lineTotal) >= 0.01 ? '줄 합계 ' + money(b.lineTotal) + ' · 절사 ' + money(b.contractAmount - b.lineTotal) : '줄 ' + b.lines + '개') +
+        (b.rfiPendingAmount ? ' · RFI 승인 대기 ' + money(b.rfiPendingAmount) : '')],
       ['확인된 기성', money(b.earned), pct(b.percent) + ' · 사람이 확인한 수량 × 계약 단가'],
       ['반입 자재 (미설치)', money(b.storedOnSite), '청구서에 따로 적는 칸'],
       ['확인 대기', (b.pendingCount || 0) + '건', '기록은 됐고 아직 확인 전'],
     ];
     return '<div style="border:1px solid var(--border-default);border-radius:12px;padding:14px 16px;margin-bottom:16px;background:var(--bg-surface)">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:14px;font-weight:800;flex:1">기성 = 공정 · ' + u.esc(b.contractTitle || '') + '</span>' +
+      u.rowButton(Object.keys(state.open).length ? '모든 줄 접기' : '모든 줄 펼치기', 'window.AdminSectionDrawings.toggleAll()') +
       (b.contractId ? u.rowButton('기성 근거 대장 열기', 'window.AdminSectionDrawings.ledger(' + b.contractId + ')') : '') + '</div>' +
       bar(b.percent) +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px">' + cells.map(function (c) {
@@ -336,7 +394,8 @@
               (s.contractAmount && !s.billing ? '<span style="font-size:12px;color:var(--text-secondary)">계약 ' + money(s.contractAmount) + '</span>' : '') +
               '<span style="font-size:12px;color:var(--text-tertiary)">도면 ' + s.sheets.length + '장' + (s.sheets.length && found < s.sheets.length ? ' · ' + (s.sheets.length - found) + '장은 아직 없음' : '') + '</span>' +
               (d.canManage ? u.rowButton('도면 고르기', 'window.AdminSectionDrawings.pick(' + s.id + ')') : '') +
-            '</div>' + sectionMoney(u, s) +
+              (d.billing && d.billing.canManage && s.contractId ? u.rowButton('작업 추가 RFI', 'window.AdminSectionDrawings.rfi(' + s.id + ')') : '') +
+            '</div>' + changeList(u, s, d.billing && d.billing.canManage) + sectionMoney(u, s) +
             (s.sheets.length
               ? '<div style="display:flex;gap:10px;flex-wrap:wrap">' + s.sheets.map(function (p) { return sheetChip(u, p); }).join('') + '</div>'
               : '<div style="font-size:12px;color:var(--text-tertiary)">고른 도면이 없습니다.</div>') +
@@ -653,43 +712,253 @@
     });
   }
 
-  /** 한 공정의 계약 줄 — 줄마다 진행률. 기록·확인은 기성 근거 대장에서. */
+  /** 공정 카드의 줄 목록 펼치기·접기 — 펼친 공정은 다시 불러와도 펼쳐 둔다. */
   function lines(sectionId) {
-    var u = ui();
-    call('api_getSectionLines', [sectionId]).then(function (r) {
-      if (r.success === false) { u.toast(r.error || '불러오지 못했습니다.', 'error'); return; }
-      var group = null;
-      // 표가 아니라 줄 카드 — 휴대폰에서는 오른쪽 칸이 아래로 내려와야 버튼이 보인다.
-      var rows = r.lines.map(function (l) {
-        var head = '';
-        if ((l.group || '') !== (group || '')) { group = l.group; head = group ? '<div style="padding:12px 2px 2px;font-size:12px;font-weight:800;color:var(--text-secondary)">' + u.esc(group) + '</div>' : ''; }
-        var done = l.splitsMaterial
-          ? '반입 ' + qtyText(l.storedQty) + ' · 설치 ' + qtyText(l.installedQty)
-          : '시공 ' + qtyText(l.installedQty);
-        return head + '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 2px;border-top:1px solid var(--border-subtle)">' +
-          '<div style="flex:1 1 300px;min-width:0"><div style="font-size:13px;font-weight:700">#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + '</div>' +
-            (l.spec ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + u.esc(l.spec) + '</div>' : '') +
-            '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + money(l.amount) + '</div></div>' +
-          '<div style="flex:1 1 200px;font-size:12px">' + bar(l.percent) +
-            '<div style="margin-top:4px"><b>' + pct(l.percent) + '</b> · ' + money(l.earned) + '</div>' +
-            '<div style="color:var(--text-tertiary)">' + done + '</div>' +
-            (l.pendingCount ? '<div style="color:var(--status-warning)">확인 대기 ' + l.pendingCount + '건</div>' : '') +
-            (l.installGap ? '<div style="color:var(--status-danger)">설치가 반입보다 많음 · 반입 기록을 더하세요</div>' : '') + '</div>' +
-          '<div style="flex:0 0 auto;align-self:flex-start">' + (r.contractId ? u.rowButton(r.canManage ? '기록·확인' : '근거 보기', 'window.AdminSectionDrawings.ledger(' + r.contractId + ',' + l.id + ')') : '') + '</div></div>';
-      }).join('');
-      state.linesModal = u.modal({
-        title: r.section.code + ' ' + r.section.name + ' — 계약 줄 ' + r.lines.length + '개',
-        subtitle: '진행률은 사람이 확인한 수량 × 계약 단가입니다. 자재가 들어오면 반입, 설치하면 설치로 기록합니다.',
-        width: 980,
-        body: rows ? rows : '<div style="padding:16px;color:var(--text-tertiary)">이 공정에 올라온 계약 줄이 없습니다.</div>',
+    if (state.open[sectionId]) delete state.open[sectionId]; else state.open[sectionId] = true;
+    if (active()) paint(render());
+  }
+
+  function toggleAll() {
+    var any = Object.keys(state.open).length;
+    state.open = {};
+    if (!any) (state.data.sections || []).forEach(function (s) { if (s.billing) state.open[s.id] = true; });
+    if (active()) paint(render());
+  }
+
+  function findSection(id) { return (state.data.sections || []).filter(function (s) { return s.id === id; })[0]; }
+
+  function today() {
+    if (state.data && state.data.today) return state.data.today;
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  /** 문서함에 파일을 올리고 문서 번호를 돌려준다 — 사진·RFI 문서·승인 문서가 모두 문서함의 근거가 된다. */
+  function uploadDocs(files) {
+    var ids = [];
+    return Array.prototype.slice.call(files || []).reduce(function (p, f) {
+      return p.then(function () {
+        var fd = new FormData();
+        fd.append('files[]', f);
+        fd.append('site_id', String(state.data.siteId));
+        return request('/document-hub/api/upload', 'POST', fd).then(function (res) {
+          var id = res && (((res.documents || [])[0] || {}).id || ((res.duplicates || [])[0] || {}).documentId);
+          if (!id) throw new Error(f.name + ': ' + ((res && (res.error || res.message || (((res.failed || [])[0]) || {}).reason)) || '올리지 못했습니다.'));
+          ids.push(id);
+        });
       });
-    }).catch(function (e) { u.toast(e.message || '불러오지 못했습니다.', 'error'); });
+    }, Promise.resolve()).then(function () { return ids; });
+  }
+
+  function field(label, html) {
+    return '<label style="display:block;font-size:12px;font-weight:700;margin-top:10px">' + label + html + '</label>';
+  }
+
+  function small(label, html) { return '<label style="display:block;font-size:11px;color:var(--text-secondary)">' + label + html + '</label>'; }
+
+  var INPUT = 'width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:13px;font-family:inherit;box-sizing:border-box';
+
+  /** 줄 하나에 반입·설치(시공) 기록 — 사진은 문서함에 올라가 그 기록의 근거가 된다. 확인은 담당자가 한다. */
+  function record(sectionId, lineId) {
+    var u = ui();
+    var s = findSection(sectionId);
+    var l = s && s.billing ? s.billing.lines.filter(function (x) { return x.id === lineId; })[0] : null;
+    if (!l) return;
+    var stages = l.splitsMaterial ? [['installation', '설치 — 노무 단가만큼'], ['stored', '반입 — 자재 단가만큼 (설치 전 자재)']] : [['installed', '시공 완료']];
+    var body =
+      '<div style="font-size:13px;line-height:1.6"><b>#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + '</b><br>' +
+        '계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + (l.splitsMaterial ? '반입 ' + qtyText(l.storedQty) + ' · 설치 ' + qtyText(l.installedQty) : '시공 ' + qtyText(l.installedQty)) + ' (확인된 수량)</div>' +
+      field('무엇을 했나요?', '<select data-stage style="' + INPUT + '">' + stages.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select>') +
+      field('이번 수량 (' + u.esc(l.unit) + ')', '<input data-qty type="number" min="0" step="any" style="' + INPUT + '">') +
+      (l.splitsMaterial ? '<label data-with-stored style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px"><input type="checkbox" data-stored checked> <span data-stored-text>반입도 같은 수량으로 기록 (설치한 자재는 들어온 것)</span></label>' : '') +
+      field('작업일', '<input data-date type="date" value="' + today() + '" style="' + INPUT + '">') +
+      field('위치', '<input data-location placeholder="예) 주방 서쪽 벽 · 그리드 C-4" style="' + INPUT + '">') +
+      field('사진 · 송장 (여러 장)', '<input data-files type="file" multiple accept="image/*,application/pdf" style="' + INPUT + '">') +
+      '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">사진이나 송장이 있어야 담당자가 확인하고 청구할 수 있습니다.</div>' +
+      field('메모', '<textarea data-notes rows="2" style="' + INPUT + '"></textarea>');
+    var m = u.modal({
+      title: '진행 기록 — ' + s.code + ' ' + s.name, subtitle: '기록은 확인 대기로 들어갑니다. 담당자가 사진을 보고 확인하면 진행률과 기성에 들어갑니다.',
+      width: 560, body: body,
+      actions: [{ label: '취소', value: null }, { label: '기록하기', value: 'keep', kind: 'primary' }],
+      onReady: function (box) {
+        var sel = box.querySelector('[data-stage]');
+        var wrap = box.querySelector('[data-with-stored]');
+        function sync() { if (wrap) wrap.style.display = sel.value === 'installation' ? 'flex' : 'none'; }
+        sel.addEventListener('change', sync); sync();
+      },
+      onAction: function (a, box) {
+        var stage = box.querySelector('[data-stage]').value;
+        var qty = Number(box.querySelector('[data-qty]').value);
+        var date = box.querySelector('[data-date]').value;
+        var location = box.querySelector('[data-location]').value.trim();
+        if (!(qty > 0)) { u.toast('수량을 적으세요.', 'error'); return; }
+        if (!location) { u.toast('위치를 적으세요.', 'error'); return; }
+        var withStored = stage === 'installation' && box.querySelector('[data-stored]') && box.querySelector('[data-stored]').checked;
+        // 설치한 만큼 반입이 안 적혀 있으면 그 차이만 반입으로 더한다 — 이미 적힌 반입을 두 번 세지 않는다.
+        var storedSoFar = (l.storedQty || 0) + (l.pendingStoredQty || 0);
+        var installedAfter = (l.installedQty || 0) + (l.pendingInstalledQty || 0) + qty;
+        var storedQty = withStored ? Math.max(0, Math.round((installedAfter - storedSoFar) * 10000) / 10000) : 0;
+        var files = box.querySelector('[data-files]').files;
+        var notes = box.querySelector('[data-notes]').value;
+        u.toast(files.length ? '사진 올리는 중…' : '기록하는 중…');
+        uploadDocs(files).then(function (ids) {
+          var evidence = ids.map(function (id, i) { return { type: 'document', id: id, locator: (stage === 'stored' ? '송장·사진 ' : '현장 사진 ') + (i + 1) }; });
+          var uuid = global.crypto && global.crypto.randomUUID ? global.crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
+          var jobs = [{ stage: stage, qty: qty }];
+          if (storedQty > 0) jobs.unshift({ stage: 'stored', qty: storedQty });
+          return jobs.reduce(function (p, j) {
+            return p.then(function () {
+              return call('api_saveClaimRecord', [{ lineId: l.id, recordKind: 'actual', workDate: date, location: location, stage: j.stage,
+                reportedQty: j.qty, sourceRef: 'section-ui:' + uuid + ':' + j.stage, evidence: evidence,
+                notes: (j.stage === 'stored' && stage === 'installation' ? '설치 기록과 함께 반입 인정. ' : '') + notes }]).then(function (r) {
+                if (r.success === false) throw new Error(r.error || '기록하지 못했습니다.');
+              });
+            });
+          }, Promise.resolve());
+        }).then(function () {
+          m.close(null);
+          u.toast('확인 대기로 기록했습니다.' + (storedQty > 0 ? ' 반입 ' + qtyText(storedQty) + ' 도 함께 적었습니다.' : ''));
+          return reload();
+        }).catch(function (e) { u.toast(e.message || '기록하지 못했습니다.', 'error'); });
+      },
+    });
+  }
+
+  /** 작업 추가 RFI — 추가는 새 줄, 감액은 기존 줄의 수량. 승인 전에는 계약이 바뀌지 않는다. */
+  function rfi(sectionId) {
+    var u = ui();
+    var s = findSection(sectionId);
+    if (!s) return;
+    var accepted = s.billing ? s.billing.lines.filter(function (l) { return l.status === 'accepted' && l.contractQty > 0; }) : [];
+    var addRow = function () {
+      return '<div data-add-row style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;padding:8px;border:1px solid var(--border-subtle);border-radius:8px;margin-top:6px">' +
+        '<input data-f="description" placeholder="작업명" style="' + INPUT + ';grid-column:1/-1">' +
+        '<input data-f="spec" placeholder="규격 (선택)" style="' + INPUT + ';grid-column:1/-1">' +
+        small('단위', '<input data-f="unit" placeholder="EA, LF" style="' + INPUT + '">') +
+        small('수량', '<input data-f="qty" type="number" step="any" style="' + INPUT + '">') +
+        small('자재 단가', '<input data-f="materialPrice" type="number" step="any" style="' + INPUT + '">') +
+        small('노무 단가', '<input data-f="laborPrice" type="number" step="any" style="' + INPUT + '">') + '</div>';
+    };
+    var deductRow = function () {
+      return '<div data-deduct-row style="display:grid;grid-template-columns:1fr 120px;gap:6px;margin-top:6px">' +
+        '<select data-f="lineId" style="' + INPUT + '"><option value="">— 줄 고르기 —</option>' + accepted.map(function (l) {
+          return '<option value="' + l.id + '">#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + ' · 계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + '</option>';
+        }).join('') + '</select><input data-f="qty" type="number" step="any" placeholder="줄일 수량" style="' + INPUT + '"></div>';
+    };
+    var body =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 10px">' +
+        field('종류', '<select data-kind style="' + INPUT + '"><option value="add">작업 추가 (+)</option>' + (accepted.length ? '<option value="deduct">감액 (−) 기존 줄 줄이기</option>' : '') + '</select>') +
+        field('RFI 번호', '<input data-no placeholder="예) 003" style="' + INPUT + '">') +
+        field('제출일', '<input data-date type="date" value="' + today() + '" style="' + INPUT + '">') +
+      '</div>' +
+      field('제목', '<input data-title placeholder="예) Pantry 추가 벽체" style="' + INPUT + '">') +
+      '<div data-add-box><div style="font-size:12px;font-weight:700;margin-top:12px">추가할 작업 줄</div><div data-add-list>' + addRow() + '</div>' +
+        '<button type="button" data-more-add style="margin-top:6px;padding:5px 10px;border-radius:6px;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer">+ 줄 더하기</button>' +
+        '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">자재 단가와 노무 단가를 둘 다 적으면 반입·설치로 나눠 받습니다.</div></div>' +
+      '<div data-deduct-box style="display:none"><div style="font-size:12px;font-weight:700;margin-top:12px">줄일 계약 줄</div><div data-deduct-list>' + deductRow() + '</div>' +
+        '<button type="button" data-more-deduct style="margin-top:6px;padding:5px 10px;border-radius:6px;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer">+ 줄 더하기</button></div>' +
+      '<div data-total style="margin-top:10px;font-size:13px;font-weight:700"></div>' +
+      field('RFI 문서 (선택)', '<input data-file type="file" accept="image/*,application/pdf,.doc,.docx,.xlsx" style="' + INPUT + '">') +
+      field('메모', '<textarea data-note rows="2" style="' + INPUT + '"></textarea>');
+    function collect(box) {
+      var kind = box.querySelector('[data-kind]').value;
+      var rows = Array.prototype.slice.call(box.querySelectorAll(kind === 'add' ? '[data-add-row]' : '[data-deduct-row]'));
+      return { kind: kind, items: rows.map(function (r) {
+        var o = {};
+        Array.prototype.forEach.call(r.querySelectorAll('[data-f]'), function (el) { o[el.getAttribute('data-f')] = el.value.trim(); });
+        return o;
+      }).filter(function (o) { return kind === 'add' ? (o.description || o.qty) : o.lineId; }) };
+    }
+    function total(box) {
+      var c = collect(box);
+      var sum = c.items.reduce(function (t, o) {
+        if (c.kind === 'add') return t + (Number(o.qty) || 0) * ((Number(o.materialPrice) || 0) + (Number(o.laborPrice) || 0));
+        var l = accepted.filter(function (x) { return String(x.id) === String(o.lineId); })[0];
+        return t - (l ? (Number(o.qty) || 0) * l.unitPrice : 0);
+      }, 0);
+      box.querySelector('[data-total]').textContent = '계약 변경 금액 ' + (sum >= 0 ? '+' : '') + money(sum) + ' (원청 승인 뒤 반영)';
+    }
+    var m = u.modal({
+      title: '작업 추가 RFI — ' + s.code + ' ' + s.name,
+      subtitle: '계약은 RFI 로만 바뀝니다. 제출하면 승인 대기로 적히고, 원청 승인 문서를 붙여 승인하면 계약과 청구에 들어갑니다.',
+      width: 720, body: body,
+      actions: [{ label: '취소', value: null }, { label: 'RFI 제출', value: 'keep', kind: 'primary' }],
+      onReady: function (box) {
+        var kind = box.querySelector('[data-kind]');
+        kind.addEventListener('change', function () {
+          box.querySelector('[data-add-box]').style.display = kind.value === 'add' ? '' : 'none';
+          box.querySelector('[data-deduct-box]').style.display = kind.value === 'deduct' ? '' : 'none';
+          total(box);
+        });
+        box.querySelector('[data-more-add]').addEventListener('click', function () { box.querySelector('[data-add-list]').insertAdjacentHTML('beforeend', addRow()); });
+        box.querySelector('[data-more-deduct]').addEventListener('click', function () { box.querySelector('[data-deduct-list]').insertAdjacentHTML('beforeend', deductRow()); });
+        box.addEventListener('input', function () { total(box); });
+        box.addEventListener('change', function () { total(box); });
+        total(box);
+      },
+      onAction: function (a, box) {
+        var c = collect(box);
+        var no = box.querySelector('[data-no]').value.trim();
+        var title = box.querySelector('[data-title]').value.trim();
+        if (!no) { u.toast('RFI 번호를 적으세요.', 'error'); return; }
+        if (!title) { u.toast('제목을 적으세요.', 'error'); return; }
+        if (!c.items.length) { u.toast('줄을 한 개 이상 적으세요.', 'error'); return; }
+        var file = box.querySelector('[data-file]').files;
+        uploadDocs(file).then(function (ids) {
+          return call('api_submitRfi', [{ sectionId: s.id, kind: c.kind, rfiNo: no, title: title, submittedOn: box.querySelector('[data-date]').value,
+            note: box.querySelector('[data-note]').value, requestDocumentId: ids[0] || null, items: c.items }]);
+        }).then(function (r) {
+          if (r.success === false) throw new Error(r.error || '제출하지 못했습니다.');
+          m.close(null);
+          state.open[s.id] = true;
+          u.toast(r.message);
+          return reload();
+        }).catch(function (e) { u.toast(e.message || '제출하지 못했습니다.', 'error'); });
+      },
+    });
+  }
+
+  /** 원청의 답 — 승인은 승인 문서가 있어야 한다. 반려·취소는 사유만. */
+  function rfiDecide(changeId, action) {
+    var u = ui();
+    var c = null;
+    (state.data.sections || []).forEach(function (s) { (s.changes || []).forEach(function (x) { if (x.id === changeId) c = x; }); });
+    if (!c) return;
+    var done = function (payload) {
+      return call('api_decideRfi', [payload]).then(function (r) {
+        if (r.success === false) return { success: false, error: r.error };
+        u.toast(r.message);
+        return reload().then(function () { return { success: true }; });
+      });
+    };
+    if (action === 'withdraw') {
+      u.confirmDanger({ title: 'RFI ' + c.rfiNo + ' 취소', body: '제출을 거둬들입니다. 현장 기록이 없는 추가 줄은 함께 지워집니다.', confirmLabel: '취소하기' }).then(function (ok) {
+        if (ok) done({ id: c.id, action: 'withdraw' }).then(function (r) { if (r && r.success === false) u.toast(r.error, 'error'); });
+      });
+      return;
+    }
+    var approve = action === 'approve';
+    u.formModal({
+      title: 'RFI ' + c.rfiNo + (approve ? ' 승인' : ' 반려'),
+      subtitle: approve ? '원청의 승인 메일·공문·서명본을 붙이세요. 승인하면 계약 금액이 ' + (c.amount >= 0 ? '+' : '') + money(c.amount) + ' 바뀌고 청구 대상이 됩니다.' : '반려하면 현장 기록이 없는 추가 줄은 지워집니다.',
+      saveLabel: approve ? '승인 반영' : '반려로 적기',
+      fields: (approve ? [
+        { name: 'file', label: '원청 승인 문서', type: 'file', required: true, colSpan: 2, accept: 'image/*,application/pdf,.eml,.doc,.docx' },
+      ] : []).concat([
+        { name: 'decidedOn', label: approve ? '승인일' : '반려일', type: 'date', value: today() },
+        { name: 'note', label: '메모', type: 'textarea', colSpan: 2 },
+      ]),
+      onSave: function (v) {
+        return uploadDocs(v.file ? [v.file] : []).then(function (ids) {
+          return done({ id: c.id, action: action, approvalDocumentId: ids[0] || null, decidedOn: v.decidedOn, note: v.note });
+        }).catch(function (e) { return { success: false, error: e.message }; });
+      },
+    });
   }
 
   function qtyText(v) { return v === null || v === undefined ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
 
   function ledger(contractId, lineId) {
-    if (state.linesModal) { state.linesModal.close(null); state.linesModal = null; }
     if (global.AdminClaimEvidence) global.AdminClaimEvidence.open(contractId, lineId);
   }
 
@@ -721,6 +990,10 @@
     pickSite: pickSite,
     uploadContract: uploadContract,
     lines: lines,
+    toggleAll: toggleAll,
+    record: record,
+    rfi: rfi,
+    rfiDecide: rfiDecide,
     ledger: ledger,
     _state: state,
     _meaningful: meaningful,

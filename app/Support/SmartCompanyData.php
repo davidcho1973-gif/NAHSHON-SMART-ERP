@@ -59,6 +59,7 @@ use App\Services\DocumentExpiryService;
 use App\Services\Drawings\SectionDrawingService;
 use App\Services\Finance\ClaimEvidenceService;
 use App\Services\Finance\ClaimSourceImportService;
+use App\Services\Finance\ContractChangeService;
 use App\Services\Finance\ContractSheetImportService;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\Finance\ProgressBillingDrafter;
@@ -343,6 +344,8 @@ class SmartCompanyData
             'api_draftClaimEvidence' => app(ClaimEvidenceService::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),
             'api_getClaimPacket' => app(ClaimEvidenceService::class)->getPacket((int) ($args[0] ?? 0)),
             'api_getSectionLines' => app(SectionDrawingService::class)->sectionLines((int) ($args[0] ?? 0)),
+            'api_submitRfi' => app(ContractChangeService::class)->submit(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_decideRfi' => app(ContractChangeService::class)->decide(is_array($args[0] ?? null) ? $args[0] : []),
             'api_previewContractSheet' => app(ContractSheetImportService::class)->preview((int) ($args[0] ?? 0)),
             'api_importContractSheet' => app(ContractSheetImportService::class)->import(is_array($args[0] ?? null) ? $args[0] : []),
             'api_importClaimSource' => app(ClaimSourceImportService::class)->import((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : [], (int) ($args[2] ?? 0), (int) ($args[3] ?? 0)),

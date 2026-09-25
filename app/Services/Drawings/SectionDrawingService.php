@@ -11,9 +11,11 @@ use App\Models\WorkSection;
 use App\Models\WorkSectionSheet;
 use App\Services\Admin\BillingAdminService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ContractChangeService;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -79,6 +81,7 @@ class SectionDrawingService
                 'contractAmount' => $sec->contract_amount,
                 'contractId' => $sec->project_contract_id,
                 'billing' => $money['sections'][$sec->id] ?? null,
+                'changes' => $money['changes'][$sec->id] ?? [],
                 'sheets' => $sec->sheets->map(function (WorkSectionSheet $pick) use ($byNo): array {
                     $sheet = $byNo->get((string) DrawingSheet::normalizeNo($pick->sheet_no));
 
@@ -91,6 +94,8 @@ class SectionDrawingService
             'noSite' => false,
             'siteId' => $site->id,
             'site' => trim($site->code.' — '.$site->name, ' —'),
+            // 현장 시계의 오늘 — 브라우저 날짜를 쓰면 시차 때문에 «미래 작업» 으로 거절된다.
+            'today' => Carbon::today($site->timezone ?: config('app.timezone'))->toDateString(),
             'sites' => $this->siteOptions($sites),
             'sections' => $sections,
             'documents' => $this->documents($user, $site, $sheets),
@@ -119,13 +124,14 @@ class SectionDrawingService
         }
         $lines = $this->visibleLines(collect([$section->id]));
         $progress = app(ClaimEvidenceService::class)->progressByLine($lines);
+        $rfi = app(ContractChangeService::class)->forLines($lines->pluck('id')->all());
 
         return [
             'success' => true,
             'section' => ['id' => $section->id, 'code' => $section->code, 'name' => $section->name],
             'contractId' => $lines->first()?->project_contract_id ?? $section->project_contract_id,
             'canManage' => $billing->canManage($user),
-            'lines' => $lines->map(fn (ContractBoqLine $l): array => $this->lineProgress($l, $progress[$l->id]))->values()->all(),
+            'lines' => $lines->map(fn (ContractBoqLine $l): array => $this->lineProgress($l, $progress[$l->id], $rfi[$l->id] ?? []))->values()->all(),
         ];
     }
 
@@ -262,39 +268,51 @@ class SectionDrawingService
     {
         $billing = app(BillingAdminService::class);
         if (! $billing->canView() || $sections->isEmpty()) {
-            return ['sections' => [], 'summary' => null];
+            return ['sections' => [], 'changes' => [], 'summary' => null];
         }
         $lines = $this->visibleLines($sections->pluck('id'));
         $progress = app(ClaimEvidenceService::class)->progressByLine($lines);
+        $changes = app(ContractChangeService::class);
+        $rfiByLine = $changes->forLines($lines->pluck('id')->all());
         $out = [];
         foreach ($lines->groupBy('work_section_id') as $sectionId => $group) {
-            $rows = $group->map(fn (ContractBoqLine $l): array => $this->lineProgress($l, $progress[$l->id]));
-            $amount = round($rows->sum('amount'), 2);
-            $earned = round($rows->sum('earned'), 2);
+            $rows = $group->map(fn (ContractBoqLine $l): array => $this->lineProgress($l, $progress[$l->id], $rfiByLine[$l->id] ?? []));
+            // 확정된 줄만 계약이다. 원청이 아직 승인하지 않은 RFI 줄은 따로 센다.
+            $accepted = $group->where('status', 'accepted');
+            $contractRows = $rows->where('status', 'accepted');
+            // 계약서처럼 줄 금액을 반올림 없이 더한다 — 줄마다 센트로 자르고 더하면 계약서 소계와 몇 센트 어긋난다.
+            $amount = round($accepted->sum(fn (ContractBoqLine $l): float => (float) $l->contract_qty * (float) $l->unit_price), 2);
+            $earned = round($contractRows->sum('earned'), 2);
             $out[(int) $sectionId] = [
-                'lines' => $rows->count(), 'amount' => $amount, 'earned' => $earned,
-                'storedOnSite' => round($rows->sum('storedOnSite'), 2),
+                'lineCount' => $contractRows->count(), 'amount' => $amount, 'earned' => $earned,
+                'storedOnSite' => round($contractRows->sum('storedOnSite'), 2),
                 'percent' => $amount > 0 ? round($earned / $amount * 100, 1) : null,
-                'done' => $rows->filter(fn (array $r): bool => $r['percent'] !== null && $r['percent'] >= 100)->count(),
+                'done' => $contractRows->filter(fn (array $r): bool => $r['percent'] !== null && $r['percent'] >= 100)->count(),
                 'pendingCount' => $rows->sum('pendingCount'),
-                'gaps' => $rows->where('installGap', true)->count(),
+                'gaps' => $contractRows->where('installGap', true)->count(),
+                'rfiPendingAmount' => round($rows->where('status', '!=', 'accepted')->sum('amount'), 2),
+                'lines' => $rows->values()->all(),
             ];
         }
         $contract = $lines->first()?->contract;
         $amount = round(array_sum(array_column($out, 'amount')), 2);
         $earned = round(array_sum(array_column($out, 'earned')), 2);
 
-        return ['sections' => $out, 'summary' => [
+        return ['sections' => $out, 'changes' => $changes->forSections($sections->pluck('id')), 'summary' => [
             'contractId' => $contract?->id,
             'contractTitle' => $contract?->title,
             'contractAmount' => $contract?->current_amount !== null ? (float) $contract->current_amount : null,
+            'originalAmount' => $contract?->original_amount !== null ? (float) $contract->original_amount : null,
+            'approvedChanges' => (float) ($contract?->approved_change_amount ?? 0),
+            'rfiPendingAmount' => round(array_sum(array_column($out, 'rfiPendingAmount')), 2),
             'lineTotal' => $amount,
-            'lines' => $lines->count(),
+            'lines' => array_sum(array_column($out, 'lineCount')),
             'earned' => $earned,
             'storedOnSite' => round(array_sum(array_column($out, 'storedOnSite')), 2),
             'percent' => $amount > 0 ? round($earned / $amount * 100, 1) : null,
             'pendingCount' => array_sum(array_column($out, 'pendingCount')),
             'canImport' => $billing->canManage() && $this->canManage(auth()->user()),
+            'canManage' => $billing->canManage(),
         ]];
     }
 
@@ -316,9 +334,10 @@ class SectionDrawingService
 
     /**
      * @param  array{verified: array<string, float>, pending: array<string, float>, pendingCount: int, earned: float}  $p
+     * @param  array<int, array<string, mixed>>  $rfi  이 줄을 만든(추가) 또는 줄이는(감액) RFI
      * @return array<string, mixed>
      */
-    private function lineProgress(ContractBoqLine $l, array $p): array
+    private function lineProgress(ContractBoqLine $l, array $p, array $rfi = []): array
     {
         $amount = round((float) $l->contract_qty * (float) $l->unit_price, 2);
         $split = $l->recognition_basis === 'milestone';
@@ -329,8 +348,10 @@ class SectionDrawingService
             'id' => $l->id, 'lineNo' => $l->line_no, 'group' => $l->group_label, 'description' => $l->description, 'spec' => $l->spec,
             'unit' => $l->unit, 'contractQty' => (float) $l->contract_qty, 'unitPrice' => (float) $l->unit_price, 'amount' => $amount,
             'materialPrice' => $l->material_price !== null ? (float) $l->material_price : null,
-            'splitsMaterial' => $split, 'status' => $l->status,
+            'splitsMaterial' => $split, 'status' => $l->status, 'stageWeights' => $l->stage_weights,
             'installedQty' => $installed, 'storedQty' => $split ? $stored : null,
+            'pendingInstalledQty' => (float) ($p['pending']['installation'] ?? $p['pending']['installed'] ?? 0),
+            'pendingStoredQty' => (float) ($p['pending']['stored'] ?? 0),
             'pendingCount' => $p['pendingCount'],
             'earned' => $p['earned'],
             'percent' => $amount > 0 ? round($p['earned'] / $amount * 100, 1) : null,
@@ -338,6 +359,7 @@ class SectionDrawingService
             'storedOnSite' => $split ? round(max(0, $stored - $installed) * (float) $l->material_price, 2) : 0.0,
             // 설치가 반입보다 많으면 반입 기록이 빠진 것이다 — 그 자재값을 못 받고 있다.
             'installGap' => $split && $installed > $stored + 0.00001,
+            'rfi' => $rfi,
         ];
     }
 
