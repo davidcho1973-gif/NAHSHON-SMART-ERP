@@ -19,6 +19,7 @@
 <body>
     <main class="card">
         <p class="eyebrow">Worker Badge QR</p>
+            @include("partials.lang-switch")
         <h1>{{ __('작업자 식별 QR') }}</h1>
         <div class="worker">
             <strong>{{ $employee?->name ?? 'Unknown worker' }}</strong>

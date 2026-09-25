@@ -54,6 +54,7 @@
     <div class="app">
         <header>
             <p class="eyebrow">Foreman / Safety Mode</p>
+            @include("partials.lang-switch")
             <h1>{{ __('팀 출퇴근 및 일일 인원 마감') }}</h1>
         </header>
 

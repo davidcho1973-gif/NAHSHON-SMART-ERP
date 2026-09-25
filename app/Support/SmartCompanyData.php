@@ -57,6 +57,8 @@ use App\Services\CommandCenter\ConstructionCommandCenterService;
 use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
 use App\Services\Drawings\SectionDrawingService;
+use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\Finance\ProgressBillingDrafter;
 use App\Services\GeminiReceiptAnalyzer;
@@ -306,16 +308,16 @@ class SmartCompanyData
             ),
             'api_getEmployeeAdminOptions' => app(EmployeeAdminService::class)->options(),
             'api_saveEmployeeAdmin' => app(EmployeeAdminService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            // 현장 QR 등록자 «확인» — 회사·팀·(자사일 때) 시급 셋만 정하면 끝난다.
+            'api_confirmSelfRegistration' => app(EmployeeAdminService::class)->confirmSelfRegistration(
+                (int) ($args[0] ?? 0),
+                is_array($args[1] ?? null) ? $args[1] : [],
+            ),
             'api_deleteEmployeeAdmin' => app(EmployeeAdminService::class)->delete((int) ($args[0] ?? 0)),
             // 직원 정보를 그대로 써서 로그인 계정을 만든다 — 이름·이메일을 또 치지 않는다.
             'api_grantEmployeeAccount' => app(EmployeeAdminService::class)->grantAccount(
                 (int) ($args[0] ?? 0),
                 is_array($args[1] ?? null) ? $args[1] : []
-            ),
-            // PIN 초대·재설정 링크 발급 — 관리자에게 나가는 것은 링크뿐, 번호는 본인만 정한다.
-            'api_issuePinLink' => app(EmployeeAdminService::class)->issuePinLink(
-                (int) ($args[0] ?? 0),
-                (string) ($args[1] ?? 'invite')
             ),
 
             // 원청 계약 · 서류 (Filament ProjectContractResource 를 SPA 로 옮긴 것).
@@ -333,6 +335,13 @@ class SmartCompanyData
             // 조회 3개는 api_get* 접두사라 읽기전용 계정 게이트·프론트 캐시가 그대로 작동하고,
             // 쓰기 6개는 read-only 계정에 403 이 떨어진다. 산식·전이 규칙은 서비스 안에서 방어한다.
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
+            'api_saveClaimLine' => app(ClaimEvidenceService::class)->saveLine(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_saveClaimRecord' => app(ClaimEvidenceService::class)->saveRecord(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_reviewClaimRecord' => app(ClaimEvidenceService::class)->reviewRecord(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_draftClaimEvidence' => app(ClaimEvidenceService::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),
+            'api_getClaimPacket' => app(ClaimEvidenceService::class)->getPacket((int) ($args[0] ?? 0)),
+            'api_importClaimSource' => app(ClaimSourceImportService::class)->import((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : [], (int) ($args[2] ?? 0), (int) ($args[3] ?? 0)),
             'api_getBillings' => app(BillingAdminService::class)->getBillings((int) ($args[0] ?? 0)),
             'api_getBillingOptions' => app(BillingAdminService::class)->getBillingOptions(),
             'api_saveBilling' => app(BillingAdminService::class)->saveBilling(is_array($args[0] ?? null) ? $args[0] : []),

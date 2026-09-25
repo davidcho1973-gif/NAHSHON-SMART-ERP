@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-23 Claim evidence ledger
+
+Progress percentages and mutable estimates did not identify contract-accepted quantities or original proof behind billing amounts. Added contract BOQ terms, distinct source/forecast/actual records, partial verification, scoped document/intake/photo links, reservations and frozen packets feeding the existing billing calculator and receipt ledger. Billing opens the evidence desk; manual/WBS totals cannot override ledger contracts. Original photos are preserved separately, linked files cannot be deleted, and verification/submission checks proof hashes. Milestone value rounds cumulatively per contract line, so splitting stages or months cannot create extra cents.
+
+Kitchen was imported into a separate local preview database: 62 source-only rows, 0 verified records, 0 pay applications; repeating the import created 0 duplicates. Source files and extracted data remain outside Git. Forecast classification, missing drawing matches and fabrication claims remain unverified. Production data has not been imported.
+
+Validation: full local suite 2,345 tests, 2,336 passed, 8 failures and 1 skip; seven failures were missing Bash on Windows and one was a customer name in a new test fixture. Affected classes passed after correction (126 tests / 521 assertions); final evidence/import suite passed 20 tests / 178 assertions. All 35 Node tests, static build, Blade compilation, changed-PHP Pint and diff checks passed. Actual AdminUI with isolated-DB source data passed browser checks at 1360/768/360px with no overflow or JS errors. Linux CI and staging/production verification are pending.
+
 ## CODEX — 2026-09-22 Unified site attendance QR
 
 Separate registration, roster-selection attendance and app/account entry paths confused workers and allowed an employee ID or phone suffix to stand in for identity. Consolidated site QR entry into registration or full-phone/PIN connection, followed by a remembered verified device and one clock-in/out button. Legacy registration QR URLs redirect to this gate. Public roster lookup/device issuance is retired; existing unverified tokens require one PIN connection. HR retains registration review, PIN links and private follow-up paperwork; the roster shows the existing headcount service's attendance state. New workers may record attendance before HR review, but unreviewed workers block payroll approval/payment. Existing employee, attendance and payroll records are preserved.
@@ -44,6 +52,7 @@ Owner requested removal of pay viewing from the worker app. Removed the pay tab,
 
 | Date | Worker | Area | Summary | Commit / Status | Verification |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-23 | CODEX | Claim evidence pilot | Contract BOQ, verified work, frozen billing allocations; source-only import and proof preservation. | codex/billing-evidence-ledger; CI/release pending | PHP126 + final20, Node35, build/Blade/style, browser1360/768/360; isolated import62, verified/payments0. |
 | 2026-09-22 | CODEX | Unified attendance | One site QR, verified personal device, HR roster and pending-review payroll protection. | codex/unified-attendance; release verification pending | Targeted63 + GD rerun170 passed; JS34/build/style passed; full Linux CI required. |
 | 2026-09-22 | CODEX | Manager mobile receiving | Worker app camera/file intake shares ERP receiving ledger; scoped private proof, manual/AI draft, human confirmation, duplicate retry protection and owned/rental fix. | codex/material-receiving-mobile | Related PHP47 + final failed-class/security rerun60 passed; JS32 passed; build/Blade passed. Linux CI and staging/NAHSHON release gates follow. |
 | 2026-09-20 | CODEX | Remove pay from worker app | Attendance-only home response and three-tab UI; preserve administrative payroll. | codex/worker-remove-pay | Relevant PostgreSQL tests and release verification recorded in workspace outputs/ERP_Worker_NoPay_20260920. |
@@ -537,3 +546,10 @@ Validation checkpoint: new QR and employee-admin suite 40 tests / 185 assertions
 
 ## CODEX — 2026-09-21 QR release verification
 Detailed HR registration fixtures now specify their required worker position. Public signup discards extra HR fields and cannot reissue an existing login/device using a known name and phone. Targeted registration regression: 67 tests, 365 assertions passed. Printable registration/attendance posters and email delivery requested after verified release; not yet delivered.
+
+## 2026-09-23 — Claim evidence audit timestamp correction
+
+- The evidence-ledger rollout passed 2,348 PHP tests (9,187 assertions) and 35 Node tests. PRs #94/#95 were merged, and Deploy NAHSHON verified build 90dfea6 with a healthy scheduler.
+- Post-deployment review found that the application's local wall time was serialized without its offset into PostgreSQL timestamp-with-time-zone columns when the database session used UTC. This affected audit timestamps, not quantities, prices or claim calculations.
+- Follow-up correction preserves offsets in the three evidence models and restricts historical repair to untouched source imports whose original import metadata proves the clock displacement. Reviewed or edited records are excluded.
+- Follow-up validation and deployment results will be recorded with the correction PR and its CI run.

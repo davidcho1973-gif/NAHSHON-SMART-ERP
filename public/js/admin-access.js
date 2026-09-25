@@ -60,12 +60,13 @@
 
     var notes = [];
     notes.push(rows.length + '개 계정');
+    notes.push(rows.filter(function (r) { return r.erpAccess; }).length + '명 ERP 입장 허용');
     if (inactive) notes.push(inactive + '개 비활성');
     if (gaps) notes.push(gaps + '개 범위 미지정');
 
     return u.pageHeader(
       '계정 · 권한 관리',
-      '누가 어느 현장까지 볼 수 있는지 정합니다. — ' + notes.join(' · '),
+      'ERP 본화면은 여기서 허용한 사람만 들어옵니다. 현장 인력은 전화번호 뒷 4자리로 작업자 앱을 씁니다. — ' + notes.join(' · '),
       u.primaryButton('계정 추가', 'window.AdminAccess.openForm()', 'plus')
     ) + u.table({
       id: 'ua-tbl',
@@ -93,6 +94,16 @@
         },
         { key: 'scope', label: '범위', render: scopeCell },
         {
+          // 현장 인력은 전화번호 뒷 4자리로 작업자 앱에 들어오고, ERP 본화면은 승인된
+          // 사람에게만 열린다. 그 «승인» 이 목록에서 보이지 않으면 아무도 관리할 수 없다.
+          key: 'erpAccess', label: 'ERP 입장', width: '110px',
+          render: function (r) {
+            return r.erpAccess
+              ? u.badge('허용됨', 'ok')
+              : u.badge('작업자 앱만', 'muted');
+          },
+        },
+        {
           key: 'status', label: '상태', width: '110px',
           render: function (r) { return u.badge(r.statusLabel, statusKind(r.status)); },
         },
@@ -107,7 +118,12 @@
             var toggle = r.status === 'active'
               ? u.rowButton('정지', 'window.AdminAccess.setStatus(' + r.id + ',"suspended")')
               : u.rowButton('활성화', 'window.AdminAccess.setStatus(' + r.id + ',"active")');
-            return toggle + ' ' +
+            // ERP 입장을 주고 빼는 것은 «역할을 바꾸는 일» 이다. 그래서 따로 만든 손잡이가
+            // 아니라 역할 화면을 연다 — 손잡이가 둘이면 어느 쪽이 정본인지 아무도 모른다.
+            var erp = r.erpAccess
+              ? u.rowButton('ERP 입장 해제', 'window.AdminAccess.openForm(' + r.id + ')')
+              : u.rowButton('ERP 입장 허용', 'window.AdminAccess.openForm(' + r.id + ')');
+            return erp + ' ' + toggle + ' ' +
               u.rowButton('수정', 'window.AdminAccess.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminAccess.remove(' + r.id + ')', 'danger');
           },
@@ -166,7 +182,12 @@
 
           { name: 'role', label: '역할', type: 'select', required: true, group: '권한',
             options: o.roles, value: row ? row.role : 'worker',
-            hint: self ? '본인 계정이라 바꿀 수 없습니다.' : '자기보다 높은 역할은 부여할 수 없습니다.' },
+            // 역할이 곧 «ERP 본화면에 들어갈 수 있는가» 다. 그 사실을 여기서 말해 주지
+            // 않으면, 관리자는 작업자 역할을 준 사람이 왜 ERP 를 못 여는지 알 수 없다.
+            hint: self
+              ? '본인 계정이라 바꿀 수 없습니다.'
+              : 'ERP 본화면은 관리자·인사담당·현장소장·안전관리자·급여·협력사관리자·원청·열람전용에게 열립니다. '
+                + '작업자·작업반장은 전화번호 뒷 4자리로 작업자 앱만 씁니다. 자기보다 높은 역할은 부여할 수 없습니다.' },
           { name: 'status', label: '상태', type: 'select', required: true, group: '권한',
             options: o.statuses, value: row ? row.status : 'active',
             hint: self ? '본인 계정이라 바꿀 수 없습니다.' : '' },

@@ -36,12 +36,14 @@ class WorkerEnrollmentController extends Controller
         $team = Team::findOrFail($data['team_id']);
 
         if ($request->boolean('confirmed')) {
+            // 등록과 승인을 한 번에 끝낸다. 개인 링크는 만들지 않는다 —
+            // 본인은 현장 QR 을 찍고 전화번호 뒷 4자리를 넣으면 들어온다.
             $result = $this->enrollment->registerAndActivate($request->user(), $team, $data);
 
             return $this->qr(
-                $result['url'],
+                route('gate.show', ['site' => $team->site_id]),
                 $result['enrollment']->name.' · 출퇴근 시작 QR',
-                '직원 본인이 기본 카메라로 스캔 · 15분 유효 · 1회 사용 · PIN 설정 후 바로 출근 화면',
+                '본인이 기본 카메라로 이 QR 을 찍고 전화번호 뒷 4자리를 넣으면 바로 출근 화면이 열립니다.',
             );
         }
 
@@ -55,14 +57,7 @@ class WorkerEnrollmentController extends Controller
         $request->validate(['confirmed' => ['accepted']]);
         $this->enrollment->approve($request->user(), $enrollment);
 
-        return redirect()->route('worker-enrollment.index', $this->returnQuery($request))->with('notice', '승인했습니다. 개인용 앱 연결 QR을 발급하여 본인에게 전달하세요. 시급 금액은 급여 설정에서 확인하세요.');
-    }
-
-    public function activation(Request $request, WorkerEnrollment $enrollment)
-    {
-        $url = $this->enrollment->activation($request->user(), $enrollment);
-
-        return $this->qr($url, $enrollment->name.' · 개인용 앱 연결', '본인에게만 전달 · 15분 유효 · 1회 사용 · 재발급하면 이전 링크 무효');
+        return redirect()->route('worker-enrollment.index', $this->returnQuery($request))->with('notice', '승인했습니다. 본인은 전화번호 뒷 4자리로 바로 들어옵니다. 시급 금액은 급여 설정에서 확인하세요.');
     }
 
     public function reject(Request $request, WorkerEnrollment $enrollment)

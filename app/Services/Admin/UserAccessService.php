@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin;
 
+use App\Http\Middleware\RequireApprovedErpAccess;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
@@ -102,6 +103,12 @@ class UserAccessService
                 'teamId' => $u->allowed_team_id,
                 'team' => $u->allowedTeam?->name,
                 'notes' => $u->access_notes,
+                // 이 계정이 ERP 본화면에 들어갈 수 있는가 — 목록에서 한눈에 보여야 한다.
+                //
+                // 2026-09-23 부터 현장 인력은 전화번호 뒷 4자리로 작업자 앱에 들어오고,
+                // ERP 본화면은 «승인된 역할» 에게만 열린다(RequireApprovedErpAccess).
+                // 그 판정을 화면이 따로 계산하면 두 벌이 되어 언젠가 어긋난다 — 여기서 내려준다.
+                'erpAccess' => in_array($u->access_role, RequireApprovedErpAccess::ERP_ROLES, true),
                 'hasGoogle' => filled($u->google_id),
                 'lastLoginAt' => $u->last_login_at?->toDateTimeString(),
                 // 자기 자신은 화면에서 역할·상태 손잡이를 잠근다(자물쇠 아이콘 표시용).

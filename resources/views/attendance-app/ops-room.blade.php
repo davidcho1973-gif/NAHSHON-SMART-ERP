@@ -101,6 +101,7 @@
     <div class="app field-shell">
         <header class="field-header">
             <a class="back field-back" href="{{ route('attendance-app.index') }}">← {{ __('홈') }}</a>
+            @include("partials.lang-switch")
             <p class="eyebrow">{{ \App\Support\Org::name() }} · {{ $siteName ?: __('현장') }}</p>
             <h1>{{ $myTrade ? __('오늘 보고').' — '.$myTrade : __('현장 기록') }}</h1>
 

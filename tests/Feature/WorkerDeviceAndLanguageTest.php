@@ -141,12 +141,19 @@ class WorkerDeviceAndLanguageTest extends TestCase
             ->assertStatus(200)->assertJson(['recognized' => true, 'next' => 'clock_out']);
     }
 
-    public function test_existing_worker_cannot_bind_by_employee_id_alone(): void
+    /**
+     * 같은 사람을 다른 휴대폰에서 고르면 그 휴대폰도 기억된다 — 폰을 바꾼 사람을 막지 않는다.
+     * (사장님 결정 2026-09-23: PIN 없이 뒷 4자리로 본인을 찾아 바로 찍는다.)
+     */
+    public function test_choosing_yourself_on_a_second_phone_remembers_that_phone_too(): void
     {
-        $token = $this->register('carlos@example.com');
+        $this->register('carlos@example.com');
         $employee = Employee::where('email', 'carlos@example.com')->firstOrFail();
-        $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])->assertStatus(410);
-        $this->assertDatabaseCount('worker_devices', 1);
+
+        $this->postJson('/gate/'.$this->site->id.'/claim', ['employee_id' => $employee->id])
+            ->assertOk()->assertJson(['success' => true]);
+
+        $this->assertDatabaseCount('worker_devices', 2);
     }
 
     public function test_remember_rejects_a_worker_from_another_site(): void
@@ -158,7 +165,7 @@ class WorkerDeviceAndLanguageTest extends TestCase
         ]);
 
         $this->postJson('/gate/'.$this->site->id.'/remember', ['employee_id' => $employee->id])
-            ->assertStatus(410)->assertJson(['success' => false]);
+            ->assertStatus(422)->assertJson(['success' => false]);
     }
 
     public function test_forget_drops_the_device(): void
@@ -178,11 +185,12 @@ class WorkerDeviceAndLanguageTest extends TestCase
         $res = $this->get('/gate/'.$this->site->id);
 
         $res->assertStatus(200);
-        foreach (WorkerLang::OPTIONS as $code => $name) {
-            $res->assertSee('value="'.$code.'"', false);
-            $res->assertSee($name);
+        // 언어 단추는 공용 조각 하나를 모든 화면이 쓴다(partials/lang-switch) —
+        // 화면마다 만들면 새 화면에서 반드시 하나가 빠진다.
+        foreach (['ko', 'en', 'es'] as $code) {
+            $res->assertSee('data-locale="'.$code.'"', false);
         }
-        // 사전이 통째로 실려야 새로고침 없이 언어를 바꿀 수 있다.
+        // 사전이 통째로 실려야 화면이 그 말로 바로 그려진다.
         $res->assertSee('Marcar entrada');
         $res->assertSee('Clock out');
     }
@@ -192,10 +200,10 @@ class WorkerDeviceAndLanguageTest extends TestCase
         $res = $this->followingRedirects()->get('/join/w/'.$this->site->id);
 
         $res->assertStatus(200);
-        foreach (WorkerLang::OPTIONS as $code => $name) {
-            $res->assertSee('value="'.$code.'"', false);
+        foreach (['ko', 'en', 'es'] as $code) {
+            $res->assertSee('data-locale="'.$code.'"', false);
         }
-        $res->assertSee('Registrarme y crear PIN');
+        $res->assertSee('Registrarme y marcar entrada');
         $res->assertSee('name="preferred_language"', false);
     }
 

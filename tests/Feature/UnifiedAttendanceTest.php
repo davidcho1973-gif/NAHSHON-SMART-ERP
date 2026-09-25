@@ -8,10 +8,8 @@ use App\Models\PayrollRun;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkerDevice;
-use App\Services\Admin\EmployeeAdminService;
 use App\Support\QrPosters;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class UnifiedAttendanceTest extends TestCase
@@ -23,7 +21,7 @@ class UnifiedAttendanceTest extends TestCase
         $company = Company::create(['code' => 'OWN', 'name' => 'Own', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
         $site = Site::create(['code' => 'TEST', 'name' => 'Test', 'company_id' => $company->id, 'status' => 'active', 'timezone' => 'America/New_York']);
         $employee = Employee::create(['name' => 'Test Worker', 'phone' => '4805550123', 'company_id' => $company->id, 'site_id' => $site->id, 'employment_status' => 'active', 'employment_type' => Employee::TYPE_DIRECT]);
-        $user = User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active', 'pin_hash' => Hash::make('2580')]);
+        $user = User::factory()->create(['employee_id' => $employee->id, 'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']);
 
         return [$site, $employee, $user];
     }
@@ -32,21 +30,32 @@ class UnifiedAttendanceTest extends TestCase
     {
         [$site] = $this->worker();
         $this->get(route('worker-join.form', $site))->assertRedirect(route('gate.show', ['site' => $site, 'lang' => 'ko']));
-        $this->get(route('gate.show', $site))->assertOk()->assertSee('name="full_name"', false)->assertSee('id="pin"', false);
+        $this->get(route('gate.show', $site))->assertOk()->assertSee('name="full_name"', false)->assertSee('id="last4"', false);
         $this->assertSame(QrPosters::make($site, QrPosters::GATE)['url'], QrPosters::make($site, QrPosters::JOIN)['url']);
         $this->assertCount(1, QrPosters::many($site));
     }
 
-    public function test_only_pin_verified_device_can_punch_and_client_cannot_choose_employee(): void
+    /**
+     * 찍는 사람은 «이 휴대폰» 이 정한다 — 요청 본문이 사람을 고르지 못한다.
+     *
+     * PIN 은 없앴지만(사장님 결정 2026-09-23) 이 규칙은 남는다. 없으면 아무나
+     * employee_id 만 바꿔 남의 출근을 찍을 수 있고, 그건 곧 남의 임금이다.
+     */
+    public function test_the_phone_decides_who_punches_and_the_client_cannot_choose(): void
     {
         [$site,$employee] = $this->worker();
-        $this->postJson(route('gate.remember', $site), ['employee_id' => $employee->id])->assertStatus(410);
-        $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertStatus(410);
-        $legacy = WorkerDevice::issueFor($employee);
-        $this->postJson(route('gate.punch', $site), ['employee_id' => $employee->id, 'device_token' => $legacy])->assertUnauthorized();
-        $this->postJson(route('gate.login', $site), ['phone' => '+1 (480) 555-0123', 'pin' => '9998'])->assertUnprocessable();
-        $token = $this->postJson(route('gate.login', $site), ['phone' => '+1 (480) 555-0123', 'pin' => '2580'])->assertOk()->json('device_token');
+
+        // 연결되지 않은 휴대폰은 아무것도 못 찍는다.
+        $stray = WorkerDevice::issueFor($employee);
+        $this->postJson(route('gate.punch', $site), ['employee_id' => $employee->id, 'device_token' => $stray])->assertUnauthorized();
+
+        // 뒷 4자리로 찾아 이름을 고르면 그 순간 이 휴대폰이 기억된다.
+        $found = $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertOk()->json('workers');
+        $this->assertSame($employee->id, $found[0]['id']);
+        $token = $this->postJson(route('gate.claim', $site), ['employee_id' => $employee->id])->assertOk()->json('device_token');
+
         $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', true);
+        // 본문에 남의 번호를 넣어도 이 휴대폰의 주인으로 찍힌다.
         $this->postJson(route('gate.punch', $site), ['employee_id' => 999999, 'device_token' => $token])->assertJsonPath('success', true);
         $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id, 'event_type' => 'clock_in']);
         $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('ignored', true);
@@ -62,16 +71,28 @@ class UnifiedAttendanceTest extends TestCase
         $this->assertSame('Test Worker', $employee->fresh()->name);
     }
 
-    public function test_wrong_site_disabled_and_admin_accounts_cannot_use_public_gate(): void
+    /**
+     * 게이트는 <b>출퇴근만</b> 하는 문이다.
+     *
+     * 관리자 계정을 가진 사람도 자기 출근은 이 문으로 찍는다 — 현장에 서 있는 사람이니까.
+     * 다만 그 휴대폰이 ERP 세션을 여는 열쇠가 되지는 않는다(벽에 붙은 QR 로 연결한
+     * 휴대폰 한 대가 관리자 권한이 되면 안 된다). 퇴사·비활성 기록은 아예 못 찍는다.
+     */
+    public function test_the_gate_records_attendance_but_never_opens_an_admin_session(): void
     {
         [$site,$employee,$user] = $this->worker();
         $user->update(['access_role' => 'admin']);
-        $this->postJson(route('gate.login', $site), ['phone' => $employee->phone, 'pin' => '2580'])->assertUnprocessable();
-        $token = WorkerDevice::issueFor($employee, verified: true);
-        $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', false);
-        $user->update(['access_role' => 'worker', 'account_status' => 'disabled']);
+
+        $token = $this->postJson(route('gate.claim', $site), ['employee_id' => $employee->id])->assertOk()->json('device_token');
+        $this->assertGuest('web', '관리자 계정은 휴대폰만으로 ERP 세션이 열리지 않는다');
+        $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', true);
+        $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('success', true);
+
+        // 퇴사·비활성은 이름부터 나오지 않고 찍히지도 않는다.
+        $employee->update(['employment_status' => 'terminated']);
+        $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertOk()->assertJsonCount(0, 'workers');
         $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertUnauthorized();
-        $this->assertDatabaseCount('attendance_logs', 0);
+        $this->assertDatabaseCount('attendance_logs', 1);
     }
 
     public function test_hr_unconfirmed_employee_blocks_payroll_approval(): void
@@ -92,46 +113,48 @@ class UnifiedAttendanceTest extends TestCase
         $this->assertSame('approved', $run->fresh()->status);
     }
 
-    public function test_new_worker_sets_pin_then_clocks_in_without_hr_blocking_attendance(): void
+    /**
+     * 등록한 그 자리에서 출근이 찍힌다 — 인사 확인을 기다리지 않는다.
+     *
+     * 예전에는 등록과 첫 출근 사이에 15분짜리 PIN 링크가 있었다. 그 링크를 놓치면
+     * 인사담당자가 다시 보내 줘야 했고, 그 사이에 그 사람은 명단에는 있는데 출근은
+     * 못 찍는 상태로 현장에 서 있었다.
+     */
+    public function test_new_worker_clocks_in_immediately_without_a_pin_or_hr(): void
     {
         [$site] = $this->worker();
         $response = $this->post(route('worker-join.store', $site), ['full_name' => 'New Worker', 'phone' => '4805550198']);
         $response->assertOk();
-        $setup = $response->viewData('pinSetupUrl');
-        $this->assertNotEmpty($setup);
-        $result = $this->postJson($setup, ['pin' => '2580'])->assertOk();
-        $token = $result->json('attendance_device_token');
+        $token = $response->viewData('deviceToken');
+        $this->assertNotEmpty($token);
+        $this->assertDatabaseCount('auth_setup_tokens', 0);
+
         $this->postJson(route('gate.me', $site), ['device_token' => $token])->assertJsonPath('recognized', true);
         $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('success', true);
+
         $employee = Employee::where('phone', '4805550198')->firstOrFail();
+        // 인사 확인은 아직 남아 있다 — 그렇다고 출퇴근을 막지는 않는다.
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id]);
-        $this->postJson($setup, ['pin' => '4826'])->assertUnprocessable();
     }
 
-    public function test_repeated_wrong_pin_locks_phone_recovery(): void
-    {
-        [$site, $employee, $user] = $this->worker();
-        for ($i = 0; $i < 5; $i++) {
-            $this->postJson(route('gate.login', $site), ['phone' => $employee->phone, 'pin' => '9870'])->assertUnprocessable();
-        }
-        $this->assertTrue($user->fresh()->pin_locked_until->isFuture());
-        $this->postJson(route('gate.login', $site), ['phone' => $employee->phone, 'pin' => '2580'])->assertUnprocessable();
-        $this->assertDatabaseCount('worker_devices', 0);
-    }
-
-    public function test_hr_connects_existing_worker_without_separate_account_creation(): void
+    /**
+     * 계정이 없던 옛 직원도 자기 출근은 찍는다.
+     *
+     * 예전에는 인사담당자가 «PIN 링크» 를 발급해야 그 사람에게 계정이 생겼다. PIN 이
+     * 사라진 지금, 계정이 필요한 곳은 앱(메시지·문서)뿐이고 출퇴근은 계정 없이도 된다 —
+     * 계정이 없다는 이유로 현장에 서 있는 사람의 근무가 기록되지 않으면 그건 임금이다.
+     */
+    public function test_a_worker_without_an_account_still_clocks_in(): void
     {
         [$site, $employee, $user] = $this->worker();
         $user->delete();
-        $hr = User::factory()->create(['access_role' => 'hr_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']);
-        $this->actingAs($hr);
-        $result = app(EmployeeAdminService::class)->issuePinLink($employee->id);
-        $this->assertTrue($result['success']);
-        $this->assertSame('worker', $employee->fresh()->user->access_role);
-        $this->assertSame('self', $employee->fresh()->user->access_scope);
-        $foreman = User::factory()->create(['access_role' => 'foreman', 'access_scope' => 'team', 'account_status' => 'active']);
-        $this->actingAs($foreman);
-        $this->assertFalse(app(EmployeeAdminService::class)->issuePinLink($employee->id)['success']);
+
+        $found = $this->postJson(route('gate.identify', $site), ['last4' => '0123'])->assertOk()->json('workers');
+        $this->assertSame($employee->id, $found[0]['id']);
+
+        $token = $this->postJson(route('gate.claim', $site), ['employee_id' => $employee->id])->assertOk()->json('device_token');
+        $this->postJson(route('gate.punch', $site), ['device_token' => $token])->assertJsonPath('success', true);
+        $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id, 'event_type' => 'clock_in']);
     }
 }

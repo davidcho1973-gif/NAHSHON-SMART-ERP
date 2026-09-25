@@ -8,6 +8,10 @@
 @php($t = [
     'ko' => [
         'wait' => '잠시만요…',
+        'findTitle' => '전화번호 뒷 4자리를 넣어 주세요',
+        'findBody' => '등록하신 전화번호의 마지막 네 자리입니다. 비밀번호도 PIN 도 없습니다.',
+        'last4' => '전화번호 뒷 4자리',
+        'noMatch' => '찾지 못했습니다. 번호를 다시 확인하시거나 현장 QR 로 등록해 주세요.',
         'title' => '휴대폰을 찾을 수 없습니다',
         'body' => '이 휴대폰은 아직 현장에 등록되어 있지 않습니다. 현장에 붙은 파란 「새 작업자 등록」 QR 을 휴대폰 카메라로 찍어 이름과 전화번호를 넣어 주세요. 등록을 마치면 이 화면을 거치지 않고 바로 열립니다.',
         'gate' => '이미 등록했는데 안 열리면, 출입구 QR 을 한 번 찍은 뒤 다시 시도해 주세요.',
@@ -15,6 +19,10 @@
     ],
     'en' => [
         'wait' => 'One moment…',
+        'findTitle' => 'Enter the last 4 digits of your phone',
+        'findBody' => 'The last four digits of your registered phone number. No password, no PIN.',
+        'last4' => 'Last 4 digits',
+        'noMatch' => 'Not found. Check the digits, or register with the site QR.',
         'title' => 'This phone is not registered yet',
         'body' => 'Scan the blue “New Worker Sign-Up” QR posted on site with your phone camera and enter your name and phone number. After that this screen is skipped.',
         'gate' => 'Already registered? Scan the gate QR once, then try again.',
@@ -22,6 +30,10 @@
     ],
     'es' => [
         'wait' => 'Un momento…',
+        'findTitle' => 'Escriba los últimos 4 dígitos de su teléfono',
+        'findBody' => 'Los últimos cuatro dígitos de su teléfono registrado. Sin contraseña y sin PIN.',
+        'last4' => 'Últimos 4 dígitos',
+        'noMatch' => 'No encontrado. Revise los dígitos o regístrese con el QR de la obra.',
         'title' => 'Este teléfono aún no está registrado',
         'body' => 'Escanee con la cámara el QR azul de “Registro de trabajador nuevo” que está en la obra y escriba su nombre y teléfono. Después esta pantalla no aparece más.',
         'gate' => '¿Ya se registró? Escanee el QR de la entrada una vez y vuelva a intentar.',
@@ -33,6 +45,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ \App\Support\Org::name() }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <style>
@@ -59,10 +72,18 @@
             <p>{{ $t['wait'] }}</p>
         </div>
 
+        {{-- 휴대폰이 기억돼 있지 않을 때 — 외울 것을 주지 않는다. 자기 전화번호 뒷 4자리다.
+             작업자·반장·관리자가 같은 문을 쓴다. 이 문으로 열리는 것은 작업자 앱뿐이다. --}}
         <div id="stuck" hidden>
-            <h1>{{ $t['title'] }}</h1>
-            <p>{{ $t['body'] }}</p>
-            <p>{{ $t['gate'] }}</p>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:10px">@include('partials.lang-switch')</div>
+            <h1>{{ $t['findTitle'] }}</h1>
+            <p>{{ $t['findBody'] }}</p>
+            <label for="last4">{{ $t['last4'] }}</label>
+            <input id="last4" type="tel" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"
+                   style="width:100%;padding:14px;font-size:20px;letter-spacing:.3em;text-align:center;border:1px solid #d8d5cd;border-radius:10px;margin:10px 0">
+            <p id="app-notice" role="status" aria-live="polite"></p>
+            <div id="matches"></div>
+            <p style="font-size:13px;opacity:.75">{{ $t['body'] }}</p>
             <a class="go" href="{{ route('worker-app.entry') }}">{{ $t['retry'] }}</a>
         </div>
 
@@ -90,6 +111,56 @@
 
             document.getElementById('device_token').value = token;
             document.getElementById('hand').submit();
+        })();
+
+        // 뒷 4자리로 본인 찾기 — 네 자리가 차면 스스로 찾고, 이름을 누르면 들어간다.
+        (function () {
+            var box = document.getElementById('last4');
+            var list = document.getElementById('matches');
+            var note = document.getElementById('app-notice');
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            var urls = { find: @json(route('worker-app.find')), enter: @json(route('worker-app.enter')) };
+            var busy = false;
+
+            function post(url, body) {
+                return fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json', 'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrf ? csrf.content : '',
+                    },
+                    body: JSON.stringify(body),
+                }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || ''); return d; }); });
+            }
+
+            box.addEventListener('input', function () {
+                var v = box.value.replace(/\D/g, '').slice(0, 4);
+                if (v !== box.value) { box.value = v; }
+                list.innerHTML = ''; note.textContent = '';
+                if (v.length !== 4 || busy) { return; }
+                busy = true;
+                post(urls.find, { last4: v }).then(function (d) {
+                    var ws = (d && d.workers) || [];
+                    if (!ws.length) { note.textContent = @json($t['noMatch']); return; }
+                    list.innerHTML = ws.map(function (w) {
+                        return '<button type="button" class="go pick" data-id="' + w.id + '">' + w.name +
+                            (w.site ? ' · ' + w.site : '') + '</button>';
+                    }).join('');
+                    Array.prototype.forEach.call(list.querySelectorAll('.pick'), function (b) {
+                        b.onclick = function () { enter(b.dataset.id); };
+                    });
+                }).catch(function (e) { note.textContent = e.message || @json($t['noMatch']); })
+                  .then(function () { busy = false; });
+            });
+
+            function enter(id) {
+                if (busy) { return; }
+                busy = true;
+                post(urls.enter, { employee_id: Number(id) }).then(function (d) {
+                    try { localStorage.setItem('dasolWorkerDevice', d.device_token); } catch (e) {}
+                    window.location.replace(d.redirect);
+                }).catch(function (e) { note.textContent = e.message || ''; busy = false; });
+            }
         })();
     </script>
 </body>

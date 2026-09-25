@@ -44,39 +44,43 @@
             <div class="check">✓</div>
             <h1 id="done-title">등록되었습니다</h1>
             <p><strong>{{ $workerName }}</strong><br><span id="done-copy">이 휴대폰을 출퇴근용으로 연결했습니다.</span></p>
-            <div class="moving" id="moving">{{ $pinSetupUrl ? '개인 PIN 설정으로 이동합니다…' : '출근 화면으로 이동합니다…' }}</div>
-            <a class="gate" id="gate-link" href="{{ $pinSetupUrl ?: $gateUrl }}">{{ $pinSetupUrl ? 'PIN 설정하고 출근하기' : '출근 화면 열기' }}</a>
+            <div class="moving" id="moving">출근 화면으로 이동합니다…</div>
+            <a class="gate" id="gate-link" href="{{ $gateUrl }}">출근 화면 열기</a>
         </section>
         <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
         <script>
             (function () {
                 // 이 폰을 기억할지 말지는 worker-device-remember.js 한 곳이 정한다
                 // (반장 폰으로 팀원을 여럿 등록했을 때 남의 출근이 찍히는 것을 막는 규칙).
-                var shared = window.rememberWorkerDevice(@json($employee->id), @json($deviceToken), @json($lang));
+                // 공용 휴대폰인지는 서버가 정한다 — 토큰을 안 준 것이 그 답이다.
+                // 브라우저의 판단은 그대로 두되(이미 저장된 남의 토큰을 지우는 일을 한다),
+                // 결론은 서버 쪽을 따른다. 판단이 두 벌이면 한쪽만 고쳐진다.
+                var shared = window.rememberWorkerDevice(@json($employee->id), @json($deviceToken), @json($lang))
+                    || @json($deviceToken === '');
 
                 var words = {
                     ko: shared
-                        ? ['등록되었습니다', '공용 휴대폰으로 판단되어 자동 본인 연결은 하지 않았습니다. 출근 화면에서 본인을 확인해 주세요.', '출근 화면으로 이동합니다…', '출근 화면 열기']
-                        : @json($pinSetupUrl)
-                            ? ['등록되었습니다', '이제 본인만 아는 4자리 PIN을 설정해 주세요.', 'PIN 설정 후 바로 출근 화면이 열립니다…', 'PIN 설정하고 출근하기']
-                            : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다.', '바로 출근할 수 있도록 이동합니다…', '출근 화면 열기'],
+                        ? ['등록되었습니다', '공용 휴대폰으로 보여 이 휴대폰을 본인 것으로 연결하지 않았습니다. 본인 휴대폰에서 같은 QR 을 찍으면 바로 출근할 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기']
+                        : ['등록되었습니다', '이 휴대폰을 출퇴근용으로 연결했습니다. 바로 출근을 찍을 수 있습니다.', '출근 화면으로 이동합니다…', '출근 화면 열기'],
                     en: shared
-                        ? ['Registration complete', 'This appears to be a shared phone. Confirm your identity on the attendance screen.', 'Opening attendance…', 'Open attendance']
-                        : @json($pinSetupUrl)
-                            ? ['Registration complete', 'Now set a private 4-digit PIN.', 'Attendance opens after PIN setup…', 'Set PIN and clock in']
-                            : ['Registration complete', 'This phone is now linked for attendance.', 'Opening attendance so you can clock in…', 'Open attendance'],
+                        ? ['Registration complete', 'This looks like a shared phone, so it was not linked to you. Scan the same QR on your own phone and you can clock in right away.', 'Opening attendance…', 'Open attendance']
+                        : ['Registration complete', 'This phone is linked for attendance. You can clock in right now.', 'Opening attendance…', 'Open attendance'],
                     es: shared
-                        ? ['Registro completo', 'Parece ser un teléfono compartido. Confirme su identidad en la pantalla de asistencia.', 'Abriendo asistencia…', 'Abrir asistencia']
-                        : @json($pinSetupUrl)
-                            ? ['Registro completo', 'Ahora configure un PIN privado de 4 dígitos.', 'La asistencia se abrirá después de configurar el PIN…', 'Configurar PIN y marcar entrada']
-                            : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia.', 'Abriendo asistencia para marcar entrada…', 'Abrir asistencia']
+                        ? ['Registro completo', 'Parece un teléfono compartido, así que no se vinculó a usted. Escanee el mismo QR en su propio teléfono y podrá marcar entrada de inmediato.', 'Abriendo asistencia…', 'Abrir asistencia']
+                        : ['Registro completo', 'Este teléfono quedó vinculado para la asistencia. Ya puede marcar entrada.', 'Abriendo asistencia…', 'Abrir asistencia']
                 }[@json($lang)];
                 document.getElementById('done-title').textContent = words[0];
                 document.getElementById('done-copy').textContent = words[1];
                 document.getElementById('moving').textContent = words[2];
                 document.getElementById('gate-link').textContent = words[3];
 
-                window.setTimeout(function () { window.location.replace(@json($pinSetupUrl ?: $gateUrl)); }, 900);
+                // 공용 휴대폰이면 데려가지 않는다 — 여기서 읽어야 할 안내가 있고,
+                // 그 화면에서 이 사람이 찍을 수 있는 것도 없다.
+                if (!shared) {
+                    window.setTimeout(function () { window.location.replace(@json($gateUrl)); }, 900);
+                } else {
+                    document.getElementById('moving').textContent = '';
+                }
             })();
         </script>
     @else

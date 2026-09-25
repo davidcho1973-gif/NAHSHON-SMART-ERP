@@ -2,19 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\AuthSetupToken;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
-use App\Models\WorkerDevice;
 use App\Models\WorkerEnrollment;
 use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\UserAccessService;
-use App\Services\Auth\PinAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class WorkerEnrollmentTest extends TestCase
@@ -72,8 +68,32 @@ class WorkerEnrollmentTest extends TestCase
             'team_id' => $this->team->id,
             'employment_status' => 'active',
         ]);
-        $this->assertDatabaseCount('auth_setup_tokens', 1);
-        $this->assertStringContainsString('/auth/pin/setup/', $response->viewData('url'));
+        // 개인 링크는 만들지 않는다 — 본인에게 건네는 것은 현장 QR 하나뿐이고,
+        // 그 앞에서 전화번호 뒷 4자리를 넣으면 들어온다(사장님 결정 2026-09-23).
+        $this->assertDatabaseCount('auth_setup_tokens', 0);
+        $this->assertSame(route('gate.show', ['site' => $this->team->site_id]), $response->viewData('url'));
+    }
+
+    /** 승인만으로 계정이 서고, 본인은 전화번호 뒷 4자리로 들어온다. */
+    public function test_approval_alone_lets_the_worker_in_with_four_digits(): void
+    {
+        $enrollment = $this->submit();
+        $this->actingAs($this->admin)->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1])->assertRedirect();
+
+        $employee = $enrollment->fresh()->employee;
+        $user = $employee->user;
+        $this->assertNull($user->email, '현장 인력에게 이메일을 요구하지 않는다');
+        $this->assertSame('worker', $user->access_role);
+
+        auth()->logout();
+        $found = $this->postJson(route('worker-app.find'), ['last4' => '0147'])->assertOk()->json('workers');
+        $this->assertSame($employee->id, $found[0]['id']);
+
+        $this->postJson(route('worker-app.enter'), ['employee_id' => $employee->id])->assertOk();
+        $this->assertAuthenticatedAs($user);
+        $this->get(route('attendance-app.index'))->assertOk();
+        // 그 문으로는 ERP 본화면이 열리지 않는다.
+        $this->get('/')->assertRedirect(route('attendance-app.index'));
     }
 
     public function test_public_registration_and_team_qr_are_removed_and_guest_cannot_register(): void
@@ -95,48 +115,6 @@ class WorkerEnrollmentTest extends TestCase
             ->assertOk()
             ->assertSee('href="/"', false)
             ->assertDontSee('example.com');
-    }
-
-    public function test_approval_activation_and_pin_login_without_email_use_existing_employee_relation(): void
-    {
-        $enrollment = $this->submit();
-        $this->actingAs($this->admin)->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1])->assertRedirect();
-        $enrollment->refresh();
-        $employee = $enrollment->employee;
-        $user = $employee->user;
-        $this->assertNull($user->email);
-        $this->assertSame('worker', $user->access_role);
-        $this->assertSame('self', $user->access_scope);
-        $this->assertTrue($employee->isHourly());
-        $this->assertEquals($this->team->id, $employee->team_id);
-        $this->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1])->assertRedirect();
-        $this->assertDatabaseCount('employees', 1);
-        $response = $this->post(route('worker-enrollment.activation', $enrollment))->assertOk();
-        $url = $response->viewData('url');
-        $this->assertTrue(AuthSetupToken::first()->expires_at->lte(now()->addMinutes(15)));
-        auth()->logout();
-        $this->get($url)->assertOk()->assertSee('Kim Worker');
-        $result = $this->postJson($url, ['pin' => '5937'])->assertOk();
-        $this->assertSame(route('gate.show', ['site' => $employee->site_id, 'onboarded' => 1]), $result->json('redirect'));
-        $this->assertNotEmpty($result->json('attendance_device_token'));
-        $this->assertAuthenticatedAs($user);
-        $this->assertDatabaseCount('login_devices', 1);
-        $this->assertDatabaseCount('worker_devices', 1);
-        $this->postJson(route('gate.me', ['site' => $employee->site_id]), [
-            'device_token' => $result->json('attendance_device_token'),
-        ])->assertOk()->assertJsonPath('recognized', true)->assertJsonPath('employee.id', $employee->id);
-        $this->get('/attendance-app')->assertOk();
-        $this->travelTo(Carbon::parse('2026-09-19 12:00:00', 'UTC'));
-        $this->postJson(route('attendance-app.punch'), ['direction' => 'in', 'gate_site' => $employee->site_id])
-            ->assertOk()->assertJsonPath('success', true);
-        $this->travel(2)->minutes();
-        $this->postJson(route('attendance-app.punch'), ['direction' => 'out', 'gate_site' => $employee->site_id])
-            ->assertOk()->assertJsonPath('success', true);
-        $this->assertDatabaseHas('attendance_logs', ['employee_id' => $employee->id, 'team_id' => $this->team->id, 'event_type' => 'clock_out']);
-        $this->postJson($url, ['pin' => '5937'])->assertStatus(422);
-        auth()->logout();
-        $this->postJson(route('pin.login'), ['device_token' => $result->json('device_token'), 'pin' => '5937'])->assertOk();
-        $this->assertAuthenticatedAs($user);
     }
 
     public function test_only_hr_roles_can_register_and_legacy_routes_do_not_bypass_policy(): void
@@ -164,7 +142,6 @@ class WorkerEnrollmentTest extends TestCase
         $this->post($this->url(), ['team_id' => $this->team->id, 'name' => 'Other', 'phone' => '2025550100'])->assertForbidden();
         $this->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1])->assertForbidden();
         $this->post(route('worker-enrollment.reject', $enrollment))->assertForbidden();
-        $this->post(route('worker-enrollment.activation', $enrollment))->assertForbidden();
         $this->assertSame('pending', $enrollment->fresh()->status);
         $this->assertDatabaseCount('auth_setup_tokens', 0);
         $other = $this->team->replicate();
@@ -174,7 +151,6 @@ class WorkerEnrollmentTest extends TestCase
         $this->get(route('worker-enrollment.index'))->assertDontSee('Hidden Person');
         $foreman->update(['access_role' => 'worker']);
         $this->actingAs($foreman)->get(route('worker-enrollment.index'))->assertForbidden();
-        $this->post(route('worker-enrollment.activation', $enrollment))->assertForbidden();
     }
 
     public function test_existing_phone_in_other_team_is_not_overwritten_or_duplicated(): void
@@ -185,19 +161,6 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertNull($old->fresh()->team_id);
         $this->assertDatabaseCount('employees', 1);
         $this->assertSame('pending', $enrollment->fresh()->status);
-    }
-
-    public function test_reissue_expires_old_link_and_expired_accounts_cannot_activate(): void
-    {
-        $enrollment = $this->submit();
-        $this->actingAs($this->admin)->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1]);
-        $old = $this->post(route('worker-enrollment.activation', $enrollment))->viewData('url');
-        $new = $this->post(route('worker-enrollment.activation', $enrollment))->viewData('url');
-        auth()->logout();
-        $this->postJson($old, ['pin' => '5937'])->assertStatus(422);
-        $this->travel(16)->minutes();
-        $this->postJson($new, ['pin' => '5937'])->assertStatus(422);
-        $this->assertDatabaseCount('login_devices', 0);
     }
 
     public function test_rejection_and_missing_identity_confirmation_do_not_create_access(): void
@@ -221,20 +184,6 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertNotNull($employee->fresh()->user);
     }
 
-    public function test_suspended_or_promoted_user_cannot_consume_activation(): void
-    {
-        $enrollment = $this->submit();
-        $this->actingAs($this->admin)->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1]);
-        $url = $this->post(route('worker-enrollment.activation', $enrollment))->viewData('url');
-        $user = $enrollment->fresh()->employee->user;
-        $user->update(['account_status' => 'suspended']);
-        auth()->logout();
-        $this->postJson($url, ['pin' => '5937'])->assertStatus(422);
-        $user->update(['account_status' => 'active', 'access_role' => 'admin']);
-        $this->postJson($url, ['pin' => '5937'])->assertStatus(422);
-        $this->assertDatabaseCount('login_devices', 0);
-    }
-
     public function test_no_email_worker_account_can_be_edited_by_existing_account_management(): void
     {
         $enrollment = $this->submit();
@@ -247,45 +196,5 @@ class WorkerEnrollmentTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertNull($user->fresh()->email);
         $this->assertFalse(app(EmployeeAdminService::class)->delete($user->employee_id)['success']);
-    }
-
-    public function test_setup_requires_nontrivial_pin_and_cannot_reactivate_after_completion(): void
-    {
-        $enrollment = $this->submit();
-        $this->actingAs($this->admin)->post(route('worker-enrollment.approve', $enrollment), ['confirmed' => 1]);
-        $url = $this->post(route('worker-enrollment.activation', $enrollment))->viewData('url');
-        auth()->logout();
-        foreach (['1111', '1234', '0147'] as $pin) {
-            $this->postJson($url, ['pin' => $pin])->assertStatus(422);
-        }
-        $this->postJson($url, ['pin' => '5937'])->assertOk();
-        $this->actingAs($this->admin)->post(route('worker-enrollment.activation', $enrollment))->assertStatus(409);
-    }
-
-    public function test_regular_pin_invite_does_not_bind_a_gate_attendance_device(): void
-    {
-        $employee = Employee::create([
-            'name' => 'Invited Worker',
-            'phone' => '+12025550188',
-            'company_id' => $this->team->company_id,
-            'site_id' => $this->team->site_id,
-            'team_id' => $this->team->id,
-            'position' => 'worker',
-            'employment_type' => 'direct',
-            'employment_status' => 'active',
-        ]);
-        $user = User::factory()->create([
-            'employee_id' => $employee->id,
-            'access_role' => 'worker',
-            'access_scope' => 'self',
-            'account_status' => 'active',
-        ]);
-        $url = app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_INVITE, $this->admin);
-
-        $this->postJson($url, ['pin' => '5937'])
-            ->assertOk()
-            ->assertJsonPath('redirect', route('gate.show', ['site' => $employee->site_id, 'onboarded' => 1]));
-        $this->assertDatabaseCount('worker_devices', 1);
-        $this->assertNotNull(WorkerDevice::sole()->identity_verified_at);
     }
 }

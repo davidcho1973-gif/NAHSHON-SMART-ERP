@@ -10,6 +10,7 @@ use App\Services\Admin\ReportRecipientService;
 use App\Support\AccessPolicy;
 use App\Support\LegacyOperationPolicy;
 use App\Support\SmartCompanyData;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -98,6 +99,21 @@ class SmartCompanyApiController extends Controller
         }
 
         $required = self::GATES[$method] ?? null;
+
+        // 전화번호 뒷 4자리로 들어온 세션은 «관문이 있는» 창구를 지나지 못한다.
+        //
+        // 사장님 결정(2026-09-23)으로 관리자도 뒷 4자리만으로 작업자 앱에 들어온다.
+        // 그 편의가 여기까지 오면, 남의 번호 뒷자리를 아는 사람이 화면을 거치지 않고
+        // 창구를 직접 불러 전 직원 명부·급여를 받아 갈 수 있다. 그래서 «작업자 앱이
+        // 쓰는 창구» 와 «권한이 필요한 창구» 를 세션 등급으로 가른다. 정식 로그인
+        // (구글·이메일)으로 들어오면 이 제한은 없다.
+        if ($required !== null && WorkerDeviceSession::isDeviceOnly($request)) {
+            return response()->json([
+                'success' => false,
+                'error' => '휴대폰 번호로 들어오셨습니다. 이 자료는 ERP 로그인이 필요합니다.',
+            ], $this->isReadEndpoint($method) ? 200 : 403);
+        }
+
         if ($required !== null && ! in_array($request->user()?->access_role, $required, true)) {
             // 조회 거부는 200 으로 돌려준다 — 403 을 던지면 화면 스크립트가 통신 실패로
             // 보고 페이지를 통째로 비운다. 쓰기는 위 열람전용 게이트와 같이 403 이다.

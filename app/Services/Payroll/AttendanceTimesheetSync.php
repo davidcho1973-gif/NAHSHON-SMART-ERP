@@ -109,6 +109,41 @@ class AttendanceTimesheetSync
     }
 
     /**
+     * 한 사람의 출퇴근을 날짜별로 다시 계산한다.
+     *
+     * 이 표는 «출퇴근 기록» 과 «그 사람의 고용형태» 두 가지에서 나온다. 그런데
+     * 지금까지는 기록이 바뀔 때만 다시 계산했다. 고용형태는 이 표가 있느냐 없느냐를
+     * 정하는 값인데도 그쪽이 바뀌면 아무 일도 일어나지 않았다.
+     *
+     * 그래서 «소속 미확인» 으로 일한 날이 생기면(급여 시트를 만들지 않는다) 나중에
+     * 인사에서 자사 직영으로 확인해도 그 며칠은 급여에서 통째로 빠진다 — 사람은
+     * 일했고 기록도 남아 있는데 임금만 없다. 파생된 표는 자기 입력 <b>전부</b>를 따라야 한다.
+     *
+     * @return int 다시 계산한 (사람, 날짜) 수
+     */
+    public function resyncEmployee(int $employeeId, ?string $from = null, ?string $to = null): int
+    {
+        if (! Schema::hasTable('attendance_logs')) {
+            return 0;
+        }
+
+        $dates = AttendanceLog::query()
+            ->where('employee_id', $employeeId)
+            ->where('status', '!=', 'rejected')
+            ->when($from, fn ($q) => $q->whereDate('attendance_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('attendance_date', '<=', $to))
+            ->pluck('attendance_date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->unique();
+
+        foreach ($dates as $date) {
+            $this->syncDay($employeeId, $date);
+        }
+
+        return $dates->count();
+    }
+
+    /**
      * Backfill timesheets from all attendance within a date range.
      *
      * @return int number of (employee, day) timesheets synced

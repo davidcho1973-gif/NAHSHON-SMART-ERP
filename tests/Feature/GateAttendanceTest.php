@@ -121,14 +121,26 @@ class GateAttendanceTest extends TestCase
     {
         $this->worker('김철수');
         $this->worker('이민준', $this->otherSite);
-        $this->postJson(route('gate.search', $this->site), ['q' => '김철'])->assertStatus(410)->assertJsonMissingPath('workers');
+
+        $this->postJson(route('gate.search', $this->site), ['q' => '김철'])
+            ->assertOk()
+            ->assertJsonCount(1, 'workers')
+            ->assertJsonPath('workers.0.name', '김철수');
     }
 
-    public function test_search_refuses_to_hand_out_the_roster(): void
+    /**
+     * 이름 검색은 뒷 4자리가 겹칠 때 쓰는 예비 통로다. 한 글자는 받지 않는다 —
+     * 한 글자를 허용하면 글자를 돌려가며 현장 명단을 통째로 훑을 수 있다.
+     */
+    public function test_search_needs_more_than_one_letter(): void
     {
         $this->worker('김철수');
-        foreach (['', '김', '김철수'] as $q) {
-            $this->postJson(route('gate.search', $this->site), ['q' => $q])->assertStatus(410)->assertJsonMissingPath('workers');
+
+        foreach (['', '김'] as $q) {
+            $this->postJson(route('gate.search', $this->site), ['q' => $q])
+                ->assertOk()
+                ->assertJsonCount(0, 'workers')
+                ->assertJsonPath('tooShort', true);
         }
     }
 }

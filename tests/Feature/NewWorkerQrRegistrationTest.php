@@ -50,8 +50,9 @@ class NewWorkerQrRegistrationTest extends TestCase
 
         $employee = Employee::sole();
         $response->assertOk()
-            ->assertSee('/auth/pin/setup/', false)
-            ->assertSee('PIN 설정하고 출근하기')
+            // 첫 출근 앞에 PIN 화면을 두지 않는다 — 등록이 이 휴대폰을 이미 연결했다.
+            ->assertDontSee('/auth/pin/setup/', false)
+            ->assertSee('출근 화면 열기')
             // 이 폰을 기억하는 규칙은 worker-device-remember.js 한 곳에 있다(등록 화면 둘이 같이 쓴다).
             // 화면이 그 파일을 싣고 부르는지를 본다 — 저장 코드가 화면 안에 박혀 있는지가 아니라.
             ->assertSee('js/worker-device-remember.js', false)
@@ -60,19 +61,26 @@ class NewWorkerQrRegistrationTest extends TestCase
         $this->assertSame($this->site->id, $employee->site_id);
         $this->assertSame('worker', $employee->position);
         $this->assertNull($employee->email);
-        $this->assertSame('미지정', $employee->role);
+        // 공정도 소속도 이 화면은 묻지 않는다 — 그러니 적지도 않는다.
+        // '미지정' 은 공정처럼 생긴 글자라 공종별 인원 집계에 영원히 한 칸을 차지했다.
+        $this->assertNull($employee->role);
+        $this->assertNull($employee->company_id);
+        $this->assertSame(Employee::TYPE_UNVERIFIED, $employee->employment_type);
         $this->assertTrue((bool) data_get($employee->payload, 'self_registered_pending_hr'));
         $this->assertSame($employee->id, MemberRegistration::sole()->employee_id);
         $this->assertSame($employee->id, WorkerDevice::sole()->employee_id);
+        $this->assertNotNull(WorkerDevice::sole()->identity_verified_at, '연결된 휴대폰이어야 그 자리에서 찍을 수 있다');
         $this->assertSame('worker', $employee->user?->access_role);
-        $this->assertDatabaseCount('auth_setup_tokens', 1);
+        // 15분짜리 링크는 첫 출근의 길목에서 사라졌다. PIN 은 나중에 본인이 정한다.
+        $this->assertDatabaseCount('auth_setup_tokens', 0);
         $this->assertDatabaseHas('unified_alerts', ['event_type' => 'worker_self_registration_review']);
 
         $this->post(route('worker-join.store', $this->site), [
             'full_name' => 'Miguel Torres', 'phone' => '4805550100',
         ])->assertSessionHasErrors('phone');
         $this->assertDatabaseCount('worker_devices', 1);
-        $this->assertDatabaseCount('auth_setup_tokens', 1);
+        // 거부된 등록은 아무것도 남기지 않는다 — 휴대폰도, 설정 링크도.
+        $this->assertDatabaseCount('auth_setup_tokens', 0);
     }
 
     public function test_hr_can_copy_a_signed_followup_link_and_worker_completes_details(): void

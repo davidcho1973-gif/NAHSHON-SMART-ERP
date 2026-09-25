@@ -52,34 +52,81 @@ class GateIdentityAndSiteCheckTest extends TestCase
 
     public function test_전화번호_뒷_4자리로_본인을_찾는다(): void
     {
-        $this->worker('김철수', '+1 (480) 555-0199');
-        foreach (['0199', '', '19', 'abcd'] as $last4) {
-            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
-        }
+        $kim = $this->worker('김철수', '+1 (480) 555-0199');
+
+        $this->postJson(route('gate.identify', $this->site), ['last4' => '0199'])
+            ->assertOk()
+            ->assertJsonPath('workers.0.id', $kim->id)
+            ->assertJsonPath('workers.0.name', '김철수');
     }
 
     public function test_표기가_달라도_같은_번호로_읽는다(): void
     {
-        $this->worker('김철수', '+1 (480) 555-0199');
-        foreach (['0199', '', '19', 'abcd'] as $last4) {
-            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
+        // 같은 번호가 사람마다 다르게 적혀 있다 — 괄호·하이픈·국가번호.
+        // 뒷 4자리는 표기가 아니라 숫자로 비교해야 한다.
+        foreach (['+1 (480) 555-0199', '480.555.0199', '4805550199'] as $i => $written) {
+            $site = Site::create([
+                'company_id' => $this->company->id, 'code' => 'S'.$i, 'name' => 'Site '.$i, 'status' => 'active',
+            ]);
+            $worker = $this->worker('김철수'.$i, $written, $site);
+
+            $this->postJson(route('gate.identify', $site), ['last4' => '0199'])
+                ->assertOk()
+                ->assertJsonPath('workers.0.id', $worker->id);
         }
     }
 
     public function test_다른_현장_사람과_번호가_없는_사람은_나오지_않는다(): void
     {
-        $this->worker('김철수', '+1 (480) 555-0199');
-        foreach (['0199', '', '19', 'abcd'] as $last4) {
-            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
-        }
+        $other = Site::create(['company_id' => $this->company->id, 'code' => 'OTH', 'name' => 'Other', 'status' => 'active']);
+        $this->worker('남의현장', '480-555-0199', $other);
+        $this->worker('번호없음', null);
+
+        $this->postJson(route('gate.identify', $this->site), ['last4' => '0199'])
+            ->assertOk()
+            ->assertJsonCount(0, 'workers');
     }
 
     public function test_네_자리가_아니면_아무것도_돌려주지_않는다(): void
     {
         $this->worker('김철수', '+1 (480) 555-0199');
-        foreach (['0199', '', '19', 'abcd'] as $last4) {
-            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])->assertStatus(410)->assertJsonMissingPath('workers');
+
+        foreach (['', '19', 'abcd', '01990'] as $last4) {
+            $this->postJson(route('gate.identify', $this->site), ['last4' => $last4])
+                ->assertOk()
+                ->assertJsonCount(0, 'workers');
         }
+    }
+
+    /**
+     * 고른 순간 이 휴대폰이 그 사람의 것이 된다 — 다음부터는 묻지 않는다.
+     *
+     * 사장님 결정(2026-09-23): PIN 을 없애고, 등록된 사람은 4자리만으로 바로 찍는다.
+     * 같은 현장 사람이 남의 뒷 4자리를 알면 대신 찍을 수 있다는 것을 알고 내린 결정이다.
+     */
+    public function test_이름을_고르면_이_휴대폰이_기억되고_바로_찍힌다(): void
+    {
+        $kim = $this->worker('김철수', '480-555-0199');
+
+        $token = $this->postJson(route('gate.claim', $this->site), ['employee_id' => $kim->id])
+            ->assertOk()->json('device_token');
+
+        $this->assertNotEmpty($token);
+        $this->postJson(route('gate.me', $this->site), ['device_token' => $token])
+            ->assertJsonPath('recognized', true)
+            ->assertJsonPath('employee.name', '김철수');
+        $this->postJson(route('gate.punch', $this->site), ['device_token' => $token])
+            ->assertJsonPath('success', true);
+    }
+
+    public function test_다른_현장_사람은_고를_수_없다(): void
+    {
+        $other = Site::create(['company_id' => $this->company->id, 'code' => 'OTH', 'name' => 'Other', 'status' => 'active']);
+        $stranger = $this->worker('남의현장', '480-555-0177', $other);
+
+        $this->postJson(route('gate.claim', $this->site), ['employee_id' => $stranger->id])
+            ->assertStatus(422);
+        $this->assertSame(0, WorkerDevice::query()->count());
     }
 
     // ── 어디인가 ────────────────────────────────────────────────────────

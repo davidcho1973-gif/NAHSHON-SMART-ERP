@@ -44,6 +44,7 @@
 <div class="field-shell">
     <header class="field-header">
         <a class="field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+            @include("partials.lang-switch")
         <h1>{{ __('자재 입고') }}</h1>
         <p class="field-subtle">{{ __('사진이나 파일을 첨부하고 실제 입고 수량을 확인해 주세요.') }}</p>
     </header>

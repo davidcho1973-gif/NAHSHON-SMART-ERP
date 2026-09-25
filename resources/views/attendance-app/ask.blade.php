@@ -77,6 +77,7 @@
     <div class="app field-shell">
         <header class="field-header">
             <a class="back field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
+            @include("partials.lang-switch")
             <h1>{{ __('물어보기') }}</h1>
             <p class="sub">{{ $siteName ?: __('현장') }} · {{ __('작업자도 공정·시공·수량·도면·시방을 물어볼 수 있습니다. 답은 나만 봅니다. 회계·급여·단가·견적·계약금액은 재무 권한에 따라 제한됩니다.') }}</p>
         </header>

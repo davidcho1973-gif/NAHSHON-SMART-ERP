@@ -146,20 +146,10 @@ class AppInstallTest extends TestCase
         }
     }
 
-    public function test_the_gate_poster_tells_workers_the_screen_can_become_an_app(): void
-    {
-        // 포스터는 이미 게이트 벽에 붙어 있다. 설치를 알릴 가장 싼 자리다.
-        $langs = WorkerLang::poster()['gate'];
-
-        foreach (['ko', 'en', 'es'] as $code) {
-            $steps = implode(' ', $langs[$code]['steps']);
-            $this->assertMatchesRegularExpression(
-                '/PIN/u',
-                $steps,
-                "[{$code}] 포스터에 최초 PIN 안내가 없습니다."
-            );
-        }
-    }
+    // 벽에 붙는 종이의 문구를 여기서도 붙잡고 있었다. 이름은 «앱 설치를 알린다» 인데
+    // 실제로는 PIN 을 찾고 있었고, 그래서 PIN 을 걷어낸 날 이 시험만 남아 포스터가
+    // 없어진 기능을 계속 가르치게 만들었다. 문구 규칙은 한 곳에서만 지킨다 —
+    // PosterMatchesTheScreenItOpensTest. 앱 설치 안내는 화면 쪽 시험이 위에서 지킨다.
 
     public function test_the_logged_in_worker_app_is_installable_too(): void
     {

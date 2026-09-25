@@ -56,7 +56,11 @@ class OpsPhotoController extends Controller
         $token = (string) Str::uuid();
         $path = self::pathFor($request->user()?->id, $token);
 
-        Storage::disk(self::disk())->put($path, file_get_contents($file->getRealPath()), 'private');
+        $bytes = file_get_contents($file->getRealPath());
+        $disk = Storage::disk(self::disk());
+        if (! $disk->put($path.'.original', $bytes, 'private') || ! $disk->put($path, $bytes, 'private')) {
+            return response()->json(['success' => false, 'error' => '사진 원본을 보존하지 못했습니다. 다시 등록하세요.'], 500);
+        }
 
         return response()->json([
             'success' => true,
@@ -87,6 +91,12 @@ class OpsPhotoController extends Controller
 
         $paths = is_array($batch->photo_paths) ? array_values($batch->photo_paths) : [];
         abort_unless(isset($paths[$index]), 404);
+
+        if ($request->boolean('original')) {
+            $original = ($batch->original_photos ?? [])[$index] ?? null;
+            abort_unless($original && ($original['provenance'] ?? '') === 'upload_original', 404);
+            $paths[$index] = $original['path'];
+        }
 
         $disk = Storage::disk((string) ($batch->photo_disk ?: self::disk()));
         abort_unless($disk->exists($paths[$index]), 404);

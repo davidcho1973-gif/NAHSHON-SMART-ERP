@@ -204,15 +204,17 @@
 
   function actionsCell(r) {
     var u = ui();
+    var evidenceActions = r.evidenceBased ? u.rowButton('근거 묶음', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' +
+      u.rowButton('근거 JSON', 'window.AdminClaimEvidence.packet(' + r.id + ',true)') + ' ' : '';
     if (!state.canManage) {
-      return r.receipts && r.receipts.length ? u.rowButton('입금 ' + r.receipts.length, 'window.AdminBilling.toggleReceipts(' + r.id + ')') : '';
+      return evidenceActions + (r.receipts && r.receipts.length ? u.rowButton('입금 ' + r.receipts.length, 'window.AdminBilling.toggleReceipts(' + r.id + ')') : '');
     }
-    var b = [];
+    var b = [evidenceActions];
     if (r.receipts && r.receipts.length) {
       b.push(u.rowButton('입금 ' + r.receipts.length, 'window.AdminBilling.toggleReceipts(' + r.id + ')'));
     }
     if (r.status === 'draft') {
-      b.push(u.rowButton('수정', 'window.AdminBilling.openForm(' + r.id + ')'));
+      b.push(r.evidenceBased ? u.rowButton('근거 갱신', 'window.AdminClaimEvidence.open(' + state.contractId + ')') : u.rowButton('수정', 'window.AdminBilling.openForm(' + r.id + ')'));
       b.push(u.rowButton('제출', 'window.AdminBilling.submitApp(' + r.id + ')'));
       b.push(u.rowButton('삭제', 'window.AdminBilling.removeApp(' + r.id + ')', 'danger'));
     } else if (r.status === 'submitted') {
@@ -374,10 +376,10 @@
   function detailView() {
     var u = ui();
     var c = state.detail.contract;
-    var actions = '';
+    var actions = u.primaryButton('기성 근거 대장', 'window.AdminClaimEvidence.open(' + c.id + ')', 'list-checks');
     if (state.canManage) {
-      actions = u.primaryButton('새 회차', 'window.AdminBilling.openForm()', 'plus') +
-        u.rowButton('공정률로 초안', 'window.AdminBilling.draftFromProgress()') +
+      actions += u.rowButton('새 회차', 'window.AdminBilling.openForm()') +
+        u.rowButton('공정 추정 초안', 'window.AdminBilling.draftFromProgress()') +
         u.rowButton('수금 입력 (미배정 포함)', 'window.AdminBilling.openReceipt()');
     }
 
@@ -813,6 +815,12 @@
   // ── 진입점 ────────────────────────────────────────────────────────────
 
   function renderScreen() {
+    if (global.AdminBilling._pendingContractId) {
+      var contractId = global.AdminBilling._pendingContractId;
+      global.AdminBilling._pendingContractId = null;
+      openDetail(contractId);
+      return '';
+    }
     state.view = 'list';
     state.detail = null;
     state.expandedId = null;

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuthSetupToken;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\MemberRegistration;
@@ -12,8 +11,8 @@ use App\Models\WbsItem;
 use App\Models\WorkerDevice;
 use App\Models\WorkerEnrollment;
 use App\Services\Alerts\UnifiedAlertService;
-use App\Services\Auth\PinAuthService;
 use App\Support\QrPosters;
+use App\Support\WorkerDeviceSession;
 use App\Support\WorkerLang;
 use App\Support\WorkerPhone;
 use Illuminate\Http\JsonResponse;
@@ -83,34 +82,93 @@ class SimpleWorkerRegistrationController extends Controller
                 }
             }],
             'preferred_language' => ['nullable', Rule::in(array_keys(WorkerLang::OPTIONS))],
+            // 이 휴대폰이 이미 등록한 사람 — 브라우저가 알려 주는 값이다(공용 폰 판단용).
+            'device_owner' => ['nullable', 'string', 'max:32'],
         ]);
 
-        // 현장에 지정한 자사를 우선 사용한다. 오래된 현장처럼 company_id 가 비어 있으면
-        // 활성 자사 한 곳까지만 안전하게 보완한다. 어느 회사인지 추측해야 하는 상태라면
-        // 사람을 엉뚱한 급여대장에 넣지 않고 관리자 설정을 요구한다.
-        $company = $site->company
-            ?? Company::query()->where('status', 'active')->where('company_type', Company::TYPE_OWN)->first();
-        abort_unless($company, 422, '이 현장의 기본 회사를 먼저 설정해 주세요.');
-
+        // 소속은 비워 둔다 — 이 화면은 회사를 묻지 않는다.
+        //
+        // 예전에는 현장의 자사 회사로 찍었다. 그러면 협력사 인원까지 «자사 직영(시급)»
+        // 이 되어 우리 급여 대장에 오르고, 임금률이 없으니 경고가 뜬다. 묻지 않은 것을
+        // 아는 척한 값이었고, 틀린 쪽이 하필 돈이 걸린 쪽이었다.
+        //
+        // 공정도 마찬가지다. '미지정' 은 공정처럼 생긴 글자라 공종별 인원 집계에
+        // 영원히 한 칸을 차지한다. 비워 두면 «없다» 로 읽히고, 인사 확인 줄에서
+        // 진짜 공정을 채운다.
         $request->replace([
             'full_name' => trim(preg_replace('/\s+/u', ' ', (string) $data['full_name']) ?: (string) $data['full_name']),
             'phone' => trim((string) $data['phone']),
-            'company_id' => $company->id,
-            'role' => '미지정',
             'position' => 'worker',
             'preferred_language' => WorkerLang::resolve($data['preferred_language'] ?? null),
+            'device_owner' => trim((string) ($data['device_owner'] ?? '')),
         ]);
 
         return DB::transaction(function () use ($request, $site): View {
             // Serialize public registrations for the normalized phone, including different sites.
             $phone = WorkerPhone::normalize((string) $request->input('phone'));
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['worker-register:'.$phone]);
-            if (! $phone || WorkerPhone::employees((string) $request->input('phone'))->exists()) {
-                throw ValidationException::withMessages(['phone' => '이미 등록된 번호이거나 올바르지 않은 번호입니다. 전화번호·PIN으로 연결하거나 인사담당자에게 문의하세요. / Use phone and PIN, or contact HR.']);
-            }
+
+            $this->refuseIfAlreadyRegistered(
+                (string) $request->input('full_name'),
+                (string) $request->input('phone'),
+                $phone,
+            );
 
             return $this->register($request, $site);
         });
+    }
+
+    /**
+     * 이미 등록된 사람은 다시 등록하지 않는다 — <b>이름이나 번호 하나만 같아도</b> 막는다.
+     *
+     * <b>사장님 지시(2026-09-23):</b> «이름과 휴대폰을 비교해서 둘 중 하나라도 같은 정보가
+     * 있으면 이미 등록되어 있다고 말해라.»
+     *
+     * 예전에는 번호만 봤다. 그래서 같은 사람이 번호를 다르게 적으면(오타, 새 번호, 회사 폰)
+     * 명단에 같은 사람이 두 줄로 섰다. 두 줄이 되는 순간 출역 인원이 부풀고, 그 사람의
+     * 근무가 두 기록으로 갈려 급여에서 한쪽이 통째로 빠진다.
+     *
+     * 이름까지 보면 <b>동명이인</b>이 막힌다. 그건 알고 고른 쪽이다 — 현장에 같은 이름이
+     * 둘 있는 것은 드물고, 막혔을 때 인사담당자가 직접 등록하면 된다. 반대로 한 사람이
+     * 두 줄로 서는 것은 급여를 뽑는 날까지 아무도 모른다.
+     *
+     * 그래서 «왜 막혔는지» 를 문구가 말해 준다. «이미 등록됨» 만 띄우면 본인은 등록한 적이
+     * 없는데 막힌 이유를 알 수 없고, 그 자리에서 포기한다.
+     */
+    private function refuseIfAlreadyRegistered(string $name, string $rawPhone, ?string $normalizedPhone): void
+    {
+        if (! $normalizedPhone) {
+            throw ValidationException::withMessages(['phone' => '전화번호를 다시 확인해 주세요.'
+                .' / Check the phone number. / Revise el número de teléfono.']);
+        }
+
+        if (WorkerPhone::employees($rawPhone)->exists()) {
+            throw ValidationException::withMessages(['phone' => '이미 등록된 번호입니다. 현장 QR 을 찍고 전화번호 뒷 4자리로 들어오세요.'
+                .' / Already registered — scan the site QR and enter the last 4 digits of your phone.'
+                .' / Ya está registrado: escanee el QR de la obra y escriba los últimos 4 dígitos.']);
+        }
+
+        // 표기가 갈려도 같은 이름은 같은 이름이다 — 앞뒤 공백·가운데 여러 칸·대소문자를 지운다.
+        $key = $this->nameKey($name);
+        if ($key === '') {
+            return;
+        }
+
+        $twin = Employee::query()->whereNotNull('name')
+            ->get(['id', 'name', 'employment_status'])
+            ->first(fn (Employee $e): bool => $this->nameKey((string) $e->name) === $key);
+
+        if ($twin !== null) {
+            throw ValidationException::withMessages(['full_name' => '이미 등록된 이름입니다. 본인이면 현장 QR 을 찍고 전화번호 뒷 4자리로 들어오세요. 같은 이름의 다른 사람이면 인사담당자에게 말씀해 주세요.'
+                .' / This name is already registered. If it is you, scan the site QR and enter the last 4 digits of your phone; if you are a different person with the same name, please see HR.'
+                .' / Ese nombre ya está registrado. Si es usted, escanee el QR y escriba los últimos 4 dígitos; si es otra persona con el mismo nombre, avise a Recursos Humanos.']);
+        }
+    }
+
+    /** 이름 비교용 열쇠 — 표기(공백·대소문자)가 달라도 같은 이름은 같게 읽힌다. */
+    private function nameKey(string $name): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $name) ?? $name));
     }
 
     /** 이전 관리자 링크를 받은 사람도 같은 직원 등록 화면을 쓴다. */
@@ -388,16 +446,18 @@ class SimpleWorkerRegistrationController extends Controller
         // 처음 보는 회사 이름을 적어 넣었으면 당연히 여기에 걸린다 — 그 회사가 자사인지
         // 협력사인지는 이름만 봐서는 알 수 없고, 그 답이 급여 방식을 정한다.
         // 관리자는 묻지 않는다 — 어느 회사 소속이든 관리직이다.
-        $mustAsk = ! $manager && $company?->employmentType() === null && $locked === null;
+        // 현장 QR 은 이름·전화 두 가지만 묻는다 — 소속도 공정도 여기서는 답하지 않는다.
+        $mustAsk = ! $quick && ! $manager && $company?->employmentType() === null && $locked === null;
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:120'],
             // 목록에 없는 회사는 직접 적는다. 내일 처음 오는 협력사 인원이 목록에 있을 리 없다.
-            'company_id' => ['nullable', 'required_without:company_name', Rule::exists('companies', 'id')],
-            'company_name' => ['nullable', 'required_without:company_id', 'string', 'max:120'],
+            // (현장 QR 은 묻지 않으므로 비어 있는 채로 통과한다.)
+            'company_id' => $quick ? ['nullable'] : ['nullable', 'required_without:company_name', Rule::exists('companies', 'id')],
+            'company_name' => $quick ? ['nullable'] : ['nullable', 'required_without:company_id', 'string', 'max:120'],
             // 공정도 마찬가지로 자유 입력을 받는다. 다만 아래에서 기존 공정명과 대소문자·공백만
             // 다른 값은 기존 이름으로 맞춘다 — 안 그러면 집계가 'Piping' 과 'piping' 으로 갈린다.
-            'role' => ['required', 'string', 'max:60'],
+            'role' => $quick ? ['nullable', 'string', 'max:60'] : ['required', 'string', 'max:60'],
             'position' => ['required', Rule::in(array_keys(Employee::POSITIONS))],
             // 이메일은 선택이다. 현장에서 이메일을 안 쓰거나 주소가 기억나지 않는 사람이
             // 여기서 막히면 등록 자체를 못 하고, 그러면 그날 그 사람은 명단에 없는 채로
@@ -425,16 +485,26 @@ class SimpleWorkerRegistrationController extends Controller
         }
 
         // 검증을 통과했으니 이제 만들어도 된다.
-        $company ??= $this->createCompany((string) $data['company_name']);
-        $data['company_id'] = $company->getKey();
-        $data['role'] = $this->normalizeTrade($site, (string) $data['role']);
+        // 현장 QR 은 회사를 묻지 않았으므로 만들 것도 없다 — 비어 있는 채로 둔다.
+        if (! $quick) {
+            $company ??= $this->createCompany((string) $data['company_name']);
+        }
+        $data['company_id'] = $company?->getKey();
+        $data['role'] = filled($data['role'] ?? null)
+            ? $this->normalizeTrade($site, (string) $data['role'])
+            : null;
 
         // 관리 직책을 선택하면 관리직이다 — URL이나 임의의 권한 입력값으로 정하지 않는다.
         // (출퇴근 정책이 여기서 갈린다: 관리직은 출석 확인, 시급 직영은 정밀 시간관리.)
         // 작업자는 회사 분류가 최우선 — 관리자가 유지하는 데이터라 "어느 종이를 스캔했나" 보다 믿을 만하다.
-        $type = $manager
-            ? Employee::TYPE_STAFF
-            : ($company?->employmentType() ?? $locked ?? $data['employment_type']);
+        // 현장 QR 은 소속을 묻지 않았다 — 그러니 아는 척하지 않고 «미확인» 으로 둔다.
+        // 인원은 세지만 급여 시트는 만들지 않는다. 인사가 회사를 확인하는 순간 진짜
+        // 값이 되고, 그때 이미 일한 날의 급여가 따라온다(EmployeeTimesheetPolicyObserver).
+        $type = match (true) {
+            $manager => Employee::TYPE_STAFF,
+            $quick => Employee::TYPE_UNVERIFIED,
+            default => $company?->employmentType() ?? $locked ?? $data['employment_type'],
+        };
 
         $lang = WorkerLang::resolve($data['preferred_language'] ?? null);
 
@@ -516,7 +586,9 @@ class SimpleWorkerRegistrationController extends Controller
         }
 
         // 이 휴대폰을 기억해 둔다 — 다음부터 게이트 QR 만 찍으면 본인으로 바로 인식된다.
-        $deviceToken = $site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '';
+        $deviceToken = $quick && $site
+            ? $this->linkThisPhone($request, $employee)
+            : ($site ? WorkerDevice::issueFor($employee, $request->userAgent()) : '');
 
         return $this->doneView(
             $site,
@@ -527,8 +599,42 @@ class SimpleWorkerRegistrationController extends Controller
             false,
             $kind,
             $quick,
-            $quick ? $this->quickPinSetupUrl($employee) : null,
+            null,
         );
+    }
+
+    /**
+     * 등록한 그 휴대폰을 이 사람의 것으로 연결한다 — 바로 출근을 찍을 수 있게.
+     *
+     * 예전에는 등록이 «검증되지 않은» 토큰을 발급했다. 게이트는 검증된 토큰만 받으므로
+     * 그 토큰으로는 아무것도 못 찍고, 15분짜리 PIN 링크를 따라가 PIN 을 정해야만
+     * 첫 출근이 됐다. 15분을 놓치면 인사담당자가 링크를 다시 보내 줘야 했다 —
+     * 벽에 붙은 QR 을 찍은 사람이 그 자리에서 출근하지 못하는 구조였다.
+     *
+     * 신원은 이미 이 자리에서 받았다: 본인이 자기 휴대폰으로 이름과 번호를 적었고,
+     * 이미 등록된 번호는 거부된다(quickStore). 그러니 이 휴대폰을 그 사람으로
+     * 인정한다 — 확인을 두 번 하지 않는다.
+     *
+     * 다만 <b>공용 휴대폰</b>은 예외다. 반장이 자기 폰으로 팀원을 여럿 등록하면,
+     * 마지막 사람으로 연결된 폰이 반장의 주머니에 남아 남의 출근을 찍게 된다.
+     * 브라우저가 «이 폰은 이미 다른 사람을 등록했다» 고 알려 주면(device_owner)
+     * 연결하지 않는다. 판단은 서버가 한다 — 값을 지어내면 연결이 <b>안 되는</b>
+     * 방향이라 거짓말로 얻을 것이 없다.
+     */
+    private function linkThisPhone(Request $request, Employee $employee): string
+    {
+        $owner = trim((string) $request->input('device_owner', ''));
+        if ($owner !== '' && $owner !== (string) $employee->getKey()) {
+            return '';
+        }
+
+        $token = WorkerDevice::issueFor($employee, $request->userAgent(), verified: true);
+
+        // 계정이 있어야 세션을 열 수 있다(PIN·메시지·앱이 모두 계정에 달려 있다).
+        $this->quickAccount($employee);
+        WorkerDeviceSession::openFor($request, $token);
+
+        return $token;
     }
 
     /**
@@ -627,21 +733,33 @@ class SimpleWorkerRegistrationController extends Controller
             $this->alertManagerNeedsAccount($employee, $site);
         }
 
+        // 다시 온 사람도 이 휴대폰에서 바로 찍을 수 있어야 한다. 현장 QR 로 왔으면
+        // 그 자리에서 연결하고(공용 폰이면 연결하지 않는다), 인사 등록이면 예전처럼 기억만 한다.
+        $deviceToken = $quick && $site !== null
+            ? $this->linkThisPhone($request, $employee)
+            : WorkerDevice::issueFor($employee, $request->userAgent());
+
         return $this->doneView(
             $site,
             $employee,
             $lang,
-            WorkerDevice::issueFor($employee, $request->userAgent()),
+            $deviceToken,
             (string) $employee->name,
             true,
             $kind,
             $quick,
-            $quick ? $this->quickPinSetupUrl($employee) : null,
+            null,
         );
     }
 
-    /** 공용 QR 등록 뒤 본인이 바로 PIN을 정한다. 권한은 작업자 본인 범위로만 만든다. */
-    private function quickPinSetupUrl(Employee $employee): ?string
+    /**
+     * 현장 QR 등록자의 로그인 계정 — 작업자 본인 범위로만 만든다.
+     *
+     * 계정이 있어야 이 사람의 세션을 열 수 있고(출퇴근 앱·PIN 설정이 모두 그 뒤에 있다),
+     * 권한은 «자기 기록만» 이다. 벽에 붙은 QR 로 등록한 휴대폰 한 대가 관리자 열쇠가
+     * 되면 안 된다(WorkerDeviceSession::mayEnterWithDeviceAlone).
+     */
+    private function quickAccount(Employee $employee): ?User
     {
         $user = $employee->user;
 
@@ -649,7 +767,11 @@ class SimpleWorkerRegistrationController extends Controller
             return null;
         }
 
-        $user ??= User::query()->create([
+        if ($user) {
+            return $user;
+        }
+
+        $user = User::query()->create([
             'name' => $employee->name,
             'email' => null,
             'password' => Str::random(64),
@@ -662,11 +784,7 @@ class SimpleWorkerRegistrationController extends Controller
             'allowed_team_id' => $employee->team_id,
         ]);
 
-        if ($user->hasPin()) {
-            return null;
-        }
-
-        return app(PinAuthService::class)->issueSetupLink($user, AuthSetupToken::PURPOSE_ACTIVATION);
+        return $user;
     }
 
     /**

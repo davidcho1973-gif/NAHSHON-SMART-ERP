@@ -3,7 +3,7 @@
 <nav><a href="{{ $returnTo }}">← 이전 업무 화면 / Back</a></nav>
 <h1>{{ $canRegister ? '인사 · 작업자 등록 및 앱 연결' : '우리 팀 직원 등록 현황' }}</h1>
 @if($canRegister)
-<div class="steps" aria-label="신규 작업자 등록 흐름"><strong>1. 인사담당자 등록</strong><span>→</span><strong>2. 직원이 QR 촬영</strong><span>→</span><strong>3. PIN 설정 후 출근</strong></div>
+<div class="steps" aria-label="신규 작업자 등록 흐름"><strong>1. 인사담당자 등록</strong><span>→</span><strong>2. 직원이 QR 촬영</strong><span>→</span><strong>3. 전화번호 뒷 4자리로 출근</strong></div>
 <section class="panel"><h2>신규 작업자 등록</h2><p>인사담당자가 신원과 소속을 확인한 뒤 개인 QR을 만듭니다. 직원은 별도 앱을 열거나 설치할 필요가 없습니다.</p>
 <form method="post" action="{{ route('worker-enrollment.store') }}">@csrf
 @if($returnTo === '/attendance-app')<input type="hidden" name="return_to" value="/attendance-app">@endif
@@ -26,8 +26,7 @@
 @endif
 @elseif($row->status === 'approved')
 @if($row->employee?->employment_status !== 'active' || $row->employee?->user?->account_status !== 'active')<p class="error">직원 또는 계정이 비활성 상태입니다. 인사담당자에게 확인하세요.</p>
-@elseif($row->employee?->user?->hasPin())<p class="notice">PIN 설정 완료 · 출퇴근 계정 연결됨</p>
-@else<p>인사 승인 완료 · PIN 설정 대기</p>@if($canRegister)<form method="post" action="{{ route('worker-enrollment.activation', $row) }}">@csrf<button type="submit">직원 개인용 앱 연결 QR 발급 / 재발급</button></form>@endif
+@else<p class="notice">인사 승인 완료 · 본인이 전화번호 뒷 4자리로 바로 들어옵니다 (링크를 보낼 일이 없습니다)</p>
 @endif
 @else<p>반려됨 · Rejected</p>@endif
 </article>

@@ -15,6 +15,7 @@ use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
 use App\Observers\EmployeeOffboardingObserver;
 use App\Observers\EmployeePayrollProfileObserver;
+use App\Observers\EmployeeTimesheetPolicyObserver;
 use App\Observers\LinkedDocumentFilingObserver;
 use App\Observers\MobileExpenseReceiptObserver;
 use App\Services\Communication\ChatAssistant;
@@ -67,6 +68,23 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        // 등록은 출퇴근과 다른 일이다 — 한 문을 같이 쓰면 한쪽에 맞춘 숫자가 다른 쪽을 연다.
+        //
+        // 현장 WiFi 는 주소 하나를 여럿이 나눠 쓰므로 출퇴근은 분당 120번이 맞다.
+        // 그런데 같은 숫자를 등록에 적용하면 «분당 120명의 새 직원» 이 된다. 등록은
+        // 벽에 붙은 QR 로 누구나 열 수 있는 문이고, 이제 등록 즉시 출퇴근까지 찍히므로
+        // 그 문은 더 좁아야 한다. 하루 상한까지 둔다 — 한 현장에 하루 40명 넘게
+        // 처음 오는 일은 드물고, 넘을 일이 있으면 인사담당자가 등록해 주면 된다.
+        RateLimiter::for('worker-register', function (Request $request) {
+            $phone = WorkerPhone::normalize((string) $request->input('phone', '')) ?? 'invalid';
+
+            return [
+                Limit::perMinute(3)->by('phone:'.hash('sha256', $phone)),
+                Limit::perMinute(5)->by('ip:'.$request->ip()),
+                Limit::perDay(40)->by('ip-day:'.$request->ip()),
+            ];
+        });
+
         // Microsoft 365 발송기 등록 — MAIL_MAILER=graph 로 쓴다.
         //
         // 라라벨에 없는 발송기라 여기서 붙인다. 설정이 비어 있어도 등록 자체는 해 둔다 —
@@ -87,6 +105,10 @@ class AppServiceProvider extends ServiceProvider
 
         // 퇴사·비활성 전환 시 계정·배지·기기·채팅방·푸시를 한 번에 닫는다(열쇠 회수).
         Employee::observe(EmployeeOffboardingObserver::class);
+
+        // 고용형태가 바뀌면 그 사람의 급여 시트를 다시 계산한다 — 파생된 표는
+        // 출퇴근 기록만이 아니라 고용형태까지, 자기 입력 전부를 따라야 한다.
+        Employee::observe(EmployeeTimesheetPolicyObserver::class);
 
         // 신규 직원 → 회사방·팀방 자동 가입. 함수는 있었는데 부르는 곳이 0곳이라
         // 새 직원은 아무 방에도 없이 시작했다(연계 점검 ⑮).

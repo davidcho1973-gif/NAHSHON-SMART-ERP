@@ -153,7 +153,7 @@ class ManagerJoinTest extends TestCase
         auth()->logout();
         // 예전 링크도 작업자 문으로 모인다. 그 문이 휴대폰으로 알아보고 앱에 넣어 준다.
         $this->get(route('gate.show', ['site' => $this->site]).'?install=1')
-            ->assertOk()->assertSee('id="login-form"', false);
+            ->assertOk()->assertSee('id="last4"', false);
 
         // 기억된 휴대폰이 아니면 여전히 앱에 못 들어간다 — 다만 이메일·비밀번호를
         // 묻는 화면이 아니라, 무엇을 하면 되는지 말해 주는 화면으로 보낸다.
@@ -161,7 +161,7 @@ class ManagerJoinTest extends TestCase
         $this->assertGuest();
         $this->assertSame(route('attendance-app.index'), session('url.intended'));
         $this->get(route('gate.show', ['site' => $this->site]))->assertOk()
-            ->assertSee('id="login-form"', false)
+            ->assertSee('id="last4"', false)
             ->assertDontSee('id="open-worker-app"', false);
     }
 
