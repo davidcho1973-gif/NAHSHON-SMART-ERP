@@ -127,4 +127,41 @@ class DrawingMarkTest extends TestCase
         $this->assertFalse($this->marks()->save(['siteId' => $this->site->id, 'sheetNo' => '703K-A01-01', 'shape' => 'note', 'points' => [[0.1, 0.1]], 'label' => 'x'])['success']);
         $this->assertFalse($this->marks()->delete(DrawingMark::firstOrFail()->id)['success']);
     }
+
+    public function test_marks_know_which_billing_round_paid_for_their_work(): void
+    {
+        $recordId = $this->record('installation', 40);
+        $ledger = app(ClaimEvidenceService::class);
+        $this->assertTrue($ledger->reviewRecord(['id' => $recordId, 'action' => 'verify', 'verifiedQty' => 40, 'reviewNote' => 'ok'])['success']);
+        $this->marks()->save(['siteId' => $this->site->id, 'sheetNo' => '703K-A01-01', 'shape' => 'line',
+            'points' => [[0.1, 0.2], [0.4, 0.2]], 'lineId' => $this->wall->id, 'recordId' => $recordId]);
+        $this->assertSame([], $this->marks()->sheet($this->site->id, '703K-A01-01')['marks'][0]['rounds'], '청구 전에는 회차가 없다 — 다음 기성 대상');
+
+        $draft = $ledger->draft($this->wall->project_contract_id, '2026-09-30');
+        $this->assertTrue($draft['success'], $draft['error'] ?? '');
+        $rounds = $this->marks()->sheet($this->site->id, '703K-A01-01')['marks'][0]['rounds'];
+        $this->assertCount(1, $rounds);
+        $this->assertSame($draft['applicationNo'], $rounds[0]['no'], '기성 회차는 배정된 청구 회차 번호다');
+        $this->assertEquals(40, $rounds[0]['qty']);
+    }
+
+    public function test_sheet_scale_is_kept_on_the_latest_sheet_and_checked(): void
+    {
+        $doc = IntelligentDocument::create(['uuid' => (string) Str::uuid(), 'source' => 'dropzone', 'disk' => 'local', 'file_path' => 'docs/s.pdf',
+            'original_file_name' => 's.pdf', 'stored_file_name' => 's.pdf', 'extension' => 'pdf', 'mime_type' => 'application/pdf', 'file_size' => 1,
+            'sha256' => hash('sha256', Str::random()), 'title' => 's.pdf', 'received_at' => now(), 'ai_status' => 'ready',
+            'site_id' => $this->site->id, 'company_id' => $this->company->id, 'category' => 'drawing_spec']);
+        $this->assertFalse($this->marks()->setScale($this->site->id, '703K-A01-01', 4 / 72, 'x')['success'], '도면 파일이 없으면 축척도 없다');
+        DrawingSheet::create(['intelligent_document_id' => $doc->id, 'site_id' => $this->site->id, 'page_no' => 1, 'sheet_no' => '703K-A01-01', 'status' => 'done']);
+
+        $this->assertFalse($this->marks()->setScale($this->site->id, '703K-A01-01', 50, 'x')['success'], '말이 안 되는 축척');
+        $ok = $this->marks()->setScale($this->site->id, '703k-a01-01', 4 / 72, '도면에서 읽음: 1/4" = 1\'-0"');
+        $this->assertTrue($ok['success'], $ok['error'] ?? '');
+        $sheet = $this->marks()->sheet($this->site->id, '703K-A01-01')['sheet'];
+        $this->assertEqualsWithDelta(4 / 72, $sheet['feetPerPoint'], 1e-9);
+        $this->assertStringContainsString('1/4', $sheet['scaleLabel']);
+
+        $this->actingAs(User::factory()->create(['access_role' => 'safety_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']));
+        $this->assertFalse($this->marks()->setScale($this->site->id, '703K-A01-01', 8 / 72, 'x')['success'], '보기 권한만으로는 축척을 못 바꾼다');
+    }
 }

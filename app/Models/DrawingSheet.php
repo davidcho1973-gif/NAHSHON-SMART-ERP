@@ -24,7 +24,7 @@ class DrawingSheet extends Model
     protected $fillable = [
         'intelligent_document_id', 'site_id', 'page_no', 'sheet_no', 'title', 'discipline', 'manual',
         'text_source', 'text', 'status', 'error', 'ai_model',
-        'thumb_disk', 'thumb_path', 'width_pt', 'height_pt', 'read_at',
+        'thumb_disk', 'thumb_path', 'width_pt', 'height_pt', 'feet_per_point', 'scale_label', 'read_at',
     ];
 
     protected function casts(): array

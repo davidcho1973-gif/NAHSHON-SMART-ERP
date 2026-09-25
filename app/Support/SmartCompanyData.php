@@ -347,6 +347,7 @@ class SmartCompanyData
             'api_getSectionLines' => app(SectionDrawingService::class)->sectionLines((int) ($args[0] ?? 0)),
             'api_getSheetMarks' => app(DrawingMarkService::class)->sheet((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_saveDrawingMark' => app(DrawingMarkService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_setSheetScale' => app(DrawingMarkService::class)->setScale((int) ($args[0] ?? 0), (string) ($args[1] ?? ''), $args[2] ?? null, (string) ($args[3] ?? '')),
             'api_deleteDrawingMark' => app(DrawingMarkService::class)->delete((int) ($args[0] ?? 0)),
             'api_submitRfi' => app(ContractChangeService::class)->submit(is_array($args[0] ?? null) ? $args[0] : []),
             'api_decideRfi' => app(ContractChangeService::class)->decide(is_array($args[0] ?? null) ? $args[0] : []),

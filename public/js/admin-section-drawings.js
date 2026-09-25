@@ -771,8 +771,8 @@
       '<div style="font-size:12px;font-weight:700;margin-bottom:6px">도면에 표시</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><select data-mark-sheet style="' + INPUT + ';margin-top:0;flex:1;min-width:150px">' +
         sheets.map(function (p) { return '<option value="' + u.esc(p.sheetNo) + '">' + u.esc(p.sheetNo + (p.sheet && p.sheet.title ? ' · ' + p.sheet.title : '')) + '</option>'; }).join('') + '</select>' +
-      '<button type="button" data-mark-open style="padding:8px 12px;border-radius:8px;border:none;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer"><i class="ph ph-map-pin"></i> 도면에서 찍기</button></div>' +
-      '<div data-mark-state style="font-size:12px;color:var(--text-tertiary);margin-top:6px">찍으면 사진·수량과 함께 도면 위에 표시됩니다. 위치 칸의 방 이름을 도면에서 찾아 보여 줍니다.</div></div>';
+      '<button type="button" data-mark-open style="padding:8px 12px;border-radius:8px;border:none;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer"><i class="ph ph-map-pin"></i> 도면 열어 표시·설명</button></div>' +
+      '<div data-mark-state style="font-size:12px;color:var(--text-tertiary);margin-top:6px">도면에 선·영역·점·메모를 그리고 설명을 붙이면 기록과 함께 저장됩니다. 축척이 있으면 그린 길이·면적이 수량이 됩니다.</div></div>';
   }
 
   /** 줄 하나에 반입·설치(시공) 기록 — 사진은 문서함에 올라가 그 기록의 근거가 된다. 확인은 담당자가 한다. */
@@ -787,6 +787,7 @@
         '계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + (l.splitsMaterial ? '반입 ' + qtyText(l.storedQty) + ' · 설치 ' + qtyText(l.installedQty) : '시공 ' + qtyText(l.installedQty)) + ' (확인된 수량)</div>' +
       field('무엇을 했나요?', '<select data-stage style="' + INPUT + '">' + stages.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select>') +
       field('이번 수량 (' + u.esc(l.unit) + ')', '<input data-qty type="number" min="0" step="any" style="' + INPUT + '">') +
+      '<div data-over style="display:none;font-size:12px;color:var(--status-danger);margin-top:4px"></div>' +
       (l.splitsMaterial ? '<label data-with-stored style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px"><input type="checkbox" data-stored checked> <span data-stored-text>반입도 같은 수량으로 기록 (설치한 자재는 들어온 것)</span></label>' : '') +
       field('작업일', '<input data-date type="date" value="' + today() + '" style="' + INPUT + '">') +
       field('위치', '<input data-location placeholder="예) 주방 서쪽 벽 · 그리드 C-4" style="' + INPUT + '">') +
@@ -803,19 +804,38 @@
         if (openBtn) openBtn.addEventListener('click', function () {
           global.DrawingMarker.open({
             siteId: state.data.siteId, sheetNo: box.querySelector('[data-mark-sheet]').value, mode: 'pick', sectionId: s.id,
-            line: { id: l.id, lineNo: l.lineNo, description: l.description, unit: l.unit },
+            line: { id: l.id, lineNo: l.lineNo, description: l.description, unit: l.unit, spec: l.spec },
             suggest: box.querySelector('[data-location]').value,
+            note: box.querySelector('[data-notes]').value,
+            today: today(),
             onPick: function (g) {
-              box._geom = g;
+              box._pick = g;
               var t = box.querySelector('[data-mark-state]');
-              t.innerHTML = '<span style="color:var(--status-success);font-weight:700">✓ ' + u.esc(g.sheetNo) + ' 에 ' + ({ point: '점', line: '선', area: '영역' }[g.shape] || '') + ' 표시 준비</span> · 기록하면 함께 저장됩니다.';
-              openBtn.innerHTML = '<i class="ph ph-arrow-clockwise"></i> 다시 찍기';
+              var qtyEl = box.querySelector('[data-qty]');
+              var filled = false;
+              // 도면에서 잰 값 — 수량 칸이 비어 있을 때만 채운다. 사람이 적은 수량을 덮지 않는다.
+              if (g.measuredTotal && !Number(qtyEl.value)) { qtyEl.value = g.measuredTotal; filled = true; qtyEl.dispatchEvent(new Event('input')); }
+              var notesEl = box.querySelector('[data-notes]');
+              if (g.label && !notesEl.value.trim()) notesEl.value = g.label;
+              t.innerHTML = '<span style="color:var(--status-success);font-weight:700">✓ ' + u.esc(g.sheetNo) + ' 에 표시 ' + g.shapes.length + '개' + (g.label ? ' · 설명 붙임' : '') + '</span>' +
+                (g.measuredTotal ? ' · 도면에서 잰 값 <b>' + g.measuredTotal + ' ' + u.esc(g.unit || '') + '</b>' + (filled ? ' (수량에 넣음)' : '') : '') + ' · 기록하면 함께 저장됩니다.';
+              openBtn.innerHTML = '<i class="ph ph-arrow-clockwise"></i> 다시 그리기';
             },
           });
         });
         var sel = box.querySelector('[data-stage]');
         var wrap = box.querySelector('[data-with-stored]');
-        function sync() { if (wrap) wrap.style.display = sel.value === 'installation' ? 'flex' : 'none'; }
+        function sync() { if (wrap) wrap.style.display = sel.value === 'installation' ? 'flex' : 'none'; over(); }
+        // 계약 수량을 넘으면 먼저 알려 준다 — 넘는 일은 RFI 로 계약을 늘려야 받을 수 있다.
+        function over() {
+          var q = Number(box.querySelector('[data-qty]').value) || 0;
+          var done = sel.value === 'stored' ? (l.storedQty || 0) + (l.pendingStoredQty || 0) : (l.installedQty || 0) + (l.pendingInstalledQty || 0);
+          var el = box.querySelector('[data-over]');
+          var after = Math.round((done + q) * 10000) / 10000;
+          el.style.display = q > 0 && after > l.contractQty ? 'block' : 'none';
+          el.textContent = '누적 ' + qtyText(after) + ' ' + l.unit + ' 이 계약 수량 ' + qtyText(l.contractQty) + ' 을 넘습니다. 넘는 ' + qtyText(after - l.contractQty) + ' 은 «작업 추가 RFI» 로 계약을 늘려야 청구할 수 있습니다.';
+        }
+        box.querySelector('[data-qty]').addEventListener('input', over);
         sel.addEventListener('change', sync); sync();
       },
       onAction: function (a, box) {
@@ -849,13 +869,17 @@
               });
             });
           }, Promise.resolve()).then(function () {
-            var g = box._geom;
-            if (!g || !mainId) return;
+            var pk = box._pick;
+            if (!pk || !mainId) return;
             // 표시는 기록의 근거를 도면에 보여 주는 것이다 — 기록은 이미 저장됐으니 표시가 실패해도 기록은 남는다.
-            return call('api_saveDrawingMark', [{ siteId: state.data.siteId, sheetNo: g.sheetNo, shape: g.shape, points: g.points,
-              lineId: l.id, recordId: mainId, sectionId: s.id, label: notes }]).then(function (r) {
-              if (r.success === false) u.toast('기록은 저장했지만 도면 표시는 못 했습니다: ' + (r.error || ''), 'error');
-            });
+            return pk.shapes.reduce(function (p2, g) {
+              return p2.then(function () {
+                return call('api_saveDrawingMark', [{ siteId: state.data.siteId, sheetNo: pk.sheetNo, shape: g.shape, points: g.points,
+                  lineId: l.id, recordId: mainId, sectionId: s.id, label: g.shape === 'note' ? g.label : (pk.label || notes) }]).then(function (r) {
+                  if (r.success === false) u.toast('기록은 저장했지만 도면 표시는 못 했습니다: ' + (r.error || ''), 'error');
+                });
+              });
+            }, Promise.resolve());
           });
         }).then(function () {
           m.close(null);
@@ -1003,7 +1027,7 @@
     var s = findSection(sectionId);
     if (!global.DrawingMarker || !s) return;
     global.DrawingMarker.open({
-      siteId: state.data.siteId, sheetNo: sheetNo, mode: 'view', sectionId: s.id,
+      siteId: state.data.siteId, sheetNo: sheetNo, mode: 'view', sectionId: s.id, today: today(),
       lines: s.billing ? s.billing.lines.map(function (l) { return { id: l.id, lineNo: l.lineNo, description: l.description, unit: l.unit }; }) : [],
       onChange: function () { reload(); },
     });

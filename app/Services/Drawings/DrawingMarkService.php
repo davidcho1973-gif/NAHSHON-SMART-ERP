@@ -7,6 +7,7 @@ use App\Models\ContractBoqLine;
 use App\Models\DrawingMark;
 use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
+use App\Models\PayApplicationAllocation;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkSection;
@@ -38,10 +39,7 @@ class DrawingMarkService
             if ($no === null) {
                 throw new InvalidArgumentException('도면 번호가 없습니다.');
             }
-            // 같은 번호가 여러 파일에 있으면(개정판) 가장 늦게 올라온 파일의 장 — 공정별 도면 화면과 같은 규칙.
-            $sheet = DrawingSheet::query()->where('site_id', $site->id)->whereRaw('upper(sheet_no) = ?', [$no])
-                ->with('document:id,title,original_file_name,created_at')->get()
-                ->sortByDesc(fn (DrawingSheet $s) => [$s->document?->created_at?->timestamp ?? 0, $s->id])->first();
+            $sheet = $this->latestSheet($site, $no);
 
             $marks = DrawingMark::query()->where('site_id', $site->id)->where('sheet_no', $no)
                 ->with(['line.section', 'record'])->orderBy('id')->get();
@@ -112,6 +110,30 @@ class DrawingMarkService
             ]);
 
             return ['success' => true, 'id' => $mark->id, 'mark' => $this->rows(collect([$mark->load(['line.section', 'record'])]))[0]];
+        });
+    }
+
+    /**
+     * 도면의 축척을 적는다 — 도면에서 읽은 축척을 확인했거나, 아는 치수로 맞췄을 때.
+     * 그 번호의 가장 최근 장(개정판)에 붙는다. 축척이 있어야 그은 선·영역이 수량이 된다.
+     *
+     * @return array<string, mixed>
+     */
+    public function setScale(int $siteId, string $sheetNo, mixed $feetPerPoint, string $label): array
+    {
+        return $this->respond(function () use ($siteId, $sheetNo, $feetPerPoint, $label): array {
+            [, $site] = $this->access($siteId, true);
+            $sheet = $this->latestSheet($site, (string) DrawingSheet::normalizeNo($sheetNo));
+            if ($sheet === null) {
+                throw new InvalidArgumentException('도면 파일이 올라와야 축척을 적을 수 있습니다.');
+            }
+            // 실물 크기 1:1(0.0012 ft/pt) 부터 토목 1" = 500'(6.9 ft/pt) 까지 — 그 밖은 잘못 잰 것이다.
+            if (! is_numeric($feetPerPoint) || (float) $feetPerPoint < 0.0005 || (float) $feetPerPoint > 10) {
+                throw new InvalidArgumentException('축척 값이 도면 축척의 범위를 벗어났습니다. 치수를 다시 재 주세요.');
+            }
+            $sheet->forceFill(['feet_per_point' => round((float) $feetPerPoint, 10), 'scale_label' => mb_substr(trim($label) ?: '사람이 맞춤', 0, 120)])->save();
+
+            return ['success' => true, 'feetPerPoint' => (float) $sheet->feet_per_point, 'scaleLabel' => $sheet->scale_label];
         });
     }
 
@@ -205,8 +227,16 @@ class DrawingMarkService
         $docs = IntelligentDocument::query()->visibleTo(auth()->user())->whereIn('id', $docIds ?: [0])
             ->get(['id', 'title', 'original_file_name', 'mime_type', 'extension'])->keyBy('id');
         $users = User::query()->whereIn('id', $marks->pluck('created_by')->filter()->unique()->all() ?: [0])->pluck('name', 'id');
+        // 몇 차 기성에 들어갔나 — 기성 회차에 배정된 수량(pay_application_allocations)이 그 사실이다.
+        $rounds = PayApplicationAllocation::query()->whereIn('claim_work_record_id', $marks->pluck('claim_work_record_id')->filter()->unique()->all() ?: [0])
+            ->with('application:id,application_no,status,period_end')->get()
+            ->groupBy('claim_work_record_id')
+            ->map(fn (Collection $g) => $g->map(fn (PayApplicationAllocation $a): array => [
+                'no' => (int) $a->application?->application_no, 'status' => $a->application?->status,
+                'periodEnd' => $a->application?->period_end?->toDateString(), 'qty' => (float) $a->quantity,
+            ])->filter(fn (array $r): bool => $r['no'] > 0)->sortBy('no')->values()->all());
 
-        return $marks->map(function (DrawingMark $m) use ($docs, $users): array {
+        return $marks->map(function (DrawingMark $m) use ($docs, $users, $rounds): array {
             $r = $m->record;
             $evidence = collect($r?->evidence ?? [])->map(function (array $e) use ($docs): ?array {
                 if (($e['type'] ?? '') !== 'document' || ! $docs->has((int) $e['id'])) {
@@ -222,6 +252,8 @@ class DrawingMarkService
             return [
                 'id' => $m->id, 'shape' => $m->shape, 'points' => $m->points, 'label' => $m->label,
                 'status' => self::statusOf($m->line, $r),
+                // 이 표시의 일이 청구된 기성 회차들(1차·2차…). 색을 회차별로 나누는 근거.
+                'rounds' => $r ? ($rounds[$r->id] ?? []) : [],
                 'sectionId' => $m->work_section_id,
                 'line' => $m->line ? ['id' => $m->line->id, 'lineNo' => $m->line->line_no, 'description' => $m->line->description,
                     'unit' => $m->line->unit, 'section' => $m->line->section?->code] : null,
@@ -232,6 +264,14 @@ class DrawingMarkService
                 'createdAt' => $m->created_at?->toIso8601String(),
             ];
         })->values()->all();
+    }
+
+    /** 같은 번호가 여러 파일에 있으면(개정판) 가장 늦게 올라온 파일의 장 — 공정별 도면 화면과 같은 규칙. */
+    private function latestSheet(Site $site, string $no): ?DrawingSheet
+    {
+        return DrawingSheet::query()->where('site_id', $site->id)->whereRaw('upper(sheet_no) = ?', [$no])
+            ->with('document:id,title,original_file_name,created_at')->get()
+            ->sortByDesc(fn (DrawingSheet $s) => [$s->document?->created_at?->timestamp ?? 0, $s->id])->first();
     }
 
     /** @return array{0: User, 1: Site} */

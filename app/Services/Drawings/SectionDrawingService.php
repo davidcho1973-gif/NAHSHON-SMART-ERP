@@ -418,6 +418,8 @@ class SectionDrawingService
             'thumbUrl' => $s->thumb_path ? route('drawing-sheets.thumb', ['sheet' => $s->id]).'?v='.($s->updated_at?->timestamp ?? 0) : null,
             'widthPt' => $s->width_pt,
             'heightPt' => $s->height_pt,
+            'feetPerPoint' => $s->feet_per_point !== null ? (float) $s->feet_per_point : null,
+            'scaleLabel' => $s->scale_label,
         ];
     }
 
