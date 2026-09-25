@@ -2,12 +2,15 @@
 
 namespace App\Services\Drawings;
 
+use App\Models\ContractBoqLine;
 use App\Models\DrawingSheet;
 use App\Models\IntelligentDocument;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkSection;
 use App\Models\WorkSectionSheet;
+use App\Services\Admin\BillingAdminService;
+use App\Services\Finance\ClaimEvidenceService;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,6 +25,9 @@ use Illuminate\Support\Facades\DB;
  *  - 쪽마다의 도면 번호·글자: drawing_sheets. 사진으로 된 쪽은 AI 가 읽어 붙인다.
  *  - 공정 목록: work_sections — 원청 계약 기성표의 섹션.
  *  - 선택: work_section_sheets — 도면 <b>번호</b>로 잇는다. 개정판이 와도 선택이 산다.
+ *  - 계약 줄과 기성: contract_boq_lines(기성 근거 대장). 줄이 work_section_id 로 공정을 안다.
+ *    기성관리가 공정관리이므로(사장), 공정의 진행률은 그 공정 줄들의 확인 기성 ÷ 계약 금액이다.
+ *    금액 계산은 대장(ClaimEvidenceService::progressByLine)이 하고 여기서는 더하기만 한다.
  */
 class SectionDrawingService
 {
@@ -61,14 +67,18 @@ class SectionDrawingService
             ->groupBy(fn (DrawingSheet $s): string => (string) DrawingSheet::normalizeNo($s->sheet_no))
             ->map(fn (Collection $g): DrawingSheet => $g->first());
 
-        $sections = WorkSection::query()->where('site_id', $site->id)
-            ->with('sheets')->orderBy('sort_order')->orderBy('id')->get()
+        $sectionModels = WorkSection::query()->where('site_id', $site->id)
+            ->with('sheets')->orderBy('sort_order')->orderBy('id')->get();
+        $money = $this->money($sectionModels);
+        $sections = $sectionModels
             ->map(fn (WorkSection $sec): array => [
                 'id' => $sec->id,
                 'division' => $sec->division,
                 'code' => $sec->code,
                 'name' => $sec->name,
                 'contractAmount' => $sec->contract_amount,
+                'contractId' => $sec->project_contract_id,
+                'billing' => $money['sections'][$sec->id] ?? null,
                 'sheets' => $sec->sheets->map(function (WorkSectionSheet $pick) use ($byNo): array {
                     $sheet = $byNo->get((string) DrawingSheet::normalizeNo($pick->sheet_no));
 
@@ -87,6 +97,35 @@ class SectionDrawingService
             'otherPdfs' => $this->otherPdfs($user, $site, $sheets),
             'catalog' => $sheets->map(fn (DrawingSheet $s): array => $this->sheetRow($s))->values()->all(),
             'canManage' => $this->canManage($user),
+            'billing' => $money['summary'],
+        ];
+    }
+
+    /**
+     * 한 공정의 계약 줄 — 줄마다 계약 수량, 확인된 반입·설치 수량, 받을 수 있는 기성.
+     *
+     * @return array<string, mixed>
+     */
+    public function sectionLines(int $sectionId): array
+    {
+        $user = auth()->user();
+        $billing = app(BillingAdminService::class);
+        if (! $user instanceof User || ! $billing->canView($user)) {
+            return ['success' => false, 'error' => '기성을 볼 권한이 없습니다.'];
+        }
+        $section = WorkSection::query()->find($sectionId);
+        if ($section === null || ! $this->canUseSiteId($user, $section->site_id)) {
+            return ['success' => false, 'error' => '공정을 찾을 수 없습니다.'];
+        }
+        $lines = $this->visibleLines(collect([$section->id]));
+        $progress = app(ClaimEvidenceService::class)->progressByLine($lines);
+
+        return [
+            'success' => true,
+            'section' => ['id' => $section->id, 'code' => $section->code, 'name' => $section->name],
+            'contractId' => $lines->first()?->project_contract_id ?? $section->project_contract_id,
+            'canManage' => $billing->canManage($user),
+            'lines' => $lines->map(fn (ContractBoqLine $l): array => $this->lineProgress($l, $progress[$l->id]))->values()->all(),
         ];
     }
 
@@ -209,6 +248,97 @@ class SectionDrawingService
         ])->save();
 
         return ['success' => true, 'sheet' => $this->sheetRow($sheet)];
+    }
+
+    // ── 기성 ─────────────────────────────────────────────────────────
+
+    /**
+     * 공정별·현장 전체 기성 요약. 기성을 볼 권한이 없으면 금액을 보내지 않는다.
+     *
+     * @param  Collection<int, WorkSection>  $sections
+     * @return array{sections: array<int, array<string, mixed>>, summary: ?array<string, mixed>}
+     */
+    private function money(Collection $sections): array
+    {
+        $billing = app(BillingAdminService::class);
+        if (! $billing->canView() || $sections->isEmpty()) {
+            return ['sections' => [], 'summary' => null];
+        }
+        $lines = $this->visibleLines($sections->pluck('id'));
+        $progress = app(ClaimEvidenceService::class)->progressByLine($lines);
+        $out = [];
+        foreach ($lines->groupBy('work_section_id') as $sectionId => $group) {
+            $rows = $group->map(fn (ContractBoqLine $l): array => $this->lineProgress($l, $progress[$l->id]));
+            $amount = round($rows->sum('amount'), 2);
+            $earned = round($rows->sum('earned'), 2);
+            $out[(int) $sectionId] = [
+                'lines' => $rows->count(), 'amount' => $amount, 'earned' => $earned,
+                'storedOnSite' => round($rows->sum('storedOnSite'), 2),
+                'percent' => $amount > 0 ? round($earned / $amount * 100, 1) : null,
+                'done' => $rows->filter(fn (array $r): bool => $r['percent'] !== null && $r['percent'] >= 100)->count(),
+                'pendingCount' => $rows->sum('pendingCount'),
+                'gaps' => $rows->where('installGap', true)->count(),
+            ];
+        }
+        $contract = $lines->first()?->contract;
+        $amount = round(array_sum(array_column($out, 'amount')), 2);
+        $earned = round(array_sum(array_column($out, 'earned')), 2);
+
+        return ['sections' => $out, 'summary' => [
+            'contractId' => $contract?->id,
+            'contractTitle' => $contract?->title,
+            'contractAmount' => $contract?->current_amount !== null ? (float) $contract->current_amount : null,
+            'lineTotal' => $amount,
+            'lines' => $lines->count(),
+            'earned' => $earned,
+            'storedOnSite' => round(array_sum(array_column($out, 'storedOnSite')), 2),
+            'percent' => $amount > 0 ? round($earned / $amount * 100, 1) : null,
+            'pendingCount' => array_sum(array_column($out, 'pendingCount')),
+            'canImport' => $billing->canManage() && $this->canManage(auth()->user()),
+        ]];
+    }
+
+    /**
+     * 볼 수 있는 계약의 줄만 — 기성 권한의 계약 범위(회사·현장)를 그대로 따른다.
+     *
+     * @param  Collection<int, int>  $sectionIds
+     * @return Collection<int, ContractBoqLine>
+     */
+    private function visibleLines(Collection $sectionIds): Collection
+    {
+        $lines = ContractBoqLine::query()->whereIn('work_section_id', $sectionIds->all() ?: [0])->with('contract')->orderBy('id')->get();
+        $billing = app(BillingAdminService::class);
+        $allowed = $lines->pluck('project_contract_id')->unique()
+            ->filter(fn ($id): bool => $billing->findAccessibleContract((int) $id) !== null)->all();
+
+        return $lines->filter(fn (ContractBoqLine $l): bool => in_array($l->project_contract_id, $allowed, true))->values();
+    }
+
+    /**
+     * @param  array{verified: array<string, float>, pending: array<string, float>, pendingCount: int, earned: float}  $p
+     * @return array<string, mixed>
+     */
+    private function lineProgress(ContractBoqLine $l, array $p): array
+    {
+        $amount = round((float) $l->contract_qty * (float) $l->unit_price, 2);
+        $split = $l->recognition_basis === 'milestone';
+        $installed = (float) ($p['verified']['installation'] ?? $p['verified']['installed'] ?? 0);
+        $stored = (float) ($p['verified']['stored'] ?? 0);
+
+        return [
+            'id' => $l->id, 'lineNo' => $l->line_no, 'group' => $l->group_label, 'description' => $l->description, 'spec' => $l->spec,
+            'unit' => $l->unit, 'contractQty' => (float) $l->contract_qty, 'unitPrice' => (float) $l->unit_price, 'amount' => $amount,
+            'materialPrice' => $l->material_price !== null ? (float) $l->material_price : null,
+            'splitsMaterial' => $split, 'status' => $l->status,
+            'installedQty' => $installed, 'storedQty' => $split ? $stored : null,
+            'pendingCount' => $p['pendingCount'],
+            'earned' => $p['earned'],
+            'percent' => $amount > 0 ? round($p['earned'] / $amount * 100, 1) : null,
+            // 반입했지만 아직 설치 안 한 자재 — 청구서의 «반입 자재» 칸이 된다.
+            'storedOnSite' => $split ? round(max(0, $stored - $installed) * (float) $l->material_price, 2) : 0.0,
+            // 설치가 반입보다 많으면 반입 기록이 빠진 것이다 — 그 자재값을 못 받고 있다.
+            'installGap' => $split && $installed > $stored + 0.00001,
+        ];
     }
 
     // ── 문서·권한 ─────────────────────────────────────────────────────

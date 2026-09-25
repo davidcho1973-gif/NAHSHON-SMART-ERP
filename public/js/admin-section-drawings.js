@@ -10,6 +10,9 @@
  *     안 읽은 파일이 있으면 화면을 여는 것만으로 읽기가 시작된다.
  *  2. 공정별 선택 — 공정마다 도면 번호를 고른다. 번호로 저장하므로 개정판이 와도 선택이 산다.
  *  3. 확인 — 도면을 누르면 크게 보이고, AI 가 읽은 글자와 번호를 사람이 고칠 수 있다.
+ *  4. 기성 — 원청 계약 기성표(엑셀)를 올리면 계약서의 줄이 공정 아래에 붙고, 공정마다
+ *     확인된 기성과 진행률이 보인다. 사장: «기성관리가 공정관리다». 금액은 기성 근거 대장이
+ *     계산한 값을 그대로 보여 준다. 줄의 기록·확인은 대장 화면에서 한다.
  */
 (function (global) {
   'use strict';
@@ -61,7 +64,16 @@
 
   function money(v) {
     if (v === null || v === undefined) return '';
-    return '$' + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    var n = Number(v);
+    return (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+
+  function pct(v) { return v === null || v === undefined ? '—' : (Math.round(v * 10) / 10) + '%'; }
+
+  function bar(percent) {
+    var w = Math.max(0, Math.min(100, Number(percent) || 0));
+    return '<div style="height:6px;border-radius:3px;background:var(--bg-base);overflow:hidden;min-width:80px">' +
+      '<div style="height:100%;width:' + w + '%;background:' + (w >= 100 ? 'var(--status-success)' : 'var(--brand-primary)') + '"></div></div>';
   }
 
   // ── PDF.js ─────────────────────────────────────────────────────────
@@ -262,6 +274,45 @@
       '</div>';
   }
 
+  /** 공정 카드의 기성 줄 — 계약 줄이 올라온 공정만. */
+  function sectionMoney(u, s) {
+    var b = s.billing;
+    if (!b) return '';
+    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px">' +
+      '<div style="flex:1;min-width:140px">' + bar(b.percent) + '</div>' +
+      '<span style="font-size:12px;font-weight:700">' + pct(b.percent) + '</span>' +
+      '<span style="font-size:12px;color:var(--text-secondary)">기성 ' + money(b.earned) + ' / 계약 ' + money(b.amount) + '</span>' +
+      (b.storedOnSite > 0 ? '<span style="font-size:12px;color:var(--text-secondary)">반입 자재 ' + money(b.storedOnSite) + '</span>' : '') +
+      (b.pendingCount ? '<span style="font-size:12px;color:var(--status-warning)">확인 대기 ' + b.pendingCount + '건</span>' : '') +
+      (b.gaps ? '<span style="font-size:12px;color:var(--status-danger)">반입 기록 빠짐 ' + b.gaps + '줄</span>' : '') +
+      u.rowButton('줄 ' + b.lines + '개 보기', 'window.AdminSectionDrawings.lines(' + s.id + ')') +
+      '</div>';
+  }
+
+  /** 현장 전체 기성 — 계약서가 올라왔으면 합계, 안 올라왔으면 올리라는 안내. */
+  function billingPanel(u, d) {
+    var b = d.billing;
+    if (!b) return '';
+    if (!b.lines) {
+      return b.canImport ? '<div style="border:1px dashed var(--border-default);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:var(--text-secondary)">' +
+        '원청 계약 기성표(엑셀)를 올리면 계약서의 줄이 공정 아래에 붙고, 줄마다 진행률과 기성 금액이 보입니다. 위의 <b>계약서 올리기</b>를 누르세요.</div>' : '';
+    }
+    var cells = [
+      ['계약', money(b.contractAmount !== null ? b.contractAmount : b.lineTotal), b.contractAmount !== null && Math.abs(b.contractAmount - b.lineTotal) >= 0.01 ? '줄 합계 ' + money(b.lineTotal) + ' · 절사 ' + money(b.contractAmount - b.lineTotal) : '줄 ' + b.lines + '개'],
+      ['확인된 기성', money(b.earned), pct(b.percent) + ' · 사람이 확인한 수량 × 계약 단가'],
+      ['반입 자재 (미설치)', money(b.storedOnSite), '청구서에 따로 적는 칸'],
+      ['확인 대기', (b.pendingCount || 0) + '건', '기록은 됐고 아직 확인 전'],
+    ];
+    return '<div style="border:1px solid var(--border-default);border-radius:12px;padding:14px 16px;margin-bottom:16px;background:var(--bg-surface)">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:14px;font-weight:800;flex:1">기성 = 공정 · ' + u.esc(b.contractTitle || '') + '</span>' +
+      (b.contractId ? u.rowButton('기성 근거 대장 열기', 'window.AdminSectionDrawings.ledger(' + b.contractId + ')') : '') + '</div>' +
+      bar(b.percent) +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px">' + cells.map(function (c) {
+        return '<div><div style="font-size:12px;color:var(--text-secondary)">' + u.esc(c[0]) + '</div><div style="font-size:18px;font-weight:800;margin:2px 0">' + u.esc(c[1]) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-tertiary)">' + u.esc(c[2]) + '</div></div>';
+      }).join('') + '</div></div>';
+  }
+
   function sectionsPanel(u, d) {
     if (!(d.sections || []).length) {
       return '<div style="padding:30px;text-align:center;color:var(--text-tertiary);border:1px dashed var(--border-default);border-radius:12px">' +
@@ -282,10 +333,10 @@
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
               '<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--bg-base);color:var(--text-secondary)">' + u.esc(s.code) + '</span>' +
               '<span style="font-size:14px;font-weight:700;flex:1">' + u.esc(s.name) + '</span>' +
-              (s.contractAmount ? '<span style="font-size:12px;color:var(--text-secondary)">계약 ' + money(s.contractAmount) + '</span>' : '') +
+              (s.contractAmount && !s.billing ? '<span style="font-size:12px;color:var(--text-secondary)">계약 ' + money(s.contractAmount) + '</span>' : '') +
               '<span style="font-size:12px;color:var(--text-tertiary)">도면 ' + s.sheets.length + '장' + (s.sheets.length && found < s.sheets.length ? ' · ' + (s.sheets.length - found) + '장은 아직 없음' : '') + '</span>' +
               (d.canManage ? u.rowButton('도면 고르기', 'window.AdminSectionDrawings.pick(' + s.id + ')') : '') +
-            '</div>' +
+            '</div>' + sectionMoney(u, s) +
             (s.sheets.length
               ? '<div style="display:flex;gap:10px;flex-wrap:wrap">' + s.sheets.map(function (p) { return sheetChip(u, p); }).join('') + '</div>'
               : '<div style="font-size:12px;color:var(--text-tertiary)">고른 도면이 없습니다.</div>') +
@@ -310,11 +361,13 @@
     var actions = siteSel +
       (d.canManage ? '<label style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer">' +
         '<i class="ph ph-upload-simple"></i>도면 올리기<input type="file" accept="application/pdf,.pdf" multiple style="display:none" onchange="window.AdminSectionDrawings.upload(this)"></label>' : '') +
+      (d.billing && d.billing.canImport ? '<label style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary);font-size:13px;font-weight:600;cursor:pointer">' +
+        '<i class="ph ph-file-xls"></i>계약서 올리기<input type="file" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="window.AdminSectionDrawings.uploadContract(this)"></label>' : '') +
       (d.canManage ? u.rowButton('공정 추가', 'window.AdminSectionDrawings.editSection()') : '');
 
     return u.pageHeader('공정별 도면',
       d.site + ' · 계약서의 공정마다 그 일을 그리고 적을 도면을 고릅니다. 도면 번호로 저장하므로 개정판이 와도 선택이 유지됩니다.',
-      actions) + docsPanel(u, d) + sectionsPanel(u, d);
+      actions) + billingPanel(u, d) + docsPanel(u, d) + sectionsPanel(u, d);
   }
 
   function reload() {
@@ -533,6 +586,113 @@
     });
   }
 
+  // ── 계약서·기성 ─────────────────────────────────────────────────────
+
+  /** 계약서 엑셀 → 문서함에 올리고 → 무엇을 읽었는지 보여 주고 → 확인하면 줄을 올린다. */
+  function uploadContract(input) {
+    var u = ui();
+    var f = (input.files || [])[0];
+    input.value = '';
+    if (!f) return;
+    u.toast(f.name + ' 올리는 중…');
+    var fd = new FormData();
+    fd.append('files[]', f);
+    fd.append('site_id', String(state.data.siteId));
+    request('/document-hub/api/upload', 'POST', fd).then(function (res) {
+      if (!res || res.success === false) throw new Error((res && (res.error || res.message)) || '올리지 못했습니다.');
+      var id = ((res.documents || [])[0] || {}).id || ((res.duplicates || [])[0] || {}).documentId;
+      if (!id) throw new Error((((res.failed || [])[0]) || {}).reason || '올리지 못했습니다.');
+      return call('api_previewContractSheet', [id]);
+    }).then(function (p) {
+      if (p.success === false) throw new Error(p.error || '계약서를 읽지 못했습니다.');
+      confirmContract(p);
+    }).catch(function (e) { u.toast(e.message || '올리지 못했습니다.', 'error'); });
+  }
+
+  function confirmContract(p) {
+    var u = ui();
+    var options = (p.contracts || []).map(function (c) {
+      var same = c.amount !== null && Math.abs(c.amount - p.contractTotal) < 0.01;
+      return '<option value="' + c.id + '"' + (c.id === p.suggestedContractId ? ' selected' : '') + '>' + u.esc(c.title + ' · ' + (c.amount !== null ? money(c.amount) : '금액 없음') + (same ? '' : ' (금액 다름)') + (c.lines ? ' · 줄 ' + c.lines + '개' : '')) + '</option>';
+    }).join('');
+    var sections = (p.sections || []).map(function (s) {
+      return '<tr><td style="padding:4px 6px;color:var(--text-secondary)">' + u.esc(s.division || '') + '</td><td style="padding:4px 6px">' + u.esc(s.name) + '</td>' +
+        '<td style="padding:4px 6px;text-align:right">' + s.lines + '줄</td><td style="padding:4px 6px;text-align:right">' + money(s.amount) + '</td>' +
+        '<td style="padding:4px 6px;font-size:11px;color:' + (s.matches ? 'var(--text-secondary)' : 'var(--status-warning)') + '">' + u.esc(s.matches ? '→ ' + s.matches.code + ' (도면 선택 유지)' : '새 공정') + '</td></tr>';
+    }).join('');
+    var body =
+      '<div style="font-size:13px;line-height:1.7">' +
+        '<b>' + u.esc(p.project || p.fileName) + '</b>' + (p.scope ? ' · ' + u.esc(p.scope) : '') + '<br>' +
+        '계약 합계 <b>' + money(p.contractTotal) + '</b> · 줄 <b>' + p.lineCount + '개</b> · 공정 ' + p.sections.length + '개' +
+        (Math.abs(p.roundOff) >= 0.01 ? ' · 줄 합계 ' + money(p.lineTotal) + ' (절사 ' + money(p.roundOff) + ')' : '') + '<br>' +
+        '자재 단가가 있는 ' + p.storedLineCount + '줄은 반입 자재 기성(자재 단가)과 설치 기성(나머지)을 따로 받습니다.' +
+      '</div>' +
+      '<div style="max-height:260px;overflow:auto;margin:10px 0;border:1px solid var(--border-default);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:12px">' + sections + '</table></div>' +
+      '<label style="display:block;font-size:12px;font-weight:700;margin-top:6px">어느 계약의 줄인가요?' +
+        '<select data-contract style="width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:13px">' +
+        options + '<option value="0"' + (p.suggestedContractId ? '' : ' selected') + '>새 수주 계약 만들기 — ' + u.esc(p.newContractTitle) + ' · ' + money(p.contractTotal) + '</option></select></label>' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13px;cursor:pointer"><input type="checkbox" data-confirm style="margin-top:3px">' +
+        '<span>이 파일은 원청과 맺은 계약 내역입니다. 줄의 수량과 단가를 계약 조건으로 확정합니다. 이후 변경은 RFI 로만 합니다.</span></label>';
+    var m = u.modal({
+      title: '계약서 올리기 — ' + p.site.label,
+      subtitle: p.fileName + ' · ' + p.sheetName + ' 시트를 읽었습니다. 섹션마다 줄 금액의 합이 계약서 소계와 맞는 것을 확인했습니다.',
+      width: 760, body: body,
+      actions: [{ label: '취소', value: null }, { label: '줄 올리기', value: 'keep', kind: 'primary' }],
+      onAction: function (a, box) {
+        if (!box.querySelector('[data-confirm]').checked) { u.toast('계약 내역인지 확인란을 눌러 주세요.', 'error'); return; }
+        var cid = Number(box.querySelector('[data-contract]').value);
+        u.toast('계약 줄을 올리는 중…');
+        call('api_importContractSheet', [{ documentId: p.documentId, contractId: cid, createContract: cid === 0, confirmContract: true }]).then(function (r) {
+          if (r.success === false) { u.toast(r.error || '올리지 못했습니다.', 'error'); return; }
+          m.close(null);
+          global.apiCache = {};
+          u.toast(r.message);
+          return reload();
+        }).catch(function (e) { u.toast(e.message || '올리지 못했습니다.', 'error'); });
+      },
+    });
+  }
+
+  /** 한 공정의 계약 줄 — 줄마다 진행률. 기록·확인은 기성 근거 대장에서. */
+  function lines(sectionId) {
+    var u = ui();
+    call('api_getSectionLines', [sectionId]).then(function (r) {
+      if (r.success === false) { u.toast(r.error || '불러오지 못했습니다.', 'error'); return; }
+      var group = null;
+      // 표가 아니라 줄 카드 — 휴대폰에서는 오른쪽 칸이 아래로 내려와야 버튼이 보인다.
+      var rows = r.lines.map(function (l) {
+        var head = '';
+        if ((l.group || '') !== (group || '')) { group = l.group; head = group ? '<div style="padding:12px 2px 2px;font-size:12px;font-weight:800;color:var(--text-secondary)">' + u.esc(group) + '</div>' : ''; }
+        var done = l.splitsMaterial
+          ? '반입 ' + qtyText(l.storedQty) + ' · 설치 ' + qtyText(l.installedQty)
+          : '시공 ' + qtyText(l.installedQty);
+        return head + '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 2px;border-top:1px solid var(--border-subtle)">' +
+          '<div style="flex:1 1 300px;min-width:0"><div style="font-size:13px;font-weight:700">#' + u.esc(l.lineNo) + ' ' + u.esc(l.description) + '</div>' +
+            (l.spec ? '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + u.esc(l.spec) + '</div>' : '') +
+            '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">계약 ' + qtyText(l.contractQty) + ' ' + u.esc(l.unit) + ' · ' + money(l.amount) + '</div></div>' +
+          '<div style="flex:1 1 200px;font-size:12px">' + bar(l.percent) +
+            '<div style="margin-top:4px"><b>' + pct(l.percent) + '</b> · ' + money(l.earned) + '</div>' +
+            '<div style="color:var(--text-tertiary)">' + done + '</div>' +
+            (l.pendingCount ? '<div style="color:var(--status-warning)">확인 대기 ' + l.pendingCount + '건</div>' : '') +
+            (l.installGap ? '<div style="color:var(--status-danger)">설치가 반입보다 많음 · 반입 기록을 더하세요</div>' : '') + '</div>' +
+          '<div style="flex:0 0 auto;align-self:flex-start">' + (r.contractId ? u.rowButton(r.canManage ? '기록·확인' : '근거 보기', 'window.AdminSectionDrawings.ledger(' + r.contractId + ',' + l.id + ')') : '') + '</div></div>';
+      }).join('');
+      state.linesModal = u.modal({
+        title: r.section.code + ' ' + r.section.name + ' — 계약 줄 ' + r.lines.length + '개',
+        subtitle: '진행률은 사람이 확인한 수량 × 계약 단가입니다. 자재가 들어오면 반입, 설치하면 설치로 기록합니다.',
+        width: 980,
+        body: rows ? rows : '<div style="padding:16px;color:var(--text-tertiary)">이 공정에 올라온 계약 줄이 없습니다.</div>',
+      });
+    }).catch(function (e) { u.toast(e.message || '불러오지 못했습니다.', 'error'); });
+  }
+
+  function qtyText(v) { return v === null || v === undefined ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+
+  function ledger(contractId, lineId) {
+    if (state.linesModal) { state.linesModal.close(null); state.linesModal = null; }
+    if (global.AdminClaimEvidence) global.AdminClaimEvidence.open(contractId, lineId);
+  }
+
   function pickSite(id) {
     if (!id) return;
     var code = null;
@@ -559,6 +719,9 @@
     openSheet: openSheet,
     editSection: editSection,
     pickSite: pickSite,
+    uploadContract: uploadContract,
+    lines: lines,
+    ledger: ledger,
     _state: state,
     _meaningful: meaningful,
   };

@@ -10,6 +10,7 @@ use App\Models\PayApplication;
 use App\Models\PayApplicationAllocation;
 use App\Models\ProjectContract;
 use App\Models\WbsPhoto;
+use App\Models\WorkSection;
 use App\Services\Admin\BillingAdminService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -153,9 +154,17 @@ class ClaimEvidenceService
                 if ($documentId) {
                     $this->resolveEvidence($contract, [['type' => 'document', 'id' => $documentId, 'locator' => $locator ?: '문서 전체']]);
                 }
+                $split = $this->priceSplit($input, $existing, $price);
+                $sectionId = array_key_exists('workSectionId', $input) ? (int) $input['workSectionId'] : (int) $existing?->work_section_id;
+                if ($sectionId && ! WorkSection::whereKey($sectionId)->where('site_id', $contract->site_id ?: -1)->exists()) {
+                    throw new InvalidArgumentException('계약 현장의 공정만 연결할 수 있습니다.');
+                }
                 $line = $existing ?? new ContractBoqLine;
-                $line->fill([
+                $line->fill($split + [
                     'project_contract_id' => $contract->id, 'line_no' => $lineNo,
+                    'work_section_id' => $sectionId ?: null,
+                    'spec' => array_key_exists('spec', $input) ? $this->optionalText($input['spec'], 10000) : $existing?->spec,
+                    'group_label' => array_key_exists('groupLabel', $input) ? $this->optionalText($input['groupLabel'], 255) : $existing?->group_label,
                     'description' => $this->text($input['description'] ?? $existing?->description, '항목명', 10000),
                     'unit' => $this->text($input['unit'] ?? $existing?->unit, '단위', 20),
                     'contract_qty' => $qty, 'unit_price' => $price, 'recognition_basis' => $basis,
@@ -390,6 +399,49 @@ class ClaimEvidenceService
         });
     }
 
+    /**
+     * 줄별 확인 실적과 그 값 — 공정별 화면이 대장과 같은 계산 규칙(단계 비율 × 계약 단가)을 쓰도록
+     * 여기서만 계산한다. 화면마다 비율을 다시 곱하면 두 화면의 금액이 갈라진다.
+     *
+     * @param  iterable<ContractBoqLine>  $lines
+     * @return array<int, array{verified: array<string, float>, pending: array<string, float>, pendingCount: int, earned: float}>
+     */
+    public function progressByLine(iterable $lines): array
+    {
+        $lines = collect($lines)->keyBy('id');
+        $out = $lines->map(fn () => ['verified' => [], 'pending' => [], 'pendingCount' => 0, 'earned' => 0.0])->all();
+        if ($lines->isEmpty()) {
+            return $out;
+        }
+        $records = ClaimWorkRecord::query()->whereIn('contract_boq_line_id', $lines->keys()->all())
+            ->where('record_kind', 'actual')->whereIn('status', ['verified', 'pending'])
+            ->get(['contract_boq_line_id', 'stage', 'status', 'reported_qty', 'verified_qty']);
+        foreach ($records as $r) {
+            $row = &$out[$r->contract_boq_line_id];
+            if ($r->status === 'verified') {
+                $row['verified'][$r->stage] = ($row['verified'][$r->stage] ?? 0.0) + (float) $r->verified_qty;
+            } else {
+                $row['pending'][$r->stage] = ($row['pending'][$r->stage] ?? 0.0) + (float) $r->reported_qty;
+                $row['pendingCount']++;
+            }
+            unset($row);
+        }
+        foreach ($out as $id => $row) {
+            $line = $lines->get($id);
+            $weighted = 0.0;
+            foreach ($row['verified'] as $stage => $qty) {
+                try {
+                    $weighted += $this->weightedQuantity($line, $stage, $qty);
+                } catch (InvalidArgumentException) {
+                    continue;   // 인정 비율이 없는 단계는 대장과 똑같이 값으로 치지 않는다.
+                }
+            }
+            $out[$id]['earned'] = $this->lineValue($line, $weighted);
+        }
+
+        return $out;
+    }
+
     /** Submission gate; callers already hold the contract lock. */
     public function validateApplication(PayApplication $app): ?string
     {
@@ -603,6 +655,26 @@ class ClaimEvidenceService
         return ['sourceOptions' => $sources, 'sourceDocumentOptions' => $documentOptions];
     }
 
+    /**
+     * 계약서의 자재·노무·경비 단가(G·H·I열). 셋의 합이 계약 단가와 다르면 한쪽이 틀린 것이다 —
+     * 반입 자재 기성과 청구서의 반입 자재 칸이 이 값으로 계산되므로 어긋난 채 저장하지 않는다.
+     *
+     * @return array{material_price: ?float, labor_price: ?float, expense_price: ?float}
+     */
+    private function priceSplit(array $input, ?ContractBoqLine $existing, float $unitPrice): array
+    {
+        $split = [];
+        foreach (['material_price' => 'materialPrice', 'labor_price' => 'laborPrice', 'expense_price' => 'expensePrice'] as $column => $key) {
+            $value = array_key_exists($key, $input) ? $input[$key] : $existing?->{$column};
+            $split[$column] = $value === null || $value === '' ? null : $this->number($value, '단가 구성');
+        }
+        if (array_filter($split, fn ($v) => $v !== null) !== [] && abs(array_sum($split) - $unitPrice) > 0.00005) {
+            throw new InvalidArgumentException('자재·노무·경비 단가의 합이 계약 단가와 다릅니다.');
+        }
+
+        return $split;
+    }
+
     private function stageWeight(ContractBoqLine $line, string $stage, bool $accepted = true): float
     {
         if ($line->recognition_basis === 'quantity') {
@@ -632,7 +704,11 @@ class ClaimEvidenceService
 
     private function lineRow(ContractBoqLine $line): array
     {
-        return ['id' => $line->id, 'projectContractId' => $line->project_contract_id, 'lineNo' => $line->line_no, 'description' => $line->description, 'unit' => $line->unit, 'contractQty' => (float) $line->contract_qty, 'unitPrice' => (float) $line->unit_price, 'contractAmount' => round((float) $line->contract_qty * (float) $line->unit_price, 2), 'recognitionBasis' => $line->recognition_basis, 'stageWeights' => $line->stage_weights, 'status' => $line->status, 'acceptanceNote' => $line->acceptance_note, 'acceptedBy' => $line->accepted_by, 'acceptedAt' => $line->accepted_at?->toIso8601String(), 'sourceRef' => $line->source_ref, 'sourceDocumentId' => $line->source_document_id, 'sourceLocator' => $line->source_locator];
+        return ['id' => $line->id, 'projectContractId' => $line->project_contract_id, 'lineNo' => $line->line_no, 'description' => $line->description, 'unit' => $line->unit, 'contractQty' => (float) $line->contract_qty, 'unitPrice' => (float) $line->unit_price, 'contractAmount' => round((float) $line->contract_qty * (float) $line->unit_price, 2), 'recognitionBasis' => $line->recognition_basis, 'stageWeights' => $line->stage_weights, 'status' => $line->status, 'acceptanceNote' => $line->acceptance_note, 'acceptedBy' => $line->accepted_by, 'acceptedAt' => $line->accepted_at?->toIso8601String(), 'sourceRef' => $line->source_ref, 'sourceDocumentId' => $line->source_document_id, 'sourceLocator' => $line->source_locator,
+            'workSectionId' => $line->work_section_id, 'groupLabel' => $line->group_label, 'spec' => $line->spec,
+            'materialPrice' => $line->material_price !== null ? (float) $line->material_price : null,
+            'laborPrice' => $line->labor_price !== null ? (float) $line->labor_price : null,
+            'expensePrice' => $line->expense_price !== null ? (float) $line->expense_price : null];
     }
 
     private function recordRow(ClaimWorkRecord $record): array

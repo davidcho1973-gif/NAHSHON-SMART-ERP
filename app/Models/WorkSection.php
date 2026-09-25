@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 계약서의 공정 한 묶음 — 「3) DRYWALL」「M1-2. Duct Work」.
  *
  * 기성관리가 공정관리다(사장). 그래서 공정의 이름과 금액은 원청 계약 기성표의 섹션이다.
- * 계약 행(수량·단가)이 올라오면 이 아래에 붙는다.
+ * 계약 행(수량·단가)은 contract_boq_lines.work_section_id 로 이 아래에 붙는다.
  */
 class WorkSection extends Model
 {
@@ -26,6 +26,12 @@ class WorkSection extends Model
     public function site(): BelongsTo
     {
         return $this->belongsTo(Site::class);
+    }
+
+    /** 이 공정에 속한 계약 행(기성 근거 대장). */
+    public function lines(): HasMany
+    {
+        return $this->hasMany(ContractBoqLine::class)->orderBy('id');
     }
 
     public function sheets(): HasMany

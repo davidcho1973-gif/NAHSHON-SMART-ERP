@@ -8,7 +8,7 @@
 
   var state = { contractId: null, ledger: null, lineId: null, filter: 'all', packet: null, request: 0 };
   var kinds = { source_claim: '원본 청구 · 미확인', actual: '실제 작업 보고', forecast: '예상 작업' };
-  var stages = { installed: '시공 완료', fabrication: '제작', stored: '보관 자재', installation: '설치' };
+  var stages = { installed: '시공 완료', fabrication: '제작', stored: '반입 자재', installation: '설치' };
   var statuses = { pending: '검토 대기', verified: '수량 확인', rejected: '반려', draft: '계약 조건 검토 중', accepted: '계약 조건 확정' };
   function ui() { return global.AdminUI; }
   function esc(v) { return ui().esc(v === undefined || v === null ? '' : String(v)); }
@@ -224,7 +224,7 @@
       field('unitPrice', '계약단가', l.unitPrice, { required: true, group: '계약 항목' }),
       field('recognitionBasis', '기성 인정 방식', l.recognitionBasis || 'quantity', { required: true, type: 'select', group: '인정 조건', options: [{ value: 'quantity', label: '수량 기준' }, { value: 'milestone', label: '단계별 인정' }] }),
       field('fabricationWeight', '제작 인정 비중 (%)', weights.fabrication || '', { group: '인정 조건', hint: '단계별 인정일 때 입력합니다. 계약에 적힌 비중을 사용하세요.' }),
-      field('storedWeight', '보관 자재 인정 비중 (%)', weights.stored || '', { group: '인정 조건' }),
+      field('storedWeight', '반입 자재 인정 비중 (%)', weights.stored || '', { group: '인정 조건' }),
       field('installationWeight', '설치 인정 비중 (%)', weights.installation || weights.installed || '', { group: '인정 조건', hint: '단계별 비중의 합계는 100%여야 합니다.' }),
       field('sourceDocumentId', '계약 근거 문서', l.sourceDocumentId, { type: 'select', options: docOptions(), group: '확정 근거' }),
       field('sourceRef', '계약 근거 식별', l.sourceRef, { group: '확정 근거', hint: '계약 번호·합의 문서 번호 등 확인 가능한 원본 식별을 적으세요.' }),
@@ -325,8 +325,9 @@
       });
     } });
   }
-  function open(contractId) {
-    state.contractId = Number(contractId); state.ledger = null; state.lineId = null; state.packet = null; state.filter = 'all';
+  // lineId: 공정별 도면 화면의 «줄 보기» 에서 한 줄을 바로 열 때.
+  function open(contractId, lineId) {
+    state.contractId = Number(contractId); state.ledger = null; state.lineId = lineId ? Number(lineId) : null; state.packet = null; state.filter = 'all';
     if (global.goToView) global.goToView('claim-evidence-admin'); else render();
   }
   function render() {

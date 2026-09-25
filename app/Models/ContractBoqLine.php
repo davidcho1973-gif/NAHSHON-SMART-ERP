@@ -15,7 +15,13 @@ class ContractBoqLine extends Model
 
     protected function casts(): array
     {
-        return ['contract_qty' => 'decimal:4', 'unit_price' => 'decimal:4', 'stage_weights' => 'array', 'accepted_at' => 'datetime'];
+        return ['contract_qty' => 'decimal:4', 'unit_price' => 'decimal:4', 'material_price' => 'decimal:4', 'labor_price' => 'decimal:4', 'expense_price' => 'decimal:4', 'stage_weights' => 'array', 'accepted_at' => 'datetime'];
+    }
+
+    /** 계약서의 공정 묶음(「3) DRYWALL」) — 기성관리가 공정관리이므로 줄이 자기 공정을 안다. */
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(WorkSection::class, 'work_section_id');
     }
 
     public function contract(): BelongsTo
