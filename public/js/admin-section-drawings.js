@@ -847,29 +847,25 @@
         if (!(qty > 0)) { u.toast('수량을 적으세요.', 'error'); return; }
         if (!location) { u.toast('위치를 적으세요.', 'error'); return; }
         var withStored = stage === 'installation' && box.querySelector('[data-stored]') && box.querySelector('[data-stored]').checked;
-        // 설치한 만큼 반입이 안 적혀 있으면 그 차이만 반입으로 더한다 — 이미 적힌 반입을 두 번 세지 않는다.
-        var storedSoFar = (l.storedQty || 0) + (l.pendingStoredQty || 0);
-        var installedAfter = (l.installedQty || 0) + (l.pendingInstalledQty || 0) + qty;
-        var storedQty = withStored ? Math.max(0, Math.round((installedAfter - storedSoFar) * 10000) / 10000) : 0;
+        var storedQty = 0;
         var files = box.querySelector('[data-files]').files;
         var notes = box.querySelector('[data-notes]').value;
         u.toast(files.length ? '사진 올리는 중…' : '기록하는 중…');
         uploadDocs(files).then(function (ids) {
           var evidence = ids.map(function (id, i) { return { type: 'document', id: id, locator: (stage === 'stored' ? '송장·사진 ' : '현장 사진 ') + (i + 1) }; });
           var uuid = global.crypto && global.crypto.randomUUID ? global.crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
-          var jobs = [{ stage: stage, qty: qty, main: true }];
-          if (storedQty > 0) jobs.unshift({ stage: 'stored', qty: storedQty });
           var mainId = null;
-          return jobs.reduce(function (p, j) {
-            return p.then(function () {
-              return call('api_saveClaimRecord', [{ lineId: l.id, recordKind: 'actual', workDate: date, location: location, stage: j.stage,
-                reportedQty: j.qty, sourceRef: 'section-ui:' + uuid + ':' + j.stage, evidence: evidence,
-                notes: (j.stage === 'stored' && stage === 'installation' ? '설치 기록과 함께 반입 인정. ' : '') + notes }]).then(function (r) {
-                if (r.success === false) throw new Error(r.error || '기록하지 못했습니다.');
-                if (j.main) mainId = r.id;
-              });
-            });
-          }, Promise.resolve()).then(function () {
+          // 설치는 서버가 빠진 반입까지 함께 적는다(상황실 글과 같은 규칙) — 화면이 따로 계산하지 않는다.
+          var payload = { lineId: l.id, recordKind: 'actual', workDate: date, location: location, stage: stage,
+            reportedQty: qty, sourceRef: 'section-ui:' + uuid, evidence: evidence, notes: notes };
+          var req = stage === 'installation' || stage === 'installed'
+            ? call('api_recordInstallation', [Object.assign(payload, { withDelivery: !!withStored })])
+            : call('api_saveClaimRecord', [payload]);
+          return req.then(function (r) {
+            if (r.success === false) throw new Error(r.error || '기록하지 못했습니다.');
+            mainId = r.id;
+            storedQty = r.storedQty || 0;
+          }).then(function () {
             var pk = box._pick;
             if (!pk || !mainId) return;
             // 표시는 기록의 근거를 도면에 보여 주는 것이다 — 기록은 이미 저장됐으니 표시가 실패해도 기록은 남는다.

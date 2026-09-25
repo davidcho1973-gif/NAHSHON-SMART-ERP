@@ -25,6 +25,7 @@ class OpsIntakeItem extends Model
         'todo' => '준비·조치',
         'submittal' => '제출물·서류',
         'billing' => '청구·기성',
+        'installation' => '설치 기성',
         'permit' => '인허가',
         'hr' => '인사·노무',
         'admin' => '사무·행정',

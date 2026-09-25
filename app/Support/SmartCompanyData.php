@@ -342,6 +342,7 @@ class SmartCompanyData
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
             'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
             'api_saveClaimLine' => app(ClaimEvidenceService::class)->saveLine(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_recordInstallation' => app(ClaimEvidenceService::class)->recordInstallation(is_array($args[0] ?? null) ? $args[0] : []),
             'api_saveClaimRecord' => app(ClaimEvidenceService::class)->saveRecord(is_array($args[0] ?? null) ? $args[0] : []),
             'api_reviewClaimRecord' => app(ClaimEvidenceService::class)->reviewRecord(is_array($args[0] ?? null) ? $args[0] : []),
             'api_draftClaimEvidence' => app(ClaimEvidenceService::class)->draft((int) ($args[0] ?? 0), isset($args[1]) ? (string) $args[1] : null),

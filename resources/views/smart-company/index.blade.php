@@ -9003,6 +9003,7 @@
         approval:    { label: '승인',          color: '#0d9488', icon: 'ph-seal-check' },
         decision:    { label: '의사결정',      color: '#7c3aed', icon: 'ph-scales' },
         todo:        { label: '준비·조치',     color: '#64748b', icon: 'ph-check-square' },
+        installation:{ label: '설치 기성',     color: '#10b981', icon: 'ph-hammer' },
         noise:       { label: '잡담',          color: '#94a3b8', icon: 'ph-chat-dots' }
       };
 
@@ -9011,7 +9012,7 @@
       var OPS_SHORT = {
         progress: '진행', plan: '계획', procurement: '자재', labor: '인원', expense: '지출', issue: '이슈',
         inspection: '검사', request: '지시', approval: '승인', decision: '결정', todo: '준비',
-        submittal: '제출물', billing: '청구', permit: '허가', hr: '인사', admin: '사무', noise: '잡담'
+        submittal: '제출물', billing: '청구', installation: '설치', permit: '허가', hr: '인사', admin: '사무', noise: '잡담'
       };
       var OPS_TRADE_COLOR = { '전기': '#f59e0b', '배관': '#0ea5e9', '기계': '#6366f1', '소방': '#ef4444', '건축': '#22c55e', '토목': '#a16207', '주방': '#ec4899', '구조': '#64748b' };
 

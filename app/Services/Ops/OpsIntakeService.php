@@ -127,6 +127,7 @@ class OpsIntakeService
         ]);
 
         $board = $this->reflectWeekBoard($batch);
+        $claims = $this->reflectClaims($batch);
 
         return [
             'success' => true,
@@ -137,6 +138,7 @@ class OpsIntakeService
             'needsInput' => $items->where('status', 'needs_input')->count(),
             'items' => $items->map(fn (OpsIntakeItem $i) => $this->row($i))->all(),
             'weekBoard' => $board,
+            'installations' => $claims,
         ];
     }
 
@@ -156,6 +158,24 @@ class OpsIntakeService
             Log::warning('상황실 → 작업판 반영 실패(batch '.$batch->id.'): '.$e->getMessage());
 
             return ['updated' => 0, 'lines' => []];
+        }
+    }
+
+    /**
+     * 같은 글로 설치 기성 기록도 — 「주방 서쪽 벽 드라이월 120 SF 마감」 이 그 계약 줄의 설치 기록으로.
+     * 작업판처럼 부가 목적지다. 실패해도 판독 결과는 산다.
+     *
+     * @return array{proposed: int, applied: int}
+     */
+    private function reflectClaims(OpsIntakeBatch $batch): array
+    {
+        try {
+            return app(OpsClaimReflector::class)->reflect($batch);
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('상황실 → 설치 기성 실패(batch '.$batch->id.'): '.$e->getMessage());
+
+            return ['proposed' => 0, 'applied' => 0];
         }
     }
 
@@ -286,6 +306,9 @@ class OpsIntakeService
 
             // 4단계: 이번 주 작업판 — 글이 말한 줄을 진행중/완료/못함으로.
             $this->reflectWeekBoard($batch);
+
+            // 5단계: 설치 기성 — 글이 계약 줄을 몇 만큼 설치했다고 하면 설치 기록 제안(권한 있는 글쓴이면 바로 기록).
+            $this->reflectClaims($batch);
 
             $this->discardPhotos($batch, $photoKinds);
 
@@ -864,11 +887,13 @@ class OpsIntakeService
             // 지출은 공정·조달과 달리 전용 경로로 — 재무(MobileExpense)에 등록된다.
             $res = $item->category === 'expense'
                 ? $this->modules->applyExpense($item, $userId, $via)
-                : match ($item->target_type) {
+                : ($item->category === OpsClaimReflector::CATEGORY
+                    ? app(OpsClaimReflector::class)->apply($item, $patch, $userId, $via)
+                    : match ($item->target_type) {
                     'procurement' => $this->applyProcurement($item, $patch, $userId, $via),
                     'submittal' => $this->applySubmittal($item, $patch, $userId, false, $via),
                     default => $this->applyWbs($item, $patch, $userId, $via),
-                };
+                });
         } catch (\Throwable $e) {
             $this->releaseClaim($id, $before);
 
@@ -1293,7 +1318,7 @@ class OpsIntakeService
             return ['success' => false, 'error' => '되돌릴 이전 값이 없습니다.'];
         }
 
-        $res = match ($item->target_type) {
+        $res = $item->category === OpsClaimReflector::CATEGORY ? app(OpsClaimReflector::class)->revert($item) : match ($item->target_type) {
             'procurement' => $this->applyProcurement($item, $previous, $userId),
             // allowClear=true — 원래 비어 있던 값(계획일 미등록)으로 되돌리려면 비울 수 있어야 한다.
             'submittal' => $this->applySubmittal($item, $previous, $userId, true),

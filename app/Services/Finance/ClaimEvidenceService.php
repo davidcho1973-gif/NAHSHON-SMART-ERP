@@ -246,6 +246,55 @@ class ClaimEvidenceService
         });
     }
 
+    /**
+     * 설치(시공) 기록 — 반입 단계가 있는 줄이면 설치한 만큼 빠진 반입도 함께 적는다. 설치한 자재는
+     * 들어온 것이다. 반입이 빠지면 그 자재값을 못 받고, 원청 청구서(설치 = 단가 전체)와 대장 금액이
+     * 어긋난다. 공정별 도면의 «기록» 과 상황실 글이 같은 규칙을 쓰도록 여기 한 곳에 둔다.
+     *
+     * @param  array<string, mixed>  $input  saveRecord 와 같은 값(stage 는 줄에 맞춰 정한다)
+     * @return array<string, mixed>  id(설치 기록), storedId, storedQty
+     */
+    public function recordInstallation(array $input): array
+    {
+        return $this->respond(function () use ($input): array {
+            $line = ContractBoqLine::find((int) ($input['lineId'] ?? 0));
+            if (! $line) {
+                throw new InvalidArgumentException('계약 항목을 찾을 수 없습니다.');
+            }
+            $split = $line->recognition_basis === 'milestone' && isset(($line->stage_weights ?? [])['stored']);
+            $stage = $line->recognition_basis === 'milestone' ? 'installation' : 'installed';
+
+            return DB::transaction(function () use ($input, $line, $split, $stage): array {
+                $main = $this->saveRecord(['stage' => $stage, 'recordKind' => 'actual'] + $input);
+                if (! ($main['success'] ?? false)) {
+                    throw new InvalidArgumentException($main['error'] ?? '설치 기록을 저장하지 못했습니다.');
+                }
+                $gap = 0.0;
+                $storedId = null;
+                if ($split && ($input['withDelivery'] ?? true)) {
+                    $sum = fn (string $st): float => (float) ClaimWorkRecord::where('contract_boq_line_id', $line->id)->where('record_kind', 'actual')
+                        ->where('stage', $st)->whereIn('status', ['pending', 'verified'])
+                        ->selectRaw('coalesce(sum(coalesce(verified_qty, reported_qty)), 0) as q')->value('q');
+                    $gap = round($sum('installation') - $sum('stored'), 4);
+                    if ($gap > 0) {
+                        $stored = $this->saveRecord([
+                            'lineId' => $line->id, 'recordKind' => 'actual', 'stage' => 'stored', 'reportedQty' => $gap,
+                            'workDate' => $input['workDate'] ?? null, 'location' => $input['location'] ?? null,
+                            'evidence' => $input['evidence'] ?? [], 'sourceRef' => isset($input['sourceRef']) ? $input['sourceRef'].':stored' : null,
+                            'notes' => '설치 기록과 함께 반입 인정(설치한 자재는 들어온 것). '.($input['notes'] ?? ''),
+                        ]);
+                        if (! ($stored['success'] ?? false)) {
+                            throw new InvalidArgumentException($stored['error'] ?? '반입 기록을 저장하지 못했습니다.');
+                        }
+                        $storedId = $stored['id'];
+                    }
+                }
+
+                return ['success' => true, 'id' => $main['id'], 'record' => $main['record'], 'storedId' => $storedId, 'storedQty' => max(0, $gap)];
+            });
+        });
+    }
+
     public function reviewRecord(array $input): array
     {
         return $this->respond(function () use ($input): array {
