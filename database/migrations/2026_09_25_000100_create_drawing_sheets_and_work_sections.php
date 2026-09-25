@@ -61,6 +61,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('site_id')->constrained()->cascadeOnDelete();
             $table->foreignId('company_id')->nullable()->constrained()->nullOnDelete();
+            // 이 공정이 속한 원청 계약. 계약 행(contract_boq_lines — 기성 근거 대장)도 같은 계약에
+            // 매달리므로, 계약서의 공정 묶음과 계약 행이 한 계약을 가리킨다. 계약이 아직 ERP 에
+            // 없으면 비워 두고, 계약이 등록되면 잇는다.
+            $table->foreignId('project_contract_id')->nullable()->constrained('project_contracts')->nullOnDelete();
 
             // 건축공사 · 설비공사 · 전기공사 — 계약서의 큰 묶음.
             $table->string('division', 60);

@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class WorkSection extends Model
 {
     protected $fillable = [
-        'site_id', 'company_id', 'division', 'code', 'name', 'contract_amount', 'sort_order', 'source',
+        'site_id', 'company_id', 'project_contract_id', 'division', 'code', 'name', 'contract_amount', 'sort_order', 'source',
     ];
 
     protected function casts(): array

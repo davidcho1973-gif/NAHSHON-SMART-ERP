@@ -55,11 +55,17 @@ return new class extends Migration
             return;   // 703K 가 없는 배포(다른 고객) — 할 일이 없다.
         }
 
+        // 같은 현장의 수주 계약 중 계약액이 이 기성표(1,789,000)와 같은 것이 딱 하나면 그 계약에 잇는다.
+        // 모호하면 잇지 않는다 — 틀린 계약에 붙느니 비워 두고 화면에서 잇게 한다.
+        $contracts = DB::table('project_contracts')->where('site_id', $site->id)
+            ->where('direction', 'receivable')->where('original_amount', 1789000)->pluck('id');
+        $contractId = $contracts->count() === 1 ? (int) $contracts->first() : null;
+
         $now = Carbon::now();
         foreach (self::SECTIONS as $i => [$division, $code, $name, $amount, $sheets]) {
             $existing = DB::table('work_sections')->where('site_id', $site->id)->where('code', $code)->first(['id']);
             $values = [
-                'company_id' => $site->company_id, 'division' => $division, 'name' => $name,
+                'company_id' => $site->company_id, 'project_contract_id' => $contractId, 'division' => $division, 'name' => $name,
                 'contract_amount' => $amount, 'sort_order' => $i + 1,
                 'source' => '원청 계약 기성표 continuation sheet (2026-09)', 'updated_at' => $now,
             ];
