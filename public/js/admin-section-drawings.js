@@ -368,6 +368,7 @@
     return '<div style="border:1px solid var(--border-default);border-radius:12px;padding:14px 16px;margin-bottom:16px;background:var(--bg-surface)">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:14px;font-weight:800;flex:1">기성 = 공정 · ' + u.esc(b.contractTitle || '') + '</span>' +
       u.rowButton(Object.keys(state.open).length ? '모든 줄 접기' : '모든 줄 펼치기', 'window.AdminSectionDrawings.toggleAll()') +
+      (b.contractId ? u.rowButton('원청 청구서 엑셀', 'window.AdminSectionDrawings.gcClaims(' + b.contractId + ')') : '') +
       (b.contractId ? u.rowButton('기성 근거 대장 열기', 'window.AdminSectionDrawings.ledger(' + b.contractId + ')') : '') + '</div>' +
       bar(b.percent) +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px">' + cells.map(function (c) {
@@ -1033,6 +1034,93 @@
     });
   }
 
+  // ── 원청 청구서 엑셀 ────────────────────────────────────────────────
+
+  var APP_STATUS = { draft: '작성 중', submitted: '제출', approved: '원청 승인', paid: '입금', closed: '마감' };
+
+  /** 기성 회차 목록 — 회차마다 미리보기·내려받기, 관리자는 이번 기성 초안 만들기. */
+  function gcClaims(contractId) {
+    var u = ui();
+    call('api_listGcClaims', [contractId]).then(function (r) {
+      if (r.success === false) { u.toast(r.error || '불러오지 못했습니다.', 'error'); return; }
+      var apps = r.applications || [];
+      var body = (apps.length ? apps.map(function (a) {
+        return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border-subtle)">' +
+          '<b style="font-size:14px">' + a.no + '차 기성</b>' +
+          '<span style="font-size:12px;color:var(--text-secondary)">' + u.esc((a.periodStart || '') + ' ~ ' + (a.periodEnd || '')) + ' · ' + (APP_STATUS[a.status] || a.status) + ' · ' + money(a.thisPeriodAmount) + '</span>' +
+          '<span style="flex:1"></span>' +
+          (a.fromLedger
+            ? u.rowButton('미리보기', 'window.AdminSectionDrawings.gcPreview(' + a.id + ')') + ' ' + u.rowButton('엑셀 내려받기', 'window.AdminSectionDrawings.gcDownload(' + a.id + ')')
+            : '<span style="font-size:11px;color:var(--text-tertiary)">근거 대장에서 만든 회차가 아니라 원청 양식으로 낼 수 없습니다</span>') +
+          '</div>';
+      }).join('') : '<div style="padding:16px;color:var(--text-tertiary);font-size:13px">아직 기성 회차가 없습니다. 아래에서 이번 기성 초안을 만드세요.</div>') +
+        (r.canManage ? '<div style="margin-top:14px;padding:12px;border:1px solid var(--border-default);border-radius:10px;background:var(--bg-base)">' +
+          '<div style="font-size:12px;font-weight:700;margin-bottom:6px">이번 기성 초안 만들기</div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span style="font-size:12px">마감일</span><input data-end type="date" value="' + u.esc(r.today || today()) + '" style="' + INPUT + ';width:auto;margin-top:0">' +
+          '<button type="button" data-draft style="padding:8px 12px;border-radius:8px;border:none;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer">초안 만들기</button></div>' +
+          '<div style="font-size:11px;color:var(--text-tertiary);margin-top:6px">마감일까지 사람이 확인한 수량 중 아직 청구하지 않은 것만 들어갑니다. 작성 중인 초안이 있으면 그것을 다시 계산합니다.</div></div>' : '');
+      var m = u.modal({ title: '원청 청구서 엑셀', subtitle: '원청이 준 기성표 양식에 확인된 수량을 채웁니다. 반입 자재 칸과 RFI 시트가 붙습니다.', width: 720, body: body,
+        onReady: function (box) {
+          var btn = box.querySelector('[data-draft]');
+          if (btn) btn.onclick = function () {
+            btn.disabled = true;
+            call('api_draftClaimEvidence', [contractId, box.querySelector('[data-end]').value]).then(function (d) {
+              btn.disabled = false;
+              if (d.success === false) { u.toast(d.error || '초안을 만들지 못했습니다.', 'error'); return; }
+              u.toast(d.applicationNo + '차 기성 초안 ' + money(d.thisPeriodAmount) + (d.updated ? ' (다시 계산)' : ''));
+              m.close(null);
+              global.apiCache = {};
+              gcClaims(contractId);
+            });
+          };
+        } });
+    }).catch(function (e) { u.toast(e.message || '불러오지 못했습니다.', 'error'); });
+  }
+
+  function gcPreview(appId) {
+    var u = ui();
+    call('api_previewGcClaim', [appId]).then(function (r) {
+      if (r.success === false) { u.toast(r.error || '만들지 못했습니다.', 'error'); return; }
+      var s = r.summary || {};
+      var rows = [
+        ['금회 공사 금액', s.workThisPeriod, '천 달러 절사 후 · 원청 양식 계산'],
+        ['공사 누계', s.workToDate, ''],
+        ['반입 자재 (미설치) 누계', s.storedToDate, '따로 만든 칸'],
+        ['RFI 변경 공사 누계', s.changeOrdersToDate, '4_RFI 시트'],
+        ['금회 청구 총액', s.grossThisBill, ''],
+        ['금회 유보금', s.retentionThisBill, ''],
+        ['금회 받을 돈', s.netThisBill, '선급금·유보금 반영'],
+        ['ERP 기성 초안 금액', s.ledgerThisPeriod, '절사 전 · 확인 수량 × 계약 단가'],
+      ];
+      var body = '<table style="width:100%;border-collapse:collapse;font-size:13px">' + rows.map(function (x) {
+        return '<tr style="border-bottom:1px solid var(--border-subtle)"><td style="padding:7px 4px">' + x[0] + '</td><td style="padding:7px 4px;text-align:right;font-weight:700">' + (x[1] === null || x[1] === undefined ? '—' : '$' + Number(x[1]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + '</td><td style="padding:7px 4px;font-size:11px;color:var(--text-tertiary)">' + x[2] + '</td></tr>';
+      }).join('') + '</table>' +
+        ((r.notes || []).length ? '<div style="margin-top:12px;font-size:12px;line-height:1.7">' + r.notes.map(function (n) { return '· ' + u.esc(n); }).join('<br>') + '</div>' : '') +
+        ((r.fixes || []).length ? '<details style="margin-top:10px;font-size:12px"><summary style="cursor:pointer;color:var(--status-warning)">원청 양식의 소계 수식 ' + r.fixes.length + '곳을 바로잡았습니다</summary><div style="margin-top:6px;font-family:monospace;font-size:11px;line-height:1.6">' + r.fixes.map(u.esc).join('<br>') + '</div></details>' : '');
+      u.modal({ title: s.applicationNo + '차 기성 — 원청 청구서 미리보기', subtitle: '내려받을 엑셀 파일 안의 계산값입니다.', width: 640, body: body,
+        actions: [{ label: '닫기', value: null }, { label: '엑셀 내려받기', value: 'dl', kind: 'primary' }] }).result.then(function (v) { if (v === 'dl') gcDownload(appId); });
+    }).catch(function (e) { u.toast(e.message || '만들지 못했습니다.', 'error'); });
+  }
+
+  function gcDownload(appId) {
+    var u = ui();
+    u.toast('원청 청구서를 만드는 중…');
+    fetch('/billing-export/applications/' + appId + '/gc-claim.xlsx', { credentials: 'same-origin' }).then(function (res) {
+      var type = res.headers.get('content-type') || '';
+      if (!res.ok || type.indexOf('json') !== -1) return res.json().then(function (j) { throw new Error(j.error || '만들지 못했습니다.'); });
+      var cd = res.headers.get('content-disposition') || '';
+      var name = (cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i) || [])[1] || ('claim-' + appId + '.xlsx');
+      return res.blob().then(function (blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = decodeURIComponent(name);
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+        u.toast('원청 청구서 엑셀을 내려받았습니다.');
+      });
+    }).catch(function (e) { u.toast(e.message || '만들지 못했습니다.', 'error'); });
+  }
+
   function qtyText(v) { return v === null || v === undefined ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
 
   function ledger(contractId, lineId) {
@@ -1068,6 +1156,9 @@
     uploadContract: uploadContract,
     lines: lines,
     view: view,
+    gcClaims: gcClaims,
+    gcPreview: gcPreview,
+    gcDownload: gcDownload,
     toggleAll: toggleAll,
     record: record,
     rfi: rfi,

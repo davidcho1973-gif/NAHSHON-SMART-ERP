@@ -204,7 +204,7 @@
 
   function actionsCell(r) {
     var u = ui();
-    var evidenceActions = r.evidenceBased ? u.rowButton('근거 묶음', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' +
+    var evidenceActions = r.evidenceBased ? (window.AdminSectionDrawings ? u.rowButton('원청 양식 엑셀', 'window.AdminSectionDrawings.gcDownload(' + r.id + ')') + ' ' : '') + u.rowButton('근거 묶음', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' +
       u.rowButton('근거 JSON', 'window.AdminClaimEvidence.packet(' + r.id + ',true)') + ' ' : '';
     if (!state.canManage) {
       return evidenceActions + (r.receipts && r.receipts.length ? u.rowButton('입금 ' + r.receipts.length, 'window.AdminBilling.toggleReceipts(' + r.id + ')') : '');

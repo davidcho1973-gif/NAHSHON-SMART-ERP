@@ -7,6 +7,7 @@ use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\DrawingSheetController;
+use App\Http\Controllers\GcClaimExportController;
 use App\Http\Controllers\EmailAiInboxController;
 use App\Http\Controllers\EmailPasswordAuthController;
 use App\Http\Controllers\EquipmentApiController;
@@ -342,6 +343,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/ops-api/photo/{batch}/{index}', [OpsPhotoController::class, 'show'])
         ->whereNumber('index')->name('ops.photo.show');
     // 공정별 도면 — 브라우저가 도면 PDF 를 한 쪽씩 그려 보내고, 사진 쪽은 AI 가 글자를 읽어 붙인다.
+    Route::get('/billing-export/applications/{application}/gc-claim.xlsx', [GcClaimExportController::class, 'download'])->whereNumber('application')->name('billing-export.gc-claim');
     Route::post('/drawing-api/documents/{document}/start', [DrawingSheetController::class, 'start'])->whereNumber('document')->name('drawing-sheets.start');
     Route::post('/drawing-api/documents/{document}/pages/{page}', [DrawingSheetController::class, 'page'])
         ->whereNumber(['document', 'page'])->middleware('throttle:240,1')->name('drawing-sheets.page');
