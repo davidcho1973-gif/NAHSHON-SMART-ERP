@@ -63,6 +63,7 @@ use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ContractChangeService;
 use App\Services\Finance\ContractSheetImportService;
 use App\Services\Finance\GcClaimWorkbookService;
+use App\Services\Finance\ReceiptClaimConnector;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\Finance\ProgressBillingDrafter;
 use App\Services\GeminiReceiptAnalyzer;
@@ -352,6 +353,8 @@ class SmartCompanyData
             'api_deleteDrawingMark' => app(DrawingMarkService::class)->delete((int) ($args[0] ?? 0)),
             'api_listGcClaims' => app(GcClaimWorkbookService::class)->applications((int) ($args[0] ?? 0)),
             'api_previewGcClaim' => app(GcClaimWorkbookService::class)->preview((int) ($args[0] ?? 0)),
+            'api_getReceiptClaims' => app(ReceiptClaimConnector::class)->view((int) ($args[0] ?? 0)),
+            'api_linkReceiptLine' => app(ReceiptClaimConnector::class)->link(is_array($args[0] ?? null) ? $args[0] : []),
             'api_submitRfi' => app(ContractChangeService::class)->submit(is_array($args[0] ?? null) ? $args[0] : []),
             'api_decideRfi' => app(ContractChangeService::class)->decide(is_array($args[0] ?? null) ? $args[0] : []),
             'api_previewContractSheet' => app(ContractSheetImportService::class)->preview((int) ($args[0] ?? 0)),

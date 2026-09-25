@@ -8,6 +8,7 @@ use App\Models\MaterialReceiptLine;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Finance\MaterialReceiptExpenseConnector;
+use App\Services\Finance\ReceiptClaimConnector;
 use App\Services\Vendors\VendorResolver;
 use App\Support\MaterialReceiptAccess;
 use App\Support\MaterialReceiptUpload;
@@ -215,6 +216,11 @@ class MaterialReceiptService
                 return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
             }
 
+            // 이 송장으로 만든 반입 기록이 이미 확인(기성)됐으면 확정을 풀 수 없다 — 근거가 사라진다.
+            if (! $confirmed && ($blocked = app(ReceiptClaimConnector::class)->blocksUnconfirm($receipt))) {
+                return ['success' => false, 'error' => $blocked];
+            }
+
             $receipt->forceFill($confirmed ? [
                 'status' => MaterialReceipt::STATUS_CONFIRMED,
                 'confirmed_by_id' => $user?->id,
@@ -236,8 +242,18 @@ class MaterialReceiptService
                 $financeWarning = '입고는 확정됐지만 회계 대기 연결에 실패했습니다. 확정을 풀었다 다시 확정하거나 관리자에게 확인하세요.';
             }
 
+            // 확정된 송장은 기성의 «반입» 기록(확인 대기)으로, 풀린 송장은 거기서 거둔다.
+            // 역시 부가 목적지 — 실패해도 입고 확정은 산다.
+            $claims = null;
+            try {
+                $claims = app(ReceiptClaimConnector::class)->sync($receipt);
+            } catch (\Throwable $e) {
+                report($e);
+                $claims = ['created' => 0, 'unmatched' => 0, 'warning' => '입고는 확정됐지만 반입 기록 연결에 실패했습니다. 입고 화면에서 직접 연결하세요.'];
+            }
+
             return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status,
-                'finance' => $finance, 'financeWarning' => $financeWarning];
+                'finance' => $finance, 'financeWarning' => $financeWarning, 'claims' => $claims];
         });
     }
 

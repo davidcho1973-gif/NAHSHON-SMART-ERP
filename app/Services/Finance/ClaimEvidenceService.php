@@ -5,6 +5,7 @@ namespace App\Services\Finance;
 use App\Models\ClaimWorkRecord;
 use App\Models\ContractBoqLine;
 use App\Models\IntelligentDocument;
+use App\Models\MaterialReceipt;
 use App\Models\OpsIntakeItem;
 use App\Models\PayApplication;
 use App\Models\PayApplicationAllocation;
@@ -531,6 +532,8 @@ class ClaimEvidenceService
                 'document' => IntelligentDocument::visibleTo(auth()->user())->find($id),
                 'intake' => OpsIntakeItem::find($id),
                 'photo' => WbsPhoto::find($id),
+                // 자재 입고의 송장 사진 — 반입 기록의 근거(사장 지시 2026-09-25 «송장 사진 올리면 반입 기록 자동»).
+                'receipt' => MaterialReceipt::query()->visibleTo(auth()->user())->find($id),
                 default => null,
             };
             if (! $source) {
@@ -547,6 +550,8 @@ class ClaimEvidenceService
                 if ($source->company_id && $contract->company_id && (int) $source->company_id !== (int) $contract->company_id) {
                     $same = false;
                 }
+            } elseif ($type === 'receipt') {
+                $same = $contract->site_id && (int) $source->site_id === (int) $contract->site_id;
             } else {
                 $same = $contract->site_id && (int) $source->site_id === (int) $contract->site_id && (! $projectCode || $source->project_code === $projectCode);
             }
@@ -554,9 +559,13 @@ class ClaimEvidenceService
                 throw new InvalidArgumentException('다른 계약·프로젝트의 자료를 기성 근거로 연결할 수 없습니다.');
             }
             $resolved[$type.':'.$id.':'.$locator] = ['type' => $type, 'id' => $id, 'locator' => $locator, 'note' => $this->optionalText($entry['note'] ?? null, 2000), 'title' => match ($type) {
-                'document' => $source->title ?: $source->original_file_name, 'intake' => $source->summary ?: mb_substr($source->raw_text ?? '', 0, 120), default => $source->caption ?: $source->original_name
-            }, 'revision' => $type === 'document' ? $source->revision : null, 'sha256' => $type === 'document' ? $source->sha256 : null, 'filePath' => $type === 'document' ? $source->file_path : ($type === 'photo' ? $source->path : null), 'disk' => $source->disk ?? null, 'url' => match ($type) {
-                'document' => route('document-intelligence.preview', $source, false), 'photo' => route('wbs-photos.file', $source, false), default => null
+                'document' => $source->title ?: $source->original_file_name, 'intake' => $source->summary ?: mb_substr($source->raw_text ?? '', 0, 120),
+                'receipt' => '송장 '.trim(($source->vendor ?: '').' '.$source->received_on?->toDateString()), default => $source->caption ?: $source->original_name
+            }, 'revision' => $type === 'document' ? $source->revision : null, 'sha256' => $type === 'document' ? $source->sha256 : null, 'filePath' => match ($type) {
+                'document' => $source->file_path, 'photo' => $source->path, 'receipt' => $source->photo_path, default => null
+            }, 'disk' => $type === 'receipt' ? $source->photo_disk : ($source->disk ?? null), 'url' => match ($type) {
+                'document' => route('document-intelligence.preview', $source, false), 'photo' => route('wbs-photos.file', $source, false),
+                'receipt' => $source->photo_path ? route('material-receipts.file', $source, false) : null, default => null
             }];
             if ($type === 'photo') {
                 $resolved[$type.':'.$id.':'.$locator] += ['originalFilePath' => $source->original_path, 'originalSha256' => $source->original_sha256, 'originalPreserved' => filled($source->original_path) && filled($source->original_sha256)];
@@ -574,6 +583,13 @@ class ClaimEvidenceService
 
     private function physicalProof(string $type, mixed $source): array
     {
+        if ($type === 'receipt') {
+            if (! filled($source->photo_path)) {
+                throw new InvalidArgumentException('송장 사진이 없는 입고 기록입니다. 사진을 올린 입고만 반입 근거가 됩니다.');
+            }
+
+            return $this->physicalProof('photo', (object) ['path' => $source->photo_path, 'disk' => $source->photo_disk ?: 'public', 'original_path' => null, 'original_sha256' => null]);
+        }
         if ($type === 'intake') {
             if (trim((string) $source->raw_text) !== '') {
                 return ['verifiedTextSha256' => hash('sha256', $source->raw_text), 'fileCheckAt' => now()->toIso8601String()];

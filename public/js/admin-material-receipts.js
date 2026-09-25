@@ -126,6 +126,7 @@
               'style="font-size:12px;color:var(--brand-primary);text-decoration:none">사진</a>');
             if (!state.canManage) return bits.join(' ');
             if (r.status === 'confirmed') {
+              bits.push(u.rowButton('반입 기록', 'window.AdminMaterialReceipts.claims(' + r.id + ')'));
               bits.push(u.rowButton('확정 해제', 'window.AdminMaterialReceipts.confirm(' + r.id + ',false)'));
             } else {
               bits.push(u.rowButton('수정', 'window.AdminMaterialReceipts.open(' + r.id + ')'));
@@ -329,8 +330,62 @@
       else if (on && f.posted && f.amount !== null && f.amount !== undefined) u.toast('입고를 확정했습니다. $' + Number(f.amount).toLocaleString() + ' 을(를) 회계 대기로 넘겼습니다.');
       else if (on && f.note) u.toast('입고를 확정했습니다. ' + f.note, 'error');
       else u.toast(on ? '입고를 확정했습니다.' : '확정을 해제했습니다. 회계 대기에서 빠졌고, 이제 수정할 수 있습니다.');
-      return reload();
+      // 확정은 기성의 반입 기록으로도 이어진다 — 몇 건이 됐고 몇 건은 사람이 골라야 하는지.
+      var c = res.claims || null;
+      if (on && c) {
+        if (c.warning) u.toast(c.warning, 'error');
+        else if (c.deferred) u.toast('반입 기록은 기성 담당자가 입고 화면을 열면 자동으로 연결됩니다.');
+        else if (c.created || c.unmatched) u.toast('반입 기록 ' + c.created + '건을 확인 대기로 만들었습니다.' + (c.unmatched ? ' 계약 줄을 못 찾은 품목 ' + c.unmatched + '건은 직접 고르세요.' : ''));
+      }
+      return reload().then(function () { if (on && c && c.unmatched) claims(id); });
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
+  }
+
+  /** 송장 줄 ↔ 기성 반입 기록. 못 찾은 줄은 계약 줄을 골라 잇는다 — 고른 연결은 다음 송장부터 저절로. */
+  function claims(id) {
+    var u = ui();
+    call('api_getReceiptClaims', [id]).then(function (r) {
+      if (r.success === false) { u.toast(r.error || '불러오지 못했습니다.', 'error'); return; }
+      var opts = '<option value="">— 계약 줄 고르기 —</option>' + (r.options || []).map(function (o) {
+        return '<option value="' + o.id + '" data-unit="' + u.esc(o.unit) + '">' + u.esc(o.label) + ' (' + u.esc(o.unit) + ')</option>';
+      }).join('');
+      var st = { pending: '확인 대기', verified: '확인됨 · 기성 반영', rejected: '반려' };
+      var body = (r.hasPhoto ? '' : '<div style="font-size:12px;color:var(--status-warning);margin-bottom:8px">이 입고에는 송장 사진이 없어 반입 기록을 확인(청구)할 수 없습니다. 사진을 올린 입고만 근거가 됩니다.</div>') +
+        (r.rows || []).map(function (row) {
+          var head = '<div style="font-size:13px;font-weight:700">' + u.esc(row.name) + ' <span style="font-weight:400;color:var(--text-secondary)">' + qty(row.qty) + ' ' + u.esc(row.unit || '') + '</span></div>';
+          if (row.record) {
+            return '<div style="padding:10px 2px;border-bottom:1px solid var(--border-subtle)">' + head +
+              '<div style="font-size:12px;margin-top:3px">→ <b>#' + u.esc(row.record.lineNo) + ' ' + u.esc(row.record.description) + '</b> · 반입 ' + qty(row.record.qty) + ' ' + u.esc(row.record.unit || '') +
+              ' · <span style="color:' + (row.record.status === 'verified' ? 'var(--status-success)' : 'var(--status-warning)') + '">' + (st[row.record.status] || row.record.status) + '</span></div>' +
+              '<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">' + u.esc(row.record.notes || '') + '</div></div>';
+          }
+          return '<div data-row="' + row.receiptLineId + '" style="padding:10px 2px;border-bottom:1px solid var(--border-subtle)">' + head +
+            (r.canManage && r.confirmed && (r.options || []).length
+              ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><select data-line style="flex:1;min-width:220px;padding:7px 8px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:12px">' + opts + '</select>' +
+                '<span style="font-size:12px">송장 1 ' + u.esc(row.unit || '개') + ' =</span><input data-factor type="number" step="any" value="1" style="width:80px;padding:7px 8px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-base);color:var(--text-primary);font-size:12px"><span data-unit style="font-size:12px"></span>' +
+                '<button type="button" data-link style="padding:7px 12px;border-radius:8px;border:none;background:var(--brand-primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer">연결</button></div>'
+              : '<div style="font-size:12px;color:var(--text-tertiary);margin-top:3px">' + (r.confirmed ? '연결할 계약 줄이 없습니다 (이 현장에 반입으로 받는 계약 줄 없음)' : '입고를 확정하면 반입 기록이 만들어집니다') + '</div>') +
+            '</div>';
+        }).join('');
+      u.modal({ title: '송장 → 기성 반입 기록', subtitle: '확정된 송장의 품목이 계약 줄의 «반입» 기록(확인 대기)이 됩니다. 담당자가 확인해야 기성에 들어갑니다. 한 번 연결한 품목은 다음 송장부터 저절로 연결됩니다.', width: 760, body: body,
+        onReady: function (box) {
+          Array.prototype.forEach.call(box.querySelectorAll('[data-row]'), function (el) {
+            var sel = el.querySelector('[data-line]');
+            if (!sel) return;
+            sel.onchange = function () { var o = sel.options[sel.selectedIndex]; el.querySelector('[data-unit]').textContent = o ? (o.getAttribute('data-unit') || '') : ''; };
+            el.querySelector('[data-link]').onclick = function () {
+              if (!sel.value) { u.toast('계약 줄을 고르세요.', 'error'); return; }
+              call('api_linkReceiptLine', [{ receiptLineId: Number(el.getAttribute('data-row')), contractLineId: Number(sel.value), factor: Number(el.querySelector('[data-factor]').value) }]).then(function (res) {
+                if (res.success === false) { u.toast(res.error || '연결하지 못했습니다.', 'error'); return; }
+                u.toast(res.message);
+                var dlg = box.closest('[role=dialog]');
+                if (dlg && dlg.parentNode) dlg.parentNode.remove();
+                claims(id);
+              });
+            };
+          });
+        } });
+    }).catch(function (e) { u.toast(e.message || '불러오지 못했습니다.', 'error'); });
   }
 
   function remove(id) {
@@ -363,6 +418,7 @@
     render: renderScreen,
     open: open,
     confirm: confirm,
+    claims: claims,
     remove: remove,
     pickPhoto: pickPhoto,
     photoPicked: photoPicked,
