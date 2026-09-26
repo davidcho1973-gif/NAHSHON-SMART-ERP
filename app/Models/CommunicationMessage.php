@@ -171,6 +171,12 @@ class CommunicationMessage extends Model
         return $this->hasMany(CommunicationMessageFile::class)->orderBy('id');
     }
 
+    /** 사람들이 누른 반응 — ✅ 확인 · 👍 등. */
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(CommunicationMessageReaction::class)->orderBy('id');
+    }
+
     public function related(): MorphTo
     {
         return $this->morphTo();

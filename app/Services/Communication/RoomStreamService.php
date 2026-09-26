@@ -114,7 +114,7 @@ class RoomStreamService
         $humans = array_values(array_filter($presence, fn (array $m): bool => ! ($m['bot'] ?? false)));
 
         return [
-            'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user))->all(),
+            'messages' => $this->rows($messages, $room, $user),
             'lastId' => $lastId,
             'hasOlder' => $hasOlder,
             'cursor' => now()->toIso8601String(),
@@ -150,7 +150,7 @@ class RoomStreamService
             ->exists();
 
         return [
-            'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user))->values()->all(),
+            'messages' => $this->rows($messages, $room, $user),
             'hasOlder' => $hasOlder,
         ];
     }
@@ -182,10 +182,23 @@ class RoomStreamService
         return false;
     }
 
+    /**
+     * 여러 글을 한 번에 — 방 권한(고정할 수 있나)은 글마다 묻지 않고 한 번만 구한다.
+     *
+     * @param  \Illuminate\Support\Collection<int, CommunicationMessage>  $messages
+     * @return list<array<string, mixed>>
+     */
+    private function rows($messages, CommunicationRoom $room, User $user): array
+    {
+        $canPostHere = $this->communication->canPost($user, $room);
+
+        return $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user, $canPostHere))->values()->all();
+    }
+
     private function baseQuery(CommunicationRoom $room)
     {
         return CommunicationMessage::query()
-            ->with(['senderEmployee', 'senderUser', 'files'])
+            ->with(['senderEmployee', 'senderUser', 'files', 'room', 'reactions.employee:id,name', 'reactions.user:id,name'])
             ->where('communication_room_id', $room->id)
             ->active();
     }
@@ -231,7 +244,7 @@ class RoomStreamService
      *
      * @return array<string, mixed>
      */
-    private function row(CommunicationMessage $message, CommunicationRoom $room, ?User $viewer = null): array
+    private function row(CommunicationMessage $message, CommunicationRoom $room, ?User $viewer = null, ?bool $canPostHere = null): array
     {
         $removed = $message->isRemoved();
         $mentions = $removed ? [] : (array) ($message->payload['mentions'] ?? []);
@@ -259,6 +272,11 @@ class RoomStreamService
             'mentions' => array_values(array_filter(array_map(fn ($p): string => (string) ($p['name'] ?? ''), $mentions))),
             'mentionEveryone' => $everyone,
             'mentionsMe' => $this->calls($viewer, $message, $mentions, $everyone),
+            // ✅ 확인 · 👍 … — 누가 눌렀는지까지. 지운 글에는 반응도 감춘다.
+            'reactions' => $removed ? [] : $this->communication->reactionSummary($message, $viewer),
+            'pinned' => (bool) $message->is_pinned && ! $removed,
+            'pinnedBy' => $message->payload['pinned_by']['name'] ?? null,
+            'canPin' => $this->communication->canPin($viewer, $message, $canPostHere),
             'files' => $removed ? [] : $message->files->map(fn (CommunicationMessageFile $f): array => [
                 'id' => (int) $f->id,
                 'name' => (string) $f->original_name,

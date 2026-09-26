@@ -4,6 +4,7 @@ namespace App\Services\Communication;
 
 use App\Models\AttendanceLog;
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationMessageReaction;
 use App\Models\CommunicationMessageRead;
 use App\Models\CommunicationNotification;
 use App\Models\CommunicationRoom;
@@ -573,6 +574,134 @@ class CommunicationService
                 $q->whereIn('id', $userIds ?: [0])->orWhereIn('employee_id', $employeeIds ?: [0]);
             })
             ->get();
+    }
+
+    // ---- 반응(✅ 확인) · 고정 -------------------------------------------------
+
+    /**
+     * 반응을 누르거나(없으면) 거둔다(있으면). 지운 글에는 누를 수 없다.
+     *
+     * 글의 수정 시각을 건드려 둔다 — 열려 있는 다른 사람 화면이 "바뀐 글" 로 받아
+     * 숫자를 고쳐 그리게 하려는 것이다.
+     */
+    public function toggleReaction(User $user, CommunicationMessage $message, string $emoji): bool
+    {
+        if ($message->isRemoved() || ! in_array($emoji, CommunicationMessageReaction::ALLOWED, true)) {
+            return false;
+        }
+
+        $existing = CommunicationMessageReaction::query()
+            ->where('communication_message_id', $message->id)
+            ->where('user_id', $user->id)
+            ->where('emoji', $emoji)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+        } else {
+            CommunicationMessageReaction::query()->firstOrCreate(
+                ['communication_message_id' => $message->id, 'user_id' => $user->id, 'emoji' => $emoji],
+                ['communication_room_id' => $message->communication_room_id, 'employee_id' => $user->employee_id],
+            );
+        }
+
+        $message->touch();
+
+        return true;
+    }
+
+    /**
+     * 글 하나의 반응 요약 — 종류별 수 · 누른 사람 · 내가 눌렀는지. ✅ 가 늘 맨 앞이다.
+     * 화면(stream)과 누른 직후의 응답이 같은 모양을 받도록 여기 한 곳에서 만든다.
+     *
+     * @return list<array{emoji: string, count: int, mine: bool, names: list<string>}>
+     */
+    public function reactionSummary(CommunicationMessage $message, ?User $viewer): array
+    {
+        $reactions = $message->relationLoaded('reactions')
+            ? $message->reactions
+            : $message->reactions()->with(['employee:id,name', 'user:id,name'])->get();
+
+        $summary = [];
+        foreach (CommunicationMessageReaction::ALLOWED as $emoji) {
+            $same = $reactions->where('emoji', $emoji);
+            if ($same->isEmpty()) {
+                continue;
+            }
+            $summary[] = [
+                'emoji' => $emoji,
+                'count' => $same->count(),
+                'mine' => $viewer !== null && $same->contains(fn (CommunicationMessageReaction $r): bool => (int) $r->user_id === (int) $viewer->id),
+                'names' => $same->map(fn (CommunicationMessageReaction $r): string => $r->personName())->filter()->values()->all(),
+            ];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * 글을 방 위에 꽂아 둘 수 있는가 — 그 방에 새 글을 쓸 수 있는 사람이면.
+     * 공지방에서는 관리자만 쓰므로 관리자만 꽂는다.
+     */
+    public function canPin(?User $user, CommunicationMessage $message, ?bool $canPostHere = null): bool
+    {
+        if ($message->isRemoved()) {
+            return false;
+        }
+
+        // 대화 목록을 그릴 때는 글마다 방 권한을 다시 묻지 않도록 한 번 구한 답을 넘겨받는다.
+        return $canPostHere ?? ($message->room !== null && $this->canPost($user, $message->room));
+    }
+
+    /** 꽂거나 뺀다. 누가 꽂았는지는 남긴다 — "이거 누가 올려 둔 거예요?" 를 없앤다. */
+    public function togglePin(User $user, CommunicationMessage $message): bool
+    {
+        $payload = (array) ($message->payload ?? []);
+        $pinned = ! $message->is_pinned;
+
+        if ($pinned) {
+            $payload['pinned_by'] = [
+                'user_id' => (int) $user->id,
+                'name' => (string) ($user->employee?->name ?? $user->name),
+                'at' => now()->toIso8601String(),
+            ];
+        } else {
+            unset($payload['pinned_by']);
+        }
+
+        $message->update(['is_pinned' => $pinned, 'payload' => $payload ?: null]);
+
+        return $pinned;
+    }
+
+    /**
+     * 방에 꽂아 둔 글 — 최근에 꽂은 것부터.
+     *
+     * @return list<array{id: int, sender: string, body: string, pinnedBy: string|null, sentAt: string|null}>
+     */
+    public function pinsFor(CommunicationRoom $room): array
+    {
+        return CommunicationMessage::query()
+            ->with(['senderEmployee:id,name', 'senderUser:id,name'])
+            ->where('communication_room_id', $room->id)
+            ->active()
+            ->whereNull('removed_at')
+            ->where('is_pinned', true)
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get()
+            // 꽂은 시각 순 — 공지처럼 올릴 때 자동으로 꽂힌 글은 올린 시각이 곧 꽂은 시각이다.
+            ->sortByDesc(fn (CommunicationMessage $m): string => (string) ($m->payload['pinned_by']['at'] ?? $m->sent_at?->toIso8601String() ?? ''))
+            ->take(30)
+            ->values()
+            ->map(fn (CommunicationMessage $m): array => [
+                'id' => (int) $m->id,
+                'sender' => (string) ($m->senderEmployee?->name ?? $m->senderUser?->name ?? ($m->kind === CommunicationMessage::KIND_SYSTEM ? '🤖 AI' : 'SMART ERP')),
+                'body' => mb_substr(trim((string) ($m->title ? $m->title.' — '.$m->body : $m->body)), 0, 140),
+                'pinnedBy' => $m->payload['pinned_by']['name'] ?? null,
+                'sentAt' => $m->sent_at?->format('n/j H:i'),
+            ])
+            ->all();
     }
 
     // ---- 방별 알림 설정 ------------------------------------------------------

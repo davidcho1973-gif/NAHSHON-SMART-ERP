@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationMessageFile;
+use App\Models\CommunicationMessageReaction;
 use App\Models\CommunicationNotification;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Services\Admin\CommunicationAdminService;
 use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\CommunicationService;
+use App\Services\Communication\MessageSearch;
 use App\Services\Communication\RoomStreamService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -130,6 +132,71 @@ class CommunicationController extends Controller
         }
 
         return redirect()->route('communication.show', $params);
+    }
+
+    /**
+     * 대화 검색 — 볼 수 있는 방의 글만. 방 하나 안에서만 찾을 수도 있다.
+     * 권한 규칙은 MessageSearch 가 방 목록과 같은 한 벌을 쓴다.
+     */
+    public function search(Request $request, MessageSearch $search): View
+    {
+        $user = $request->user();
+        $query = trim((string) $request->query('q', ''));
+
+        $room = null;
+        if ($request->filled('room')) {
+            $room = CommunicationRoom::query()->find((int) $request->query('room'));
+            abort_unless($room && $this->communicationService->canAccessRoom($user, $room), 404);
+        }
+
+        return view('communication.search', [
+            'user' => $user,
+            'query' => $query,
+            'terms' => $search->terms($query),
+            'room' => $room,
+            'roomLabel' => $room ? $this->roomLabel($room, $user) : null,
+            'results' => $query !== '' ? $search->search($user, $query, $room) : [],
+        ]);
+    }
+
+    /** ✅ 확인 · 👍 … 반응을 누르거나 거둔다. 응답은 그 글의 반응 요약. */
+    public function react(Request $request, CommunicationRoom $room, CommunicationMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+        abort_unless((int) $message->communication_room_id === (int) $room->id, 404);
+
+        $data = $request->validate([
+            'emoji' => ['required', 'string', 'in:'.implode(',', CommunicationMessageReaction::ALLOWED)],
+        ]);
+
+        if (! $this->communicationService->toggleReaction($user, $message, $data['emoji'])) {
+            return response()->json(['success' => false, 'error' => __('지운 글에는 반응할 수 없습니다.')], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'reactions' => $this->communicationService->reactionSummary($message->fresh(), $user),
+        ]);
+    }
+
+    /** 글을 방 위에 꽂거나 뺀다. */
+    public function pin(Request $request, CommunicationRoom $room, CommunicationMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+        abort_unless((int) $message->communication_room_id === (int) $room->id, 404);
+        abort_unless($this->communicationService->canPin($user, $message), 403);
+
+        return response()->json(['success' => true, 'pinned' => $this->communicationService->togglePin($user, $message)]);
+    }
+
+    /** 방에 꽂아 둔 글 목록. */
+    public function pins(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        abort_unless($this->communicationService->canAccessRoom($request->user(), $room), 403);
+
+        return response()->json(['pins' => $this->communicationService->pinsFor($room)]);
     }
 
     /** 이 방에서 언제 내 폰을 울릴지 — 모든 글 / 부를 때만 / 끄기. */

@@ -94,6 +94,7 @@
                         <span class="count">{{ $activityUnread > 99 ? '99+' : $activityUnread }}</span>
                     @endif
                 </a>
+                <a class="shortcut" id="link-search" href="{{ route('communication.search') }}">🔍 {{ __('검색') }}</a>
             </div>
 
             <section class="rooms">

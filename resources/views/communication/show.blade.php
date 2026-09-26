@@ -73,6 +73,23 @@
         /* 알림에서 눌러 들어온 글 — 잠깐 빛나고 사라진다. */
         .flash .bubble, .notice-card.flash { animation: flash 2.4s ease-out; }
         @keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px #f59e0b; } 100% { box-shadow: 0 0 0 0 transparent; } }
+        /* 반응 — ✅ 확인이 맨 앞. 내가 누른 것은 테두리로. */
+        .rxs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+        .row.mine .rxs { justify-content: flex-end; }
+        .rx { border: 1px solid var(--line, #e5e7eb); background: #fff; border-radius: 999px; padding: 2px 8px; font-size: 12px; cursor: pointer; line-height: 1.5; }
+        .rx.mine { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+        .rx-who { font-size: 11px; color: #6b7280; margin-top: 3px; }
+        .rx-pick { display: flex; gap: 4px; margin-top: 4px; }
+        .row.mine .rx-pick { justify-content: flex-end; }
+        .rx-pick button { border: 1px solid var(--line, #e5e7eb); background: #fff; border-radius: 10px; font-size: 18px; padding: 3px 7px; cursor: pointer; }
+        /* 방 위에 꽂아 둔 글 — 카카오톡 공지 띠와 같은 자리. */
+        .pinbar { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; border: 0; background: rgba(255,255,255,.85); border-radius: 10px; padding: 8px 11px; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+        .pinbar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pinbar b { font-size: 11px; color: #6b7280; }
+        .pin-item { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #f1f3f5; background: none; padding: 11px 2px; font: inherit; cursor: pointer; }
+        .pin-item .who { margin: 0 0 3px; font-size: 11px; color: #6b7280; }
+        .pin-item .txt { font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+
         /* 위로 올려 더 오래된 대화 불러오기 */
         .older { text-align: center; margin: 4px 0 14px; }
         .older button { border: 0; background: rgba(255,255,255,.8); border-radius: 999px; padding: 7px 16px; font-size: 12px; font-weight: 700; color: #374151; cursor: pointer; }
@@ -170,6 +187,7 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center">
+                    <a class="peo" href="{{ route('communication.search', ['room' => $room]) }}" aria-label="{{ __('이 방에서 찾기') }}" style="text-decoration:none">🔍</a>
                     {{-- 이 방 알림 — 🔔 모든 글 / @ 부를 때만 / 🔕 끄기. 누르면 고르는 시트가 뜬다. --}}
                     <button class="peo" type="button" id="btn-notify" aria-label="{{ __('이 방 알림') }}">{{ ['all' => '🔔', 'mentions' => '@', 'none' => '🔕'][$notifyLevel] ?? '🔔' }}</button>
                     <button class="peo" type="button" id="btn-members">{{ __('참여자') }}</button>
@@ -184,6 +202,8 @@
                     @endif
                 </div>
             </div>
+            {{-- 꽂아 둔 글이 있으면 머리띠 아래에 한 줄 — 누르면 전부 본다. --}}
+            <button type="button" class="pinbar" id="pinbar" hidden>📌 <span id="pin-text"></span><b id="pin-count"></b></button>
         </header>
 
         <main class="field-content" id="thread"></main>
@@ -264,6 +284,11 @@
         <div id="sheet-list"></div>
     </div>
 
+    <div class="sheet" id="pins-sheet" role="dialog" aria-label="{{ __('고정한 글') }}">
+        <h2>📌 {{ __('고정한 글') }}</h2>
+        <div id="pins-list"></div>
+    </div>
+
     {{-- 이 방 알림 — 방마다 고른다. 시끄러운 방은 줄이고, 지시가 오가는 방은 다 받는다. --}}
     <div class="sheet" id="notify-sheet" role="dialog" aria-label="{{ __('이 방 알림') }}">
         <h2>{{ __('이 방 알림') }}</h2>
@@ -320,6 +345,11 @@
     var byId = {};          // 인용에 쓰려고 받은 메시지를 기억해 둔다
     var order = [];         // 화면에 그린 글 번호(오름차순) — 과거를 위에 붙일 때 다시 그리는 기준
     var hasOlder = false;
+    // 고를 수 있는 반응 — 서버가 받는 목록과 같은 한 벌.
+    var REACTIONS = @json(\App\Models\CommunicationMessageReaction::ALLOWED);
+    var pickingId = null;   // 반응 고르는 줄을 펼친 글
+    var pinsUrl = '{{ route('communication.pins', ['room' => $room], false) }}';
+    var pins = [];
 
     function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
     function escRe(s) { return s.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&'); }
@@ -360,13 +390,47 @@
         }).join('') + '</div>';
     }
 
+    /** 글 아래 손잡이 — 답글 · 반응 · 고정 · 수정 · 삭제. 할 수 있는 것만 보인다. */
+    function toolsHtml(m, style) {
+        if (m.removed) return '';
+        return '<div class="tools"' + (style ? ' style="' + style + '"' : '') + '>' +
+            '<button type="button" onclick="window.Chat.reply(' + m.id + t(')">답글</button>') +
+            '<button type="button" onclick="window.Chat.pick(' + m.id + ')" aria-label="' + t('반응') + '">☺</button>' +
+            (m.canPin ? '<button type="button" onclick="window.Chat.pin(' + m.id + ')">' + (m.pinned ? t('고정 해제') : t('고정')) + '</button>' : '') +
+            (m.canEdit ? '<button type="button" onclick="window.Chat.edit(' + m.id + t(')">수정</button>') : '') +
+            (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + t(')">삭제</button>') : '') +
+            '</div>';
+    }
+
+    /**
+     * 반응 — 누른 수와 내가 눌렀는지. 공지·지시 카드에서는 ✅ 누른 사람 이름까지 보인다:
+     * "누가 봤나" 가 그 글의 핵심이기 때문이다.
+     */
+    function reactionsHtml(m, showWho) {
+        if (m.removed) return '';
+        var list = m.reactions || [];
+        var html = list.length ? '<div class="rxs">' + list.map(function (r) {
+            return '<button type="button" class="rx' + (r.mine ? ' mine' : '') + '" title="' + esc((r.names || []).join(', ')) +
+                '" onclick="window.Chat.react(' + m.id + ',\'' + r.emoji + '\')">' + r.emoji + ' ' + r.count + '</button>';
+        }).join('') + '</div>' : '';
+        var confirmed = list.filter(function (r) { return r.emoji === '✅'; })[0];
+        if (showWho && confirmed) {
+            html += '<div class="rx-who">' + t('확인:') + ' ' + esc(confirmed.names.join(', ')) + '</div>';
+        }
+        if (pickingId === m.id) {
+            html += '<div class="rx-pick">' + REACTIONS.map(function (e) {
+                return '<button type="button" onclick="window.Chat.react(' + m.id + ',\'' + e + '\')">' + e + '</button>';
+            }).join('') + '</div>';
+        }
+        return html;
+    }
+
     function noticeHtml(m) {
         var ai = m.kind === 'system';
         return '<div class="notice-card ' + (ai ? 'ai' : '') + (m.priority === 'urgent' ? ' urgent' : '') + '" id="message-' + m.id + '">' +
-            '<b>' + esc(m.title || (ai ? '🤖 AI' : t('공지'))) + '</b>' +
+            '<b>' + (m.pinned ? '📌 ' : '') + esc(m.title || (ai ? '🤖 AI' : t('공지'))) + '</b>' +
             urgentTag(m) + quoteHtml(m) + bodyHtml(m) + filesHtml(m.files) +
-            (m.removed ? '' : '<div class="tools" style="margin-top:8px"><button type="button" onclick="window.Chat.reply(' + m.id + t(')">답글</button>') +
-                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + t(')">삭제</button>') : '') + '</div>') +
+            reactionsHtml(m, true) + toolsHtml(m, 'margin-top:8px') +
             '</div>';
     }
 
@@ -380,29 +444,22 @@
     }
 
     function bubbleHtml(m) {
-        var tools = '';
-        if (!m.removed) {
-            tools = '<div class="tools">' +
-                '<button type="button" onclick="window.Chat.reply(' + m.id + t(')">답글</button>') +
-                (m.canEdit ? '<button type="button" onclick="window.Chat.edit(' + m.id + t(')">수정</button>') : '') +
-                (m.canRemove ? '<button type="button" onclick="window.Chat.remove(' + m.id + t(')">삭제</button>') : '') +
-                '</div>';
-        }
-
-        var stamp = '<span class="stamp">' + (m.edited ? t('<span class="edited">수정됨 </span>') : '') + esc(m.sentAt || '') + '</span>';
+        var tools = toolsHtml(m);
+        var stamp = '<span class="stamp">' + (m.pinned ? '📌 ' : '') + (m.edited ? t('<span class="edited">수정됨 </span>') : '') + esc(m.sentAt || '') + '</span>';
         var bubble = '<div class="bubble' + (m.removed ? ' gone' : '') + (m.priority === 'urgent' ? ' urgent' : '') + '">' +
             urgentTag(m) + quoteHtml(m) + bodyHtml(m) + '</div>';
         var body = m.removed ? bubble : bubble + filesHtml(m.files);
+        var rx = reactionsHtml(m, false);
 
         if (m.mine) {
             return '<div class="row mine" id="message-' + m.id + '" data-body="' + esc(m.body) + '">' +
-                '<div class="stack"><div class="bundle">' + stamp + body + '</div>' + tools + '</div></div>';
+                '<div class="stack"><div class="bundle">' + stamp + body + '</div>' + rx + tools + '</div></div>';
         }
 
         return '<div class="row' + (m.mentionsMe ? ' called' : '') + '" id="message-' + m.id + '">' +
             '<div class="face">' + esc(initials(m.sender)) + '</div>' +
             '<div class="stack"><div class="who">' + esc(m.sender) + '</div>' +
-            '<div class="bundle">' + body + stamp + '</div>' + tools + '</div></div>';
+            '<div class="bundle">' + body + stamp + '</div>' + rx + tools + '</div></div>';
     }
 
     function htmlFor(m) {
@@ -530,8 +587,76 @@
         });
     });
 
+    // ── 꽂아 둔 글 ──────────────────────────────────────────────────
+    function loadPins() {
+        fetch(pinsUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) { if (d) { pins = d.pins || []; paintPins(); } })
+            .catch(function () {});
+    }
+    function paintPins() {
+        var bar = document.getElementById('pinbar');
+        if (!pins.length) { bar.hidden = true; return; }
+        document.getElementById('pin-text').textContent = pins[0].body;
+        document.getElementById('pin-count').textContent = pins.length > 1 ? '+' + (pins.length - 1) : '';
+        bar.hidden = false;
+    }
+    /** 꽂아 둔 글로 간다 — 화면에 있으면 그 자리로, 아직 안 불러온 옛 글이면 그 글 주변을 새로 연다. */
+    function jumpTo(id) {
+        closeSheets();
+        var el = document.getElementById('message-' + id);
+        if (el) { focusId = id; flashFocus(); return; }
+        window.location.href = window.location.pathname + '?focus=' + id;
+    }
+    document.getElementById('pinbar').addEventListener('click', function () {
+        document.getElementById('pins-list').innerHTML = pins.map(function (p) {
+            return '<button type="button" class="pin-item" data-id="' + p.id + '">' +
+                '<div class="who">' + esc(p.sender) + ' · ' + esc(p.sentAt || '') + (p.pinnedBy ? ' · 📌 ' + esc(p.pinnedBy) : '') + '</div>' +
+                '<div class="txt">' + esc(p.body) + '</div></button>';
+        }).join('');
+        openSheet('pins-sheet');
+    });
+    document.getElementById('pins-list').addEventListener('click', function (e) {
+        var b = e.target.closest('.pin-item');
+        if (b) jumpTo(parseInt(b.getAttribute('data-id'), 10));
+    });
+
+    function post(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+            body: JSON.stringify(payload || {})
+        }).then(function (r) { return r.json().then(function (d) { if (!r.ok || d.success === false) throw new Error(d.error || d.message || ''); return d; }); });
+    }
+
     // ── 내 글 손보기 ────────────────────────────────────────────────
     window.Chat = {
+        /** ☺ — 반응 고르는 줄을 펼치거나 접는다. */
+        pick: function (id) {
+            var before = pickingId;
+            pickingId = pickingId === id ? null : id;
+            if (before && byId[before]) render(byId[before]);
+            if (byId[id]) render(byId[id]);
+        },
+        /** 반응을 누르거나 거둔다 — 숫자는 서버가 돌려준 대로 고쳐 그린다. */
+        react: function (id, emoji) {
+            post(roomBase + '/' + id + '/react', { emoji: emoji })
+                .then(function (d) {
+                    pickingId = null;
+                    if (byId[id]) { byId[id].reactions = d.reactions || []; render(byId[id]); }
+                })
+                .catch(function (e) { alert(e.message || t('반응을 남기지 못했습니다.')); });
+        },
+        /** 방 위에 꽂거나 뺀다. */
+        pin: function (id) {
+            post(roomBase + '/' + id + '/pin')
+                .then(function (d) {
+                    if (byId[id]) { byId[id].pinned = !!d.pinned; render(byId[id]); }
+                    loadPins();
+                })
+                .catch(function (e) { alert(e.message || t('고정하지 못했습니다.')); });
+        },
         /** 위로 올려 더 오래된 대화 — 두 달 전 지시도 "있었는데 못 찾는" 것이 되지 않게. */
         older: function () {
             if (!order.length) return;
@@ -716,8 +841,15 @@
                     return !first && !m.mine && m.id > lastId;
                 }).length;
 
+                // 누가 글을 꽂거나 뺐으면 위쪽 띠도 다시 받는다(처음 열 때는 늘 받는다).
+                var pinChanged = first || (data.messages || []).some(function (m) {
+                    var old = byId[m.id];
+                    return old ? !!old.pinned !== !!m.pinned : !!m.pinned;
+                });
+
                 (data.messages || []).forEach(render);
                 paintMembers(data.members, data.onlineCount);
+                if (pinChanged) loadPins();
                 if (first) { hasOlder = !!data.hasOlder; paintOlder(); }
 
                 if (fresh > 0) { window.ChatChime && window.ChatChime.ring(fresh); }
