@@ -96,9 +96,11 @@ class ChatAttachmentService
     /**
      * 개인 대화는 회사 문서함으로 흘려보내지 않는다. 이 선을 분명히 긋지 않으면
      * 사람들이 메신저 자체를 쓰지 않는다 — 신뢰가 기능보다 먼저다.
+     * 비공개 그룹방도 같다: "명단에 있는 사람만" 이라고 약속한 방의 파일이 문서함에서
+     * 다른 사람에게 보이면 그 약속이 깨진다.
      */
     private function shouldFileToHub(?CommunicationRoom $room): bool
     {
-        return $room !== null && $room->type !== CommunicationRoom::TYPE_DIRECT;
+        return $room !== null && ! in_array($room->type, CommunicationRoom::MEMBERS_ONLY, true);
     }
 }

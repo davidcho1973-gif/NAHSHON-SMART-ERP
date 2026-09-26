@@ -31,6 +31,7 @@
         .icon.mention { background: #dbeafe; color: #1d4ed8; }
         .icon.reply { background: #dcfce7; color: #15803d; }
         .icon.announcement { background: var(--accent-bg); }
+        .icon.invite { background: #fef3c7; color: #92400e; }
         .what { font-size: 14px; font-weight: 700; line-height: 1.35; }
         .item.read .what { font-weight: 500; color: #4b5563; }
         .mid { min-width: 0; }
@@ -76,11 +77,12 @@
 
             @forelse($items as $item)
                 @php
-                    $kind = in_array($item->type, ['mention', 'reply', 'announcement'], true) ? $item->type : 'announcement';
-                    $icon = ['mention' => '@', 'reply' => '↩', 'announcement' => '📢'][$kind];
+                    $kind = in_array($item->type, ['mention', 'reply', 'announcement', 'invite'], true) ? $item->type : 'announcement';
+                    $icon = ['mention' => '@', 'reply' => '↩', 'announcement' => '📢', 'invite' => '#'][$kind];
                     $what = match ($kind) {
                         'mention' => __(':name님이 나를 불렀습니다', ['name' => $item->title]),
                         'reply' => __(':name님이 답글을 달았습니다', ['name' => $item->title]),
+                        'invite' => __(':name님이 방에 초대했습니다', ['name' => $item->title]),
                         default => $item->title,
                     };
                 @endphp

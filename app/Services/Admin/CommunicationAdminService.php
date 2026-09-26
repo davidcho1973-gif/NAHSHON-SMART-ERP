@@ -91,10 +91,14 @@ class CommunicationAdminService
                 'messageCount' => (int) $r->messages_count,
                 'lastMessageAt' => $r->last_message_at?->toDateTimeString(),
                 // 현장 방만 "현장 직원 동기화" 가 의미 있다 — 넣을 명단의 기준이 현장이다.
-                'canSyncMembers' => $r->site_id !== null,
+                // 주제방·그룹방은 현장에 걸려 있어도 전원을 붓지 않는다.
+                'canSyncMembers' => $r->site_id !== null && ! $r->isSelfServe(),
             ])->values()->all();
 
+        // 1:1 · 그룹방의 글은 관리 화면에도 싣지 않는다. 메신저가 "명단에 있는 사람만" 이라고
+        // 약속하는 방이다 — 관리 화면이 그 글을 보여 주면 그 약속이 거짓말이 된다.
         $messages = CommunicationMessage::query()
+            ->whereHas('room', fn ($q) => $q->whereNotIn('type', CommunicationRoom::MEMBERS_ONLY))
             ->with(['room:id,name', 'senderEmployee:id,name'])
             ->withCount('reads')
             ->orderByDesc('sent_at')->orderByDesc('id')
@@ -194,11 +198,20 @@ class CommunicationAdminService
             'description' => $this->text($input['description'] ?? null),
             'site_id' => $siteId,
             'team_id' => ($input['team_id'] ?? '') !== '' ? (int) $input['team_id'] : null,
-            'company_id' => $room->company_id ?: $site?->company_id,
+            // 현장을 안 골랐으면 만든 사람의 회사 방이다 — 주제방은 "같은 회사" 로 찾아지므로
+            // 회사가 비면 아무도 못 찾는 방이 된다.
+            'company_id' => $room->company_id ?: $site?->company_id ?: $this->communication->companyIdOf(auth()->user()),
             'is_read_only' => (bool) ($input['is_read_only'] ?? false),
             'status' => isset(CommunicationRoom::STATUS_OPTIONS[$input['status'] ?? '']) ? $input['status'] : ($room->status ?: 'active'),
             'created_by_id' => $room->created_by_id ?: auth()->id(),
         ]);
+
+        // 주제방은 "같은 회사" 사람이 찾아 들어오는 방이다 — 회사가 비면 아무도 못 찾는
+        // 방이 조용히 생긴다. 그런 방을 만들지 않고 현장을 골라 달라고 한다.
+        if ($room->type === CommunicationRoom::TYPE_TOPIC && ! $room->company_id) {
+            return ['success' => false, 'error' => '주제방은 어느 회사의 방인지 정해져야 찾을 수 있습니다. 현장을 골라 주세요.'];
+        }
+
         $room->save();
 
         return ['success' => true, 'id' => $room->id];
@@ -221,6 +234,10 @@ class CommunicationAdminService
         $room = CommunicationRoom::query()->with('site')->find($id);
         if (! $room) {
             return ['success' => false, 'error' => '메신저 방을 찾을 수 없습니다.'];
+        }
+        // 주제방·그룹방에 현장 전원을 부으면 "골라 들어오는 방" 도 "초대한 사람만" 도 깨진다.
+        if ($room->isSelfServe()) {
+            return ['success' => false, 'error' => '주제방·그룹방은 스스로 들어오거나 초대로만 들어옵니다. 현장 전원을 넣지 않습니다.'];
         }
         if (! $room->site) {
             return ['success' => false, 'error' => '현장에 속한 방만 직원을 동기화할 수 있습니다.'];

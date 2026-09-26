@@ -20,8 +20,11 @@ class CommunicationNotification extends Model
     /** 내가 쓴 글(또는 내가 답한 글)에 누가 답글을 달았다. */
     public const TYPE_REPLY = 'reply';
 
-    /** 나를 콕 집은 알림 — 활동함에서 "나를 부른 것" 으로 모아 보이는 종류. */
-    public const PERSONAL_TYPES = [self::TYPE_MENTION, self::TYPE_REPLY];
+    /** 누가 나를 주제방·그룹방에 초대했다. */
+    public const TYPE_INVITE = 'invite';
+
+    /** 나를 콕 집은 알림 — 방 목록에 빨간 @ 로 보이는 종류. */
+    public const PERSONAL_TYPES = [self::TYPE_MENTION, self::TYPE_REPLY, self::TYPE_INVITE];
 
     protected $fillable = [
         'user_id',

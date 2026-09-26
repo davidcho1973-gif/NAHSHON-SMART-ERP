@@ -247,6 +247,10 @@ class CommunicationController extends Controller
             'notifyLevel' => $this->communicationService->notifyLevelFor($user, $room),
             'canCallEveryone' => $this->communicationService->canCallEveryone($user),
             'canPostUrgent' => $this->communicationService->canPostUrgent($user),
+            // 주제방·그룹방에 들어와 있으면 초대도 하고 나갈 수도 있다(같은 조건).
+            'canInvite' => $insideSelfServe = $this->communicationService->canInvite($user, $room),
+            'canLeave' => $insideSelfServe,
+            'canEditAbout' => $this->communicationService->canEditAbout($user, $room),
             // 활동함에서 눌러 들어온 글 — 처음 그릴 때 그 글 주변을 보여 준다.
             'focusId' => max(0, (int) $request->integer('focus')),
             // 열쇠가 없는 배포에서는 [AI] 버튼을 아예 만들지 않는다 —
@@ -282,7 +286,7 @@ class CommunicationController extends Controller
         ));
     }
 
-    public function store(Request $request, CommunicationRoom $room): RedirectResponse
+    public function store(Request $request, CommunicationRoom $room): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
@@ -293,6 +297,7 @@ class CommunicationController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
             'parent_id' => ['nullable', 'integer'],
             'urgent' => ['nullable', 'boolean'],
+            'broadcast' => ['nullable', 'boolean'],
             'files' => ['nullable', 'array', 'max:10'],
             'files.*' => ['file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
         ]);
@@ -326,6 +331,8 @@ class CommunicationController extends Controller
             'title' => $parent ? null : ($data['title'] ?? null),
             'priority' => $priority,
             'is_pinned' => $kind === CommunicationMessage::KIND_ANNOUNCEMENT,
+            // 답글을 방에도 보인다(슬랙의 "채널에도 보내기") — 모두가 알아야 할 결론일 때.
+            'payload' => $parent && ($data['broadcast'] ?? false) ? ['broadcast' => true] : null,
         ]);
 
         // 첨부는 메시지에 붙는 동시에 문서함으로도 들어가 분석·모듈 배달을 탄다.
@@ -334,7 +341,81 @@ class CommunicationController extends Controller
             $this->attachments->attachAll($message, is_array($files) ? $files : [$files], $user);
         }
 
+        // 스레드 창은 제자리에서 보낸다 — 방 화면 전체를 다시 불러오면 보던 스레드가 닫힌다.
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'id' => (int) $message->id]);
+        }
+
         return redirect()->route('communication.show', ['room' => $room]);
+    }
+
+    /** 스레드 — 원글과 그 아래 답글 전부. */
+    public function thread(Request $request, CommunicationRoom $room, CommunicationMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+        abort_unless((int) $message->communication_room_id === (int) $room->id, 404);
+
+        // 답글을 눌러도 그 답글이 속한 줄기를 연다.
+        $parent = $message->parent_id ? ($message->parent ?? $message) : $message;
+
+        return response()->json(app(RoomStreamService::class)->thread($room, $user, $parent));
+    }
+
+    /** 방 찾기 — 같은 회사의 주제방 중 아직 안 들어간 곳. */
+    public function browse(Request $request): View
+    {
+        return view('communication.browse', [
+            'topics' => $this->communicationService->browsableTopicsFor($request->user()),
+        ]);
+    }
+
+    public function join(Request $request, CommunicationRoom $room): RedirectResponse
+    {
+        abort_unless($this->communicationService->joinRoom($request->user(), $room), 403);
+
+        return redirect()->route('communication.show', ['room' => $room]);
+    }
+
+    public function leave(Request $request, CommunicationRoom $room): RedirectResponse
+    {
+        abort_unless($this->communicationService->leaveRoom($request->user(), $room), 403);
+
+        return redirect()->route('communication.index')->with('success', __('방에서 나왔습니다.'));
+    }
+
+    /** 초대할 만한 사람 — 이름으로 찾는다. */
+    public function invitees(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canInvite($user, $room), 403);
+
+        return response()->json([
+            'people' => $this->communicationService->inviteCandidates($user, $room, (string) $request->query('q', ''))
+                ->map(fn (Employee $e): array => ['id' => (int) $e->id, 'name' => (string) $e->name])
+                ->all(),
+        ]);
+    }
+
+    public function invite(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        $data = $request->validate(['employee_id' => ['required', 'integer']]);
+        $target = Employee::query()->where('employment_status', 'active')->find((int) $data['employee_id']);
+
+        abort_unless($target && $this->communicationService->invite($request->user(), $room, $target), 403);
+
+        return response()->json(['success' => true]);
+    }
+
+    /** 방 설명 — 무슨 이야기를 하는 방인지 한 줄. */
+    public function about(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        abort_unless($this->communicationService->canAccessRoom($request->user(), $room), 403);
+        $data = $request->validate(['description' => ['nullable', 'string', 'max:500']]);
+
+        abort_unless($this->communicationService->updateAbout($request->user(), $room, $data['description'] ?? null), 403);
+
+        return response()->json(['success' => true, 'description' => $room->fresh()->description]);
     }
 
     /** 잘못 쓴 글 고치기 — 본인만. 고친 흔적((수정됨))은 남는다. */
@@ -387,9 +468,10 @@ class CommunicationController extends Controller
         }
 
         // 만든 사람은 그 방에 들어가 있어야 한다 — 만들고 못 들어가면 앞뒤가 안 맞는다.
+        // 직원 기록이 없는 관리자 계정도 계정으로 들어간다(그래야 그룹방에 사람을 초대할 수 있다).
         $room = CommunicationRoom::query()->find((int) ($result['id'] ?? 0));
-        if ($room && $request->user()->employee) {
-            $this->communicationService->ensureRoomMember($room, $request->user()->employee, 'owner');
+        if ($room) {
+            $this->communicationService->addMember($room, $request->user(), 'owner');
         }
 
         return $room

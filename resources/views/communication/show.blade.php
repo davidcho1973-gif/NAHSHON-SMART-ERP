@@ -90,6 +90,34 @@
         .pin-item .who { margin: 0 0 3px; font-size: 11px; color: #6b7280; }
         .pin-item .txt { font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 
+        /* 스레드 — 원글 아래 "💬 답글 N개", 누르면 아래에서 올라오는 창. */
+        .replies { border: 0; background: none; padding: 3px 2px; margin-top: 3px; font-size: 12px; font-weight: 700; color: #2563eb; cursor: pointer; text-align: left; }
+        .row.mine .replies { align-self: flex-end; }
+        .thread-sheet { display: none; max-height: 88vh; padding-bottom: 0; }
+        .thread-head { display: flex; align-items: center; justify-content: space-between; }
+        .thread-head h2 { margin: 0; }
+        #thread-body-list { max-height: calc(88vh - 190px); overflow: auto; margin: 8px 0; }
+        .t-item { padding: 10px 2px; border-bottom: 1px solid #f1f3f5; }
+        .t-item.t-parent { background: #f8fafc; border-radius: 10px; padding: 10px; border-bottom: 0; }
+        .t-who { font-size: 12px; color: #6b7280; margin-bottom: 3px; }
+        .t-who b { color: #111827; font-size: 13px; }
+        .t-bc { font-size: 10px; background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 1px 6px; }
+        .t-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .t-text.gone { color: #64748b; font-style: italic; }
+        .t-count, .t-empty { font-size: 12px; color: #6b7280; padding: 8px 2px; }
+        .t-item.flash { animation: flash 2.4s ease-out; }
+        #thread-form { position: sticky; bottom: 0; background: #fff; padding: 8px 0 calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #f1f3f5; }
+        .broadcast { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #374151; padding-top: 6px; }
+        /* 방 정보 — 설명 · 초대 · 나가기 */
+        .about { background: #f8fafc; border-radius: 12px; padding: 11px 12px; margin-bottom: 14px; }
+        .about-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: #374151; }
+        .linkbtn { border: 0; background: none; color: #2563eb; font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px 0 0; }
+        .invite input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px; margin-bottom: 6px; }
+        .inv { display: flex; align-items: center; justify-content: space-between; padding: 7px 2px; font-size: 14px; }
+        .inv button { border: 0; border-radius: 8px; padding: 6px 12px; background: rgba(0,0,0,.85); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .inv-empty { font-size: 12px; color: #9ca3af; padding: 6px 2px; }
+        .leavebtn { width: 100%; border: 1px solid #fecaca; background: #fff; color: #b91c1c; border-radius: 10px; padding: 10px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+
         /* 위로 올려 더 오래된 대화 불러오기 */
         .older { text-align: center; margin: 4px 0 14px; }
         .older button { border: 0; background: rgba(255,255,255,.8); border-radius: 999px; padding: 7px 16px; font-size: 12px; font-weight: 700; color: #374151; cursor: pointer; }
@@ -139,9 +167,6 @@
         .hint { font-size: 11px; color: #6b7280; padding: 6px 2px 0; }
         input[type=file] { display: none; }
         .readonly { padding: 12px; color: #6b7280; font-size: 13px; text-align: center; }
-        .replying { display: flex; align-items: center; gap: 8px; background: #f2f3f5; border-left: 4px solid var(--accent-bg); border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; color: #191919; }
-        .replying span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .replying button { border: 0; background: none; font-size: 16px; color: #64748b; cursor: pointer; line-height: 1; }
         .quote { border-left: 3px solid rgba(0,0,0,.15); padding-left: 8px; margin-bottom: 5px; font-size: 11px; color: #767676; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* 참여자 시트 */
@@ -173,6 +198,8 @@
                 'site_ops' => '현장 상황실',
                 'company' => '회사 채팅방',
                 'team' => '팀 채팅방',
+                'topic' => '주제방',
+                'group' => '비공개 그룹방',
                 'direct' => '1:1 대화',
             ][$room->type] ?? '채팅방';
         @endphp
@@ -210,14 +237,10 @@
 
         <section class="composer" aria-label="{{ __('메시지 입력') }}">
             @if($canPostTopLevel)
+                {{-- 여기는 새 글만 쓴다. 답글은 글마다 열리는 스레드 창에서 쓴다 — 답글이 방 한가운데
+                     섞이면 대화가 엉키기 때문이다(슬랙의 스레드). --}}
                 <form id="composer-form" method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
                     @csrf
-                    <input type="hidden" name="parent_id" id="parent-id" value="">
-                    {{-- 답장 대상 — 무엇에 답하는 중인지 보이지 않으면 엉뚱한 곳에 달린다. --}}
-                    <div class="replying" id="replying" hidden>
-                        <span id="replying-text"></span>
-                        <button type="button" id="replying-cancel" aria-label="답장 취소">×</button>
-                    </div>
                     @if($room->type === 'site_announcement')
                         <input type="text" name="title" maxlength="255" placeholder="공지 제목"
                                style="border:1px solid var(--line);border-radius:12px;padding:9px 12px;width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit">
@@ -244,7 +267,7 @@
                     <input type="file" name="files[]" id="files" multiple
                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
                     <div class="picked" id="picked"></div>
-                    @if($room->type !== 'direct')
+                    @if(! in_array($room->type, \App\Models\CommunicationRoom::MEMBERS_ONLY, true))
                         <div class="hint">{{ __('사진·영수증·도면을 올리면 AI 가 읽고 재무·장비·문서함으로 보냅니다.') }}</div>
                     @endif
                     @if($aiAvailable)
@@ -252,36 +275,60 @@
                     @endif
                 </form>
             @else
-                {{-- 공지 전용 방이라도 답글은 쓸 수 있다 — 안내만 하고 길을 막아 두면 거짓말이 된다. --}}
-                <form id="composer-form" method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
-                    @csrf
-                    <input type="hidden" name="parent_id" id="parent-id" value="">
-                    <div class="replying" id="replying" hidden>
-                        <span id="replying-text"></span>
-                        <button type="button" id="replying-cancel" aria-label="답장 취소">×</button>
-                    </div>
-                    <div class="mention-pop" id="mention-pop" hidden></div>
-                    <div class="cbar">
-                        <button class="plus" type="button" id="btn-file" aria-label="파일 첨부">＋</button>
-                        @if($aiAvailable)
-                            <button class="aibtn" type="button" id="btn-ai" aria-label="AI 에게 묻기" title="AI 에게 묻기">AI</button>
-                        @endif
-                        <textarea name="body" id="body" maxlength="4000" rows="1" placeholder="공지의 [답글] 을 눌러 답을 남겨 주세요"></textarea>
-                        <button class="send" type="submit" id="btn-send">{{ __('전송') }}</button>
-                    </div>
-                    <input type="file" name="files[]" id="files" multiple
-                           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
-                    <div class="picked" id="picked"></div>
-                    <div class="hint">{{ __('이 방은 공지 전용입니다 — 새 글은 관리자만 쓰고, 각 공지에는 누구나 답글을 달 수 있습니다.') }}</div>
-                </form>
+                {{-- 공지 전용 방 — 새 글 칸 대신 길을 알려 준다. 답글은 각 공지의 [답글] 이 연다
+                     (새 글 칸을 두고 누르면 막히게 하면 그 칸이 거짓말이 된다). --}}
+                <div class="readonly">{{ __('이 방은 공지 전용입니다 — 새 글은 관리자만 쓰고, 각 공지에는 누구나 답글을 달 수 있습니다.') }}</div>
             @endif
         </section>
     </div>
 
     <div class="sheet-back" id="sheet-back"></div>
+    {{-- 방 정보 — 무슨 방인지(설명) · 누가 있는지 · 초대 · 나가기. --}}
     <div class="sheet" id="sheet">
+        <div class="about" id="about">
+            <div class="about-text" id="about-text">{{ $room->description ?: __('방 설명이 없습니다.') }}</div>
+            @if($canEditAbout)
+                <button type="button" class="linkbtn" id="btn-about">{{ __('설명 고치기') }}</button>
+            @endif
+        </div>
         <h2>{{ __('참여자') }} <span id="sheet-count" style="color:#6b7280;font-weight:400"></span></h2>
+        @if($canInvite)
+            {{-- 초대는 1:1 을 걸 수 있는 사람까지만 — 같은 명단을 쓴다. --}}
+            <div class="invite">
+                <input type="search" id="invite-q" placeholder="{{ __('초대할 사람 이름') }}" autocomplete="off">
+                <div id="invite-list"></div>
+            </div>
+        @endif
         <div id="sheet-list"></div>
+        @if($canLeave)
+            <form method="POST" action="{{ route('communication.leave', ['room' => $room]) }}"
+                  onsubmit="return confirm(t('이 방에서 나갈까요? 다시 들어오려면 방 찾기나 초대가 필요합니다.'))" style="margin-top:14px">
+                @csrf
+                <button type="submit" class="leavebtn">{{ __('이 방에서 나가기') }}</button>
+            </form>
+        @endif
+    </div>
+
+    {{-- 스레드 — 글 하나와 그 아래 답글. 답글은 여기서 쓴다. --}}
+    <div class="sheet thread-sheet" id="thread-sheet" role="dialog" aria-label="{{ __('스레드') }}">
+        <div class="thread-head">
+            <h2>{{ __('스레드') }}</h2>
+            <button type="button" class="linkbtn" id="thread-close" aria-label="{{ __('닫기') }}">✕</button>
+        </div>
+        <div id="thread-body-list"></div>
+        <form id="thread-form" method="POST" action="{{ route('communication.store', ['room' => $room]) }}" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" name="parent_id" id="parent-id" value="">
+            <div class="mention-pop" id="thread-mention-pop" hidden></div>
+            <div class="cbar">
+                <button class="plus" type="button" id="thread-btn-file" aria-label="파일 첨부">＋</button>
+                <textarea name="body" id="thread-input" maxlength="4000" rows="1" placeholder="{{ __('답글 입력') }}"></textarea>
+                <button class="send" type="submit" id="thread-send">{{ __('전송') }}</button>
+            </div>
+            <input type="file" name="files[]" id="thread-files" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic">
+            <div class="picked" id="thread-picked"></div>
+            <label class="broadcast"><input type="checkbox" name="broadcast" value="1" id="thread-broadcast"> {{ __('방에도 보내기') }}</label>
+        </form>
     </div>
 
     <div class="sheet" id="pins-sheet" role="dialog" aria-label="{{ __('고정한 글') }}">
@@ -350,6 +397,20 @@
     var pickingId = null;   // 반응 고르는 줄을 펼친 글
     var pinsUrl = '{{ route('communication.pins', ['room' => $room], false) }}';
     var pins = [];
+    var openThreadId = null;   // 지금 열려 있는 스레드의 원글
+    var roomDescription = @json((string) ($room->description ?? ''));
+
+    /**
+     * 방 흐름에서 접히는 글 — 사람이 쓴 답글 중 "방에도 보내기" 를 안 고른 것.
+     * AI·시스템의 답은 방 전체에 대한 답이라 방에 그대로 보인다.
+     */
+    function folded(m) { return !!m.parentId && !m.broadcast && m.kind !== 'system'; }
+
+    /** 원글 아래 "💬 답글 N개" — 누르면 스레드가 열린다. */
+    function repliesHtml(m) {
+        if (!m.replyCount || m.parentId) return '';
+        return '<button type="button" class="replies" onclick="window.Chat.thread(' + m.id + ')">💬 ' + m.replyCount + t('개의 답글') + '</button>';
+    }
 
     function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
     function escRe(s) { return s.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&'); }
@@ -430,7 +491,7 @@
         return '<div class="notice-card ' + (ai ? 'ai' : '') + (m.priority === 'urgent' ? ' urgent' : '') + '" id="message-' + m.id + '">' +
             '<b>' + (m.pinned ? '📌 ' : '') + esc(m.title || (ai ? '🤖 AI' : t('공지'))) + '</b>' +
             urgentTag(m) + quoteHtml(m) + bodyHtml(m) + filesHtml(m.files) +
-            reactionsHtml(m, true) + toolsHtml(m, 'margin-top:8px') +
+            reactionsHtml(m, true) + repliesHtml(m) + toolsHtml(m, 'margin-top:8px') +
             '</div>';
     }
 
@@ -449,7 +510,7 @@
         var bubble = '<div class="bubble' + (m.removed ? ' gone' : '') + (m.priority === 'urgent' ? ' urgent' : '') + '">' +
             urgentTag(m) + quoteHtml(m) + bodyHtml(m) + '</div>';
         var body = m.removed ? bubble : bubble + filesHtml(m.files);
-        var rx = reactionsHtml(m, false);
+        var rx = reactionsHtml(m, false) + repliesHtml(m);
 
         if (m.mine) {
             return '<div class="row mine" id="message-' + m.id + '" data-body="' + esc(m.body) + '">' +
@@ -485,6 +546,9 @@
             existing.outerHTML = htmlFor(m);
             return;
         }
+
+        // 접히는 답글은 방 흐름에 그리지 않는다 — 원글의 "답글 N개" 가 대신 알린다.
+        if (folded(m)) return;
 
         // 아직 불러오지 않은 옛 글이 바뀐 것 — 아래에 붙이면 순서가 뒤집힌다.
         // 위로 올려 과거를 불러올 때 바뀐 모습 그대로 함께 온다.
@@ -555,6 +619,7 @@
     function closeSheets() {
         Array.prototype.forEach.call(document.querySelectorAll('.sheet'), function (s) { s.style.display = 'none'; });
         document.getElementById('sheet-back').style.display = 'none';
+        openThreadId = null;
     }
     document.getElementById('btn-members').addEventListener('click', function () {
         fetch(membersUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
@@ -586,6 +651,34 @@
                 .catch(function (e) { alert(e.message || t('알림 설정을 바꾸지 못했습니다.')); });
         });
     });
+
+    // ── 스레드 ─────────────────────────────────────────────────────
+    function threadItemHtml(m, isParent) {
+        return '<div class="t-item' + (isParent ? ' t-parent' : '') + '" id="thread-message-' + m.id + '">' +
+            '<div class="t-who"><b>' + esc(m.sender) + '</b> <span>' + esc(m.sentOn ? m.sentOn.slice(5).replace('-', '/') + ' ' : '') + esc(m.sentAt || '') + '</span>' +
+            (m.broadcast ? ' <span class="t-bc">' + t('방에도 보냄') + '</span>' : '') + '</div>' +
+            '<div class="t-text' + (m.removed ? ' gone' : '') + '">' + urgentTag(m) + bodyHtml(m) + '</div>' +
+            filesHtml(m.files) + reactionsHtml(m, isParent && m.kind === 'announcement') + '</div>';
+    }
+
+    function loadThread(id, highlightId) {
+        if (!id) return;
+        fetch(roomBase + '/thread/' + id, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                if (!d || openThreadId !== id) return;
+                if (d.parent) byId[d.parent.id] = Object.assign(byId[d.parent.id] || {}, d.parent);
+                (d.replies || []).forEach(function (m) { byId[m.id] = m; });
+                var list = document.getElementById('thread-body-list');
+                list.innerHTML = (d.parent ? threadItemHtml(d.parent, true) : '') +
+                    '<div class="t-count">' + (d.replies || []).length + t('개의 답글') + '</div>' +
+                    (d.replies || []).map(function (m) { return threadItemHtml(m, false); }).join('');
+                var target = highlightId ? document.getElementById('thread-message-' + highlightId) : null;
+                if (target) { target.scrollIntoView({ block: 'center' }); target.classList.add('flash'); }
+                else list.scrollTop = list.scrollHeight;
+            })
+            .catch(function () {});
+    }
 
     // ── 꽂아 둔 글 ──────────────────────────────────────────────────
     function loadPins() {
@@ -645,6 +738,7 @@
                 .then(function (d) {
                     pickingId = null;
                     if (byId[id]) { byId[id].reactions = d.reactions || []; render(byId[id]); }
+                    if (openThreadId) loadThread(openThreadId);
                 })
                 .catch(function (e) { alert(e.message || t('반응을 남기지 못했습니다.')); });
         },
@@ -669,27 +763,25 @@
                     if (!data) throw new Error();
                     var fresh = (data.messages || []).filter(function (m) { return order.indexOf(m.id) < 0; });
                     fresh.forEach(function (m) { byId[m.id] = m; });
-                    order = fresh.map(function (m) { return m.id; }).concat(order);
+                    order = fresh.filter(function (m) { return !folded(m); }).map(function (m) { return m.id; }).concat(order);
                     hasOlder = !!data.hasOlder;
                     rebuild();
                 })
                 .catch(function () { if (btn) { btn.disabled = false; btn.textContent = t('이전 대화 더 보기'); } });
         },
+        /** [답글] — 그 글의 스레드를 연다. 답글의 답글도 원글 스레드로 모인다(대화가 계단이 되지 않게). */
         reply: function (id) {
             var target = byId[id];
-            var box = document.getElementById('replying');
-            var field = document.getElementById('parent-id');
-            if (!box || !field || !target) return;
-
-            // 답글은 원글에만 달린다 — 답글의 답글까지 허용하면 대화가 계단이 된다.
-            field.value = target.parentId ? target.parentId : id;
-            var shown = byId[field.value] || target;
-            document.getElementById('replying-text').textContent =
-                '↩ ' + (shown.sender ? shown.sender + ': ' : '') + (shown.body || '').slice(0, 50);
-            box.hidden = false;
-
-            var body = document.getElementById('body');
-            if (body) body.focus();
+            window.Chat.thread(target && target.parentId ? target.parentId : id, true);
+        },
+        /** 스레드 창 — 원글과 답글 전부. 답글 칸은 그 원글에 단다. */
+        thread: function (id, focusInput, highlightId) {
+            openSheet('thread-sheet');          // 다른 시트를 닫으며 열린 스레드 표시도 지우므로 먼저 연다
+            openThreadId = id;
+            document.getElementById('parent-id').value = id;
+            document.getElementById('thread-body-list').innerHTML = '<div class="t-empty">' + t('불러오는 중…') + '</div>';
+            loadThread(id, highlightId);
+            if (focusInput) setTimeout(function () { document.getElementById('thread-input').focus(); }, 50);
         },
         edit: function (id) {
             var row = document.getElementById('message-' + id);
@@ -837,9 +929,13 @@
 
                 // 새로 도착한 남의 글만 센다 — 첫 진입의 과거 글이나 내 글, 수정으로 인한
                 // 재그리기에 소리가 나면 그날로 음소거된다.
+                // 접힌 답글은 나를 불렀을 때만 소리를 낸다 — 남의 스레드 잡담에 울리면 소리를 끈다.
                 var fresh = (data.messages || []).filter(function (m) {
-                    return !first && !m.mine && m.id > lastId;
+                    return !first && !m.mine && m.id > lastId && (!folded(m) || m.mentionsMe);
                 }).length;
+                var touchesThread = openThreadId && (data.messages || []).some(function (m) {
+                    return m.id === openThreadId || m.parentId === openThreadId;
+                });
 
                 // 누가 글을 꽂거나 뺐으면 위쪽 띠도 다시 받는다(처음 열 때는 늘 받는다).
                 var pinChanged = first || (data.messages || []).some(function (m) {
@@ -853,9 +949,16 @@
                 if (first) { hasOlder = !!data.hasOlder; paintOlder(); }
 
                 if (fresh > 0) { window.ChatChime && window.ChatChime.ring(fresh); }
+                if (touchesThread) loadThread(openThreadId);
 
-                // 처음 열 때: 알림에서 온 글이 있으면 그 글로, 아니면 맨 아래(가장 최근)로.
-                if (first && flashFocus()) {
+                // 알림·검색에서 온 글이 접힌 답글이면 — 원글로 가서 그 스레드를 열어 보인다.
+                var target = first && focusId ? byId[focusId] : null;
+                if (target && folded(target)) {
+                    var answered = target.parentId;
+                    focusId = answered;
+                    flashFocus();
+                    window.Chat.thread(answered, false, target.id);
+                } else if (first && flashFocus()) {
                     // 그 글에 머문다
                 } else if (data.messages && data.messages.length && (atBottom || first)) {
                     window.scrollTo(0, document.body.scrollHeight);
@@ -871,61 +974,17 @@
     window.addEventListener('pagehide', function () { clearTimeout(timer); });
 
     // ── 입력창 ─────────────────────────────────────────────────────
-    var cancel = document.getElementById('replying-cancel');
-    if (cancel) {
-        cancel.addEventListener('click', function () {
-            document.getElementById('parent-id').value = '';
-            document.getElementById('replying').hidden = true;
-        });
-    }
+    // 방의 새 글 칸과 스레드의 답글 칸이 같은 손잡이를 쓴다 — 한쪽만 @ 목록이 뜨거나
+    // 한쪽만 엔터로 보내지면 사람들은 어느 칸이 어떻게 동작하는지 외워야 한다.
 
-    var form = document.getElementById('composer-form');
-    if (form) {
-        var body = document.getElementById('body');
-        var files = document.getElementById('files');
-        var picked = document.getElementById('picked');
-
-        document.getElementById('btn-file').addEventListener('click', function () { files.click(); });
-
-        // [AI] — "@AI" 를 대신 써 준다. 이미 부른 뒤라면 두 번 붙이지 않는다.
-        var ai = document.getElementById('btn-ai');
-        if (ai) {
-            ai.addEventListener('click', function () {
-                if (!/@\s*(ai|에이아이)\b/i.test(body.value)) {
-                    body.value = '@AI ' + body.value.replace(/^\s+/, '');
-                }
-                body.focus();
-                body.setSelectionRange(body.value.length, body.value.length);
-                body.dispatchEvent(new Event('input'));
-            });
-        }
-        files.addEventListener('change', function () {
-            var names = Array.prototype.map.call(files.files, function (f) { return f.name; });
-            picked.textContent = names.length ? '📎 ' + names.join(', ') : '';
-            picked.style.display = names.length ? 'block' : 'none';
-        });
-
-        // 줄이 늘면 입력창도 자란다 — 긴 보고를 좁은 칸에 밀어 넣지 않게.
-        body.addEventListener('input', function () {
-            body.style.height = 'auto';
-            body.style.height = Math.min(120, body.scrollHeight) + 'px';
-        });
-
-        // PC 에서는 엔터로 보내고, 줄바꿈은 Shift+엔터. 폰에서는 엔터가 줄바꿈이다.
-        body.addEventListener('keydown', function (e) {
-            var phone = window.matchMedia('(max-width: 820px)').matches;
-            if (!phone && e.key === 'Enter' && !e.shiftKey && pop.hidden) { e.preventDefault(); form.requestSubmit(); }
-            if (!pop.hidden && e.key === 'Escape') { pop.hidden = true; }
-        });
-
-        // ── @ 부르기 ───────────────────────────────────────────────
-        // "@" 를 치면 방 사람 목록이 뜬다. 고르면 "@이름 " 을 대신 써 줄 뿐 — 누구를
-        // 불렀는지는 서버가 글자에서 읽는다(부르는 길이 둘이면 한쪽만 알림이 간다).
-        var pop = document.getElementById('mention-pop');
-
-        function mentionToken() {
-            var pos = body.selectionStart || 0;
-            var m = body.value.slice(0, pos).match(/(^|\s)@([^\s@]*)$/);
+    /**
+     * "@" 를 치면 방 사람 목록이 뜬다. 고르면 "@이름 " 을 대신 써 줄 뿐 — 누구를
+     * 불렀는지는 서버가 글자에서 읽는다(부르는 길이 둘이면 한쪽만 알림이 간다).
+     */
+    function attachMentionPicker(input, pop) {
+        function token() {
+            var pos = input.selectionStart || 0;
+            var m = input.value.slice(0, pos).match(/(^|\s)@([^\s@]*)$/);
             return m ? { start: pos - m[2].length - 1, end: pos, q: m[2].toLowerCase() } : null;
         }
 
@@ -943,8 +1002,8 @@
             return list.slice(0, 6);
         }
 
-        function paintPop() {
-            var tok = mentionToken();
+        function paint() {
+            var tok = token();
             var list = tok ? suggestions(tok.q) : [];
             if (!list.length) { pop.hidden = true; return; }
             pop.innerHTML = list.map(function (s) {
@@ -957,19 +1016,64 @@
         pop.addEventListener('mousedown', function (e) { e.preventDefault(); });   // 입력창 포커스를 뺏지 않게
         pop.addEventListener('click', function (e) {
             var b = e.target.closest('button[data-name]');
-            var tok = mentionToken();
+            var tok = token();
             if (!b || !tok) return;
             var insert = '@' + b.getAttribute('data-name') + ' ';
-            body.value = body.value.slice(0, tok.start) + insert + body.value.slice(tok.end);
+            input.value = input.value.slice(0, tok.start) + insert + input.value.slice(tok.end);
             var caret = tok.start + insert.length;
-            body.focus();
-            body.setSelectionRange(caret, caret);
+            input.focus();
+            input.setSelectionRange(caret, caret);
             pop.hidden = true;
-            body.dispatchEvent(new Event('input'));
+            input.dispatchEvent(new Event('input'));
         });
-        body.addEventListener('input', paintPop);
-        body.addEventListener('click', paintPop);
-        body.addEventListener('blur', function () { setTimeout(function () { pop.hidden = true; }, 150); });
+        input.addEventListener('input', paint);
+        input.addEventListener('click', paint);
+        input.addEventListener('blur', function () { setTimeout(function () { pop.hidden = true; }, 150); });
+    }
+
+    /** 입력칸 하나를 꾸린다 — 파일 고르기 · 줄 늘리기 · PC 엔터 보내기 · @ 목록. */
+    function wireComposer(form, input, fileBtn, fileInput, picked, pop) {
+        fileBtn.addEventListener('click', function () { fileInput.click(); });
+        fileInput.addEventListener('change', function () {
+            var names = Array.prototype.map.call(fileInput.files, function (f) { return f.name; });
+            picked.textContent = names.length ? '📎 ' + names.join(', ') : '';
+            picked.style.display = names.length ? 'block' : 'none';
+        });
+
+        // 줄이 늘면 입력창도 자란다 — 긴 보고를 좁은 칸에 밀어 넣지 않게.
+        input.addEventListener('input', function () {
+            input.style.height = 'auto';
+            input.style.height = Math.min(120, input.scrollHeight) + 'px';
+        });
+
+        // PC 에서는 엔터로 보내고, 줄바꿈은 Shift+엔터. 폰에서는 엔터가 줄바꿈이다.
+        input.addEventListener('keydown', function (e) {
+            var phone = window.matchMedia('(max-width: 820px)').matches;
+            if (!phone && e.key === 'Enter' && !e.shiftKey && pop.hidden) { e.preventDefault(); form.requestSubmit(); }
+            if (!pop.hidden && e.key === 'Escape') { pop.hidden = true; }
+        });
+
+        attachMentionPicker(input, pop);
+    }
+
+    var form = document.getElementById('composer-form');
+    if (form) {
+        var body = document.getElementById('body');
+        wireComposer(form, body, document.getElementById('btn-file'), document.getElementById('files'),
+            document.getElementById('picked'), document.getElementById('mention-pop'));
+
+        // [AI] — "@AI" 를 대신 써 준다. 이미 부른 뒤라면 두 번 붙이지 않는다.
+        var ai = document.getElementById('btn-ai');
+        if (ai) {
+            ai.addEventListener('click', function () {
+                if (!/@\s*(ai|에이아이)\b/i.test(body.value)) {
+                    body.value = '@AI ' + body.value.replace(/^\s+/, '');
+                }
+                body.focus();
+                body.setSelectionRange(body.value.length, body.value.length);
+                body.dispatchEvent(new Event('input'));
+            });
+        }
 
         // ── 🚨 긴급 ────────────────────────────────────────────────
         var urgentBtn = document.getElementById('btn-urgent');
@@ -981,6 +1085,84 @@
                 document.getElementById('urgent-hint').hidden = !on;
             });
         }
+    }
+
+    // ── 스레드 창의 답글 칸 — 제자리에서 보낸다(방 화면을 다시 불러오면 보던 스레드가 닫힌다) ──
+    var threadForm = document.getElementById('thread-form');
+    var threadInput = document.getElementById('thread-input');
+    var threadFiles = document.getElementById('thread-files');
+    wireComposer(threadForm, threadInput, document.getElementById('thread-btn-file'), threadFiles,
+        document.getElementById('thread-picked'), document.getElementById('thread-mention-pop'));
+    threadForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!threadInput.value.trim() && !threadFiles.files.length) return;
+        var send = document.getElementById('thread-send');
+        send.disabled = true;
+        fetch(threadForm.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+            body: new FormData(threadForm)
+        }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+            .then(function () {
+                threadInput.value = '';
+                threadInput.style.height = 'auto';
+                threadFiles.value = '';
+                document.getElementById('thread-picked').style.display = 'none';
+                document.getElementById('thread-broadcast').checked = false;
+                loadThread(openThreadId);
+                poll();
+            })
+            .catch(function () { alert(t('답글을 보내지 못했습니다.')); })
+            .finally(function () { send.disabled = false; });
+    });
+    document.getElementById('thread-close').addEventListener('click', closeSheets);
+
+    // ── 방 정보 — 설명 고치기 · 초대 ────────────────────────────────
+    var aboutBtn = document.getElementById('btn-about');
+    if (aboutBtn) {
+        aboutBtn.addEventListener('click', function () {
+            var el = document.getElementById('about-text');
+            var next = window.prompt(t('이 방은 무슨 이야기를 하는 방인가요?'), roomDescription || '');
+            if (next === null) return;
+            fetch(roomBase + '/about', {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                body: JSON.stringify({ description: next })
+            }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                .then(function (d) { roomDescription = d.description || ''; el.textContent = roomDescription || t('방 설명이 없습니다.'); })
+                .catch(function () { alert(t('설명을 고치지 못했습니다.')); });
+        });
+    }
+
+    var inviteQ = document.getElementById('invite-q');
+    if (inviteQ) {
+        var inviteTimer = null;
+        var paintInvitees = function () {
+            fetch(roomBase + '/invitees?q=' + encodeURIComponent(inviteQ.value.trim()), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : { people: [] }; })
+                .then(function (d) {
+                    document.getElementById('invite-list').innerHTML = (d.people || []).map(function (p) {
+                        return '<div class="inv"><span>' + esc(p.name) + '</span><button type="button" data-id="' + p.id + '">' + t('초대') + '</button></div>';
+                    }).join('') || '<div class="inv-empty">' + t('초대할 수 있는 사람이 없습니다.') + '</div>';
+                });
+        };
+        inviteQ.addEventListener('input', function () { clearTimeout(inviteTimer); inviteTimer = setTimeout(paintInvitees, 250); });
+        inviteQ.addEventListener('focus', paintInvitees);
+        document.getElementById('invite-list').addEventListener('click', function (e) {
+            var b = e.target.closest('button[data-id]');
+            if (!b) return;
+            b.disabled = true;
+            post(roomBase + '/invite', { employee_id: parseInt(b.getAttribute('data-id'), 10) })
+                .then(function () {
+                    b.textContent = t('초대함');
+                    fetch(membersUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) { paintMembers(d.members, (d.members || []).filter(function (m) { return m.online; }).length); openMembers(); });
+                })
+                .catch(function () { b.disabled = false; alert(t('초대하지 못했습니다.')); });
+        });
     }
 
     poll();

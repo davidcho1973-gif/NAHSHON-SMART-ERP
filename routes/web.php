@@ -415,6 +415,8 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/attendance-app/messages/activity/{notification}/open', [CommunicationController::class, 'openActivity'])->name('communication.activity.open');
         // 대화 검색 — 볼 수 있는 방의 글만. 역시 {room} 보다 먼저.
         Route::get('/attendance-app/messages/search', [CommunicationController::class, 'search'])->name('communication.search');
+        // 방 찾기 — 같은 회사의 주제방을 둘러보고 스스로 들어간다. 역시 {room} 보다 먼저.
+        Route::get('/attendance-app/messages/browse', [CommunicationController::class, 'browse'])->name('communication.browse');
 
         // 채팅 화면에서 방 만들기·정리 — 규칙은 관리 서비스 한 곳에 있고 여기서는 부르기만 한다.
         Route::post('/attendance-app/messages/rooms', [CommunicationController::class, 'storeRoom'])->name('communication.room.store');
@@ -428,6 +430,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/attendance-app/messages/{room}/notify', [CommunicationController::class, 'notifyLevel'])->name('communication.notify');
         // 방 위에 꽂아 둔 글 · ✅ 확인 같은 반응 · 꽂기/빼기
         Route::get('/attendance-app/messages/{room}/pins', [CommunicationController::class, 'pins'])->name('communication.pins');
+        // 주제방 들어가기·나가기 · 초대 · 방 설명 · 스레드
+        Route::post('/attendance-app/messages/{room}/join', [CommunicationController::class, 'join'])->name('communication.join');
+        Route::post('/attendance-app/messages/{room}/leave', [CommunicationController::class, 'leave'])->name('communication.leave');
+        Route::get('/attendance-app/messages/{room}/invitees', [CommunicationController::class, 'invitees'])->name('communication.invitees');
+        Route::post('/attendance-app/messages/{room}/invite', [CommunicationController::class, 'invite'])->name('communication.invite');
+        Route::patch('/attendance-app/messages/{room}/about', [CommunicationController::class, 'about'])->name('communication.about');
+        Route::get('/attendance-app/messages/{room}/thread/{message}', [CommunicationController::class, 'thread'])->name('communication.thread');
         Route::post('/attendance-app/messages/{room}/{message}/react', [CommunicationController::class, 'react'])->name('communication.react');
         Route::post('/attendance-app/messages/{room}/{message}/pin', [CommunicationController::class, 'pin'])->name('communication.pin');
         Route::patch('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'updateMessage'])->name('communication.message.update');

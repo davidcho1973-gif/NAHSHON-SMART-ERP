@@ -232,10 +232,11 @@ class CommunicationService
     {
         $query = CommunicationRoom::query()->active();
 
-        // DMs are always private — even admins only see the ones they belong to.
+        // 1:1 · 그룹방 · 주제방은 명단에 있어야 목록에 보인다 — 관리자라도 같다.
+        // (1:1 · 그룹방은 비공개라서, 주제방은 "골라 들어가는 방" 이라서.)
         if ($this->hasAllSiteAccess($user)) {
             return $query->where(function (Builder $query) use ($user): void {
-                $query->where('type', '!=', CommunicationRoom::TYPE_DIRECT)
+                $query->whereNotIn('type', CommunicationRoom::LISTED_BY_MEMBERSHIP)
                     ->orWhereHas('members', fn (Builder $memberQuery) => $this->applyMemberIdentity($memberQuery, $user));
             });
         }
@@ -243,11 +244,12 @@ class CommunicationService
         return $query->where(function (Builder $query) use ($user): void {
             $query->whereHas('members', fn (Builder $memberQuery) => $this->applyMemberIdentity($memberQuery, $user));
 
-            // Scope-based visibility never covers DMs (they carry no company/site/team).
+            // 권한 범위(회사·현장·팀)로 보이는 방에도 위 세 종류는 들지 않는다.
+            $listed = CommunicationRoom::LISTED_BY_MEMBERSHIP;
             match ($user->access_scope) {
-                'company' => $query->orWhere(fn (Builder $q) => $q->where('type', '!=', CommunicationRoom::TYPE_DIRECT)->where('company_id', $user->allowed_company_id)),
-                'site' => $query->orWhere(fn (Builder $q) => $q->where('type', '!=', CommunicationRoom::TYPE_DIRECT)->where('site_id', $user->allowed_site_id)),
-                'team' => $query->orWhere(fn (Builder $q) => $q->where('type', '!=', CommunicationRoom::TYPE_DIRECT)->where('team_id', $user->allowed_team_id)),
+                'company' => $query->orWhere(fn (Builder $q) => $q->whereNotIn('type', $listed)->where('company_id', $user->allowed_company_id)),
+                'site' => $query->orWhere(fn (Builder $q) => $q->whereNotIn('type', $listed)->where('site_id', $user->allowed_site_id)),
+                'team' => $query->orWhere(fn (Builder $q) => $q->whereNotIn('type', $listed)->where('team_id', $user->allowed_team_id)),
                 'self' => null,
                 default => null,
             };
@@ -272,8 +274,8 @@ class CommunicationService
             return false;
         }
 
-        // DMs bypass role/scope entirely — only the two participants may enter.
-        if ($room->type === CommunicationRoom::TYPE_DIRECT) {
+        // 1:1 · 그룹방은 역할·범위를 보지 않는다 — 명단에 있는 사람만 들어간다.
+        if (in_array($room->type, CommunicationRoom::MEMBERS_ONLY, true)) {
             return $this->membershipForUser($room, $user)->exists();
         }
 
@@ -283,6 +285,13 @@ class CommunicationService
 
         if ($this->membershipForUser($room, $user)->exists()) {
             return true;
+        }
+
+        // 주제방은 같은 회사면 들여다보고 들어올 수 있다 — 그래야 "방 찾기" 가 된다.
+        if ($room->type === CommunicationRoom::TYPE_TOPIC) {
+            $companyId = $this->companyIdOf($user);
+
+            return $companyId !== null && (int) $room->company_id === $companyId;
         }
 
         return match ($user->access_scope) {
@@ -365,6 +374,11 @@ class CommunicationService
         ]);
 
         $this->markMessageRead($message, $user);
+
+        // 답글이 달리면 원글도 "바뀐 글" 이 된다 — 열려 있는 화면의 "답글 N개" 가 따라 오르게.
+        if ($message->parent_id) {
+            CommunicationMessage::query()->whereKey($message->parent_id)->first()?->touch();
+        }
 
         if ($message->kind === CommunicationMessage::KIND_ANNOUNCEMENT && $message->parent_id === null) {
             $this->fanOutAnnouncement($message, $room);
@@ -724,16 +738,7 @@ class CommunicationService
             return false;
         }
 
-        $membership = $this->membershipForUser($room, $user)->first();
-        if (! $membership) {
-            // 직원 기록이 없는 관리자 계정도 있다 — 그때는 계정으로 구성원이 된다.
-            $membership = $user->employee
-                ? $this->ensureRoomMember($room, $user->employee)
-                : CommunicationRoomMember::query()->updateOrCreate(
-                    ['communication_room_id' => $room->id, 'user_id' => $user->id],
-                    ['role' => 'member', 'status' => 'active', 'joined_at' => Carbon::now()],
-                );
-        }
+        $membership = $this->membershipForUser($room, $user)->first() ?? $this->addMember($room, $user);
 
         $membership->update(['notify_level' => $level]);
 
@@ -960,6 +965,21 @@ class CommunicationService
      */
     public function directCandidatesForUser(User $user, ?string $search = null): Collection
     {
+        $query = $this->reachablePeopleQuery($user);
+
+        if (filled($search)) {
+            $query->where('name', 'like', '%' . trim($search) . '%');
+        }
+
+        return $query->orderBy('name')->limit(30)->get();
+    }
+
+    /**
+     * 이 사람이 말을 걸 수 있는 직원 — 1:1 을 시작하거나 방에 초대할 수 있는 범위.
+     * 두 일이 같은 명단을 쓴다: 1:1 로는 못 부르는 사람을 초대로는 부를 수 있으면 규칙이 샌다.
+     */
+    public function reachablePeopleQuery(User $user): Builder
+    {
         $query = Employee::query()
             ->where('employment_status', 'active')
             ->when($user->employee_id, fn (Builder $q) => $q->where('id', '!=', $user->employee_id));
@@ -977,11 +997,148 @@ class CommunicationService
             }
         }
 
-        if (filled($search)) {
-            $query->where('name', 'like', '%' . trim($search) . '%');
+        return $query;
+    }
+
+    // ---- 주제방 · 그룹방 — 스스로 들어오고 나가고 초대한다 ------------------------
+
+    /** 이 사람의 회사 — 직원 기록이 있으면 그 회사, 없으면 계정에 걸린 회사. */
+    public function companyIdOf(User $user): ?int
+    {
+        $id = $user->employee?->company_id ?? $user->allowed_company_id;
+
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * "방 찾기" 에 보일 주제방 — 같은 회사의 공개 방 중 아직 안 들어간 것.
+     * 그룹방(비공개)은 여기 나오지 않는다. 초대로만 들어간다.
+     *
+     * @return Collection<int, CommunicationRoom>
+     */
+    public function browsableTopicsFor(User $user): Collection
+    {
+        $companyId = $this->companyIdOf($user);
+        if (! $this->hasAllSiteAccess($user) && $companyId === null) {
+            return collect();
         }
 
-        return $query->orderBy('name')->limit(30)->get();
+        return CommunicationRoom::query()
+            ->active()
+            ->where('type', CommunicationRoom::TYPE_TOPIC)
+            ->whereDoesntHave('members', fn (Builder $m) => $this->applyMemberIdentity($m, $user))
+            ->when(! $this->hasAllSiteAccess($user), fn (Builder $q) => $q->where('company_id', $companyId))
+            ->withCount('activeMembers')
+            ->orderByRaw('last_message_at desc nulls last')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /** 주제방에 스스로 들어간다. 그룹방은 초대로만. */
+    public function joinRoom(User $user, CommunicationRoom $room): bool
+    {
+        if ($room->type !== CommunicationRoom::TYPE_TOPIC || ! $this->canAccessRoom($user, $room)) {
+            return false;
+        }
+
+        $this->addMember($room, $user);
+
+        return true;
+    }
+
+    /**
+     * 방에서 나온다 — 주제방·그룹방만. 현장방·공지방은 지시가 오가는 방이라 나갈 수 없다
+     * (나가도 현장 배정이 다시 넣는다. 나간 줄 알았는데 남아 있으면 그게 더 나쁘다).
+     * 명단에서 지우지 않고 "나감" 으로 둔다 — 누가 언제까지 있었는지가 기록이다.
+     */
+    public function leaveRoom(User $user, CommunicationRoom $room): bool
+    {
+        if (! $room->isSelfServe()) {
+            return false;
+        }
+
+        return $this->membershipForUser($room, $user)->update(['status' => 'left']) > 0;
+    }
+
+    /** 초대할 수 있는가 — 주제방·그룹방에 들어와 있는 사람이면. */
+    public function canInvite(?User $user, CommunicationRoom $room): bool
+    {
+        return $user !== null && $room->isSelfServe() && $this->membershipForUser($room, $user)->exists();
+    }
+
+    /**
+     * 사람을 방에 들인다. 1:1 을 걸 수 있는 범위의 사람만 — 그 밖의 사람을 초대로 끌어들이면
+     * 협력사 잠금 같은 규칙이 샌다. 초대받은 사람의 활동함에 남는다.
+     */
+    public function invite(User $inviter, CommunicationRoom $room, Employee $target): bool
+    {
+        if (! $this->canInvite($inviter, $room)
+            || ! $this->reachablePeopleQuery($inviter)->whereKey($target->id)->exists()) {
+            return false;
+        }
+
+        $this->ensureRoomMember($room, $target);
+
+        CommunicationNotification::query()->create([
+            'user_id' => $target->user?->id,
+            'employee_id' => $target->id,
+            'communication_room_id' => $room->id,
+            'type' => CommunicationNotification::TYPE_INVITE,
+            'title' => mb_substr((string) ($inviter->employee?->name ?? $inviter->name), 0, 255),
+            'body' => $room->name,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * 초대할 만한 사람 — 말을 걸 수 있는 사람 중 아직 이 방에 없는 사람.
+     *
+     * @return Collection<int, Employee>
+     */
+    public function inviteCandidates(User $inviter, CommunicationRoom $room, ?string $search = null): Collection
+    {
+        $inside = $room->activeMembers()->whereNotNull('employee_id')->pluck('employee_id');
+
+        return $this->reachablePeopleQuery($inviter)
+            ->whereNotIn('id', $inside->all() ?: [0])
+            ->when(filled($search), fn (Builder $q) => $q->where('name', 'ilike', '%'.trim((string) $search).'%'))
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name']);
+    }
+
+    /** 방 설명(무슨 이야기를 하는 방인지)은 방을 만든 사람과 방을 이끄는 사람이 고친다. */
+    public function canEditAbout(?User $user, CommunicationRoom $room): bool
+    {
+        if (! $user || $room->type === CommunicationRoom::TYPE_DIRECT) {
+            return false;
+        }
+
+        return $this->isLead($user)
+            || $this->membershipForUser($room, $user)->where('role', 'owner')->exists();
+    }
+
+    public function updateAbout(User $user, CommunicationRoom $room, ?string $description): bool
+    {
+        if (! $this->canEditAbout($user, $room)) {
+            return false;
+        }
+
+        $room->update(['description' => $this->nullableText($description)]);
+
+        return true;
+    }
+
+    /** 방 명단에 넣는다 — 직원이면 직원으로, 직원 기록이 없는 관리자 계정이면 계정으로. */
+    public function addMember(CommunicationRoom $room, User $user, string $role = 'member'): CommunicationRoomMember
+    {
+        return $user->employee
+            ? $this->ensureRoomMember($room, $user->employee, $role)
+            : CommunicationRoomMember::query()->updateOrCreate(
+                ['communication_room_id' => $room->id, 'user_id' => $user->id],
+                ['role' => $role, 'status' => 'active', 'joined_at' => Carbon::now()],
+            );
     }
 
     // ---- notification feed (bell) ------------------------------------------

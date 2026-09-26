@@ -26,14 +26,39 @@ class CommunicationRoom extends Model
 
     public const TYPE_TEAM = 'team';
 
+    /** 주제방 — 같은 회사 사람이면 누구나 "방 찾기" 에서 보고 스스로 들어온다(슬랙의 공개 채널). */
+    public const TYPE_TOPIC = 'topic';
+
+    /** 그룹방 — 초대받은 사람만. 관리자라도 명단에 없으면 못 본다(슬랙의 비공개 채널). */
+    public const TYPE_GROUP = 'group';
+
+    /**
+     * 명단에 이름이 있어야 내 채팅 목록에 보이는 방.
+     * 주제방은 들어가기 전까지 목록을 어지럽히지 않는다 — 그것이 "골라 들어가는 방" 이다.
+     */
+    public const LISTED_BY_MEMBERSHIP = [self::TYPE_DIRECT, self::TYPE_GROUP, self::TYPE_TOPIC];
+
+    /** 명단에 있어야만 들어갈 수 있는 방 — 관리자 권한이나 현장 범위로도 열리지 않는다. */
+    public const MEMBERS_ONLY = [self::TYPE_DIRECT, self::TYPE_GROUP];
+
+    /** 사람이 스스로 들어오고 나가고 서로 초대하는 방. 현장 전원을 붓는 "구성원 동기화" 는 쓰지 않는다. */
+    public const SELF_SERVE = [self::TYPE_TOPIC, self::TYPE_GROUP];
+
     public const TYPE_OPTIONS = [
         self::TYPE_SITE_CHAT => '현장 채팅방 (Site Chat)',
         self::TYPE_SITE_ANNOUNCEMENT => '공지 알림방 (Announcements)',
         self::TYPE_SITE_OPS => '현장 상황실 (Ops Room)',
         self::TYPE_COMPANY => '회사 채팅방 (Company)',
         self::TYPE_TEAM => '팀 채팅방 (Crew)',
+        self::TYPE_TOPIC => '주제방 (Topic — 누구나 찾아 들어옴)',
+        self::TYPE_GROUP => '그룹방 (Private — 초대한 사람만)',
         self::TYPE_DIRECT => '직원 1:1 메시지 (Direct)',
     ];
+
+    public function isSelfServe(): bool
+    {
+        return in_array($this->type, self::SELF_SERVE, true);
+    }
 
     public const STATUS_OPTIONS = [
         'active' => 'Active',

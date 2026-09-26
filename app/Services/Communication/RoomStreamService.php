@@ -133,6 +133,26 @@ class RoomStreamService
      *
      * @return array{messages: list<array<string, mixed>>, hasOlder: bool}
      */
+    /**
+     * 스레드 한 줄기 — 원글과 그 아래 답글 전부.
+     *
+     * @return array{parent: array<string, mixed>|null, replies: list<array<string, mixed>>}
+     */
+    public function thread(CommunicationRoom $room, User $user, CommunicationMessage $parent): array
+    {
+        $messages = $this->baseQuery($room)
+            ->where(fn ($q) => $q->whereKey($parent->id)->orWhere('parent_id', $parent->id))
+            ->orderBy('id')
+            ->get();
+
+        $rows = collect($this->rows($messages, $room, $user));
+
+        return [
+            'parent' => $rows->firstWhere('id', (int) $parent->id),
+            'replies' => $rows->where('id', '!=', (int) $parent->id)->values()->all(),
+        ];
+    }
+
     public function older(CommunicationRoom $room, User $user, int $beforeId): array
     {
         $messages = $this->baseQuery($room)
@@ -199,6 +219,8 @@ class RoomStreamService
     {
         return CommunicationMessage::query()
             ->with(['senderEmployee', 'senderUser', 'files', 'room', 'reactions.employee:id,name', 'reactions.user:id,name'])
+            // 원글 아래 "답글 N개" — 지운 답글은 세지 않는다.
+            ->withCount(['replies as reply_count' => fn ($q) => $q->where('status', 'active')->whereNull('removed_at')])
             ->where('communication_room_id', $room->id)
             ->active();
     }
@@ -274,6 +296,9 @@ class RoomStreamService
             'mentionsMe' => $this->calls($viewer, $message, $mentions, $everyone),
             // ✅ 확인 · 👍 … — 누가 눌렀는지까지. 지운 글에는 반응도 감춘다.
             'reactions' => $removed ? [] : $this->communication->reactionSummary($message, $viewer),
+            // 스레드: 답글은 원글 아래로 접힌다. "방에도 보내기" 를 고른 답글만 방에도 보인다.
+            'replyCount' => (int) ($message->reply_count ?? 0),
+            'broadcast' => (bool) ($message->payload['broadcast'] ?? false),
             'pinned' => (bool) $message->is_pinned && ! $removed,
             'pinnedBy' => $message->payload['pinned_by']['name'] ?? null,
             'canPin' => $this->communication->canPin($viewer, $message, $canPostHere),

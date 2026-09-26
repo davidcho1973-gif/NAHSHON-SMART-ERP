@@ -95,6 +95,7 @@
                     @endif
                 </a>
                 <a class="shortcut" id="link-search" href="{{ route('communication.search') }}">🔍 {{ __('검색') }}</a>
+                <a class="shortcut" id="link-browse" href="{{ route('communication.browse') }}"># {{ __('방 찾기') }}</a>
             </div>
 
             <section class="rooms">
@@ -105,6 +106,8 @@
                         'site_ops' => '상황실',
                         'company' => '회사',
                         'team' => '팀',
+                        'topic' => '주제',
+                        'group' => '비공개',
                         'direct' => '1:1',
                     ];
                 @endphp
@@ -163,6 +166,8 @@
                             <option value="team">{{ __('팀 채팅방') }}</option>
                             <option value="company">{{ __('회사 채팅방') }}</option>
                             <option value="site_announcement">{{ __('공지방 (관리자만 글쓰기)') }}</option>
+                            <option value="topic">{{ __('주제방 (같은 회사 누구나 찾아 들어옴)') }}</option>
+                            <option value="group">{{ __('그룹방 (비공개 — 초대한 사람만)') }}</option>
                         </select>
                         @if($siteOptions->isNotEmpty())
                             <select name="site_id" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px">
