@@ -228,6 +228,7 @@ class AppLocaleFollowsChoiceTest extends TestCase
         'attendance-app/ops-room',
         'attendance-app/share',
         'attendance-app/team',
+        'communication/activity',
         'communication/index',
         'communication/show',
         'expense-app/index',

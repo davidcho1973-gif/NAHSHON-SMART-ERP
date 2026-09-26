@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationMessageFile;
+use App\Models\CommunicationNotification;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
 use App\Services\Admin\CommunicationAdminService;
@@ -41,8 +42,10 @@ class CommunicationController extends Controller
             'rooms' => $rooms,
             'roomLabels' => $roomLabels,
             'unreadCounts' => $this->communicationService->unreadCountsForUser($user),
-            'notifications' => $this->communicationService->notificationsForUser($user),
-            'notificationUnread' => $this->communicationService->unreadNotificationCountForUser($user),
+            // 방마다 "나를 부른 것" 수 · 알림 수준 — 조용히 해 둔 방은 흐리게, 부른 방은 @ 로.
+            'personalUnread' => $this->communicationService->personalUnreadByRoom($user),
+            'notifyLevels' => $this->communicationService->notifyLevelsForUser($user, $rooms),
+            'activityUnread' => $this->communicationService->unreadNotificationCountForUser($user),
             'dmCandidates' => $user->employee_id
                 ? $this->communicationService->directCandidatesForUser($user, $request->query('people'))
                 : collect(),
@@ -80,7 +83,70 @@ class CommunicationController extends Controller
     {
         $this->communicationService->markNotificationsRead($request->user());
 
-        return redirect()->route('communication.index');
+        return redirect()->route('communication.activity');
+    }
+
+    /**
+     * 활동함 — 나를 부른 글 · 내 글에 달린 답글 · 공지를 한곳에.
+     *
+     * 방이 열 개가 되면 "누가 나를 찾았나" 를 방마다 들어가 확인할 수 없다.
+     * 슬랙의 "활동" 탭과 같은 자리다.
+     */
+    public function activity(Request $request): View
+    {
+        $user = $request->user();
+        $filter = (string) $request->query('type', 'all');
+        $types = [
+            'mention' => CommunicationNotification::TYPE_MENTION,
+            'reply' => CommunicationNotification::TYPE_REPLY,
+            'announcement' => CommunicationNotification::TYPE_ANNOUNCEMENT,
+        ];
+
+        return view('communication.activity', [
+            'user' => $user,
+            'employee' => $user->employee,
+            'filter' => isset($types[$filter]) ? $filter : 'all',
+            'items' => $this->communicationService->activityForUser($user, $types[$filter] ?? null),
+            'unread' => $this->communicationService->unreadNotificationCountForUser($user),
+        ]);
+    }
+
+    /** 활동함의 한 줄을 눌렀다 — 읽음으로 두고 그 글이 보이는 자리로 데려간다. */
+    public function openActivity(Request $request, CommunicationNotification $notification): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->ownsNotification($user, $notification), 404);
+
+        $this->communicationService->markNotificationRead($notification);
+
+        $room = $notification->room;
+        if (! $room || ! $this->communicationService->canAccessRoom($user, $room)) {
+            return redirect()->route('communication.activity')->with('error', __('이제 볼 수 없는 방입니다.'));
+        }
+
+        $params = ['room' => $room];
+        if ($notification->communication_message_id) {
+            $params['focus'] = $notification->communication_message_id;
+        }
+
+        return redirect()->route('communication.show', $params);
+    }
+
+    /** 이 방에서 언제 내 폰을 울릴지 — 모든 글 / 부를 때만 / 끄기. */
+    public function notifyLevel(Request $request, CommunicationRoom $room): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
+
+        $data = $request->validate([
+            'level' => ['required', 'string', 'in:'.implode(',', CommunicationRoom::NOTIFY_LEVELS)],
+        ]);
+
+        if (! $this->communicationService->setNotifyLevel($user, $room, $data['level'])) {
+            return response()->json(['success' => false, 'error' => __('이 계정은 방 알림을 바꿀 수 없습니다.')], 422);
+        }
+
+        return response()->json(['success' => true, 'level' => $data['level']]);
     }
 
     private function roomLabel(CommunicationRoom $room, $user): string
@@ -99,26 +165,23 @@ class CommunicationController extends Controller
 
         $this->communicationService->markRoomRead($user, $room);
 
+        // 대화 목록은 여기서 싣지 않는다 — 화면은 처음부터 stream 한 통로로만 그린다
+        // (서버 렌더와 실시간 렌더를 두 벌 두면 언젠가 둘이 달라진다).
         $room->load(['site', 'team']);
-        $messages = CommunicationMessage::query()
-            ->with(['senderEmployee', 'senderUser', 'reads', 'files', 'replies.senderEmployee', 'replies.senderUser', 'replies.reads', 'replies.files'])
-            ->where('communication_room_id', $room->id)
-            ->whereNull('parent_id')
-            ->active()
-            ->orderBy('is_pinned', 'desc')
-            ->orderBy('sent_at')
-            ->orderBy('id')
-            ->get();
 
         return view('communication.show', [
             'user' => $user,
             'employee' => $user->employee,
             'room' => $room,
             'roomLabel' => $this->roomLabel($room, $user),
-            'messages' => $messages,
             'membersCount' => $room->activeMembers()->count(),
             'canPostTopLevel' => $this->communicationService->canPost($user, $room),
             'canManageRoom' => app(CommunicationAdminService::class)->canManage($user),
+            'notifyLevel' => $this->communicationService->notifyLevelFor($user, $room),
+            'canCallEveryone' => $this->communicationService->canCallEveryone($user),
+            'canPostUrgent' => $this->communicationService->canPostUrgent($user),
+            // 활동함에서 눌러 들어온 글 — 처음 그릴 때 그 글 주변을 보여 준다.
+            'focusId' => max(0, (int) $request->integer('focus')),
             // 열쇠가 없는 배포에서는 [AI] 버튼을 아예 만들지 않는다 —
             // 눌러도 아무 일 없는 버튼이 가장 나쁘다.
             'aiAvailable' => app(\App\Services\Communication\ChatAssistant::class)->available(),
@@ -136,9 +199,20 @@ class CommunicationController extends Controller
         $user = $request->user();
         abort_unless($this->communicationService->canAccessRoom($user, $room), 403);
 
-        return response()->json(
-            app(RoomStreamService::class)->since($room, $user, (int) $request->integer('after')),
-        );
+        $stream = app(RoomStreamService::class);
+
+        // 위로 올려 과거를 불러오는 요청 — 새 글 받기와는 다른 일이다.
+        if ($request->integer('before') > 0) {
+            return response()->json($stream->older($room, $user, (int) $request->integer('before')));
+        }
+
+        return response()->json($stream->since(
+            $room,
+            $user,
+            (int) $request->integer('after'),
+            (int) $request->integer('focus'),
+            $request->query('changed') !== null ? (string) $request->query('changed') : null,
+        ));
     }
 
     public function store(Request $request, CommunicationRoom $room): RedirectResponse
@@ -151,6 +225,7 @@ class CommunicationController extends Controller
             'body' => ['required_without:files', 'nullable', 'string', 'max:4000'],
             'title' => ['nullable', 'string', 'max:255'],
             'parent_id' => ['nullable', 'integer'],
+            'urgent' => ['nullable', 'boolean'],
             'files' => ['nullable', 'array', 'max:10'],
             'files.*' => ['file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
         ]);
@@ -169,11 +244,20 @@ class CommunicationController extends Controller
             ? CommunicationMessage::KIND_ANNOUNCEMENT
             : CommunicationMessage::KIND_MESSAGE;
 
+        // 긴급은 알림을 꺼 둔 사람도 울린다 — 권한 없는 사람의 긴급 표시는 조용히 무시한다
+        // (글 자체는 보내진다. 표시 하나 때문에 현장 보고가 막히면 안 된다).
+        $urgent = (bool) ($data['urgent'] ?? false) && $this->communicationService->canPostUrgent($user);
+        $priority = match (true) {
+            $urgent => 'urgent',
+            $kind === CommunicationMessage::KIND_ANNOUNCEMENT => 'important',
+            default => 'normal',
+        };
+
         $message = $this->communicationService->postMessage($user, $room, (string) ($data['body'] ?? ''), [
             'parent_id' => $parent?->id,
             'kind' => $kind,
             'title' => $parent ? null : ($data['title'] ?? null),
-            'priority' => $kind === CommunicationMessage::KIND_ANNOUNCEMENT ? 'important' : 'normal',
+            'priority' => $priority,
             'is_pinned' => $kind === CommunicationMessage::KIND_ANNOUNCEMENT,
         ]);
 

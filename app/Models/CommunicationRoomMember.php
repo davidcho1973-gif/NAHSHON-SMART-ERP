@@ -20,8 +20,19 @@ class CommunicationRoomMember extends Model
         'last_read_message_id',
         'last_read_at',
         'last_seen_at',
+        'notify_level',
         'payload',
     ];
+
+    /** 이 사람이 이 방에서 실제로 쓰는 알림 수준 — 고른 적 없으면 방 기본값. */
+    public function effectiveNotifyLevel(?CommunicationRoom $room = null): string
+    {
+        if (in_array($this->notify_level, CommunicationRoom::NOTIFY_LEVELS, true)) {
+            return $this->notify_level;
+        }
+
+        return ($room ?? $this->room)?->defaultNotifyLevel() ?? CommunicationRoom::NOTIFY_ALL;
+    }
 
     protected function casts(): array
     {

@@ -17,6 +17,12 @@ class CommunicationNotification extends Model
 
     public const TYPE_MENTION = 'mention';
 
+    /** 내가 쓴 글(또는 내가 답한 글)에 누가 답글을 달았다. */
+    public const TYPE_REPLY = 'reply';
+
+    /** 나를 콕 집은 알림 — 활동함에서 "나를 부른 것" 으로 모아 보이는 종류. */
+    public const PERSONAL_TYPES = [self::TYPE_MENTION, self::TYPE_REPLY];
+
     protected $fillable = [
         'user_id',
         'employee_id',

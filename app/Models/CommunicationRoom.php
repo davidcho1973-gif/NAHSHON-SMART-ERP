@@ -40,6 +40,29 @@ class CommunicationRoom extends Model
         'archived' => 'Archived',
     ];
 
+    /** 모든 글에 울린다. */
+    public const NOTIFY_ALL = 'all';
+
+    /** 나를 불렀을 때(@이름 · @모두 · 내 글에 단 답글)만 울린다. */
+    public const NOTIFY_MENTIONS = 'mentions';
+
+    /** 울리지 않는다. 긴급(🚨) 글만 예외. */
+    public const NOTIFY_NONE = 'none';
+
+    public const NOTIFY_LEVELS = [self::NOTIFY_ALL, self::NOTIFY_MENTIONS, self::NOTIFY_NONE];
+
+    /**
+     * 사람이 고르지 않았을 때의 기본값.
+     *
+     * 회사방만 "부를 때만" 이다 — 회사 전원이 모인 방이라 가장 시끄럽고, 거기 올라오는
+     * 글 대부분은 나에게 할 일을 주지 않는다. 현장·팀·공지·1:1 은 지시가 오가는
+     * 방이라 전부 받는 것이 기본이다.
+     */
+    public function defaultNotifyLevel(): string
+    {
+        return $this->type === self::TYPE_COMPANY ? self::NOTIFY_MENTIONS : self::NOTIFY_ALL;
+    }
+
     protected $fillable = [
         'company_id',
         'site_id',

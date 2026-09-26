@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
+use App\Services\Admin\CommunicationAdminService;
 use App\Services\Push\ChatPushNotifier;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -217,9 +218,11 @@ class CommunicationService
             $this->ensureEmployeeRooms($user->employee);
         }
 
+        // 방금 대화가 오간 방이 맨 위 — 카카오톡·슬랙과 같은 규칙. PostgreSQL 은 내림차순에서
+        // 빈 값(글이 한 번도 없는 방)을 맨 앞에 두므로, 빈 값은 뒤로 보낸다고 적어 둔다.
         return $this->roomQueryForUser($user)
             ->with(['site', 'team', 'latestMessage'])
-            ->orderByDesc('last_message_at')
+            ->orderByRaw('last_message_at desc nulls last')
             ->orderBy('name')
             ->get();
     }
@@ -303,7 +306,34 @@ class CommunicationService
             return true;
         }
 
-        return in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager'], true);
+        return $this->isLead($user);
+    }
+
+    /**
+     * 방을 이끄는 사람 — 공지 쓰기, "@모두" 부르기, 긴급(🚨) 보내기가 여기에 묶인다.
+     *
+     * 명단은 방 관리 권한과 같은 한 벌을 쓴다. 여기에 따로 적어 두면 한쪽에 역할이
+     * 추가될 때 다른 쪽은 그대로 남는다.
+     */
+    public function isLead(?User $user): bool
+    {
+        return in_array($user?->access_role, CommunicationAdminService::MANAGE_ROLES, true);
+    }
+
+    /**
+     * "@모두" 는 방 전원의 폰을 울린다 — 알림을 "부를 때만" 으로 줄여 둔 사람까지.
+     * 아무나 쓰면 알림 설정이 무의미해지므로 방을 이끄는 사람만 쓴다. 다른 사람이 쓰면
+     * 그냥 글자로 남는다.
+     */
+    public function canCallEveryone(?User $user): bool
+    {
+        return $this->isLead($user);
+    }
+
+    /** 긴급(🚨)은 알림을 꺼 둔 사람에게도 울린다 — 그래서 방을 이끄는 사람만 보낸다. */
+    public function canPostUrgent(?User $user): bool
+    {
+        return $this->isLead($user);
     }
 
     /**
@@ -311,6 +341,12 @@ class CommunicationService
      */
     public function postMessage(User $user, CommunicationRoom $room, string $body, array $attributes = []): CommunicationMessage
     {
+        $calls = app(MentionResolver::class)->resolve($room, $body, $user, $this->canCallEveryone($user));
+        $payload = $attributes['payload'] ?? null;
+        if ($calls['people'] !== [] || $calls['everyone']) {
+            $payload = array_merge((array) $payload, $this->mentionPayload($calls));
+        }
+
         $message = CommunicationMessage::query()->create([
             'communication_room_id' => $room->id,
             'sender_user_id' => $user->id,
@@ -324,7 +360,7 @@ class CommunicationService
             'is_pinned' => (bool) ($attributes['is_pinned'] ?? false),
             'priority' => $attributes['priority'] ?? 'normal',
             'status' => 'active',
-            'payload' => $attributes['payload'] ?? null,
+            'payload' => $payload,
         ]);
 
         $this->markMessageRead($message, $user);
@@ -333,15 +369,268 @@ class CommunicationService
             $this->fanOutAnnouncement($message, $room);
         }
 
+        $targeted = $this->deliverPersonal($message, $room, $user, $calls);
+
         // 폰이 주머니에 있어도 닿게 한다. 알림이 실패해도 글은 이미 올라갔다 —
         // 알림 때문에 전송이 죽으면 안 되므로 여기서 삼킨다.
         try {
-            app(ChatPushNotifier::class)->notify($message);
+            app(ChatPushNotifier::class)->notify($message, $targeted);
         } catch (\Throwable $e) {
             report($e);
         }
 
         return $message;
+    }
+
+    // ---- 부르기(@멘션) · 답글 알림 -------------------------------------------
+
+    /**
+     * @param  array{people: list<array{employee_id: int|null, user_id: int|null, name: string}>, everyone: bool}  $calls
+     * @return array<string, mixed>
+     */
+    private function mentionPayload(array $calls): array
+    {
+        return ['mentions' => $calls['people'], 'mention_everyone' => $calls['everyone']];
+    }
+
+    /**
+     * 이 글이 콕 집은 사람들에게 활동함 알림을 남기고, 그 사람들의 계정 번호를 돌려준다
+     * (알림을 "부를 때만" 으로 둔 사람도 이 명단에 있으면 폰이 울린다).
+     *
+     * 콕 집는 길은 셋이다: "@이름", "@모두", 그리고 <b>내가 쓰거나 답한 글에 달린 답글</b>.
+     * 세 번째가 빠지면 질문을 올려 두고 답이 달렸는지 몇 번이고 들어가 봐야 한다.
+     *
+     * 1:1 방에는 활동함 알림을 남기지 않는다 — 두 사람뿐이라 방 목록의 안 읽은 수가
+     * 곧 그 알림이다. 같은 일을 두 곳에서 알리면 둘 다 안 본다.
+     *
+     * @param  array{people: list<array{employee_id: int|null, user_id: int|null, name: string}>, everyone: bool}  $calls
+     * @return list<int>
+     */
+    private function deliverPersonal(CommunicationMessage $message, CommunicationRoom $room, User $author, array $calls): array
+    {
+        $calledIds = $this->deliverPersonalCalls($message, $room, $author, $calls);
+
+        if (! $message->parent_id) {
+            return $calledIds;
+        }
+
+        // 이미 이름으로 부른 사람에게 "답글이 달렸다" 를 또 보내지 않는다.
+        $followers = $this->threadFollowers($message, $room, $author)
+            ->reject(fn (User $u): bool => in_array((int) $u->id, $calledIds, true))
+            ->values();
+
+        if ($room->type !== CommunicationRoom::TYPE_DIRECT) {
+            $this->notifyPeople(
+                $message,
+                $room,
+                $author,
+                $followers->map(fn (User $u): array => [
+                    'employee_id' => $u->employee_id ? (int) $u->employee_id : null,
+                    'user_id' => (int) $u->id,
+                ])->all(),
+                CommunicationNotification::TYPE_REPLY,
+            );
+        }
+
+        return array_values(array_unique(array_merge(
+            $calledIds,
+            $followers->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+        )));
+    }
+
+    /**
+     * "@이름" · "@모두" 로 부른 사람들에게 알림을 남기고 그 계정 번호를 돌려준다.
+     *
+     * @param  array{people: list<array{employee_id: int|null, user_id: int|null, name: string}>, everyone: bool}  $calls
+     * @return list<int>
+     */
+    private function deliverPersonalCalls(CommunicationMessage $message, CommunicationRoom $room, User $author, array $calls): array
+    {
+        $called = $calls['everyone']
+            ? $this->memberIdentities($room, $author)
+            : array_map(fn (array $p): array => ['employee_id' => $p['employee_id'], 'user_id' => $p['user_id']], $calls['people']);
+
+        if ($room->type !== CommunicationRoom::TYPE_DIRECT) {
+            $this->notifyPeople($message, $room, $author, $called, CommunicationNotification::TYPE_MENTION);
+        }
+
+        return $this->usersFor($called)
+            ->reject(fn (User $u): bool => (int) $u->id === (int) $author->id)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * 답글이 달린 글의 "구독자" — 원글을 쓴 사람과 그 아래 먼저 답한 사람들.
+     * 지금 이 방에 못 들어오는 사람(현장을 옮겼거나 퇴사)에게는 보내지 않는다.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    private function threadFollowers(CommunicationMessage $reply, CommunicationRoom $room, User $author): Collection
+    {
+        $parent = CommunicationMessage::query()->find($reply->parent_id);
+        if (! $parent) {
+            return collect();
+        }
+
+        $senderIds = CommunicationMessage::query()
+            ->where('parent_id', $parent->id)
+            ->where('id', '!=', $reply->id)
+            ->whereNotNull('sender_user_id')
+            ->pluck('sender_user_id')
+            ->push($parent->sender_user_id)
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->reject(fn (int $id): bool => $id === (int) $author->id)
+            ->unique()
+            ->values();
+
+        if ($senderIds->isEmpty()) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereIn('id', $senderIds->all())
+            ->where('account_status', 'active')
+            ->get()
+            ->filter(fn (User $u): bool => $this->canAccessRoom($u, $room))
+            ->values();
+    }
+
+    /**
+     * @param  list<array{employee_id: int|null, user_id: int|null}>  $people
+     */
+    private function notifyPeople(CommunicationMessage $message, CommunicationRoom $room, User $author, array $people, string $type): void
+    {
+        if ($people === []) {
+            return;
+        }
+
+        $sender = $author->employee?->name ?? $author->name ?? '';
+        $preview = trim($message->body) !== ''
+            ? mb_substr(trim((string) preg_replace('/\s+/u', ' ', $message->body)), 0, 160)
+            : '📎';
+
+        foreach ($people as $person) {
+            if (! $person['employee_id'] && ! $person['user_id']) {
+                continue;
+            }
+
+            // 알림의 제목은 부른 사람의 이름만 담는다. "…님이 불렀습니다" 같은 문장은
+            // 화면이 보는 사람의 언어로 붙인다 — 저장된 한국어 문장은 번역되지 않는다.
+            CommunicationNotification::query()->create([
+                'user_id' => $person['user_id'],
+                'employee_id' => $person['employee_id'],
+                'communication_room_id' => $room->id,
+                'communication_message_id' => $message->id,
+                'type' => $type,
+                'title' => mb_substr($sender !== '' ? $sender : 'SMART ERP', 0, 255),
+                'body' => $preview,
+            ]);
+        }
+    }
+
+    /**
+     * 방 사람 전원(글쓴이 제외)의 신원 — "@모두" 가 부르는 범위.
+     *
+     * @return list<array{employee_id: int|null, user_id: int|null}>
+     */
+    private function memberIdentities(CommunicationRoom $room, User $author): array
+    {
+        return $room->activeMembers()
+            ->get(['employee_id', 'user_id'])
+            ->reject(fn (CommunicationRoomMember $m): bool => ($m->user_id !== null && (int) $m->user_id === (int) $author->id)
+                || ($m->employee_id !== null && $author->employee_id !== null && (int) $m->employee_id === (int) $author->employee_id))
+            ->map(fn (CommunicationRoomMember $m): array => [
+                'employee_id' => $m->employee_id ? (int) $m->employee_id : null,
+                'user_id' => $m->user_id ? (int) $m->user_id : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * 신원(직원 번호 · 계정 번호)을 로그인 계정으로 — 폰은 계정에 묶여 있다.
+     *
+     * @param  list<array{employee_id: int|null, user_id: int|null}>  $people
+     * @return Collection<int, User>
+     */
+    private function usersFor(array $people): Collection
+    {
+        $employeeIds = array_values(array_filter(array_column($people, 'employee_id')));
+        $userIds = array_values(array_filter(array_column($people, 'user_id')));
+
+        if ($employeeIds === [] && $userIds === []) {
+            return collect();
+        }
+
+        return User::query()
+            ->where('account_status', 'active')
+            ->where(function (Builder $q) use ($employeeIds, $userIds): void {
+                $q->whereIn('id', $userIds ?: [0])->orWhereIn('employee_id', $employeeIds ?: [0]);
+            })
+            ->get();
+    }
+
+    // ---- 방별 알림 설정 ------------------------------------------------------
+
+    /** 이 사람이 이 방에서 쓰는 알림 수준(고른 적 없으면 방 기본값). */
+    public function notifyLevelFor(User $user, CommunicationRoom $room): string
+    {
+        $membership = $this->membershipForUser($room, $user)->first();
+
+        return $membership?->effectiveNotifyLevel($room) ?? $room->defaultNotifyLevel();
+    }
+
+    /**
+     * 방마다 언제 울릴지 고른다. 방 구성원이 아니어도 볼 수 있는 방(관리자·현장 범위)이면
+     * 고르는 순간 구성원이 된다 — 설정을 둘 자리가 구성원 줄이기 때문이다.
+     */
+    public function setNotifyLevel(User $user, CommunicationRoom $room, string $level): bool
+    {
+        if (! in_array($level, CommunicationRoom::NOTIFY_LEVELS, true) || ! $this->canAccessRoom($user, $room)) {
+            return false;
+        }
+
+        $membership = $this->membershipForUser($room, $user)->first();
+        if (! $membership) {
+            // 직원 기록이 없는 관리자 계정도 있다 — 그때는 계정으로 구성원이 된다.
+            $membership = $user->employee
+                ? $this->ensureRoomMember($room, $user->employee)
+                : CommunicationRoomMember::query()->updateOrCreate(
+                    ['communication_room_id' => $room->id, 'user_id' => $user->id],
+                    ['role' => 'member', 'status' => 'active', 'joined_at' => Carbon::now()],
+                );
+        }
+
+        $membership->update(['notify_level' => $level]);
+
+        return true;
+    }
+
+    /**
+     * 방마다 이 사람의 알림 수준 — 방 목록에서 조용히 해 둔 방을 흐리게 보이려고.
+     *
+     * @param  Collection<int, CommunicationRoom>  $rooms
+     * @return array<int, string>
+     */
+    public function notifyLevelsForUser(User $user, Collection $rooms): array
+    {
+        $members = CommunicationRoomMember::query()
+            ->whereIn('communication_room_id', $rooms->pluck('id')->all() ?: [0])
+            ->tap(fn (Builder $q) => $this->applyMemberIdentity($q, $user))
+            ->get()
+            ->keyBy('communication_room_id');
+
+        $levels = [];
+        foreach ($rooms as $room) {
+            $levels[$room->id] = $members->get($room->id)?->effectiveNotifyLevel($room) ?? $room->defaultNotifyLevel();
+        }
+
+        return $levels;
     }
 
     // ---- 본인 글 고치기·지우기 ---------------------------------------------
@@ -381,9 +670,45 @@ class CommunicationService
             || in_array($user->access_role, ['super_admin', 'admin', 'site_manager'], true);
     }
 
+    /**
+     * 고친 글에서 이름을 새로 부르면 그 사람에게만 알린다. 이미 불렀던 사람을 다시
+     * 울리면 오타 하나 고칠 때마다 폰이 울린다.
+     */
     public function editMessage(User $user, CommunicationMessage $message, string $body): CommunicationMessage
     {
-        $message->update(['body' => trim($body), 'edited_at' => now()]);
+        $room = $message->room;
+        $before = collect($message->payload['mentions'] ?? [])
+            ->map(fn (array $p): string => ($p['employee_id'] ?? '').':'.($p['user_id'] ?? ''));
+        $everyoneBefore = (bool) ($message->payload['mention_everyone'] ?? false);
+
+        $calls = $room
+            ? app(MentionResolver::class)->resolve($room, $body, $user, $this->canCallEveryone($user))
+            : ['people' => [], 'everyone' => false];
+
+        $payload = (array) ($message->payload ?? []);
+        unset($payload['mentions'], $payload['mention_everyone']);
+        if ($calls['people'] !== [] || $calls['everyone']) {
+            $payload = array_merge($payload, $this->mentionPayload($calls));
+        }
+
+        $message->update(['body' => trim($body), 'edited_at' => now(), 'payload' => $payload ?: null]);
+
+        $fresh = [
+            'people' => $everyoneBefore ? [] : array_values(array_filter(
+                $calls['people'],
+                fn (array $p): bool => ! $before->contains(($p['employee_id'] ?? '').':'.($p['user_id'] ?? '')),
+            )),
+            'everyone' => $calls['everyone'] && ! $everyoneBefore,
+        ];
+
+        if ($room && ($fresh['people'] !== [] || $fresh['everyone'])) {
+            $targeted = $this->deliverPersonalCalls($message, $room, $user, $fresh);
+            try {
+                app(ChatPushNotifier::class)->notify($message->fresh(), $targeted, onlyTargeted: true);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return $message->fresh();
     }
@@ -566,21 +891,56 @@ class CommunicationService
             });
     }
 
+    public function unreadNotificationCountForUser(User $user): int
+    {
+        return $this->notificationQueryForUser($user)->unread()->count();
+    }
+
     /**
+     * 활동함 — 나에게 온 알림(부름 · 답글 · 공지)을 종류별로.
+     *
      * @return Collection<int, CommunicationNotification>
      */
-    public function notificationsForUser(User $user, int $limit = 20): Collection
+    public function activityForUser(User $user, ?string $type = null, int $limit = 60): Collection
     {
         return $this->notificationQueryForUser($user)
-            ->with('room')
+            ->when($type !== null, fn (Builder $q) => $q->where('type', $type))
+            ->with(['room', 'message'])
             ->orderByDesc('id')
             ->limit($limit)
             ->get();
     }
 
-    public function unreadNotificationCountForUser(User $user): int
+    /** 이 알림이 이 사람 것인가 — 남의 알림 번호로 읽음 처리하거나 따라 들어가지 못하게. */
+    public function ownsNotification(User $user, CommunicationNotification $notification): bool
     {
-        return $this->notificationQueryForUser($user)->unread()->count();
+        return $this->notificationQueryForUser($user)->whereKey($notification->id)->exists();
+    }
+
+    public function markNotificationRead(CommunicationNotification $notification): void
+    {
+        if ($notification->read_at === null) {
+            $notification->update(['read_at' => Carbon::now()]);
+        }
+    }
+
+    /**
+     * 방마다 "나를 부른 것" 중 안 읽은 수 — 방 목록에 빨간 @ 로 보인다.
+     * 알림을 줄여 둔 방이라도 나를 부른 글은 눈에 띄어야 한다.
+     *
+     * @return array<int, int>
+     */
+    public function personalUnreadByRoom(User $user): array
+    {
+        return $this->notificationQueryForUser($user)
+            ->unread()
+            ->whereIn('type', CommunicationNotification::PERSONAL_TYPES)
+            ->whereNotNull('communication_room_id')
+            ->selectRaw('communication_room_id, count(*) as n')
+            ->groupBy('communication_room_id')
+            ->pluck('n', 'communication_room_id')
+            ->map(fn ($n): int => (int) $n)
+            ->all();
     }
 
     public function markNotificationsRead(User $user): void
@@ -658,6 +1018,13 @@ class CommunicationService
         foreach ($messages as $message) {
             $this->markMessageRead($message, $user);
         }
+
+        // 방을 열어 봤으면 그 방에서 나를 부른 알림도 본 것이다 — 활동함에 남아 있으면
+        // 이미 읽은 것을 또 열어 보게 된다.
+        $this->notificationQueryForUser($user)
+            ->where('communication_room_id', $room->id)
+            ->unread()
+            ->update(['read_at' => Carbon::now()]);
 
         $membership = $this->membershipForUser($room, $user)->first();
         if ($membership) {

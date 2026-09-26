@@ -29,16 +29,10 @@
 
         .pad { padding: 12px 16px 0; }
 
-        /* 알림(서류 만료 등) */
-        .bell { margin: 12px 16px; border: 1px solid #fee2e2; background: #fff5f5; border-radius: 14px; overflow: hidden; }
-        .bell-head { display: flex; align-items: center; gap: 8px; padding: 10px 13px; border-bottom: 1px solid #fee2e2; font-size: 13px; }
-        .bell-head strong { font-size: 13px; }
+        /* 바로가기 — 활동함(나를 부른 것). 방이 늘어도 "누가 나를 찾았나" 는 한곳에서 본다. */
+        .shortcuts { display: flex; gap: 8px; margin: 12px 16px 4px; }
+        .shortcut { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; border-radius: 12px; background: #f2f3f5; color: var(--label); text-decoration: none; font-size: 13px; font-weight: 700; }
         .count { background: #ef4444; color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 800; }
-        .bell form { margin-left: auto; }
-        .bell button { background: none; border: 0; color: #2563eb; font-size: 12px; font-weight: 700; cursor: pointer; }
-        .notif { display: block; padding: 10px 13px; text-decoration: none; color: inherit; border-top: 1px solid #fef2f2; }
-        .notif strong { display: block; font-size: 13px; line-height: 1.35; }
-        .notif span { display: block; font-size: 12px; color: #6b7280; margin-top: 2px; }
 
         /* 방 목록 */
         .rooms { display: block; }
@@ -55,6 +49,10 @@
         .right { text-align: right; display: grid; gap: 5px; justify-items: end; }
         .time { font-size: 11px; color: #9ca3af; }
         .badge { background: #ff3b30; color: #fff; border-radius: 999px; min-width: 20px; padding: 2px 6px; font-size: 11px; font-weight: 800; text-align: center; }
+        /* 알림을 줄여 둔 방 — 안 읽은 수는 회색. 급하지 않다고 본인이 정한 방이다. */
+        .badge.quiet { background: #c4c9d0; }
+        .badges { display: flex; gap: 4px; }
+        .quiet-mark { font-size: 11px; color: #9ca3af; }
 
         .section-title { padding: 16px 16px 6px; font-size: 12px; font-weight: 800; color: #9ca3af; }
         .empty { padding: 40px 16px; text-align: center; color: #9ca3af; font-size: 13px; }
@@ -89,27 +87,14 @@
         <main class="field-content">
             <div class="pad">@include('partials.push-optin')</div>
 
-            @if($notifications->isNotEmpty())
-                <div class="bell">
-                    <div class="bell-head">
-                        <strong>{{ __('알림') }}</strong>
-                        @if($notificationUnread > 0)
-                            <span class="count">{{ $notificationUnread > 99 ? '99+' : $notificationUnread }}</span>
-                            <form method="POST" action="{{ route('communication.notifications.read') }}">
-                                @csrf
-                                <button type="submit">{{ __('모두 읽음') }}</button>
-                            </form>
-                        @endif
-                    </div>
-                    @foreach($notifications as $notification)
-                        <a class="notif {{ $notification->read_at ? '' : 'unread' }}"
-                           href="{{ $notification->communication_room_id ? route('communication.show', ['room' => $notification->communication_room_id]) : route('communication.index') }}">
-                            <strong>{{ $notification->title }}</strong>
-                            @if($notification->body)<span>{{ \Illuminate\Support\Str::limit($notification->body, 70) }}</span>@endif
-                        </a>
-                    @endforeach
-                </div>
-            @endif
+            <div class="shortcuts">
+                <a class="shortcut" id="link-activity" href="{{ route('communication.activity') }}">
+                    🔔 {{ __('활동') }}
+                    @if($activityUnread > 0)
+                        <span class="count">{{ $activityUnread > 99 ? '99+' : $activityUnread }}</span>
+                    @endif
+                </a>
+            </div>
 
             <section class="rooms">
                 @php
@@ -126,6 +111,8 @@
                     @php
                         $latest = $room->latestMessage;
                         $unread = $unreadCounts[$room->id] ?? 0;
+                        $calledMe = $personalUnread[$room->id] ?? 0;
+                        $quiet = ($notifyLevels[$room->id] ?? 'all') !== 'all';
                         $label = $roomLabels[$room->id] ?? $room->name;
                         // 1:1 은 회색 동그라미 — 사람 대 사람 대화는 브랜드 면이 아니다.
                         $faceClass = $room->type === 'direct' ? 'face plain' : 'face';
@@ -143,10 +130,19 @@
                             <div class="last">{{ $preview }}</div>
                         </div>
                         <div class="right">
-                            <span class="time">{{ $room->last_message_at?->format('n/j') ?? '' }}</span>
-                            @if($unread > 0)
-                                <span class="badge">{{ $unread > 99 ? '99+' : $unread }}</span>
-                            @endif
+                            <span class="time">
+                                @if(($notifyLevels[$room->id] ?? 'all') === 'none')<span class="quiet-mark">🔕</span>@endif
+                                {{ $room->last_message_at?->format('n/j') ?? '' }}
+                            </span>
+                            <span class="badges">
+                                {{-- 나를 부른 글이 있으면 빨간 @ — 알림을 줄여 둔 방이라도 이것만은 보여야 한다. --}}
+                                @if($calledMe > 0)
+                                    <span class="badge">@</span>
+                                @endif
+                                @if($unread > 0)
+                                    <span class="badge {{ $quiet ? 'quiet' : '' }}">{{ $unread > 99 ? '99+' : $unread }}</span>
+                                @endif
+                            </span>
                         </div>
                     </a>
                 @empty

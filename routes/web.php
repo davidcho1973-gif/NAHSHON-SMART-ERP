@@ -410,6 +410,9 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/attendance-app/messages', [CommunicationController::class, 'index'])->name('communication.index');
         Route::post('/attendance-app/messages/direct', [CommunicationController::class, 'startDirect'])->name('communication.direct.start');
         Route::post('/attendance-app/messages/notifications/read', [CommunicationController::class, 'readNotifications'])->name('communication.notifications.read');
+        // 활동함 — 나를 부른 글 · 내 글에 달린 답글 · 공지. {room} 보다 먼저 둬야 방 번호로 읽히지 않는다.
+        Route::get('/attendance-app/messages/activity', [CommunicationController::class, 'activity'])->name('communication.activity');
+        Route::get('/attendance-app/messages/activity/{notification}/open', [CommunicationController::class, 'openActivity'])->name('communication.activity.open');
 
         // 채팅 화면에서 방 만들기·정리 — 규칙은 관리 서비스 한 곳에 있고 여기서는 부르기만 한다.
         Route::post('/attendance-app/messages/rooms', [CommunicationController::class, 'storeRoom'])->name('communication.room.store');
@@ -419,6 +422,8 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/attendance-app/messages/{room}/stream', [CommunicationController::class, 'stream'])->name('communication.stream');
         // 이 방에 누가 있는지 · 잘못 쓴 글 고치기·지우기(본인)
         Route::get('/attendance-app/messages/{room}/members', [CommunicationController::class, 'members'])->name('communication.members');
+        // 이 방에서 언제 내 폰을 울릴지 — 모든 글 / 부를 때만 / 끄기
+        Route::post('/attendance-app/messages/{room}/notify', [CommunicationController::class, 'notifyLevel'])->name('communication.notify');
         Route::patch('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'updateMessage'])->name('communication.message.update');
         Route::delete('/attendance-app/messages/{room}/{message}', [CommunicationController::class, 'destroyMessage'])->name('communication.message.destroy');
         Route::get('/attendance-app/messages/{room}', [CommunicationController::class, 'show'])->name('communication.show');

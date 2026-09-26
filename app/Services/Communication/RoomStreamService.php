@@ -37,36 +37,65 @@ class RoomStreamService
 
     private const IDLE_SECONDS = 60;
 
-    /** 처음 열 때 보여줄 최근 대화 수. */
+    /** 처음 열 때 보여줄 최근 대화 수. 위로 올리면 이만큼씩 더 불러온다. */
     private const FIRST_PAGE = 60;
+
+    /** 알림을 눌러 특정 글로 들어올 때, 그 글 위로 함께 보여줄 앞 대화 수. */
+    private const FOCUS_CONTEXT = 20;
+
+    /**
+     * 바뀐 글을 찾을 때 겹쳐 보는 초. 시각은 초 단위로 저장되므로, 같은 초 안에 생긴
+     * 변화를 놓치지 않으려고 조금 겹친다(겹쳐 온 글은 화면이 제자리에서 다시 그릴 뿐이다).
+     */
+    private const CHANGE_OVERLAP_SECONDS = 2;
 
     public function __construct(private readonly CommunicationService $communication) {}
 
     /**
+     * @param  int  $focusId  알림에서 눌러 들어온 글 — 처음 열 때 그 글 주변을 준다
+     * @param  string|null  $changedSince  지난번 응답의 cursor — 그 뒤로 바뀐(고침·지움·반응) 글도 준다
      * @return array<string, mixed>
      */
-    public function since(CommunicationRoom $room, User $user, int $afterId): array
+    public function since(CommunicationRoom $room, User $user, int $afterId, int $focusId = 0, ?string $changedSince = null): array
     {
         // 이 사람이 지금 이 방을 보고 있다고 표시한다 — 상대가 화면 앞에 있는지 알 수 있게.
         $this->communication->touchPresence($user, $room);
 
-        $base = CommunicationMessage::query()
-            ->with(['senderEmployee', 'senderUser', 'files'])
-            ->where('communication_room_id', $room->id)
-            ->active();
+        $base = $this->baseQuery($room);
+        $hasOlder = false;
 
-        if ($afterId <= 0) {
+        if ($afterId <= 0 && $focusId > 0) {
+            // 알림을 눌러 들어온 경우 — 가장 최근이 아니라 <b>그 글</b>이 보여야 한다.
+            $before = (clone $base)->where('id', '<', $focusId)->orderByDesc('id')->limit(self::FOCUS_CONTEXT)->get();
+            $from = (clone $base)->where('id', '>=', $focusId)->orderBy('id')->limit(100)->get();
+            $messages = $before->merge($from)->sortBy('id')->values();
+        } elseif ($afterId <= 0) {
             // 처음 여는 화면 — 방의 첫 글이 아니라 <b>가장 최근</b> 대화가 보여야 한다.
             // 오래된 것부터 100개를 주면 1년 전 대화를 보며 스크롤을 내려야 한다.
             $messages = (clone $base)->orderByDesc('id')->limit(self::FIRST_PAGE)->get()->sortBy('id')->values();
         } else {
-            // 새 글뿐 아니라 <b>방금 고쳐지거나 지워진 글</b>도 내려보낸다 —
+            // 새 글뿐 아니라 <b>그사이 바뀐 글</b>(고침·지움·반응)도 내려보낸다 —
             // 안 그러면 지운 글이 남의 화면에는 그대로 남아 있는다.
-            $messages = $base->where(function ($q) use ($afterId): void {
-                $q->where('id', '>', $afterId)
-                    ->orWhere('edited_at', '>=', now()->subMinutes(2))
-                    ->orWhere('removed_at', '>=', now()->subMinutes(2));
+            $changed = $this->parseCursor($changedSince);
+            $messages = $base->where(function ($q) use ($afterId, $changed): void {
+                $q->where('id', '>', $afterId);
+
+                if ($changed !== null) {
+                    $q->orWhere('updated_at', '>=', $changed->subSeconds(self::CHANGE_OVERLAP_SECONDS));
+                } else {
+                    // 커서를 모르는 옛 화면(배포 전에 열어 둔 탭)을 위한 길.
+                    $q->orWhere('edited_at', '>=', now()->subMinutes(2))
+                        ->orWhere('removed_at', '>=', now()->subMinutes(2));
+                }
             })->orderBy('id')->limit(100)->get();
+        }
+
+        if ($afterId <= 0 && $messages->isNotEmpty()) {
+            $hasOlder = CommunicationMessage::query()
+                ->where('communication_room_id', $room->id)
+                ->active()
+                ->where('id', '<', (int) $messages->min('id'))
+                ->exists();
         }
 
         // 받아 간 순간 읽은 것으로 친다 — 화면에 떠 있는데 안 읽음으로 남으면
@@ -87,11 +116,92 @@ class RoomStreamService
         return [
             'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user))->all(),
             'lastId' => $lastId,
+            'hasOlder' => $hasOlder,
+            'cursor' => now()->toIso8601String(),
             'nextPollMs' => $this->nextPollMs($room, $messages->isNotEmpty()) * 1000,
             'membersCount' => count($humans),
             'onlineCount' => count(array_filter($humans, fn (array $m): bool => $m['online'])),
             'members' => $presence,
         ];
+    }
+
+    /**
+     * 위로 올려 더 오래된 대화를 본다 — 처음 60개 밖의 과거.
+     *
+     * 이것이 없으면 두 달 전 지시는 "있었는데 못 찾는" 것이 된다. 읽음 표시나 접속
+     * 표시는 건드리지 않는다 — 과거를 뒤지는 것은 새 글을 받는 일이 아니다.
+     *
+     * @return array{messages: list<array<string, mixed>>, hasOlder: bool}
+     */
+    public function older(CommunicationRoom $room, User $user, int $beforeId): array
+    {
+        $messages = $this->baseQuery($room)
+            ->where('id', '<', $beforeId)
+            ->orderByDesc('id')
+            ->limit(self::FIRST_PAGE)
+            ->get()
+            ->sortBy('id')
+            ->values();
+
+        $hasOlder = $messages->isNotEmpty() && CommunicationMessage::query()
+            ->where('communication_room_id', $room->id)
+            ->active()
+            ->where('id', '<', (int) $messages->min('id'))
+            ->exists();
+
+        return [
+            'messages' => $messages->map(fn (CommunicationMessage $m): array => $this->row($m, $room, $user))->values()->all(),
+            'hasOlder' => $hasOlder,
+        ];
+    }
+
+    /**
+     * 이 글이 보는 사람을 불렀는가. 내가 쓴 글의 "@모두" 는 나를 부른 것이 아니다.
+     *
+     * @param  array<int, array<string, mixed>>  $mentions
+     */
+    private function calls(?User $viewer, CommunicationMessage $message, array $mentions, bool $everyone): bool
+    {
+        if ($viewer === null || (int) $message->sender_user_id === (int) $viewer->id) {
+            return false;
+        }
+
+        if ($everyone) {
+            return true;
+        }
+
+        foreach ($mentions as $p) {
+            if (isset($p['user_id']) && (int) $p['user_id'] === (int) $viewer->id) {
+                return true;
+            }
+            if (isset($p['employee_id']) && $viewer->employee_id && (int) $p['employee_id'] === (int) $viewer->employee_id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function baseQuery(CommunicationRoom $room)
+    {
+        return CommunicationMessage::query()
+            ->with(['senderEmployee', 'senderUser', 'files'])
+            ->where('communication_room_id', $room->id)
+            ->active();
+    }
+
+    private function parseCursor(?string $cursor): ?\Illuminate\Support\Carbon
+    {
+        if (blank($cursor)) {
+            return null;
+        }
+
+        try {
+            // 표의 시각은 앱 시간대로 저장된다 — 같은 시간대로 맞춰 비교한다.
+            return \Illuminate\Support\Carbon::parse($cursor)->setTimezone(config('app.timezone'));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -124,6 +234,8 @@ class RoomStreamService
     private function row(CommunicationMessage $message, CommunicationRoom $room, ?User $viewer = null): array
     {
         $removed = $message->isRemoved();
+        $mentions = $removed ? [] : (array) ($message->payload['mentions'] ?? []);
+        $everyone = ! $removed && (bool) ($message->payload['mention_everyone'] ?? false);
 
         return [
             'id' => (int) $message->id,
@@ -143,6 +255,10 @@ class RoomStreamService
             'removed' => $removed,
             'canEdit' => $this->communication->canEdit($viewer, $message),
             'canRemove' => $this->communication->canRemove($viewer, $message),
+            // 부른 이름 — 화면이 "@이름" 을 강조한다. 나를 부른 글은 말풍선째 눈에 띄게.
+            'mentions' => array_values(array_filter(array_map(fn ($p): string => (string) ($p['name'] ?? ''), $mentions))),
+            'mentionEveryone' => $everyone,
+            'mentionsMe' => $this->calls($viewer, $message, $mentions, $everyone),
             'files' => $removed ? [] : $message->files->map(fn (CommunicationMessageFile $f): array => [
                 'id' => (int) $f->id,
                 'name' => (string) $f->original_name,
