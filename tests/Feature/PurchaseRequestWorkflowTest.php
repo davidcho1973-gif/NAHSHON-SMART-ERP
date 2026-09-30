@@ -15,6 +15,7 @@ use App\Models\PurchaseRequestOrder;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Support\PurchaseAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -128,6 +129,16 @@ class PurchaseRequestWorkflowTest extends TestCase
         $this->buyer->forceFill(['allowed_site_id' => $this->otherSite->id])->save();
         $this->actingAsPurchaseUser($this->buyer)->getJson('/purchase-requests/'.$row['id'])->assertNotFound();
         $this->getJson('/purchase-requests?desk=1')->assertOk()->assertJsonCount(0, 'rows');
+    }
+
+    public function test_super_admin_can_request_without_a_separate_grant_but_suspension_still_blocks_access(): void
+    {
+        $owner = $this->user(['access_role' => 'super_admin', 'purchase_request_enabled' => false]);
+        $this->actingAsPurchaseUser($owner)->get('/attendance-app?tab=home')
+            ->assertOk()->assertSee('/attendance-app/purchase-requests', false);
+        $this->postJson('/purchase-requests', $this->payload())->assertOk();
+        $owner->forceFill(['account_status' => 'suspended'])->save();
+        $this->assertFalse(PurchaseAccess::canRequest($owner));
     }
 
     public function test_requester_cannot_process_purchase_and_phone_only_buyer_cannot_execute(): void

@@ -33,6 +33,7 @@ use App\Http\Controllers\OpsPhotoController;
 use App\Http\Controllers\OpsVoiceController;
 use App\Http\Controllers\OrgLogoController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PersonalAppAccessController;
 use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\ProjectContractDocumentController;
 use App\Http\Controllers\PurchaseAnalysisController;
@@ -90,6 +91,19 @@ Route::post('/auth/password/setup', [EmailPasswordAuthController::class, 'store'
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+Route::get('/app/connect/{token}', [PersonalAppAccessController::class, 'preview'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('personal-app.connect');
+Route::post('/app/connect/{token}', [PersonalAppAccessController::class, 'connect'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:20,1')->name('personal-app.connect.store');
+Route::middleware('auth')->group(function (): void {
+    Route::get('/attendance-app/manager-access', [PersonalAppAccessController::class, 'index'])->name('attendance-app.manager-access');
+    Route::get('/personal-app-access/users', [PersonalAppAccessController::class, 'users'])->name('personal-app-access.users');
+    Route::post('/personal-app-access/users/{user}/qr', [PersonalAppAccessController::class, 'issue'])
+        ->whereNumber('user')->middleware('throttle:30,1')->name('personal-app-access.issue');
+    Route::post('/personal-app-access/devices/{device}/revoke', [PersonalAppAccessController::class, 'revoke'])
+        ->whereNumber('device')->middleware('throttle:30,1')->name('personal-app-access.revoke');
+});
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/attendance-app/purchase-requests', [PurchaseRequestController::class, 'mobile'])->name('attendance-app.purchase-requests');

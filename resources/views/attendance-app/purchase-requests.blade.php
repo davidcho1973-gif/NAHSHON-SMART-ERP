@@ -14,6 +14,7 @@
         <a class="field-back" href="{{ route('attendance-app.index') }}">{{ __('← 홈') }}</a>
         @include('partials.lang-switch')
         <h1>{{ __('구매신청') }}</h1>
+        <a href="{{ route('user-manual') }}#purchase-requests">{{ __('사용 방법') }}</a>
     </header>
     <main class="field-content pr-mobile" id="purchase-mobile">
         <section class="field-card" id="pr-new">

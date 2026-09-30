@@ -22,7 +22,9 @@
     "로그인하면 앱으로 보내는데 앱에서는 ERP 로 가라고 하는" 모순이 생긴다.
 --}}
 @auth
-    @if (auth()->user()->landingPath() === '/')
+    @if (auth()->user()->landingPath() === '/'
+        && ! session()->has(\App\Services\Auth\PersonalAppAccessService::SESSION)
+        && ! session()->has(\App\Services\Auth\PersonalAppAccessService::LEGACY_SESSION))
         {{-- 회사 이름은 붙이지 않는다. 바로 아래 머리띠에 이미 있고, 회사 이름이
              ERP 로 끝나는 배포에서는 "ERP ERP" 가 된다. 세 언어 모두 이대로 읽힌다. --}}
         <a class="erp-home" href="{{ route('smart-company.index') }}">

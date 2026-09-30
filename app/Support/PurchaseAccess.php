@@ -8,7 +8,7 @@ use App\Services\Auth\EmailPasswordAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
-/** Purchase permissions are explicit grants, never inferred from an app tile or a job title. */
+/** Super administrators have built-in access; other internal managers need explicit grants. */
 final class PurchaseAccess
 {
     public const ELIGIBLE_ROLES = ['super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'payroll'];
@@ -21,7 +21,8 @@ final class PurchaseAccess
 
     public static function canRequest(?User $user): bool
     {
-        return self::eligible($user) && (bool) $user->purchase_request_enabled;
+        return self::eligible($user)
+            && ($user->access_role === 'super_admin' || (bool) $user->purchase_request_enabled);
     }
 
     public static function canBuy(?User $user, ?Request $request = null): bool

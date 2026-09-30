@@ -7,7 +7,10 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkerDevice;
+use App\Services\Auth\PersonalAppAccessService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 /**
@@ -104,6 +107,39 @@ class FourDigitDoorTest extends TestCase
         // 화면을 거치지 않고 창구를 직접 불러도 마찬가지다 — 권한이 필요한 자료는 안 나간다.
         $this->postJson(route('api.smart-company', ['method' => 'api_getKakaoReminders']), [])
             ->assertOk()->assertJsonPath('success', false);
+    }
+
+    public function test_a_weak_manager_login_clears_the_old_erp_recaller_instead_of_minting_one(): void
+    {
+        $manager = $this->person('소장', '480-555-0122', 'site_manager', 'superintendent');
+        $this->actingAs($manager->user);
+        $recaller = Auth::guard()->getRecallerName();
+
+        $response = $this->withCookie($recaller, 'old-browser-credential')
+            ->postJson(route('worker-app.enter'), ['employee_id' => $manager->id])
+            ->assertOk();
+
+        $this->assertAuthenticatedAs($manager->user);
+        $cookie = collect($response->headers->getCookies())->first(fn ($cookie) => $cookie->getName() === $recaller);
+        $this->assertNotNull($cookie, 'The old remember-me cookie must explicitly be removed.');
+        $this->assertLessThan(time(), $cookie->getExpiresTime());
+        $this->get('/')->assertRedirect(route('attendance-app.index'));
+    }
+
+    public function test_an_old_manager_recaller_cannot_restore_unrestricted_erp_access(): void
+    {
+        $manager = $this->person('소장', '480-555-0122', 'site_manager', 'superintendent')->user;
+        $manager->forceFill(['remember_token' => str_repeat('r', 60)])->save();
+        $cookie = $manager->getAuthIdentifier().'|'.$manager->getRememberToken().'|'.$manager->getAuthPassword();
+
+        $this->withCookie(Auth::guard()->getRecallerName(), $cookie)->get('/')
+            ->assertRedirect('/attendance-app')
+            ->assertSessionHas(WorkerDeviceSession::FLAG, true)
+            ->assertSessionHas(PersonalAppAccessService::LEGACY_SESSION, true);
+
+        $this->assertAuthenticatedAs($manager);
+        $this->postJson('/vehicle-api/save', [])->assertForbidden()->assertJsonPath('code', 'personal_app_only');
+        $this->postJson('/auth/password/setup', [])->assertForbidden()->assertJsonPath('code', 'personal_app_only');
     }
 
     /** 정식 로그인 + 승인된 권한이면 본화면이 열린다. */

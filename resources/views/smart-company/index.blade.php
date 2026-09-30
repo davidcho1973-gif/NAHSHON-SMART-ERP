@@ -19,6 +19,8 @@
   <link rel="stylesheet" href="{{ asset('css/purchase-requests.css') }}?v={{ filemtime(public_path('css/purchase-requests.css')) }}">
   <script src="{{ asset('js/purchase-common.js') }}?v={{ filemtime(public_path('js/purchase-common.js')) }}" defer></script>
   <script src="{{ asset('js/admin-purchases.js') }}?v={{ filemtime(public_path('js/admin-purchases.js')) }}" defer></script>
+  <link rel="stylesheet" href="{{ asset('css/personal-app-access.css') }}?v={{ filemtime(public_path('css/personal-app-access.css')) }}">
+  <script src="{{ asset('js/personal-app-access.js') }}?v={{ filemtime(public_path('js/personal-app-access.js')) }}" defer></script>
   <script src="{{ asset('js/admin-meetings.js') }}?v={{ filemtime(public_path('js/admin-meetings.js')) }}" defer></script>
   <script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
@@ -295,6 +297,9 @@
           <div class="nav-section">
             <div class="nav-section-title">설정</div>
             <ul class="nav-list">
+              @if(auth()->user()?->account_status === 'active' && auth()->user()?->access_role === 'super_admin')
+              <li class="nav-item" data-view="personal-app-access" id="nav-personal-app-access"><i class="ph ph-qr-code"></i><span>개인앱 연결 QR</span></li>
+              @endif
               @if(in_array(auth()->user()?->access_role, \App\Services\Admin\CrewSetupService::VIEW_ROLES, true))
               <li class="nav-item" data-view="crew-setup" id="nav-crew-setup"><i class="ph ph-users-three"></i><span>회사·팀 등록</span></li>
               @if(in_array(auth()->user()?->access_role, \App\Support\AccessPolicy::SYSTEM_ROLES, true))
@@ -381,6 +386,9 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="employee-admin"><i class="ph ph-identification-card"></i><span>직원 등록 · 관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="applicant-admin"><i class="ph ph-user-plus"></i><span>입사지원 · 온보딩</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="access-control"><i class="ph ph-lock-key"></i><span>계정 · 권한 관리</span></button>
+          @if(auth()->user()?->account_status === 'active' && auth()->user()?->access_role === 'super_admin')
+          <button class="mobile-more-tile" type="button" data-mobile-view="personal-app-access"><i class="ph ph-qr-code"></i><span>개인앱 연결 QR</span></button>
+          @endif
           <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여 / 정산</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-sliders"></i><span>임금 프로필</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재 · 장비</span></button>
@@ -1489,6 +1497,7 @@
         'daily-report': { title: '일일 보고', render: function () { return window.AdminDailyReport.render(); } },
         'correspondence': { title: '서신 원장', render: function () { return window.AdminCorrespondence.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
+        'personal-app-access': { title: '개인앱 연결 QR', render: function () { return window.PersonalAppAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
         'week-board': { title: '공정 관리 — 이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
         'section-drawings': { title: '공정별 도면', render: function () { return window.AdminSectionDrawings.render(); } },

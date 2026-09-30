@@ -97,6 +97,7 @@
         },
         { key: 'scope', label: '범위', render: scopeCell },
         { key: 'purchaseAccess', label: '구매 권한', render: function (r) {
+          if (r.role === 'super_admin') return u.badge('구매신청 · 구매처리 기본 허용', 'ok');
           return (r.purchaseRequestAccess ? u.badge('구매신청', 'ok') : '') +
             (r.purchaseBuyerAccess ? ' ' + u.badge('구매처리', 'warn') : '') || '—';
         } },
@@ -177,6 +178,8 @@
         title: row ? '계정 수정 — ' + row.name : '계정 추가',
         subtitle: o.purchasingReauthenticationRequired
           ? '구매 권한 변경은 화면 상단의 다시 로그인 버튼을 이용하세요.'
+          : row && row.role === 'super_admin'
+          ? '수퍼관리자는 구매신청·구매처리가 기본 허용됩니다.'
           : self
           ? '본인 계정입니다. 역할과 상태는 다른 관리자만 바꿀 수 있습니다.'
           : '역할은 무엇을 할 수 있는지, 범위는 어느 현장까지 보이는지를 정합니다.',
@@ -212,7 +215,7 @@
 
           { name: 'notes', label: '메모', type: 'textarea', colSpan: 2, group: '권한',
             value: row ? row.notes : '', hint: '왜 이 권한을 줬는지 남겨두면 나중에 정리할 때 도움이 됩니다.' },
-        ].concat(o.canManagePurchasingGrants ? [
+        ].concat(o.canManagePurchasingGrants && (!row || row.role !== 'super_admin') ? [
           { name: 'purchaseRequestAccess', label: '개인앱 구매신청', type: 'checkbox', group: '구매 권한',
             value: Boolean(row && row.purchaseRequestAccess), checkboxLabel: '허용', hint: '관리자 계정에만 부여할 수 있습니다.' },
           { name: 'purchaseBuyerAccess', label: 'ERP 구매처리', type: 'checkbox', group: '구매 권한',

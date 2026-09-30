@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +20,7 @@ class GoogleAuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user instanceof User) {
+        if ($user instanceof User && ! WorkerDeviceSession::isDeviceOnly($request)) {
             // 이미 로그인돼 있는데 로그인 화면으로 온 경우(북마크·뒤로가기).
             // 작업자를 ERP 로 보내면 안 된다 — 아래 landingPath 가 역할별로 갈라 준다.
             return redirect()->to($user->landingPath());
@@ -113,6 +114,7 @@ class GoogleAuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        app(PersonalAppAccessService::class)->logout($request);
         Auth::logout();
 
         $request->session()->invalidate();
@@ -169,6 +171,7 @@ class GoogleAuthController extends Controller
 
         $request->session()->regenerate();
         $request->session()->put(EmailPasswordAuthService::STRONG_AUTH_SESSION, (int) $user->id);
+        PersonalAppAccessService::clearSession($request);
         WorkerDeviceSession::clear($request);
 
         return redirect()->to($this->destinationFor($request, $user));

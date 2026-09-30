@@ -4,9 +4,11 @@ error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 
 use App\Http\Middleware\AllowSameOriginFraming;
 use App\Http\Middleware\LocalAutoLogin;
+use App\Http\Middleware\PersonalAppSession;
 use App\Http\Middleware\RequireActiveAccount;
 use App\Http\Middleware\SetLocale;
 use App\Support\UploadLimits;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -37,10 +39,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // 언어 쿠키는 클라이언트(JS)가 평문으로 설정하므로 암호화에서 제외.
         $middleware->encryptCookies(except: ['app_locale']);
 
+        // Restore a trusted app cookie after StartSession and before an auth-protected
+        // route can reject it. Web-group placement alone does not override auth priority.
+        $middleware->prependToPriorityList(
+            AuthenticatesRequests::class,
+            PersonalAppSession::class,
+        );
+
         // 모든 웹 요청에 선택 언어를 적용.
         $middleware->web(append: [
             // 로컬 개발 자동 로그인(SNAP_AUTOLOGIN=1 + local 전용) — 운영에선 항상 무동작.
             LocalAutoLogin::class,
+            PersonalAppSession::class,
             RequireActiveAccount::class,
             SetLocale::class,
             // 같은 사이트 안에서는 iframe 허용(SAMEORIGIN) — 안 붙이면 플랫폼이
