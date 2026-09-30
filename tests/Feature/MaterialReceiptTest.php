@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Item;
 use App\Models\MaterialReceipt;
+use App\Models\PurchaseReceiptAllocation;
+use App\Models\PurchaseRequest;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\Vendor;
@@ -14,6 +16,7 @@ use App\Services\Ocr\OcrEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -175,6 +178,63 @@ class MaterialReceiptTest extends TestCase
         $this->assertSame('Graybar', $row['vendor'], '대소문자만 다른 이름이 두 거래처가 되면 집계가 갈라진다.');
         $this->assertSame(1, Vendor::query()->count());
         $this->assertNotNull($row['vendorId']);
+    }
+
+    public function test_linked_purchase_receiving_evidence_cannot_be_unconfirmed_replaced_or_deleted(): void
+    {
+        $this->actingAsManager();
+        $id = $this->save([['name' => 'EMT', 'quantity' => 10, 'unit' => 'EA']])['id'];
+        $this->assertTrue($this->svc()->confirm($id)['success']);
+        $receipt = MaterialReceipt::findOrFail($id);
+        $source = $receipt->lines()->firstOrFail();
+        $allocation = $this->linkPurchaseLine($source->id);
+
+        foreach ([$this->svc()->confirm($id, false), $this->save([['name' => 'EMT', 'quantity' => 1]], ['id' => $id]), $this->svc()->delete($id)] as $result) {
+            $this->assertFalse($result['success']);
+            $this->assertStringContainsString('구매 요청에 연결된 입고', $result['error']);
+        }
+        $this->assertSame(MaterialReceipt::STATUS_CONFIRMED, $receipt->fresh()->status);
+        $this->assertSame(10.0, (float) $source->fresh()->quantity);
+        $this->assertSame($source->id, $allocation->fresh()->material_receipt_line_id);
+        $this->assertSame(4.0, (float) $allocation->fresh()->quantity);
+    }
+
+    public function test_legacy_linked_draft_is_protected_before_its_lines_are_recreated(): void
+    {
+        $this->actingAsManager();
+        $id = $this->save([['name' => 'EMT', 'quantity' => 10, 'unit' => 'EA']])['id'];
+        $receipt = MaterialReceipt::findOrFail($id);
+        $source = $receipt->lines()->firstOrFail();
+        // A legacy/manual correction may have left allocations on a draft. Never erase them.
+        $this->linkPurchaseLine($source->id);
+        $this->assertFalse($this->save([['name' => 'Changed', 'quantity' => 1]], ['id' => $id])['success']);
+        $this->assertFalse($this->svc()->delete($id)['success']);
+        $this->assertSame([$source->id], $receipt->lines()->pluck('id')->all());
+        $this->assertTrue($this->svc()->confirm($id)['success']);
+        $this->assertDatabaseCount('purchase_receipt_allocations', 1);
+    }
+
+    private function linkPurchaseLine(int $sourceId): PurchaseReceiptAllocation
+    {
+        $request = PurchaseRequest::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'requested_by_id' => auth()->id(), 'request_key' => auth()->id().':'.Str::uuid(),
+            'request_fingerprint' => hash('sha256', (string) $sourceId), 'status' => 'ordered']);
+        $line = $request->lines()->create(['name' => 'EMT', 'quantity' => 10, 'unit' => 'EA', 'seq' => 0]);
+
+        return PurchaseReceiptAllocation::create(['purchase_request_line_id' => $line->id,
+            'material_receipt_line_id' => $sourceId, 'quantity' => 4, 'allocated_by_id' => auth()->id()]);
+    }
+
+    public function test_scoped_admin_receiving_does_not_gain_another_site_or_require_a_purchase_grant(): void
+    {
+        $this->actingAsManager();
+        $id = $this->save([['name' => 'EMT', 'quantity' => 10]])['id'];
+        $other = Site::create(['company_id' => $this->company->id, 'code' => 'PRIVATE-RCV', 'name' => 'Other', 'status' => 'active']);
+        $this->actingAsManager(['access_role' => 'admin', 'access_scope' => 'site', 'allowed_site_id' => $other->id]);
+        $this->assertSame(0, $this->svc()->list('ALL')['total']);
+        $this->assertFalse($this->svc()->confirm($id)['success']);
+        $this->assertFalse($this->save([['name' => 'EMT', 'quantity' => 1]])['success']);
+        $this->assertTrue($this->save([['name' => 'EMT', 'quantity' => 1]], ['site_id' => $other->id])['success']);
     }
 
     public function test_a_known_item_name_is_linked_and_an_unknown_one_is_not_invented(): void

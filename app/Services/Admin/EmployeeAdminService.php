@@ -49,6 +49,9 @@ class EmployeeAdminService
         if (! array_key_exists($status, self::STATUSES)) {
             return ['success' => false, 'error' => '올바른 재직 상태를 선택하세요.'];
         }
+        if ($error = $this->protectedPurchaseIdentityChange($row, ['employment_status' => $status])) {
+            return ['success' => false, 'error' => $error];
+        }
         $row->update(['employment_status' => $status]);
 
         return ['success' => true, 'messages' => ['재직 상태를 저장했습니다.', '차량·숙소 반납은 실제 반납 확인 후 별도로 처리하세요.']];
@@ -620,6 +623,10 @@ class EmployeeAdminService
         }
 
         if ($row) {
+            if ($error = $this->protectedPurchaseIdentityChange($row, $data, $input)) {
+                return ['success' => false, 'error' => $error];
+            }
+
             $row->update($data);
 
             $account = $this->syncAccountEmail($row, $email, $input);
@@ -683,6 +690,49 @@ class EmployeeAdminService
         return ['loginEmail' => $email, 'accountEmailChanged' => true];
     }
 
+    /** Employee fields also supply account identity and fallback purchase scope. */
+    private function protectedPurchaseIdentityChange(Employee $employee, array $data, array $input = [], bool $deleting = false): ?string
+    {
+        $account = $employee->user()->first();
+        if (! $account || ! ($account->purchase_request_enabled || $account->purchase_buy_enabled || $account->access_role === 'super_admin')
+            || app(UserAccessService::class)->canManagePurchasingGrants()) {
+            return null;
+        }
+
+        $message = '구매 권한이 있는 계정의 본인 정보·소속·접근 범위 변경, 재활성화 또는 삭제는 수퍼관리자만 처리할 수 있습니다.';
+        if ($deleting) {
+            return $message;
+        }
+
+        foreach (['name', 'first_name', 'last_name', 'email', 'phone', 'employee_number', 'badge_number',
+            'company_id', 'site_id', 'team_id', 'attendance_app_role', 'attendance_app_scope'] as $field) {
+            if (! array_key_exists($field, $data)) {
+                continue;
+            }
+            $default = match ($field) {
+                'attendance_app_role' => 'worker',
+                'attendance_app_scope' => 'self',
+                default => '',
+            };
+            if ((string) ($data[$field] ?? $default) !== (string) ($employee->{$field} ?? $default)) {
+                return $message;
+            }
+        }
+
+        if (($data['employment_status'] ?? null) === 'active' && $employee->employment_status !== 'active') {
+            return $message;
+        }
+
+        // A pre-existing contact/login mismatch must not bypass the employee-field comparison.
+        $email = mb_strtolower(trim((string) ($data['email'] ?? '')));
+        if (filter_var($input['syncAccountEmail'] ?? false, FILTER_VALIDATE_BOOL)
+            && $email !== '' && $email !== mb_strtolower((string) $account->email)) {
+            return $message;
+        }
+
+        return null;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -696,6 +746,10 @@ class EmployeeAdminService
         $row = Employee::find($id);
         if (! $row) {
             return ['success' => false, 'error' => '직원을 찾을 수 없습니다.'];
+        }
+
+        if ($error = $this->protectedPurchaseIdentityChange($row, [], deleting: true)) {
+            return ['success' => false, 'error' => $error];
         }
 
         $isSuper = $actor->access_role === 'super_admin';

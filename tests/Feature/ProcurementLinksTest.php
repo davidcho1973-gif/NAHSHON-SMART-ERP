@@ -7,10 +7,11 @@ use App\Models\ProcurementItem;
 use App\Models\Project;
 use App\Models\ProjectContract;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\Vendor;
 use App\Models\WbsItem;
+use App\Services\Admin\ContractAdminService;
 use App\Services\Procurement\ProcurementService;
-use App\Services\Vendors\VendorResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -36,6 +37,7 @@ class ProcurementLinksTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
 
         $this->site = Site::create([
             'code' => 'S-PO', 'name' => '조달 현장',
@@ -177,10 +179,10 @@ class ProcurementLinksTest extends TestCase
         $this->wbs();
         $this->update('W-1', ['contract_id' => $contract->id, 'amount' => 40000]);
 
-        $admin = \App\Models\User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']);
-        $this->actingAs($admin);
+        $admin = User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']);
+        $this->actingAsPurchaseUser($admin);
 
-        $rows = app(\App\Services\Admin\ContractAdminService::class)->list();
+        $rows = app(ContractAdminService::class)->list();
         $row = collect($rows['rows'])->firstWhere('id', $contract->id);
 
         $this->assertSame(40000.0, $row['poTotal']);

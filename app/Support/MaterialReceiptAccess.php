@@ -37,7 +37,9 @@ final class MaterialReceiptAccess
 
         return Site::query()->when($activeOnly, fn ($q) => $q->where('status', 'active'))
             ->orderBy('name')->get()
-            ->filter(fn (Site $site): bool => AiInformationAccess::canUseSite($user, $site))->values();
+            ->filter(fn (Site $site): bool => PurchaseAccess::eligible($user)
+                ? PurchaseAccess::canUseSite($user, $site)
+                : AiInformationAccess::canUseSite($user, $site))->values();
     }
 
     /** @return array<int, array{value: int, label: string}> */

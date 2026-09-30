@@ -34,6 +34,7 @@ class CommunicationNotification extends Model
         'type',
         'title',
         'body',
+        'action_url',
         'read_at',
     ];
 

@@ -29,6 +29,8 @@ class VendorResolver
 
         $existing = Vendor::query()
             ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower($name)])
+            ->where(fn ($query) => $query->whereNull('company_id')
+                ->when($companyId !== null, fn ($query) => $query->orWhere('company_id', $companyId)))
             ->orderByRaw('company_id IS NOT NULL')   // 전사 공통(company_id null) 우선
             ->first();
         if ($existing) {

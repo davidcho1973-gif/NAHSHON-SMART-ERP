@@ -23,6 +23,7 @@ use App\Services\Wbs\WeekBoardReflector;
 use App\Support\AccessPolicy;
 use App\Support\ImageDownscale;
 use App\Support\ImageParts;
+use App\Support\PurchaseAccess;
 use App\Support\ReportSlot;
 use App\Support\SiteFromText;
 use Illuminate\Support\Carbon;
@@ -890,10 +891,10 @@ class OpsIntakeService
                 : ($item->category === OpsClaimReflector::CATEGORY
                     ? app(OpsClaimReflector::class)->apply($item, $patch, $userId, $via)
                     : match ($item->target_type) {
-                    'procurement' => $this->applyProcurement($item, $patch, $userId, $via),
-                    'submittal' => $this->applySubmittal($item, $patch, $userId, false, $via),
-                    default => $this->applyWbs($item, $patch, $userId, $via),
-                });
+                        'procurement' => $this->applyProcurement($item, $patch, $userId, $via),
+                        'submittal' => $this->applySubmittal($item, $patch, $userId, false, $via),
+                        default => $this->applyWbs($item, $patch, $userId, $via),
+                    });
         } catch (\Throwable $e) {
             $this->releaseClaim($id, $before);
 
@@ -1042,6 +1043,17 @@ class OpsIntakeService
      */
     private function applyProcurement(OpsIntakeItem $item, array $patch, ?int $userId, string $via = OpsIntakeItem::VIA_MANUAL): array
     {
+        // Analysis can propose a purchase change, but only an explicit buyer review may commit it.
+        // A report submission or background replay must never impersonate buyer approval.
+        $actor = auth()->user() ?? ($userId ? User::find($userId) : null);
+        if (! in_array($via, [OpsIntakeItem::VIA_MANUAL, 'meeting_review'], true)
+            || ! PurchaseAccess::canBuy($actor)
+            || (auth()->check() && $userId !== null && auth()->id() !== $userId)) {
+            $message = '구매 담당자가 구매 변경 내용을 확인한 후 직접 반영해야 합니다.';
+            $item->update(['result_note' => $message]);
+
+            return ['success' => false, 'error' => $message];
+        }
         // 제안의 대상 코드는 PO 번호다 — 실제 갱신은 project_code + wbs_code 로 이뤄진다.
         //
         // 현장으로 좁히는 것이 중요하다. po_no 에는 유일 제약이 없고(유일한 것은

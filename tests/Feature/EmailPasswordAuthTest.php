@@ -6,7 +6,10 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\UnifiedAlert;
 use App\Models\User;
+use App\Services\Admin\UserAccessService;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\PurchaseAccess;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -163,6 +166,81 @@ class EmailPasswordAuthTest extends TestCase
         $this->assertDatabaseMissing('unified_alerts', [
             'fingerprint' => "signed-in-with-phone-digits:{$user->id}",
         ]);
+    }
+
+    public function test_buyers_and_superadmins_require_a_real_password_and_receive_strong_session_proof(): void
+    {
+        foreach (['admin', 'super_admin'] as $role) {
+            $email = $role.'@example.com';
+            $user = $this->employeeUser($role, $email);
+            $user->forceFill(['purchase_buy_enabled' => $role === 'admin',
+                'password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+
+            $this->signIn('0072', $email)->assertSessionHasErrors('email_login')
+                ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+            $this->assertGuest();
+
+            $this->withSession([WorkerDeviceSession::FLAG => true]);
+            $this->signIn('MySite2026', $email)
+                ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
+                ->assertSessionMissing(WorkerDeviceSession::FLAG);
+            $this->assertAuthenticatedAs($user);
+            $this->assertTrue(PurchaseAccess::canBuy($user, request()));
+            $this->post('/logout');
+        }
+    }
+
+    public function test_ordinary_phone_digit_login_does_not_create_remember_cookie_or_retain_strong_proof(): void
+    {
+        $user = $this->employeeUser('site_manager');
+        $this->withSession([EmailPasswordAuthService::STRONG_AUTH_SESSION => $user->id]);
+
+        $this->signIn()->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION)
+            ->assertCookieMissing(Auth::guard()->getRecallerName());
+        $this->assertAuthenticatedAs($user);
+        $this->assertDatabaseHas('auth_events', ['user_id' => $user->id, 'event' => 'login_success', 'method' => 'phone4']);
+
+        // A grant made while the person is signed in does not upgrade a phone-only session.
+        $user->forceFill(['purchase_buy_enabled' => true])->save();
+        $this->assertFalse(PurchaseAccess::canBuy($user, request()));
+        $this->savePassword()->assertSessionHasErrors('password');
+        $this->assertNull($user->fresh()->password_set_at);
+    }
+
+    public function test_legacy_and_device_sessions_cannot_bootstrap_a_buyer_password(): void
+    {
+        $user = $this->employeeUser('admin');
+        $user->forceFill(['purchase_buy_enabled' => true])->save();
+        $this->actingAs($user);
+        $this->savePassword()->assertSessionHasErrors('password');
+        $this->assertNull($user->fresh()->password_set_at);
+
+        $this->withSession([EmailPasswordAuthService::STRONG_AUTH_SESSION => $user->id, WorkerDeviceSession::FLAG => true]);
+        $this->savePassword()->assertSessionHasErrors('password');
+        $this->assertNull($user->fresh()->password_set_at);
+
+        // A verified Google login can bootstrap a password; merely having google_id cannot.
+        $this->withSession([WorkerDeviceSession::FLAG => false]);
+        $this->savePassword()->assertRedirect('/');
+        $this->assertTrue(Hash::check('MySite2026', $user->fresh()->password));
+    }
+
+    public function test_unproven_superadmin_session_cannot_delegate_via_purchase_flags_or_role_promotion(): void
+    {
+        $user = $this->employeeUser('super_admin');
+        $this->actingAs($user);
+        $this->get('/login')->assertRedirect('/');
+        $service = app(UserAccessService::class);
+        $this->assertFalse($service->canManagePurchasingGrants());
+        $result = $service->save(['name' => 'New Super', 'email' => 'new-super@example.com',
+            'role' => 'super_admin', 'scope' => 'all_sites', 'status' => 'active']);
+        $this->assertFalse($result['success']);
+        $this->assertArrayHasKey('role', $result['errors']);
+        $this->assertDatabaseMissing('users', ['email' => 'new-super@example.com']);
+
+        $this->withSession([EmailPasswordAuthService::STRONG_AUTH_SESSION => $user->id + 1]);
+        $this->assertFalse($service->canManagePurchasingGrants());
+        $this->assertFalse(PurchaseAccess::canBuy($user, request()));
     }
 
     /**

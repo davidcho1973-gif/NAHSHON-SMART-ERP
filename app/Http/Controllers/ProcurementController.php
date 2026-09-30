@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\IntegratedDocument;
 use App\Models\ProcurementItem;
+use App\Models\Site;
 use App\Services\Procurement\ProcurementDocAnalyzer;
+use App\Support\PurchaseAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,17 +18,19 @@ use RuntimeException;
  */
 class ProcurementController extends Controller
 {
-    public function __construct(private readonly ProcurementDocAnalyzer $analyzer)
-    {
-    }
+    public function __construct(private readonly ProcurementDocAnalyzer $analyzer) {}
 
     /**
      * 서류 업로드 → AI 분석 → 추출값 + 제안 단계 반환(+원본 보관). 저장은 사용자가 확인 후 별도로.
      */
     public function analyze(Request $request): JsonResponse
     {
+        $actor = PurchaseAccess::assertBuyer($request->user());
+        $siteInput = $request->input('site_id', $request->input('siteId'));
+        $siteId = is_numeric($siteInput) ? (int) $siteInput : (int) Site::where('code', (string) $siteInput)->value('id');
+        PurchaseAccess::assertSite($actor, $siteId);
         $request->validate([
-            'file' => 'required|file|max:32768',
+            'file' => 'required|file|max:32768|mimes:pdf,png,jpg,jpeg,webp,docx,xlsx',
         ]);
 
         try {
@@ -43,13 +47,17 @@ class ProcurementController extends Controller
                 ], 422);
             }
 
-            $mime = $file->getClientMimeType() ?: ($file->getMimeType() ?: 'application/octet-stream');
+            $mime = $file->getMimeType() ?: 'application/octet-stream';
 
             // 업로드된 임시 파일을 바로 분석(빠른 왕복), 그리고 원본을 보관해 링크로 남긴다.
             $data = $this->analyzer->analyze($file->getRealPath(), $mime);
 
             $disk = IntegratedDocument::storageDisk();
-            $path = $file->store('procurement-docs', $disk);
+            $disk = $disk === 'public' ? 'local' : $disk;
+            $path = $file->store("procurement-docs/{$actor->id}/{$siteId}", ['disk' => $disk, 'visibility' => 'private']);
+            if (! $path) {
+                throw new RuntimeException('구매 근거 파일을 보관하지 못했습니다. 다시 시도해 주세요.');
+            }
 
             return response()->json([
                 'success' => true,
@@ -63,21 +71,26 @@ class ProcurementController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
+            return response()->json(['success' => false, 'error' => '구매 서류 분석·보관에 실패했습니다. 잠시 후 다시 시도해 주세요.'], 400);
         }
     }
 
     /**
      * 조달 항목에 연결된 근거 서류 원본 열람.
      */
-    public function showFile(ProcurementItem $item)
+    public function showFile(Request $request, ProcurementItem $item)
     {
+        $actor = PurchaseAccess::assertBuyer($request->user());
+        if ($item->site_id !== null || $actor->access_role !== 'super_admin') {
+            PurchaseAccess::assertSite($actor, (int) $item->site_id);
+        }
         $disk = $item->document_disk ?: 'public';
         abort_unless(filled($item->document_path) && Storage::disk($disk)->exists($item->document_path), 404);
 
-        return Storage::disk($disk)->response(
+        return Storage::disk($disk)->download(
             $item->document_path,
             $item->document_name ?: ('procurement-'.$item->id),
+            ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff'],
         );
     }
 }
