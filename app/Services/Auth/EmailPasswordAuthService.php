@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Models\AuthEvent;
 use App\Models\User;
 use App\Services\Alerts\UnifiedAlertService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,9 @@ use Illuminate\Support\Str;
 class EmailPasswordAuthService
 {
     public const SETUP_SESSION = 'email_password_setup';
+
+    /** Positive proof for purchasing; old or remembered sessions must authenticate again. */
+    public const STRONG_AUTH_SESSION = 'purchase_strong_auth_user';
 
     /**
      * 이메일 + (전화번호 뒷 4자리 또는 본인이 정한 비밀번호) 로 들어온다.
@@ -34,7 +38,7 @@ class EmailPasswordAuthService
      */
     public function attempt(string $email, string $password, Request $request): string
     {
-        $request->session()->forget(self::SETUP_SESSION);
+        $request->session()->forget([self::SETUP_SESSION, self::STRONG_AUTH_SESSION]);
         $result = DB::transaction(function () use ($email, $password, $request) {
             $user = User::query()->whereRaw('lower(email) = ?', [Str::lower(trim($email))])->lockForUpdate()->first();
             if (! $user || ! $this->active($user)) {
@@ -48,7 +52,7 @@ class EmailPasswordAuthService
             $initial = $this->initialDigits($user);
             $byDigits = $initial !== null && hash_equals($initial, $password);
             $byPassword = $user->password_set_at && Hash::check($password, $user->password);
-            $valid = $byDigits || $byPassword;
+            $valid = $byPassword || ($byDigits && ! $this->requiresStrongAuthentication($user));
 
             if (! $valid) {
                 $failures = $user->password_login_locked_until ? 1 : $user->password_login_failures + 1;
@@ -65,11 +69,11 @@ class EmailPasswordAuthService
 
             // 바로 들어간다. 예전에는 4자리면 «비밀번호를 정하라» 는 화면을 한 번 거쳤는데,
             // 4자리를 계속 쓰게 된 지금 그 화면은 매번 나오는 군더더기가 된다.
-            return ['result' => 'login', 'user' => $user, 'digits' => $byDigits];
+            return ['result' => 'login', 'user' => $user, 'digits' => ! $byPassword];
         });
 
         if ($result['result'] === 'login') {
-            $this->signIn($result['user'], $request);
+            $this->signIn($result['user'], $request, strong: ! $result['digits']);
             if ($result['digits'] ?? false) {
                 $this->announcePhoneDigitSignIn($result['user'], $request);
             }
@@ -110,6 +114,13 @@ class EmailPasswordAuthService
             if ($user->password_set_at && (! $request->user() || ! Hash::check($currentPassword ?? '', $user->password))) {
                 return null;
             }
+            // A weak/legacy session cannot create a first password after a purchasing
+            // grant or promotion. Otherwise phone digits could be exchanged for buyer access.
+            if (! $user->password_set_at && $this->requiresStrongAuthentication($user)
+                && (! self::hasStrongAuthentication($request, $user)
+                    || WorkerDeviceSession::isDeviceOnly($request))) {
+                return null;
+            }
             $user->forceFill([
                 'password' => Hash::make($password),
                 'password_set_at' => now(),
@@ -124,7 +135,7 @@ class EmailPasswordAuthService
 
         $request->session()->forget(self::SETUP_SESSION);
         if ($user) {
-            $this->signIn($user, $request);
+            $this->signIn($user, $request, strong: true);
         }
 
         return $user;
@@ -220,11 +231,28 @@ class EmailPasswordAuthService
         return hash_hmac('sha256', $user->email.'|'.$user->employee?->phone, (string) config('app.key'));
     }
 
-    private function signIn(User $user, Request $request): void
+    public static function hasStrongAuthentication(Request $request, User $user): bool
     {
-        Auth::login($user, true);
+        return $request->hasSession()
+            && (int) $request->session()->get(self::STRONG_AUTH_SESSION, 0) === (int) $user->id;
+    }
+
+    private function requiresStrongAuthentication(User $user): bool
+    {
+        return $user->access_role === 'super_admin' || (bool) $user->purchase_buy_enabled;
+    }
+
+    private function signIn(User $user, Request $request, bool $strong): void
+    {
+        Auth::login($user, remember: $strong);
         $request->session()->regenerate();
+        if ($strong) {
+            $request->session()->put(self::STRONG_AUTH_SESSION, (int) $user->id);
+            WorkerDeviceSession::clear($request);
+        } else {
+            $request->session()->forget(self::STRONG_AUTH_SESSION);
+        }
         $user->forceFill(['last_login_at' => now()])->save();
-        AuthEvent::record('login_success', user: $user, method: 'password', request: $request);
+        AuthEvent::record('login_success', user: $user, method: $strong ? 'password' : 'phone4', request: $request);
     }
 }

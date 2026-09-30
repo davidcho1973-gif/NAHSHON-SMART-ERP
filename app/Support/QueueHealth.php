@@ -53,7 +53,7 @@ final class QueueHealth
      *
      * @var list<string>
      */
-    public const SERVED_QUEUES = [self::DOCUMENT_QUEUE, 'meetings'];
+    public const SERVED_QUEUES = [self::DOCUMENT_QUEUE, 'meetings', 'purchases', 'purchase-notifications'];
 
     /**
      * @return array<string, mixed>

@@ -16,6 +16,9 @@
     rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="{{ asset('js/admin-shell.js') }}?v={{ filemtime(public_path('js/admin-shell.js')) }}" defer></script>
+  <link rel="stylesheet" href="{{ asset('css/purchase-requests.css') }}?v={{ filemtime(public_path('css/purchase-requests.css')) }}">
+  <script src="{{ asset('js/purchase-common.js') }}?v={{ filemtime(public_path('js/purchase-common.js')) }}" defer></script>
+  <script src="{{ asset('js/admin-purchases.js') }}?v={{ filemtime(public_path('js/admin-purchases.js')) }}" defer></script>
   <script src="{{ asset('js/admin-meetings.js') }}?v={{ filemtime(public_path('js/admin-meetings.js')) }}" defer></script>
   <script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
@@ -232,6 +235,11 @@
                 <i class="ph ph-package"></i><span>자재 · 장비</span>
               </li>
             <ul class="nav-sub" data-sub="g-inv">
+              @if(\App\Support\PurchaseAccess::hasBuyerPermission(auth()->user()))
+              <li class="nav-item nav-child" data-view="purchase-requests" id="nav-purchase-requests">
+                <i class="ph ph-shopping-cart"></i><span>구매 요청</span>
+              </li>
+              @endif
               <li class="nav-item nav-child" data-view="material-receipts" id="nav-material-receipts">
                 <i class="ph ph-truck-trailer"></i><span>자재 입고</span>
               </li>
@@ -377,6 +385,9 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-sliders"></i><span>임금 프로필</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재 · 장비</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="material-receipts"><i class="ph ph-truck-trailer"></i><span>자재 입고</span></button>
+          @if(\App\Support\PurchaseAccess::hasBuyerPermission(auth()->user()))
+          <button class="mobile-more-tile" type="button" data-mobile-view="purchase-requests"><i class="ph ph-shopping-cart"></i><span>구매 요청</span></button>
+          @endif
           <button class="mobile-more-tile" type="button" data-mobile-view="item-master"><i class="ph ph-list-bullets"></i><span>품목 · 분류</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="boq"><i class="ph ph-calculator"></i><span>물량 / BOQ</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="vendors"><i class="ph ph-shopping-cart"></i><span>구매 / 렌트</span></button>
@@ -1482,6 +1493,7 @@
         'week-board': { title: '공정 관리 — 이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
         'section-drawings': { title: '공정별 도면', render: function () { return window.AdminSectionDrawings.render(); } },
         'material-receipts': { title: '자재 입고', render: function () { return window.AdminMaterialReceipts.render(); } },
+        'purchase-requests': { title: '구매 요청', render: function () { return window.AdminPurchases.render(); } },
         'item-master': { title: '품목 · 분류', render: function () { return window.AdminItems.render(); } },
         'equipment-checks': { title: '장비 사용 점검', render: function () { return window.AdminEquipmentChecks.render(); } },
         'submittals': { title: '제출물 대장', render: function () { return window.AdminRegisters.renderSubmittals(); } },
@@ -8538,7 +8550,8 @@
         else if (it.slack <= 7) slackHtml = '<span style="color:#f59e0b;font-size:11px;font-weight:700">여유 ' + it.slack + '일</span>';
         else slackHtml = '<span style="color:#10b981;font-size:11px;font-weight:600">여유 ' + it.slack + '일</span>';
 
-        var advanceBtn = it.status === '입고완료' ? '' :
+        var purchaseCanManage = @json(\App\Support\PurchaseAccess::canBuy(auth()->user()));
+        var advanceBtn = !purchaseCanManage || it.status === '입고완료' ? '' :
           '<button onclick="window.wbsProcAdvance(\'' + wbsJsArg(it.wbs_id) + '\')" title="다음 단계로 (' + wbsEsc(it.nextStatus) + ')" style="background:none;border:1px solid #ea580c;color:#ea580c;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer"><i class="ph ph-arrow-right"></i></button>';
 
         return '<div style="display:grid;grid-template-columns:54px minmax(170px,1fr) 116px 158px 92px 92px 96px 96px;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-subtle);border-left:3px solid ' + alertBorder + '">' +
@@ -8553,11 +8566,12 @@
           '<span class="cell-mono" style="font-size:11px;color:var(--text-tertiary)">' + wbsEsc(it.needBy || '—') + '</span>' +
           '<span>' + slackHtml + '</span>' +
           '<span style="display:flex;gap:4px;justify-content:flex-end">' + advanceBtn +
-          '<button onclick="window.wbsProcEdit(\'' + wbsJsArg(it.wbs_id) + '\')" title="조달 상세 편집" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer"><i class="ph ph-pencil-simple"></i></button>' +
+          (purchaseCanManage ? '<button onclick="window.wbsProcEdit(\'' + wbsJsArg(it.wbs_id) + '\')" title="조달 상세 편집" style="background:none;border:1px solid var(--border-default);color:var(--text-secondary);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer"><i class="ph ph-pencil-simple"></i></button>' : '') +
           '</span></div>';
       }
 
       window.wbsProcAdvance = async function(wbsCode) {
+        if (!@json(\App\Support\PurchaseAccess::canBuy(auth()->user()))) return;
         var it = ((window._wbsProcure && window._wbsProcure.items) || []).filter(function(x){ return x.wbs_id === wbsCode; })[0];
         if (!it) return;
         var r = await window.API.updateProcurement(window.WBS_CURRENT_PROJECT, wbsCode, { status: it.nextStatus });
@@ -8567,6 +8581,7 @@
       };
 
       window.wbsProcEdit = function(wbsCode) {
+        if (!@json(\App\Support\PurchaseAccess::canBuy(auth()->user()))) return;
         var it = ((window._wbsProcure && window._wbsProcure.items) || []).filter(function(x){ return x.wbs_id === wbsCode; })[0];
         if (!it) return;
         var STAGES = (window._wbsProcure && window._wbsProcure.statuses) || ['발주대기','발주완료','생산중','선적중','통관중','입고완료'];
@@ -8678,7 +8693,7 @@
           resEl.innerHTML = '<span style="color:var(--text-tertiary)">AI가 서류를 읽는 중…</span>';
           try {
             var tokenEl = document.querySelector('meta[name="csrf-token"]');
-            var fd = new FormData(); fd.append('file', input.files[0]);
+            var fd = new FormData(); fd.append('file', input.files[0]); fd.append('siteId', it.siteId || '');
             var res = await fetch('/procurement-api/analyze', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': tokenEl ? tokenEl.getAttribute('content') : '', 'Accept': 'application/json' }, body: fd });
             var json = await res.json();
             if (!json || !json.success) { resEl.innerHTML = '<span style="color:var(--status-danger)">분석 실패: ' + wbsEsc((json && (json.error || json.message)) || ('HTTP ' + res.status)) + '</span>'; btn.disabled = false; btn.innerHTML = old; return; }

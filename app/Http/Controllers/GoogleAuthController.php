@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +54,7 @@ class GoogleAuthController extends Controller
             $parameters['prompt'] = config('services.google.prompt');
         }
 
-        return redirect()->away(config('services.google.auth_url') . '?' . http_build_query($parameters));
+        return redirect()->away(config('services.google.auth_url').'?'.http_build_query($parameters));
     }
 
     public function callback(Request $request): RedirectResponse
@@ -120,7 +122,7 @@ class GoogleAuthController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $profile
+     * @param  array<string, mixed>  $profile
      */
     private function loginGoogleProfile(Request $request, array $profile): RedirectResponse
     {
@@ -166,6 +168,8 @@ class GoogleAuthController extends Controller
         Auth::login($user, remember: true);
 
         $request->session()->regenerate();
+        $request->session()->put(EmailPasswordAuthService::STRONG_AUTH_SESSION, (int) $user->id);
+        WorkerDeviceSession::clear($request);
 
         return redirect()->to($this->destinationFor($request, $user));
     }

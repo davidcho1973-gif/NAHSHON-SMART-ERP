@@ -7,7 +7,6 @@ use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
 use App\Http\Controllers\DrawingSheetController;
-use App\Http\Controllers\GcClaimExportController;
 use App\Http\Controllers\EmailAiInboxController;
 use App\Http\Controllers\EmailPasswordAuthController;
 use App\Http\Controllers\EquipmentApiController;
@@ -15,6 +14,7 @@ use App\Http\Controllers\EquipmentChecklistController;
 use App\Http\Controllers\ExpenseAppController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
+use App\Http\Controllers\GcClaimExportController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
@@ -35,6 +35,8 @@ use App\Http\Controllers\OrgLogoController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\ProjectContractDocumentController;
+use App\Http\Controllers\PurchaseAnalysisController;
+use App\Http\Controllers\PurchaseRequestController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QrPrintController;
 use App\Http\Controllers\SimpleWorkerRegistrationController;
@@ -88,6 +90,21 @@ Route::post('/auth/password/setup', [EmailPasswordAuthController::class, 'store'
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+Route::middleware('auth')->group(function (): void {
+    Route::get('/attendance-app/purchase-requests', [PurchaseRequestController::class, 'mobile'])->name('attendance-app.purchase-requests');
+    Route::prefix('purchase-requests')->group(function (): void {
+        Route::post('/analyze', [PurchaseAnalysisController::class, 'store'])->middleware('throttle:12,1');
+        Route::get('/analysis/{job}', [PurchaseAnalysisController::class, 'show'])->whereNumber('job');
+        Route::get('/', [PurchaseRequestController::class, 'index']);
+        Route::post('/', [PurchaseRequestController::class, 'store'])->middleware('throttle:30,1');
+        Route::get('/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->whereNumber('purchaseRequest');
+        Route::get('/{purchaseRequest}/receipts', [PurchaseRequestController::class, 'receipts'])->whereNumber('purchaseRequest');
+        Route::post('/{purchaseRequest}/action', [PurchaseRequestController::class, 'action'])->whereNumber('purchaseRequest')->middleware('throttle:60,1');
+        Route::post('/{purchaseRequest}/attachments', [PurchaseRequestController::class, 'upload'])->whereNumber('purchaseRequest')->middleware('throttle:20,1');
+        Route::get('/{purchaseRequest}/attachments/{attachment}/download', [PurchaseRequestController::class, 'download'])->whereNumber(['purchaseRequest', 'attachment'])->name('purchase-requests.attachment');
+    });
+});
 
 Route::middleware(['auth'])->prefix('worker-onboarding')->group(function () {
     Route::get('/', [WorkerEnrollmentController::class, 'index'])->name('worker-enrollment.index');

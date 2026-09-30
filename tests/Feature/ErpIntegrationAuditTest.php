@@ -27,13 +27,13 @@ class ErpIntegrationAuditTest extends TestCase
 
     public function test_empty_vendor_database_does_not_return_demo_contacts(): void
     {
-        $this->actingAs(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
         $this->assertSame([], SmartCompanyData::vendors());
     }
 
     public function test_housing_summary_and_cards_share_real_capacity_and_rent_fields(): void
     {
-        $this->actingAs(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
         Housing::create(['code' => 'H-A', 'name' => 'House A', 'address' => 'Test address', 'beds' => 4, 'occupied' => 2, 'monthly_rent' => 2500, 'status' => 'available']);
         $rows = SmartCompanyData::housingList();
         $stats = SmartCompanyData::housingStats();
@@ -48,7 +48,7 @@ class ErpIntegrationAuditTest extends TestCase
     public function test_manual_is_authenticated_and_covers_every_sidebar_menu(): void
     {
         $this->get('/help')->assertRedirect('/login');
-        $this->actingAs(User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']));
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'worker', 'account_status' => 'active']));
         $this->get('/help')->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8');
         $manual = file_get_contents(resource_path('manuals/user-manual-ko.html'));
         $spa = file_get_contents(resource_path('views/smart-company/index.blade.php'));
@@ -65,7 +65,7 @@ class ErpIntegrationAuditTest extends TestCase
     {
         $hr = User::factory()->create(['access_role' => 'hr_manager', 'account_status' => 'active']);
         $admin = User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']);
-        $this->actingAs($hr);
+        $this->actingAsPurchaseUser($hr);
         $service = app(UserAccessService::class);
         $this->assertFalse($service->save(['id' => $admin->id, 'name' => 'Hijack', 'email' => 'replace@example.test', 'role' => 'worker', 'scope' => 'self', 'status' => 'active'])['success']);
         $this->assertFalse($service->setStatus($admin->id, 'suspended')['success']);
@@ -75,7 +75,7 @@ class ErpIntegrationAuditTest extends TestCase
 
     public function test_employee_identity_cannot_be_linked_to_two_accounts(): void
     {
-        $this->actingAs(User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']));
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'admin', 'account_status' => 'active']));
         $employee = Employee::create(['name' => 'Existing worker', 'phone' => '+12025550111']);
         User::factory()->create(['employee_id' => $employee->id]);
         $result = app(UserAccessService::class)->save(['name' => 'New login', 'email' => 'duplicate@example.test', 'role' => 'worker', 'scope' => 'self', 'status' => 'active', 'employeeId' => $employee->id]);
@@ -122,6 +122,7 @@ class ErpIntegrationAuditTest extends TestCase
 
     public function test_missed_eta_is_late_even_before_the_planned_need_by_date(): void
     {
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
         WbsItem::create(['project_code' => 'AUDIT', 'wbs_code' => 'A-3', 'level' => 'subtask', 'name' => '자재 조달', 'crew_size' => 0, 'planned_end' => '2026-11-01']);
         app(ProcurementService::class)->update('AUDIT', 'A-3', ['status' => '선적중', 'eta' => '2026-09-18']);
         $list = app(ProcurementService::class)->list('AUDIT', 'ALL', '2026-09-19');
@@ -131,6 +132,7 @@ class ErpIntegrationAuditTest extends TestCase
 
     public function test_failed_finance_link_is_reported_without_losing_procurement_save(): void
     {
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
         WbsItem::create(['project_code' => 'AUDIT', 'wbs_code' => 'A-4', 'level' => 'subtask', 'name' => '자재 조달']);
         $this->mock(ProcurementExpenseConnector::class)->shouldReceive('sync')->once()->andThrow(new \RuntimeException('Simulated unavailable ledger'));
         $result = app(ProcurementService::class)->update('AUDIT', 'A-4', ['status' => '입고완료', 'amount' => 100]);

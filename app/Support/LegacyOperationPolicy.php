@@ -39,13 +39,16 @@ final class LegacyOperationPolicy
         'api_updateOpsBatch', 'api_deleteOpsBatch', 'api_startDailyClosing',
         'api_saveDailyPlan', 'api_sendDailyReport', 'api_saveOpsLabor', 'api_deleteOpsLabor',
         'api_markWbsStatus', 'api_updateWbsRow', 'api_insertWbsRow', 'api_addManualWbsWork',
-        'api_toggleWeekCommit', 'api_updateProcurement', 'api_processWbsManual',
+        'api_toggleWeekCommit', 'api_processWbsManual',
         'api_createSafetyCardForWbs', 'api_assignSafetySigner',
     ];
 
     public static function authorize(string $method, array $args, string $siteId): string
     {
         $user = auth()->user();
+        if ($method === 'api_updateProcurement') {
+            PurchaseAccess::assertBuyer($user);
+        }
         if (in_array($method, self::MANAGE, true)) {
             OperationalAccess::assertManage();
         }

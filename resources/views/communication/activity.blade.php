@@ -66,6 +66,7 @@
                     'mention' => __('나를 부름'),
                     'reply' => __('답글'),
                     'announcement' => __('공지'),
+                    'purchase' => __('구매'),
                 ];
             @endphp
             <nav class="chips" aria-label="{{ __('알림 종류') }}">
@@ -77,8 +78,8 @@
 
             @forelse($items as $item)
                 @php
-                    $kind = in_array($item->type, ['mention', 'reply', 'announcement', 'invite'], true) ? $item->type : 'announcement';
-                    $icon = ['mention' => '@', 'reply' => '↩', 'announcement' => '📢', 'invite' => '#'][$kind];
+                    $kind = $item->type === 'purchase_request' ? 'purchase' : (in_array($item->type, ['mention', 'reply', 'announcement', 'invite'], true) ? $item->type : 'announcement');
+                    $icon = ['mention' => '@', 'reply' => '↩', 'announcement' => '📢', 'invite' => '#', 'purchase' => '🛒'][$kind];
                     $what = match ($kind) {
                         'mention' => __(':name님이 나를 불렀습니다', ['name' => $item->title]),
                         'reply' => __(':name님이 답글을 달았습니다', ['name' => $item->title]),

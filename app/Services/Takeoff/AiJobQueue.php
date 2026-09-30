@@ -5,6 +5,7 @@ namespace App\Services\Takeoff;
 use App\Jobs\RunAiJob;
 use App\Models\AiJob;
 use App\Support\CurrentCompany;
+use App\Support\PurchaseAccess;
 
 /**
  * AI 작업 접수 창구 — 받아서 번호표를 주고 즉시 돌려보낸다.
@@ -82,6 +83,19 @@ class AiJobQueue
         }
 
         $user = auth()->user();
+        if ($job->kind === 'purchase_draft') {
+            // Purchase drafts can contain private order evidence. The document admin shortcut is not applicable.
+            if ((int) $job->user_id !== (int) $user?->id || ! $user
+                || (! PurchaseAccess::canRequest($user) && ! PurchaseAccess::canBuy($user))) {
+                return ['success' => false, 'error' => '이 작업을 볼 권한이 없습니다.'];
+            }
+            PurchaseAccess::assertSite($user, (int) ($job->params['site_id'] ?? 0));
+            if (($job->params['mode'] ?? '') === 'order' && ! PurchaseAccess::canBuy($user)) {
+                return ['success' => false, 'error' => '구매 처리 권한이 필요합니다.'];
+            }
+
+            return $job->toStatusArray();
+        }
         $mine = $job->user_id === null || $job->user_id === $user?->id;
         $admin = in_array($user?->access_role, ['super_admin', 'admin'], true);
         if (! $mine && ! $admin) {
