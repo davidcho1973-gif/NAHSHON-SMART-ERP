@@ -2,6 +2,16 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-30 Personal-app QR connection
+
+The owner's active superadmin account had no separate requester grant, so purchasing disappeared from the personal app. Superadmins now have built-in purchase request access; other eligible internal managers still need explicit superadmin grants. ERP and the superadmin personal app share a QR menu that issues a targeted, single-use 15-minute connection. Successful scanning opens the personal app and remembers a revocable app-only device for up to 400 days. Account switching requires confirmation. The QR does not assign permissions.
+
+Dedicated hashed device credentials are checked against current account, employment and purchase permissions on every request. App-only sessions cannot use ERP buyer operations, change roles or establish an ERP password. Real password/Google authentication upgrades the session explicitly. Weak phone-digit manager login no longer creates an ERP remember cookie, and legacy remember sessions remain app-only. A matching valid app cookie restores its own proof before auth checks, including after a previously strong session expires. Revocation and logout end the device connection. App work tiles remain available when attendance lookup fails or no employee is linked.
+
+Validation: final isolated PostgreSQL/PHP 8.5 full suite: 2,572 tests, 2,571 passed, one existing skip, 10,548 assertions. All 57 JavaScript interaction tests, Blade compilation, production asset build, changed/new PHP style and diff checks passed. An initial full run found the missing manual navigation anchor, fixed before the final full run. Independent final auth/security review found no remaining blockers. Browser mock UI covered mobile layout and QR expiration/account-switch behavior. Production read-only inspection confirmed davidcho1973 is an active superadmin with an empty previous purchasing grant. No live grants, employee records, purchases or attendance entries were created; physical phone-camera commissioning remains a user-device check.
+
+Detailed Korean purchasing/QR instructions are in docs/PURCHASE_REQUESTS_KO.md and /help (purchase-requests, personal-app-access/personal-app-qr). A separately saved seven-page Korean PDF was rendered and visually verified. Deployment follows the feature PR, staging, production CI and actual NAHSHON build verification gates.
+
 ## CODEX — 2026-09-29 Purchase requests
 
 WBS procurement rows cannot represent individual requests, partial orders and independently confirmed receipts. Added a request/order domain linked to the existing receiving ledger, with explicit superadmin grants for mobile requesting and separate buyer-only processing. Concise mobile intake and ERP buyer desk reuse existing UI, grounded AI adapters and notification inbox. Private draft analysis runs durably on the purchases queue; AI cannot execute orders. Legacy procurement mutations and files use the same buyer/site boundary. Employee identity edits cannot bypass purchase grants; purchasing/delegation require verified password or Google authentication, with a re-login action for legacy sessions.

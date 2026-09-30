@@ -7,6 +7,8 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\WorkerDevice;
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -135,6 +137,31 @@ class WorkerAppNeedsNoPasswordTest extends TestCase
         $this->post(route('worker-app.device'), ['device_token' => $this->deviceToken]);
 
         $this->assertGuest();
+    }
+
+    public function test_both_weak_worker_entries_discard_earlier_strong_and_personal_app_proof(): void
+    {
+        $request = request();
+        $request->setLaravelSession(app('session.store'));
+
+        foreach (['phone', 'remembered-device'] as $entry) {
+            $request->session()->put([
+                EmailPasswordAuthService::STRONG_AUTH_SESSION => $this->workerUser->id,
+                EmailPasswordAuthService::SETUP_SESSION => ['user_id' => $this->workerUser->id],
+                PersonalAppAccessService::SESSION => 123,
+            ]);
+
+            $opened = $entry === 'phone'
+                ? WorkerDeviceSession::openForApp($request, $this->employee->fresh())
+                : WorkerDeviceSession::openFor($request, $this->deviceToken);
+
+            $this->assertTrue($opened);
+            $this->assertAuthenticatedAs($this->workerUser);
+            $this->assertTrue($request->session()->get(WorkerDeviceSession::FLAG));
+            $this->assertFalse($request->session()->has(EmailPasswordAuthService::STRONG_AUTH_SESSION));
+            $this->assertFalse($request->session()->has(EmailPasswordAuthService::SETUP_SESSION));
+            $this->assertFalse($request->session()->has(PersonalAppAccessService::SESSION));
+        }
     }
 
     /**
