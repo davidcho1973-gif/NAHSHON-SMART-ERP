@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Password;
@@ -12,7 +13,7 @@ class EmailPasswordAuthController extends Controller
 {
     public function login(Request $request, EmailPasswordAuthService $service): RedirectResponse
     {
-        if ($request->user()) {
+        if ($request->user() && ! WorkerDeviceSession::isDeviceOnly($request)) {
             return redirect($request->user()->landingPath());
         }
         $data = $request->validate([

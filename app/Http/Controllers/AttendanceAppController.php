@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Admin\PayProfileService;
 use App\Services\Attendance\WorkerAttendanceService;
 use App\Services\AttendanceQrService;
+use App\Services\Auth\PersonalAppAccessService;
 use App\Services\Communication\CommunicationService;
 use App\Services\DailyCrewReportService;
 use App\Services\Hr\SelfEmployeeLink;
@@ -47,6 +48,11 @@ class AttendanceAppController extends Controller
             'employee' => $employee,
             'canReceiveMaterials' => ! $request->filled('as') && MaterialReceiptAccess::canManage($user),
             'canRequestPurchases' => ! $request->filled('as') && PurchaseAccess::canRequest($user),
+            'isManagerApp' => ! $request->filled('as') && PurchaseAccess::eligible($user),
+            'canManagePersonalAppQr' => ! $request->filled('as') && $user?->account_status === 'active'
+                && $user?->access_role === 'super_admin',
+            'isPersonalAppOnly' => $request->session()->has(PersonalAppAccessService::SESSION)
+                || $request->session()->has(PersonalAppAccessService::LEGACY_SESSION),
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,
             'messageUnreadCount' => $user ? $this->communicationService->unreadCountForUser($user) : 0,
             // 3단(QR)은 인터넷이 끊겼을 때 쓰는 마지막 수단이다. 그런데 그때 QR 을 받으러

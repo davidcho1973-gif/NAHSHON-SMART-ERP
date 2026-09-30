@@ -52,7 +52,9 @@ class EmailPasswordAuthService
             $initial = $this->initialDigits($user);
             $byDigits = $initial !== null && hash_equals($initial, $password);
             $byPassword = $user->password_set_at && Hash::check($password, $user->password);
-            $valid = $byPassword || ($byDigits && ! $this->requiresStrongAuthentication($user));
+            $appUpgrade = $request->session()->has(PersonalAppAccessService::SESSION)
+                || $request->session()->get(PersonalAppAccessService::LEGACY_SESSION) === true;
+            $valid = $byPassword || ($byDigits && ! $this->requiresStrongAuthentication($user) && ! $appUpgrade);
 
             if (! $valid) {
                 $failures = $user->password_login_locked_until ? 1 : $user->password_login_failures + 1;
@@ -244,6 +246,7 @@ class EmailPasswordAuthService
 
     private function signIn(User $user, Request $request, bool $strong): void
     {
+        PersonalAppAccessService::clearSession($request);
         Auth::login($user, remember: $strong);
         $request->session()->regenerate();
         if ($strong) {

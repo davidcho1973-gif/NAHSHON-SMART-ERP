@@ -6,8 +6,11 @@ use App\Models\AuthEvent;
 use App\Models\Employee;
 use App\Models\User;
 use App\Models\WorkerDevice;
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\PersonalAppAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Str;
 
 /**
@@ -52,6 +55,12 @@ final class WorkerDeviceSession
     /** 휴대폰으로 열었다고 표시한다. */
     public static function markDeviceOnly(Request $request): void
     {
+        // Switching to a weak worker entry must discard proofs from an earlier account/session.
+        $request->session()->forget([
+            EmailPasswordAuthService::STRONG_AUTH_SESSION,
+            EmailPasswordAuthService::SETUP_SESSION,
+            PersonalAppAccessService::SESSION,
+        ]);
         $request->session()->put(self::FLAG, true);
     }
 
@@ -135,7 +144,13 @@ final class WorkerDeviceSession
             return false;
         }
 
-        Auth::login($user, remember: true);
+        // A Laravel recaller restores only the user, not this app-only session boundary.
+        // Managers must reconnect through their revocable personal-app credential instead.
+        $remember = self::mayEnterWithDeviceAlone($user);
+        Auth::login($user, remember: $remember);
+        if (! $remember) {
+            Cookie::queue(Cookie::forget(Auth::guard()->getRecallerName()));
+        }
         $request->session()->regenerate();
         self::markDeviceOnly($request);
 

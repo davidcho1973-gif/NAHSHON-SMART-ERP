@@ -426,6 +426,11 @@
 
 @include('partials.install-app', ['installLang' => $employee?->preferred_language])
 
+@if(session()->has(\App\Services\Auth\PersonalAppAccessService::SESSION))
+    {{-- PersonalAppSession validated this device before rendering this page. --}}
+    <script src="{{ asset('js/personal-app-connect.js') }}?v={{ filemtime(public_path('js/personal-app-connect.js')) }}" data-personal-device-verified="1" defer></script>
+@endif
+
 <script>
 (function () {
     'use strict';
@@ -793,15 +798,10 @@
         h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
             tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
-            @if($canRequestPurchases)
-            tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '') +
-            @endif
-            @if($canReceiveMaterials)
-            tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '') +
-            @endif
-            @if(auth()->user()->access_role === 'foreman')
+            authorizedAppTiles() +
+            @if(!$isPersonalAppOnly && auth()->user()->access_role === 'foreman')
             tile('{{ route('worker-enrollment.index', ['return_to' => '/attendance-app']) }}', ICON.report, '우리 팀 직원 등록 현황', '인사 등록 및 앱 연결 상태 조회', '') +
-            @elseif(in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true))
+            @elseif(!$isPersonalAppOnly && in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true))
             tile('{{ route('worker-enrollment.index', ['return_to' => '/attendance-app']) }}', ICON.report, '인사 · 작업자 등록', '인사 승인 · 직원 개인 앱 연결', '') +
             @endif
             tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, d.reportBadge) +
@@ -950,9 +950,11 @@
                 '<span class="go">›</span></button></div>';
         }
 
+        @if(!$isPersonalAppOnly)
         h += '<div class="sec"><a class="link" href="{{ route('password.setup') }}"><div><b>' +
             (state.lang === 'ko' ? '이메일 비밀번호 설정' : (state.lang === 'es' ? 'Contraseña de correo' : 'Email password settings')) +
             '</b></div><span class="go">›</span></a></div>';
+        @endif
         h += '<div class="sec"><form method="POST" action="{{ route('logout') }}">' +
             '<input type="hidden" name="_token" value="' + CSRF + '">' +
             '<button type="submit" class="link" style="width:100%;cursor:pointer;font-family:inherit;text-align:left">' +
@@ -976,9 +978,9 @@
             // 연결이 안 된 것과 진짜로 실패한 것은 다른 상황이다. 같은 빨간 상자로 보여 주면
             // 관리자는 앱이 깨진 줄 알고, 작업자는 자기가 뭘 잘못했다고 생각한다.
             view.innerHTML = (d && d.code === 'view_as_denied') ? viewDenied(d)
-                : (d && d.code === 'no_employee') ? notLinked(d) : failed(d);
-            document.getElementById('nm').textContent = (d && d.email) ? d.email : '작업자';
-            document.getElementById('tag').textContent = '··';
+                : (d && d.code === 'no_employee') ? notLinked(d) : managerQuickSection() + failed(d);
+            document.getElementById('nm').textContent = (d && d.email) ? d.email : @json($user?->name ?? '작업자');
+            document.getElementById('tag').textContent = @json(mb_substr($user?->name ?? '··', 0, 2));
             document.getElementById('sb').textContent = (d && d.code === 'no_employee') ? '연결 대기 중' : '';
             bindSelfLink();
             paintTabs();
@@ -1011,16 +1013,38 @@
      * 안 붙어 있기 때문이다. 그래서 이 화면이 사실상 이 앱의 첫인상이다. 오류가 아니라
      * "다음에 할 일" 로 보이게 만든다.
      */
-    function notLinked(d) {
-        var who = d && d.email ? d.email : '';
+    // Module access belongs to the signed-in account, not its optional attendance record.
+    function authorizedAppTiles() {
         var h = '';
         @if($canRequestPurchases)
-        h += '<section><div class="quick">' +
-            tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '', true) + '</div></section>';
+        h += tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '');
+        @endif
+        @if($canManagePersonalAppQr)
+        h += tile('/attendance-app/manager-access', ICON.scan, '개인앱 연결 QR', '관리자 선택 · 휴대폰 연결', '');
         @endif
         @if($canReceiveMaterials)
-        h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
-            tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '', true) + '</div></section>';
+        h += tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '');
+        @endif
+        return h;
+    }
+
+    function managerQuickSection() {
+        var h = authorizedAppTiles();
+        @if($isManagerApp)
+        h += tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '') +
+            tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, '') +
+            tile('{{ route('expense-app.index') }}', ICON.receipt, T.qReceipt, T.qReceiptSub, '') +
+            tile('{{ route('attendance-app.docs') }}', ICON.doc, T.qDoc, T.qDocSub, '') +
+            tile('{{ route('communication.index') }}', ICON.chat, T.qChat, T.qChatSub, UNREAD ? String(UNREAD) : '');
+        @endif
+        return h ? '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' + h + '</div></section>' : '';
+    }
+
+    function notLinked(d) {
+        var who = d && d.email ? d.email : '';
+        var h = managerQuickSection();
+        @if($isManagerApp)
+        h += '<details class="sec"><summary class="sec-h" style="cursor:pointer">출퇴근용 직원 정보 연결</summary>';
         @endif
         h += '<div class="slab is-waiting">' +
             '<div class="state"><i></i>연결 대기 중</div>' +
@@ -1059,6 +1083,9 @@
                 '</div></div>';
         }
 
+        @if($isManagerApp)
+        h += '</details>';
+        @endif
         return h;
     }
 
