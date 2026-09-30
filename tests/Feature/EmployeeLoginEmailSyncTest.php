@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\Site;
 use App\Models\User;
 use App\Services\Admin\EmployeeAdminService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,7 +49,7 @@ class EmployeeLoginEmailSyncTest extends TestCase
             'access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active',
         ]);
 
-        $this->actingAs(User::factory()->create([
+        $this->actingAsPurchaseUser(User::factory()->create([
             'access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
         ]));
     }
@@ -155,5 +157,95 @@ class EmployeeLoginEmailSyncTest extends TestCase
 
         $this->assertStringContainsString('loginHint', $js);
         $this->assertStringContainsString('syncAccountEmail', $js);
+    }
+
+    public function test_lower_administrators_cannot_take_over_a_purchase_account_via_employee_email_sync(): void
+    {
+        foreach (['admin', 'hr_manager'] as $role) {
+            $this->actingAsPurchaseUser(User::factory()->create([
+                'access_role' => $role, 'access_scope' => 'all_sites', 'account_status' => 'active',
+            ]));
+            foreach (['purchase_request_enabled', 'purchase_buy_enabled'] as $grant) {
+                $this->account->forceFill(['purchase_request_enabled' => false, 'purchase_buy_enabled' => false,
+                    $grant => true, 'access_role' => 'admin', 'account_status' => 'suspended'])->save();
+                $before = $this->employee->fresh()->getAttributes();
+
+                $result = $this->save(['email' => 'takeover@example.com', 'syncAccountEmail' => true, 'name' => 'Replacement person']);
+
+                $this->assertFalse($result['success']);
+                $this->assertStringContainsString('수퍼관리자', $result['error']);
+                $this->assertSame($before, $this->employee->fresh()->getAttributes(), 'Rejected identity changes must not partially save employee data.');
+                $this->assertSame('old@gmail.com', $this->account->fresh()->email);
+            }
+        }
+    }
+
+    public function test_existing_contact_email_mismatch_cannot_be_used_to_transfer_a_granted_login(): void
+    {
+        $this->account->forceFill(['purchase_request_enabled' => true])->save();
+        $this->employee->update(['email' => 'different@example.com']);
+
+        $result = $this->save(['email' => 'different@example.com', 'syncAccountEmail' => true]);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('old@gmail.com', $this->account->fresh()->email);
+        $this->assertSame('different@example.com', $this->employee->fresh()->email);
+    }
+
+    public function test_employee_identity_and_fallback_scope_changes_cannot_expand_purchase_access(): void
+    {
+        $otherCompany = Company::create(['code' => 'C2', 'name' => 'Other company', 'status' => 'active']);
+        $site = Site::create(['company_id' => $this->company->id, 'code' => 'C1-S', 'name' => 'Other site', 'status' => 'active']);
+        $this->account->forceFill(['purchase_buy_enabled' => true, 'access_role' => 'admin', 'access_scope' => 'site'])->save();
+        $before = $this->employee->fresh()->getAttributes();
+
+        foreach ([['companyId' => $otherCompany->id], ['siteId' => $site->id], ['phone' => '9125550101'],
+            ['employeeNumber' => 'NEW-ID'], ['badgeNumber' => 'NEW-NFC'], ['qrRole' => 'attendance_admin', 'qrScope' => 'site']] as $change) {
+            $result = $this->save(['email' => 'old@gmail.com'] + $change);
+            $this->assertFalse($result['success']);
+            $this->assertSame($before, $this->employee->fresh()->getAttributes());
+        }
+    }
+
+    public function test_hr_can_edit_ordinary_details_and_suspend_but_cannot_reactivate_or_delete_purchase_identity(): void
+    {
+        $this->account->forceFill(['purchase_request_enabled' => true])->save();
+        $result = $this->save(['email' => 'old@gmail.com', 'nationality' => 'US']);
+        $this->assertTrue($result['success']);
+        $this->assertSame('US', $this->employee->fresh()->nationality);
+
+        $service = app(EmployeeAdminService::class);
+        $number = $this->employee->fresh()->employee_number;
+        $this->assertTrue($service->setStatus($number, 'terminated')['success']);
+        $this->assertFalse($service->setStatus($number, 'active')['success']);
+        $this->assertFalse($this->save(['email' => 'old@gmail.com', 'status' => 'active'])['success']);
+        $this->assertFalse($service->delete($this->employee->id)['success']);
+        $this->assertSame('terminated', $this->employee->fresh()->employment_status);
+        $this->assertNotNull($this->account->fresh()->employee_id);
+    }
+
+    public function test_only_a_formal_superadministrator_session_can_update_a_granted_employee_identity(): void
+    {
+        $this->account->forceFill(['purchase_buy_enabled' => true])->save();
+        $this->actingAsPurchaseUser(User::factory()->create([
+            'access_role' => 'super_admin', 'access_scope' => 'all_sites', 'account_status' => 'active',
+        ]));
+        request()->setLaravelSession(app('session.store'));
+        session()->put(WorkerDeviceSession::FLAG, true);
+
+        $this->assertFalse($this->save(['email' => 'new@example.com', 'syncAccountEmail' => true])['success']);
+        $this->assertSame('old@gmail.com', $this->employee->fresh()->email);
+
+        session()->forget(WorkerDeviceSession::FLAG);
+        $this->assertTrue($this->save(['email' => 'new@example.com', 'syncAccountEmail' => true])['success']);
+        $this->assertSame('new@example.com', $this->account->fresh()->email);
+    }
+
+    public function test_superadministrator_employee_identity_is_protected_without_explicit_purchase_flags(): void
+    {
+        $this->account->forceFill(['access_role' => 'super_admin'])->save();
+
+        $this->assertFalse($this->save(['email' => 'takeover@example.com', 'syncAccountEmail' => true])['success']);
+        $this->assertSame('old@gmail.com', $this->account->fresh()->email);
     }
 }

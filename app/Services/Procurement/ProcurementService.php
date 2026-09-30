@@ -2,14 +2,20 @@
 
 namespace App\Services\Procurement;
 
+use App\Models\IntegratedDocument;
 use App\Models\Item;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContract;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WbsItem;
 use App\Services\Finance\ProcurementExpenseConnector;
 use App\Services\Vendors\VendorResolver;
+use App\Support\OperationalAccess;
+use App\Support\PurchaseAccess;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 조달 관리 — 발주·조달성 WBS 공정을 자동 추출해 납기(리드타임)를 스마트하게 추적한다.
@@ -27,24 +33,30 @@ class ProcurementService
      */
     public function list(string $projectCode, string $siteId = 'ALL', ?string $today = null): array
     {
+        $actor = auth()->user();
+        abort_unless($actor && $actor->account_status === 'active', 403);
+        abort_if(request()->hasSession() && WorkerDeviceSession::isDeviceOnly(request()), 403);
+        $buyer = PurchaseAccess::canBuy($actor);
         $today ??= now()->toDateString();
 
         $query = WbsItem::query()
             ->where('project_code', $projectCode)
             ->where('level', WbsItem::LEVEL_SUBTASK);
+        $this->scopeSites($query, $actor);
         if ($siteId !== 'ALL') {
             $query->where('site_id', Site::query()->where('code', $siteId)->value('id'));
         }
 
         $subs = $query->get()->filter(fn (WbsItem $i) => $i->looksLikeProcurement());
 
-        $tracking = ProcurementItem::query()
+        $trackingQuery = ProcurementItem::query()
             ->where('project_code', $projectCode)
             ->whereIn('wbs_code', $subs->pluck('wbs_code')->all())
-            ->with(['item:id,name,unit,standard_cost', 'contract:id,contract_number,title,current_amount,currency'])
-            ->get()->keyBy('wbs_code');
+            ->with(['item:id,name,unit,standard_cost', 'contract:id,contract_number,title,current_amount,currency']);
+        $this->scopeSites($trackingQuery, $actor);
+        $tracking = $trackingQuery->get()->keyBy('wbs_code');
 
-        $rows = $subs->map(function (WbsItem $i) use ($tracking, $today): array {
+        $rows = $subs->map(function (WbsItem $i) use ($tracking, $today, $buyer): array {
             $t = $tracking->get($i->wbs_code);
             $status = $t?->status ?? '발주대기';
             $eta = $t?->eta?->toDateString();
@@ -67,26 +79,27 @@ class ProcurementService
                 'statusIndex' => array_search($status, ProcurementItem::STATUSES, true) ?: 0,
                 'progress' => ProcurementItem::progressFor($status),
                 'nextStatus' => ProcurementItem::nextStatus($status),
-                'vendor' => $t?->vendor ?? ($i->company ?? ''),
-                'vendorId' => $t?->vendor_id,
-                'contractId' => $t?->contract_id,
-                'contractLabel' => $t?->contract
+                'siteId' => $i->site_id,
+                'vendor' => $buyer ? ($t?->vendor ?? ($i->company ?? '')) : null,
+                'vendorId' => $buyer ? $t?->vendor_id : null,
+                'contractId' => $buyer ? $t?->contract_id : null,
+                'contractLabel' => $buyer && $t?->contract
                     ? trim(($t->contract->contract_number ? $t->contract->contract_number.' · ' : '').$t->contract->title)
                     : null,
                 'itemId' => $t?->item_id,
                 'itemName' => $t?->item?->name,
-                'poNo' => $t?->po_no,
-                'amount' => $t?->amount !== null ? (float) $t->amount : null,
-                'currency' => $t?->currency,
+                'poNo' => $buyer ? $t?->po_no : null,
+                'amount' => $buyer && $t?->amount !== null ? (float) $t->amount : null,
+                'currency' => $buyer ? $t?->currency : null,
                 'orderedOn' => $t?->ordered_on?->toDateString(),
                 'eta' => $eta,
                 'needBy' => $needBy,
                 'slack' => $slack,
                 'delay' => $delay,                                 // done/late/risk/ok/unknown
                 'alert' => $this->alertLevel($delay, (bool) $i->is_critical),
-                'note' => $t?->note,
-                'documentName' => $t?->document_name,
-                'documentUrl' => ($t && filled($t->document_path)) ? route('procurement.file', ['item' => $t->id]) : null,
+                'note' => $buyer ? $t?->note : null,
+                'documentName' => $buyer ? $t?->document_name : null,
+                'documentUrl' => ($buyer && $t && filled($t->document_path)) ? route('procurement.file', ['item' => $t->id]) : null,
                 'plannedStart' => $i->planned_start?->toDateString(),
             ];
         })->sort(function (array $a, array $b): int {
@@ -102,7 +115,8 @@ class ProcurementService
             'projectId' => $projectCode,
             'date' => $today,
             'statuses' => ProcurementItem::STATUSES,
-            'contracts' => $this->contractOptions($projectCode),
+            'canBuy' => $buyer,
+            'contracts' => $buyer ? $this->contractOptions($projectCode, $actor) : [],
             'items' => $rows->all(),
             'total' => $rows->count(),
             'ordered' => $rows->whereNotIn('status', ['발주대기'])->count(),
@@ -121,6 +135,12 @@ class ProcurementService
      */
     public function update(string $projectCode, string $wbsCode, array $patch, string $siteId = 'ALL', ?int $userId = null): array
     {
+        // Every writer (legacy API, manual meeting review and jobs) uses the same buyer gate.
+        // An absent web actor must never turn a console call into unrestricted purchasing.
+        $actor = auth()->user() ?? ($userId ? User::find($userId) : null);
+        abort_if(auth()->check() && $userId !== null && auth()->id() !== $userId, 403);
+        $actor = PurchaseAccess::assertBuyer($actor);
+        $userId = $actor->id;
         $wbsCode = trim($wbsCode);
         if ($projectCode === '' || $wbsCode === '') {
             return ['success' => false, 'error' => '프로젝트/작업 코드가 없습니다.'];
@@ -130,8 +150,17 @@ class ProcurementService
         if (! $wbs) {
             return ['success' => false, 'error' => '해당 조달 공정을 찾을 수 없습니다.'];
         }
+        $this->assertSite($actor, $wbs->site_id);
+        if ($siteId !== 'ALL') {
+            abort_unless((int) Site::where('code', $siteId)->value('id') === (int) $wbs->site_id, 403);
+        }
 
         $item = ProcurementItem::query()->firstOrNew(['project_code' => $projectCode, 'wbs_code' => $wbsCode]);
+        if ($item->exists) {
+            $this->assertSite($actor, $item->site_id);
+            abort_unless($item->site_id === $wbs->site_id, 403);
+        }
+        $this->assertDocumentPatch($patch, $item, $actor, $wbs->site_id);
         if (! $item->exists) {
             $item->wbs_item_id = $wbs->id;
             $item->site_id = $wbs->site_id;
@@ -148,27 +177,34 @@ class ProcurementService
         if (array_key_exists('item_id', $patch)) {
             // 품목 마스터 연결 — 있는 품목만. 없는 id 가 오면 연결을 지우는 것으로 본다.
             $itemId = is_numeric($patch['item_id']) ? (int) $patch['item_id'] : null;
-            $item->item_id = ($itemId && Item::query()->whereKey($itemId)->exists()) ? $itemId : null;
-        }
-        if (array_key_exists('vendor', $patch)) {
-            // 공급처는 글자가 아니라 거래처 마스터 행이다. 이름이 오면 대장에서 찾고
-            // 없으면 대장에 만든다 — 어느 유입 경로(손 입력·발주서 AI·상황실)로 와도
-            // 여기 한 곳을 지나므로 자유 텍스트가 다시 생기지 않는다.
-            // 문자열 칼럼에는 마스터의 이름을 적는다(사본). "graybar" 라고 쳐도
-            // 대장에 "Graybar" 가 있으면 그 이름으로 통일된다.
-            $vendor = app(VendorResolver::class)->resolve((string) $patch['vendor']);
-            $item->vendor_id = $vendor?->id;
-            $item->vendor = $vendor?->name;
-            unset($patch['vendor']);
+            $master = $itemId ? Item::find($itemId) : null;
+            $companyId = $wbs->site_id ? Site::find($wbs->site_id)?->company_id : null;
+            abort_if($master?->company_id !== null && $master->company_id !== $companyId, 403);
+            $item->item_id = $master?->id;
         }
         if (array_key_exists('contract_id', $patch)) {
             // 발주는 발주(payable)·상호 계약에만 걸 수 있다. 수주 계약에 발주를 걸면
             // 계약 대비 발주 누계가 원청 계약 금액과 섞여 둘 다 못 믿게 된다.
             $contractId = is_numeric($patch['contract_id']) ? (int) $patch['contract_id'] : null;
-            $item->contract_id = ($contractId && ProjectContract::query()
+            $contract = $contractId ? ProjectContract::query()
                 ->whereKey($contractId)
                 ->whereIn('direction', ['payable', 'mutual'])
-                ->exists()) ? $contractId : null;
+                ->first() : null;
+            if ($contract) {
+                $this->assertSite($actor, $contract->site_id);
+                abort_if($contract->site_id !== null && $contract->site_id !== $wbs->site_id, 403);
+                $companyId = $wbs->site_id ? Site::find($wbs->site_id)?->company_id : null;
+                abort_if($contract->company_id !== null && $contract->company_id !== $companyId, 403);
+            }
+            $item->contract_id = $contract?->id;
+        }
+        if (array_key_exists('vendor', $patch)) {
+            // Resolve/create a vendor only after all linked-record permissions have passed.
+            // The master row is authoritative; the text column is its display name copy.
+            $vendor = app(VendorResolver::class)->resolve((string) $patch['vendor'], $wbs->site_id ? Site::find($wbs->site_id)?->company_id : null);
+            $item->vendor_id = $vendor?->id;
+            $item->vendor = $vendor?->name;
+            unset($patch['vendor']);
         }
         foreach (['po_no', 'currency', 'note', 'document_disk', 'document_path', 'document_name'] as $k) {
             if (array_key_exists($k, $patch)) {
@@ -215,23 +251,25 @@ class ProcurementService
      *
      * @return array<int, array<string, mixed>>
      */
-    private function contractOptions(string $projectCode): array
+    private function contractOptions(string $projectCode, User $actor): array
     {
-        $contracts = ProjectContract::query()
+        $query = ProjectContract::query()
             ->whereIn('direction', ['payable', 'mutual'])
             ->whereNotIn('status', ['terminated', 'expired'])
             ->with('counterpartyVendor:id,name')
-            ->orderBy('title')
-            ->get();
+            ->orderBy('title');
+        $this->scopeSites($query, $actor);
+        $contracts = $query->get();
         if ($contracts->isEmpty()) {
             return [];
         }
 
-        $ordered = ProcurementItem::query()
+        $orderedQuery = ProcurementItem::query()
             ->whereIn('contract_id', $contracts->pluck('id'))
             ->where('project_code', $projectCode)
-            ->selectRaw('contract_id, SUM(COALESCE(amount, 0)) as total')
-            ->groupBy('contract_id')->pluck('total', 'contract_id');
+            ->selectRaw('contract_id, SUM(COALESCE(amount, 0)) as total');
+        $this->scopeSites($orderedQuery, $actor);
+        $ordered = $orderedQuery->groupBy('contract_id')->pluck('total', 'contract_id');
 
         return $contracts->map(function (ProjectContract $c) use ($ordered): array {
             $poTotal = (float) ($ordered[$c->id] ?? 0);
@@ -247,6 +285,44 @@ class ProcurementService
                 'remaining' => $limit !== null ? round($limit - $poTotal, 2) : null,
             ];
         })->values()->all();
+    }
+
+    private function scopeSites($query, User $actor): void
+    {
+        if ($actor->access_role !== 'super_admin') {
+            $siteIds = PurchaseAccess::eligible($actor)
+                ? PurchaseAccess::sites($actor)->pluck('id')->all()
+                : OperationalAccess::siteIds($actor);
+            $query->whereIn('site_id', $siteIds);
+        }
+    }
+
+    private function assertSite(User $actor, ?int $siteId): void
+    {
+        // Unassigned historical WBS rows remain available only to the super administrator.
+        if ($siteId === null && $actor->access_role === 'super_admin') {
+            return;
+        }
+        PurchaseAccess::assertSite($actor, (int) $siteId);
+    }
+
+    private function assertDocumentPatch(array $patch, ProcurementItem $item, User $actor, ?int $siteId): void
+    {
+        if (! array_intersect(['document_disk', 'document_path', 'document_name'], array_keys($patch))) {
+            return;
+        }
+        $path = $patch['document_path'] ?? $item->document_path;
+        $disk = $patch['document_disk'] ?? $item->document_disk;
+        if ($item->exists && $path === $item->document_path && $disk === $item->document_disk) {
+            return;
+        }
+        // A raw disk/path supplied by a client is not permission to attach another document.
+        $expectedDisk = IntegratedDocument::storageDisk();
+        $expectedDisk = $expectedDisk === 'public' ? 'local' : $expectedDisk;
+        abort_unless(is_string($path) && $disk === $expectedDisk
+            && str_starts_with($path, "procurement-docs/{$actor->id}/{$siteId}/")
+            && ! str_contains($path, '..') && ! str_contains($path, '\\')
+            && Storage::disk($disk)->exists($path), 403, '본인이 업로드한 해당 현장의 구매 근거만 연결할 수 있습니다.');
     }
 
     private function delayState(string $status, ?string $eta, ?int $slack, string $today): string

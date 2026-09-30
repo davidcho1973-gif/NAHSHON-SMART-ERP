@@ -8,11 +8,15 @@ use App\Models\CommunicationMessageReaction;
 use App\Models\CommunicationNotification;
 use App\Models\CommunicationRoom;
 use App\Models\Employee;
+use App\Models\Site;
 use App\Services\Admin\CommunicationAdminService;
+use App\Services\Communication\ChatAssistant;
 use App\Services\Communication\ChatAttachmentService;
 use App\Services\Communication\CommunicationService;
 use App\Services\Communication\MessageSearch;
 use App\Services\Communication\RoomStreamService;
+use App\Services\Procurement\PurchaseRequestService;
+use App\Support\PurchaseAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,8 +29,7 @@ class CommunicationController extends Controller
     public function __construct(
         private readonly CommunicationService $communicationService,
         private readonly ChatAttachmentService $attachments,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -54,7 +57,7 @@ class CommunicationController extends Controller
             'peopleSearch' => (string) $request->query('people', ''),
             // 방을 만들 수 있는 사람에게만 [+] 를 보여준다 — 눌러도 막히는 버튼은 안 만든다.
             'canManageRooms' => app(CommunicationAdminService::class)->canManage($user),
-            'siteOptions' => \App\Models\Site::query()->where('status', 'active')->orderBy('code')->get(['id', 'code', 'name']),
+            'siteOptions' => Site::query()->where('status', 'active')->orderBy('code')->get(['id', 'code', 'name']),
         ]);
     }
 
@@ -102,6 +105,7 @@ class CommunicationController extends Controller
             'mention' => CommunicationNotification::TYPE_MENTION,
             'reply' => CommunicationNotification::TYPE_REPLY,
             'announcement' => CommunicationNotification::TYPE_ANNOUNCEMENT,
+            'purchase' => 'purchase_request',
         ];
 
         return view('communication.activity', [
@@ -120,6 +124,20 @@ class CommunicationController extends Controller
         abort_unless($this->communicationService->ownsNotification($user, $notification), 404);
 
         $this->communicationService->markNotificationRead($notification);
+
+        if ($notification->type === 'purchase_request'
+            && preg_match('~^/attendance-app/purchase-requests\?request=([0-9]+)$~', (string) $notification->action_url, $purchaseMatch)) {
+            app(PurchaseRequestService::class)->visible((int) $purchaseMatch[1], $user);
+
+            return redirect($notification->action_url);
+        }
+        if ($notification->type === 'purchase_request'
+            && preg_match('~^/\?view=purchase-requests&request=([0-9]+)$~', (string) $notification->action_url, $purchaseMatch)) {
+            PurchaseAccess::assertBuyer($user);
+            app(PurchaseRequestService::class)->visible((int) $purchaseMatch[1], $user);
+
+            return redirect($notification->action_url);
+        }
 
         $room = $notification->room;
         if (! $room || ! $this->communicationService->canAccessRoom($user, $room)) {
@@ -255,7 +273,7 @@ class CommunicationController extends Controller
             'focusId' => max(0, (int) $request->integer('focus')),
             // 열쇠가 없는 배포에서는 [AI] 버튼을 아예 만들지 않는다 —
             // 눌러도 아무 일 없는 버튼이 가장 나쁘다.
-            'aiAvailable' => app(\App\Services\Communication\ChatAssistant::class)->available(),
+            'aiAvailable' => app(ChatAssistant::class)->available(),
         ]);
     }
 

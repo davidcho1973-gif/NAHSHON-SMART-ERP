@@ -793,6 +793,9 @@
         h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
             tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
+            @if($canRequestPurchases)
+            tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '') +
+            @endif
             @if($canReceiveMaterials)
             tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '') +
             @endif
@@ -1011,6 +1014,10 @@
     function notLinked(d) {
         var who = d && d.email ? d.email : '';
         var h = '';
+        @if($canRequestPurchases)
+        h += '<section><div class="quick">' +
+            tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '', true) + '</div></section>';
+        @endif
         @if($canReceiveMaterials)
         h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '', true) + '</div></section>';

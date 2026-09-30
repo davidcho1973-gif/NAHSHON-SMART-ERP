@@ -3,11 +3,15 @@
 namespace App\Services\Admin;
 
 use App\Http\Middleware\RequireApprovedErpAccess;
+use App\Models\AuthEvent;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\PurchaseAccess;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -25,6 +29,15 @@ use Illuminate\Support\Str;
  */
 class UserAccessService
 {
+    public function canManagePurchasingGrants(): bool
+    {
+        return auth()->user()?->account_status === 'active'
+            && auth()->user()?->access_role === 'super_admin'
+            && request()->hasSession()
+            && ! WorkerDeviceSession::isDeviceOnly(request())
+            && EmailPasswordAuthService::hasStrongAuthentication(request(), auth()->user());
+    }
+
     /** 이 화면을 열 수 있는 역할. */
     public const VIEW_ROLES = ['super_admin', 'admin', 'hr_manager'];
 
@@ -113,6 +126,8 @@ class UserAccessService
                 'lastLoginAt' => $u->last_login_at?->toDateTimeString(),
                 // 자기 자신은 화면에서 역할·상태 손잡이를 잠근다(자물쇠 아이콘 표시용).
                 'isSelf' => $u->id === auth()->id(),
+                'purchaseRequestAccess' => (bool) $u->purchase_request_enabled,
+                'purchaseBuyerAccess' => (bool) $u->purchase_buy_enabled,
             ])
             ->values()
             ->all();
@@ -140,6 +155,10 @@ class UserAccessService
         return [
             'success' => true,
             'roles' => $pairs(array_intersect_key(User::ROLE_LABELS_KO, $this->assignableRoles())),
+            'canManagePurchasingGrants' => $this->canManagePurchasingGrants(),
+            'purchasingReauthenticationRequired' => auth()->user()?->access_role === 'super_admin'
+                && ! $this->canManagePurchasingGrants(),
+            'purchasingRoles' => PurchaseAccess::ELIGIBLE_ROLES,
             'scopes' => $pairs(User::SCOPE_LABELS_KO),
             'statuses' => $pairs(User::STATUS_LABELS_KO),
             'companies' => Company::query()->orderBy('name')->get(['id', 'name'])
@@ -184,6 +203,23 @@ class UserAccessService
         $status = (string) ($input['status'] ?? 'active');
 
         $errors = [];
+        // A new superadmin inherits purchasing and delegation authority without explicit flags.
+        if ($role === 'super_admin' && (! $row || $row->access_role !== 'super_admin')
+            && ! $this->canManagePurchasingGrants()) {
+            $errors['role'] = '수퍼관리자 부여는 비밀번호 또는 Google로 다시 로그인한 뒤 진행하세요.';
+        }
+        $grantFields = ['purchaseRequestAccess' => 'purchase_request_enabled', 'purchaseBuyerAccess' => 'purchase_buy_enabled'];
+        foreach ($grantFields as $inputKey => $column) {
+            if (array_key_exists($inputKey, $input)) {
+                if (! $this->canManagePurchasingGrants()) {
+                    $errors[$inputKey] = '구매 권한은 정식 로그인한 수퍼관리자만 변경할 수 있습니다.';
+                } elseif (! in_array($input[$inputKey], [true, false, 0, 1, '0', '1'], true)) {
+                    $errors[$inputKey] = '권한 설정값이 올바르지 않습니다.';
+                } elseif (filter_var($input[$inputKey], FILTER_VALIDATE_BOOLEAN) && ! in_array($role, PurchaseAccess::ELIGIBLE_ROLES, true)) {
+                    $errors[$inputKey] = '관리자 계정에만 구매 권한을 부여할 수 있습니다.';
+                }
+            }
+        }
         $employeeId = $this->intOrNull($input['employeeId'] ?? null);
         if ($employeeId && ! Employee::whereKey($employeeId)->exists()) {
             $errors['employeeId'] = '존재하는 직원을 선택하세요.';
@@ -264,8 +300,33 @@ class UserAccessService
             'access_notes' => trim((string) ($input['notes'] ?? '')) ?: null,
         ];
 
+        // A lower administrator must not take over or expand an explicitly granted account.
+        if ($row && ($row->access_role === 'super_admin' || $row->purchase_request_enabled || $row->purchase_buy_enabled) && ! $this->canManagePurchasingGrants()) {
+            if ($status === 'active' && $row->account_status !== 'active') {
+                return ['success' => false, 'error' => '구매 권한 계정의 재활성화는 수퍼관리자에게 요청하세요.'];
+            }
+            foreach (['email', 'employee_id', 'access_role', 'access_scope', 'allowed_company_id', 'allowed_site_id', 'allowed_team_id'] as $key) {
+                if ((string) $data[$key] !== (string) $row->{$key}) {
+                    return ['success' => false, 'error' => '구매 권한 계정의 신원·역할·범위 변경은 수퍼관리자에게 요청하세요.'];
+                }
+            }
+        }
+        foreach ($grantFields as $inputKey => $column) {
+            if ($this->canManagePurchasingGrants() && array_key_exists($inputKey, $input)) {
+                $data[$column] = filter_var($input[$inputKey], FILTER_VALIDATE_BOOLEAN);
+            }
+            if (! in_array($role, PurchaseAccess::ELIGIBLE_ROLES, true)) {
+                $data[$column] = false;
+            }
+        }
+
         if ($row) {
+            $grantBefore = [(bool) $row->purchase_request_enabled, (bool) $row->purchase_buy_enabled];
             $row->forceFill($data)->save();
+            if ($grantBefore !== [(bool) $row->purchase_request_enabled, (bool) $row->purchase_buy_enabled]) {
+                AuthEvent::record('purchase_permissions_changed', user: $row, actor: auth()->user(),
+                    method: 'erp', request: request(), note: json_encode(['before' => $grantBefore, 'after' => [(bool) $row->purchase_request_enabled, (bool) $row->purchase_buy_enabled]]));
+            }
 
             return ['success' => true, 'id' => $row->id];
         }
@@ -274,7 +335,8 @@ class UserAccessService
         // Until setup, keep an unknown placeholder rather than storing phone digits.
         $data['password'] = Hash::make(Str::random(48));
 
-        $created = User::create($data);
+        $created = new User;
+        $created->forceFill($data)->save();
 
         return ['success' => true, 'id' => $created->id];
     }
@@ -299,6 +361,10 @@ class UserAccessService
         }
         if (! array_key_exists($row->access_role, $this->assignableRoles())) {
             return ['success' => false, 'error' => '상위 권한 계정의 상태는 변경할 수 없습니다.'];
+        }
+        if (($row->access_role === 'super_admin' || $row->purchase_request_enabled || $row->purchase_buy_enabled) && $status === 'active'
+            && $row->account_status !== 'active' && ! $this->canManagePurchasingGrants()) {
+            return ['success' => false, 'error' => '구매 권한 계정의 재활성화는 수퍼관리자에게 요청하세요.'];
         }
         if ($row->id === auth()->id()) {
             return ['success' => false, 'error' => '자기 계정의 상태는 바꿀 수 없습니다.'];
@@ -329,6 +395,9 @@ class UserAccessService
         }
         if ($row->id === $actor->id) {
             return ['success' => false, 'error' => '자기 계정은 삭제할 수 없습니다.'];
+        }
+        if (($row->purchase_request_enabled || $row->purchase_buy_enabled) && ! $this->canManagePurchasingGrants()) {
+            return ['success' => false, 'error' => '구매 권한 계정은 수퍼관리자만 삭제할 수 있습니다.'];
         }
         if ($row->access_role === 'super_admin' && $this->activeSuperAdminCount($row->id) === 0) {
             return ['success' => false, 'error' => '마지막 슈퍼관리자입니다. 다른 슈퍼관리자를 먼저 지정하세요.'];

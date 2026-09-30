@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Item;
 use App\Models\ProcurementItem;
+use App\Models\User;
 use App\Models\WbsItem;
 use App\Services\Procurement\ProcurementService;
 use App\Services\Wbs\WbsService;
@@ -17,6 +18,12 @@ use Tests\TestCase;
 class ProcurementServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
+    }
 
     private function sub(string $code, string $name, array $attrs = []): WbsItem
     {

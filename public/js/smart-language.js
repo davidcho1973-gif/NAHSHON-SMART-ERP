@@ -17,6 +17,15 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '구매 요청': 'Purchase requests',
+    '구매신청': 'Request materials',
+    '구매처리': 'Purchasing',
+    '개인앱 구매신청': 'Personal app requests',
+    'ERP 구매처리': 'ERP purchasing',
+    '구매 권한': 'Purchasing access',
+    '구매 담당자로 지정': 'Assign as buyer',
+    '요청 · 진행상태 확인': 'Request and track materials',
+    '관리자 계정에만 부여할 수 있습니다.': 'Available for administrator accounts only.',
     "공정미팅": "Project meeting",
     "녹음 시작": "Start recording",
     "녹음 종료": "Stop recording",
@@ -351,6 +360,15 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'Purchase requests': 'Solicitudes de compra',
+    'Request materials': 'Solicitar materiales',
+    'Purchasing': 'Compras',
+    'Personal app requests': 'Solicitudes en la app personal',
+    'ERP purchasing': 'Compras en ERP',
+    'Purchasing access': 'Permisos de compras',
+    'Assign as buyer': 'Asignar como comprador',
+    'Request and track materials': 'Solicitar y seguir materiales',
+    'Available for administrator accounts only.': 'Disponible solo para cuentas de administrador.',
     "공정미팅": "Reunión de obra",
     "녹음 시작": "Iniciar grabación",
     "녹음 종료": "Detener grabación",

@@ -9,6 +9,7 @@ use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Project;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\WbsItem;
 use App\Services\Communication\CommunicationService;
 use App\Services\Ops\OpsIntakeService;
@@ -293,6 +294,8 @@ class OpsIntakeTest extends TestCase
 
     public function test_procurement_eta_is_applied_to_the_purchase_order(): void
     {
+        $this->actingAs(User::factory()->create(['access_role' => 'site_manager', 'account_status' => 'active',
+            'access_scope' => 'site', 'allowed_site_id' => $this->site->id, 'purchase_buy_enabled' => true]));
         ProcurementItem::create([
             'project_code' => 'LG-01', 'site_id' => $this->site->id, 'wbs_code' => 'LG-01-W-A100',
             'status' => '발주완료', 'vendor' => 'Graybar', 'po_no' => 'PO-118',

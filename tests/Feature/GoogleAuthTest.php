@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -34,12 +36,14 @@ class GoogleAuthTest extends TestCase
         ]);
 
         $response = $this
-            ->withSession(['google_oauth_state' => 'known-state'])
+            ->withSession(['google_oauth_state' => 'known-state', WorkerDeviceSession::FLAG => true])
             ->get('/auth/google/callback?state=known-state&code=auth-code');
 
         // 작업자는 ERP 가 아니라 자기 앱으로 간다. 자기 근무시간을 보러 로그인했는데
         // 회사 전체 화면이 뜨면 잘못 눌렀다고 생각하고 앱을 지운다.
-        $response->assertRedirect('/attendance-app');
+        $response->assertRedirect('/attendance-app')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
+            ->assertSessionMissing(WorkerDeviceSession::FLAG);
         $this->assertAuthenticatedAs($user->fresh());
         $this->assertSame('google-123', $user->fresh()->google_id);
         $this->assertNotNull($user->fresh()->last_login_at);

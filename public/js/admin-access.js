@@ -68,7 +68,10 @@
       '계정 · 권한 관리',
       'ERP 본화면은 여기서 허용한 사람만 들어옵니다. 현장 인력은 전화번호 뒷 4자리로 작업자 앱을 씁니다. — ' + notes.join(' · '),
       u.primaryButton('계정 추가', 'window.AdminAccess.openForm()', 'plus')
-    ) + u.table({
+    ) + (state.options && state.options.purchasingReauthenticationRequired
+      ? u.notice('구매 권한 변경은 이메일·비밀번호 또는 Google로 다시 로그인한 후 가능합니다.', 'warn') +
+        '<div style="margin-bottom:14px">' + u.rowButton('로그아웃 후 다시 로그인', 'PurchaseRequests.reauthenticate()') + '</div>'
+      : '') + u.table({
       id: 'ua-tbl',
       searchPlaceholder: '이름 · 이메일 · 현장 검색',
       emptyText: '등록된 계정이 없습니다.',
@@ -93,6 +96,10 @@
           },
         },
         { key: 'scope', label: '범위', render: scopeCell },
+        { key: 'purchaseAccess', label: '구매 권한', render: function (r) {
+          return (r.purchaseRequestAccess ? u.badge('구매신청', 'ok') : '') +
+            (r.purchaseBuyerAccess ? ' ' + u.badge('구매처리', 'warn') : '') || '—';
+        } },
         {
           // 현장 인력은 전화번호 뒷 4자리로 작업자 앱에 들어오고, ERP 본화면은 승인된
           // 사람에게만 열린다. 그 «승인» 이 목록에서 보이지 않으면 아무도 관리할 수 없다.
@@ -168,7 +175,9 @@
       var self = row && row.isSelf;
       u.formModal({
         title: row ? '계정 수정 — ' + row.name : '계정 추가',
-        subtitle: self
+        subtitle: o.purchasingReauthenticationRequired
+          ? '구매 권한 변경은 화면 상단의 다시 로그인 버튼을 이용하세요.'
+          : self
           ? '본인 계정입니다. 역할과 상태는 다른 관리자만 바꿀 수 있습니다.'
           : '역할은 무엇을 할 수 있는지, 범위는 어느 현장까지 보이는지를 정합니다.',
         saveLabel: row ? '수정' : '추가',
@@ -203,7 +212,12 @@
 
           { name: 'notes', label: '메모', type: 'textarea', colSpan: 2, group: '권한',
             value: row ? row.notes : '', hint: '왜 이 권한을 줬는지 남겨두면 나중에 정리할 때 도움이 됩니다.' },
-        ],
+        ].concat(o.canManagePurchasingGrants ? [
+          { name: 'purchaseRequestAccess', label: '개인앱 구매신청', type: 'checkbox', group: '구매 권한',
+            value: Boolean(row && row.purchaseRequestAccess), checkboxLabel: '허용', hint: '관리자 계정에만 부여할 수 있습니다.' },
+          { name: 'purchaseBuyerAccess', label: 'ERP 구매처리', type: 'checkbox', group: '구매 권한',
+            value: Boolean(row && row.purchaseBuyerAccess), checkboxLabel: '구매 담당자로 지정' }
+        ] : []),
         onSave: function (v) {
           v.id = id || 0;
           return call('api_saveUserAccess', [v]).then(function (res) {
@@ -263,7 +277,7 @@
   /** SPA 라우터가 부르는 진입점. */
   function renderScreen() {
     paint('<div style="padding:40px;text-align:center;color:var(--text-tertiary)">불러오는 중…</div>');
-    reload().catch(function (e) {
+    loadOptions().then(reload).catch(function (e) {
       paint('<div style="padding:40px;text-align:center;color:var(--status-danger)">' +
         ui().esc(e.message || '계정 목록을 불러오지 못했습니다.') + '</div>');
     });

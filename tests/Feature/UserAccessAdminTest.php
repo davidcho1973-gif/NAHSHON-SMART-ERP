@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Admin\UserAccessService;
+use App\Support\PurchaseAccess;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -50,11 +52,48 @@ class UserAccessAdminTest extends TestCase
         return app(UserAccessService::class);
     }
 
+    public function test_purchase_grants_require_superadmin_and_do_not_follow_role_or_identity_edits(): void
+    {
+        $super = $this->user('super_admin');
+        $manager = $this->user('site_manager', 'active', 'site');
+        $site = Site::create(['code' => 'PUR-GRANT', 'name' => 'Test site', 'status' => 'active']);
+        $input = ['id' => $manager->id, 'name' => $manager->name, 'email' => $manager->email,
+            'role' => 'site_manager', 'scope' => 'site', 'siteId' => $site->id, 'status' => 'active',
+            'purchaseRequestAccess' => true, 'purchaseBuyerAccess' => false];
+        $this->actingAsPurchaseUser($this->user('admin'));
+        $this->assertFalse($this->svc()->save($input)['success']);
+        $this->actingAsPurchaseUser($super);
+        $this->assertTrue($this->svc()->save($input)['success']);
+        $this->assertTrue($manager->fresh()->purchase_request_enabled);
+        $this->assertDatabaseHas('auth_events', ['event' => 'purchase_permissions_changed', 'user_id' => $manager->id, 'actor_id' => $super->id]);
+        $this->actingAsPurchaseUser($this->user('admin'));
+        unset($input['purchaseRequestAccess'], $input['purchaseBuyerAccess']);
+        $this->assertTrue($this->svc()->save($input)['success']);
+        $this->assertTrue($manager->fresh()->purchase_request_enabled);
+        $this->assertFalse($this->svc()->save(array_merge($input, ['scope' => 'all_sites']))['success']);
+        $this->assertFalse($this->svc()->save(array_merge($input, ['email' => 'takeover@example.test']))['success']);
+        $this->assertFalse($this->svc()->delete($manager->id)['success']);
+        $this->actingAsPurchaseUser($super);
+        $this->assertTrue($this->svc()->save(array_merge($input, ['purchaseRequestAccess' => false]))['success']);
+        $this->assertFalse(PurchaseAccess::canRequest($manager->fresh()));
+    }
+
+    public function test_worker_and_phone_only_superadmin_cannot_receive_or_assign_purchase_grants(): void
+    {
+        $this->actingAsPurchaseUser($this->user('super_admin'));
+        $input = ['name' => 'Grant test', 'email' => 'grant@example.test', 'role' => 'worker', 'scope' => 'self', 'status' => 'active', 'purchaseRequestAccess' => true];
+        $this->assertFalse($this->svc()->save($input)['success']);
+        $this->withSession([WorkerDeviceSession::FLAG => true]);
+        $input['role'] = 'admin';
+        $this->api('api_saveUserAccess', [$input])->assertOk()->assertJsonPath('success', false)->assertJsonStructure(['errors' => ['purchaseRequestAccess']]);
+        $this->assertDatabaseMissing('users', ['email' => 'grant@example.test']);
+    }
+
     // ── 화면 접근 ────────────────────────────────────────────────────────
 
     public function test_a_worker_cannot_read_the_account_list(): void
     {
-        $this->actingAs($this->user('worker', 'active', 'self'));
+        $this->actingAsPurchaseUser($this->user('worker', 'active', 'self'));
 
         $this->assertFalse($this->svc()->list()['success'], '작업자에게 전 직원 계정 목록이 보이면 안 된다');
     }
@@ -62,14 +101,14 @@ class UserAccessAdminTest extends TestCase
     public function test_a_client_account_cannot_read_the_account_list(): void
     {
         // 원청(client)은 열람 전용이지만, 열람 대상에 남의 계정 목록은 포함되지 않는다.
-        $this->actingAs($this->user('client'));
+        $this->actingAsPurchaseUser($this->user('client'));
 
         $this->assertFalse($this->svc()->list()['success']);
     }
 
     public function test_a_suspended_admin_cannot_read_the_account_list(): void
     {
-        $this->actingAs($this->user('admin', 'suspended'));
+        $this->actingAsPurchaseUser($this->user('admin', 'suspended'));
 
         $this->assertFalse($this->svc()->list()['success'], '정지된 계정은 권한이 남아 있어도 막혀야 한다');
     }
@@ -77,7 +116,7 @@ class UserAccessAdminTest extends TestCase
     public function test_an_hr_manager_can_read_the_account_list(): void
     {
         $me = $this->user('hr_manager');
-        $this->actingAs($me);
+        $this->actingAsPurchaseUser($me);
         $worker = $this->user('worker');
 
         $res = $this->svc()->list();
@@ -91,7 +130,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_an_hr_manager_cannot_grant_admin_or_super_admin(): void
     {
-        $this->actingAs($this->user('hr_manager'));
+        $this->actingAsPurchaseUser($this->user('hr_manager'));
 
         $roles = array_keys($this->svc()->assignableRoles());
         $this->assertNotContains('super_admin', $roles);
@@ -101,14 +140,14 @@ class UserAccessAdminTest extends TestCase
 
     public function test_an_admin_cannot_grant_super_admin(): void
     {
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
 
         $this->assertNotContains('super_admin', array_keys($this->svc()->assignableRoles()));
     }
 
     public function test_only_a_super_admin_can_grant_super_admin(): void
     {
-        $this->actingAs($this->user('super_admin'));
+        $this->actingAsPurchaseUser($this->user('super_admin'));
 
         $this->assertContains('super_admin', array_keys($this->svc()->assignableRoles()));
     }
@@ -116,7 +155,7 @@ class UserAccessAdminTest extends TestCase
     public function test_escalation_is_refused_not_silently_downgraded(): void
     {
         // 조용히 낮추면 화면에는 저장됐다고 뜨는데 실제 권한은 다른 상태가 된다.
-        $this->actingAs($this->user('hr_manager'));
+        $this->actingAsPurchaseUser($this->user('hr_manager'));
 
         $res = $this->svc()->save([
             'name' => '침입자', 'email' => 'x@example.test',
@@ -133,7 +172,7 @@ class UserAccessAdminTest extends TestCase
     public function test_you_cannot_change_your_own_role(): void
     {
         $me = $this->user('admin');
-        $this->actingAs($me);
+        $this->actingAsPurchaseUser($me);
 
         $res = $this->svc()->save([
             'id' => $me->id, 'name' => $me->name, 'email' => $me->email,
@@ -148,7 +187,7 @@ class UserAccessAdminTest extends TestCase
     {
         // 시드 소유자가 남아 있으므로 "마지막 슈퍼관리자" 규칙에는 걸리지 않는다.
         $me = $this->user('super_admin');
-        $this->actingAs($me);
+        $this->actingAsPurchaseUser($me);
 
         $this->assertFalse($this->svc()->setStatus($me->id, 'suspended')['success']);
         $this->assertFalse($this->svc()->delete($me->id)['success']);
@@ -162,7 +201,7 @@ class UserAccessAdminTest extends TestCase
         $this->removeSeededOwner();
         $admin = $this->user('admin');
         $last = $this->user('super_admin');
-        $this->actingAs($admin);
+        $this->actingAsPurchaseUser($admin);
 
         $res = $this->svc()->save([
             'id' => $last->id, 'name' => $last->name, 'email' => $last->email,
@@ -178,7 +217,7 @@ class UserAccessAdminTest extends TestCase
         $this->removeSeededOwner();
         $admin = $this->user('admin');
         $last = $this->user('super_admin');
-        $this->actingAs($admin);
+        $this->actingAsPurchaseUser($admin);
 
         $this->assertFalse($this->svc()->setStatus($last->id, 'suspended')['success']);
         $this->assertFalse($this->svc()->delete($last->id)['success']);
@@ -190,7 +229,7 @@ class UserAccessAdminTest extends TestCase
         $this->removeSeededOwner();
         $me = $this->user('super_admin');
         $other = $this->user('super_admin');
-        $this->actingAs($me);
+        $this->actingAsPurchaseUser($me);
 
         $this->assertTrue($this->svc()->delete($other->id)['success']);
         $this->assertNull(User::find($other->id));
@@ -200,7 +239,7 @@ class UserAccessAdminTest extends TestCase
     {
         // 시드 소유자가 남아 있어 "마지막" 규칙에는 걸리지 않는다 — 역할 규칙만 검증된다.
         $target = $this->user('super_admin');
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
 
         $this->assertFalse($this->svc()->delete($target->id)['success']);
         $this->assertNotNull(User::find($target->id));
@@ -209,7 +248,7 @@ class UserAccessAdminTest extends TestCase
     public function test_an_hr_manager_cannot_delete_accounts_at_all(): void
     {
         $target = $this->user('worker');
-        $this->actingAs($this->user('hr_manager'));
+        $this->actingAsPurchaseUser($this->user('hr_manager'));
 
         $this->assertFalse($this->svc()->delete($target->id)['success'], '인사담당자는 만들고 고칠 수는 있어도 지울 수는 없다');
         $this->assertNotNull(User::find($target->id));
@@ -219,7 +258,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_a_scope_of_site_requires_a_site(): void
     {
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
 
         $res = $this->svc()->save([
             'name' => '김현장', 'email' => 'site@example.test',
@@ -232,7 +271,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_a_duplicate_email_is_reported_on_the_email_field(): void
     {
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
         $existing = $this->user('worker');
 
         $res = $this->svc()->save([
@@ -246,7 +285,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_editing_keeps_your_own_email(): void
     {
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
         $row = $this->user('worker');
 
         $res = $this->svc()->save([
@@ -260,7 +299,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_a_new_account_is_created_with_the_chosen_scope(): void
     {
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
         $site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
 
         $res = $this->svc()->save([
@@ -280,7 +319,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_the_api_exposes_the_screen_to_an_admin(): void
     {
-        $this->actingAs($this->user('admin'));
+        $this->actingAsPurchaseUser($this->user('admin'));
 
         $this->api('api_getUserAccessList')->assertOk()->assertJsonPath('success', true);
         $this->api('api_getUserAccessOptions')->assertOk()->assertJsonPath('success', true);
@@ -289,7 +328,7 @@ class UserAccessAdminTest extends TestCase
     public function test_the_api_blocks_a_read_only_client_from_mutating(): void
     {
         // 열람 전용 계정은 api_get 이 아닌 엔드포인트에서 컨트롤러가 먼저 403 을 준다.
-        $this->actingAs($this->user('client'));
+        $this->actingAsPurchaseUser($this->user('client'));
 
         $this->api('api_saveUserAccess', [['name' => 'x', 'email' => 'x@x.com']])->assertStatus(403);
     }
@@ -297,7 +336,7 @@ class UserAccessAdminTest extends TestCase
     public function test_the_api_blocks_a_worker_from_mutating_even_though_it_is_not_read_only(): void
     {
         // worker 는 열람 전용 역할이 아니라 컨트롤러를 통과한다 — 그래서 서비스가 막아야 한다.
-        $this->actingAs($this->user('worker', 'active', 'self'));
+        $this->actingAsPurchaseUser($this->user('worker', 'active', 'self'));
 
         $this->api('api_saveUserAccess', [['name' => '침입', 'email' => 'w@example.test', 'role' => 'admin']])
             ->assertOk()->assertJsonPath('success', false);
@@ -306,7 +345,7 @@ class UserAccessAdminTest extends TestCase
 
     public function test_options_only_offer_roles_the_caller_may_grant(): void
     {
-        $this->actingAs($this->user('hr_manager'));
+        $this->actingAsPurchaseUser($this->user('hr_manager'));
 
         $values = array_column($this->svc()->options()['roles'], 'value');
         $this->assertNotContains('super_admin', $values);
@@ -316,7 +355,7 @@ class UserAccessAdminTest extends TestCase
     public function test_the_list_marks_your_own_row(): void
     {
         $me = $this->user('admin');
-        $this->actingAs($me);
+        $this->actingAsPurchaseUser($me);
 
         $rows = collect($this->svc()->list()['rows']);
         $this->assertTrue($rows->firstWhere('id', $me->id)['isSelf']);

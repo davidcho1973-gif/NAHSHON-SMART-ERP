@@ -247,6 +247,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'last_login_at' => 'datetime',
             'password_set_at' => 'datetime',
+            'purchase_request_enabled' => 'boolean',
+            'purchase_buy_enabled' => 'boolean',
             'password_login_locked_until' => 'datetime',
             'pin_set_at' => 'datetime',
             'pin_locked_until' => 'datetime',

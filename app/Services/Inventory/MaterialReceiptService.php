@@ -5,6 +5,7 @@ namespace App\Services\Inventory;
 use App\Models\Item;
 use App\Models\MaterialReceipt;
 use App\Models\MaterialReceiptLine;
+use App\Models\PurchaseReceiptAllocation;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Finance\MaterialReceiptExpenseConnector;
@@ -134,6 +135,9 @@ class MaterialReceiptService
             if (! $receipt) {
                 return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
             }
+            if ($receipt->exists && ($blocked = $this->purchaseLinkBlocker($receipt))) {
+                return ['success' => false, 'error' => $blocked];
+            }
             if ($receipt->exists && $receipt->isConfirmed()) {
                 return ['success' => false, 'error' => '확정된 입고는 수정할 수 없습니다. 먼저 «확정 해제» 하세요.'];
             }
@@ -215,6 +219,9 @@ class MaterialReceiptService
             if ($receipt->isConfirmed() === $confirmed) {
                 return ['success' => true, 'id' => $receipt->id, 'status' => $receipt->status];
             }
+            if (! $confirmed && ($blocked = $this->purchaseLinkBlocker($receipt))) {
+                return ['success' => false, 'error' => $blocked];
+            }
 
             // 이 송장으로 만든 반입 기록이 이미 확인(기성)됐으면 확정을 풀 수 없다 — 근거가 사라진다.
             if (! $confirmed && ($blocked = app(ReceiptClaimConnector::class)->blocksUnconfirm($receipt))) {
@@ -274,6 +281,9 @@ class MaterialReceiptService
             if (! $receipt) {
                 return ['success' => false, 'error' => '입고 기록을 찾을 수 없습니다.'];
             }
+            if ($blocked = $this->purchaseLinkBlocker($receipt)) {
+                return ['success' => false, 'error' => $blocked];
+            }
             if ($receipt->isConfirmed()) {
                 return ['success' => false, 'error' => '확정된 입고는 삭제할 수 없습니다. 먼저 «확정 해제» 하세요.'];
             }
@@ -282,6 +292,17 @@ class MaterialReceiptService
 
             return ['success' => true];
         });
+    }
+
+    private function purchaseLinkBlocker(MaterialReceipt $receipt): ?string
+    {
+        // Save replaces all lines. Once a purchase uses a line as receiving evidence,
+        // unconfirming and rewriting it would erase purchase quantities and their history.
+        // Callers hold the receipt lock, shared with purchase allocation, before checking.
+        return PurchaseReceiptAllocation::query()
+            ->whereIn('material_receipt_line_id', $receipt->lines()->select('id'))->exists()
+            ? '구매 요청에 연결된 입고는 확정 해제·수정·삭제할 수 없습니다. 구매 담당자에게 정정을 요청하세요.'
+            : null;
     }
 
     /** 현장 운영자면 기록·확정할 수 있다(출퇴근 수정·문서와 같은 등급). */

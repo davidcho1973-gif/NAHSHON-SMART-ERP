@@ -2,6 +2,12 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-29 Purchase requests
+
+WBS procurement rows cannot represent individual requests, partial orders and independently confirmed receipts. Added a request/order domain linked to the existing receiving ledger, with explicit superadmin grants for mobile requesting and separate buyer-only processing. Concise mobile intake and ERP buyer desk reuse existing UI, grounded AI adapters and notification inbox. Private draft analysis runs durably on the purchases queue; AI cannot execute orders. Legacy procurement mutations and files use the same buyer/site boundary. Employee identity edits cannot bypass purchase grants; purchasing/delegation require verified password or Google authentication, with a re-login action for legacy sessions.
+
+Validation: final isolated PostgreSQL/PHP 8.5 regression passed 2,551 tests / 10,287 assertions (one existing skip); all 51 JavaScript tests, Blade compilation, static build, changed-PHP style and diff checks passed. An initial Windows run exceeded its 512 MB image-test memory limit; final local configuration used 1,536 MB, without changing application or CI limits. The first full run exposed one missing activity translation, now fixed. Actual Chrome mock-data checks covered mobile intake, failed-attachment retry without duplicate creation, required reason selection and partial orders. No production records or real purchases were created, and no paid live AI accuracy benchmark was performed. Staging and production deployment evidence follows through the required PR checks.
+
 ## CODEX — 2026-09-23 Claim evidence ledger
 
 Progress percentages and mutable estimates did not identify contract-accepted quantities or original proof behind billing amounts. Added contract BOQ terms, distinct source/forecast/actual records, partial verification, scoped document/intake/photo links, reservations and frozen packets feeding the existing billing calculator and receipt ledger. Billing opens the evidence desk; manual/WBS totals cannot override ledger contracts. Original photos are preserved separately, linked files cannot be deleted, and verification/submission checks proof hashes. Milestone value rounds cumulatively per contract line, so splitting stages or months cannot create extra cents.

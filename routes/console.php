@@ -146,3 +146,7 @@ Schedule::command('queue:work meeting-analysis --queue=meetings --stop-when-empt
 // 건너뛰므로 평소에는 문서당 조회 한 번으로 끝난다 — 임베딩 호출이 헛돌지 않는다.
 // (매시간인 이유: 배포 후 첫 축적을 사람이 콘솔 없이 한 시간 안에 받게 하려고.)
 Schedule::command('erp:harvest-knowledge')->hourly();
+
+// Durable purchase analysis and notifications survive closing the personal app.
+Schedule::command('queue:work document-analysis --queue=purchase-notifications,purchases --stop-when-empty --max-time=50 --tries=1 --timeout=600')
+    ->everyMinute()->withoutOverlapping(15)->runInBackground();
