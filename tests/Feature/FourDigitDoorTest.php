@@ -103,7 +103,7 @@ class FourDigitDoorTest extends TestCase
         $this->enterWithDigits($manager, '0133');
 
         $this->assertAuthenticatedAs($manager->user);
-        $this->get('/')->assertRedirect(route('attendance-app.index'));
+        $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
         // 화면을 거치지 않고 창구를 직접 불러도 마찬가지다 — 권한이 필요한 자료는 안 나간다.
         $this->postJson(route('api.smart-company', ['method' => 'api_getKakaoReminders']), [])
             ->assertOk()->assertJsonPath('success', false);
@@ -123,7 +123,7 @@ class FourDigitDoorTest extends TestCase
         $cookie = collect($response->headers->getCookies())->first(fn ($cookie) => $cookie->getName() === $recaller);
         $this->assertNotNull($cookie, 'The old remember-me cookie must explicitly be removed.');
         $this->assertLessThan(time(), $cookie->getExpiresTime());
-        $this->get('/')->assertRedirect(route('attendance-app.index'));
+        $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
     }
 
     public function test_an_old_manager_recaller_cannot_restore_unrestricted_erp_access(): void
@@ -133,7 +133,7 @@ class FourDigitDoorTest extends TestCase
         $cookie = $manager->getAuthIdentifier().'|'.$manager->getRememberToken().'|'.$manager->getAuthPassword();
 
         $this->withCookie(Auth::guard()->getRecallerName(), $cookie)->get('/')
-            ->assertRedirect('/attendance-app')
+            ->assertRedirect(route('login', ['erp' => 1]))
             ->assertSessionHas(WorkerDeviceSession::FLAG, true)
             ->assertSessionHas(PersonalAppAccessService::LEGACY_SESSION, true);
 
@@ -160,6 +160,7 @@ class FourDigitDoorTest extends TestCase
 
             $this->actingAs($person->user);
             $this->get('/')->assertRedirect(route('attendance-app.index'));
+            $this->getJson('/')->assertForbidden()->assertJsonPath('reauthenticate_url', null);
             $this->post(route('logout'));
         }
     }

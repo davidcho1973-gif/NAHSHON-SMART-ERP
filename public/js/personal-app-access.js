@@ -16,14 +16,12 @@
     return data;
   }
   function loginAgain(){
-    const form=document.createElement('form'),token=document.createElement('input');
-    form.method='POST';form.action='/logout';token.type='hidden';token.name='_token';token.value=document.querySelector('meta[name="csrf-token"]')?.content||'';
-    form.appendChild(token);document.body.appendChild(form);form.submit();
+    global.location.href='/login?erp=1';
   }
   function paintError(error){
     if(!state.host)return;
     state.host.innerHTML=ui().pageHeader('개인앱 연결 QR','', '')+ui().notice(error.message,'danger')+
-      (error.code==='personal_app_reauthentication_required'?ui().primaryButton('로그아웃 후 다시 로그인','PersonalAppAccess.loginAgain()'):'');
+      (error.code==='personal_app_reauthentication_required'?ui().primaryButton('ERP 로그인','PersonalAppAccess.loginAgain()'):'');
   }
   function userCards(){
     const target=state.host?.querySelector('#pa-users');if(!target)return;

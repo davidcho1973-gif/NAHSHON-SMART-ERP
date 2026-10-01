@@ -70,7 +70,7 @@
       u.primaryButton('계정 추가', 'window.AdminAccess.openForm()', 'plus')
     ) + (state.options && state.options.purchasingReauthenticationRequired
       ? u.notice('구매 권한 변경은 이메일·비밀번호 또는 Google로 다시 로그인한 후 가능합니다.', 'warn') +
-        '<div style="margin-bottom:14px">' + u.rowButton('로그아웃 후 다시 로그인', 'PurchaseRequests.reauthenticate()') + '</div>'
+        '<div style="margin-bottom:14px">' + u.rowButton('ERP 로그인', 'PurchaseRequests.reauthenticate()') + '</div>'
       : '') + u.table({
       id: 'ua-tbl',
       searchPlaceholder: '이름 · 이메일 · 현장 검색',

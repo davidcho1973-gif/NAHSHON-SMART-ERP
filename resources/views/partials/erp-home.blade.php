@@ -13,22 +13,32 @@
     빠지고, 빠진 앱에서는 아무도 그 사실을 말해 주지 않는다.
 
     ── 누구에게 보이나 ────────────────────────────────────────────────
-    ERP 가 자기 집인 사람에게만 보인다(User::landingPath() 가 '/' 인 사람).
+    ERP 접근 역할인 사람에게만 보인다(RequireApprovedErpAccess의 역할 목록).
     작업자·반장에게는 보이지 않는다. 그들에게 ERP 는 자기 화면이 아니고, 눌러서
     회사 전체 화면이 뜨면 뭘 잘못 눌렀다고 생각하고 앱을 지운다 — 설치를 부탁하는
     첫날에 그걸 겪으면 두 번째 기회는 없다(landingPath 가 존재하는 이유와 같다).
 
-    판정을 여기서 새로 만들지 않고 landingPath() 를 그대로 쓴다. 규칙이 두 벌이면
-    "로그인하면 앱으로 보내는데 앱에서는 ERP 로 가라고 하는" 모순이 생긴다.
+    앱 전용 연결은 ERP 로그인을 안내한다. 로그아웃하면 개인앱 기기 연결까지
+    폐기되므로, 실제 비밀번호/Google 인증으로 승격하는 경로를 사용한다.
 --}}
 @auth
-    @if (auth()->user()->landingPath() === '/'
-        && ! session()->has(\App\Services\Auth\PersonalAppAccessService::SESSION)
-        && ! session()->has(\App\Services\Auth\PersonalAppAccessService::LEGACY_SESSION))
+    @if (auth()->user()->account_status === 'active'
+        && in_array(auth()->user()->access_role, \App\Http\Middleware\RequireApprovedErpAccess::ERP_ROLES, true))
+        @php
+            $erpSignInRequired = ! \App\Services\Auth\EmailPasswordAuthService::hasStrongAuthentication(request(), auth()->user())
+                || \App\Support\WorkerDeviceSession::isDeviceOnly(request())
+                || session()->has(\App\Services\Auth\PersonalAppAccessService::SESSION)
+                || session()->has(\App\Services\Auth\PersonalAppAccessService::LEGACY_SESSION);
+            $erpLinkLabel = $erpSignInRequired ? match (app()->getLocale()) {
+                'en' => 'ERP sign in',
+                'es' => 'Iniciar sesión ERP',
+                default => 'ERP 로그인',
+            } : 'ERP';
+        @endphp
         {{-- 회사 이름은 붙이지 않는다. 바로 아래 머리띠에 이미 있고, 회사 이름이
              ERP 로 끝나는 배포에서는 "ERP ERP" 가 된다. 세 언어 모두 이대로 읽힌다. --}}
-        <a class="erp-home" href="{{ route('smart-company.index') }}">
-            <span aria-hidden="true">←</span> ERP
+        <a class="erp-home" href="{{ $erpSignInRequired ? route('login', ['erp' => 1]) : route('smart-company.index') }}">
+            <span aria-hidden="true">←</span> {{ $erpLinkLabel }}
         </a>
         <style>
             /* 앱마다 CSS 가 따로라 여기서 자기 것만 정의한다(변수는 있으면 쓰고 없으면 기본값). */

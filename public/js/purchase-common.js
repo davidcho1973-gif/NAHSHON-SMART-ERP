@@ -19,11 +19,7 @@
     return data;
   }
   function reauthenticate() {
-    const form = document.createElement('form'), token = document.createElement('input');
-    form.method = 'POST'; form.action = '/logout';
-    token.type = 'hidden'; token.name = '_token';
-    token.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    form.appendChild(token); document.body.appendChild(form); form.submit();
+    global.location.href = '/login?erp=1';
   }
   function safeUrl(value) {
     if (typeof value !== 'string' || !value.trim()) return '';

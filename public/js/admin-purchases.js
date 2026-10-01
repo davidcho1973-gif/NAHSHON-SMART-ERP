@@ -6,7 +6,7 @@
   const title = r => (r.lines?.[0]?.name || '구매 요청') + (r.lines?.length > 1 ? ' 외 '+(r.lines.length-1)+'종' : '');
   const money = r => r.amount == null ? '—' : Number(r.amount).toLocaleString(undefined,{style:'currency',currency:r.currency || 'USD'});
   const button = (label,fn) => A().rowButton(label,fn);
-  const reauthenticationHtml = () => A().notice('구매처리를 계속하려면 이메일·비밀번호 또는 Google로 다시 로그인하세요.','warn')+button('로그아웃 후 다시 로그인','PurchaseRequests.reauthenticate()');
+  const reauthenticationHtml = () => A().notice('구매처리를 계속하려면 이메일·비밀번호 또는 Google로 다시 로그인하세요.','warn')+button('ERP 로그인','PurchaseRequests.reauthenticate()');
   function errorMessage(error) {
     if(error.code==='purchase_reauthentication_required'&&!state.reauthenticationShown){
       state.reauthenticationShown=true;

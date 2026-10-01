@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-09-30 ERP entry from personal app
+
+Approved managers opening ERP from app-only or old remembered sessions were sent back to attendance by the access middleware. Those HTML requests now open explicit ERP sign-in; real password or Google authentication returns to the account's role home. Strongly authenticated managers enter normally, while workers/foremen stay in their app and forbidden API/non-GET requests return 403 without replay. Explicit ERP login discards a stale personal-app intended destination.
+
+Reauthentication no longer logs out or revokes the remembered personal device. Failed password/Google cancellation preserves the existing app connection. The shared app link now says ERP sign-in when required; login UI and the Korean online/PDF manual describe the transition. No role or purchasing grant was broadened.
+
+Validation: targeted authentication/purchasing suite 100 passed / 888 assertions; full isolated PostgreSQL/PHP 8.5 regression 2,575 tests, 2,574 passed, one existing Windows skip, 10,647 assertions. All 59 JavaScript tests, production build, Blade compilation, Pint, diff check and independent authentication review passed. No production account, grant, attendance, purchase or device records were created. Feature PR, staging verification and actual NAHSHON build checks remain the release gates.
+
 ## CODEX — 2026-09-30 Personal-app QR connection
 
 The owner's active superadmin account had no separate requester grant, so purchasing disappeared from the personal app. Superadmins now have built-in purchase request access; other eligible internal managers still need explicit superadmin grants. ERP and the superadmin personal app share a QR menu that issues a targeted, single-use 15-minute connection. Successful scanning opens the personal app and remembers a revocable app-only device for up to 400 days. Account switching requires confirmation. The QR does not assign permissions.

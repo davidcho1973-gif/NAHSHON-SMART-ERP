@@ -152,8 +152,11 @@ class PersonalAppAccessTest extends TestCase
     {
         $this->manager->forceFill(['purchase_buy_enabled' => true])->save();
         $this->connectManager();
-        $this->get('/?view=employee-admin')->assertRedirect('/attendance-app');
+        $this->get('/?view=employee-admin')->assertRedirect(route('login', ['erp' => 1]));
+        $this->getJson('/')->assertForbidden()->assertJsonPath('reauthenticate_url', route('login', ['erp' => 1]));
         $this->postJson('/smart-company-api/api_saveUserAccount', ['args' => [[]]])->assertForbidden()->assertJsonPath('code', 'personal_app_only');
+        $this->post('/vehicle-api/save', [])->assertForbidden()->assertHeaderMissing('Location')
+            ->assertSessionMissing('url.intended');
         $this->getJson('/purchase-requests?desk=1')->assertForbidden()->assertJsonPath('code', 'purchase_reauthentication_required');
         $this->postJson('/auth/password/setup', ['password' => 'Changed1234', 'password_confirmation' => 'Changed1234'])
             ->assertForbidden()->assertJsonPath('code', 'personal_app_only');
@@ -276,17 +279,48 @@ class PersonalAppAccessTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_explicit_password_login_upgrades_app_session_without_revoking_device(): void
+    public function test_erp_entry_reauthenticates_a_trusted_superadmin_without_losing_the_app_connection(): void
     {
-        $this->manager->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
-        $this->connectManager();
-        $this->get('/login')->assertOk()->assertSee('/auth/password/login');
-        $this->post('/auth/password/login', ['email' => $this->manager->email, 'password' => 'MySite2026'])
+        $this->super->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+        $connected = $this->connectManager($this->super);
+        $deviceToken = $connected->getCookie(PersonalAppAccessService::COOKIE)->getValue();
+        $deviceId = PersonalAppDevice::first()->id;
+        $this->withCookie(PersonalAppAccessService::COOKIE, $deviceToken);
+        foreach (['/', '/erp', '/dashboard', '/admin', '/admin/users'] as $path) {
+            $this->get($path)->assertRedirect(route('login', ['erp' => 1]));
+        }
+        $this->head('/')->assertRedirect(route('login', ['erp' => 1]));
+        $this->withSession(['url.intended' => '/attendance-app/purchase-requests'])
+            ->get('/login?erp=1')->assertOk()->assertSee('/auth/password/login')
+            ->assertViewHas('erpLogin', true)->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true);
+
+        $failedLogin = $this->post('/auth/password/login', ['email' => $this->super->email, 'password' => 'WrongPassword2026'])
+            ->assertRedirect(route('login', ['erp' => 1]))->assertSessionHasErrors('email_login')
+            ->assertSessionHas(PersonalAppAccessService::SESSION, $deviceId)
+            ->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true);
+        $this->assertAuthenticatedAs($this->super);
+        $this->get('/attendance-app')->assertOk();
+        $this->assertNull(PersonalAppDevice::first()->revoked_at);
+
+        $successfulLogin = $this->post('/auth/password/login', ['email' => $this->super->email, 'password' => 'MySite2026'])
             ->assertRedirect('/')->assertSessionMissing(PersonalAppAccessService::SESSION)
             ->assertSessionMissing(WorkerDeviceSession::FLAG)
-            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $this->manager->id);
+            ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION)
+            ->assertSessionMissing('url.intended')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $this->super->id);
+        foreach ([$failedLogin, $successfulLogin] as $loginResponse) {
+            $cookie = $loginResponse->getCookie(PersonalAppAccessService::COOKIE);
+            if ($cookie) {
+                $this->assertGreaterThan(now()->timestamp, $cookie->getExpiresTime(), 'Reauthentication must not expire the app cookie.');
+                $this->assertSame($deviceToken, $cookie->getValue());
+            }
+        }
         $this->assertNull(PersonalAppDevice::first()->revoked_at);
         $this->get('/')->assertOk();
+
+        $this->expireSession();
+        $this->get('/attendance-app')->assertOk()->assertSessionHas(PersonalAppAccessService::SESSION, $deviceId);
+        $this->assertAuthenticatedAs($this->super);
     }
 
     public function test_phone_digits_cannot_remove_the_app_only_boundary_via_password_login(): void

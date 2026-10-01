@@ -6,6 +6,8 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -48,7 +50,7 @@ class ErpHomeLinkTest extends TestCase
         ];
     }
 
-    public function test_ERP_가_자기_집인_사람에게는_모든_사이드_앱에_돌아가는_문이_있다(): void
+    public function test_er_p_가_자기_집인_사람에게는_모든_사이드_앱에_돌아가는_문이_있다(): void
     {
         // 홈 화면 아이콘으로 바로 열리는 화면들이라, 나가는 길이 없으면 주소창을
         // 손으로 고쳐야 ERP 로 돌아간다.
@@ -72,6 +74,21 @@ class ErpHomeLinkTest extends TestCase
                 ->assertOk()
                 ->assertDontSee('class="erp-home"', false, "[{$role}] 에게 ERP 문이 열려 있습니다");
         }
+    }
+
+    public function test_app_only_manager_can_find_erp_sign_in_without_logging_out(): void
+    {
+        $manager = $this->userWith('super_admin');
+        $this->actingAs($manager)->withSession([WorkerDeviceSession::FLAG => true])
+            ->get(route('attendance-app.index'))->assertOk()
+            ->assertSee('ERP 로그인')->assertSee(route('login', ['erp' => 1]), false);
+        $this->get('/login?erp=1')->assertOk()->assertSee('name="password"', false);
+
+        $this->withSession([WorkerDeviceSession::FLAG => false,
+            EmailPasswordAuthService::STRONG_AUTH_SESSION => $manager->id,
+        ])->get(route('attendance-app.index'))->assertOk()
+            ->assertSee('href="'.route('smart-company.index').'"', false)
+            ->assertDontSee('ERP 로그인');
     }
 
     public function test_판정은_로그인_직후_보내는_곳과_같은_규칙을_쓴다(): void
