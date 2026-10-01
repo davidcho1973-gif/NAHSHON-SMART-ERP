@@ -17,6 +17,7 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    'ERP 로그인': 'ERP sign in',
     '개인앱 연결 QR': 'Personal app QR access',
     '관리자 선택 · 휴대폰 연결': 'Choose a manager and connect a phone',
     '구매신청 · 구매처리 기본 허용': 'Requests and purchasing included',
@@ -363,6 +364,7 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    'ERP sign in': 'Iniciar sesión ERP',
     'Personal app QR access': 'Acceso QR a la app personal',
     'Choose a manager and connect a phone': 'Elegir un administrador y conectar un teléfono',
     'Requests and purchasing included': 'Solicitudes y compras incluidas',

@@ -46,23 +46,31 @@ class RequireApprovedErpAccess
 
         // 뒷 4자리로 들어온 세션 — 권한이 무엇이든 본화면은 열리지 않는다.
         if (WorkerDeviceSession::isDeviceOnly($request)) {
-            return $this->deny($request, '휴대폰 번호로 들어오셨습니다. ERP 화면은 이메일·비밀번호 또는 Google 로그인이 필요합니다.');
+            return self::deny($request, 'ERP에 접속하려면 이메일·비밀번호 또는 Google로 로그인하세요. 개인앱 연결은 유지됩니다.');
         }
 
         if (! in_array($user->access_role, self::ERP_ROLES, true)) {
-            return $this->deny($request, 'ERP 화면 접근 권한이 없습니다. 필요하시면 관리자에게 요청해 주세요.');
+            return self::deny($request, 'ERP 화면 접근 권한이 없습니다. 필요하시면 관리자에게 요청해 주세요.');
         }
 
         return $next($request);
     }
 
-    private function deny(Request $request, string $message)
+    public static function deny(Request $request, string $message, string $code = 'erp_access_denied')
     {
-        if ($request->expectsJson()) {
-            return response()->json(['success' => false, 'error' => $message], 403);
+        $maySignIn = in_array($request->user()?->access_role, self::ERP_ROLES, true);
+        if ($request->expectsJson() || ! in_array($request->method(), ['GET', 'HEAD'], true)) {
+            return response()->json(['success' => false, 'error' => $message, 'code' => $code,
+                'reauthenticate_url' => $maySignIn ? route('login', ['erp' => 1]) : null,
+            ], 403);
         }
 
-        // 막힌 사람을 빈 화면에 두지 않는다 — 그 사람이 쓸 수 있는 화면으로 보낸다.
+        // The app credential cannot open ERP, but approved managers need a visible
+        // sign-in exit. Redirecting them back to the app trapped every ERP bookmark.
+        if ($maySignIn) {
+            return redirect()->route('login', ['erp' => 1])->with('status', $message);
+        }
+
         return redirect()->route('attendance-app.index')->with('status', $message);
     }
 }

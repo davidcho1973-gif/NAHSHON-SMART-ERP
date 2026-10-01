@@ -5,6 +5,13 @@ const vm=require('node:vm');
 const path=require('node:path');
 const source=name=>fs.readFileSync(path.join(__dirname,'../../public/js/',name),'utf8');
 
+test('QR manager reauthentication opens ERP sign-in without submitting logout or clearing the device',()=>{
+  const window={location:{href:'https://erp.example.com/attendance-app/manager-access'},addEventListener(){}};
+  vm.runInNewContext(source('personal-app-access.js'),{window,document:{getElementById(){return null;}}});
+  window.PersonalAppAccess.loginAgain();
+  assert.equal(window.location.href,'/login?erp=1');
+});
+
 test('QR links stay on this ERP and cannot become a different action or external URL',()=>{
   const window={addEventListener(){}};
   vm.runInNewContext(source('personal-app-access.js'),{window,document:{getElementById(){return null;}},URL,location:{origin:'https://erp.example.com'}});

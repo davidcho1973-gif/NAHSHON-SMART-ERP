@@ -7,7 +7,7 @@ const source = fs.readFileSync(path.join(__dirname, '../../public/js/purchase-co
 
 function harness(fetchImpl) {
   const calls = [];
-  const window = {};
+  const window = {location:{href:'https://erp.example.test/?view=purchase-requests'}};
   vm.runInNewContext(source, {
     window, URL, FormData, crypto:require('node:crypto').webcrypto,
     location:{origin:'https://erp.example.test'},
@@ -15,8 +15,15 @@ function harness(fetchImpl) {
     setTimeout:callback=>callback(),
     fetch:async(url,options)=>{calls.push({url,options});return fetchImpl ? fetchImpl(url,options) : {ok:true,json:async()=>({success:true})};},
   });
-  return {P:window.PurchaseRequests,calls};
+  return {P:window.PurchaseRequests,calls,window};
 }
+
+test('buyer reauthentication opens ERP sign-in without logging out or revoking the personal device', () => {
+  const {P,calls,window}=harness();
+  P.reauthenticate();
+  assert.equal(window.location.href,'/login?erp=1');
+  assert.equal(calls.length,0);
+});
 
 test('request content is escaped and executable product links are excluded', () => {
   const {P}=harness();

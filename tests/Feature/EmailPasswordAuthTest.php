@@ -207,6 +207,30 @@ class EmailPasswordAuthTest extends TestCase
         $this->assertNull($user->fresh()->password_set_at);
     }
 
+    public function test_explicit_erp_login_reauthenticates_a_weak_manager_instead_of_reusing_phone_digits(): void
+    {
+        $user = $this->employeeUser('site_manager');
+        $user->forceFill(['password' => Hash::make('MySite2026'), 'password_set_at' => now()])->save();
+        $this->signIn('0072')->assertRedirect('/');
+        $this->assertAuthenticatedAs($user);
+
+        // A pre-existing email/phone login is authenticated but has no device flag or strong proof.
+        $this->withSession(['url.intended' => '/attendance-app'])
+            ->get('/login?erp=1')->assertOk()->assertViewHas('erpLogin', true)
+            ->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true);
+        $this->signIn('0072')->assertRedirect(route('login', ['erp' => 1]))
+            ->assertSessionHasErrors('email_login')
+            ->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true)
+            ->assertSessionMissing(EmailPasswordAuthService::STRONG_AUTH_SESSION);
+        $this->assertAuthenticatedAs($user);
+
+        $this->signIn('MySite2026')->assertRedirect('/')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
+            ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION)
+            ->assertSessionMissing('url.intended');
+        $this->get('/')->assertOk();
+    }
+
     public function test_legacy_and_device_sessions_cannot_bootstrap_a_buyer_password(): void
     {
         $user = $this->employeeUser('admin');

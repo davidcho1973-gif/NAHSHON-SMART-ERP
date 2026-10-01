@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\PersonalAppDevice;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -145,6 +147,40 @@ class GoogleAuthTest extends TestCase
             ->get('/login');
 
         $response->assertRedirect('/');
+    }
+
+    public function test_google_erp_reauthentication_preserves_app_on_failure_and_ignores_its_stale_landing_on_success(): void
+    {
+        $this->configureGoogle();
+        $user = User::factory()->create(['email' => 'super@example.com', 'access_role' => 'super_admin',
+            'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $device = PersonalAppDevice::create(['user_id' => $user->id, 'token_hash' => hash('sha256', 'trusted-device'),
+            'expires_at' => now()->addDays(100)]);
+        $this->actingAs($user)->withSession([PersonalAppAccessService::SESSION => $device->id,
+            WorkerDeviceSession::FLAG => true, 'url.intended' => '/attendance-app'])
+            ->get('/login?erp=1')->assertOk()->assertViewHas('erpLogin', true);
+        $this->get('/auth/google')->assertRedirect()->assertSessionHas('google_oauth_state');
+        $this->get('/auth/google/callback?error=access_denied')->assertRedirect('/login')
+            ->assertSessionHasErrors('google')
+            ->assertSessionHas(PersonalAppAccessService::SESSION, $device->id)
+            ->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true);
+        $this->assertAuthenticatedAs($user);
+        $this->assertNull($device->fresh()->revoked_at);
+
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'google-token'], 200),
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'google-super', 'email' => $user->email, 'email_verified' => true,
+            ], 200),
+        ]);
+        $this->withSession(['google_oauth_state' => 'fresh-state'])
+            ->get('/auth/google/callback?state=fresh-state&code=auth-code')->assertRedirect('/')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id)
+            ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION)
+            ->assertSessionMissing(PersonalAppAccessService::SESSION)
+            ->assertSessionMissing(WorkerDeviceSession::FLAG)->assertSessionMissing('url.intended');
+        $this->assertNull($device->fresh()->revoked_at);
+        $this->get('/')->assertOk();
     }
 
     public function test_login_page_explains_when_the_session_has_expired(): void

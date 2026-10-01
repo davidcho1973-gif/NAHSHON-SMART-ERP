@@ -19,21 +19,29 @@ class GoogleAuthController extends Controller
     public function login(Request $request): View|RedirectResponse
     {
         $user = $request->user();
+        $erpLogin = EmailPasswordAuthService::rememberErpLogin($request);
 
-        if ($user instanceof User && ! WorkerDeviceSession::isDeviceOnly($request)) {
+        if ($user instanceof User && ! WorkerDeviceSession::isDeviceOnly($request)
+            && (! $erpLogin || EmailPasswordAuthService::hasStrongAuthentication($request, $user))) {
             // 이미 로그인돼 있는데 로그인 화면으로 온 경우(북마크·뒤로가기).
             // 작업자를 ERP 로 보내면 안 된다 — 아래 landingPath 가 역할별로 갈라 준다.
+            if ($erpLogin) {
+                $request->session()->forget([EmailPasswordAuthService::ERP_LOGIN_SESSION, 'url.intended']);
+            }
+
             return redirect()->to($user->landingPath());
         }
 
         return view('auth.google-login', [
             'googleConfigured' => $this->googleIsConfigured(),
             'sessionExpired' => $request->boolean('expired'),
+            'erpLogin' => $erpLogin,
         ]);
     }
 
     public function redirect(Request $request): RedirectResponse
     {
+        EmailPasswordAuthService::rememberErpLogin($request);
         if (! $this->googleIsConfigured()) {
             return $this->deny('Google login is not configured yet. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
         }
@@ -191,6 +199,12 @@ class GoogleAuthController extends Controller
      */
     private function destinationFor(Request $request, User $user): string
     {
+        if ($request->session()->pull(EmailPasswordAuthService::ERP_LOGIN_SESSION) === true) {
+            $request->session()->forget('url.intended');
+
+            return $user->landingPath();
+        }
+
         $intended = $request->session()->pull('url.intended');
 
         if (is_string($intended) && $this->isSafeDestination($intended)) {
