@@ -117,6 +117,6 @@ class SuperAdminGrantsErpAccessTest extends TestCase
         $this->postJson(route('worker-app.enter'), ['employee_id' => $manager->employee_id])->assertOk();
 
         $this->assertAuthenticatedAs($manager->fresh());
-        $this->get('/')->assertRedirect(route('attendance-app.index'));
+        $this->get('/')->assertRedirect(route('login', ['erp' => 1]));
     }
 }

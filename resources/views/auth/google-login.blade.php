@@ -11,7 +11,7 @@
   <link rel="manifest" href="{{ route('erp.manifest') }}">
   <link rel="icon" href="{{ asset('images/app-icon.svg') }}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="{{ asset('images/app-icon.svg') }}">
-  <title>Sign In - {{ \App\Support\Org::name() }} SMART ERP</title>
+  <title>{{ ($erpLogin ?? false) ? 'ERP 로그인' : 'Sign In' }} - {{ \App\Support\Org::name() }} SMART ERP</title>
   <style>
     :root {
       color-scheme: light;
@@ -489,8 +489,12 @@
       </div>
 
       <div class="auth-actions">
-      <h1>Sign In</h1>
-      <p class="subtitle">등록된 이메일 또는 Google로 로그인하세요.<br>Sign in with your registered email or Google.</p>
+      <h1>{{ ($erpLogin ?? false) ? 'ERP 로그인' : 'Sign In' }}</h1>
+      @if ($erpLogin ?? false)
+        <p class="subtitle">본인 비밀번호 또는 Google로 로그인하세요.<br>개인앱 연결은 유지됩니다.</p>
+      @else
+        <p class="subtitle">등록된 이메일 또는 Google로 로그인하세요.<br>Sign in with your registered email or Google.</p>
+      @endif
 
       @if ($sessionExpired ?? false)
         <div class="notice error">로그인 세션이 만료되었습니다. 다시 로그인해 주세요. / Please sign in again.</div>
@@ -506,6 +510,9 @@
 
       <form id="email-login" action="{{ route('password.login') }}" method="POST" style="padding:18px;background:#fff;color:#172033;border:1px solid #d8dee4;border-radius:16px;margin-bottom:18px;text-align:left">
         @csrf
+        @if ($erpLogin ?? false)
+          <input type="hidden" name="erp" value="1">
+        @endif
         @if ($errors->has('email_login') || $errors->has('email') || $errors->has('password'))
           <div class="notice error" role="alert">{{ $errors->first('email_login') ?: ($errors->first('email') ?: $errors->first('password')) }}</div>
         @endif
@@ -517,6 +524,10 @@
           style="width:100%;min-height:48px;border:1px solid #a6b3c3;border-radius:9px;padding:12px;font:inherit;color:#172033;background:#fff">
         <button type="submit" style="width:100%;min-height:50px;margin-top:16px;border:0;border-radius:10px;background:#183b62;color:#fff;font:inherit;font-weight:700;cursor:pointer">이메일로 로그인 / Sign in</button>
         <div id="email-login-help" style="font-size:12px;line-height:1.65;color:#526174;margin-top:13px">
+          @if ($erpLogin ?? false)
+            비밀번호가 없으면 등록된 Google 계정으로 로그인하세요.
+            <br>Use your password or your registered Google account.
+          @else
           {{-- 구글이 안 되는 관리자가 여기서 멈추지 않게, 무엇을 넣으면 되는지 첫 줄에 적는다.
                예전에는 «처음 이용하는 계정» 이라고만 적혀 있어서, 이미 구글로 쓰던 사람은
                자기 얘기가 아닌 줄 알고 그냥 돌아섰다. --}}
@@ -533,12 +544,13 @@
             <br>The last 4 digits keep working. You may also set your own password after signing in; the digits still work afterwards.
             Five wrong tries lock the account for 15 minutes. If it does not work, ask your administrator to confirm your registered email and phone number.
           </details>
+          @endif
         </div>
       </form>
 
       <div class="divider">or</div>
 
-      <a class="google-button" href="{{ route('auth.google.redirect') }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
+      <a class="google-button" href="{{ route('auth.google.redirect', ($erpLogin ?? false) ? ['erp' => 1] : []) }}" aria-disabled="{{ $googleConfigured ? 'false' : 'true' }}">
         <span class="google-mark">G</span>
         <span>Continue with Google</span>
       </a>
@@ -547,6 +559,9 @@
       @unless ($googleConfigured)
         <p class="setup-note">Google OAuth 환경변수가 아직 설정되지 않았습니다. Laravel Cloud와 로컬 `.env`에 client ID, secret, callback URL을 추가해 주세요.</p>
       @endunless
+      @if (($erpLogin ?? false) && auth()->check())
+        <p class="setup-note"><a href="{{ route('attendance-app.index') }}">개인앱으로 돌아가기 / Back to personal app</a></p>
+      @endif
       </div>
     </section>
   </main>

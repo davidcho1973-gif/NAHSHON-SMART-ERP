@@ -76,9 +76,9 @@ class PersonalAppSession
 
     private function deny(Request $request): Response
     {
-        return $request->expectsJson()
-            ? response()->json(['success' => false, 'code' => 'personal_app_only', 'error' => '개인앱 연결입니다. ERP 업무는 별도로 로그인하세요.'], 403)
-            : redirect('/attendance-app')->with('status', 'ERP 업무는 별도로 로그인하세요.');
+        return RequireApprovedErpAccess::deny($request,
+            'ERP에 접속하려면 이메일·비밀번호 또는 Google로 로그인하세요. 개인앱 연결은 유지됩니다.',
+            'personal_app_only');
     }
 
     private function restorable(Request $request): bool

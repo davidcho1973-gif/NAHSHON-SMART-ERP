@@ -19,6 +19,18 @@ class EmailPasswordAuthService
     /** Positive proof for purchasing; old or remembered sessions must authenticate again. */
     public const STRONG_AUTH_SESSION = 'purchase_strong_auth_user';
 
+    /** Explicit ERP entry must authenticate rather than follow an old app landing. */
+    public const ERP_LOGIN_SESSION = 'erp_login_requested';
+
+    public static function rememberErpLogin(Request $request): bool
+    {
+        if ($request->boolean('erp')) {
+            $request->session()->put(self::ERP_LOGIN_SESSION, true);
+        }
+
+        return $request->session()->get(self::ERP_LOGIN_SESSION) === true;
+    }
+
     /**
      * 이메일 + (전화번호 뒷 4자리 또는 본인이 정한 비밀번호) 로 들어온다.
      *
@@ -53,7 +65,8 @@ class EmailPasswordAuthService
             $byDigits = $initial !== null && hash_equals($initial, $password);
             $byPassword = $user->password_set_at && Hash::check($password, $user->password);
             $appUpgrade = $request->session()->has(PersonalAppAccessService::SESSION)
-                || $request->session()->get(PersonalAppAccessService::LEGACY_SESSION) === true;
+                || $request->session()->get(PersonalAppAccessService::LEGACY_SESSION) === true
+                || $request->session()->get(self::ERP_LOGIN_SESSION) === true;
             $valid = $byPassword || ($byDigits && ! $this->requiresStrongAuthentication($user) && ! $appUpgrade);
 
             if (! $valid) {
