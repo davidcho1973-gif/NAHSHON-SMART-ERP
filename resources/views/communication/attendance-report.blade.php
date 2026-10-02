@@ -4,7 +4,7 @@
 <p>작업자가 확인 버튼을 누른 기록입니다. 내용 수정 전 확인은 이전 확인으로 표시됩니다.</p>
 @forelse($messages as $message)
 <article><h2>{{ $message->title ?: '공지 / Notice' }}</h2><p>{{ $message->payload['attendance_notice']['event'] }} · {{ ($message->payload['attendance_notice']['required'] ?? false) ? '필수 확인 / Required' : '일반 / Normal' }} · 종료 {{ $message->payload['attendance_notice']['expires_at'] }}</p>
-<table><tr><th>작업자 / Worker</th><th>확인 시각 / Confirmed (UTC)</th><th>상태 / Status</th></tr>
+<table><tr><th>작업자 / Worker</th><th>확인 시각 / Confirmed ({{ config('app.timezone') }})</th><th>상태 / Status</th></tr>
 @forelse($receipts->get($message->id, collect()) as $receipt)
 <tr><td>{{ $receipt->name }}</td><td>{{ $receipt->acknowledged_at }}</td><td>{{ \Illuminate\Support\Carbon::parse($receipt->acknowledged_at)->lt($message->edited_at ?? $message->sent_at) ? '이전 확인 / Previous' : '확인 / Confirmed' }}</td></tr>
 @empty<tr><td colspan="3">아직 확인 기록이 없습니다. / No confirmations yet.</td></tr>@endforelse</table></article>
