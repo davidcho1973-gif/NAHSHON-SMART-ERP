@@ -82,22 +82,23 @@ Actions 재실행에서 이렇게 나왔다 — 추측이 아니라 로그다.
 
 ## 지금 있는 배포
 
-| | **DASOL (원본)** | **NAHSHON MEP** | **스테이징** |
-|---|---|---|---|
-| 누구 것 | **DASOL USA** — 우리 회사. 원본 | **NAHSHON MEP** | **KSR** — 첫 시험 고객 (무상) |
-| Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp` | `nahshon-smart-erp-staging` |
-| 환경 이름 | `main` | **`nahshon-mep`** | `main` |
-| 브랜치 | `main` | `main` 또는 `staging` (아래 참고) | `staging` |
-| 주소 | **`https://erp.dasolusa.com`** | **`https://erp.nahshonmep.com`** — 붙이는 중 (2026-09-03, 아래 참고) | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` |
-| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | `https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud` (도메인이 붙을 때까지는 이것) | — |
-| `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `"NAHSHON MEP"` | `KSR` |
-| `ORG_CODE` | `DASOLUSA` | — | — |
-| 데이터 | 거의 비어 있음 | 쓰는 중 | **실제 데이터** |
+| | **DASOL (원본)** | **NAHSHON MEP** | **스테이징** | **LIMAN** |
+|---|---|---|---|---|
+| 누구 것 | **DASOL USA** — 우리 회사. 원본 | **NAHSHON MEP** | **KSR** — 첫 시험 고객 (무상) | **JK LIMAN ENG, LLC** |
+| Laravel Cloud 앱 | `nahshon-smart-erp` | `nahshon-smart-erp` | `nahshon-smart-erp-staging` | `nahshon-smart-erp` |
+| 환경 이름 | `main` | **`nahshon-mep`** | `main` | **`liman`** |
+| 브랜치 | `main` | `main` 또는 `staging` (아래 참고) | `staging` | `main` |
+| 주소 | **`https://erp.dasolusa.com`** | **`https://erp.nahshonmep.com`** — 붙이는 중 (2026-09-03, 아래 참고) | `https://nahshon-smart-erp-staging-main-tj7e94.laravel.cloud` | **`https://liman.erp.dasolusa.com`** — 세우는 중 (아래 «LIMAN 세우기») |
+| 옛 주소 | `https://nahshon-smart-erp-main-m9veux.laravel.cloud` (아직 열림) | `https://nahshon-smart-erp-nahshon-mep-hntasf.laravel.cloud` (도메인이 붙을 때까지는 이것) | — | — |
+| `ORG_NAME` | `"DASOL USA"` (따옴표 필수 — 띄어쓰기) | `"NAHSHON MEP"` | `KSR` | `LIMAN` |
+| `ORG_CODE` | `DASOLUSA` | — | — | `LIMAN` |
+| 데이터 | 거의 비어 있음 | 쓰는 중 | **실제 데이터** | 세우는 중 (2026-10-02~) |
 
-> **같은 앱 안에 환경이 둘이다(`main`, `nahshon-mep`).** 그리고 스테이징 앱의 환경
-> 이름도 `main` 이라, 화면 위쪽 파란 네모만 보면 셋이 구별되지 않는다. 가리는 법:
+> **같은 앱 안에 환경이 셋이다(`main`, `nahshon-mep`, `liman`).** 그리고 스테이징 앱의 환경
+> 이름도 `main` 이라, 화면 위쪽 파란 네모만 보면 구별되지 않는다. 가리는 법:
 >
 > - 파란 네모가 **`NAHSHON MEP`** → 나손 앱
+> - 파란 네모가 **`liman`** → LIMAN
 > - 파란 네모가 `main` 인데 앱 이름에 **`-staging` 이 붙음** → KSR (실제 데이터)
 > - 파란 네모가 `main` 이고 앱 이름이 그냥 `nahshon-smart-erp` → DASOL 원본
 >
@@ -106,6 +107,66 @@ Actions 재실행에서 이렇게 나왔다 — 추측이 아니라 로그다.
 > **앱 이름과 회사 이름이 다르다.** `nahshon-smart-erp` 는 코드 저장소에서 온 이름이고,
 > 그 앱의 `main` 환경은 DASOL 것이다. 이름만 보고 «나손 = main» 이라고 읽으면 틀린다
 > (2026-09-01 에 실제로 이 착각으로 잘못된 주소를 안내한 적이 있다).
+
+### LIMAN 세우기 — 진행 중 (David 지시 2026-10-02)
+
+> 회사 이름은 `LIMAN`, 정식 법인명은 `JK LIMAN ENG, LLC`, 주소는 `liman.erp.dasolusa.com`.
+
+절차는 `docs/새-고객-배포.md` 그대로다 — **코드는 손대지 않는다.** 회사 이름은
+환경변수에서만 오고, 코드에 `LIMAN` 이 들어가면 `OrgIdentityTest` 가 깨진다.
+최고 관리자 이메일 같은 개인 값은 이 문서에 적지 않는다 — Laravel Cloud 환경변수에만 둔다.
+
+| # | 어디서 | 무엇 | 됐나 |
+|---|---|---|---|
+| 1 | Laravel Cloud → `nahshon-smart-erp` | 환경 `liman` 추가, 브랜치 `main`, **새 DB**(복제 금지), **새 버킷**, Scale to Zero 끔 | ☐ |
+| 2 | 구글 콘솔 → OAuth 클라이언트 | 리디렉션 URI `https://liman.erp.dasolusa.com/auth/google/callback` 추가 | ☐ |
+| 3 | Laravel Cloud → `liman` → 환경변수 | 아래 목록 | ☐ |
+| 4 | `liman` → Commands | `key:generate --show`, `push:keys` → 값 넣고 재배포 | ☐ |
+| 5 | `liman` → Commands | `migrate --force`, `org:provision --admin=<최고 관리자>` | ☐ |
+| 6 | `liman` → 클러스터 | Scheduler 켜기 + 문서 큐 일꾼(`docs/document-analysis-operations.md` 의 명령) | ☐ |
+| 7 | `liman` → Domains · **Hostinger** DNS | `liman.erp.dasolusa.com` 추가, Hostinger 에 Name **`liman.erp`** 한 줄 | ☐ |
+| 8 | GitHub → Secrets / Variables | `LARAVEL_CLOUD_DEPLOY_HOOK_LIMAN`(재생성 → 복사 버튼), `LIMAN_URL` | ☐ |
+| 9 | 브라우저 | `/build-version` 확인 + 최고 관리자 구글 로그인 한 번 | ☐ |
+
+**환경변수** (빈 값은 그 자리에서 만들거나 복사해 넣는다):
+
+```
+APP_NAME=ERP
+APP_URL=https://liman.erp.dasolusa.com
+ORG_NAME=LIMAN
+ORG_SHORT_NAME=LIMAN
+ORG_CODE=LIMAN
+ORG_LEGAL_NAME="JK LIMAN ENG, LLC"
+ORG_ADMIN_EMAIL=
+CACHE_STORE=file
+APP_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=https://liman.erp.dasolusa.com/auth/google/callback
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:<최고 관리자>
+MAIL_MAILER=smtp
+MAIL_HOST=
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=
+MAIL_FROM_NAME="LIMAN ERP"
+DOCUMENT_STORAGE_DISK=s3
+DOCUMENT_DISK=s3
+WBS_PHOTO_DISK=s3
+MEETING_DISK=s3
+GEMINI_API_KEY=
+```
+
+`MAIL_SCHEME` 과 `SESSION_DOMAIN` 은 넣지 않는다. **카카오(`KAKAO_*`, `SOLAPI_*`)도 넣지
+않는다** — LIMAN 은 카카오 비즈니스 채널이 없어 만들 수 없다. 출퇴근·일일보고 알림은
+웹 푸시(VAPID)로 간다. 기본값이 꺼짐이라 안 넣으면 그대로 꺼져 있다.
+
+**배포 잡은 먼저 들어가 있다** (`Tests` 의 **Deploy LIMAN**). 8번 전에는 훅 시크릿이 비어
+«적기» 갈래로 돌고 초록으로 끝난다(서버가 아직 없으면 «응답 없음» 이 적힌다).
+8번을 하면 그때부터 다른 셋과 같이 «배포 → 서버가 바뀌었는지 확인, 안 바뀌면 빨강» 이다.
 
 ### 나손 환경이 어느 브랜치를 보는가
 

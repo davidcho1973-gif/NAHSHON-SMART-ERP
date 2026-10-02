@@ -27,3 +27,6 @@ jobs:
           echo
           echo "== 운영 (erp.dasolusa.com) =="
           curl -sS -m 30 https://erp.dasolusa.com/build-version | python3 -m json.tool || echo "운영 응답 없음"
+          echo
+          echo "== LIMAN (liman.erp.dasolusa.com) =="
+          curl -sS -m 30 https://liman.erp.dasolusa.com/build-version | python3 -m json.tool || echo "LIMAN 응답 없음 — 아직 안 세웠거나 DNS 반영 전"

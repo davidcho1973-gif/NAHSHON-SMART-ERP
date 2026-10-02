@@ -93,10 +93,10 @@ jobs:
   #
   # 설정할 것 (환경별로 하나씩):
   #   Settings → Secrets and variables → Actions
-  #     Secrets   : LARAVEL_CLOUD_DEPLOY_HOOK_STAGING / ..._PRODUCTION
+  #     Secrets   : LARAVEL_CLOUD_DEPLOY_HOOK_STAGING / ..._PRODUCTION / ..._NAHSHON / ..._LIMAN
   #                 ← Laravel Cloud → Settings → Deployments → Deploy hook URL
   #                   (입력칸에서 잘려 보이므로 반드시 복사 버튼을 쓸 것)
-  #     Variables : STAGING_URL / PRODUCTION_URL
+  #     Variables : STAGING_URL / PRODUCTION_URL / NAHSHON_URL / LIMAN_URL
   #
   # 둘 다 없으면 조용히 건너뛴다. 설정 전까지 저장소를 빨갛게 만들 이유가 없다.
   deploy-staging:
@@ -239,6 +239,57 @@ jobs:
 
       # 시크릿 이름이 틀려 값이 비어 온 경우. 이때 실패로 몰면 «내가 시키지도 못한 배포» 가
       # 늦다고 빨간 X 가 뜬다 — 적어만 두고, 위의 경고가 이름을 확인하라고 말한다.
+      - name: Report the deployed build
+        if: always() && steps.hook.outputs.has_hook != 'true'
+        run: bash scripts/deploy/report-build.sh
+
+      - name: Check the scheduler
+        if: always()
+        run: bash scripts/deploy/check-scheduler.sh
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # LIMAN — 네 번째 배포 (David 지시 2026-10-02). 같은 앱 `nahshon-smart-erp` 의
+  # `liman` 환경, 주소 liman.erp.dasolusa.com.
+  #
+  # 나손 잡과 같은 모양이다. 훅이 들어오기 전(= 환경을 세우는 중)에는 «적기» 갈래로
+  # 물러서서 잡을 초록으로 둔다 — 아직 서지도 않은 서버가 응답이 없다고 main 을
+  # 빨갛게 만들면, 사람은 그 X 를 무시하는 법부터 배운다. 훅을 넣는 순간부터는
+  # 다른 셋과 같은 잣대(서버가 그 커밋으로 바뀌지 않으면 실패)로 판정한다.
+  deploy-liman:
+    name: Deploy LIMAN
+    needs: tests
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      ENV_LABEL: LIMAN
+      # 기본값을 함께 적는 이유는 나손과 같다 — 변수를 안 넣었다고 확인이 조용히
+      # 꺼지면 «배포됐어?» 에 다시 아무도 답할 수 없게 된다.
+      BASE: ${{ vars.LIMAN_URL || 'https://liman.erp.dasolusa.com' }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Trigger Laravel Cloud deployment
+        id: hook
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_LIMAN }}
+          HOOK_NAME: LARAVEL_CLOUD_DEPLOY_HOOK_LIMAN
+        run: bash scripts/deploy/trigger-hook.sh
+
+      - name: Diagnose the hook URL shape
+        if: steps.hook.outputs.ok != 'true'
+        env:
+          HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_LIMAN }}
+          REFERENCE_HOOK: ${{ secrets.LARAVEL_CLOUD_DEPLOY_HOOK_PRODUCTION }}
+          REFERENCE_LABEL: 잘 되는 훅
+        run: bash scripts/deploy/diagnose-hook.sh
+
+      - name: Verify the deployed build
+        if: always() && steps.hook.outputs.has_hook == 'true'
+        run: bash scripts/deploy/verify-build.sh
+
       - name: Report the deployed build
         if: always() && steps.hook.outputs.has_hook != 'true'
         run: bash scripts/deploy/report-build.sh

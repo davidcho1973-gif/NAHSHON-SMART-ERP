@@ -167,7 +167,7 @@ class DeployReportTest extends TestCase
         sort($hookNames);
         sort($urlNames);
 
-        $this->assertCount(3, $hookNames, '배포 대상은 셋입니다');
+        $this->assertCount(4, $hookNames, '배포 대상은 넷입니다 — DEPLOYMENT_ENVIRONMENTS.md 의 표와 같아야 합니다');
         $this->assertSame($hookNames, $urlNames, '훅과 주소의 짝이 어긋나 있습니다 — 배포와 확인이 다른 서버를 봅니다');
     }
 
