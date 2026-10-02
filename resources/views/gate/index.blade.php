@@ -43,9 +43,11 @@
 <section id="attendance" hidden><div id="who"><small data-t="recognized"></small><h2 id="worker-name"></h2><p id="status"></p></div>
 <button id="punch" class="primary"></button><button id="switch-worker" data-t="switchWorker"></button>
 <p class="note" data-t="dailyHint"></p></section>
+<section id="completed" hidden aria-live="polite"><h2 id="completed-title"></h2><p id="completed-at"></p><div id="completion-notices"></div></section>
 </main>
 {{-- 이 휴대폰을 누구의 것으로 볼지는 등록 화면 둘이 같이 쓰는 한 파일이 정한다. --}}
 <script src="{{ asset('js/worker-device-remember.js') }}?v={{ filemtime(public_path('js/worker-device-remember.js')) }}"></script>
+<script src="{{ asset('js/gate-completion.js') }}?v={{ filemtime(public_path('js/gate-completion.js')) }}"></script>
 <script>
 (() => {
  const copy = {
@@ -53,16 +55,16 @@
  en:{title:'Site attendance',intro:'Enter the last 4 digits of your registered phone and tap your name. Next time, just scan this QR — the clock in/out button is right there.',last4:'Last 4 digits of your phone',noMatch:'Not found. Check the digits, or tap "Register a new worker".',newWorker:'Register a new worker',forgot:'Number changed, or your name is missing? Tell HR.',registerHint:'Enter your name and phone. This phone is linked and you can clock in right away; paperwork comes later.',name:'Name',register:'Register and clock in',back:'Back',recognized:'Worker on this phone',switchWorker:'Not me · Disconnect',dailyHint:'Use this same QR next time. Tap the button to record attendance.',clock_in:'Clock in',clock_out:'Clock out',none:'No record today',last:'Last record',done:'Recorded',pending:'Saved · Administrator review needed',duplicate:'Already recorded. No duplicate added.',busy:'Working…',network:'Connection failed. Please try again.'},
  es:{title:'Asistencia en obra',intro:'Escriba los últimos 4 dígitos de su teléfono registrado y pulse su nombre. La próxima vez, solo escanee este QR: el botón de entrada/salida aparece directo.',last4:'Últimos 4 dígitos de su teléfono',noMatch:'No encontrado. Revise los dígitos o pulse "Registrar trabajador nuevo".',newWorker:'Registrar trabajador nuevo',forgot:'¿Cambió de número o no aparece su nombre? Avise a Recursos Humanos.',registerHint:'Escriba nombre y teléfono. Este teléfono queda vinculado y puede marcar entrada de inmediato; los documentos después.',name:'Nombre',register:'Registrarme y marcar entrada',back:'Volver',recognized:'Trabajador de este teléfono',switchWorker:'No soy yo · Desconectar',dailyHint:'Use el mismo QR la próxima vez. Pulse el botón para registrar asistencia.',clock_in:'Marcar entrada',clock_out:'Marcar salida',none:'Sin registros hoy',last:'Último registro',done:'Registrado',pending:'Guardado · Revisión necesaria',duplicate:'Ya registrado. No se agregó un duplicado.',busy:'Procesando…',network:'Error de conexión. Inténtelo otra vez.'}
  };
- const urls = {me: @json(route('gate.me',$site)), identify: @json(route('gate.identify',$site)), claim: @json(route('gate.claim',$site)), punch: @json(route('gate.punch',$site)), forget: @json(route('gate.forget',$site))};
+ const urls = {me: @json(route('gate.me',$site)), identify: @json(route('gate.identify',$site)), claim: @json(route('gate.claim',$site)), punch: @json(route('gate.punch',$site)), forget: @json(route('gate.forget',$site)), notices: @json(route('gate.notices',$site)), noticeAck: @json(route('gate.notice-ack',$site)), noticeFile: @json(route('gate.notice-file',$site))};
  const el = id => document.getElementById(id);
  let lang = @json($lang), token = '', record = null, geo = {}, busy = false;
  try { token = localStorage.getItem('dasolWorkerDevice') || ''; } catch (_) {}
  const text = () => copy[lang];
  function paint(){ document.documentElement.lang=lang; el('registration-language').value=lang; document.querySelectorAll('[data-t]').forEach(e=>e.textContent=text()[e.dataset.t]); if(record){ el('worker-name').textContent=record.employee.name; el('status').textContent=record.lastEvent?text().last+' · '+(record.lastEvent==='clock_in'?text().clock_in:text().clock_out)+' '+(record.lastAt||''):text().none; el('punch').textContent=text()[record.next]; } }
- function show(id){ ['entry','register','attendance'].forEach(x=>el(x).hidden=x!==id); }
+ function show(id){ ['entry','register','attendance','completed'].forEach(x=>el(x).hidden=x!==id); }
  function note(message,error=false){el('notice').textContent=message;el('notice').className=error?'error':'success';}
  function save(value){token=value;try{value?localStorage.setItem('dasolWorkerDevice',value):localStorage.removeItem('dasolWorkerDevice');}catch(_){} }
- async function post(kind,data){const r=await fetch(urls[kind],{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)}); const d=await r.json();if(!r.ok)throw new Error(d.error||d.message||text().network);return d;}
+ async function post(kind,data,signal){const r=await fetch(urls[kind],{signal,method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)}); const d=await r.json();if(!r.ok)throw new Error(d.error||d.message||text().network);return d;}
  async function recognize(){const d=await post('me',{device_token:token}); if(!d.recognized){show('entry');return false;}record=d;paint();show('attendance');return true;}
  // 언어 단추는 공용 조각이 맡는다 — 서버에 알리고 화면을 다시 그린다(partials/lang-switch).
  el('new-worker').onclick=()=>{note('');show('register');}; el('back').onclick=()=>show('entry');
@@ -90,7 +92,27 @@
      await recognize();note('');
    }catch(err){note(err.message,true);}finally{busy=false;}}
  el('switch-worker').onclick=async()=>{if(busy)return;try{await post('forget',{device_token:token});save('');location.reload();}catch(err){note(err.message,true);}};
- el('punch').onclick=async()=>{if(busy)return;busy=true;el('punch').disabled=true;note(text().busy);try{const d=await post('punch',{device_token:token,...geo});if(!d.success)throw new Error(d.error||text().network);await recognize();note((d.ignored?text().duplicate:d.pending?text().pending:text().done)+' '+(d.date||'')+' '+(d.at||''));}catch(err){note(err.message,true);}finally{busy=false;el('punch').disabled=false;}};
+ let completed = false;
+ const completionCopy = {
+ ko:{clock_in:'출근하였습니다.',clock_out:'퇴근하였습니다.',closed:'완료되었습니다.',closeHint:'이 화면을 닫으셔도 됩니다. 다음 출퇴근 때 현장 QR을 다시 찍어 주세요.',loading:'공지를 불러오는 중…',failed:'출퇴근 기록은 저장되었습니다. 공지 확인에 실패했습니다. 다시 시도하거나 담당자에게 문의해 주세요.',retry:'다시 시도',close:'확인하고 닫기',notices:'현장 공지',required:'필수 확인',details:'자세히 보기 · 첨부파일',ack:'내용을 확인했습니다',confirmed:'확인 완료'},
+ en:{clock_in:'Clocked in.',clock_out:'Clocked out.',closed:'Completed.',closeHint:'You may close this page. Scan the site QR again for your next punch.',loading:'Loading notices…',failed:'Attendance was saved. Notices could not be confirmed. Retry or contact your supervisor.',retry:'Retry',close:'Confirm and close',notices:'Site notices',required:'Required',details:'Details and attachments',ack:'I have read this',confirmed:'Confirmed'},
+ es:{clock_in:'Entrada registrada.',clock_out:'Salida registrada.',closed:'Completado.',closeHint:'Puede cerrar esta página. Escanee el QR para el próximo registro.',loading:'Cargando avisos…',failed:'La asistencia se guardó. No se pudo confirmar el aviso. Reintente o avise al supervisor.',retry:'Reintentar',close:'Confirmar y cerrar',notices:'Avisos de obra',required:'Obligatorio',details:'Detalles y archivos',ack:'He leído el aviso',confirmed:'Confirmado'}
+ };
+ function finishPunch(d){
+   completed=true;show('completed');note('');
+   const t=completionCopy[lang];
+   el('completed-title').textContent=d.ignored?text().duplicate:(t[d.event]||text().done);
+   el('completed-at').textContent=(record?.employee?.name||'')+' · '+(d.date||'')+' '+(d.at||'')+(d.pending?' · '+text().pending:'');
+   window.GateCompletion.create({container:el('completion-notices'),text:t,
+     post:async(kind,data)=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);try{return await post(kind,{device_token:token,...data},controller.signal);}finally{clearTimeout(timer);}},
+     download:async file=>{
+       const r=await fetch(urls.noticeFile,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify({device_token:token,file_id:file.id})});
+       if(!r.ok)throw new Error('download');
+       const url=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+     }
+   }).load();
+ }
+ el('punch').onclick=async()=>{if(busy||completed)return;busy=true;el('punch').disabled=true;note(text().busy);try{const d=await post('punch',{device_token:token,...geo});if(!d.success)throw new Error(d.error||text().network);finishPunch(d);}catch(err){note(err.message,true);}finally{busy=false;if(!completed)el('punch').disabled=false;}};
  paint();if(token)recognize().catch(()=>note(text().network,true));
  if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>{geo={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy};},()=>{},{timeout:8000,enableHighAccuracy:true});
 })();

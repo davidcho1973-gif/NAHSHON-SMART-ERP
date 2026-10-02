@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminUploadController;
 use App\Http\Controllers\AttendanceAppController;
 use App\Http\Controllers\AttendanceGeoController;
+use App\Http\Controllers\AttendanceNoticeController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DocumentIntelligenceController;
@@ -480,6 +481,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/push/subscribe', [PushSubscriptionController::class, 'store'])->name('push.subscribe');
     Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
     Route::post('/attendance-app/messages/{room}', [CommunicationController::class, 'store'])->name('communication.store');
+    Route::get('/attendance-app/messages/{room}/attendance-notices', [AttendanceNoticeController::class, 'report'])->name('communication.attendance-report');
     Route::get('/attendance-app/team/{token}', [AttendanceAppController::class, 'team'])->name('attendance-app.team');
     Route::post('/attendance-app/team/{token}', [AttendanceAppController::class, 'recordTeam'])->name('attendance-app.team.record');
     Route::get('/attendance-app/team/{token}/crew', [AttendanceAppController::class, 'crew'])->name('attendance-app.crew');
@@ -632,6 +634,9 @@ Route::post('/gate/{site}/claim', [GateAttendanceController::class, 'claim'])
 Route::post('/gate/{site}/remember', [GateAttendanceController::class, 'remember'])
     ->middleware('throttle:60,1')->name('gate.remember');
 Route::post('/gate/{site}/forget', [GateAttendanceController::class, 'forget'])->name('gate.forget');
+Route::post('/gate/{site}/notices', [AttendanceNoticeController::class, 'index'])->middleware('throttle:120,1')->name('gate.notices');
+Route::post('/gate/{site}/notices/acknowledge', [AttendanceNoticeController::class, 'acknowledge'])->middleware('throttle:120,1')->name('gate.notice-ack');
+Route::post('/gate/{site}/notices/file', [AttendanceNoticeController::class, 'file'])->middleware('throttle:120,1')->name('gate.notice-file');
 
 Route::get('/member/register/{token}/qr', [MemberRegistrationController::class, 'qr'])->name('member-registration.qr');
 Route::get('/member/register/{token}', [MemberRegistrationController::class, 'show'])->name('member-registration.show');
