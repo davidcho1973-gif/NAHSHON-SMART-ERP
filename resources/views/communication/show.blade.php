@@ -244,6 +244,12 @@
                     @if($room->type === 'site_announcement')
                         <input type="text" name="title" maxlength="255" placeholder="공지 제목"
                                style="border:1px solid var(--line);border-radius:12px;padding:9px 12px;width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit">
+                        <details style="padding:8px"><summary>출퇴근 공지 설정 / Attendance notice</summary>
+                            <label>표시 / Show <select name="attendance_event"><option value="none">표시 안 함 / Off</option><option value="both">출근·퇴근 / Both</option><option value="clock_in">출근 / Clock in</option><option value="clock_out">퇴근 / Clock out</option></select></label>
+                            <label><input type="checkbox" name="attendance_required" value="1"> 필수 확인 / Required</label>
+                            <label>게시 종료일 / Ends <input type="date" name="attendance_expires" value="{{ now()->addDays(14)->toDateString() }}"></label>
+                            <a href="{{ route('communication.attendance-report', $room) }}">확인 현황 / Confirmations</a>
+                        </details>
                     @endif
                     @if($canPostUrgent)
                         {{-- 긴급은 알림을 꺼 둔 사람에게도 울린다. 그래서 켤 때마다 그 사실을 보여준다. --}}

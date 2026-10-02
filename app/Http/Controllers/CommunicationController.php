@@ -21,6 +21,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -316,6 +317,9 @@ class CommunicationController extends Controller
             'parent_id' => ['nullable', 'integer'],
             'urgent' => ['nullable', 'boolean'],
             'broadcast' => ['nullable', 'boolean'],
+            'attendance_event' => ['nullable', 'in:none,both,clock_in,clock_out'],
+            'attendance_required' => ['nullable', 'boolean'],
+            'attendance_expires' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'files' => ['nullable', 'array', 'max:10'],
             'files.*' => ['file', 'max:'.config('document-intelligence.max_upload_kb', 51200)],
         ]);
@@ -329,6 +333,10 @@ class CommunicationController extends Controller
         }
 
         abort_unless($this->communicationService->canPost($user, $room, $parent), 403);
+        if (($data['attendance_event'] ?? 'none') !== 'none') {
+            abort_unless($parent === null && $room->type === CommunicationRoom::TYPE_SITE_ANNOUNCEMENT
+                && $this->communicationService->isLead($user), 403);
+        }
 
         $kind = $room->type === CommunicationRoom::TYPE_SITE_ANNOUNCEMENT && $parent === null
             ? CommunicationMessage::KIND_ANNOUNCEMENT
@@ -350,7 +358,13 @@ class CommunicationController extends Controller
             'priority' => $priority,
             'is_pinned' => $kind === CommunicationMessage::KIND_ANNOUNCEMENT,
             // 답글을 방에도 보인다(슬랙의 "채널에도 보내기") — 모두가 알아야 할 결론일 때.
-            'payload' => $parent && ($data['broadcast'] ?? false) ? ['broadcast' => true] : null,
+            'payload' => $kind === CommunicationMessage::KIND_ANNOUNCEMENT && ($data['attendance_event'] ?? 'none') !== 'none'
+                ? ['attendance_notice' => [
+                    'event' => $data['attendance_event'],
+                    'required' => (bool) ($data['attendance_required'] ?? false),
+                    'expires_at' => Carbon::parse($data['attendance_expires'] ?? now()->addDays(14)->toDateString(), $room->site?->timezone ?: config('app.timezone'))->endOfDay()->utc()->toIso8601String(),
+                ]]
+                : ($parent && ($data['broadcast'] ?? false) ? ['broadcast' => true] : null),
         ]);
 
         // 첨부는 메시지에 붙는 동시에 문서함으로도 들어가 분석·모듈 배달을 탄다.
