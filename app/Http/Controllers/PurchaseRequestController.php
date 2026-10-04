@@ -76,7 +76,7 @@ class PurchaseRequestController extends Controller
                 $event = $row->events()->create(['actor_id' => $request->user()->id, 'action' => 'email',
                     'status' => $row->status, 'message' => '업체 이메일 전송 대기: '.$data['to'],
                     'data' => $data + ['delivery' => 'queued'], 'request_key' => $key, 'fingerprint' => $fingerprint]);
-                \App\Jobs\SendPurchaseInquiry::dispatch($event->id)->afterCommit();
+                \App\Jobs\SendPurchaseInquiry::dispatch($event->id)->onConnection('document-analysis')->onQueue('purchases')->afterCommit();
                 return ['success' => true, 'delivery' => 'queued'];
             });
         });

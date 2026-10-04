@@ -601,5 +601,7 @@ Detailed HR registration fixtures now specify their required worker position. Pu
 - 미확인 수량·단위 접수, 구매 담당자의 주문 전 품목 확정, 상대 날짜 기준일과 현장 시간대, 대화 보완·담당자 확인 전달.
 - 사진 표시본과 원본 보존, 사무실의 요청/처리 화면, 제품 후보 검색·판매처 연결·등록 업체 연락·연락 결과 기록.
 - 선택 첨부 이메일: 권한·현장 범위 확인, 멱등 전송, 전송 대기/완료/확인 필요 이력. 발송 설정이 없으면 성공으로 표시하지 않는다.
-- 로컬 PostgreSQL 구매 시험 24개 및 JS 시험 64개 통과, 빌드 통과. 전체 로컬 시험 2583개 중 Windows GD/Bash 및 환경 의존 실패가 있어 Linux CI에서 전체 결과를 확인한다.
+- 로컬 PostgreSQL 구매 시험 26개 및 JS 시험 64개 통과, 빌드 통과. Linux CI 전체 시험 통과 확인 후 PR #106/#107을 운영/스테이징에 병합했다.
 - 운영 데이터 없이 별도 purchase_ui_20261004 DB에서 실제 로그인·미확인 요청 제출·사무실 처리·이메일 초안 화면 검증. 실제 업체 이메일·결제는 실행하지 않았다.
+- 업체 납품 확정은 주문 완료와 별도 상태로 관리하고 납품일 변경 시 재확인을 요구한다.
+- 배포 전 운영 설정 점검: default 큐는 처리하지 않으므로 문의 이메일을 기존 document-analysis/purchases 큐로 연결했다. NAHSHON SMTP ready=true, DASOL mailer=log/ready=false여서 DASOL 실제 발송에는 회사 메일 설정이 필요하다.
