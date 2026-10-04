@@ -83,6 +83,21 @@ class PurchaseRequestWorkflowTest extends TestCase
             ['action' => 'resolve', 'version' => $confirmed['version'], 'lines' => [['name' => 'x', 'quantity' => 1, 'unit' => 'EA']]])->assertForbidden();
     }
 
+    public function test_supplier_confirmation_is_explicit_and_a_changed_delivery_date_requires_reconfirmation(): void
+    {
+        $row = $this->createRequest();
+        $this->actingAsPurchaseUser($this->buyer)->postJson('/purchase-requests/'.$row['id'].'/action',
+            ['action' => 'supplier_confirm', 'version' => $row['version'], 'eta' => '2026-10-05', 'note' => 'Confirmed'])->assertUnprocessable();
+        $ordered = $this->order($this->evidence($row));
+        $this->assertSame('ordered', $ordered['status']);
+        $confirmed = $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'supplier_confirm',
+            'version' => $ordered['version'], 'eta' => '2026-10-05', 'note' => 'Supplier confirmed first truck at 07:00'])->assertOk()->json('request');
+        $this->assertSame('supplier_confirmed', $confirmed['status']);
+        $this->getJson('/purchase-requests?desk=1&status=supplier_confirmed')->assertOk()->assertJsonPath('rows.0.status', 'supplier_confirmed');
+        $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'eta', 'version' => $confirmed['version'],
+            'eta' => '2026-10-06'])->assertOk()->assertJsonPath('request.status', 'ordered');
+    }
+
     public function test_inquiry_email_is_scoped_selective_and_idempotent(): void
     {
         config(['mail.default' => 'smtp']);

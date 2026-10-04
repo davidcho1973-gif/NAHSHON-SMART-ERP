@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
   const base = '/purchase-requests';
-  const labels = {submitted:'요청됨',needs_info:'정보 필요',reviewing:'검토 중',on_hold:'보류',out_of_stock:'품절',partially_ordered:'일부 구매',ordered:'구매완료',partial:'일부 입고',received:'입고완료',cancelled:'취소'};
+  const labels = {submitted:'요청됨',needs_info:'정보 필요',reviewing:'검토 중',on_hold:'보류',out_of_stock:'품절',partially_ordered:'일부 구매',ordered:'구매완료',supplier_confirmed:'업체 납품 확정',partial:'일부 입고',received:'입고완료',cancelled:'취소'};
   const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function errorText(data) { return Object.values(data.errors || {}).flat().join(' ') || data.error || data.message || '처리하지 못했습니다. 다시 시도해 주세요.'; }
   async function api(path, method, body) {

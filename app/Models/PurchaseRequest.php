@@ -11,6 +11,7 @@ class PurchaseRequest extends Model
     public const STATUSES = [
         'submitted' => '요청됨', 'needs_info' => '정보 필요', 'reviewing' => '검토 중',
         'on_hold' => '보류', 'out_of_stock' => '품절', 'partially_ordered' => '일부 구매', 'ordered' => '구매완료',
+        'supplier_confirmed' => '업체 납품 확정',
         'partial' => '일부 입고', 'received' => '입고완료', 'cancelled' => '취소',
     ];
 

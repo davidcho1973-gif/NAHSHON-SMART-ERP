@@ -2,7 +2,7 @@
   'use strict';
   const P = () => global.PurchaseRequests, A = () => global.AdminUI;
   const state = {rows:[],sites:[],status:'',site:'',reasons:{},loading:false,operationKeys:new Map()};
-  const actionLabels = {review:'검토 시작',needs_info:'정보 요청',hold:'보류',out_of_stock:'품절',order:'구매완료',eta:'배송일',receive:'입고 연결',cancel:'취소',resolve:'품목·수량 확정',contact:'업체 연락 기록'};
+  const actionLabels = {review:'검토 시작',needs_info:'정보 요청',hold:'보류',out_of_stock:'품절',order:'구매완료',eta:'배송일',receive:'입고 연결',cancel:'취소',resolve:'품목·수량 확정',contact:'업체 연락 기록',supplier_confirm:'업체 납품 확정'};
   const title = r => (r.lines?.[0]?.name || '구매 요청') + (r.lines?.length > 1 ? ' 외 '+(r.lines.length-1)+'종' : '');
   const money = r => r.amount == null ? '—' : Number(r.amount).toLocaleString(undefined,{style:'currency',currency:r.currency || 'USD'});
   const button = (label,fn) => A().rowButton(label,fn);
@@ -30,7 +30,7 @@
           {key:'need_by',label:'필요일'},
           {key:'amount',label:'금액',render:r=>e(money(r))},
           {key:'status',label:'상태',render:r=>A().badge(r.status_label || P().labels[r.status],['ordered','received'].includes(r.status)?'ok':['needs_info','on_hold','out_of_stock'].includes(r.status)?'warn':'muted')+(r.eta?'<div style="font-size:11px;margin-top:4px">도착 '+e(r.eta)+'</div>':'')},
-          {key:'next',label:'다음 할 일',render:r=>e(['received','cancelled'].includes(r.status)?'완료':r.lines?.some(l=>l.quantity==null || !l.unit)?'품목·수량 확정':r.status==='needs_info'?'현장 답변 확인':['ordered','partially_ordered','partial'].includes(r.status)?'배송·입고 확인':'업체·제품 확인')},
+          {key:'next',label:'다음 할 일',render:r=>e(['received','cancelled'].includes(r.status)?'완료':r.lines?.some(l=>l.quantity==null || !l.unit)?'품목·수량 확정':r.status==='needs_info'?'현장 답변 확인':r.status==='ordered'?'업체 납품 확인':['supplier_confirmed','partially_ordered','partial'].includes(r.status)?'배송·입고 확인':'업체·제품 확인')},
           {key:'action',label:'',render:r=>button('처리','AdminPurchases.open('+r.id+')')}
         ]}));
       A().bindSearch('purchase-desk-table');
@@ -118,6 +118,7 @@
       if(!(r.actions || []).includes(kind))throw new Error('현재 상태에서 처리할 수 없습니다. 새로고침해 주세요.');
       if(state.detail){state.detail.close();state.detail=null;}
       if(['hold','out_of_stock','needs_info','cancel'].includes(kind))return chooseReason(r,kind);
+      if(kind==='supplier_confirm')return A().formModal({title:'업체 납품 확정',fields:[{name:'eta',label:'업체가 확인한 납품일',type:'date',required:true,value:r.eta || ''},{name:'note',label:'업체 · 도착 시간 · 첫 차량/전량 · 확인 근거',type:'textarea',required:true}],onSave:async v=>{try{await apply(r,'supplier_confirm',{eta:v.eta,note:v.note});return {success:true};}catch(err){return {success:false,error:errorMessage(err)};}}});
       if(kind==='resolve')return resolve(r);
       if(kind==='contact')return A().formModal({title:'업체 연락 결과',fields:[{name:'note',label:'업체 · 가격 · 공급 가능 여부 · 다음 연락',type:'textarea',required:true}],onSave:async v=>{try{await apply(r,'contact',{note:v.note});return {success:true};}catch(err){return {success:false,error:errorMessage(err)};}}});
       if(kind==='order')return order(r);
