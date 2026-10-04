@@ -99,6 +99,35 @@ class PurchaseRequestWorkflowTest extends TestCase
         $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertForbidden();
     }
 
+    public function test_inquiry_worker_sends_selected_materials_once_and_rechecks_permissions(): void
+    {
+        config(['mail.default' => 'smtp']);
+        $row = $this->createRequest();
+        $this->actingAsPurchaseUser($this->buyer);
+        $file = $this->postJson('/purchase-requests/'.$row['id'].'/attachments', ['purpose' => 'request',
+            'file' => UploadedFile::fake()->createWithContent('drawing.pdf', "%PDF-1.4\nselected drawing")])->assertOk()->json('attachment');
+        $payload = ['to' => 'vendor@example.test', 'subject' => 'Quote request', 'body' => 'Please quote',
+            'attachment_ids' => [$file['id']], 'request_key' => (string) Str::uuid()];
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk();
+        $event = PurchaseRequestEvent::where('purchase_request_id', $row['id'])->where('action', 'email')->firstOrFail();
+        \Illuminate\Support\Facades\Mail::shouldReceive('raw')->once()->andReturnUsing(function ($body, $callback): void {
+            $message = new \Illuminate\Mail\Message(new \Symfony\Component\Mime\Email);
+            $callback($message);
+            $this->assertSame('Please quote', $body);
+            $this->assertSame('vendor@example.test', $message->getSymfonyMessage()->getTo()[0]->getAddress());
+            $this->assertCount(1, $message->getSymfonyMessage()->getAttachments());
+        });
+        $job = new \App\Jobs\SendPurchaseInquiry($event->id);
+        $job->handle(app(\App\Services\Procurement\PurchaseRequestService::class));
+        $this->assertSame('sent', $event->fresh()->data['delivery']);
+        $job->handle(app(\App\Services\Procurement\PurchaseRequestService::class));
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload, ['request_key' => (string) Str::uuid()]))->assertOk();
+        $second = PurchaseRequestEvent::where('purchase_request_id', $row['id'])->where('action', 'email')->latest('id')->firstOrFail();
+        $this->buyer->forceFill(['purchase_buy_enabled' => false])->save();
+        (new \App\Jobs\SendPurchaseInquiry($second->id))->handle(app(\App\Services\Procurement\PurchaseRequestService::class));
+        $this->assertSame('failed', $second->fresh()->data['delivery']);
+    }
+
     private function createRequest(array $extra = []): array
     {
         return $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests', $this->payload($extra))

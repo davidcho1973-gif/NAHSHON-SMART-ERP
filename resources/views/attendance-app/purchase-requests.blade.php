@@ -28,11 +28,13 @@
                     <label>{{ __('필요한 물건이나 하려는 작업을 알려주세요') }}<textarea id="pr-input" placeholder="예: 여기 배관을 연결해야 해요. 또는 레미콘 4500psi 27CY 월요일 7시 납품해주세요."></textarea></label>
                     <p class="pr-help">{{ __('제품 이름과 규격을 몰라도 괜찮아요. 사무실에서 확인해 구매합니다.') }}</p>
                     <div class="pr-actions">
+                        <button id="pr-camera-button" type="button">{{ __('사진 찍기') }}</button>
                         <button id="pr-file-button" type="button">{{ __('사진 · 도면') }}</button>
                         <button id="pr-record" type="button">{{ __('말로 입력') }}</button>
                         <button id="pr-link-button" type="button">{{ __('제품 링크') }}</button>
                     </div>
                     <input id="pr-source-files" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.mp3,.m4a,.wav,.webm,.ogg" multiple hidden>
+                    <input id="pr-camera-file" type="file" accept="image/*" capture="environment" hidden>
                     <label id="pr-link-field" hidden>{{ __('제품 링크') }}<input id="pr-product-link" type="url" placeholder="https://"></label>
                     <div id="pr-image-editor" hidden></div>
                     <div id="pr-file-list" class="pr-help"></div>

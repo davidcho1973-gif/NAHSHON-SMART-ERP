@@ -66,6 +66,8 @@ class PurchaseRequestController extends Controller
             $fingerprint = hash('sha256', json_encode($data));
             return \Illuminate\Support\Facades\DB::transaction(function () use ($row, $request, $data, $key, $fingerprint): array {
                 $row = \App\Models\PurchaseRequest::whereKey($row->id)->lockForUpdate()->firstOrFail();
+                $this->service->visible($row->id);
+                abort_if($row->status === 'cancelled', 422, '취소된 요청입니다.');
                 $previous = $row->events()->where('request_key', $key)->first();
                 if ($previous) {
                     abort_unless(hash_equals($previous->fingerprint, $fingerprint), 409, '이미 다른 내용으로 전송한 요청입니다.');

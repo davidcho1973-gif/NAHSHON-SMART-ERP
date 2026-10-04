@@ -33,7 +33,7 @@ class SendPurchaseInquiry implements ShouldQueue
             $row = $service->visible($event->purchase_request_id, $user);
             abort_if($row->status === 'cancelled', 422, '취소된 요청입니다.');
             $files = $row->attachments()->whereIn('id', $data['attachment_ids'])->get();
-            $event->update(['data' => array_merge($data, ['delivery' => 'sending'])]);
+            $event->update(['message' => '업체 이메일 전송 확인 중: '.$data['to'], 'data' => array_merge($data, ['delivery' => 'sending'])]);
             Mail::raw($data['body'], function ($mail) use ($data, $files, $user): void {
                 $mail->to($data['to'])->subject($data['subject'])->replyTo($user->email, $user->name);
                 foreach ($files as $file) {
@@ -44,6 +44,15 @@ class SendPurchaseInquiry implements ShouldQueue
         } catch (Throwable $e) {
             $event->update(['message' => '업체 이메일 전송 확인 필요: '.$data['to'], 'data' => array_merge($data, ['delivery' => 'failed'])]);
             report($e);
+        }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $event = PurchaseRequestEvent::find($this->eventId);
+        if ($event && in_array($event->data['delivery'] ?? '', ['queued', 'sending'], true)) {
+            $event->update(['message' => '업체 이메일 전송 확인 필요: '.($event->data['to'] ?? ''),
+                'data' => array_merge($event->data, ['delivery' => 'unknown'])]);
         }
     }
 }
