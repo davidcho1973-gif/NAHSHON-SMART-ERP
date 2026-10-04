@@ -108,6 +108,7 @@ class PurchaseRequestWorkflowTest extends TestCase
         $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk()->assertJsonPath('delivery', 'queued');
         $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk()->assertJsonPath('replayed', true);
         Bus::assertDispatched(\App\Jobs\SendPurchaseInquiry::class, 1);
+        Bus::assertDispatched(\App\Jobs\SendPurchaseInquiry::class, fn ($job) => $job->connection === 'document-analysis' && $job->queue === 'purchases');
         $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload, ['body' => 'Changed']))->assertConflict();
         $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload,
             ['request_key' => (string) Str::uuid(), 'attachment_ids' => [999999]]))->assertUnprocessable();
