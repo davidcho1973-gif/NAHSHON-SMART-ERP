@@ -396,7 +396,7 @@ class PurchaseRequestService
             $actions[] = 'clarify';
         }
         $result = ['id' => $row->id, 'version' => $row->version, 'status' => $status, 'status_label' => PurchaseRequest::STATUSES[$status] ?? $status,
-            'site_id' => $row->site_id, 'site_name' => $row->site?->name, 'requester_name' => $row->requester?->name,
+            'site_id' => $row->site_id, 'site_name' => $row->site?->name, 'site_address' => $row->site?->address, 'requester_name' => $row->requester?->name,
             'requested_by_id' => $row->requested_by_id, 'need_by' => $row->need_by?->toDateString(), 'note' => $row->note,
             'eta' => $row->eta?->toDateString(), 'reason' => $row->reason, 'lines' => $lines, 'orders' => $orders,
             'title' => $lines[0]['name'] ?? '구매 요청', 'created_at' => $row->created_at?->toIso8601String(),
@@ -559,7 +559,7 @@ class PurchaseRequestService
 
     private function relations(): array
     {
-        return ['site:id,name,code', 'requester:id,name', 'lines.orderLines', 'lines.allocations.receiptLine.receipt', 'events', 'attachments', 'orders.lines'];
+        return ['site:id,name,code,address', 'requester:id,name', 'lines.orderLines', 'lines.allocations.receiptLine.receipt', 'events', 'attachments', 'orders.lines'];
     }
 
     /** Read-only source records; matching a name is not proof of an interchangeable product. */
