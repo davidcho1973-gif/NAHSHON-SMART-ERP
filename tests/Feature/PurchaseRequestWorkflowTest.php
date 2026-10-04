@@ -67,6 +67,82 @@ class PurchaseRequestWorkflowTest extends TestCase
             'lines' => [['name' => 'Copper elbow', 'specification' => '3/4 inch', 'quantity' => 10, 'unit' => 'EA', 'product_url' => 'https://example.com/elbow']]], $extra);
     }
 
+    public function test_unknown_product_quantity_can_be_requested_but_must_be_resolved_before_ordering(): void
+    {
+        $row = $this->createRequest(['lines' => [['name' => '배관 연결 작업용 자재', 'quantity' => null, 'unit' => null]]]);
+        $this->assertNull($row['lines'][0]['quantity']);
+        $this->assertSame('submitted', $row['status']);
+        $this->actingAsPurchaseUser($this->buyer)->getJson('/purchase-requests?desk=1')->assertOk()->assertJsonPath('rows.0.status', 'submitted');
+        $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'order', 'version' => $row['version']])->assertUnprocessable();
+        $confirmed = $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'resolve', 'version' => $row['version'],
+            'lines' => [['name' => '엘보', 'quantity' => 20, 'unit' => 'EA', 'specification' => '승인 규격 확인']]])
+            ->assertOk()->json('request');
+        $this->assertEquals(20, $confirmed['lines'][0]['quantity']);
+        $this->assertSame('submitted', $confirmed['status']);
+        $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests/'.$row['id'].'/action',
+            ['action' => 'resolve', 'version' => $confirmed['version'], 'lines' => [['name' => 'x', 'quantity' => 1, 'unit' => 'EA']]])->assertForbidden();
+    }
+
+    public function test_supplier_confirmation_is_explicit_and_a_changed_delivery_date_requires_reconfirmation(): void
+    {
+        $row = $this->createRequest();
+        $this->actingAsPurchaseUser($this->buyer)->postJson('/purchase-requests/'.$row['id'].'/action',
+            ['action' => 'supplier_confirm', 'version' => $row['version'], 'eta' => '2026-10-05', 'note' => 'Confirmed'])->assertUnprocessable();
+        $ordered = $this->order($this->evidence($row));
+        $this->assertSame('ordered', $ordered['status']);
+        $confirmed = $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'supplier_confirm',
+            'version' => $ordered['version'], 'eta' => '2026-10-05', 'note' => 'Supplier confirmed first truck at 07:00'])->assertOk()->json('request');
+        $this->assertSame('supplier_confirmed', $confirmed['status']);
+        $this->getJson('/purchase-requests?desk=1&status=supplier_confirmed')->assertOk()->assertJsonPath('rows.0.status', 'supplier_confirmed');
+        $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'eta', 'version' => $confirmed['version'],
+            'eta' => '2026-10-06'])->assertOk()->assertJsonPath('request.status', 'ordered');
+    }
+
+    public function test_inquiry_email_is_scoped_selective_and_idempotent(): void
+    {
+        config(['mail.default' => 'smtp']);
+        $row = $this->createRequest();
+        $this->actingAsPurchaseUser($this->buyer);
+        $payload = ['to' => 'vendor@example.test', 'subject' => 'Quote request', 'body' => 'Please quote',
+            'attachment_ids' => [], 'request_key' => (string) Str::uuid()];
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk()->assertJsonPath('delivery', 'queued');
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk()->assertJsonPath('replayed', true);
+        Bus::assertDispatched(\App\Jobs\SendPurchaseInquiry::class, 1);
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload, ['body' => 'Changed']))->assertConflict();
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload,
+            ['request_key' => (string) Str::uuid(), 'attachment_ids' => [999999]]))->assertUnprocessable();
+        $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertForbidden();
+    }
+
+    public function test_inquiry_worker_sends_selected_materials_once_and_rechecks_permissions(): void
+    {
+        config(['mail.default' => 'smtp']);
+        $row = $this->createRequest();
+        $this->actingAsPurchaseUser($this->buyer);
+        $file = $this->postJson('/purchase-requests/'.$row['id'].'/attachments', ['purpose' => 'request',
+            'file' => UploadedFile::fake()->createWithContent('drawing.pdf', "%PDF-1.4\nselected drawing")])->assertOk()->json('attachment');
+        $payload = ['to' => 'vendor@example.test', 'subject' => 'Quote request', 'body' => 'Please quote',
+            'attachment_ids' => [$file['id']], 'request_key' => (string) Str::uuid()];
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk();
+        $event = PurchaseRequestEvent::where('purchase_request_id', $row['id'])->where('action', 'email')->firstOrFail();
+        \Illuminate\Support\Facades\Mail::shouldReceive('raw')->once()->andReturnUsing(function ($body, $callback): void {
+            $message = new \Illuminate\Mail\Message(new \Symfony\Component\Mime\Email);
+            $callback($message);
+            $this->assertSame('Please quote', $body);
+            $this->assertSame('vendor@example.test', $message->getSymfonyMessage()->getTo()[0]->getAddress());
+            $this->assertCount(1, $message->getSymfonyMessage()->getAttachments());
+        });
+        $job = new \App\Jobs\SendPurchaseInquiry($event->id);
+        $job->handle(app(\App\Services\Procurement\PurchaseRequestService::class));
+        $this->assertSame('sent', $event->fresh()->data['delivery']);
+        $job->handle(app(\App\Services\Procurement\PurchaseRequestService::class));
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload, ['request_key' => (string) Str::uuid()]))->assertOk();
+        $second = PurchaseRequestEvent::where('purchase_request_id', $row['id'])->where('action', 'email')->latest('id')->firstOrFail();
+        $this->buyer->forceFill(['purchase_buy_enabled' => false])->save();
+        (new \App\Jobs\SendPurchaseInquiry($second->id))->handle(app(\App\Services\Procurement\PurchaseRequestService::class));
+        $this->assertSame('failed', $second->fresh()->data['delivery']);
+    }
+
     private function createRequest(array $extra = []): array
     {
         return $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests', $this->payload($extra))
