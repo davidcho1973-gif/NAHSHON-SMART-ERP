@@ -67,6 +67,38 @@ class PurchaseRequestWorkflowTest extends TestCase
             'lines' => [['name' => 'Copper elbow', 'specification' => '3/4 inch', 'quantity' => 10, 'unit' => 'EA', 'product_url' => 'https://example.com/elbow']]], $extra);
     }
 
+    public function test_unknown_product_quantity_can_be_requested_but_must_be_resolved_before_ordering(): void
+    {
+        $row = $this->createRequest(['lines' => [['name' => '배관 연결 작업용 자재', 'quantity' => null, 'unit' => null]]]);
+        $this->assertNull($row['lines'][0]['quantity']);
+        $this->assertSame('submitted', $row['status']);
+        $this->actingAsPurchaseUser($this->buyer)->getJson('/purchase-requests?desk=1')->assertOk()->assertJsonPath('rows.0.status', 'submitted');
+        $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'order', 'version' => $row['version']])->assertUnprocessable();
+        $confirmed = $this->postJson('/purchase-requests/'.$row['id'].'/action', ['action' => 'resolve', 'version' => $row['version'],
+            'lines' => [['name' => '엘보', 'quantity' => 20, 'unit' => 'EA', 'specification' => '승인 규격 확인']]])
+            ->assertOk()->json('request');
+        $this->assertEquals(20, $confirmed['lines'][0]['quantity']);
+        $this->assertSame('submitted', $confirmed['status']);
+        $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests/'.$row['id'].'/action',
+            ['action' => 'resolve', 'version' => $confirmed['version'], 'lines' => [['name' => 'x', 'quantity' => 1, 'unit' => 'EA']]])->assertForbidden();
+    }
+
+    public function test_inquiry_email_is_scoped_selective_and_idempotent(): void
+    {
+        config(['mail.default' => 'smtp']);
+        $row = $this->createRequest();
+        $this->actingAsPurchaseUser($this->buyer);
+        $payload = ['to' => 'vendor@example.test', 'subject' => 'Quote request', 'body' => 'Please quote',
+            'attachment_ids' => [], 'request_key' => (string) Str::uuid()];
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk()->assertJsonPath('delivery', 'queued');
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertOk()->assertJsonPath('replayed', true);
+        Bus::assertDispatched(\App\Jobs\SendPurchaseInquiry::class, 1);
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload, ['body' => 'Changed']))->assertConflict();
+        $this->postJson('/purchase-requests/'.$row['id'].'/email', array_merge($payload,
+            ['request_key' => (string) Str::uuid(), 'attachment_ids' => [999999]]))->assertUnprocessable();
+        $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests/'.$row['id'].'/email', $payload)->assertForbidden();
+    }
+
     private function createRequest(array $extra = []): array
     {
         return $this->actingAsPurchaseUser($this->requester)->postJson('/purchase-requests', $this->payload($extra))

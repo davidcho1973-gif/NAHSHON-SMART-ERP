@@ -39,6 +39,8 @@ class PurchaseAnalysisController extends Controller
                 return $previous;
             }
             $params = array_intersect_key($data, array_flip(['site_id', 'mode', 'text', 'request_key']));
+            $params['reference_date'] = now($site->timezone ?: 'America/New_York')->toDateString();
+            $params['timezone'] = $site->timezone ?: 'America/New_York';
             $params['fingerprint'] = $fingerprint;
             if ($file) {
                 $disk = (string) config('filesystems.wbs_photos_disk', 'local');

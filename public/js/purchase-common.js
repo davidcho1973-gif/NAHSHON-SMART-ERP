@@ -30,7 +30,7 @@
     return url ? '<a href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(a.name || a.original_name || '첨부파일')+'</a>' : esc(a.name || '첨부파일');
   }
   function linesHtml(lines) {
-    return (lines || []).map(l => '<div class="pr-line"><strong>'+esc(l.name)+'</strong><span>'+esc(l.quantity)+' '+esc(l.unit)+'</span>'+
+    return (lines || []).map(l => '<div class="pr-line"><strong>'+esc(l.name)+'</strong><span>'+esc(l.quantity == null ? '수량 확인 필요' : l.quantity)+' '+esc(l.unit || '단위 확인 필요')+'</span>'+
       (l.specification ? '<small>'+esc(l.specification)+'</small>' : '')+
       (l.ordered_quantity ? '<small>주문 '+esc(l.ordered_quantity)+' '+esc(l.unit)+'</small>' : '')+
       (l.received_quantity ? '<small>입고 '+esc(l.received_quantity)+' '+esc(l.unit)+'</small>' : '')+

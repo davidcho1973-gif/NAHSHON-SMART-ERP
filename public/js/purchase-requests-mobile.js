@@ -8,17 +8,17 @@
   function fileList() { $('pr-file-list').textContent=files.map(f=>f.name).join(' · ')+(files.length>1?' — 첫 파일 분석 · 전체 파일 첨부':''); }
   function renderLines() {
     $('pr-draft').hidden=false;
-    $('pr-edit-lines').innerHTML=lines.map((l,i)=>'<div class="pr-edit-line" data-line="'+i+'"><div class="pr-edit-line-head"><strong>품목 '+(i+1)+'</strong><button type="button" data-remove="'+i+'">삭제</button></div><label>품목명<input data-field="name" required maxlength="240" value="'+e(l.name || '')+'"></label><div class="pr-pair"><label>수량<input data-field="quantity" type="number" min="0.0001" step="any" required value="'+e(l.quantity ?? '')+'"></label><label>단위<input data-field="unit" required maxlength="40" placeholder="개, 박스, ft" value="'+e(l.unit || '')+'"></label></div><label>규격 · 용도<input data-field="specification" maxlength="2000" value="'+e(l.specification || '')+'"></label><details><summary>제품 링크</summary><label><input data-field="product_url" type="url" value="'+e(l.product_url || '')+'"></label></details></div>').join('');
+    $('pr-edit-lines').innerHTML=lines.map((l,i)=>'<div class="pr-edit-line" data-line="'+i+'"><div class="pr-edit-line-head"><strong>품목 '+(i+1)+'</strong><button type="button" data-remove="'+i+'">삭제</button></div><label>품목명<input data-field="name" required maxlength="240" value="'+e(l.name || '')+'"></label><div class="pr-pair"><label>수량<input data-field="quantity" type="number" min="0.001" step="any" placeholder="모르면 비워두세요" value="'+e(l.quantity ?? '')+'"></label><label>단위<input data-field="unit" maxlength="40" placeholder="개, 박스, ft" value="'+e(l.unit || '')+'"></label></div><label>규격 · 용도<input data-field="specification" maxlength="2000" value="'+e(l.specification || '')+'"></label><details><summary>제품 링크</summary><label><input data-field="product_url" type="url" value="'+e(l.product_url || '')+'"></label></details></div>').join('');
   }
-  function readLines() { return Array.from($('pr-edit-lines').querySelectorAll('[data-line]')).map(row=>Object.fromEntries(Array.from(row.querySelectorAll('[data-field]')).map(input=>[input.dataset.field,input.dataset.field==='quantity'?Number(input.value):input.value.trim()]))); }
+  function readLines() { return Array.from($('pr-edit-lines').querySelectorAll('[data-line]')).map(row=>Object.fromEntries(Array.from(row.querySelectorAll('[data-field]')).map(input=>[input.dataset.field,input.dataset.field==='quantity'?(input.value.trim()===''?null:Number(input.value)):input.value.trim()]))); }
   function appendLine(line) { if(lines.length)lines=readLines();lines.push(line || {name:'',quantity:'',unit:'',specification:'',product_url:$('pr-product-link').value});renderLines(); }
   function adopt(result) {
     lines=(result.lines || []).map(l=>({name:l.name || '',quantity:l.quantity ?? '',unit:l.unit || '',specification:l.specification || '',product_url:l.product_url || ''}));
     if(!lines.length)lines=[{name:'',quantity:'',unit:'',specification:result.note || '',product_url:$('pr-product-link').value}];
     if(result.need_by)$('pr-need-by').value=result.need_by;
     $('pr-note').value=result.note || $('pr-input').value;
-    $('pr-questions').textContent=(result.questions || []).join(' · ');
-    renderLines();message('pr-analysis-message','품목과 수량을 확인하고 보내세요.');
+    $('pr-questions').innerHTML=(result.questions || []).map(q=>'<p>'+e(q)+'</p>').join('');$('pr-conversation').hidden=!(result.questions || []).length;
+    renderLines();message('pr-analysis-message','정리된 내용을 확인하세요. 모르는 조건은 사무실에서 확인할 수 있습니다.');
   }
   function showCandidates(result) {
     const rows=result.candidates || [];const host=$('pr-candidates');host.hidden=false;
@@ -104,8 +104,10 @@
   };
   window.addEventListener('pagehide',()=>{if(recorder?.state==='recording')recorder.stop();stopTracks();});
   $('pr-file-button').onclick=()=>$('pr-source-files').click();
-  $('pr-source-files').onchange=ev=>{files.push(...Array.from(ev.target.files));fileList();};
+  $('pr-source-files').onchange=ev=>{const added=Array.from(ev.target.files);files.push(...added);fileList();const photo=added.find(f=>f.type.startsWith('image/'));if(photo)window.PurchaseImageMarker.open(photo,$('pr-image-editor'),marked=>{files.unshift(marked);fileList();message('pr-analysis-message','표시 이미지로 분석합니다. 원본도 함께 첨부됩니다.');});ev.target.value='';};
   $('pr-link-button').onclick=()=>{$('pr-link-field').hidden=false;$('pr-product-link').focus();};
+  $('pr-answer-send').onclick=()=>{const answer=$('pr-answer').value.trim();if(!answer)return;$('pr-input').value+='\n추가 답변: '+answer;$('pr-answer').value='';analyze('request');};
+  $('pr-defer').onclick=()=>{$('pr-note').value+='\n담당자 확인 필요: '+$('pr-questions').textContent;$('pr-conversation').hidden=true;message('pr-analysis-message','미확인 조건을 사무실에 전달합니다. 요청을 보내세요.');};
   $('pr-analyze').onclick=()=>analyze('request');$('pr-search').onclick=()=>analyze('search');
   $('pr-manual').onclick=()=>{if(!lines.length)appendLine({name:$('pr-input').value.slice(0,240),specification:'',quantity:'',unit:'',product_url:$('pr-product-link').value});else $('pr-draft').hidden=false;};
   $('pr-add-line').onclick=()=>appendLine();
