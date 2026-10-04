@@ -593,3 +593,13 @@ Detailed HR registration fixtures now specify their required worker position. Pu
 - Post-deployment review found that the application's local wall time was serialized without its offset into PostgreSQL timestamp-with-time-zone columns when the database session used UTC. This affected audit timestamps, not quantities, prices or claim calculations.
 - Follow-up correction preserves offsets in the three evidence models and restricts historical repair to untouched source imports whose original import metadata proves the clock displacement. Reviewed or edited records are excluded.
 - Follow-up validation and deployment results will be recorded with the correction PR and its CI run.
+
+## 2026-10-04 CODEX — 구매 요청과 사무실 처리
+
+원인: 신청자가 제품명·수량·단위를 안다는 저장 규칙이 현장 요청을 막았고, 사무실의 제품 검색·업체 연락이 요청과 분리되어 있었다.
+
+- 미확인 수량·단위 접수, 구매 담당자의 주문 전 품목 확정, 상대 날짜 기준일과 현장 시간대, 대화 보완·담당자 확인 전달.
+- 사진 표시본과 원본 보존, 사무실의 요청/처리 화면, 제품 후보 검색·판매처 연결·등록 업체 연락·연락 결과 기록.
+- 선택 첨부 이메일: 권한·현장 범위 확인, 멱등 전송, 전송 대기/완료/확인 필요 이력. 발송 설정이 없으면 성공으로 표시하지 않는다.
+- 로컬 PostgreSQL 구매 시험 24개 및 JS 시험 64개 통과, 빌드 통과. 전체 로컬 시험 2583개 중 Windows GD/Bash 및 환경 의존 실패가 있어 Linux CI에서 전체 결과를 확인한다.
+- 운영 데이터 없이 별도 purchase_ui_20261004 DB에서 실제 로그인·미확인 요청 제출·사무실 처리·이메일 초안 화면 검증. 실제 업체 이메일·결제는 실행하지 않았다.

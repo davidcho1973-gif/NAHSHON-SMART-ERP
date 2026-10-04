@@ -115,6 +115,7 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/', [PurchaseRequestController::class, 'store'])->middleware('throttle:30,1');
         Route::get('/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->whereNumber('purchaseRequest');
         Route::get('/{purchaseRequest}/receipts', [PurchaseRequestController::class, 'receipts'])->whereNumber('purchaseRequest');
+        Route::post('/{purchaseRequest}/email', [PurchaseRequestController::class, 'email'])->whereNumber('purchaseRequest')->middleware('throttle:10,1');
         Route::post('/{purchaseRequest}/action', [PurchaseRequestController::class, 'action'])->whereNumber('purchaseRequest')->middleware('throttle:60,1');
         Route::post('/{purchaseRequest}/attachments', [PurchaseRequestController::class, 'upload'])->whereNumber('purchaseRequest')->middleware('throttle:20,1');
         Route::get('/{purchaseRequest}/attachments/{attachment}/download', [PurchaseRequestController::class, 'download'])->whereNumber(['purchaseRequest', 'attachment'])->name('purchase-requests.attachment');

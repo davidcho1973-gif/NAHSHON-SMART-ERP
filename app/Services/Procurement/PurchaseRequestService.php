@@ -45,7 +45,7 @@ class PurchaseRequestService
         $query = PurchaseRequest::query()->select('purchase_requests.*')->whereIn('site_id', $sites->pluck('id'))
             ->when(! $desk, fn ($q) => $q->where('requested_by_id', $user->id))
             ->when($siteId, fn ($q) => $q->where('site_id', $siteId));
-        $quantities = DB::table('purchase_request_lines')->selectRaw('purchase_request_id, sum(quantity) as requested')->groupBy('purchase_request_id');
+        $quantities = DB::table('purchase_request_lines')->selectRaw("purchase_request_id, sum(quantity) as requested, count(*) FILTER (WHERE quantity IS NULL OR unit IS NULL OR trim(unit) = '') as unresolved")->groupBy('purchase_request_id');
         $orders = DB::table('purchase_request_orders')->join('purchase_request_order_lines', 'purchase_request_order_lines.purchase_request_order_id', '=', 'purchase_request_orders.id')
             ->selectRaw('purchase_request_orders.purchase_request_id, sum(purchase_request_order_lines.quantity) as ordered')->groupBy('purchase_request_orders.purchase_request_id');
         $receipts = DB::table('purchase_receipt_allocations')->join('purchase_request_lines', 'purchase_request_lines.id', '=', 'purchase_receipt_allocations.purchase_request_line_id')
@@ -57,7 +57,7 @@ class PurchaseRequestService
             ->leftJoinSub($receipts, 'pr_receipt', 'pr_receipt.purchase_request_id', '=', 'purchase_requests.id');
         // Filter the derived status before limiting: old unfulfilled requests must not
         // disappear behind a page of more recent completed purchases.
-        $effectiveStatus = "CASE WHEN purchase_requests.status = 'cancelled' THEN 'cancelled' WHEN COALESCE(pr_qty.requested,0) > 0 AND COALESCE(pr_receipt.received,0) >= pr_qty.requested THEN 'received' WHEN COALESCE(pr_receipt.received,0) > 0 THEN 'partial' WHEN purchase_requests.status IN ('needs_info','on_hold','out_of_stock') THEN purchase_requests.status WHEN COALESCE(pr_qty.requested,0) > 0 AND COALESCE(pr_order.ordered,0) >= pr_qty.requested THEN 'ordered' WHEN COALESCE(pr_order.ordered,0) > 0 THEN 'partially_ordered' ELSE purchase_requests.status END";
+        $effectiveStatus = "CASE WHEN purchase_requests.status = 'cancelled' THEN 'cancelled' WHEN COALESCE(pr_qty.requested,0) > 0 AND COALESCE(pr_qty.unresolved,0) = 0 AND COALESCE(pr_receipt.received,0) >= pr_qty.requested THEN 'received' WHEN COALESCE(pr_receipt.received,0) > 0 THEN 'partial' WHEN purchase_requests.status IN ('needs_info','on_hold','out_of_stock') THEN purchase_requests.status WHEN purchase_requests.status = 'supplier_confirmed' THEN 'supplier_confirmed' WHEN COALESCE(pr_qty.requested,0) > 0 AND COALESCE(pr_qty.unresolved,0) = 0 AND COALESCE(pr_order.ordered,0) >= pr_qty.requested THEN 'ordered' WHEN COALESCE(pr_order.ordered,0) > 0 THEN 'partially_ordered' ELSE purchase_requests.status END";
         if ($status && $status !== 'all') {
             $query->whereRaw('('.$effectiveStatus.') = ?', [$status]);
         }
@@ -144,7 +144,7 @@ class PurchaseRequestService
         $user = $this->actor();
         $this->visible($id, $user);
         $data = Validator::make($input, [
-            'action' => ['required', Rule::in(['review', 'needs_info', 'hold', 'out_of_stock', 'order', 'eta', 'receive', 'cancel', 'clarify'])],
+            'action' => ['required', Rule::in(['review', 'needs_info', 'hold', 'out_of_stock', 'order', 'eta', 'receive', 'cancel', 'clarify', 'resolve', 'contact', 'supplier_confirm'])],
             'version' => 'required|integer|min:1', 'request_key' => 'nullable|uuid', 'reason' => 'nullable|string|max:80',
             'eta' => 'nullable|date_format:Y-m-d', 'note' => 'nullable|string|max:10000',
             'vendor' => 'nullable|string|max:255', 'order_number' => 'nullable|string|max:160',
@@ -177,7 +177,29 @@ class PurchaseRequestService
             $eventData = [];
             $message = '';
             $noOp = false;
-            if ($action === 'clarify') {
+            if ($action === 'supplier_confirm') {
+                abort_unless($status === 'ordered' && filled($data['eta'] ?? null) && filled($data['note'] ?? null), 422, '주문 완료 후 업체가 확인한 납품일과 확인 내용을 입력하세요.');
+                $row->status = 'supplier_confirmed';
+                $row->eta = $data['eta'];
+                $message = '업체 납품 확정: '.$data['eta'].' · '.$data['note'];
+                $eventData = ['eta' => $data['eta'], 'confirmation' => $data['note']];
+            } elseif ($action === 'contact') {
+                abort_if(in_array($status, ['cancelled', 'received'], true), 422, '완료된 요청입니다.');
+                abort_unless(filled($data['note'] ?? null), 422, '연락 결과를 입력하세요.');
+                $message = '업체 연락: '.$data['note'];
+            } elseif ($action === 'resolve') {
+                abort_if($row->orders()->exists() || in_array($status, ['cancelled', 'received'], true), 422, '주문 전 요청만 확정할 수 있습니다.');
+                abort_unless(! empty($data['lines']), 422, '품목을 입력하세요.');
+                $confirmed = $this->cleanLines($data['lines']);
+                foreach ($confirmed as $line) {
+                    abort_unless($line['quantity'] !== null && filled($line['unit']), 422, '구매 전 수량과 단위를 확인하세요.');
+                }
+                $row->lines()->delete();
+                foreach ($confirmed as $seq => $line) {
+                    $row->lines()->create($line + ['seq' => $seq]);
+                }
+                $message = '구매 담당자가 품목과 수량을 확정했습니다.';
+            } elseif ($action === 'clarify') {
                 abort_unless(PurchaseAccess::canRequest($user) && $row->requested_by_id === $user->id && $row->status === 'needs_info', 403, '본인의 정보 요청에만 답할 수 있습니다.');
                 abort_unless(filled($data['note'] ?? null) || ! empty($data['lines']), 422, '확인할 내용을 입력하세요.');
                 if (! empty($data['lines'])) {
@@ -192,6 +214,7 @@ class PurchaseRequestService
                 $message = '요청자가 내용을 보완했습니다.'.(filled($data['note'] ?? null) ? ' '.$data['note'] : '');
             } elseif ($action === 'order') {
                 abort_if(in_array($status, ['cancelled', 'received'], true), 422, '이 요청은 구매할 수 없습니다.');
+                abort_if(collect($state['lines'])->contains(fn ($l) => $l['quantity'] === null || blank($l['unit'])), 422, '품목 수량과 단위를 먼저 확정하세요.');
                 $order = $this->order($row, $data, $user, $state);
                 $row->status = 'ordered';
                 $row->reason = null;
@@ -209,6 +232,9 @@ class PurchaseRequestService
                 abort_unless(array_key_exists('eta', $data), 422, '도착 예정일 또는 미정을 선택하세요.');
                 $noOp = $row->eta?->toDateString() === ($data['eta'] ?? null);
                 $row->eta = $data['eta'] ?? null;
+                if (! $noOp && $row->status === 'supplier_confirmed') {
+                    $row->status = 'ordered';
+                }
                 $message = $row->eta ? '도착 예정일: '.$row->eta->format('Y-m-d') : '도착 예정일을 확인 중입니다.';
             } else {
                 abort_if(in_array($status, ['cancelled', 'received'], true), 422, '완료된 요청은 변경할 수 없습니다.');
@@ -319,13 +345,13 @@ class PurchaseRequestService
             $received = round((float) $line->allocations->filter(fn ($a): bool => $a->receiptLine?->receipt?->isConfirmed() === true)->sum('quantity'), 3);
 
             return ['id' => $line->id, 'name' => $line->name, 'specification' => $line->specification,
-                'quantity' => (float) $line->quantity, 'unit' => $line->unit, 'product_url' => $line->product_url,
+                'quantity' => $line->quantity !== null ? (float) $line->quantity : null, 'unit' => $line->unit, 'product_url' => $line->product_url,
                 'ordered_quantity' => $ordered, 'remaining_to_order' => max(0, round((float) $line->quantity - $ordered, 3)),
                 'received_quantity' => $received, 'remaining_to_receive' => max(0, round($ordered - $received, 3))];
         })->all();
         $orderedAny = collect($lines)->sum('ordered_quantity') > 0;
         $receivedAny = collect($lines)->sum('received_quantity') > 0;
-        $orderedAll = $lines !== [] && collect($lines)->every(fn ($l): bool => $l['remaining_to_order'] <= 0);
+        $orderedAll = $lines !== [] && collect($lines)->every(fn ($l): bool => $l['quantity'] !== null && filled($l['unit']) && $l['remaining_to_order'] <= 0);
         $receivedAll = $orderedAll && collect($lines)->every(fn ($l): bool => $l['received_quantity'] >= $l['quantity']);
         $status = $row->status;
         if ($status !== 'cancelled') {
@@ -334,7 +360,7 @@ class PurchaseRequestService
             } elseif ($receivedAny) {
                 $status = 'partial';
             } elseif (! in_array($status, ['on_hold', 'out_of_stock', 'needs_info'], true)) {
-                $status = $orderedAll ? 'ordered' : ($orderedAny ? 'partially_ordered' : $status);
+                $status = $orderedAll ? ($status === 'supplier_confirmed' ? 'supplier_confirmed' : 'ordered') : ($orderedAny ? 'partially_ordered' : $status);
             }
         }
         $orders = $row->orders->map(function ($order) use ($buyerView): array {
@@ -348,12 +374,16 @@ class PurchaseRequestService
         })->all();
         $actions = [];
         if ($buyerView && ! in_array($status, ['cancelled', 'received'], true)) {
-            $actions = ['needs_info', 'hold', 'out_of_stock', 'eta'];
+            $actions = ['needs_info', 'hold', 'out_of_stock', 'eta', 'contact'];
             if (! $orderedAny) {
                 $actions[] = 'review';
+                $actions[] = 'resolve';
             }
             if (! $orderedAll) {
                 $actions[] = 'order';
+            }
+            if ($status === 'ordered') {
+                $actions[] = 'supplier_confirm';
             }
             if ($orderedAny && collect($lines)->sum('remaining_to_receive') > 0) {
                 $actions[] = 'receive';
@@ -508,21 +538,21 @@ class PurchaseRequestService
     {
         return ['lines' => ($required ? 'required' : 'sometimes').'|array|min:1|max:100',
             'lines.*.name' => 'required|string|max:255', 'lines.*.specification' => 'nullable|string|max:4000',
-            'lines.*.quantity' => 'required|numeric|min:0.001|max:99999999999.999',
-            'lines.*.unit' => 'required|string|max:32', 'lines.*.product_url' => 'nullable|url:http,https|max:2048'];
+            'lines.*.quantity' => 'nullable|numeric|min:0.001|max:99999999999.999',
+            'lines.*.unit' => 'nullable|string|max:32', 'lines.*.product_url' => 'nullable|url:http,https|max:2048'];
     }
 
     private function cleanLines(array $lines): array
     {
         return array_map(function (array $line): array {
             $name = trim($line['name']);
-            $unit = trim($line['unit']);
-            if ($name === '' || $unit === '') {
+            $unit = trim((string) ($line['unit'] ?? ''));
+            if ($name === '') {
                 throw ValidationException::withMessages(['lines' => '품명과 단위를 입력하세요.']);
             }
 
             return ['name' => $name, 'specification' => trim((string) ($line['specification'] ?? '')) ?: null,
-                'quantity' => round((float) $line['quantity'], 3), 'unit' => $unit,
+                'quantity' => isset($line['quantity']) ? round((float) $line['quantity'], 3) : null, 'unit' => $unit ?: null,
                 'product_url' => trim((string) ($line['product_url'] ?? '')) ?: null];
         }, $lines);
     }
@@ -565,7 +595,11 @@ class PurchaseRequestService
                 'need_by' => $r->need_by?->toDateString(),
             ])->all();
 
-        return ['items' => $items, 'stock_records' => $assets, 'related_requests' => $related,
+        $vendors = \App\Models\Vendor::query()->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('company_id')->orWhere('company_id', $row->company_id))
+            ->orderBy('name')->limit(50)->get(['id', 'name', 'phone', 'email', 'address', 'trade'])->toArray();
+
+        return ['vendors' => $vendors, 'items' => $items, 'stock_records' => $assets, 'related_requests' => $related,
             'match_basis' => '이름 일치 · 규격과 사용 가능 수량 확인 필요'];
     }
 

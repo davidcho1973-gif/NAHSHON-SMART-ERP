@@ -46,6 +46,42 @@ class PurchaseRequestController extends Controller
         return $this->respond(fn (): array => $this->service->receipts($id));
     }
 
+    public function email(Request $request, int $id): JsonResponse
+    {
+        return $this->respond(function () use ($request, $id): array {
+            PurchaseAccess::assertBuyer($request->user());
+            $row = $this->service->visible($id);
+            abort_if($row->status === 'cancelled', 422, '취소된 요청입니다.');
+            $data = $request->validate([
+                'to' => 'required|email:rfc|max:255', 'subject' => 'required|string|max:200',
+                'body' => 'required|string|max:12000', 'request_key' => 'required|uuid',
+                'attachment_ids' => 'present|array|max:20', 'attachment_ids.*' => 'integer|distinct',
+            ]);
+            abort_if(preg_match('/[\r\n]/', $data['subject'].$data['to']), 422, '수신처와 제목을 확인하세요.');
+            abort_if(in_array(config('mail.default'), ['log', 'array'], true), 503, '회사 이메일 발송 설정이 필요합니다.');
+            $files = $row->attachments()->whereIn('id', $data['attachment_ids'])->get();
+            abort_unless($files->count() === count($data['attachment_ids']), 422, '이 요청의 첨부자료만 선택하세요.');
+            abort_if($files->sum('size') > 15 * 1024 * 1024, 422, '이메일 첨부는 합계 15MB까지 가능합니다.');
+            $key = $request->user()->id.':email:'.$data['request_key'];
+            $fingerprint = hash('sha256', json_encode($data));
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($row, $request, $data, $key, $fingerprint): array {
+                $row = \App\Models\PurchaseRequest::whereKey($row->id)->lockForUpdate()->firstOrFail();
+                $this->service->visible($row->id);
+                abort_if($row->status === 'cancelled', 422, '취소된 요청입니다.');
+                $previous = $row->events()->where('request_key', $key)->first();
+                if ($previous) {
+                    abort_unless(hash_equals($previous->fingerprint, $fingerprint), 409, '이미 다른 내용으로 전송한 요청입니다.');
+                    return ['success' => true, 'delivery' => $previous->data['delivery'], 'replayed' => true];
+                }
+                $event = $row->events()->create(['actor_id' => $request->user()->id, 'action' => 'email',
+                    'status' => $row->status, 'message' => '업체 이메일 전송 대기: '.$data['to'],
+                    'data' => $data + ['delivery' => 'queued'], 'request_key' => $key, 'fingerprint' => $fingerprint]);
+                \App\Jobs\SendPurchaseInquiry::dispatch($event->id)->afterCommit();
+                return ['success' => true, 'delivery' => 'queued'];
+            });
+        });
+    }
+
     public function upload(Request $request, int $id): JsonResponse
     {
         return $this->respond(function () use ($request, $id): array {
