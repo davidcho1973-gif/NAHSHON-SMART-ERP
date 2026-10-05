@@ -7,6 +7,7 @@ use App\Services\Finance\ReceiptQuickIntake;
 use App\Support\ReceiptUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -110,7 +111,7 @@ class ExpenseAppController extends Controller
             return response()->json(['success' => false, 'code' => 'no_employee', 'items' => []]);
         }
 
-        $items = MobileExpense::query()
+        $items = MobileExpense::query()->withoutReceiptContent()
             ->where('employee_id', $employee->id)
             ->orderByDesc('expense_date')
             ->orderByDesc('id')
@@ -120,7 +121,7 @@ class ExpenseAppController extends Controller
                 'id' => $e->id,
                 'date' => $e->expense_date?->toDateString(),
                 'amount' => (float) $e->amount,
-                'description' => \Illuminate\Support\Str::limit((string) $e->description, 60),
+                'description' => Str::limit((string) $e->description, 60),
                 'account' => $e->accounting_account,
                 'paymentType' => $e->payment_type,
                 'status' => $e->status,

@@ -360,13 +360,13 @@
           $submitterName = trim(($expense->employee->first_name ?? '').' '.($expense->employee->last_name ?? ''));
           // 문서함에서 자동 등록된 경비는 제출한 "사람"이 없다 — 미상이라고 쓰면
           // 문제가 있는 것처럼 읽히므로 출처를 그대로 밝힌다.
-          $expenseSource = is_array($expense->ocr_data) ? ($expense->ocr_data['source'] ?? '') : '';
+          $expenseSource = $expense->expense_source ?? '';
           $submitterName = $submitterName !== ''
               ? $submitterName
               : ($expense->employee->email ?? ($expenseSource === 'document-hub' ? '문서함 자동' : '미상'));
           $expensePayload = $expense->toArray();
           $expensePayload['category'] = $expense->accounting_account ?: $expense->category;
-          $expensePayload['receipt_view_url'] = $expense->receipt_path ? route('mobile-expense.receipt', $expense) : null;
+          $expensePayload['receipt_view_url'] = ($expense->receipt_path || $expense->has_receipt) ? route('mobile-expense.receipt', $expense) : null;
           $expensePayload['submitter'] = $submitterName;
           $canModifyExpense = $canManageAllExpenses || ((int) $expense->employee_id === (int) auth()->user()?->employee_id && in_array($expense->status, ['draft', 'pending', 'rejected'], true));
           $expensePayload['edit_url'] = $canModifyExpense ? route('mobile-expense.edit', $expense) : null;
@@ -394,6 +394,7 @@
           <span>등록된 경비 내역이 없습니다.</span>
         </div>
       @endforelse
+      {{ $expenses->links() }}
     </div>
 
     <!-- Floating Action Button -->
@@ -488,26 +489,12 @@
 
   <script>
     function filterStatus(status, btn) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      const cards = document.querySelectorAll('.expense-card');
-      let visibleCount = 0;
-      cards.forEach(card => {
-        if (status === 'all' || card.getAttribute('data-status') === status) {
-          card.style.display = 'flex';
-          visibleCount++;
-        } else {
-          card.style.display = 'none';
-        }
-      });
-
-      const empty = document.querySelector('.empty-state');
-      if (empty) {
-        empty.style.display = (visibleCount === 0) ? 'flex' : 'none';
-      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete('page');
+      if (status === 'all') url.searchParams.delete('status');
+      else url.searchParams.set('status', status);
+      window.location.assign(url.toString());
     }
-
     function openDetailModal(expense) {
       document.getElementById('modalPaymentType').textContent = expense.payment_type === 'personal' ? '개인 지출 (환급 대상)' : '회사 법인카드';
       document.getElementById('modalAmount').textContent = '$' + Number(expense.amount).toLocaleString('en-US', {minimumFractionDigits: 2});

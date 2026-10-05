@@ -170,6 +170,7 @@
 @include('partials.field-app-nav')
 <div class="toast" id="toast"></div>
 
+<script src="{{ asset('js/receipt-photo.js') }}"></script>
 <script>
     // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
     // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
@@ -327,6 +328,7 @@
 
     async function submitOne(q) {
         var fd = new FormData();
+        q.file = await window.ReceiptPhoto.prepare(q.file);
         fd.append('receipt', q.file);
         fd.append('payment_type', personal ? 'personal' : 'corporate');
         fd.append('lang', lang);

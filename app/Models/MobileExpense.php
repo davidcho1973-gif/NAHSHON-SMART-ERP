@@ -56,6 +56,15 @@ class MobileExpense extends Model
         ];
     }
 
+    /** Metadata only; the receipt endpoint deliberately loads the single original. */
+    public function scopeWithoutReceiptContent($query)
+    {
+        $columns = array_diff($this->getFillable(), ['receipt_file', 'ocr_data']);
+
+        return $query->select(array_map(fn ($c) => 'mobile_expenses.'.$c, array_merge(['id'], $columns)))
+            ->selectRaw('(receipt_file IS NOT NULL AND octet_length(receipt_file) > 0) AS has_receipt');
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

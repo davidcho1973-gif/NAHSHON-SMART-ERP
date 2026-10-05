@@ -62,10 +62,10 @@ use App\Services\Finance\ClaimEvidenceService;
 use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ContractChangeService;
 use App\Services\Finance\ContractSheetImportService;
-use App\Services\Finance\GcClaimWorkbookService;
-use App\Services\Finance\ReceiptClaimConnector;
 use App\Services\Finance\ExpenseReviewService;
+use App\Services\Finance\GcClaimWorkbookService;
 use App\Services\Finance\ProgressBillingDrafter;
+use App\Services\Finance\ReceiptClaimConnector;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Services\Hr\GlobalHrService;
 use App\Services\IntegratedDocumentService;
@@ -132,7 +132,7 @@ class SmartCompanyData
             'api_rejectAttendanceLog' => self::rejectAttendanceLog($args[0] ?? null),
 
             'api_getFinanceStats' => self::financeStats($siteId),
-            'api_getExpenses' => self::expenses($siteId),
+            'api_getExpenses' => self::expenses($siteId, true, is_array($args[0] ?? null) ? $args[0] : null),
             // 재무 목록 원클릭 승인/반려/지급 — 규칙은 ExpenseReviewService 한 곳에 있다.
             'api_reviewExpense' => self::reviewExpense((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_getPayrollDashboard' => self::payrollDashboard($args[1] ?? null, $siteId),
@@ -1006,27 +1006,18 @@ class SmartCompanyData
         try {
             if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
                 $startOfMonth = Carbon::now()->startOfMonth();
-                $rows = self::financeExpenseQuery($siteId)
-                    ->whereIn('status', ['pending', 'approved', 'paid'])
-                    ->get();
-                $mtdRows = $rows->filter(fn (MobileExpense $e): bool => $e->expense_date?->gte($startOfMonth) ?? false);
-                $mtdTotal = (float) $mtdRows->sum(fn (MobileExpense $e): float => (float) $e->amount);
-                $pending = $rows->where('status', 'pending');
-                $paid = $rows->where('status', 'paid');
-                $claimable = $rows
-                    ->where('status', 'approved')
-                    ->where('payment_type', 'personal');
-
-                // 누적 지출(전 기간) — 승인·지급된 확정 지출만. "누적 지출 금액" 카드가
-                // 이번 달(mtdTotal)만 보여줘서 지난달 지출이 전부 빠져 보이던 버그의 교정값.
-                $totalSpend = (float) $rows
-                    ->whereIn('status', ['approved', 'paid'])
-                    ->sum(fn (MobileExpense $e): float => (float) $e->amount);
-
-                // 승인대기 합계 — 자동 계상(임대료·자재 입고·급여 등 커넥터가 만든 pending)이
-                // 확정 숫자에서 빠지는 건 맞지만, "빠져 있다"는 사실이 보여야 한다.
-                // 승인을 안 누르면 누적 지출·계약 잔액이 조용히 틀려 보이던 구멍(점검 C).
-                $pendingTotal = (float) $pending->sum(fn (MobileExpense $e): float => (float) $e->amount);
+                // Aggregate in PostgreSQL: SELECT * previously loaded every receipt blob twice.
+                $query = self::financeExpenseQuery($siteId)->whereIn('status', ['pending', 'approved', 'paid']);
+                $totals = (clone $query)->selectRaw("COALESCE(SUM(CASE WHEN expense_date >= ? THEN amount ELSE 0 END),0) AS mtd,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending_count,
+                    COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END),0) AS pending,
+                    COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END),0) AS paid,
+                    COALESCE(SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END),0) AS approved,
+                    COALESCE(SUM(CASE WHEN status = 'approved' AND payment_type = 'personal' THEN amount ELSE 0 END),0) AS claimable",
+                    [$startOfMonth->toDateString()])->first();
+                $mtdTotal = (float) $totals->mtd;
+                $totalSpend = (float) $totals->approved + (float) $totals->paid;
+                $pendingTotal = (float) $totals->pending;
 
                 // 총 수주 금액 — 계약 관리의 원청 수주 계약(receivable) 유효 금액 합.
                 // 사전예산(mtdBudget)을 "총 수주"로 보여주던 라벨-데이터 불일치의 교정값.
@@ -1089,24 +1080,20 @@ class SmartCompanyData
                     $disputedDeductions = (float) ($receiptTotals->disputed ?? 0);
                 }
 
-                $preApprovals = collect();
+                $preTotals = (object) ['pending_count' => 0, 'pending' => 0, 'approved' => 0, 'budget' => 0];
                 if (Schema::hasTable('expense_pre_approvals')) {
-                    $preApprovals = self::financePreApprovalQuery($siteId)
-                        ->whereIn('status', ['pending', 'approved'])
-                        ->get();
+                    $preTotals = self::financePreApprovalQuery($siteId)->selectRaw("COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending_count,
+                        COALESCE(SUM(CASE WHEN status = 'pending' THEN estimated_amount ELSE 0 END),0) AS pending,
+                        COALESCE(SUM(CASE WHEN status = 'approved' THEN estimated_amount ELSE 0 END),0) AS approved,
+                        COALESCE(SUM(CASE WHEN status = 'approved' AND planned_date >= ? THEN estimated_amount ELSE 0 END),0) AS budget",
+                        [$startOfMonth->toDateString()])->first();
                 }
-
-                $approvedPreApprovals = $preApprovals->where('status', 'approved');
-                $pendingPreApprovals = $preApprovals->where('status', 'pending');
-                $mtdBudget = (float) $approvedPreApprovals
-                    ->filter(fn (ExpensePreApproval $approval): bool => $approval->planned_date?->gte($startOfMonth) ?? false)
-                    ->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount);
-
+                $mtdBudget = (float) $preTotals->budget;
                 $palette = ['#2563eb', '#10b981', '#f59e0b', '#7c3aed', '#ef4444', '#06b6d4', '#eab308'];
-                $grouped = $mtdRows
-                    ->groupBy(fn (MobileExpense $e): string => $e->accounting_account ?: ($e->category ?: FinanceChartOfAccounts::FALLBACK_ACCOUNT))
-                    ->map(fn ($group): float => (float) $group->sum(fn (MobileExpense $e): float => (float) $e->amount))
-                    ->sortDesc();
+                $grouped = (clone $query)->where('expense_date', '>=', $startOfMonth->toDateString())
+                    ->selectRaw("COALESCE(NULLIF(accounting_account,''),NULLIF(category,''),?) AS label, SUM(amount) AS total", [FinanceChartOfAccounts::FALLBACK_ACCOUNT])
+                    ->groupBy('accounting_account', 'category')->get()->groupBy('label')
+                    ->map(fn ($group): float => (float) $group->sum('total'))->sortDesc();
 
                 $byCategory = [];
                 $i = 0;
@@ -1118,14 +1105,13 @@ class SmartCompanyData
                 return [
                     'mtdTotal' => $mtdTotal,
                     'mtdBudget' => $mtdBudget,
-                    'pendingApproval' => $pending->count() + $pendingPreApprovals->count(),
-                    'pendingAmount' => (float) $pending->sum(fn (MobileExpense $e): float => (float) $e->amount)
-                        + (float) $pendingPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
-                    'claimable' => (float) $claimable->sum(fn (MobileExpense $e): float => (float) $e->amount),
-                    'paidAmount' => (float) $paid->sum(fn (MobileExpense $e): float => (float) $e->amount),
-                    'approvedPreApprovalAmount' => (float) $approvedPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
-                    'pendingPreApprovalAmount' => (float) $pendingPreApprovals->sum(fn (ExpensePreApproval $approval): float => (float) $approval->estimated_amount),
-                    'approvedExpenseAmount' => (float) $rows->where('status', 'approved')->sum(fn (MobileExpense $e): float => (float) $e->amount),
+                    'pendingApproval' => (int) $totals->pending_count + (int) $preTotals->pending_count,
+                    'pendingAmount' => $pendingTotal + (float) $preTotals->pending,
+                    'claimable' => (float) $totals->claimable,
+                    'paidAmount' => (float) $totals->paid,
+                    'approvedPreApprovalAmount' => (float) $preTotals->approved,
+                    'pendingPreApprovalAmount' => (float) $preTotals->pending,
+                    'approvedExpenseAmount' => (float) $totals->approved,
                     'budgetBalance' => $mtdBudget - $mtdTotal,
                     'totalSpend' => $totalSpend,
                     // 승인대기(자동 계상 포함) — 확정 숫자에 안 들어간 지출이 얼마인지 표시용.
@@ -1158,51 +1144,66 @@ class SmartCompanyData
         return ['mtdTotal' => 0, 'mtdBudget' => 0, 'pendingApproval' => 0, 'pendingAmount' => 0, 'claimable' => 0, 'totalSpend' => 0, 'contractTotal' => 0, 'contractBalance' => 0, 'billedTotal' => 0, 'submittedPending' => 0, 'receivedTotal' => 0, 'arOutstanding' => 0, 'disputedDeductions' => 0, 'retainageHeld' => 0, 'collectionRate' => 0, 'byCategory' => [], 'includesHqCommon' => false];
     }
 
-    public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true): array
+    public static function expenses(string $siteId = 'ALL', bool $applyUserScope = true, ?array $options = null): array
     {
         try {
             if (class_exists(Schema::class) && Schema::hasTable('mobile_expenses')) {
                 $canReview = app(ExpenseReviewService::class)->canReview(auth()->user());
 
-                return self::financeExpenseQuery($siteId, $applyUserScope)
-                    ->with(['site', 'employee', 'preApproval'])
+                $query = self::financeExpenseQuery($siteId, $applyUserScope)
+                    ->withoutReceiptContent()
+                    ->with(['site:id,code', 'employee:id,first_name,last_name,email', 'preApproval:id,title,estimated_amount'])
                     ->orderByDesc('expense_date')
-                    ->orderByDesc('id')
-                    ->get()
-                    ->map(function (MobileExpense $e) use ($canReview): array {
-                        $canModify = self::canModifyMobileExpense($e);
-                        $employeeName = trim(($e->employee?->first_name ?? '').' '.($e->employee?->last_name ?? ''));
+                    ->orderByDesc('id');
+                $search = mb_substr(trim((string) ($options['search'] ?? '')), 0, 200);
+                if ($search !== '') {
+                    $query->where(function ($q) use ($search): void {
+                        $q->where('description', 'ilike', '%'.$search.'%')->orWhere('accounting_account', 'ilike', '%'.$search.'%')
+                            ->orWhere('category', 'ilike', '%'.$search.'%');
+                    });
+                }
+                $page = max(1, (int) ($options['page'] ?? 1));
+                $total = $options !== null ? (clone $query)->count() : 0;
+                if ($options !== null) {
+                    $page = min($page, max(1, (int) ceil($total / 25)));
+                    $query->forPage($page, 25);
+                }
+                $items = $query->get()->map(function (MobileExpense $e) use ($canReview): array {
+                    $canModify = self::canModifyMobileExpense($e);
+                    $employeeName = trim(($e->employee?->first_name ?? '').' '.($e->employee?->last_name ?? ''));
 
-                        return [
-                            'id' => 'EXP-'.$e->id,
-                            'expenseId' => $e->id,
-                            'date' => optional($e->expense_date)->toDateString() ?? '',
-                            'site' => $e->site?->code ?: 'Global / Office',
-                            'account' => $e->accounting_account ?: ($e->category ?: '-'),
-                            'category' => $e->accounting_account ?: ($e->category ?: FinanceChartOfAccounts::FALLBACK_ACCOUNT),
-                            'departmentClass' => $e->class ?: '',
-                            'detail' => $e->description ?: '-',
-                            'amount' => (float) $e->amount,
-                            'method' => $e->payment_type,
-                            'claimable' => $e->payment_type === 'personal' && $e->status === 'approved',
-                            'status' => $e->status,
-                            'employeeName' => $employeeName ?: ($e->employee?->email ?: ''),
-                            'preApprovalId' => $e->expense_pre_approval_id,
-                            'preApprovalTitle' => $e->preApproval?->title ?: '',
-                            'preApprovalAmount' => $e->preApproval ? (float) $e->preApproval->estimated_amount : null,
-                            'reviewedAt' => optional($e->reviewed_at)->toIso8601String(),
-                            'paidAt' => optional($e->paid_at)->toIso8601String(),
-                            'receiptUrl' => self::mobileExpenseReceiptUrl($e),
-                            'canReview' => $canReview,
-                            'canModify' => $canModify,
-                            'editUrl' => $canModify ? route('mobile-expense.edit', $e, false) : '',
-                            'deleteUrl' => $canModify ? route('mobile-expense.destroy', $e, false) : '',
-                        ];
-                    })
+                    return [
+                        'id' => 'EXP-'.$e->id,
+                        'expenseId' => $e->id,
+                        'date' => optional($e->expense_date)->toDateString() ?? '',
+                        'site' => $e->site?->code ?: 'Global / Office',
+                        'account' => $e->accounting_account ?: ($e->category ?: '-'),
+                        'category' => $e->accounting_account ?: ($e->category ?: FinanceChartOfAccounts::FALLBACK_ACCOUNT),
+                        'departmentClass' => $e->class ?: '',
+                        'detail' => $e->description ?: '-',
+                        'amount' => (float) $e->amount,
+                        'method' => $e->payment_type,
+                        'claimable' => $e->payment_type === 'personal' && $e->status === 'approved',
+                        'status' => $e->status,
+                        'employeeName' => $employeeName ?: ($e->employee?->email ?: ''),
+                        'preApprovalId' => $e->expense_pre_approval_id,
+                        'preApprovalTitle' => $e->preApproval?->title ?: '',
+                        'preApprovalAmount' => $e->preApproval ? (float) $e->preApproval->estimated_amount : null,
+                        'reviewedAt' => optional($e->reviewed_at)->toIso8601String(),
+                        'paidAt' => optional($e->paid_at)->toIso8601String(),
+                        'receiptUrl' => self::mobileExpenseReceiptUrl($e),
+                        'canReview' => $canReview,
+                        'canModify' => $canModify,
+                        'editUrl' => $canModify ? route('mobile-expense.edit', $e, false) : '',
+                        'deleteUrl' => $canModify ? route('mobile-expense.destroy', $e, false) : '',
+                    ];
+                })
                     ->all();
+
+                return $options === null ? $items : ['items' => $items, 'page' => $page, 'perPage' => 25, 'total' => $total, 'lastPage' => max(1, (int) ceil($total / 25))];
             }
-        } catch (\Throwable) {
-            // Fall back to an empty list when the table is not ready.
+        } catch (\Throwable $e) {
+            throw $e;
         }
 
         return [];
@@ -1210,7 +1211,7 @@ class SmartCompanyData
 
     private static function mobileExpenseReceiptUrl(MobileExpense $expense): string
     {
-        if (! $expense->receipt_path && ! $expense->receipt_file) {
+        if (! $expense->receipt_path && ! ($expense->has_receipt ?? $expense->receipt_file)) {
             return '';
         }
 

@@ -1263,7 +1263,7 @@
         return gsRun('api_getAttendanceLive', [_siteId()], { success: false, checkedIn: [], notCheckedIn: [], teamSummary: [], totalActive: 0, presentCount: 0, absentCount: 0 });
       },
       getGlobalAttendance: () => gsRun('api_getGlobalAttendance', [], { success: false, mode: 'global', checkedIn: [], notCheckedIn: [], siteStats: {}, totalPresent: 0, totalWorkers: 0 }),
-      getExpenses: () => gsRun('api_getExpenses', [], []),
+      getExpenses: (options) => gsRun('api_getExpenses', options ? [options] : [], []),
       reviewExpense: (expenseId, decision) => gsRun('api_reviewExpense', [expenseId, decision], { success: false, message: '' }),
       // 기성 청구·수금 (billing-admin) — 조회 3 + 쓰기 6. api_get* 접두사가 곧 캐시·읽기전용 게이트다.
       getBillingContracts: (filters) => gsRun('api_getBillingContracts', [filters || {}], { success: false, rows: [] }),
@@ -5383,16 +5383,20 @@
         }
       };
 
+      var financePage = 1, financeSearch = '', financeSite = null;
       async function renderFinance() {
+        if (financeSite !== _siteId()) { financePage = 1; financeSearch = ''; financeSite = _siteId(); }
         pageContainer.innerHTML = skeleton();
         try {
           var [stats, expenses] = await Promise.all([
             window.API.getFinanceStats(),
-            window.API.getExpenses()
+            window.API.getExpenses({page: financePage, search: financeSearch})
           ]);
 
           stats = stats || {};
-          expenses = Array.isArray(expenses) ? expenses : [];
+          var expensePage = expenses || {};
+          expenses = Array.isArray(expensePage.items) ? expensePage.items : [];
+          financePage = Number(expensePage.page || 1);
 
           var mtdBudget = Number(stats.mtdBudget || 0);
           var mtdTotal = Number(stats.mtdTotal || 0);
@@ -5499,19 +5503,19 @@
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-bullets"></i> 비용 제출 내역</div>' +
             '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드</button>' +
-            '<input type="text" class="search-inline" id="fin-search" placeholder="내역 검색..."></div></div>' +
+            '<input type="text" class="search-inline" id="fin-search" placeholder="전체 내역 검색 후 Enter" value="' + safeHtml(financeSearch) + '"></div></div>' +
             '<div class="panel-body"><table class="data-table" id="fin-table"><thead><tr>' +
             '<th>날짜</th><th>현장</th><th>계정</th><th>세부내역</th><th style="text-align:right">금액</th><th style="text-align:right">관리</th>' +
-            '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div></div>' +
+            '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div>' +
+            '<div style="display:flex;gap:12px;align-items:center;padding:12px"><button id="fin-prev" class="btn-secondary" ' + (financePage <= 1 ? 'disabled' : '') + '>이전</button><span>' + financePage + ' / ' + Number(expensePage.lastPage || 1) + ' · ' + Number(expensePage.total || 0) + '건</span><button id="fin-next" class="btn-secondary" ' + (financePage >= Number(expensePage.lastPage || 1) ? 'disabled' : '') + '>다음</button></div></div>' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-pie-slice"></i> 계정별 지출현황</div></div>' +
             '<div class="panel-body padded" style="display:flex;flex-direction:column;gap:14px">' + categoryHtml + '</div></div>' +
             '</div>';
 
-          document.getElementById('fin-search').addEventListener('input', function () {
-            var q = this.value.toLowerCase();
-            document.querySelectorAll('#fin-table tbody tr').forEach(function (row) {
-              row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
-            });
+          document.getElementById('fin-prev').onclick = function () { financePage--; renderFinance(); };
+          document.getElementById('fin-next').onclick = function () { financePage++; renderFinance(); };
+          document.getElementById('fin-search').addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') { financeSearch = this.value.trim(); financePage = 1; renderFinance(); }
           });
           document.querySelectorAll('.finance-delete-expense').forEach(function (button) {
             button.addEventListener('click', function () {
