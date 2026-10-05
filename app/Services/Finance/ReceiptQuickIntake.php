@@ -4,9 +4,11 @@ namespace App\Services\Finance;
 
 use App\Models\Employee;
 use App\Models\MobileExpense;
+use App\Models\Vendor;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
+use App\Support\ReceiptPhoto;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -37,13 +39,13 @@ class ReceiptQuickIntake
             return ['success' => false, 'code' => 'not_active'];
         }
 
-        $path = $photo->store('receipts', 'public');
+        $path = ReceiptPhoto::store($photo);
         $absolute = Storage::disk('public')->path($path);
 
         // ERP 와 같은 판독기. 실패해도 접수를 막지 않는다 — 사진과 수기 금액으로 살린다.
         $ocr = [];
         try {
-            $ocr = app(GeminiReceiptAnalyzer::class)->analyze($absolute, $photo->getMimeType());
+            $ocr = app(GeminiReceiptAnalyzer::class)->analyze($absolute, Storage::disk('public')->mimeType($path));
         } catch (\Throwable $e) {
             Log::warning('영수증 앱 판독 실패(수기 입력으로 진행): '.$e->getMessage());
         }
@@ -88,7 +90,7 @@ class ReceiptQuickIntake
 
         // ④ 중복 의심 — 다른 입구(문서함·ERP)로 이미 들어온 같은 돈일 수 있다.
         //    막지 않고 표시한다: 판단은 승인하는 사람이 한다.
-        $vendorId = \App\Models\Vendor::matchByName($vendor);
+        $vendorId = Vendor::matchByName($vendor);
         $sentry = app(DuplicateExpenseSentry::class);
         $suspect = $sentry->findSuspect(round($amount, 2), $expenseDate, $vendorId, $vendor);
         if ($suspect !== null) {
@@ -110,7 +112,7 @@ class ReceiptQuickIntake
             'receipt_path' => '/storage/'.$path,
             // 원본을 DB 에도 넣는다(ERP 등록과 동일) — 배포가 디스크를 초기화해도 장부 근거는 남는다.
             'receipt_file' => ReceiptFilePayload::encode((string) Storage::disk('public')->get($path)),
-            'receipt_mime_type' => $photo->getMimeType() ?: 'image/jpeg',
+            'receipt_mime_type' => Storage::disk('public')->mimeType($path) ?: 'image/jpeg',
             'receipt_original_name' => $photo->getClientOriginalName() ?: basename($path),
             'ocr_data' => $ocr + array_filter([
                 'source' => 'expense-app',
