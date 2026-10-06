@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\Communication\ChatFactFinder;
 use App\Services\Documents\DocumentAsk;
+use App\Support\DotsAccess;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -44,5 +46,14 @@ class MobileAskController extends Controller
         $result = $this->ask->ask($user, (string) $data['question']);
 
         return response()->json($result, ($result['success'] ?? false) ? 200 : 422);
+    }
+
+    public function dots(Request $request): RedirectResponse
+    {
+        abort_unless(DotsAccess::canOpen($request), 403);
+
+        return redirect()->away(DotsAccess::destination())
+            ->header('Cache-Control', 'private, no-store')
+            ->header('Referrer-Policy', 'no-referrer');
     }
 }

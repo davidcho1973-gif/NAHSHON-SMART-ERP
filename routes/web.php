@@ -426,6 +426,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/attendance-app/docs', [MobileDocumentController::class, 'index'])->name('attendance-app.docs');
         // 물어보기 — 도면·서류·대장에 대고 묻는다. 답은 물어본 사람만 본다.
         Route::get('/attendance-app/ask', [MobileAskController::class, 'index'])->name('attendance-app.ask');
+        Route::get('/attendance-app/dots', [MobileAskController::class, 'dots'])->name('attendance-app.dots');
         Route::post('/ask-api/question', [MobileAskController::class, 'question'])
             ->middleware('throttle:30,1')->name('ask.question');
     });

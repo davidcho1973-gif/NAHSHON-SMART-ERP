@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-05 Owner-only Dots shortcut
+
+Root cause: ERP had no Dots entry or explicit eligibility rule, and a superadmin role alone would grant access to more people than David authorized. The personal app home and Ask screen now offer a Dots shortcut only to the active, strongly authenticated superadmin whose email is explicitly allowed (initially davidcho1973@gmail.com). The server redirect checks the same policy, rejects unsafe destinations, and disables response caching/referrer forwarding. Other superadmins and workers cannot use the ERP redirect or see the shortcut. Shared config allows later explicit expansion or disabling with an empty allowlist.
+
+This is a link to David's existing ChatGPT dot, not an embedded Dots API or company workspace conversion. ChatGPT independently controls dot access. No ERP files, conversations, cookies, or credentials are sent to Dots automatically. Workers retain the existing Ask feature. Shared routes/config/UI changes are necessary for the owner-only personal-app entry requested by David.
+
+Validation: new access regression 3 tests/20 assertions and existing MobileAsk regression 24 tests/101 assertions passed locally; Pint, static build, and diff check passed. PR CI and production/staging deployment verification follow before release completion.
+
 ## CODEX — 2026-10-05 Multi-page document photos
 
 Root cause: document intake treated each image as a separate file/document, and mobile camera capture had no accumulated page workflow. Mobile and document-hub uploads now keep an ordered removable selection with repeat camera capture, combine photo-only selections into one multi-page PDF by default, and allow independent registration by clearing the checkbox. Existing PDF preview and AI analyze all pages in one document. Mixed files remain independent. Failed mobile uploads retain pages for retry.
