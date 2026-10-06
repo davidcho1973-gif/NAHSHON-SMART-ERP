@@ -80,7 +80,8 @@ class ManagerInvitationService
                     'allowed_company_id' => $company?->id, 'allowed_team_id' => null],
             ]);
             AuthEvent::record('manager_invitation_created', user: $user, actor: auth()->user(), method: 'erp', request: request());
-            $url = route('manager-invitation.show', ['token' => $token]);
+            // Alias hosts do not share the canonical Google callback's session cookie.
+            $url = rtrim((string) config('app.url'), '/').route('manager-invitation.show', ['token' => $token], absolute: false);
 
             return ['success' => true, 'id' => $invite->id, 'url' => $url, 'qr' => QrSvg::dataUri($url),
                 'expiresAt' => $invite->expires_at->toDateTimeString(), 'name' => $user->name];

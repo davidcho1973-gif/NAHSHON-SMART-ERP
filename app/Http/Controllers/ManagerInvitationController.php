@@ -13,6 +13,12 @@ class ManagerInvitationController extends Controller
     {
         $invite = $service->find($token);
 
+        $canonicalRoot = rtrim((string) config('app.url'), '/');
+        if ($request->getHost() !== parse_url($canonicalRoot, PHP_URL_HOST)) {
+            return redirect()->away($canonicalRoot.route('manager-invitation.show', ['token' => $token], absolute: false))
+                ->header('Referrer-Policy', 'no-referrer');
+        }
+
         return response()->view('auth.manager-invitation', [
             'token' => $token, 'user' => User::findOrFail($invite->user_id),
             'verified' => $service->sessionToken($request) === $token,
