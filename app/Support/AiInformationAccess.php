@@ -13,7 +13,7 @@ final class AiInformationAccess
     public const DENIED = '회계·급여·단가·견적·계약금액은 재무 열람 권한이 있어야 답변할 수 있습니다. 공정·시공·수량 질문은 금액 부분을 제외하고 물어봐 주세요.';
 
     // Unknown/general documents are not assumed safe merely because AI misclassified them.
-    private const TECHNICAL_TYPES = ['drawing', 'specification', 'submittal', 'rfi', 'daily_report', 'inspection', 'ncr', 'safety_plan', 'incident_report', 'schedule', 'meeting_minutes', 'delivery_ticket', 'certificate', 'warranty', 'closeout_package'];
+    public const TECHNICAL_TYPES = ['drawing', 'specification', 'submittal', 'rfi', 'daily_report', 'inspection', 'ncr', 'safety_plan', 'incident_report', 'schedule', 'meeting_minutes', 'delivery_ticket', 'certificate', 'warranty', 'closeout_package'];
 
     // PostgreSQL and PCRE compatible. Do not match technical "얼마나/얼마", dimensions or quantities.
     private const MONEY_PATTERN = '급여|임금|시급|월급|연봉|인건비|노무비|재료비|단가|금액|총액|견적|회계|경비|지출|예산|정산|대금|원가|매출|매입|수익|이익|청구|세금|송금|계좌|돈|비용|가격|임대료|\\b(payroll|salary|salaries|wages?|accounting|financial|price|pricing|costs?|expenses?|budget|invoice|payment|profit|revenue|quotation|tax|unit[ _-]?rate|contract[ _-]?(amount|value|sum)|estimate|cotizaci[oó]n|precio|costo|salario|n[oó]mina|presupuesto|factura|pago)\\b|[$€£₩]|\\b(USD|KRW|EUR)\\b|[0-9][0-9,.]*[ ]*(달러|원)([^가-힣]|$)';

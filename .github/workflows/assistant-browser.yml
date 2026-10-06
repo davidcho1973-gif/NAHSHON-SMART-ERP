@@ -1,0 +1,99 @@
+name: Assistant browser (synthetic)
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-chromium:
+    name: Synthetic Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: erp_assistant_browser_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d erp_assistant_browser_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout the exact requested commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up PHP 8.5 (same version as tests.yml)
+        uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: '8.5'
+          extensions: dom, curl, gd, libxml, mbstring, zip, pcntl, pdo, pgsql, pdo_pgsql
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.16.0'
+
+      - name: Install existing Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Install pinned browser test tools outside application dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/erp-browser-tools" --ignore-scripts --no-audit --no-fund --package-lock=false @playwright/test@1.57.0
+          node "$RUNNER_TEMP/erp-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/erp-browser-tools/node_modules" >> "$GITHUB_ENV"
+
+      - name: Prepare empty synthetic database
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A fresh checkout and explicit environment, never production .env or secrets.
+          test ! -f .env
+          source tests/browser/environment.sh
+          php tests/browser/fixture.php guard
+          php artisan migrate --force
+          php tests/browser/fixture.php seed
+
+      - name: Run real Chromium against local Laravel only
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tests/browser/environment.sh
+          export GITHUB_SHA="$(git rev-parse HEAD)"
+          mkdir -p test-results/assistant-browser
+          php artisan serve --host=127.0.0.1 --port=8765 --no-reload > test-results/assistant-browser/SYNTHETIC-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in {1..60}; do
+            if curl --silent --fail http://127.0.0.1:8765/up > /dev/null; then ready=true; break; fi
+            kill -0 "$server_pid"
+            sleep 1
+          done
+          test "$ready" = true
+          timeout 300s node tests/browser/assistant-workspace.cjs
+
+      - name: Upload synthetic-only screenshots, workbook and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: SYNTHETIC-assistant-browser-${{ github.run_id }}
+          path: test-results/assistant-browser/
+          if-no-files-found: ignore
+          retention-days: 7
+
+# Intentionally separate from Tests: no deployment hooks, environments, provider
+# secrets, scheduler, queue worker, OAuth grants, or live AI requests belong here.

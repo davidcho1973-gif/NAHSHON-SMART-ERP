@@ -4,15 +4,15 @@ namespace App\Services\Communication;
 
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
-use App\Models\OpsIntakeItem;
 use App\Models\User;
 use App\Models\WbsItem;
 use App\Services\Push\ChatPushNotifier;
 use App\Services\Wbs\CpmEngine;
+use App\Support\AiAssistantBudget;
 use App\Support\AiInformationAccess;
 use App\Support\AnthropicChat;
 use App\Support\Org;
-use Illuminate\Support\Carbon;
+use DomainException;
 use Throwable;
 
 /**
@@ -45,18 +45,25 @@ class ChatAssistant
     /** 참여자 목록에 보이는 이름. */
     public const DISPLAY_NAME = '🤖 AI 도우미';
 
-    /** 답할 때 참고하는 최근 대화 수. 방 전체를 보내면 요금이 대화량에 비례한다. */
-    private const CONTEXT_MESSAGES = 20;
+    private const PRIVATE_ASK = '개인 자료와 대화방 참여자의 열람 범위를 보호하기 위해 이 질문은 개인 물어보기에서 확인해 주세요: /attendance-app/ask';
+
+    // A shared reply must never republish a personal document, roster, or old bot answer.
+    private const SHARED_TOPICS = ['wbs', 'procurement', 'equipment', 'boq', 'submittals', 'inspection'];
+
+    private const DELAY_PATTERN = '/(.+?)\s*(?:이|가|은|는)?\s*(하루|이틀|사흘|나흘|\d+\s*일)\s*(?:정도\s*)?(밀리|늦|지연)/u';
+
+    private const SHARED_FACTS = ['현장', '공정', '조달·발주', '장비', '물량/BOQ', '제출물 대장', '검사·검측'];
 
     public function __construct(
         private readonly AnthropicChat $claude,
         private readonly ChatFactFinder $facts,
+        private readonly AiAssistantBudget $budget,
     ) {}
 
     /** 이 배포에 AI 도우미가 살아 있는가(열쇠가 있는가). */
     public function available(): bool
     {
-        return $this->claude->available();
+        return $this->budget->enabled() && $this->claude->available();
     }
 
     /**
@@ -112,10 +119,11 @@ class ChatAssistant
             return null;
         }
 
-        $room = $message->room ?? CommunicationRoom::find($message->communication_room_id);
-        $asker = $message->senderUser ?? User::find($message->sender_user_id);
+        $room = CommunicationRoom::find($message->communication_room_id);
+        $asker = User::with('employee')->find($message->sender_user_id);
 
-        if (! $room || ! $asker) {
+        if (! $room || ! $asker || $asker->account_status !== 'active'
+            || ! app(CommunicationService::class)->canAccessRoom($asker, $room)) {
             return null;
         }
 
@@ -131,25 +139,58 @@ class ChatAssistant
             return $this->reply($message, '무엇을 도와드릴까요? '.self::HANDLE.' 뒤에 질문을 적어 주세요.');
         }
 
+        $topics = $this->facts->topicsIn($question);
+        if (($topics === [] && preg_match(self::DELAY_PATTERN, $question) !== 1)
+            || array_diff($topics, self::SHARED_TOPICS) !== []) {
+            return $this->reply($message, self::PRIVATE_ASK);
+        }
+
         try {
-            $gathered = $this->facts->gather($question, $room, $asker);
-            $gathered['facts'] = AiInformationAccess::technicalFacts($gathered['facts']);
+            $audience = $this->sharedAudience($room, $asker);
+            if ($audience === null) {
+                return $this->reply($message, self::PRIVATE_ASK);
+            }
+            $gathered = $this->facts->gather($question, $room, $asker, localOnly: true, sharedOnly: true);
+            $gathered['facts'] = AiInformationAccess::technicalFacts(array_intersect_key(
+                $gathered['facts'], array_flip(self::SHARED_FACTS),
+            ));
 
             // What-if — "A작업 3일 밀리면 뭐가 밀려?" 는 CPM 엔진이 계산한 사실로 답한다.
-            // 상용 제품들은 조회까지만 한다 — 우리는 반영 제안까지 만들어 [반영] 한 번이면 된다.
-            $whatIf = $this->tryWhatIf($question, $room, $message);
+            // A question only simulates. Writes require the explicit preview/confirm flow.
+            $whatIf = $gathered['site'] ? $this->tryWhatIf($question, $room) : null;
             if ($whatIf !== null) {
                 $gathered['facts']['지연 시뮬레이션(CPM 엔진 계산)'] = $whatIf;
             }
 
-            $text = $this->ask($question, $message, $room, $asker, $gathered);
+            $text = $this->ask($question, $room, $asker, $gathered);
             if ($whatIf !== null && ! blank($text)) {
-                $text .= "\n\n📌 이 지연을 반영하는 제안을 등록했습니다 — 현장 상황실에서 [반영]을 누르면 종료일이 실제로 바뀌고 후속 일정·예상 준공이 함께 갱신됩니다.";
+                $text .= "\n\n📌 시뮬레이션 결과입니다. 실제 공정표는 변경되지 않았습니다.";
             }
+        } catch (DomainException $e) {
+            return $this->reply($message, $e->getMessage());
         } catch (Throwable $e) {
             report($e);
 
             return $this->reply($message, '지금은 답을 만들지 못했습니다. 잠시 뒤에 다시 불러 주세요.');
+        }
+
+        // The audience and sender can change while the provider is answering. Never
+        // publish a previously authorized answer into a changed room or push audience.
+        $currentRoom = $room->fresh();
+        $currentAsker = $asker->fresh(['employee']);
+        $currentMessage = $message->fresh();
+        if (! $currentRoom || ! $currentAsker || ! $currentMessage || $currentMessage->isRemoved()
+            || $currentMessage->body !== $message->body
+            || $currentMessage->sender_user_id !== $message->sender_user_id
+            || $currentMessage->communication_room_id !== $message->communication_room_id
+            || $this->alreadyAnswered($currentMessage)
+            || ! app(CommunicationService::class)->canAccessRoom($currentAsker, $currentRoom)) {
+            return null;
+        }
+        if ($currentAsker->account_status !== 'active'
+            || AiInformationAccess::context($currentAsker) !== AiInformationAccess::context($asker)
+            || $this->sharedAudience($currentRoom, $currentAsker) !== $audience) {
+            return $this->reply($message, self::PRIVATE_ASK);
         }
 
         if (AiInformationAccess::financial((string) $text)) {
@@ -160,18 +201,18 @@ class ChatAssistant
     }
 
     /**
-     * "…이 N일 밀리면/늦으면" 질문이면 CPM 시뮬레이션을 돌리고 반영 제안까지 만든다.
+     * "…이 N일 밀리면/늦으면" 질문이면 읽기 전용 CPM 시뮬레이션을 돌린다.
      *
      * 답은 AI 가 말로 풀지만 숫자는 전부 엔진이 계산한 사실이다 — 지어낸 날짜가 아니다.
      *
      * @return array<string, mixed>|null
      */
-    private function tryWhatIf(string $question, CommunicationRoom $room, CommunicationMessage $message): ?array
+    private function tryWhatIf(string $question, CommunicationRoom $room): ?array
     {
         if ($room->site_id === null) {
             return null;
         }
-        if (! preg_match('/(.+?)\s*(?:이|가|은|는)?\s*(하루|이틀|사흘|나흘|\d+\s*일)\s*(?:정도\s*)?(밀리|늦|지연)/u', $question, $m)) {
+        if (! preg_match(self::DELAY_PATTERN, $question, $m)) {
             return null;
         }
 
@@ -191,32 +232,17 @@ class ChatAssistant
             ->distinct()->pluck('project_code');
 
         foreach ($codes as $code) {
+            // The CPM engine resolves a project globally. Ambiguous cross-site codes
+            // must not pull another project's tasks into a shared-room simulation.
+            if (WbsItem::query()->where('project_code', $code)->where(function ($query) use ($room): void {
+                $query->whereNull('site_id')->orWhere('site_id', '!=', $room->site_id)
+                    ->orWhere(fn ($q) => $q->whereNotNull('company_id')->where('company_id', '!=', $room->company_id));
+            })->exists()) {
+                continue;
+            }
             $sim = app(CpmEngine::class)->simulate((string) $code, $target, $days);
             if (! ($sim['success'] ?? false)) {
                 continue;
-            }
-
-            // 반영 제안 — [반영] 한 번으로 실제 공정표가 갱신되게. 결과는 방으로 돌아온다.
-            try {
-                $newEnd = Carbon::parse((string) WbsItem::query()
-                    ->where('wbs_code', $sim['wbsCode'])->value('planned_end'))
-                    ->addDays($days)->toDateString();
-                OpsIntakeItem::create([
-                    'site_id' => $room->site_id,
-                    'source' => 'chat',
-                    'communication_message_id' => $message->id,
-                    'raw_text' => mb_substr($question, 0, 500),
-                    'category' => 'plan',
-                    'confidence' => 95,
-                    'summary' => "{$sim['name']} {$days}일 지연 반영 (AI what-if)",
-                    'target_type' => 'wbs',
-                    'target_code' => $sim['wbsCode'],
-                    'target_name' => $sim['name'],
-                    'proposed' => ['planned_end' => $newEnd],
-                    'status' => 'pending',
-                ]);
-            } catch (Throwable $e) {
-                report($e); // 제안 등록 실패가 답변을 막으면 안 된다.
             }
 
             return $sim;
@@ -227,7 +253,7 @@ class ChatAssistant
 
     // ── Claude 에게 묻기 ───────────────────────────────────────────────
 
-    private function ask(string $question, CommunicationMessage $message, CommunicationRoom $room, User $asker, array $gathered): string
+    private function ask(string $question, CommunicationRoom $room, User $asker, array $gathered): string
     {
         $payload = [
             'max_tokens' => 1200,
@@ -235,8 +261,6 @@ class ChatAssistant
             'messages' => [[
                 'role' => 'user',
                 'content' => implode("\n\n", array_filter([
-                    '[최근 대화]',
-                    $this->recentTalk($message, $room),
                     '[조회한 사실]',
                     $gathered['facts'] === []
                         ? '(이 질문으로는 조회한 자료가 없습니다)'
@@ -247,7 +271,8 @@ class ChatAssistant
             ]],
         ];
 
-        return trim($this->claude->textOf($this->claude->raw($payload)));
+        return $this->budget->run($asker, $room->company_id, 'chat_ask', $payload,
+            fn (array $bounded): string => trim($this->claude->textOf($this->claude->raw($bounded))));
     }
 
     /**
@@ -290,26 +315,56 @@ class ChatAssistant
         return implode("\n", $lines);
     }
 
-    /** 방금 무슨 이야기를 하고 있었는지 — 질문이 대화에 이어질 때가 많다. */
-    private function recentTalk(CommunicationMessage $message, CommunicationRoom $room): string
+    /**
+     * A room's readers include scope-authorized users, not just its member list.
+     * Unknown employee-only identities and overly large/unverifiable audiences fail
+     * closed. Documents, knowledge cards and conversation history are excluded even
+     * for a verified audience, so later members cannot inherit someone's private data.
+     */
+    private function sharedAudience(CommunicationRoom $room, User $asker): ?string
     {
-        $rows = CommunicationMessage::query()
-            ->with(['senderEmployee', 'senderUser'])
-            ->where('communication_room_id', $room->id)
-            ->where('id', '<=', $message->id)
-            ->active()
-            ->orderByDesc('id')
-            ->limit(self::CONTEXT_MESSAGES)
-            ->get()
-            ->sortBy('id');
+        $site = $room->site;
+        if ($room->status !== 'active' || ! $room->company_id || ! $site
+            || (int) $site->company_id !== (int) $room->company_id || $site->status !== 'active') {
+            return null;
+        }
 
-        return $rows->reject(fn (CommunicationMessage $m) => AiInformationAccess::financial($m->visibleBody()))->map(function (CommunicationMessage $m): string {
-            $who = $m->senderEmployee?->name
-                ?? $m->senderUser?->name
-                ?? ($m->kind === CommunicationMessage::KIND_SYSTEM ? 'AI' : '시스템');
+        $users = User::query()->where('account_status', 'active')->with('employee')->orderBy('id')->limit(1001)->get();
+        if ($users->count() > 1000) {
+            return null;
+        }
+        $members = $room->activeMembers()->orderBy('id')->get(['id', 'user_id', 'employee_id', 'role']);
+        foreach ($members as $member) {
+            $identities = $users->filter(fn (User $user): bool => ($member->user_id && (int) $user->id === (int) $member->user_id)
+                || ($member->employee_id && (int) $user->employee_id === (int) $member->employee_id));
+            if ($identities->count() !== 1) {
+                return null;
+            }
+            $identity = $identities->first();
+            if (($member->user_id && (int) $identity->id !== (int) $member->user_id)
+                || ($member->employee_id && (int) $identity->employee_id !== (int) $member->employee_id)) {
+                return null;
+            }
+        }
 
-            return '['.($m->sent_at?->format('m/d H:i') ?? '').'] '.$who.': '.mb_substr($m->visibleBody(), 0, 400);
-        })->implode("\n");
+        $service = app(CommunicationService::class);
+        $readers = $users->filter(fn (User $user): bool => $service->canAccessRoom($user, $room));
+        if (! $readers->contains('id', $asker->id)) {
+            return null;
+        }
+        foreach ($readers as $reader) {
+            if (! AiInformationAccess::canUseSite($reader, $site)
+                || $this->budget->companyId($reader, $room->company_id) !== (int) $room->company_id) {
+                return null;
+            }
+        }
+
+        return hash('sha256', json_encode([
+            $room->only(['id', 'type', 'company_id', 'site_id', 'team_id', 'status']),
+            $site->only(['id', 'company_id', 'status']),
+            $members->toArray(),
+            $readers->map(fn (User $user): array => [$user->id, AiInformationAccess::context($user)])->values()->all(),
+        ]));
     }
 
     // ── 방에 답글 남기기 ───────────────────────────────────────────────

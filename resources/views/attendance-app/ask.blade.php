@@ -113,6 +113,8 @@
                 <div id="answer"></div>
             @endif
 
+            @include('attendance-app.partials.assistant-workspace')
+
             <div class="sec-h">{{ __('최근 물어본 것') }}</div>
             <div id="recent"></div>
         </main>
@@ -159,10 +161,13 @@
             return h + '</div>';
         }
 
+        var questionSequence = 0;
         function ask(question) {
             question = (question || '').trim();
             if (!question) { say(t('무엇을 찾을지 적어 주세요.'), 'warn'); return; }
             var go = el('go');
+            if (go.disabled) return;
+            var sequence = ++questionSequence;
             go.disabled = true;
             el('answer').innerHTML = '<div class="answer"><div class="q">' + esc(question) + t('</div><div class="a thinking">문서를 뒤지는 중… 10초쯤 걸립니다.</div></div>');
             say(t('찾는 중입니다.'));
@@ -170,10 +175,11 @@
             fetch(@json(route('ask.question')), {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
-                body: JSON.stringify({ question: question })
+                body: JSON.stringify({ question: question, site_id: window.ErpAssistantWorkspace ? window.ErpAssistantWorkspace.siteId() : null })
             })
                 .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
                 .then(function (res) {
+                    if (sequence !== questionSequence) return;
                     go.disabled = false;
                     var d = res.d || {};
                     if (!d.success) {
@@ -187,11 +193,18 @@
                     say(d.found ? t('등록된 문서에서 찾았습니다. 출처를 눌러 원문을 여세요.') : t('등록된 문서에는 없었습니다. 문서를 올리면 다음엔 답할 수 있습니다.'), d.found ? '' : 'warn');
                 })
                 .catch(function () {
+                    if (sequence !== questionSequence) return;
                     go.disabled = false;
                     el('answer').innerHTML = '';
                     say(t('연결이 끊겼습니다. 다시 눌러 주세요.'), 'bad');
                 });
         }
+
+        window.addEventListener('assistant-scope-changed', function () {
+            questionSequence++;
+            if (el('go')) el('go').disabled = false;
+            if (el('answer')) el('answer').innerHTML = '';
+        });
 
         if (el('go')) {
             el('go').addEventListener('click', function () { ask(el('q').value); });
