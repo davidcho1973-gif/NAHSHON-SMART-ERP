@@ -9,66 +9,45 @@ use App\Support\WorkerDeviceSession;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cookie;
 use Symfony\Component\HttpFoundation\Response;
 
-/** A personal-app device restores only app access, never the account's ERP session. */
+/** Retire QR credentials and retain the boundary for legacy remembered sessions. */
 class PersonalAppSession
 {
-    public function __construct(private readonly PersonalAppAccessService $access) {}
-
     public function handle(Request $request, Closure $next): Response
     {
-        // Real password/Google authentication explicitly replaces app-only proof.
-        if ($request->user() && EmailPasswordAuthService::hasStrongAuthentication($request, $request->user())
-            && ! WorkerDeviceSession::isDeviceOnly($request)) {
+        $qrSession = $request->session()->has(PersonalAppAccessService::SESSION);
+        $qrCookie = (string) $request->cookie(PersonalAppAccessService::COOKIE, '') !== '';
+        $strong = $request->user() && EmailPasswordAuthService::hasStrongAuthentication($request, $request->user())
+            && ! WorkerDeviceSession::isDeviceOnly($request);
+
+        // Old credentials are cleanup inputs, never authentication inputs.
+        if ($qrSession || $qrCookie) {
+            app(PersonalAppAccessService::class)->logout($request);
+            if ($qrSession && ! $strong) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+            }
+            if (! $request->user() && ! $this->authenticationPath($request)) {
+                return $request->expectsJson()
+                    ? response()->json(['success' => false, 'code' => 'personal_app_qr_retired', 'error' => '관리자 개인 QR 기능이 종료되었습니다. 다시 로그인하세요.'], 401)
+                    : redirect()->route('login', ['erp' => 1])->with('status', '관리자 개인 QR 기능이 종료되었습니다. Google 또는 이메일·비밀번호로 로그인하세요.');
+            }
+        }
+
+        if ($strong) {
             PersonalAppAccessService::clearSession($request);
 
             return $next($request);
         }
-
-        if ($this->restorable($request) && (! $request->user() || Auth::viaRemember())) {
-            $this->access->restore($request, allowMatchingRemembered: true);
-        }
-
-        // Old Laravel remember cookies do not record whether phone digits created them.
-        // They may retain app convenience, but cannot become a fresh ERP credential.
-        if ($request->user() && Auth::viaRemember() && PurchaseAccess::eligible($request->user())
-            && ! $request->session()->has(PersonalAppAccessService::SESSION)) {
+        // Preserve the boundary for old remember cookies of unknown authentication origin.
+        if ($request->user() && Auth::viaRemember() && PurchaseAccess::eligible($request->user())) {
             WorkerDeviceSession::markDeviceOnly($request);
             $request->session()->put(PersonalAppAccessService::LEGACY_SESSION, true);
         }
-
         if ($request->session()->get(PersonalAppAccessService::LEGACY_SESSION) === true) {
             return $this->allowed($request) ? $next($request) : $this->deny($request);
-        }
-
-        if (! $request->session()->has(PersonalAppAccessService::SESSION)) {
-            return $next($request);
-        }
-
-        $device = $this->access->sessionDevice($request);
-        if (! $device) {
-            // A saved session must stop working as soon as the device/account is revoked.
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-            Cookie::queue(Cookie::forget(PersonalAppAccessService::COOKIE));
-            Cookie::queue(Cookie::forget(WorkerDeviceSession::COOKIE));
-
-            if ($this->authenticationPath($request)) {
-                return $next($request);
-            }
-
-            return $request->expectsJson()
-                ? response()->json(['success' => false, 'code' => 'personal_app_device_revoked', 'error' => '앱 연결이 해제되었습니다. 새 QR로 연결하세요.'], 401)
-                : redirect('/app')->with('status', '앱 연결이 해제되었습니다. 새 QR로 연결하세요.');
-        }
-
-        // The model is reloaded so role, employee status and site grants never come from a saved QR.
-        Auth::setUser($device->user);
-        if (! $this->allowed($request)) {
-            return $this->deny($request);
         }
 
         return $next($request);
@@ -79,12 +58,6 @@ class PersonalAppSession
         return RequireApprovedErpAccess::deny($request,
             'ERP에 접속하려면 이메일·비밀번호 또는 Google로 로그인하세요. 개인앱 연결은 유지됩니다.',
             'personal_app_only');
-    }
-
-    private function restorable(Request $request): bool
-    {
-        // Never switch a signed-in account or consume a QR merely because a cookie exists.
-        return ! $this->authenticationPath($request) && $this->allowed($request);
     }
 
     private function authenticationPath(Request $request): bool
