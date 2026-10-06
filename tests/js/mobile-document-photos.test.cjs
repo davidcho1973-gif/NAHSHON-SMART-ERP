@@ -20,6 +20,7 @@ test('repeated camera captures accumulate and submit one document with its site'
   assert.equal(s.queue().length,2);assert.equal(s.elements['camera-file'].value,'');
   await s.send();assert.equal(s.combined[0].length,2);assert.equal(s.requests.length,1);
   assert.equal(s.requests[0].get('file').name,'invoice-pages.pdf');assert.equal(s.requests[0].get('site_id'),'123');assert.equal(s.queue().length,0);
+  assert.match(s.elements.recent.innerHTML,/href="\/docs-api\/file\/1"/);
 });
 test('failed registration retains original pages and re-enables capture for retry',async()=>{
   const s=setup(false);for(const name of ['one.jpg','two.jpg'])s.add('camera-file',new File(['image'],name,{type:'image/jpeg'}));

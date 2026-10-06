@@ -228,7 +228,7 @@
                 var chip = r.status === 'analyzing'
                     ? t('<span class="chip wait">읽는 중</span>')
                     : (r.status === 'failed' ? t('<span class="chip bad">읽기 실패</span>') : t('<span class="chip ok">보관됨</span>'));
-                return '<div class="row"><div class="nm">' + esc(r.name) + '</div>' +
+                return '<div class="row"><div class="nm"><a href="/docs-api/file/' + Number(r.id) + '" target="_blank" rel="noopener" style="color:inherit">' + esc(r.name) + '</a></div>' +
                     '<div class="meta">' + chip +
                     (r.folder ? '<span>' + esc(r.folder) + '</span>' : '') +
                     (r.at ? '<span>' + esc(r.at) + '</span>' : '') + '</div></div>';
