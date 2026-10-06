@@ -78,6 +78,10 @@
             </button>
             <input type="file" id="files" multiple hidden
                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.pptx,.dwg,.dxf,.doc,.xls,.ppt,.hwp">
+            <button class="btn" id="camera" type="button">{{ __('사진 촬영 · 다음 장 추가') }}</button>
+            <input type="file" id="camera-file" accept="image/*" capture="environment" hidden>
+            <label><input type="checkbox" id="combine-photos" checked> {{ __('사진 여러 장을 한 문서로 등록') }}</label>
+            <p class="sub">{{ __('선택한 순서대로 등록합니다. 사진은 글자가 읽히도록 용량을 줄여 저장합니다.') }}</p>
 
             <div class="queue" id="queue"></div>
             <button class="btn" id="send" type="button" hidden>{{ __('올리기') }}</button>
@@ -93,6 +97,8 @@
         @include('partials.field-app-nav')
     </div>
 
+    <script src="{{ asset('js/receipt-photo.js') }}?v={{ filemtime(public_path('js/receipt-photo.js')) }}"></script>
+    <script src="{{ asset('js/document-photos.js') }}?v={{ filemtime(public_path('js/document-photos.js')) }}"></script>
     <script>
     // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
     // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
@@ -111,13 +117,19 @@
 
         el('pick').addEventListener('click', function () { el('files').click(); });
 
-        el('files').addEventListener('change', function () {
+        var busy = false;
+        el('camera').onclick = function () { if (!busy) el('camera-file').click(); };
+        function addFiles() {
+            if (busy) return;
             Array.prototype.slice.call(this.files || []).forEach(function (f) {
-                if (queue.length < 10) queue.push(f);
+                if (queue.length < 20) queue.push(f);
+                else say(t('최대 20장까지 추가할 수 있습니다.'), 'bad');
             });
             this.value = '';
             drawQueue();
-        });
+        }
+        el('files').addEventListener('change', addFiles);
+        el('camera-file').addEventListener('change', addFiles);
 
         function drawQueue() {
             var host = el('queue');
@@ -130,7 +142,7 @@
                 x.type = 'button';
                 x.textContent = '×';
                 x.setAttribute('aria-label', t('빼기'));
-                x.addEventListener('click', function () { queue.splice(i, 1); drawQueue(); });
+                x.addEventListener('click', function () { if (!busy) { queue.splice(i, 1); drawQueue(); } });
                 row.appendChild(x);
                 host.appendChild(row);
             });
@@ -140,14 +152,30 @@
 
         // 한 번에 한 개씩 올린다 — 요청 하나가 작아야 현장 네트워크에서 끊기지 않고,
         // 몇 개까지 갔는지 사람에게 보여 줄 수 있다.
-        el('send').addEventListener('click', function () {
+        el('send').addEventListener('click', async function () {
+            if (busy) return;
             var btn = this;
-            var total = queue.length;
+            busy = true; btn.disabled = true;
+            el('pick').disabled = el('camera').disabled = el('combine-photos').disabled = true;
+            var originals = queue.slice();
+            var files;
+            try {
+                say(t('사진을 준비하는 중…'));
+                files = el('combine-photos').checked && queue.length > 1 && queue.every(DocumentPhotos.isPhoto)
+                    ? [await DocumentPhotos.combine(queue)] : [];
+                if (!files.length) for (const photo of queue) files.push(await ReceiptPhoto.prepare(photo));
+            } catch (e) {
+                say(e.message, 'bad'); busy = false; btn.disabled = false;
+                el('pick').disabled = el('camera').disabled = el('combine-photos').disabled = false;
+                return;
+            }
+            var total = files.length;
             var done = 0;
             var failed = [];
             btn.disabled = true;
 
-            queue.reduce(function (chain, f) {
+            var retry = [];
+            files.reduce(function (chain, f) {
                 return chain.then(function () {
                     say(t('올리는 중 ') + (done + 1) + '/' + total + ' — ' + f.name);
                     var fd = new FormData();
@@ -159,7 +187,7 @@
                         body: fd
                     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
                       .then(function (res) {
-                          if (!res.d || res.d.success === false) { failed.push(f.name + ' — ' + ((res.d && res.d.error) || t('실패'))); return; }
+                          if (!res.ok || !res.d || res.d.success === false) { retry.push(f); failed.push(f.name + ' — ' + ((res.d && (res.d.error || res.d.message)) || t('실패'))); return; }
                           done++;
                           if (res.d.document) {
                               RECENT.unshift({
@@ -171,10 +199,12 @@
                               });
                           }
                       })
-                      .catch(function () { failed.push(f.name + t(' — 연결 실패')); });
+                      .catch(function () { retry.push(f); failed.push(f.name + t(' — 연결 실패')); });
                 });
             }, Promise.resolve()).then(function () {
-                queue = [];
+                queue = retry.length && files.length === 1 && originals.length > 1 ? originals : retry;
+                busy = false;
+                el('pick').disabled = el('camera').disabled = el('combine-photos').disabled = false;
                 drawQueue();
                 btn.disabled = false;
                 drawRecent();
@@ -198,7 +228,7 @@
                 var chip = r.status === 'analyzing'
                     ? t('<span class="chip wait">읽는 중</span>')
                     : (r.status === 'failed' ? t('<span class="chip bad">읽기 실패</span>') : t('<span class="chip ok">보관됨</span>'));
-                return '<div class="row"><div class="nm">' + esc(r.name) + '</div>' +
+                return '<div class="row"><div class="nm"><a href="/docs-api/file/' + Number(r.id) + '" target="_blank" rel="noopener" style="color:inherit">' + esc(r.name) + '</a></div>' +
                     '<div class="meta">' + chip +
                     (r.folder ? '<span>' + esc(r.folder) + '</span>' : '') +
                     (r.at ? '<span>' + esc(r.at) + '</span>' : '') + '</div></div>';

@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-05 Multi-page document photos
+
+Root cause: document intake treated each image as a separate file/document, and mobile camera capture had no accumulated page workflow. Mobile and document-hub uploads now keep an ordered removable selection with repeat camera capture, combine photo-only selections into one multi-page PDF by default, and allow independent registration by clearing the checkbox. Existing PDF preview and AI analyze all pages in one document. Mixed files remain independent. Failed mobile uploads retain pages for retry.
+
+Camera photos are reduced before transmission using the existing readable receipt policy (2560 edge, quality 90, long receipts retain readable width up to 8192). Document intake also reduces supported photos for clients without browser compression; unsupported/small files and PDFs remain intact, and larger recompression is discarded. Browser conversion failure preserves the selection and explains how to retry. No historical records are rewritten.
+
+Validation: browser regression suite and build pass locally. New tests cover repeated capture, single-document registration, separate mode, retry retention, PDF byte offsets/page order, resize dimensions and unsupported input. Local PHP executable is unavailable in this chat; PHP/photo and PostgreSQL regression tests must pass in PR CI before staging/main deployment. Release verification is recorded below after deployment.
+
 ## CODEX — 2026-10-05 Finance memory and receipt uploads
 
 Root cause: finance statistics and expenses each selected full mobile_expenses rows, including about 193 MB of embedded receipt bytes across 57 production records. Concurrent requests returned 503 and app restart logs were observed. OOM termination itself was not independently confirmed. Aggregate amounts now stay in PostgreSQL; scoped metadata queries exclude receipt_file and ocr_data. The finance UI requests 25-row pages with server-side search; the legacy export still receives all metadata. The mobile list is paginated with DB totals and the personal receipt list excludes blobs. Individual receipt routes and authorization are preserved; no historical records or images are rewritten.

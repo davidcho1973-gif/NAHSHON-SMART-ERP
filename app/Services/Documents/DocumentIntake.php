@@ -41,6 +41,9 @@ class DocumentIntake
         if (! in_array($extension, (array) config('document-intelligence.allowed_extensions', []), true)) {
             return $this->result('failed', null, '지원하지 않는 파일 형식입니다.');
         }
+        $file = \App\Support\DocumentPhoto::prepare($file);
+        $originalName = $file->getClientOriginalName();
+        $extension = strtolower($file->getClientOriginalExtension());
 
         $scopes = app(DocumentScope::class);
         $scope = $scopes->normalize($scope);
