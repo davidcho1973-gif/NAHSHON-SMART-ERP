@@ -2,6 +2,12 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-05 One-link onboarding for new managers
+
+Root cause: manager invitations required an existing worker account, forcing new hires through public worker registration and a second invitation. The same invitation model now supports unclaimed new-employee invitations with a server-selected role/scope and optional company/site placement. Recipient enters name/full phone then Google or email/password within the same private link. Completion atomically creates one staff employee and one strongly authenticated account, consumes the invitation, and retains the existing-worker promotion path. No account or manager access is created before completion. Public/HR registration phone locks and login-identity locks prevent concurrent duplicate enrollment; registered phones and identities are rejected, never rebound. Pending invitations can be canceled/reissued; seven-day, one-use, issuer authorization, canonical alias/OAuth and 15-minute session rules remain. No payroll/financial or production employee data is created during development. Shared SPA/view/API changes are necessary for the user-requested complete onboarding flow.
+
+Validation: targeted auth/access/purchasing regression 59 tests /361 assertions passed; final invitation tests 16 /196 passed after concurrency locks; all 69 browser interaction tests passed; static build, Pint and diff checks passed. Actual local browser rendered the new name/phone form and continued to credentials on the same link. Google enrollment and duplicate identity rejection tested using verified-profile fixtures. Production employee data untouched. Full Linux CI and staging/production deployment evidence follow after release checks.
+
 ## CODEX — 2026-10-05 Owner-only Dots shortcut
 
 Root cause: ERP had no Dots entry or explicit eligibility rule, and a superadmin role alone would grant access to more people than David authorized. The personal app home and Ask screen now offer a Dots shortcut only to the active, strongly authenticated superadmin whose email is explicitly allowed (initially davidcho1973@gmail.com). The server redirect checks the same policy, rejects unsafe destinations, and disables response caching/referrer forwarding. Other superadmins and workers cannot use the ERP redirect or see the shortcut. Shared config allows later explicit expansion or disabling with an empty allowlist.
