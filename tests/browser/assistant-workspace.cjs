@@ -123,11 +123,17 @@ async function propose(page, title) {
 }
 
 async function restore(page, id) {
-    await page.evaluate(({ user, id }) => sessionStorage.setItem('erp-assistant-proposal-' + user, id), { user: fixture.users.owner.id, id });
-    const response = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/proposals/' + id);
-    await page.reload();
-    const result = await response;
-    assert.equal(result.status(), 200);
+    // Reload recovery also consumes the real request limiter. Replay only a confirmed
+    // 429 read after its Retry-After delay; no uncertain request or mutation is retried.
+    const recovered = await withThrottleRetry(async () => {
+        await page.evaluate(({ user, id }) => sessionStorage.setItem('erp-assistant-proposal-' + user, id), { user: fixture.users.owner.id, id });
+        const response = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/proposals/' + id);
+        await page.reload();
+        const result = await response;
+        return { status: result.status(), retryAfter: result.headers()['retry-after'], result };
+    });
+    assert.equal(recovered.status, 200);
+    const result = recovered.result;
     await panel(page, 1);
     await expect(page.locator('#assistant-preview')).toBeVisible();
     await expect(page.locator('#assistant-approve')).not.toBeChecked();
