@@ -54,8 +54,8 @@ class DocumentAsk
      */
     public function ask(User $asker, string $question, ?Site $requestedSite = null): array
     {
-        $asker = $asker->fresh(['employee']) ?? $asker;
-        if (! $asker->exists || $asker->account_status !== 'active') {
+        $asker = $asker->fresh(['employee']);
+        if (! $asker || $asker->account_status !== 'active') {
             return ['success' => false, 'error' => '활성 계정만 질문할 수 있습니다.'];
         }
         $question = trim(preg_replace('/\s+/u', ' ', $question) ?? $question);
@@ -143,6 +143,11 @@ class DocumentAsk
      */
     public function recent(User $asker, int $limit = self::RECENT): array
     {
+        $asker = $asker->fresh(['employee']);
+        if (! $asker || $asker->account_status !== 'active') {
+            return [];
+        }
+
         return DocumentQuestion::query()
             ->with('site')
             ->where('user_id', $asker->id)
@@ -192,16 +197,16 @@ class DocumentAsk
 
     private function recordsReadable(User $actor, array $sources): bool
     {
+        $current = $actor->fresh(['employee']);
+        if (! $current || $current->account_status !== 'active') {
+            return false;
+        }
         foreach ($sources as $source) {
             if (! in_array($source['dataset'] ?? null, ['material_receipts', 'payslips', 'pay_applications'], true)
-                || (in_array($source['dataset'], ['payslips', 'pay_applications'], true) && ! AccessPolicy::canManageMoney($actor))) {
+                || (in_array($source['dataset'], ['payslips', 'pay_applications'], true) && ! AccessPolicy::canManageMoney($current))) {
                 return false;
             }
             try {
-                $current = $actor->fresh(['employee']);
-                if (! $current) {
-                    return false;
-                }
                 $context = new ErpReadContext($current, (int) $source['company_id'], (int) $source['site_id']);
                 $query = app(ErpReadQuery::class)->query($source['dataset'], $context);
                 $ids = $source['ids'] ?? [];
@@ -225,7 +230,7 @@ class DocumentAsk
         if ($sources === []) {
             return $answer;
         }
-        $notice = '조회된 ERP 기록 최대 12건의 표본 기준이며 전체 합계가 아닙니다. 기록 ID 순으로 조회합니다.';
+        $notice = '자료 종류별로 조회된 ERP 기록 최대 12건의 표본 기준이며 전체 합계가 아닙니다. 기록 ID 순으로 조회합니다.';
         if (in_array('material_receipts', array_column($sources, 'dataset'), true)) {
             $notice .= ' 입고 대장은 재고 잔량이 아닙니다.';
         }

@@ -369,4 +369,60 @@ class AssistantGroundedAskTest extends TestCase
         $this->assertDatabaseCount('document_questions', 1);
         Http::assertSentCount(1);
     }
+
+    #[DataProvider('datasets')]
+    public function test_stale_actor_cannot_reuse_history_after_role_change(string $dataset, string $question, string $label, string $field, string $role): void
+    {
+        $this->record($dataset, $this->site, 'ASK_STALE_ROLE');
+        $actor = $this->actor($role);
+        $this->fakeProvider($label, $field);
+        $this->actingAsPurchaseUser($actor)->postJson(route('ask.question'), [
+            'question' => $question, 'site_id' => $this->site->id,
+        ])->assertOk()->assertJson(['success' => true]);
+        $this->assertCount(1, app(DocumentAsk::class)->recent($actor));
+
+        User::whereKey($actor->id)->update(['access_role' => $role === 'payroll' ? 'site_manager' : 'worker']);
+
+        $this->assertSame($role, $actor->access_role, 'The service receives the old in-memory actor.');
+        $this->assertSame([], app(DocumentAsk::class)->recent($actor));
+        Http::assertSentCount(1);
+    }
+
+    public function test_deleted_actor_cannot_read_history_or_request_a_provider_call(): void
+    {
+        $this->record('pay_applications', $this->site, 'ASK_DELETED_ACTOR');
+        $actor = $this->actor('payroll');
+        $this->fakeProvider('기성 청구', 'internal_reference');
+        $this->actingAsPurchaseUser($actor)->postJson(route('ask.question'), [
+            'question' => '기성 청구 내역 알려줘', 'site_id' => $this->site->id,
+        ])->assertOk()->assertJson(['success' => true]);
+        User::whereKey($actor->id)->delete();
+
+        $this->assertSame([], app(DocumentAsk::class)->recent($actor));
+        $this->assertFalse(app(DocumentAsk::class)->ask($actor, '기성 청구 내역 알려줘', $this->site)['success']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_mixed_topics_disclose_the_sample_limit_per_dataset(): void
+    {
+        foreach (self::datasets() as [$dataset]) {
+            for ($i = 1; $i <= 13; $i++) {
+                $this->record($dataset, $this->site, 'ASK_MIXED_'.$dataset.'_'.$i);
+            }
+        }
+        $this->fakeProvider('기성 청구', 'internal_reference');
+        $response = $this->actingAsPurchaseUser($this->actor())->postJson(route('ask.question'), [
+            'question' => '재고 입고, 급여, 기성 청구 알려줘', 'site_id' => $this->site->id,
+        ])->assertOk()->assertJson(['success' => true]);
+
+        $facts = $this->factsFromPayload($this->providerPayloads[0]);
+        foreach (self::datasets() as [$dataset, $question, $label]) {
+            $this->assertCount(12, $facts[$label]['목록']);
+            $this->assertTrue($facts[$label]['일부 자료만 조회']);
+        }
+        $this->assertStringContainsString('자료 종류별로 조회된 ERP 기록 최대 12건', $response->json('answer'));
+        $this->assertStringContainsString('재고 잔량이 아닙니다', $response->json('answer'));
+        $this->assertCount(3, DocumentQuestion::query()->sole()->source_erp_records);
+        Http::assertSentCount(1);
+    }
 }
