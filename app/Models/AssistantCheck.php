@@ -12,6 +12,6 @@ class AssistantCheck extends Model
 
     protected function casts(): array
     {
-        return ['enabled' => 'boolean', 'approved_at' => 'datetime', 'next_run_at' => 'datetime', 'last_run_at' => 'datetime', 'last_result' => 'array'];
+        return ['enabled' => 'boolean', 'interval_hours' => 'integer', 'approved_at' => 'datetime', 'next_run_at' => 'datetime', 'last_run_at' => 'datetime', 'last_result' => 'array'];
     }
 }

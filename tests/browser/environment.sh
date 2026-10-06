@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # Source only in a disposable local checkout. No deployment/provider environment is inherited.
 export APP_ENV=testing APP_DEBUG=false APP_URL=http://127.0.0.1:8765
-export APP_KEY='base64:c3ludGhldGljLWJyb3dzZXItdGVzdC1rZXktMzJieXQ='
+# Keep the per-run key in inherited process memory, never in logs or a file.
+# A caller may have tracing enabled; do not restore it while key material exists.
+set +x
+if ! APP_KEY="$(php -r 'echo "base64:".base64_encode(random_bytes(32));')"; then
+    return 1 2>/dev/null || exit 1
+fi
+export APP_KEY
 export ERP_BROWSER_SYNTHETIC=1 ERP_BROWSER_BASE_URL=http://127.0.0.1:8765
 export DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432
 export DB_DATABASE=erp_assistant_browser_test DB_USERNAME=postgres DB_PASSWORD=postgres DB_URL=''
