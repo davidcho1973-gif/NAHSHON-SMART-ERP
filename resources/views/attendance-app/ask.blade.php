@@ -83,6 +83,12 @@
         </header>
 
         <main class="field-content">
+            @if (\App\Support\DotsAccess::canOpen(request()))
+                <div class="askbox" style="margin-bottom:14px">
+                    <a class="upload" href="{{ route('attendance-app.dots') }}" target="_blank" rel="noopener noreferrer">{{ __('내 Dots 열기') }} ↗</a>
+                    <p class="hint">{{ __('ChatGPT에서 열립니다. ERP 자료는 자동으로 전달되지 않습니다.') }}</p>
+                </div>
+            @endif
             @if (! $available)
                 <div class="off">{{ __('AI 도우미가 이 서버에 켜져 있지 않습니다. 관리자에게 알려 주세요.') }}</div>
             @else
