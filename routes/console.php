@@ -150,3 +150,7 @@ Schedule::command('erp:harvest-knowledge')->hourly();
 // Durable purchase analysis and notifications survive closing the personal app.
 Schedule::command('queue:work document-analysis --queue=purchase-notifications,purchases --stop-when-empty --max-time=50 --tries=1 --timeout=600')
     ->everyMinute()->withoutOverlapping(15)->runInBackground();
+
+// Deployment alone never activates checks; the server gate and each owner's approval are both required.
+Schedule::command('assistant:check')->everyFifteenMinutes()->withoutOverlapping()
+    ->when(fn (): bool => (bool) config('ai_assistant.checks_enabled', false));

@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
 
 #[Fillable([
     'employee_id',
@@ -30,10 +32,16 @@ use Illuminate\Support\Collection;
     'access_notes',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
+
+    /** MCP is bearer-only and deliberately does not install a Passport cookie guard. */
+    public function getProviderName(): string
+    {
+        return 'users';
+    }
 
     /**
      * Memoised per request. Named apart from accessibleCompanies() so Eloquent

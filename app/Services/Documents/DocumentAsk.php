@@ -8,9 +8,11 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Communication\ChatFactFinder;
 use App\Support\AccessPolicy;
+use App\Support\AiAssistantBudget;
 use App\Support\AiInformationAccess;
 use App\Support\AnthropicChat;
 use App\Support\Org;
+use DomainException;
 use Throwable;
 
 /**
@@ -36,19 +38,21 @@ class DocumentAsk
     public function __construct(
         private readonly AnthropicChat $claude,
         private readonly ChatFactFinder $facts,
+        private readonly AiAssistantBudget $budget,
     ) {}
 
     public function available(): bool
     {
-        return $this->claude->available();
+        return $this->budget->enabled() && $this->claude->available();
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function ask(User $asker, string $question): array
+    public function ask(User $asker, string $question, ?Site $requestedSite = null): array
     {
-        if ($asker->account_status !== 'active') {
+        $asker = $asker->fresh(['employee']) ?? $asker;
+        if (! $asker->exists || $asker->account_status !== 'active') {
             return ['success' => false, 'error' => '활성 계정만 질문할 수 있습니다.'];
         }
         $question = trim(preg_replace('/\s+/u', ' ', $question) ?? $question);
@@ -62,11 +66,14 @@ class DocumentAsk
             return ['success' => false, 'error' => 'AI 도우미가 이 서버에 켜져 있지 않습니다. 관리자에게 알려 주세요.'];
         }
 
-        $site = $this->facts->siteOf($asker);
+        $site = $requestedSite?->fresh() ?? $this->facts->siteOf($asker);
+        if ($requestedSite && (! $site || $site->id !== $requestedSite->id || ! AiInformationAccess::canUseSite($asker, $site))) {
+            return ['success' => false, 'error' => '이 현장 자료를 조회할 권한이 없습니다.'];
+        }
         $accessContext = AiInformationAccess::context($asker);
 
         try {
-            $gathered = $this->facts->gatherFor($question, $site, $asker);
+            $gathered = $this->facts->gatherFor($question, $site, $asker, localOnly: true);
             $reply = $gathered['facts'] === [] && $gathered['denied'] !== []
                 ? ['answer' => implode("\n", $gathered['denied']), 'found' => false, 'sources' => []]
                 : $this->compose($question, $site, $asker, $gathered);
@@ -74,6 +81,8 @@ class DocumentAsk
                 $reply = ['answer' => AiInformationAccess::DENIED, 'found' => false, 'sources' => []];
                 $gathered['denied'] = array_values(array_unique([...$gathered['denied'], AiInformationAccess::DENIED]));
             }
+        } catch (DomainException $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
         } catch (Throwable $e) {
             report($e);
 
@@ -81,14 +90,16 @@ class DocumentAsk
         }
 
         $currentUser = $asker->fresh(['employee']);
-        if (! $currentUser || AiInformationAccess::context($currentUser) !== $accessContext) {
+        $currentSite = $site?->fresh();
+        if (! $currentUser || AiInformationAccess::context($currentUser) !== $accessContext
+            || ($site && (! $currentSite || ! AiInformationAccess::canUseSite($currentUser, $currentSite)))) {
             return ['success' => false, 'error' => '계정 권한 또는 현장 배정이 변경되었습니다. 새로고침한 뒤 다시 질문해 주세요.'];
         }
         $provenance = $this->documentIdsIn($gathered['facts']);
         if ($provenance !== [] && AiInformationAccess::documents($currentUser, $site)->whereIn('id', $provenance)->count() !== count($provenance)) {
             return ['success' => false, 'error' => '근거 자료의 열람 범위가 변경되었습니다. 다시 질문해 주세요.'];
         }
-        $sources = $this->sources($reply['sources'], $gathered['facts'], $currentUser);
+        $sources = $this->sources($reply['sources'], $gathered['facts'], $currentUser, $site);
 
         $row = DocumentQuestion::create([
             'user_id' => $asker->id,
@@ -124,15 +135,19 @@ class DocumentAsk
     public function recent(User $asker, int $limit = self::RECENT): array
     {
         return DocumentQuestion::query()
+            ->with('site')
             ->where('user_id', $asker->id)
             ->where('access_context', AiInformationAccess::context($asker))
             ->latest('id')
             ->limit($limit)
             ->get()
             ->filter(function (DocumentQuestion $q) use ($asker): bool {
+                if ($q->site_id && (! $q->site || ! AiInformationAccess::canUseSite($asker, $q->site))) {
+                    return false;
+                }
                 $ids = $q->source_document_ids ?? array_column($q->sources ?: [], 'document_id');
 
-                return ($ids === [] || AiInformationAccess::documents($asker, $this->facts->siteOf($asker))->whereIn('id', $ids)->count() === count(array_unique($ids)))
+                return ($ids === [] || AiInformationAccess::documents($asker, $q->site ?? $this->facts->siteOf($asker))->whereIn('id', $ids)->count() === count(array_unique($ids)))
                     && (AccessPolicy::canManageMoney($asker) || ! AiInformationAccess::financial($q->answer));
             })
             ->map(fn (DocumentQuestion $q): array => [
@@ -140,7 +155,7 @@ class DocumentAsk
                 'question' => $q->question,
                 'answer' => $q->answer,
                 'found' => $q->found,
-                'sources' => $this->sources(array_column($q->sources ?: [], 'document_id'), array_map(fn ($s) => ['문서ID' => $s['document_id']], $q->sources ?: []), $asker),
+                'sources' => $this->sources(array_column($q->sources ?: [], 'document_id'), array_map(fn ($s) => ['문서ID' => $s['document_id']], $q->sources ?: []), $asker, $q->site),
                 'askedAt' => $q->created_at?->format('m-d H:i'),
             ])
             ->values()->all();
@@ -172,17 +187,12 @@ class DocumentAsk
             ]],
         ];
 
-        $json = $this->claude->json($payload);
+        $json = $this->budget->run($asker, $site?->company_id, 'document_ask', $payload,
+            fn (array $bounded): ?array => $this->claude->json($bounded));
 
         if (! is_array($json) || ! is_string($json['answer'] ?? null) || trim($json['answer']) === '') {
-            // 형식이 깨졌으면 글자라도 건진다 — 답이 있는데 버리는 것이 더 나쁘다.
-            $text = trim($this->claude->textOf($this->claude->raw($payload)));
-            $decoded = json_decode($text, true);
-            if (is_array($decoded) && is_string($decoded['answer'] ?? null)) {
-                $json = $decoded;
-            } else {
-                return ['answer' => $text !== '' ? $text : '답을 만들지 못했습니다.', 'found' => false, 'sources' => []];
-            }
+            // Invalid output must not trigger a second paid provider call.
+            return ['answer' => '답을 만들지 못했습니다. 질문을 조금 바꿔 다시 물어봐 주세요.', 'found' => false, 'sources' => []];
         }
 
         return [
@@ -245,7 +255,7 @@ class DocumentAsk
      * @param  array<string, mixed>  $facts
      * @return array<int, array<string, mixed>>
      */
-    private function sources(array $claimed, array $facts, User $asker): array
+    private function sources(array $claimed, array $facts, User $asker, ?Site $site = null): array
     {
         $known = $this->documentIdsIn($facts);
         $ids = array_values(array_unique(array_filter($claimed, fn (int $id): bool => in_array($id, $known, true))));
@@ -254,7 +264,7 @@ class DocumentAsk
             return [];
         }
 
-        $docs = AiInformationAccess::documents($asker, $this->facts->siteOf($asker))->whereIn('id', $ids)->get()->keyBy('id');
+        $docs = AiInformationAccess::documents($asker, $site ?? $this->facts->siteOf($asker))->whereIn('id', $ids)->get()->keyBy('id');
         $openable = IntelligentDocument::query()->visibleTo($asker)->whereIn('id', $ids)->pluck('id')->all();
 
         $out = [];

@@ -97,7 +97,7 @@ class ReceiptQuickIntake
             $description .= $sentry->note($suspect);
         }
 
-        $expense = MobileExpense::create([
+        $expense = app(ExpenseRegistrationService::class)->registerPending([
             'company_id' => $employee->company_id,
             'vendor_id' => $vendorId,
             'site_id' => $siteId,

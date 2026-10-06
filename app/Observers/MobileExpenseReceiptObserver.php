@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\MobileExpense;
+use App\Services\Finance\ExpenseRegistrationService;
 use App\Services\IntegratedDocumentService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -21,10 +22,16 @@ class MobileExpenseReceiptObserver
             return;
         }
 
+        // The canonical source is already filed. The registration service verifies its
+        // shared scope and retained receipt bytes before suppressing a duplicate copy.
+        if (app(ExpenseRegistrationService::class)->hasCanonicalReceipt($expense)) {
+            return;
+        }
+
         try {
             app(IntegratedDocumentService::class)->fileReceipt($expense);
         } catch (Throwable $e) {
-            Log::warning('영수증 문서함 편철 실패(지출 등록은 정상): ' . $e->getMessage(), ['expense_id' => $expense->id]);
+            Log::warning('영수증 문서함 편철 실패(지출 등록은 정상): '.$e->getMessage(), ['expense_id' => $expense->id]);
         }
     }
 }

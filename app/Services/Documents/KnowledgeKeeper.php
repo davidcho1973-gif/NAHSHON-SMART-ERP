@@ -120,7 +120,7 @@ class KnowledgeKeeper
      * @param  array<int, string>  $terms
      * @return array<int, array<string, mixed>>
      */
-    public function search(?Site $site, User $asker, array $terms, string $question, int $limit = 8): array
+    public function search(?Site $site, User $asker, array $terms, string $question, int $limit = 8, bool $localOnly = false): array
     {
         if (! self::ready()) {
             return [];
@@ -169,7 +169,7 @@ class KnowledgeKeeper
         }
 
         // 의미 검색 — 남는 자리를 뜻이 가까운 카드로 채운다.
-        if ($picked->count() < $limit) {
+        if (! $localOnly && $picked->count() < $limit) {
             $queryVector = GeminiEmbedder::available() ? GeminiEmbedder::embed($question) : null;
 
             if ($queryVector !== null) {

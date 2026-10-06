@@ -13,7 +13,9 @@ use App\Models\WbsItem;
 use App\Services\Communication\ChatAssistant;
 use App\Services\Communication\ChatFactFinder;
 use App\Services\Communication\CommunicationService;
+use App\Services\Communication\RoomStreamService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -28,10 +30,15 @@ class ChatAssistantTest extends TestCase
     use RefreshDatabase;
 
     private Company $ourCompany;
+
     private Company $partner;
+
     private Site $site;
+
     private CommunicationRoom $room;
+
     private User $manager;
+
     private User $vendorAdmin;
 
     protected function setUp(): void
@@ -87,7 +94,7 @@ class ChatAssistantTest extends TestCase
         return app(CommunicationService::class)->postMessage($user, $this->room, $body);
     }
 
-    private function botReplies(): \Illuminate\Support\Collection
+    private function botReplies(): Collection
     {
         return CommunicationMessage::query()
             ->where('communication_room_id', $this->room->id)
@@ -133,6 +140,9 @@ class ChatAssistantTest extends TestCase
 
     public function test_it_answers_in_the_room_as_a_reply_to_the_question(): void
     {
+        // A partner without site clearance must not receive site facts. The happy
+        // path uses a verified audience; cross-company rooms redirect to private Ask.
+        $this->room->members()->where('employee_id', $this->vendorAdmin->employee_id)->update(['status' => 'left']);
         $this->fakeClaude('공정표 기준 62% 입니다.');
 
         $question = $this->say($this->manager, '@AI 3층 배관 공정 진행률 알려줘');
@@ -143,6 +153,7 @@ class ChatAssistantTest extends TestCase
         $this->assertSame('공정표 기준 62% 입니다.', $replies->first()->body);
         $this->assertSame($question->id, $replies->first()->parent_id);
         $this->assertSame(ChatAssistant::DISPLAY_NAME, $replies->first()->title);
+        Http::assertSentCount(1);
     }
 
     public function test_it_never_answers_the_same_question_twice(): void
@@ -198,7 +209,7 @@ class ChatAssistantTest extends TestCase
         $this->assertSame(ChatAssistant::DISPLAY_NAME, $presence[0]['name']);
         $this->assertTrue($presence[0]['bot']);
 
-        $stream = app(\App\Services\Communication\RoomStreamService::class)->since($this->room, $this->manager, 0);
+        $stream = app(RoomStreamService::class)->since($this->room, $this->manager, 0);
         $this->assertSame(2, $stream['membersCount'], 'AI 는 참여자 목록에는 있지만 "몇 명" 에는 세지 않는다');
     }
 

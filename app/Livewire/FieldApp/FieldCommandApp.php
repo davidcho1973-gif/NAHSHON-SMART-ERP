@@ -16,6 +16,7 @@ use App\Models\Site;
 use App\Models\SiteContractor;
 use App\Services\Equipment\EquipmentAssignmentService;
 use App\Services\FieldApp\DrawingVisionService;
+use App\Services\Ops\DailyFieldReportService;
 use chillerlan\QRCode\QRCode;
 use Illuminate\Support\Str;
 use Livewire\Component;
@@ -232,21 +233,8 @@ class FieldCommandApp extends Component
             }
         }
 
-        // updateOrCreate 의 plain where 는 날짜 칼럼의 저장 형식과 매칭되지 않아 중복
-        // INSERT 를 유발하므로, whereDate 로 직접 조회 후 갱신/생성한다.
-        $report = $this->currentReport();
-        if ($report) {
-            $report->update($attributes);
-        } else {
-            $report = DailyClosingReport::query()->create($attributes + [
-                'site_id' => $this->site_id,
-                'report_date' => $this->work_date,
-                'field_status' => $attributes['field_status'] ?? 'draft',
-                // 현장이 쓴 것만 있고 아직 마감은 안 눌렀다. writing 으로 두면 상황실
-                // 화면이 끝나지 않는 마감으로 읽는다.
-                'status' => DailyClosingReport::OPEN,
-            ]);
-        }
+        $report = app(DailyFieldReportService::class)
+            ->save($this->site_id, $this->work_date, $attributes);
 
         $this->report_status = $report->field_status ?: 'draft';
 
