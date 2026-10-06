@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
-/** Real PostgreSQL processes contend for the final company slot. No external calls. */
+/** Private Ask and field suggestions contend for one shared quota. No external calls. */
 class AiAssistantBudgetConcurrencyTest extends TestCase
 {
     use DatabaseMigrations;
@@ -44,7 +44,7 @@ config(['ai_assistant.enabled' => true, 'ai_assistant.companies' => [],
 $actor = App\Models\User::findOrFail((int) $argv[1]);
 while (microtime(true) < (float) $argv[3]) { usleep(1000); }
 try {
-    app(App\Support\AiAssistantBudget::class)->run($actor, (int) $argv[2], 'document_ask',
+    app(App\Support\AiAssistantBudget::class)->run($actor, (int) $argv[2], $argv[6],
         ['max_tokens' => 16, 'messages' => [['role' => 'user', 'content' => 'synthetic race']]],
         function () { usleep(50000); return 'synthetic answer'; });
     echo 'allowed';
@@ -56,7 +56,7 @@ CODE;
         $processes = [];
         try {
             for ($i = 0; $i < 4; $i++) {
-                $process = new Process([PHP_BINARY, '-r', $script, (string) $actor->id, (string) $company->id, $startAt, (string) $companyLimit, (string) $userLimit], base_path(), $env);
+                $process = new Process([PHP_BINARY, '-r', $script, (string) $actor->id, (string) $company->id, $startAt, (string) $companyLimit, (string) $userLimit, $i % 2 === 0 ? 'document_ask' : 'draft_suggestion'], base_path(), $env);
                 $process->setTimeout(30)->start();
                 $processes[] = $process;
             }

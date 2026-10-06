@@ -86,7 +86,7 @@ final class AiAssistantBudget
      */
     public function run(User $actor, ?int $companyId, string $feature, array $payload, callable $call): mixed
     {
-        if (! in_array($feature, ['document_ask', 'chat_ask'], true)) {
+        if (! in_array($feature, ['document_ask', 'chat_ask', 'draft_suggestion'], true)) {
             throw new DomainException('지원하지 않는 AI 요청입니다.');
         }
         if (! $this->enabled()) {

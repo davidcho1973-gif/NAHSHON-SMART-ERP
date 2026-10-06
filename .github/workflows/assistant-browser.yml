@@ -56,22 +56,16 @@ jobs:
           node "$RUNNER_TEMP/erp-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
           echo "NODE_PATH=$RUNNER_TEMP/erp-browser-tools/node_modules" >> "$GITHUB_ENV"
 
-      - name: Prepare empty synthetic database
+      - name: Prepare synthetic database and run Chromium locally
         shell: bash
         run: |
           set -euo pipefail
-          # A fresh checkout and explicit environment, never production .env or secrets.
+          # Seed and server share one in-memory ephemeral key in this single step.
           test ! -f .env
           source tests/browser/environment.sh
           php tests/browser/fixture.php guard
           php artisan migrate --force
           php tests/browser/fixture.php seed
-
-      - name: Run real Chromium against local Laravel only
-        shell: bash
-        run: |
-          set -euo pipefail
-          source tests/browser/environment.sh
           export GITHUB_SHA="$(git rev-parse HEAD)"
           mkdir -p test-results/assistant-browser
           php artisan serve --host=127.0.0.1 --port=8765 --no-reload > test-results/assistant-browser/SYNTHETIC-server.log 2>&1 &

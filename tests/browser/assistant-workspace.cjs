@@ -1,6 +1,7 @@
 'use strict';
 
-// Real Chromium, actual password login and HTTP endpoints; no synthetic API responses.
+// Real Chromium and actual password/preview/confirmation endpoints. The explicitly labeled
+// suggestion UI fixture alone fakes its AI response; backend suggestions have HTTP-fake feature tests.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -122,16 +123,101 @@ async function propose(page, title) {
 }
 
 async function restore(page, id) {
-    await page.evaluate(({ user, id }) => sessionStorage.setItem('erp-assistant-proposal-' + user, id), { user: fixture.users.owner.id, id });
-    const response = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/proposals/' + id);
-    await page.reload();
-    const result = await response;
-    assert.equal(result.status(), 200);
+    // Reload recovery also consumes the real request limiter. Replay only a confirmed
+    // 429 read after its Retry-After delay; no uncertain request or mutation is retried.
+    const recovered = await withThrottleRetry(async () => {
+        await page.evaluate(({ user, id }) => sessionStorage.setItem('erp-assistant-proposal-' + user, id), { user: fixture.users.owner.id, id });
+        const response = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/proposals/' + id);
+        await page.reload();
+        const result = await response;
+        return { status: result.status(), retryAfter: result.headers()['retry-after'], result };
+    });
+    assert.equal(recovered.status, 200);
+    const result = recovered.result;
     await panel(page, 1);
     await expect(page.locator('#assistant-preview')).toBeVisible();
     await expect(page.locator('#assistant-approve')).not.toBeChecked();
     await expect(page.locator('[data-action=confirm]')).toBeDisabled();
     return (await result.json()).proposal;
+}
+
+// CI deliberately has no provider key. Keep the AI fixture entirely browser-local:
+// status/suggestion payloads are simulated, while preview/confirmation remain real HTTP/DB.
+async function suggestedPreview(page) {
+    const statusUrl = base + '/ask-api/workspace/status*';
+    const suggestionUrl = base + '/ask-api/workspace/suggestions';
+    const baseline = state();
+    let requests = 0, release, entered;
+    const waiting = new Promise(resolve => { entered = resolve; });
+    const delayed = new Promise(resolve => { release = resolve; });
+    const statusHandler = async route => {
+        const actual = await route.fetch();
+        assert.equal(actual.status(), 200);
+        const body = await actual.json();
+        assert.equal(body.suggestions_enabled, false, 'Real synthetic server has no provider key.');
+        await route.fulfill({ response: actual, json: { ...body, suggestions_enabled: true } });
+    };
+    const suggestionHandler = async route => {
+        const request = route.request().postDataJSON();
+        assert.equal(request.operation, 'ops.todo.create');
+        assert.equal(request.company_id, fixture.companies.A);
+        assert.equal(request.site_id, fixture.sites.A);
+        assert.equal(request.record_id, null);
+        assert.equal(request.source_document_id, null);
+        requests++;
+        if (requests === 1) { entered(); await delayed; }
+        const { request_text, ...envelope } = request;
+        assert.equal(typeof request_text, 'string');
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true,
+            suggestion: { ...envelope, fields: { title: 'SYNTHETIC suggested duct inspection', detail: 'Must not overwrite my words' },
+                questions: ['Check the proposed fields.'], missing_fields: [] } }) });
+    };
+    await page.route(statusUrl, statusHandler);
+    await page.route(suggestionUrl, suggestionHandler);
+    try {
+        await openAsk(page);
+        await panel(page, 1);
+        await page.locator('#assistant-operation').selectOption('ops.todo.create');
+        await page.locator('#assistant-title').fill('');
+        await page.locator('#assistant-detail').fill('SYNTHETIC existing manual detail');
+        await page.locator('#assistant-request-text').fill('Inspect the duct layout.');
+        await expect(page.locator('[data-action=suggest]')).toBeEnabled();
+        await page.locator('[data-action=suggest]').evaluate(button => { button.click(); button.click(); });
+        await waiting;
+        assert.equal(requests, 1);
+        await expect(page.locator('[data-action=propose]')).toBeDisabled();
+        await page.locator('#assistant-detail').fill('SYNTHETIC newer manual detail');
+        const first = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/suggestions');
+        release();
+        await first;
+        await expect(page.locator('[data-action=suggest]')).toBeEnabled();
+        await expect(page.locator('#assistant-title')).toHaveValue('');
+        await expect(page.locator('#assistant-detail')).toHaveValue('SYNTHETIC newer manual detail');
+        const second = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/suggestions');
+        await page.locator('[data-action=suggest]').click();
+        assert.equal((await second).status(), 200);
+        await expect(page.locator('#assistant-title')).toHaveValue('SYNTHETIC suggested duct inspection');
+        await expect(page.locator('#assistant-detail')).toHaveValue('SYNTHETIC newer manual detail');
+        await expect(page.locator('#assistant-preview')).toBeHidden();
+        await expect(page.locator('#assistant-approve')).not.toBeChecked();
+        assert.equal(state().proposals.length, baseline.proposals.length, 'AI suggestions cannot create proposals.');
+        assert.equal(state().todos.length, baseline.todos.length, 'AI suggestions cannot create business records.');
+        await page.locator('#assistant-title').fill('SYNTHETIC confirm once');
+        const response = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/proposals');
+        await page.locator('[data-action=propose]').click();
+        const actual = await response;
+        assert.equal(actual.status(), 200);
+        const proposal = (await actual.json()).proposal;
+        assert.equal(proposal.after.title, 'SYNTHETIC confirm once');
+        assert.equal(proposal.after.detail, 'SYNTHETIC newer manual detail');
+        await expect(page.locator('[data-action=confirm]')).toBeDisabled();
+        await expect(page.locator('#assistant-approve')).not.toBeChecked();
+        return proposal;
+    } finally {
+        release();
+        await page.unroute(suggestionUrl, suggestionHandler);
+        await page.unroute(statusUrl, statusHandler);
+    }
 }
 
 (async () => {
@@ -223,8 +309,8 @@ async function restore(page, id) {
         assert.equal((await api(page, '/proposals/' + proposal.id + '/cancel', {})).status, 200);
     });
 
-    await step('preview, explicit checkbox and repeated confirmation apply exactly once', async () => {
-        const proposal = await propose(page, 'SYNTHETIC confirm once');
+    await step('browser-only suggestion fixture requires real preview, explicit checkbox and exactly-once confirmation', async () => {
+        const proposal = await suggestedPreview(page);
         assert.equal(state().todos.length, 1, 'Preview must not create a business record.');
         await expect(page.locator('#assistant-preview-body')).toContainText('SYNTHETIC Company A');
         await expect(page.locator('#assistant-preview-body')).toContainText('SYNTHETIC Site A');
@@ -326,6 +412,24 @@ async function restore(page, id) {
         const stopped = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/checks/' + check.id + '/disable'));
         await stop.click();
         assert.equal((await stopped).status(), 200);
+    });
+
+    await step('daily-report checks are hourly and remain off after saving', async () => {
+        await page.locator('#assistant-check-kind').selectOption('missing_trade_reports');
+        await expect(page.locator('#assistant-check-interval')).toHaveValue('1');
+        await expect(page.locator('#assistant-check-interval option')).toHaveCount(1);
+        const rejected = await api(page, '/checks', {
+            site_id: fixture.sites.A, kind: 'missing_trade_reports', interval_hours: 24
+        });
+        assert.equal(rejected.status, 422, 'The server must reject a non-hourly daily-report check.');
+        const response = page.waitForResponse(r => new URL(r.url()).pathname === '/ask-api/workspace/checks');
+        await page.locator('[data-action=save-check]').click();
+        const check = (await (await response).json()).check;
+        assert.equal(check.enabled, false);
+        assert.equal(check.interval_hours, 1);
+        await expect(page.locator('[data-check-consent="' + check.id + '"]')).not.toBeChecked();
+        await page.locator('#assistant-check-kind').selectOption('pending_expense_approvals');
+        await expect(page.locator('#assistant-check-interval option')).toHaveCount(3);
     });
 
     await step('site-limited password session rejects client-supplied role and foreign scope', async () => {

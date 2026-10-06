@@ -66,9 +66,7 @@ final class AssistantProposalService
     public function create(User $actor, string $operation, int $siteId, array $payload, ?int $recordId = null): array
     {
         $this->assertEnabled();
-        abort_unless(in_array($operation, $this->capabilities(), true), 422, '지원하지 않는 변경 작업입니다.');
-        abort_unless((in_array($operation, [self::CREATE_TODO, self::CREATE_DAILY_REPORT, self::CREATE_EXPENSE], true) && $recordId === null)
-            || (in_array($operation, [self::UPDATE_TODO, self::UPDATE_DAILY_PLAN, self::UPDATE_DOCUMENT_CATEGORY], true) && $recordId !== null && $recordId > 0), 422, '변경 대상이 올바르지 않습니다.');
+        $this->assertTarget($operation, $recordId);
         $payload = $this->validatePayload($operation, $payload);
 
         return DB::transaction(function () use ($actor, $operation, $siteId, $payload, $recordId): array {
@@ -379,16 +377,129 @@ final class AssistantProposalService
         $this->assertTechnicalText((string) $record->title.' '.(string) $record->detail);
     }
 
+    /** One field definition feeds strict proposals and partial, non-executable suggestions. */
+    private function payloadSchema(string $operation): array
+    {
+        $text = static fn (int $max, bool $required = true): array => ['type' => 'string', 'max_length' => $max, 'required' => $required];
+        $date = static fn (bool $required = true): array => ['type' => 'string', 'format' => 'date', 'required' => $required];
+        $enum = static fn (array $values): array => ['type' => 'string', 'enum' => $values, 'required' => true];
+
+        return match ($operation) {
+            self::CREATE_TODO, self::UPDATE_TODO => ['title' => $text(255), 'detail' => $text(4000, false), 'due_on' => $date(false)],
+            self::UPDATE_DAILY_PLAN => ['work_scope' => $text(8000), 'notes' => $text(4000, false)],
+            self::CREATE_DAILY_REPORT => ['report_date' => $date(), 'work_title' => $text(500), 'work_today' => $text(8000), 'work_tomorrow' => $text(8000, false)],
+            self::CREATE_EXPENSE => ['description' => $text(4000), 'amount' => ['type' => 'string', 'format' => 'decimal', 'required' => true],
+                'currency' => $enum([ExpenseRegistrationService::CURRENCY]), 'expense_date' => $date(),
+                'accounting_account' => $enum(FinanceChartOfAccounts::accounts()), 'payment_type' => $enum(['personal', 'corporate']),
+                'source_document_id' => ['type' => 'integer', 'required' => false]],
+            self::UPDATE_DOCUMENT_CATEGORY => ['category' => $enum(self::DOCUMENT_CATEGORIES)],
+            default => abort(422, '지원하지 않는 변경 작업입니다.'),
+        };
+    }
+
+    public function suggestionSchema(string $operation): array
+    {
+        return array_diff_key($this->payloadSchema($operation), array_flip(['currency', 'source_document_id']));
+    }
+
+    private function fieldRules(array $schema, bool $partial = false): array
+    {
+        $rules = [];
+        foreach ($schema as $name => $field) {
+            $rule = [$partial ? 'sometimes' : ($field['required'] ? 'required' : 'nullable')];
+            if (($field['format'] ?? null) === 'decimal') {
+                $rule = [...$rule, 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/D', 'numeric', 'min:0.01', 'max:999999999999.99'];
+            } elseif (($field['format'] ?? null) === 'date') {
+                $rule[] = 'date_format:Y-m-d';
+            } else {
+                $rule[] = $field['type'];
+                if ($field['type'] === 'integer') {
+                    $rule[] = 'min:1';
+                }
+            }
+            if (isset($field['max_length'])) {
+                $rule[] = 'max:'.$field['max_length'];
+            }
+            if (isset($field['enum'])) {
+                $rule[] = Rule::in($field['enum']);
+            }
+            $rules[$name] = $rule;
+        }
+
+        return $rules;
+    }
+
+    /** Validate only a partial patch; null/unknown values never clear an existing form. */
+    public function validateSuggestionFields(string $operation, array $fields): array
+    {
+        $schema = $this->suggestionSchema($operation);
+        $this->onlyFields($fields, array_keys($schema));
+        foreach ($fields as $name => $value) {
+            abort_unless($value === null || is_string($value), 422, 'AI 초안의 필드 형식을 확인할 수 없습니다.');
+            if ($value === null || trim($value) === '') {
+                unset($fields[$name]);
+            } else {
+                $fields[$name] = trim($value);
+            }
+        }
+        $fields = Validator::make($fields, $this->fieldRules($schema, true))->validate();
+        if ($operation !== self::CREATE_EXPENSE) {
+            $this->assertTechnicalText(implode(' ', $fields));
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Read-only authorization: no proposal/business write and no locks across provider I/O.
+     * Reused both before and after generation; the caller compares the exact fingerprint.
+     */
+    public function suggestionContext(User $actor, string $operation, int $companyId, int $siteId, ?int $recordId, ?int $sourceId, string $requestText, array $fields = []): array
+    {
+        $this->assertEnabled();
+        $this->assertTarget($operation, $recordId);
+        abort_unless($sourceId === null || $operation === self::CREATE_EXPENSE, 422);
+        if ($operation !== self::CREATE_EXPENSE) {
+            $this->assertTechnicalText($requestText);
+        }
+
+        return DB::transaction(function () use ($actor, $operation, $companyId, $siteId, $recordId, $sourceId, $fields): array {
+            [$actor, $site] = $this->scope($actor, $siteId, $companyId);
+            $this->authorizeOperation($actor, $site, $operation, $fields);
+            $record = $recordId === null ? null : $this->record($operation, $recordId, $siteId, $actor);
+            $source = null;
+            if ($sourceId !== null) {
+                [$receipt] = $this->receiptSource($actor, $site, $sourceId);
+                abort_if(MobileExpense::query()->where('source_ref', 'document:'.$sourceId)->exists(), 422, '이미 경비로 등록된 영수증입니다.');
+                $source = $this->receiptSourceSnapshot($receipt);
+            }
+            if ($operation === self::CREATE_DAILY_REPORT && isset($fields['report_date'])) {
+                $day = $this->dailyReport($siteId, $fields['report_date']);
+                if ($day) {
+                    $this->assertEditable($day, $operation, $actor);
+                }
+            }
+
+            return ['actor' => $actor, 'fingerprint' => $this->digest([
+                'actor' => AiInformationAccess::context($actor), 'company_id' => $site->company_id, 'site_id' => $site->id,
+                'record' => $record ? $this->recordVersion($record) : null, 'source' => $source,
+            ])];
+        });
+    }
+
+    private function assertTarget(string $operation, ?int $recordId): void
+    {
+        abort_unless(in_array($operation, $this->capabilities(), true), 422, '지원하지 않는 변경 작업입니다.');
+        abort_unless((in_array($operation, [self::CREATE_TODO, self::CREATE_DAILY_REPORT, self::CREATE_EXPENSE], true) && $recordId === null)
+            || (in_array($operation, [self::UPDATE_TODO, self::UPDATE_DAILY_PLAN, self::UPDATE_DOCUMENT_CATEGORY], true) && $recordId !== null && $recordId > 0), 422, '변경 대상이 올바르지 않습니다.');
+    }
+
     private function validatePayload(string $operation, array $payload): array
     {
+        $schema = $this->payloadSchema($operation);
+        $this->onlyFields($payload, array_keys($schema));
+        $data = Validator::make($payload, $this->fieldRules($schema))->validate();
         if ($operation === self::CREATE_DAILY_REPORT) {
-            $this->onlyFields($payload, ['report_date', 'work_title', 'work_today', 'work_tomorrow']);
-            $data = Validator::make($payload, [
-                'report_date' => ['required', 'date_format:Y-m-d'],
-                'work_title' => ['required', 'string', 'max:500'],
-                'work_today' => ['required', 'string', 'max:8000'],
-                'work_tomorrow' => ['nullable', 'string', 'max:8000'],
-            ])->validate();
             $data = ['report_date' => $data['report_date'], 'work_title' => trim($data['work_title']),
                 'work_today' => trim($data['work_today']), 'work_tomorrow' => trim((string) ($data['work_tomorrow'] ?? '')) ?: null];
             abort_unless($data['work_title'] !== '' && $data['work_today'] !== '', 422);
@@ -397,21 +508,9 @@ final class AssistantProposalService
             return $data;
         }
         if ($operation === self::UPDATE_DOCUMENT_CATEGORY) {
-            $this->onlyFields($payload, ['category']);
-
-            return Validator::make($payload, ['category' => ['required', Rule::in(self::DOCUMENT_CATEGORIES)]])->validate();
+            return $data;
         }
         if ($operation === self::CREATE_EXPENSE) {
-            $this->onlyFields($payload, ['description', 'amount', 'currency', 'expense_date', 'accounting_account', 'payment_type', 'source_document_id']);
-            $data = Validator::make($payload, [
-                'description' => ['required', 'string', 'max:4000'],
-                'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/D', 'numeric', 'min:0.01', 'max:999999999999.99'],
-                'currency' => ['required', Rule::in([ExpenseRegistrationService::CURRENCY])],
-                'expense_date' => ['required', 'date_format:Y-m-d'],
-                'accounting_account' => ['required', Rule::in(FinanceChartOfAccounts::accounts())],
-                'payment_type' => ['required', Rule::in(['personal', 'corporate'])],
-                'source_document_id' => ['nullable', 'integer', 'min:1'],
-            ])->validate();
             $data['description'] = trim($data['description']);
             abort_unless($data['description'] !== '', 422);
             // Decimal strings retain every approved cent, without float rounding.
@@ -422,13 +521,6 @@ final class AssistantProposalService
             return $data;
         }
         if ($operation === self::UPDATE_DAILY_PLAN) {
-            if (array_diff(array_keys($payload), ['work_scope', 'notes'])) {
-                throw ValidationException::withMessages(['payload' => '작업계획 초안의 작업 내용과 비고만 변경할 수 있습니다.']);
-            }
-            $data = Validator::make($payload, [
-                'work_scope' => ['required', 'string', 'max:8000'],
-                'notes' => ['nullable', 'string', 'max:4000'],
-            ])->validate();
             $data = ['work_scope' => trim($data['work_scope']), 'notes' => trim((string) ($data['notes'] ?? ''))];
             if ($data['work_scope'] === '') {
                 throw ValidationException::withMessages(['work_scope' => '작업 내용을 입력하세요.']);
@@ -437,20 +529,7 @@ final class AssistantProposalService
 
             return $data;
         }
-
-        if (array_diff(array_keys($payload), ['title', 'detail', 'due_on'])) {
-            throw ValidationException::withMessages(['payload' => '제목, 상세 내용, 기한만 변경할 수 있습니다.']);
-        }
-        $data = Validator::make($payload, [
-            'title' => ['required', 'string', 'max:255'],
-            'detail' => ['nullable', 'string', 'max:4000'],
-            'due_on' => ['nullable', 'date_format:Y-m-d'],
-        ])->validate();
-        $data = [
-            'title' => trim($data['title']),
-            'detail' => trim((string) ($data['detail'] ?? '')) ?: null,
-            'due_on' => $data['due_on'] ?? null,
-        ];
+        $data = ['title' => trim($data['title']), 'detail' => trim((string) ($data['detail'] ?? '')) ?: null, 'due_on' => $data['due_on'] ?? null];
         if ($data['title'] === '') {
             throw ValidationException::withMessages(['title' => '할 일을 입력하세요.']);
         }

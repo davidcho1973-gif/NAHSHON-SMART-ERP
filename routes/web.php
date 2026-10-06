@@ -432,6 +432,7 @@ Route::middleware('auth')->group(function (): void {
             Route::get('/status', 'status')->name('assistant.status');
             Route::post('/report', 'report')->name('assistant.report');
             Route::get('/export', 'export')->middleware('throttle:5,1')->name('assistant.export');
+            Route::post('/suggestions', 'suggest')->name('assistant.suggest');
             Route::post('/proposals', 'propose')->name('assistant.propose');
             Route::get('/proposals/{proposal}', 'preview')->whereUuid('proposal');
             Route::post('/proposals/{proposal}/confirm', 'confirm')->whereUuid('proposal');

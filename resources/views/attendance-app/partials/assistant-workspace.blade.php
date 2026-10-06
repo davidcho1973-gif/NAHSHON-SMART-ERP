@@ -29,13 +29,19 @@
         <div id="assistant-report"></div>
         <button type="button" data-action="next" hidden>{{ __('다음 100건') }}</button>
     </details>
-    <details>
+    <details id="assistant-change-panel">
         <summary>{{ __('변경 미리보기') }}</summary>
         <p class="hint">{{ __('지원 작업: 할 일, 일일 계획·보고 초안, 검토 대기 경비, 기술 문서 분류. 지급·급여 승인·계정 권한 변경은 지원하지 않습니다.') }}</p>
         <p id="assistant-mutations-off" class="hint warn" hidden>{{ __('변경 기능은 서버에서 아직 활성화되지 않았습니다.') }}</p>
         <fieldset id="assistant-write-fields" disabled class="assistant-fields">
             <label>{{ __('작업') }}<select id="assistant-operation"><option value="ops.todo.create">{{ __('할 일 등록') }}</option><option value="ops.todo.update">{{ __('할 일 수정') }}</option><option value="daily_plan.draft.update">{{ __('일일 계획 초안 수정') }}</option><option value="daily_report.draft.create">{{ __('일일 보고 초안 등록') }}</option><option value="expense.pending.create">{{ __('검토 대기 경비 등록') }}</option><option value="document.category.update">{{ __('기술 문서 분류 수정') }}</option></select></label>
             <label data-operations="ops.todo.update daily_plan.draft.update document.category.update">{{ __('수정할 기록 ID') }}<input id="assistant-record" type="number" min="1"></label>
+            <label>{{ __('입력 내용 제안 요청') }}<textarea id="assistant-request-text" maxlength="2000" rows="3" aria-describedby="assistant-suggestion-help"></textarea></label>
+            <p id="assistant-suggestion-help" class="hint">{{ __('직접 쓴 요청만 AI에 보냅니다. 영수증·문서를 읽거나 OCR하지 않습니다. USD 총액과 YYYY-MM-DD 날짜를 명시하세요. 제안은 빈 항목만 채우며 저장에는 별도 미리보기와 승인이 필요합니다.') }}</p>
+            <p id="assistant-suggestions-off" class="hint">{{ __('AI 제안을 사용할 수 없습니다. 아래 항목을 직접 입력할 수 있습니다.') }}</p>
+            <button type="button" data-action="suggest" disabled>{{ __('입력 내용 제안') }}</button>
+            <div id="assistant-suggestion-result" class="hint" role="status" aria-live="polite"></div>
+            <p class="hint warn" data-operations="ops.todo.update daily_plan.draft.update">{{ __('수정 작업은 입력 내용으로 기존 값을 교체합니다. 빈 항목이 유지된다고 가정하지 말고 미리보기에서 지워지는 값도 확인하세요.') }}</p>
             <label data-operations="ops.todo.create ops.todo.update daily_plan.draft.update daily_report.draft.create">{{ __('제목 / 계획 작업 내용') }}<textarea id="assistant-title" maxlength="8000" rows="2"></textarea></label>
             <label data-operations="ops.todo.create ops.todo.update daily_plan.draft.update">{{ __('내용') }}<textarea id="assistant-detail" maxlength="4000" rows="2"></textarea></label>
             <label data-operations="ops.todo.create ops.todo.update">{{ __('기한') }}<input id="assistant-due" type="date"></label>
@@ -64,10 +70,11 @@
         <summary>{{ __('정기 확인') }}</summary>
         <p class="hint">{{ __('저장 시 꺼짐 상태입니다. 서버 활성화와 시작 승인이 있어야 실행됩니다. 결과는 여기서만 확인하며 이메일·푸시는 발송하지 않습니다.') }}</p>
         <div class="assistant-fields">
-            <label>{{ __('확인 항목') }}<select id="assistant-check-kind"><option value="overdue_wbs">{{ __('지연 공정') }}</option><option value="overdue_procurement">{{ __('조달 납기 경과') }}</option><option value="expiring_documents">{{ __('30일 내 문서 만료') }}</option></select></label>
+            <label>{{ __('확인 항목') }}<select id="assistant-check-kind">@foreach (\App\Services\Assistant\AssistantCheckService::KINDS as $kind => $label)<option value="{{ $kind }}" data-description="{{ __(\App\Services\Assistant\AssistantCheckService::DESCRIPTIONS[$kind] ?? '') }}">{{ __($label) }}</option>@endforeach</select></label>
             <label>{{ __('간격') }}<select id="assistant-check-interval"><option value="24">24h</option><option value="6">6h</option><option value="1">1h</option></select></label>
             <button type="button" data-action="save-check">{{ __('꺼짐 상태로 저장') }}</button>
         </div>
+        <p id="assistant-check-meaning" class="hint"></p>
         <div id="assistant-checks"></div>
     </details>
 </section>

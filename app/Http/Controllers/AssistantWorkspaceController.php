@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\IntelligentDocument;
 use App\Models\User;
 use App\Services\Assistant\AssistantCheckService;
+use App\Services\Assistant\AssistantDraftSuggestionService;
 use App\Services\Assistant\AssistantProposalService;
 use App\Services\Assistant\AssistantReportService;
 use App\Services\Auth\EmailPasswordAuthService;
@@ -41,10 +42,13 @@ class AssistantWorkspaceController extends Controller
         return $this->json($reports->options($actor) + [
             'budget' => app(AiAssistantBudget::class)->status($actor, isset($data['company_id']) ? (int) $data['company_id'] : null),
             'mutations_enabled' => (bool) config('ai_assistant.mutations_enabled', false),
+            'suggestions_enabled' => app(AssistantDraftSuggestionService::class)->available(),
             'checks_enabled' => (bool) config('ai_assistant.checks_enabled', false),
             'expense_accounts' => FinanceChartOfAccounts::accounts(),
             'document_categories' => array_intersect_key(IntelligentDocument::CATEGORY_OPTIONS, array_flip(AssistantProposalService::DOCUMENT_CATEGORIES)),
             'check_kinds' => AssistantCheckService::KINDS, 'checks' => $checks->list($actor),
+            'check_descriptions' => AssistantCheckService::DESCRIPTIONS,
+            'check_intervals' => collect(AssistantCheckService::KINDS)->map(fn ($label, $kind) => AssistantCheckService::intervals($kind))->all(),
         ]);
     }
 
@@ -56,6 +60,11 @@ class AssistantWorkspaceController extends Controller
     public function export(Request $request, AssistantReportService $reports): StreamedResponse
     {
         return $reports->download($this->actor($request), $request->all());
+    }
+
+    public function suggest(Request $request, AssistantDraftSuggestionService $suggestions): JsonResponse
+    {
+        return $this->json(['suggestion' => $suggestions->suggest($this->actor($request), $request->all())]);
     }
 
     public function propose(Request $request, AssistantProposalService $proposals): JsonResponse
