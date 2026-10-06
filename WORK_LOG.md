@@ -2,6 +2,10 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-05 Canonical invitation origin for LIMAN
+
+User requested deployment to NAHSHON, DASOL and LIMAN. Initial release PR115/116 and main52cf16d passed 2,588 PHP tests /10,623 assertions and68 JS tests; all three public URLs show the new build, no pending migrations and working invitation assets/routes. LIMAN is the DASOL environment alias, not a separate database. Read-only verification found host-only session cookies on LIMAN while Google callbacks target DASOL's canonical host. Invitations now generate links/QR on APP_URL and valid alias entry links redirect there before phone verification, keeping enrollment and OAuth state on the same origin. Added an alias enrollment regression. No production invitation, employee, attendance or payroll records were created.
+
 ## CODEX — 2026-10-05 Multi-page document photos
 
 Root cause: document intake treated each image as a separate file/document, and mobile camera capture had no accumulated page workflow. Mobile and document-hub uploads now keep an ordered removable selection with repeat camera capture, combine photo-only selections into one multi-page PDF by default, and allow independent registration by clearing the checkbox. Existing PDF preview and AI analyze all pages in one document. Mixed files remain independent. Failed mobile uploads retain pages for retry.
