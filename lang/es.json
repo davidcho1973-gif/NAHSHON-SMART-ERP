@@ -518,5 +518,7 @@
   "새 요청": "Nueva solicitud",
   "제품 이름과 규격을 몰라도 괜찮아요.": "No es necesario conocer el nombre ni las especificaciones.",
   "선택한 자료만 발송합니다. 합계 15MB까지 가능합니다.": "Solo se envían los archivos seleccionados. Tamaño total máximo: 15MB.",
-  "확인 후 발송": "Revisar y enviar"
+  "확인 후 발송": "Revisar y enviar",
+    "내 Dots 열기": "Abrir mis Dots",
+    "ChatGPT에서 열립니다. ERP 자료는 자동으로 전달되지 않습니다.": "Se abre en ChatGPT. Los datos del ERP no se envían automáticamente."
 }
