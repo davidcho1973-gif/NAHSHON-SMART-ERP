@@ -89,7 +89,7 @@
         el('checks').replaceChildren();
         (rows || []).forEach(function (check) {
             var row = node('div'); row.className = 'row';
-            row.appendChild(node('strong', check.site_name + ' · ' + check.label));
+            row.appendChild(node('strong', check.site_name + ' · ' + tr(check.label)));
             row.appendChild(node('p', (check.enabled ? tr('실행 중') : tr('꺼짐')) + ' · ' + check.interval_hours + 'h'));
             if (check.last_run_at) row.appendChild(node('p', tr('마지막 실행') + ': ' + check.last_run_at));
             if (check.next_run_at) row.appendChild(node('p', tr('다음 실행') + ': ' + check.next_run_at));
@@ -229,7 +229,7 @@
         host.querySelectorAll('[data-operations]').forEach(function (field) { field.hidden = field.dataset.operations.split(' ').indexOf(el('operation').value) < 0; });
     }
     select('company', options.companies || [], 'id', 'name', options.default_company_id);
-    select('dataset', options.datasets || [], 'key', 'label'); sites(); exportLink();
+    select('dataset', (options.datasets || []).map(function (d) { return {key:d.key,label:tr(d.label)}; }), 'key', 'label'); sites(); exportLink();
     el('company').addEventListener('change', function () { sites(); scopeChanged(); });
     el('site').addEventListener('change', scopeChanged);
     ['dataset', 'search'].forEach(function (id) { el(id).addEventListener('input', function () { guard.change(); cursor = null; el('report').replaceChildren(); host.querySelector('[data-action=next]').hidden = true; exportLink(); }); });

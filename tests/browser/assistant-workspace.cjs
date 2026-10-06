@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { chromium, expect } = require('@playwright/test');
+const { withThrottleRetry } = require('./throttle-retry.cjs');
 assert.equal(require('@playwright/test/package.json').version, '1.57.0', 'Use the pinned test tool version.');
 
 const base = process.env.ERP_BROWSER_BASE_URL;
@@ -46,15 +47,18 @@ async function context(viewport) {
 }
 
 async function api(page, suffix, payload, method) {
-    return page.evaluate(async ({ suffix, payload, method }) => {
+    // The dense CI flow shares the real 30/minute limiter. Only a confirmed
+    // rejection is safe to replay; transport failures and other statuses are not.
+    return withThrottleRetry(() => page.evaluate(async ({ suffix, payload, method }) => {
         const response = await fetch('/ask-api/workspace' + suffix, {
             method: method || (payload === undefined ? 'GET' : 'POST'), credentials: 'same-origin',
             headers: { Accept: 'application/json', 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
             body: payload === undefined ? undefined : JSON.stringify(payload),
         });
-        return { status: response.status, cache: response.headers.get('cache-control'), body: await response.json() };
-    }, { suffix, payload, method });
+        return { status: response.status, cache: response.headers.get('cache-control'),
+            retryAfter: response.headers.get('retry-after'), body: await response.json() };
+    }, { suffix, payload, method }));
 }
 
 async function openAsk(page) {
