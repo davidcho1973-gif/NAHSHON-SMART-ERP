@@ -794,6 +794,9 @@
         h += '<section><h2 class="quick-heading">' + T.quickActions + '</h2><div class="quick">' +
             // 물어보기 — 도면·서류에 대고 묻는 문. 검색창처럼 한 줄 가득 둔다.
             tile('{{ route('attendance-app.ask') }}', ICON.ask, T.qAsk, T.qAskSub, '', true) +
+            @if(\App\Support\DotsAccess::canOpen(request()))
+            tile('{{ route('attendance-app.dots') }}', ICON.ask, @json(__('내 Dots 열기')), @json(__('ChatGPT에서 열립니다. ERP 자료는 자동으로 전달되지 않습니다.')), '', true) +
+            @endif
             authorizedAppTiles() +
             @if(!$isPersonalAppOnly && auth()->user()->access_role === 'foreman')
             tile('{{ route('worker-enrollment.index', ['return_to' => '/attendance-app']) }}', ICON.report, '우리 팀 직원 등록 현황', '인사 등록 및 앱 연결 상태 조회', '') +
