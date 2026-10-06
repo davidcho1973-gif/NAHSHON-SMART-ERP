@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\ManagerInvitationService;
 use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Http\Client\ConnectionException;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class GoogleAuthController extends Controller
@@ -49,6 +51,7 @@ class GoogleAuthController extends Controller
         $state = Str::random(40);
 
         $request->session()->put('google_oauth_state', $state);
+        $request->session()->put('google_oauth_invitation', app(ManagerInvitationService::class)->sessionToken($request));
 
         $parameters = [
             'client_id' => config('services.google.client_id'),
@@ -148,6 +151,18 @@ class GoogleAuthController extends Controller
             return $this->deny('Please verify your Google email before signing in.');
         }
 
+        $invitationToken = $request->session()->pull('google_oauth_invitation');
+        if ($invitationToken !== null) {
+            abort_unless($invitationToken === app(ManagerInvitationService::class)->sessionToken($request), 410, '초대 확인이 만료되었습니다. 초대 링크에서 다시 시작하세요.');
+            try {
+                app(ManagerInvitationService::class)->accept($request, $email, googleId: $googleId);
+            } catch (ValidationException $exception) {
+                return redirect()->route('manager-invitation.show', ['token' => $invitationToken])->withErrors($exception->errors());
+            }
+
+            return redirect()->route('manager-invitation.welcome');
+        }
+
         $linkedUser = User::query()->where('google_id', $googleId)->first();
         $emailUser = User::query()->whereRaw('lower(email) = ?', [$email])->first();
 
@@ -241,6 +256,11 @@ class GoogleAuthController extends Controller
 
     private function deny(string $message): RedirectResponse
     {
+        $token = app(ManagerInvitationService::class)->sessionToken(request());
+        if ($token) {
+            return redirect()->route('manager-invitation.show', ['token' => $token])->withErrors(['google' => $message]);
+        }
+
         return redirect()->route('login')->withErrors(['google' => $message]);
     }
 

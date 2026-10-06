@@ -6,10 +6,12 @@ use App\Http\Middleware\RequireApprovedErpAccess;
 use App\Models\AuthEvent;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\ManagerInvitation;
 use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
+use App\Services\Auth\ManagerInvitationService;
 use App\Support\PurchaseAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Support\Facades\Hash;
@@ -92,8 +94,9 @@ class UserAccessService
             return ['success' => false, 'error' => '계정 관리 권한이 없습니다.'];
         }
 
+        $pendingInvitations = ManagerInvitation::whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->pluck('user_id')->flip();
         $rows = User::query()
-            ->with(['employee:id,name,employee_number', 'allowedCompany:id,name', 'allowedSite:id,code', 'allowedTeam:id,name'])
+            ->with(['employee:id,name,employee_number,phone,employment_status', 'allowedCompany:id,name', 'allowedSite:id,code', 'allowedTeam:id,name'])
             ->orderBy('name')
             ->get()
             ->map(fn (User $u): array => [
@@ -126,6 +129,8 @@ class UserAccessService
                 'lastLoginAt' => $u->last_login_at?->toDateTimeString(),
                 // 자기 자신은 화면에서 역할·상태 손잡이를 잠근다(자물쇠 아이콘 표시용).
                 'isSelf' => $u->id === auth()->id(),
+                'canInvite' => app(ManagerInvitationService::class)->eligible($u),
+                'invitationPending' => $pendingInvitations->has($u->id),
                 'purchaseRequestAccess' => (bool) $u->purchase_request_enabled,
                 'purchaseBuyerAccess' => (bool) $u->purchase_buy_enabled,
             ])
@@ -156,6 +161,7 @@ class UserAccessService
             'success' => true,
             'roles' => $pairs(array_intersect_key(User::ROLE_LABELS_KO, $this->assignableRoles())),
             'canManagePurchasingGrants' => $this->canManagePurchasingGrants(),
+            'canIssueInvitations' => app(ManagerInvitationService::class)->canIssue(),
             'purchasingReauthenticationRequired' => auth()->user()?->access_role === 'super_admin'
                 && ! $this->canManagePurchasingGrants(),
             'purchasingRoles' => PurchaseAccess::ELIGIBLE_ROLES,
