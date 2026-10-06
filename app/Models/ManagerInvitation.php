@@ -10,6 +10,6 @@ class ManagerInvitation extends Model
 
     protected function casts(): array
     {
-        return ['grant' => 'array', 'expires_at' => 'datetime', 'accepted_at' => 'datetime', 'revoked_at' => 'datetime'];
+        return ['grant' => 'array', 'enrollment' => 'array', 'expires_at' => 'datetime', 'accepted_at' => 'datetime', 'revoked_at' => 'datetime'];
     }
 }

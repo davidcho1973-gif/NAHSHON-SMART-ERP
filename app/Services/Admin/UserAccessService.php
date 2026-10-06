@@ -94,7 +94,7 @@ class UserAccessService
             return ['success' => false, 'error' => '계정 관리 권한이 없습니다.'];
         }
 
-        $pendingInvitations = ManagerInvitation::whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->pluck('user_id')->flip();
+        $pendingInvitations = ManagerInvitation::whereNotNull('user_id')->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->pluck('user_id')->flip();
         $rows = User::query()
             ->with(['employee:id,name,employee_number,phone,employment_status', 'allowedCompany:id,name', 'allowedSite:id,code', 'allowedTeam:id,name'])
             ->orderBy('name')
@@ -137,7 +137,17 @@ class UserAccessService
             ->values()
             ->all();
 
-        return ['success' => true, 'rows' => $rows];
+        $newInvitations = app(ManagerInvitationService::class)->canIssue()
+            ? ManagerInvitation::where('kind', 'new_employee')->whereNull('accepted_at')->whereNull('revoked_at')
+                ->orderByDesc('id')->get()->map(fn (ManagerInvitation $invite): array => [
+                    'id' => $invite->id, 'label' => $invite->recipient_label ?: '신규 관리자 초대 #'.$invite->id,
+                    'roleLabel' => User::ROLE_LABELS_KO[$invite->grant['access_role']],
+                    'scopeLabel' => User::SCOPE_LABELS_KO[$invite->grant['access_scope']],
+                    'grant' => $invite->grant, 'enrollment' => $invite->enrollment,
+                    'expiresAt' => $invite->expires_at->toDateTimeString(), 'expired' => $invite->expires_at->isPast(),
+                ])->all() : [];
+
+        return ['success' => true, 'rows' => $rows, 'newInvitations' => $newInvitations];
     }
 
     /**

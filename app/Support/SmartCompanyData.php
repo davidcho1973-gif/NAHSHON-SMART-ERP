@@ -205,6 +205,7 @@ class SmartCompanyData
             'api_getUserAccessList' => app(UserAccessService::class)->list(),
             'api_createManagerInvitation' => app(ManagerInvitationService::class)->issue(is_array($args[0] ?? null) ? $args[0] : []),
             'api_revokeManagerInvitation' => app(ManagerInvitationService::class)->revoke((int) ($args[0] ?? 0)),
+            'api_revokeNewManagerInvitation' => app(ManagerInvitationService::class)->revokeNew((int) ($args[0] ?? 0)),
             'api_getUserAccessOptions' => app(UserAccessService::class)->options(),
             'api_saveUserAccess' => app(UserAccessService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_setUserAccessStatus' => app(UserAccessService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
