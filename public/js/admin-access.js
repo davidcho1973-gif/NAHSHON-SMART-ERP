@@ -12,7 +12,7 @@
   'use strict';
 
   var A = null;          // window.AdminUI — defer 순서상 실행 시점에 잡는다
-  var state = { rows: [], options: null };
+  var state = { rows: [], options: null, newInvitations: [] };
 
   function ui() {
     if (!A) A = global.AdminUI;
@@ -67,6 +67,8 @@
     return u.pageHeader(
       '계정 · 권한 관리',
       'ERP 본화면은 여기서 허용한 사람만 들어옵니다. 현장 인력은 전화번호 뒷 4자리로 작업자 앱을 씁니다. — ' + notes.join(' · '),
+      (state.options && state.options.canIssueInvitations
+        ? u.primaryButton('신규 관리자 초대', 'window.AdminAccess.inviteNew()', 'user-plus') + ' ' : '') +
       u.primaryButton('계정 추가', 'window.AdminAccess.openForm()', 'plus')
     ) + (state.options && state.options.purchasingReauthenticationRequired
       ? u.notice('구매 권한 변경은 이메일·비밀번호 또는 Google로 다시 로그인한 후 가능합니다.', 'warn') +
@@ -142,6 +144,26 @@
         },
       ],
       rows: rows,
+    }) + renderNewInvitations();
+  }
+
+  function renderNewInvitations() {
+    if (!state.options || !state.options.canIssueInvitations || !state.newInvitations.length) return '';
+    var u = ui();
+    return '<h3 style="margin-top:24px">등록 대기 중인 신규 관리자 초대</h3>' + u.table({
+      id: 'ua-invites', rows: state.newInvitations,
+      columns: [
+        { key: 'label', label: '초대 메모' },
+        { key: 'roleLabel', label: '역할' },
+        { key: 'scopeLabel', label: '관리 범위' },
+        { key: 'expiresAt', label: '유효기간', render: function (r) {
+          return u.esc(r.expiresAt) + (r.expired ? ' · 만료' : '');
+        } },
+        { key: '_actions', label: '관리', render: function (r) {
+          return u.rowButton('초대 재발급', 'window.AdminAccess.inviteNew(' + r.id + ')') + ' ' +
+            u.rowButton('초대 취소', 'window.AdminAccess.revokeNewInvite(' + r.id + ')');
+        } }
+      ]
     });
   }
 
@@ -158,6 +180,7 @@
         return;
       }
       state.rows = res.rows || [];
+      state.newInvitations = res.newInvitations || [];
       paint(render());
       ui().bindSearch('ua-tbl');
     });
@@ -281,26 +304,49 @@
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }
 
-  function invite(id) {
+  function inviteNew(invitationId) {
+    var previous = state.newInvitations.find(function (r) { return r.id === invitationId; });
+    invite(null, previous);
+  }
+
+  function invite(id, previous) {
     var u = ui();
     var row = state.rows.find(function (r) { return r.id === id; });
-    if (!row) return;
+    var isNew = id === null;
+    if (!row && !isNew) return;
+    row = row || { name: '새 입사자', siteId: previous && previous.enrollment.site_id,
+      companyId: previous && previous.enrollment.company_id };
     loadOptions().then(function (o) {
       u.formModal({
-        title: '관리자로 초대 — ' + row.name,
-        subtitle: '직원이 직접 로그인 정보를 등록합니다. 7일간 유효하며 재발급 시 이전 초대는 취소됩니다.',
+        title: isNew ? '신규 관리자 초대' : '관리자로 초대 — ' + row.name,
+        subtitle: isNew ? '직원 사전 등록 없이 링크 하나를 전달합니다. 직원이 이름·전화번호·로그인 정보를 입력하면 등록이 완료됩니다. 7일·1회용입니다.'
+          : '직원이 직접 로그인 정보를 등록합니다. 7일간 유효하며 재발급 시 이전 초대는 취소됩니다.',
         saveLabel: '초대 링크 · QR 만들기',
         fields: [
-          { name: 'role', label: '역할', type: 'select', required: true, value: 'site_manager',
+          { name: 'role', label: '역할', type: 'select', required: true, value: previous ? previous.grant.access_role : 'site_manager',
             hint: '관리자는 전체 현장 권한입니다. 담당 현장만 관리할 직원은 현장관리자를 선택하세요.',
             options: o.roles.filter(function (r) { return ['admin', 'site_manager'].indexOf(r.value) >= 0; }) },
-          { name: 'scope', label: '관리 범위', type: 'select', required: true, value: 'site',
+          { name: 'scope', label: '관리 범위', type: 'select', required: true, value: previous ? previous.grant.access_scope : 'site',
             options: o.scopes.filter(function (r) { return ['site', 'company', 'all_sites'].indexOf(r.value) >= 0; }) },
           { name: 'siteId', label: '담당 현장', type: 'select', options: o.sites, value: row.siteId || '' },
-          { name: 'companyId', label: '담당 회사', type: 'select', options: o.companies, value: row.companyId || '' }
-        ],
+          { name: 'companyId', label: isNew ? '소속 회사 · 회사 범위일 때 담당 회사' : '담당 회사', type: 'select', options: o.companies, value: row.companyId || '' }
+        ].concat(isNew ? [{ name: 'recipientLabel', label: '초대 메모 (선택)', value: previous ? previous.label : '',
+          hint: '예: 703K 새 소장. 직원 이름·이메일은 직원이 직접 입력합니다.' }] : []),
+        onReady: function (form) {
+          var role = form.querySelector('[name="role"]');
+          var scope = form.querySelector('[name="scope"]');
+          function syncScope() {
+            if (role.value === 'admin') scope.value = 'all_sites';
+            scope.disabled = role.value === 'admin';
+          }
+          role.addEventListener('change', syncScope);
+          syncScope();
+        },
         onSave: function (v) {
-          v.id = id;
+          v.kind = isNew ? 'new_employee' : 'existing_worker';
+          if (isNew && previous) v.replaceInvitationId = previous.id;
+          if (!isNew) v.id = id;
+          if (v.role === 'admin') v.scope = 'all_sites';
           return call('api_createManagerInvitation', [v]).then(function (res) {
             if (res.success === false) return res;
             // Wait until formModal closes before presenting the sharing dialog.
@@ -315,10 +361,13 @@
 
   function showInvitation(res) {
     var u = ui();
-    var message = res.name + ' 님, 관리자 등록을 완료해 주세요. 기존 등록 전화번호를 확인한 뒤 Google 또는 이메일·비밀번호를 설정하면 됩니다.\n' + res.url;
+    var isNew = res.kind === 'new_employee';
+    var message = isNew ? '관리자 입사 등록 초대입니다. 아래 링크에서 이름·전화번호를 입력하고 Google 또는 이메일·새 ERP 비밀번호로 등록해 주세요. 직원 등록과 관리자 설정이 함께 완료됩니다.\n' + res.url
+      : res.name + ' 님, 관리자 등록을 완료해 주세요. 기존 등록 전화번호를 확인한 뒤 Google 또는 이메일·비밀번호를 설정하면 됩니다.\n' + res.url;
     u.modal({
       title: '카톡 · QR로 초대', width: 460,
-      subtitle: '초대받은 직원 본인에게만 전달하세요. 등록 완료 전까지 현재 작업자 권한이 유지됩니다.',
+      subtitle: isNew ? '한 명에게만 전달하세요. 등록 완료 전에는 직원·계정이 생성되지 않습니다.'
+        : '초대받은 직원 본인에게만 전달하세요. 등록 완료 전까지 현재 작업자 권한이 유지됩니다.',
       body: '<div style="text-align:center"><img alt="관리자 등록 초대 QR" src="' + u.esc(res.qr) + '" style="width:240px;max-width:100%"></div>' +
         '<p>유효기간: ' + u.esc(res.expiresAt) + '</p>' +
         '<textarea aria-label="카톡으로 보낼 초대 내용" readonly style="box-sizing:border-box;width:100%;min-height:135px">' + u.esc(message) + '</textarea>',
@@ -348,6 +397,17 @@
     }).catch(function (e) { u.toast(e.message, 'error'); });
   }
 
+  function revokeNewInvite(id) {
+    var u = ui();
+    u.confirmDanger({ title: '초대를 취소할까요?', body: '전달한 링크와 QR로 더 이상 등록할 수 없습니다.', confirmLabel: '초대 취소' }).then(function (ok) {
+      if (!ok) return;
+      return call('api_revokeNewManagerInvitation', [id]).then(function (res) {
+        if (res.success === false) { u.toast(res.error, 'error'); return; }
+        u.toast('초대를 취소했습니다.'); return reload();
+      });
+    }).catch(function (e) { u.toast(e.message, 'error'); });
+  }
+
   /** SPA 라우터가 부르는 진입점. */
   function renderScreen() {
     paint('<div style="padding:40px;text-align:center;color:var(--text-tertiary)">불러오는 중…</div>');
@@ -364,6 +424,8 @@
     setStatus: setStatus,
     remove: remove,
     invite: invite,
+    inviteNew: inviteNew,
+    revokeNewInvite: revokeNewInvite,
     revokeInvite: revokeInvite,
     _state: state,
     _scopeGap: scopeGap,
