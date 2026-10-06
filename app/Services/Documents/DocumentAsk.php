@@ -70,7 +70,8 @@ class DocumentAsk
         }
 
         $site = $requestedSite?->fresh() ?? $this->facts->siteOf($asker);
-        if ($requestedSite && (! $site || $site->id !== $requestedSite->id || ! AiInformationAccess::canUseSite($asker, $site))) {
+        if (($requestedSite && (! $site || $site->id !== $requestedSite->id))
+            || ($site && ! $this->canUseSite($asker, $site))) {
             return ['success' => false, 'error' => '이 현장 자료를 조회할 권한이 없습니다.'];
         }
         $accessContext = AiInformationAccess::context($asker);
@@ -95,7 +96,8 @@ class DocumentAsk
         $currentUser = $asker->fresh(['employee']);
         $currentSite = $site?->fresh();
         if (! $currentUser || AiInformationAccess::context($currentUser) !== $accessContext
-            || ($site && (! $currentSite || ! AiInformationAccess::canUseSite($currentUser, $currentSite)))) {
+            || ($site && (! $currentSite || (int) $currentSite->company_id !== (int) $site->company_id
+                || ! $this->canUseSite($currentUser, $currentSite)))) {
             return ['success' => false, 'error' => '계정 권한 또는 현장 배정이 변경되었습니다. 새로고침한 뒤 다시 질문해 주세요.'];
         }
         $provenance = $this->documentIdsIn($gathered['facts']);
@@ -156,7 +158,7 @@ class DocumentAsk
             ->limit($limit)
             ->get()
             ->filter(function (DocumentQuestion $q) use ($asker): bool {
-                if ($q->site_id && (! $q->site || ! AiInformationAccess::canUseSite($asker, $q->site))) {
+                if ($q->site_id && (! $q->site || ! $this->canUseSite($asker, $q->site))) {
                     return false;
                 }
                 if (! $this->recordsReadable($asker, $q->source_erp_records ?? [])) {
@@ -176,6 +178,15 @@ class DocumentAsk
                 'askedAt' => $q->created_at?->format('m-d H:i'),
             ])
             ->values()->all();
+    }
+
+    /** Site scope alone cannot retain a company grant revoked while a provider call was pending. */
+    private function canUseSite(User $actor, Site $site): bool
+    {
+        // Reuse the existing request authority: system role, current direct/employee
+        // company assignment, or current membership. Do not invent a stricter pivot-only policy.
+        return AiInformationAccess::canUseSite($actor, $site)
+            && $this->budget->companyId($actor, (int) $site->company_id) === (int) $site->company_id;
     }
 
     /** Only server-compiled ERP dataset projections can become saved-answer provenance. */
