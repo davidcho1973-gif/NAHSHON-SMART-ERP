@@ -53,6 +53,7 @@ use App\Services\Attendance\AttendanceGeoService;
 use App\Services\Attendance\DailyHeadcountService;
 use App\Services\Attendance\SiteWifiService;
 use App\Services\AttendanceQrService;
+use App\Services\Auth\ManagerInvitationService;
 use App\Services\CommandCenter\ConstructionCommandCenterService;
 use App\Services\DashboardService;
 use App\Services\DocumentExpiryService;
@@ -202,6 +203,8 @@ class SmartCompanyData
             // 계정 · 권한 관리 (Filament Access Control 을 SPA 로 옮긴 것).
             // 권한 판단은 전부 서비스 안에서 한다 — 화면에서 버튼을 숨기는 건 방어가 아니다.
             'api_getUserAccessList' => app(UserAccessService::class)->list(),
+            'api_createManagerInvitation' => app(ManagerInvitationService::class)->issue(is_array($args[0] ?? null) ? $args[0] : []),
+            'api_revokeManagerInvitation' => app(ManagerInvitationService::class)->revoke((int) ($args[0] ?? 0)),
             'api_getUserAccessOptions' => app(UserAccessService::class)->options(),
             'api_saveUserAccess' => app(UserAccessService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_setUserAccessStatus' => app(UserAccessService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),

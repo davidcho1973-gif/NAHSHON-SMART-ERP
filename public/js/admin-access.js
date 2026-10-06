@@ -131,6 +131,10 @@
             var erp = r.erpAccess
               ? u.rowButton('ERP 입장 해제', 'window.AdminAccess.openForm(' + r.id + ')')
               : u.rowButton('ERP 입장 허용', 'window.AdminAccess.openForm(' + r.id + ')');
+            if (r.canInvite && state.options && state.options.canIssueInvitations) {
+              erp = u.rowButton(r.invitationPending ? '초대 재발급' : '관리자로 초대', 'window.AdminAccess.invite(' + r.id + ')');
+            }
+            if (r.invitationPending && state.options && state.options.canIssueInvitations) erp += ' ' + u.rowButton('초대 취소', 'window.AdminAccess.revokeInvite(' + r.id + ')');
             return erp + ' ' + toggle + ' ' +
               u.rowButton('수정', 'window.AdminAccess.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminAccess.remove(' + r.id + ')', 'danger');
@@ -277,6 +281,73 @@
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }
 
+  function invite(id) {
+    var u = ui();
+    var row = state.rows.find(function (r) { return r.id === id; });
+    if (!row) return;
+    loadOptions().then(function (o) {
+      u.formModal({
+        title: '관리자로 초대 — ' + row.name,
+        subtitle: '직원이 직접 로그인 정보를 등록합니다. 7일간 유효하며 재발급 시 이전 초대는 취소됩니다.',
+        saveLabel: '초대 링크 · QR 만들기',
+        fields: [
+          { name: 'role', label: '역할', type: 'select', required: true, value: 'site_manager',
+            hint: '관리자는 전체 현장 권한입니다. 담당 현장만 관리할 직원은 현장관리자를 선택하세요.',
+            options: o.roles.filter(function (r) { return ['admin', 'site_manager'].indexOf(r.value) >= 0; }) },
+          { name: 'scope', label: '관리 범위', type: 'select', required: true, value: 'site',
+            options: o.scopes.filter(function (r) { return ['site', 'company', 'all_sites'].indexOf(r.value) >= 0; }) },
+          { name: 'siteId', label: '담당 현장', type: 'select', options: o.sites, value: row.siteId || '' },
+          { name: 'companyId', label: '담당 회사', type: 'select', options: o.companies, value: row.companyId || '' }
+        ],
+        onSave: function (v) {
+          v.id = id;
+          return call('api_createManagerInvitation', [v]).then(function (res) {
+            if (res.success === false) return res;
+            // Wait until formModal closes before presenting the sharing dialog.
+            setTimeout(function () { showInvitation(res); }, 0);
+            reload();
+            return { success: true };
+          });
+        }
+      });
+    }).catch(function (e) { u.toast(e.message, 'error'); });
+  }
+
+  function showInvitation(res) {
+    var u = ui();
+    var message = res.name + ' 님, 관리자 등록을 완료해 주세요. 기존 등록 전화번호를 확인한 뒤 Google 또는 이메일·비밀번호를 설정하면 됩니다.\n' + res.url;
+    u.modal({
+      title: '카톡 · QR로 초대', width: 460,
+      subtitle: '초대받은 직원 본인에게만 전달하세요. 등록 완료 전까지 현재 작업자 권한이 유지됩니다.',
+      body: '<div style="text-align:center"><img alt="관리자 등록 초대 QR" src="' + u.esc(res.qr) + '" style="width:240px;max-width:100%"></div>' +
+        '<p>유효기간: ' + u.esc(res.expiresAt) + '</p>' +
+        '<textarea aria-label="카톡으로 보낼 초대 내용" readonly style="box-sizing:border-box;width:100%;min-height:135px">' + u.esc(message) + '</textarea>',
+      actions: [{ label: '카톡에 보낼 내용 복사', value: 'keep', action: 'copy', kind: 'primary' },
+        { label: '공유하기', value: 'keep', action: 'share' }, { label: '닫기', value: null }],
+      onAction: function (action, wrap) {
+        if (action.action === 'share' && navigator.share) {
+          navigator.share({ title: '관리자 초대', text: message }).catch(function (e) { if (e.name !== 'AbortError') u.toast('내용을 복사해 카톡으로 보내세요.', 'error'); });
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(message).then(function () { u.toast('복사했습니다. 카톡 대화에 붙여넣어 보내세요.'); })
+            .catch(function () { wrap.querySelector('textarea').select(); u.toast('선택된 내용을 직접 복사하세요.'); });
+        } else { wrap.querySelector('textarea').select(); u.toast('선택된 내용을 직접 복사하세요.'); }
+      }
+    });
+  }
+
+  function revokeInvite(id) {
+    var u = ui();
+    u.confirmDanger({ title: '초대를 취소할까요?', body: '전달한 링크와 QR로 더 이상 등록할 수 없습니다. 기존 직원 기록은 유지됩니다.', confirmLabel: '초대 취소' }).then(function (ok) {
+      if (!ok) return;
+      return call('api_revokeManagerInvitation', [id]).then(function (res) {
+        if (res.success === false) { u.toast(res.error, 'error'); return; }
+        u.toast('초대를 취소했습니다.'); return reload();
+      });
+    }).catch(function (e) { u.toast(e.message, 'error'); });
+  }
+
   /** SPA 라우터가 부르는 진입점. */
   function renderScreen() {
     paint('<div style="padding:40px;text-align:center;color:var(--text-tertiary)">불러오는 중…</div>');
@@ -292,6 +363,8 @@
     openForm: openForm,
     setStatus: setStatus,
     remove: remove,
+    invite: invite,
+    revokeInvite: revokeInvite,
     _state: state,
     _scopeGap: scopeGap,
   };
