@@ -2,6 +2,10 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-05 Canonical invitation origin for LIMAN
+
+User requested deployment to NAHSHON, DASOL and LIMAN. Initial release PR115/116 and main52cf16d passed 2,588 PHP tests /10,623 assertions and68 JS tests; all three public URLs show the new build, no pending migrations and working invitation assets/routes. LIMAN is the DASOL environment alias, not a separate database. Read-only verification found host-only session cookies on LIMAN while Google callbacks target DASOL's canonical host. Invitations now generate links/QR on APP_URL and valid alias entry links redirect there before phone verification, keeping enrollment and OAuth state on the same origin. Added an alias enrollment regression. No production invitation, employee, attendance or payroll records were created.
+
 ## CODEX — 2026-10-05 Owner-only Dots shortcut
 
 Root cause: ERP had no Dots entry or explicit eligibility rule, and a superadmin role alone would grant access to more people than David authorized. The personal app home and Ask screen now offer a Dots shortcut only to the active, strongly authenticated superadmin whose email is explicitly allowed (initially davidcho1973@gmail.com). The server redirect checks the same policy, rejects unsafe destinations, and disables response caching/referrer forwarding. Other superadmins and workers cannot use the ERP redirect or see the shortcut. Shared config allows later explicit expansion or disabling with an empty allowlist.

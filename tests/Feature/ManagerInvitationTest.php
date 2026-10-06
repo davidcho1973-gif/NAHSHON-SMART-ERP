@@ -152,6 +152,23 @@ class ManagerInvitationTest extends TestCase
         $this->assertSame($this->worker->id, session(EmailPasswordAuthService::STRONG_AUTH_SESSION));
     }
 
+    public function test_alias_invitation_links_and_qr_use_the_canonical_login_host(): void
+    {
+        config(['app.url' => 'http://localhost']);
+        $this->app['url']->forceRootUrl('http://alias.local');
+        $invite = $this->issue();
+        $this->assertStringStartsWith('http://localhost/manager-invitation/', $invite['url']);
+        $token = basename($invite['url']);
+        $this->guest();
+        $this->get('http://alias.local/manager-invitation/'.$token)
+            ->assertRedirect($invite['url'])->assertHeader('Referrer-Policy', 'no-referrer');
+        $this->assertNull(session(ManagerInvitationService::SESSION));
+        $this->assertSame('worker', $this->worker->fresh()->access_role);
+        $this->app['url']->forceRootUrl('http://localhost');
+        $this->post($invite['url'].'/verify', ['phone' => '2025550147'])->assertRedirect($invite['url']);
+        $this->get($invite['url'])->assertOk()->assertSee('Existing Worker');
+    }
+
     public function test_revoked_invitation_after_phone_verification_cannot_complete(): void
     {
         $invite = $this->issue();
