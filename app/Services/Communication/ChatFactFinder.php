@@ -169,7 +169,11 @@ class ChatFactFinder
         try {
             $result = app(ErpReadQuery::class)->read($dataset, new ErpReadContext($actor, (int) $site->company_id, $site->id), ['limit' => self::ROWS, 'text_limit' => 250]);
             $facts[$label] = ['자료' => $dataset, '기준시각' => $result['as_of'], '목록' => $result['records'],
-                '일부 자료만 조회' => $result['next_after_id'] !== null, '주의' => '목록은 최대 12건입니다. 전체 합계를 추정하지 마세요.'];
+                '조회건수' => count($result['records']), '최대조회건수' => self::ROWS,
+                '조회범위' => ['company_id' => $site->company_id, 'site_id' => $site->id],
+                '정렬' => '기록 ID 오름차순', '일부 자료만 조회' => $result['next_after_id'] !== null,
+                '주의' => '조회된 ERP 기록 최대 12건의 표본이며 전체 합계가 아닙니다. 최신순이 아닙니다. 전체 합계를 추정하지 마세요.'
+                    .($dataset === 'material_receipts' ? ' 입고 대장은 재고 잔량이 아닙니다.' : '')];
         } catch (HttpException $e) {
             if ($e->getStatusCode() !== 403) {
                 throw $e;

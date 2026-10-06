@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DocumentQuestion extends Model
 {
     protected $fillable = [
-        'user_id', 'site_id', 'question', 'answer', 'found', 'sources', 'denied', 'model', 'access_context', 'source_document_ids',
+        'user_id', 'site_id', 'question', 'answer', 'found', 'sources', 'denied', 'model', 'access_context', 'source_document_ids', 'source_erp_records',
     ];
 
     protected function casts(): array
@@ -20,6 +20,7 @@ class DocumentQuestion extends Model
             'found' => 'boolean',
             'sources' => 'array',
             'source_document_ids' => 'array',
+            'source_erp_records' => 'array',
             'denied' => 'array',
         ];
     }

@@ -2,6 +2,8 @@
 
 namespace App\Services\Documents;
 
+use App\Mcp\Read\ErpReadContext;
+use App\Mcp\Read\ErpReadQuery;
 use App\Models\DocumentQuestion;
 use App\Models\IntelligentDocument;
 use App\Models\Site;
@@ -13,6 +15,7 @@ use App\Support\AiInformationAccess;
 use App\Support\AnthropicChat;
 use App\Support\Org;
 use DomainException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 /**
@@ -99,6 +102,11 @@ class DocumentAsk
         if ($provenance !== [] && AiInformationAccess::documents($currentUser, $site)->whereIn('id', $provenance)->count() !== count($provenance)) {
             return ['success' => false, 'error' => '근거 자료의 열람 범위가 변경되었습니다. 다시 질문해 주세요.'];
         }
+        $recordSources = $this->recordSourcesIn($gathered['facts']);
+        if (! $this->recordsReadable($currentUser, $recordSources)) {
+            return ['success' => false, 'error' => '근거 ERP 기록의 열람 범위가 변경되었습니다. 다시 질문해 주세요.'];
+        }
+        $reply['answer'] = $this->withRecordLimit($reply['answer'], $recordSources);
         $sources = $this->sources($reply['sources'], $gathered['facts'], $currentUser, $site);
 
         $row = DocumentQuestion::create([
@@ -112,6 +120,7 @@ class DocumentAsk
             'model' => $this->claude->model(),
             'access_context' => $accessContext,
             'source_document_ids' => $provenance,
+            'source_erp_records' => $recordSources,
         ]);
 
         return [
@@ -145,6 +154,9 @@ class DocumentAsk
                 if ($q->site_id && (! $q->site || ! AiInformationAccess::canUseSite($asker, $q->site))) {
                     return false;
                 }
+                if (! $this->recordsReadable($asker, $q->source_erp_records ?? [])) {
+                    return false;
+                }
                 $ids = $q->source_document_ids ?? array_column($q->sources ?: [], 'document_id');
 
                 return ($ids === [] || AiInformationAccess::documents($asker, $q->site ?? $this->facts->siteOf($asker))->whereIn('id', $ids)->count() === count(array_unique($ids)))
@@ -159,6 +171,66 @@ class DocumentAsk
                 'askedAt' => $q->created_at?->format('m-d H:i'),
             ])
             ->values()->all();
+    }
+
+    /** Only server-compiled ERP dataset projections can become saved-answer provenance. */
+    private function recordSourcesIn(array $facts): array
+    {
+        $sources = [];
+        foreach ($facts as $fact) {
+            if (! is_array($fact) || ! in_array($fact['자료'] ?? null, ['material_receipts', 'payslips', 'pay_applications'], true)) {
+                continue;
+            }
+            $sources[] = ['dataset' => $fact['자료'], 'company_id' => (int) $fact['조회범위']['company_id'],
+                'site_id' => (int) $fact['조회범위']['site_id'],
+                'ids' => array_values(array_unique(array_map('intval', array_column($fact['목록'], 'id')))),
+                'limit' => 12, 'count' => $fact['조회건수'], 'has_more' => $fact['일부 자료만 조회']];
+        }
+
+        return $sources;
+    }
+
+    private function recordsReadable(User $actor, array $sources): bool
+    {
+        foreach ($sources as $source) {
+            if (! in_array($source['dataset'] ?? null, ['material_receipts', 'payslips', 'pay_applications'], true)
+                || (in_array($source['dataset'], ['payslips', 'pay_applications'], true) && ! AccessPolicy::canManageMoney($actor))) {
+                return false;
+            }
+            try {
+                $current = $actor->fresh(['employee']);
+                if (! $current) {
+                    return false;
+                }
+                $context = new ErpReadContext($current, (int) $source['company_id'], (int) $source['site_id']);
+                $query = app(ErpReadQuery::class)->query($source['dataset'], $context);
+                $ids = $source['ids'] ?? [];
+                if ($query->whereKey($ids)->count() !== count($ids)) {
+                    return false;
+                }
+            } catch (HttpException $e) {
+                if ($e->getStatusCode() !== 403) {
+                    throw $e;
+                }
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function withRecordLimit(string $answer, array $sources): string
+    {
+        if ($sources === []) {
+            return $answer;
+        }
+        $notice = '조회된 ERP 기록 최대 12건의 표본 기준이며 전체 합계가 아닙니다. 기록 ID 순으로 조회합니다.';
+        if (in_array('material_receipts', array_column($sources, 'dataset'), true)) {
+            $notice .= ' 입고 대장은 재고 잔량이 아닙니다.';
+        }
+
+        return mb_substr($answer, 0, max(0, 4000 - mb_strlen($notice) - 2))."\n\n".$notice;
     }
 
     // ── Claude 에게 묻기 ───────────────────────────────────────────────
