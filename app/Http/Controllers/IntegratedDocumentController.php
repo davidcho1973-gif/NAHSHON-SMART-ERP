@@ -59,6 +59,8 @@ class IntegratedDocumentController extends Controller
             }
 
             // 영구 보관 디스크에 저장(오브젝트 스토리지 설정 시 배포에도 유실되지 않음).
+            $file = \App\Support\DocumentPhoto::prepare($file);
+            $ext = strtolower($file->getClientOriginalExtension());
             $disk = IntegratedDocument::storageDisk();
             $path = $file->store('integrated-documents', $disk);
             // 마임은 업로드 시점(로컬 임시파일)에서 판별 — 원격 디스크에서도 안전.

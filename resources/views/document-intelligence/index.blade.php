@@ -172,6 +172,12 @@
                                 <div><div class="drop-icon">⇧</div><strong>문서를 여기에 끌어다 놓으세요</strong><p>또는 버튼을 눌러 여러 파일을 선택하세요.</p><button class="btn primary" id="pick-files">파일 선택</button><small>PDF · Word · Excel · CSV · TXT · 이미지 · EML / 파일당 최대 {{ $maxUploadMb }}MB</small></div>
                             </div>
                             <input id="file-input" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.eml">
+                            <input id="photo-camera" type="file" accept="image/*" capture="environment" hidden>
+                            <button class="btn" id="take-photo" type="button">사진 촬영 · 다음 장 추가</button>
+                            <label><input id="combine-photos" type="checkbox" checked> 사진 여러 장을 한 문서로 등록</label>
+                            <p>사진만 선택하면 순서대로 한 문서에 묶습니다. 글자가 읽히도록 용량을 줄여 저장합니다.</p>
+                            <div id="selected-photos" aria-live="polite"></div>
+                            <button class="btn primary" id="send-selected" type="button" hidden>선택한 파일 등록</button>
                             <div class="queue" id="upload-queue"><div id="queue-files"></div><div class="progress"><i id="upload-progress"></i></div><div id="queue-summary"></div></div>
                         </div>
                     </section>
@@ -217,6 +223,8 @@
   </div>
 </div>
 
+<script src="{{ asset('js/receipt-photo.js') }}?v={{ filemtime(public_path('js/receipt-photo.js')) }}"></script>
+<script src="{{ asset('js/document-photos.js') }}?v={{ filemtime(public_path('js/document-photos.js')) }}"></script>
 <script>
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const canManage = @json($canManage);
@@ -576,9 +584,16 @@ function uploadOne(file, scope, onProgress){
 
 let uploading=false;
 async function uploadFiles(fileList){
-    const files=[...(fileList||[])];
+    let files=[...(fileList||[])];
     if(!files.length||uploading)return;
     uploading=true;
+    try {
+        files=document.getElementById('combine-photos').checked && files.length>1 && files.every(DocumentPhotos.isPhoto)
+            ? [await DocumentPhotos.combine(files)] : files;
+        if(files.length!==1 || files[0].type!=='application/pdf') {
+            const reduced=[];for(const file of files) reduced.push(await ReceiptPhoto.prepare(file));files=reduced;
+        }
+    } catch(e) { uploading=false;toast(e.message,true);return false; }
     const queue=document.getElementById('upload-queue'),bar=document.getElementById('upload-progress'),summary=document.getElementById('queue-summary');
     queue.classList.add('show');
     summary.className='';summary.textContent='';
@@ -633,8 +648,32 @@ async function uploadFiles(fileList){
         summary.textContent=message;
         setTimeout(()=>{queue.classList.remove('show');bar.style.width='0';summary.textContent=''},1200);
     }
+    return !problems.length;
 }
-if(canManage){const dialog=document.getElementById('upload-dialog');document.getElementById('upload-open').onclick=()=>dialog.showModal();document.getElementById('upload-close').onclick=()=>dialog.close();const dz=document.getElementById('dropzone'),input=document.getElementById('file-input');document.getElementById('pick-files').onclick=()=>input.click();input.onchange=()=>uploadFiles(input.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>uploadFiles(e.dataTransfer.files))}
+if(canManage){
+    const dialog=document.getElementById('upload-dialog');
+    document.getElementById('upload-open').onclick=()=>dialog.showModal();
+    document.getElementById('upload-close').onclick=()=>{if(!uploading)dialog.close()};
+    const dz=document.getElementById('dropzone'),input=document.getElementById('file-input'),camera=document.getElementById('photo-camera');
+    let selected=[];
+    const draw=()=>{
+        document.getElementById('selected-photos').innerHTML=selected.map((f,i)=>`<p>${i+1}. ${esc(f.name)} (${fmtBytes(f.size)}) <button type="button" class="btn small" data-remove="${i}">빼기</button></p>`).join('');
+        document.getElementById('send-selected').hidden=!selected.length;
+    };
+    const add=files=>{if(uploading)return;for(const f of files){if(selected.length>=50){toast('최대 50개까지 선택할 수 있습니다.',true);break}selected.push(f)}draw()};
+    document.getElementById('pick-files').onclick=()=>{if(!uploading)input.click()};
+    document.getElementById('take-photo').onclick=()=>{if(!uploading)camera.click()};
+    input.onchange=()=>{add(input.files);input.value=''};
+    camera.onchange=()=>{add(camera.files);camera.value=''};
+    document.getElementById('selected-photos').onclick=e=>{const b=e.target.closest('[data-remove]');if(b&&!uploading){selected.splice(Number(b.dataset.remove),1);draw()}};
+    document.getElementById('send-selected').onclick=async function(){
+        if(uploading)return;this.disabled=true;this.textContent='사진 준비 · 등록 중…';
+        try{if(await uploadFiles(selected)){selected=[];draw()}}finally{this.disabled=false;this.textContent='선택한 파일 등록'}
+    };
+    ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));
+    ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
+    dz.addEventListener('drop',e=>add(e.dataTransfer.files));
+}
 document.getElementById('drawer-close').onclick=()=>{clearDocument();rememberDocumentNavigation();document.getElementById('search').focus();};
 function searchDocuments(){documentPage=1;clearDocument();rememberDocumentNavigation();loadDocuments();}
 document.getElementById('search-btn').onclick=searchDocuments;
