@@ -49,8 +49,6 @@ class AttendanceAppController extends Controller
             'canReceiveMaterials' => ! $request->filled('as') && MaterialReceiptAccess::canManage($user),
             'canRequestPurchases' => ! $request->filled('as') && PurchaseAccess::canRequest($user),
             'isManagerApp' => ! $request->filled('as') && PurchaseAccess::eligible($user),
-            'canManagePersonalAppQr' => ! $request->filled('as') && $user?->account_status === 'active'
-                && $user?->access_role === 'super_admin',
             'isPersonalAppOnly' => $request->session()->has(PersonalAppAccessService::SESSION)
                 || $request->session()->has(PersonalAppAccessService::LEGACY_SESSION),
             'canProcessCrew' => $user ? $this->attendanceQrService->canProcessCrew($user) : false,

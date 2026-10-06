@@ -613,3 +613,6 @@ Detailed HR registration fixtures now specify their required worker position. Pu
 - 운영 데이터 없이 별도 purchase_ui_20261004 DB에서 실제 로그인·미확인 요청 제출·사무실 처리·이메일 초안 화면 검증. 실제 업체 이메일·결제는 실행하지 않았다.
 - 업체 납품 확정은 주문 완료와 별도 상태로 관리하고 납품일 변경 시 재확인을 요구한다.
 - 배포 전 운영 설정 점검: default 큐는 처리하지 않으므로 문의 이메일을 기존 document-analysis/purchases 큐로 연결했다. NAHSHON SMTP ready=true, DASOL mailer=log/ready=false여서 DASOL 실제 발송에는 회사 메일 설정이 필요하다.
+
+## 2026-10-05 — Retire manager personal QR
+Removed manager QR menus, issuer/exchange code and assets at user request. Old routes return 410; old QR cookies cannot restore users and QR-only sessions are invalidated on the next request. Strong password/Google sessions survive stale QR cookies. Historical device records remain for audit. Field attendance QR unchanged. Updated manuals and replaced retired feature tests with retirement/auth-boundary regression coverage. Targeted 67 tests / 480 assertions and JS61 passed; Blade/build passed. Full CI and deployment pending. Includes previously tested finance optimization from staging.
