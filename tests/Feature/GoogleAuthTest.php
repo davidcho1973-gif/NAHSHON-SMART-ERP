@@ -149,7 +149,7 @@ class GoogleAuthTest extends TestCase
         $response->assertRedirect('/');
     }
 
-    public function test_google_erp_reauthentication_preserves_app_on_failure_and_ignores_its_stale_landing_on_success(): void
+    public function test_google_erp_reauthentication_retires_old_qr_and_ignores_stale_landing(): void
     {
         $this->configureGoogle();
         $user = User::factory()->create(['email' => 'super@example.com', 'access_role' => 'super_admin',
@@ -162,10 +162,10 @@ class GoogleAuthTest extends TestCase
         $this->get('/auth/google')->assertRedirect()->assertSessionHas('google_oauth_state');
         $this->get('/auth/google/callback?error=access_denied')->assertRedirect('/login')
             ->assertSessionHasErrors('google')
-            ->assertSessionHas(PersonalAppAccessService::SESSION, $device->id)
+            ->assertSessionMissing(PersonalAppAccessService::SESSION)
             ->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true);
-        $this->assertAuthenticatedAs($user);
-        $this->assertNull($device->fresh()->revoked_at);
+        $this->assertGuest();
+        $this->assertNotNull($device->fresh()->revoked_at);
 
         Http::fake([
             'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'google-token'], 200),
@@ -179,7 +179,7 @@ class GoogleAuthTest extends TestCase
             ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION)
             ->assertSessionMissing(PersonalAppAccessService::SESSION)
             ->assertSessionMissing(WorkerDeviceSession::FLAG)->assertSessionMissing('url.intended');
-        $this->assertNull($device->fresh()->revoked_at);
+        $this->assertNotNull($device->fresh()->revoked_at);
         $this->get('/')->assertOk();
     }
 

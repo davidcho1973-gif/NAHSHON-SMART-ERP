@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-05 Finance memory and receipt uploads
+
+Root cause: finance statistics and expenses each selected full mobile_expenses rows, including about 193 MB of embedded receipt bytes across 57 production records. Concurrent requests returned 503 and app restart logs were observed. OOM termination itself was not independently confirmed. Aggregate amounts now stay in PostgreSQL; scoped metadata queries exclude receipt_file and ocr_data. The finance UI requests 25-row pages with server-side search; the legacy export still receives all metadata. The mobile list is paginated with DB totals and the personal receipt list excludes blobs. Individual receipt routes and authorization are preserved; no historical records or images are rewritten.
+
+New receipt photos in the expense app and expense wizard are reduced before upload, with a shared server-side fallback for receipt uploads/edits. JPEG quality 90, normal long edge 2560, long receipts preserve width up to a bounded 8192 edge. Small, unsupported and PDF files retain original bytes, and a larger recompression is rejected. Existing records remain unchanged. Browser compression fallback and safe server decode bounds prevent unsupported images from blocking submission.
+
+Validation: targeted 50 PHP tests/243 assertions passed; JS 68 passed; Blade/build/diff checked. Full regression and staging/main CI deployment verification required before reporting release complete. Evidence in scratch/finance-* and root ERP continuity.
+
 ## CODEX — 2026-10-02 Attendance completion and notices
 
 Root cause: after a successful QR punch the page called recognize(), immediately rendering the opposite attendance action. A saved punch now terminates that page's punch state, preserves the confirmation/time, and shows only eligible site/company announcements or a close-page instruction. Notice fetch/acknowledgement uses separate requests after the attendance transaction; errors cannot undo the punch. Reopening the site QR intentionally starts the next visit.
@@ -605,3 +613,6 @@ Detailed HR registration fixtures now specify their required worker position. Pu
 - 운영 데이터 없이 별도 purchase_ui_20261004 DB에서 실제 로그인·미확인 요청 제출·사무실 처리·이메일 초안 화면 검증. 실제 업체 이메일·결제는 실행하지 않았다.
 - 업체 납품 확정은 주문 완료와 별도 상태로 관리하고 납품일 변경 시 재확인을 요구한다.
 - 배포 전 운영 설정 점검: default 큐는 처리하지 않으므로 문의 이메일을 기존 document-analysis/purchases 큐로 연결했다. NAHSHON SMTP ready=true, DASOL mailer=log/ready=false여서 DASOL 실제 발송에는 회사 메일 설정이 필요하다.
+
+## 2026-10-05 — Retire manager personal QR
+Removed manager QR menus, issuer/exchange code and assets at user request. Old routes return 410; old QR cookies cannot restore users and QR-only sessions are invalidated on the next request. Strong password/Google sessions survive stale QR cookies. Historical device records remain for audit. Field attendance QR unchanged. Updated manuals and replaced retired feature tests with retirement/auth-boundary regression coverage. Targeted 67 tests / 480 assertions and JS61 passed; Blade/build passed. Full CI and deployment pending. Includes previously tested finance optimization from staging.

@@ -19,8 +19,6 @@
   <link rel="stylesheet" href="{{ asset('css/purchase-requests.css') }}?v={{ filemtime(public_path('css/purchase-requests.css')) }}">
   <script src="{{ asset('js/purchase-common.js') }}?v={{ filemtime(public_path('js/purchase-common.js')) }}" defer></script>
   <script src="{{ asset('js/admin-purchases.js') }}?v={{ filemtime(public_path('js/admin-purchases.js')) }}" defer></script>
-  <link rel="stylesheet" href="{{ asset('css/personal-app-access.css') }}?v={{ filemtime(public_path('css/personal-app-access.css')) }}">
-  <script src="{{ asset('js/personal-app-access.js') }}?v={{ filemtime(public_path('js/personal-app-access.js')) }}" defer></script>
   <script src="{{ asset('js/admin-meetings.js') }}?v={{ filemtime(public_path('js/admin-meetings.js')) }}" defer></script>
   <script src="{{ asset('js/erp-history.js') }}?v={{ filemtime(public_path('js/erp-history.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
@@ -297,9 +295,6 @@
           <div class="nav-section">
             <div class="nav-section-title">설정</div>
             <ul class="nav-list">
-              @if(auth()->user()?->account_status === 'active' && auth()->user()?->access_role === 'super_admin')
-              <li class="nav-item" data-view="personal-app-access" id="nav-personal-app-access"><i class="ph ph-qr-code"></i><span>개인앱 연결 QR</span></li>
-              @endif
               @if(in_array(auth()->user()?->access_role, \App\Services\Admin\CrewSetupService::VIEW_ROLES, true))
               <li class="nav-item" data-view="crew-setup" id="nav-crew-setup"><i class="ph ph-users-three"></i><span>회사·팀 등록</span></li>
               @if(in_array(auth()->user()?->access_role, \App\Support\AccessPolicy::SYSTEM_ROLES, true))
@@ -386,9 +381,6 @@
           <button class="mobile-more-tile" type="button" data-mobile-view="employee-admin"><i class="ph ph-identification-card"></i><span>직원 등록 · 관리</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="applicant-admin"><i class="ph ph-user-plus"></i><span>입사지원 · 온보딩</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="access-control"><i class="ph ph-lock-key"></i><span>계정 · 권한 관리</span></button>
-          @if(auth()->user()?->account_status === 'active' && auth()->user()?->access_role === 'super_admin')
-          <button class="mobile-more-tile" type="button" data-mobile-view="personal-app-access"><i class="ph ph-qr-code"></i><span>개인앱 연결 QR</span></button>
-          @endif
           <button class="mobile-more-tile" type="button" data-mobile-view="payroll"><i class="ph ph-coins"></i><span>급여 / 정산</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="pay-profiles"><i class="ph ph-sliders"></i><span>임금 프로필</span></button>
           <button class="mobile-more-tile" type="button" data-mobile-view="inventory"><i class="ph ph-package"></i><span>자재 · 장비</span></button>
@@ -1263,7 +1255,7 @@
         return gsRun('api_getAttendanceLive', [_siteId()], { success: false, checkedIn: [], notCheckedIn: [], teamSummary: [], totalActive: 0, presentCount: 0, absentCount: 0 });
       },
       getGlobalAttendance: () => gsRun('api_getGlobalAttendance', [], { success: false, mode: 'global', checkedIn: [], notCheckedIn: [], siteStats: {}, totalPresent: 0, totalWorkers: 0 }),
-      getExpenses: () => gsRun('api_getExpenses', [], []),
+      getExpenses: (options) => gsRun('api_getExpenses', options ? [options] : [], []),
       reviewExpense: (expenseId, decision) => gsRun('api_reviewExpense', [expenseId, decision], { success: false, message: '' }),
       // 기성 청구·수금 (billing-admin) — 조회 3 + 쓰기 6. api_get* 접두사가 곧 캐시·읽기전용 게이트다.
       getBillingContracts: (filters) => gsRun('api_getBillingContracts', [filters || {}], { success: false, rows: [] }),
@@ -1497,7 +1489,6 @@
         'daily-report': { title: '일일 보고', render: function () { return window.AdminDailyReport.render(); } },
         'correspondence': { title: '서신 원장', render: function () { return window.AdminCorrespondence.render(); } },
         'access-control': { title: '계정 · 권한 관리', render: function () { return window.AdminAccess.render(); } },
-        'personal-app-access': { title: '개인앱 연결 QR', render: function () { return window.PersonalAppAccess.render(); } },
         'attendance-logs': { title: '출퇴근 기록', render: function () { return window.AdminAttendance.render(); } },
         'week-board': { title: '공정 관리 — 이번 주 작업판', render: function () { return window.AdminWeekBoard.render(); } },
         'section-drawings': { title: '공정별 도면', render: function () { return window.AdminSectionDrawings.render(); } },
@@ -5383,16 +5374,20 @@
         }
       };
 
+      var financePage = 1, financeSearch = '', financeSite = null;
       async function renderFinance() {
+        if (financeSite !== _siteId()) { financePage = 1; financeSearch = ''; financeSite = _siteId(); }
         pageContainer.innerHTML = skeleton();
         try {
           var [stats, expenses] = await Promise.all([
             window.API.getFinanceStats(),
-            window.API.getExpenses()
+            window.API.getExpenses({page: financePage, search: financeSearch})
           ]);
 
           stats = stats || {};
-          expenses = Array.isArray(expenses) ? expenses : [];
+          var expensePage = expenses || {};
+          expenses = Array.isArray(expensePage.items) ? expensePage.items : [];
+          financePage = Number(expensePage.page || 1);
 
           var mtdBudget = Number(stats.mtdBudget || 0);
           var mtdTotal = Number(stats.mtdTotal || 0);
@@ -5499,19 +5494,19 @@
             '<div class="dashboard-grid-main" style="grid-template-columns:2fr 1fr">' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-list-bullets"></i> 비용 제출 내역</div>' +
             '<div style="display:flex; gap:8px; align-items:center;"><button id="btn-fin-export" class="btn-secondary" style="font-size:12px; padding:6px 12px; height: 36px;" onclick="window.downloadFinanceExcel()"><i class="ph ph-download-simple"></i> 마스터 엑셀 다운로드</button>' +
-            '<input type="text" class="search-inline" id="fin-search" placeholder="내역 검색..."></div></div>' +
+            '<input type="text" class="search-inline" id="fin-search" placeholder="전체 내역 검색 후 Enter" value="' + safeHtml(financeSearch) + '"></div></div>' +
             '<div class="panel-body"><table class="data-table" id="fin-table"><thead><tr>' +
             '<th>날짜</th><th>현장</th><th>계정</th><th>세부내역</th><th style="text-align:right">금액</th><th style="text-align:right">관리</th>' +
-            '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div></div>' +
+            '</tr></thead><tbody>' + expensesHtml + '</tbody></table></div>' +
+            '<div style="display:flex;gap:12px;align-items:center;padding:12px"><button id="fin-prev" class="btn-secondary" ' + (financePage <= 1 ? 'disabled' : '') + '>이전</button><span>' + financePage + ' / ' + Number(expensePage.lastPage || 1) + ' · ' + Number(expensePage.total || 0) + '건</span><button id="fin-next" class="btn-secondary" ' + (financePage >= Number(expensePage.lastPage || 1) ? 'disabled' : '') + '>다음</button></div></div>' +
             '<div class="panel"><div class="panel-header"><div class="panel-title"><i class="ph ph-chart-pie-slice"></i> 계정별 지출현황</div></div>' +
             '<div class="panel-body padded" style="display:flex;flex-direction:column;gap:14px">' + categoryHtml + '</div></div>' +
             '</div>';
 
-          document.getElementById('fin-search').addEventListener('input', function () {
-            var q = this.value.toLowerCase();
-            document.querySelectorAll('#fin-table tbody tr').forEach(function (row) {
-              row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
-            });
+          document.getElementById('fin-prev').onclick = function () { financePage--; renderFinance(); };
+          document.getElementById('fin-next').onclick = function () { financePage++; renderFinance(); };
+          document.getElementById('fin-search').addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') { financeSearch = this.value.trim(); financePage = 1; renderFinance(); }
           });
           document.querySelectorAll('.finance-delete-expense').forEach(function (button) {
             button.addEventListener('click', function () {

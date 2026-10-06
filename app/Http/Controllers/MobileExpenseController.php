@@ -5,22 +5,23 @@ namespace App\Http\Controllers;
 use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
 use App\Models\Site;
+use App\Services\Finance\DuplicateExpenseSentry;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\GeminiReceiptAnalyzer;
+use App\Support\DefaultScope;
 use App\Support\FinanceChartOfAccounts;
 use App\Support\ReceiptFilePayload;
+use App\Support\ReceiptPhoto;
 use App\Support\ReceiptUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use RuntimeException;
 
 class MobileExpenseController extends Controller
 {
@@ -32,24 +33,26 @@ class MobileExpenseController extends Controller
         $employeeId = $user->employee_id;
         $canManageAllExpenses = $this->canManageAllExpenses();
 
-        $expenses = MobileExpense::query()
-            ->when(! $canManageAllExpenses, fn ($query) => $query->where('employee_id', $employeeId))
-            ->with(['employee', 'site', 'preApproval'])
-            ->orderByDesc('expense_date')
-            ->orderByDesc('id')
-            ->get();
-
-        // 누적 승인 지출 — 월 구분 없이 전 기간(David 지시 2026-08-19: "프로젝트 시작부터
-        // 끝날 때까지 전부"). 예전에는 이번 달 지출분만 세서, 지출일이 지난달인 건을
-        // 방금 승인해도 카드가 $0 이었다 — 승인 즉시 잡히려면 날짜 창이 없어야 한다.
-        // paid 도 포함한다: 지급완료는 승인을 거쳐 나간 돈이지, 승인이 취소된 게 아니다.
-        $approvedMtd = $expenses->filter(fn ($ex) => in_array($ex->status, ['approved', 'paid'], true))->sum('amount');
-        $pendingCount = $expenses->where('status', 'pending')->count();
-        $pendingAmount = $expenses->where('status', 'pending')->sum('amount');
-        // 환급 "대기"(승인됐지만 아직 안 준 돈)와 "완료"(지급된 돈)는 다른 돈이다.
-        // 예전엔 approved 합계를 '개인환급 완료'로 보여줘서, 아직 못 받은 돈이 받은 돈처럼 보였다.
-        $claimableAmount = $expenses->where('status', 'approved')->where('payment_type', 'personal')->sum('amount');
-        $totalReimbursement = $expenses->where('status', 'paid')->where('payment_type', 'personal')->sum('amount');
+        $query = MobileExpense::query()
+            ->when(! $canManageAllExpenses, fn ($query) => $query->where('employee_id', $employeeId));
+        $totals = (clone $query)->selectRaw("COALESCE(SUM(CASE WHEN status IN ('approved','paid') THEN amount ELSE 0 END),0) AS approved,
+            COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending_count,
+            COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END),0) AS pending,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND payment_type = 'personal' THEN amount ELSE 0 END),0) AS claimable,
+            COALESCE(SUM(CASE WHEN status = 'paid' AND payment_type = 'personal' THEN amount ELSE 0 END),0) AS reimbursed")->first();
+        $approvedMtd = (float) $totals->approved;
+        $pendingCount = (int) $totals->pending_count;
+        $pendingAmount = (float) $totals->pending;
+        $claimableAmount = (float) $totals->claimable;
+        $totalReimbursement = (float) $totals->reimbursed;
+        $status = request('status');
+        if (in_array($status, ['pending', 'approved', 'paid', 'rejected', 'draft'], true)) {
+            $query->where('status', $status);
+        }
+        $expenses = $query->withoutReceiptContent()
+            ->selectRaw("ocr_data->>'source' AS expense_source")
+            ->with(['employee:id,first_name,last_name,email', 'site:id,code,name', 'preApproval:id,title,estimated_amount'])
+            ->orderByDesc('expense_date')->orderByDesc('id')->paginate(25)->withQueryString();
 
         return view('mobile-expense.index', [
             'expenses' => $expenses,
@@ -68,7 +71,7 @@ class MobileExpenseController extends Controller
         // 사람이 방금 고른 값(주소 파라미터)이 언제나 이긴다. 없으면 소속 규칙:
         // 현장 사람은 자기 현장, 수퍼관리자·고위관리자·회계는 Global 이 기본이다 —
         // 전체를 보는 사람의 경비를 아무 현장에나 자동으로 앉히면 그게 더 큰 오류다.
-        $selectedSiteId = $this->requestedSiteId($request) ?: \App\Support\DefaultScope::siteId($user);
+        $selectedSiteId = $this->requestedSiteId($request) ?: DefaultScope::siteId($user);
 
         return view('mobile-expense.wizard', [
             'sites' => $this->siteOptions($selectedSiteId),
@@ -99,11 +102,11 @@ class MobileExpenseController extends Controller
             $file = $request->file('receipt');
 
             // Store in storage/app/public/receipts
-            $path = $file->store('receipts', 'public');
+            $path = ReceiptPhoto::store($file);
             $absolutePath = Storage::disk('public')->path($path);
 
             // Analyze receipt — 형식은 파일이 말하는 대로(PDF 는 PDF 로) 넘긴다.
-            $analysisResult = $this->receiptAnalyzer->analyze($absolutePath, $file->getMimeType() ?: null);
+            $analysisResult = $this->receiptAnalyzer->analyze($absolutePath, Storage::disk('public')->mimeType($path) ?: null);
 
             return response()->json([
                 'success' => true,
@@ -193,7 +196,7 @@ class MobileExpenseController extends Controller
 
         // 중복 의심 — 다른 입구(영수증앱·문서함)로 이미 들어온 같은 돈일 수 있다.
         // 막지 않고 설명란에 표시만 한다: 판단은 승인하는 사람이 한다.
-        $sentry = app(\App\Services\Finance\DuplicateExpenseSentry::class);
+        $sentry = app(DuplicateExpenseSentry::class);
         $suspect = $sentry->findSuspect(
             (float) $request->input('amount'),
             (string) $request->input('expense_date'),
@@ -290,7 +293,7 @@ class MobileExpenseController extends Controller
 
         if ($request->hasFile('receipt')) {
             $file = $request->file('receipt');
-            $path = $file->store('receipts', 'public');
+            $path = ReceiptPhoto::store($file);
             $receiptFile = $this->storedReceiptFile($path);
 
             $updates['receipt_path'] = '/storage/'.$path;

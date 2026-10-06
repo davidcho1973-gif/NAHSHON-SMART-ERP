@@ -426,10 +426,6 @@
 
 @include('partials.install-app', ['installLang' => $employee?->preferred_language])
 
-@if(session()->has(\App\Services\Auth\PersonalAppAccessService::SESSION))
-    {{-- PersonalAppSession validated this device before rendering this page. --}}
-    <script src="{{ asset('js/personal-app-connect.js') }}?v={{ filemtime(public_path('js/personal-app-connect.js')) }}" data-personal-device-verified="1" defer></script>
-@endif
 
 <script>
 (function () {
@@ -1018,9 +1014,6 @@
         var h = '';
         @if($canRequestPurchases)
         h += tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '');
-        @endif
-        @if($canManagePersonalAppQr)
-        h += tile('/attendance-app/manager-access', ICON.scan, '개인앱 연결 QR', '관리자 선택 · 휴대폰 연결', '');
         @endif
         @if($canReceiveMaterials)
         h += tile('{{ route('attendance-app.material-receipts') }}', ICON.doc, T.qMaterial, T.qMaterialSub, '');

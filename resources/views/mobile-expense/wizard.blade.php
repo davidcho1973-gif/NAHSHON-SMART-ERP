@@ -607,7 +607,8 @@
     </form>
   </div>
 
-  <script>
+  <script src="{{ asset('js/receipt-photo.js') }}"></script>
+<script>
     let currentStep = 1;
     const totalSteps = 6;
     let rawAmountString = "0";
@@ -702,7 +703,7 @@
       sub.textContent = 'Gemini가 영수증 정보를 추출하고 있습니다.';
 
       const formData = new FormData();
-      formData.append('receipt', file);
+      formData.append('receipt', await window.ReceiptPhoto.prepare(file));
 
       try {
         const response = await fetch("{{ route('mobile-expense.upload-receipt') }}", {
