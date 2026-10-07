@@ -137,6 +137,8 @@
         <input type="file" id="file-album" accept="image/*" multiple style="display:none">
 
         <div class="queue" id="queue"></div>
+        <label style="display:block;margin:12px 0"><input type="checkbox" id="group-receipt"> {{ __('같은 구매 건의 여러 장을 하나의 영수증으로 묶기') }}</label>
+        <p class="hint">{{ __('품목이 다음 장에 이어지는 영수증은 묶어서 제출하세요. 거래처·구매일·총액은 한 건으로 처리합니다.') }}</p>
         </section>
 
         <div class="card">
@@ -171,6 +173,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="{{ asset('js/receipt-photo.js') }}"></script>
+<script src="{{ asset('js/document-photos.js') }}?v={{ filemtime(public_path('js/document-photos.js')) }}"></script>
 <script>
     // 화면 안의 글도 서버와 같은 사전을 읽는다. 블레이드는 __(), 여기서는 t().
     // 사전이 두 벌이면 한쪽만 번역되는 사고가 난다.
@@ -251,6 +254,7 @@
         el.textContent = msg; el.style.display = 'block';
         clearTimeout(el._t); el._t = setTimeout(function () { el.style.display = 'none'; }, 3500);
     }
+    function escapeHtml(value) { var node = document.createElement('span'); node.textContent = String(value); return node.innerHTML; }
 
     var hasEmployee = @json((bool) $employee);
     if (!hasEmployee) { applyLang(); return; }
@@ -267,7 +271,8 @@
     tabSend.addEventListener('click', function () { show('send'); });
     tabMine.addEventListener('click', function () { show('mine'); });
 
-    // ── 사진 줄(queue) — 찍거나 골라서 쌓는다. 한 장 = 경비 한 건.
+    // One purchase can span several pages; submission mode determines the expense count.
+    var submitting = false;
     var queue = []; // {file, url, state: 'ready'|'sending'|'done'|'need_amount'|'error', msg, amount, result}
     var camInput = document.getElementById('file-cam');
     var albumInput = document.getElementById('file-album');
@@ -275,7 +280,9 @@
     document.getElementById('album').addEventListener('click', function () { albumInput.click(); });
 
     function addFiles(list) {
+        if (submitting) return;
         Array.prototype.forEach.call(list || [], function (f) {
+            if (queue.reduce(function (n, q) { return n + (q.pages ? q.pages.length : 1); }, 0) >= 20) { toast(t('최대 20장까지 추가할 수 있습니다.')); return; }
             queue.push({ file: f, url: URL.createObjectURL(f), state: 'ready', msg: '', amount: '' });
         });
         renderQueue();
@@ -297,7 +304,7 @@
             else state = '<div class="q-state">' + T.readyToSend + '</div>';
 
             return '<div class="q-item"><img src="' + q.url + '" alt="">' +
-                '<div class="q-body"><div class="q-name">' + (q.file.name || 'photo') + '</div>' + state + '</div>' +
+                '<div class="q-body"><div class="q-name">' + escapeHtml(q.file.name || 'photo') + (q.pages ? ' (' + q.pages.length + ')' : '') + '</div>' + state + '</div>' +
                 (q.state === 'sending' ? '' : '<button class="q-x" onclick="window._qRemove(' + i + ')">✕</button>') +
                 '</div>';
         }).join('');
@@ -307,7 +314,8 @@
         go.textContent = pending.length > 1 ? T.send + ' (' + pending.length + ')' : T.send;
         document.querySelector('#shoot [data-t]').textContent = pending.length ? T.shootMore : T.shoot;
     }
-    window._qRemove = function (i) { if (queue[i]) { queue.splice(i, 1); renderQueue(); } };
+    function release(q) { (q.urls || [q.url]).forEach(function (url) { try { URL.revokeObjectURL(url); } catch (_) {} }); }
+    window._qRemove = function (i) { if (!submitting && queue[i]) { release(queue[i]); queue.splice(i, 1); renderQueue(); } };
     window._qAmount = function (i, v) { if (queue[i]) queue[i].amount = v; };
 
     // ── 결제 수단
@@ -321,9 +329,8 @@
     document.getElementById('pt-personal').addEventListener('click', function () { setPt(true); });
     document.getElementById('pt-corporate').addEventListener('click', function () { setPt(false); });
 
-    // ── 제출: 줄에 쌓인 사진을 한 장씩 차례로 보낸다(한 요청 한 장 — 용량 제한을
-    //    사실상 없앤다). 각 장을 서버가 ERP 와 같은 AI 로 읽고, 흐린 장만 남아서
-    //    금액을 물어본다 — 잘 읽힌 장들은 이미 접수된 뒤다.
+    // Group continuation pages before submission. One request creates one expense;
+    // independent purchases still submit separately, and failed groups stay together.
     var go = document.getElementById('go');
 
     async function submitOne(q) {
@@ -347,9 +354,26 @@
     }
 
     go.addEventListener('click', async function () {
+        if (submitting) return;
         var pending = queue.filter(function (q) { return q.state !== 'done' && q.state !== 'sending'; });
         if (!pending.length) { toast(T.needPhoto); return; }
+        submitting = true;
         go.disabled = true;
+        var grouping = document.getElementById('group-receipt');
+        grouping.disabled = true;
+        if (grouping.checked && pending.length > 1) {
+            try {
+                go.textContent = t('사진을 준비하는 중…');
+                var pages = pending.reduce(function (all, q) { return all.concat(q.pages || [q.file]); }, []);
+                var combined = await DocumentPhotos.combine(pages);
+                var grouped = {file: combined, pages: pages, url: pending[0].url,
+                    urls: pending.reduce(function (all, q) { return all.concat(q.urls || [q.url]); }, []), state: 'ready', msg: '', amount: ''};
+                queue = queue.filter(function (q) { return pending.indexOf(q) < 0; });
+                queue.push(grouped); pending = [grouped];
+            } catch(e) {
+                toast(e.message); submitting = false; grouping.disabled = false; renderQueue(); return;
+            }
+        }
 
         var doneNow = [];
         for (var i = 0; i < pending.length; i++) {
@@ -391,10 +415,10 @@
         }
 
         // 접수된 장은 줄에서 사라진다(썸네일 메모리도 반환).
-        queue.filter(function (q) { return q.state === 'done'; }).forEach(function (q) { try { URL.revokeObjectURL(q.url); } catch (e) {} });
+        queue.filter(function (q) { return q.state === 'done'; }).forEach(release);
         queue = queue.filter(function (q) { return q.state !== 'done'; });
         if (!queue.length) document.getElementById('memo').value = '';
-        renderQueue();
+        submitting = false; grouping.disabled = false; renderQueue();
 
         // 한 장이라도 실제로 올려 본 다음에 앱 설치를 권한다 — 쓸모를 모르는 채로
         // 받는 설치 권유는 그냥 닫힌다(출퇴근앱도 첫 타각 뒤에 권한다).

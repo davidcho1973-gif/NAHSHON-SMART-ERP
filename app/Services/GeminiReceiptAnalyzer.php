@@ -66,7 +66,14 @@ class GeminiReceiptAnalyzer
     private function prompt(): string
     {
         return <<<'PROMPT'
-Analyze this receipt image and extract the receipt fields in JSON format.
+Analyze all pages of this receipt image or PDF and extract ONE purchase transaction in JSON format.
+Continuation pages belong to the same receipt, not separate expenses. Read items from every page in order.
+Use the final transaction grand total once. Never add repeated totals, carried-forward balances,
+page subtotals, payment confirmations, or the same tax/tip printed again on another page.
+Do not treat subtotal plus tax plus grand total as separate purchases. When no final total is visible,
+leave amount as 0 for manual review rather than guessing by summing page totals.
+In description, include the purchased items from all pages. Ignore duplicated overlap from photographs
+of the same printed lines, but preserve distinct purchased lines and quantities even when names match.
 Do not guess missing values. If a value is completely missing, return an empty string or null as specified by the type.
 
 Fields to extract:
