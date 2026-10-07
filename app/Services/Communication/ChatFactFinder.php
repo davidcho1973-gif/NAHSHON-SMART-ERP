@@ -2,6 +2,8 @@
 
 namespace App\Services\Communication;
 
+use App\Mcp\Read\ErpReadContext;
+use App\Mcp\Read\ErpReadQuery;
 use App\Models\AttendanceLog;
 use App\Models\BoqItem;
 use App\Models\CommunicationRoom;
@@ -18,7 +20,10 @@ use App\Models\WbsItem;
 use App\Services\Documents\KnowledgeKeeper;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
+use App\Support\JobAccess;
+use App\Support\JobEndpointPolicy;
 use App\Support\SiteClock;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * AI 가 대화방에서 질문을 받았을 때 <b>대신 조회해 주는</b> 자리.
@@ -50,6 +55,9 @@ class ChatFactFinder
         'equipment' => ['장비', '렌탈', '임대', '중장비', '크레인', '리프트', '지게차', 'equipment', 'rental'],
         'attendance' => ['출근', '퇴근', '출역', '인원', '몇 명', '몇명', '근태', '출퇴근', 'attendance', 'headcount'],
         'money' => ['비용', '경비', '영수증', '지출', '금액', '예산', '급여', '인건비', '정산', 'cost', 'expense', 'payroll'],
+        'inventory' => ['재고', '입고', '반입', 'inventory', 'stock'],
+        'payroll' => ['급여', '임금', 'payroll', 'salary'],
+        'claims' => ['기성', '청구', 'claim', 'billing'],
         'documents' => ['문서', '도면', '계약서', '서류', '스펙', '사양', 'drawing', 'document', 'spec'],
         'boq' => ['물량', '수량', '몇 개', '몇개', '몇 장', '몇장', '몇 본', '몇본', '단가', '산출', '내역', 'boq', 'quantity', 'takeoff'],
         'submittals' => ['제출물', '샵드로잉', '제작도', '컷시트', '배합설계', '승인', 'submittal', 'shop drawing'],
@@ -64,9 +72,9 @@ class ChatFactFinder
      *
      * @return array{site: ?Site, facts: array<string, mixed>, denied: array<int, string>}
      */
-    public function gather(string $question, CommunicationRoom $room, User $asker): array
+    public function gather(string $question, CommunicationRoom $room, User $asker, bool $localOnly = false, bool $sharedOnly = false): array
     {
-        return $this->gatherFor($question, $this->siteFor($room, $asker), $asker);
+        return $this->gatherFor($question, $this->siteFor($room, $asker), $asker, $localOnly, $sharedOnly);
     }
 
     /**
@@ -77,18 +85,21 @@ class ChatFactFinder
      *
      * @return array{site: ?Site, facts: array<string, mixed>, denied: array<int, string>}
      */
-    public function gatherFor(string $question, ?Site $site, User $asker): array
+    public function gatherFor(string $question, ?Site $site, User $asker, bool $localOnly = false, bool $sharedOnly = false): array
     {
         if ($asker->account_status !== 'active' || ($site && ! AiInformationAccess::canUseSite($asker, $site))) {
             return ['site' => null, 'facts' => [], 'denied' => ['이 현장 자료를 조회할 권한이 없습니다.']];
         }
-        if (! $site && ! AccessPolicy::canManageSystem($asker)) {
+        if (! $site && ($sharedOnly || ! AccessPolicy::canManageSystem($asker))) {
             return ['site' => null, 'facts' => [], 'denied' => ['담당 현장이 지정되지 않았습니다. 관리자에게 현장 배정을 요청해 주세요.']];
         }
-        if (! AccessPolicy::canManageMoney($asker) && AiInformationAccess::financial($question)) {
+        if (AiInformationAccess::financial($question) && ! JobAccess::financialQuestionAllowed($asker, $question)) {
             return ['site' => $site, 'facts' => [], 'denied' => [AiInformationAccess::DENIED]];
         }
         $topics = $this->topicsIn($question);
+        if ($sharedOnly) {
+            $topics = array_values(array_diff($topics, ['attendance', 'money', 'inventory', 'payroll', 'claims', 'documents']));
+        }
 
         $facts = [];
         $denied = [];
@@ -104,30 +115,41 @@ class ChatFactFinder
 
         // 지식 창고는 주제와 무관하게 항상 본다 — 축적된 지식은 어떤 질문에든
         // 걸릴 수 있고, 아무 주제에도 안 걸린 질문의 마지막 그물이기도 하다.
-        $knowledge = app(KnowledgeKeeper::class)
-            ->search($site, $asker, $this->searchTerms($question), $question);
+        $knowledge = $sharedOnly ? [] : app(KnowledgeKeeper::class)
+            ->search($site, $asker, $this->searchTerms($question), $question, localOnly: $localOnly);
         if ($knowledge !== []) {
             $facts['지식 창고(문서에서 축적)'] = $knowledge;
         }
 
         foreach ($topics as $topic) {
+            $module = ['wbs' => 'progress', 'procurement' => 'purchasing', 'equipment' => 'materials', 'attendance' => 'attendance',
+                'money' => 'finance', 'inventory' => 'materials', 'payroll' => 'payroll', 'claims' => 'contracts', 'documents' => 'documents',
+                'boq' => 'progress', 'submittals' => 'progress', 'inspection' => 'safety'][$topic] ?? 'documents';
+            if (JobAccess::managed($asker) && ! JobAccess::can($asker, $module)) {
+                $denied[] = '담당 업무 밖의 자료는 조회할 수 없습니다.';
+
+                continue;
+            }
             match ($topic) {
                 'wbs' => $facts['공정'] = $this->wbs($site, $asker),
                 'procurement' => $facts['조달·발주'] = $this->procurement($site, $asker),
                 'equipment' => $facts['장비'] = $this->equipment($site, $asker),
                 'attendance' => $this->attendance($site, $asker, $facts, $denied),
                 'money' => $this->money($site, $asker, $facts, $denied),
+                'inventory' => $this->storedRecords('material_receipts', '입고 대장(재고 잔량 아님)', $site, $asker, $facts, $denied),
+                'payroll' => $this->storedRecords('payslips', '급여 명세', $site, $asker, $facts, $denied),
+                'claims' => $this->storedRecords('pay_applications', '기성 청구', $site, $asker, $facts, $denied),
                 'documents' => $facts['문서함'] = $this->documents($site, $asker, $question),
                 'boq' => $facts['물량/BOQ'] = $this->boq($site, $asker, $question),
                 'submittals' => $facts['제출물 대장'] = $this->submittals($site, $asker, $question),
-                'inspection' => $facts['검사·검측'] = $this->inspection($site, $asker, $question),
+                'inspection' => $facts['검사·검측'] = $this->inspection($site, $asker, $question, includeDocumentActions: ! $sharedOnly),
                 default => null,
             };
         }
 
         // 마지막 그물 — 아무 주제에도 안 걸린 질문("코어에 합판 써도 돼?")은
         // 문서 본문 검색이 받아낸다. 시방·계약 조항 질문은 낱말 표로 다 못 잡는다.
-        if (! isset($facts['문서함'])) {
+        if (! $sharedOnly && ! isset($facts['문서함'])) {
             $fallback = $this->documents($site, $asker, $question);
             if ($fallback !== []) {
                 $facts['문서함'] = $fallback;
@@ -136,9 +158,38 @@ class ChatFactFinder
 
         return [
             'site' => $site,
-            'facts' => array_filter(AccessPolicy::canManageMoney($asker) ? $facts : AiInformationAccess::technicalFacts($facts), fn ($v): bool => $v !== [] && $v !== null),
+            'facts' => array_filter(AccessPolicy::canManageMoney($asker) ? (JobAccess::managed($asker) ? JobEndpointPolicy::redact($facts, $asker) : $facts) : AiInformationAccess::technicalFacts($facts), fn ($v): bool => $v !== [] && $v !== null),
             'denied' => $denied,
         ];
+    }
+
+    /** New domains reuse the same stored-record projections as reports and MCP. */
+    private function storedRecords(string $dataset, string $label, ?Site $site, User $actor, array &$facts, array &$denied): void
+    {
+        if (! $site) {
+            $denied[] = $label.': 조회할 현장을 선택해 주세요.';
+
+            return;
+        }
+        if (in_array($dataset, ['payslips', 'pay_applications'], true) && ! AccessPolicy::canManageMoney($actor)) {
+            $denied[] = AiInformationAccess::DENIED;
+
+            return;
+        }
+        try {
+            $result = app(ErpReadQuery::class)->read($dataset, new ErpReadContext($actor, (int) $site->company_id, $site->id), ['limit' => self::ROWS, 'text_limit' => 250]);
+            $facts[$label] = ['자료' => $dataset, '기준시각' => $result['as_of'], '목록' => $result['records'],
+                '조회건수' => count($result['records']), '최대조회건수' => self::ROWS,
+                '조회범위' => ['company_id' => $site->company_id, 'site_id' => $site->id],
+                '정렬' => '기록 ID 오름차순', '일부 자료만 조회' => $result['next_after_id'] !== null,
+                '주의' => '조회된 ERP 기록 최대 12건의 표본이며 전체 합계가 아닙니다. 최신순이 아닙니다. 전체 합계를 추정하지 마세요.'
+                    .($dataset === 'material_receipts' ? ' 입고 대장은 재고 잔량이 아닙니다.' : '')];
+        } catch (HttpException $e) {
+            if ($e->getStatusCode() !== 403) {
+                throw $e;
+            }
+            $denied[] = $label.': 열람 권한이 없습니다.';
+        }
     }
 
     /** 질문에 걸리는 주제들. 아무것도 안 걸리면 아무것도 뒤지지 않는다. */
@@ -236,7 +287,7 @@ class ChatFactFinder
         // 있는지는 siteFor() 에서 이미 걸렀다.
 
         $open = (clone $query)
-            ->whereNotIn('status', ['received', 'cancelled'])
+            ->whereNotIn('status', ['입고완료', 'received', 'cancelled'])
             ->orderBy('eta')
             ->limit(self::ROWS)
             ->get();
@@ -246,7 +297,7 @@ class ChatFactFinder
         }
 
         return [
-            '미입고 건수' => (clone $query)->whereNotIn('status', ['received', 'cancelled'])->count(),
+            '미입고 건수' => (clone $query)->whereNotIn('status', ['입고완료', 'received', 'cancelled'])->count(),
             '목록' => $open->map(fn (ProcurementItem $p): array => array_filter([
                 '발주번호' => $p->po_no,
                 '거래처' => $p->vendor,
@@ -587,7 +638,7 @@ class ChatFactFinder
      * 조회를 못 한 것은 완전히 다른 이야기인데, 조용히 빼면 AI 가 그 둘을
      * 구별하지 못하고 "확인되지 않습니다" 로 뭉뚱그린다.
      */
-    private function inspection(?Site $site, User $asker, string $question): array
+    private function inspection(?Site $site, User $asker, string $question, bool $includeDocumentActions = true): array
     {
         $out = [];
 
@@ -648,6 +699,11 @@ class ChatFactFinder
                 ]))->values()->all();
         }
 
+        // Private source-derived actions must never be reclassified as shared site facts.
+        if (! $includeDocumentActions) {
+            return $out;
+        }
+
         // 3) 문서에서 AI 가 뽑아 둔 기한·검사 액션
         $actions = DocumentActionItem::query()
             ->whereIn('intelligent_document_id', AiInformationAccess::documents($asker, $site)->select('id'))
@@ -661,6 +717,7 @@ class ChatFactFinder
         $actionRows = $actions->get();
         if ($actionRows->isNotEmpty()) {
             $out['문서에서 뽑은 검사·기한 항목'] = $actionRows->map(fn ($a): array => array_filter([
+                '문서ID' => $a->intelligent_document_id,
                 '종류' => $a->action_type,
                 '내용' => mb_substr((string) ($a->title ?: $a->details), 0, 140),
                 '기한' => $a->due_at?->toDateString() ?? '문서에 날짜 명시 없음',

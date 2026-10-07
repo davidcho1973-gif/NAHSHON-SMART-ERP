@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\EmailPasswordAuthService;
+use App\Support\JobAccess;
 use App\Support\WorkerDeviceSession;
 use Closure;
 use Illuminate\Http\Request;
@@ -45,7 +47,7 @@ class RequireApprovedErpAccess
         }
 
         // 뒷 4자리로 들어온 세션 — 권한이 무엇이든 본화면은 열리지 않는다.
-        if (WorkerDeviceSession::isDeviceOnly($request)) {
+        if (WorkerDeviceSession::isDeviceOnly($request) || (JobAccess::managed($user) && ! EmailPasswordAuthService::hasStrongAuthentication($request, $user))) {
             return self::deny($request, 'ERP에 접속하려면 이메일·비밀번호 또는 Google로 로그인하세요. 개인앱 연결은 유지됩니다.');
         }
 

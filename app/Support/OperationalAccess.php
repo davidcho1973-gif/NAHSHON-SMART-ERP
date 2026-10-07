@@ -44,6 +44,12 @@ final class OperationalAccess
 
     public static function assertManage(): void
     {
+        if (JobAccess::managed(auth()->user())) {
+            $permission = JobEndpointPolicy::route(request());
+            abort_unless($permission && JobAccess::can(auth()->user(), ...$permission), 403);
+
+            return;
+        }
         abort_unless(AccessPolicy::canManageSite(auth()->user()), 403, '현장 관리 권한이 필요합니다.');
     }
 }

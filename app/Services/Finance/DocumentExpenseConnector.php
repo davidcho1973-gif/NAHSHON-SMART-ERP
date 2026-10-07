@@ -59,8 +59,9 @@ class DocumentExpenseConnector
         $sourceRef = "document:{$document->id}";
         $existing = MobileExpense::query()->where('source_ref', $sourceRef)->first();
 
-        // 사람이 이미 승인/지급한 건은 손대지 않는다 — 장부 확정 후 소급 변경 금지.
-        if ($existing && $existing->status !== 'pending') {
+        // Source identity is not write ownership: a person may register the same receipt
+        // with explicitly reviewed values. Reanalysis owns only its own pending rows.
+        if ($existing && ($existing->status !== 'pending' || ($existing->ocr_data['source'] ?? null) !== 'document-hub')) {
             return;
         }
         if ($flow !== 'out' || $amount <= 0) {
@@ -119,7 +120,7 @@ class DocumentExpenseConnector
         }
 
         if (! $existing) {
-            MobileExpense::query()->create($attributes + ['source_ref' => $sourceRef, 'status' => 'pending']);
+            app(ExpenseRegistrationService::class)->registerPending($attributes + ['source_ref' => $sourceRef]);
 
             return;
         }

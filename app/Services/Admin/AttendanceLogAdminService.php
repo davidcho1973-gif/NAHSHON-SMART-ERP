@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\AccessPolicy;
+use App\Support\JobAccess;
 use App\Support\SiteClock;
 use App\Support\WorkRules;
 use Illuminate\Support\Carbon;
@@ -76,6 +77,9 @@ class AttendanceLogAdminService
     public function canView(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'attendance', 'view');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -85,6 +89,9 @@ class AttendanceLogAdminService
     public function canDelete(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor)) {
+            return JobAccess::can($actor, 'attendance', 'delete');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -94,6 +101,9 @@ class AttendanceLogAdminService
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'attendance', 'edit');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -153,6 +163,7 @@ class AttendanceLogAdminService
             'rows' => $this->days($query->get()),
             'canManage' => $this->canManage(),
             'canDelete' => $this->canDelete(),
+            'canApprove' => JobAccess::managed(auth()->user()) ? JobAccess::can(auth()->user(), 'attendance', 'approve') : $this->canManage(),
         ];
     }
 
@@ -351,7 +362,10 @@ class AttendanceLogAdminService
         $errors = [];
         $employeeId = $this->intOrNull($input['employeeId'] ?? null);
         $eventType = (string) ($input['eventType'] ?? '');
-        $status = (string) ($input['status'] ?? 'approved');
+        $status = (string) ($input['status'] ?? (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'attendance', 'approve') ? 'pending' : 'approved'));
+        if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'attendance', 'approve') && $status !== 'pending') {
+            return ['success' => false, 'error' => '수기 근태는 대기 상태로 제출하세요. 승인 권한자가 확인해야 합니다.'];
+        }
         $source = (string) ($input['source'] ?? 'manual');
         $eventAtRaw = trim((string) ($input['eventAt'] ?? ''));
 
@@ -473,7 +487,7 @@ class AttendanceLogAdminService
      */
     public function setStatus(int $id, string $status): array
     {
-        if (! $this->canManage()) {
+        if (JobAccess::managed(auth()->user()) ? ! JobAccess::can(auth()->user(), 'attendance', 'approve') : ! $this->canManage()) {
             return ['success' => false, 'error' => '출퇴근 기록 수정 권한이 없습니다.'];
         }
         if (! array_key_exists($status, self::STATUSES)) {

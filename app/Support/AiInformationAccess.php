@@ -13,7 +13,7 @@ final class AiInformationAccess
     public const DENIED = '회계·급여·단가·견적·계약금액은 재무 열람 권한이 있어야 답변할 수 있습니다. 공정·시공·수량 질문은 금액 부분을 제외하고 물어봐 주세요.';
 
     // Unknown/general documents are not assumed safe merely because AI misclassified them.
-    private const TECHNICAL_TYPES = ['drawing', 'specification', 'submittal', 'rfi', 'daily_report', 'inspection', 'ncr', 'safety_plan', 'incident_report', 'schedule', 'meeting_minutes', 'delivery_ticket', 'certificate', 'warranty', 'closeout_package'];
+    public const TECHNICAL_TYPES = ['drawing', 'specification', 'submittal', 'rfi', 'daily_report', 'inspection', 'ncr', 'safety_plan', 'incident_report', 'schedule', 'meeting_minutes', 'delivery_ticket', 'certificate', 'warranty', 'closeout_package'];
 
     // PostgreSQL and PCRE compatible. Do not match technical "얼마나/얼마", dimensions or quantities.
     private const MONEY_PATTERN = '급여|임금|시급|월급|연봉|인건비|노무비|재료비|단가|금액|총액|견적|회계|경비|지출|예산|정산|대금|원가|매출|매입|수익|이익|청구|세금|송금|계좌|돈|비용|가격|임대료|\\b(payroll|salary|salaries|wages?|accounting|financial|price|pricing|costs?|expenses?|budget|invoice|payment|profit|revenue|quotation|tax|unit[ _-]?rate|contract[ _-]?(amount|value|sum)|estimate|cotizaci[oó]n|precio|costo|salario|n[oó]mina|presupuesto|factura|pago)\\b|[$€£₩]|\\b(USD|KRW|EUR)\\b|[0-9][0-9,.]*[ ]*(달러|원)([^가-힣]|$)';
@@ -32,6 +32,9 @@ final class AiInformationAccess
     {
         if ($user->account_status !== 'active' || ! array_key_exists($user->access_role, User::ROLE_OPTIONS)) {
             return false;
+        }
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return in_array((int) $site->id, JobAccess::siteIds($user), true);
         }
         if (AccessPolicy::canManageSystem($user)) {
             return true;
@@ -83,6 +86,22 @@ final class AiInformationAccess
         return $query;
     }
 
+    public static function withoutUnauthorizedJobText(Builder $query, User $user): void
+    {
+        foreach (['payroll' => '급여|주급|임금|시급|월급|연봉|인건비|노무비|payroll|salary|wage',
+            'finance' => '회계|경비|손익|자금|지출|수금|세금|계좌|accounting|expense|profit|bank|tax',
+            'contracts' => '계약금액|기성금액|견적|contract[ _-]?(amount|value|sum)|quotation'] as $module => $pattern) {
+            if (JobAccess::can($user, $module)) {
+                continue;
+            }
+            foreach (['title', 'original_file_name', 'summary', 'key_facts', 'search_text', 'extracted_text'] as $field) {
+                $column = $query->getModel()->qualifyColumn($field);
+                $expression = $field === 'key_facts' ? 'CAST('.$column.' AS JSONB)' : $column;
+                $query->whereRaw("COALESCE(CAST({$expression} AS TEXT), '') !~* ?", [$pattern]);
+            }
+        }
+    }
+
     public static function withoutFinancialText(Builder $query, string $column): void
     {
         // PostgreSQL uses \y for a word boundary; column names are application constants only.
@@ -114,6 +133,6 @@ final class AiInformationAccess
     {
         return hash('sha256', json_encode(['worker-ask-v1', $user->access_role, $user->account_status, $user->access_scope,
             $user->allowed_company_id, $user->allowed_site_id, $user->allowed_team_id, $user->employee_id,
-            $user->employee?->company_id, $user->employee?->site_id]));
+            $user->employee?->company_id, $user->employee?->site_id, $user->job_role, $user->job_permissions, $user->job_site_ids]));
     }
 }

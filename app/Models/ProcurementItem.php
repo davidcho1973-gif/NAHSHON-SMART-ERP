@@ -13,6 +13,9 @@ class ProcurementItem extends Model
     /** 조달 상태 파이프라인(순서 = 진행 단계). */
     public const STATUSES = ['발주대기', '발주완료', '생산중', '선적중', '통관중', '입고완료'];
 
+    /** Explicit registered order stages only; unknown states are not receipt evidence. */
+    public const AWAITING_RECEIPT_STATUSES = ['발주완료', '생산중', '선적중', '통관중'];
+
     /** 각 단계의 진행률(%) — 파이프라인 시각화·집계용. */
     public const STATUS_PROGRESS = [
         '발주대기' => 0,

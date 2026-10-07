@@ -23,6 +23,10 @@ class DefaultScope
 
     public static function isGlobal(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return $user->access_scope === 'company';
+        }
+
         return $user !== null && in_array($user->access_role, self::GLOBAL_ROLES, true);
     }
 

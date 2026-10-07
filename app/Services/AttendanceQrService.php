@@ -9,11 +9,12 @@ use App\Models\DailyWorkAssignment;
 use App\Models\Employee;
 use App\Models\EmployeeBadgeQrToken;
 use App\Models\User;
+use App\Support\JobAccess;
+use App\Support\Org;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
-use App\Support\Org;
 
 class AttendanceQrService
 {
@@ -194,6 +195,9 @@ class AttendanceQrService
 
     public function canProcessCrew(User $user, ?AttendanceQrCode $qrCode = null): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'attendance', 'edit') && (! $qrCode || in_array((int) $qrCode->site_id, JobAccess::siteIds($user), true));
+        }
         if (in_array($user->access_role, ['super_admin', 'admin', 'hr_manager', 'site_manager', 'safety_manager', 'foreman'], true)) {
             return $this->withinUserScope($user, $qrCode);
         }

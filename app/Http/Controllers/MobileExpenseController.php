@@ -6,6 +6,7 @@ use App\Models\ExpensePreApproval;
 use App\Models\MobileExpense;
 use App\Models\Site;
 use App\Services\Finance\DuplicateExpenseSentry;
+use App\Services\Finance\ExpenseRegistrationService;
 use App\Services\Finance\ExpenseReviewService;
 use App\Services\GeminiReceiptAnalyzer;
 use App\Support\DefaultScope;
@@ -211,7 +212,7 @@ class MobileExpenseController extends Controller
         $receiptStoragePath = $this->publicReceiptPath($receiptPath);
         $receiptFile = $this->storedReceiptFile($receiptStoragePath);
 
-        MobileExpense::create($this->mobileExpensePayload([
+        app(ExpenseRegistrationService::class)->registerPending($this->mobileExpensePayload([
             'company_id' => $companyId,
             'project_id' => $request->input('project_id'),
             'wbs_code' => $request->input('wbs_code'),

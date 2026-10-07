@@ -2,10 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Site;
 use App\Models\User;
+use App\Services\Assistant\AssistantReportService;
+use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Communication\ChatFactFinder;
 use App\Services\Documents\DocumentAsk;
+use App\Support\AiAssistantBudget;
+use App\Support\AiInformationAccess;
 use App\Support\DotsAccess;
+use App\Support\WorkerDeviceSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +38,9 @@ class MobileAskController extends Controller
             'available' => $this->ask->available(),
             // 음성은 Gemini 키가 있어야 — 마이크를 눌러 보고 나서 실패를 아는 것보다 낫다.
             'voiceReady' => trim((string) config('services.gemini.api_key')) !== '',
+            'budget' => app(AiAssistantBudget::class)->status($user, app(ChatFactFinder::class)->siteOf($user)?->company_id),
+            'workspaceReady' => EmailPasswordAuthService::hasStrongAuthentication($request, $user) && ! WorkerDeviceSession::isDeviceOnly($request),
+            'workspace' => app(AssistantReportService::class)->options($user),
             'recent' => $user instanceof User ? $this->ask->recent($user) : [],
         ]);
     }
@@ -41,9 +50,11 @@ class MobileAskController extends Controller
         $user = $request->user();
         abort_unless($user instanceof User && $user->account_status === 'active', 403);
 
-        $data = $request->validate(['question' => ['required', 'string', 'max:600']]);
+        $data = $request->validate(['question' => ['required', 'string', 'max:600'], 'site_id' => ['nullable', 'integer', 'min:1']]);
+        $site = isset($data['site_id']) ? Site::findOrFail((int) $data['site_id']) : null;
+        abort_if($site && ! AiInformationAccess::canUseSite($user, $site), 403);
 
-        $result = $this->ask->ask($user, (string) $data['question']);
+        $result = $this->ask->ask($user, (string) $data['question'], $site);
 
         return response()->json($result, ($result['success'] ?? false) ? 200 : 422);
     }

@@ -43,9 +43,31 @@ class GoogleAuthController extends Controller
 
     public function redirect(Request $request): RedirectResponse
     {
-        EmailPasswordAuthService::rememberErpLogin($request);
+        $erpLogin = EmailPasswordAuthService::rememberErpLogin($request);
         if (! $this->googleIsConfigured()) {
             return $this->deny('Google login is not configured yet. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+        }
+
+        $origin = $this->originFor($this->redirectUri());
+        if ($origin === null) {
+            return $this->deny('Google login callback URL is not configured correctly.');
+        }
+
+        $intended = $this->safeDestinationPath($request->query('return_to'))
+            ?? $this->safeDestinationPath($request->session()->get('url.intended'), $request->getSchemeAndHttpHost())
+            ?? $this->safeDestinationPath($request->session()->get('url.intended'), $this->originFor((string) config('app.url')));
+
+        // Alias-host cookies do not reach the configured callback host. Enter that
+        // origin before creating OAuth state; never move a session or state token.
+        if ($origin !== $request->getSchemeAndHttpHost()) {
+            $parameters = array_filter(['erp' => $erpLogin ? '1' : null, 'return_to' => $intended], fn ($value) => $value !== null);
+
+            return redirect()->away($origin.route('auth.google.redirect', [], false)
+                .($parameters ? '?'.http_build_query($parameters) : ''));
+        }
+
+        if ($intended !== null) {
+            $request->session()->put('url.intended', $intended);
         }
 
         $state = Str::random(40);
@@ -220,38 +242,63 @@ class GoogleAuthController extends Controller
             return $user->landingPath();
         }
 
-        $intended = $request->session()->pull('url.intended');
-
-        if (is_string($intended) && $this->isSafeDestination($intended)) {
-            return $intended;
-        }
-
-        return $user->landingPath();
+        return $this->safeDestinationPath(
+            $request->session()->pull('url.intended'),
+            $this->originFor((string) config('app.url')),
+        ) ?? $user->landingPath();
     }
 
     /** 우리 앱 안의, 지금도 살아 있는 화면인가. */
-    private function isSafeDestination(string $url): bool
+    private function safeDestinationPath(mixed $url, ?string $allowedOrigin = null): ?string
     {
-        $path = (string) parse_url($url, PHP_URL_PATH);
-
-        // 다른 사이트로 보내지 않는다(열린 리다이렉트).
-        $host = parse_url($url, PHP_URL_HOST);
-        if ($host !== null && $host !== parse_url((string) config('app.url'), PHP_URL_HOST)) {
-            return false;
+        if (! is_string($url) || preg_match('/[\\x00-\\x20\\x7f\\\\\\\\]/', $url)) {
+            return null;
         }
 
-        if ($path === '' || ! str_starts_with($path, '/')) {
-            return false;
+        $parts = parse_url($url);
+        if ($parts === false || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+
+        // Only explicitly allowed absolute origins may become local paths. Query
+        // return_to values have no allowed origin and must already be relative.
+        if (isset($parts['scheme']) || isset($parts['host'])) {
+            if ($allowedOrigin === null || $this->originFor($url) !== $allowedOrigin) {
+                return null;
+            }
+        }
+
+        $path = $parts['path'] ?? '';
+        $decodedPath = rawurldecode($path);
+        if (! str_starts_with($path, '/') || str_starts_with($path, '//')
+            || str_starts_with($decodedPath, '//') || preg_match('/[\\x00-\\x20\\x7f\\\\\\\\]/', $decodedPath)) {
+            return null;
         }
 
         // 없어진 관리자 패널, 그리고 로그인 자체로 되돌아가는 고리.
         foreach (['/admin', '/login', '/auth/'] as $dead) {
-            if (str_starts_with($path, $dead)) {
-                return false;
+            if (str_starts_with($decodedPath, $dead)) {
+                return null;
             }
         }
 
-        return true;
+        return $path.(isset($parts['query']) ? '?'.$parts['query'] : '')
+            .(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
+    }
+
+    private function originFor(string $url): ?string
+    {
+        $parts = parse_url($url);
+        $scheme = strtolower($parts['scheme'] ?? '');
+        if (! in_array($scheme, ['http', 'https'], true) || empty($parts['host'])
+            || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+
+        $port = $parts['port'] ?? ($scheme === 'https' ? 443 : 80);
+
+        return $scheme.'://'.strtolower($parts['host'])
+            .($port === ($scheme === 'https' ? 443 : 80) ? '' : ':'.$port);
     }
 
     private function deny(string $message): RedirectResponse

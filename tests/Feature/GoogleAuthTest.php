@@ -9,11 +9,161 @@ use App\Services\Auth\PersonalAppAccessService;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GoogleAuthTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_alias_google_entry_redirects_before_creating_oauth_state(): void
+    {
+        $this->configureGoogle();
+        config(['services.google.redirect' => 'https://erp.example.com/auth/google/callback']);
+        Http::fake();
+
+        $this->get('https://alias.example.com/auth/google?state=untrusted&redirect_uri=https://outside.example/callback')
+            ->assertRedirect('https://erp.example.com/auth/google')
+            ->assertSessionMissing('google_oauth_state');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_canonical_google_entry_creates_state_without_an_extra_redirect(): void
+    {
+        $this->configureGoogle();
+        config(['services.google.redirect' => 'https://erp.example.com:443/auth/google/callback']);
+
+        $response = $this->get('https://erp.example.com/auth/google')
+            ->assertRedirect()->assertSessionHas('google_oauth_state');
+
+        $location = $response->headers->get('Location');
+        $this->assertSame('accounts.google.com', parse_url($location, PHP_URL_HOST));
+        parse_str(parse_url($location, PHP_URL_QUERY), $parameters);
+        $this->assertSame('https://erp.example.com:443/auth/google/callback', $parameters['redirect_uri']);
+        $this->assertSame(session('google_oauth_state'), $parameters['state']);
+        $this->assertSame('openid email profile', $parameters['scope']);
+    }
+
+    public function test_google_entry_matches_the_callback_scheme_and_non_default_port(): void
+    {
+        $this->configureGoogle();
+        config(['services.google.redirect' => 'https://erp.example.com:8443/auth/google/callback']);
+
+        $this->get('http://erp.example.com/auth/google')
+            ->assertRedirect('https://erp.example.com:8443/auth/google')
+            ->assertSessionMissing('google_oauth_state');
+    }
+
+    public function test_google_entry_without_an_explicit_callback_uses_the_current_origin(): void
+    {
+        $this->configureGoogle();
+        config(['services.google.redirect' => null]);
+
+        $response = $this->get('https://erp.example.com/auth/google')
+            ->assertRedirect()->assertSessionHas('google_oauth_state');
+
+        parse_str(parse_url($response->headers->get('Location'), PHP_URL_QUERY), $parameters);
+        $this->assertSame('https://erp.example.com/auth/google/callback', $parameters['redirect_uri']);
+    }
+
+    public function test_alias_login_restores_only_the_safe_local_destination_in_a_new_canonical_session(): void
+    {
+        $this->configureGoogle();
+        config(['app.url' => 'https://erp.example.com',
+            'services.google.redirect' => 'https://erp.example.com/auth/google/callback']);
+        $user = User::factory()->create(['email' => 'worker@example.com', 'access_role' => 'worker',
+            'access_scope' => 'self', 'account_status' => 'active']);
+        $destination = '/attendance-app?tab=history#today';
+
+        $response = $this->withSession(['url.intended' => 'https://alias.example.com'.$destination])
+            ->get('https://alias.example.com/auth/google')
+            ->assertRedirect('https://erp.example.com/auth/google?'.http_build_query(['return_to' => $destination]))
+            ->assertSessionMissing('google_oauth_state');
+
+        // Host-only cookies are separate: none of the alias session reaches the callback origin.
+        $this->app['session.store']->flush();
+        $this->get($response->headers->get('Location'))
+            ->assertSessionHas('google_oauth_state')
+            ->assertSessionHas('url.intended', $destination);
+        $state = session('google_oauth_state');
+        $this->fakeGoogleProfile($user);
+
+        $this->get('https://erp.example.com/auth/google/callback?'.http_build_query(['state' => $state, 'code' => 'auth-code']))
+            ->assertRedirect('https://erp.example.com'.$destination)
+            ->assertSessionMissing('google_oauth_state')
+            ->assertSessionMissing('url.intended');
+        $this->assertAuthenticatedAs($user->fresh());
+    }
+
+    public function test_alias_login_preserves_explicit_erp_entry_across_host_sessions(): void
+    {
+        $this->configureGoogle();
+        config(['app.url' => 'https://erp.example.com',
+            'services.google.redirect' => 'https://erp.example.com/auth/google/callback']);
+        $user = User::factory()->create(['email' => 'admin@example.com', 'access_role' => 'admin',
+            'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->get('https://alias.example.com/login?erp=1')->assertOk();
+
+        $response = $this->withSession(['url.intended' => '/attendance-app'])
+            ->get('https://alias.example.com/auth/google')
+            ->assertRedirect('https://erp.example.com/auth/google?'.http_build_query(['erp' => '1', 'return_to' => '/attendance-app']))
+            ->assertSessionMissing('google_oauth_state');
+
+        $this->app['session.store']->flush();
+        $this->get($response->headers->get('Location'))
+            ->assertSessionHas(EmailPasswordAuthService::ERP_LOGIN_SESSION, true);
+        $state = session('google_oauth_state');
+        $this->fakeGoogleProfile($user);
+
+        $this->get('https://erp.example.com/auth/google/callback?'.http_build_query(['state' => $state, 'code' => 'auth-code']))
+            ->assertRedirect('https://erp.example.com')
+            ->assertSessionMissing(EmailPasswordAuthService::ERP_LOGIN_SESSION)
+            ->assertSessionMissing('url.intended')
+            ->assertSessionHas(EmailPasswordAuthService::STRONG_AUTH_SESSION, $user->id);
+    }
+
+    #[DataProvider('unsafeDestinations')]
+    public function test_google_entry_does_not_forward_or_accept_an_unsafe_destination(mixed $destination): void
+    {
+        $this->configureGoogle();
+        config(['app.url' => 'https://erp.example.com',
+            'services.google.redirect' => 'https://erp.example.com/auth/google/callback']);
+
+        $this->withSession(['url.intended' => $destination])
+            ->get('https://alias.example.com/auth/google')
+            ->assertRedirect('https://erp.example.com/auth/google')
+            ->assertSessionMissing('google_oauth_state');
+
+        $this->app['session.store']->flush();
+        $this->get('https://erp.example.com/auth/google?'.http_build_query(['return_to' => $destination]))
+            ->assertSessionHas('google_oauth_state')
+            ->assertSessionMissing('url.intended');
+    }
+
+    public static function unsafeDestinations(): array
+    {
+        return [
+            'outside host' => ['https://outside.example/attendance-app'],
+            'protocol relative' => ['//outside.example/attendance-app'],
+            'canonical protocol relative' => ['//erp.example.com/attendance-app'],
+            'credentials' => ['https://user:password@erp.example.com/attendance-app'],
+            'other port' => ['https://erp.example.com:444/attendance-app'],
+            'other scheme' => ['http://erp.example.com/attendance-app'],
+            'javascript scheme' => ['javascript:/attendance-app'],
+            'backslash authority' => ['/\\outside.example/attendance-app'],
+            'encoded backslash' => ['/%5coutside.example/attendance-app'],
+            'encoded authority' => ['/%2foutside.example/attendance-app'],
+            'newline' => ["/\n/outside.example/attendance-app"],
+            'encoded newline' => ['/%0a/outside.example/attendance-app'],
+            'retired admin' => ['/admin/member-documents'],
+            'login loop' => ['/login?erp=1'],
+            'oauth loop' => ['/auth/google'],
+            'encoded login loop' => ['/%6cogin'],
+            'relative without slash' => ['attendance-app'],
+            'array' => [['/attendance-app']],
+        ];
+    }
 
     public function test_google_callback_links_registered_active_user_and_logs_in(): void
     {
@@ -198,6 +348,16 @@ class GoogleAuthTest extends TestCase
             'services.google.client_id' => 'client-id',
             'services.google.client_secret' => 'client-secret',
             'services.google.redirect' => 'http://localhost/auth/google/callback',
+        ]);
+    }
+
+    private function fakeGoogleProfile(User $user): void
+    {
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'google-token'], 200),
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'google-'.$user->id, 'email' => $user->email, 'email_verified' => true,
+            ], 200),
         ]);
     }
 }

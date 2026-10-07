@@ -15,7 +15,9 @@ use App\Models\PurchaseRequestAttachment;
 use App\Models\PurchaseRequestLine;
 use App\Models\PurchaseRequestOrder;
 use App\Models\User;
+use App\Models\Vendor;
 use App\Services\Vendors\VendorResolver;
+use App\Support\JobAccess;
 use App\Support\PurchaseAccess;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -119,6 +121,7 @@ class PurchaseRequestService
             $row = PurchaseRequest::create([
                 'company_id' => $site->company_id, 'site_id' => $site->id, 'requested_by_id' => $user->id,
                 'request_key' => $key, 'request_fingerprint' => $fingerprint,
+                'approval_required' => JobAccess::managed($user), 'approval_status' => JobAccess::managed($user) ? 'pending' : null,
                 'status' => 'submitted', 'need_by' => $data['need_by'] ?? null, 'note' => $data['note'] ?? null,
             ]);
             foreach ($data['lines'] as $seq => $line) {
@@ -213,6 +216,12 @@ class PurchaseRequestService
                 $row->reason = null;
                 $message = '요청자가 내용을 보완했습니다.'.(filled($data['note'] ?? null) ? ' '.$data['note'] : '');
             } elseif ($action === 'order') {
+                if ($row->approval_required) {
+                    abort_unless($row->approval_status === 'approved', 422, '승인권자의 구매 예산 승인 후 주문할 수 있습니다.');
+                    abort_unless(isset($data['amount']) && ($data['currency'] ?? 'USD') === $row->approval_currency, 422, '승인 통화와 주문 금액을 입력하세요.');
+                    $spent = (int) round((float) $row->orders()->sum('amount') * 100);
+                    abort_unless($spent + (int) round((float) $data['amount'] * 100) <= (int) round((float) $row->approved_budget * 100), 422, '승인된 구매 예산 한도를 넘었습니다.');
+                }
                 abort_if(in_array($status, ['cancelled', 'received'], true), 422, '이 요청은 구매할 수 없습니다.');
                 abort_if(collect($state['lines'])->contains(fn ($l) => $l['quantity'] === null || blank($l['unit'])), 422, '품목 수량과 단위를 먼저 확정하세요.');
                 $order = $this->order($row, $data, $user, $state);
@@ -261,6 +270,12 @@ class PurchaseRequestService
             }
             if ($noOp) {
                 return ['success' => true, 'unchanged' => true, 'request' => $this->serialize($row, $user)];
+            }
+            if ($row->approval_required && in_array($action, ['resolve', 'clarify'], true)) {
+                $row->approval_status = 'pending';
+                $row->approved_budget = null;
+                $row->approved_at = null;
+                $row->approved_by_id = null;
             }
             $row->version++;
             $row->save();
@@ -379,7 +394,7 @@ class PurchaseRequestService
                 $actions[] = 'review';
                 $actions[] = 'resolve';
             }
-            if (! $orderedAll) {
+            if (! $orderedAll && (! $row->approval_required || $row->approval_status === 'approved')) {
                 $actions[] = 'order';
             }
             if ($status === 'ordered') {
@@ -395,7 +410,7 @@ class PurchaseRequestService
         if (PurchaseAccess::canRequest($user) && $row->requested_by_id === $user->id && $row->status === 'needs_info') {
             $actions[] = 'clarify';
         }
-        $result = ['id' => $row->id, 'version' => $row->version, 'status' => $status, 'status_label' => PurchaseRequest::STATUSES[$status] ?? $status,
+        $result = ['approval_required' => (bool) $row->approval_required, 'approval_status' => $row->approval_status, 'id' => $row->id, 'version' => $row->version, 'status' => $status, 'status_label' => PurchaseRequest::STATUSES[$status] ?? $status,
             'site_id' => $row->site_id, 'site_name' => $row->site?->name, 'site_address' => $row->site?->address, 'requester_name' => $row->requester?->name,
             'requested_by_id' => $row->requested_by_id, 'need_by' => $row->need_by?->toDateString(), 'note' => $row->note,
             'eta' => $row->eta?->toDateString(), 'reason' => $row->reason, 'lines' => $lines, 'orders' => $orders,
@@ -407,6 +422,8 @@ class PurchaseRequestService
         ];
         if ($buyerView) {
             $currencies = $row->orders->pluck('currency')->unique();
+            $result['approved_budget'] = $row->approved_budget;
+            $result['approval_currency'] = $row->approval_currency;
             $result['amount'] = $row->orders->isNotEmpty() && $currencies->count() === 1 && $row->orders->every(fn ($o): bool => $o->amount !== null) ? (float) $row->orders->sum('amount') : null;
             $result['currency'] = $currencies->count() === 1 ? $currencies->first() : null;
             $result['vendor'] = $row->orders->pluck('vendor')->unique()->implode(', ');
@@ -595,7 +612,7 @@ class PurchaseRequestService
                 'need_by' => $r->need_by?->toDateString(),
             ])->all();
 
-        $vendors = \App\Models\Vendor::query()->where('status', 'active')
+        $vendors = Vendor::query()->where('status', 'active')
             ->where(fn ($q) => $q->whereNull('company_id')->orWhere('company_id', $row->company_id))
             ->orderBy('name')->limit(50)->get(['id', 'name', 'phone', 'email', 'address', 'trade'])->toArray();
 

@@ -9,6 +9,7 @@ use App\Models\ProjectContract;
 use App\Models\User;
 use App\Services\Finance\BillingCalculator;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Support\JobAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -47,6 +48,9 @@ class BillingAdminService
     public function canView(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'contracts', 'view');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -56,6 +60,9 @@ class BillingAdminService
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'contracts', 'edit');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -65,6 +72,9 @@ class BillingAdminService
     private function canDelete(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'contracts', 'delete');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -567,7 +577,7 @@ class BillingAdminService
 
         // 승인 취소·수동 종결·재개는 확정 기록을 되돌리는 행위라 삭제 권한자만 (§3.1)
         $needsDelete = in_array($action, ['unapprove', 'close', 'reopen'], true);
-        if ($needsDelete ? ! $this->canDelete() : ! $this->canManage()) {
+        if (JobAccess::managed(auth()->user()) ? ! JobAccess::can(auth()->user(), 'contracts', $needsDelete ? 'delete' : ($action === 'approve' ? 'approve' : 'edit')) : ($needsDelete ? ! $this->canDelete() : ! $this->canManage())) {
             return ['success' => false, 'error' => '기성 상태 변경 권한이 없습니다.'];
         }
 

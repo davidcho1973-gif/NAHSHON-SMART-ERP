@@ -49,29 +49,54 @@ final class AccessPolicy
 
     public static function canManageSystem(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'system', 'edit');
+        }
+
         return self::has($user, self::SYSTEM_ROLES);
     }
 
     /** 경비 승인·지급, 급여 실행. */
     public static function canManageMoney(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'finance') || JobAccess::can($user, 'payroll') || JobAccess::can($user, 'contracts');
+        }
+
         return self::has($user, self::MONEY_ROLES);
     }
 
     /** 직원 등록·수정. */
     public static function canManagePeople(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'people', 'edit');
+        }
+
         return self::has($user, self::PEOPLE_ROLES);
     }
 
     /** 현장 운영 — 출퇴근 수정, 문서함, 공정·조달 반영. */
     public static function canManageSite(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            $permission = JobEndpointPolicy::route(request());
+            if ($permission && in_array($permission[0], ['attendance', 'progress', 'reports', 'safety', 'materials', 'documents', 'purchasing', 'office'], true)) {
+                return JobAccess::can($user, ...$permission);
+            }
+
+            return JobAccess::can($user, 'progress', 'edit') || JobAccess::can($user, 'reports', 'edit') || JobAccess::can($user, 'safety', 'edit');
+        }
+
         return self::has($user, self::SITE_ROLES);
     }
 
     public static function canAnnounce(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'messages', 'edit');
+        }
+
         return self::has($user, self::ANNOUNCE_ROLES);
     }
 

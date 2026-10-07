@@ -69,6 +69,10 @@ Route::get('/manager-invitation/complete', [ManagerInvitationController::class, 
 Route::get('/manager-invitation/{token}', [ManagerInvitationController::class, 'show'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('manager-invitation.show');
 Route::post('/manager-invitation/{token}/verify', [ManagerInvitationController::class, 'verify'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.verify');
 Route::post('/manager-invitation/{token}/complete', [ManagerInvitationController::class, 'complete'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:5,1')->name('manager-invitation.complete');
+use App\Http\Controllers\AssistantWorkspaceController;
+use App\Http\Controllers\JobApprovalController;
+use App\Http\Controllers\JobWorkspaceController;
+use App\Http\Controllers\PersonalPayslipController;
 use App\Support\Org;
 use App\Support\QueueHealth;
 use App\Support\UploadLimits;
@@ -351,6 +355,11 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/email-ai/ask', [EmailAiInboxController::class, 'ask'])->name('email-ai.ask');
 
     // QR Attendance mobile app
+    Route::post('/job-payments/{module}/{id}', [JobApprovalController::class, 'pay'])->whereNumber('id')->middleware(RequireApprovedErpAccess::class)->name('job-payments.record');
+    Route::post('/job-approvals/{module}/{id}', [JobApprovalController::class, 'decide'])->whereNumber('id')->middleware(RequireApprovedErpAccess::class)->name('job-approvals.decide');
+    Route::get('/attendance-app/workspace', [JobWorkspaceController::class, 'index'])->middleware(RequireApprovedErpAccess::class)->name('job-workspace');
+    Route::get('/attendance-app/payslips', [PersonalPayslipController::class, 'index'])->name('personal-payslips.index');
+    Route::get('/attendance-app/payslips/{id}', [PersonalPayslipController::class, 'show'])->whereNumber('id')->name('personal-payslips.show');
     Route::get('/attendance-app', [AttendanceAppController::class, 'index'])->name('attendance-app.index');
     // 작업자 홈이 쓰는 두 개. 화면은 이 둘만 보고 자동 → 직접 → QR 로 내려간다.
     Route::get('/attendance-app/home', [AttendanceAppController::class, 'home'])->name('attendance-app.home');
@@ -427,6 +436,19 @@ Route::middleware('auth')->group(function (): void {
         // 물어보기 — 도면·서류·대장에 대고 묻는다. 답은 물어본 사람만 본다.
         Route::get('/attendance-app/ask', [MobileAskController::class, 'index'])->name('attendance-app.ask');
         Route::get('/attendance-app/dots', [MobileAskController::class, 'dots'])->name('attendance-app.dots');
+        Route::prefix('ask-api/workspace')->controller(AssistantWorkspaceController::class)->middleware('throttle:30,1')->group(function (): void {
+            Route::get('/status', 'status')->name('assistant.status');
+            Route::post('/report', 'report')->name('assistant.report');
+            Route::get('/export', 'export')->middleware('throttle:5,1')->name('assistant.export');
+            Route::post('/suggestions', 'suggest')->name('assistant.suggest');
+            Route::post('/proposals', 'propose')->name('assistant.propose');
+            Route::get('/proposals/{proposal}', 'preview')->whereUuid('proposal');
+            Route::post('/proposals/{proposal}/confirm', 'confirm')->whereUuid('proposal');
+            Route::post('/proposals/{proposal}/cancel', 'cancel')->whereUuid('proposal');
+            Route::post('/checks', 'saveCheck')->name('assistant.checks');
+            Route::post('/checks/{check}/activate', 'activateCheck')->whereNumber('check');
+            Route::post('/checks/{check}/disable', 'disableCheck')->whereNumber('check');
+        });
         Route::post('/ask-api/question', [MobileAskController::class, 'question'])
             ->middleware('throttle:30,1')->name('ask.question');
     });

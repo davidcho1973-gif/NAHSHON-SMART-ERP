@@ -6,7 +6,6 @@ use App\Models\CommunicationMessage;
 use App\Models\CommunicationRoom;
 use App\Models\Company;
 use App\Models\Employee;
-use App\Models\OpsIntakeItem;
 use App\Models\ProcurementItem;
 use App\Models\Site;
 use App\Models\User;
@@ -78,7 +77,7 @@ class CpmWhatIfTest extends TestCase
         $this->assertSame('A100', $sim['activity']);
     }
 
-    public function test_AI_에게_밀리면_이라고_물으면_시뮬레이션과_반영_제안이_만들어진다(): void
+    public function test_chat_what_if_only_simulates_without_creating_a_write_proposal(): void
     {
         Http::fake(['*api.anthropic.com*' => Http::response([
             'content' => [['type' => 'text', 'text' => 'A100 이 3일 밀리면 검사·마감이 밀려 준공이 1/17 이 됩니다.']],
@@ -86,6 +85,7 @@ class CpmWhatIfTest extends TestCase
         ])]);
 
         $company = Company::create(['code' => 'C1', 'name' => '자사', 'status' => 'active', 'company_type' => Company::TYPE_OWN]);
+        $this->site->update(['company_id' => $company->id]);
         $room = CommunicationRoom::create(['company_id' => $company->id, 'site_id' => $this->site->id,
             'type' => CommunicationRoom::TYPE_SITE_CHAT, 'name' => '현장방', 'status' => 'active']);
         $employee = Employee::create(['company_id' => $company->id, 'site_id' => $this->site->id,
@@ -97,13 +97,11 @@ class CpmWhatIfTest extends TestCase
         $reply = app(ChatAssistant::class)->answer($question->fresh());
 
         $this->assertNotNull($reply);
-        $this->assertStringContainsString('제안을 등록했습니다', $reply->body, '상용 제품은 조회까지 — 우리는 반영까지 간다');
-
-        $proposal = OpsIntakeItem::query()->where('target_code', self::P.'-W-A100')->first();
-        $this->assertNotNull($proposal);
-        $this->assertSame('2026-01-12', $proposal->proposed['planned_end'], '종료 1/9 + 3일');
-        $this->assertSame('pending', $proposal->status, '반영은 사람이 [반영]을 눌러야 한다');
-        $this->assertSame($question->id, $proposal->communication_message_id, '반영 결과가 이 메시지 답글로 돌아온다');
+        $this->assertStringContainsString('실제 공정표는 변경되지 않았습니다', $reply->body);
+        $this->assertDatabaseCount('ops_intake_items', 0);
+        $this->assertSame('2026-01-09', WbsItem::query()->where('activity_id', 'A100')->first()->planned_end->toDateString());
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => str_contains($request['messages'][0]['content'], '"projectedEndAfter": "2026-01-17"'));
     }
 
     public function test_약속을_자주_못_지킨_공종은_새_공정표에서_경고된다(): void
