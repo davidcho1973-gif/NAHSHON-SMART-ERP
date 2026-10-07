@@ -133,6 +133,6 @@ final class AiInformationAccess
     {
         return hash('sha256', json_encode(['worker-ask-v1', $user->access_role, $user->account_status, $user->access_scope,
             $user->allowed_company_id, $user->allowed_site_id, $user->allowed_team_id, $user->employee_id,
-            $user->employee?->company_id, $user->employee?->site_id, $user->job_role, $user->job_permissions, $user->job_site_ids]));
+            $user->employee?->company_id, $user->employee?->site_id, $user->job_role, $user->job_permissions, $user->job_site_ids, $user->job_trade]));
     }
 }

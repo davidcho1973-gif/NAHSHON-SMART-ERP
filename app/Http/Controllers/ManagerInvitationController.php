@@ -22,6 +22,8 @@ class ManagerInvitationController extends Controller
         return response()->view('auth.manager-invitation', [
             'token' => $token, 'user' => $invite->user_id ? User::findOrFail($invite->user_id) : null,
             'newEmployee' => $invite->kind === 'new_employee',
+            'jobLabel' => config('job_access.jobs.'.($invite->grant['job_role'] ?? '').'.label'),
+            'jobTrade' => $invite->grant['job_trade'] ?? null,
             'enrollmentName' => $request->session()->get(ManagerInvitationService::SESSION.'.name'),
             'verified' => $service->sessionToken($request) === $token,
             'googleConfigured' => filled(config('services.google.client_id')) && filled(config('services.google.client_secret')),

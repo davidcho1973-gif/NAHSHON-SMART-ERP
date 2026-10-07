@@ -3,7 +3,7 @@
 @include('partials.erp-home')
 <main><a href="{{ route('attendance-app.index') }}">← 내 업무</a><h1>{{ $label }} · 관리업무</h1><p>{{ implode(' · ', $duties) }}</p>
 <div class="cards">@foreach($summary as $name => $count)<div class="card"><div class="muted">{{ $name }}</div><div class="number">{{ $count }}</div></div>@endforeach</div>
-<h2>담당 업무</h2><div class="cards">@forelse($links as $link)<a class="card" href="{{ $link['url'] }}"><b>{{ $link['label'] }}</b><p class="muted">{{ implode(' · ', array_map(fn($action) => config('job_access.actions.'.$action), $link['actions'])) }}</p></a>@empty<p>담당 업무 권한이 없습니다. 관리자에게 설정을 요청하세요.</p>@endforelse</div>
+<h2>담당 업무</h2><div class="cards">@forelse($links as $link)<a class="card" href="{{ $link['url'] }}"><b>{{ $link['label'] }}</b><p class="muted">{{ $link['description'] ?? implode(' · ', array_map(fn($action) => config('job_access.actions.'.$action), $link['actions'])) }}</p></a>@empty<p>담당 업무 권한이 없습니다. 관리자에게 설정을 요청하세요.</p>@endforelse</div>
 @if(count($approvals))<h2>승인 대기</h2><p class="muted">내용을 확인한 뒤 승인하세요. 구매는 승인한 예산 한도 안에서만 주문할 수 있습니다.</p>
 @foreach($approvals as $row)<form class="card approval" data-url="{{ route('job-approvals.decide', ['module' => $row['module'], 'id' => $row['id']]) }}"><b>{{ $row['title'] }}</b><p>{{ $row['detail'] }}</p>
 @if($row['url'])<a href="{{ $row['url'] }}">상세 자료 확인</a>@endif

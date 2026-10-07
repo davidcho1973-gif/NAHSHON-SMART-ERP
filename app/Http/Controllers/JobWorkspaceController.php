@@ -17,6 +17,7 @@ class JobWorkspaceController extends Controller
         $user = $request->user();
         abort_unless($user && $user->account_status === 'active', 403);
         $links = [];
+        $links[] = ['label' => '영수증 등록', 'url' => route('expense-app.index'), 'actions' => ['view', 'edit']];
         foreach (['attendance' => ['attendance-logs', '근태·인원 현황'], 'people' => ['employee-admin', '직원 관리'],
             'progress' => ['week-board', '공정·작업 배치'], 'reports' => ['opsroom', '현장 보고'], 'safety' => ['safety', '안전·교육'],
             'payroll' => ['payroll', '급여·정산'], 'finance' => ['finance', '회계·경비'], 'contracts' => ['contract-admin', '계약·기성'],
@@ -26,7 +27,7 @@ class JobWorkspaceController extends Controller
             }
         }
         if (JobAccess::can($user, 'purchasing')) {
-            $links[] = ['label' => '구매신청', 'url' => '/attendance-app/purchase-requests', 'actions' => ['view']];
+            $links[] = ['label' => '구매신청', 'url' => '/attendance-app/purchase-requests', 'actions' => ['view'], 'description' => '본인 구매요청 등록 · 첨부 · 진행상태 확인'];
             if (JobAccess::can($user, 'purchasing', 'edit')) {
                 $links[] = ['label' => '구매 처리', 'url' => '/?view=purchase-requests', 'actions' => ['edit']];
             }
