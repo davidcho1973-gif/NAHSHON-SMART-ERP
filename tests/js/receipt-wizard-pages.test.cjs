@@ -20,5 +20,5 @@ test('adding or removing a page invalidates the previously analyzed attachment',
   s.el('receiptPagesList').children[0].children[0].onclick();assert.equal(s.size(),1);assert.equal(s.el('receiptPath').value,'');
 });
 test('analysis failure retains original pages and allows retry',async()=>{
-  const s=setup(false);s.add('one.jpg');s.add('two.jpg');await s.analyze();assert.equal(s.size(),2);assert.equal(s.el('analyzeReceiptPages').disabled,false);assert.equal(s.el('receiptFileInput').disabled,false);assert.equal(s.el('receiptPath').value,'');
+  const s=setup(false);s.add('one.jpg');s.add('two.jpg');await s.analyze();assert.equal(s.size(),2);assert.equal(s.el('receiptAnalyzeButton').disabled,false);assert.equal(s.el('receiptFileInput').disabled,false);assert.equal(s.el('receiptPath').value,'');
 });

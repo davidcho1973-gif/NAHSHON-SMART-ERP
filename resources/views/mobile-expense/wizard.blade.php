@@ -468,7 +468,7 @@
         <input type="file" id="receiptCameraInput" accept="image/*" capture="environment" hidden onchange="handleReceiptUpload(event)">
         <p>한 구매 건의 사진을 모두 추가한 뒤 한 번에 분석하세요. 여러 장은 하나의 영수증으로 저장됩니다.</p>
         <div id="receiptPagesList" aria-live="polite"></div>
-        <button type="button" class="btn-manual-skip" id="analyzeReceiptPages" onclick="analyzeReceiptPages()" disabled>추가한 영수증 함께 분석</button>
+        <button type="button" class="btn-manual-skip" id="receiptAnalyzeButton" onclick="analyzeReceiptPages()" disabled>추가한 영수증 함께 분석</button>
         <div class="analysis-card" id="receiptAnalysisCard" aria-live="polite">
           <div class="analysis-head">
             <span class="analysis-title">AI analysis result</span>
@@ -703,7 +703,7 @@
         remove.onclick = () => { if (receiptBusy) return; receiptPages.splice(index, 1); clearReceiptAnalysis(); drawReceiptPages(); showReceiptUploadPreview(receiptPages[0]); };
         row.appendChild(remove); host.appendChild(row);
       });
-      document.getElementById('analyzeReceiptPages').disabled = receiptBusy || !receiptPages.length;
+      document.getElementById('receiptAnalyzeButton').disabled = receiptBusy || !receiptPages.length;
       document.getElementById('receiptFileInput').disabled = document.getElementById('receiptCameraInput').disabled = document.getElementById('receiptCameraButton').disabled = receiptBusy;
     }
     function handleReceiptUpload(event) {
