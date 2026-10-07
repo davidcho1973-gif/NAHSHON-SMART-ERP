@@ -20,6 +20,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Models\WeekBoardLine;
 use App\Services\Admin\AttendanceLogAdminService;
+use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\JobAccessService;
 use App\Services\Admin\JobApprovalService;
 use App\Services\Admin\UserAccessService;
@@ -426,6 +427,28 @@ class JobAccessTest extends TestCase
         $this->actingAsPurchaseUser($user);
         $this->assertTrue(JobAccess::can($user, 'reports', 'edit'));
         $this->postJson('/smart-company-api/api_sendDailyReport', ['args' => []])->assertForbidden();
+    }
+
+    public function test_hr_cannot_change_managed_payroll_login_through_employee_email_sync(): void
+    {
+        [$company, $site] = $this->fixtures();
+        $employee = Employee::create(['name' => 'Payroll officer', 'email' => 'payroll@example.test', 'company_id' => $company->id, 'site_id' => $site->id]);
+        $target = $this->profile('office', $company, [$site], ['jobDuties' => ['payroll']]);
+        $target->forceFill(['email' => 'payroll@example.test', 'employee_id' => $employee->id])->save();
+        $hr = $this->profile('office', $company, [$site], ['jobDuties' => ['hr']]);
+        $input = ['id' => $employee->id, 'name' => $employee->name, 'firstName' => $employee->first_name, 'lastName' => $employee->last_name,
+            'employeeNumber' => $employee->employee_number, 'badgeNumber' => $employee->badge_number, 'phone' => $employee->phone,
+            'companyId' => $company->id, 'siteId' => $site->id, 'email' => 'changed@example.test', 'syncAccountEmail' => true];
+        $this->actingAsPurchaseUser($hr);
+        $result = app(EmployeeAdminService::class)->save($input);
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('수퍼관리자', $result['error']);
+        $this->assertSame('payroll@example.test', $target->fresh()->email);
+        $this->assertSame('payroll@example.test', $employee->fresh()->email);
+        $this->actingAsPurchaseUser(User::factory()->create(['access_role' => 'super_admin', 'account_status' => 'active']));
+        $result = app(EmployeeAdminService::class)->save($input);
+        $this->assertTrue($result['success'], json_encode($result));
+        $this->assertSame('changed@example.test', $target->fresh()->email);
     }
 
     public function test_empty_managed_payroll_does_not_create_a_hidden_run(): void

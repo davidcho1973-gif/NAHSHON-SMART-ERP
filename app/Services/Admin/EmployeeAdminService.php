@@ -701,12 +701,14 @@ class EmployeeAdminService
     private function protectedPurchaseIdentityChange(Employee $employee, array $data, array $input = [], bool $deleting = false): ?string
     {
         $account = $employee->user()->first();
-        if (! $account || ! ($account->purchase_request_enabled || $account->purchase_buy_enabled || $account->access_role === 'super_admin')
+        if (! $account || ! ($account->purchase_request_enabled || $account->purchase_buy_enabled || $account->access_role === 'super_admin' || JobAccess::managed($account))
             || app(UserAccessService::class)->canManagePurchasingGrants()) {
             return null;
         }
 
-        $message = '구매 권한이 있는 계정의 본인 정보·소속·접근 범위 변경, 재활성화 또는 삭제는 수퍼관리자만 처리할 수 있습니다.';
+        $message = JobAccess::managed($account)
+            ? '직책·업무 권한이 있는 계정의 로그인 정보·소속·접근 범위 변경, 재활성화 또는 삭제는 수퍼관리자만 처리할 수 있습니다.'
+            : '구매 권한이 있는 계정의 본인 정보·소속·접근 범위 변경, 재활성화 또는 삭제는 수퍼관리자만 처리할 수 있습니다.';
         if ($deleting) {
             return $message;
         }
