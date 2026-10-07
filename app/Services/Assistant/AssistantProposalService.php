@@ -17,6 +17,7 @@ use App\Services\Ops\OpsActionService;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
 use App\Support\FinanceChartOfAccounts;
+use App\Support\JobAccess;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -577,6 +578,10 @@ final class AssistantProposalService
 
     private function authorizeOperation(User $actor, Site $site, string $operation, array $payload): void
     {
+        if (JobAccess::managed($actor)) {
+            $module = $operation === self::CREATE_EXPENSE ? 'finance' : ($operation === self::UPDATE_DOCUMENT_CATEGORY ? 'documents' : 'reports');
+            abort_unless(JobAccess::can($actor, $module, 'edit'), 403, '작성·수정 권한이 없습니다.');
+        }
         if ($operation !== self::CREATE_EXPENSE) {
             return;
         }

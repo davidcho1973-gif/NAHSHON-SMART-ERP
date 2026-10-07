@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\ManagerInvitation;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\JobAccess;
 use App\Support\QrSvg;
 use App\Support\WorkerDeviceSession;
 use App\Support\WorkerPhone;
@@ -57,12 +58,24 @@ class ManagerInvitationService
         if (! in_array($kind, ['existing_worker', 'new_employee'], true)) {
             return ['success' => false, 'error' => '초대 종류를 확인하세요.'];
         }
+        $jobGrant = null;
+        if (filled($input['jobRole'] ?? null)) {
+            try {
+                $jobGrant = JobAccess::grant($input);
+            } catch (ValidationException $e) {
+                return ['success' => false, 'errors' => $e->errors()];
+            }
+            $input['role'] = $jobGrant['access_role'];
+            $input['scope'] = $jobGrant['access_scope'];
+            $input['siteId'] = $jobGrant['allowed_site_id'];
+            $input['companyId'] = $jobGrant['allowed_company_id'];
+        }
         $role = $input['role'] ?? '';
         $scope = $input['scope'] ?? '';
-        if (! in_array($role, ['admin', 'site_manager'], true) || ! in_array($scope, ['site', 'company', 'all_sites'], true)) {
+        if (! $jobGrant && (! in_array($role, ['admin', 'site_manager'], true) || ! in_array($scope, ['site', 'company', 'all_sites'], true))) {
             return ['success' => false, 'error' => '관리자 역할과 관리 범위를 선택하세요.'];
         }
-        if ($role === 'admin' && $scope !== 'all_sites') {
+        if (! $jobGrant && $role === 'admin' && $scope !== 'all_sites') {
             return ['success' => false, 'error' => '관리자는 전체 현장 권한입니다. 특정 현장만 맡기려면 현장관리자를 선택하세요.'];
         }
         $site = $scope === 'site' ? Site::find((int) ($input['siteId'] ?? 0)) : null;
@@ -82,7 +95,7 @@ class ManagerInvitationService
             $enrollment = ['site_id' => $homeSite?->id, 'company_id' => $homeCompany?->id ?? $homeSite?->company_id];
         }
 
-        return DB::transaction(function () use ($input, $kind, $label, $enrollment, $role, $scope, $site, $company) {
+        return DB::transaction(function () use ($input, $kind, $label, $enrollment, $role, $scope, $site, $company, $jobGrant) {
             $user = $kind === 'existing_worker' ? User::query()->lockForUpdate()->find((int) ($input['id'] ?? 0)) : null;
             if ($kind === 'existing_worker' && (! $user || ! $this->eligible($user))) {
                 return ['success' => false, 'error' => '이메일·로그인 정보가 없는 활성 작업자 또는 반장만 초대할 수 있습니다. 기존 관리자 계정은 계정 수정으로 관리하세요.'];
@@ -101,7 +114,7 @@ class ManagerInvitationService
                 'user_id' => $user?->id, 'created_by_id' => auth()->id(), 'token_hash' => hash('sha256', $token),
                 'kind' => $kind, 'enrollment' => $enrollment, 'recipient_label' => $label ?: null,
                 'account_fingerprint' => $user ? $this->fingerprint($user) : hash('sha256', 'new_employee'), 'expires_at' => now()->addDays(7),
-                'grant' => ['access_role' => $role, 'access_scope' => $scope, 'allowed_site_id' => $site?->id,
+                'grant' => $jobGrant ?? ['access_role' => $role, 'access_scope' => $scope, 'allowed_site_id' => $site?->id,
                     'allowed_company_id' => $company?->id, 'allowed_team_id' => null],
             ]);
             AuthEvent::record('manager_invitation_created', user: $user, actor: auth()->user(), method: 'erp', request: request(), note: 'invitation_id='.$invite->id);
@@ -162,9 +175,9 @@ class ManagerInvitationService
 
         return ! $invite->accepted_at && ! $invite->revoked_at && $invite->expires_at->isFuture()
             && $issuer?->account_status === 'active' && $issuer->access_role === 'super_admin'
-            && in_array($grant['access_role'] ?? null, ['admin', 'site_manager'], true)
-            && in_array($grant['access_scope'] ?? null, ['site', 'company', 'all_sites'], true)
-            && ($grant['access_role'] !== 'admin' || $grant['access_scope'] === 'all_sites')
+            && (isset($grant['job_role']) ? $this->validJobGrant($grant) : (in_array($grant['access_role'] ?? null, ['admin', 'site_manager'], true)
+                && in_array($grant['access_scope'] ?? null, ['site', 'company', 'all_sites'], true)
+                && ($grant['access_role'] !== 'admin' || $grant['access_scope'] === 'all_sites')))
             && ($invite->kind === 'new_employee'
                 ? ! $invite->user_id && is_array($invite->enrollment)
                     && (empty($invite->enrollment['site_id']) || Site::whereKey($invite->enrollment['site_id'])->exists())
@@ -172,6 +185,19 @@ class ManagerInvitationService
                 : $invite->kind === 'existing_worker' && $user && $this->eligible($user) && hash_equals($invite->account_fingerprint, $this->fingerprint($user)))
             && ($grant['access_scope'] !== 'site' || Site::whereKey($grant['allowed_site_id'])->exists())
             && ($grant['access_scope'] !== 'company' || Company::whereKey($grant['allowed_company_id'])->exists());
+    }
+
+    private function validJobGrant(array $grant): bool
+    {
+        try {
+            $checked = JobAccess::grant(['jobRole' => $grant['job_role'], 'jobDuties' => $grant['job_duties'] ?? [],
+                'jobPermissions' => $grant['job_permissions'] ?? [], 'siteIds' => $grant['job_site_ids'] ?? [],
+                'scope' => $grant['access_scope'], 'companyId' => $grant['allowed_company_id'], 'teamId' => $grant['allowed_team_id'] ?? null]);
+
+            return $checked == $grant;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function verifyPhone(string $token, string $phone, Request $request, ?string $name = null): void
@@ -241,7 +267,8 @@ class ManagerInvitationService
                 $employee = Employee::create($invite->enrollment + [
                     'name' => $session['name'], 'phone' => '+'.$phone, 'email' => $email,
                     'employment_status' => 'active', 'employment_type' => Employee::TYPE_STAFF,
-                    'position' => $invite->grant['access_role'] === 'admin' ? 'general_manager' : 'superintendent',
+                    'position' => isset($invite->grant['job_role']) ? config('job_access.jobs.'.$invite->grant['job_role'].'.position') : ($invite->grant['access_role'] === 'admin' ? 'general_manager' : 'superintendent'),
+                    'team_id' => $invite->grant['allowed_team_id'] ?? null,
                     'payload' => ['manager_invitation_id' => $invite->id],
                 ]);
                 $user = User::create(['name' => $employee->name, 'employee_id' => $employee->id,

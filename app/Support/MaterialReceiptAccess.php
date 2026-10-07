@@ -10,6 +10,12 @@ use Illuminate\Support\Collection;
 /** The same receiving permission applies to the worker app, ERP and evidence files. */
 final class MaterialReceiptAccess
 {
+    public static function canView(?User $user): bool
+    {
+        return JobAccess::managed($user) && $user->access_role !== 'super_admin'
+            ? JobAccess::can($user, 'materials') : self::canManage($user);
+    }
+
     public static function canManage(?User $user): bool
     {
         if (! $user || $user->account_status !== 'active' || $user->isReadOnly()
@@ -17,6 +23,9 @@ final class MaterialReceiptAccess
             return false;
         }
 
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'materials', 'edit');
+        }
         if (in_array($user->access_role, [...AccessPolicy::SITE_ROLES, 'safety_manager', 'foreman'], true)) {
             return true;
         }
@@ -31,7 +40,7 @@ final class MaterialReceiptAccess
     /** @return Collection<int, Site> */
     public static function sites(?User $user, bool $activeOnly = false): Collection
     {
-        if (! self::canManage($user)) {
+        if (! self::canView($user)) {
             return collect();
         }
 

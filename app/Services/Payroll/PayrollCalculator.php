@@ -4,14 +4,18 @@ namespace App\Services\Payroll;
 
 use App\Models\Employee;
 use App\Models\EmployeePayrollProfile;
+use App\Models\MobileExpense;
 use App\Models\PayrollRun;
 use App\Models\PayrollTimesheet;
 use App\Models\Payslip;
+use App\Models\Project;
+use App\Services\Alerts\UnifiedAlertService;
+use App\Support\JobAccess;
+use App\Support\Org;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use App\Support\Org;
 
 /**
  * PayrollCalculator — the HR ⇄ Payroll engine.
@@ -217,7 +221,7 @@ class PayrollCalculator
     private function alertZeroRates(Collection $rows, Collection $employees, Carbon $start): void
     {
         try {
-            $alerts = app(\App\Services\Alerts\UnifiedAlertService::class);
+            $alerts = app(UnifiedAlertService::class);
             $byId = $employees->keyBy('id');
 
             $rows->filter(fn (array $r) => ($r['regHours'] > 0 || $r['otHours'] > 0)
@@ -328,8 +332,15 @@ class PayrollCalculator
         $rows = $this->aggregate($period['start'], $period['end'], $siteId);
 
         return DB::transaction(function () use ($period, $rows, $siteId, $userId): PayrollRun {
+            $code = $this->runCode($period['start'], $siteId);
+            $actor = auth()->user();
+            if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+                $code .= '-C'.$actor->allowed_company_id.'-'.substr(hash('sha256', json_encode([$actor->access_scope, JobAccess::siteIds($actor), $actor->allowed_team_id])), 0, 10);
+                $existing = PayrollRun::where('code', $code)->lockForUpdate()->first();
+                abort_if($existing && in_array($existing->status, ['approved', 'paid'], true), 409, '승인·지급된 급여는 재계산할 수 없습니다.');
+            }
             $run = PayrollRun::query()->updateOrCreate(
-                ['code' => $this->runCode($period['start'], $siteId)],
+                ['code' => $code],
                 [
                     'period_start' => $period['start']->toDateString(),
                     'period_end' => $period['end']->toDateString(),
@@ -581,7 +592,7 @@ class PayrollCalculator
             return 0.0;
         }
 
-        return round((float) \App\Models\MobileExpense::query()
+        return round((float) MobileExpense::query()
             ->where('employee_id', $employeeId)
             ->where('payment_type', 'personal')
             ->where('status', 'approved')
@@ -604,7 +615,7 @@ class PayrollCalculator
         }
 
         if (! array_key_exists($siteId, $this->siteProjectCache)) {
-            $ids = \App\Models\Project::query()->where('site_id', $siteId)->limit(2)->pluck('id');
+            $ids = Project::query()->where('site_id', $siteId)->limit(2)->pluck('id');
             $this->siteProjectCache[$siteId] = $ids->count() === 1 ? (int) $ids->first() : null;
         }
 

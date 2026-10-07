@@ -7,6 +7,7 @@ use App\Models\EmployeePayrollProfile;
 use App\Models\Payslip;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\JobAccess;
 
 /**
  * 임금 프로필 — Filament EmployeePayrollProfileResource 를 SPA 로 옮긴 것.
@@ -39,6 +40,9 @@ class PayProfileService
     public function canView(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'payroll', 'view');
+        }
 
         return $actor !== null && $actor->account_status === 'active'
             && in_array($actor->access_role, self::VIEW_ROLES, true);
@@ -47,6 +51,9 @@ class PayProfileService
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'payroll', 'edit');
+        }
 
         return $actor !== null && $actor->account_status === 'active'
             && in_array($actor->access_role, self::MANAGE_ROLES, true);
@@ -201,6 +208,9 @@ class PayProfileService
      */
     public function delete(int $id): array
     {
+        if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'payroll', 'delete')) {
+            return ['success' => false, 'error' => '임금 프로필 삭제 권한이 없습니다.'];
+        }
         if (! $this->canManage()) {
             return ['success' => false, 'error' => '임금 프로필을 삭제할 권한이 없습니다.'];
         }

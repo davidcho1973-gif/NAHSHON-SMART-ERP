@@ -30,7 +30,7 @@
           {key:'need_by',label:'필요일'},
           {key:'amount',label:'금액',render:r=>e(money(r))},
           {key:'status',label:'상태',render:r=>A().badge(r.status_label || P().labels[r.status],['ordered','received'].includes(r.status)?'ok':['needs_info','on_hold','out_of_stock'].includes(r.status)?'warn':'muted')+(r.eta?'<div style="font-size:11px;margin-top:4px">도착 '+e(r.eta)+'</div>':'')},
-          {key:'next',label:'다음 할 일',render:r=>e(['received','cancelled'].includes(r.status)?'완료':r.lines?.some(l=>l.quantity==null || !l.unit)?'품목·수량 확정':r.status==='needs_info'?'현장 답변 확인':r.status==='ordered'?'업체 납품 확인':['supplier_confirmed','partially_ordered','partial'].includes(r.status)?'배송·입고 확인':'업체·제품 확인')},
+          {key:'next',label:'다음 할 일',render:r=>e(['received','cancelled'].includes(r.status)?'완료':r.lines?.some(l=>l.quantity==null || !l.unit)?'품목·수량 확정':r.approval_required && r.approval_status!=='approved'?'승인권자 확인':r.status==='needs_info'?'현장 답변 확인':r.status==='ordered'?'업체 납품 확인':['supplier_confirmed','partially_ordered','partial'].includes(r.status)?'배송·입고 확인':'업체·제품 확인')},
           {key:'action',label:'',render:r=>button('처리','AdminPurchases.open('+r.id+')')}
         ]}));
       A().bindSearch('purchase-desk-table');

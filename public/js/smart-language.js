@@ -17,6 +17,16 @@
   function bPairs(a) { return a.map(function (p) { return [b(p[0]), b(p[1])]; }); }
 
   const exactEn = new Map(Object.entries(bMap({
+    '관리업무': 'Management tasks',
+    '관리업무 · 승인 대기': 'Management tasks · pending approvals',
+    '담당 업무': 'Assigned tasks',
+    '직책·세부권한': 'Job title and permissions',
+    '공정별 팀장': 'Trade team leader',
+    '공무팀장': 'Project engineering manager',
+    '사무실 관리자': 'Office administrator',
+    '인사·총무': 'HR and administration',
+    '급여명세서': 'My payslips',
+    '지급 완료 기록': 'Payment completion records',
     "필요한 물건이나 하려는 작업을 알려주세요": "Describe what you need or the work you want to do",
     "제품 이름과 규격을 몰라도 괜찮아요. 사무실에서 확인해 구매합니다.": "You do not need to know the product name or specifications. The office will confirm and purchase it.",
     "제품을 직접 고르기 · 선택": "Choose a product · optional",
@@ -399,6 +409,16 @@
   ];
 
   const exactEs = new Map(Object.entries(bMap({
+    '관리업무': 'Tareas de gestión',
+    '관리업무 · 승인 대기': 'Gestión · aprobaciones pendientes',
+    '담당 업무': 'Tareas asignadas',
+    '직책·세부권한': 'Cargo y permisos',
+    '공정별 팀장': 'Jefe de equipo por oficio',
+    '공무팀장': 'Jefe de ingeniería del proyecto',
+    '사무실 관리자': 'Administrador de oficina',
+    '인사·총무': 'Recursos humanos y administración',
+    '급여명세서': 'Mis recibos de nómina',
+    '지급 완료 기록': 'Registro de pagos completados',
     "Describe what you need or the work you want to do": "Describe lo que necesitas o el trabajo que quieres hacer",
     "You do not need to know the product name or specifications. The office will confirm and purchase it.": "No necesitas conocer el nombre ni las especificaciones. La oficina los confirmará y realizará la compra.",
     "Choose a product · optional": "Elegir un producto · opcional",

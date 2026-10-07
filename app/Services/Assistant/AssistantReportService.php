@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
+use App\Support\JobAccess;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -46,7 +47,8 @@ final class AssistantReportService
             'actor_id' => $actor->id,
             'companies' => $companies->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
             'sites' => $sites->map(fn ($s) => ['id' => $s->id, 'company_id' => $s->company_id, 'name' => $s->name])->values()->all(),
-            'datasets' => collect(self::DATASETS)->filter(fn ($label, $key) => in_array($actor->access_role, $catalog[$key]['roles'], true) && (! in_array($key, self::MONEY_DATASETS, true) || AccessPolicy::canManageMoney($actor)))
+            'datasets' => collect(self::DATASETS)->filter(fn ($label, $key) => in_array($actor->access_role, $catalog[$key]['roles'], true) && (! in_array($key, self::MONEY_DATASETS, true) || AccessPolicy::canManageMoney($actor))
+                && (! JobAccess::managed($actor) || JobAccess::can($actor, JobAccess::datasetModule($key))))
                 ->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values()->all(),
             'default_site_id' => AiInformationAccess::siteId($actor),
             'default_company_id' => $actor->allowed_company_id ?: $actor->employee?->company_id,
@@ -65,6 +67,9 @@ final class AssistantReportService
         abort_unless($actor, 403);
         $context = new ErpReadContext($actor, (int) $input['company_id'], isset($input['site_id']) ? (int) $input['site_id'] : null);
         $dataset = $input['dataset'];
+        if (JobAccess::managed($actor)) {
+            abort_unless(JobAccess::can($actor, JobAccess::datasetModule($dataset), $export ? 'export' : 'view'), 403);
+        }
         abort_if(in_array($dataset, self::MONEY_DATASETS, true) && ! AccessPolicy::canManageMoney($actor), 403, AiInformationAccess::DENIED);
         $reader = app(ErpReadQuery::class);
 

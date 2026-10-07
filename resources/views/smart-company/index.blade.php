@@ -24,6 +24,7 @@
   <script src="{{ asset('js/wbs-schedule.js') }}?v={{ filemtime(public_path('js/wbs-schedule.js')) }}" defer></script>
   <script src="{{ asset('js/wbs-photos.js') }}?v={{ filemtime(public_path('js/wbs-photos.js')) }}" defer></script>
   <script src="{{ asset('js/guest-links.js') }}?v={{ filemtime(public_path('js/guest-links.js')) }}" defer></script>
+    <script src="{{ asset('js/job-permissions.js') }}?v={{ filemtime(public_path('js/job-permissions.js')) }}" defer></script>
     <script src="{{ asset('js/admin-access.js') }}?v={{ filemtime(public_path('js/admin-access.js')) }}" defer></script>
     <script src="{{ asset('js/admin-attendance.js') }}?v={{ filemtime(public_path('js/admin-attendance.js')) }}" defer></script>
     <script src="{{ asset('js/admin-items.js') }}?v={{ filemtime(public_path('js/admin-items.js')) }}" defer></script>
@@ -1391,6 +1392,10 @@
       const authenticatedAccount = @json($authUser);
       // 별도 스크립트 블록(출퇴근 모달 등)에서도 참조할 수 있도록 전역 노출.
       window.authenticatedAccount = authenticatedAccount;
+      const jobViewModules={'week-board':'progress','section-drawings':'progress',wbs:'progress',opsroom:'reports','daily-report':'reports',correspondence:'reports',safety:'safety','attendance-logs':'attendance',hr:'people','employee-admin':'people','applicant-admin':'people','access-control':'system',payroll:'payroll','pay-profiles':'payroll',inventory:'materials','purchase-requests':'purchasing','material-receipts':'materials','item-master':'materials','equipment-checks':'materials',boq:'progress',vendors:'purchasing',vehicle:'office',housing:'office',finance:'finance','billing-admin':'contracts','document-hub':'documents',docs:'documents','email-ai':'documents','contract-admin':'contracts',submittals:'progress','crew-setup':'system','kakao-reminders':'system','site-admin':'system','org-settings':'system','messenger-admin':'system',messenger:'messages',command:'reports'};
+      function jobViewAllowed(view){return !authenticatedAccount.job_role || authenticatedAccount.raw_role==='super_admin' || ['dashboard','my-attendance','alerts','account-profile','account-update-profile','account-ui-settings','account-password'].includes(view) || (authenticatedAccount.job_permissions && (authenticatedAccount.job_permissions[jobViewModules[view]]||[]).includes('view'));}
+      if(authenticatedAccount.job_role && authenticatedAccount.raw_role!=='super_admin')document.querySelectorAll('[data-view]').forEach(function(el){if(!jobViewAllowed(el.dataset.view))el.hidden=true;});
+
       const accountDefaults = {
         company: ORG_NAME,
         name: authenticatedAccount.name || 'ERP User',
@@ -1778,6 +1783,7 @@
       var erpNavigation = window.ERPHistory.create({
         read: readNavigation, url: navigationUrl, capture: captureNavigation,
         render: function (state, snapshot) {
+          if(!jobViewAllowed(state.view))state={view:'dashboard',site:window.currentSiteId||'ALL'};
           if (!routes[state.view]) state = { view: 'dashboard', site: window.currentSiteId || 'ALL' };
           var generation = ++navigationRender;
           if (restoreObserver) restoreObserver.disconnect();
@@ -2599,6 +2605,14 @@
 
       // 현장 운영 대시보드 — 리스크·예외(③) 트리아지 상단 + 현장 일일 운영(②) 하단. 전부 실데이터.
       async function renderDashboard() {
+        if(authenticatedAccount.job_role && authenticatedAccount.raw_role!=='super_admin'){
+          const reply=await fetch('/attendance-app/workspace',{headers:{Accept:'application/json'}});
+          if(!reply.ok)return renderError('담당 업무를 불러오지 못했습니다.');
+          const job=await reply.json();
+          const e=window.AdminUI.esc;
+          pageContainer.innerHTML = '<h1>'+e(job.label)+' · 담당 업무</h1><p>'+e(job.duties.join(' · '))+'</p><p><a href="/attendance-app/workspace">관리업무 · 승인 대기</a></p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">'+Object.entries(job.summary).map(function(s){return '<div class="card" style="padding:20px">'+e(s[0])+'<h2>'+e(String(s[1]))+'</h2></div>';}).join('')+job.links.map(function(l){return '<a class="card" style="padding:20px;color:inherit;text-decoration:none" href="'+e(l.url)+'">'+e(l.label)+'</a>';}).join('')+'</div>';
+          return;
+        }
         pageContainer.innerHTML = skeleton();
         try {
           var d = await window.API.getOpsDashboard();
@@ -5425,14 +5439,14 @@
             var deleteButton = ex.deleteUrl ? '<button type="button" class="btn-secondary finance-delete-expense" data-delete-url="' + safeHtml(ex.deleteUrl) + '" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;padding:0;color:var(--status-danger);border-color:var(--status-danger)" title="삭제"><i class="ph ph-trash" style="font-size:17px"></i></button>' : '';
             // 승인대기는 목록에서 바로 승인/반려, 승인완료는 바로 지급완료 처리한다.
             var reviewButtons = '';
-            if (ex.canReview && ex.expenseId) {
+            if ((ex.canReview || ex.canPay) && ex.expenseId) {
               var reviewButton = function (decision, title, icon, color) {
                 return '<button type="button" class="btn-secondary finance-review-expense" data-expense-id="' + ex.expenseId + '" data-decision="' + decision + '" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;padding:0;color:' + color + ';border-color:' + color + '" title="' + title + '"><i class="ph ' + icon + '" style="font-size:18px"></i></button>';
               };
-              if (ex.status === 'pending') {
+              if (ex.status === 'pending' && ex.canReview) {
                 reviewButtons = reviewButton('approved', '승인', 'ph-check-circle', 'var(--status-success)')
                   + reviewButton('rejected', '반려', 'ph-x-circle', 'var(--status-danger)');
-              } else if (ex.status === 'approved') {
+              } else if (ex.status === 'approved' && ex.canPay) {
                 reviewButtons = reviewButton('paid', '지급완료 처리', 'ph-currency-circle-dollar', 'var(--brand-primary)');
               }
             }

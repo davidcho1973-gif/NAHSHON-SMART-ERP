@@ -15,6 +15,7 @@ use App\Services\Attendance\DailyHeadcountService;
 use App\Services\Push\WebPushSender;
 use App\Support\AccessPolicy;
 use App\Support\CurrentCompany;
+use App\Support\JobAccess;
 use App\Support\WorkerLang;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -89,6 +90,9 @@ class EmployeeAdminService
     public function canView(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'people', 'view');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -98,6 +102,9 @@ class EmployeeAdminService
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'people', 'edit');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -738,6 +745,9 @@ class EmployeeAdminService
      */
     public function delete(int $id): array
     {
+        if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'people', 'delete')) {
+            return ['success' => false, 'error' => '삭제 권한이 없습니다.'];
+        }
         $actor = auth()->user();
         if (! $actor || $actor->account_status !== 'active' || ! in_array($actor->access_role, self::DELETE_ROLES, true)) {
             return ['success' => false, 'error' => '직원 삭제 권한이 없습니다. 퇴사자는 상태를 "퇴사" 로 두세요.'];

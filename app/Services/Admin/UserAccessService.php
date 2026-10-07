@@ -12,6 +12,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\Auth\EmailPasswordAuthService;
 use App\Services\Auth\ManagerInvitationService;
+use App\Support\JobAccess;
 use App\Support\PurchaseAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Support\Facades\Hash;
@@ -68,6 +69,9 @@ class UserAccessService
     public function canView(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return false;
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -77,6 +81,9 @@ class UserAccessService
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return false;
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -96,7 +103,7 @@ class UserAccessService
 
         $pendingInvitations = ManagerInvitation::whereNotNull('user_id')->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->pluck('user_id')->flip();
         $rows = User::query()
-            ->with(['employee:id,name,employee_number,phone,employment_status', 'allowedCompany:id,name', 'allowedSite:id,code', 'allowedTeam:id,name'])
+            ->with(['employee:id,name,employee_number,phone,employment_status,company_id,site_id,team_id', 'allowedCompany:id,name', 'allowedSite:id,code', 'allowedTeam:id,name'])
             ->orderBy('name')
             ->get()
             ->map(fn (User $u): array => [
@@ -106,15 +113,16 @@ class UserAccessService
                 'employeeId' => $u->employee_id,
                 'employeeNumber' => $u->employee?->employee_number,
                 'role' => $u->access_role,
-                'roleLabel' => User::ROLE_LABELS_KO[$u->access_role] ?? (string) $u->access_role,
+                'roleLabel' => JobAccess::label($u),
+                'jobRole' => $u->job_role, 'jobDuties' => $u->job_duties, 'jobPermissions' => $u->job_permissions, 'siteIds' => $u->job_site_ids,
                 'roleTier' => User::ROLE_TIERS[$u->access_role] ?? 'low',
                 'scope' => $u->access_scope,
                 'scopeLabel' => User::SCOPE_LABELS_KO[$u->access_scope] ?? (string) $u->access_scope,
                 'status' => $u->account_status,
                 'statusLabel' => User::STATUS_LABELS_KO[$u->account_status] ?? (string) $u->account_status,
-                'companyId' => $u->allowed_company_id,
+                'companyId' => $u->allowed_company_id ?: $u->employee?->company_id,
                 'company' => $u->allowedCompany?->name,
-                'siteId' => $u->allowed_site_id,
+                'siteId' => $u->allowed_site_id ?: $u->employee?->site_id,
                 'site' => $u->allowedSite?->code,
                 'teamId' => $u->allowed_team_id,
                 'team' => $u->allowedTeam?->name,
@@ -141,7 +149,7 @@ class UserAccessService
             ? ManagerInvitation::where('kind', 'new_employee')->whereNull('accepted_at')->whereNull('revoked_at')
                 ->orderByDesc('id')->get()->map(fn (ManagerInvitation $invite): array => [
                     'id' => $invite->id, 'label' => $invite->recipient_label ?: '신규 관리자 초대 #'.$invite->id,
-                    'roleLabel' => User::ROLE_LABELS_KO[$invite->grant['access_role']],
+                    'roleLabel' => isset($invite->grant['job_role']) ? config('job_access.jobs.'.$invite->grant['job_role'].'.label') : User::ROLE_LABELS_KO[$invite->grant['access_role']],
                     'scopeLabel' => User::SCOPE_LABELS_KO[$invite->grant['access_scope']],
                     'grant' => $invite->grant, 'enrollment' => $invite->enrollment,
                     'expiresAt' => $invite->expires_at->toDateTimeString(), 'expired' => $invite->expires_at->isPast(),
@@ -172,6 +180,7 @@ class UserAccessService
             'roles' => $pairs(array_intersect_key(User::ROLE_LABELS_KO, $this->assignableRoles())),
             'canManagePurchasingGrants' => $this->canManagePurchasingGrants(),
             'canIssueInvitations' => app(ManagerInvitationService::class)->canIssue(),
+            'jobCatalog' => $this->canManagePurchasingGrants() ? JobAccess::catalog() : null,
             'purchasingReauthenticationRequired' => auth()->user()?->access_role === 'super_admin'
                 && ! $this->canManagePurchasingGrants(),
             'purchasingRoles' => PurchaseAccess::ELIGIBLE_ROLES,
@@ -179,8 +188,8 @@ class UserAccessService
             'statuses' => $pairs(User::STATUS_LABELS_KO),
             'companies' => Company::query()->orderBy('name')->get(['id', 'name'])
                 ->map(fn (Company $c): array => ['value' => (string) $c->id, 'label' => $c->name])->all(),
-            'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name'])
-                ->map(fn (Site $s): array => ['value' => (string) $s->id, 'label' => $s->code.' — '.$s->name])->all(),
+            'sites' => Site::query()->orderBy('code')->get(['id', 'code', 'name', 'company_id'])
+                ->map(fn (Site $s): array => ['value' => (string) $s->id, 'companyId' => $s->company_id, 'label' => $s->code.' — '.$s->name])->all(),
             'teams' => Team::query()->orderBy('name')->get(['id', 'name'])
                 ->map(fn (Team $t): array => ['value' => (string) $t->id, 'label' => $t->name])->all(),
             'employees' => Employee::query()->orderBy('name')->get(['id', 'name', 'employee_number'])
@@ -212,6 +221,9 @@ class UserAccessService
             return ['success' => false, 'error' => '상위 권한 계정은 수정할 수 없습니다.'];
         }
 
+        if ($row && JobAccess::managed($row) && ! $this->canManagePurchasingGrants()) {
+            return ['success' => false, 'error' => '직책별 권한 계정은 슈퍼관리자만 변경할 수 있습니다.'];
+        }
         $name = trim((string) ($input['name'] ?? ''));
         $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
         $role = (string) ($input['role'] ?? 'worker');
@@ -378,7 +390,7 @@ class UserAccessService
         if (! array_key_exists($row->access_role, $this->assignableRoles())) {
             return ['success' => false, 'error' => '상위 권한 계정의 상태는 변경할 수 없습니다.'];
         }
-        if (($row->access_role === 'super_admin' || $row->purchase_request_enabled || $row->purchase_buy_enabled) && $status === 'active'
+        if (($row->access_role === 'super_admin' || JobAccess::managed($row) || $row->purchase_request_enabled || $row->purchase_buy_enabled) && $status === 'active'
             && $row->account_status !== 'active' && ! $this->canManagePurchasingGrants()) {
             return ['success' => false, 'error' => '구매 권한 계정의 재활성화는 수퍼관리자에게 요청하세요.'];
         }
@@ -399,6 +411,9 @@ class UserAccessService
      */
     public function delete(int $id): array
     {
+        if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'system', 'delete')) {
+            return ['success' => false, 'error' => '삭제 권한이 없습니다.'];
+        }
         // 삭제는 관리자만 — 인사담당자는 만들고 고칠 수는 있어도 지울 수는 없다.
         $actor = auth()->user();
         if (! $actor || $actor->account_status !== 'active' || ! in_array($actor->access_role, ['super_admin', 'admin'], true)) {
@@ -412,7 +427,7 @@ class UserAccessService
         if ($row->id === $actor->id) {
             return ['success' => false, 'error' => '자기 계정은 삭제할 수 없습니다.'];
         }
-        if (($row->purchase_request_enabled || $row->purchase_buy_enabled) && ! $this->canManagePurchasingGrants()) {
+        if ((JobAccess::managed($row) || $row->purchase_request_enabled || $row->purchase_buy_enabled) && ! $this->canManagePurchasingGrants()) {
             return ['success' => false, 'error' => '구매 권한 계정은 수퍼관리자만 삭제할 수 있습니다.'];
         }
         if ($row->access_role === 'super_admin' && $this->activeSuperAdminCount($row->id) === 0) {

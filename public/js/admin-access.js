@@ -122,7 +122,7 @@
           render: function (r) {
             // 자기 계정은 스스로 잠그지 못하게 상태/삭제를 막는다(서버도 같이 막는다).
             if (r.isSelf) {
-              return '<span style="font-size:11px;color:var(--text-tertiary)">본인 계정</span> ' +
+              return (state.options.jobCatalog ? u.rowButton('직책·세부권한', 'window.AdminAccess.openJob(' + r.id + ')') + ' ' : '') + '<span style="font-size:11px;color:var(--text-tertiary)">본인 계정</span> ' +
                 u.rowButton('수정', 'window.AdminAccess.openForm(' + r.id + ')');
             }
             var toggle = r.status === 'active'
@@ -137,7 +137,7 @@
               erp = u.rowButton(r.invitationPending ? '초대 재발급' : '관리자로 초대', 'window.AdminAccess.invite(' + r.id + ')');
             }
             if (r.invitationPending && state.options && state.options.canIssueInvitations) erp += ' ' + u.rowButton('초대 취소', 'window.AdminAccess.revokeInvite(' + r.id + ')');
-            return erp + ' ' + toggle + ' ' +
+            return (state.options.jobCatalog ? u.rowButton('직책·세부권한', 'window.AdminAccess.openJob(' + r.id + ')') + ' ' : '') + erp + ' ' + toggle + ' ' +
               u.rowButton('수정', 'window.AdminAccess.openForm(' + r.id + ')') + ' ' +
               u.rowButton('삭제', 'window.AdminAccess.remove(' + r.id + ')', 'danger');
           },
@@ -304,6 +304,24 @@
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }
 
+  function openJob(id) {
+    var row=state.rows.find(function(r){return r.id===id;});
+    loadOptions().then(function(o){
+      if(!o.jobCatalog || !row)return;
+      var editor;
+      ui().formModal({title:'직책·세부권한 — '+row.name, subtitle:'기존 직원·출퇴근 기록은 유지됩니다. 소속 회사와 담당 범위를 확인하세요.',saveLabel:'직책·권한 적용',
+        fields:[
+          {name:'jobRole',label:'직책',type:'select',required:true,value:row.jobRole||'site_manager',options:Object.entries(o.jobCatalog.jobs).map(function(e){return {value:e[0],label:e[1].label};})},
+          {name:'scope',label:'담당 범위',type:'select',required:true,value:row.jobRole?row.scope:'site',options:o.scopes.filter(function(s){return s.value!=='all_sites';})},
+          {name:'companyId',label:'소속 회사',type:'select',required:true,options:o.companies,value:row.companyId||''},
+          {name:'teamId',label:'담당 팀 (팀 범위)',type:'select',options:o.teams,value:row.teamId||''}
+        ],
+        onReady:function(wrap){editor=global.JobPermissionEditor.attach(wrap,o.jobCatalog,o.sites,{permissions:row.jobPermissions,duties:row.jobDuties||[],siteIds:row.siteIds||[Number(row.siteId)].filter(Boolean)});},
+        onSave:function(v){Object.assign(v,editor.read());return call('api_setJobAccess',[id,v]).then(function(res){if(res.success===false)return res;ui().toast('직책·업무 권한을 적용했습니다.');return reload().then(function(){return {success:true};});});}
+      });
+    });
+  }
+
   function inviteNew(invitationId) {
     var previous = state.newInvitations.find(function (r) { return r.id === invitationId; });
     invite(null, previous);
@@ -317,6 +335,7 @@
     row = row || { name: '새 입사자', siteId: previous && previous.enrollment.site_id,
       companyId: previous && previous.enrollment.company_id };
     loadOptions().then(function (o) {
+      var jobEditor;
       u.formModal({
         title: isNew ? '신규 관리자 초대' : '관리자로 초대 — ' + row.name,
         subtitle: isNew ? '직원 사전 등록 없이 링크 하나를 전달합니다. 직원이 이름·전화번호·로그인 정보를 입력하면 등록이 완료됩니다. 7일·1회용입니다.'
@@ -330,7 +349,9 @@
             options: o.scopes.filter(function (r) { return ['site', 'company', 'all_sites'].indexOf(r.value) >= 0; }) },
           { name: 'siteId', label: '담당 현장', type: 'select', options: o.sites, value: row.siteId || '' },
           { name: 'companyId', label: isNew ? '소속 회사 · 회사 범위일 때 담당 회사' : '담당 회사', type: 'select', options: o.companies, value: row.companyId || '' }
-        ].concat(isNew ? [{ name: 'recipientLabel', label: '초대 메모 (선택)', value: previous ? previous.label : '',
+        ].concat(o.jobCatalog ? [{name:'jobRole',label:'직책',type:'select',required:true,value:previous && previous.grant.job_role || 'site_manager',
+          options:Object.entries(o.jobCatalog.jobs).map(function(e){return {value:e[0],label:e[1].label};})},
+          {name:'teamId',label:'담당 팀 (팀 범위)',type:'select',options:o.teams,value:previous && previous.grant.allowed_team_id || ''}] : []).concat(isNew ? [{ name: 'recipientLabel', label: '초대 메모 (선택)', value: previous ? previous.label : '',
           hint: '예: 703K 새 소장. 직원 이름·이메일은 직원이 직접 입력합니다.' }] : []),
         onReady: function (form) {
           var role = form.querySelector('[name="role"]');
@@ -339,14 +360,21 @@
             if (role.value === 'admin') scope.value = 'all_sites';
             scope.disabled = role.value === 'admin';
           }
-          role.addEventListener('change', syncScope);
-          syncScope();
+          if(o.jobCatalog){
+            role.parentElement.style.display='none';
+            form.querySelector('[name="siteId"]').parentElement.style.display='none';
+            scope.disabled=false;
+            scope.innerHTML=o.scopes.filter(function(s){return s.value!=='all_sites';}).map(function(s){return '<option value="'+u.esc(s.value)+'">'+u.esc(s.label)+'</option>';}).join('');
+            scope.value=previous && previous.grant.access_scope || 'site';
+            jobEditor=global.JobPermissionEditor.attach(form,o.jobCatalog,o.sites,{permissions:previous && previous.grant.job_permissions,duties:previous && previous.grant.job_duties || [],siteIds:previous && previous.grant.job_site_ids || [Number(row.siteId)].filter(Boolean)});
+          }else{role.addEventListener('change', syncScope);syncScope();}
         },
         onSave: function (v) {
           v.kind = isNew ? 'new_employee' : 'existing_worker';
           if (isNew && previous) v.replaceInvitationId = previous.id;
           if (!isNew) v.id = id;
-          if (v.role === 'admin') v.scope = 'all_sites';
+          if(jobEditor)Object.assign(v,jobEditor.read());
+          else if (v.role === 'admin') v.scope = 'all_sites';
           return call('api_createManagerInvitation', [v]).then(function (res) {
             if (res.success === false) return res;
             // Wait until formModal closes before presenting the sharing dialog.
@@ -421,6 +449,7 @@
   global.AdminAccess = {
     render: renderScreen,
     openForm: openForm,
+    openJob: openJob,
     setStatus: setStatus,
     remove: remove,
     invite: invite,

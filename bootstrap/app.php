@@ -3,6 +3,7 @@
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 
 use App\Http\Middleware\AllowSameOriginFraming;
+use App\Http\Middleware\AuthorizeJobAccess;
 use App\Http\Middleware\LocalAutoLogin;
 use App\Http\Middleware\PersonalAppSession;
 use App\Http\Middleware\RequireActiveAccount;
@@ -14,6 +15,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -46,6 +48,11 @@ return Application::configure(basePath: dirname(__DIR__))
             PersonalAppSession::class,
         );
 
+        $middleware->prependToPriorityList(
+            SubstituteBindings::class,
+            AuthorizeJobAccess::class,
+        );
+
         // 모든 웹 요청에 선택 언어를 적용.
         $middleware->web(append: [
             // 로컬 개발 자동 로그인(SNAP_AUTOLOGIN=1 + local 전용) — 운영에선 항상 무동작.
@@ -53,6 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
             PersonalAppSession::class,
             RequireActiveAccount::class,
             SetLocale::class,
+            AuthorizeJobAccess::class,
             // 같은 사이트 안에서는 iframe 허용(SAMEORIGIN) — 안 붙이면 플랫폼이
             // deny 를 붙여 SPA 가 품은 문서함·문서 뷰어가 회색으로 깨진다.
             AllowSameOriginFraming::class,

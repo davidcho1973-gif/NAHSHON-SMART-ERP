@@ -13,6 +13,8 @@ use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
 use App\Models\ProcurementItem;
 use App\Models\ProjectContractDocument;
+use App\Models\Scopes\JobDataScope;
+use App\Models\User;
 use App\Observers\EmployeeOffboardingObserver;
 use App\Observers\EmployeePayrollProfileObserver;
 use App\Observers\EmployeeTimesheetPolicyObserver;
@@ -28,6 +30,7 @@ use App\Services\Ocr\OcrEngine;
 use App\Services\Ocr\OpenAiOcrEngine;
 use App\Support\WorkerPhone;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
@@ -58,6 +61,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // One actor boundary protects lists, record lookups and direct file routes. Console jobs retain their trusted scope.
+        $jobScope = new JobDataScope;
+        foreach (glob(app_path('Models/*.php')) as $file) {
+            $class = 'App\\Models\\'.basename($file, '.php');
+            if (is_subclass_of($class, Model::class) && $class !== User::class) {
+                $class::addGlobalScope($jobScope);
+                $class::saving(fn ($model) => JobDataScope::assertWritable($model));
+            }
+        }
         // A shared site Wi-Fi must not lock out all workers after ten registrations.
         RateLimiter::for('worker-entry', function (Request $request) {
             $phone = WorkerPhone::normalize((string) $request->input('phone', '')) ?? 'invalid';

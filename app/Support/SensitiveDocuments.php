@@ -47,6 +47,11 @@ final class SensitiveDocuments
      */
     public static function scope(Builder $query, string $column = 'document_type'): Builder
     {
+        $actor = auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return $query->where(fn (Builder $q) => $q->whereNull($column)->orWhereNotIn($column,
+                array_values(array_diff(self::MONEY_TYPES, JobAccess::visibleMoneyTypes($actor)))));
+        }
         if (self::canSeeMoney()) {
             return $query;
         }
@@ -61,6 +66,10 @@ final class SensitiveDocuments
     /** 이 문서 한 건을 이 사용자가 열어도 되는가 (상세 조회용). */
     public static function allows(?string $documentType): bool
     {
+        $actor = auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin' && in_array($documentType, self::MONEY_TYPES, true)) {
+            return in_array($documentType, JobAccess::visibleMoneyTypes($actor), true);
+        }
         if ($documentType === null || $documentType === '') {
             return true;
         }

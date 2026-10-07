@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-06 Job titles and scoped business permissions
+
+Root cause: legacy administrator roles mixed title, data scope and business actions, so assigning a title could also grant unrelated company-wide and payment access. Introduced one job/duty/action catalog, a server endpoint policy, actor-bound model scope and validated grants. Profiles: worker, trade lead, site manager, engineering manager, safety manager, office administrator (HR/administration, payroll, accounting, purchasing; combinable) and president. Company, multiple sites and team scope remain independent of six actions (view/edit/approve/pay/delete/export); system access stays a separate superadmin responsibility. Both invitation paths and existing-account editing use the same grant/editor. Existing employee IDs, attendance history and login identities are retained; migrations do not guess or mass-assign titles.
+
+Personal app keeps own work and adds a job workspace, scoped approvals/payment completion records and own paid payslips. Management access requires verified Google/password login; own payslips require PIN/strong login, never phone-number-only access. Purchase orders require approval, currency and remaining budget; changes invalidate approval. Payroll and expense approval/pay actions are separate and enforce state/scope; stale approval/payment snapshots are rejected. API, file, AI/document and explicit-actor MCP reads enforce business permissions and staff privacy. Shared config/routes/SPA changes are required by the authorized ERP/personal-app role redesign. Related legacy tests remain in place; unrelated open PRs are not included.
+
+Validation: PostgreSQL related PHP 101 tests /595 assertions and JS134 pass; final job regressions24 /118 assertions include read-only materials and metadata scope checks. Static build, Pint, 54 changed/new PHP syntax checks and diff checks pass. Full local run reached 3000 tests but Windows child-process bash/GD/OpenSSL dependencies caused platform failures; Linux/PostgreSQL full CI is the release gate. No production employee/attendance/payroll records, staff grants, bank transfers or external emails were used for testing. Feature → staging → main release and all three domain verification follow in PR/workflow evidence.
+
 ## CODEX — 2026-10-05 One-link onboarding for new managers
 
 Root cause: manager invitations required an existing worker account, forcing new hires through public worker registration and a second invitation. The same invitation model now supports unclaimed new-employee invitations with a server-selected role/scope and optional company/site placement. Recipient enters name/full phone then Google or email/password within the same private link. Completion atomically creates one staff employee and one strongly authenticated account, consumes the invitation, and retains the existing-worker promotion path. No account or manager access is created before completion. Public/HR registration phone locks and login-identity locks prevent concurrent duplicate enrollment; registered phones and identities are rejected, never rebound. Pending invitations can be canceled/reissued; seven-day, one-use, issuer authorization, canonical alias/OAuth and 15-minute session rules remain. No payroll/financial or production employee data is created during development. Shared SPA/view/API changes are necessary for the user-requested complete onboarding flow.
@@ -655,3 +663,9 @@ Detailed HR registration fixtures now specify their required worker position. Pu
 
 ## 2026-10-05 — Retire manager personal QR
 Removed manager QR menus, issuer/exchange code and assets at user request. Old routes return 410; old QR cookies cannot restore users and QR-only sessions are invalidated on the next request. Strong password/Google sessions survive stale QR cookies. Historical device records remain for audit. Field attendance QR unchanged. Updated manuals and replaced retired feature tests with retirement/auth-boundary regression coverage. Targeted 67 tests / 480 assertions and JS61 passed; Blade/build passed. Full CI and deployment pending. Includes previously tested finance optimization from staging.
+
+Release completion: PR122/123 merged; staging6d07143 and maindcdc4af. Full Linux2599 PHP /10762 assertions and69 JS passed. Staging run37405303989 and main37405720864 succeeded including both production jobs. All NAHSHON/DASOL/LIMAN URLs verified dcdc4af, zero pending migrations, scheduler running and new invitation assets. No production staff/attendance/payroll records created during verification. Evidence: outputs/ERP_New_Manager_Invitations_20261005 in the calling task.
+
+### 2026-10-06 CODEX — 개인앱 현재 기능·직책별 화면 안내
+- 읽기 전용 코드 확인: 공통 출퇴근/근무/나 탭, 오늘 보고·영수증·문서 업로드·메시지·물어보기, 구매·입고·인사 메뉴의 역할/로그인 조건과 QR 근태 처리 권한 확인.
+- 현재 개인앱에는 시급·급여명세서 표시가 없으며, 회사 6개 직책별 전용 홈과 내 업무/관리업무 분리는 제안 단계임을 안내. 앱 코드·권한·운영 데이터 변경 없음.

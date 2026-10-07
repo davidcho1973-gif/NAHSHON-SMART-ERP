@@ -4,6 +4,9 @@ namespace App\Services\Finance;
 
 use App\Models\MobileExpense;
 use App\Models\User;
+use App\Services\Communication\DecisionReplyConnector;
+use App\Support\AccessPolicy;
+use App\Support\JobAccess;
 
 /**
  * 경비 승인 규칙의 정본 — 누가, 어떤 상태로 바꿀 수 있는가.
@@ -16,7 +19,7 @@ use App\Models\User;
 class ExpenseReviewService
 {
     /** 경비 전체를 승인·반려·지급 처리할 수 있는 역할 — 규칙은 AccessPolicy 한 곳에. */
-    public const MANAGER_ROLES = \App\Support\AccessPolicy::MONEY_ROLES;
+    public const MANAGER_ROLES = AccessPolicy::MONEY_ROLES;
 
     public const DECISIONS = ['approved', 'rejected', 'paid'];
 
@@ -24,7 +27,7 @@ class ExpenseReviewService
 
     public function canReview(?User $user): bool
     {
-        return \App\Support\AccessPolicy::canManageMoney($user);
+        return AccessPolicy::canManageMoney($user);
     }
 
     /**
@@ -34,6 +37,10 @@ class ExpenseReviewService
      */
     public function review(MobileExpense $expense, string $decision, ?User $reviewer): array
     {
+        if (JobAccess::managed($reviewer) && $reviewer->access_role !== 'super_admin'
+            && ! JobAccess::can($reviewer, 'finance', $decision === 'paid' ? 'pay' : 'approve')) {
+            return ['success' => false, 'message' => '승인 또는 지급 실행 권한이 없습니다.'];
+        }
         if (! $this->canReview($reviewer)) {
             return ['success' => false, 'message' => '경비를 승인·반려할 권한이 없습니다.'];
         }
@@ -42,6 +49,17 @@ class ExpenseReviewService
             return ['success' => false, 'message' => '알 수 없는 처리 유형입니다.'];
         }
 
+        if (JobAccess::managed($reviewer) && $reviewer->access_role !== 'super_admin') {
+            if (($decision === 'paid' && $expense->status !== 'approved') || ($decision !== 'paid' && ! in_array($expense->status, ['pending', 'submitted'], true))) {
+                return ['success' => false, 'message' => '현재 상태에서는 처리할 수 없습니다. 승인 후 지급하세요.'];
+            }
+            if ($decision !== 'paid' && $reviewer->employee_id && (int) $expense->employee_id === (int) $reviewer->employee_id) {
+                return ['success' => false, 'message' => '본인 경비는 다른 승인자가 확인해야 합니다.'];
+            }
+            if (! MobileExpense::whereKey($expense->id)->exists()) {
+                return ['success' => false, 'message' => '담당 범위 밖의 경비입니다.'];
+            }
+        }
         $expense->update([
             'status' => $decision,
             'reviewed_by_user_id' => $reviewer->id,
@@ -51,7 +69,7 @@ class ExpenseReviewService
         ]);
 
         // 결정이 방으로 돌아간다 — 방에서 태어난 경비면 그 자리에 결과 답글.
-        app(\App\Services\Communication\DecisionReplyConnector::class)->expenseDecided($expense->fresh());
+        app(DecisionReplyConnector::class)->expenseDecided($expense->fresh());
 
         return [
             'success' => true,

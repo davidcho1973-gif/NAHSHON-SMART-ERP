@@ -17,7 +17,7 @@
   'use strict';
 
   var A = null;
-  var state = { rows: [], options: null, filters: null, canManage: false, canDelete: false };
+  var state = { rows: [], options: null, filters: null, canManage: false, canApprove: false, canDelete: false };
 
   function ui() { if (!A) A = global.AdminUI; return A; }
 
@@ -114,7 +114,7 @@
   /** 한 기록에 대해 할 수 있는 일들. */
   function eventActions(e, what) {
     var u = ui();
-    if (!e || !state.canManage) return '';
+    if (!e || !(state.canManage || state.canApprove || state.canDelete)) return '';
 
     // 지워진 기록에서 할 수 있는 것은 되살리기뿐이다. 승인·수정 버튼을 같이 두면
     // 눌러 보고 거절당하게 된다.
@@ -126,9 +126,9 @@
     }
 
     var out = '<span style="font-size:11px;color:var(--text-tertiary);margin-right:5px">' + what + '</span>';
-    if (e.status !== 'approved') out += u.rowButton('승인', 'window.AdminAttendance.setStatus(' + e.id + ',"approved")') + ' ';
-    out += u.rowButton('수정', 'window.AdminAttendance.openForm(' + e.id + ')') + ' ';
-    if (e.status !== 'rejected') out += u.rowButton('반려', 'window.AdminAttendance.setStatus(' + e.id + ',"rejected")') + ' ';
+    if (state.canApprove && e.status !== 'approved') out += u.rowButton('승인', 'window.AdminAttendance.setStatus(' + e.id + ',"approved")') + ' ';
+    if (state.canManage) out += u.rowButton('수정', 'window.AdminAttendance.openForm(' + e.id + ')') + ' ';
+    if (state.canApprove && e.status !== 'rejected') out += u.rowButton('반려', 'window.AdminAttendance.setStatus(' + e.id + ',"rejected")') + ' ';
     // 삭제는 관리자만. 급여 근거를 목록에서 빼는 일이다.
     if (state.canDelete) out += u.rowButton('삭제', 'window.AdminAttendance.remove(' + e.id + ')', 'danger');
 
@@ -226,6 +226,7 @@
       }
       state.rows = res.rows || [];
       state.canManage = !!res.canManage;
+      state.canApprove = res.canApprove === undefined ? state.canManage : !!res.canApprove;
       state.canDelete = !!res.canDelete;
       paint(render());
       ui().bindSearch('at-tbl');
@@ -303,7 +304,7 @@
             value: ev ? String(ev.eventAt || '').replace(' ', 'T').slice(0, 16) : '',
             hint: '현장 시계로 적으세요. 날짜도 현장 시간대 기준으로 계산됩니다.' },
           { name: 'status', label: '상태', type: 'select', required: true, group: '기록',
-            options: o.statuses, value: ev ? ev.status : 'approved' },
+            options: state.canApprove ? o.statuses : o.statuses.filter(function(s){return s.value==='pending';}), value: state.canApprove ? (ev ? ev.status : 'approved') : 'pending' },
           { name: 'source', label: '기록 방식', type: 'select', group: '기록',
             // 자동으로 찍힌 기록(게이트·위치·자동마감)은 고를 수 없지만, 고치려고 연
             // 기록의 출처는 그대로 보여야 한다 — 안 보이면 저장할 때 바뀐 줄 안다.

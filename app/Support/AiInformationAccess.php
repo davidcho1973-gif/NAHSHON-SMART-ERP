@@ -33,6 +33,9 @@ final class AiInformationAccess
         if ($user->account_status !== 'active' || ! array_key_exists($user->access_role, User::ROLE_OPTIONS)) {
             return false;
         }
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return in_array((int) $site->id, JobAccess::siteIds($user), true);
+        }
         if (AccessPolicy::canManageSystem($user)) {
             return true;
         }
@@ -83,6 +86,22 @@ final class AiInformationAccess
         return $query;
     }
 
+    public static function withoutUnauthorizedJobText(Builder $query, User $user): void
+    {
+        foreach (['payroll' => '급여|주급|임금|시급|월급|연봉|인건비|노무비|payroll|salary|wage',
+            'finance' => '회계|경비|손익|자금|지출|수금|세금|계좌|accounting|expense|profit|bank|tax',
+            'contracts' => '계약금액|기성금액|견적|contract[ _-]?(amount|value|sum)|quotation'] as $module => $pattern) {
+            if (JobAccess::can($user, $module)) {
+                continue;
+            }
+            foreach (['title', 'original_file_name', 'summary', 'key_facts', 'search_text', 'extracted_text'] as $field) {
+                $column = $query->getModel()->qualifyColumn($field);
+                $expression = $field === 'key_facts' ? 'CAST('.$column.' AS JSONB)' : $column;
+                $query->whereRaw("COALESCE(CAST({$expression} AS TEXT), '') !~* ?", [$pattern]);
+            }
+        }
+    }
+
     public static function withoutFinancialText(Builder $query, string $column): void
     {
         // PostgreSQL uses \y for a word boundary; column names are application constants only.
@@ -114,6 +133,6 @@ final class AiInformationAccess
     {
         return hash('sha256', json_encode(['worker-ask-v1', $user->access_role, $user->account_status, $user->access_scope,
             $user->allowed_company_id, $user->allowed_site_id, $user->allowed_team_id, $user->employee_id,
-            $user->employee?->company_id, $user->employee?->site_id]));
+            $user->employee?->company_id, $user->employee?->site_id, $user->job_role, $user->job_permissions, $user->job_site_ids]));
     }
 }
