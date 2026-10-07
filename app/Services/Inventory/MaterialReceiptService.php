@@ -45,7 +45,7 @@ class MaterialReceiptService
     {
         $user = auth()->user();
 
-        if (! $this->canManage($user)) {
+        if (! MaterialReceiptAccess::canView($user)) {
             return ['success' => false, 'canManage' => false, 'sites' => [], 'items' => [], 'total' => 0,
                 'draftCount' => 0, 'error' => '자재 입고를 조회할 권한이 없습니다.'];
         }

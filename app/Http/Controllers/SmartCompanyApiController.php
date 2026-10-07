@@ -8,6 +8,7 @@ use App\Services\Admin\EmployeeAdminService;
 use App\Services\Admin\MailDiagnosticsService;
 use App\Services\Admin\ReportRecipientService;
 use App\Support\AccessPolicy;
+use App\Support\JobEndpointPolicy;
 use App\Support\LegacyOperationPolicy;
 use App\Support\SmartCompanyData;
 use App\Support\WorkerDeviceSession;
@@ -89,6 +90,7 @@ class SmartCompanyApiController extends Controller
     public function __invoke(Request $request, string $method): JsonResponse
     {
         $args = $request->input('args', []);
+        JobEndpointPolicy::authorizeLegacy($request->user(), $method, is_array($args) ? $args : []);
         $siteId = $request->input('siteId', 'ALL');
 
         if ($request->user()?->isReadOnly() && ! $this->isReadEndpoint($method)) {

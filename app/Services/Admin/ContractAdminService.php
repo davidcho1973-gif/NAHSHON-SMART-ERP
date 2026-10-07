@@ -10,6 +10,7 @@ use App\Models\ProjectContract;
 use App\Models\ProjectContractDocument;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\JobAccess;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -49,6 +50,9 @@ class ContractAdminService
     public function canView(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'contracts', 'view');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -58,6 +62,9 @@ class ContractAdminService
     public function canManage(?User $actor = null): bool
     {
         $actor ??= auth()->user();
+        if (JobAccess::managed($actor) && $actor->access_role !== 'super_admin') {
+            return JobAccess::can($actor, 'contracts', 'edit');
+        }
 
         return $actor !== null
             && $actor->account_status === 'active'
@@ -260,6 +267,10 @@ class ContractAdminService
         $title = trim((string) ($input['title'] ?? ''));
         $direction = (string) ($input['direction'] ?? '');
         $status = (string) ($input['status'] ?? 'draft');
+        if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'contracts', 'approve')
+            && (! in_array($status, ['draft', 'under_review'], true) || (float) ($input['approvedChangeAmount'] ?? 0) !== (float) ($row?->approved_change_amount ?? 0))) {
+            return ['success' => false, 'error' => '계약 상태·승인 금액 변경에는 승인 권한이 필요합니다.'];
+        }
         $type = (string) ($input['contractType'] ?? '');
 
         $errors = [];
@@ -397,6 +408,9 @@ class ContractAdminService
      */
     public function delete(int $id): array
     {
+        if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'contracts', 'delete')) {
+            return ['success' => false, 'error' => '삭제 권한이 없습니다.'];
+        }
         $actor = auth()->user();
         if (! $actor || $actor->account_status !== 'active' || ! in_array($actor->access_role, self::DELETE_ROLES, true)) {
             return ['success' => false, 'error' => '계약 삭제 권한이 없습니다.'];

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\JobAccess;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -211,6 +212,10 @@ class User extends Authenticatable implements OAuthenticatable
      */
     public function accessibleCompanies(): Collection
     {
+        if (JobAccess::managed($this) && $this->access_role !== 'super_admin') {
+            return Company::withoutGlobalScopes()->whereKey($this->allowed_company_id ?: 0)->where('status', 'active')->get();
+        }
+
         return $this->accessibleCompaniesCache ??= in_array($this->access_role, ['super_admin', 'admin'], true)
             ? Company::query()->where('status', 'active')->orderBy('name')->get()
             : $this->companies()->where('status', 'active')->orderBy('name')->get();
@@ -242,6 +247,10 @@ class User extends Authenticatable implements OAuthenticatable
      */
     public function landingPath(): string
     {
+        if (JobAccess::managed($this)) {
+            return '/attendance-app';
+        }
+
         return match ($this->access_role) {
             'foreman', 'worker' => '/attendance-app',
             default => '/',
@@ -260,6 +269,7 @@ class User extends Authenticatable implements OAuthenticatable
             'password_login_locked_until' => 'datetime',
             'pin_set_at' => 'datetime',
             'pin_locked_until' => 'datetime',
+            'job_duties' => 'array', 'job_permissions' => 'array', 'job_site_ids' => 'array',
         ];
     }
 }

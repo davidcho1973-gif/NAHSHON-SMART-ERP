@@ -7,6 +7,7 @@ use App\Models\Site;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\CurrentCompany;
+use App\Support\JobAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -75,10 +76,12 @@ class SmartCompanyController extends Controller
             // 등록(직원) 이름 — 출퇴근 등 본인 확인 화면에서 계정명 대신 실제 등록명을 표시.
             'employee_name' => $user->employee?->name ?: $name,
             'email' => $user->email,
-            'role' => User::ROLE_OPTIONS[$user->access_role] ?? Str::headline($user->access_role ?: 'user'),
+            'role' => JobAccess::managed($user) ? JobAccess::label($user) : (User::ROLE_OPTIONS[$user->access_role] ?? Str::headline($user->access_role ?: 'user')),
             'initials' => $this->initials($name),
             'employee_id' => $user->employee_id,
             'raw_role' => $user->access_role,
+            'job_role' => $user->job_role, 'job_label' => JobAccess::label($user),
+            'job_permissions' => $user->job_permissions,
             'site_code' => $user->employee?->site?->code,
             'can_access_admin' => $user->account_status === 'active'
                 && in_array($user->access_role, User::ADMIN_PANEL_ROLES, true),

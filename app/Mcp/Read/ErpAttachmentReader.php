@@ -3,6 +3,7 @@
 namespace App\Mcp\Read;
 
 use App\Models\MobileExpense;
+use App\Support\JobAccess;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Support\Facades\Storage;
 
@@ -12,6 +13,9 @@ final class ErpAttachmentReader
 
     public function read(string $dataset, string $slot, int $id, ErpReadContext $context): array
     {
+        if (JobAccess::managed($context->actor)) {
+            abort_unless(JobAccess::can($context->actor, JobAccess::datasetModule($dataset), 'export'), 403, '파일 다운로드 권한이 없습니다.');
+        }
         $queries = app(ErpReadQuery::class);
         $definition = $queries->definition($dataset);
         $descriptor = $definition['attachments'][$slot] ?? null;

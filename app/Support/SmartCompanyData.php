@@ -39,6 +39,7 @@ use App\Services\Admin\EquipmentCheckAdminService;
 use App\Services\Admin\EquipmentSheetService;
 use App\Services\Admin\GuestLinkService;
 use App\Services\Admin\ItemMasterService;
+use App\Services\Admin\JobAccessService;
 use App\Services\Admin\KakaoReminderAdminService;
 use App\Services\Admin\LegacyActions;
 use App\Services\Admin\MailDiagnosticsService;
@@ -103,6 +104,8 @@ class SmartCompanyData
 {
     public static function handle(string $method, array $args = [], string $siteId = 'ALL'): mixed
     {
+        JobEndpointPolicy::authorizeLegacy(auth()->user(), $method, $args);
+
         return match ($method) {
             'api_getGlobalHrOverview' => self::globalHrOverview((string) ($args[0] ?? 'ALL')),
             'api_getTeamBoard' => self::teamBoard((string) ($args[0] ?? '')),
@@ -207,6 +210,7 @@ class SmartCompanyData
             'api_revokeManagerInvitation' => app(ManagerInvitationService::class)->revoke((int) ($args[0] ?? 0)),
             'api_revokeNewManagerInvitation' => app(ManagerInvitationService::class)->revokeNew((int) ($args[0] ?? 0)),
             'api_getUserAccessOptions' => app(UserAccessService::class)->options(),
+            'api_setJobAccess' => app(JobAccessService::class)->save((int) ($args[0] ?? 0), is_array($args[1] ?? null) ? $args[1] : []),
             'api_saveUserAccess' => app(UserAccessService::class)->save(is_array($args[0] ?? null) ? $args[0] : []),
             'api_setUserAccessStatus' => app(UserAccessService::class)->setStatus((int) ($args[0] ?? 0), (string) ($args[1] ?? '')),
             'api_deleteUserAccess' => app(UserAccessService::class)->delete((int) ($args[0] ?? 0)),
@@ -1196,7 +1200,8 @@ class SmartCompanyData
                         'reviewedAt' => optional($e->reviewed_at)->toIso8601String(),
                         'paidAt' => optional($e->paid_at)->toIso8601String(),
                         'receiptUrl' => self::mobileExpenseReceiptUrl($e),
-                        'canReview' => $canReview,
+                        'canReview' => JobAccess::managed(auth()->user()) ? JobAccess::can(auth()->user(), 'finance', 'approve') : $canReview,
+                        'canPay' => JobAccess::managed(auth()->user()) ? JobAccess::can(auth()->user(), 'finance', 'pay') : $canReview,
                         'canModify' => $canModify,
                         'editUrl' => $canModify ? route('mobile-expense.edit', $e, false) : '',
                         'deleteUrl' => $canModify ? route('mobile-expense.destroy', $e, false) : '',
@@ -1994,6 +1999,9 @@ class SmartCompanyData
     public static function runPayroll(mixed $periodStart, string $siteId = 'ALL'): array
     {
         $user = auth()->user();
+        if (JobAccess::managed($user) && ! JobAccess::can($user, 'payroll', 'edit')) {
+            return ['success' => false, 'error' => '급여 edit 권한이 없습니다.'];
+        }
 
         if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
             return ['success' => false, 'error' => '급여 정산 실행 권한이 없습니다.'];
@@ -2022,6 +2030,9 @@ class SmartCompanyData
     public static function approvePayroll(mixed $runId): array
     {
         $user = auth()->user();
+        if (JobAccess::managed($user) && ! JobAccess::can($user, 'payroll', 'approve')) {
+            return ['success' => false, 'error' => '급여 approve 권한이 없습니다.'];
+        }
 
         if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
             return ['success' => false, 'error' => '급여 확정 권한이 없습니다.'];
@@ -2033,6 +2044,10 @@ class SmartCompanyData
 
         try {
             $run = PayrollRun::findOrFail($runId);
+            if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+                abort_unless(in_array($run->status, ['draft', 'calculated'], true), 409, '승인 대기 급여만 확정할 수 있습니다.');
+                abort_if((int) $run->created_by_id === (int) $user->id, 403, '본인이 작성한 급여는 다른 승인자가 확인해야 합니다.');
+            }
             $run->update([
                 'status' => 'approved',
                 'approved_at' => now(),
@@ -2049,6 +2064,9 @@ class SmartCompanyData
     public static function payPayroll(mixed $runId): array
     {
         $user = auth()->user();
+        if (JobAccess::managed($user) && ! JobAccess::can($user, 'payroll', 'pay')) {
+            return ['success' => false, 'error' => '급여 pay 권한이 없습니다.'];
+        }
 
         if (! in_array($user?->access_role, ['super_admin', 'admin', 'hr_manager', 'payroll'], true)) {
             return ['success' => false, 'error' => '급여 지급 완료 권한이 없습니다.'];
@@ -2061,6 +2079,9 @@ class SmartCompanyData
         try {
             $run = PayrollRun::findOrFail($runId);
 
+            if (JobAccess::managed($user)) {
+                abort_unless($run->status === 'approved', 409, '급여 승인 후 지급할 수 있습니다.');
+            }
             DB::transaction(function () use ($run): void {
                 $run->update([
                     'status' => 'paid',

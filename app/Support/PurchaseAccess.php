@@ -21,6 +21,10 @@ final class PurchaseAccess
 
     public static function canRequest(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'purchasing');
+        }
+
         return self::eligible($user)
             && ($user->access_role === 'super_admin' || (bool) $user->purchase_request_enabled);
     }
@@ -40,6 +44,10 @@ final class PurchaseAccess
 
     public static function hasBuyerPermission(?User $user): bool
     {
+        if (JobAccess::managed($user) && $user->access_role !== 'super_admin') {
+            return JobAccess::can($user, 'purchasing', 'edit');
+        }
+
         return self::eligible($user)
             && ($user->access_role === 'super_admin' || (bool) $user->purchase_buy_enabled);
     }
@@ -51,6 +59,9 @@ final class PurchaseAccess
         }
         if ($user->access_role === 'super_admin') {
             return true;
+        }
+        if (JobAccess::managed($user)) {
+            return in_array((int) $site->id, JobAccess::siteIds($user), true);
         }
         $companyId = (int) ($user->allowed_company_id ?: $user->employee?->company_id);
         if ($user->access_role === 'vendor_admin' && (! $companyId || $companyId !== (int) $site->company_id)) {

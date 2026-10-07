@@ -38,7 +38,7 @@
   }
   function details(r) {
     const events = r.events || [], files = r.attachments || [],orders=r.orders || [];
-    return '<div class="pr-summary"><span>'+esc(r.site_name)+'</span><span>필요일 '+esc(r.need_by || '미정')+'</span><span>도착 '+esc(r.eta || '미정')+'</span></div>'+linesHtml(r.lines)+
+    return (r.approval_required ? '<p class="pr-note">구매 승인: '+esc({pending:'승인 대기',approved:'승인 완료',rejected:'반려'}[r.approval_status] || '대기')+(r.approved_budget != null ? ' · 예산 한도 '+esc(r.approval_currency)+' '+esc(Number(r.approved_budget).toLocaleString()) : '')+'</p>' : '')+'<div class="pr-summary"><span>'+esc(r.site_name)+'</span><span>필요일 '+esc(r.need_by || '미정')+'</span><span>도착 '+esc(r.eta || '미정')+'</span></div>'+linesHtml(r.lines)+
       (r.note ? '<p class="pr-note">'+esc(r.note)+'</p>' : '')+
       (orders.length ? '<details><summary>주문정보 '+orders.length+'건</summary>'+orders.map(o=>'<div class="pr-event"><strong>'+esc(o.vendor)+' · '+esc(o.order_number)+'</strong>'+((o.amount!=null)?'<p>'+esc(o.currency)+' '+esc(Number(o.amount).toLocaleString())+'</p>':'')+(o.lines || []).map(l=>{const source=(r.lines || []).find(x=>x.id===l.request_line_id);return '<p>'+esc(source?.name || '품목')+' · '+esc(l.quantity)+' '+esc(source?.unit || '')+'</p>';}).join('')+'</div>').join('')+'</details>' : '')+
       (r.context ? '<details><summary>기존 자재 · 요청 조회</summary><p class="pr-event">'+esc(r.context.match_basis)+'</p>'+

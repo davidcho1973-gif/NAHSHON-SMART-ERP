@@ -5,9 +5,12 @@ namespace App\Mcp\Read;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\Payslip;
+use App\Models\Scopes\JobDataScope;
 use App\Models\Site;
 use App\Services\Communication\CommunicationService;
 use App\Support\AccessPolicy;
+use App\Support\JobAccess;
+use App\Support\JobEndpointPolicy;
 use App\Support\SensitiveDocuments;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -27,10 +30,17 @@ final class ErpReadQuery
             throw new LogicException('Invalid catalog parent chain.');
         }
         $definition = $this->definition($key);
-        abort_unless(in_array($context->actor->access_role, $definition['roles'], true), 403, 'Module access denied.');
+        if (JobAccess::managed($context->actor) && $context->actor->access_role !== 'super_admin') {
+            abort_unless(JobAccess::can($context->actor, JobAccess::datasetModule($key)), 403, '업무 자료 열람 권한이 없습니다.');
+        } else {
+            abort_unless(in_array($context->actor->access_role, $definition['roles'], true), 403, 'Module access denied.');
+        }
         /** @var Model $model */
         $model = new $definition['model'];
         $query = $model->newQuery();
+        if (JobAccess::managed($context->actor)) {
+            $query->withGlobalScope('job_context', new JobDataScope($context->actor));
+        }
         $column = fn (string $name): string => $model->qualifyColumn($name);
 
         if (isset($definition['parent'])) {
@@ -205,6 +215,9 @@ final class ErpReadQuery
             return $row;
         })->all();
 
+        if (JobAccess::managed($context->actor)) {
+            $rows = JobEndpointPolicy::redact($rows, $context->actor);
+        }
         while (count($rows) > 1 && strlen(json_encode($rows, JSON_THROW_ON_ERROR)) > 524288) {
             array_pop($rows);
             $more = true;

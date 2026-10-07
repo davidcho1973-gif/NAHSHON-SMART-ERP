@@ -55,7 +55,7 @@ function eventsIn(rows) {
   return rows.flatMap(r => [r.clockIn, r.clockOut, ...(r.extras || [])]).filter(Boolean);
 }
 
-async function harness({ rows = [row()], canManage = true, canDelete = true, responses = {} } = {}) {
+async function harness({ rows = [row()], canManage = true, canApprove, canDelete = true, responses = {} } = {}) {
   const host = { innerHTML: '' };
   const calls = [];
   const forms = [];
@@ -87,7 +87,7 @@ async function harness({ rows = [row()], canManage = true, canDelete = true, res
         return { success: true, employees: [{ value: '7', label: 'Test Worker' }],
           sites: [{ value: '3', label: 'TEST-SITE' }], eventTypes: [], statuses: [], sources: [] };
       case 'api_getAttendanceLogs':
-        return { success: true, rows: clone(serverRows), canManage, canDelete };
+        return { success: true, rows: clone(serverRows), canManage, canApprove, canDelete };
       case 'api_setAttendanceLogStatus': {
         const current = eventsIn(serverRows).find(item => item.id === args[0]);
         assert.ok(current, 'status request must identify the selected record');
@@ -334,4 +334,19 @@ test('failed deletion keeps the row and displays the API error', async () => {
   assert.deepEqual(h.toasts, [{ message: 'Test delete denied', kind: 'error' }]);
   assert.equal(h.requests('api_getAttendanceLogs').length, 1);
   assert.equal(h.context.window.AdminAttendance._state.rows[0].clockIn.id, 41);
+});
+
+test('approval-only manager sees approve/reject without edits or deletion', async () => {
+  const h = await harness({canManage:false,canApprove:true,canDelete:false});
+  const buttons = controls(h.host.innerHTML);
+  assert.ok(buttons.some(b=>b.label==='승인'));
+  assert.ok(buttons.some(b=>b.label==='반려'));
+  assert.ok(!buttons.some(b=>['수정','삭제','기록 추가'].includes(b.label)));
+});
+
+test('editor without approval cannot see approve or reject buttons', async () => {
+  const h = await harness({canManage:true,canApprove:false,canDelete:false});
+  const buttons = controls(h.host.innerHTML);
+  assert.ok(buttons.some(b=>b.label==='수정'));
+  assert.ok(!buttons.some(b=>['승인','반려','삭제'].includes(b.label)));
 });

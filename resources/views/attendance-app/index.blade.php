@@ -798,9 +798,9 @@
             tile('{{ route('attendance-app.dots') }}', ICON.ask, @json(__('내 Dots 열기')), @json(__('ChatGPT에서 열립니다. ERP 자료는 자동으로 전달되지 않습니다.')), '', true) +
             @endif
             authorizedAppTiles() +
-            @if(!$isPersonalAppOnly && auth()->user()->access_role === 'foreman')
+            @if(!$isPersonalAppOnly && !\App\Support\JobAccess::managed(auth()->user()) && auth()->user()->access_role === 'foreman')
             tile('{{ route('worker-enrollment.index', ['return_to' => '/attendance-app']) }}', ICON.report, '우리 팀 직원 등록 현황', '인사 등록 및 앱 연결 상태 조회', '') +
-            @elseif(!$isPersonalAppOnly && in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true))
+            @elseif(!$isPersonalAppOnly && ((!\App\Support\JobAccess::managed(auth()->user()) && in_array(auth()->user()->access_role, ['super_admin', 'admin', 'hr_manager'], true)) || \App\Support\JobAccess::can(auth()->user(), 'people', 'edit')))
             tile('{{ route('worker-enrollment.index', ['return_to' => '/attendance-app']) }}', ICON.report, '인사 · 작업자 등록', '인사 승인 · 직원 개인 앱 연결', '') +
             @endif
             tile('{{ route('attendance-app.ops-room') }}', ICON.report, T.qReport, T.qReportSub, d.reportBadge) +
@@ -1015,6 +1015,12 @@
     // Module access belongs to the signed-in account, not its optional attendance record.
     function authorizedAppTiles() {
         var h = '';
+        @if(\App\Support\JobAccess::managed(auth()->user()) && auth()->user()->job_role !== 'worker')
+        h += tile('{{ route('job-workspace') }}', ICON.report, @json(\App\Support\JobAccess::label(auth()->user()).' · 관리업무'), '담당 업무 · 현황 · 승인', '');
+        @endif
+        @if(auth()->user()->employee_id)
+        h += tile('{{ route('personal-payslips.index') }}', ICON.doc, '내 급여명세서', '지급 완료된 본인 명세서', '');
+        @endif
         @if($canRequestPurchases)
         h += tile('{{ route('attendance-app.purchase-requests') }}', ICON.receipt, '구매신청', '요청 · 진행상태 확인', '');
         @endif

@@ -13,6 +13,7 @@ use App\Support\AccessPolicy;
 use App\Support\AiAssistantBudget;
 use App\Support\AiInformationAccess;
 use App\Support\AnthropicChat;
+use App\Support\JobAccess;
 use App\Support\Org;
 use DomainException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -81,7 +82,7 @@ class DocumentAsk
             $reply = $gathered['facts'] === [] && $gathered['denied'] !== []
                 ? ['answer' => implode("\n", $gathered['denied']), 'found' => false, 'sources' => []]
                 : $this->compose($question, $site, $asker, $gathered);
-            if (! AccessPolicy::canManageMoney($asker) && AiInformationAccess::financial($reply['answer'])) {
+            if (AiInformationAccess::financial($reply['answer']) && ! JobAccess::financialQuestionAllowed($asker, $reply['answer'])) {
                 $reply = ['answer' => AiInformationAccess::DENIED, 'found' => false, 'sources' => []];
                 $gathered['denied'] = array_values(array_unique([...$gathered['denied'], AiInformationAccess::DENIED]));
             }
@@ -167,7 +168,7 @@ class DocumentAsk
                 $ids = $q->source_document_ids ?? array_column($q->sources ?: [], 'document_id');
 
                 return ($ids === [] || AiInformationAccess::documents($asker, $q->site ?? $this->facts->siteOf($asker))->whereIn('id', $ids)->count() === count(array_unique($ids)))
-                    && (AccessPolicy::canManageMoney($asker) || ! AiInformationAccess::financial($q->answer));
+                    && (! AiInformationAccess::financial($q->answer) || JobAccess::financialQuestionAllowed($asker, $q->answer));
             })
             ->map(fn (DocumentQuestion $q): array => [
                 'id' => $q->id,

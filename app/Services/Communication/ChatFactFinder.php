@@ -20,6 +20,8 @@ use App\Models\WbsItem;
 use App\Services\Documents\KnowledgeKeeper;
 use App\Support\AccessPolicy;
 use App\Support\AiInformationAccess;
+use App\Support\JobAccess;
+use App\Support\JobEndpointPolicy;
 use App\Support\SiteClock;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -91,7 +93,7 @@ class ChatFactFinder
         if (! $site && ($sharedOnly || ! AccessPolicy::canManageSystem($asker))) {
             return ['site' => null, 'facts' => [], 'denied' => ['담당 현장이 지정되지 않았습니다. 관리자에게 현장 배정을 요청해 주세요.']];
         }
-        if (! AccessPolicy::canManageMoney($asker) && AiInformationAccess::financial($question)) {
+        if (AiInformationAccess::financial($question) && ! JobAccess::financialQuestionAllowed($asker, $question)) {
             return ['site' => $site, 'facts' => [], 'denied' => [AiInformationAccess::DENIED]];
         }
         $topics = $this->topicsIn($question);
@@ -120,6 +122,14 @@ class ChatFactFinder
         }
 
         foreach ($topics as $topic) {
+            $module = ['wbs' => 'progress', 'procurement' => 'purchasing', 'equipment' => 'materials', 'attendance' => 'attendance',
+                'money' => 'finance', 'inventory' => 'materials', 'payroll' => 'payroll', 'claims' => 'contracts', 'documents' => 'documents',
+                'boq' => 'progress', 'submittals' => 'progress', 'inspection' => 'safety'][$topic] ?? 'documents';
+            if (JobAccess::managed($asker) && ! JobAccess::can($asker, $module)) {
+                $denied[] = '담당 업무 밖의 자료는 조회할 수 없습니다.';
+
+                continue;
+            }
             match ($topic) {
                 'wbs' => $facts['공정'] = $this->wbs($site, $asker),
                 'procurement' => $facts['조달·발주'] = $this->procurement($site, $asker),
@@ -148,7 +158,7 @@ class ChatFactFinder
 
         return [
             'site' => $site,
-            'facts' => array_filter(AccessPolicy::canManageMoney($asker) ? $facts : AiInformationAccess::technicalFacts($facts), fn ($v): bool => $v !== [] && $v !== null),
+            'facts' => array_filter(AccessPolicy::canManageMoney($asker) ? (JobAccess::managed($asker) ? JobEndpointPolicy::redact($facts, $asker) : $facts) : AiInformationAccess::technicalFacts($facts), fn ($v): bool => $v !== [] && $v !== null),
             'denied' => $denied,
         ];
     }

@@ -19,7 +19,7 @@ class PurchaseRequest extends Model
 
     protected function casts(): array
     {
-        return ['need_by' => 'date', 'eta' => 'date', 'version' => 'integer'];
+        return ['approval_required' => 'boolean', 'approved_budget' => 'decimal:2', 'approved_at' => 'datetime', 'need_by' => 'date', 'eta' => 'date', 'version' => 'integer'];
     }
 
     public function site(): BelongsTo
