@@ -419,6 +419,15 @@ class JobAccessTest extends TestCase
         $this->postJson('/smart-company-api/api_saveSafetyPlan', ['args' => ['missing', [], true]])->assertForbidden();
     }
 
+    public function test_worker_report_writing_does_not_grant_final_report_dispatch(): void
+    {
+        [$company, $site] = $this->fixtures();
+        $user = $this->profile('worker', $company, [$site], ['scope' => 'self']);
+        $this->actingAsPurchaseUser($user);
+        $this->assertTrue(JobAccess::can($user, 'reports', 'edit'));
+        $this->postJson('/smart-company-api/api_sendDailyReport', ['args' => []])->assertForbidden();
+    }
+
     public function test_empty_managed_payroll_does_not_create_a_hidden_run(): void
     {
         [$company, $site] = $this->fixtures();

@@ -277,7 +277,7 @@ return [
         'api_saveWeekBoardLines' => ['progress', 'edit'],
         'api_saveWorkSection' => ['progress', 'edit'],
         'api_searchDocs' => ['documents', 'view'],
-        'api_sendDailyReport' => ['reports', 'edit'],
+        'api_sendDailyReport' => ['reports', 'approve'],
         'api_sendTestMail' => ['system', 'edit'],
         'api_sendVendorEmail' => ['purchasing', 'edit'],
         'api_setApplicantInterview' => ['people', 'edit'],
