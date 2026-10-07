@@ -331,6 +331,10 @@ class PayrollCalculator
         $period = $this->resolvePeriod($periodStart);
         $rows = $this->aggregate($period['start'], $period['end'], $siteId);
 
+        if (JobAccess::managed(auth()->user()) && auth()->user()->access_role !== 'super_admin') {
+            abort_if($rows->isEmpty(), 422, '담당 범위에 급여 계산 대상 직원이 없습니다.');
+        }
+
         return DB::transaction(function () use ($period, $rows, $siteId, $userId): PayrollRun {
             $code = $this->runCode($period['start'], $siteId);
             $actor = auth()->user();

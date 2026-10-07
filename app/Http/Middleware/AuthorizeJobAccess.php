@@ -21,14 +21,16 @@ class AuthorizeJobAccess
         $controller = class_basename(explode('@', $request->route()?->getActionName() ?? '')[0]);
         $personal = ['AttendanceAppController', 'WorkerAppEntryController', 'GoogleAuthController', 'EmailPasswordAuthController',
             'JobWorkspaceController', 'PersonalPayslipController', 'ExpenseAppController', 'MobileAskController', 'CommunicationController',
-            'ManagerInvitationController', 'WebManifestController', 'AttendanceGeoController', 'PushSubscriptionController'];
+            'ManagerInvitationController', 'WebManifestController', 'AttendanceGeoController', 'PushSubscriptionController', 'MobileDocumentController'];
+        $ownUpload = $controller === 'IntegratedDocumentController' && $request->route()->getActionMethod() === 'upload';
+        $equipmentCheck = $controller === 'EquipmentChecklistController' && in_array($request->route()->getActionMethod(), ['show', 'submit'], true);
         $public = ! collect($request->route()?->gatherMiddleware() ?? [])->contains(fn ($middleware) => $middleware === 'auth' || str_starts_with($middleware, 'auth:'));
         $crewAction = $controller === 'AttendanceAppController' && in_array($request->route()->getActionMethod(), ['crew', 'recordCrew', 'closeCrewDay'], true);
         $managerAsk = $controller === 'MobileAskController' && $user->job_role !== 'worker';
-        if (! $public && (! in_array($controller, $personal, true) || $crewAction || $managerAsk)) {
+        if (! $public && ((! in_array($controller, $personal, true) && ! $ownUpload && ! $equipmentCheck) || $crewAction || $managerAsk)) {
             abort_unless(EmailPasswordAuthService::hasStrongAuthentication($request, $user) && ! WorkerDeviceSession::isDeviceOnly($request), 403, '관리 업무 자료는 이메일·비밀번호 또는 Google로 로그인하세요.');
         }
-        if (! $public && ! in_array($controller, $personal, true) && $controller !== 'SmartCompanyController') {
+        if (! $public && ! in_array($controller, $personal, true) && ! $equipmentCheck && $controller !== 'SmartCompanyController') {
             $permission = JobEndpointPolicy::route($request);
             abort_unless($permission && JobAccess::can($user, ...$permission), 403, '이 업무를 처리할 권한이 없습니다.');
         }

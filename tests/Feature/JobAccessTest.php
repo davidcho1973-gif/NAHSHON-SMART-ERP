@@ -8,6 +8,7 @@ use App\Models\AttendanceLog;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeePayrollProfile;
+use App\Models\Equipment;
 use App\Models\IntelligentDocument;
 use App\Models\MobileExpense;
 use App\Models\PayrollRun;
@@ -23,6 +24,7 @@ use App\Services\Admin\JobAccessService;
 use App\Services\Admin\JobApprovalService;
 use App\Services\Admin\UserAccessService;
 use App\Services\Auth\ManagerInvitationService;
+use App\Services\Equipment\EquipmentChecklistService;
 use App\Services\Payroll\PayrollCalculator;
 use App\Support\AiInformationAccess;
 use App\Support\JobAccess;
@@ -30,7 +32,10 @@ use App\Support\JobEndpointPolicy;
 use App\Support\PurchaseAccess;
 use App\Support\WorkerDeviceSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -404,5 +409,54 @@ class JobAccessTest extends TestCase
         $again = $calculator->runPayroll('2026-10-05', 'ALL', $user->id);
         $this->assertSame($run->id, $again->id);
         $this->assertSame(1, $again->payslips()->count());
+    }
+
+    public function test_safety_editor_cannot_approve_a_plan_with_the_save_flag(): void
+    {
+        [$company, $site] = $this->fixtures();
+        $user = $this->profile('safety', $company, [$site], ['jobPermissions' => ['safety' => ['view', 'edit']]]);
+        $this->actingAsPurchaseUser($user);
+        $this->postJson('/smart-company-api/api_saveSafetyPlan', ['args' => ['missing', [], true]])->assertForbidden();
+    }
+
+    public function test_empty_managed_payroll_does_not_create_a_hidden_run(): void
+    {
+        [$company, $site] = $this->fixtures();
+        $user = $this->profile('office', $company, [$site], ['jobDuties' => ['payroll']]);
+        $this->actingAsPurchaseUser($user);
+        try {
+            app(PayrollCalculator::class)->runPayroll('2026-10-05', 'ALL', $user->id);
+            $this->fail('An empty managed run must be rejected.');
+        } catch (HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+        }
+        $this->assertDatabaseCount('payroll_runs', 0);
+    }
+
+    public function test_worker_keeps_personal_document_upload_and_equipment_checks_without_management_access(): void
+    {
+        [$company, $site, $second, $foreign] = $this->fixtures();
+        Storage::fake('public');
+        Queue::fake();
+        $employee = Employee::create(['name' => 'Worker', 'company_id' => $company->id, 'site_id' => $site->id, 'employment_status' => 'active']);
+        $equipment = Equipment::create(['company_id' => $company->id, 'site_id' => $site->id, 'equipment_type' => 'Excavator', 'model' => 'CAT 320', 'category_group' => 'equipment', 'trade' => 'heavy', 'status' => Equipment::STATUS_AVAILABLE]);
+        $token = $equipment->ensureQrToken();
+        $checklists = app(EquipmentChecklistService::class);
+        $template = $checklists->templateFor($equipment, 'pre_use');
+        $answers = $template->items->mapWithKeys(fn ($item) => [$item->id => ['ok' => true]])->all();
+        $user = $this->profile('worker', $company, [$site], ['scope' => 'self']);
+        $user->forceFill(['employee_id' => $employee->id])->save();
+        $this->actingAs($user)->withSession([WorkerDeviceSession::FLAG => true]);
+        $this->get('/attendance-app/docs')->assertOk();
+        $this->post('/docs-api/upload', ['site_id' => $site->id, 'file' => UploadedFile::fake()->create('Plan.dwg', 1, 'application/octet-stream')], ['Accept' => 'application/json'])->assertStatus(201);
+        $this->post('/docs-api/upload', ['site_id' => $foreign->id, 'file' => UploadedFile::fake()->create('Other.dwg', 1, 'application/octet-stream')], ['Accept' => 'application/json'])->assertForbidden();
+        $this->get('/eq/'.$token)->assertOk();
+        $this->postJson('/eq/'.$token.'/submit', ['stage' => 'pre_use', 'answers' => $answers])->assertOk()->assertJsonPath('success', true);
+        $this->postJson('/smart-company-api/api_getEquipmentList', ['args' => []])->assertForbidden();
+        Auth::logout();
+        $team = Team::create(['code' => 'QR-TEAM', 'name' => 'Pipe team', 'trade_type' => '배관', 'company_id' => $company->id, 'site_id' => $site->id]);
+        $user->forceFill(JobAccess::grant(['jobRole' => 'trade_lead', 'scope' => 'team', 'teamId' => $team->id, 'companyId' => $company->id, 'siteIds' => [$site->id]], $user))->save();
+        $this->actingAs($user)->withSession([WorkerDeviceSession::FLAG => true]);
+        $this->get('/eq/'.$token)->assertOk();
     }
 }

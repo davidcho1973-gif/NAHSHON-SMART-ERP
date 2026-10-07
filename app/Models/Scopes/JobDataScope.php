@@ -32,6 +32,14 @@ class JobDataScope implements Scope
         $table = $model->getTable();
         $columns = $this->columns[$table] ??= Schema::getColumnListing($table);
         $column = fn (string $name): string => $model->qualifyColumn($name);
+        // Shared checklist questions have no employee owner; equipment QR operations still stay on assigned sites.
+        if ($table === 'equipment_checklist_templates') {
+            $builder->where(fn (Builder $q) => $q->whereNull($column('company_id'))->orWhere($column('company_id'), $user->allowed_company_id ?: 0))
+                ->where(fn (Builder $q) => $q->whereNull($column('site_id'))->orWhereIn($column('site_id'), JobAccess::siteIds($user)));
+
+            return;
+        }
+        $personalEquipment = $table === 'equipments' && request()->is('eq/*');
         if ($table === 'companies') {
             $builder->where($column('id'), $user->allowed_company_id ?: 0);
 
@@ -59,9 +67,9 @@ class JobDataScope implements Scope
             return;
         }
         if (in_array('employee_id', $columns, true)) {
-            $builder->where(function (Builder $q) use ($column, $user): void {
+            $builder->where(function (Builder $q) use ($column, $user, $personalEquipment): void {
                 $q->whereIn($column('employee_id'), JobAccess::employeeQuery($user)->select('id'));
-                if ($user->access_scope !== 'self') {
+                if ($user->access_scope !== 'self' || $personalEquipment) {
                     $q->orWhereNull($column('employee_id'));
                 }
             });
@@ -103,12 +111,17 @@ class JobDataScope implements Scope
                 });
             });
         }
-        if ($user->access_scope === 'team' && in_array('trade', $columns, true)) {
+        if ($user->access_scope === 'team' && in_array('trade', $columns, true) && ! $personalEquipment) {
             $trade = JobAccess::trade($user);
             $trade ? $builder->where($column('trade'), $trade) : $builder->whereRaw('1 = 0');
         }
         if ($user->access_scope === 'team' && in_array('team_id', $columns, true)) {
-            $builder->where($column('team_id'), $user->allowed_team_id ?: 0);
+            $builder->where(function (Builder $q) use ($column, $user, $personalEquipment): void {
+                $q->where($column('team_id'), $user->allowed_team_id ?: 0);
+                if ($personalEquipment) {
+                    $q->orWhereNull($column('team_id'));
+                }
+            });
         }
         if (in_array('employee_id', $columns, true) && in_array('site_id', $columns, true) && $user->access_scope !== 'company') {
             $builder->where(fn (Builder $q) => $q->where($column('employee_id'), $user->employee_id ?: 0)->orWhereIn($column('site_id'), JobAccess::siteIds($user)));

@@ -340,6 +340,7 @@ return [
         'OpsMeetingController' => ['_module' => 'reports'],
         'MobileEquipmentController' => ['_module' => 'materials'],
         'EquipmentApiController' => ['_module' => 'materials'],
+        'EquipmentChecklistController' => ['_module' => 'materials', 'stickerSheet' => ['materials', 'export'], 'sticker' => ['materials', 'export']],
         'VehicleApiController' => ['_module' => 'office'],
         'MobileExpenseController' => ['_module' => 'finance'],
         'ExpensePreApprovalController' => ['_module' => 'finance'],

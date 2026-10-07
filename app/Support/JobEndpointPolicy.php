@@ -28,6 +28,9 @@ final class JobEndpointPolicy
         }
         $permission = self::legacy($method, $args);
         abort_unless($permission && JobAccess::can($user, ...$permission), 403, '이 업무를 처리할 권한이 없습니다.');
+        if ($method === 'api_saveSafetyPlan' && ($args[2] ?? false)) {
+            abort_unless(JobAccess::can($user, 'safety', 'approve'), 403, '안전계획 승인 권한이 없습니다.');
+        }
     }
 
     public static function route(Request $request): ?array
