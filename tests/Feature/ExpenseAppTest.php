@@ -79,6 +79,33 @@ class ExpenseAppTest extends TestCase
         $this->assertSame('expense-app', $expense->ocr_data['source'] ?? null);
     }
 
+    public function test_continuation_pages_are_analyzed_once_and_create_one_expense_with_one_total(): void
+    {
+        $engine = \Mockery::mock(\App\Services\Ocr\OcrEngine::class);
+        $engine->shouldReceive('analyze')->once()
+            ->withArgs(fn (array $parts, string $prompt): bool => count($parts) === 1
+                && $parts[0]['mime_type'] === 'application/pdf'
+                && str_contains($prompt, 'ONE purchase transaction')
+                && str_contains($prompt, 'Never add repeated totals')
+                && str_contains($prompt, 'purchased items from all pages'))
+            ->andReturn(['data' => [
+                'vendor_name' => 'Supplier', 'amount' => 175.25, 'subtotal' => 160, 'tax' => 15.25,
+                'date' => '2026-10-06', 'category' => '5201 Job Materials',
+                'description' => 'Page 1: PVC pipe; page 2: fittings; page 3: valves',
+            ], 'model' => 'mock']);
+        $this->app->instance(\App\Services\Ocr\OcrEngine::class, $engine);
+
+        $this->submit(['receipt' => UploadedFile::fake()->createWithContent('purchase-pages.pdf', file_get_contents(base_path('tests/fixtures/receipt-continuation.pdf')))])
+            ->assertOk()->assertJsonPath('analyzed.amount', 175.25);
+        $this->assertDatabaseCount('mobile_expenses', 1);
+        $expense = MobileExpense::firstOrFail();
+        $this->assertSame(175.25, (float) $expense->amount);
+        $this->assertSame('application/pdf', $expense->receipt_mime_type);
+        $this->assertSame('purchase-pages.pdf', $expense->receipt_original_name);
+        $this->assertStringContainsString('valves', $expense->description);
+        $this->assertSame(15.25, $expense->ocr_data['tax']);
+    }
+
     public function test_판독이_흐리면_금액을_물어보고_수기_금액으로_접수한다(): void
     {
         // 판독 실패(빈 응답) — 금액 없이 내면 접수하지 않는다.

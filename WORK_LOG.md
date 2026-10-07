@@ -2,6 +2,14 @@
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
+## CODEX — 2026-10-06 Receipt continuation pages
+
+Root cause: the receipt app loop submitted every queued image independently, so a purchase spanning multiple pages created multiple expenses. The receipt app now offers an explicit same-purchase grouping checkbox and converts the selected pages into one reduced PDF before its single intake request. Independent-purchase mode is retained. A group needing a manual total or a retry stays together, and additional pages rebuild the group from the originals in order. ERP expense registration now accumulates photos/camera captures and analyzes them only after the user clicks the combined analysis button; changed pages invalidate the old receipt attachment.
+
+The shared receipt OCR prompt reads all continuation pages as one transaction, uses the final grand total once, avoids adding carried-forward/page totals or repeated tax/tip, and includes items from all pages while preserving distinct identical-name purchase lines. Existing storage, approval, company/site/employee scope and reimbursement behavior are unchanged; existing separate expenses are not rewritten.
+
+Validation: 14 targeted JS tests passed, including grouped submission, independent purchases, manual-total retry, conversion failure, adding a page after retry, wizard accumulation and stale-analysis invalidation. Broad local JS run passed 141 tests; the existing shell/PHP environment test cannot run in this Windows chat without its PHP/bash runtime. CI runs the full JS and PHP/PostgreSQL suites. A real three-page PDF fixture tests one intake/OCR call, one stored expense and one final total. Static build and diff checks pass. PR/CI and staging/main server verification are required before release completion.
+
 ## CODEX — 2026-10-06 Foremen and trade managers
 
 Root cause: the trade_lead profile described a single crew foreman but was labelled a trade team leader, and the permission model had no scope spanning all teams of one trade. Keep its stored identity and existing grants, label it 작업반장, and add 공정팀장 with an explicit company/selected-sites/trade grant. Scope employees, teams, trade-tagged work and requester-owned purchase records on the server; reject other-trade writes. Account changes and invitation completion apply the catalog position to the same employee. Trade changes invalidate AI context and invitation identity; pre-existing invitations remain compatible.

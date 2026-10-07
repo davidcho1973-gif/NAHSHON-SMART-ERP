@@ -462,8 +462,13 @@
           <i class="ph ph-receipt-bold upload-icon" id="uploadAreaIcon"></i>
           <span class="upload-label" id="uploadAreaLabel">사진 촬영 또는 파일 올리기</span>
           <span class="upload-sub" id="uploadAreaSub">{{ \App\Support\ReceiptUpload::hint() }}</span>
-          <input type="file" id="receiptFileInput" accept="image/*,application/pdf" style="display:none" onchange="handleReceiptUpload(event)">
+          <input type="file" id="receiptFileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleReceiptUpload(event)">
         </div>
+        <button type="button" class="btn-manual-skip" id="receiptCameraButton" onclick="document.getElementById('receiptCameraInput').click()">사진 촬영 · 다음 장 추가</button>
+        <input type="file" id="receiptCameraInput" accept="image/*" capture="environment" hidden onchange="handleReceiptUpload(event)">
+        <p>한 구매 건의 사진을 모두 추가한 뒤 한 번에 분석하세요. 여러 장은 하나의 영수증으로 저장됩니다.</p>
+        <div id="receiptPagesList" aria-live="polite"></div>
+        <button type="button" class="btn-manual-skip" id="analyzeReceiptPages" onclick="analyzeReceiptPages()" disabled>추가한 영수증 함께 분석</button>
         <div class="analysis-card" id="receiptAnalysisCard" aria-live="polite">
           <div class="analysis-head">
             <span class="analysis-title">AI analysis result</span>
@@ -496,7 +501,7 @@
             </div>
           </div>
         </div>
-        <div class="btn-manual-skip" onclick="goNextStep()">영수증 없이 직접 입력하기</div>
+        <div class="btn-manual-skip" onclick="skipReceiptPages()">영수증 없이 직접 입력하기</div>
       </div>
 
       <!-- STEP 3: Site, budget, and department -->
@@ -608,6 +613,7 @@
   </div>
 
   <script src="{{ asset('js/receipt-photo.js') }}"></script>
+  <script src="{{ asset('js/document-photos.js') }}?v={{ filemtime(public_path('js/document-photos.js')) }}"></script>
 <script>
     let currentStep = 1;
     const totalSteps = 6;
@@ -666,6 +672,9 @@
       const preview = document.getElementById('receiptUploadPreview');
       const container = document.getElementById('uploadContainer');
 
+      if (receiptPreviewObjectUrl) {
+        URL.revokeObjectURL(receiptPreviewObjectUrl); receiptPreviewObjectUrl = null;
+      }
       if (!file || !file.type.startsWith('image/')) {
         preview.removeAttribute('src');
         preview.classList.remove('visible');
@@ -673,9 +682,6 @@
         return;
       }
 
-      if (receiptPreviewObjectUrl) {
-        URL.revokeObjectURL(receiptPreviewObjectUrl);
-      }
 
       receiptPreviewObjectUrl = URL.createObjectURL(file);
       preview.src = receiptPreviewObjectUrl;
@@ -683,9 +689,39 @@
       container.classList.add('has-preview');
     }
 
-    async function handleReceiptUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+    let receiptPages = [], receiptBusy = false;
+    function clearReceiptAnalysis() {
+      document.getElementById('receiptPath').value = '';
+      document.getElementById('ocrData').value = '';
+      document.getElementById('receiptAnalysisCard').classList.remove('visible');
+    }
+    function drawReceiptPages() {
+      const host = document.getElementById('receiptPagesList'); host.innerHTML = '';
+      receiptPages.forEach((file, index) => {
+        const row = document.createElement('div'); row.textContent = (index + 1) + '. ' + file.name + ' ';
+        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '빼기'; remove.disabled = receiptBusy;
+        remove.onclick = () => { if (receiptBusy) return; receiptPages.splice(index, 1); clearReceiptAnalysis(); drawReceiptPages(); showReceiptUploadPreview(receiptPages[0]); };
+        row.appendChild(remove); host.appendChild(row);
+      });
+      document.getElementById('analyzeReceiptPages').disabled = receiptBusy || !receiptPages.length;
+      document.getElementById('receiptFileInput').disabled = document.getElementById('receiptCameraInput').disabled = document.getElementById('receiptCameraButton').disabled = receiptBusy;
+    }
+    function handleReceiptUpload(event) {
+      if (receiptBusy) return;
+      for (const file of event.target.files || []) {
+        if (receiptPages.length >= 20) { alert('최대 20장까지 추가할 수 있습니다.'); break; }
+        receiptPages.push(file);
+      }
+      event.target.value = ''; clearReceiptAnalysis(); drawReceiptPages();
+      showReceiptUploadPreview(receiptPages[0]);
+    }
+    function skipReceiptPages() {
+      if (receiptBusy) return;
+      receiptPages = []; clearReceiptAnalysis(); drawReceiptPages(); showReceiptUploadPreview(null); goNextStep();
+    }
+    async function analyzeReceiptPages() {
+      if (!receiptPages.length || receiptBusy) return;
+      receiptBusy = true; drawReceiptPages();
 
       const container = document.getElementById('uploadContainer');
       const scanner = document.getElementById('scannerBar');
@@ -693,7 +729,7 @@
       const label = document.getElementById('uploadAreaLabel');
       const sub = document.getElementById('uploadAreaSub');
 
-      showReceiptUploadPreview(file);
+      showReceiptUploadPreview(receiptPages[0]);
 
       // Start scanner animation
       scanner.style.display = 'block';
@@ -702,10 +738,9 @@
       label.textContent = 'AI 영수증 분석중...';
       sub.textContent = 'Gemini가 영수증 정보를 추출하고 있습니다.';
 
-      const formData = new FormData();
-      formData.append('receipt', await window.ReceiptPhoto.prepare(file));
-
       try {
+        const file = receiptPages.length > 1 ? await DocumentPhotos.combine(receiptPages) : await window.ReceiptPhoto.prepare(receiptPages[0]);
+        const formData = new FormData(); formData.append('receipt', file);
         const response = await fetch("{{ route('mobile-expense.upload-receipt') }}", {
           method: 'POST',
           headers: {
@@ -739,10 +774,8 @@
           document.getElementById('categoryInput').value = accountingAccount;
           document.getElementById('accountingAccountInput').value = accountingAccount;
 
-          if (data.amount) {
-            rawAmountString = Number(data.amount).toFixed(2);
-            updateAmountDisplay();
-          }
+          rawAmountString = (Number(data.amount) || 0).toFixed(2);
+          updateAmountDisplay();
           if (data.date) {
             document.getElementById('dateInput').value = data.date;
           }
@@ -756,6 +789,7 @@
       } catch (err) {
         alert('서버 오류: ' + err.message);
       } finally {
+        receiptBusy = false; drawReceiptPages();
         // Reset upload UI
         scanner.style.display = 'none';
         icon.className = 'ph ph-receipt-bold upload-icon';
@@ -897,6 +931,9 @@
     }
 
     function handleNextClick() {
+      if (receiptBusy || (receiptPages.length && !document.getElementById('receiptPath').value)) {
+        alert('추가한 영수증을 먼저 함께 분석해 주세요.'); currentStep = 2; updateStepUI(); return;
+      }
       if (currentStep === totalSteps) {
         // Form Validation check
         const amountVal = parseFloat(document.getElementById('amountInput').value) || 0;

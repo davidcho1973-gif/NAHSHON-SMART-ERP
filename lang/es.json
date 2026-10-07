@@ -1,4 +1,6 @@
 {
+    "같은 구매 건의 여러 장을 하나의 영수증으로 묶기": "Unir las páginas de la misma compra en un recibo",
+    "품목이 다음 장에 이어지는 영수증은 묶어서 제출하세요. 거래처·구매일·총액은 한 건으로 처리합니다.": "Una los recibos cuyos artículos continúan en la siguiente página. El proveedor, la fecha y el total se registran una sola vez.",
     "사진 촬영 · 다음 장 추가": "Tomar una foto · agregar la siguiente página",
     "사진 여러 장을 한 문서로 등록": "Registrar varias fotos como un solo documento",
     "선택한 순서대로 등록합니다. 사진은 글자가 읽히도록 용량을 줄여 저장합니다.": "Las páginas se guardan en el orden seleccionado. Las fotos se reducen manteniendo el texto legible.",
