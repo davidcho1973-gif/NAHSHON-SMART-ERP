@@ -43,10 +43,15 @@ class ManagerInvitationService
 
     public function fingerprint(User $user): string
     {
-        return hash('sha256', json_encode([$user->employee_id, $user->email, $user->google_id,
+        $identity = [$user->employee_id, $user->email, $user->google_id,
             $user->password, $user->access_role, $user->access_scope, $user->account_status,
             $user->allowed_site_id, $user->allowed_company_id, $user->allowed_team_id,
-            $user->purchase_request_enabled, $user->purchase_buy_enabled, $user->employee?->phone, $user->employee?->employment_status]));
+            $user->purchase_request_enabled, $user->purchase_buy_enabled, $user->employee?->phone, $user->employee?->employment_status];
+        if ($user->access_scope === 'trade') {
+            $identity[] = $user->job_trade;
+        }
+
+        return hash('sha256', json_encode($identity));
     }
 
     public function issue(array $input): array
@@ -192,9 +197,10 @@ class ManagerInvitationService
         try {
             $checked = JobAccess::grant(['jobRole' => $grant['job_role'], 'jobDuties' => $grant['job_duties'] ?? [],
                 'jobPermissions' => $grant['job_permissions'] ?? [], 'siteIds' => $grant['job_site_ids'] ?? [],
-                'scope' => $grant['access_scope'], 'companyId' => $grant['allowed_company_id'], 'teamId' => $grant['allowed_team_id'] ?? null]);
+                'scope' => $grant['access_scope'], 'companyId' => $grant['allowed_company_id'], 'teamId' => $grant['allowed_team_id'] ?? null, 'jobTrade' => $grant['job_trade'] ?? null]);
 
-            return $checked == $grant;
+            // Invitations issued before trade scope had no job_trade key.
+            return $checked == ($grant + ['job_trade' => null]);
         } catch (\Throwable) {
             return false;
         }
@@ -282,6 +288,7 @@ class ManagerInvitationService
                 $data['password_set_at'] = now();
             }
             $user->forceFill($data)->save();
+            JobAccess::applyEmployeePosition($user);
             $invite->update(['user_id' => $user->id, 'accepted_at' => now()]);
             AuthEvent::record('manager_invitation_accepted', user: $user, actor: User::find($invite->created_by_id), method: $googleId ? 'google' : 'password', request: $request);
 

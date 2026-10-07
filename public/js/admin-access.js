@@ -316,7 +316,7 @@
           {name:'companyId',label:'소속 회사',type:'select',required:true,options:o.companies,value:row.companyId||''},
           {name:'teamId',label:'담당 팀 (팀 범위)',type:'select',options:o.teams,value:row.teamId||''}
         ],
-        onReady:function(wrap){editor=global.JobPermissionEditor.attach(wrap,o.jobCatalog,o.sites,{permissions:row.jobPermissions,duties:row.jobDuties||[],siteIds:row.siteIds||[Number(row.siteId)].filter(Boolean)});},
+        onReady:function(wrap){editor=global.JobPermissionEditor.attach(wrap,o.jobCatalog,o.sites,{jobTrade:row.jobTrade,permissions:row.jobPermissions,duties:row.jobDuties||[],siteIds:row.siteIds||[Number(row.siteId)].filter(Boolean)});},
         onSave:function(v){Object.assign(v,editor.read());return call('api_setJobAccess',[id,v]).then(function(res){if(res.success===false)return res;ui().toast('직책·업무 권한을 적용했습니다.');return reload().then(function(){return {success:true};});});}
       });
     });
@@ -366,7 +366,7 @@
             scope.disabled=false;
             scope.innerHTML=o.scopes.filter(function(s){return s.value!=='all_sites';}).map(function(s){return '<option value="'+u.esc(s.value)+'">'+u.esc(s.label)+'</option>';}).join('');
             scope.value=previous && previous.grant.access_scope || 'site';
-            jobEditor=global.JobPermissionEditor.attach(form,o.jobCatalog,o.sites,{permissions:previous && previous.grant.job_permissions,duties:previous && previous.grant.job_duties || [],siteIds:previous && previous.grant.job_site_ids || [Number(row.siteId)].filter(Boolean)});
+            jobEditor=global.JobPermissionEditor.attach(form,o.jobCatalog,o.sites,{jobTrade:previous && previous.grant.job_trade,permissions:previous && previous.grant.job_permissions,duties:previous && previous.grant.job_duties || [],siteIds:previous && previous.grant.job_site_ids || [Number(row.siteId)].filter(Boolean)});
           }else{role.addEventListener('change', syncScope);syncScope();}
         },
         onSave: function (v) {

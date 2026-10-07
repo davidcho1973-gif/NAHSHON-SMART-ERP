@@ -90,6 +90,7 @@ class User extends Authenticatable implements OAuthenticatable
     public const SCOPE_LABELS_KO = [
         'self' => '본인만',
         'team' => '소속 팀',
+        'trade' => '담당 공정 전체 팀',
         'site' => '지정 현장',
         'company' => '소속 회사',
         'all_sites' => '전체 현장',

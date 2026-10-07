@@ -45,6 +45,14 @@ final class JobAccess
         return config('job_access.jobs.'.($user?->job_role ?? '').'.label') ?: (User::ROLE_LABELS_KO[$user?->access_role] ?? '직원');
     }
 
+    public static function applyEmployeePosition(User $user): void
+    {
+        $position = config('job_access.jobs.'.$user->job_role.'.position');
+        if ($position && $user->employee) {
+            $user->employee->forceFill(['position' => $position])->save();
+        }
+    }
+
     /** Only the authenticated permission issuer calls this; no client-supplied carrier role is trusted. */
     public static function grant(array $input, ?User $target = null): array
     {
@@ -75,11 +83,11 @@ final class JobAccess
         $company = Company::find((int) ($input['companyId'] ?? 0));
         $scope = $input['scope'] ?? config('job_access.jobs.'.$job.'.scope');
         $ids = $input['siteIds'] ?? (filled($input['siteId'] ?? null) ? [(int) $input['siteId']] : []);
-        if (! $company || ! in_array($scope, ['self', 'team', 'site', 'company'], true) || ! is_array($ids)) {
+        if (! $company || ! in_array($scope, ['self', 'team', 'trade', 'site', 'company'], true) || ! is_array($ids)) {
             throw ValidationException::withMessages(['companyId' => '소속 회사와 담당 범위를 선택하세요.']);
         }
         $ids = array_values(array_unique(array_map('intval', $ids)));
-        if (in_array($scope, ['site', 'team'], true) && ! $ids) {
+        if (in_array($scope, ['site', 'team', 'trade'], true) && ! $ids) {
             throw ValidationException::withMessages(['siteId' => '담당 현장을 선택하세요.']);
         }
         if (Site::whereIn('id', $ids)->where('company_id', $company->id)->count() !== count($ids)) {
@@ -89,6 +97,10 @@ final class JobAccess
         if ($scope === 'team' && (! $team || ! in_array((int) $team->site_id, $ids, true) || (int) $team->company_id !== (int) $company->id)) {
             throw ValidationException::withMessages(['teamId' => '담당 회사·현장의 팀을 선택하세요.']);
         }
+        $trade = $scope === 'trade' ? ($input['jobTrade'] ?? null) : null;
+        if (($job === 'trade_manager' && $scope !== 'trade') || ($scope === 'trade' && (! is_string($trade) || ! Team::withoutGlobalScopes()->where('company_id', $company->id)->whereIn('site_id', $ids)->where('trade_type', $trade)->exists()))) {
+            throw ValidationException::withMessages(['jobTrade' => '공정팀장은 담당 현장과 해당 회사의 공정을 선택하세요.']);
+        }
         if ($job === 'worker' && $scope !== 'self') {
             throw ValidationException::withMessages(['scope' => '작업자는 본인 범위로 지정하세요.']);
         }
@@ -96,7 +108,7 @@ final class JobAccess
         return ['job_role' => $job, 'job_duties' => array_values(array_unique($duties)), 'job_permissions' => $permissions,
             'job_site_ids' => $ids, 'access_role' => $target?->access_role === 'super_admin' ? 'super_admin' : ($job === 'worker' ? 'worker' : 'admin'),
             'access_scope' => $scope, 'allowed_company_id' => $company->id, 'allowed_site_id' => $ids[0] ?? null,
-            'allowed_team_id' => $scope === 'team' ? $team?->id : null,
+            'allowed_team_id' => $scope === 'team' ? $team?->id : null, 'job_trade' => $trade,
             'purchase_request_enabled' => ! empty($permissions['purchasing']),
             'purchase_buy_enabled' => in_array('edit', $permissions['purchasing'] ?? [], true)];
     }
@@ -120,6 +132,8 @@ final class JobAccess
                     $q->whereKey($user->employee_id ?: 0);
                 } elseif ($user->access_scope === 'team') {
                     $q->where('team_id', $user->allowed_team_id ?: 0)->whereIn('site_id', self::siteIds($user));
+                } elseif ($user->access_scope === 'trade') {
+                    $q->whereIn('team_id', self::teamIds($user))->whereIn('site_id', self::siteIds($user));
                 } elseif ($user->access_scope !== 'company') {
                     $q->whereIn('site_id', self::siteIds($user));
                 }
@@ -129,12 +143,24 @@ final class JobAccess
 
     public static function trade(User $user): ?string
     {
+        if ($user->access_scope === 'trade') {
+            return $user->job_trade;
+        }
+
         return filled($user->allowed_team_id) ? Team::withoutGlobalScopes()->whereKey($user->allowed_team_id)->where('company_id', $user->allowed_company_id)->value('trade_type') : null;
+    }
+
+    public static function teamIds(User $user): array
+    {
+        return Team::withoutGlobalScopes()->where('company_id', $user->allowed_company_id ?: 0)
+            ->whereIn('site_id', self::siteIds($user))->where('trade_type', self::trade($user) ?: '__unassigned__')
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     public static function catalog(): array
     {
-        return config('job_access');
+        return config('job_access') + ['trades' => Team::withoutGlobalScopes()->whereNotNull('trade_type')->where('trade_type', '!=', '')
+            ->get(['company_id', 'site_id', 'trade_type'])->map(fn ($team) => ['companyId' => $team->company_id, 'siteId' => $team->site_id, 'value' => $team->trade_type])->all()];
     }
 
     public static function datasetModule(string $key): string
