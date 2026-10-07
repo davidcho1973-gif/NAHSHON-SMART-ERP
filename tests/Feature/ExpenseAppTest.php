@@ -95,7 +95,7 @@ class ExpenseAppTest extends TestCase
             ], 'model' => 'mock']);
         $this->app->instance(\App\Services\Ocr\OcrEngine::class, $engine);
 
-        $this->submit(['receipt' => UploadedFile::fake()->createWithContent('purchase-pages.pdf', file_get_contents(base_path('tests/fixtures/receipt-continuation.pdf')))])
+        $this->submit(['receipt' => UploadedFile::fake()->createWithContent('purchase-pages.pdf', file_get_contents(base_path('tests/Fixtures/receipt-continuation.pdf')))])
             ->assertOk()->assertJsonPath('analyzed.amount', 175.25);
         $this->assertDatabaseCount('mobile_expenses', 1);
         $expense = MobileExpense::firstOrFail();
