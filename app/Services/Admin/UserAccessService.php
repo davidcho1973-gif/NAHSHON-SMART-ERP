@@ -114,7 +114,7 @@ class UserAccessService
                 'employeeNumber' => $u->employee?->employee_number,
                 'role' => $u->access_role,
                 'roleLabel' => JobAccess::label($u),
-                'jobRole' => $u->job_role, 'jobDuties' => $u->job_duties, 'jobPermissions' => $u->job_permissions, 'siteIds' => $u->job_site_ids,
+                'jobRole' => $u->job_role, 'jobTrade' => $u->job_trade, 'jobDuties' => $u->job_duties, 'jobPermissions' => $u->job_permissions, 'siteIds' => $u->job_site_ids,
                 'roleTier' => User::ROLE_TIERS[$u->access_role] ?? 'low',
                 'scope' => $u->access_scope,
                 'scopeLabel' => User::SCOPE_LABELS_KO[$u->access_scope] ?? (string) $u->access_scope,

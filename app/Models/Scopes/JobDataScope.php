@@ -111,7 +111,7 @@ class JobDataScope implements Scope
                 });
             });
         }
-        if ($user->access_scope === 'team' && in_array('trade', $columns, true) && ! $personalEquipment) {
+        if (in_array($user->access_scope, ['team', 'trade'], true) && in_array('trade', $columns, true) && ! $personalEquipment) {
             $trade = JobAccess::trade($user);
             $trade ? $builder->where($column('trade'), $trade) : $builder->whereRaw('1 = 0');
         }
@@ -122,6 +122,18 @@ class JobDataScope implements Scope
                     $q->orWhereNull($column('team_id'));
                 }
             });
+        }
+        if ($user->access_scope === 'trade' && in_array('team_id', $columns, true)) {
+            $builder->where(function (Builder $q) use ($column, $user, $personalEquipment): void {
+                $q->whereIn($column('team_id'), JobAccess::teamIds($user));
+                if ($personalEquipment) {
+                    $q->orWhereNull($column('team_id'));
+                }
+            });
+        }
+        if ($table === 'purchase_requests' && in_array($user->access_scope, ['team', 'trade'], true)) {
+            $owners = User::query()->whereIn('employee_id', JobAccess::employeeQuery($user)->select('id'))->select('id');
+            $builder->where(fn (Builder $q) => $q->where($column('requested_by_id'), $user->id)->orWhereIn($column('requested_by_id'), $owners));
         }
         if (in_array('employee_id', $columns, true) && in_array('site_id', $columns, true) && $user->access_scope !== 'company') {
             $builder->where(fn (Builder $q) => $q->where($column('employee_id'), $user->employee_id ?: 0)->orWhereIn($column('site_id'), JobAccess::siteIds($user)));
@@ -154,6 +166,9 @@ class JobDataScope implements Scope
         if ($table === 'teams' && $user->access_scope === 'team') {
             $builder->where($column('id'), $user->allowed_team_id ?: 0);
         }
+        if ($table === 'teams' && $user->access_scope === 'trade') {
+            $builder->whereIn($column('id'), JobAccess::teamIds($user));
+        }
     }
 
     public static function assertWritable(Model $model): void
@@ -167,8 +182,11 @@ class JobDataScope implements Scope
                 abort_unless($parent::query()->withoutGlobalScope(self::class)->withGlobalScope('job_parent', new self($user))->whereKey($model->getAttribute($foreignKey))->exists(), 403, '담당 범위 밖의 자료입니다.');
             }
         }
-        if ($user->access_scope === 'team' && $model->isDirty('trade')) {
+        if (in_array($user->access_scope, ['team', 'trade'], true) && $model->isDirty('trade')) {
             abort_unless(filled(JobAccess::trade($user)) && $model->trade === JobAccess::trade($user), 403, '담당 공종의 자료만 작성할 수 있습니다.');
+        }
+        if ($user->access_scope === 'trade' && $model->isDirty('trade_type')) {
+            abort_unless($model->trade_type === JobAccess::trade($user), 403, '담당 공정만 변경할 수 있습니다.');
         }
         if ($model->isDirty('project_id') && $model->project_id !== null) {
             abort_unless(Project::whereKey($model->project_id)->exists(), 403, '담당 범위 밖의 프로젝트입니다.');
@@ -181,7 +199,7 @@ class JobDataScope implements Scope
             $allowed = match ($column) {
                 'company_id' => $id === (int) $user->allowed_company_id,
                 'site_id' => in_array($id, JobAccess::siteIds($user), true),
-                'team_id' => $user->access_scope !== 'team' || $id === (int) $user->allowed_team_id,
+                'team_id' => $user->access_scope === 'trade' ? in_array($id, JobAccess::teamIds($user), true) : ($user->access_scope !== 'team' || $id === (int) $user->allowed_team_id),
                 'employee_id' => JobAccess::employeeQuery($user)->whereKey($id)->exists(),
             };
             abort_unless($allowed, 403, '담당 범위 밖의 자료를 저장할 수 없습니다.');

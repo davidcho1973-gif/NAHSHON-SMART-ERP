@@ -119,6 +119,7 @@ class Employee extends Model
     public const POSITIONS = [
         'worker' => '작업자',
         'foreman' => '반장',
+        'trade_manager' => '공정팀장',
         'engineer' => '기사 · 엔지니어',
         'superintendent' => '현장소장',
         'safety' => '안전관리자',
@@ -135,7 +136,7 @@ class Employee extends Model
      *
      * @var array<int, string>
      */
-    public const SUPERVISORY_POSITIONS = ['foreman', 'engineer', 'superintendent', 'safety', 'office', 'general_manager'];
+    public const SUPERVISORY_POSITIONS = ['foreman', 'trade_manager', 'engineer', 'superintendent', 'safety', 'office', 'general_manager'];
 
     public function positionLabel(): ?string
     {

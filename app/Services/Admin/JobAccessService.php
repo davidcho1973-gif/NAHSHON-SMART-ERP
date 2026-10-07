@@ -24,6 +24,7 @@ class JobAccessService
                 }
                 $before = $user->only(array_keys($grant));
                 $user->forceFill($grant)->save();
+                JobAccess::applyEmployeePosition($user);
                 AuthEvent::record('job_permissions_changed', user: $user, actor: auth()->user(), method: 'erp', request: request(),
                     note: json_encode(['before' => $before, 'after' => $grant], JSON_UNESCAPED_UNICODE));
 

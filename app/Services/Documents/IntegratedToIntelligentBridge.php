@@ -137,7 +137,8 @@ class IntegratedToIntelligentBridge
                 'sender' => $doc->issuer,
                 'document_date' => $doc->issued_on,
                 'expires_on' => $doc->expires_on,
-                'summary' => $doc->summary,
+                // Integrated summaries are JSON lines; the intelligence inbox stores plain text.
+                'summary' => is_array($doc->summary) ? implode("\n", $doc->summary) : $doc->summary,
                 'analyzed_at' => now(),
                 'ai_payload' => ['bridged_from' => 'integrated', 'note' => '원 모듈 판독 결과 복사 — 재분석 생략'],
             ] : []),
