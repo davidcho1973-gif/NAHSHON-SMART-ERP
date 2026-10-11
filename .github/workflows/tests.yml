@@ -73,8 +73,28 @@ jobs:
       - name: Run migrations
         run: php artisan migrate --force
 
+      - name: Check spreadsheet preview and diagnose PHP exits
+        run: |
+          cat > "$RUNNER_TEMP/php-shutdown-diagnostics.php" <<'PHP'
+          <?php
+          $diagnosticReserve = str_repeat('x', 1048576);
+          register_shutdown_function(static function () use (&$diagnosticReserve): void {
+              $diagnosticReserve = null;
+              fwrite(STDERR, "\nPHP shutdown: ".json_encode([
+                  'last_error' => error_get_last(),
+                  'peak_bytes' => memory_get_peak_usage(true),
+                  'limit' => ini_get('memory_limit'),
+              ], JSON_UNESCAPED_SLASHES)."\n");
+          });
+          PHP
+          /usr/bin/time -v php -d display_errors=stderr -d log_errors=1 -d error_log=/dev/stderr \
+            -d auto_prepend_file="$RUNNER_TEMP/php-shutdown-diagnostics.php" \
+            vendor/bin/phpunit --filter OfficePreviewTest --debug
+
       - name: Execute tests
-        run: php artisan test
+        run: |
+          /usr/bin/time -v php -d display_errors=stderr -d log_errors=1 -d error_log=/dev/stderr \
+            -d auto_prepend_file="$RUNNER_TEMP/php-shutdown-diagnostics.php" vendor/bin/phpunit
 
       - name: Browser interaction regression tests
         run: node --test tests/js/*.test.cjs
