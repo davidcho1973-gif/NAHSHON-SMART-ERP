@@ -321,7 +321,7 @@ return [
         'setupRentalSheet' => ['office', 'edit'],
     ],
     'controllers' => [
-        'ClaimSubmissionController' => ['_module' => 'contracts'],
+        'ClaimSubmissionController' => ['_module' => 'contracts', 'response' => ['contracts', 'export']],
         'WorkerEnrollmentController' => ['_module' => 'people', 'index' => ['people', 'view'], 'approve' => ['people', 'edit'], 'reject' => ['people', 'edit']],
         'MobileOpsRoomController' => ['_module' => 'reports'],
         'MobileDocumentController' => ['_module' => 'documents'],

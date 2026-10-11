@@ -501,7 +501,7 @@
       var body = wrap.querySelector('#reg-comms-body');
       if (!body) return;
       var c = d.contacts || {};
-      var pickDocs = (d.linkable || []).concat(d.documents || []).filter(function (doc, i, all) {
+      var pickDocs = (d.linkable || []).concat((d.documents || []).filter(function (doc) { return doc.kind === 'received' || doc.kind === 'approval'; })).filter(function (doc, i, all) {
         return all.findIndex(function (other) { return other.id === doc.id; }) === i;
       });
       var field = function (label, name, value, type) {
@@ -545,7 +545,7 @@
           '<div style="font-size:12.5px;font-weight:700;color:var(--text-primary);margin-bottom:8px" id="comms-picker-title"></div>' +
           (pickDocs.length
             ? pickDocs.map(function (doc) {
-                return '<label style="display:flex;gap:7px;align-items:center;font-size:12px;color:var(--text-primary);padding:5px 2px;cursor:pointer">' +
+                return '<label data-comms-existing="' + ((d.linkable || []).some(function (o) { return o.id === doc.id; }) ? '0' : '1') + '" style="display:flex;gap:7px;align-items:center;font-size:12px;color:var(--text-primary);padding:5px 2px;cursor:pointer">' +
                   '<input type="checkbox" class="comms-pick" value="' + doc.id + '">' +
                   '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + u.esc(doc.label) + '</span>' +
                   '<span style="color:var(--text-tertiary);font-size:10.5px;flex-shrink:0">' + u.esc(doc.receivedAt || '') + '</span></label>';
@@ -562,7 +562,7 @@
           ? '<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:5px">' + d.documents.map(function (doc) {
               return '<button type="button" onclick="window.AdminRegisters.openSource(' + doc.id + ')" ' +
                 'style="border:1px solid var(--border-default);background:var(--bg-base);border-radius:999px;padding:4px 11px;' +
-                'font-size:11px;color:var(--text-primary);cursor:pointer">' + (doc.kind === 'approval' ? '✅ ' : '📎 ') + u.esc(doc.label) + '</button>';
+                'font-size:11px;color:var(--text-primary);cursor:pointer">' + (doc.kind === 'approval' ? '회신 · ' : '📎 ') + u.esc(doc.label) + '</button>';
             }).join('') + '</div>'
           : '') +
         // ── 타임라인 ──
@@ -573,8 +573,8 @@
                 return '<div style="display:flex;gap:9px;font-size:11.5px;padding:5px 0;border-bottom:1px dashed var(--border-default)">' +
                   '<span style="color:var(--text-tertiary);flex-shrink:0">' + u.esc(ev.at || '') + '</span>' +
                   '<span style="font-weight:700;color:var(--text-primary);flex-shrink:0">' + u.esc(ev.label) + '</span>' +
-                  '<span style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-                    u.esc(ev.to || ev.document || ev.subject || '') +
+                  '<span style="color:var(--text-secondary);white-space:normal;overflow-wrap:anywhere">' +
+                    u.esc(ev.event === 'response_recorded' || ev.type === 'response_recorded' || ev.action === 'response_recorded' ? [ev.subject, ev.document].filter(Boolean).join(' · ') : (ev.subject || ev.to || ev.document || '')) +
                     (ev.channel === 'mailto' ? ' (메일앱에서 작성)' : '') + '</span></div>';
               }).join('')
             : '<div style="font-size:11.5px;color:var(--text-tertiary)">아직 소통 기록이 없습니다. 담당자를 넣고 ① 부터 시작하세요.</div>') +
@@ -596,6 +596,10 @@
       };
       function showPicker(kind, title) {
         pickerKind = kind;
+        body.querySelectorAll('[data-comms-existing]').forEach(function (el) {
+          el.style.display = kind === 'received' && el.getAttribute('data-comms-existing') === '1' ? 'none' : 'flex';
+          el.querySelector('input').checked = false;
+        });
         body.querySelector('#comms-decision').style.display = kind === 'approval' ? 'block' : 'none';
         var p = body.querySelector('#comms-picker');
         p.style.display = 'block';

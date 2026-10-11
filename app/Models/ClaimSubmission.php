@@ -10,6 +10,8 @@ class ClaimSubmission extends Model
 {
     protected $guarded = ['id'];
 
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     protected function casts(): array
     {
         return [
@@ -23,9 +25,9 @@ class ClaimSubmission extends Model
             'history' => 'array',
             'file_size' => 'integer',
             'prepared_at' => 'datetime',
-            'sent_at' => 'datetime',
-            'received_at' => 'datetime',
-            'response_at' => 'datetime',
+            'sent_at' => 'date',
+            'received_at' => 'date',
+            'response_at' => 'date',
         ];
     }
 

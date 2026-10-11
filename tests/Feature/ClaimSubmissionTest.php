@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\ClaimSubmission;
+use App\Models\ClaimWorkRecord;
+use App\Models\ContractBoqLine;
+use App\Models\PayApplicationAllocation;
 use App\Models\Company;
 use App\Models\IntelligentDocument;
 use App\Models\PayApplication;
@@ -137,6 +140,22 @@ class ClaimSubmissionTest extends TestCase
         $this->assertNotContains('document:'.$private->id, $values);
     }
 
+    public function test_confidential_and_restricted_documents_cannot_enter_packets_or_responses(): void
+    {
+        foreach (['confidential', 'restricted'] as $confidentiality) {
+            $document = $this->document(['confidentiality' => $confidentiality]);
+            $this->assertFalse($this->select($document)['success']);
+            $options = array_column($this->service()->workspace($this->application->id)['sourceOptions'], 'value');
+            $this->assertNotContains('document:'.$document->id, $options);
+        }
+        $submission = $this->prepared();
+        $this->assertTrue($this->transition($submission, 'sent')['success']);
+        $this->assertFalse($this->transition($submission, 'accepted', [
+            'response_document' => ['type' => 'document', 'id' => $document->id],
+        ])['success']);
+        $this->assertSame('sent', $submission->fresh()->status);
+    }
+
     public function test_an_approved_corporate_file_requires_an_explicit_contract_link(): void
     {
         $shared = $this->document(['site_id' => null, 'project_id' => null]);
@@ -182,6 +201,45 @@ class ClaimSubmissionTest extends TestCase
         $this->assertSame('draft', $this->application->fresh()->status);
     }
 
+    public function test_stored_milestone_allocations_cannot_hide_in_current_work_when_contract_disallows_them(): void
+    {
+        $submission = $this->prepared();
+        $line = ContractBoqLine::create([
+            'project_contract_id' => $this->contract->id, 'line_no' => 'STORED',
+            'description' => 'Stored equipment', 'unit' => 'EA', 'contract_qty' => 1, 'unit_price' => 100,
+            'recognition_basis' => 'milestone', 'stage_weights' => ['stored' => 100], 'status' => 'accepted',
+        ]);
+        $record = ClaimWorkRecord::create([
+            'contract_boq_line_id' => $line->id, 'record_kind' => 'actual', 'work_date' => '2026-10-11',
+            'location' => 'Laydown area A', 'stage' => 'stored', 'reported_qty' => 1, 'verified_qty' => 1, 'status' => 'verified',
+            'evidence' => [], 'review_history' => [],
+        ]);
+        PayApplicationAllocation::create([
+            'pay_application_id' => $this->application->id, 'claim_work_record_id' => $record->id,
+            'quantity' => 1, 'amount' => 100, 'snapshot' => ['record' => ['stage' => 'stored']],
+        ]);
+        $this->assertSame('0.00', $this->application->fresh()->stored_materials_amount);
+        $prepared = $this->service()->prepare($this->application->id);
+        $this->assertFalse($prepared['success']);
+        $this->assertStringContainsString('반입·보관 기성', $prepared['error']);
+        $sent = $this->transition($submission, 'sent');
+        $this->assertFalse($sent['success']);
+        $this->assertStringContainsString('반입·보관 기성', $sent['error']);
+        $this->assertSame('prepared', $submission->fresh()->status);
+        $this->assertSame('100.00', $this->application->fresh()->this_period_amount);
+        $this->assertSame('100.00', PayApplicationAllocation::firstOrFail()->amount);
+    }
+
+    public function test_a_returned_packet_requires_a_reason_and_keeps_its_existing_state_on_failure(): void
+    {
+        $submission = $this->prepared();
+        $this->assertTrue($this->transition($submission, 'sent')['success']);
+        $result = $this->transition($submission, 'changes_requested', ['note' => ' ']);
+        $this->assertFalse($result['success']);
+        $this->assertSame('sent', $submission->fresh()->status);
+        $this->assertCount(2, $submission->fresh()->history);
+    }
+
     public function test_failed_financial_validation_rolls_back_sent_state_and_history(): void
     {
         $this->application->update(['this_period_amount' => 0]);
@@ -211,6 +269,21 @@ class ClaimSubmissionTest extends TestCase
         $this->assertSame('approved', $this->application->fresh()->status);
         $this->assertSame('100.00', $this->application->fresh()->amount_due);
         $this->assertSame('90.00', $this->application->fresh()->approved_amount);
+    }
+
+    public function test_recorded_response_can_be_downloaded_after_source_deletion_and_requires_contract_access(): void
+    {
+        $submission = $this->prepared();
+        $this->assertTrue($this->transition($submission, 'sent')['success']);
+        $this->assertTrue($this->transition($submission, 'received')['success']);
+        $response = $this->service()->getResponseDownload($submission->id, 2);
+        $this->assertSame('Original measured work proof', Storage::disk($response['disk'])->get($response['path']));
+        $this->document->delete();
+        $response = $this->service()->getResponseDownload($submission->id, 2);
+        $this->assertSame('Original measured work proof', Storage::disk($response['disk'])->get($response['path']));
+        $this->actingAs(User::factory()->create(['access_role' => 'worker', 'access_scope' => 'self', 'account_status' => 'active']));
+        $this->expectException(InvalidArgumentException::class);
+        $this->service()->getResponseDownload($submission->id, 2);
     }
 
     public function test_returned_packet_gets_a_new_revision_without_rewriting_old_bytes_or_claim_amounts(): void
@@ -294,12 +367,92 @@ class ClaimSubmissionTest extends TestCase
         $this->assertSame(1, ClaimSubmission::count());
     }
 
+    public function test_an_archive_does_not_bypass_a_later_document_privacy_restriction(): void
+    {
+        $submission = $this->prepared();
+        $this->document->update(['confidentiality' => 'restricted']);
+        $this->expectException(InvalidArgumentException::class);
+        $this->service()->getDownload($submission->id);
+    }
+
+    public function test_retained_archive_survives_source_expiry_and_deletion(): void
+    {
+        $submission = $this->prepared();
+        $this->document->update(['expires_on' => '2026-10-10']);
+        $this->assertSame($submission->id, $this->service()->getDownload($submission->id)->id);
+        $this->document->delete();
+        $this->assertSame($submission->id, $this->service()->getDownload($submission->id)->id);
+    }
+
     public function test_corrupt_archive_is_never_offered_as_a_successful_download(): void
     {
         $submission = $this->prepared();
         Storage::disk('local')->put($submission->file_path, 'corrupt archive');
         $this->expectException(InvalidArgumentException::class);
         $this->service()->getDownload($submission->id);
+    }
+
+    public function test_legacy_submitted_claim_can_record_past_dispatch_and_response_without_recalculating_money(): void
+    {
+        $this->application->update([
+            'status' => 'submitted', 'submitted_on' => '2026-09-20',
+            'previous_billed_amount' => 250, 'cumulative_amount' => 350,
+            'retainage_held' => 0, 'earned_less_retainage' => 350,
+            'previous_certificates' => 230, 'amount_due' => 120,
+        ]);
+        $this->document->update(['expires_on' => '2026-09-30', 'status' => 'expired']);
+        $workspace = $this->service()->workspace($this->application->id);
+        $this->assertSame('2026-09-20', $workspace['application']['historicalSubmittedOn']);
+        $submission = $this->prepared();
+        $this->assertSame('2026-09-20', $submission->manifest['documentsValidatedOn']);
+        $this->assertSame('120.00', $submission->application_snapshot['due']);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open(Storage::disk('local')->path($submission->file_path)));
+        $this->assertStringContainsString('Reconstructed record', $zip->getFromName('claim-summary.html'));
+        $zip->close();
+        $this->assertFalse($this->transition($submission, 'sent', ['occurred_at' => '2026-09-19'])['success']);
+        $this->assertTrue($this->transition($submission, 'sent', ['occurred_at' => '2026-09-20'])['success']);
+        $this->assertFalse(app(BillingAdminService::class)->setBillingStatus(['id' => $this->application->id, 'action' => 'withdraw'])['success']);
+        $this->assertTrue($this->transition($submission, 'accepted', ['occurred_at' => '2026-09-23'])['success']);
+        $approved = app(BillingAdminService::class)->setBillingStatus([
+            'id' => $this->application->id, 'action' => 'approve', 'approvedAmount' => 120, 'approvedOn' => '2026-09-23',
+        ]);
+        $this->assertTrue($approved['success'], $approved['error'] ?? '');
+        $this->assertSame('2026-09-20', $this->application->fresh()->submitted_on->toDateString());
+        $this->assertSame('250.00', $this->application->fresh()->previous_billed_amount);
+        $this->assertSame('120.00', $this->application->fresh()->amount_due);
+        $this->assertSame('2026-09-23', $submission->fresh()->response_at->toDateString());
+    }
+
+    public function test_resubmission_after_historical_reconstruction_requires_documents_valid_today(): void
+    {
+        $this->application->update(['status' => 'submitted', 'submitted_on' => '2026-09-20']);
+        $this->document->update(['expires_on' => '2026-09-30']);
+        $first = $this->prepared();
+        $this->assertTrue($this->transition($first, 'sent', ['occurred_at' => '2026-09-20'])['success']);
+        $this->assertTrue($this->transition($first, 'changes_requested', [
+            'occurred_at' => '2026-09-23', 'note' => 'A current replacement is required.',
+        ])['success']);
+        $this->assertNull($this->service()->workspace($this->application->id)['application']['historicalSubmittedOn']);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+        $replacement = $this->document([], 'Updated prescribed form');
+        $this->assertTrue($this->select($replacement)['success']);
+        $prepared = $this->service()->prepare($this->application->id);
+        $this->assertTrue($prepared['success'], $prepared['error'] ?? '');
+        $second = ClaimSubmission::findOrFail($prepared['submission']['id']);
+        $this->assertNull($second->manifest['historicalSubmittedOn']);
+        $this->assertSame('2026-10-11', $second->manifest['documentsValidatedOn']);
+        $this->assertFalse($this->transition($second, 'sent', ['occurred_at' => '2026-09-20'])['success']);
+        $this->assertSame('2026-09-20', $this->application->fresh()->submitted_on->toDateString());
+    }
+
+    public function test_document_expiry_uses_calendar_days_in_the_site_timezone(): void
+    {
+        $this->contract->site->update(['timezone' => 'America/New_York']);
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-12T02:00:00Z'));
+        $this->document->update(['expires_on' => '2026-10-11']);
+        $this->assertTrue($this->select()['success']);
+        $this->assertTrue($this->service()->prepare($this->application->id)['success']);
     }
 
     public function test_legacy_completed_records_remain_readable_without_creating_submission_facts(): void

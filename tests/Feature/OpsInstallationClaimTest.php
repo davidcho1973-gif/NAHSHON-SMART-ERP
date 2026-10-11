@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\ClaimWorkRecord;
 use App\Models\ContractBoqLine;
+use App\Models\DailyTradeReport;
 use App\Models\OpsIntakeBatch;
 use App\Models\OpsIntakeItem;
+use App\Models\Project;
 use App\Models\ProjectContract;
 use App\Models\User;
 use App\Services\Finance\ClaimEvidenceService;
@@ -40,12 +42,17 @@ class OpsInstallationClaimTest extends TestCase
 
     private User $manager;
 
+    private Project $project;
+
     protected function setUp(): void
     {
         $this->fixtureSetUp();
         Carbon::setTestNow('2026-09-20 15:00:00');
         $this->manager = auth()->user();
-        $contract = ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id, 'title' => 'Prime',
+        $this->project = Project::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'project_code' => 'OPS-CLAIM-1', 'name' => 'Kitchen claim project']);
+        $contract = ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'project_id' => $this->project->id, 'title' => 'Prime',
             'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD', 'payload' => ['claim_profile' => $this->confirmedClaimProfile()]]);
         $this->assertTrue(app(ContractSheetImportService::class)->import(['documentId' => $this->workbook()->id, 'contractId' => $contract->id, 'confirmContract' => true])['success']);
         $this->wall = ContractBoqLine::where('line_no', '2')->firstOrFail();   // 100 LF2 · 반입/설치 분리
@@ -70,15 +77,22 @@ class OpsInstallationClaimTest extends TestCase
     {
         $this->reply = [['contract_line_id' => $this->wall->id, 'quantity' => 40, 'location' => 'Pantry north wall', 'quote' => 'Pantry 북쪽 벽 드라이월 40 SF 마감', 'confidence' => 0.9]];
         $batch = $this->report('Pantry 북쪽 벽 드라이월 40 SF 마감했습니다', $this->manager);
+        $report = DailyTradeReport::create(['site_id' => $this->site->id, 'work_date' => '2026-09-18',
+            'trade' => 'Drywall', 'kind' => 'trade', 'status' => 'open']);
+        $batch->update(['daily_trade_report_id' => $report->id]);
 
         $r = app(OpsClaimReflector::class)->reflect($batch);
         $this->assertSame(['proposed' => 1, 'applied' => 1], $r);
 
         $item = OpsIntakeItem::where('category', 'installation')->sole();
         $this->assertSame('applied', $item->status);
+        $this->assertSame($this->project->project_code, $item->project_code, '근거는 선택한 계약의 프로젝트에 속한다');
+        $this->assertSame('2026-09-18', $item->occurred_on->toDateString(), '보고일은 접수일로 덮어쓰지 않는다');
         $install = ClaimWorkRecord::where('stage', 'installation')->sole();
         $this->assertSame('pending', $install->status, '확인 대기 — 담당자가 확인해야 기성');
         $this->assertEquals(40, $install->reported_qty);
+        $this->assertSame('2026-09-18', $install->work_date->toDateString());
+        $this->assertSame('2026-09-18', ClaimWorkRecord::where('stage', 'stored')->sole()->work_date->toDateString());
         $this->assertSame('intake', $install->evidence[0]['type']);
         $this->assertSame($item->id, $install->evidence[0]['id']);
         $this->assertEquals(40, ClaimWorkRecord::where('stage', 'stored')->sole()->reported_qty, '설치한 자재는 들어온 것 — 빠진 반입도 함께');
@@ -128,5 +142,45 @@ class OpsInstallationClaimTest extends TestCase
         app(OpsClaimReflector::class)->reflect($this->report('덕트 25 m2 전부 끝', $this->manager));
         $this->assertEquals(10, ClaimWorkRecord::sole()->reported_qty, '계약 10 까지만 — 넘는 것은 RFI');
         $this->assertStringContainsString('RFI', OpsIntakeItem::where('category', 'installation')->sole()->proposed['note']);
+    }
+
+    public function test_undated_report_uses_site_received_date_and_requires_work_date_review(): void
+    {
+        config(['app.timezone' => 'UTC']);
+        Carbon::setTestNow(Carbon::parse('2026-09-20T01:00:00Z'));
+        $this->reply = [['contract_line_id' => $this->duct->id, 'quantity' => 4, 'confidence' => 0.9]];
+        $batch = $this->report('덕트 4 m2 설치', $this->manager);
+
+        $this->assertSame(['proposed' => 1, 'applied' => 1], app(OpsClaimReflector::class)->reflect($batch));
+
+        $item = OpsIntakeItem::where('category', 'installation')->sole();
+        $record = ClaimWorkRecord::sole();
+        $this->assertSame('2026-09-19', $item->occurred_on->toDateString(), '뉴욕 접수일은 UTC 날짜와 다르다');
+        $this->assertSame('2026-09-19', $record->work_date->toDateString());
+        $this->assertSame('pending', $record->status, '접수일을 확인된 작업일로 취급하지 않는다');
+        $this->assertStringContainsString('작업일 확인 필요', $item->summary);
+        $this->assertStringContainsString('작업일 미기재 — 현장 접수일 2026-09-19', $record->notes);
+    }
+
+    public function test_intake_evidence_cannot_follow_a_contract_into_another_project_at_the_same_site(): void
+    {
+        $foreman = User::factory()->create(['access_role' => 'safety_manager', 'access_scope' => 'all_sites', 'account_status' => 'active']);
+        $this->reply = [['contract_line_id' => $this->duct->id, 'quantity' => 4, 'confidence' => 0.9]];
+        $this->actingAs($foreman);
+        $this->assertSame(['proposed' => 1, 'applied' => 0],
+            app(OpsClaimReflector::class)->reflect($this->report('덕트 4 m2 설치', $foreman)));
+        $item = OpsIntakeItem::where('category', 'installation')->sole();
+        $this->assertSame($this->project->project_code, $item->project_code);
+
+        $other = Project::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
+            'project_code' => 'OPS-CLAIM-2', 'name' => 'Other project at the same site']);
+        $this->duct->contract->update(['project_id' => $other->id]);
+        $this->actingAs($this->manager);
+
+        $res = app(OpsIntakeService::class)->apply($item->id, null, $this->manager->id);
+        $this->assertFalse($res['success'], '같은 현장이어도 다른 프로젝트의 근거는 기성에 쓸 수 없다');
+        $this->assertSame(0, ClaimWorkRecord::count());
+        $this->assertSame('pending', $item->fresh()->status);
+        $this->assertSame($this->project->project_code, $item->fresh()->project_code, '기존 근거 범위를 고쳐서 통과시키지 않는다');
     }
 }

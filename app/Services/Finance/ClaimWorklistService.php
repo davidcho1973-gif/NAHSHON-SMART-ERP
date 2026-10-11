@@ -19,7 +19,7 @@ class ClaimWorklistService
         }
 
         $ids = array_column($result['rows'], 'id');
-        $contracts = ProjectContract::whereIn('id', $ids)->get(['id', 'payload'])->keyBy('id');
+        $contracts = ProjectContract::with('site:id,timezone')->whereIn('id', $ids)->get(['id', 'site_id', 'payload'])->keyBy('id');
         $applications = PayApplication::whereIn('project_contract_id', $ids)
             ->orderBy('application_no')->get(['id', 'project_contract_id', 'application_no', 'status'])->keyBy('project_contract_id');
         $submissions = ClaimSubmission::whereIn('pay_application_id', $applications->pluck('id'))
@@ -32,7 +32,8 @@ class ClaimWorklistService
             $submission = $application ? $submissions->get($application->id) : null;
             $confirmed = ContractClaimProfile::confirmed($contract);
             $day = (int) ($profile['submission_day'] ?? 0);
-            $due = $day > 0 ? now()->startOfMonth()->day(min($day, now()->daysInMonth)) : null;
+            $today = Carbon::today($contract->site?->timezone ?: config('app.timezone'));
+            $due = $day > 0 ? $today->copy()->startOfMonth()->day(min($day, $today->daysInMonth)) : null;
             if ($due && $submission?->sent_at && $submission->sent_at->gte($due)) {
                 $due = $due->addMonthNoOverflow()->day(min($day, $due->daysInMonth));
             }
@@ -57,7 +58,7 @@ class ClaimWorklistService
             };
             $row['attention'] = ! $confirmed || $submission?->status === 'changes_requested'
                 || (float) $row['outstanding'] > 0
-                || ($due && $due->lt(Carbon::today()) && (! $submission || $submission->status === 'prepared'));
+                || ($due && $due->lt($today) && (! $submission || $submission->status === 'prepared'));
         }
         unset($row);
 

@@ -35,6 +35,7 @@ class ClaimSubmissionService
         return $this->respond(function () use ($applicationId): array {
             [$application, $contract] = $this->context($applicationId, false);
             $profile = ContractClaimProfile::read($contract);
+            $historicalDate = $this->historicalSubmittedOn($application);
             $evidence = $this->draftEvidence($application, $profile);
             $requirements = [];
             foreach ($profile['requirements'] ?? [] as $requirement) {
@@ -42,7 +43,7 @@ class ClaimSubmissionService
                 $sources = [];
                 foreach ($evidence[$requirement['key']] ?? [] as $ref) {
                     try {
-                        $sources[] = $this->source($contract, $ref)['display'];
+                        $sources[] = $this->source($contract, $ref, true, null, $historicalDate)['display'];
                     } catch (InvalidArgumentException) {
                         $sources[] = ['type' => $ref['type'] ?? '', 'id' => $ref['id'] ?? 0, 'label' => '자료를 다시 선택하세요.', 'unavailable' => true];
                     }
@@ -58,13 +59,14 @@ class ClaimSubmissionService
                 'application' => [
                     'id' => $application->id, 'applicationNo' => $application->application_no,
                     'type' => $application->type, 'status' => $application->status,
+                    'historicalSubmittedOn' => $historicalDate,
                     'periodStart' => $application->period_start?->toDateString(),
                     'periodEnd' => $application->period_end?->toDateString(),
                     'amountDue' => (float) $application->amount_due, 'currency' => $contract->currency,
                 ],
                 'profile' => $profile, 'profileConfirmed' => ContractClaimProfile::confirmed($contract),
                 'requirements' => $requirements, 'draftEvidence' => $evidence,
-                'sourceOptions' => $this->sourceOptions($contract),
+                'sourceOptions' => $this->sourceOptions($contract, $historicalDate),
                 'submissions' => ClaimSubmission::where('pay_application_id', $application->id)->orderByDesc('revision')->get()->map(fn ($row) => $this->row($row))->all(),
                 'canManage' => $this->billing->canManage(),
             ];
@@ -91,7 +93,7 @@ class ClaimSubmissionService
                     }
                     $evidence[$key] = [];
                     foreach ($refs as $ref) {
-                        $source = $this->source($contract, is_array($ref) ? $ref : []);
+                        $source = $this->source($contract, is_array($ref) ? $ref : [], true, null, $this->historicalSubmittedOn($application));
                         $evidence[$key][$source['display']['value']] = ['type' => $source['display']['type'], 'id' => $source['display']['id']];
                     }
                     $evidence[$key] = array_values($evidence[$key]);
@@ -117,9 +119,8 @@ class ClaimSubmissionService
                         throw new InvalidArgumentException('계약별 제출 조건과 근거를 먼저 확인하세요.');
                     }
                     $profile = ContractClaimProfile::read($contract);
-                    if ((float) $application->stored_materials_amount > 0 && ! ($profile['stored_materials'] ?? false)) {
-                        throw new InvalidArgumentException('이 계약에서 보관 자재 청구가 허용되는지 먼저 확인하세요.');
-                    }
+                    $historicalDate = $this->historicalSubmittedOn($application);
+                    $this->assertMaterialRules($application, $profile);
                     if ($application->type !== 'retainage_release' && ContractBoqLine::where('project_contract_id', $contract->id)->exists()) {
                         $error = app(ClaimEvidenceService::class)->validateApplication($application);
                         if ($error) {
@@ -139,7 +140,7 @@ class ClaimSubmissionService
                             throw new InvalidArgumentException('필수 자료가 없습니다: '.$requirement['title']);
                         }
                         foreach ($refs as $ref) {
-                            $source = $this->source($contract, $ref);
+                            $source = $this->source($contract, $ref, true, null, $historicalDate);
                             $key = $source['display']['value'];
                             if (! isset($files[$key])) {
                                 $bytes = $this->readVerified($source['disk'], $source['path'], $source['hash']);
@@ -175,6 +176,8 @@ class ClaimSubmissionService
                         'application' => $snapshot, 'revision' => $revision,
                         'profileVersion' => $profile['version'], 'profile' => $profile,
                         'preparedAt' => now()->toIso8601String(), 'documents' => $manifest,
+                        'historicalSubmittedOn' => $historicalDate,
+                        'documentsValidatedOn' => $historicalDate ?? Carbon::today($contract->site?->timezone ?: config('app.timezone'))->toDateString(),
                         'lines' => $this->claimLines($application),
                     ];
                     $zipPath = $this->zip($package, $files);
@@ -246,7 +249,7 @@ class ClaimSubmissionService
                     $date = $this->date($input['occurred_at'] ?? null);
                     $today = Carbon::today($contract->site?->timezone ?: config('app.timezone'))->toDateString();
                     $earliest = ($submission->received_at ?? $submission->sent_at)?->toDateString()
-                        ?? $submission->prepared_at->copy()->timezone($contract->site?->timezone ?: config('app.timezone'))->toDateString();
+                        ?? ($submission->manifest['historicalSubmittedOn'] ?? $submission->prepared_at->copy()->timezone($contract->site?->timezone ?: config('app.timezone'))->toDateString());
                     if ($date > $today || $date < $earliest) {
                         throw new InvalidArgumentException('처리일은 이전 처리일 이후이며 현장 오늘 날짜 이하여야 합니다.');
                     }
@@ -255,6 +258,9 @@ class ClaimSubmissionService
                         throw new InvalidArgumentException('실제 제출·응답의 접수번호 또는 참조를 255자 이내로 입력하세요.');
                     }
                     $note = trim((string) ($input['note'] ?? ''));
+                    if ($status === 'changes_requested' && $note === '') {
+                        throw new InvalidArgumentException('수정 요청 사유를 입력하세요.');
+                    }
                     if (mb_strlen($note) > 2000) {
                         throw new InvalidArgumentException('처리 메모는 2000자 이내로 입력하세요.');
                     }
@@ -262,13 +268,13 @@ class ClaimSubmissionService
                     if ($status === 'sent') {
                         $this->assertCurrent($submission, $application, $contract);
                     } else {
-                        $source = $this->source($contract, is_array($input['response_document'] ?? null) ? $input['response_document'] : []);
+                        $source = $this->source($contract, is_array($input['response_document'] ?? null) ? $input['response_document'] : [], true, null, $date);
                         $bytes = $this->readVerified($source['disk'], $source['path'], $source['hash']);
                         $responsePath = 'claim-submissions/'.$contract->id.'/'.$application->id.'/responses/'.Str::uuid();
                         $this->writeVerified($submission->disk, $responsePath, $bytes);
                         $proof = $source['display'] + [
                             'disk' => $submission->disk, 'path' => $responsePath,
-                            'sha256' => hash('sha256', $bytes), 'bytes' => strlen($bytes),
+                            'sha256' => hash('sha256', $bytes), 'bytes' => strlen($bytes), 'name' => $source['name'],
                         ];
                     }
                     $event = [
@@ -345,9 +351,37 @@ class ClaimSubmissionService
         if (! $submission) {
             throw new InvalidArgumentException('제출본을 찾을 수 없습니다.');
         }
-        $this->context($submission->pay_application_id, false);
+        [, $contract] = $this->context($submission->pay_application_id, false);
+        foreach ($submission->manifest['documents'] ?? [] as $item) {
+            $ref = $item['source'];
+            $exists = ($ref['type'] === 'document' ? IntelligentDocument::query() : ProjectContractDocument::query())->whereKey($ref['id'])->exists();
+            if ($exists) {
+                // A retained original survives expiry/deletion, but a later privacy restriction
+                // must not turn an older archive into a route around current access control.
+                $this->source($contract, $ref, false);
+            }
+        }
         $this->verifyArchive($submission->disk, $submission->file_path, $submission->sha256);
         return $submission;
+    }
+
+    public function getResponseDownload(int $submissionId, int $eventIndex): array
+    {
+        $submission = ClaimSubmission::find($submissionId);
+        if (! $submission || $eventIndex < 0) {
+            throw new InvalidArgumentException('보존한 응답을 찾을 수 없습니다.');
+        }
+        [, $contract] = $this->context($submission->pay_application_id, false);
+        $proof = $submission->history[$eventIndex]['responseDocument'] ?? null;
+        if (! is_array($proof) || empty($proof['path']) || empty($proof['sha256'])) {
+            throw new InvalidArgumentException('이 처리 이력에는 보존한 응답 파일이 없습니다.');
+        }
+        $exists = ($proof['type'] === 'document' ? IntelligentDocument::query() : ProjectContractDocument::query())->whereKey($proof['id'])->exists();
+        if ($exists) {
+            $this->source($contract, $proof, false);
+        }
+        $this->readVerified($proof['disk'], $proof['path'], $proof['sha256']);
+        return ['disk' => $proof['disk'], 'path' => $proof['path'], 'name' => $proof['name'] ?? 'gc-response'];
     }
 
     private function context(int $applicationId, bool $write = true): array
@@ -368,6 +402,15 @@ class ClaimSubmissionService
         ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
         $contract->refresh();
         $application->refresh();
+    }
+
+    private function historicalSubmittedOn(PayApplication $application): ?string
+    {
+        if ($application->status !== 'submitted' || ! $application->submitted_on
+            || ClaimSubmission::where('pay_application_id', $application->id)->whereNotNull('sent_at')->exists()) {
+            return null;
+        }
+        return $application->submitted_on->toDateString();
     }
 
     private function editable(PayApplication $application): void
@@ -405,13 +448,15 @@ class ClaimSubmissionService
         return ($requirement['stage'] ?? 'each_claim') !== 'final' || in_array($application->type, ['final', 'retainage_release'], true);
     }
 
-    private function source(ProjectContract $contract, array $ref): array
+    private function source(ProjectContract $contract, array $ref, bool $current = true, IntelligentDocument|ProjectContractDocument|null $loaded = null, ?string $validOn = null): array
     {
         $type = $ref['type'] ?? '';
         $id = (int) ($ref['id'] ?? 0);
         if ($type === 'document') {
-            $document = IntelligentDocument::visibleTo(auth()->user())->find($id);
+            $document = $loaded instanceof IntelligentDocument && (int) $loaded->id === $id
+                ? $loaded : IntelligentDocument::visibleTo(auth()->user())->find($id);
             $valid = $document && $document->access_level !== 'private'
+                && ! in_array($document->confidentiality, ['confidential', 'restricted'], true)
                 && (! $document->company_id || (int) $document->company_id === (int) $contract->company_id)
                 && (! $document->project_contract_id || (int) $document->project_contract_id === (int) $contract->id)
                 && (! $document->project_id || (int) $document->project_id === (int) $contract->project_id)
@@ -425,24 +470,26 @@ class ClaimSubmissionService
             $version = $document?->revision;
             $hash = $document?->sha256;
         } elseif ($type === 'contract_document') {
-            $document = ProjectContractDocument::where('project_contract_id', $contract->id)->find($id);
-            $valid = $document && ! $document->is_confidential && $document->is_current;
+            $document = $loaded instanceof ProjectContractDocument && (int) $loaded->id === $id && (int) $loaded->project_contract_id === (int) $contract->id
+                ? $loaded : ProjectContractDocument::where('project_contract_id', $contract->id)->find($id);
+            $valid = $document && ! $document->is_confidential && (! $current || $document->is_current);
             $version = $document?->version;
             $hash = data_get($document?->payload, 'sha256');
         } else {
             throw new InvalidArgumentException('문서함 또는 계약 문서의 실제 파일을 선택하세요.');
         }
-        if (! $valid || in_array($document->status, ['expired', 'rejected', 'superseded'], true)) {
+        if (! $valid || ($current && in_array($document->status, ['rejected', 'superseded'], true))
+            || ($current && $document->status === 'expired' && (! $validOn || ! $document->expires_on))) {
             throw new InvalidArgumentException('계약·프로젝트에 속한 공유 문서만 제출 근거로 사용할 수 있습니다.');
         }
-        $today = Carbon::today($contract->site?->timezone ?: config('app.timezone'));
-        if ($document->expires_on && $document->expires_on->lt($today)) {
+        $today = $validOn ?? Carbon::today($contract->site?->timezone ?: config('app.timezone'))->toDateString();
+        if ($current && $document->expires_on && $document->expires_on->toDateString() < $today) {
             throw new InvalidArgumentException('만료된 문서는 제출 근거로 사용할 수 없습니다.');
         }
-        if ($document->effective_on && $document->effective_on->gt($today)) {
+        if ($current && $document->effective_on && $document->effective_on->toDateString() > $today) {
             throw new InvalidArgumentException('아직 유효하지 않은 문서입니다.');
         }
-        if (! filled($document->file_path)) {
+        if ($current && ! filled($document->file_path)) {
             throw new InvalidArgumentException('선택한 문서의 원본 파일이 없습니다.');
         }
         $name = $document->original_file_name ?: ('document-'.$id);
@@ -457,7 +504,7 @@ class ClaimSubmissionService
         ];
     }
 
-    private function sourceOptions(ProjectContract $contract): array
+    private function sourceOptions(ProjectContract $contract, ?string $validOn = null): array
     {
         $documents = IntelligentDocument::visibleTo(auth()->user())->where(function ($query) use ($contract): void {
             $query->where('project_contract_id', $contract->id);
@@ -465,14 +512,14 @@ class ClaimSubmissionService
                 $query->orWhere('project_id', $contract->project_id);
             }
         })->orderByDesc('id')->limit(300)->get();
-        $refs = $documents->map(fn ($row) => ['type' => 'document', 'id' => $row->id])->all();
+        $candidates = $documents->map(fn ($row) => ['ref' => ['type' => 'document', 'id' => $row->id], 'model' => $row])->all();
         foreach ($contract->currentDocuments()->orderByDesc('id')->limit(200)->get() as $row) {
-            $refs[] = ['type' => 'contract_document', 'id' => $row->id];
+            $candidates[] = ['ref' => ['type' => 'contract_document', 'id' => $row->id], 'model' => $row];
         }
         $options = [];
-        foreach ($refs as $ref) {
+        foreach ($candidates as $candidate) {
             try {
-                $options[] = $this->source($contract, $ref)['display'];
+                $options[] = $this->source($contract, $candidate['ref'], true, $candidate['model'], $validOn)['display'];
             } catch (InvalidArgumentException) {
                 continue;
             }
@@ -503,6 +550,7 @@ class ClaimSubmissionService
 
     private function assertCurrent(ClaimSubmission $submission, PayApplication $application, ProjectContract $contract): void
     {
+        $this->assertMaterialRules($application, ContractClaimProfile::read($contract));
         if (! ContractClaimProfile::confirmed($contract) || $submission->profile_snapshot !== ContractClaimProfile::read($contract)) {
             throw new InvalidArgumentException('제출 조건이 변경되었습니다. 확인된 조건으로 새 제출본을 준비하세요.');
         }
@@ -510,10 +558,24 @@ class ClaimSubmissionService
             throw new InvalidArgumentException('준비 이후 청구 금액·기간이 변경되었습니다. 새 제출본을 준비하세요.');
         }
         foreach ($submission->manifest['documents'] ?? [] as $item) {
-            $source = $this->source($contract, $item['source']);
+            $source = $this->source($contract, $item['source'], true, null, $submission->manifest['historicalSubmittedOn'] ?? null);
             $this->readVerified($source['disk'], $source['path'], $item['sha256']);
         }
         $this->verifyArchive($submission->disk, $submission->file_path, $submission->sha256);
+    }
+
+    private function assertMaterialRules(PayApplication $application, array $profile): void
+    {
+        if ($profile['stored_materials'] ?? false) {
+            return;
+        }
+        $storedAllocation = PayApplicationAllocation::where('pay_application_id', $application->id)
+            ->with('record:id,stage')->get()->contains(fn ($allocation) =>
+                ((float) $allocation->amount > 0 || (float) $allocation->quantity > 0)
+                && (data_get($allocation->snapshot, 'record.stage') === 'stored' || $allocation->record?->stage === 'stored'));
+        if ((float) $application->stored_materials_amount > 0 || $storedAllocation) {
+            throw new InvalidArgumentException('계약 제출 조건과 BOQ 반입·보관 기성이 충돌합니다. 보관 자재 청구 허용 근거를 먼저 확인하세요.');
+        }
     }
 
     private function verifyArchive(string $diskName, string $path, string $expected): void
@@ -591,8 +653,10 @@ class ClaimSubmissionService
             if ($zip->open($path, ZipArchive::OVERWRITE) !== true) {
                 throw new InvalidArgumentException('제출본 ZIP을 만들 수 없습니다.');
             }
-            $zip->addFromString('manifest.json', json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-            $zip->addFromString('claim-summary.html', $this->summary($package));
+            if (! $zip->addFromString('manifest.json', json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))
+                || ! $zip->addFromString('claim-summary.html', $this->summary($package))) {
+                throw new InvalidArgumentException('제출 요약과 파일 목록을 ZIP에 넣을 수 없습니다.');
+            }
             foreach ($files as $file) {
                 if (! $zip->addFile($file['path'], $file['name'])) {
                     throw new InvalidArgumentException('제출본에 원본을 넣을 수 없습니다.');
@@ -613,6 +677,9 @@ class ClaimSubmissionService
         $escape = fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $app = $package['application'];
         $html = '<!doctype html><html lang="en"><meta charset="utf-8"><title>Claim summary</title><style>body{font:15px sans-serif;margin:36px;line-height:1.5}table{border-collapse:collapse;width:100%;margin:20px 0}td,th{border:1px solid #bbb;padding:8px;text-align:left}</style><h1>Progress claim summary</h1>';
+        if (! empty($package['historicalSubmittedOn'])) {
+            $html .= '<p><strong>Reconstructed record of an existing submitted claim (기존 제출 자료 복원본).</strong> Original recorded submission date: '.$escape($package['historicalSubmittedOn']).'. Documents validated for that date. This archive was assembled on '.$escape($package['preparedAt']).'. Actual dispatch and response evidence are recorded separately.</p>';
+        }
         $html .= '<p>'.$escape($package['contract']['title']).' — '.$escape($package['contract']['number']).'<br>Application '.$escape($app['applicationNo']).' / Revision '.$escape($package['revision']).'<br>Period: '.$escape($app['periodStart']).' – '.$escape($app['periodEnd']).'<br>Currency: '.$escape($package['contract']['currency']).'</p><table>';
         foreach (['this_period_amount' => 'Current work', 'stored_materials_amount' => 'Stored materials', 'G' => 'Completed and stored to date', 'held' => 'Retainage held', 'line6' => 'Earned less retainage', 'line7' => 'Previous certificates', 'due' => 'Current payment requested'] as $key => $label) {
             $html .= '<tr><th>'.$escape($label).'</th><td>'.$escape($app[$key] ?? '').'</td></tr>';
@@ -630,12 +697,13 @@ class ClaimSubmissionService
 
     private function row(ClaimSubmission $submission): array
     {
-        $history = array_map(function (array $event): array {
+        $history = array_map(function (array $event, int $index) use ($submission): array {
             if (is_array($event['responseDocument'] ?? null)) {
                 unset($event['responseDocument']['disk'], $event['responseDocument']['path']);
+                $event['responseDownloadUrl'] = '/billing-export/submissions/'.$submission->id.'/responses/'.$index.'/file';
             }
             return $event;
-        }, $submission->history ?? []);
+        }, $submission->history ?? [], array_keys($submission->history ?? []));
         return [
             'id' => $submission->id, 'revision' => $submission->revision, 'status' => $submission->status,
             'profileVersion' => $submission->profile_version, 'preparedAt' => $submission->prepared_at?->toIso8601String(),

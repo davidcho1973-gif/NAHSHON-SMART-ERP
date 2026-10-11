@@ -152,7 +152,7 @@
 
   function actionsCell(r) {
     var u = ui();
-    var evidenceActions = u.rowButton('제출 서류', 'window.AdminBilling.openSubmission(' + r.id + ')') + ' ' + (r.evidenceBased ? u.rowButton('실적 근거', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' : '');
+    var evidenceActions = (r.evidenceBased && window.AdminSectionDrawings ? u.rowButton('양식 엑셀 초안', 'window.AdminSectionDrawings.gcDownload(' + r.id + ')') + ' ' : '') + u.rowButton('제출 서류', 'window.AdminBilling.openSubmission(' + r.id + ')') + ' ' + (r.evidenceBased ? u.rowButton('실적 근거', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' : '');
     if (!state.canManage) {
       return evidenceActions + (r.receipts && r.receipts.length ? u.rowButton('입금 ' + r.receipts.length, 'window.AdminBilling.toggleReceipts(' + r.id + ')') : '');
     }
@@ -750,10 +750,13 @@
   function submissionView() {
     var u = ui(), d = state.submission, a = d.application;
     var latest = (d.submissions || [])[0];
+    var active = a.status === 'draft' || a.status === 'submitted';
+    var canEditEvidence = d.canManage && active && (!latest || ['prepared', 'changes_requested'].indexOf(latest.status) >= 0);
     var html = u.rowButton('← 회차 · 수금', 'window.AdminBilling.openDetail(' + state.contractId + ')') +
       u.pageHeader('제출 서류 — 회차 #' + a.applicationNo,
         (a.periodStart || '') + ' ~ ' + (a.periodEnd || '') + ' · ' + money(a.amountDue, a.currency),
-        d.canManage ? u.primaryButton('제출파일 준비', 'window.AdminBilling.prepareSubmission()', 'archive') : '');
+        canEditEvidence ? u.primaryButton('제출파일 준비', 'window.AdminBilling.prepareSubmission()', 'archive') : '');
+    if (a.historicalSubmittedOn) html += '<p>기존 제출 자료 보완 · 최초 제출일 ' + u.esc(a.historicalSubmittedOn) + '. 실제 과거 송부일과 원청 회신을 기록하세요.</p>';
     if (!d.profile.confirmed_at) html += '<p role="alert">계약 관리에서 원청 요구사항과 청구조건을 먼저 확인하세요.</p>';
     html += '<p>파일을 준비하거나 내려받는 것만으로 송부 처리되지 않습니다.</p>';
     html += u.table({ id: 'bs-required', search: false, emptyText: '등록된 요구서류가 없습니다. 계약의 청구조건을 확인하세요.',
@@ -764,14 +767,16 @@
         { key: 'evidence', label: '연결 파일', render: function (r) {
           if (!r.active) return '—';
           var selected = (d.draftEvidence[r.key] || r.evidence || []).map(function (e) { return e.type + ':' + e.id; });
-          var options = (d.sourceOptions || []).map(function (o) {
+          var options = (d.sourceOptions || []).concat(r.evidence || []).filter(function (o, i, all) {
+            return all.findIndex(function (other) { return other.type === o.type && Number(other.id) === Number(o.id); }) === i;
+          }).map(function (o) {
             var value = o.value || o.type + ':' + o.id;
             return '<option value="' + u.esc(value) + '"' + (selected.indexOf(value) >= 0 ? ' selected' : '') + '>' + u.esc(o.label) + (o.expiresOn ? ' · 만료 ' + u.esc(o.expiresOn) : '') + '</option>';
           }).join('');
-          return '<select multiple aria-label="' + u.esc(r.title) + '" data-claim-evidence="' + u.esc(r.key) + '" style="width:100%;min-height:84px"' + (d.canManage ? '' : ' disabled') + '>' + options + '</select>';
+          return '<select multiple aria-label="' + u.esc(r.title) + '" data-claim-evidence="' + u.esc(r.key) + '" style="width:100%;min-height:84px"' + (canEditEvidence ? '' : ' disabled') + '>' + options + '</select>';
         }}
       ], rows: d.requirements || [] });
-    if (d.canManage) html += '<div style="margin:12px 0">' + u.rowButton('연결 저장', 'window.AdminBilling.saveSubmissionEvidence()') + '</div>';
+    if (canEditEvidence) html += '<div style="margin:12px 0">' + u.rowButton('연결 저장', 'window.AdminBilling.saveSubmissionEvidence()') + '</div>';
     html += u.table({ id: 'bs-revisions', search: false, emptyText: '아직 준비한 제출파일이 없습니다.',
       columns: [
         { key: 'revision', label: '제출본', render: function (r) { return 'v' + u.esc(r.revision); }},
@@ -781,14 +786,14 @@
         }},
         { key: 'act', label: '', render: function (r) {
           var out = '<a href="' + u.esc(r.downloadUrl) + '">제출 ZIP</a>';
-          if (d.canManage && latest && r.id === latest.id) {
+          if (d.canManage && active && latest && r.id === latest.id) {
             var next = {prepared:['sent'],sent:['received','changes_requested','accepted'],received:['changes_requested','accepted']}[r.status] || [];
             next.forEach(function (status) {
               out += ' ' + u.rowButton(submissionLabels[status], "window.AdminBilling.submissionTransition(" + r.id + ",'" + status + "')");
             });
           }
           if (r.history && r.history.length) out += '<details><summary>이력</summary>' + r.history.map(function (h) {
-            return '<div>' + u.esc(submissionLabels[h.status] || h.status || '') + ' · ' + u.esc(h.occurred_at || h.at || '') + ' ' + u.esc(h.reference || h.note || '') + '</div>';
+            return '<div>' + u.esc(submissionLabels[h.status] || h.status || '') + ' · ' + u.esc(h.occurredAt || h.recordedAt || '') + ' ' + u.esc(h.reference || '') + (h.note ? ' · ' + u.esc(h.note) : '') + (h.responseDownloadUrl ? ' <a href="' + u.esc(h.responseDownloadUrl) + '">회신 원본</a>' : '') + '</div>';
           }).join('') + '</details>';
           return out;
         }}
@@ -845,7 +850,7 @@
         var args = {submission_id:id,status:status,occurred_at:v.occurred_at,reference:v.reference,note:v.note};
         if (needsResponse) { var parts = String(v.response || '').split(':'); args.response_document = {type:parts[0],id:Number(parts[1])}; }
         return call('api_transitionClaimSubmission', [args]).then(function (res) {
-          if (res.success === false) return res;
+          if (res.success === false) return {success:false,error:res.error || Object.values(res.errors || {}).flat().join(' ') || '상태를 기록하지 못했습니다.'};
           global.apiCache = {};
           return call('api_getBillings', [state.contractId]).then(checkedResult).then(function (detail) {
             state.detail = detail;

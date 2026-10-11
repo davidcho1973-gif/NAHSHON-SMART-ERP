@@ -26,9 +26,9 @@ return new class extends Migration
             $table->char('sha256', 64);
             $table->unsignedBigInteger('file_size');
             $table->timestampTz('prepared_at');
-            $table->timestampTz('sent_at')->nullable();
-            $table->timestampTz('received_at')->nullable();
-            $table->timestampTz('response_at')->nullable();
+            $table->date('sent_at')->nullable();
+            $table->date('received_at')->nullable();
+            $table->date('response_at')->nullable();
             $table->string('reference', 255)->nullable();
             $table->string('sent_reference', 255)->nullable();
             $table->json('response_document')->nullable();

@@ -949,7 +949,8 @@ class BillingAdminService
      */
     private function revertApplication(PayApplication $row, string $from, string $to): array
     {
-        if ($to === 'draft' && (data_get($row->payload, 'evidenceSubmittedAt') || data_get($row->payload, 'claimSubmissionSentAt'))) {
+        if ($to === 'draft' && (data_get($row->payload, 'evidenceSubmittedAt') || data_get($row->payload, 'claimSubmissionSentAt')
+            || ClaimSubmission::where('pay_application_id', $row->id)->whereNotNull('sent_at')->exists())) {
             return ['success' => false, 'error' => '제출한 근거 묶음은 보존됩니다. 정정은 다음 회차에서 처리하세요.'];
         }
         if ($row->status !== $from) {
