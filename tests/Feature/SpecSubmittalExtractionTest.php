@@ -84,7 +84,7 @@ class SpecSubmittalExtractionTest extends TestCase
         $existing = Submittal::create([
             'company_id' => $project->company_id, 'site_id' => $project->site_id, 'project_id' => $project->id,
             'seq' => 1, 'source_document_id' => $document->id,
-            'csi' => $item['csi'], 'category' => $item['category'], 'title' => $item['title'],
+            'csi' => $item['csi'], 'section' => $item['section'], 'category' => $item['category'], 'title' => $item['title'],
             'source_excerpt' => $item['source_excerpt'], 'status' => '조건부승인', 'approved_on' => '2026-09-01',
             'notes' => 'Do not replace this condition', 'gate' => true,
         ]);
