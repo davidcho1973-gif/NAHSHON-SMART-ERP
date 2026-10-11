@@ -300,7 +300,7 @@ class SubmittalCommsTest extends TestCase
         $this->assertSame('received', $row->documents()->sole()->pivot->kind);
         $this->assertSame('조건부승인 · '.now()->toDateString().' · '.str_repeat('가', 200), SubmittalEvent::sole()->subject);
 
-        $rejected = $this->doc($admin, $row, 'gc-rejection.pdf');
+        $rejected = $this->doc($admin, $row, 'gc-rejection.pdf', '%PDF-1.7 rejection');
         $args['documentIds'] = [$rejected->id];
         $args['disposition'] = '반려';
         $args['decisionNote'] = 'Wrong revision';
@@ -318,8 +318,8 @@ class SubmittalCommsTest extends TestCase
         $this->actingAs($admin);
         foreach (['missing', 'oversize', 'changed'] as $case) {
             $row = $this->row($base, ['seq' => 20 + Submittal::count(), 'recipient_email' => 'gc@example.test']);
-            $good = $this->doc($admin, $row, $case.'-good.pdf', 'good');
-            $bad = $this->doc($admin, $row, $case.'-bad.pdf', 'bad-content');
+            $good = $this->doc($admin, $row, $case.'-good.pdf', 'g-'.substr($case, 0, 2));
+            $bad = $this->doc($admin, $row, $case.'-bad.pdf', $case.'-bad-content');
             $row->documents()->attach([$good->id => ['kind' => 'received'], $bad->id => ['kind' => 'received']]);
             config(['mail.max_attachment_bytes' => $case === 'oversize' ? 5 : 1000]);
             if ($case === 'missing') {

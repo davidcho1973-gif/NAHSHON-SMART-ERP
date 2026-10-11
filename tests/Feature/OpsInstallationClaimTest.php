@@ -50,7 +50,8 @@ class OpsInstallationClaimTest extends TestCase
         Carbon::setTestNow('2026-09-20 15:00:00');
         $this->manager = auth()->user();
         $this->project = Project::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
-            'project_code' => 'OPS-CLAIM-1', 'name' => 'Kitchen claim project']);
+            'project_code' => 'OPS-CLAIM-1', 'name' => 'Kitchen claim project',
+            'construction_type' => 'equipment_setting', 'project_stage' => 'awarded']);
         $contract = ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
             'project_id' => $this->project->id, 'title' => 'Prime',
             'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD', 'payload' => ['claim_profile' => $this->confirmedClaimProfile()]]);
@@ -173,7 +174,8 @@ class OpsInstallationClaimTest extends TestCase
         $this->assertSame($this->project->project_code, $item->project_code);
 
         $other = Project::create(['company_id' => $this->company->id, 'site_id' => $this->site->id,
-            'project_code' => 'OPS-CLAIM-2', 'name' => 'Other project at the same site']);
+            'project_code' => 'OPS-CLAIM-2', 'name' => 'Other project at the same site',
+            'construction_type' => 'equipment_setting', 'project_stage' => 'awarded']);
         $this->duct->contract->update(['project_id' => $other->id]);
         $this->actingAs($this->manager);
 
