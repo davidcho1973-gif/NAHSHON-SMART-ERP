@@ -48,7 +48,7 @@ class SpecSubmittalExtractionTest extends TestCase
         $again = $service->extract($document->fresh());
         $this->assertTrue($again['reused']);
         $this->assertSame(0, $again['created']);
-        $duplicateUpload = $this->document($project, 'original specification');
+        $duplicateUpload = $this->document($project, 'original specification', 'shared');
         $this->assertTrue($service->extract($duplicateUpload)['reused']);
         $this->assertSame(2, Submittal::count());
         $this->assertSame('승인', $approved->fresh()->status);
@@ -131,7 +131,7 @@ class SpecSubmittalExtractionTest extends TestCase
         ]);
     }
 
-    private function document(Project $project, string $bytes): IntelligentDocument
+    private function document(Project $project, string $bytes, string $accessLevel = 'scope'): IntelligentDocument
     {
         $uuid = (string) Str::uuid();
         $path = 'submittal-specs/'.$uuid.'.pdf';
@@ -139,7 +139,7 @@ class SpecSubmittalExtractionTest extends TestCase
 
         return IntelligentDocument::create([
             'uuid' => $uuid, 'company_id' => $project->company_id, 'site_id' => $project->site_id,
-            'project_id' => $project->id, 'uploaded_by' => auth()->id(), 'disk' => 'local', 'file_path' => $path,
+            'project_id' => $project->id, 'uploaded_by' => auth()->id(), 'access_level' => $accessLevel, 'disk' => 'local', 'file_path' => $path,
             'original_file_name' => 'spec.pdf', 'stored_file_name' => 'spec.pdf', 'title' => 'Specification',
             'mime_type' => 'application/pdf', 'extension' => 'pdf', 'file_size' => strlen($bytes),
             'sha256' => hash('sha256', $bytes), 'received_at' => now(), 'ai_status' => 'ready',
