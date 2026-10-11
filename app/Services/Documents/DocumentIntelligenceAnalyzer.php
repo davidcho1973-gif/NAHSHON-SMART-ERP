@@ -32,9 +32,14 @@ class DocumentIntelligenceAnalyzer
         if (! is_array($result['data'] ?? null) || $result['data'] === []) {
             throw new \RuntimeException('[EMPTY_ANALYSIS] AI returned an empty or invalid document analysis.');
         }
-        $result['data']['source_review_reason'] = $parts === [] && $prepared['text_truncated']
-            ? '본문이 AI 입력 한도를 넘어 일부만 분석되었습니다. 문서를 분할하여 전체 내용을 검토해 주세요.'
-            : null;
+        $reviewReasons = [];
+        if ($parts === [] && $prepared['text_truncated']) {
+            $reviewReasons[] = '본문이 AI 입력 한도를 넘어 일부만 분석되었습니다. 문서를 분할하여 전체 내용을 검토해 주세요.';
+        }
+        if ($prepared['email_attachment_review_required']) {
+            $reviewReasons[] = '이메일 본문만 분석되었으며 첨부 파일 내용은 분석되지 않았습니다. 첨부 원본을 별도로 검토해 주세요.';
+        }
+        $result['data']['source_review_reason'] = $reviewReasons === [] ? null : implode(' ', $reviewReasons);
 
         return [
             'data' => $result['data'],
@@ -87,6 +92,8 @@ class DocumentIntelligenceAnalyzer
             'prompt' => $prompt,
             'extracted_text' => $extractedText,
             'text_truncated' => mb_strwidth($extractedText ?? '', 'UTF-8') > 120000,
+            'email_attachment_review_required' => (strtolower((string) $document->extension) === 'eml' || strtolower((string) $document->mime_type) === 'message/rfc822')
+                && str_contains($extractedText ?? '', DocumentTextExtractor::EMAIL_ATTACHMENT_REVIEW_MARKER),
         ];
     }
 
@@ -117,6 +124,7 @@ class DocumentIntelligenceAnalyzer
 8. action_items의 due_on은 문서에 명시된 날짜 또는 문서일+통보기간을 계산한 YYYY-MM-DD다. 추측이면 details에 추정이라고 밝히고 confidence를 낮춘다.
 9. 권리 포기, 손해배상, Liquidated Damages, backcharge, scope gap, 승인 없는 추가작업, Notice 미제출, 잘못된 Revision, 안전중지, 검사실패, 지급보류 가능성은 high/critical로 표시한다.
 10. 문서에 없는 내용을 창작하지 않는다. 불명확한 값은 빈 문자열/빈 배열로 둔다.
+    이메일의 첨부 파일명/형식 표시는 내용 판독 근거가 아니다. contents not analyzed로 표시된 파일의 내용·금액·승인 여부를 추측하지 않는다.
 11. 이 문서가 "돈이 실제로 나갔거나 나가야 하는 기록"(영수증, 공급사 인보이스, 급여 지급 내역,
     청구서, 카드 명세 항목)이면 money 를 채운다: flow=out. 반대로 우리가 받을 돈의 기록
     (우리가 발행한 기성청구·인보이스)이면 flow=in. 돈 기록이 아니면 flow=none 으로 두고

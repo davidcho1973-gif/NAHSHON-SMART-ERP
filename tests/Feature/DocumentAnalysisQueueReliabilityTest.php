@@ -11,9 +11,12 @@ use App\Services\Ocr\OcrEngine;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Mockery;
+use Monolog\Handler\AbstractProcessingHandler;
+use Monolog\LogRecord;
 use Tests\TestCase;
 
 class DocumentAnalysisQueueReliabilityTest extends TestCase
@@ -78,6 +81,13 @@ class DocumentAnalysisQueueReliabilityTest extends TestCase
 
     public function test_rolled_back_dirty_save_records_safe_failure_even_when_alert_delivery_fails(): void
     {
+        Log::driver()->getLogger()->setHandlers([new class extends AbstractProcessingHandler
+        {
+            protected function write(LogRecord $record): void
+            {
+                throw new \RuntimeException('Write timed-out');
+            }
+        }]);
         $existing = $this->document('ready');
         $document = $this->document();
         $originalHash = $document->sha256;
@@ -107,6 +117,10 @@ class DocumentAnalysisQueueReliabilityTest extends TestCase
         $this->assertStringContainsString('[DUPLICATE_SCOPE]', $document->ai_error);
         $this->assertStringNotContainsString('SQLSTATE', $document->ai_error);
         $this->assertSame('ready', $existing->fresh()->ai_status);
+        $fallback = file_get_contents(storage_path('logs/logging-fallback-'.date('Y-m-d').'.log'));
+        $this->assertStringContainsString('SQLSTATE[23505]', $fallback);
+        $this->assertStringContainsString('Alert storage unavailable', $fallback);
+        $this->assertStringNotContainsString('Write timed-out', $document->ai_error);
     }
 
     public function test_deserialized_failure_hook_only_updates_the_run_it_owns(): void

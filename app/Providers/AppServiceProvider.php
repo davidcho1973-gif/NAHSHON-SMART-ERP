@@ -28,6 +28,7 @@ use App\Services\Ocr\ClaudeOcrEngine;
 use App\Services\Ocr\GeminiOcrEngine;
 use App\Services\Ocr\OcrEngine;
 use App\Services\Ocr\OpenAiOcrEngine;
+use App\Support\Logging\PreserveFailedLogRecords;
 use App\Support\WorkerPhone;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -43,6 +44,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Cloud injects its socket channel before providers register. Protect every
+        // configured channel here so a transport failure cannot replace a business error.
+        foreach ($this->app['config']->get('logging.channels', []) as $name => $channel) {
+            $this->app['config']->set("logging.channels.{$name}.tap", array_unique([
+                ...($channel['tap'] ?? []),
+                PreserveFailedLogRecords::class,
+            ]));
+        }
+
         // 공통 OCR 엔진 선택: 기본은 Gemini. Claude 는 AI_OCR_ENGINE=claude 로 명시할 때만 사용
         // (ANTHROPIC 크레딧 부족/미설정 시 자동으로 Claude 로 가서 실패하던 문제 방지).
         $this->app->bind(OcrEngine::class, function ($app): OcrEngine {
