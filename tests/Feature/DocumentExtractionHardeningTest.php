@@ -50,6 +50,115 @@ class DocumentExtractionHardeningTest extends TestCase
         }
     }
 
+    public function test_multipart_email_decodes_headers_and_body_without_including_large_binary_attachments(): void
+    {
+        $plain = 'Review the ceiling café scope <703K> before Friday. The quoted price is $1,250.00.';
+        $bytes = implode("\r\n", [
+            'Subject: =?UTF-8?B?'.base64_encode('703K 천장').'?=',
+            ' =?UTF-8?B?'.base64_encode(' 검토').'?=',
+            'From: =?UTF-8?B?'.base64_encode('김 담당').'?= <office@example.com>',
+            'To: manager@example.com,',
+            ' owner@example.com',
+            'Content-Type: multipart/mixed;',
+            ' boundary="outer-boundary"', '',
+            'This MIME preamble is not the message body.',
+            '--outer-boundary', 'Content-Type: multipart/alternative; boundary="alternative"', '',
+            '--alternative', 'Content-Type: text/plain; charset=windows-1252',
+            'Content-Transfer-Encoding: quoted-printable', '',
+            quoted_printable_encode(mb_convert_encoding($plain, 'Windows-1252', 'UTF-8')),
+            '--alternative', 'Content-Type: text/html; charset=UTF-8', '',
+            '<p>Alternative duplicate must not be included.</p>',
+            '--alternative--',
+            '--outer-boundary', 'Content-Type: application/pdf',
+            "Content-Disposition: attachment; filename*0*=UTF-8''703K_%EC%B2%9C%EC%9E%A5;",
+            ' filename*1*=%20%EA%B2%AC%EC%A0%81.pdf',
+            'Content-Transfer-Encoding: base64', '',
+            chunk_split(base64_encode(str_repeat('BINARY_ATTACHMENT_ONLY', 270000)), 76, "\r\n"),
+            '--outer-boundary', 'Content-Type: text/plain; name="instructions.txt"',
+            'Content-Disposition: attachment; filename="instructions.txt"', '',
+            'Attached evidence must not be mistaken for the sender message.',
+            '--outer-boundary--',
+            'MIME epilogue must also be excluded.',
+        ]);
+
+        $text = app(DocumentTextExtractor::class)->extract($bytes, 'eml');
+
+        $this->assertGreaterThan(7 * 1048576, strlen($bytes));
+        $this->assertLessThan(1000, strlen($text));
+        $this->assertStringContainsString('Subject: 703K 천장 검토', $text);
+        $this->assertStringContainsString('From: 김 담당 <office@example.com>', $text);
+        $this->assertStringContainsString('To: manager@example.com, owner@example.com', $text);
+        $this->assertStringContainsString($plain, $text);
+        $this->assertStringContainsString('703K_천장 견적.pdf (application/pdf); contents not analyzed.', $text);
+        $this->assertStringContainsString('instructions.txt (text/plain); contents not analyzed.', $text);
+        $this->assertSame(2, substr_count($text, DocumentTextExtractor::EMAIL_ATTACHMENT_REVIEW_MARKER));
+        foreach (['Alternative duplicate', 'QklOQVJZX0FUVEFDSE1FTlRfT05MWQ', 'BINARY_ATTACHMENT_ONLY', 'Attached evidence', 'MIME preamble', 'MIME epilogue'] as $excluded) {
+            $this->assertStringNotContainsString($excluded, $text);
+        }
+    }
+
+    public function test_html_email_decodes_base64_and_charset_and_preserves_readable_paragraphs(): void
+    {
+        $html = '<html><head><style>.hidden{color:red}</style></head><body><script>trackingScript()</script>'
+            .'<p>천장 공사 검토</p><p>회신 기한: 금요일 &amp; 현장 확인</p><table><tr><td>항목</td><td>수량 20</td></tr></table></body></html>';
+        $htmlPart = "Content-Type: text/html; charset=EUC-KR\nContent-Transfer-Encoding: base64\n\n"
+            .chunk_split(base64_encode(mb_convert_encoding($html, 'EUC-KR', 'UTF-8')), 76, "\n");
+        $emails = [
+            "Subject: HTML email\n".$htmlPart,
+            "Subject: Empty plain alternative\nContent-Type: multipart/alternative; boundary=empty-plain\n\n"
+                ."--empty-plain\nContent-Type: text/plain\n\n--empty-plain\n".$htmlPart."--empty-plain--\n",
+        ];
+        foreach ($emails as $bytes) {
+            $text = app(DocumentTextExtractor::class)->extract($bytes, null, 'message/rfc822');
+            $this->assertStringContainsString("공사 검토\n회신 기한: 금요일 & 현장 확인\n항목 수량 20", $text);
+            $this->assertStringNotContainsString('trackingScript', $text);
+            $this->assertStringNotContainsString('.hidden', $text);
+            $this->assertTrue(mb_check_encoding($text, 'UTF-8'));
+            $this->assertStringNotContainsString(DocumentTextExtractor::EMAIL_ATTACHMENT_REVIEW_MARKER, $text);
+        }
+    }
+
+    public function test_unread_email_attachments_and_inline_images_both_require_review(): void
+    {
+        $engine = $this->mock(OcrEngine::class);
+        $engine->shouldReceive('analyze')->twice()->withArgs(function ($parts, $prompt) {
+            return $parts === [] && str_contains($prompt, 'Please review the proposed ceiling scope before Friday.')
+                && ! str_contains($prompt, 'UNREAD_ATTACHMENT_CONTENT');
+        })->andReturn(['data' => ['title' => 'Email scope review'], 'model' => 'test']);
+        $engine->shouldReceive('name')->andReturn('test');
+        $analyzer = new DocumentIntelligenceAnalyzer($engine, new DocumentTextExtractor);
+
+        foreach (['inline', 'attachment'] as $disposition) {
+            $bytes = implode("\r\n", [
+                'Subject: Ceiling scope', 'Content-Type: multipart/related; boundary="related"', '',
+                '--related', 'Content-Type: text/plain; charset=UTF-8', '',
+                'Please review the proposed ceiling scope before Friday.',
+                '--related', 'Content-Type: image/png; name="scope.png"',
+                'Content-Disposition: '.$disposition.'; filename="scope.png"',
+                'Content-ID: <image001>', 'Content-Transfer-Encoding: base64', '',
+                base64_encode('UNREAD_ATTACHMENT_CONTENT'), '--related--',
+            ]);
+            $result = $analyzer->analyze(new IntelligentDocument(['extension' => 'eml', 'mime_type' => 'message/rfc822']), $bytes);
+            $this->assertStringContainsString('첨부 파일 내용은 분석되지 않았습니다', $result['data']['source_review_reason']);
+            $this->assertStringNotContainsString('입력 한도', $result['data']['source_review_reason']);
+            $this->assertStringContainsString(DocumentTextExtractor::EMAIL_ATTACHMENT_REVIEW_MARKER, $result['extracted_text']);
+            if ($disposition === 'inline') {
+                $this->assertStringContainsString('[Email inline image not analyzed]', $result['extracted_text']);
+            }
+        }
+    }
+
+    public function test_incomplete_mime_message_is_rejected_before_any_ai_call(): void
+    {
+        $engine = $this->mock(OcrEngine::class);
+        $engine->shouldNotReceive('analyze');
+        $bytes = "Subject: Incomplete email\r\nContent-Type: multipart/mixed; boundary=missing-close\r\n\r\n"
+            ."--missing-close\r\nContent-Type: text/plain\r\n\r\nA message followed by a truncated attachment.";
+
+        $this->expectExceptionMessage('[INVALID_EMAIL]');
+        (new DocumentIntelligenceAnalyzer($engine, new DocumentTextExtractor))->analyze(new IntelligentDocument(['extension' => 'eml']), $bytes);
+    }
+
     public function test_excel_resolves_actual_cells_and_non_contiguous_sheet_numbers(): void
     {
         $bytes = $this->archive([
@@ -99,6 +208,10 @@ class DocumentExtractionHardeningTest extends TestCase
         $this->assertFalse(DocumentAnalysisFailure::retryWithText($error));
         $this->assertFalse(DocumentAnalysisFailure::retryWithText(new \RuntimeException('HTTP 429 quota')));
         $this->assertTrue(DocumentAnalysisFailure::retryWithText(new \RuntimeException('Request payload size exceeds limit')));
+        $invalidEmail = new \RuntimeException('[INVALID_EMAIL] private raw MIME details');
+        $this->assertStringStartsWith('[INVALID_EMAIL]', DocumentAnalysisFailure::preflightMessage($invalidEmail));
+        $this->assertStringNotContainsString('private raw MIME details', DocumentAnalysisFailure::preflightMessage($invalidEmail));
+        $this->assertFalse(DocumentAnalysisFailure::retryWithText($invalidEmail));
     }
 
     public function test_empty_provider_result_is_not_a_successful_document(): void

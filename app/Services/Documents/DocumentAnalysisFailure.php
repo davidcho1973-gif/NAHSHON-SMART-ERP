@@ -10,6 +10,7 @@ final class DocumentAnalysisFailure
         $m = mb_strtolower($e->getMessage());
         foreach ([
             'invalid_workbook' => 'Excel 구조 또는 셀 참조가 손상되었습니다. Excel에서 다시 저장해 주세요.',
+            'invalid_email' => '이메일 MIME 구조 또는 본문 인코딩을 읽을 수 없습니다. 원본 이메일을 다시 저장해 주세요.',
             'extraction_limit' => '압축 해제 본문이 안전 한도를 넘습니다. 문서를 나눠 주세요.',
             'input_encoding' => 'AI 요청 문자 인코딩 검사에 실패했습니다. 서버의 본문 추출 처리를 확인해 주세요.',
             'empty_analysis' => 'AI가 사용할 수 있는 분석 결과를 반환하지 않았습니다. 원본과 응답 로그를 확인해 주세요.',
