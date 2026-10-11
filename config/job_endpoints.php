@@ -3,6 +3,11 @@
 // Explicit endpoint catalog: a newly added endpoint requires a reviewed permission assignment.
 return [
     'legacy' => [
+        'api_getClaimWorklist' => ['contracts', 'view'],
+        'api_getClaimSubmissionWorkspace' => ['contracts', 'view'],
+        'api_saveClaimSubmissionEvidence' => ['contracts', 'edit'],
+        'api_prepareClaimSubmission' => ['contracts', 'export'],
+        'api_transitionClaimSubmission' => ['contracts', 'edit'],
         'api_setJobAccess' => ['system', 'edit'],
         'api_actPermit' => ['safety', 'approve'],
         'api_activateApplicant' => ['people', 'edit'],
@@ -316,6 +321,7 @@ return [
         'setupRentalSheet' => ['office', 'edit'],
     ],
     'controllers' => [
+        'ClaimSubmissionController' => ['_module' => 'contracts'],
         'WorkerEnrollmentController' => ['_module' => 'people', 'index' => ['people', 'view'], 'approve' => ['people', 'edit'], 'reject' => ['people', 'edit']],
         'MobileOpsRoomController' => ['_module' => 'reports'],
         'MobileDocumentController' => ['_module' => 'documents'],

@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\Submittal;
 use App\Services\Ocr\OcrEngine;
 use App\Support\AiMeter;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -52,6 +53,18 @@ class SpecSubmittalService
             return ['success' => false, 'error' => TakeoffTarget::reason($document)];
         }
 
+        $sourceHash = hash('sha256', $bytes);
+        if (filled($document->sha256) && ! hash_equals(strtolower($document->sha256), $sourceHash)) {
+            return ['success' => false, 'error' => '등록된 시방서와 실제 원본이 다릅니다. 새 개정 문서로 등록하세요.'];
+        }
+        $previousHash = data_get($document->ai_payload, 'submittal_extraction.sourceSha256');
+        if ($previousHash && $previousHash !== $sourceHash) {
+            return ['success' => false, 'error' => '이미 추출한 시방서의 원본이 변경되었습니다. 기존 승인 이력을 보존하도록 새 개정 문서로 등록하세요.'];
+        }
+        if ($cached = $this->cachedExtraction($document, $project, $sourceHash)) {
+            return $cached;
+        }
+
         $startedAt = microtime(true);
         try {
             $result = $this->engine->analyze(
@@ -74,85 +87,138 @@ class SpecSubmittalService
                 'error' => '이 문서에서는 제출물 요구를 찾지 못했습니다. 시방서가 맞는지 확인해 주세요.'];
         }
 
-        return $this->persist($document, $items, $project);
+        return $this->persist($document, $items, $project, $sourceHash);
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $items
      * @return array{success: bool, created: int, review: int, gates: int, rows: array<int, array<string, mixed>>}
      */
-    private function persist(IntelligentDocument $document, array $items, Project $project): array
+    private function persist(IntelligentDocument $document, array $items, Project $project, string $sourceHash): array
     {
-        $nextSeq = (int) Submittal::query()->where('project_id', $project->id)->max('seq');
-
-        $created = 0;
-        $review = 0;
-        $gates = 0;
-        $rows = [];
-
-        foreach ($items as $raw) {
-            $title = trim((string) ($raw['title'] ?? ''));
-            if ($title === '') {
-                continue;
+        // Serialize the project sequence and source import. A retry adds evidence once,
+        // rather than appending another register or overwriting an approved requirement.
+        return DB::transaction(function () use ($document, $items, $project, $sourceHash): array {
+            Project::query()->whereKey($project->id)->lockForUpdate()->firstOrFail();
+            $document = IntelligentDocument::query()->lockForUpdate()->findOrFail($document->id);
+            if ($cached = $this->cachedExtraction($document, $project, $sourceHash)) {
+                return $cached;
             }
-
-            $confidence = max(0, min(100, (int) ($raw['confidence'] ?? 0)));
-            $excerpt = trim((string) ($raw['source_excerpt'] ?? ''));
-            $category = (string) ($raw['category'] ?? '');
-            $gate = (bool) ($raw['gate'] ?? false);
-
-            $reasons = [];
-            if ($confidence < self::LOW_CONFIDENCE) {
-                $reasons[] = "확신도 {$confidence}";
+            $freshBytes = $this->fileOf($document);
+            if ($freshBytes === null || hash('sha256', $freshBytes) !== $sourceHash) {
+                return ['success' => false, 'error' => '판독 중 시방서 원본이 변경되었습니다. 새 개정 문서로 등록하세요.'];
             }
-            if (! in_array($category, self::CATEGORIES, true)) {
-                $reasons[] = '구분 불명';
-                $category = 'Action 제출물';   // 가장 무거운 쪽으로 둔다 — 승인 필요로 보는 편이 안전하다
+            $nextSeq = (int) Submittal::query()->where('project_id', $project->id)->max('seq');
+            $existing = Submittal::query()->where('project_id', $project->id)
+                ->where('source_document_id', $document->id)->get()
+                ->keyBy(fn (Submittal $row) => $this->requirementKey($row->csi, $row->category, $row->source_excerpt, $row->title));
+            $created = 0;
+            $rowIds = [];
+            foreach ($items as $raw) {
+                $title = trim((string) ($raw['title'] ?? ''));
+                if ($title === '') {
+                    continue;
+                }
+                $confidence = max(0, min(100, (int) ($raw['confidence'] ?? 0)));
+                $excerpt = Str::limit(trim((string) ($raw['source_excerpt'] ?? '')), 1500, '');
+                $category = (string) ($raw['category'] ?? '');
+                $gate = (bool) ($raw['gate'] ?? false);
+                $reasons = [];
+                if ($confidence < self::LOW_CONFIDENCE) {
+                    $reasons[] = "확신도 {$confidence}";
+                }
+                if (! in_array($category, self::CATEGORIES, true)) {
+                    $reasons[] = '구분 불명';
+                    $category = 'Action 제출물';
+                }
+                if ($excerpt === '') {
+                    $reasons[] = '원문 인용 없음';
+                }
+                if (! $gate && preg_match('/금지|승인 전|제출 전|not.{0,12}(begin|proceed|install)|prior to approval/iu', $title)) {
+                    $reasons[] = '정지 조항일 수 있음(문구에 금지 표현)';
+                }
+                $csi = Str::limit((string) ($raw['csi'] ?? ''), 18, '');
+                $title = Str::limit($title, 900, '');
+                $key = $this->requirementKey($csi, $category, $excerpt, $title);
+                $row = $existing->get($key);
+                if (! $row) {
+                    $row = Submittal::create([
+                        'company_id' => $document->company_id,
+                        'site_id' => $project->site_id ?: $document->site_id,
+                        'project_id' => $project->id,
+                        'seq' => ++$nextSeq,
+                        'csi' => $csi,
+                        'section' => Str::limit((string) ($raw['section'] ?? ''), 90, ''),
+                        'category' => $category,
+                        'title' => $title,
+                        'gate' => $gate,
+                        'status' => '미착수',
+                        'confidence' => $confidence,
+                        'needs_review' => $reasons !== [],
+                        'review_reason' => $reasons === [] ? null : Str::limit(implode(' · ', $reasons), 250, ''),
+                        'source_document_id' => $document->id,
+                        'extracted_by' => $this->engine->name(),
+                        'source_excerpt' => $excerpt !== '' ? $excerpt : null,
+                        'notes' => filled($raw['timing'] ?? null) ? '시점 조건: '.Str::limit((string) $raw['timing'], 200, '') : null,
+                    ]);
+                    $existing->put($key, $row);
+                    $created++;
+                }
+                $rowIds[$key] = $row->id;
             }
-            // 게이트는 원문 없이는 믿지 않는다. 잘못 판정하면 공사가 서거나 재시공이 된다.
-            if ($gate && $excerpt === '') {
-                $reasons[] = '정지 조항인데 원문 인용 없음';
-            }
-            if (! $gate && preg_match('/금지|승인 전|제출 전|not.{0,12}(begin|proceed|install)|prior to approval/iu', $title)) {
-                $reasons[] = '정지 조항일 수 있음(문구에 금지 표현)';
-            }
-
-            $row = Submittal::create([
-                'company_id' => $document->company_id,
-                'site_id' => $project->site_id ?: $document->site_id,
-                'project_id' => $project->id,
-                'seq' => ++$nextSeq,
-                'csi' => Str::limit((string) ($raw['csi'] ?? ''), 18, ''),
-                'section' => Str::limit((string) ($raw['section'] ?? ''), 90, ''),
-                'category' => $category,
-                'title' => Str::limit($title, 900, ''),
-                'gate' => $gate,
-                'status' => '미착수',
-                'confidence' => $confidence,
-                'needs_review' => $reasons !== [],
-                'review_reason' => $reasons === [] ? null : Str::limit(implode(' · ', $reasons), 250, ''),
-                'source_document_id' => $document->id,
-                'extracted_by' => $this->engine->name(),
-                'source_excerpt' => $excerpt !== '' ? Str::limit($excerpt, 1500, '') : null,
-                'notes' => filled($raw['timing'] ?? null) ? '시점 조건: '.Str::limit((string) $raw['timing'], 200, '') : null,
-            ]);
-
-            $created++;
-            if ($reasons !== []) {
-                $review++;
-            }
-            if ($gate) {
-                $gates++;
-            }
-            $rows[] = [
-                'seq' => $row->seq, 'csi' => $row->csi, 'title' => Str::limit($row->title, 70),
-                'category' => $row->category, 'gate' => $gate,
-                'confidence' => $confidence, 'review' => $row->review_reason,
+            $payload = $document->ai_payload ?? [];
+            $payload['submittal_extraction'] = [
+                'sourceSha256' => $sourceHash, 'projectId' => $project->id,
+                'requirements' => $rowIds, 'extractedAt' => now()->toIso8601String(),
             ];
+            $document->forceFill(['ai_payload' => $payload])->save();
+
+            return $this->extractionResult($project, array_values($rowIds), $created, false);
+        });
+    }
+
+    private function requirementKey(?string $csi, ?string $category, ?string $excerpt, ?string $title): string
+    {
+        $normalize = fn (?string $text): string => mb_strtolower((string) preg_replace('/[\p{P}\p{Z}\s]+/u', '', trim($text ?? '')));
+
+        // Keep separate obligations even when the model quotes the same paragraph for both.
+        return hash('sha256', $normalize($csi).'|'.$normalize($category).'|'.$normalize($excerpt).'|'.$normalize($title));
+    }
+
+    private function cachedExtraction(IntelligentDocument $document, Project $project, string $sourceHash): ?array
+    {
+        // Identical bytes imported again in the same project reuse the original requirement IDs.
+        // A new revision (different bytes) remains a separate source and cannot inherit approval.
+        $source = IntelligentDocument::query()
+            ->where('ai_payload->submittal_extraction->projectId', $project->id)
+            ->where('ai_payload->submittal_extraction->sourceSha256', $sourceHash)
+            ->orderBy('id')->first();
+        if (! $source) {
+            return null;
+        }
+        $ids = array_values((array) data_get($source->ai_payload, 'submittal_extraction.requirements', []));
+        if ($ids === [] || Submittal::where('project_id', $project->id)->whereIn('id', $ids)->count() !== count(array_unique($ids))) {
+            return null;
         }
 
-        return ['success' => true, 'created' => $created, 'review' => $review, 'gates' => $gates, 'rows' => $rows,
-            'project' => $project->name, 'projectCode' => $project->project_code];
+        return $this->extractionResult($project, $ids, 0, true);
+    }
+
+    private function extractionResult(Project $project, array $ids, int $created, bool $reused): array
+    {
+        $records = Submittal::query()->where('project_id', $project->id)->whereIn('id', $ids)->orderBy('seq')->get();
+
+        return [
+            'success' => true, 'created' => $created, 'reused' => $reused,
+            'review' => $records->where('needs_review', true)->count(),
+            'gates' => $records->where('gate', true)->count(),
+            'rows' => $records->map(fn (Submittal $row) => [
+                'seq' => $row->seq, 'csi' => $row->csi, 'title' => Str::limit($row->title, 70),
+                'category' => $row->category, 'gate' => $row->gate,
+                'confidence' => $row->confidence, 'review' => $row->review_reason,
+            ])->all(),
+            'project' => $project->name, 'projectCode' => $project->project_code,
+        ];
     }
 
     private function fileOf(IntelligentDocument $document): ?string
@@ -200,6 +266,7 @@ class SpecSubmittalService
             '- timing 에 시점 조건을 적으세요("타설 28일 경과 후", "작업 21일 전 통보").',
             '- csi 는 "09 6519" 같은 번호, section 은 그 이름("비닐타일 바닥").',
             '- confidence 는 정직하게. 조항이 흐릿하거나 해석이 갈리면 낮게 매기세요.',
+            '- source_excerpt 에 각 요구의 원문 조항을 그대로 인용하세요. 번역하거나 다른 요구의 문장을 합치지 마세요.',
             '- 같은 요구가 여러 번 나오면 한 줄로 합치세요.',
         ]));
     }

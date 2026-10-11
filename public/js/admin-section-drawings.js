@@ -690,7 +690,7 @@
         '<b>' + u.esc(p.project || p.fileName) + '</b>' + (p.scope ? ' · ' + u.esc(p.scope) : '') + '<br>' +
         '계약 합계 <b>' + money(p.contractTotal) + '</b> · 줄 <b>' + p.lineCount + '개</b> · 공정 ' + p.sections.length + '개' +
         (Math.abs(p.roundOff) >= 0.01 ? ' · 줄 합계 ' + money(p.lineTotal) + ' (절사 ' + money(p.roundOff) + ')' : '') + '<br>' +
-        '자재 단가가 있는 ' + p.storedLineCount + '줄은 반입 자재 기성(자재 단가)과 설치 기성(나머지)을 따로 받습니다.' +
+        '자재 단가가 있는 ' + p.storedLineCount + '줄은 자재·노무 단가를 구분할 수 있습니다. 실제 인정 방식은 계약별 청구조건 확인 후 적용합니다.' +
       '</div>' +
       '<div style="max-height:260px;overflow:auto;margin:10px 0;border:1px solid var(--border-default);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:12px">' + sections + '</table></div>' +
       '<label style="display:block;font-size:12px;font-weight:700;margin-top:6px">어느 계약의 줄인가요?' +

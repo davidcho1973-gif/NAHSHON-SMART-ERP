@@ -35,7 +35,7 @@ class ContractSheetImportTest extends TestCase
     private function contract(float $amount = 3000): ProjectContract
     {
         return ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id, 'title' => 'Prime',
-            'direction' => 'receivable', 'original_amount' => $amount, 'currency' => 'USD']);
+            'direction' => 'receivable', 'original_amount' => $amount, 'currency' => 'USD', 'payload' => ['claim_profile' => $this->confirmedClaimProfile()]]);
     }
 
     private function service(): ContractSheetImportService
@@ -216,8 +216,8 @@ class ContractSheetImportTest extends TestCase
         $this->assertEquals(5, $contract->retainage_percent);
         $lines = ContractBoqLine::where('project_contract_id', $contract->id)->get();
         $this->assertCount(350, $lines);
-        $this->assertTrue($lines->every(fn ($l) => $l->status === 'accepted' && $l->work_section_id !== null));
-        $this->assertSame(199, $lines->where('recognition_basis', 'milestone')->count());
+        $this->assertTrue($lines->every(fn ($l) => $l->status === 'draft' && $l->work_section_id !== null), '새 배포 환경에서도 계약별 확인 없이 지급 조건을 확정하지 않는다');
+        $this->assertSame(0, $lines->where('recognition_basis', 'milestone')->count());
         // 계약서처럼 줄 금액을 반올림 없이 더하면 계약서 합계와 같다(줄마다 센트로 반올림하면 2센트 차이가 난다).
         $this->assertEquals(1789820.36, round($lines->sum(fn ($l) => (float) $l->contract_qty * (float) $l->unit_price), 2));
         $drywall = WorkSection::where('site_id', $site->id)->where('code', 'A3')->firstOrFail();
@@ -231,6 +231,27 @@ class ContractSheetImportTest extends TestCase
         $migration->up();
         $this->assertSame(350, ContractBoqLine::count(), '다시 돌아도 줄이 늘지 않는다');
         $this->assertSame(1, ProjectContract::where('site_id', $site->id)->count());
+    }
+
+    public function test_import_without_contract_payment_confirmation_stays_draft_and_never_infers_stored_entitlement(): void
+    {
+        $contract = $this->contract();
+        $contract->update(['payload' => []]);
+        $doc = $this->workbook();
+        $result = $this->service()->import(['documentId' => $doc->id, 'contractId' => $contract->id, 'confirmContract' => true]);
+        $this->assertTrue($result['success'], $result['error'] ?? '');
+        $wall = ContractBoqLine::where('line_no', '2')->firstOrFail();
+        $this->assertSame('draft', $wall->status);
+        $this->assertSame('quantity', $wall->recognition_basis);
+
+        $contract->update(['payload' => ['claim_profile' => $this->confirmedClaimProfile(false)]]);
+        $this->assertTrue($this->service()->import(['documentId' => $doc->id, 'contractId' => $contract->id, 'confirmContract' => true])['success']);
+        $this->assertSame('accepted', $wall->fresh()->status);
+        $this->assertSame('quantity', $wall->fresh()->recognition_basis, '단가 분해가 있어도 이 계약은 시공분만 인정한다');
+
+        $contract->update(['payload' => ['claim_profile' => $this->confirmedClaimProfile(true)]]);
+        $this->assertTrue($this->service()->import(['documentId' => $doc->id, 'contractId' => $contract->id, 'confirmContract' => true])['success']);
+        $this->assertSame('quantity', $wall->fresh()->recognition_basis, '이미 확정한 BOQ 인정 기준은 재가져오기로 바꾸지 않는다');
     }
 
     public function test_a_subtotal_that_does_not_match_its_lines_stops_the_import(): void

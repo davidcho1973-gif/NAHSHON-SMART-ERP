@@ -501,13 +501,16 @@
       var body = wrap.querySelector('#reg-comms-body');
       if (!body) return;
       var c = d.contacts || {};
+      var pickDocs = (d.linkable || []).concat(d.documents || []).filter(function (doc, i, all) {
+        return all.findIndex(function (other) { return other.id === doc.id; }) === i;
+      });
       var field = function (label, name, value, type) {
         return '<div><label style="display:block;font-size:10.5px;font-weight:700;color:var(--text-tertiary);margin-bottom:4px">' + label + '</label>' +
           '<input data-c="' + name + '" type="' + (type || 'text') + '" value="' + u.esc(value || '') + '" style="' + inputStyle + '"></div>';
       };
       var mailNote = d.mailReady ? '' :
         '<div style="font-size:11px;color:var(--warning,#b45309);margin-top:6px;word-break:keep-all">' +
-        '메일 서버가 아직 없어, 보내기를 누르면 <b>사장님 메일앱</b>이 내용이 채워진 채 열립니다. 환경변수에 MAIL 설정을 넣으면 ERP 가 직접 보냅니다.</div>';
+        '메일 서버가 아직 없어, 보내기를 누르면 <b>사장님 메일앱</b>이 내용이 채워진 채 열립니다. 메일앱 열기는 초안 작성이며, 실제 송부로 기록되지 않습니다.</div>';
 
       body.innerHTML =
         // ── 담당자 ──
@@ -534,20 +537,24 @@
             '<button type="button" id="comms-request" style="' + btnStyle + '"' + (c.vendorEmail ? '' : ' disabled title="업체 이메일을 먼저 넣으세요"') + '>① 업체에 요청 메일</button>' +
             '<button type="button" id="comms-link-received" style="' + btn2Style + '">② 받은 자료 연결</button>' +
             '<button type="button" id="comms-transmit" style="' + btnStyle + '"' + (c.recipientEmail ? '' : ' disabled title="수신 이메일을 먼저 넣으세요"') + '>③ 원청에 전달 (자료 첨부)</button>' +
-            '<button type="button" id="comms-link-approval" style="' + btn2Style + '">④ 승인본 연결</button>' +
+            '<button type="button" id="comms-link-approval" style="' + btn2Style + '">④ 원청 회신 기록</button>' +
           '</div>' + mailNote +
         '</div>' +
         // ── 연결 후보 (기본 접힘) ──
         '<div id="comms-picker" style="display:none;border:1px solid var(--brand-primary);border-radius:10px;padding:14px;margin-bottom:12px">' +
           '<div style="font-size:12.5px;font-weight:700;color:var(--text-primary);margin-bottom:8px" id="comms-picker-title"></div>' +
-          ((d.linkable || []).length
-            ? (d.linkable || []).map(function (doc) {
+          (pickDocs.length
+            ? pickDocs.map(function (doc) {
                 return '<label style="display:flex;gap:7px;align-items:center;font-size:12px;color:var(--text-primary);padding:5px 2px;cursor:pointer">' +
                   '<input type="checkbox" class="comms-pick" value="' + doc.id + '">' +
                   '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + u.esc(doc.label) + '</span>' +
                   '<span style="color:var(--text-tertiary);font-size:10.5px;flex-shrink:0">' + u.esc(doc.receivedAt || '') + '</span></label>';
               }).join('')
             : '<div style="font-size:11.5px;color:var(--text-tertiary)">이 프로젝트에 연결할 만한 최근 문서가 없습니다. 업체가 보낸 파일을 먼저 문서함에 올려 주세요.</div>') +
+          '<div id="comms-decision" style="display:none;margin-top:12px">' +
+            '<label>회신 결과 <select id="comms-disposition" style="' + inputStyle + '"><option value="">선택</option><option>승인</option><option>조건부승인</option><option>반려</option></select></label>' +
+            '<label>회신일 <input type="date" id="comms-decision-on" style="' + inputStyle + '"></label>' +
+            '<label>조건·반려 사유 (200자) <textarea id="comms-decision-note" maxlength="200" style="' + inputStyle + '"></textarea></label></div>' +
           '<div style="margin-top:10px"><button type="button" id="comms-picker-go" style="' + btnStyle + '">연결</button></div>' +
         '</div>' +
         // ── 연결된 자료 ──
@@ -589,6 +596,7 @@
       };
       function showPicker(kind, title) {
         pickerKind = kind;
+        body.querySelector('#comms-decision').style.display = kind === 'approval' ? 'block' : 'none';
         var p = body.querySelector('#comms-picker');
         p.style.display = 'block';
         body.querySelector('#comms-picker-title').textContent = title;
@@ -598,12 +606,21 @@
         showPicker('received', '받은 자료로 연결할 문서를 고르세요 (문서함 최근 문서)');
       };
       body.querySelector('#comms-link-approval').onclick = function () {
-        showPicker('approval', '승인본으로 연결할 문서를 고르세요 — 연결하면 상태가 「승인」이 됩니다');
+        showPicker('approval', '원청 회신 원본과 실제 승인·반려 결과를 함께 기록하세요');
       };
       body.querySelector('#comms-picker-go').onclick = function () {
         var ids = Array.from(body.querySelectorAll('.comms-pick:checked')).map(function (x) { return parseInt(x.value, 10); });
         if (!ids.length) { u.toast('문서를 먼저 고르세요.', 'error'); return; }
-        act('link', { documentIds: ids, kind: pickerKind }, this)
+        var args = { documentIds: ids, kind: pickerKind };
+        if (pickerKind === 'approval') {
+          args.disposition = body.querySelector('#comms-disposition').value;
+          args.decisionOn = body.querySelector('#comms-decision-on').value;
+          args.decisionNote = body.querySelector('#comms-decision-note').value.trim();
+          if (!args.disposition || !args.decisionOn || (args.disposition !== '승인' && !args.decisionNote)) {
+            u.toast('회신 결과·날짜와 조건 또는 반려 사유를 입력하세요.', 'error'); return;
+          }
+        }
+        act('link', args, this)
           .then(function (res) { if (res) { u.toast('자료 ' + res.linked + '건을 연결했습니다.'); refresh(); } });
       };
     }
@@ -638,6 +655,10 @@
 
   function quickStatus(id, status) {
     var u = ui();
+    if (['승인', '조건부승인', '반려'].indexOf(status) >= 0) {
+      u.toast('원청 회신 원본과 결과를 연결해 주세요.');
+      openComms(id); reloadSubmittals().then(drawSubmittals); return;
+    }
     call('api_saveSubmittal', [{ id: id, status: status }]).then(function () {
       (state.sub.rows || []).forEach(function (r) { if (r.id === id) r.status = status; });
       // 상태만 바꿨을 때 표 전체를 다시 그리면 스크롤·검색이 초기화되므로 통계만 다시 그린다.
@@ -662,11 +683,10 @@
       saveLabel: '기록',
       fields: [
         { name: 'status', label: '상태', type: 'select', required: true, group: '진행',
-          options: state.sub.statuses || [], value: row.status },
+          options: (state.sub.statuses || []).filter(function (o) { var v = typeof o === 'string' ? o : o.value; return ['승인', '조건부승인', '반려'].indexOf(v) < 0 || v === row.status; }), value: row.status },
         { name: 'assignee', label: '담당', group: '진행', value: row.assignee || '' },
         { name: 'plannedOn', label: '계획일', type: 'date', group: '일정', value: row.plannedOn || '' },
         { name: 'submittedOn', label: '제출일', type: 'date', group: '일정', value: row.submittedOn || '' },
-        { name: 'approvedOn', label: '승인일', type: 'date', group: '일정', value: row.approvedOn || '' },
         { name: 'notes', label: '메모', type: 'textarea', colSpan: 2, group: '일정', value: row.notes || '' },
       ],
       onSave: function (v) {

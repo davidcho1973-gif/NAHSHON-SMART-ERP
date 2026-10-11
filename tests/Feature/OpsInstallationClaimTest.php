@@ -46,7 +46,7 @@ class OpsInstallationClaimTest extends TestCase
         Carbon::setTestNow('2026-09-20 15:00:00');
         $this->manager = auth()->user();
         $contract = ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id, 'title' => 'Prime',
-            'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD']);
+            'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD', 'payload' => ['claim_profile' => $this->confirmedClaimProfile()]]);
         $this->assertTrue(app(ContractSheetImportService::class)->import(['documentId' => $this->workbook()->id, 'contractId' => $contract->id, 'confirmContract' => true])['success']);
         $this->wall = ContractBoqLine::where('line_no', '2')->firstOrFail();   // 100 LF2 · 반입/설치 분리
         $this->duct = ContractBoqLine::where('line_no', '8')->firstOrFail();   // 10 M2 · 수량 기준

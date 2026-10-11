@@ -15,8 +15,14 @@ class SubmittalEvent extends Model
 {
     public const KIND_LABELS = [
         'request_sent' => '업체에 자료 요청',
+        'request_draft' => '자료 요청 메일 초안',
+        'request_failed' => '자료 요청 발송 실패',
         'materials_linked' => '받은 자료 연결',
         'transmitted' => '원청에 전달',
+        'transmit_draft' => '원청 전달 메일 초안',
+        'transmit_failed' => '원청 전달 실패',
+        'transmit_preflight_failed' => '제출 자료 확인 필요',
+        'response_recorded' => '원청 회신 판정 기록',
         'approval_linked' => '승인본 연결',
         'note' => '메모',
     ];

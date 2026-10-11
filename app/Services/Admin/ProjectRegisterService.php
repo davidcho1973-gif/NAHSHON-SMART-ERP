@@ -157,14 +157,23 @@ class ProjectRegisterService
             return ['success' => false, 'error' => '알 수 없는 상태값입니다: '.$status];
         }
 
-        $row->fill([
-            'status' => $status,
-            'assignee' => trim((string) ($data['assignee'] ?? '')) ?: null,
-            'planned_on' => ($data['plannedOn'] ?? null) ?: null,
-            'submitted_on' => ($data['submittedOn'] ?? null) ?: null,
-            'approved_on' => ($data['approvedOn'] ?? null) ?: null,
-            'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
-        ])->save();
+        // A status dropdown is not an external approval. Record the actual reply and
+        // its disposition through the document-link path; preserve all previous events.
+        $responseStates = ['승인', '조건부승인', '반려'];
+        if ($status !== $row->status && (in_array($status, $responseStates, true) || in_array($row->status, $responseStates, true))) {
+            return ['success' => false, 'error' => '원청 회신 판정은 소통 화면에서 회신 문서·실제 판정·회신일과 함께 기록하세요. 재제출은 자료 전달 후 기록됩니다.'];
+        }
+        if (array_key_exists('approvedOn', $data) && (($data['approvedOn'] ?: null) !== $row->approved_on?->toDateString())) {
+            return ['success' => false, 'error' => '승인일은 회신 문서를 연결하면서 기록하세요.'];
+        }
+        // A quick status change must not erase dates, the assignee, or notes.
+        $updates = ['status' => $status];
+        foreach (['assignee' => 'assignee', 'plannedOn' => 'planned_on', 'submittedOn' => 'submitted_on', 'notes' => 'notes'] as $input => $column) {
+            if (array_key_exists($input, $data)) {
+                $updates[$column] = trim((string) $data[$input]) ?: null;
+            }
+        }
+        $row->fill($updates)->save();
 
         return ['success' => true, 'id' => $row->id, 'status' => $row->status];
     }
@@ -266,7 +275,7 @@ class ProjectRegisterService
             'overview' => $comms->overview($row),
             'contacts' => $comms->saveContacts($row, is_array($args['data'] ?? null) ? $args['data'] : [], (bool) ($args['applyToCsi'] ?? false)),
             'request' => $comms->sendRequest($row, $userId),
-            'link' => $comms->linkDocuments($row, is_array($args['documentIds'] ?? null) ? $args['documentIds'] : [], (string) ($args['kind'] ?? 'received'), $userId),
+            'link' => $comms->linkDocuments($row, is_array($args['documentIds'] ?? null) ? $args['documentIds'] : [], (string) ($args['kind'] ?? 'received'), $userId, \Illuminate\Support\Arr::only($args, ['disposition', 'decisionOn', 'decisionNote'])),
             'transmit' => $comms->sendTransmit($row, $userId),
             default => ['success' => false, 'error' => '알 수 없는 동작입니다: '.$action],
         };

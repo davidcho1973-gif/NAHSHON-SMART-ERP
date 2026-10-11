@@ -9,6 +9,8 @@ use App\Models\ProjectContract;
 use App\Models\User;
 use App\Services\Finance\BillingCalculator;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimSubmissionService;
+use App\Models\ClaimSubmission;
 use App\Support\JobAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -643,7 +645,7 @@ class BillingAdminService
             return ['success' => false, 'error' => '수금이 배정된 회차는 삭제할 수 없습니다. 수금을 먼저 재배정하세요.'];
         }
 
-        if (data_get($row->payload, 'evidenceSubmittedAt')) {
+        if (data_get($row->payload, 'evidenceSubmittedAt') || ClaimSubmission::where('pay_application_id', $row->id)->exists()) {
             return ['success' => false, 'error' => '한 번 제출된 기성 근거 묶음은 삭제할 수 없습니다.'];
         }
 
@@ -900,9 +902,14 @@ class BillingAdminService
             }
         }
 
-        $computed = $this->computeDerived($row->project_contract_id, $row->application_no, $e, $f, $rate, $released);
+        $computed = $this->submissionAmounts($row);
 
-        $submittedOn = Carbon::now()->toDateString();
+        // Preparing or downloading a packet is not proof that it was actually sent.
+        if ($error = app(ClaimSubmissionService::class)->validateSubmission($row)) {
+            return ['success' => false, 'error' => $error];
+        }
+        $submission = ClaimSubmission::where('pay_application_id', $row->id)->orderByDesc('revision')->firstOrFail();
+        $submittedOn = $submission->sent_at->toDateString();
         // 지급 기일 기본값: payment_terms 의 "Net N" 파싱, 실패 시 +45일. 수동 입력값은 존중
         $dueOn = $row->due_on?->toDateString();
         if ($dueOn === null) {
@@ -920,7 +927,7 @@ class BillingAdminService
             'earned_less_retainage' => $computed['line6'],
             'previous_certificates' => $computed['line7'],
             'amount_due' => $computed['due'],
-            'payload' => array_merge((array) $row->payload, data_get($row->payload, 'billingBasis') === 'claim_evidence'
+            'payload' => array_merge((array) $row->payload, ['claimSubmissionSentAt' => now()->toIso8601String()], data_get($row->payload, 'billingBasis') === 'claim_evidence'
                 ? ['evidenceSubmittedAt' => now()->toIso8601String()] : []),
         ]));
 
@@ -942,7 +949,7 @@ class BillingAdminService
      */
     private function revertApplication(PayApplication $row, string $from, string $to): array
     {
-        if ($to === 'draft' && data_get($row->payload, 'evidenceSubmittedAt')) {
+        if ($to === 'draft' && (data_get($row->payload, 'evidenceSubmittedAt') || data_get($row->payload, 'claimSubmissionSentAt'))) {
             return ['success' => false, 'error' => '제출한 근거 묶음은 보존됩니다. 정정은 다음 회차에서 처리하세요.'];
         }
         if ($row->status !== $from) {
@@ -981,6 +988,10 @@ class BillingAdminService
     {
         if ($row->status !== 'submitted') {
             return ['success' => false, 'error' => '제출된(submitted) 회차만 승인 기록할 수 있습니다.'];
+        }
+
+        if ($error = app(ClaimSubmissionService::class)->validateApproval($row)) {
+            return ['success' => false, 'error' => $error];
         }
 
         $approvedAmount = null;
@@ -1088,6 +1099,15 @@ class BillingAdminService
      *
      * @return array{D: float, G: float, held: float, line6: float, line7: float, due: float}
      */
+    public function submissionAmounts(PayApplication $row): array
+    {
+        return $this->computeDerived(
+            $row->project_contract_id, $row->application_no,
+            (float) $row->this_period_amount, (float) $row->stored_materials_amount,
+            (float) ($row->retainage_percent ?? 0), (float) $row->retainage_released,
+        );
+    }
+
     private function computeDerived(int $contractId, ?int $beforeNo, float $e, float $f, float $rate, float $released): array
     {
         $prevQuery = PayApplication::query()->where('project_contract_id', $contractId);

@@ -41,6 +41,7 @@ use App\Models\WorkSection;
 
 // Trusted parent chains for records with no direct company/site ownership.
 return [
+    'ClaimSubmission' => [['pay_application_id', PayApplication::class], ['project_contract_id', ProjectContract::class]],
     'PurchaseRequestEvent' => [['purchase_request_id', PurchaseRequest::class]],
     'PurchaseRequestOrder' => [['purchase_request_id', PurchaseRequest::class]],
     'PurchaseRequestOrderLine' => [['purchase_request_order_id', PurchaseRequestOrder::class], ['purchase_request_line_id', PurchaseRequestLine::class]],

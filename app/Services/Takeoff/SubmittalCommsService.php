@@ -9,8 +9,9 @@ use App\Models\SubmittalEvent;
 use App\Services\Mail\OutboundMailer;
 use App\Support\MailReady;
 use App\Support\Org;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 /**
@@ -35,7 +36,7 @@ class SubmittalCommsService
     ) {}
 
     // 첨부 한도는 MailReady::attachmentBudget() 이 정본이다 — 메일러마다 다르다.
-    // 이보다 크면 메일이 반송되므로 목록만 적고 첨부는 뺀다(아래 tooBig).
+    // 일부만 보내고 전체 제출로 표시하지 않는다. 원본·용량을 모두 확인한 뒤 발송한다.
 
     /* ─── 담당자 ────────────────────────────────────────────────────────── */
 
@@ -170,9 +171,9 @@ class SubmittalCommsService
             ? ($submittal->vendor_name ?: $submittal->vendor_email).' 에게 요청 메일을 보냈습니다. ('.$thread->ref_code.')'
             : '메일 서버가 없어 메일앱으로 엽니다 — 보내기를 누르면 발송됩니다.';
 
-        $this->log($submittal, 'request_sent', $channel, $submittal->vendor_name, $submittal->vendor_email, $subject, null, $userId, $result['messageId'] ?? null);
+        $this->log($submittal, $channel === 'email' ? 'request_sent' : 'request_draft', $channel, $submittal->vendor_name, $submittal->vendor_email, $subject, null, $userId, $result['messageId'] ?? null);
 
-        if ($submittal->status === '미착수') {
+        if ($channel === 'email' && $submittal->status === '미착수') {
             $submittal->forceFill(['status' => '작성중'])->save();
         }
 
@@ -191,29 +192,67 @@ class SubmittalCommsService
      * @param  list<int>  $documentIds
      * @return array{success: bool, linked: int, error?: string}
      */
-    public function linkDocuments(Submittal $submittal, array $documentIds, string $kind, ?int $userId = null): array
+    public function linkDocuments(Submittal $submittal, array $documentIds, string $kind, ?int $userId = null, array $decision = []): array
     {
-        $kind = $kind === 'approval' ? 'approval' : 'received';
+        if (! in_array($kind, ['received', 'approval'], true)) {
+            return ['success' => false, 'linked' => 0, 'error' => '문서 연결 종류를 확인하세요.'];
+        }
         $ids = array_values(array_unique(array_filter(array_map('intval', $documentIds))));
         if ($ids === []) {
             return ['success' => false, 'linked' => 0, 'error' => '연결할 문서를 고르세요.'];
         }
-
-        // 열람 범위 안의 문서만 — 남의 회사 문서를 연결하면 소통 기록이 남의 것을 가리킨다.
-        $documents = IntelligentDocument::query()->visibleTo(auth()->user())->whereIn('id', $ids)->get();
-        foreach ($documents as $document) {
-            $submittal->documents()->syncWithoutDetaching([$document->id => ['kind' => $kind, 'created_by' => $userId]]);
-            $this->log($submittal, $kind === 'approval' ? 'approval_linked' : 'materials_linked', 'manual',
-                null, null, null, $document->id, $userId);
+        if ($kind === 'approval') {
+            $validator = Validator::make($decision, [
+                'disposition' => 'required|in:승인,조건부승인,반려',
+                'decisionOn' => 'required|date_format:Y-m-d|before_or_equal:today',
+                'decisionNote' => 'nullable|string|max:200',
+            ]);
+            if ($validator->fails() || (in_array($decision['disposition'] ?? '', ['조건부승인', '반려'], true) && blank($decision['decisionNote'] ?? null))) {
+                return ['success' => false, 'linked' => 0, 'error' => '회신 문서의 실제 판정·회신일을 입력하세요. 조건부승인·반려는 조건 또는 사유(200자 이내)도 필요합니다.'];
+            }
         }
 
-        if ($documents->isNotEmpty() && $kind === 'approval') {
-            $submittal->forceFill(['status' => '승인', 'approved_on' => $submittal->approved_on ?: now()->toDateString()])->save();
-        } elseif ($documents->isNotEmpty() && $submittal->status === '미착수') {
-            $submittal->forceFill(['status' => '작성중'])->save();
-        }
+        return DB::transaction(function () use ($submittal, $ids, $kind, $userId, $decision): array {
+            $submittal = Submittal::query()->lockForUpdate()->findOrFail($submittal->id);
+            // Visibility alone is insufficient for an operator who manages several projects.
+            $documents = IntelligentDocument::query()->visibleTo(auth()->user())->whereIn('id', $ids)->get();
+            if ($documents->count() !== count($ids) || $documents->contains(fn ($d) => ! $this->sameProject($submittal, $d) || $d->access_level === 'private')) {
+                return ['success' => false, 'linked' => 0, 'error' => '같은 프로젝트의 접근 가능한 공유 문서만 연결할 수 있습니다. 다른 현장·프로젝트 또는 개인 문서를 확인하세요.'];
+            }
+            if ($kind === 'approval') {
+                foreach ($documents as $document) {
+                    try {
+                        $this->documentBytes($document);
+                    } catch (\Throwable $e) {
+                        return ['success' => false, 'linked' => 0, 'error' => '회신 원본을 확인할 수 없습니다: '.$document->displayTitle()];
+                    }
+                }
+            }
+            $linked = $submittal->documents()->pluck('intelligent_documents.id')->all();
+            foreach ($documents as $document) {
+                // A received file may also contain the stamped response. Keep its existing role;
+                // the immutable event records the response instead of rewriting previous links.
+                if (! in_array($document->id, $linked, true)) {
+                    $submittal->documents()->attach($document->id, ['kind' => $kind, 'created_by' => $userId]);
+                }
+                $subject = $kind === 'approval'
+                    ? $decision['disposition'].' · '.$decision['decisionOn'].' · '.trim((string) ($decision['decisionNote'] ?? ''))
+                    : null;
+                $this->log($submittal, $kind === 'approval' ? 'response_recorded' : 'materials_linked', 'manual',
+                    null, null, $subject, $document->id, $userId);
+            }
 
-        return ['success' => true, 'linked' => $documents->count()];
+            if ($kind === 'approval') {
+                $submittal->forceFill([
+                    'status' => $decision['disposition'],
+                    'approved_on' => in_array($decision['disposition'], ['승인', '조건부승인'], true) ? $decision['decisionOn'] : null,
+                ])->save();
+            } elseif ($submittal->status === '미착수') {
+                $submittal->forceFill(['status' => '작성중'])->save();
+            }
+
+            return ['success' => true, 'linked' => $documents->count(), 'status' => $submittal->status];
+        });
     }
 
     /* ─── ③ 원청에 전달 ─────────────────────────────────────────────────── */
@@ -233,8 +272,19 @@ class SubmittalCommsService
         }
 
         $subject = $this->transmitSubject($submittal);
-        [$files, $tooBig] = $this->collectAttachments($materials);
-        $html = $this->transmitHtml($submittal, $materials, $tooBig);
+        // Root cause: the old path silently omitted files, then certified the whole packet as submitted.
+        $visible = IntelligentDocument::query()->visibleTo(auth()->user())->whereIn('id', $materials->modelKeys())->pluck('id');
+        if ($materials->contains(fn ($d) => ! $visible->contains($d->id) || ! $this->sameProject($submittal, $d) || $d->access_level === 'private')) {
+            return ['success' => false, 'error' => '제출 자료에 다른 프로젝트 또는 접근할 수 없는 개인 문서가 있습니다. 연결을 확인하세요.'];
+        }
+        [$files, $problems] = $this->collectAttachments($materials);
+        if ($problems !== []) {
+            $this->log($submittal, 'transmit_preflight_failed', 'manual', $submittal->recipient_name,
+                $submittal->recipient_email, implode(' · ', $problems), null, $userId);
+
+            return ['success' => false, 'sent' => false, 'error' => '자료를 모두 첨부할 수 없어 보내지 않았습니다: '.implode(' · ', $problems)];
+        }
+        $html = $this->transmitHtml($submittal, $materials);
 
         $thread = $this->outbound->threadFor(
             $submittal, $subject, $submittal->recipient_email, $submittal->recipient_name,
@@ -273,14 +323,18 @@ class SubmittalCommsService
 
         $message = $channel === 'email'
             ? ($submittal->recipient_name ?: $submittal->recipient_email).' 에게 전달했습니다 — 자료 '.$materials->count().'건'
-                .($tooBig !== [] ? ' (용량 초과 '.count($tooBig).'건은 목록만 적었습니다)' : '').'.'
+                .'.'
             : '메일 서버가 없어 메일앱으로 엽니다. 자료 파일은 문서함에서 내려받아 직접 첨부해 주세요.';
 
-        $this->log($submittal, 'transmitted', $channel, $submittal->recipient_name, $submittal->recipient_email, $subject, null, $userId, $result['messageId'] ?? null);
-        $submittal->forceFill([
-            'status' => '제출',
-            'submitted_on' => $submittal->submitted_on ?: now()->toDateString(),
-        ])->save();
+        $this->log($submittal, $channel === 'email' ? 'transmitted' : 'transmit_draft', $channel, $submittal->recipient_name, $submittal->recipient_email, $subject, null, $userId, $result['messageId'] ?? null);
+        // Opening the mail app is a draft, not evidence that the GC received a submission.
+        if ($channel === 'email') {
+            $submittal->forceFill([
+                'status' => ($submittal->submitted_on || in_array($submittal->status, ['승인', '조건부승인', '반려'], true)) ? '재제출' : '제출',
+                'submitted_on' => now()->toDateString(),
+                'approved_on' => null,
+            ])->save();
+        }
 
         return [
             'success' => true,
@@ -349,9 +403,8 @@ class SubmittalCommsService
 
     /**
      * @param  \Illuminate\Support\Collection<int, IntelligentDocument>  $materials
-     * @param  list<string>  $tooBig
      */
-    private function transmitHtml(Submittal $submittal, $materials, array $tooBig): string
+    private function transmitHtml(Submittal $submittal, $materials): string
     {
         $e = fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         $rows = $materials->map(fn (IntelligentDocument $d): string => '<li>'.$e($d->title ?: $d->original_file_name).'</li>')->implode('');
@@ -366,9 +419,6 @@ class SubmittalCommsService
             .'<td style="border:1px solid #ddd;padding:7px 10px">#'.$e($submittal->seq).' '.$e(Str::limit($submittal->title, 160)).'</td></tr>'
             .'</table>'
             .'<p><b>첨부 자료</b></p><ul>'.$rows.'</ul>'
-            .($tooBig !== []
-                ? '<p style="color:#8c2f26;font-size:13px">다음 자료는 용량이 커서 첨부하지 못했습니다 — 별도 전달드리겠습니다: '.$e(implode(', ', $tooBig)).'</p>'
-                : '')
             .'<p style="color:#666;font-size:12px">'.$e(Org::name()).'</p>'
             .'</div>';
     }
@@ -400,30 +450,23 @@ class SubmittalCommsService
     private function collectAttachments($materials): array
     {
         $files = [];
-        $tooBig = [];
+        $problems = [];
         $total = 0;
         foreach ($materials as $document) {
             $label = (string) ($document->title ?: $document->original_file_name);
             try {
-                $disk = Storage::disk($document->disk);
-                if ($document->file_path === '' || ! $disk->exists($document->file_path)) {
-                    $tooBig[] = $label.' (원본 없음)';
-
-                    continue;
-                }
-                $data = (string) $disk->get($document->file_path);
+                $data = $this->documentBytes($document);
             } catch (\Throwable $e) {
-                report($e);
-                $tooBig[] = $label.' (읽기 실패)';
-
-                continue;
-            }
-            if ($total + strlen($data) > MailReady::attachmentBudget()) {
-                $tooBig[] = $label;
+                $problems[] = $label.' (원본 없음·읽기 실패·원본 불일치)';
 
                 continue;
             }
             $total += strlen($data);
+            if ($total > MailReady::attachmentBudget()) {
+                $problems[] = $label.' (첨부 총량 초과)';
+
+                continue;
+            }
             $files[] = [
                 'data' => $data,
                 'name' => $document->original_file_name ?: ($label.'.'.$document->extension),
@@ -431,27 +474,48 @@ class SubmittalCommsService
             ];
         }
 
-        return [$files, $tooBig];
+        return [$files, $problems];
+    }
+
+    private function sameProject(Submittal $submittal, IntelligentDocument $document): bool
+    {
+        if ((int) $document->company_id !== (int) $submittal->company_id) {
+            return false;
+        }
+
+        return $submittal->project_id
+            ? (int) $document->project_id === (int) $submittal->project_id
+                && (! $document->site_id || (int) $document->site_id === (int) $submittal->site_id)
+            : ($submittal->site_id && (int) $document->site_id === (int) $submittal->site_id && ! $document->project_id);
+    }
+
+    private function documentBytes(IntelligentDocument $document): string
+    {
+        $disk = Storage::disk($document->disk ?: config('document-intelligence.disk'));
+        if (blank($document->file_path) || ! $disk->exists($document->file_path)) {
+            throw new \RuntimeException('원본 없음');
+        }
+        $bytes = $disk->get($document->file_path);
+        if (! is_string($bytes) || $bytes === '' || (filled($document->sha256) && ! hash_equals(strtolower($document->sha256), hash('sha256', $bytes)))) {
+            throw new \RuntimeException('원본 불일치');
+        }
+
+        return $bytes;
     }
 
     /** 「자료요청」 이 만들어 둔 요청서 HTML — 있으면 메일 본문의 정본이다. */
     private function latestRequestLetter(Submittal $submittal): ?string
     {
-        if (! $submittal->csi) {
-            return null;
-        }
-        $document = IntelligentDocument::query()
-            ->where('document_number', $submittal->csi.'-REQ-'.$submittal->seq)
-            ->where('extension', 'html')
-            ->orderByDesc('id')
-            ->first();
-        if (! $document) {
+        // CSI/sequence numbers repeat in different projects. Only this row's explicit
+        // request relation identifies its letter; old unlinked letters are not guessed.
+        $document = $submittal->documents()->visibleTo(auth()->user())
+            ->wherePivot('kind', 'request')->where('extension', 'html')
+            ->orderByDesc('intelligent_documents.id')->first();
+        if (! $document || ! $this->sameProject($submittal, $document)) {
             return null;
         }
         try {
-            $disk = Storage::disk($document->disk);
-
-            return $disk->exists($document->file_path) ? (string) $disk->get($document->file_path) : null;
+            return $this->documentBytes($document);
         } catch (\Throwable) {
             return null;
         }
@@ -508,7 +572,7 @@ class SubmittalCommsService
             'channel' => $channel,
             'to_name' => $toName,
             'to_email' => $toEmail,
-            'subject' => $subject ? Str::limit($subject, 250, '') : null,
+            'subject' => $subject ? mb_substr($subject, 0, 250) : null,
             'intelligent_document_id' => $documentId,
             'mail_message_id' => $mailMessageId,
             'created_by' => $userId,

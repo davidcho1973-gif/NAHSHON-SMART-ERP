@@ -1,0 +1,314 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\ClaimSubmission;
+use App\Models\Company;
+use App\Models\IntelligentDocument;
+use App\Models\PayApplication;
+use App\Models\Project;
+use App\Models\ProjectContract;
+use App\Models\ProjectContractDocument;
+use App\Models\Site;
+use App\Models\User;
+use App\Services\Admin\BillingAdminService;
+use App\Services\Finance\ClaimSubmissionService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Tests\TestCase;
+use ZipArchive;
+
+class ClaimSubmissionTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private ProjectContract $contract;
+    private PayApplication $application;
+    private IntelligentDocument $document;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['document-intelligence.disk' => 'local']);
+        Storage::fake('local');
+        $this->travelTo(now()->setDate(2026, 10, 11)->setTime(12, 0));
+        $this->actingAs(User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']));
+        $company = Company::create(['code' => 'SUBMISSION', 'name' => 'Submission Co', 'status' => 'active']);
+        $site = Site::create(['company_id' => $company->id, 'code' => 'PACKET', 'name' => 'Packet site', 'timezone' => 'UTC', 'status' => 'active']);
+        $project = Project::create(['company_id' => $company->id, 'site_id' => $site->id, 'project_code' => 'PACKET-1', 'name' => 'Packet project', 'construction_type' => 'equipment_setting']);
+        $this->contract = ProjectContract::create([
+            'company_id' => $company->id, 'site_id' => $site->id, 'project_id' => $project->id,
+            'title' => 'Short project contract', 'contract_number' => 'C-101', 'direction' => 'receivable',
+            'status' => 'active', 'original_amount' => 10000, 'retainage_percent' => 0,
+            'payload' => ['claim_profile' => [
+                'version' => 1, 'confirmed_at' => now()->toIso8601String(), 'confirmed_by' => auth()->id(),
+                'basis_note' => 'Signed contract payment exhibit, page 3.', 'stored_materials' => false,
+                'submission_day' => 25, 'preparation_days' => 7, 'template_label' => 'Owner prescribed form',
+                'requirements' => [['key' => 'work_proof', 'title' => 'Measured work proof', 'stage' => 'each_claim', 'required' => true]],
+            ]],
+        ]);
+        $result = app(BillingAdminService::class)->saveBilling([
+            'projectContractId' => $this->contract->id, 'periodStart' => '2026-10-01',
+            'periodEnd' => '2026-10-11', 'thisPeriodAmount' => 100,
+        ]);
+        $this->assertTrue($result['success'], $result['error'] ?? '');
+        $this->application = PayApplication::findOrFail($result['id']);
+        $this->document = $this->document();
+    }
+
+    private function service(): ClaimSubmissionService
+    {
+        return app(ClaimSubmissionService::class);
+    }
+
+    private function document(array $extra = [], string $contents = 'Original measured work proof'): IntelligentDocument
+    {
+        $uuid = (string) Str::uuid();
+        $path = 'proofs/'.$uuid.'.txt';
+        Storage::disk('local')->put($path, $contents);
+        return IntelligentDocument::create(array_merge([
+            'uuid' => $uuid, 'company_id' => $this->contract->company_id,
+            'site_id' => $this->contract->site_id, 'project_id' => $this->contract->project_id,
+            'project_contract_id' => $this->contract->id, 'uploaded_by' => auth()->id(),
+            'disk' => 'local', 'file_path' => $path, 'original_file_name' => 'proof.txt',
+            'stored_file_name' => $uuid.'.txt', 'mime_type' => 'text/plain', 'extension' => 'txt',
+            'file_size' => strlen($contents), 'sha256' => hash('sha256', $contents), 'title' => 'Proof',
+            'received_at' => now(), 'ai_status' => 'ready', 'access_level' => 'shared', 'status' => 'approved',
+        ], $extra));
+    }
+
+    private function select(?IntelligentDocument $document = null): array
+    {
+        return $this->service()->saveEvidence([
+            'application_id' => $this->application->id,
+            'evidence' => ['work_proof' => [['type' => 'document', 'id' => ($document ?? $this->document)->id]]],
+        ]);
+    }
+
+    private function prepared(): ClaimSubmission
+    {
+        $this->assertTrue($this->select()['success']);
+        $result = $this->service()->prepare($this->application->id);
+        $this->assertTrue($result['success'], $result['error'] ?? '');
+        return ClaimSubmission::findOrFail($result['submission']['id']);
+    }
+
+    private function transition(ClaimSubmission $submission, string $status, array $extra = []): array
+    {
+        return $this->service()->transition(array_merge([
+            'submission_id' => $submission->id, 'status' => $status,
+            'occurred_at' => '2026-10-11', 'reference' => 'Portal reference '.$status,
+            'response_document' => ['type' => 'document', 'id' => $this->document->id],
+        ], $extra));
+    }
+
+    public function test_missing_unconfirmed_and_expired_requirements_never_produce_a_ready_packet(): void
+    {
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+        $this->assertTrue($this->select()['success']);
+        $payload = $this->contract->payload;
+        $payload['claim_profile']['confirmed_at'] = null;
+        $this->contract->update(['payload' => $payload]);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+        $payload['claim_profile']['confirmed_at'] = now()->toIso8601String();
+        $this->contract->update(['payload' => $payload]);
+        $this->document->update(['expires_on' => '2026-10-10']);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+        $this->assertSame(0, ClaimSubmission::count());
+    }
+
+    public function test_private_other_contract_and_foreign_project_sources_are_not_exportable(): void
+    {
+        $private = $this->document(['access_level' => 'private', 'owner_user_id' => auth()->id()]);
+        $this->assertFalse($this->select($private)['success'], 'Even the owner must explicitly share a private document before exporting it.');
+        $other = ProjectContract::create([
+            'company_id' => $this->contract->company_id, 'site_id' => $this->contract->site_id,
+            'title' => 'Other contract', 'direction' => 'receivable', 'status' => 'active',
+        ]);
+        $this->assertFalse($this->select($this->document(['project_contract_id' => $other->id]))['success']);
+        $project = Project::create([
+            'company_id' => $this->contract->company_id, 'site_id' => $this->contract->site_id,
+            'project_code' => 'FOREIGN', 'name' => 'Foreign project', 'construction_type' => 'equipment_setting',
+        ]);
+        $this->assertFalse($this->select($this->document(['project_id' => $project->id]))['success']);
+        $values = array_column($this->service()->workspace($this->application->id)['sourceOptions'], 'value');
+        $this->assertNotContains('document:'.$private->id, $values);
+    }
+
+    public function test_an_approved_corporate_file_requires_an_explicit_contract_link(): void
+    {
+        $shared = $this->document(['site_id' => null, 'project_id' => null]);
+        $this->assertTrue($this->select($shared)['success']);
+        $shared->update(['project_contract_id' => null]);
+        $this->assertFalse($this->select($shared)['success']);
+    }
+
+    public function test_prepared_zip_contains_originals_and_summary_but_is_not_sent_or_approved(): void
+    {
+        $submission = $this->prepared();
+        $path = Storage::disk('local')->path($submission->file_path);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($path));
+        $this->assertStringContainsString('100.00', $zip->getFromName('claim-summary.html'));
+        $manifest = json_decode($zip->getFromName('manifest.json'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('Original measured work proof', $zip->getFromName($manifest['documents'][0]['file']));
+        $zip->close();
+        $this->service()->getDownload($submission->id);
+        $this->assertSame('draft', $this->application->fresh()->status);
+        $this->assertSame('prepared', $submission->fresh()->status);
+        $this->assertNull($submission->fresh()->sent_at);
+        $direct = app(BillingAdminService::class)->setBillingStatus(['id' => $this->application->id, 'action' => 'submit']);
+        $this->assertFalse($direct['success']);
+        $this->assertFalse($this->transition($submission, 'accepted')['success']);
+    }
+
+    public function test_changed_source_rules_or_amounts_require_a_new_prepared_revision(): void
+    {
+        $submission = $this->prepared();
+        Storage::disk('local')->put($this->document->file_path, 'Replacement bytes');
+        $this->assertFalse($this->transition($submission, 'sent')['success']);
+        $this->assertSame('prepared', $submission->fresh()->status);
+        Storage::disk('local')->put($this->document->file_path, 'Original measured work proof');
+        $payload = $this->contract->payload;
+        $payload['claim_profile']['version'] = 2;
+        $this->contract->update(['payload' => $payload]);
+        $this->assertFalse($this->transition($submission, 'sent')['success']);
+        $payload['claim_profile']['version'] = 1;
+        $this->contract->update(['payload' => $payload]);
+        $this->application->update(['this_period_amount' => 101]);
+        $this->assertFalse($this->transition($submission, 'sent')['success']);
+        $this->assertSame('draft', $this->application->fresh()->status);
+    }
+
+    public function test_failed_financial_validation_rolls_back_sent_state_and_history(): void
+    {
+        $this->application->update(['this_period_amount' => 0]);
+        $submission = $this->prepared();
+        $result = $this->transition($submission, 'sent');
+        $this->assertFalse($result['success']);
+        $this->assertSame('prepared', $submission->fresh()->status);
+        $this->assertCount(1, $submission->fresh()->history);
+        $this->assertNull($submission->fresh()->sent_at);
+        $this->assertSame('draft', $this->application->fresh()->status);
+    }
+
+    public function test_receipt_and_acceptance_require_real_response_files_and_financial_approval_is_separate(): void
+    {
+        $submission = $this->prepared();
+        $this->assertTrue($this->transition($submission, 'sent')['success']);
+        $this->assertSame('submitted', $this->application->fresh()->status);
+        $this->assertFalse($this->transition($submission, 'received', ['response_document' => null])['success']);
+        $this->assertTrue($this->transition($submission, 'received')['success']);
+        $this->assertFalse(app(BillingAdminService::class)->setBillingStatus(['id' => $this->application->id, 'action' => 'approve'])['success']);
+        $this->assertTrue($this->transition($submission, 'accepted')['success']);
+        $this->assertSame('submitted', $this->application->fresh()->status);
+        // Approval retains the received original even if the mutable source is later replaced.
+        Storage::disk('local')->put($this->document->file_path, 'Later document replacement');
+        $approval = app(BillingAdminService::class)->setBillingStatus(['id' => $this->application->id, 'action' => 'approve', 'approvedAmount' => 90]);
+        $this->assertTrue($approval['success'], $approval['error'] ?? '');
+        $this->assertSame('approved', $this->application->fresh()->status);
+        $this->assertSame('100.00', $this->application->fresh()->amount_due);
+        $this->assertSame('90.00', $this->application->fresh()->approved_amount);
+    }
+
+    public function test_returned_packet_gets_a_new_revision_without_rewriting_old_bytes_or_claim_amounts(): void
+    {
+        $first = $this->prepared();
+        $originalZip = Storage::disk('local')->get($first->file_path);
+        $this->assertTrue($this->transition($first, 'sent')['success']);
+        $this->assertTrue($this->transition($first, 'changes_requested', ['note' => 'Replace the signed inspection sheet.'])['success']);
+        $replacement = $this->document([], 'Corrected inspection sheet');
+        $this->assertTrue($this->select($replacement)['success']);
+        $result = $this->service()->prepare($this->application->id);
+        $this->assertTrue($result['success'], $result['error'] ?? '');
+        $second = ClaimSubmission::findOrFail($result['submission']['id']);
+        $this->assertSame(2, $second->revision);
+        $this->assertSame('changes_requested', $first->fresh()->status);
+        $this->assertSame($originalZip, Storage::disk('local')->get($first->file_path));
+        $this->assertSame($first->application_snapshot, $second->application_snapshot);
+        $this->assertFalse($this->transition($first, 'accepted')['success']);
+        $this->assertTrue($this->transition($second, 'sent')['success']);
+        $this->assertSame('100.00', $this->application->fresh()->amount_due);
+    }
+
+    public function test_prepare_and_sent_use_the_site_day_near_midnight(): void
+    {
+        $this->contract->site->update(['timezone' => 'America/New_York']);
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-12T02:00:00Z'));
+        $submission = $this->prepared();
+        $this->assertTrue($this->transition($submission, 'sent', ['occurred_at' => '2026-10-11'])['success']);
+    }
+
+    public function test_out_of_scope_actor_cannot_read_workspace_or_download_archives(): void
+    {
+        $submission = $this->prepared();
+        $otherSite = Site::create(['code' => 'OTHER-PACKET', 'name' => 'Other site', 'status' => 'active']);
+        $this->actingAs(User::factory()->create([
+            'access_role' => 'site_manager', 'access_scope' => 'site', 'allowed_site_id' => $otherSite->id, 'account_status' => 'active',
+        ]));
+        $this->assertFalse($this->service()->workspace($this->application->id)['success']);
+        $this->expectException(InvalidArgumentException::class);
+        $this->service()->getDownload($submission->id);
+    }
+
+    public function test_read_only_billing_user_cannot_prepare_or_record_external_acceptance(): void
+    {
+        $submission = $this->prepared();
+        $this->actingAs(User::factory()->create(['access_role' => 'payroll', 'access_scope' => 'all_sites', 'account_status' => 'active']));
+        $this->assertTrue($this->service()->workspace($this->application->id)['success']);
+        $this->assertFalse($this->select()['success']);
+        $this->assertFalse($this->transition($submission, 'sent')['success']);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+    }
+
+    public function test_final_requirements_activate_only_for_final_and_retainage_release_claims(): void
+    {
+        $payload = $this->contract->payload;
+        $payload['claim_profile']['requirements'][] = ['key' => 'handover', 'title' => 'Handover acceptance', 'stage' => 'final', 'required' => true];
+        $this->contract->update(['payload' => $payload]);
+        $this->assertTrue($this->select()['success']);
+        $this->assertTrue($this->service()->prepare($this->application->id)['success']);
+        $this->application->update(['type' => 'final']);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+        $this->application->update(['type' => 'retainage_release']);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+    }
+
+    public function test_once_evidence_is_suggested_for_the_next_claim_but_revalidated_for_expiry(): void
+    {
+        $payload = $this->contract->payload;
+        $payload['claim_profile']['requirements'][0]['stage'] = 'once';
+        $this->contract->update(['payload' => $payload]);
+        $first = $this->prepared();
+        $this->assertTrue($this->transition($first, 'sent')['success']);
+        $created = app(BillingAdminService::class)->saveBilling([
+            'projectContractId' => $this->contract->id, 'periodEnd' => '2026-10-11', 'thisPeriodAmount' => 50,
+        ]);
+        $this->assertTrue($created['success']);
+        $workspace = $this->service()->workspace($created['id']);
+        $this->assertSame($this->document->id, $workspace['draftEvidence']['work_proof'][0]['id']);
+        $this->document->update(['expires_on' => '2026-10-10']);
+        $this->assertFalse($this->service()->prepare($created['id'])['success']);
+        $this->assertSame(1, ClaimSubmission::count());
+    }
+
+    public function test_corrupt_archive_is_never_offered_as_a_successful_download(): void
+    {
+        $submission = $this->prepared();
+        Storage::disk('local')->put($submission->file_path, 'corrupt archive');
+        $this->expectException(InvalidArgumentException::class);
+        $this->service()->getDownload($submission->id);
+    }
+
+    public function test_legacy_completed_records_remain_readable_without_creating_submission_facts(): void
+    {
+        $this->application->update(['status' => 'paid', 'approved_amount' => 100, 'paid_at' => now()]);
+        $workspace = $this->service()->workspace($this->application->id);
+        $this->assertTrue($workspace['success']);
+        $this->assertSame([], $workspace['submissions']);
+        $this->assertFalse($this->service()->prepare($this->application->id)['success']);
+        $this->assertSame('paid', $this->application->fresh()->status);
+    }
+}

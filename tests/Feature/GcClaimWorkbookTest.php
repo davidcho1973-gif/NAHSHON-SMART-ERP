@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\WorkSection;
 use App\Services\Finance\ClaimEvidenceService;
 use App\Services\Finance\ContractChangeService;
+use App\Services\Finance\ContractSheetImportService;
 use App\Services\Finance\GcClaimWorkbookService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -55,6 +56,19 @@ class GcClaimWorkbookTest extends TestCase
         (require database_path('migrations/2026_09_25_000101_seed_703k_work_sections.php'))->up();
         (require database_path('migrations/2026_09_25_000105_load_703k_contract_lines.php'))->up();
         $this->contract = ProjectContract::where('site_id', $site->id)->sole();
+
+        // This fixture explicitly represents an agreed stored-material entitlement.
+        $this->contract->update(['payload' => array_merge($this->contract->payload ?? [], [
+            'claim_profile' => ['version' => 1, 'confirmed_at' => now()->toIso8601String(), 'confirmed_by' => auth()->id(),
+                'basis_note' => 'Signed test contract permits stored materials', 'stored_materials' => true,
+                'requirements' => [], 'submission_day' => 25, 'preparation_days' => 7, 'template_label' => '703K'],
+        ])]);
+        $sourceId = ContractBoqLine::where('project_contract_id', $this->contract->id)->value('source_document_id');
+        $import = app(ContractSheetImportService::class)->import([
+            'documentId' => $sourceId, 'contractId' => $this->contract->id, 'confirmContract' => true,
+        ]);
+        $this->assertTrue($import['success'], $import['error'] ?? '');
+
 
         Storage::disk('local')->put('proof/photo.jpg', 'photo-bytes');
         $this->proof = IntelligentDocument::create(['uuid' => (string) Str::uuid(), 'source' => 'dropzone', 'disk' => 'local', 'file_path' => 'proof/photo.jpg',

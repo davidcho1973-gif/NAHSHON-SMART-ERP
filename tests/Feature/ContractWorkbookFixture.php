@@ -28,6 +28,15 @@ trait ContractWorkbookFixture
         $this->actingAs(User::factory()->create(['access_role' => 'admin', 'access_scope' => 'all_sites', 'account_status' => 'active']));
     }
 
+    /** This fixture contract expressly permits stored materials; other contracts must opt in. */
+    private function confirmedClaimProfile(bool $stored = true): array
+    {
+        return ['version' => 1, 'confirmed_at' => now()->toIso8601String(), 'confirmed_by' => auth()->id(),
+            'basis_note' => 'Test contract payment clause: stored materials permitted only when selected.',
+            'stored_materials' => $stored, 'submission_day' => 25, 'preparation_days' => 7,
+            'template_label' => 'Fixture GC v1', 'requirements' => []];
+    }
+
     /** 원청 기성표와 같은 모양: 요약표가 본문의 섹션 제목·소계를 수식으로 가리킨다. */
     private function workbook(array $override = []): IntelligentDocument
     {

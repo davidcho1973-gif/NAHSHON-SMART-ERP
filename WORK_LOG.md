@@ -1,5 +1,18 @@
 # WORK LOG
 
+## CODEX — 2026-10-11 Claim preparation and documented submission reform
+
+The commercial workflow now centers on each receivable contract's confirmed claim conditions and original supporting documents. New/unconfirmed imports no longer inherit the 703K stored-material assumption. Existing accepted BOQ and financial history remain unchanged. Contract document replacement requires the same document identity or an explicit predecessor.
+
+Added claim submission revisions with immutable ZIP originals, a manifest, profile/amount snapshots, and documented sent/received/changes-requested/accepted transitions. Downloading/preparing a packet does not transmit it. Source files are scoped, checked, and copied; approval requires the external response rather than a generic status change. Financial approval and receipts remain on the existing billing ledger. The worklist shows next actions and separates currencies.
+
+Submittal request lookup is project-bound; incomplete attachments stop transmission; mailto only records a draft. Approval/rejection records require the original response and disposition. Repeated specification extraction preserves existing requirements and approval history.
+
+Relevant PHP tests and JS workflow tests were extended. Local command execution is unavailable (helper setup failure), so release verification must use the existing GitHub full PHP/PostgreSQL and JS CI, followed by staging and production deployment/build checks. Do not treat this log as deployment confirmation.
+
+Usage: docs/CLAIM_WORKFLOW_KO.md.
+# WORK LOG
+
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 
 ## CODEX — 2026-10-06 Receipt continuation pages
