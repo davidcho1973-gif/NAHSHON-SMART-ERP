@@ -6,6 +6,7 @@ use App\Models\IntelligentDocument;
 use App\Models\Submittal;
 use App\Services\Ocr\OcrEngine;
 use App\Support\AiMeter;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -73,35 +74,43 @@ class SubmittalRequestService
         $path = "document-intelligence/inbox/{$uuid}/{$name}";
         $disk->put($path, $html);
 
-        return IntelligentDocument::create([
-            'uuid' => $uuid,
-            'disk' => (string) config('document-intelligence.disk'),
-            'company_id' => $submittal->company_id,
-            'site_id' => $submittal->site_id,
-            'project_id' => $submittal->project_id,
-            'file_path' => $path,
-            'original_file_name' => $name,
-            'stored_file_name' => $name,
-            'mime_type' => 'text/html',
-            'extension' => 'html',
-            'file_size' => strlen($html),
-            'sha256' => hash('sha256', $html),
-            'title' => trim(($submittal->csi ? "[{$submittal->csi}] " : '').($submittal->section ?: '제출물').' — 자료 요청서'),
-            // 우리가 만든 문서라 AI 분류를 다시 돌릴 이유가 없다. 분류를 여기서 확정한다.
-            'category' => 'rfi_submittal',
-            'document_type' => 'transmittal',
-            'direction' => 'outgoing',
-            'discipline' => $submittal->section,
-            'document_number' => $submittal->csi ? $submittal->csi.'-REQ-'.$submittal->seq : null,
-            'recipients' => $vendorName ? [$vendorName] : [],
-            'summary' => '제출물 #'.$submittal->seq.' 관련 업체 자료 요청서'.($submittal->gate ? ' (정지 조항 — 승인 전 진행 불가)' : ''),
-            'ai_status' => 'ready',
-            'ai_engine' => $this->engine->name(),
-            'ai_confidence' => 95,
-            'received_at' => now(),
-            'analyzed_at' => now(),
-            'document_date' => now()->toDateString(),
-        ]);
+        $document = DB::transaction(function () use ($submittal, $uuid, $path, $name, $html, $vendorName): IntelligentDocument {
+            $document = IntelligentDocument::create([
+                'uuid' => $uuid,
+                'disk' => (string) config('document-intelligence.disk'),
+                'company_id' => $submittal->company_id,
+                'site_id' => $submittal->site_id,
+                'project_id' => $submittal->project_id,
+                'file_path' => $path,
+                'original_file_name' => $name,
+                'stored_file_name' => $name,
+                'mime_type' => 'text/html',
+                'extension' => 'html',
+                'file_size' => strlen($html),
+                'sha256' => hash('sha256', $html),
+                'title' => trim(($submittal->csi ? "[{$submittal->csi}] " : '').($submittal->section ?: '제출물').' — 자료 요청서'),
+                // 우리가 만든 문서라 AI 분류를 다시 돌릴 이유가 없다. 분류를 여기서 확정한다.
+                'category' => 'rfi_submittal',
+                'document_type' => 'transmittal',
+                'direction' => 'outgoing',
+                'discipline' => $submittal->section,
+                'document_number' => $submittal->csi ? $submittal->csi.'-REQ-'.$submittal->seq : null,
+                'recipients' => $vendorName ? [$vendorName] : [],
+                'summary' => '제출물 #'.$submittal->seq.' 관련 업체 자료 요청서'.($submittal->gate ? ' (정지 조항 — 승인 전 진행 불가)' : ''),
+                'ai_status' => 'ready',
+                'ai_engine' => $this->engine->name(),
+                'ai_confidence' => 95,
+                'received_at' => now(),
+                'analyzed_at' => now(),
+                'document_date' => now()->toDateString(),
+            ]);
+            // A request is owned by this submittal; CSI/sequence text is only a label.
+            $submittal->documents()->attach($document->id, ['kind' => 'request', 'created_by' => auth()->id()]);
+
+            return $document;
+        });
+
+        return $document;
     }
 
     /**

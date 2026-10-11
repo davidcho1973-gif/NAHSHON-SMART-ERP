@@ -36,7 +36,7 @@
   // 청구 원장은 센트 단위가 유의미하다 — 정수면 정수로, 소수가 있으면 2자리로.
   function money(v, cur) {
     if (v === null || v === undefined || v === '') return '';
-    return (cur === 'KRW' ? '₩' : '$') + Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return (cur === 'KRW' ? '₩' : cur === 'USD' || !cur ? '$' : cur + ' ') + Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   }
 
   function koLabel(label) {
@@ -84,90 +84,38 @@
   // ── 화면 1: 계약 목록 ─────────────────────────────────────────────────
 
   function listView() {
-    var u = ui();
-    var rows = state.rows;
-
-    var totalOutstanding = rows.reduce(function (s, r) { return s + (r.outstanding || 0); }, 0);
-    var unassigned = rows.reduce(function (s, r) { return s + (r.unassignedCount || 0); }, 0);
-    var notes = [rows.length + '건'];
-    if (totalOutstanding) notes.push('미수금 ' + money(totalOutstanding, 'USD'));
-    if (unassigned) notes.push('매칭 대기 입금 ' + unassigned + '건');
-
-    return u.pageHeader(
-      '기성 청구 · 수금',
-      '수주 계약별로 얼마를 청구했고 얼마가 들어왔는지 봅니다. 계약을 누르면 회차·수금 원장이 열립니다. — ' + notes.join(' · '),
-      ''
-    ) + u.table({
-      id: 'bl-tbl',
-      searchPlaceholder: '계약명 · 계약번호 · 상대방 검색',
-      emptyText: '수주(receivable) 계약이 없습니다. 계약 관리에서 수주 계약을 먼저 등록하세요.',
-      columns: [
-        {
-          key: 'title', label: '계약', width: '230px',
-          render: function (r) {
-            return '<div onclick="window.AdminBilling.openDetail(' + r.id + ')" style="cursor:pointer">' +
-              '<div style="font-weight:600">' + u.esc(r.title) + '</div>' +
-              '<div style="font-size:11px;color:var(--text-tertiary)">' +
-              u.esc(r.contractNumber || r.internalReference || '') +
-              (r.counterparty ? ' · ' + u.esc(r.counterparty) : '') +
-              (r.site ? ' · ' + u.esc(r.site) : '') + '</div></div>';
-          },
-        },
-        {
-          key: 'currentAmount', label: '계약액', align: 'right', width: '110px',
-          render: function (r) { return u.esc(money(r.currentAmount, r.currency)); },
-        },
-        {
-          key: 'cumulative', label: '청구 누계 (G)', align: 'right', width: '120px',
-          render: function (r) {
-            if (!r.applicationCount) return '<span style="color:var(--text-tertiary)">—</span>';
-            var pct = (r.currentAmount && r.cumulative) ? Math.round(r.cumulative / r.currentAmount * 100) : null;
-            return '<div>' + u.esc(money(r.cumulative, r.currency)) + '</div>' +
-              (pct !== null ? '<div style="font-size:10px;color:var(--text-tertiary)">' + pct + '%</div>' : '');
-          },
-        },
-        {
-          key: 'receivedTotal', label: '수금 누계', align: 'right', width: '110px',
-          render: function (r) { return r.receivedTotal ? u.esc(money(r.receivedTotal, r.currency)) : '<span style="color:var(--text-tertiary)">—</span>'; },
-        },
-        {
-          key: 'outstanding', label: '미수금', align: 'right', width: '110px',
-          render: function (r) {
-            if (!r.applicationCount) return '<span style="color:var(--text-tertiary)">—</span>';
-            var over = r.outstanding > 0;
-            return '<span style="' + (over ? 'color:var(--status-warning);font-weight:700' : '') + '">' +
-              u.esc(money(r.outstanding, r.currency)) + '</span>';
-          },
-        },
-        {
-          key: 'retainageHeld', label: '유보금', align: 'right', width: '100px',
-          render: function (r) { return r.retainageHeld ? u.esc(money(r.retainageHeld, r.currency)) : '<span style="color:var(--text-tertiary)">—</span>'; },
-        },
-        {
-          key: 'balanceToFinish', label: 'Balance to Finish', align: 'right', width: '120px',
-          render: function (r) { return r.balanceToFinish === null ? '<span style="color:var(--text-tertiary)">—</span>' : u.esc(money(r.balanceToFinish, r.currency)); },
-        },
-        {
-          key: 'latestStatus', label: '최근 회차', width: '130px',
-          render: function (r) {
-            if (!r.applicationCount) return '<span style="color:var(--text-tertiary)">회차 없음</span>';
-            return '<div style="font-size:12px">#' + r.latestApplicationNo + ' ' + statusBadge(r.latestStatus, r.latestStatusLabel) + '</div>' +
-              (r.disputedDeductions ? '<div style="margin-top:3px">' + ui().badge('분쟁 ' + money(r.disputedDeductions, r.currency), 'warn') + '</div>' : '');
-          },
-        },
-        {
-          key: 'unassignedCount', label: '매칭 대기', align: 'right', width: '90px',
-          render: function (r) {
-            return r.unassignedCount ? ui().badge('입금 ' + r.unassignedCount + '건', 'warn') : '<span style="color:var(--text-tertiary)">—</span>';
-          },
-        },
-        {
-          key: 'act', label: '', align: 'right', width: '90px',
-          render: function (r) { return u.rowButton('원장 열기', 'window.AdminBilling.openDetail(' + r.id + ')'); },
-        },
-      ],
-      rows: rows,
+    var u = ui(), rows = state.rows;
+    var notes = [rows.length + '개 계약'];
+    var totals = {};
+    rows.forEach(function (r) {
+      var code = r.currency || 'USD';
+      totals[code] = (totals[code] || 0) + Number(r.outstanding || 0);
     });
+    Object.keys(totals).forEach(function (code) {
+      if (totals[code]) notes.push('미수금 ' + money(totals[code], code));
+    });
+    return u.pageHeader('기성 준비 · 제출 · 수금', notes.join(' · '), '') +
+      u.table({
+        id: 'bl-tbl', searchPlaceholder: '현장 · 계약 · 다음 할 일 검색',
+        emptyText: '계약 관리에서 수주 계약과 청구조건을 등록하세요.',
+        columns: [
+          { key: 'title', label: '현장 / 계약', render: function (r) {
+            return '<b>' + u.esc(r.site || '현장 미지정') + '</b><div>' + u.esc(r.title) + '</div><small>' + u.esc(r.counterparty || '') + '</small>';
+          }},
+          { key: 'nextAction', label: '다음 할 일', render: function (r) {
+            return u.badge(r.nextAction || '회차 확인', r.attention ? 'warn' : 'muted') +
+              (r.latestApplicationNo ? '<div style="margin-top:4px">회차 #' + u.esc(r.latestApplicationNo) + (r.submissionRevision ? ' · 제출본 v' + u.esc(r.submissionRevision) : '') + '</div>' : '');
+          }},
+          { key: 'submissionDue', label: '제출일 / 준비 시작', render: function (r) {
+            return u.esc(r.submissionDue || '계약별 지정') + '<div><small>' + u.esc(r.preparationOn || '') + '</small></div>';
+          }},
+          { key: 'outstanding', label: '미수금', align: 'right', render: function (r) { return u.esc(money(r.outstanding, r.currency)); }},
+          { key: 'retainageHeld', label: '유보금', align: 'right', render: function (r) { return u.esc(money(r.retainageHeld, r.currency)); }},
+          { key: 'act', label: '', render: function (r) {
+            return u.rowButton('열기', 'window.AdminBilling.openDetail(' + r.id + ')');
+          }}
+        ], rows: rows
+      });
   }
 
   // ── 화면 2: 계약 상세 (회차 · 수금 원장) ──────────────────────────────
@@ -204,8 +152,7 @@
 
   function actionsCell(r) {
     var u = ui();
-    var evidenceActions = r.evidenceBased ? (window.AdminSectionDrawings ? u.rowButton('원청 양식 엑셀', 'window.AdminSectionDrawings.gcDownload(' + r.id + ')') + ' ' : '') + u.rowButton('근거 묶음', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' +
-      u.rowButton('근거 JSON', 'window.AdminClaimEvidence.packet(' + r.id + ',true)') + ' ' : '';
+    var evidenceActions = (r.evidenceBased && window.AdminSectionDrawings ? u.rowButton('양식 엑셀 초안', 'window.AdminSectionDrawings.gcDownload(' + r.id + ')') + ' ' : '') + u.rowButton('제출 서류', 'window.AdminBilling.openSubmission(' + r.id + ')') + ' ' + (r.evidenceBased ? u.rowButton('실적 근거', 'window.AdminClaimEvidence.packet(' + r.id + ')') + ' ' : '');
     if (!state.canManage) {
       return evidenceActions + (r.receipts && r.receipts.length ? u.rowButton('입금 ' + r.receipts.length, 'window.AdminBilling.toggleReceipts(' + r.id + ')') : '');
     }
@@ -215,7 +162,6 @@
     }
     if (r.status === 'draft') {
       b.push(r.evidenceBased ? u.rowButton('근거 갱신', 'window.AdminClaimEvidence.open(' + state.contractId + ')') : u.rowButton('수정', 'window.AdminBilling.openForm(' + r.id + ')'));
-      b.push(u.rowButton('제출', 'window.AdminBilling.submitApp(' + r.id + ')'));
       b.push(u.rowButton('삭제', 'window.AdminBilling.removeApp(' + r.id + ')', 'danger'));
     } else if (r.status === 'submitted') {
       b.push(u.rowButton('승인 기록', 'window.AdminBilling.openApprove(' + r.id + ')'));
@@ -379,7 +325,6 @@
     var actions = u.primaryButton('기성 근거 대장', 'window.AdminClaimEvidence.open(' + c.id + ')', 'list-checks');
     if (state.canManage) {
       actions += u.rowButton('새 회차', 'window.AdminBilling.openForm()') +
-        u.rowButton('공정 추정 초안', 'window.AdminBilling.draftFromProgress()') +
         u.rowButton('수금 입력 (미배정 포함)', 'window.AdminBilling.openReceipt()');
     }
 
@@ -389,7 +334,7 @@
       u.pageHeader(
         '기성 원장 — ' + c.title,
         (c.counterparty ? c.counterparty + ' · ' : '') + (c.contractNumber || c.internalReference || '') +
-        ' · 월말에 회차를 만들어 제출하고, GC 승인·입금을 그대로 기록하면 잔액은 서버가 맞춥니다.',
+        ' · 확인 실적 → 제출 서류 → 원청 회신 → 수금',
         actions
       ) +
       summaryStrip(c) +
@@ -407,7 +352,9 @@
 
   function draw() {
     var u = ui();
-    if (state.view === 'detail' && state.detail) {
+    if (state.view === 'submission' && state.submission) {
+      paint(submissionView());
+    } else if (state.view === 'detail' && state.detail) {
       paint(detailView());
       u.bindSearch('bd-tbl');
     } else {
@@ -417,7 +364,7 @@
   }
 
   function reloadList() {
-    return call('api_getBillingContracts', [{}]).then(function (res) {
+    return call('api_getClaimWorklist', [{}]).then(function (res) {
       if (res.success === false) {
         paint('<div style="padding:40px;text-align:center;color:var(--text-secondary)">' +
           ui().esc(res.error || '기성 현황을 불러오지 못했습니다.') + '</div>');
@@ -481,7 +428,7 @@
   // gsRun 도 쓰기 성공 시 캐시를 비우지만, 규약을 화면 쪽에서도 명시해 둔다.
   function afterWrite() {
     global.apiCache = {};
-    return state.view === 'detail' ? reloadDetail() : reloadList();
+    return (state.view === 'detail' || state.view === 'submission') ? reloadDetail() : reloadList();
   }
 
   function findApp(id) {
@@ -570,27 +517,7 @@
     }).catch(function (e) { u.toast(e.message || '선택지를 불러오지 못했습니다.', 'error'); });
   }
 
-  function submitApp(id) {
-    var u = ui();
-    var r = findApp(id);
-    u.confirmDanger({
-      title: '회차를 제출할까요?',
-      body: '회차 #' + (r ? r.applicationNo : id) + ' 을(를) 제출합니다. 제출 시점에 전회 누계(D)·순청구액이 최종 확정되고, ' +
-        '이후 금액 수정은 다음 회차 조정으로만 가능합니다.',
-      confirmLabel: '제출',
-    }).then(function (ok) {
-      if (!ok) return;
-      return call('api_setBillingStatus', [{ id: id, action: 'submit' }]).then(function (res) {
-        if (res.success === false) {
-          u.toast(res.error || (res.errors && Object.values(res.errors)[0]) || '제출하지 못했습니다.', 'error');
-          return;
-        }
-        u.toast('제출했습니다. ' + computedSummary(res.computed, cur()));
-        notifyAlerts(res.alerts);
-        return afterWrite();
-      });
-    }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
-  }
+  function submitApp(id) { return openSubmission(id); }
 
   function withdrawApp(id) {
     var u = ui();
@@ -812,6 +739,128 @@
     }).catch(function (e) { u.toast(e.message || '오류가 발생했습니다.', 'error'); });
   }
 
+
+  var submissionLabels = { prepared: '파일 준비', sent: '송부 기록', received: '원청 접수', changes_requested: '보완 요청', accepted: '원청 수리' };
+
+  function checkedResult(res) {
+    if (res.success === false) throw new Error(res.error || Object.values(res.errors || {}).flat().join(' ') || '처리하지 못했습니다.');
+    return res;
+  }
+
+  function submissionView() {
+    var u = ui(), d = state.submission, a = d.application;
+    var latest = (d.submissions || [])[0];
+    var active = a.status === 'draft' || a.status === 'submitted';
+    var canEditEvidence = d.canManage && active && (!latest || ['prepared', 'changes_requested'].indexOf(latest.status) >= 0);
+    var html = u.rowButton('← 회차 · 수금', 'window.AdminBilling.openDetail(' + state.contractId + ')') +
+      u.pageHeader('제출 서류 — 회차 #' + a.applicationNo,
+        (a.periodStart || '') + ' ~ ' + (a.periodEnd || '') + ' · ' + money(a.amountDue, a.currency),
+        canEditEvidence ? u.primaryButton('제출파일 준비', 'window.AdminBilling.prepareSubmission()', 'archive') : '');
+    if (a.historicalSubmittedOn) html += '<p>기존 제출 자료 보완 · 최초 제출일 ' + u.esc(a.historicalSubmittedOn) + '. 실제 과거 송부일과 원청 회신을 기록하세요.</p>';
+    if (!d.profile.confirmed_at) html += '<p role="alert">계약 관리에서 원청 요구사항과 청구조건을 먼저 확인하세요.</p>';
+    html += '<p>파일을 준비하거나 내려받는 것만으로 송부 처리되지 않습니다.</p>';
+    html += u.table({ id: 'bs-required', search: false, emptyText: '등록된 요구서류가 없습니다. 계약의 청구조건을 확인하세요.',
+      columns: [
+        { key: 'title', label: '요구서류', render: function (r) {
+          return u.esc(r.title) + ' ' + u.badge(!r.active ? '해당 없음' : r.missing ? '필요' : '연결됨', r.active && r.missing ? 'warn' : 'muted');
+        }},
+        { key: 'evidence', label: '연결 파일', render: function (r) {
+          if (!r.active) return '—';
+          var selected = (d.draftEvidence[r.key] || r.evidence || []).map(function (e) { return e.type + ':' + e.id; });
+          var options = (d.sourceOptions || []).concat(r.evidence || []).filter(function (o, i, all) {
+            return all.findIndex(function (other) { return other.type === o.type && Number(other.id) === Number(o.id); }) === i;
+          }).map(function (o) {
+            var value = o.value || o.type + ':' + o.id;
+            return '<option value="' + u.esc(value) + '"' + (selected.indexOf(value) >= 0 ? ' selected' : '') + '>' + u.esc(o.label) + (o.expiresOn ? ' · 만료 ' + u.esc(o.expiresOn) : '') + '</option>';
+          }).join('');
+          return '<select multiple aria-label="' + u.esc(r.title) + '" data-claim-evidence="' + u.esc(r.key) + '" style="width:100%;min-height:84px"' + (canEditEvidence ? '' : ' disabled') + '>' + options + '</select>';
+        }}
+      ], rows: d.requirements || [] });
+    if (canEditEvidence) html += '<div style="margin:12px 0">' + u.rowButton('연결 저장', 'window.AdminBilling.saveSubmissionEvidence()') + '</div>';
+    html += u.table({ id: 'bs-revisions', search: false, emptyText: '아직 준비한 제출파일이 없습니다.',
+      columns: [
+        { key: 'revision', label: '제출본', render: function (r) { return 'v' + u.esc(r.revision); }},
+        { key: 'status', label: '상태', render: function (r) { return u.badge(submissionLabels[r.status] || r.status, r.status === 'changes_requested' ? 'warn' : 'muted'); }},
+        { key: 'reference', label: '기록', render: function (r) {
+          return u.esc(r.reference || '') + '<div><small>' + u.esc(r.responseAt || r.receivedAt || r.sentAt || r.preparedAt || '') + '</small></div>';
+        }},
+        { key: 'act', label: '', render: function (r) {
+          var out = '<a href="' + u.esc(r.downloadUrl) + '">제출 ZIP</a>';
+          if (d.canManage && active && latest && r.id === latest.id) {
+            var next = {prepared:['sent'],sent:['received','changes_requested','accepted'],received:['changes_requested','accepted']}[r.status] || [];
+            next.forEach(function (status) {
+              out += ' ' + u.rowButton(submissionLabels[status], "window.AdminBilling.submissionTransition(" + r.id + ",'" + status + "')");
+            });
+          }
+          if (r.history && r.history.length) out += '<details><summary>이력</summary>' + r.history.map(function (h) {
+            return '<div>' + u.esc(submissionLabels[h.status] || h.status || '') + ' · ' + u.esc(h.occurredAt || h.recordedAt || '') + ' ' + u.esc(h.reference || '') + (h.note ? ' · ' + u.esc(h.note) : '') + (h.responseDownloadUrl ? ' <a href="' + u.esc(h.responseDownloadUrl) + '">회신 원본</a>' : '') + '</div>';
+          }).join('') + '</details>';
+          return out;
+        }}
+      ], rows: d.submissions || [] });
+    if (latest && latest.status === 'accepted' && a.status === 'submitted' && state.canManage)
+      html += '<div style="margin-top:14px">' + u.primaryButton('승인 금액 기록', 'window.AdminBilling.openApprove(' + a.id + ')', 'check') + '</div>';
+    return html;
+  }
+
+  function openSubmission(id) {
+    return call('api_getClaimSubmissionWorkspace', [id]).then(checkedResult).then(function (d) {
+      state.submission = d; state.view = 'submission'; draw();
+    }).catch(function (e) { ui().toast(e.message, 'error'); });
+  }
+
+  function collectSubmissionEvidence() {
+    var evidence = {};
+    document.querySelectorAll('[data-claim-evidence]').forEach(function (el) {
+      evidence[el.getAttribute('data-claim-evidence')] = Array.from(el.selectedOptions).map(function (o) {
+        var parts = o.value.split(':'); return {type:parts[0],id:Number(parts[1])};
+      });
+    });
+    return {application_id:state.submission.application.id,evidence:evidence};
+  }
+
+  function saveSubmissionEvidence() {
+    return call('api_saveClaimSubmissionEvidence', [collectSubmissionEvidence()]).then(checkedResult).then(function () {
+      ui().toast('연결을 저장했습니다.'); return openSubmission(state.submission.application.id);
+    }).catch(function (e) { ui().toast(e.message, 'error'); });
+  }
+
+  function prepareSubmission() {
+    if (state.preparingSubmission) return;
+    state.preparingSubmission = true;
+    var id = state.submission.application.id;
+    return call('api_saveClaimSubmissionEvidence', [collectSubmissionEvidence()]).then(checkedResult).then(function () {
+      return call('api_prepareClaimSubmission', [id]);
+    }).then(checkedResult).then(function () {
+      ui().toast('제출파일을 준비했습니다. 실제 송부 후 송부 기록을 남기세요.'); return openSubmission(id);
+    }).catch(function (e) { ui().toast(e.message, 'error'); }).finally(function () { state.preparingSubmission = false; });
+  }
+
+  function submissionTransition(id, status) {
+    var d = state.submission, needsResponse = status !== 'sent';
+    var fields = [
+      {name:'occurred_at',label:needsResponse ? '원청 회신일' : '실제 송부일',type:'date',required:true,value:''},
+      {name:'reference',label:needsResponse ? '회신 번호 / 이메일 제목' : '송부처 · 이메일 제목 / 포털 접수번호',required:true,value:''}
+    ];
+    if (needsResponse) fields.push({name:'response',label:'원청 회신 원본',type:'select',required:true,
+      options:[{value:'',label:'선택'}].concat((d.sourceOptions || []).map(function (o) { return {value:o.value || o.type + ':' + o.id,label:o.label}; }))});
+    fields.push({name:'note',label:status === 'changes_requested' ? '보완 요청 내용' : '메모',type:'textarea',required:status === 'changes_requested'});
+    ui().formModal({title:submissionLabels[status],subtitle:needsResponse ? '원청 회신 원본을 기록합니다.' : '원청에 실제로 보낸 뒤 기록하세요.',fields:fields,saveLabel:'기록',
+      onSave:function (v) {
+        var args = {submission_id:id,status:status,occurred_at:v.occurred_at,reference:v.reference,note:v.note};
+        if (needsResponse) { var parts = String(v.response || '').split(':'); args.response_document = {type:parts[0],id:Number(parts[1])}; }
+        return call('api_transitionClaimSubmission', [args]).then(function (res) {
+          if (res.success === false) return {success:false,error:res.error || Object.values(res.errors || {}).flat().join(' ') || '상태를 기록하지 못했습니다.'};
+          global.apiCache = {};
+          return call('api_getBillings', [state.contractId]).then(checkedResult).then(function (detail) {
+            state.detail = detail;
+            return openSubmission(d.application.id);
+          }).then(function () { return {success:true}; });
+        });
+      }
+    });
+  }
+
   // ── 진입점 ────────────────────────────────────────────────────────────
 
   function renderScreen() {
@@ -840,6 +889,10 @@
     openForm: openForm,
     draftFromProgress: draftFromProgress,
     submitApp: submitApp,
+    openSubmission: openSubmission,
+    saveSubmissionEvidence: saveSubmissionEvidence,
+    prepareSubmission: prepareSubmission,
+    submissionTransition: submissionTransition,
     withdrawApp: withdrawApp,
     openApprove: openApprove,
     unapproveApp: unapproveApp,

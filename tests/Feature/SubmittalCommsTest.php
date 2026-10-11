@@ -10,6 +10,8 @@ use App\Models\Site;
 use App\Models\Submittal;
 use App\Models\SubmittalEvent;
 use App\Models\User;
+use App\Services\Ocr\OcrEngine;
+use App\Services\Takeoff\SubmittalRequestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -100,6 +102,8 @@ class SubmittalCommsTest extends TestCase
         $this->assertStringStartsWith('mailto:sales%40hager-example.test', $data['mailto']);
         $this->assertStringContainsString('subject=', $data['mailto']);
         $this->assertSame('mailto', SubmittalEvent::sole()->channel);
+        $this->assertSame('request_draft', SubmittalEvent::sole()->kind);
+        $this->assertSame('미착수', $row->fresh()->status);
     }
 
     public function test_request_without_vendor_email_asks_for_it_first(): void
@@ -176,13 +180,13 @@ class SubmittalCommsTest extends TestCase
         $doc = $this->doc($admin, $row, 'approved-stamped.pdf');
 
         $this->actingAs($admin)->postJson('/smart-company-api/api_submittalComms', [
-            'args' => ['link', $row->id, ['documentIds' => [$doc->id], 'kind' => 'approval']],
+            'args' => ['link', $row->id, ['documentIds' => [$doc->id], 'kind' => 'approval', 'disposition' => '승인', 'decisionOn' => now()->toDateString()]],
         ])->assertOk();
 
         $fresh = $row->fresh();
         $this->assertSame('승인', $fresh->status);
         $this->assertNotNull($fresh->approved_on);
-        $this->assertSame('approval_linked', SubmittalEvent::sole()->kind);
+        $this->assertSame('response_recorded', SubmittalEvent::sole()->kind);
         $this->assertSame('approval', $fresh->documents->first()->pivot->kind);
     }
 
@@ -202,7 +206,7 @@ class SubmittalCommsTest extends TestCase
 
         $this->assertFalse($data['mailReady']);
         $this->assertSame('sales@hager-example.test', $data['contacts']['vendorEmail']);
-        $this->assertSame(['request_sent', 'materials_linked'], array_column($data['events'], 'kind'));
+        $this->assertSame(['request_draft', 'materials_linked'], array_column($data['events'], 'kind'));
         $this->assertCount(1, $data['documents']);
         // 이미 연결한 문서는 연결 후보에 다시 나오지 않는다.
         $this->assertSame([], array_filter($data['linkable'], fn (array $d): bool => $d['id'] === $doc->id));
@@ -221,6 +225,147 @@ class SubmittalCommsTest extends TestCase
         ])->assertOk()->json();
 
         $this->assertFalse($data['success']);
+    }
+
+    public function test_request_letter_is_bound_to_its_submittal_when_projects_reuse_csi_and_sequence(): void
+    {
+        $this->readyMail();
+        [$admin, $row] = $this->fixture(['vendor_email' => 'vendor@example.test']);
+        $this->actingAs($admin);
+        $otherProject = $row->project->replicate();
+        $otherProject->project_code = 'OTHER-JOB';
+        $otherProject->name = 'Other job';
+        $otherProject->save();
+        $other = $this->row($row, ['project_id' => $otherProject->id, 'seq' => $row->seq]);
+
+        $engine = \Mockery::mock(OcrEngine::class);
+        $engine->shouldReceive('analyze')->twice()->andReturn(
+            ['data' => ['required_items' => ['OWN-REQUIREMENT'], 'opening' => 'Own request', 'due_note' => '']],
+            ['data' => ['required_items' => ['OTHER-REQUIREMENT'], 'opening' => 'Other request', 'due_note' => '']],
+        );
+        $engine->shouldReceive('name')->andReturn('fake');
+        $this->app->instance(OcrEngine::class, $engine);
+        $service = app(SubmittalRequestService::class);
+        $own = $service->build($row);
+        $foreign = $service->build($other);
+        $this->assertTrue($own['success']);
+        $this->assertTrue($foreign['success']);
+        $this->assertSame($own['documentId'], $row->documents()->wherePivot('kind', 'request')->sole()->id);
+
+        $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['request', $row->id, []]])
+            ->assertOk()->assertJsonPath('success', true);
+        Mail::assertSent(SubmittalMail::class, fn (SubmittalMail $mail): bool => str_contains($mail->bodyHtml, 'OWN-REQUIREMENT')
+            && ! str_contains($mail->bodyHtml, 'OTHER-REQUIREMENT'));
+    }
+
+    public function test_linking_another_projects_document_rejects_the_entire_selection(): void
+    {
+        [$admin, $row] = $this->fixture();
+        $own = $this->doc($admin, $row, 'own.pdf');
+        $otherProject = $row->project->replicate();
+        $otherProject->project_code = 'OTHER-JOB';
+        $otherProject->save();
+        $other = $this->row($row, ['project_id' => $otherProject->id]);
+        $foreign = $this->doc($admin, $other, 'foreign.pdf');
+
+        $this->actingAs($admin)->postJson('/smart-company-api/api_submittalComms', [
+            'args' => ['link', $row->id, ['documentIds' => [$own->id, $foreign->id], 'kind' => 'received']],
+        ])->assertOk()->assertJsonPath('success', false);
+        $this->assertCount(0, $row->fresh()->documents);
+        $this->assertSame(0, SubmittalEvent::count());
+    }
+
+    public function test_response_requires_actual_disposition_and_original_and_preserves_the_received_link(): void
+    {
+        [$admin, $row] = $this->fixture();
+        $this->actingAs($admin);
+        $doc = $this->doc($admin, $row, 'gc-response.pdf');
+        $row->documents()->attach($doc->id, ['kind' => 'received']);
+        $args = ['documentIds' => [$doc->id], 'kind' => 'approval'];
+        $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['link', $row->id, $args]])
+            ->assertOk()->assertJsonPath('success', false);
+        $args += ['disposition' => '조건부승인', 'decisionOn' => now()->toDateString(), 'decisionNote' => str_repeat('가', 201)];
+        $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['link', $row->id, $args]])
+            ->assertOk()->assertJsonPath('success', false);
+        $args['decisionNote'] = str_repeat('가', 200);
+        Storage::disk('local')->delete($doc->file_path);
+        $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['link', $row->id, $args]])
+            ->assertOk()->assertJsonPath('success', false);
+        $this->assertSame('미착수', $row->fresh()->status);
+        Storage::disk('local')->put($doc->file_path, '%PDF-1.7 x');
+
+        $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['link', $row->id, $args]])
+            ->assertOk()->assertJsonPath('success', true);
+        $this->assertSame('조건부승인', $row->fresh()->status);
+        $this->assertSame('received', $row->documents()->sole()->pivot->kind);
+        $this->assertSame('조건부승인 · '.now()->toDateString().' · '.str_repeat('가', 200), SubmittalEvent::sole()->subject);
+
+        $rejected = $this->doc($admin, $row, 'gc-rejection.pdf', '%PDF-1.7 rejection');
+        $args['documentIds'] = [$rejected->id];
+        $args['disposition'] = '반려';
+        $args['decisionNote'] = 'Wrong revision';
+        $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['link', $row->id, $args]])
+            ->assertOk()->assertJsonPath('success', true);
+        $this->assertSame('반려', $row->fresh()->status);
+        $this->assertNull($row->fresh()->approved_on);
+        $this->assertSame(2, $row->events()->count(), 'Earlier response evidence is retained.');
+    }
+
+    public function test_partial_attachment_packets_never_send_or_become_submitted(): void
+    {
+        $this->readyMail();
+        [$admin, $base] = $this->fixture();
+        $this->actingAs($admin);
+        foreach (['missing', 'oversize', 'changed'] as $case) {
+            $row = $this->row($base, ['seq' => 20 + Submittal::count(), 'recipient_email' => 'gc@example.test']);
+            $good = $this->doc($admin, $row, $case.'-good.pdf', 'g-'.substr($case, 0, 2));
+            $bad = $this->doc($admin, $row, $case.'-bad.pdf', $case.'-bad-content');
+            $row->documents()->attach([$good->id => ['kind' => 'received'], $bad->id => ['kind' => 'received']]);
+            config(['mail.max_attachment_bytes' => $case === 'oversize' ? 5 : 1000]);
+            if ($case === 'missing') {
+                Storage::disk('local')->delete($bad->file_path);
+            } elseif ($case === 'changed') {
+                Storage::disk('local')->put($bad->file_path, 'different');
+            }
+            $this->postJson('/smart-company-api/api_submittalComms', ['args' => ['transmit', $row->id, []]])
+                ->assertOk()->assertJsonPath('success', false)->assertJsonPath('sent', false);
+            $this->assertSame('미착수', $row->fresh()->status);
+            $this->assertNull($row->fresh()->submitted_on);
+        }
+        Mail::assertNothingSent();
+        $this->assertSame(0, SubmittalEvent::where('kind', 'transmitted')->count());
+    }
+
+    public function test_mailto_transmission_is_only_a_draft(): void
+    {
+        config(['mail.default' => 'log']);
+        [$admin, $row] = $this->fixture(['recipient_email' => 'gc@example.test', 'status' => '작성중']);
+        $doc = $this->doc($admin, $row, 'package.pdf');
+        $row->documents()->attach($doc->id, ['kind' => 'received']);
+
+        $this->actingAs($admin)->postJson('/smart-company-api/api_submittalComms', ['args' => ['transmit', $row->id, []]])
+            ->assertOk()->assertJsonPath('success', true)->assertJsonPath('sent', false);
+        $this->assertSame('작성중', $row->fresh()->status);
+        $this->assertNull($row->fresh()->submitted_on);
+        $this->assertSame('transmit_draft', SubmittalEvent::sole()->kind);
+    }
+
+    public function test_status_edit_cannot_invent_approval_or_erase_other_fields(): void
+    {
+        [$admin, $row] = $this->fixture(['assignee' => 'Site engineer', 'planned_on' => '2026-10-01', 'notes' => 'Keep evidence']);
+        $this->actingAs($admin)->postJson('/smart-company-api/api_saveSubmittal', [
+            'args' => [['id' => $row->id, 'status' => '작성중']],
+        ])->assertOk()->assertJsonPath('success', true);
+        $this->assertSame('Site engineer', $row->fresh()->assignee);
+        $this->assertSame('Keep evidence', $row->fresh()->notes);
+        $this->assertSame('2026-10-01', $row->fresh()->planned_on->toDateString());
+        foreach (['승인', '조건부승인', '반려'] as $status) {
+            $this->postJson('/smart-company-api/api_saveSubmittal', [
+                'args' => [['id' => $row->id, 'status' => $status, 'approvedOn' => now()->toDateString()]],
+            ])->assertOk()->assertJsonPath('success', false);
+        }
+        $this->assertSame('작성중', $row->fresh()->status);
+        $this->assertNull($row->fresh()->approved_on);
     }
 
     /** @param array<string, mixed> $overrides

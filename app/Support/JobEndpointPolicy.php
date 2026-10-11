@@ -18,6 +18,10 @@ final class JobEndpointPolicy
             return ['contracts', $method === 'api_setBillingStatus' && in_array($args[0]['action'] ?? '', ['submit', 'withdraw'], true) ? 'edit' : 'approve'];
         }
 
+        if ($method === 'api_transitionClaimSubmission') {
+            return ['contracts', in_array($args[0]['status'] ?? '', ['accepted', 'changes_requested'], true) ? 'approve' : 'edit'];
+        }
+
         return $entry;
     }
 

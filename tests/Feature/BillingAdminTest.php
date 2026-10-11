@@ -14,6 +14,8 @@ use App\Services\Admin\ContractAdminService;
 use App\Support\SmartCompanyData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use Tests\Concerns\PreparesClaimSubmissions;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 기성 청구 · 수금 — 수주 계약 청구 원장(BillingAdminService)의 뒷단.
@@ -27,6 +29,7 @@ use Tests\TestCase;
 class BillingAdminTest extends TestCase
 {
     use RefreshDatabase;
+    use PreparesClaimSubmissions;
 
     private Company $us;
 
@@ -37,6 +40,7 @@ class BillingAdminTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         $this->us = Company::create(['code' => 'C1', 'name' => 'ABC ENG', 'status' => 'active']);
         $this->them = Company::create(['code' => 'LG', 'name' => 'LG', 'status' => 'active']);
         $this->site = Site::create(['code' => 'LG_ESS_PH', 'name' => 'LG PHOENIX', 'timezone' => 'America/Phoenix', 'status' => 'active']);
@@ -80,6 +84,15 @@ class BillingAdminTest extends TestCase
     /** @return array<string, mixed> */
     private function setStatus(int $id, string $action, array $extra = []): array
     {
+        if ($action === 'submit') {
+            return $this->submitClaimFixture($id);
+        }
+        if ($action === 'approve' && PayApplication::find($id)?->status === 'submitted') {
+            $accepted = $this->acceptClaimFixture($id);
+            if (! $accepted['success']) {
+                return $accepted;
+            }
+        }
         return $this->svc()->setBillingStatus(array_merge(['id' => $id, 'action' => $action], $extra));
     }
 
@@ -249,7 +262,23 @@ class BillingAdminTest extends TestCase
         $this->assertNull(PayApplication::find($a2['id']));
     }
 
-    public function test_withdraw_and_unapprove_only_touch_the_latest_application(): void
+    public function test_legacy_unpacketized_submissions_keep_latest_only_withdrawal_rules(): void
+    {
+        $contract = $this->contract();
+        $this->actingAs($this->user('admin'));
+        $first = $this->draft($contract, ['thisPeriodAmount' => 100]);
+        PayApplication::findOrFail($first['id'])->update(['status' => 'submitted', 'submitted_on' => '2026-08-31']);
+        $second = $this->draft($contract, ['thisPeriodAmount' => 200]);
+        PayApplication::findOrFail($second['id'])->update(['status' => 'submitted', 'submitted_on' => '2026-08-31']);
+
+        $blocked = $this->setStatus($first['id'], 'withdraw');
+        $this->assertFalse($blocked['success']);
+        $this->assertStringContainsString('후속 회차', $blocked['error']);
+        $this->assertTrue($this->setStatus($second['id'], 'withdraw')['success']);
+        $this->assertNull(PayApplication::findOrFail($second['id'])->submitted_on);
+    }
+
+    public function test_sent_packets_remain_immutable_and_unapprove_only_touches_the_latest_application(): void
     {
         $c = $this->contract();
         $this->actingAs($this->user('admin'));
@@ -262,15 +291,14 @@ class BillingAdminTest extends TestCase
         // 중간 회차 회수 거부 — 중간을 되돌리면 후속 회차의 전회 누계가 낡는다
         $blocked = $this->setStatus($a1['id'], 'withdraw');
         $this->assertFalse($blocked['success']);
-        $this->assertStringContainsString('후속 회차', $blocked['error']);
+        $this->assertStringContainsString('제출한 근거', $blocked['error']);
 
-        // 최신 회차는 무를 수 있다 — 제출일도 함께 지워진다
-        $this->assertTrue($this->setStatus($a2['id'], 'withdraw')['success']);
+        // An actual submitted packet, including the latest one, must retain its dated record.
+        $this->assertFalse($this->setStatus($a2['id'], 'withdraw')['success']);
         $fresh2 = PayApplication::find($a2['id']);
-        $this->assertSame('draft', $fresh2->status);
-        $this->assertNull($fresh2->submitted_on);
+        $this->assertSame('submitted', $fresh2->status);
+        $this->assertNotNull($fresh2->submitted_on);
 
-        $this->setStatus($a2['id'], 'submit');
         $this->setStatus($a1['id'], 'approve');
         $this->setStatus($a2['id'], 'approve', ['approvedAmount' => '90000']);
 

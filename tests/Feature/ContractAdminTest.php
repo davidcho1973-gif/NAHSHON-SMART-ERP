@@ -176,6 +176,12 @@ class ContractAdminTest extends TestCase
         $res = $this->svc()->save($this->base(['originalAmount' => '100000', 'approvedChangeAmount' => '25000']));
 
         $this->assertSame(125000.0, (float) ProjectContract::find($res['id'])->current_amount);
+
+        $updated = $this->svc()->save($this->base(['id' => $res['id'], 'approvedChangeAmount' => '30000']));
+        $this->assertTrue($updated['success']);
+        $this->assertSame(130000.0, (float) ProjectContract::find($res['id'])->current_amount,
+            '변경 금액만 수정하면 기존 원계약 금액과 합산한다');
+        $this->assertSame(100000.0, (float) ProjectContract::find($res['id'])->original_amount);
     }
 
     public function test_an_explicit_current_amount_wins(): void
@@ -216,15 +222,15 @@ class ContractAdminTest extends TestCase
         Storage::disk($doc->disk)->assertExists($doc->file_path);
     }
 
-    public function test_a_newer_document_supersedes_the_previous_one_of_the_same_type(): void
+    public function test_a_newer_document_supersedes_only_the_same_document_number(): void
     {
         $c = $this->contract();
         $this->actingAs($this->user('admin'));
 
         $first = $this->svc()->uploadDocument($c->id, UploadedFile::fake()->create('coi-2025.pdf', 10, 'application/pdf'),
-            ['documentType' => 'certificate_of_insurance']);
+            ['documentType' => 'certificate_of_insurance', 'documentNumber' => 'COI-001']);
         $second = $this->svc()->uploadDocument($c->id, UploadedFile::fake()->create('coi-2026.pdf', 10, 'application/pdf'),
-            ['documentType' => 'certificate_of_insurance']);
+            ['documentType' => 'certificate_of_insurance', 'documentNumber' => 'COI-001']);
 
         $this->assertSame(2, $second['version']);
         $this->assertTrue($second['replaced']);
@@ -255,11 +261,12 @@ class ContractAdminTest extends TestCase
         $v1 = $this->svc()->uploadDocument($c->id, UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),
             ['documentType' => 'w9']);
         $v2 = $this->svc()->uploadDocument($c->id, UploadedFile::fake()->create('b.pdf', 10, 'application/pdf'),
-            ['documentType' => 'w9']);
+            ['documentType' => 'w9', 'replacementDocumentId' => $v1['id']]);
 
         $this->assertTrue($this->svc()->deleteDocument($v2['id'])['success']);
         $this->assertTrue((bool) ProjectContractDocument::find($v1['id'])->is_current,
             '최신본을 지우면 앞 버전이 다시 현재본이 돼야 한다');
+        $this->assertSame('draft', ProjectContractDocument::find($v1['id'])->status, '초안이 삭제 복구로 승인되지 않는다');
     }
 
     public function test_an_oversized_file_is_refused(): void
@@ -320,6 +327,96 @@ class ContractAdminTest extends TestCase
 
         $row = $this->svc()->documents($c->id)['rows'][0];
         $this->assertTrue($row['expired'], '끊긴 보험으로 작업하면 사고 때 보상이 안 된다');
+    }
+
+    public function test_claim_profile_confirmation_is_versioned_and_does_not_trust_client_metadata(): void
+    {
+        $this->actingAs($actor = $this->user('admin'));
+        $contract = $this->contract(['payload' => ['keep' => 'existing'], 'original_amount' => 1000,
+            'approved_change_amount' => 100, 'current_amount' => 1100, 'currency' => 'KRW',
+            'insurance_required' => true, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31',
+            'counterparty_contact_name' => 'Contract contact', 'notes' => 'Preserve this record']);
+        $preservedFields = array_flip(['internal_reference', 'site_id', 'counterparty_company_id',
+            'original_amount', 'approved_change_amount', 'current_amount', 'currency', 'insurance_required',
+            'starts_on', 'ends_on', 'counterparty_contact_name', 'notes']);
+        $preserved = array_intersect_key($contract->fresh()->getAttributes(), $preservedFields);
+        $this->assertNull(collect($this->svc()->list()['rows'])->firstWhere('id', $contract->id)['claimProfile']['confirmed_at']);
+        $input = ['basis_note' => 'Contract article 8 / GC reply 2026-10-11', 'stored_materials' => false,
+            'submission_day' => 25, 'preparation_days' => 5, 'template_label' => 'GC v2',
+            'requirements' => [['title' => 'Inspection record', 'stage' => 'each_claim']], 'confirmed_at' => 'forged', 'confirmed_by' => 9999];
+        $r = $this->svc()->save($this->base(['id' => $contract->id, 'claimProfile' => $input]));
+        $this->assertTrue($r['success']);
+        $this->assertNull($r['claimProfile']['confirmed_at']);
+        $this->assertSame(1, $r['claimProfile']['version']);
+        $key = $r['claimProfile']['requirements'][0]['key'];
+        $confirmed = $this->svc()->save($this->base(['id' => $contract->id, 'claimProfile' => $input + ['version' => 1, 'confirm' => true]]));
+        $this->assertTrue($confirmed['success']);
+        $this->assertSame($actor->id, $confirmed['claimProfile']['confirmed_by']);
+        $this->assertNotSame('forged', $confirmed['claimProfile']['confirmed_at']);
+        $this->assertSame($key, $confirmed['claimProfile']['requirements'][0]['key']);
+        $this->assertSame('existing', $contract->fresh()->payload['keep']);
+
+        $unchanged = $this->svc()->save($this->base(['id' => $contract->id, 'claimProfile' => $confirmed['claimProfile']]));
+        $this->assertSame(2, $unchanged['claimProfile']['version']);
+        $changed = $this->svc()->save($this->base(['id' => $contract->id, 'claimProfile' => array_replace($confirmed['claimProfile'], ['submission_day' => 20])]));
+        $this->assertTrue($changed['success']);
+        $this->assertNull($changed['claimProfile']['confirmed_at']);
+        $this->assertSame(3, $changed['claimProfile']['version']);
+        $this->assertFalse($this->svc()->save($this->base(['id' => $contract->id, 'claimProfile' => $confirmed['claimProfile']]))['success'], 'stale profile cannot overwrite current terms');
+        $this->assertSame($preserved, array_intersect_key($contract->fresh()->getAttributes(), $preservedFields),
+            '청구 조건 수정에 포함되지 않은 관리번호·현장·계약 금액·날짜·연락처는 보존한다');
+    }
+
+    public function test_updating_a_contract_rejects_explicit_blank_reference_and_required_fields(): void
+    {
+        $this->actingAs($this->user('admin'));
+        $contract = $this->contract();
+        $reference = $contract->internal_reference;
+        foreach (['internalReference', 'title', 'companyId', 'direction'] as $field) {
+            $res = $this->svc()->save($this->base(['id' => $contract->id, $field => '']));
+            $this->assertFalse($res['success']);
+            $this->assertArrayHasKey($field, $res['errors']);
+        }
+        $this->assertSame($reference, $contract->fresh()->internal_reference);
+
+        $res = $this->svc()->save($this->base(['id' => $contract->id, 'startsOn' => '2027-01-01']));
+        $this->assertTrue($res['success']);
+        $res = $this->svc()->save($this->base(['id' => $contract->id, 'endsOn' => '2026-12-31']));
+        $this->assertFalse($res['success'], '부분 수정도 보존된 시작일과 비교한다');
+        $this->assertArrayHasKey('endsOn', $res['errors']);
+    }
+
+    public function test_claim_profile_rejects_missing_basis_invalid_days_and_duplicate_requirements(): void
+    {
+        $this->actingAs($this->user('admin'));
+        foreach ([['confirm' => true], ['submission_day' => 32], ['preparation_days' => -1],
+            ['requirements' => [['key' => 'same', 'title' => 'A', 'stage' => 'once'], ['key' => 'same', 'title' => 'B', 'stage' => 'final']]]] as $profile) {
+            $this->assertFalse($this->svc()->save($this->base(['claimProfile' => $profile]))['success']);
+        }
+        $this->assertSame(0, ProjectContract::count());
+    }
+
+    public function test_documents_of_the_same_type_are_independent_unless_identity_matches(): void
+    {
+        $this->actingAs($this->user('admin'));
+        $contract = $this->contract();
+        $first = $this->svc()->uploadDocument($contract->id, UploadedFile::fake()->create('claim-1.pdf', 10, 'application/pdf'),
+            ['documentType' => 'pay_application', 'documentNumber' => 'CLAIM-1']);
+        $second = $this->svc()->uploadDocument($contract->id, UploadedFile::fake()->create('claim-2.pdf', 10, 'application/pdf'),
+            ['documentType' => 'pay_application', 'documentNumber' => 'CLAIM-2']);
+        $third = $this->svc()->uploadDocument($contract->id, UploadedFile::fake()->create('other.pdf', 10, 'application/pdf'),
+            ['documentType' => 'pay_application']);
+        $this->assertSame(1, $second['version']);
+        $this->assertSame(1, $third['version']);
+        $this->assertSame(3, ProjectContractDocument::where('is_current', true)->count());
+        $replacement = $this->svc()->uploadDocument($contract->id, UploadedFile::fake()->create('other-r2.pdf', 10, 'application/pdf'),
+            ['documentType' => 'pay_application', 'replacementDocumentId' => $third['id']]);
+        $this->assertSame(2, $replacement['version']);
+        $this->assertTrue(ProjectContractDocument::find($first['id'])->is_current);
+        $this->assertTrue(ProjectContractDocument::find($second['id'])->is_current);
+        $otherContract = $this->contract();
+        $this->assertFalse($this->svc()->uploadDocument($otherContract->id, UploadedFile::fake()->create('wrong.pdf', 10, 'application/pdf'),
+            ['documentType' => 'pay_application', 'replacementDocumentId' => $replacement['id']])['success']);
     }
 
     // ── API ─────────────────────────────────────────────────────────────

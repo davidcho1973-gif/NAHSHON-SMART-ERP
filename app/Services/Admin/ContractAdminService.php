@@ -10,10 +10,14 @@ use App\Models\ProjectContract;
 use App\Models\ProjectContractDocument;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Finance\ContractClaimProfile;
 use App\Support\JobAccess;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * 원청 계약 · 서류 — Filament ProjectContractResource 를 SPA 로 옮긴 것.
@@ -22,7 +26,7 @@ use Illuminate\Support\Facades\Storage;
  * 여전히 유효로 남아 있거나, 갱신 통보 기한이 코앞인데 아무도 모르는 상황이 실제 손해로
  * 이어진다. 그래서 목록이 만료·갱신 임박·다음 조치를 먼저 보여준다.
  *
- * 서류는 버전이 생명이다. 같은 종류의 새 서류를 올리면 이전 것을 "대체됨" 으로 내리고
+ * 서류는 버전이 생명이다. 같은 문서번호 또는 명시한 대체 대상의 새 판만 이전 것을 "대체됨" 으로 내리고
  * 최신본만 현재로 둔다 — 어느 것이 최신인지 모르는 서류철이 가장 위험하다.
  */
 class ContractAdminService
@@ -186,6 +190,7 @@ class ContractAdminService
                 'currency' => $c->currency ?: 'USD',
                 'retainagePercent' => $c->retainage_percent !== null ? (float) $c->retainage_percent : null,
                 'paymentTerms' => $c->payment_terms,
+                'claimProfile' => ContractClaimProfile::read($c),
                 'executedOn' => $c->executed_on?->toDateString(),
                 'effectiveOn' => $c->effective_on?->toDateString(),
                 'startsOn' => $c->starts_on?->toDateString(),
@@ -264,16 +269,23 @@ class ContractAdminService
             return ['success' => false, 'error' => '계약을 찾을 수 없습니다.'];
         }
 
+        if ($row && ! $this->canAccessContract($row->id)) {
+            return ['success' => false, 'error' => '접근 가능한 계약을 찾을 수 없습니다.'];
+        }
+
         $title = trim((string) ($input['title'] ?? ''));
         $direction = (string) ($input['direction'] ?? '');
-        $status = (string) ($input['status'] ?? 'draft');
+        $status = (string) ($input['status'] ?? $row?->status ?? 'draft');
         if (JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'contracts', 'approve')
-            && (! in_array($status, ['draft', 'under_review'], true) || (float) ($input['approvedChangeAmount'] ?? 0) !== (float) ($row?->approved_change_amount ?? 0))) {
+            && (! in_array($status, ['draft', 'under_review'], true) || (float) ($input['approvedChangeAmount'] ?? $row?->approved_change_amount ?? 0) !== (float) ($row?->approved_change_amount ?? 0))) {
             return ['success' => false, 'error' => '계약 상태·승인 금액 변경에는 승인 권한이 필요합니다.'];
         }
         $type = (string) ($input['contractType'] ?? '');
 
         $errors = [];
+        if ($row && array_key_exists('internalReference', $input) && trim((string) $input['internalReference']) === '') {
+            $errors['internalReference'] = '기존 계약의 내부 관리번호는 비울 수 없습니다.';
+        }
         if ($title === '') {
             $errors['title'] = '계약명을 입력하세요.';
         }
@@ -291,7 +303,7 @@ class ContractAdminService
         if (! $companyId) {
             $errors['companyId'] = '자사(계약 주체)를 선택하세요.';
         }
-        $counterpartyId = $this->intOrNull($input['counterpartyId'] ?? null);
+        $counterpartyId = $this->intOrNull(array_key_exists('counterpartyId', $input) ? $input['counterpartyId'] : $row?->counterparty_company_id);
         if ($counterpartyId && $counterpartyId === $companyId) {
             $errors['counterpartyId'] = '자기 회사와는 계약할 수 없습니다.';
         }
@@ -312,7 +324,9 @@ class ContractAdminService
         }
 
         // 끝나는 날이 시작보다 앞서면 기간 계산과 만료 경고가 전부 어긋난다.
-        if (! empty($dates['startsOn']) && ! empty($dates['endsOn']) && $dates['endsOn'] < $dates['startsOn']) {
+        $startsOn = array_key_exists('startsOn', $input) ? ($dates['startsOn'] ?? null) : $row?->starts_on?->toDateString();
+        $endsOn = array_key_exists('endsOn', $input) ? ($dates['endsOn'] ?? null) : $row?->ends_on?->toDateString();
+        if ($startsOn && $endsOn && $endsOn < $startsOn) {
             $errors['endsOn'] = '종료일이 시작일보다 앞설 수 없습니다.';
         }
 
@@ -394,13 +408,63 @@ class ContractAdminService
             }
         }
 
+        // 생성 기본값을 부분 수정에도 적용하면 관리번호는 null, 기존 현장·금액·날짜는
+        // 빈 값이 된다. 수정은 명시한 필드만 저장하고 나머지는 잠긴 현재 행에 보존한다.
         if ($row) {
-            $row->update($data);
-
-            return ['success' => true, 'id' => $row->id];
+            foreach (array_keys($data) as $column) {
+                $key = match ($column) {
+                    'counterparty_company_id' => 'counterpartyId',
+                    'counterparty_contact_name' => 'contactName',
+                    'counterparty_contact_email' => 'contactEmail',
+                    'counterparty_contact_phone' => 'contactPhone',
+                    default => Str::camel($column),
+                };
+                if (! array_key_exists($key, $input)) {
+                    unset($data[$column]);
+                }
+            }
         }
+        $recalculateCurrent = $nums['currentAmount'] === null
+            && (array_key_exists('currentAmount', $input) || array_key_exists('originalAmount', $input) || array_key_exists('approvedChangeAmount', $input));
 
-        return ['success' => true, 'id' => ProjectContract::create($data)->id];
+        return DB::transaction(function () use ($row, $data, $input, $recalculateCurrent): array {
+            if ($row) {
+                $row = ProjectContract::whereKey($row->id)->lockForUpdate()->firstOrFail();
+                if ($recalculateCurrent) {
+                    $original = array_key_exists('original_amount', $data) ? $data['original_amount'] : $row->original_amount;
+                    $change = $data['approved_change_amount'] ?? $row->approved_change_amount;
+                    $data['current_amount'] = $original !== null ? (float) $original + (float) $change : null;
+                }
+            }
+            if (array_key_exists('claimProfile', $input)) {
+                if (! is_array($input['claimProfile'])) {
+                    return ['success' => false, 'errors' => ['claimProfile' => '청구 조건 형식을 확인하세요.']];
+                }
+                if (filter_var($input['claimProfile']['confirm'] ?? false, FILTER_VALIDATE_BOOL)
+                    && JobAccess::managed(auth()->user()) && ! JobAccess::can(auth()->user(), 'contracts', 'approve')) {
+                    return ['success' => false, 'error' => '청구 조건 확인에는 계약 승인 권한이 필요합니다.'];
+                }
+                $payload = $row?->payload ?? [];
+                $previous = (array) ($payload['claim_profile'] ?? []);
+                try {
+                    $profile = ContractClaimProfile::update($input['claimProfile'], $previous, (int) auth()->id());
+                } catch (InvalidArgumentException $e) {
+                    return ['success' => false, 'errors' => ['claimProfile' => $e->getMessage()]];
+                }
+                if ($previous && $profile !== $previous) {
+                    $payload['claim_profile_history'][(string) $previous['version']] = $previous;
+                }
+                $payload['claim_profile'] = $profile;
+                $data['payload'] = $payload;
+            }
+            if ($row) {
+                $row->update($data);
+            } else {
+                $row = ProjectContract::create($data);
+            }
+
+            return ['success' => true, 'id' => $row->id, 'claimProfile' => ContractClaimProfile::read($row)];
+        });
     }
 
     /**
@@ -491,7 +555,7 @@ class ContractAdminService
     }
 
     /**
-     * 서류 업로드. 같은 종류의 최신본이 있으면 그것을 "대체됨" 으로 내리고
+     * 서류 업로드. 명시한 기존 문서의 새 판만 "대체됨" 으로 내리고
      * 새 것을 현재로 세운다 — 어느 것이 최신인지 모르는 서류철이 가장 위험하다.
      *
      * @param  array<string, mixed>  $input
@@ -523,44 +587,64 @@ class ContractAdminService
             $status = 'draft';
         }
 
-        $disk = $this->disk();
-        $path = $file->store('contract-documents/'.$contractId, $disk);
-
-        $previous = ProjectContractDocument::query()
-            ->where('project_contract_id', $contractId)
-            ->where('document_type', $docType)
-            ->where('is_current', true)
-            ->latest('id')
-            ->first();
-
-        $doc = ProjectContractDocument::create([
-            'project_contract_id' => $contractId,
-            'replaces_document_id' => $previous?->id,
-            'uploaded_by' => auth()->id(),
-            'document_type' => $docType,
-            'title' => trim((string) ($input['title'] ?? '')) ?: $file->getClientOriginalName(),
-            'document_number' => trim((string) ($input['documentNumber'] ?? '')) ?: null,
-            'version' => $previous ? ((int) $previous->version + 1) : 1,
-            'status' => $status,
-            'is_required' => (bool) ($input['isRequired'] ?? false),
-            'is_current' => true,
-            'is_confidential' => (bool) ($input['isConfidential'] ?? false),
-            'issued_on' => $this->date($input['issuedOn'] ?? null),
-            'effective_on' => $this->date($input['effectiveOn'] ?? null),
-            'expires_on' => $this->date($input['expiresOn'] ?? null),
-            'disk' => $disk,
-            'file_path' => $path,
-            'original_file_name' => $file->getClientOriginalName(),
-            'mime_type' => $file->getClientMimeType() ?: 'application/octet-stream',
-            'file_size' => $file->getSize(),
-            'notes' => trim((string) ($input['notes'] ?? '')) ?: null,
-        ]);
-
-        if ($previous) {
-            $previous->update(['is_current' => false, 'status' => 'superseded']);
+        if (! $this->canAccessContract($contractId)) {
+            return ['success' => false, 'error' => '접근 가능한 계약을 찾을 수 없습니다.'];
         }
+        $number = trim((string) ($input['documentNumber'] ?? '')) ?: null;
+        $replacementId = $this->intOrNull($input['replacementDocumentId'] ?? null);
 
-        return ['success' => true, 'id' => $doc->id, 'version' => $doc->version, 'replaced' => (bool) $previous];
+        return DB::transaction(function () use ($contractId, $file, $input, $docType, $status, $number, $replacementId): array {
+            ProjectContract::whereKey($contractId)->lockForUpdate()->firstOrFail();
+            $previous = null;
+            if ($replacementId) {
+                $previous = ProjectContractDocument::whereKey($replacementId)->where('project_contract_id', $contractId)
+                    ->where('document_type', $docType)->where('is_current', true)->first();
+                if (! $previous) {
+                    return ['success' => false, 'errors' => ['replacementDocumentId' => '같은 계약·종류의 현재 문서를 선택하세요.']];
+                }
+                if ($number && $previous->document_number && $number !== $previous->document_number) {
+                    return ['success' => false, 'errors' => ['documentNumber' => '대체할 문서의 번호와 다릅니다. 별도 문서는 대체 대상을 비우세요.']];
+                }
+                $number ??= $previous->document_number;
+            } elseif ($number) {
+                $matches = ProjectContractDocument::where('project_contract_id', $contractId)->where('document_type', $docType)
+                    ->where('document_number', $number)->where('is_current', true)->limit(2)->get();
+                if ($matches->count() > 1) {
+                    return ['success' => false, 'errors' => ['replacementDocumentId' => '같은 번호의 문서가 여럿입니다. 대체할 현재 문서를 직접 선택하세요.']];
+                }
+                $previous = $matches->first();
+            }
+            $disk = $this->disk();
+            $path = $file->store('contract-documents/'.$contractId, $disk);
+            $doc = ProjectContractDocument::create([
+                'project_contract_id' => $contractId,
+                'replaces_document_id' => $previous?->id,
+                'payload' => ['replaced_status' => $previous?->status],
+                'uploaded_by' => auth()->id(),
+                'document_type' => $docType,
+                'title' => trim((string) ($input['title'] ?? '')) ?: $file->getClientOriginalName(),
+                'document_number' => $number,
+                'version' => $previous ? ((int) $previous->version + 1) : 1,
+                'status' => $status,
+                'is_required' => (bool) ($input['isRequired'] ?? false),
+                'is_current' => true,
+                'is_confidential' => (bool) ($input['isConfidential'] ?? false),
+                'issued_on' => $this->date($input['issuedOn'] ?? null),
+                'effective_on' => $this->date($input['effectiveOn'] ?? null),
+                'expires_on' => $this->date($input['expiresOn'] ?? null),
+                'disk' => $disk,
+                'file_path' => $path,
+                'original_file_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getClientMimeType() ?: 'application/octet-stream',
+                'file_size' => $file->getSize(),
+                'notes' => trim((string) ($input['notes'] ?? '')) ?: null,
+            ]);
+            if ($previous) {
+                $previous->update(['is_current' => false, 'status' => 'superseded']);
+            }
+
+            return ['success' => true, 'id' => $doc->id, 'version' => $doc->version, 'replaced' => (bool) $previous];
+        });
     }
 
     /**
@@ -578,11 +662,13 @@ class ContractAdminService
             return ['success' => false, 'error' => '서류를 찾을 수 없습니다.'];
         }
 
-        // 최신본을 지우면 바로 앞 버전을 다시 현재로 올린다. 안 그러면 그 종류의
-        // 현재 서류가 없는 상태가 되어 "최신본이 뭐지" 를 알 수 없게 된다.
+        if (! $this->canAccessContract($doc->project_contract_id)) {
+            return ['success' => false, 'error' => '접근 가능한 계약을 찾을 수 없습니다.'];
+        }
+        // Restore the predecessor's recorded state, never invent an approval.
         if ($doc->is_current && $doc->replaces_document_id) {
             ProjectContractDocument::where('id', $doc->replaces_document_id)
-                ->update(['is_current' => true, 'status' => 'approved']);
+                ->update(['is_current' => true, 'status' => data_get($doc->payload, 'replaced_status') ?: 'under_review']);
         }
 
         try {

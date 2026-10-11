@@ -159,7 +159,7 @@
       '← 계약 목록</button>' +
       u.pageHeader(
         '서류 — ' + state.contractTitle,
-        '같은 종류의 새 서류를 올리면 이전 것은 자동으로 "대체됨" 이 되고 최신본만 현재로 남습니다. — ' + notes.join(' · '),
+        '같은 문서번호 또는 선택한 대체 대상만 새 버전으로 묶습니다. 다른 회차·문서는 각각 보관합니다. — ' + notes.join(' · '),
         state.docsCanManage ? u.primaryButton('서류 올리기', 'window.AdminContracts.openDocForm()', 'upload-simple') : ''
       ) + u.table({
         id: 'cd-tbl',
@@ -261,10 +261,28 @@
     reload();
   }
 
+  function requirementText(profile, stage) {
+    return (profile.requirements || []).filter(function (item) { return item.stage === stage; }).map(function (item) { return item.title; }).join('\n');
+  }
+
+  function claimProfileInput(v, previous) {
+    var requirements = [];
+    [['once', 'claimOnce'], ['each_claim', 'claimEach'], ['final', 'claimFinal']].forEach(function (entry) {
+      String(v[entry[1]] || '').split(/\r?\n/).map(function (title) { return title.trim(); }).filter(Boolean).forEach(function (title) {
+        var old = (previous.requirements || []).find(function (item) { return item.stage === entry[0] && item.title === title; });
+        requirements.push({ key: old ? old.key : '', title: title, stage: entry[0], required: true });
+      });
+    });
+    return { version: previous.version || 0, basis_note: v.claimBasis || '', stored_materials: !!v.claimStored,
+      submission_day: v.claimDay === '' ? null : v.claimDay, preparation_days: v.claimLead === '' ? 7 : v.claimLead,
+      template_label: v.claimTemplate || '', requirements: requirements, confirm: !!v.claimConfirm };
+  }
+
   function openForm(id) {
     var u = ui();
     var r = id ? state.rows.filter(function (x) { return x.id === id; })[0] : null;
 
+    var profile = r && r.claimProfile || {};
     loadOptions().then(function (o) {
       u.formModal({
         title: r ? '계약 수정 — ' + r.title : '계약 등록',
@@ -331,9 +349,23 @@
             value: r ? r.certifiedPayrollRequired : false },
           { name: 'scopeOfWork', label: '공사 범위', type: 'textarea', colSpan: 2, group: '⑤ 요건', value: r ? r.scopeOfWork : '' },
           { name: 'notes', label: '비고', type: 'textarea', colSpan: 2, group: '⑤ 요건', value: r ? r.notes : '' },
+          { name: 'claimBasis', label: '확인 근거', type: 'textarea', colSpan: 2, group: '⑥ 청구 조건 · 제출서류', value: profile.basis_note || '',
+            hint: '이 계약의 조항·원청 회신 문서와 위치를 적으세요. 다른 현장의 조건은 자동 적용하지 않습니다.' },
+          { name: 'claimStored', label: '반입자재 기성 인정', type: 'checkbox', group: '⑥ 청구 조건 · 제출서류', value: !!profile.stored_materials,
+            hint: '설치 전 반입자재도 지급 대상으로 인정하는 계약인 경우에만 선택하세요.' },
+          { name: 'claimTemplate', label: '원청 양식 이름 · 버전', group: '⑥ 청구 조건 · 제출서류', value: profile.template_label || '' },
+          { name: 'claimDay', label: '원청 제출 마감일 (매월)', type: 'number', group: '⑥ 청구 조건 · 제출서류', value: profile.submission_day == null ? '' : profile.submission_day,
+            hint: '1~31일. 매월 정해진 날이 없으면 비워 둡니다. 현장 실적 기준일·지급기일과 구분합니다.' },
+          { name: 'claimLead', label: '마감 전 준비 기간 (일)', type: 'number', group: '⑥ 청구 조건 · 제출서류', value: profile.preparation_days == null ? 7 : profile.preparation_days },
+          { name: 'claimOnce', label: '최초 제출 필수서류', type: 'textarea', colSpan: 2, group: '⑥ 청구 조건 · 제출서류', value: requirementText(profile, 'once'), hint: '서류 이름을 한 줄에 하나씩 적으세요.' },
+          { name: 'claimEach', label: '매회 청구 필수서류', type: 'textarea', colSpan: 2, group: '⑥ 청구 조건 · 제출서류', value: requirementText(profile, 'each_claim'), hint: '이 계약에서 요구하는 사진대지·검측서 등만 적으세요.' },
+          { name: 'claimFinal', label: '최종 정산 필수서류', type: 'textarea', colSpan: 2, group: '⑥ 청구 조건 · 제출서류', value: requirementText(profile, 'final') },
+          { name: 'claimConfirm', label: '위 청구 조건을 계약 근거와 대조하여 확인', type: 'checkbox', colSpan: 2, group: '⑥ 청구 조건 · 제출서류', value: false,
+            hint: profile.confirmed_at ? '현재 확인본 v' + profile.version + ' · ' + profile.confirmed_at + '. 조건을 변경하면 재확인이 필요합니다. 기존 확정 실적은 변경되지 않습니다.' : '확인 전 새 계약 줄은 검토 대기로 저장됩니다. 기존 확정 실적은 변경되지 않습니다.' },
         ],
         onSave: function (v) {
           v.id = id || 0;
+          v.claimProfile = claimProfileInput(v, profile);
           return call('api_saveContract', [v]).then(function (res) {
             if (res.success === false) return res;
             u.toast(r ? '계약을 수정했습니다.' : '계약을 등록했습니다.');
@@ -406,7 +438,10 @@
             options: o.documentStatuses, value: 'draft' },
           { name: 'title', label: '서류명', group: '분류', value: '', colSpan: 2,
             hint: '비우면 파일 이름을 씁니다.' },
-          { name: 'documentNumber', label: '문서 번호', group: '분류', value: '' },
+          { name: 'documentNumber', label: '문서 번호', group: '분류', value: '', hint: '동일 종류·동일 번호인 경우에만 새 버전으로 연결됩니다. 회차가 다르면 다른 번호를 사용하세요.' },
+          { name: 'replacementDocumentId', label: '대체할 현재 문서 (선택)', type: 'select', group: '분류', value: '',
+            options: [{ value: '', label: '별도 문서 / 문서번호로 연결' }].concat(state.docs.filter(function (d) { return d.isCurrent; }).map(function (d) { return { value: d.id, label: d.title + ' · v' + d.version }; })),
+            hint: '번호가 없는 문서의 개정판이면 기존 문서를 선택하세요. 같은 종류만 대체할 수 있습니다.' },
           { name: 'issuedOn', label: '발행일', type: 'date', group: '기간', value: '' },
           { name: 'effectiveOn', label: '효력 발생일', type: 'date', group: '기간', value: '' },
           { name: 'expiresOn', label: '만료일', type: 'date', group: '기간', value: '',
