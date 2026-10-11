@@ -58,7 +58,7 @@ class ClaimSubmissionTest extends TestCase
         ]);
         $this->assertTrue($result['success'], $result['error'] ?? '');
         $this->application = PayApplication::findOrFail($result['id']);
-        $this->document = $this->document();
+        $this->document = $this->document([], 'Original measured work proof');
     }
 
     private function service(): ClaimSubmissionService
@@ -66,9 +66,11 @@ class ClaimSubmissionTest extends TestCase
         return app(ClaimSubmissionService::class);
     }
 
-    private function document(array $extra = [], string $contents = 'Original measured work proof'): IntelligentDocument
+    private function document(array $extra = [], ?string $contents = null): IntelligentDocument
     {
         $uuid = (string) Str::uuid();
+        // Separate document fixtures need distinct bytes under the scoped SHA-256 unique constraint.
+        $contents ??= 'Measured work proof '.$uuid;
         $path = 'proofs/'.$uuid.'.txt';
         Storage::disk('local')->put($path, $contents);
         return IntelligentDocument::create(array_merge([

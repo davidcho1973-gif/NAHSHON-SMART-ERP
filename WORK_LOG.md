@@ -10,8 +10,9 @@ Submittal request lookup is project-bound; incomplete attachments stop transmiss
 
 Relevant PHP tests and JS workflow tests were extended. Local command execution is unavailable (helper setup failure), so release verification must use the existing GitHub full PHP/PostgreSQL and JS CI, followed by staging and production deployment/build checks. Do not treat this log as deployment confirmation.
 
+Initial full CI found a contract partial-update bug and duplicate document test fixtures. Updates now preserve omitted contract values, reject an explicitly blank internal reference, and retain financial defaults; test originals use distinct bytes. The unchanged OfficePreview test process also stopped unexpectedly on the updated CI runner; a complete rerun remains mandatory, with no test skips or weakened gates.
+
 Usage: docs/CLAIM_WORKFLOW_KO.md.
-# WORK LOG
 
 DASOL PRISM SMART ERP shared work log for David, Antigravity, CODEX, and Cowork.
 

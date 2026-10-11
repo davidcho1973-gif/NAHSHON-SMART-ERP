@@ -176,6 +176,12 @@ class ContractAdminTest extends TestCase
         $res = $this->svc()->save($this->base(['originalAmount' => '100000', 'approvedChangeAmount' => '25000']));
 
         $this->assertSame(125000.0, (float) ProjectContract::find($res['id'])->current_amount);
+
+        $updated = $this->svc()->save($this->base(['id' => $res['id'], 'approvedChangeAmount' => '30000']));
+        $this->assertTrue($updated['success']);
+        $this->assertSame(130000.0, (float) ProjectContract::find($res['id'])->current_amount,
+            '변경 금액만 수정하면 기존 원계약 금액과 합산한다');
+        $this->assertSame(100000.0, (float) ProjectContract::find($res['id'])->original_amount);
     }
 
     public function test_an_explicit_current_amount_wins(): void
@@ -326,7 +332,14 @@ class ContractAdminTest extends TestCase
     public function test_claim_profile_confirmation_is_versioned_and_does_not_trust_client_metadata(): void
     {
         $this->actingAs($actor = $this->user('admin'));
-        $contract = $this->contract(['payload' => ['keep' => 'existing']]);
+        $contract = $this->contract(['payload' => ['keep' => 'existing'], 'original_amount' => 1000,
+            'approved_change_amount' => 100, 'current_amount' => 1100, 'currency' => 'KRW',
+            'insurance_required' => true, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31',
+            'counterparty_contact_name' => 'Contract contact', 'notes' => 'Preserve this record']);
+        $preservedFields = array_flip(['internal_reference', 'site_id', 'counterparty_company_id',
+            'original_amount', 'approved_change_amount', 'current_amount', 'currency', 'insurance_required',
+            'starts_on', 'ends_on', 'counterparty_contact_name', 'notes']);
+        $preserved = array_intersect_key($contract->fresh()->getAttributes(), $preservedFields);
         $this->assertNull(collect($this->svc()->list()['rows'])->firstWhere('id', $contract->id)['claimProfile']['confirmed_at']);
         $input = ['basis_note' => 'Contract article 8 / GC reply 2026-10-11', 'stored_materials' => false,
             'submission_day' => 25, 'preparation_days' => 5, 'template_label' => 'GC v2',
@@ -350,6 +363,27 @@ class ContractAdminTest extends TestCase
         $this->assertNull($changed['claimProfile']['confirmed_at']);
         $this->assertSame(3, $changed['claimProfile']['version']);
         $this->assertFalse($this->svc()->save($this->base(['id' => $contract->id, 'claimProfile' => $confirmed['claimProfile']]))['success'], 'stale profile cannot overwrite current terms');
+        $this->assertSame($preserved, array_intersect_key($contract->fresh()->getAttributes(), $preservedFields),
+            '청구 조건 수정에 포함되지 않은 관리번호·현장·계약 금액·날짜·연락처는 보존한다');
+    }
+
+    public function test_updating_a_contract_rejects_explicit_blank_reference_and_required_fields(): void
+    {
+        $this->actingAs($this->user('admin'));
+        $contract = $this->contract();
+        $reference = $contract->internal_reference;
+        foreach (['internalReference', 'title', 'companyId', 'direction'] as $field) {
+            $res = $this->svc()->save($this->base(['id' => $contract->id, $field => '']));
+            $this->assertFalse($res['success']);
+            $this->assertArrayHasKey($field, $res['errors']);
+        }
+        $this->assertSame($reference, $contract->fresh()->internal_reference);
+
+        $res = $this->svc()->save($this->base(['id' => $contract->id, 'startsOn' => '2027-01-01']));
+        $this->assertTrue($res['success']);
+        $res = $this->svc()->save($this->base(['id' => $contract->id, 'endsOn' => '2026-12-31']));
+        $this->assertFalse($res['success'], '부분 수정도 보존된 시작일과 비교한다');
+        $this->assertArrayHasKey('endsOn', $res['errors']);
     }
 
     public function test_claim_profile_rejects_missing_basis_invalid_days_and_duplicate_requirements(): void
