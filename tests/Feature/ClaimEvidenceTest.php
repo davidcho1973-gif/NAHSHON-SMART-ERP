@@ -19,10 +19,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
+use Tests\Concerns\PreparesClaimSubmissions;
 
 class ClaimEvidenceTest extends TestCase
 {
     use RefreshDatabase;
+    use PreparesClaimSubmissions;
 
     private ProjectContract $contract;
 
@@ -115,7 +117,7 @@ class ClaimEvidenceTest extends TestCase
         $this->verify($record);
         $draft = $this->svc()->draft($this->contract->id, '2026-09-30');
         $this->assertTrue($draft['success'], $draft['error'] ?? '');
-        $submit = app(BillingAdminService::class)->setBillingStatus(['id' => $draft['id'], 'action' => 'submit']);
+        $submit = $this->submitClaimFixture($draft['id']);
         $this->assertTrue($submit['success'], $submit['error'] ?? '');
         $this->assertFalse($this->svc()->draft($this->contract->id, '2026-10-31')['success']);
         $this->assertFalse(app(BillingAdminService::class)->setBillingStatus(['id' => $draft['id'], 'action' => 'withdraw'])['success']);
@@ -203,7 +205,7 @@ class ClaimEvidenceTest extends TestCase
         $first = $this->svc()->draft($this->contract->id, '2026-09-30');
         $this->assertTrue($first['success'], $first['error'] ?? '');
         $this->assertSame(0.01, $first['thisPeriodAmount']);
-        $submit = app(BillingAdminService::class)->setBillingStatus(['id' => $first['id'], 'action' => 'submit']);
+        $submit = $this->submitClaimFixture($first['id']);
         $this->assertTrue($submit['success'], $submit['error'] ?? '');
         $firstSnapshot = $this->svc()->getPacket($first['id']);
         foreach (['delivery', 'installation'] as $stage) {

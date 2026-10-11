@@ -131,71 +131,81 @@ class GcClaimWorkbookService
         } finally {
             @unlink($tmpIn);
         }
-        $sheet = $this->continuationSheet($book);
-        $cols = $this->columns($sheet);
-        $sections = $this->sections($sheet, $cols);
+        $file = null;
+        try {
+            $sheet = $this->continuationSheet($book);
+            $cols = $this->columns($sheet);
+            $sections = $this->sections($sheet, $cols);
 
-        // 1. 줄 수량 — 원본에 남아 있는 예전 값(1차 예상치 등)을 먼저 지운다.
-        foreach ($sections as $sec) {
-            foreach ($sec['rows'] as $row) {
-                $sheet->setCellValue($cols['prevQty'].$row, null);
-                $sheet->setCellValue($cols['thisQty'].$row, null);
-                $sheet->setCellValue('X'.$row, null);
+            // 1. 줄 수량 — 원본에 남아 있는 예전 값(1차 예상치 등)을 먼저 지운다.
+            foreach ($sections as $sec) {
+                foreach ($sec['rows'] as $row) {
+                    $sheet->setCellValue($cols['prevQty'].$row, null);
+                    $sheet->setCellValue($cols['thisQty'].$row, null);
+                    $sheet->setCellValue('X'.$row, null);
+                }
             }
+            $rfi = [];
+            $storedPrevValue = 0.0;
+            $unplaced = [];
+            foreach ($qty as $lineId => $q) {
+                $line = $lines->get($lineId);
+                if (! $line) {
+                    continue;
+                }
+                $row = $this->rowOf($line);
+                if ($row === null) {
+                    $rfi[] = [$line, $q];
+
+                    continue;
+                }
+                if (! collect($sections)->contains(fn ($s) => in_array($row, $s['rows'], true))) {
+                    $unplaced[] = '#'.$line->line_no;
+
+                    continue;
+                }
+                $sheet->setCellValue($cols['prevQty'].$row, $this->q($q['prevInstalled']));
+                $sheet->setCellValue($cols['thisQty'].$row, $this->q($q['cumInstalled'] - $q['prevInstalled']));
+                $onSite = max(0, $q['cumStored'] - $q['cumInstalled']);
+                $sheet->setCellValue('X'.$row, $onSite > 0 ? $this->q($onSite) : null);
+                $storedPrevValue += max(0, $q['prevStored'] - $q['prevInstalled']) * (float) $line->material_price;
+            }
+            if ($unplaced !== []) {
+                throw new InvalidArgumentException('원청 양식에서 줄의 행을 찾지 못했습니다: '.implode(', ', array_slice($unplaced, 0, 10)));
+            }
+
+            // 2. 소계 수식 바로잡기 + 반입 자재 칸(X 수량 · Y 금액).
+            $fixes = $this->fixSubtotals($sheet, $cols, $sections);
+            $this->storedColumns($sheet, $cols, $sections);
+
+            // 3. RFI 로 더한 일 — 원청 양식에 줄이 없으니 시트를 따로 두고 표지의 V/O 줄에 잇는다.
+            [$rfiPrev, $rfiRef] = $this->rfiSheet($book, $rfi);
+
+            // 4. 표지.
+            $cover = $book->getSheetByName('1_PROGRESS PAYMENT');
+            $notes = $this->cover($book, $cover, $app, $contract, $no, $rfiPrev, $rfiRef, round($storedPrevValue, 2), 'Y'.$cols['total']);
+
+            $file = tempnam(sys_get_temp_dir(), 'gc');
+            $writer = new Xlsx($book);
+            $writer->setPreCalculateFormulas(true);
+            $writer->save($file);
+
+            return [
+                'path' => $file,
+                'fileName' => preg_replace('/[^A-Za-z0-9._ -]+/', '', ($contract->site?->code ?: 'Claim').' Progress Payment #'.$no.' '.($app->period_end?->format('Y-m-d') ?? '')).'.xlsx',
+                'summary' => $this->summary($book, $cols, $app, $no),
+                'fixes' => $fixes,
+                'notes' => $notes,
+                'rfiLines' => count($rfi),
+            ];
+        } catch (\Throwable $e) {
+            if ($file !== null) {
+                @unlink($file);
+            }
+            throw $e;
+        } finally {
+            $book->disconnectWorksheets();
         }
-        $rfi = [];
-        $storedPrevValue = 0.0;
-        $unplaced = [];
-        foreach ($qty as $lineId => $q) {
-            $line = $lines->get($lineId);
-            if (! $line) {
-                continue;
-            }
-            $row = $this->rowOf($line);
-            if ($row === null) {
-                $rfi[] = [$line, $q];
-
-                continue;
-            }
-            if (! collect($sections)->contains(fn ($s) => in_array($row, $s['rows'], true))) {
-                $unplaced[] = '#'.$line->line_no;
-
-                continue;
-            }
-            $sheet->setCellValue($cols['prevQty'].$row, $this->q($q['prevInstalled']));
-            $sheet->setCellValue($cols['thisQty'].$row, $this->q($q['cumInstalled'] - $q['prevInstalled']));
-            $onSite = max(0, $q['cumStored'] - $q['cumInstalled']);
-            $sheet->setCellValue('X'.$row, $onSite > 0 ? $this->q($onSite) : null);
-            $storedPrevValue += max(0, $q['prevStored'] - $q['prevInstalled']) * (float) $line->material_price;
-        }
-        if ($unplaced !== []) {
-            throw new InvalidArgumentException('원청 양식에서 줄의 행을 찾지 못했습니다: '.implode(', ', array_slice($unplaced, 0, 10)));
-        }
-
-        // 2. 소계 수식 바로잡기 + 반입 자재 칸(X 수량 · Y 금액).
-        $fixes = $this->fixSubtotals($sheet, $cols, $sections);
-        $this->storedColumns($sheet, $cols, $sections);
-
-        // 3. RFI 로 더한 일 — 원청 양식에 줄이 없으니 시트를 따로 두고 표지의 V/O 줄에 잇는다.
-        [$rfiPrev, $rfiRef] = $this->rfiSheet($book, $rfi);
-
-        // 4. 표지.
-        $cover = $book->getSheetByName('1_PROGRESS PAYMENT');
-        $notes = $this->cover($book, $cover, $app, $contract, $no, $rfiPrev, $rfiRef, round($storedPrevValue, 2), 'Y'.$cols['total']);
-
-        $file = tempnam(sys_get_temp_dir(), 'gc').'.xlsx';
-        $writer = new Xlsx($book);
-        $writer->setPreCalculateFormulas(true);
-        $writer->save($file);
-
-        return [
-            'path' => $file,
-            'fileName' => preg_replace('/[^A-Za-z0-9._ -]+/', '', ($contract->site?->code ?: 'Claim').' Progress Payment #'.$no.' '.($app->period_end?->format('Y-m-d') ?? '')).'.xlsx',
-            'summary' => $this->summary($book, $cols, $app, $no),
-            'fixes' => $fixes,
-            'notes' => $notes,
-            'rfiLines' => count($rfi),
-        ];
     }
 
     /**

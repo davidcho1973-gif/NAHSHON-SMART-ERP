@@ -16,6 +16,7 @@ use App\Http\Controllers\ExpenseAppController;
 use App\Http\Controllers\ExpensePreApprovalController;
 use App\Http\Controllers\GateAttendanceController;
 use App\Http\Controllers\GcClaimExportController;
+use App\Http\Controllers\ClaimSubmissionController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GuestViewController;
 use App\Http\Controllers\HrAttendanceExportController;
@@ -384,6 +385,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/ops-api/photo/{batch}/{index}', [OpsPhotoController::class, 'show'])
         ->whereNumber('index')->name('ops.photo.show');
     // 공정별 도면 — 브라우저가 도면 PDF 를 한 쪽씩 그려 보내고, 사진 쪽은 AI 가 글자를 읽어 붙인다.
+    Route::get('/billing-export/submissions/{submission}/responses/{event}/file', [ClaimSubmissionController::class, 'response'])->whereNumber(['submission', 'event'])->name('billing-export.submission-response');
+    Route::get('/billing-export/submissions/{submission}/packet.zip', [ClaimSubmissionController::class, 'download'])->whereNumber('submission')->name('billing-export.submission');
     Route::get('/billing-export/applications/{application}/gc-claim.xlsx', [GcClaimExportController::class, 'download'])->whereNumber('application')->name('billing-export.gc-claim');
     Route::post('/drawing-api/documents/{document}/start', [DrawingSheetController::class, 'start'])->whereNumber('document')->name('drawing-sheets.start');
     Route::post('/drawing-api/documents/{document}/pages/{page}', [DrawingSheetController::class, 'page'])

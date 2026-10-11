@@ -61,6 +61,8 @@ use App\Services\DocumentExpiryService;
 use App\Services\Drawings\DrawingMarkService;
 use App\Services\Drawings\SectionDrawingService;
 use App\Services\Finance\ClaimEvidenceService;
+use App\Services\Finance\ClaimSubmissionService;
+use App\Services\Finance\ClaimWorklistService;
 use App\Services\Finance\ClaimSourceImportService;
 use App\Services\Finance\ContractChangeService;
 use App\Services\Finance\ContractSheetImportService;
@@ -347,6 +349,11 @@ class SmartCompanyData
             // 기성 청구 · 수금 — 수주 계약의 청구 원장 (재무 대시보드 수금 카드의 데이터 공급원).
             // 조회 3개는 api_get* 접두사라 읽기전용 계정 게이트·프론트 캐시가 그대로 작동하고,
             // 쓰기 6개는 read-only 계정에 403 이 떨어진다. 산식·전이 규칙은 서비스 안에서 방어한다.
+            'api_getClaimWorklist' => app(ClaimWorklistService::class)->get((array) ($args[0] ?? [])),
+            'api_getClaimSubmissionWorkspace' => app(ClaimSubmissionService::class)->workspace((int) ($args[0] ?? 0)),
+            'api_saveClaimSubmissionEvidence' => app(ClaimSubmissionService::class)->saveEvidence((array) ($args[0] ?? [])),
+            'api_prepareClaimSubmission' => app(ClaimSubmissionService::class)->prepare((int) ($args[0] ?? 0)),
+            'api_transitionClaimSubmission' => app(ClaimSubmissionService::class)->transition((array) ($args[0] ?? [])),
             'api_getBillingContracts' => app(BillingAdminService::class)->getBillingContracts(is_array($args[0] ?? null) ? $args[0] : []),
             'api_getClaimEvidence' => app(ClaimEvidenceService::class)->getLedger((int) ($args[0] ?? 0)),
             'api_saveClaimLine' => app(ClaimEvidenceService::class)->saveLine(is_array($args[0] ?? null) ? $args[0] : []),

@@ -60,6 +60,14 @@ class OpsClaimReflector
             return ['proposed' => 0, 'applied' => 0];
         }
 
+        // 접수 시각은 작업일이 아니다. 연결된 일일보고 날짜를 보존하고, 날짜가 없는
+        // 글은 현장 접수일임을 표시한 확인 대기 기록으로만 남긴다.
+        $report = $batch->tradeReport;
+        $reportedOn = $report && (int) $report->site_id === (int) $batch->site_id
+            ? $report->work_date?->toDateString() : null;
+        $workDate = $reportedOn ?: $batch->created_at?->copy()->timezone($batch->site?->timezone ?: config('app.timezone'))->toDateString();
+        $dateNote = $reportedOn ? null : '작업일 미기재 — 현장 접수일 '.$workDate.' 기준. 실제 작업일 확인 필요';
+
         $items = [];
         foreach ((array) data_get($result, 'data.installations', []) as $row) {
             $line = $lines->get((int) ($row['contract_line_id'] ?? 0));
@@ -76,13 +84,18 @@ class OpsClaimReflector
             $quote = mb_substr(trim((string) ($row['quote'] ?? '')), 0, 300);
             $items[] = OpsIntakeItem::create([
                 'site_id' => $batch->site_id, 'ops_intake_batch_id' => $batch->id, 'source' => $batch->source,
+                // 현장에는 여러 프로젝트가 있을 수 있다. 선택한 계약 줄의 프로젝트가 근거의 범위다.
+                'project_code' => $line->contract?->project?->project_code,
                 'communication_message_id' => $batch->communication_message_id, 'created_by_id' => $batch->created_by_id,
-                'raw_text' => $batch->raw_text, 'occurred_on' => $batch->created_at?->toDateString(),
+                'raw_text' => $batch->raw_text, 'occurred_on' => $workDate,
                 'category' => self::CATEGORY, 'confidence' => (int) round((float) $row['confidence'] * 100),
-                'summary' => '#'.$line->line_no.' '.$line->description.' 설치 '.$capped.' '.$line->unit.' · '.$where,
+                'summary' => '#'.$line->line_no.' '.$line->description.' 설치 '.$capped.' '.$line->unit.' · '.$where.($dateNote ? ' · 작업일 확인 필요' : ''),
                 'target_type' => 'boq_line', 'target_code' => $line->line_no, 'target_name' => mb_substr($line->description, 0, 255),
                 'proposed' => ['lineId' => $line->id, 'qty' => $capped, 'location' => $where, 'quote' => $quote,
-                    'note' => $capped < $qty ? '계약 수량까지만(넘는 '.round($qty - $capped, 4).' 은 RFI 필요)' : null],
+                    'note' => implode(' · ', array_filter([
+                        $capped < $qty ? '계약 수량까지만(넘는 '.round($qty - $capped, 4).' 은 RFI 필요)' : null,
+                        $dateNote,
+                    ])) ?: null],
                 'status' => 'pending',
             ]);
         }
@@ -180,7 +193,7 @@ class OpsClaimReflector
     {
         return ContractBoqLine::query()->where('status', 'accepted')->where('contract_qty', '>', 0)
             ->whereHas('contract', fn ($q) => $q->where('site_id', $siteId)->where('direction', 'receivable'))
-            ->with('section:id,code')->orderBy('id')->get()->keyBy('id');
+            ->with(['section:id,code', 'contract:id,project_id', 'contract.project:id,project_code'])->orderBy('id')->get()->keyBy('id');
     }
 
     private function installed(ContractBoqLine $line): float

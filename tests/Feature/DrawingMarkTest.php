@@ -39,7 +39,7 @@ class DrawingMarkTest extends TestCase
     {
         $this->fixtureSetUp();
         $contract = ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id, 'title' => 'Prime',
-            'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD']);
+            'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD', 'payload' => ['claim_profile' => $this->confirmedClaimProfile()]]);
         $this->sheetDoc = $this->workbook();
         $this->assertTrue(app(ContractSheetImportService::class)->import(['documentId' => $this->sheetDoc->id, 'contractId' => $contract->id, 'confirmContract' => true])['success']);
         $this->wall = ContractBoqLine::where('line_no', '2')->firstOrFail();

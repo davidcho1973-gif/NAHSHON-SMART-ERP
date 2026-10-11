@@ -37,10 +37,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * 맞지 않으면 올리지 않는다 — 잘못 읽은 계약서로 돈을 청구할 수는 없다.
  *
  * ── 반입 자재 기성 ────────────────────────────────────────────────────
- * 원청이 설치 전 반입 자재도 기성으로 인정한다(사장 확인 2026-09-25). 자재 단가(G)와
- * 노무·경비 단가(H·I)가 둘 다 있는 줄은 «보관 자재 G/J%, 설치 나머지%» 의 단계별 인정으로,
- * 한쪽만 있는 줄은 수량 기준으로 올린다. 비율은 계약서의 단가에서 나오므로 사람이
- * 따로 정할 것이 없다.
+ * 계약별 확인된 청구 조건이 반입을 인정할 때만 자재 단가와 설치 단가로 나눈다.
+ * 조건이 미확인인 새 줄은 draft로 보관한다. 기존에 확정한 줄은 재가져오기로 바꾸지 않는다.
  *
  * 계약의 줄은 RFI 로만 바뀐다. 다시 올린 계약서의 같은 번호 줄이 수량·단가가 다르면
  * 덮지 않고 멈춘다.
@@ -124,7 +122,7 @@ class ContractSheetImportService
                 }
                 // 이 파일은 이 계약의 계약 내역이다 — 계약 행의 원문 근거로 쓰이므로 계약에 잇는다.
                 $doc->forceFill(['project_contract_id' => $contract->id])->save();
-                ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
+                $contract = ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
 
                 $existingSections = WorkSection::query()->where('site_id', $site->id)->orderBy('sort_order')->get();
                 $matched = $this->matchSections($sheet['sections'], $existingSections);
@@ -159,7 +157,7 @@ class ContractSheetImportService
                 return [
                     'success' => true, 'contractId' => $contract->id, 'created' => $created, 'kept' => $kept,
                     'sections' => count($sheet['sections']),
-                    'message' => '계약 줄 '.($created + $kept).'개를 공정 '.count($sheet['sections']).'개 아래에 올렸습니다.',
+                    'message' => '계약 줄 '.($created + $kept).'개를 공정 '.count($sheet['sections']).'개 아래에 올렸습니다.'.(ContractClaimProfile::confirmed($contract) ? '' : ' 새 줄은 지급 조건 확인 대기입니다. 계약의 청구 조건을 확인한 뒤 다시 가져오거나 항목별 조건을 확인하세요.'),
                 ];
             });
         });
@@ -219,17 +217,21 @@ class ContractSheetImportService
             throw new InvalidArgumentException('엑셀 파일을 열 수 없습니다.');
         }
 
-        foreach ($book->getWorksheetIterator() as $ws) {
-            $cols = $this->columns($ws);
-            if ($cols !== null) {
-                $parsed = $this->parseSheet($ws, $cols);
-                [$project, $scope] = $this->projectInfo($book);
+        try {
+            foreach ($book->getWorksheetIterator() as $ws) {
+                $cols = $this->columns($ws);
+                if ($cols !== null) {
+                    $parsed = $this->parseSheet($ws, $cols);
+                    [$project, $scope] = $this->projectInfo($book);
 
-                return ['sheetName' => $ws->getTitle(), 'project' => $project, 'scope' => $scope] + $parsed;
+                    return ['sheetName' => $ws->getTitle(), 'project' => $project, 'scope' => $scope] + $parsed;
+                }
             }
-        }
 
-        throw new InvalidArgumentException('계약 내역(continuation sheet) 표를 찾지 못했습니다. «DESCRIPTION OF WORK» 제목 줄이 있는 시트가 필요합니다.');
+            throw new InvalidArgumentException('계약 내역(continuation sheet) 표를 찾지 못했습니다. «DESCRIPTION OF WORK» 제목 줄이 있는 시트가 필요합니다.');
+        } finally {
+            $book->disconnectWorksheets();
+        }
     }
 
     /**
@@ -441,11 +443,11 @@ class ContractSheetImportService
             'contractQty' => $line['qty'], 'unitPrice' => $line['price'],
             'materialPrice' => $line['material'], 'laborPrice' => $line['labor'], 'expensePrice' => $line['expense'],
             'sourceDocumentId' => $doc->id, 'sourceLocator' => $sheetName.'!'.$line['row'].'행',
-            'status' => 'accepted',
-        ] + $this->recognition($line);
+            'status' => ContractClaimProfile::confirmed($contract) ? 'accepted' : 'draft',
+        ] + $this->recognition($line, $contract);
 
         if ($existing) {
-            if ($changed != 0.0 || $existing->records()->where('status', 'verified')->exists()) {
+            if ($existing->status === 'accepted' || $changed != 0.0 || $existing->records()->where('status', 'verified')->exists()) {
                 // 확인된 실적이 있거나 RFI 로 바뀐 줄의 계약 조건은 다시 쓰지 않는다. 같은 줄임은 위에서 확인했으니 공정만 잇는다.
                 $existing->forceFill(['work_section_id' => $section->id])->save();
 
@@ -472,21 +474,23 @@ class ContractSheetImportService
     }
 
     /** @return array<string, mixed> */
-    private function recognition(array $line): array
+    private function recognition(array $line, ProjectContract $contract): array
     {
-        return self::recognitionFor($line['material'], $line['labor'], $line['expense'], $line['price'], '원청 계약 기성표 원문 그대로');
+        return self::recognitionFor($line['material'], $line['labor'], $line['expense'], $line['price'], '원청 계약 기성표 원문', ContractClaimProfile::read($contract));
     }
 
     /**
      * 줄의 기성 인정 방식 — 계약서 줄이든 RFI 로 더한 줄이든 한 규칙이다.
-     * 자재·노무(경비) 단가가 둘 다 있으면 반입(자재 단가)과 설치(나머지)로 나눠 받는다.
+     * 확인된 계약 조건이 반입을 인정할 때만 자재/설치 단가로 나눈다. 가격 분해만으로 권리가 생기지 않는다.
      *
      * @return array{recognitionBasis: string, stageWeights: array<string, float>, acceptanceNote: string}
      */
-    public static function recognitionFor(mixed $material, mixed $labor, mixed $expense, float $price, string $basis): array
+    public static function recognitionFor(mixed $material, mixed $labor, mixed $expense, float $price, string $basis, array $profile = []): array
     {
         $rest = (float) $labor + (float) $expense;
-        if (! ((float) $material > 0 && $rest > 0) || $price <= 0) {
+        $confirmed = filled($profile['confirmed_at'] ?? null) && filled($profile['confirmed_by'] ?? null) && filled($profile['basis_note'] ?? null);
+        $basis .= $confirmed ? ' · 계약 청구 조건 v'.($profile['version'] ?? 0).' · '.$profile['basis_note'] : ' · 지급 인정 조건 미확인';
+        if (! $confirmed || ! ($profile['stored_materials'] ?? false) || ! ((float) $material > 0 && $rest > 0) || $price <= 0) {
             return ['recognitionBasis' => 'quantity', 'stageWeights' => [],
                 'acceptanceNote' => $basis.' · 수량 기준(시공 수량 × 계약 단가).'];
         }
@@ -495,7 +499,7 @@ class ContractSheetImportService
         return [
             'recognitionBasis' => 'milestone',
             'stageWeights' => ['stored' => $stored, 'installation' => round(100 - $stored, 4)],
-            'acceptanceNote' => $basis.' · 원청이 설치 전 반입 자재도 기성으로 인정(사장 확인 2026-09-25) · '
+            'acceptanceNote' => $basis.' · 계약에서 반입자재 기성을 인정 · '
                 .'반입 인정 = 자재 단가 '.(float) $material.' / 설치 인정 = 노무·경비 단가 '.round($rest, 4).'.',
         ];
     }
@@ -521,6 +525,7 @@ class ContractSheetImportService
             'scopeOfWork' => $sheet['scope'] ?? '',
             'retainagePercent' => isset($input['retainagePercent']) ? (string) $input['retainagePercent'] : '',
             'notes' => $input['contractNotes'] ?? '원청 계약 기성표에서 만든 계약. 계약 번호·유보율·선급금 조건은 계약서를 보고 채우세요.',
+            'claimProfile' => $input['claimProfile'] ?? [],
         ]);
         if (! ($saved['success'] ?? false)) {
             throw new InvalidArgumentException($saved['error'] ?? implode(' ', (array) ($saved['errors'] ?? ['계약을 만들지 못했습니다.'])));

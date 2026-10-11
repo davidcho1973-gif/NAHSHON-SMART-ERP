@@ -40,7 +40,7 @@ class ContractChangeTest extends TestCase
     {
         $this->fixtureSetUp();
         $this->prime = ProjectContract::create(['company_id' => $this->company->id, 'site_id' => $this->site->id, 'title' => 'Prime',
-            'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD']);
+            'direction' => 'receivable', 'original_amount' => 3000, 'currency' => 'USD', 'payload' => ['claim_profile' => $this->confirmedClaimProfile()]]);
         $this->sheetDoc = $this->workbook();
         $r = app(ContractSheetImportService::class)->import(['documentId' => $this->sheetDoc->id, 'contractId' => $this->prime->id, 'confirmContract' => true]);
         $this->assertTrue($r['success'], $r['error'] ?? '');
@@ -107,6 +107,8 @@ class ContractChangeTest extends TestCase
         $contract = $this->prime->fresh();
         $this->assertEquals(500, $contract->approved_change_amount);
         $this->assertEquals(3500, $contract->current_amount);
+        $this->assertFalse($this->rfi()->decide(['id' => $change->id, 'action' => 'approve', 'approvalDocumentId' => $this->doc('repeat.pdf')->id])['success']);
+        $this->assertEquals(500, $this->prime->fresh()->approved_change_amount, '중복 승인 요청은 계약금액을 재가산하지 않는다');
         $this->assertTrue($ledger->reviewRecord(['id' => $rec['id'], 'action' => 'verify', 'verifiedQty' => 4, 'reviewNote' => 'approved RFI'])['success'], '승인 뒤에는 모아 둔 기록을 청구할 수 있다');
     }
 
@@ -160,6 +162,25 @@ class ContractChangeTest extends TestCase
         $this->assertNull($withdrawn->fresh());
         $this->assertEquals(3000, $this->prime->fresh()->current_amount);
         $this->assertSame(0, ClaimWorkRecord::count());
+    }
+
+    public function test_new_rfi_entitlement_requires_this_contract_confirmation(): void
+    {
+        $this->prime->update(['payload' => []]);
+        $r = $this->rfi()->submit(['sectionId' => $this->drywall()->id, 'kind' => 'add', 'rfiNo' => 'PROFILE', 'title' => 'New scope',
+            'items' => [['description' => 'Extra', 'unit' => 'EA', 'qty' => 2, 'materialPrice' => 25, 'laborPrice' => 75]]]);
+        $this->assertTrue($r['success'], $r['error'] ?? '');
+        $change = ContractChange::where('rfi_no', 'PROFILE')->firstOrFail();
+        $line = $change->items()->first()->line;
+        $this->assertSame('quantity', $line->recognition_basis);
+        $approval = $this->doc();
+        $this->assertFalse($this->rfi()->decide(['id' => $change->id, 'action' => 'approve', 'approvalDocumentId' => $approval->id])['success']);
+        $this->assertEquals(0, $this->prime->fresh()->approved_change_amount);
+
+        $this->prime->update(['payload' => ['claim_profile' => $this->confirmedClaimProfile(false)]]);
+        $this->assertTrue($this->rfi()->decide(['id' => $change->id, 'action' => 'approve', 'approvalDocumentId' => $approval->id])['success']);
+        $this->assertSame('quantity', $line->fresh()->recognition_basis);
+        $this->assertSame('accepted', $line->fresh()->status);
     }
 
     public function test_only_billing_managers_can_submit_rfis(): void

@@ -114,8 +114,11 @@ class ContractChangeService
             return DB::transaction(function () use ($change, $contract, $action, $approval, $decidedOn, $input): array {
                 $contract = ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
                 $change->refresh()->load('items.line');
+                if ($change->status !== 'submitted') {
+                    throw new InvalidArgumentException('이미 결정된 RFI 입니다.');
+                }
                 if ($action === 'approve') {
-                    $change->kind === 'add' ? $this->approveAdd($change, $approval, $decidedOn) : $this->approveDeduct($change);
+                    $change->kind === 'add' ? $this->approveAdd($change, $approval, $decidedOn, $contract) : $this->approveDeduct($change);
                     $approved = round((float) $contract->approved_change_amount + (float) $change->amount, 2);
                     $contract->forceFill([
                         'approved_change_amount' => $approved,
@@ -211,7 +214,7 @@ class ContractChangeService
                 'materialPrice' => $parts['materialPrice'], 'laborPrice' => $parts['laborPrice'], 'expensePrice' => $parts['expensePrice'],
                 'status' => 'draft', 'sourceDocumentId' => $requestDoc?->id, 'sourceLocator' => $requestDoc ? 'RFI '.$change->rfi_no : null,
                 'sourceRef' => 'rfi:'.$change->id.':'.($i + 1),
-            ] + ContractSheetImportService::recognitionFor($parts['materialPrice'], $parts['laborPrice'], $parts['expensePrice'], $price, 'RFI '.$change->rfi_no));
+            ] + ContractSheetImportService::recognitionFor($parts['materialPrice'], $parts['laborPrice'], $parts['expensePrice'], $price, 'RFI '.$change->rfi_no, ContractClaimProfile::read($contract)));
             if (! ($saved['success'] ?? false)) {
                 throw new InvalidArgumentException(($i + 1).'번째 줄: '.($saved['error'] ?? '저장하지 못했습니다.'));
             }
@@ -223,15 +226,18 @@ class ContractChangeService
         return round($total, 2);
     }
 
-    private function approveAdd(ContractChange $change, IntelligentDocument $approval, string $decidedOn): void
+    private function approveAdd(ContractChange $change, IntelligentDocument $approval, string $decidedOn, ProjectContract $contract): void
     {
+        if (! ContractClaimProfile::confirmed($contract)) {
+            throw new InvalidArgumentException('추가 공사의 지급 인정 조건을 계약의 청구 조건에서 먼저 확인하세요.');
+        }
         foreach ($change->items as $item) {
             $line = $item->line;
-            $rule = ContractSheetImportService::recognitionFor($line->material_price, $line->labor_price, $line->expense_price, (float) $line->unit_price, 'RFI '.$change->rfi_no.' 원청 승인 '.$decidedOn);
+            $rule = ContractSheetImportService::recognitionFor($line->material_price, $line->labor_price, $line->expense_price, (float) $line->unit_price, 'RFI '.$change->rfi_no.' 원청 승인 '.$decidedOn, ContractClaimProfile::read($contract));
             $saved = $this->evidence->saveLine([
                 'id' => $line->id, 'status' => 'accepted', 'sourceDocumentId' => $approval->id,
-                'sourceLocator' => 'RFI '.$change->rfi_no.' 승인', 'acceptanceNote' => $rule['acceptanceNote'],
-            ]);
+                'sourceLocator' => 'RFI '.$change->rfi_no.' 승인',
+            ] + $rule);
             if (! ($saved['success'] ?? false)) {
                 throw new InvalidArgumentException('#'.$line->line_no.': '.($saved['error'] ?? '확정하지 못했습니다.'));
             }
