@@ -1,5 +1,11 @@
 # WORK LOG
 
+## CODEX — 2026-10-11 Decode Outlook Korean email charset
+
+Live recovery found Outlook email bodies labelled `ks_c_5601-1987`, a Microsoft code-page 949 alias which PHP mbstring does not recognize directly. Normalize only that alias to UHC for bodies, encoded headers and filenames; do not guess unknown charsets or decode it as the smaller EUC-KR set. Microsoft's code-page-identifiers documentation identifies the alias as Unified Hangul Code. Existing unread-attachment review and financial safeguards remain in force.
+
+Targeted extraction hardening: 18 tests / 78 assertions passed, including a CP949-only Hangul syllable in subject/body/filename and refusal of an unknown declared charset. Pint and diff checks passed. Full release CI remains required before production; document recovery outcomes are tracked privately.
+
 ## CODEX — 2026-10-11 Recover historical document queues
 
 The authorized NAHSHON queue audit found 85 unserved default document jobs: 82 belonged to already analyzed documents and three to failed spreadsheets. The 38 failed-job records referenced 37 still-failed EML documents and one product-search draft. All 40 failed document originals passed source integrity checks and had no prior analysis, action items, chat attachments or financial links. Queue payloads, exceptions and failed source records were encrypted, stored privately in durable object storage, and verified by readback before changes. Only the 82 completed jobs were retired at this stage; originals and existing results were not deleted or replayed.
