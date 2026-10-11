@@ -118,6 +118,42 @@ class DocumentExtractionHardeningTest extends TestCase
         }
     }
 
+    public function test_outlook_korean_charset_alias_preserves_extended_hangul_in_body_headers_and_filenames(): void
+    {
+        // 핅 is in CP949/UHC but not EUC-KR; decoding as the smaller charset loses it.
+        $subject = '703K 천장 핅 검토';
+        $body = '천장 공사 핅 검토 후 금요일까지 회신해 주세요.';
+        $filename = '천장 핅 견적.pdf';
+        $bytes = implode("\r\n", [
+            'Subject: =?ks_c_5601-1987?B?'.base64_encode(mb_convert_encoding($subject, 'UHC', 'UTF-8')).'?=',
+            'Content-Type: multipart/mixed; boundary="outlook-korean"', '',
+            '--outlook-korean', 'Content-Type: text/plain; charset="KS_C_5601-1987"',
+            'Content-Transfer-Encoding: base64', '',
+            base64_encode(mb_convert_encoding($body, 'UHC', 'UTF-8')),
+            '--outlook-korean', 'Content-Type: application/pdf',
+            "Content-Disposition: attachment; filename*=ks_c_5601-1987''".rawurlencode(mb_convert_encoding($filename, 'UHC', 'UTF-8')),
+            'Content-Transfer-Encoding: base64', '', base64_encode('UNREAD_PDF'), '--outlook-korean--',
+        ]);
+
+        $text = app(DocumentTextExtractor::class)->extract($bytes, 'eml');
+
+        $this->assertStringContainsString('Subject: '.$subject, $text);
+        $this->assertStringContainsString($body, $text);
+        $this->assertStringContainsString($filename.' (application/pdf); contents not analyzed.', $text);
+        $this->assertStringContainsString(DocumentTextExtractor::EMAIL_ATTACHMENT_REVIEW_MARKER, $text);
+        $this->assertStringNotContainsString('UNREAD_PDF', $text);
+        $this->assertTrue(mb_check_encoding($text, 'UTF-8'));
+    }
+
+    public function test_unknown_email_charset_is_not_guessed_from_readable_bytes(): void
+    {
+        $bytes = "Subject: Unknown charset\r\nContent-Type: text/plain; charset=x-unknown-charset\r\n\r\n"
+            .'This body is valid UTF-8, but its declared charset is unsupported.';
+
+        $this->expectExceptionMessage('[INVALID_EMAIL]');
+        app(DocumentTextExtractor::class)->extract($bytes, 'eml');
+    }
+
     public function test_unread_email_attachments_and_inline_images_both_require_review(): void
     {
         $engine = $this->mock(OcrEngine::class);
