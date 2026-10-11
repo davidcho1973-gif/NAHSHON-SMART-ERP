@@ -73,7 +73,7 @@ jobs:
       - name: Run migrations
         run: php artisan migrate --force
 
-      - name: Check spreadsheet preview and diagnose PHP exits
+      - name: Check workbook lifecycle before full regression
         run: |
           cat > "$RUNNER_TEMP/php-shutdown-diagnostics.php" <<'PHP'
           <?php
@@ -89,7 +89,7 @@ jobs:
           PHP
           /usr/bin/time -v php -d display_errors=stderr -d log_errors=1 -d error_log=/dev/stderr \
             -d auto_prepend_file="$RUNNER_TEMP/php-shutdown-diagnostics.php" \
-            vendor/bin/phpunit --filter OfficePreviewTest --debug
+            vendor/bin/phpunit --filter 'OfficePreviewTest|ContractSheetImportTest|GcClaimWorkbookTest|SpecSubmittalExtractionTest'
 
       - name: Execute tests
         run: |

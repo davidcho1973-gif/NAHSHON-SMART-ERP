@@ -217,17 +217,21 @@ class ContractSheetImportService
             throw new InvalidArgumentException('엑셀 파일을 열 수 없습니다.');
         }
 
-        foreach ($book->getWorksheetIterator() as $ws) {
-            $cols = $this->columns($ws);
-            if ($cols !== null) {
-                $parsed = $this->parseSheet($ws, $cols);
-                [$project, $scope] = $this->projectInfo($book);
+        try {
+            foreach ($book->getWorksheetIterator() as $ws) {
+                $cols = $this->columns($ws);
+                if ($cols !== null) {
+                    $parsed = $this->parseSheet($ws, $cols);
+                    [$project, $scope] = $this->projectInfo($book);
 
-                return ['sheetName' => $ws->getTitle(), 'project' => $project, 'scope' => $scope] + $parsed;
+                    return ['sheetName' => $ws->getTitle(), 'project' => $project, 'scope' => $scope] + $parsed;
+                }
             }
-        }
 
-        throw new InvalidArgumentException('계약 내역(continuation sheet) 표를 찾지 못했습니다. «DESCRIPTION OF WORK» 제목 줄이 있는 시트가 필요합니다.');
+            throw new InvalidArgumentException('계약 내역(continuation sheet) 표를 찾지 못했습니다. «DESCRIPTION OF WORK» 제목 줄이 있는 시트가 필요합니다.');
+        } finally {
+            $book->disconnectWorksheets();
+        }
     }
 
     /**

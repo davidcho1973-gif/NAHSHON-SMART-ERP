@@ -43,6 +43,21 @@ class GcClaimWorkbookTest extends TestCase
 
     private IntelligentDocument $proof;
 
+    /** @var array<int, Spreadsheet> */
+    private array $openedBooks = [];
+
+    protected function tearDown(): void
+    {
+        try {
+            foreach ($this->openedBooks as $book) {
+                $book->disconnectWorksheets();
+            }
+            $this->openedBooks = [];
+        } finally {
+            parent::tearDown();
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -104,8 +119,12 @@ class GcClaimWorkbookTest extends TestCase
     {
         $built = app(GcClaimWorkbookService::class)->build($appId);
         $this->assertTrue($built['success'], $built['error'] ?? '');
-        $book = IOFactory::load($built['path']);
-        @unlink($built['path']);
+        try {
+            $book = IOFactory::load($built['path']);
+            $this->openedBooks[] = $book;
+        } finally {
+            @unlink($built['path']);
+        }
 
         return $book;
     }
