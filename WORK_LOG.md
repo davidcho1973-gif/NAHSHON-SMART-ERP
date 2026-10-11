@@ -1,5 +1,13 @@
 # WORK LOG
 
+## CODEX — 2026-10-11 Recover historical document queues
+
+The authorized NAHSHON queue audit found 85 unserved default document jobs: 82 belonged to already analyzed documents and three to failed spreadsheets. The 38 failed-job records referenced 37 still-failed EML documents and one product-search draft. All 40 failed document originals passed source integrity checks and had no prior analysis, action items, chat attachments or financial links. Queue payloads, exceptions and failed source records were encrypted, stored privately in durable object storage, and verified by readback before changes. Only the 82 completed jobs were retired at this stage; originals and existing results were not deleted or replayed.
+
+Root causes addressed: raw MIME bodies included base64 binary attachments as AI input, and a failing Cloud log socket could throw from report() and replace the underlying analysis error. Decode bounded MIME bodies/headers/charsets, prefer one multipart alternative, omit binary data, and explicitly require review for unexamined attachments, including inline/CID images whose placement cannot establish whether they contain project evidence. Malformed MIME stops before AI analysis. A central tap protects configured logging channels, including Cloud-injected channels, preserving original errors in private daily JSON fallback files (seven retained), then PHP error logging if necessary. Existing channel creators and callbacks remain intact.
+
+Targeted validation: document extraction 16 tests/71 assertions; logging 3/13; queue reliability 11/74 (combined targeted run: 32 tests/162 assertions), including actual PostgreSQL rollback, failed alert delivery and failed log transport. Pint and diff checks pass. Full CI and staging/production verification are required before reanalysis. Live recovery results belong in the private operations report, not public source history; this entry alone is not evidence that all failed analyses have recovered.
+
 ## CODEX — 2026-10-11 Claim preparation and documented submission reform
 
 The commercial workflow now centers on each receivable contract's confirmed claim conditions and original supporting documents. New/unconfirmed imports no longer inherit the 703K stored-material assumption. Existing accepted BOQ and financial history remain unchanged. Contract document replacement requires the same document identity or an explicit predecessor.
