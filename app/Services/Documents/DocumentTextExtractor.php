@@ -232,10 +232,17 @@ class DocumentTextExtractor
             return $text;
         }
         try {
-            return mb_convert_encoding($text, 'UTF-8', $charset);
+            return mb_convert_encoding($text, 'UTF-8', $this->emailCharsetName($charset));
         } catch (\ValueError $e) {
             throw new \RuntimeException('[INVALID_EMAIL] 지원하지 않는 이메일 문자 인코딩입니다.', previous: $e);
         }
+    }
+
+    private function emailCharsetName(string $charset): string
+    {
+        // Outlook labels CP949 as ks_c_5601-1987, which mbstring does not recognize.
+        // Microsoft code-page-identifiers defines it as UHC, including extended Hangul.
+        return strtolower(trim($charset)) === 'ks_c_5601-1987' ? 'UHC' : trim($charset);
     }
 
     private function emailHeader(string $value): string
@@ -243,8 +250,8 @@ class DocumentTextExtractor
         // Decode encoded words only: mb_decode_mimeheader treats raw UTF-8 as ASCII.
         $value = preg_replace('/(=\?[^?\s]+\?[bq]\?[^?]*\?=)[ \t]+(?==\?[^?\s]+\?[bq]\?)/i', '$1', $value) ?? $value;
 
-        return preg_replace_callback('/=\?[^?\s]+\?[bq]\?[^?]*\?=/i',
-            static fn (array $match): string => mb_decode_mimeheader($match[0]), $value) ?? $value;
+        return preg_replace_callback('/=\?([^?\s]+)\?([bq])\?([^?]*)\?=/i',
+            fn (array $match): string => mb_decode_mimeheader('=?'.$this->emailCharsetName($match[1]).'?'.$match[2].'?'.$match[3].'?='), $value) ?? $value;
     }
 
     /** @param array<int, string> $entries */
