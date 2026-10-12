@@ -28,6 +28,7 @@ use Throwable;
 class ClaimEvidenceInboxService
 {
     private const TYPES = ['document', 'expense', 'receipt', 'photo'];
+
     private const MAX_BYTES = 30 * 1024 * 1024;
 
     public function __construct(private readonly BillingAdminService $billing, private readonly OcrEngine $ocr) {}
@@ -86,6 +87,7 @@ class ClaimEvidenceInboxService
                     // No stale title, URL or original payload survives a privacy/scope revocation.
                 }
             }
+
             return ['success' => true, 'rows' => $rows, 'summary' => $summary,
                 'lines' => $lines->map(fn ($line) => $this->lineMetadata($line))->values()->all(),
                 'pagination' => ['page' => $page, 'perPage' => $perPage, 'total' => $total, 'lastPage' => max(1, (int) ceil($total / $perPage))]];
@@ -143,6 +145,7 @@ class ClaimEvidenceInboxService
                     });
                 }
             }
+
             return ['success' => true, 'scanned' => $scanned, 'created' => $created, 'hasMore' => $hasMore];
         });
     }
@@ -162,7 +165,8 @@ class ClaimEvidenceInboxService
             }
             $candidates = [];
             $items = ClaimEvidenceInboxItem::where('project_contract_id', $contract->id)->where('status', 'review')
-                ->whereNull('reviewed_at')->where(fn ($q) => $q->whereNull('last_matched_at')->orWhere('last_matched_at', '<', now()->subHours(6)))
+                // Carbon query bindings drop offsets; this column stores timestamptz instants.
+                ->whereNull('reviewed_at')->where(fn ($q) => $q->whereNull('last_matched_at')->orWhere('last_matched_at', '<', now()->subHours(6)->toIso8601String()))
                 ->orderByRaw('last_matched_at ASC NULLS FIRST')->orderBy('id')->limit(20)->get();
             foreach ($items as $item) {
                 $item->forceFill(['last_matched_at' => now()])->save();
@@ -170,6 +174,7 @@ class ClaimEvidenceInboxService
                     $meta = $this->resolveSource($contract, $item->source_type, $item->source_id);
                     if ($meta['blockReason'] || ! $meta['autoEligible'] || trim($meta['text']) === '') {
                         $item->forceFill(['reason' => $meta['blockReason'] ?: '계약 지정 또는 공정 설명을 사람이 확인해야 합니다.'])->save();
+
                         continue;
                     }
                     $candidates[$item->id] = ['item' => $item, 'meta' => $meta];
@@ -207,6 +212,7 @@ class ClaimEvidenceInboxService
             } catch (Throwable) {
                 ClaimEvidenceInboxItem::whereIn('id', array_keys($candidates))->where('status', 'review')
                     ->update(['last_matched_at' => null]);
+
                 return ['success' => false, 'linked' => 0, 'error' => '자동 분석 응답이 없어 확인 대기로 유지했습니다. 다시 시도하세요.'];
             }
             $groups = [];
@@ -247,12 +253,14 @@ class ClaimEvidenceInboxService
                         }
                         $lineIds = $this->validLineIds($contract, array_keys($locators));
                         $this->setLinked($item, $meta, $lineIds, array_values($locators), 'lines', '높은 확신의 원문 기반 자동 연결 — 수량·기성 인정은 별도 검토입니다.', false);
+
                         return 1;
                     });
                 } catch (InvalidArgumentException) {
                     // A concurrent source/permission change leaves this source awaiting review.
                 }
             }
+
             return ['success' => true, 'linked' => $linked];
         });
     }
@@ -269,6 +277,7 @@ class ClaimEvidenceInboxService
             if (! in_array($action, ['link', 'common', 'ignore', 'reopen'], true)) {
                 throw new InvalidArgumentException('연결 처리 종류가 올바르지 않습니다.');
             }
+
             return DB::transaction(function () use ($item, $contract, $action, $input): array {
                 ProjectContract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
                 $item = ClaimEvidenceInboxItem::whereKey($item->id)->lockForUpdate()->firstOrFail();
@@ -297,6 +306,7 @@ class ClaimEvidenceInboxService
                         'reviewed_by' => $action === 'ignore' ? auth()->id() : null, 'reviewed_at' => $action === 'ignore' ? now() : null,
                         'last_matched_at' => null])->save();
                 }
+
                 return ['success' => true, 'row' => $this->row($item, $meta, $this->lines($contract))];
             });
         });
@@ -348,6 +358,7 @@ class ClaimEvidenceInboxService
                 'classification' => $item->classification];
             $descriptors[] = $descriptor;
         }
+
         return $descriptors;
     }
 
@@ -471,7 +482,9 @@ class ClaimEvidenceInboxService
             $block ??= '보존된 원본 파일이 없습니다.';
         }
         if (! $explicitContract) {
-            $contracts = ProjectContract::where('site_id', $contract->site_id)->where('direction', 'receivable');
+            // An estimate without accepted BOQ rows is not an alternative claim-workbook basis.
+            $contracts = ProjectContract::where('site_id', $contract->site_id)->where('direction', 'receivable')
+                ->whereIn('id', ContractBoqLine::where('status', 'accepted')->select('project_contract_id'));
             if (($type === 'photo' || (in_array($type, ['document', 'expense'], true) && $source->project_id)) && $contract->project_id) {
                 $contracts->where('project_id', $contract->project_id);
             }
@@ -496,6 +509,7 @@ class ClaimEvidenceInboxService
             }
             $meta['sha256'] = $actual;
         }
+
         return $meta;
     }
 
@@ -520,6 +534,7 @@ class ClaimEvidenceInboxService
                 throw new InvalidArgumentException('연결한 원본 파일이 변경되었습니다. 증빙 연결을 다시 확인하세요.');
             }
         }
+
         return $bytes;
     }
 
@@ -528,6 +543,7 @@ class ClaimEvidenceInboxService
     {
         $meta = $this->resolveSource($contract, $type, $id, false, true);
         $bytes = $this->bytes($meta);
+
         return ['bytes' => $bytes, 'name' => $meta['name'],
             'mime' => (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: 'application/octet-stream',
             'sha256' => hash('sha256', $bytes)];
@@ -565,6 +581,7 @@ class ClaimEvidenceInboxService
                 ->whereIn('source_id', MobileExpense::where(fn ($q) => $q->where('source_ref', 'document:'.$id)
                     ->orWhere('ocr_data->document_id', $id))->select('id'))->exists();
         }
+
         return false;
     }
 
@@ -627,6 +644,7 @@ class ClaimEvidenceInboxService
                 $query->where(fn ($q) => $q->whereNull('project_code')->orWhere('project_code', ''));
             }
         }
+
         return $query;
     }
 
@@ -642,6 +660,7 @@ class ClaimEvidenceInboxService
             if (! is_string($bytes) || $bytes === '' || strlen($bytes) > self::MAX_BYTES) {
                 throw new InvalidArgumentException('원본 영수증을 읽을 수 없습니다.');
             }
+
             return $bytes;
         }
         try {
@@ -661,6 +680,7 @@ class ClaimEvidenceInboxService
             if (! is_string($bytes) || $bytes === '' || strlen($bytes) > self::MAX_BYTES) {
                 throw new InvalidArgumentException('원본 파일이 비어 있거나 제출 파일 크기 제한을 넘었습니다.');
             }
+
             return $bytes;
         } catch (InvalidArgumentException $e) {
             throw $e;
@@ -677,6 +697,7 @@ class ClaimEvidenceInboxService
         if ($contract->direction !== 'receivable') {
             throw new InvalidArgumentException('수주 계약의 기성 증빙만 연결할 수 있습니다.');
         }
+
         return $contract;
     }
 
@@ -707,6 +728,7 @@ class ClaimEvidenceInboxService
         if ($valid !== count($ids)) {
             throw new InvalidArgumentException('이 계약에서 확정된 공정만 연결할 수 있습니다.');
         }
+
         return $ids;
     }
 
@@ -735,6 +757,7 @@ class ClaimEvidenceInboxService
         $changed = $meta['fingerprint'] !== $item->source_fingerprint;
         $status = $item->status === 'linked' && ($changed || $meta['blockReason']) ? 'review' : $item->status;
         $status = $status === 'linked' && $item->classification === 'common' ? 'common' : $status;
+
         return ['id' => $item->id, 'sourceType' => $item->source_type, 'sourceId' => $item->source_id,
             'title' => $meta['title'], 'date' => $meta['date'], 'dateBasis' => $meta['dateBasis'], 'status' => $status,
             'lineIds' => $item->line_ids ?? [], 'lineLabels' => $this->labels($lines, $item->line_ids ?? []),
@@ -754,6 +777,7 @@ class ClaimEvidenceInboxService
                 return '원본에 중복 또는 검토대기 표시가 있습니다. 원본 화면에서 먼저 해결하세요.';
             }
         }
+
         return null;
     }
 
@@ -768,6 +792,7 @@ class ClaimEvidenceInboxService
                 }
             }
         }
+
         return $items;
     }
 
@@ -782,6 +807,7 @@ class ClaimEvidenceInboxService
         if (str_contains($path, '..') || str_contains($path, '://') || str_contains($path, '\\')) {
             return '';
         }
+
         return ltrim($path, '/');
     }
 
