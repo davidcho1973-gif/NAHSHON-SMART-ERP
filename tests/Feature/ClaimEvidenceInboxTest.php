@@ -21,6 +21,7 @@ use App\Services\Finance\ClaimEvidenceInboxService;
 use App\Services\Ocr\OcrEngine;
 use App\Support\ReceiptFilePayload;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -33,7 +34,9 @@ class ClaimEvidenceInboxTest extends TestCase
     use RefreshDatabase;
 
     private ProjectContract $contract;
+
     private ContractBoqLine $line;
+
     private ContractBoqLine $secondLine;
 
     protected function setUp(): void
@@ -72,6 +75,7 @@ class ClaimEvidenceInboxTest extends TestCase
         $bytes ??= 'Stainless pipe delivery '.$uuid;
         $path = 'evidence/'.$uuid.'.txt';
         Storage::disk('local')->put($path, $bytes);
+
         return IntelligentDocument::create(array_merge([
             'uuid' => $uuid, 'company_id' => $this->contract->company_id, 'site_id' => $this->contract->site_id,
             'project_id' => $this->contract->project_id, 'project_contract_id' => $this->contract->id,
@@ -242,8 +246,13 @@ class ClaimEvidenceInboxTest extends TestCase
 
     public function test_high_confidence_matching_is_grounded_and_does_not_convert_evidence_into_work(): void
     {
-        $valid = $this->document([], 'Stainless pipe 25mm delivered');
+        $estimate = $this->contract->replicate();
+        $estimate->forceFill(['internal_reference' => null, 'title' => 'Earlier estimate without accepted BOQ', 'status' => 'draft'])->save();
+        $valid = $this->document(['project_contract_id' => null], 'Stainless pipe 25mm delivered');
+        $expense = $this->expense();
         $blocked = $this->document(['ai_payload' => ['source_review_reason' => 'Awaiting source check']]);
+        $this->assertTrue($this->service()->resolveSource($this->contract, 'document', $valid->id)['autoEligible']);
+        $this->assertTrue($this->service()->resolveSource($this->contract, 'expense', $expense->id)['autoEligible']);
         $this->service()->syncContract($this->contract->id);
         $item = $this->item('document', $valid->id);
         $engine = Mockery::mock(OcrEngine::class);
@@ -251,6 +260,7 @@ class ClaimEvidenceInboxTest extends TestCase
             $this->assertSame([], $images);
             $this->assertStringNotContainsString($blocked->extracted_text, $prompt);
             $this->assertArrayHasKey('properties', $schema);
+
             return true;
         })->andReturn(['data' => ['matches' => [
             ['source_id' => $item->id, 'line_id' => $this->line->id, 'confidence' => .99, 'quote' => 'Stainless pipe 25mm', 'locator' => 'delivery item 1'],
@@ -264,6 +274,45 @@ class ClaimEvidenceInboxTest extends TestCase
         $this->assertSame('review', $this->item('document', $blocked->id)->status);
         $this->assertSame(0, ClaimWorkRecord::count());
         $this->assertSame(0, PayApplicationAllocation::count());
+        // A second accepted workbook really is ambiguous, even while its contract remains draft.
+        $alternative = $this->line->replicate();
+        $alternative->project_contract_id = $estimate->id;
+        $alternative->save();
+        $this->assertFalse($this->service()->resolveSource($this->contract, 'document', $valid->id)['autoEligible']);
+        $this->assertFalse($this->service()->resolveSource($this->contract, 'expense', $expense->id)['autoEligible']);
+        $valid->update(['project_contract_id' => $this->contract->id]);
+        $this->assertTrue($this->service()->resolveSource($this->contract, 'document', $valid->id)['autoEligible']);
+        $valid->update(['project_contract_id' => $estimate->id]);
+        $this->expectException(InvalidArgumentException::class);
+        $this->service()->resolveSource($this->contract, 'document', $valid->id);
+    }
+
+    public function test_retry_cooldown_compares_instants_across_application_and_database_timezones(): void
+    {
+        $timezone = date_default_timezone_get();
+        date_default_timezone_set('Asia/Seoul');
+        $this->travelTo(Carbon::parse('2026-10-12T20:00:00+09:00'));
+        DB::statement("SET LOCAL TIME ZONE 'UTC'");
+        try {
+            $document = $this->document();
+            $this->service()->syncContract($this->contract->id);
+            $item = $this->item('document', $document->id);
+            $item->update(['last_matched_at' => now()->subHours(1)]);
+            $before = $item->fresh()->last_matched_at->getTimestamp();
+            $engine = Mockery::mock(OcrEngine::class);
+            $engine->shouldNotReceive('analyze');
+            $this->app->instance(OcrEngine::class, $engine);
+            $this->assertTrue($this->service()->match($this->contract->id)['success']);
+            $this->assertSame($before, $item->fresh()->last_matched_at->getTimestamp());
+            $this->travel(6)->hours();
+            $retry = Mockery::mock(OcrEngine::class);
+            $retry->shouldReceive('analyze')->once()->andReturn(['data' => ['matches' => []], 'model' => 'test']);
+            $this->app->instance(OcrEngine::class, $retry);
+            $this->assertTrue($this->service()->match($this->contract->id)['success']);
+            $this->assertSame(now()->getTimestamp(), $item->fresh()->last_matched_at->getTimestamp());
+        } finally {
+            date_default_timezone_set($timezone);
+        }
     }
 
     public function test_package_includes_earlier_purchases_and_detects_changed_bytes_without_changing_amounts(): void
